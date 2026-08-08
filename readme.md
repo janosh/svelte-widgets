@@ -24,40 +24,44 @@
 Every component is a named export from the package root, and every one also has a direct
 subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 
-| Component          | What it does                                                                            | Docs                                                                   |
-| ------------------ | --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `MultiSelect`      | Keyboard-friendly multi/single select with grouping, async loading and deep style hooks | [docs](https://svelte-widgets.janosh.dev/multiselect)                  |
-| `CommandMenu`      | Command palette with fuzzy search, hotkeys, recents and async actions                   | [docs](https://svelte-widgets.janosh.dev/command-menu)                 |
-| `PageSearch`       | Pagefind-backed site search built on `CommandMenu`                                      | [docs](https://svelte-widgets.janosh.dev/command-menu#pagesearch)      |
-| `Popover`          | Floating surface that positions, dismisses and traps focus for you                      | [docs](https://svelte-widgets.janosh.dev/popover)                      |
-| `ContextMenu`      | Right-click menu anchored to the pointer, with arrow-key navigation                     | [docs](https://svelte-widgets.janosh.dev/popover#contextmenu)          |
-| `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
-| `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor               | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
-| `Sheet`            | Native modal edge panel with backdrop dismissal and focus restoration                   | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
-| `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                       | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
-| `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                     | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
-| `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches               | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
-| `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                           | [docs](https://svelte-widgets.janosh.dev/toast)                        |
-| `Nav`              | Navigation bar with dropdowns, pinning and active-route styling                         | [docs](https://svelte-widgets.janosh.dev/nav)                          |
-| `Toc`              | Sticky table of contents that finds and tracks its own headings                         | [docs](https://svelte-widgets.janosh.dev/toc)                          |
-| `Masonry`          | Column-balancing masonry grid with SSR support and virtualization                       | [docs](https://svelte-widgets.janosh.dev/masonry)                      |
-| `Footer`           | Centered row of icon links, sized and themed with `--footer-*`                          | [docs](https://svelte-widgets.janosh.dev/site-chrome#footer)           |
-| `ActionButton`     | Async action button with pending, success and error feedback                            | [docs](https://svelte-widgets.janosh.dev/action-button)                |
-| `CopyButton`       | Copy-to-clipboard button with success and error feedback                                | [docs](https://svelte-widgets.janosh.dev/action-button#copybutton)     |
-| `ButtonGroup`      | Segmented control over a set of options, single or multi select                         | [docs](https://svelte-widgets.janosh.dev/button-group)                 |
-| `FullscreenButton` | Fullscreen toggle scoped to one wrapper, so viewers don't fight over the flag           | [docs](https://svelte-widgets.janosh.dev/fullscreen)                   |
-| `ThemeToggle`      | Light/dark/system theme cycler with persistence and cross-tab synchronization           | [docs](https://svelte-widgets.janosh.dev/extras#themetoggle)           |
-| `Toggle`           | Accessible switch with a bindable `checked`                                             | [docs](https://svelte-widgets.janosh.dev/extras#toggle)                |
-| `CodeExample`      | Collapsible source viewer used by the live examples                                     | [docs](https://svelte-widgets.janosh.dev/extras#codeexample)           |
-| `FileDetails`      | Collapsible `<details>` viewer for a set of files                                       | [docs](https://svelte-widgets.janosh.dev/extras#filedetails)           |
-| `PrevNext`         | Previous/next links for sequential pages                                                | [docs](https://svelte-widgets.janosh.dev/extras#prevnext)              |
-| `SubpageGrid`      | Card grid linking to child pages                                                        | [docs](https://svelte-widgets.janosh.dev/extras#subpagegrid)           |
-| `Icon`             | Inline SVG icon from the bundled set                                                    | [docs](https://svelte-widgets.janosh.dev/extras#icon)                  |
-| `GitHubCorner`     | The classic corner ribbon link                                                          | [docs](https://svelte-widgets.janosh.dev/extras#githubcorner)          |
-| `CircleSpinner`    | Minimal loading spinner                                                                 | [docs](https://svelte-widgets.janosh.dev/extras#circlespinner)         |
-| `ContributorList`  | Avatar row of GitHub contributors, grayscale until hover                                | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
-| `LiteYouTubeEmbed` | YouTube poster that only loads the player iframe once clicked                           | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
-| `Wiggle`           | Spring-animated shake wrapper                                                           | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
+| Component          | What it does                                                                             | Docs                                                                   |
+| ------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `MultiSelect`      | Keyboard-friendly multi/single select with grouping, async loading and deep style hooks  | [docs](https://svelte-widgets.janosh.dev/multiselect)                  |
+| `CommandMenu`      | Command palette with fuzzy search, hotkeys, recents and async actions                    | [docs](https://svelte-widgets.janosh.dev/command-menu)                 |
+| `PageSearch`       | Pagefind-backed site search built on `CommandMenu`                                       | [docs](https://svelte-widgets.janosh.dev/command-menu#pagesearch)      |
+| `Popover`          | Floating surface that positions, dismisses and traps focus for you                       | [docs](https://svelte-widgets.janosh.dev/popover)                      |
+| `ContextMenu`      | Right-click menu anchored to the pointer, with arrow-key navigation                      | [docs](https://svelte-widgets.janosh.dev/popover#contextmenu)          |
+| `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                 | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
+| `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
+| `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | —                                                                      |
+| `SettingsGroup`    | Collapsible group for organizing related settings sections                               | —                                                                      |
+| `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | —                                                                      |
+| `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | —                                                                      |
+| `Sheet`            | Native modal edge panel with backdrop dismissal and focus restoration                    | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
+| `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
+| `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
+| `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches                | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
+| `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                            | [docs](https://svelte-widgets.janosh.dev/toast)                        |
+| `Nav`              | Navigation bar with dropdowns, pinning and active-route styling                          | [docs](https://svelte-widgets.janosh.dev/nav)                          |
+| `Toc`              | Sticky table of contents that finds and tracks its own headings                          | [docs](https://svelte-widgets.janosh.dev/toc)                          |
+| `Masonry`          | Column-balancing masonry grid with SSR support and virtualization                        | [docs](https://svelte-widgets.janosh.dev/masonry)                      |
+| `Footer`           | Centered row of icon links, sized and themed with `--footer-*`                           | [docs](https://svelte-widgets.janosh.dev/site-chrome#footer)           |
+| `ActionButton`     | Async action button with pending, success and error feedback                             | [docs](https://svelte-widgets.janosh.dev/action-button)                |
+| `CopyButton`       | Copy-to-clipboard button with success and error feedback                                 | [docs](https://svelte-widgets.janosh.dev/action-button#copybutton)     |
+| `ButtonGroup`      | Segmented control over a set of options, single or multi select                          | [docs](https://svelte-widgets.janosh.dev/button-group)                 |
+| `FullscreenButton` | Fullscreen toggle scoped to one wrapper, so viewers don't fight over the flag            | [docs](https://svelte-widgets.janosh.dev/fullscreen)                   |
+| `ThemeToggle`      | Light/dark/system theme cycler with persistence and cross-tab synchronization            | [docs](https://svelte-widgets.janosh.dev/extras#themetoggle)           |
+| `Toggle`           | Accessible switch with a bindable `checked`                                              | [docs](https://svelte-widgets.janosh.dev/extras#toggle)                |
+| `CodeExample`      | Collapsible source viewer used by the live examples                                      | [docs](https://svelte-widgets.janosh.dev/extras#codeexample)           |
+| `FileDetails`      | Collapsible `<details>` viewer for a set of files                                        | [docs](https://svelte-widgets.janosh.dev/extras#filedetails)           |
+| `PrevNext`         | Previous/next links for sequential pages                                                 | [docs](https://svelte-widgets.janosh.dev/extras#prevnext)              |
+| `SubpageGrid`      | Card grid linking to child pages                                                         | [docs](https://svelte-widgets.janosh.dev/extras#subpagegrid)           |
+| `Icon`             | Inline SVG icon from the bundled set                                                     | [docs](https://svelte-widgets.janosh.dev/extras#icon)                  |
+| `GitHubCorner`     | The classic corner ribbon link                                                           | [docs](https://svelte-widgets.janosh.dev/extras#githubcorner)          |
+| `CircleSpinner`    | Minimal loading spinner                                                                  | [docs](https://svelte-widgets.janosh.dev/extras#circlespinner)         |
+| `ContributorList`  | Avatar row of GitHub contributors, grayscale until hover                                 | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
+| `LiteYouTubeEmbed` | YouTube poster that only loads the player iframe once clicked                            | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
+| `Wiggle`           | Spring-animated shake wrapper                                                            | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
 
 Fifteen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any element: fourteen come from `svelte-widgets/attachments`, while `heading_anchors` has its own subpath. `dismiss_on_outside_press` is the lower-level multi-surface primitive behind `click_outside`.
 
