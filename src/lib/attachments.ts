@@ -174,19 +174,23 @@ export interface DraggableOptions {
 }
 
 export type Dimensions = { width: number; height: number }
-export type ResizeCallback = (event: PointerEvent, dimensions: Dimensions) => void
+export type ResizeEvent = MouseEvent | KeyboardEvent
+export type ResizeCallback = (event: ResizeEvent, dimensions: Dimensions) => void
+export type ResizeLimit = number | ((node: HTMLElement) => number)
 
 export interface ResizableOptions {
   edges?: (`top` | `right` | `bottom` | `left`)[]
   min_width?: number
   min_height?: number
-  max_width?: number
-  max_height?: number
+  // A function is resolved at gesture time, for bounds that move with the node or viewport.
+  max_width?: ResizeLimit
+  max_height?: ResizeLimit
   handle_size?: number // px, default 8
   disabled?: boolean
   on_resize_start?: ResizeCallback
   on_resize?: ResizeCallback
   on_resize_end?: ResizeCallback
+  on_resize_reset?: ResizeCallback
 }
 
 export const draggable =
@@ -289,9 +293,10 @@ export const draggable =
     }
   }
 
-// One `[data-resize-edge]` child per edge (touch-action has no per-region form). Promotes
-// `position: static` → `relative`. Put overflow on a child — a scrollable node scrolls the
-// strips out of view.
+// One `[data-resize-edge]` child per edge, plus a `[data-resize-corner]` child wherever two
+// enabled edges meet (touch-action has no per-region form). Every handle is focusable,
+// takes arrow keys, and resets on Enter. Promotes `position: static` → `relative`. Put
+// overflow on a child — a scrollable node scrolls the handles out of view.
 export const resizable =
   (options: ResizableOptions = {}): Attachment =>
   (element: Element): (() => void) | undefined => {
@@ -309,9 +314,12 @@ export const resizable =
       on_resize_start,
       on_resize,
       on_resize_end,
+      on_resize_reset,
     } = options
 
-    if (min_width > max_width || min_height > max_height) {
+    const invalid_width = typeof max_width === `number` && min_width > max_width
+    const invalid_height = typeof max_height === `number` && min_height > max_height
+    if (invalid_width || invalid_height) {
       console.warn(
         `resizable: min dimensions exceed max dimensions (min_width=${min_width}, max_width=${max_width}, min_height=${min_height}, max_height=${max_height})`,
       )
@@ -319,17 +327,11 @@ export const resizable =
     }
 
     type Edge = `top` | `right` | `bottom` | `left`
-    let active_edge: Edge | null = null
+    // A corner press drives both axes at once, so the live grab is a pair of edges rather
+    // than a single one. Edge strips fill in only their own axis.
+    type Grab = { horizontal?: `left` | `right`; vertical?: `top` | `bottom` }
+    let is_resizing = false
     let stop_pointer_follow: (() => void) | undefined
-    let start = { x: 0, y: 0 }
-    let initial = {
-      width: 0,
-      height: 0,
-      left: 0,
-      top: 0,
-      width_inset: 0,
-      height_inset: 0,
-    }
 
     const computed = getComputedStyle(node)
     if (computed.position === `static`) node.style.position = `relative`
@@ -343,12 +345,7 @@ export const resizable =
     // whether a left/top shrink moved the node, so dblclick knows those are ours to clear
     const repositioned = { left: false, top: false }
 
-    function on_pointerdown(event: PointerEvent, edge: Edge) {
-      // `active_edge` bars a second primary mid-resize (mouse while a touch is down)
-      if (active_edge || !is_primary_press(event)) return
-      active_edge = edge
-
-      start = { x: event.clientX, y: event.clientY }
+    const measure = () => {
       const current_style = getComputedStyle(node)
       const content_box_inset = (properties: string[]) =>
         current_style.boxSizing === `border-box`
@@ -358,7 +355,7 @@ export const resizable =
                 total + (css_px(current_style.getPropertyValue(property)) || 0),
               0,
             )
-      initial = {
+      return {
         width: node.offsetWidth,
         height: node.offsetHeight,
         left: css_px(current_style.left) || 0,
@@ -376,59 +373,151 @@ export const resizable =
           `border-bottom-width`,
         ]),
       }
+    }
+    const resolve_limit = (limit: ResizeLimit) =>
+      Math.max(0, typeof limit === `function` ? limit(node) : limit)
+    const read_maximum = () => ({
+      width: resolve_limit(max_width),
+      height: resolve_limit(max_height),
+    })
+    // Only this instance's own strips — `querySelectorAll` would also rewrite the values of
+    // a nested resizable's separators, which report a different element's size.
+    const separators: { handle: HTMLElement; controls_width: boolean }[] = []
+    const sync_separator_values = (current: Dimensions, maximum: Dimensions) => {
+      for (const { handle, controls_width } of separators) {
+        const minimum = controls_width ? min_width : min_height
+        const value = controls_width ? current.width : current.height
+        const limit = controls_width ? maximum.width : maximum.height
+        handle.setAttribute(`aria-valuemin`, `${Math.min(minimum, limit)}`)
+        handle.setAttribute(
+          `aria-valuemax`,
+          `${Number.isFinite(limit) ? limit : Number.MAX_SAFE_INTEGER}`,
+        )
+        handle.setAttribute(`aria-valuenow`, `${value}`)
+      }
+    }
+    const dimensions_from_delta = (
+      grab: Grab,
+      measured: ReturnType<typeof measure>,
+      delta_x: number,
+      delta_y: number,
+    ): Dimensions => ({
+      width:
+        measured.width +
+        (grab.horizontal === `right` ? delta_x : grab.horizontal ? -delta_x : 0),
+      height:
+        measured.height +
+        (grab.vertical === `bottom` ? delta_y : grab.vertical ? -delta_y : 0),
+    })
+    const apply_resize = (
+      event: ResizeEvent,
+      grab: Grab,
+      requested: Dimensions,
+      measured: ReturnType<typeof measure>,
+      maximum: Dimensions,
+      lock_aspect_ratio = false,
+    ): Dimensions => {
+      const minimum_width = Math.min(
+        Math.max(min_width, measured.width_inset),
+        maximum.width,
+      )
+      const minimum_height = Math.min(
+        Math.max(min_height, measured.height_inset),
+        maximum.height,
+      )
+      let { width, height } = requested
+
+      if (
+        lock_aspect_ratio &&
+        grab.horizontal &&
+        grab.vertical &&
+        measured.width > 0 &&
+        measured.height > 0
+      ) {
+        const aspect_ratio = measured.width / measured.height
+        const width_change = Math.abs(width - measured.width) / measured.width
+        const height_change = Math.abs(height - measured.height) / measured.height
+        if (width_change >= height_change) {
+          const lower = Math.max(minimum_width, minimum_height * aspect_ratio)
+          const upper = Math.min(maximum.width, maximum.height * aspect_ratio)
+          width = clamp(width, Math.min(lower, upper), upper)
+          height = width / aspect_ratio
+        } else {
+          const lower = Math.max(minimum_height, minimum_width / aspect_ratio)
+          const upper = Math.min(maximum.height, maximum.width / aspect_ratio)
+          height = clamp(height, Math.min(lower, upper), upper)
+          width = height * aspect_ratio
+        }
+      } else {
+        if (grab.horizontal) width = clamp(width, minimum_width, maximum.width)
+        if (grab.vertical) height = clamp(height, minimum_height, maximum.height)
+      }
+
+      if (grab.horizontal === `left`) {
+        node.style.left = `${measured.left - (width - measured.width)}px`
+        repositioned.left = true
+      }
+      if (grab.vertical === `top`) {
+        node.style.top = `${measured.top - (height - measured.height)}px`
+        repositioned.top = true
+      }
+      // Callbacks and constraints use border-box dimensions; CSS width/height do not
+      // include padding and borders on content-box elements. Only the grabbed axis is
+      // written: pinning the other one would freeze a height-only node's natural width.
+      if (grab.horizontal)
+        node.style.width = `${Math.max(0, width - measured.width_inset)}px`
+      if (grab.vertical)
+        node.style.height = `${Math.max(0, height - measured.height_inset)}px`
+      const dimensions = { width, height }
+      sync_separator_values(dimensions, maximum)
+      on_resize?.(event, dimensions)
+      return dimensions
+    }
+
+    function on_pointerdown(event: PointerEvent, grab: Grab) {
+      // Bars a second primary mid-resize (mouse while a touch is down).
+      if (is_resizing || !is_primary_press(event)) return
+      is_resizing = true
+
+      const origin = { x: event.clientX, y: event.clientY }
+      const measured = measure()
+      const maximum = read_maximum()
       document.body.style.userSelect = `none`
-      on_resize_start?.(event, { width: initial.width, height: initial.height })
+      on_resize_start?.(event, { width: measured.width, height: measured.height })
       stop_pointer_follow = follow_pointer(
         node,
         event.pointerId,
-        on_pointermove,
+        (move_event) => {
+          if (!is_resizing) return
+          apply_resize(
+            move_event,
+            grab,
+            dimensions_from_delta(
+              grab,
+              measured,
+              move_event.clientX - origin.x,
+              move_event.clientY - origin.y,
+            ),
+            measured,
+            maximum,
+            move_event.shiftKey,
+          )
+        },
         on_pointerup,
       )
     }
 
-    function on_pointermove(event: PointerEvent) {
-      if (!active_edge) return
-      const dx = event.clientX - start.x
-      const dy = event.clientY - start.y
-      let width = initial.width
-      let height = initial.height
-      // grow from the far edge; shrink moves left/top so the opposite corner stays put
-      if (active_edge === `right`) width = clamp(initial.width + dx, min_width, max_width)
-      else if (active_edge === `left`)
-        width = clamp(initial.width - dx, min_width, max_width)
-      if (active_edge === `bottom`) {
-        height = clamp(initial.height + dy, min_height, max_height)
-      } else if (active_edge === `top`) {
-        height = clamp(initial.height - dy, min_height, max_height)
-      }
-      // Content-box padding and borders cannot shrink, so report their actual minimum.
-      width = Math.max(width, initial.width_inset)
-      height = Math.max(height, initial.height_inset)
-      if (active_edge === `left`) {
-        node.style.left = `${initial.left - (width - initial.width)}px`
-        repositioned.left = true
-      }
-      if (active_edge === `top`) {
-        node.style.top = `${initial.top - (height - initial.height)}px`
-        repositioned.top = true
-      }
-      // Callbacks and constraints use border-box dimensions; CSS width/height do not
-      // include padding and borders on content-box elements.
-      node.style.width = `${Math.max(0, width - initial.width_inset)}px`
-      node.style.height = `${Math.max(0, height - initial.height_inset)}px`
-      on_resize?.(event, { width, height })
-    }
-
     function on_pointerup(event: PointerEvent) {
-      if (!active_edge) return
+      if (!is_resizing) return
       document.body.style.userSelect = ``
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })
       stop_pointer_follow?.()
-      active_edge = null
+      is_resizing = false
     }
 
     // Only clear styles we wrote — leave consumer height and `draggable`'s left/top alone
-    const on_dblclick = () => {
+    const reset_size = (event: ResizeEvent) => {
+      if (event instanceof KeyboardEvent) event.preventDefault()
       if (has_edge(`left`, `right`)) node.style.width = ``
       if (has_edge(`top`, `bottom`)) node.style.height = ``
       for (const pos of [`left`, `top`] as const) {
@@ -436,39 +525,121 @@ export const resizable =
         node.style[pos] = ``
         repositioned[pos] = false
       }
+      const dimensions = { width: node.offsetWidth, height: node.offsetHeight }
+      sync_separator_values(dimensions, read_maximum())
+      on_resize_reset?.(event, dimensions)
     }
 
-    // Paint order: `right` over `bottom`, so a corner press resizes width
     const abort_controller = new AbortController()
     const { signal } = abort_controller
-    const resize_strips = ([`top`, `left`, `bottom`, `right`] as const)
-      .filter((edge) => edges.includes(edge))
+    const arrow_steps: Record<string, { x: number; y: number } | undefined> = {
+      ArrowLeft: { x: -1, y: 0 },
+      ArrowRight: { x: 1, y: 0 },
+      ArrowUp: { x: 0, y: -1 },
+      ArrowDown: { x: 0, y: 1 },
+    }
+    const on_keydown = (event: KeyboardEvent, grab: Grab) => {
+      if (event.key === `Enter`) return reset_size(event)
+      const direction = arrow_steps[event.key]
+      // an edge strip ignores the axis it cannot move; a corner takes both
+      if (!direction) return
+      if ((direction.x && !grab.horizontal) || (direction.y && !grab.vertical)) return
+      event.preventDefault()
+      const step = event.shiftKey ? 50 : 10
+      const measured = measure()
+      const maximum = read_maximum()
+      on_resize_start?.(event, { width: measured.width, height: measured.height })
+      const dimensions = apply_resize(
+        event,
+        grab,
+        dimensions_from_delta(grab, measured, direction.x * step, direction.y * step),
+        measured,
+        maximum,
+      )
+      on_resize_end?.(event, dimensions)
+    }
+    // An edge grab names one side and drives one axis; a corner names both and drives both.
+    const add_handle = (grab: Grab, css: string) => {
+      const handle = document.createElement(`div`)
+      const edge =
+        grab.horizontal && grab.vertical ? null : (grab.horizontal ?? grab.vertical)
+      const arrow_keys = [
+        ...(grab.horizontal ? [`ArrowLeft`, `ArrowRight`] : []),
+        ...(grab.vertical ? [`ArrowUp`, `ArrowDown`] : []),
+      ]
+      handle.tabIndex = 0
+      handle.setAttribute(
+        `aria-keyshortcuts`,
+        [...arrow_keys, ...arrow_keys.map((key) => `Shift+${key}`), `Enter`].join(` `),
+      )
+      if (edge) {
+        handle.dataset.resizeEdge = edge
+        handle.setAttribute(`role`, `separator`)
+        handle.setAttribute(`aria-label`, `Resize from ${edge} edge`)
+        handle.setAttribute(
+          `aria-orientation`,
+          grab.horizontal ? `vertical` : `horizontal`,
+        )
+        separators.push({ handle, controls_width: Boolean(grab.horizontal) })
+      } else {
+        handle.dataset.resizeCorner = `${grab.vertical}-${grab.horizontal}`
+        handle.setAttribute(`role`, `group`)
+        handle.setAttribute(`aria-roledescription`, `resize handle`)
+        handle.setAttribute(
+          `aria-label`,
+          `Resize from ${grab.vertical} ${grab.horizontal} corner`,
+        )
+      }
+      handle.style.cssText = `position: absolute; touch-action: none; ${css}`
+      handle.addEventListener(`pointerdown`, (event) => on_pointerdown(event, grab), {
+        signal,
+      })
+      handle.addEventListener(`keydown`, (event) => on_keydown(event, grab), { signal })
+      handle.addEventListener(`dblclick`, reset_size, { signal })
+      node.append(handle)
+      return handle
+    }
+
+    const vertical_edges = ([`top`, `bottom`] as const).filter((edge) => has_edge(edge))
+    const horizontal_edges = ([`left`, `right`] as const).filter((edge) => has_edge(edge))
+    const handles = ([`top`, `left`, `bottom`, `right`] as const)
+      .filter((edge) => has_edge(edge))
       .map((edge) => {
-        const resize_strip = document.createElement(`div`)
         const across = edge === `left` || edge === `right`
         const cross = across ? ([`top`, `bottom`] as const) : ([`left`, `right`] as const)
-        resize_strip.dataset.resizeEdge = edge
-        resize_strip.style.cssText = `position: absolute; touch-action: none;
-          cursor: ${across ? `ew` : `ns`}-resize;
+        return add_handle(
+          across ? { horizontal: edge } : { vertical: edge },
+          `cursor: ${across ? `ew` : `ns`}-resize;
           ${across ? `width` : `height`}: ${handle_size}px;
-          ${[edge, ...cross].map((side) => `${side}: ${inset(side)}px`).join(`; `)}`
-        resize_strip.addEventListener(
-          `pointerdown`,
-          (event) => on_pointerdown(event, edge),
-          {
-            signal,
-          },
+          ${[edge, ...cross].map((side) => `${side}: ${inset(side)}px`).join(`; `)}`,
         )
-        resize_strip.addEventListener(`dblclick`, on_dblclick, { signal })
-        node.append(resize_strip)
-        return resize_strip
       })
+      // Where two enabled edges meet, a square handle drives both axes. Appended after the
+      // strips so it paints over their overlap, which otherwise resizes one axis only.
+      .concat(
+        vertical_edges.flatMap((vertical) =>
+          horizontal_edges.map((horizontal) =>
+            add_handle(
+              { horizontal, vertical },
+              // top-left/bottom-right share a diagonal, as do top-right/bottom-left
+              `cursor: ${(vertical === `top`) === (horizontal === `left`) ? `nwse` : `nesw`}-resize;
+              width: ${handle_size}px; height: ${handle_size}px;
+              ${vertical}: ${inset(vertical)}px; ${horizontal}: ${inset(horizontal)}px`,
+            ),
+          ),
+        ),
+      )
+
+    sync_separator_values(
+      { width: node.offsetWidth, height: node.offsetHeight },
+      read_maximum(),
+    )
 
     return () => {
       stop_pointer_follow?.()
-      if (active_edge) document.body.style.userSelect = ``
+      if (is_resizing) document.body.style.userSelect = ``
       abort_controller.abort() // removal alone leaves a retained strip ref able to fire on_pointerdown
-      for (const strip of resize_strips) strip.remove()
+      for (const handle of handles) handle.remove()
     }
   }
 
