@@ -130,14 +130,14 @@
       })}
     {:else}
       {#if current_label.icon}<Icon icon={current_label.icon} />{/if}
-      {#if current_label.text}<span>{@html current_label.text}</span>{/if}
+      {#if current_label.text}<span>{current_label.text}</span>{/if}
     {/if}
   </span>
   <span data-sms-action-width="" aria-hidden="true">
     {#each Object.values(labels) as label}
       <span>
         {#if label.icon}<Icon icon={label.icon} />{/if}
-        {#if label.text}<span>{@html label.text}</span>{/if}
+        {#if label.text}<span>{label.text}</span>{/if}
       </span>
     {/each}
   </span>

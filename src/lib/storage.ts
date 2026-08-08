@@ -27,7 +27,6 @@ export const storage_get_json = (key: string, fallback: unknown): unknown =>
   guarded((): unknown => JSON.parse(storage_get(key) ?? ``), fallback)
 
 export const storage_set_json = (key: string, value: object): void => {
-  // Cyclic values, BigInts and throwing toJSON methods are not persistable.
   const serialized = guarded(() => JSON.stringify(value), undefined)
   if (serialized !== undefined) storage_set(key, serialized)
 }

@@ -145,6 +145,7 @@
     aria-pressed={multiple ? is_selected : undefined}
     tabindex={multiple ? undefined : opt.value === roving_value ? 0 : -1}
     disabled={disabled || opt.disabled}
+    aria-busy={opt.loading || undefined}
     data-value={opt.value}
     onclick={() => select(opt.value)}
     {@attach tooltip({ ...tooltip_options, content: opt.tooltip })}
@@ -155,8 +156,10 @@
       {#if opt.icon}<Icon icon={opt.icon} />{/if}
       {opt.label}
       {#if opt.loading !== undefined}
+        <!-- decoration for sighted users; `aria-busy` on the button is what AT reads -->
         <CircleSpinner
           size="0.8em"
+          aria-hidden="true"
           style={`visibility: ${opt.loading ? `visible` : `hidden`}`}
         />
       {/if}

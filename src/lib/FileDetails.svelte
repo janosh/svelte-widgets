@@ -179,6 +179,7 @@
     display: inline-grid;
     float: inline-end;
     width: fit-content;
+    white-space: nowrap;
   }
   button > span {
     grid-area: 1 / 1;

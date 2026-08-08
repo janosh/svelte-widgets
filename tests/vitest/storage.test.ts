@@ -53,11 +53,14 @@ describe(`storage_get/set/remove`, () => {
     expect(typed.ok).toBe(true)
   })
 
-  test(`storage_set_json swallows values JSON cannot serialize`, () => {
-    const cyclic: { self?: object } = {}
-    cyclic.self = cyclic
-    expect(() => storage_set_json(`test.cyclic`, cyclic)).not.toThrow()
-    expect(storage_get(`test.cyclic`)).toBeNull()
+  const cyclic: { self?: object } = {}
+  cyclic.self = cyclic
+  test.each([
+    [`cyclic value`, cyclic],
+    [`undefined toJSON result`, { toJSON: () => undefined }],
+  ])(`storage_set_json skips %s`, (case_name, value) => {
+    expect(() => storage_set_json(case_name, value)).not.toThrow()
+    expect(storage_get(case_name)).toBeNull()
   })
 })
 
