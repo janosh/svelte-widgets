@@ -36,9 +36,10 @@
     const opened_by_search = new SvelteSet<HTMLDetailsElement>()
 
     const set_hidden = (element: HTMLElement, hide: boolean): void => {
-      if (hide && !element.hidden) hidden_by_search.add(element)
-      if (hidden_by_search.has(element)) element.hidden = hide
-      if (!hide) hidden_by_search.delete(element)
+      if (hide && !element.hidden) {
+        hidden_by_search.add(element)
+        element.hidden = true
+      } else if (!hide && hidden_by_search.delete(element)) element.hidden = false
     }
 
     const restore_visibility = (): void => {

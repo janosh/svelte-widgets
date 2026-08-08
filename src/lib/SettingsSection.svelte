@@ -4,7 +4,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
-  import { observe_subtree } from './utils'
+  import { is_object, observe_subtree } from './utils'
 
   type SettingMetadata = Readonly<
     Record<string, string | { readonly description: string } | undefined>
@@ -27,10 +27,9 @@
     // arrays are unsupported because reset snapshots and comparisons only cover these shapes.
     current_values?: Record<string, unknown>
     children: Snippet
-    // `grid` puts every direct label/.setting row on one shared [label][value][wide] column
-    // rhythm, so number inputs and sliders line up down the whole section instead of each
-    // row's controls starting wherever its label text happens to end. `flow` leaves layout
-    // to the caller (the historical behaviour).
+    // `grid` puts every direct label/.setting row on one shared [label][value][wide control]
+    // column rhythm, so controls line up down the whole section instead of starting wherever
+    // each row's label text happens to end. `flow` leaves layout to the caller.
     layout?: `flow` | `grid`
     // Omit to reset every changed key through `on_reset_key`. Pass one only for sections whose
     // reset has to do more than restore values (clearing validation state, for instance).
@@ -47,14 +46,13 @@
     descriptions_open?: boolean
   } = $props()
 
-  // Create a deep copy of current_values on mount to use as reference values
-  function deep_copy(obj: unknown): unknown {
-    if (obj === null || typeof obj !== `object`) return obj
-    if (obj instanceof Date) return new Date(obj)
-    if (obj instanceof RegExp) return new RegExp(obj)
-    if (Array.isArray(obj)) return obj.map(deep_copy)
+  const deep_copy = (value: unknown): unknown => {
+    if (!is_object(value)) return value
+    if (value instanceof Date) return new Date(value)
+    if (value instanceof RegExp) return new RegExp(value)
+    if (Array.isArray(value)) return value.map(deep_copy)
     return Object.fromEntries(
-      Object.entries(obj).map(([key, value]) => [key, deep_copy(value)]),
+      Object.entries(value).map(([key, item]) => [key, deep_copy(item)]),
     )
   }
 
@@ -68,42 +66,40 @@
   const section_id = $props.id()
   const title_id = `settings-section-title-${section_id}`
 
-  // Order-independent deep equality for setting values
+  const scalar_of = (value: object): number | string | undefined =>
+    value instanceof Date
+      ? value.getTime()
+      : value instanceof RegExp
+        ? String(value)
+        : undefined
+
+  // Order-independent deep equality over the shapes `deep_copy` preserves
   const setting_equal = (left: unknown, right: unknown): boolean => {
     if (Object.is(left, right)) return true
-    if (left == null || right == null) return false
-    if (typeof left !== `object` || typeof right !== `object`) return false
-    if (left instanceof Date || right instanceof Date)
-      return (
-        left instanceof Date &&
-        right instanceof Date &&
-        left.getTime() === right.getTime()
-      )
-    if (left instanceof RegExp || right instanceof RegExp)
-      return (
-        left instanceof RegExp &&
-        right instanceof RegExp &&
-        left.toString() === right.toString()
-      )
+    if (!is_object(left) || !is_object(right)) return false
+    const [left_scalar, right_scalar] = [scalar_of(left), scalar_of(right)]
+    if (left_scalar !== undefined || right_scalar !== undefined)
+      return left_scalar === right_scalar
     if (Array.isArray(left) || Array.isArray(right)) {
-      if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-        return false
-      }
-      return left.every((item, idx) => setting_equal(item, right[idx]))
+      return (
+        Array.isArray(left) &&
+        Array.isArray(right) &&
+        left.length === right.length &&
+        left.every((item, idx) => setting_equal(item, right[idx]))
+      )
     }
-    const left_obj = left as Record<string, unknown>
-    const right_obj = right as Record<string, unknown>
-    const left_keys = Object.keys(left_obj)
-    if (left_keys.length !== Object.keys(right_obj).length) return false
-    return left_keys.every(
-      (key) =>
-        Object.hasOwn(right_obj, key) && setting_equal(left_obj[key], right_obj[key]),
+    const left_entries = Object.entries(left)
+    return (
+      left_entries.length === Object.keys(right).length &&
+      left_entries.every(
+        ([key, value]) => Object.hasOwn(right, key) && setting_equal(value, right[key]),
+      )
     )
   }
 
   // Key presence is independent of value: additions/removals count even when the
   // value is undefined. Only compare values when both sides own the key.
-  let changed_keys = $derived(
+  const changed_keys = $derived(
     Object.keys({ ...reference_values, ...current_values }).filter(
       (key) =>
         Object.hasOwn(reference_values, key) !== Object.hasOwn(current_values, key) ||
@@ -111,6 +107,9 @@
     ),
   )
   let has_descriptions = $state(false)
+  const show_reset = $derived(
+    changed_keys.length > 0 && Boolean(on_reset || on_reset_key),
+  )
 
   const reset_key = (key: string): void => {
     if (!on_reset_key || !changed_keys.includes(key)) return
@@ -118,19 +117,18 @@
     on_reset_key(key, deep_copy(reference_values[key]), reference_present)
   }
 
-  function handle_reset(event: MouseEvent) {
+  // Our buttons may sit inside a <summary> or <label>, neither of which should react to them
+  const swallow_click = (action: () => void) => (event: MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
+    action()
+  }
+
+  const handle_reset = swallow_click(() => {
     if (on_reset) on_reset()
     // Snapshot first: each reset_key shrinks changed_keys as the caller writes the value back
     else for (const key of changed_keys.slice()) reset_key(key)
-  }
-
-  function handle_descriptions_toggle(event: MouseEvent) {
-    event.stopPropagation()
-    event.preventDefault()
-    descriptions_open = !descriptions_open
-  }
+  })
 
   type EnhancedRow = {
     original_description: string | null
@@ -255,36 +253,36 @@
         enhancement.description_element = null
       }
 
-      const needs_reset = Boolean(on_reset_key) && changed_keys.includes(key)
-      if (!needs_reset) remove_reset_button(row, enhancement)
-      else {
+      if (!on_reset_key || !changed_keys.includes(key)) {
+        remove_reset_button(row, enhancement)
+      } else {
         if (!enhancement.reset_button) {
           const reset_button = document.createElement(`button`)
           reset_button.type = `button`
           reset_button.className = `setting-reset-button`
           reset_button.textContent = `↶`
           // Resolve the key at click time so a row that changes data-key needs no rewiring
-          reset_button.addEventListener(`click`, (event) => {
-            event.preventDefault()
-            event.stopPropagation()
-            if (row.dataset.key) reset_key(row.dataset.key)
-          })
+          reset_button.addEventListener(
+            `click`,
+            swallow_click(() => {
+              if (row.dataset.key) reset_key(row.dataset.key)
+            }),
+          )
           enhancement.reset_button = reset_button
           row.classList.add(`has-setting-reset`)
           row.append(reset_button)
         }
-        enhancement.reset_button.setAttribute(`aria-label`, `Reset ${key} to default`)
-        enhancement.reset_button.title = `Reset ${key} to default`
+        const reset_label = `Reset ${key} to default`
+        enhancement.reset_button.setAttribute(`aria-label`, reset_label)
+        enhancement.reset_button.title = reset_label
       }
       return Boolean(description)
     }
 
     const refresh = (): void => {
-      let found_description = false
-      for (const row of section.querySelectorAll<HTMLElement>(`[data-key]`)) {
-        found_description = enhance_row(row) || found_description
-      }
-      has_descriptions = found_description
+      // `map`, not `some`: every row has to be enhanced, short-circuiting would skip the rest
+      const rows = [...section.querySelectorAll<HTMLElement>(`[data-key]`)]
+      has_descriptions = rows.map(enhance_row).includes(true)
       for (const [row, enhancement] of enhanced_rows) {
         if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
           cleanup_enhancement(row, enhancement)
@@ -310,13 +308,13 @@
 
 <div class="settings-section-heading">
   <h4 id={title_id}>{title}</h4>
-  {#if has_descriptions || changed_keys.length}
+  {#if has_descriptions || show_reset}
     <span class="heading-actions">
       {#if has_descriptions}
         <button
           type="button"
           class="description-toggle"
-          onclick={handle_descriptions_toggle}
+          onclick={swallow_click(() => (descriptions_open = !descriptions_open))}
           aria-expanded={descriptions_open}
           aria-label="{descriptions_open
             ? `Hide`
@@ -325,7 +323,7 @@
           Explain
         </button>
       {/if}
-      {#if changed_keys.length}
+      {#if show_reset}
         <button
           type="button"
           class="reset-button"
@@ -437,9 +435,7 @@
     gap: var(--settings-row-gap, 4pt) 0;
     align-content: start;
   }
-  /* Rows are [label] [value] [wide control]. A row holding a single control lets it span the
-     last two tracks, so selects, sliders and swatches all begin on the same vertical line.
-     --ctrl-cols is published so a pane can give the same rhythm to rows it nests one level
+  /* --ctrl-cols is published so a pane can give the same rhythm to rows it nests one level
      deeper (grouped axis rows, say) without restating the track list. */
   section.grid > :global(:is(label, .setting)) {
     display: grid;

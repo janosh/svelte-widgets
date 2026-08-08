@@ -374,49 +374,49 @@ export const resizable =
         ]),
       }
     }
-    const resolve_limit = (limit: ResizeLimit) =>
-      Math.max(0, typeof limit === `function` ? limit(node) : limit)
-    const read_maximum = () => ({
-      width: resolve_limit(max_width),
-      height: resolve_limit(max_height),
-    })
+    const read_maximum = (): Dimensions => {
+      const resolve = (limit: ResizeLimit) =>
+        Math.max(0, typeof limit === `function` ? limit(node) : limit)
+      return { width: resolve(max_width), height: resolve(max_height) }
+    }
     // Only this instance's own strips — `querySelectorAll` would also rewrite the values of
     // a nested resizable's separators, which report a different element's size.
     const separators: { handle: HTMLElement; controls_width: boolean }[] = []
-    const sync_separator_values = (current: Dimensions, maximum: Dimensions) => {
+    const sync_separator_values = (
+      current: Dimensions = { width: node.offsetWidth, height: node.offsetHeight },
+      maximum: Dimensions = read_maximum(),
+    ) => {
       for (const { handle, controls_width } of separators) {
         const minimum = controls_width ? min_width : min_height
-        const value = controls_width ? current.width : current.height
         const limit = controls_width ? maximum.width : maximum.height
         handle.setAttribute(`aria-valuemin`, `${Math.min(minimum, limit)}`)
         handle.setAttribute(
           `aria-valuemax`,
           `${Number.isFinite(limit) ? limit : Number.MAX_SAFE_INTEGER}`,
         )
-        handle.setAttribute(`aria-valuenow`, `${value}`)
+        handle.setAttribute(
+          `aria-valuenow`,
+          `${controls_width ? current.width : current.height}`,
+        )
       }
     }
-    const dimensions_from_delta = (
-      grab: Grab,
-      measured: ReturnType<typeof measure>,
-      delta_x: number,
-      delta_y: number,
-    ): Dimensions => ({
-      width:
-        measured.width +
-        (grab.horizontal === `right` ? delta_x : grab.horizontal ? -delta_x : 0),
-      height:
-        measured.height +
-        (grab.vertical === `bottom` ? delta_y : grab.vertical ? -delta_y : 0),
-    })
     const apply_resize = (
       event: ResizeEvent,
       grab: Grab,
-      requested: Dimensions,
       measured: ReturnType<typeof measure>,
       maximum: Dimensions,
+      delta_x: number,
+      delta_y: number,
       lock_aspect_ratio = false,
     ): Dimensions => {
+      // grow from the far edge; a left/top shrink moves the node so the opposite corner stays
+      let width =
+        measured.width +
+        (grab.horizontal === `right` ? delta_x : grab.horizontal ? -delta_x : 0)
+      let height =
+        measured.height +
+        (grab.vertical === `bottom` ? delta_y : grab.vertical ? -delta_y : 0)
+      // Content-box padding and borders cannot shrink, so they set the real floor.
       const minimum_width = Math.min(
         Math.max(min_width, measured.width_inset),
         maximum.width,
@@ -425,7 +425,6 @@ export const resizable =
         Math.max(min_height, measured.height_inset),
         maximum.height,
       )
-      let { width, height } = requested
 
       if (
         lock_aspect_ratio &&
@@ -492,14 +491,10 @@ export const resizable =
           apply_resize(
             move_event,
             grab,
-            dimensions_from_delta(
-              grab,
-              measured,
-              move_event.clientX - origin.x,
-              move_event.clientY - origin.y,
-            ),
             measured,
             maximum,
+            move_event.clientX - origin.x,
+            move_event.clientY - origin.y,
             move_event.shiftKey,
           )
         },
@@ -526,7 +521,7 @@ export const resizable =
         repositioned[pos] = false
       }
       const dimensions = { width: node.offsetWidth, height: node.offsetHeight }
-      sync_separator_values(dimensions, read_maximum())
+      sync_separator_values(dimensions)
       on_resize_reset?.(event, dimensions)
     }
 
@@ -552,9 +547,10 @@ export const resizable =
       const dimensions = apply_resize(
         event,
         grab,
-        dimensions_from_delta(grab, measured, direction.x * step, direction.y * step),
         measured,
         maximum,
+        direction.x * step,
+        direction.y * step,
       )
       on_resize_end?.(event, dimensions)
     }
@@ -563,16 +559,15 @@ export const resizable =
       const handle = document.createElement(`div`)
       const edge =
         grab.horizontal && grab.vertical ? null : (grab.horizontal ?? grab.vertical)
-      const arrow_keys = [
-        ...(grab.horizontal ? [`ArrowLeft`, `ArrowRight`] : []),
-        ...(grab.vertical ? [`ArrowUp`, `ArrowDown`] : []),
-      ]
-      handle.tabIndex = 0
-      handle.setAttribute(
-        `aria-keyshortcuts`,
-        [...arrow_keys, ...arrow_keys.map((key) => `Shift+${key}`), `Enter`].join(` `),
-      )
       if (edge) {
+        const arrow_keys = grab.horizontal
+          ? [`ArrowLeft`, `ArrowRight`]
+          : [`ArrowUp`, `ArrowDown`]
+        handle.tabIndex = 0
+        handle.setAttribute(
+          `aria-keyshortcuts`,
+          [...arrow_keys, ...arrow_keys.map((key) => `Shift+${key}`), `Enter`].join(` `),
+        )
         handle.dataset.resizeEdge = edge
         handle.setAttribute(`role`, `separator`)
         handle.setAttribute(`aria-label`, `Resize from ${edge} edge`)
@@ -581,20 +576,15 @@ export const resizable =
           grab.horizontal ? `vertical` : `horizontal`,
         )
         separators.push({ handle, controls_width: Boolean(grab.horizontal) })
+        handle.addEventListener(`keydown`, (event) => on_keydown(event, grab), { signal })
       } else {
         handle.dataset.resizeCorner = `${grab.vertical}-${grab.horizontal}`
-        handle.setAttribute(`role`, `group`)
-        handle.setAttribute(`aria-roledescription`, `resize handle`)
-        handle.setAttribute(
-          `aria-label`,
-          `Resize from ${grab.vertical} ${grab.horizontal} corner`,
-        )
+        handle.setAttribute(`aria-hidden`, `true`)
       }
       handle.style.cssText = `position: absolute; touch-action: none; ${css}`
       handle.addEventListener(`pointerdown`, (event) => on_pointerdown(event, grab), {
         signal,
       })
-      handle.addEventListener(`keydown`, (event) => on_keydown(event, grab), { signal })
       handle.addEventListener(`dblclick`, reset_size, { signal })
       node.append(handle)
       return handle
@@ -602,38 +592,37 @@ export const resizable =
 
     const vertical_edges = ([`top`, `bottom`] as const).filter((edge) => has_edge(edge))
     const horizontal_edges = ([`left`, `right`] as const).filter((edge) => has_edge(edge))
-    const handles = ([`top`, `left`, `bottom`, `right`] as const)
-      .filter((edge) => has_edge(edge))
-      .map((edge) => {
-        const across = edge === `left` || edge === `right`
-        const cross = across ? ([`top`, `bottom`] as const) : ([`left`, `right`] as const)
-        return add_handle(
-          across ? { horizontal: edge } : { vertical: edge },
-          `cursor: ${across ? `ew` : `ns`}-resize;
-          ${across ? `width` : `height`}: ${handle_size}px;
-          ${[edge, ...cross].map((side) => `${side}: ${inset(side)}px`).join(`; `)}`,
-        )
-      })
+    const handles = [
+      ...([`top`, `left`, `bottom`, `right`] as const)
+        .filter((edge) => has_edge(edge))
+        .map((edge) => {
+          const across = edge === `left` || edge === `right`
+          const cross = across
+            ? ([`top`, `bottom`] as const)
+            : ([`left`, `right`] as const)
+          return add_handle(
+            across ? { horizontal: edge } : { vertical: edge },
+            `cursor: ${across ? `ew` : `ns`}-resize;
+            ${across ? `width` : `height`}: ${handle_size}px;
+            ${[edge, ...cross].map((side) => `${side}: ${inset(side)}px`).join(`; `)}`,
+          )
+        }),
       // Where two enabled edges meet, a square handle drives both axes. Appended after the
       // strips so it paints over their overlap, which otherwise resizes one axis only.
-      .concat(
-        vertical_edges.flatMap((vertical) =>
-          horizontal_edges.map((horizontal) =>
-            add_handle(
-              { horizontal, vertical },
-              // top-left/bottom-right share a diagonal, as do top-right/bottom-left
-              `cursor: ${(vertical === `top`) === (horizontal === `left`) ? `nwse` : `nesw`}-resize;
-              width: ${handle_size}px; height: ${handle_size}px;
-              ${vertical}: ${inset(vertical)}px; ${horizontal}: ${inset(horizontal)}px`,
-            ),
+      ...vertical_edges.flatMap((vertical) =>
+        horizontal_edges.map((horizontal) =>
+          add_handle(
+            { horizontal, vertical },
+            // top-left/bottom-right share a diagonal, as do top-right/bottom-left
+            `cursor: ${(vertical === `top`) === (horizontal === `left`) ? `nwse` : `nesw`}-resize;
+            width: ${handle_size}px; height: ${handle_size}px;
+            ${vertical}: ${inset(vertical)}px; ${horizontal}: ${inset(horizontal)}px`,
           ),
         ),
-      )
+      ),
+    ]
 
-    sync_separator_values(
-      { width: node.offsetWidth, height: node.offsetHeight },
-      read_maximum(),
-    )
+    sync_separator_values()
 
     return () => {
       stop_pointer_follow?.()

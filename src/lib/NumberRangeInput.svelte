@@ -63,7 +63,7 @@
   let input_bounds = $derived({
     min: min ?? setting_config?.minimum,
     max: max ?? setting_config?.maximum,
-    step: step ?? setting_config?.multipleOf,
+    step: step ?? setting_config?.multipleOf ?? `any`,
   })
   let resolved_title = $derived(title ?? setting_config?.description)
   let range_label = $derived(resolved_title?.trim() || setting?.trim() || `Value`)

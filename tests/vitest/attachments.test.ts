@@ -2752,17 +2752,16 @@ describe(`resizable`, () => {
     mock_rect(element, rect)
     return element
   }
-  // the strip the browser hit-tests, in place of coordinates near an edge
-  const grip = (box: HTMLElement, edge = `right`) => {
-    const strip = box.querySelector<HTMLElement>(`[data-resize-edge="${edge}"]`)
-    if (!strip) throw new Error(`no ${edge} resize strip on ${box.outerHTML}`)
-    return strip
-  }
-  const corner_grip = (box: HTMLElement, corner = `bottom-right`) => {
-    const handle = box.querySelector<HTMLElement>(`[data-resize-corner="${corner}"]`)
-    if (!handle) throw new Error(`no ${corner} resize corner on ${box.outerHTML}`)
+  // the handle the browser hit-tests, in place of coordinates near an edge
+  const handle_of = (box: HTMLElement, attribute: string, value: string) => {
+    const handle = box.querySelector<HTMLElement>(`[${attribute}="${value}"]`)
+    if (!handle) throw new Error(`no ${value} ${attribute} on ${box.outerHTML}`)
     return handle
   }
+  const grip = (box: HTMLElement, edge = `right`) =>
+    handle_of(box, `data-resize-edge`, edge)
+  const corner_grip = (box: HTMLElement, corner = `bottom-right`) =>
+    handle_of(box, `data-resize-corner`, corner)
 
   // A mouse pressed while a touch is down reaches here: isPrimary bars a second finger but
   // not a second device. Without the guard the first follower is orphaned, so its window
@@ -2924,12 +2923,8 @@ describe(`resizable`, () => {
       `bottom-right`,
     ])
     const corner = corner_grip(element, `top-right`)
-    expect([
-      corner.tabIndex,
-      corner.getAttribute(`role`),
-      corner.getAttribute(`aria-roledescription`),
-      corner.getAttribute(`aria-label`),
-    ]).toEqual([0, `group`, `resize handle`, `Resize from top right corner`])
+    expect([corner.tabIndex, corner.getAttribute(`aria-hidden`)]).toEqual([-1, `true`])
+    expect(corner.style.cursor).toBe(`nesw-resize`)
     // corners come last so they paint over the strip overlap they sit on
     expect(element.lastElementChild?.getAttribute(`data-resize-corner`)).toBe(
       `bottom-right`,
@@ -2994,6 +2989,7 @@ describe(`resizable`, () => {
 
   it.each([
     [`right`, `ArrowRight`, false, `210px`, `150px`, ``],
+    [`right`, `ArrowRight`, true, `250px`, `150px`, ``],
     [`left`, `ArrowLeft`, false, `210px`, `150px`, `-10px`],
     [`bottom`, `ArrowDown`, true, `200px`, `200px`, ``],
     [`top`, `ArrowUp`, true, `200px`, `200px`, `-50px`],
@@ -3011,15 +3007,14 @@ describe(`resizable`, () => {
     },
   )
 
-  it(`resizes and resets both corner axes from the keyboard`, () => {
+  it(`resets a keyboard resize with Enter`, () => {
     const element = create_box()
     const on_resize_start = vi.fn()
     const on_resize_reset = vi.fn()
-    resizable({ edges: [`right`, `bottom`], on_resize_start, on_resize_reset })(element)
-    const handle = corner_grip(element)
+    resizable({ edges: [`right`], on_resize_start, on_resize_reset })(element)
+    const handle = grip(element, `right`)
 
-    dispatch_key(handle, `ArrowDown`, { shiftKey: true })
-    expect([element.style.width, element.style.height]).toEqual([`200px`, `200px`])
+    dispatch_key(handle, `ArrowRight`, { shiftKey: true })
     expect(on_resize_start).toHaveBeenCalledWith(expect.any(KeyboardEvent), {
       width: 200,
       height: 150,
@@ -3027,7 +3022,7 @@ describe(`resizable`, () => {
 
     expect(dispatch_key(handle, `Enter`).defaultPrevented).toBe(true)
     expect(handle.getAttribute(`aria-keyshortcuts`)?.split(` `)).toContain(`Enter`)
-    expect([element.style.width, element.style.height]).toEqual([``, ``])
+    expect([element.style.width, element.style.height]).toEqual([``, `150px`])
     expect(on_resize_reset).toHaveBeenCalledWith(expect.any(KeyboardEvent), {
       width: 200,
       height: 150,

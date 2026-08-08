@@ -42,48 +42,41 @@ describe(`NumberRangeInput`, () => {
     ).toBe(`Value`)
   })
 
+  const schema = {
+    radius: {
+      minimum: 0,
+      maximum: 2,
+      multipleOf: 0.1,
+      description: `Radius from schema`,
+    },
+  }
   test.each([
-    {
-      name: `explicit metadata overrides schema values`,
-      props: {
-        setting: `radius`,
-        schema: {
-          radius: {
-            minimum: 0,
-            maximum: 2,
-            multipleOf: 0.1,
-            description: `Radius from schema`,
-          },
-        },
-        min: 0.25,
-        max: 1.25,
-        step: 0.25,
-        title: `Custom radius`,
-        value: 0.5,
-      },
-      expected_bounds: { min: `0.25`, max: `1.25`, step: `0.25` },
-      expected_label: `Custom radius`,
-    },
-    {
-      name: `schema values supply absent bounds and description`,
-      props: {
-        setting: `opacity`,
-        schema: {
-          opacity: {
-            minimum: 0,
-            maximum: 1,
-            multipleOf: 0.05,
-            description: `Layer opacity`,
-          },
-        },
-        value: 0.5,
-      },
-      expected_bounds: { min: `0`, max: `1`, step: `0.05` },
-      expected_label: `Layer opacity`,
-    },
-  ])(`$name`, ({ props, expected_bounds, expected_label }) => {
-    const { target, inputs, range } = mount_range(props)
-    expect(target.querySelector(`label`)?.dataset.key).toBe(props.setting)
+    [
+      `explicit props override the schema`,
+      { min: 0.25, max: 1.25, step: 0.25, title: `Custom radius` },
+      { min: `0.25`, max: `1.25`, step: `0.25` },
+      `Custom radius`,
+    ],
+    [
+      `the schema supplies absent bounds and description`,
+      {},
+      { min: `0`, max: `2`, step: `0.1` },
+      `Radius from schema`,
+    ],
+    [
+      `a schema without an increment allows any step`,
+      { schema: { radius: { minimum: 0, maximum: 1 } } },
+      { min: `0`, max: `1`, step: `any` },
+      `radius`,
+    ],
+  ] as const)(`%s`, (_name, overrides, expected_bounds, expected_label) => {
+    const { target, inputs, range } = mount_range({
+      setting: `radius`,
+      schema,
+      value: 0.5,
+      ...overrides,
+    })
+    expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
     expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
       expected_bounds,
       expected_bounds,

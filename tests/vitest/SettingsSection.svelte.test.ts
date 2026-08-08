@@ -18,6 +18,35 @@ const click_and_tick = async (
   await tick()
 }
 
+// A section whose caller writes reference values back, the way a real settings pane does
+const mount_tracked_section = (initial: SettingValues, children: string) => {
+  let current_values = $state<SettingValues>({ ...initial })
+  const reset_calls: [string, unknown, boolean][] = []
+  mount_section({
+    title: `Atoms`,
+    get current_values() {
+      return current_values
+    },
+    children: snippet(children),
+    on_reset_key: (key: string, value: unknown, present: boolean) => {
+      reset_calls.push([key, value, present])
+      const next_values = { ...current_values }
+      if (present) next_values[key] = value
+      else Reflect.deleteProperty(next_values, key)
+      current_values = next_values
+    },
+  })
+  return {
+    reset_calls,
+    get values() {
+      return current_values
+    },
+    set values(next: SettingValues) {
+      current_values = next
+    },
+  }
+}
+
 describe(`SettingsSection`, () => {
   test(`renders content with unique aria-labelledby targets`, () => {
     for (const [title, content] of [
@@ -46,6 +75,13 @@ describe(`SettingsSection`, () => {
     mount_section({ title: `Export`, children: snippet(`<button>Download</button>`) })
     expect(document.querySelector(`section`)?.textContent).toContain(`Download`)
     expect(document.querySelector(`.reset-button`)).toBeNull()
+  })
+
+  test(`hides reset controls when no reset callback is available`, () => {
+    const current_values = $state<SettingValues>({ radius: 1 })
+    mount_section({ title: `A`, current_values, children: snippet(`<span></span>`) })
+    flushSync(() => (current_values.radius = 2))
+    expect(document.querySelector(`.heading-actions`)).toBeNull()
   })
 
   test.each<[string, SettingValues, SettingValues, boolean]>([
@@ -88,19 +124,10 @@ describe(`SettingsSection`, () => {
     [`key addition`, { setting1: `a` }, { setting1: `a`, setting2: undefined }, true],
     [`key removal`, { setting1: `a`, setting2: undefined }, { setting1: `a` }, true],
   ])(`reset button after %s`, (_name, initial, next, expect_reset) => {
-    let current_values = $state<SettingValues>({ ...initial })
-    mount_section({
-      title: `Test Settings`,
-      get current_values() {
-        return current_values
-      },
-      children: snippet(`<span>content</span>`),
-    })
+    const tracked = mount_tracked_section(initial, `<span>content</span>`)
     expect(document.querySelector(`.reset-button`)).toBeNull()
 
-    flushSync(() => {
-      current_values = { ...next }
-    })
+    flushSync(() => (tracked.values = { ...next }))
     const reset_button = document.querySelector<HTMLButtonElement>(`.reset-button`)
     expect(Boolean(reset_button)).toBe(expect_reset)
     if (expect_reset) expect(reset_button?.type).toBe(`button`)
@@ -125,33 +152,16 @@ describe(`SettingsSection`, () => {
     },
   ])(`resets $name to its mounted state`, async (test_case) => {
     const { initial, change, key, reference_value, reference_present } = test_case
-    let current_values = $state<SettingValues>({ ...initial })
-    const read_current_values = (): SettingValues => current_values
-    const reset_calls: [string, unknown, boolean][] = []
-    mount_section({
-      title: `Atoms`,
-      get current_values() {
-        return current_values
-      },
-      children: snippet(`
-          <div>
-            <label data-key="radius"><span>Radius</span><input></label>
-            <label data-key="palette"><span>Palette</span><select></select></label>
-            <label data-key="temporary"><span>Temporary</span><input></label>
-          </div>
-        `),
-      on_reset_key: (reset_key: string, value: unknown, present: boolean) => {
-        reset_calls.push([reset_key, value, present])
-        const next_values = { ...current_values }
-        if (present) next_values[reset_key] = value
-        else Reflect.deleteProperty(next_values, reset_key)
-        current_values = next_values
-      },
-    })
+    const tracked = mount_tracked_section(
+      initial,
+      `<div>
+        <label data-key="radius"><span>Radius</span><input></label>
+        <label data-key="palette"><span>Palette</span><select></select></label>
+        <label data-key="temporary"><span>Temporary</span><input></label>
+      </div>`,
+    )
 
-    flushSync(() => {
-      current_values = { ...current_values, ...change }
-    })
+    flushSync(() => (tracked.values = { ...tracked.values, ...change }))
     await tick()
     expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(1)
     expect(
@@ -161,42 +171,28 @@ describe(`SettingsSection`, () => {
     ).toBe(`Reset ${key} to default`)
     await click_and_tick(`[data-key="${key}"] .setting-reset-button`)
 
-    expect(reset_calls).toEqual([[key, reference_value, reference_present]])
-    expect(Object.hasOwn(read_current_values(), key)).toBe(reference_present)
-    if (reference_present) expect(read_current_values()[key]).toEqual(reference_value)
+    expect(tracked.reset_calls).toEqual([[key, reference_value, reference_present]])
+    expect(Object.hasOwn(tracked.values, key)).toBe(reference_present)
+    if (reference_present) expect(tracked.values[key]).toEqual(reference_value)
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
   test(`section reset restores every changed key when on_reset is omitted`, async () => {
-    let current_values = $state<SettingValues>({ radius: 1, opacity: 0.5 })
-    const read_current_values = (): SettingValues => current_values
-    const reset_calls: string[] = []
-    mount_section({
-      title: `Appearance`,
-      get current_values() {
-        return current_values
-      },
-      children: snippet(`
-        <div>
-          <label data-key="radius"><span>Radius</span><input></label>
-          <label data-key="opacity"><span>Opacity</span><input></label>
-        </div>
-        `),
-      on_reset_key: (key: string, value: unknown) => {
-        reset_calls.push(key)
-        current_values = { ...current_values, [key]: value }
-      },
-    })
+    const tracked = mount_tracked_section(
+      { radius: 1, opacity: 0.5 },
+      `<div>
+        <label data-key="radius"><span>Radius</span><input></label>
+        <label data-key="opacity"><span>Opacity</span><input></label>
+      </div>`,
+    )
 
-    flushSync(() => {
-      current_values = { radius: 2, opacity: 0.8 }
-    })
+    flushSync(() => (tracked.values = { radius: 2, opacity: 0.8 }))
     await tick()
     await click_and_tick(`.settings-section-heading .reset-button`)
 
-    expect(read_current_values()).toEqual({ radius: 1, opacity: 0.5 })
-    expect(reset_calls).toEqual([`radius`, `opacity`])
+    expect(tracked.values).toEqual({ radius: 1, opacity: 0.5 })
+    expect(tracked.reset_calls.map(([key]) => key)).toEqual([`radius`, `opacity`])
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
