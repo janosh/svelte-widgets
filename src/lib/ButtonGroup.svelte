@@ -56,9 +56,9 @@
     // and an aria-required-children violation. Prefer non-focusable content, or accept
     // the tradeoff knowingly — the sort arrow sits outside the group for this reason.
     option_suffix?: Snippet<[{ option: ButtonGroupOption<Value>; selected: boolean }]>
-    // `content` comes from each option's own `tooltip`; the rest is yours, which is
+    // Content comes from each option's own `tooltip`; the rest is yours, which is
     // what lets a consumer opt into allow_html for rich tooltips
-    tooltip_options?: Omit<TooltipOptions, `content`>
+    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     // a div cannot legally sit inside phrasing content, so a group rendered in a
     // heading or a paragraph needs to be a span
     as?: string

@@ -1093,6 +1093,13 @@ describe(`Nav`, () => {
   describe(`tooltips`, () => {
     beforeEach(() => vi.useFakeTimers())
     afterEach(() => vi.useRealTimers())
+    const open_tooltip = async (selector: string): Promise<void> => {
+      await tick()
+      doc_query(selector).dispatchEvent(
+        new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
+      )
+      await vi.advanceTimersByTimeAsync(0)
+    }
 
     test.each([
       [
@@ -1119,10 +1126,8 @@ describe(`Nav`, () => {
     ] as [string, NavRoute[], Record<string, string> | undefined, string, string][])(
       `%s`,
       async (_desc, routes, tooltips, selector, expected_content) => {
-        mount_nav({ routes, tooltips })
-        await tick() // tooltip attachment is wired up in an effect after mount
-        doc_query(selector).dispatchEvent(new MouseEvent(`mouseenter`))
-        await vi.advanceTimersByTimeAsync(200) // advance past default 100ms show delay
+        mount_nav({ routes, tooltips, tooltip_options: { open_delay_ms: 0 } })
+        await open_tooltip(selector)
 
         expect(
           document.querySelector(`.custom-tooltip .tooltip-content`)?.textContent,
@@ -1133,18 +1138,14 @@ describe(`Nav`, () => {
     test(`shared tooltip_options merge with per-route options taking precedence`, async () => {
       mount_nav({
         routes: [`/docs`],
-        tooltips: { '/docs': { content: `Docs tooltip`, delay_ms: 50 } },
-        tooltip_options: { delay_ms: 500, placement: `right` },
+        tooltips: { '/docs': { content: `Docs tooltip`, show_arrow: false } },
+        tooltip_options: { open_delay_ms: 0, show_arrow: true, placement: `right` },
       })
-      await tick() // wait for tooltip attachment to be wired up
-      doc_query(`a[href="/docs"]`).dispatchEvent(new MouseEvent(`mouseenter`))
-
-      // per-route delay (50ms) wins over the shared 500ms delay
-      await vi.advanceTimersByTimeAsync(49)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-      await vi.advanceTimersByTimeAsync(1)
+      await open_tooltip(`a[href="/docs"]`)
       // placement from shared tooltip_options still applies
       expect(doc_query(`.custom-tooltip`).getAttribute(`data-placement`)).toBe(`right`)
+      // per-route arrow option wins over the shared setting
+      expect(document.querySelector(`.custom-tooltip-arrow`)).toBeNull()
     })
   })
 

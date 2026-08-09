@@ -22,7 +22,9 @@ describe(`ContributorList`, () => {
     await tick()
   }
   const hover = (element: Element) => {
-    element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
+    element.dispatchEvent(
+      new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
+    )
     vi.runAllTimers()
   }
 

@@ -182,18 +182,15 @@ test(`storage events synchronize the theme key until unmount`, async () => {
   expect(applied_theme()).toEqual([`light`, `light`])
 })
 
-// both rows needed: tooltip=false alone passes even if the attachment never runs
+// both rows needed: tooltip=false alone passes even if the attachment never strips title
 test.each([
-  [`default`, {}, `Switch to dark theme`, null],
-  [`false`, false, null, `Switch to dark theme`],
+  [`default`, {}, null],
+  [`false`, false, `Switch to dark theme`],
 ] as const)(
   `tooltip=%s decides whether the tooltip takes over the native title`,
-  async (_label, tooltip, data_original_title, title) => {
+  async (_label, tooltip, title) => {
     const button = await mount_theme_toggle({ tooltip })
-    expect([
-      button.getAttribute(`data-original-title`),
-      button.getAttribute(`title`),
-    ]).toEqual([data_original_title, title])
+    expect(button.getAttribute(`title`)).toBe(title)
   },
 )
 

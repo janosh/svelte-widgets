@@ -388,7 +388,9 @@ describe(`ButtonGroup`, () => {
       const buttons = mount_group({ options, tooltip_options })
       await tick()
       const hover = (button: HTMLButtonElement) => {
-        button.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
+        button.dispatchEvent(
+          new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
+        )
         vi.runAllTimers()
       }
 

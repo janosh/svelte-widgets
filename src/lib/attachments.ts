@@ -1,4 +1,5 @@
 import type { Attachment } from 'svelte/attachments'
+import { SvelteMap } from 'svelte/reactivity'
 import { files_from_data_transfer, filter_accepted_files } from './file-drop'
 import type { TextMutationOptions, TextSearchNodeFilter } from './text-search'
 import { create_burst_debounce, sync_owned_highlight } from './text-search'
@@ -941,518 +942,949 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
   return cleanup
 }
 
-// Global tooltip state to ensure only one tooltip is shown at a time
-let current_tooltip: (HTMLElement & { owner_element: HTMLElement }) | null = null
-let show_timeout: ReturnType<typeof setTimeout> | undefined
-let hide_timeout: ReturnType<typeof setTimeout> | undefined
-// Element that scheduled the pending show_timeout. owner_element is only set once
-// the timeout fires, so pending shows need their own ownership tracking to let
-// cleanup of one tooltip instance leave another instance's pending show alone.
-let show_timeout_owner: HTMLElement | null = null
+export type TooltipTrigger = `hover-focus` | `hover` | `focus` | `manual`
+export type TooltipWrap = `balance` | `normal` | `nowrap`
+export type TooltipStrategy = `top-layer` | `fixed` | `absolute`
+export type TooltipOpenReason =
+  | `pointer`
+  | `focus`
+  | `blur`
+  | `escape`
+  | `controlled`
+  | `visibility`
 
-function clear_tooltip() {
-  clearTimeout(show_timeout)
-  show_timeout = undefined
-  show_timeout_owner = null
-  clearTimeout(hide_timeout)
-  hide_timeout = undefined
-  current_tooltip?.owner_element.removeAttribute(`aria-describedby`)
-  current_tooltip?.remove()
-  current_tooltip = null
+export type TooltipOpenDetail = {
+  trigger: HTMLElement
+  reason: TooltipOpenReason
 }
 
-// whether the element owns the visible tooltip or a pending show
-const owns_tooltip_state = (element: HTMLElement): boolean =>
-  current_tooltip?.owner_element === element || show_timeout_owner === element
-
 export interface TooltipOptions {
-  content?: string
-  placement?: `top` | `bottom` | `left` | `right`
-  delay_ms?: number
-  hide_delay_ms?: number // helps with rapid hover transitions
-  disabled?: boolean | `touch-devices` // true disables always, 'touch-devices' uses runtime detection
+  content?: string | ((trigger: HTMLElement) => string)
+  render?: (content_el: HTMLElement, trigger: HTMLElement) => undefined | (() => void)
+  placement?: Placement | `auto`
+  align?: `center` | `start` | `end`
+  fallback_placements?: Placement[]
+  offset?: number
+  cross_axis_offset?: number
+  viewport_padding?: number
+  boundary?: Element | `viewport`
+  flip?: boolean
+  shift?: boolean
+  strategy?: TooltipStrategy
+  wrap?: TooltipWrap
+  trigger?: TooltipTrigger
+  open_delay_ms?: number
+  close_delay_ms?: number
+  skip_delay_ms?: number
+  open?: boolean
+  on_open_change?: (open: boolean, detail: TooltipOpenDetail) => void
+  disabled?: boolean
+  delegate?: boolean | string
   style?: string
-  show_arrow?: boolean // Whether to show the arrow pointer (default: true)
-  offset?: number // Distance from trigger element in pixels (default: 12)
-  // Security: HTML rendering is opt-in. Set to true only for trusted or sanitized content.
+  show_arrow?: boolean
+  // HTML is opt-in. Only pass trusted content or provide sanitize_html.
   allow_html?: boolean
-  // Optional sanitizer for HTML content - called before setting innerHTML when allow_html is true
   sanitize_html?: (html: string) => string
 }
 
-function render_tooltip_content(
-  content_el: HTMLElement,
-  content: string,
+type TooltipRegistration = {
+  root: HTMLElement
+  options: TooltipOptions
+  delegate_selector: string | null
+  original_titles: SvelteMap<HTMLElement, string>
+  cleaned: boolean
+}
+
+type TooltipLocation = `trigger` | `surface` | null
+type TooltipPhase = `idle` | `open-requested` | `close-requested` | `dismissed`
+
+type ActiveTooltip = {
+  registration: TooltipRegistration
+  trigger: HTMLElement
+  pointer_trigger: boolean
+  pointer_surface: boolean
+  focus: TooltipLocation
+  open: boolean
+  phase: TooltipPhase
+}
+
+type QueuedActivation = {
+  registration: TooltipRegistration
+  trigger: HTMLElement
+  reason: `pointer` | `focus`
+  pointer: boolean
+  focus: boolean
+}
+
+const TOOLTIP_SOURCE_SELECTOR = `[title], [aria-label], [data-title]`
+const TOOLTIP_CONTENT_ATTRIBUTES = [`title`, `aria-label`, `data-title`]
+const TOOLTIP_OBSERVED_ATTRIBUTES = [
+  ...TOOLTIP_CONTENT_ATTRIBUTES,
+  `class`,
+  `style`,
+  `lang`,
+  `dir`,
+]
+const TOOLTIP_CSS_VARS = [
+  `--tooltip-bg`,
+  `--text-color`,
+  `--tooltip-border`,
+  `--tooltip-padding`,
+  `--tooltip-radius`,
+  `--tooltip-font-size`,
+  `--tooltip-font-family`,
+  `--tooltip-shadow`,
+  `--tooltip-max-width`,
+  `--tooltip-max-height`,
+  `--tooltip-opacity`,
+  `--tooltip-arrow-size`,
+  `--tooltip-transition`,
+  `--tooltip-z-index`,
+] as const
+
+const OPPOSITE_PLACEMENT: Record<Placement, Placement> = {
+  top: `bottom`,
+  bottom: `top`,
+  left: `right`,
+  right: `left`,
+}
+
+const handled_tooltip_events = new WeakSet<Event>()
+
+const is_transparent = (color: string): boolean =>
+  [``, `transparent`, `rgba(0, 0, 0, 0)`].includes(color.trim())
+
+// Computed length or a fallback when the property is unset or not in px.
+const css_px_or = (css_length: string, fallback: number): number => {
+  const parsed = css_px(css_length)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+const accepts_tooltip_trigger = (
   options: TooltipOptions,
-) {
-  if (options.allow_html !== true) {
-    content_el.textContent = content
+  trigger: `hover` | `focus`,
+): boolean => [trigger, `hover-focus`].includes(options.trigger ?? `hover-focus`)
+
+const changed_attribute_names = (records: MutationRecord[], skip?: string): string[] =>
+  records.flatMap(({ attributeName }) =>
+    attributeName && attributeName !== skip ? [attributeName] : [],
+  )
+
+const described_by_tokens = (element: Element): string[] =>
+  (element.getAttribute(`aria-describedby`) ?? ``).split(/\s+/u).filter(Boolean)
+
+const first_nonempty = (...values: (string | null | undefined)[]): string | undefined =>
+  values.find((value): value is string => typeof value === `string` && value.length > 0)
+
+const add_description = (element: Element, id: string): void => {
+  const tokens = described_by_tokens(element)
+  if (!tokens.includes(id)) tokens.push(id)
+  element.setAttribute(`aria-describedby`, tokens.join(` `))
+}
+
+const remove_description = (element: Element, id: string): void => {
+  const tokens = described_by_tokens(element).filter((token) => token !== id)
+  if (tokens.length > 0) element.setAttribute(`aria-describedby`, tokens.join(` `))
+  else element.removeAttribute(`aria-describedby`)
+}
+
+// The visual viewport (so an open on-screen keyboard shrinks it), clipped to the
+// boundary element when one is given.
+const resolve_boundary = (options: TooltipOptions, doc: Document) => {
+  const view = doc.defaultView
+  const visual = view?.visualViewport
+  const left = visual?.offsetLeft ?? 0
+  const top = visual?.offsetTop ?? 0
+  const right = left + (visual?.width ?? view?.innerWidth ?? 0)
+  const bottom = top + (visual?.height ?? view?.innerHeight ?? 0)
+  if (!(options.boundary instanceof Element)) return { top, left, right, bottom }
+  const limit = options.boundary.getBoundingClientRect()
+  return {
+    top: Math.max(top, limit.top),
+    left: Math.max(left, limit.left),
+    right: Math.min(right, limit.right),
+    bottom: Math.min(bottom, limit.bottom),
+  }
+}
+
+const apply_triangle_style = (
+  triangle_el: HTMLElement,
+  placement: Placement,
+  px: number,
+  color: string,
+  cross_axis_center: number,
+): void => {
+  triangle_el.style.cssText = `position: absolute; width: 0; height: 0; pointer-events: none;`
+  const vertical = placement === `top` || placement === `bottom`
+  const set = (property: string, value: string) =>
+    triangle_el.style.setProperty(property, value)
+  set(vertical ? `left` : `top`, `${cross_axis_center - px}px`)
+  set(OPPOSITE_PLACEMENT[placement], `-${px}px`)
+  set(`border-${vertical ? `left` : `top`}`, `${px}px solid transparent`)
+  set(`border-${vertical ? `right` : `bottom`}`, `${px}px solid transparent`)
+  set(`border-${placement}`, `${px}px solid ${color}`)
+}
+
+const sync_arrow_styles = (
+  tooltip_el: HTMLElement,
+  placement: Placement,
+  trigger_rect: DOMRect,
+  tooltip_rect: { width: number; height: number },
+  left: number,
+  top: number,
+): void => {
+  const arrow = tooltip_el.querySelector<HTMLElement>(`.custom-tooltip-arrow`)
+  if (!arrow) return
+  const styles = getComputedStyle(tooltip_el)
+  const background = styles.backgroundColor.trim()
+  const arrow_px = css_px_or(styles.getPropertyValue(`--tooltip-arrow-size`), 6)
+  const radius_px = css_px_or(styles.borderTopLeftRadius, 0)
+  const vertical = placement === `top` || placement === `bottom`
+  const dimension = vertical ? tooltip_rect.width : tooltip_rect.height
+  const anchor_center = vertical
+    ? (trigger_rect.left + trigger_rect.right) / 2 - left
+    : (trigger_rect.top + trigger_rect.bottom) / 2 - top
+  const min_center = arrow_px + radius_px
+  const max_center = dimension - arrow_px - radius_px
+  const cross_axis_center =
+    max_center < min_center ? dimension / 2 : clamp(anchor_center, min_center, max_center)
+  const fill_color = is_transparent(background)
+    ? `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
+    : background
+  apply_triangle_style(arrow, placement, arrow_px, fill_color, cross_axis_center)
+
+  const border_arrow = tooltip_el.querySelector<HTMLElement>(
+    `.custom-tooltip-arrow-border`,
+  )
+  if (!border_arrow) return
+  const border_width = css_px_or(styles.borderTopWidth, 0)
+  const border_color = styles.borderTopColor
+  if (border_width <= 0 || is_transparent(border_color)) {
+    border_arrow.remove()
     return
   }
+  apply_triangle_style(
+    border_arrow,
+    placement,
+    arrow_px + border_width * 1.4,
+    border_color,
+    cross_axis_center,
+  )
+}
 
-  // Convert all newline flavors: HTML parsing normalizes CR/CRLF to LF in
-  // attributes, and JS callers pass \n, so matching only \r would never fire
-  let html = content.replaceAll(/\r\n?|\n/gu, `<br/>`)
-  if (options.sanitize_html) html = options.sanitize_html(html)
-  content_el.innerHTML = html
+const remember_and_strip_title = (
+  registration: TooltipRegistration,
+  trigger: HTMLElement,
+): string | null => {
+  const title = trigger.getAttribute(`title`)
+  if (title === null) return registration.original_titles.get(trigger) ?? null
+  registration.original_titles.set(trigger, title)
+  trigger.removeAttribute(`title`)
+  return title
+}
+
+const create_active_tooltip = (
+  registration: TooltipRegistration,
+  trigger: HTMLElement,
+): ActiveTooltip => ({
+  registration,
+  trigger,
+  pointer_trigger: false,
+  pointer_surface: false,
+  focus: null,
+  open: false,
+  phase: `idle`,
+})
+
+const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
+  let registration_count = 0
+  let active: ActiveTooltip | null = null
+  // A controlled tooltip owns the surface until its consumer gives it up, so another
+  // trigger's activation waits here instead of taking over. Index 0 is next in line;
+  // a focus activation parks the previous entry behind it, so focus moving away and
+  // back again restores the hover that was already waiting.
+  let queued: QueuedActivation[] = []
+  const surface = doc.createElement(`div`)
+  surface.className = `custom-tooltip`
+  surface.id = `tooltip-${get_uuid()}`
+  surface.setAttribute(`role`, `tooltip`)
+  const content_el = doc.createElement(`span`)
+  content_el.className = `tooltip-content`
+  let open_timeout: ReturnType<typeof setTimeout> | undefined
+  let close_timeout: ReturnType<typeof setTimeout> | undefined
+  let stop_auto_update: (() => void) | undefined
+  let stop_escape_layer: (() => void) | undefined
+  let render_cleanup: (() => void) | undefined
+  let last_closed_at = -Infinity
+  let last_input_was_touch = false
+
+  const clear_open_timeout = () => {
+    clearTimeout(open_timeout)
+    open_timeout = undefined
+  }
+  const clear_close_timeout = () => {
+    clearTimeout(close_timeout)
+    close_timeout = undefined
+  }
+
+  const track_input = (event: PointerEvent | KeyboardEvent) => {
+    last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
+  }
+  doc.addEventListener(`pointerdown`, track_input, true)
+  doc.addEventListener(`keydown`, track_input, true)
+
+  surface.addEventListener(`pointerenter`, () => {
+    if (!active || !accepts_tooltip_trigger(active.registration.options, `hover`)) return
+    active.pointer_surface = true
+    clear_close_timeout()
+  })
+  surface.addEventListener(`pointerleave`, () => {
+    if (!active) return
+    active.pointer_surface = false
+    close_if_interaction_ended(`pointer`)
+  })
+  surface.addEventListener(`focusin`, () => {
+    if (!active) return
+    active.focus = `surface`
+    clear_close_timeout()
+  })
+  surface.addEventListener(`focusout`, (event) => {
+    if (!active) return
+    active.focus =
+      event.relatedTarget instanceof Node && surface.contains(event.relatedTarget)
+        ? `surface`
+        : null
+    close_if_interaction_ended(`blur`)
+  })
+
+  const release_delegated_title = (
+    registration: TooltipRegistration,
+    trigger: HTMLElement,
+  ): void => {
+    const title = registration.original_titles.get(trigger)
+    if (!registration.delegate_selector || title === undefined) return
+    if (!trigger.hasAttribute(`title`)) trigger.setAttribute(`title`, title)
+    registration.original_titles.delete(trigger)
+  }
+
+  const resolve_content = (
+    registration: TooltipRegistration,
+    trigger: HTMLElement,
+  ): string | null => {
+    const { content } = registration.options
+    if (content !== undefined) {
+      return (
+        first_nonempty(typeof content === `function` ? content(trigger) : content) ?? null
+      )
+    }
+    const title = remember_and_strip_title(registration, trigger)
+    return (
+      first_nonempty(
+        title,
+        trigger.getAttribute(`aria-label`),
+        trigger.getAttribute(`data-title`),
+      ) ?? null
+    )
+  }
+
+  const apply_surface_context = (trigger: HTMLElement, options: TooltipOptions): void => {
+    surface.style.cssText = `
+      position: fixed; inset: auto; margin: 0; z-index: var(--tooltip-z-index, 9999);
+      opacity: 0; display: inline-block; box-sizing: border-box; width: max-content;
+      max-width: min(var(--tooltip-max-width, 280px), var(--tooltip-available-width, calc(100dvw - 16px)));
+      max-height: var(--tooltip-max-height, min(50dvh, 480px)); overflow-y: auto;
+      background-color: var(--tooltip-bg, light-dark(#fff, #2a2a2e));
+      color: var(--text-color, light-dark(#222, #eee));
+      border: var(--tooltip-border, 1px solid light-dark(lightgray, #555));
+      padding: var(--tooltip-padding, 2px 6px); border-radius: var(--tooltip-radius, 5pt);
+      font-family: var(--tooltip-font-family, inherit); font-size: var(--tooltip-font-size, 0.8rem);
+      line-height: 1.4; overflow-wrap: anywhere; text-wrap: balance; white-space: normal;
+      pointer-events: auto; filter: var(--tooltip-shadow, drop-shadow(0 2px 8px rgba(0,0,0,0.25)));
+      transition: opacity var(--tooltip-transition, 0.15s ease-out);
+    `
+    const trigger_styles = getComputedStyle(trigger)
+    for (const css_var_name of TOOLTIP_CSS_VARS) {
+      const value = trigger_styles.getPropertyValue(css_var_name).trim()
+      if (value) surface.style.setProperty(css_var_name, value)
+    }
+    if (!surface.style.getPropertyValue(`--tooltip-font-family`)) {
+      surface.style.setProperty(`--tooltip-font-family`, trigger_styles.fontFamily)
+    }
+    surface.style.fontStyle = trigger_styles.fontStyle
+    surface.style.fontWeight = trigger_styles.fontWeight
+    surface.style.letterSpacing = trigger_styles.letterSpacing
+    // `closest` matches the trigger itself first, so it covers its own lang/dir too.
+    const nearest = (attribute: string, ...rest: (string | undefined)[]) =>
+      first_nonempty(
+        trigger.closest(`[${attribute}]`)?.getAttribute(attribute),
+        ...rest,
+      ) ?? ``
+    surface.lang = nearest(`lang`, doc.documentElement.lang)
+    surface.dir = nearest(`dir`, doc.documentElement.dir, trigger_styles.direction)
+
+    // The base rules already wrap; only `nowrap` has to undo them.
+    const wrap = options.wrap ?? `balance`
+    surface.style.textWrap = wrap === `normal` ? `wrap` : wrap
+    if (wrap === `nowrap`) {
+      surface.style.whiteSpace = `nowrap`
+      surface.style.overflowWrap = `normal`
+    }
+    if (matchMedia(`(prefers-reduced-motion: reduce)`).matches) {
+      surface.style.transition = `none`
+    }
+    if (options.style) surface.style.cssText += options.style
+
+    // A page that goes dark through CSS vars alone resolves the default light-dark()
+    // background to LIGHT while inheriting near-white text. Follow the OS preference
+    // instead, unless the page declares a scheme or the trigger overrides either var.
+    const body_styles = getComputedStyle(doc.body)
+    if (!body_styles.colorScheme || body_styles.colorScheme === `normal`) {
+      const overrides_page = (css_var: string) => {
+        const value = surface.style.getPropertyValue(css_var)
+        return value && value !== body_styles.getPropertyValue(css_var).trim()
+      }
+      if (!overrides_page(`--tooltip-bg`) && !overrides_page(`--text-color`)) {
+        surface.style.setProperty(`color-scheme`, `light dark`)
+        surface.style.setProperty(`--text-color`, `light-dark(#222, #eee)`)
+      }
+    }
+  }
+
+  const render_active_content = (): boolean => {
+    if (!active) return false
+    render_cleanup?.()
+    render_cleanup = undefined
+    content_el.replaceChildren()
+    const { options } = active.registration
+    if (options.render) {
+      render_cleanup = options.render(content_el, active.trigger) ?? undefined
+      return true
+    }
+    const content = resolve_content(active.registration, active.trigger)
+    if (!content) return false
+    if (options.allow_html !== true) content_el.textContent = content
+    else {
+      let html = content.replaceAll(/\r\n?|\n/gu, `<br/>`)
+      if (options.sanitize_html) html = options.sanitize_html(html)
+      content_el.innerHTML = html
+    }
+    return true
+  }
+
+  const position_active = (): void => {
+    if (!active?.open) return
+    if (!active.trigger.isConnected) {
+      hide_active(`visibility`)
+      return
+    }
+    const { options } = active.registration
+    const boundary = resolve_boundary(options, doc)
+    const viewport_padding = options.viewport_padding ?? 8
+    const available = Math.max(0, boundary.right - boundary.left - viewport_padding * 2)
+    surface.style.setProperty(`--tooltip-available-width`, `${available}px`)
+    const trigger_rect = active.trigger.getBoundingClientRect()
+    // A zero-area rect carries no position, so it can never count as scrolled away.
+    const has_area =
+      trigger_rect.right > trigger_rect.left || trigger_rect.bottom > trigger_rect.top
+    const off_screen =
+      trigger_rect.right <= boundary.left ||
+      trigger_rect.left >= boundary.right ||
+      trigger_rect.bottom <= boundary.top ||
+      trigger_rect.top >= boundary.bottom
+    if (has_area && off_screen) {
+      hide_active(`visibility`)
+      return
+    }
+    const tooltip_rect = surface.getBoundingClientRect()
+    // Only placement and offset differ from compute_position's own defaults, so the
+    // remaining options pass straight through.
+    const { top, left, placement } = compute_position(trigger_rect, tooltip_rect, {
+      placement: options.placement ?? `auto`,
+      offset: options.offset ?? 12,
+      align: options.align,
+      cross_axis_offset: options.cross_axis_offset,
+      fallback_placements: options.fallback_placements,
+      flip: options.flip,
+      shift: options.shift,
+      padding: viewport_padding,
+      boundary,
+    })
+    const view = doc.defaultView
+    const add_scroll = options.strategy !== `fixed` && !surface.hasAttribute(`popover`)
+    surface.style.position = add_scroll ? `absolute` : `fixed`
+    surface.style.left = `${left + (add_scroll ? (view?.scrollX ?? 0) : 0)}px`
+    surface.style.top = `${top + (add_scroll ? (view?.scrollY ?? 0) : 0)}px`
+    surface.dataset.placement = placement
+    sync_arrow_styles(surface, placement, trigger_rect, tooltip_rect, left, top)
+    surface.style.opacity =
+      surface.style.getPropertyValue(`--tooltip-opacity`).trim() || `1`
+  }
+
+  function hide_active(
+    reason: TooltipOpenReason,
+    keep_active = false,
+    notify = true,
+  ): void {
+    const closing = active
+    clear_open_timeout()
+    clear_close_timeout()
+    active_observer.disconnect()
+    stop_auto_update?.()
+    stop_auto_update = undefined
+    stop_escape_layer?.()
+    stop_escape_layer = undefined
+    render_cleanup?.()
+    render_cleanup = undefined
+    if (!closing) return
+    const was_open = closing.open
+    closing.open = false
+    closing.phase = keep_active ? `dismissed` : `idle`
+    if (closing.trigger.isConnected && surface.contains(doc.activeElement)) {
+      closing.phase = `dismissed`
+      closing.trigger.focus({ preventScroll: true })
+    }
+    remove_description(closing.trigger, surface.id)
+    if (surface.hasAttribute(`popover`)) surface.hidePopover()
+    else {
+      surface.hidden = true
+      surface.style.display = `none`
+    }
+    if (keep_active) {
+      closing.pointer_surface = false
+      if (closing.focus === `surface`) closing.focus = null
+    } else {
+      release_delegated_title(closing.registration, closing.trigger)
+      active = null
+    }
+    if (!was_open) return
+    last_closed_at = Date.now()
+    if (!notify) return
+    closing.registration.options.on_open_change?.(false, {
+      trigger: closing.trigger,
+      reason,
+    })
+  }
+
+  const request_close = (
+    reason: `pointer` | `blur` | `escape`,
+    keep_active = false,
+  ): void => {
+    if (!active) return
+    const { options } = active.registration
+    if (options.open !== true) {
+      hide_active(reason, keep_active)
+      return
+    }
+    if (active.phase === `close-requested`) return
+    active.phase = `close-requested`
+    options.on_open_change?.(false, { trigger: active.trigger, reason })
+  }
+
+  const active_observer = new MutationObserver((mutations) => {
+    const observed = active
+    if (!observed) return
+    const changed_attributes = changed_attribute_names(mutations)
+    if (changed_attributes.includes(`title`)) {
+      let title = observed.trigger.getAttribute(`title`)
+      if (title === null) observed.registration.original_titles.delete(observed.trigger)
+      else {
+        // A custom element can put `title` back from its own attributeChangedCallback,
+        // so strip until it stops returning rather than trading one write per round.
+        for (let strip_count = 0; title !== null; strip_count += 1) {
+          if (strip_count >= 10) {
+            hide_active(`visibility`, false, false)
+            throw new Error(
+              `tooltip title could not be stripped from <${observed.trigger.tagName.toLowerCase()}>`,
+            )
+          }
+          observed.registration.original_titles.set(observed.trigger, title)
+          observed.trigger.removeAttribute(`title`)
+          title = observed.trigger.getAttribute(`title`)
+        }
+        changed_attributes.push(
+          ...changed_attribute_names(active_observer.takeRecords(), `title`),
+        )
+      }
+    }
+    const content_changed = changed_attributes.some((attribute) =>
+      TOOLTIP_CONTENT_ATTRIBUTES.includes(attribute),
+    )
+    const context_changed = changed_attributes.some(
+      (attribute) => !TOOLTIP_CONTENT_ATTRIBUTES.includes(attribute),
+    )
+    const { options } = observed.registration
+    if (
+      content_changed &&
+      options.content === undefined &&
+      !options.render &&
+      !render_active_content()
+    ) {
+      hide_active(`visibility`)
+      return
+    }
+    if (context_changed) apply_surface_context(observed.trigger, options)
+    position_active()
+  })
+
+  const show_active = (reason: TooltipOpenReason): void => {
+    clear_open_timeout()
+    if (
+      !active ||
+      active.phase === `dismissed` ||
+      active.open ||
+      !active.trigger.isConnected
+    )
+      return
+    const opening = active
+    const { options } = opening.registration
+    if (options.open === false && reason !== `controlled`) {
+      if (opening.phase !== `open-requested`) {
+        opening.phase = `open-requested`
+        options.on_open_change?.(true, { trigger: opening.trigger, reason })
+      }
+      return
+    }
+    apply_surface_context(opening.trigger, options)
+    if (!render_active_content()) {
+      surface.hidden = true
+      surface.style.display = `none`
+      return
+    }
+    surface.replaceChildren(content_el)
+    if (options.show_arrow !== false) {
+      const border_arrow = doc.createElement(`div`)
+      border_arrow.className = `custom-tooltip-arrow-border`
+      const arrow = doc.createElement(`div`)
+      arrow.className = `custom-tooltip-arrow`
+      surface.append(border_arrow, arrow)
+    }
+    surface.hidden = false
+    if (!surface.isConnected) doc.body.append(surface)
+    const supports_top_layer =
+      `popover` in surface && typeof surface.showPopover === `function`
+    if ((options.strategy ?? `top-layer`) === `top-layer` && supports_top_layer) {
+      surface.setAttribute(`popover`, `manual`)
+      surface.showPopover({ source: opening.trigger })
+    } else surface.removeAttribute(`popover`)
+    add_description(opening.trigger, surface.id)
+    opening.open = true
+    opening.phase = `idle`
+    active_observer.observe(opening.trigger, {
+      attributes: true,
+      attributeFilter: TOOLTIP_OBSERVED_ATTRIBUTES,
+    })
+    stop_auto_update = auto_update_position(opening.trigger, surface, position_active)
+    stop_escape_layer = register_escape_layer((event) => {
+      if (!active?.open) return
+      event.preventDefault()
+      event.stopPropagation()
+      request_close(`escape`, true)
+    })
+    position_active()
+    if (active !== opening || !opening.open) return
+    options.on_open_change?.(true, { trigger: opening.trigger, reason })
+  }
+
+  const request_open = (reason: `pointer` | `focus` | `controlled`): void => {
+    if (!active || active.phase === `dismissed` || active.open) return
+    clear_open_timeout()
+    const { options } = active.registration
+    const elapsed_since_close = Date.now() - last_closed_at
+    const warm =
+      elapsed_since_close >= 0 && elapsed_since_close <= (options.skip_delay_ms ?? 300)
+    const delay = reason === `pointer` && !warm ? (options.open_delay_ms ?? 400) : 0
+    if (delay === 0) show_active(reason)
+    else open_timeout = setTimeout(() => show_active(reason), delay)
+  }
+
+  function close_if_interaction_ended(reason: `pointer` | `blur`): void {
+    if (!active) return
+    if (active.registration.options.trigger === `manual`) return
+    clear_close_timeout()
+    if (active.pointer_trigger || active.pointer_surface || active.focus) return
+    clear_open_timeout()
+    if (active.phase === `dismissed` || !active.open) {
+      release_delegated_title(active.registration, active.trigger)
+      active = null
+      return
+    }
+    close_timeout = setTimeout(
+      () => request_close(reason),
+      active.registration.options.close_delay_ms ?? 100,
+    )
+  }
+
+  const queue_activation = (
+    registration: TooltipRegistration,
+    trigger: HTMLElement,
+    reason: `pointer` | `focus`,
+  ): void => {
+    const [next] = queued
+    if (next?.registration === registration && next.trigger === trigger) {
+      next.reason = reason
+      next[reason] = true
+      return
+    }
+    if (reason === `pointer` && next?.focus) return // a hover cannot displace a focus
+    const entry = {
+      registration,
+      trigger,
+      reason,
+      pointer: reason === `pointer`,
+      focus: reason === `focus`,
+    }
+    // focus pushes the standing entry back a place, hover replaces it
+    queued =
+      reason === `focus` ? [entry, ...queued.slice(0, 1)] : [entry, ...queued.slice(1)]
+  }
+
+  const activate = (
+    registration: TooltipRegistration,
+    trigger: HTMLElement,
+    reason: `pointer` | `focus`,
+  ): void => {
+    if (active && (active.registration !== registration || active.trigger !== trigger)) {
+      const controlled = active.registration.options.open === true
+      if (controlled) queue_activation(registration, trigger, reason)
+      request_close(reason === `focus` ? `blur` : `pointer`)
+      if (controlled) return
+    }
+    queued = []
+    remember_and_strip_title(registration, trigger)
+    active ??= create_active_tooltip(registration, trigger)
+    if (active.phase === `close-requested`) active.phase = `idle`
+    if (reason === `pointer`) active.pointer_trigger = true
+    else active.focus = `trigger`
+    request_open(reason)
+  }
+
+  const enter_pointer = (
+    registration: TooltipRegistration,
+    trigger: HTMLElement,
+    pointer_type: string,
+  ): void => {
+    if (pointer_type === `touch`) return
+    if (!accepts_tooltip_trigger(registration.options, `hover`)) return
+    last_input_was_touch = false
+    activate(registration, trigger, `pointer`)
+  }
+
+  const leave_trigger = (
+    registration: TooltipRegistration,
+    event: PointerEvent | FocusEvent,
+    reason: `pointer` | `focus`,
+  ): void => {
+    // A queued trigger this interaction has now left no longer wants to open. Dropping
+    // its last remaining interaction drops the entry, promoting whatever waits behind.
+    const interaction_left = (entry: QueuedActivation): boolean =>
+      entry.registration === registration &&
+      entry[reason] &&
+      event.target instanceof Node &&
+      entry.trigger.contains(event.target) &&
+      !(
+        event.relatedTarget instanceof Node && entry.trigger.contains(event.relatedTarget)
+      )
+    queued = queued.filter((entry) => {
+      if (!interaction_left(entry)) return true
+      entry[reason] = false
+      entry.reason = entry.focus ? `focus` : `pointer`
+      return entry.pointer || entry.focus
+    })
+    if (!active || active.registration !== registration) return
+    if (event.relatedTarget instanceof Node) {
+      if (active.trigger.contains(event.relatedTarget)) return
+      if (surface.contains(event.relatedTarget)) {
+        if (reason === `pointer`) {
+          active.pointer_trigger = false
+          active.pointer_surface = true
+        } else active.focus = `surface`
+        clear_close_timeout()
+        return
+      }
+    }
+    if (reason === `pointer`) active.pointer_trigger = false
+    else active.focus = null
+    close_if_interaction_ended(reason === `pointer` ? `pointer` : `blur`)
+  }
+
+  const enter_focus = (registration: TooltipRegistration, trigger: HTMLElement): void => {
+    const { options } = registration
+    if (!accepts_tooltip_trigger(options, `focus`)) return
+    // A tap focuses right after suppressing the hover tooltip; only explicit focus
+    // mode still wants to open there.
+    if (last_input_was_touch && options.trigger !== `focus`) return
+    activate(registration, trigger, `focus`)
+  }
+
+  const sync_controlled = (registration: TooltipRegistration): void => {
+    if (registration.cleaned) return
+    if (registration.options.open !== true) {
+      if (active?.registration === registration) hide_active(`controlled`, false, false)
+      return
+    }
+    if (
+      active &&
+      (active.registration !== registration || active.trigger !== registration.root)
+    ) {
+      hide_active(`controlled`)
+    }
+    active ??= create_active_tooltip(registration, registration.root)
+    request_open(`controlled`)
+  }
+
+  const register = (registration: TooltipRegistration): (() => void) => {
+    registration_count += 1
+    return () => {
+      if (registration.cleaned) return
+      registration.cleaned = true
+      if (active?.registration === registration) hide_active(`controlled`, false, false)
+      queued = queued.filter((entry) => entry.registration !== registration)
+      for (const [element, title] of registration.original_titles) {
+        if (!element.hasAttribute(`title`)) element.setAttribute(`title`, title)
+      }
+      registration.original_titles.clear()
+      registration_count -= 1
+      // Whoever was waiting on the tooltip this registration held now gets its turn.
+      const [next] = queued
+      if (!active && next) {
+        queued = []
+        if (next.trigger.isConnected) {
+          active = create_active_tooltip(next.registration, next.trigger)
+          active.pointer_trigger = next.pointer
+          active.focus = next.focus ? `trigger` : null
+          remember_and_strip_title(next.registration, next.trigger)
+          request_open(next.reason)
+        }
+      }
+      if (registration_count > 0) return
+      doc.removeEventListener(`pointerdown`, track_input, true)
+      doc.removeEventListener(`keydown`, track_input, true)
+      surface.remove()
+      on_empty()
+    }
+  }
+
+  return {
+    register,
+    enter_pointer,
+    leave_trigger,
+    enter_focus,
+    sync_controlled,
+  }
+}
+
+const tooltip_managers = new WeakMap<
+  Document,
+  ReturnType<typeof create_tooltip_manager>
+>()
+
+const get_tooltip_manager = (doc: Document) => {
+  const existing = tooltip_managers.get(doc)
+  if (existing) return existing
+  const manager = create_tooltip_manager(doc, () => tooltip_managers.delete(doc))
+  tooltip_managers.set(doc, manager)
+  return manager
+}
+
+const validate_tooltip_options = (options: TooltipOptions): void => {
+  if (
+    options.render &&
+    (options.content !== undefined || options.allow_html !== undefined)
+  ) {
+    throw new Error(`tooltip render cannot be combined with content or allow_html`)
+  }
+  if (options.sanitize_html && options.allow_html !== true) {
+    throw new Error(`tooltip sanitize_html requires allow_html: true`)
+  }
+  if (options.trigger === `manual` && options.open === undefined) {
+    throw new Error(`tooltip trigger: 'manual' requires the open option`)
+  }
+}
+
+const registration_target = (
+  registration: TooltipRegistration,
+  event_target: EventTarget | null,
+): HTMLElement | null => {
+  const { root, delegate_selector, original_titles } = registration
+  if (!(event_target instanceof Element) || !root.contains(event_target)) return null
+  if (!delegate_selector) return root
+  // Walk up to the root: a trigger whose title this registration already holds no longer
+  // matches the default selector, so past ownership counts alongside the selector.
+  let candidate: Element | null = event_target
+  while (candidate) {
+    if (
+      candidate instanceof HTMLElement &&
+      (candidate.matches(delegate_selector) || original_titles.has(candidate))
+    ) {
+      return candidate
+    }
+    candidate = candidate === root ? null : candidate.parentElement
+  }
+  return null
 }
 
 export const tooltip =
   (options: TooltipOptions = {}): Attachment =>
   (node: Element): (() => void) | undefined => {
-    // SSR guard + element validation
     if (typeof document === `undefined` || !(node instanceof HTMLElement))
       return undefined
+    if (options.disabled) return undefined
+    validate_tooltip_options(options)
 
-    const cleanup_functions: (() => void)[] = []
+    const has_root_source =
+      options.content !== undefined ||
+      Boolean(options.render) ||
+      node.matches(TOOLTIP_SOURCE_SELECTOR)
+    const delegate = options.delegate ?? (!has_root_source && options.open === undefined)
+    const delegate_selector =
+      typeof delegate === `string` ? delegate : delegate ? TOOLTIP_SOURCE_SELECTOR : null
+    // Throws the native SyntaxError naming the selector here rather than on first hover
+    if (delegate_selector) node.matches(delegate_selector)
 
-    if (options.disabled === true) return undefined
-
-    // Track current input method for 'touch-devices' option (runtime detection, not capability sniffing)
-    // This allows tooltips on hybrid devices (Surface, iPad with mouse) when using mouse/stylus
-    let last_pointer_type: string = `mouse`
-    const track_pointer = (event: PointerEvent) => {
-      last_pointer_type = event.pointerType
+    const registration: TooltipRegistration = {
+      root: node,
+      options,
+      delegate_selector,
+      original_titles: new SvelteMap(),
+      cleaned: false,
     }
-    if (options.disabled === `touch-devices`) {
-      document.addEventListener(`pointerdown`, track_pointer, true)
-      cleanup_functions.push(() =>
-        document.removeEventListener(`pointerdown`, track_pointer, true),
-      )
+    if (!delegate_selector) remember_and_strip_title(registration, node)
+
+    const manager = get_tooltip_manager(node.ownerDocument)
+    const unregister = manager.register(registration)
+
+    // Nested tooltip containers both see the event; the innermost to claim it wins.
+    const claim = (event: Event): HTMLElement | null => {
+      if (handled_tooltip_events.has(event)) return null
+      const trigger = registration_target(registration, event.target)
+      if (trigger) handled_tooltip_events.add(event)
+      return trigger
     }
+    const on_pointer_over = (event: PointerEvent) => {
+      const trigger = claim(event)
+      if (trigger) manager.enter_pointer(registration, trigger, event.pointerType)
+    }
+    const on_focus_in = (event: FocusEvent) => {
+      const trigger = claim(event)
+      if (trigger) manager.enter_focus(registration, trigger)
+    }
+    const leave = (reason: `pointer` | `focus`) => (event: PointerEvent | FocusEvent) =>
+      manager.leave_trigger(registration, event, reason)
 
-    function setup_tooltip(element: HTMLElement): (() => void) | undefined {
-      const tooltip_attrs = [`title`, `aria-label`, `data-title`]
-      // eslint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- empty string should fall through
-      let content =
-        ((options.content ?? element.title) || element.getAttribute(`aria-label`)) ??
-        element.getAttribute(`data-title`)
-      if (!content) return undefined
-
-      // Store original title and remove it to prevent native browser tooltip.
-      // This must happen even when options.content is provided, otherwise both
-      // custom and native tooltips may appear.
-      if (element.hasAttribute(`title`)) {
-        element.setAttribute(`data-original-title`, element.title)
-        element.removeAttribute(`title`)
-      }
-
-      // Reactively update content when tooltip attributes change
-      const observer = new MutationObserver((mutations) => {
-        for (const { type, attributeName } of mutations) {
-          if (type !== `attributes` || !attributeName) continue
-          const new_content = element.getAttribute(attributeName)
-          // null = attribute removed (by us), skip entirely
-          if (new_content === null) continue
-          // Always remove title to prevent browser's native tooltip (even if empty)
-          // Disconnect observer temporarily to avoid re-entrancy from our own removal
-          if (attributeName === `title`) {
-            observer.disconnect()
-            element.removeAttribute(`title`)
-            observer.observe(element, {
-              attributes: true,
-              attributeFilter: tooltip_attrs,
-            })
-            // Preserve original title for cleanup if title is set later dynamically
-            if (!element.hasAttribute(`data-original-title`) && new_content) {
-              element.setAttribute(`data-original-title`, new_content)
-            }
-          }
-          if (options.content) continue // custom content takes precedence
-          if (!new_content) continue
-          content = new_content
-          if (current_tooltip?.owner_element === element) {
-            const content_el =
-              current_tooltip.querySelector<HTMLElement>(`.tooltip-content`)
-            if (content_el) {
-              render_tooltip_content(content_el, content, options)
-              resize_and_position_tooltip(current_tooltip, element)
-            }
-          }
-        }
-      })
-      observer.observe(element, { attributes: true, attributeFilter: tooltip_attrs })
-
-      const opposite: Record<Placement, Placement> = {
-        top: `bottom`,
-        bottom: `top`,
-        left: `right`,
-        right: `left`,
-      }
-
-      const apply_triangle_style = (
-        triangle_el: HTMLElement,
-        placement: Placement,
-        px: number,
-        color: string,
-      ) => {
-        triangle_el.style.cssText = `position: absolute; width: 0; height: 0; pointer-events: none;`
-        const vert = placement === `top` || placement === `bottom`
-        const set = (prop: string, css_value: string) =>
-          triangle_el.style.setProperty(prop, css_value)
-        set(vert ? `left` : `top`, `calc(50% - ${px}px)`)
-        set(opposite[placement], `-${px}px`)
-        set(`border-${vert ? `left` : `top`}`, `${px}px solid transparent`)
-        set(`border-${vert ? `right` : `bottom`}`, `${px}px solid transparent`)
-        set(`border-${placement}`, `${px}px solid ${color}`)
-      }
-
-      const sync_arrow_styles = (tooltip_el: HTMLElement, placement: Placement) => {
-        const arrow = tooltip_el.querySelector<HTMLElement>(`.custom-tooltip-arrow`)
-        if (!arrow) return
-
-        const tooltip_styles = getComputedStyle(tooltip_el)
-        const default_arrow_color = `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
-        const tooltip_bg = tooltip_styles.backgroundColor.trim()
-        const transparent_colors = new Set([``, `transparent`, `rgba(0, 0, 0, 0)`])
-        const is_transparent = (color: string) => transparent_colors.has(color.trim())
-        const arrow_size_raw = tooltip_styles
-          .getPropertyValue(`--tooltip-arrow-size`)
-          .trim()
-        const arrow_size_num = css_px(arrow_size_raw)
-        const arrow_px = Number.isFinite(arrow_size_num) ? arrow_size_num : 6
-        apply_triangle_style(
-          arrow,
-          placement,
-          arrow_px,
-          is_transparent(tooltip_bg) ? default_arrow_color : tooltip_bg,
-        )
-
-        const border_arrow = tooltip_el.querySelector<HTMLElement>(
-          `.custom-tooltip-arrow-border`,
-        )
-        if (!border_arrow) return
-
-        const border_color = tooltip_styles.borderTopColor
-        const border_width_num = css_px(tooltip_styles.borderTopWidth)
-        const has_border = !is_transparent(border_color) && border_width_num > 0
-        if (!has_border) {
-          border_arrow.remove()
-          return
-        }
-        apply_triangle_style(
-          border_arrow,
-          placement,
-          arrow_px + border_width_num * 1.4,
-          border_color,
-        )
-      }
-
-      // Shrink tooltip to fit content, then position for correct centering
-      function resize_and_position_tooltip(tooltip_el: HTMLElement, trigger: Element) {
-        // Reset width to allow natural sizing before measuring
-        tooltip_el.style.width = ``
-
-        requestAnimationFrame(() => {
-          if (!document.body.contains(tooltip_el)) return
-          const computed = getComputedStyle(tooltip_el)
-          const padding_h = css_px(computed.paddingLeft) + css_px(computed.paddingRight)
-          const border_h =
-            css_px(computed.borderLeftWidth) + css_px(computed.borderRightWidth)
-          // Handle max-width: none as unbounded, fallback to 280 only for invalid values
-          const max_width_raw = computed.maxWidth
-          const max_width_parsed = css_px(max_width_raw)
-          const max_width =
-            max_width_raw === `none`
-              ? Infinity
-              : Number.isFinite(max_width_parsed)
-                ? max_width_parsed
-                : 280
-          // With border-box, width includes padding+border; with content-box, subtract them
-          const box_adjust =
-            computed.boxSizing === `border-box` ? 0 : padding_h + border_h
-          const style = tooltip_el.style
-          // The configured side, never the resolved one: data-placement carries the
-          // outcome for styling, and reading it back would make a flip permanent.
-          const requested_placement: Placement = options.placement ?? `bottom`
-
-          // Save styles, measure single-line width with wrapping disabled
-          const saved = {
-            maxWidth: style.maxWidth,
-            overflowWrap: style.overflowWrap,
-            textWrap: style.textWrap,
-            whiteSpace: style.whiteSpace,
-          }
-          Object.assign(style, {
-            maxWidth: `none`,
-            overflowWrap: `normal`,
-            textWrap: `nowrap`,
-            whiteSpace: `nowrap`,
-            width: `auto`,
-          })
-          const single_line_width = tooltip_el.offsetWidth
-          Object.assign(style, saved)
-
-          // Convert offsetWidth to the value needed for style.width
-          const content_width = single_line_width - box_adjust
-          if (content_width <= max_width) {
-            // Single-line: set exact width and prevent wrapping
-            style.width = `${Math.max(0, content_width)}px`
-            style.textWrap = `nowrap`
-          } else {
-            // Multi-line: binary search for minimum width that doesn't add line breaks
-            style.width = ``
-            const baseline_height = tooltip_el.offsetHeight
-            const initial_width = tooltip_el.offsetWidth
-
-            // Get min-content (longest word) as lower bound
-            Object.assign(style, {
-              maxWidth: `none`,
-              overflowWrap: `normal`,
-              width: `min-content`,
-            })
-            const min_width = tooltip_el.offsetWidth
-            Object.assign(style, {
-              maxWidth: saved.maxWidth,
-              overflowWrap: saved.overflowWrap,
-              width: `${initial_width - box_adjust}px`,
-            })
-
-            // If longest word exceeds wrapped width, grow past max-width so the
-            // word stays intact (restoring maxWidth would clamp width back down).
-            if (min_width >= initial_width) {
-              style.maxWidth = `none`
-              style.width = `${min_width - box_adjust}px`
-            } else {
-              // Binary search for minimum width that maintains baseline height
-              // Work in offsetWidth units, convert to style.width only when setting
-              let [best, high, low] = [initial_width, initial_width, min_width]
-              while (high - low > 1) {
-                const mid = Math.floor((low + high) / 2)
-                style.width = `${mid - box_adjust}px`
-                if (tooltip_el.offsetHeight > baseline_height) low = mid
-                else {
-                  best = mid
-                  high = mid
-                }
-              }
-              style.width = `${best - box_adjust}px`
-            }
-          }
-
-          // Position tooltip after width adjustment so centering uses final dimensions
-          const { top, left, placement } = compute_position(
-            trigger.getBoundingClientRect(),
-            tooltip_el.getBoundingClientRect(),
-            { placement: requested_placement, offset: options.offset ?? 12, padding: 8 },
-          )
-
-          // Persist final placement for downstream styling.
-          tooltip_el.setAttribute(`data-placement`, placement)
-          sync_arrow_styles(tooltip_el, placement)
-
-          // The tooltip is absolutely positioned on the body, so add page scroll
-          style.left = `${left + globalThis.scrollX}px`
-          style.top = `${top + globalThis.scrollY}px`
-          style.opacity =
-            getComputedStyle(trigger).getPropertyValue(`--tooltip-opacity`).trim() || `1`
-        })
-      }
-
-      function show_tooltip() {
-        if (options.disabled === `touch-devices` && last_pointer_type === `touch`) return
-
-        clear_tooltip()
-
-        show_timeout_owner = element
-        show_timeout = setTimeout(() => {
-          show_timeout = undefined
-          show_timeout_owner = null
-          const tooltip_el = document.createElement(`div`)
-          tooltip_el.className = `custom-tooltip`
-          const placement = options.placement ?? `bottom`
-          tooltip_el.setAttribute(`data-placement`, placement)
-
-          // Accessibility: link tooltip to trigger element
-          const tooltip_id = `tooltip-${get_uuid()}`
-          tooltip_el.id = tooltip_id
-          tooltip_el.setAttribute(`role`, `tooltip`)
-          element.setAttribute(`aria-describedby`, tooltip_id)
-          // light-dark() inherits the page's color-scheme (defaults to light if unset)
-          tooltip_el.style.cssText = `
-          position: absolute; z-index: 9999; opacity: 0; display: inline-block;
-          background-color: var(--tooltip-bg, light-dark(#fff, #2a2a2e)); color: var(--text-color, light-dark(#222, #eee)); border: var(--tooltip-border, 1px solid light-dark(lightgray, #555));
-          padding: var(--tooltip-padding, 2px 6px); border-radius: var(--tooltip-radius, 5pt); font-size: var(--tooltip-font-size, 0.8rem); line-height: 1.4;
-          max-width: var(--tooltip-max-width, 280px); overflow-wrap: break-word; text-wrap: balance; pointer-events: none;
-          filter: var(--tooltip-shadow, drop-shadow(0 2px 8px rgba(0,0,0,0.25))); transition: opacity 0.15s ease-out;
-        `
-
-          // Applied after base cssText so they win, preserving any !important priority
-          if (options.style) {
-            const custom_style = document.createElement(`div`).style
-            custom_style.cssText = options.style
-            for (let idx = 0; idx < custom_style.length; idx++) {
-              const property = custom_style.item(idx)
-              tooltip_el.style.setProperty(
-                property,
-                custom_style.getPropertyValue(property),
-                custom_style.getPropertyPriority(property),
-              )
-            }
-          }
-
-          // Wrap content in a span for reactive content updates
-          const content_span = document.createElement(`span`)
-          content_span.className = `tooltip-content`
-          // Security: content renders as plain text unless allow_html is explicitly true.
-          render_tooltip_content(content_span, content ?? ``, options)
-          tooltip_el.append(content_span)
-
-          // Mirror CSS custom properties from the trigger node onto the tooltip element
-          const trigger_styles = getComputedStyle(element)
-          for (const css_var_name of [
-            `--tooltip-bg`,
-            `--text-color`,
-            `--tooltip-border`,
-            `--tooltip-padding`,
-            `--tooltip-radius`,
-            `--tooltip-font-size`,
-            `--tooltip-shadow`,
-            `--tooltip-max-width`,
-            `--tooltip-opacity`,
-            `--tooltip-arrow-size`,
-          ]) {
-            const value = trigger_styles.getPropertyValue(css_var_name).trim()
-            if (value) tooltip_el.style.setProperty(css_var_name, value)
-          }
-
-          // Pages that style themselves dark via CSS vars but never declare `color-scheme`
-          // resolve the default light-dark() background to LIGHT while the inherited
-          // --text-color may be near-white → unreadable tooltip. Follow the OS preference
-          // and pair the text color with it. Pages that declare a scheme keep control
-          // (see #405), as do triggers with custom --tooltip-bg or own --text-color.
-          // Read the scheme from document.body (inherits any root-declared scheme), not
-          // the trigger: the tooltip is appended to body, so a scheme on some container
-          // around the trigger never reaches it.
-          const body_styles = getComputedStyle(document.body)
-          const page_scheme = body_styles.colorScheme
-          if (!page_scheme || page_scheme === `normal`) {
-            // A var counts as a per-trigger override only if it differs from the value
-            // inherited from body/:root (page-level styling shouldn't disable the
-            // fallback). Compare against body, not documentElement: the body-mounted
-            // tooltip inherits from body, which in turn inherits :root-declared vars.
-            const overrides_page = (css_var: string) => {
-              const value = tooltip_el.style.getPropertyValue(css_var)
-              return value && value !== body_styles.getPropertyValue(css_var).trim()
-            }
-            if (!overrides_page(`--tooltip-bg`) && !overrides_page(`--text-color`)) {
-              tooltip_el.style.setProperty(`color-scheme`, `light dark`)
-              tooltip_el.style.setProperty(`--text-color`, `light-dark(#222, #eee)`)
-            }
-          }
-
-          // Append early so we can read computed border styles for arrow border
-          document.body.append(tooltip_el)
-
-          // Create arrow elements before resize so the rAF inside
-          // resize_and_position_tooltip can find and style them with the resolved placement.
-          if (options.show_arrow !== false) {
-            const border_arrow = document.createElement(`div`)
-            border_arrow.className = `custom-tooltip-arrow-border`
-            const arrow = document.createElement(`div`)
-            arrow.className = `custom-tooltip-arrow`
-            tooltip_el.append(border_arrow, arrow)
-          }
-
-          resize_and_position_tooltip(tooltip_el, element)
-
-          current_tooltip = Object.assign(tooltip_el, { owner_element: element })
-        }, options.delay_ms ?? 100)
-      }
-
-      function handle_keydown(event: KeyboardEvent) {
-        if (event.key === `Escape` && current_tooltip?.owner_element === element) {
-          clear_tooltip()
-        }
-      }
-
-      function hide_tooltip() {
-        // A stale leave/blur from the previous trigger must not cancel the next
-        // trigger's pending show or schedule a timer that removes its tooltip.
-        if (!owns_tooltip_state(element)) return
-        if (show_timeout_owner === element) {
-          clearTimeout(show_timeout)
-          show_timeout = undefined
-          show_timeout_owner = null
-        }
-        if (current_tooltip?.owner_element !== element) return
-        // leave/blur both call this; clear any pending hide so a later show isn't
-        // wiped by a stale timer from the first hide event
-        clearTimeout(hide_timeout)
-        hide_timeout = undefined
-        const hide_delay_ms = options.hide_delay_ms ?? 0
-        if (hide_delay_ms > 0) hide_timeout = setTimeout(clear_tooltip, hide_delay_ms)
-        else clear_tooltip()
-      }
-
-      function handle_scroll(event: Event) {
-        // Hide if document or any ancestor scrolls (would move element). Skip internal element scrolls.
-        const target = event.target
-        if (target instanceof Node && target !== element && target.contains(element)) {
-          hide_tooltip()
-        }
-      }
-
-      const events = [`mouseenter`, `mouseleave`, `focus`, `blur`]
-      const handlers = [show_tooltip, hide_tooltip, show_tooltip, hide_tooltip]
-
-      events.forEach((event, idx) => element.addEventListener(event, handlers[idx]))
-
-      globalThis.addEventListener(`scroll`, handle_scroll, true)
-      document.addEventListener(`keydown`, handle_keydown)
-
-      // Watch for element removal from DOM to prevent orphaned tooltips
-      const removal_observer = new MutationObserver((mutations) => {
-        const was_removed = mutations.some((mut) =>
-          Array.from(mut.removedNodes).some(
-            (removed_node) =>
-              removed_node === element ||
-              (removed_node instanceof Element && removed_node.contains(element)),
-          ),
-        )
-        // Clear owned visible tooltip AND owned pending show — otherwise the
-        // pending timeout fires after removal and appends an orphaned tooltip
-        // positioned against a detached element
-        if (was_removed && owns_tooltip_state(element)) clear_tooltip()
-      })
-      if (element.parentElement) {
-        removal_observer.observe(element.parentElement, {
-          childList: true,
-          subtree: true,
-        })
-      }
-
-      return () => {
-        observer.disconnect()
-        removal_observer.disconnect()
-        events.forEach((event, idx) => element.removeEventListener(event, handlers[idx]))
-        globalThis.removeEventListener(`scroll`, handle_scroll, true)
-        document.removeEventListener(`keydown`, handle_keydown)
-
-        // Clear owned tooltip/pending show (also removes aria-describedby)
-        if (owns_tooltip_state(element)) clear_tooltip()
-
-        if (element.hasAttribute(`data-original-title`)) {
-          element.setAttribute(`title`, element.getAttribute(`data-original-title`) ?? ``)
-          element.removeAttribute(`data-original-title`)
-        }
-      }
+    const listeners = new AbortController()
+    const { signal } = listeners
+    node.addEventListener(`pointerover`, on_pointer_over, { signal })
+    node.addEventListener(`focusin`, on_focus_in, { signal })
+    node.addEventListener(`pointerout`, leave(`pointer`), { signal })
+    node.addEventListener(`focusout`, leave(`focus`), { signal })
+    if (options.open !== undefined) {
+      queueMicrotask(() => manager.sync_controlled(registration))
     }
 
-    const main_cleanup = setup_tooltip(node)
-    if (main_cleanup) cleanup_functions.push(main_cleanup)
-
-    node.querySelectorAll(`[title], [aria-label], [data-title]`).forEach((el) => {
-      if (!(el instanceof HTMLElement)) return
-      const child_cleanup = setup_tooltip(el)
-      if (child_cleanup) cleanup_functions.push(child_cleanup)
-    })
-
-    if (cleanup_functions.length === 0) return undefined
-
-    // per-element cleanups already clear any tooltip/pending show they own, and
-    // only elements set up here can own one — no extra outer clearing needed
-    return () => cleanup_functions.forEach((cleanup) => cleanup())
+    return () => {
+      listeners.abort()
+      unregister()
+    }
   }
 
 export type DismissDetail = {
@@ -1706,6 +2138,44 @@ export const backdrop_dismiss =
 
 export type AnchorRect = { top: number; left: number; bottom: number; right: number }
 
+// Keep geometry work to one pass per frame even when scroll, resize and observers all
+// report the same change. Tooltip and float share this lifecycle.
+const auto_update_position = (
+  anchor: Element | null,
+  floating: Element,
+  update: () => void,
+): (() => void) => {
+  const view = floating.ownerDocument.defaultView
+  const visual_viewport = view?.visualViewport
+  const animation_host = view ?? globalThis
+  let frame_id: number | undefined
+  const schedule_update = () => {
+    if (frame_id !== undefined) return
+    frame_id = animation_host.requestAnimationFrame(() => {
+      frame_id = undefined
+      update()
+    })
+  }
+
+  const listeners = new AbortController()
+  const { signal } = listeners
+  // capture: a scroll in any ancestor moves the anchor, and scroll does not bubble
+  view?.addEventListener(`scroll`, schedule_update, { capture: true, signal })
+  view?.addEventListener(`resize`, schedule_update, { signal })
+  visual_viewport?.addEventListener(`scroll`, schedule_update, { signal })
+  visual_viewport?.addEventListener(`resize`, schedule_update, { signal })
+  const resize_observer =
+    typeof ResizeObserver === `undefined` ? null : new ResizeObserver(schedule_update)
+  resize_observer?.observe(floating)
+  if (anchor) resize_observer?.observe(anchor)
+
+  return () => {
+    listeners.abort()
+    resize_observer?.disconnect()
+    if (frame_id !== undefined) animation_host.cancelAnimationFrame(frame_id)
+  }
+}
+
 export interface FloatOptions extends PositionOptions {
   // A rect instead of an element covers anchors with no markup: the pointer position
   // a context menu opens at, a text selection, a cell in a canvas.
@@ -1751,19 +2221,7 @@ export const float =
     }
 
     update()
-    // capture: a scroll in any ancestor moves the anchor, and scroll does not bubble
-    globalThis.addEventListener(`scroll`, update, true)
-    globalThis.addEventListener(`resize`, update)
-    // the floating box can grow after mount (async content, a filtered list)
-    const observer = new ResizeObserver(update)
-    observer.observe(node)
-    if (anchor instanceof Element) observer.observe(anchor)
-
-    return () => {
-      globalThis.removeEventListener(`scroll`, update, true)
-      globalThis.removeEventListener(`resize`, update)
-      observer.disconnect()
-    }
+    return auto_update_position(anchor instanceof Element ? anchor : null, node, update)
   }
 
 // Teleport an element into `target` and put it back on teardown, marking where it

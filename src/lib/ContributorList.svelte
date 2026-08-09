@@ -9,7 +9,7 @@
     ...rest
   }: Omit<HTMLAttributes<HTMLUListElement>, `children`> & {
     contributors: Contributor[]
-    tooltip_options?: Omit<TooltipOptions, `content`>
+    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
   } = $props()
 </script>
 

@@ -56,7 +56,7 @@
     page?: { url: { pathname: string } }
     labels?: Record<string, string>
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
-    tooltip_options?: Omit<TooltipOptions, `content`>
+    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     breakpoint?: number
     dropdown_cooldown_ms?: number // delay before hiding dropdown after mouse leaves; ignored when pinned
     onnavigate?: (data: {

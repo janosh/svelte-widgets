@@ -87,17 +87,21 @@ export function get_style(
 export type Placement = `top` | `right` | `bottom` | `left`
 
 export type PositionOptions = {
-  placement?: Placement | `auto` // `auto` prefers bottom, then flips
-  // `start` lines the floating box up with the anchor's edge (dropdowns), `center`
-  // centers it on the anchor (tooltips)
-  align?: `center` | `start`
+  placement?: Placement | `auto`
+  // `start` and `end` line up the corresponding physical anchor and floating edges.
+  align?: `center` | `start` | `end`
   offset?: number // gap between anchor and floating box
+  cross_axis_offset?: number // nudge perpendicular to the chosen side
   padding?: number // closest the floating box may come to a viewport edge
+  boundary?: { top: number; left: number; right: number; bottom: number }
+  fallback_placements?: Placement[] // tried after a fixed placement; restricts `auto`
   // `true` tries the opposite side then the perpendicular ones; pass an explicit
   // list to keep a dropdown from ever landing beside its input
   flip?: boolean | Placement[]
   shift?: boolean // slide along the viewport edge rather than overflow it
 }
+
+export type PositionResult = { top: number; left: number; placement: Placement }
 
 const FLIP_ORDER: Record<Placement, Placement[]> = {
   bottom: [`bottom`, `top`, `right`, `left`],
@@ -106,29 +110,36 @@ const FLIP_ORDER: Record<Placement, Placement[]> = {
   left: [`left`, `right`, `bottom`, `top`],
 }
 
-// Viewport coordinates; callers add scroll offsets when positioning absolutely.
+// Viewport coordinates by default; callers add scroll offsets when positioning absolutely.
 export function compute_position(
   anchor: { top: number; left: number; bottom: number; right: number },
   floating: { width: number; height: number },
   options: PositionOptions = {},
-): { top: number; left: number; placement: Placement } {
+): PositionResult {
   const {
     placement = `bottom`,
     align = `center`,
     offset = 0,
+    cross_axis_offset = 0,
     padding = 0,
+    boundary = {
+      top: 0,
+      left: 0,
+      right: globalThis.innerWidth,
+      bottom: globalThis.innerHeight,
+    },
+    fallback_placements,
     flip = true,
     shift = true,
   } = options
-  const { innerWidth, innerHeight } = globalThis
   const requested = placement === `auto` ? `bottom` : placement
-  const anchor_width = anchor.right - anchor.left
-  const anchor_height = anchor.bottom - anchor.top
-  // Cross-axis offset: the side being tried only fixes the main axis
-  const cross_x =
-    align === `start` ? anchor.left : anchor.left + (anchor_width - floating.width) / 2
-  const cross_y =
-    align === `start` ? anchor.top : anchor.top + (anchor_height - floating.height) / 2
+  const cross_position = (start: number, end: number, size: number): number => {
+    if (align === `start`) return start + cross_axis_offset
+    if (align === `end`) return end - size + cross_axis_offset
+    return start + (end - start - size) / 2 + cross_axis_offset
+  }
+  const cross_x = cross_position(anchor.left, anchor.right, floating.width)
+  const cross_y = cross_position(anchor.top, anchor.bottom, floating.height)
 
   const coords: Record<Placement, { top: number; left: number }> = {
     top: { top: anchor.top - floating.height - offset, left: cross_x },
@@ -137,28 +148,61 @@ export function compute_position(
     right: { top: cross_y, left: anchor.right + offset },
   }
 
-  const overflow = ({ top, left }: { top: number; left: number }) =>
-    Math.max(0, padding - top) +
-    Math.max(0, padding - left) +
-    Math.max(0, top + floating.height + padding - innerHeight) +
-    Math.max(0, left + floating.width + padding - innerWidth)
+  // Room between the anchor and the boundary on each side, gap already deducted.
+  const free_space: Record<Placement, number> = {
+    top: anchor.top - boundary.top - padding - offset,
+    bottom: boundary.bottom - padding - anchor.bottom - offset,
+    left: anchor.left - boundary.left - padding - offset,
+    right: boundary.right - padding - anchor.right - offset,
+  }
+  // Only the main axis decides a flip: cross-axis overflow is what shifting is for, and
+  // letting it count would make an edge-aligned bottom tooltip jump to the left instead.
+  const main_axis_overflow = (side: Placement): number => {
+    const needed = side === `top` || side === `bottom` ? floating.height : floating.width
+    return Math.max(0, needed - free_space[side])
+  }
 
+  // `flip: false` pins the requested side; otherwise the first candidate with the least
+  // main-axis overflow wins.
+  const explicit_order = fallback_placements ?? (Array.isArray(flip) ? flip : null)
+  const candidate_placements = (): Placement[] => {
+    if (flip === false) return [requested]
+    if (!explicit_order) return FLIP_ORDER[requested]
+    // A named placement stays the first choice, its fallbacks only queue up behind it.
+    if (fallback_placements && placement !== `auto`) {
+      return [requested, ...explicit_order.filter((side) => side !== requested)]
+    }
+    return explicit_order
+  }
+
+  // Plain `auto` has no preferred side, so it breaks overflow ties by picking the roomiest.
+  const rank_by_space = flip !== false && placement === `auto` && !explicit_order
   let chosen = requested
-  if (flip !== false) {
-    let least_overflow = Infinity
-    for (const candidate of Array.isArray(flip) ? flip : FLIP_ORDER[requested]) {
-      const candidate_overflow = overflow(coords[candidate])
-      if (candidate_overflow < least_overflow) {
-        chosen = candidate
-        least_overflow = candidate_overflow
-      }
+  let least_overflow = Infinity
+  let greatest_space = -Infinity
+  for (const candidate of candidate_placements()) {
+    const candidate_overflow = main_axis_overflow(candidate)
+    if (
+      candidate_overflow < least_overflow ||
+      (rank_by_space &&
+        candidate_overflow === least_overflow &&
+        free_space[candidate] > greatest_space)
+    ) {
+      chosen = candidate
+      least_overflow = candidate_overflow
+      greatest_space = free_space[candidate]
     }
   }
 
   let { top, left } = coords[chosen]
   if (shift) {
-    left = Math.max(padding, Math.min(left, innerWidth - floating.width - padding))
-    top = Math.max(padding, Math.min(top, innerHeight - floating.height - padding))
+    const min_left = boundary.left + padding
+    const max_left = boundary.right - floating.width - padding
+    const min_top = boundary.top + padding
+    const max_top = boundary.bottom - floating.height - padding
+    // Oversize boxes have reversed limits; the interval between them has minimum overflow.
+    left = clamp(left, Math.min(min_left, max_left), Math.max(min_left, max_left))
+    top = clamp(top, Math.min(min_top, max_top), Math.max(min_top, max_top))
   }
   return { top, left, placement: chosen }
 }
