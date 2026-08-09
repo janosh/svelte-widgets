@@ -43,15 +43,25 @@ const as_shape = (body: string): string => {
 }
 
 export const generate_icons = async (): Promise<void> => {
-  const reserved = new Set(Object.keys(custom))
+  // Compared case-insensitively: `Npm` alongside custom.ts `NPM` compiles and passes every
+  // exact-match check, then ships the same glyph twice under two spellings.
+  const reserved = new Map(Object.keys(custom).map((name) => [name.toLowerCase(), name]))
+  const claimed_ids = new Map<string, string>()
   const entries: string[] = []
   const problems: string[] = []
 
   for (const [name, icon_id] of Object.entries(iconify_icons)) {
-    if (reserved.has(name)) {
-      problems.push(`${name}: already exported from custom.ts`)
+    const clash = reserved.get(name.toLowerCase())
+    if (clash) {
+      problems.push(`${name}: already exported from custom.ts as '${clash}'`)
       continue
     }
+    const duplicate_of = claimed_ids.get(icon_id)
+    if (duplicate_of) {
+      problems.push(`${name}: '${icon_id}' already exported as '${duplicate_of}'`)
+      continue
+    }
+    claimed_ids.set(icon_id, name)
     const [prefix, id] = icon_id.split(`:`)
     const collection = await load_collection(prefix)
     const data = getIconData(collection, id)
