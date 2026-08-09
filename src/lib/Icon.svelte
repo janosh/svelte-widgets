@@ -18,7 +18,13 @@
       | { icon?: never; path: string; viewBox?: string; stroke?: string }
     ) = $props()
 
-  const resolved_icon: IconData = $derived(path ? { d: path, viewBox, stroke } : icon)
+  // The union rules out "neither", but destructuring loses that correlation for the
+  // type checker, so state it here rather than assert.
+  const resolved_icon: IconData = $derived.by(() => {
+    if (icon) return icon
+    if (path === undefined) throw new Error(`Icon needs either an icon or a path`)
+    return { d: path, viewBox, stroke }
+  })
 </script>
 
 <svg
