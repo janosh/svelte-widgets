@@ -1202,7 +1202,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   // A controlled tooltip owns the surface until its consumer gives it up, so another
   // trigger's activation waits here instead of taking over. Index 0 is next in line;
   // a focus activation parks the previous entry behind it, so focus moving away and
-  // back again restores the hover that was already waiting.
+  // back again restores the hover that was already waiting. Never more than those two.
   let queued: QueuedActivation[] = []
   const surface = doc.createElement(`div`)
   surface.className = `custom-tooltip`
@@ -1452,6 +1452,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (keep_active) {
       closing.pointer_surface = false
       if (closing.focus === `surface`) closing.focus = null
+      // Not a self-assignment: handing focus back above re-enters through focusout and
+      // focusin, which can null `active` or install a fresh one over the dismissal.
+      active = closing
     } else {
       release_delegated_title(closing.registration, closing.trigger)
       active = null

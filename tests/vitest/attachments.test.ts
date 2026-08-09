@@ -370,6 +370,35 @@ describe(`tooltip manager`, () => {
     expect(document.activeElement).toBe(element)
   })
 
+  it(`stays dismissed when Escape hands focus back to the trigger`, () => {
+    const on_open_change = vi.fn()
+    const element = create_element(`button`)
+    attach_tooltip(element, {
+      trigger: `focus`,
+      on_open_change,
+      render: (content_el) => {
+        content_el.append(document.createElement(`button`))
+        return undefined
+      },
+    })
+    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    const tooltip_el = visible_tooltip()
+    doc_query<HTMLButtonElement>(`.tooltip-content button`).focus()
+    document.dispatchEvent(escape_key())
+    expect(tooltip_el.hidden).toBe(true)
+
+    // Handing focus back re-enters through focusout/focusin, which must not resurrect
+    // the dismissed tooltip — leaving the trigger afterwards is not a second close.
+    element.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    vi.advanceTimersByTime(0)
+    expect(tooltip_el.hidden).toBe(true)
+    expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
+      [false, open_detail(element, `escape`)],
+    ])
+  })
+
   it(`focus opens immediately despite a long pointer delay`, () => {
     const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
     document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
@@ -570,6 +599,37 @@ describe(`tooltip manager`, () => {
       expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
       expect(child.title).toBe(`Next`)
     }
+  })
+
+  it(`drops queued triggers once an activation succeeds`, async () => {
+    // Nesting the controlled trigger inside a queued one is the only way the pointer
+    // reaches it without leaving the outer trigger, so a two-deep queue survives to
+    // see a successful activation.
+    const outer = create_element()
+    outer.title = `Outer`
+    const controlled = document.createElement(`button`)
+    outer.append(controlled)
+    mock_rect(controlled, { left: 20, top: 20, width: 80, height: 30 })
+    attach_tooltip(outer)
+    const cleanup_controlled = attach_tooltip(controlled, {
+      content: `Controlled`,
+      open: true,
+    })
+    const { element: elsewhere } = register_tooltip(`Elsewhere`)
+    await Promise.resolve()
+
+    pointer_over(outer) // queues behind the controlled tooltip
+    elsewhere.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true })) // queues ahead
+    pointer_out(outer, controlled) // stays inside `outer`, so its entry survives
+    pointer_over(controlled) // reactivating the controlled trigger clears the queue
+    elsewhere.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    cleanup_controlled()
+    vi.advanceTimersByTime(0)
+
+    // Nothing replays: the queue was superseded, not merely reordered.
+    expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
   })
 
   it(`requests controlled opening without showing against open: false`, () => {
