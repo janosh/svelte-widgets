@@ -66,6 +66,9 @@ export const pointer_event = (
     : new MouseEvent(type, shared)
 }
 
+export const hover = (element: Element, pointer_type = `mouse`) =>
+  element.dispatchEvent(pointer_event(`pointerover`, 0, 0, { pointerType: pointer_type }))
+
 export const data_transfer = (
   files: File[],
   items: DataTransferItem[] = [],

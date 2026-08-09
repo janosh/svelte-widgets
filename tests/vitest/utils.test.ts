@@ -87,15 +87,15 @@ describe(`get_label`, () => {
 
 describe(`get_style`, () => {
   test.each([
-    [`plain string`, undefined, ``],
-    [{ style: `color: red` }, undefined, `color: red;`],
-    [{ style: `color: red;` }, undefined, `color: red;`],
-    [{ style: `` }, undefined, ``],
-    [{ style: `   ` }, undefined, `   `], // whitespace is preserved, not trimmed
-    [{ label: `Test`, value: 42 }, undefined, ``],
-  ])(`returns correct style for %j with key %s`, (option, key, expected) => {
+    [`plain string`, ``],
+    [{ style: `color: red` }, `color: red;`],
+    [{ style: `color: red;` }, `color: red;`],
+    [{ style: `` }, ``],
+    [{ style: `   ` }, `   `], // whitespace is preserved, not trimmed
+    [{ label: `Test`, value: 42 }, ``],
+  ])(`returns correct style for %j`, (option, expected) => {
     // @ts-expect-error testing with mixed types for get_style
-    expect(get_style(option, key)).toBe(expected)
+    expect(get_style(option)).toBe(expected)
   })
 
   const option_style: OptionStyle = {
@@ -417,10 +417,8 @@ describe(`get_option_key`, () => {
 
 describe(`compute_position`, () => {
   const viewport = (width: number, height: number) => {
-    const sizes = { innerWidth: width, innerHeight: height }
-    for (const [prop, value] of Object.entries(sizes)) {
-      Object.defineProperty(globalThis, prop, { value, writable: true })
-    }
+    stub_prop(globalThis, `innerWidth`, width)
+    stub_prop(globalThis, `innerHeight`, height)
   }
   const [real_width, real_height] = [globalThis.innerWidth, globalThis.innerHeight]
   afterEach(() => viewport(real_width, real_height)) // later suites keep the defaults

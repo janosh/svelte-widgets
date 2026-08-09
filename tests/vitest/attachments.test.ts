@@ -31,6 +31,7 @@ import {
   doc_query,
   drag_event,
   escape_key,
+  hover as pointer_over,
   mock_rect,
   pointer_event,
   press_key as dispatch_key,
@@ -104,13 +105,11 @@ describe(`tooltip manager`, () => {
     if (!Object.hasOwn(element, `getBoundingClientRect`)) {
       mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
     }
-    const cleanup = tooltip({
-      strategy: `absolute`,
-      placement: `bottom`,
-      open_delay_ms: 0,
-      close_delay_ms: 0,
-      ...options,
-    })(element)
+    options.strategy ??= `absolute`
+    options.placement ??= `bottom`
+    options.open_delay_ms ??= 0
+    options.close_delay_ms ??= 0
+    const cleanup = tooltip(options)(element)
     if (!cleanup) throw new Error(`tooltip did not return cleanup`)
     cleanups.push(cleanup)
     return cleanup
@@ -126,12 +125,6 @@ describe(`tooltip manager`, () => {
     trigger,
     reason,
   })
-
-  const pointer_over = (element: HTMLElement, pointer_type = `mouse`) => {
-    element.dispatchEvent(
-      pointer_event(`pointerover`, 110, 110, { pointerType: pointer_type }),
-    )
-  }
 
   const pointer_out = (
     element: HTMLElement,
@@ -158,14 +151,12 @@ describe(`tooltip manager`, () => {
     return { cleanup, element, tooltip_el: visible_tooltip() }
   }
 
-  const setup_controlled_handoff = (blur_on_open = false) => {
+  type QueuedCase = [string, readonly string[], boolean, string?]
+  const setup_controlled_handoff = (blur_on_open = false, content = `Controlled`) => {
     const on_open_change = vi.fn()
     const controlled = create_element(`button`)
-    const cleanup_controlled = attach_tooltip(controlled, {
-      content: `Controlled`,
-      open: true,
-      on_open_change,
-    })
+    const options: TooltipOptions = { content, open: true, on_open_change }
+    const close = attach_tooltip(controlled, options)
     const root = create_element()
     const child = document.createElement(`button`)
     const other = document.createElement(`button`)
@@ -191,7 +182,7 @@ describe(`tooltip manager`, () => {
     )
     mock_rect(child, { left: 250, top: 100, width: 80, height: 30 })
     mock_rect(other, { left: 350, top: 100, width: 80, height: 30 })
-    return { child, cleanup_controlled, controlled, on_open_change, other }
+    return { child, close, controlled, on_open_change, options, other }
   }
 
   const mock_tooltip_rect = (width: number, height: number) => {
@@ -238,8 +229,8 @@ describe(`tooltip manager`, () => {
 
   it.each([
     [
-      `render with content`,
-      { content: `text`, render: (): undefined => undefined },
+      `disabled render with content`,
+      { content: `text`, disabled: true, render: (): undefined => undefined },
       `render cannot be combined`,
     ],
     [
@@ -529,6 +520,8 @@ describe(`tooltip manager`, () => {
 
   it.each([
     [`hands off immediately after controlled close`, [`close`], true],
+    [`hands off after controlled state closes`, [`release`], true],
+    [`hands off when controlled content never opened`, [`release`], true, ``],
     [`cancels after its pointer leaves`, [`leave-child`, `close`], false],
     [
       `survives blur while its pointer remains`,
@@ -560,23 +553,28 @@ describe(`tooltip manager`, () => {
       [`focus-other`, `leave-child`, `blur-other`, `close`],
       false,
     ],
-  ] as const)(`queued activation %s`, async (_name, actions, opens) => {
-    const { child, cleanup_controlled, controlled, on_open_change, other } =
-      setup_controlled_handoff(
-        actions.some((action) => action === `focus-child-reentrant`),
-      )
+  ] as const)(`queued %s`, async (...[, actions, opens, content]: QueuedCase) => {
+    const controlled_content = content ?? `Controlled`
+    const reentrant = actions.some((action) => action === `focus-child-reentrant`)
+    const { child, close, controlled, on_open_change, options, other } =
+      setup_controlled_handoff(reentrant, controlled_content)
     await Promise.resolve()
 
     pointer_over(child)
-    expect(visible_tooltip().textContent).toBe(`Controlled`)
+    expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
+      controlled_content || undefined,
+    )
     expect(child.title).toBe(`Next`)
     expect(on_open_change).toHaveBeenLastCalledWith(
       false,
       open_detail(controlled, `pointer`),
     )
     for (const action of actions) {
-      if (action === `close`) cleanup_controlled()
-      else if (action === `leave-child`) pointer_out(child)
+      if (action === `close`) close()
+      else if (action === `release`) {
+        options.open = false
+        pointer_out(controlled)
+      } else if (action === `leave-child`) pointer_out(child)
       else if (action === `hover-other`) pointer_over(other)
       else if (action === `leave-other`) pointer_out(other)
       else {
@@ -688,7 +686,7 @@ describe(`tooltip manager`, () => {
   )
 
   it(`copies language, direction, theme variables and honors reduced motion`, () => {
-    vi.mocked(matchMedia).mockReturnValue({
+    vi.mocked(matchMedia).mockReturnValueOnce({
       media: `(prefers-reduced-motion: reduce)`,
       matches: true,
       addEventListener: vi.fn(),

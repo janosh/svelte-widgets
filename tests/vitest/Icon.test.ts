@@ -4,7 +4,7 @@ import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
 test.each([
@@ -88,16 +88,13 @@ describe(`Icon`, () => {
     expect(offenders).toEqual([])
   })
 
-  // Only hand-drawn glyphs are stroked; every generated one paints with `fill`
-  test.each([
-    `Histogram`,
-    `Issues`,
-    `Materials`,
-    `Magnetic`,
-    `NeuralNetwork`,
-    `RepoFork`,
-  ] as const)(`defines %s as a currentColor stroke`, (name) => {
-    expect(icons[name].stroke).toBe(`currentColor`)
+  // Pin the complete hand-drawn set; generated icons never emit `stroke`.
+  test(`strokes exactly the hand-drawn glyphs, always with currentColor`, () => {
+    const stroked = Object.entries<IconData>(icons).filter(([, icon]) => icon.stroke)
+    expect(stroked.map(([name]) => name).join(` `)).toBe(
+      `BandStructure BrillouinZone DensityOfStates FermiSurface Histogram Issues Magnetic Materials NeuralNetwork RepoFork SolarPanel`,
+    )
+    expect([...new Set(stroked.map(([, icon]) => icon.stroke))]).toEqual([`currentColor`])
   })
 
   test(`Histogram contains one baseline subpath`, () => {
@@ -124,12 +121,18 @@ describe(`Icon`, () => {
     expect(svg.classList.contains(`custom-class`)).toBe(true)
   })
 
-  // happy-dom does no layout, so the sizing contract is read off the source. `auto`
-  // height is what keeps the non-square viewBoxes from being squashed.
-  test(`sizes off --icon-size, defaulting height to auto`, async () => {
-    const { default: source } = await import(`$lib/Icon.svelte?raw`)
-    expect(source).toContain(`width: var(--icon-size, 1em)`)
-    expect(source).toContain(`height: var(--icon-size, auto)`)
+  // `auto` preserves non-square viewBoxes; --icon-size opts into a square.
+  test(`sizes off --icon-size, defaulting height to auto`, () => {
+    mount(Icon, { target: document.body, props: { icon: icons.Check } })
+    const unsized = getComputedStyle(doc_query<SVGSVGElement>(`svg`))
+    expect([unsized.width, unsized.height]).toEqual([`16px`, `auto`])
+
+    const host = document.createElement(`div`)
+    host.style.setProperty(`--icon-size`, `32px`)
+    document.body.append(host)
+    mount(Icon, { target: host, props: { icon: icons.Check } })
+    const sized = getComputedStyle(doc_query<SVGSVGElement>(`div > svg`))
+    expect([sized.width, sized.height]).toEqual([`32px`, `32px`])
   })
 
   // For an app's own chrome glyphs, which do not belong in the shared set
@@ -149,30 +152,28 @@ describe(`Icon`, () => {
     expect(svg.getAttribute(`stroke`)).toBe(`red`)
     expect(svg.getAttribute(`fill`)).toBe(`none`)
   })
+})
 
-  test(`the catalog clears a stale copy error before retrying`, async () => {
+describe(`icon catalog page`, () => {
+  test(`clears a stale copy error before retrying`, async () => {
     const write_text = vi
       .fn<(text: string) => Promise<void>>()
       .mockRejectedValueOnce(new Error(`denied`))
       .mockResolvedValue(undefined)
     vi.stubGlobal(`navigator`, { clipboard: { writeText: write_text } })
+    onTestFinished(() => void vi.unstubAllGlobals())
 
-    try {
-      const { default: IconsPage } = await import(
-        `$root/src/routes/(demos)/(icons)/icons/+page.svelte`
-      )
-      document.body.innerHTML = ``
-      mount(IconsPage, { target: document.body })
-      const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
+    const { default: IconsPage } = await import(
+      `$root/src/routes/(demos)/(icons)/icons/+page.svelte`
+    )
+    mount(IconsPage, { target: document.body })
+    const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
 
-      copy_button.click()
-      await vi.waitFor(() =>
-        expect(doc_query(`[role="alert"]`).textContent).toContain(`denied`),
-      )
-      copy_button.click()
-      await vi.waitFor(() => expect(document.querySelector(`[role="alert"]`)).toBeNull())
-    } finally {
-      vi.unstubAllGlobals()
-    }
+    copy_button.click()
+    await vi.waitFor(() =>
+      expect(doc_query(`[role="alert"]`).textContent).toContain(`denied`),
+    )
+    copy_button.click()
+    await vi.waitFor(() => expect(document.querySelector(`[role="alert"]`)).toBeNull())
   })
 })

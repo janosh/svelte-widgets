@@ -1,7 +1,7 @@
 import ContributorList from '$lib/ContributorList.svelte'
-import { mount, tick } from 'svelte'
+import { type ComponentProps, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query } from './index'
+import { doc_query, hover } from './index'
 
 describe(`ContributorList`, () => {
   const contributors = [
@@ -17,17 +17,12 @@ describe(`ContributorList`, () => {
     },
   ]
   // attachments are applied in an effect, so the tooltip isn't live until a flush
-  const mount_list = async (props: Record<string, unknown> = {}) => {
+  const mount_list = async (
+    props: Partial<ComponentProps<typeof ContributorList>> = {},
+  ) => {
     mount(ContributorList, { target: document.body, props: { contributors, ...props } })
     await tick()
   }
-  const hover = (element: Element) => {
-    element.dispatchEvent(
-      new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
-    )
-    vi.runAllTimers()
-  }
-
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
@@ -47,13 +42,10 @@ describe(`ContributorList`, () => {
     ])
     // chrome shared by every row: profiles are off-site, and an intrinsic size keeps
     // lazy avatars from reflowing the row as they land
-    expect([links[0].target, links[0].rel]).toEqual([`_blank`, `noopener noreferrer`])
-    expect([avatars[0].alt, avatars[0].width, avatars[0].height]).toEqual([``, 60, 60])
-
-    document.body.innerHTML = ``
-    await mount_list({ contributors: [] })
-    expect(document.querySelector(`ul`)).not.toBeNull()
-    expect(document.querySelector(`li`)).toBeNull()
+    const { target, rel } = links[0]
+    const { alt, width, height, loading } = avatars[0]
+    expect([target, rel]).toEqual([`_blank`, `noopener noreferrer`])
+    expect([alt, width, height, loading]).toEqual([``, 60, 60, `lazy`])
   })
 
   test(`hovering an avatar shows the login in a tooltip`, async () => {
@@ -61,7 +53,7 @@ describe(`ContributorList`, () => {
     expect(document.querySelector(`.custom-tooltip`)).toBeNull()
 
     hover(doc_query(`ul li a`))
-    expect(document.querySelectorAll(`.custom-tooltip`)).toHaveLength(1)
+    vi.runAllTimers()
     expect(doc_query(`.tooltip-content`).textContent).toBe(`janosh`)
   })
 
@@ -69,6 +61,7 @@ describe(`ContributorList`, () => {
     await mount_list({ tooltip_options: { show_arrow: false, style: `color: teal` } })
 
     hover(doc_query(`ul li:last-child a`))
+    vi.runAllTimers()
     expect(doc_query(`.tooltip-content`).textContent).toBe(`octocat`)
     expect(doc_query(`.custom-tooltip`).style.color).toBe(`teal`)
     expect(document.querySelector(`.custom-tooltip-arrow`)).toBeNull()

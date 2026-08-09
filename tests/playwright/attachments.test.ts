@@ -2,6 +2,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 type TooltipMetrics = {
+  border_box_width: number
   content_width: number
   text_width: number
   max_width: number
@@ -28,6 +29,7 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
       css_px(style.borderRightWidth)
     const content_el = el.querySelector(`.tooltip-content`)
     return {
+      border_box_width: rect.width,
       content_width: rect.width - box_adjust,
       text_width: content_el?.getBoundingClientRect().width ?? 0,
       max_width: css_px(style.maxWidth),
@@ -86,17 +88,8 @@ test.describe(`tooltip layout and lifecycle`, () => {
     expect_within_viewport(metrics)
   })
 
-  test(`unbreakable long words wrap inside the max-width`, async ({ page }) => {
-    const long_word = `Donaudampfschifffahrtsgesellschaftskapitän`
-    const tooltip_el = await hover_tooltip(page, `Long German word`, long_word)
-    const metrics = await measure_tooltip(tooltip_el)
-
-    expect(metrics.line_count).toBeGreaterThanOrEqual(2)
-    expect(metrics.content_width).toBeLessThanOrEqual(metrics.max_width + 1)
-    expect_within_viewport(metrics)
-  })
-
   for (const [button_name, snippet, expected_max_width, min_lines] of [
+    [`Long German word`, `Donaudampfschifffahrtsgesellschaftskapitän`, 280, 2],
     [`Balanced wrapping`, `balanced text wrapping`, 200, 2],
     [`Long text viewport-safe`, `Lorem ipsum`, 220, 5],
   ] as const) {
@@ -108,7 +101,7 @@ test.describe(`tooltip layout and lifecycle`, () => {
 
       expect(metrics.max_width).toBe(expected_max_width)
       expect(metrics.line_count).toBeGreaterThanOrEqual(min_lines)
-      expect(metrics.content_width).toBeLessThanOrEqual(expected_max_width + 3)
+      expect(metrics.border_box_width).toBeLessThanOrEqual(expected_max_width + 3)
       expect_within_viewport(metrics)
     })
   }
@@ -116,19 +109,18 @@ test.describe(`tooltip layout and lifecycle`, () => {
   test(`narrow viewports keep the top-layer tooltip and shifted arrow on screen`, async ({
     page,
   }) => {
+    const button_name = `Long text viewport-safe`
     await page.setViewportSize({ width: 360, height: 560 })
-    const button = page.getByRole(`button`, {
-      name: `Long text viewport-safe`,
-      exact: true,
-    })
-    const tooltip_el = await hover_tooltip(page, `Long text viewport-safe`, `Lorem ipsum`)
+    const tooltip_el = await hover_tooltip(page, button_name, `Lorem ipsum`)
     const metrics = await measure_tooltip(tooltip_el)
+    // the 8px viewport padding, less a pixel for sub-pixel rounding
     expect(metrics.left).toBeGreaterThanOrEqual(7)
-    expect(metrics.right).toBeLessThanOrEqual(353)
+    expect(metrics.right).toBeLessThanOrEqual(metrics.viewport_width - 7)
     expect(await tooltip_el.evaluate((element) => element.matches(`:popover-open`))).toBe(
       true,
     )
 
+    const button = page.getByRole(`button`, { name: button_name, exact: true })
     const [button_box, arrow_box, placement] = await Promise.all([
       button.boundingBox(),
       tooltip_el.locator(`.custom-tooltip-arrow`).boundingBox(),

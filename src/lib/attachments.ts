@@ -982,7 +982,8 @@ export interface TooltipOptions {
   delegate?: boolean | string
   style?: string
   show_arrow?: boolean
-  // HTML is opt-in. Only pass trusted content or provide sanitize_html.
+  // HTML is opt-in, including delegated title/aria-label/data-title. Only pass trusted
+  // content; pair user-controlled delegated attributes with sanitize_html.
   allow_html?: boolean
   sanitize_html?: (html: string) => string
 }
@@ -1217,6 +1218,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   let render_cleanup: (() => void) | undefined
   let last_closed_at = -Infinity
   let last_input_was_touch = false
+  let hide_in_progress = false
 
   const clear_open_timeout = () => {
     clearTimeout(open_timeout)
@@ -1420,10 +1422,23 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       surface.style.getPropertyValue(`--tooltip-opacity`).trim() || `1`
   }
 
+  function activate_queued(): void {
+    if (active || hide_in_progress) return
+    const [next] = queued
+    queued = []
+    if (!next || next.registration.cleaned || !next.trigger.isConnected) return
+    active = create_active_tooltip(next.registration, next.trigger)
+    active.pointer_trigger = next.pointer
+    active.focus = next.focus ? `trigger` : null
+    remember_and_strip_title(next.registration, next.trigger)
+    request_open(next.reason)
+  }
+
   function hide_active(
     reason: TooltipOpenReason,
     keep_active = false,
     notify = true,
+    replay_queued = true,
   ): void {
     const closing = active
     clear_open_timeout()
@@ -1436,6 +1451,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     render_cleanup?.()
     render_cleanup = undefined
     if (!closing) return
+    hide_in_progress = true
     const was_open = closing.open
     closing.open = false
     closing.phase = keep_active ? `dismissed` : `idle`
@@ -1459,13 +1475,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       release_delegated_title(closing.registration, closing.trigger)
       active = null
     }
-    if (!was_open) return
-    last_closed_at = Date.now()
-    if (!notify) return
-    closing.registration.options.on_open_change?.(false, {
-      trigger: closing.trigger,
-      reason,
-    })
+    hide_in_progress = false
+    if (was_open) last_closed_at = Date.now()
+    if (was_open && notify)
+      closing.registration.options.on_open_change?.(false, {
+        trigger: closing.trigger,
+        reason,
+      })
+    if (!keep_active && replay_queued) activate_queued()
   }
 
   const request_close = (
@@ -1609,6 +1626,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (active.phase === `dismissed` || !active.open) {
       release_delegated_title(active.registration, active.trigger)
       active = null
+      activate_queued()
       return
     }
     close_timeout = setTimeout(
@@ -1648,9 +1666,13 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   ): void => {
     if (active && (active.registration !== registration || active.trigger !== trigger)) {
       const controlled = active.registration.options.open === true
-      if (controlled) queue_activation(registration, trigger, reason)
-      request_close(reason === `focus` ? `blur` : `pointer`)
-      if (controlled) return
+      const close_reason = reason === `focus` ? `blur` : `pointer`
+      if (controlled) {
+        queue_activation(registration, trigger, reason)
+        request_close(close_reason)
+        return
+      }
+      hide_active(close_reason, false, true, false)
     }
     queued = []
     remember_and_strip_title(registration, trigger)
@@ -1729,7 +1751,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       active &&
       (active.registration !== registration || active.trigger !== registration.root)
     ) {
-      hide_active(`controlled`)
+      hide_active(`controlled`, false, true, false)
     }
     active ??= create_active_tooltip(registration, registration.root)
     request_open(`controlled`)
@@ -1740,7 +1762,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     return () => {
       if (registration.cleaned) return
       registration.cleaned = true
-      if (active?.registration === registration) hide_active(`controlled`, false, false)
+      if (active?.registration === registration)
+        hide_active(`controlled`, false, false, false)
       queued = queued.filter((entry) => entry.registration !== registration)
       for (const [element, title] of registration.original_titles) {
         if (!element.hasAttribute(`title`)) element.setAttribute(`title`, title)
@@ -1748,17 +1771,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       registration.original_titles.clear()
       registration_count -= 1
       // Whoever was waiting on the tooltip this registration held now gets its turn.
-      const [next] = queued
-      if (!active && next) {
-        queued = []
-        if (next.trigger.isConnected) {
-          active = create_active_tooltip(next.registration, next.trigger)
-          active.pointer_trigger = next.pointer
-          active.focus = next.focus ? `trigger` : null
-          remember_and_strip_title(next.registration, next.trigger)
-          request_open(next.reason)
-        }
-      }
+      activate_queued()
       if (registration_count > 0) return
       doc.removeEventListener(`pointerdown`, track_input, true)
       doc.removeEventListener(`keydown`, track_input, true)
@@ -1831,8 +1844,8 @@ export const tooltip =
   (node: Element): (() => void) | undefined => {
     if (typeof document === `undefined` || !(node instanceof HTMLElement))
       return undefined
-    if (options.disabled) return undefined
     validate_tooltip_options(options)
+    if (options.disabled) return undefined
 
     const has_root_source =
       options.content !== undefined ||

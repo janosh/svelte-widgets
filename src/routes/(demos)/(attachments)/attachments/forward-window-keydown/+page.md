@@ -10,7 +10,7 @@
 </script>
 
 <div
-  tabindex="-1"
+  tabindex="0"
   style="padding: 1rem; border: 1px solid currentColor"
   {@attach forward_window_keydown({
     handle: (event) => {
@@ -20,6 +20,6 @@
     },
   })}
 >
-  Hover here, leave focus on the page and press an arrow key. Last key: {last_key}
+  Hover here, focus this box and press an arrow key. Last key: {last_key}
 </div>
 ```

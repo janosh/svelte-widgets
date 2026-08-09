@@ -4,7 +4,7 @@ import button_group_source from '$lib/ButtonGroup.svelte?raw'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query } from './index'
+import { doc_query, hover as dispatch_hover } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
@@ -387,17 +387,13 @@ describe(`ButtonGroup`, () => {
       const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
       const buttons = mount_group({ options, tooltip_options })
       await tick()
-      const hover = (button: HTMLButtonElement) => {
-        button.dispatchEvent(
-          new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
-        )
-        vi.runAllTimers()
-      }
 
-      hover(buttons[1])
+      dispatch_hover(buttons[1])
+      vi.runAllTimers()
       expect(document.querySelector(`.tooltip-content`)).toBeNull()
 
-      hover(buttons[0])
+      dispatch_hover(buttons[0])
+      vi.runAllTimers()
       expect(doc_query(`.tooltip-content`).innerHTML).toBe(expected)
     } finally {
       vi.useRealTimers()
