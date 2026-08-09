@@ -334,10 +334,21 @@ describe(`ButtonGroup`, () => {
 
     expect(buttons[0].querySelector(`svg`)).not.toBeNull()
     expect(buttons[1].querySelector(`svg`)).toBeNull()
-    // Loading-capable options keep the spinner's width reserved while it is hidden.
+    // Loading-capable options keep the spinner's width reserved while it is hidden. The
+    // spinner itself is decoration either way — `aria-busy` is what carries the state.
     expect(buttons[1].querySelector(`div`)?.style.width).toBe(`0.8em`)
     expect(buttons[1].querySelector(`div`)?.style.visibility).toBe(`visible`)
     expect(buttons[2].querySelector(`div`)?.style.visibility).toBe(`hidden`)
+    expect(
+      buttons.map((button) => [
+        button.getAttribute(`aria-busy`),
+        button.querySelector(`div`)?.getAttribute(`aria-hidden`),
+      ]),
+    ).toEqual([
+      [null, undefined],
+      [`true`, `true`],
+      [null, `true`],
+    ])
 
     const wrapper = doc_query(`#letters`)
     expect(wrapper.classList.contains(`button-group`)).toBe(true)

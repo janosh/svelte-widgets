@@ -523,6 +523,35 @@ export function cmd_action_matches(
   )
 }
 
+// Coalesces subtree mutations into one refresh per microtask, including mutations caused by
+// `refresh` itself. Callers perform their own initial refresh.
+export function observe_subtree(
+  root: Element,
+  attribute_filter: string[],
+  refresh: () => void,
+): () => void {
+  let queued = false
+  let disposed = false
+  const observer = new MutationObserver(() => {
+    if (queued || disposed) return
+    queued = true
+    queueMicrotask(() => {
+      queued = false
+      if (!disposed) refresh()
+    })
+  })
+  observer.observe(root, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: attribute_filter,
+  })
+  return () => {
+    disposed = true
+    observer.disconnect()
+  }
+}
+
 // === Masonry ===
 export const order_options = [
   `balanced`, // Rebalances all items to shortest columns (items may jump)

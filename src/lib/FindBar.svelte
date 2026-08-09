@@ -69,7 +69,7 @@
   })
 </script>
 
-<div aria-label={find_label} role="search" {...rest} class={[`find-bar`, rest.class]}>
+<div {...rest} aria-label={find_label} role="search" class={[`find-bar`, rest.class]}>
   <Icon icon={Search} aria-hidden="true" class="find-icon" />
   <input
     aria-label={find_label}
@@ -141,11 +141,13 @@
     max-inline-size: 18rem;
     padding: 0.18rem 0.35rem;
     border: 0;
-    outline: 0;
     background: transparent;
     color: inherit;
     font: inherit;
     font-size: 0.78rem;
+    &:focus-visible {
+      outline: 2px solid var(--active-color, #6ea8ff);
+    }
   }
   /* Fixed width prevents growing match counts from shifting the caret. */
   .find-status {

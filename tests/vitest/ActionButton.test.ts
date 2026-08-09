@@ -31,16 +31,19 @@ const mount_action_button = (
 const action_text = (button: HTMLElement): string =>
   button.querySelector(`[data-sms-action-content]`)?.textContent ?? ``
 
-test(`reserves enough width for every state label`, () => {
-  const button = mount_action_button({})
+test(`reserves width and renders every state label as text`, () => {
+  const text_labels = { ...labels, ready: { text: `<b>Save</b>` } }
+  const button = mount_action_button({ labels: text_labels })
   const content = doc_query(`[data-sms-action-content]`)
   const width_sizer = doc_query(`[data-sms-action-width]`)
   expect(getComputedStyle(button).width).toBe(`fit-content`)
   expect(getComputedStyle(button).display).toBe(`inline-grid`)
   expect(getComputedStyle(content).justifyContent).toBe(`center`)
   expect(Array.from(width_sizer.children, (child) => child.textContent?.trim())).toEqual(
-    Object.values(labels).map(({ text }) => text),
+    Object.values(text_labels).map(({ text }) => text),
   )
+  expect(action_text(button).trim()).toBe(`<b>Save</b>`)
+  expect(button.querySelector(`b`)).toBeNull()
 })
 
 test(`blocks duplicate actions while pending and resets after success`, async () => {

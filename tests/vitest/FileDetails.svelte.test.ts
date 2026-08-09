@@ -11,37 +11,28 @@ const all_text = (selector: string) =>
 const mount_files = (props: ComponentProps<typeof FileDetails> = {}) =>
   mount(FileDetails, { target: document.body, props })
 
-test.each([
+test.each<[string, string, string, string?]>([
   // inferred from title extension
-  { file: { title: `comp.svelte`, content: `<p>hi</p>` }, expected_lang: `svelte` },
-  { file: { title: `util.ts`, content: `const x = 1` }, expected_lang: `typescript` },
-  { file: { title: `app.js`, content: `let x` }, expected_lang: `javascript` },
-  { file: { title: `styles.css`, content: `.a{}` }, expected_lang: `css` },
-  { file: { title: `script.py`, content: `x = 1` }, expected_lang: `python` },
-  { file: { title: `config.yml`, content: `key: val` }, expected_lang: `yaml` },
+  [`comp.svelte`, `<p>hi</p>`, `svelte`],
+  [`util.ts`, `const x = 1`, `typescript`],
+  [`app.js`, `let x`, `javascript`],
+  [`styles.css`, `.a{}`, `css`],
+  [`script.py`, `x = 1`, `python`],
+  [`config.yml`, `key: val`, `yaml`],
   // HTML-wrapped title — extension extracted after stripping tags
-  {
-    file: { title: `<code>options.ts</code>`, content: `export const x = 1` },
-    expected_lang: `typescript`,
-  },
+  [`<code>options.ts</code>`, `export const x = 1`, `typescript`],
   // explicit language overrides title inference
-  {
-    file: { title: `data.json`, content: `{}`, language: `javascript` },
-    expected_lang: `javascript`,
-  },
+  [`data.json`, `{}`, `javascript`, `javascript`],
   // unknown extension uses extension directly as language flag
-  { file: { title: `readme.xyz`, content: `hello` }, expected_lang: `xyz` },
+  [`readme.xyz`, `hello`, `xyz`],
   // no extension falls back to default_lang
-  { file: { title: `Makefile`, content: `all:` }, expected_lang: `svelte` },
-])(
-  `pre gets language-$expected_lang class and lang-label for "$file.title"`,
-  ({ file, expected_lang }) => {
-    mount_files({ files: [file] })
-    expect(doc_query(`pre`).className).toContain(`language-${expected_lang}`)
-    // the label must surface the resolved language, not the raw extension
-    expect(doc_query(`.lang-label`).textContent).toBe(expected_lang)
-  },
-)
+  [`Makefile`, `all:`, `svelte`],
+])(`resolves the language for %s`, (title, content, expected_lang, language) => {
+  mount_files({ files: [{ title, content, language }] })
+  expect(doc_query(`pre`).className).toContain(`language-${expected_lang}`)
+  // the label must surface the resolved language, not the raw extension
+  expect(doc_query(`.lang-label`).textContent).toBe(expected_lang)
+})
 
 test(`lang-label is positioned out of flow so it can't indent code`, () => {
   mount_files({ files: [{ title: `util.ts`, content: `const x = 1` }] })
@@ -99,6 +90,7 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   const button_label = () => btn.querySelector(`[aria-hidden="false"]`)?.textContent
   expect(btn.type).toBe(`button`)
   expect(getComputedStyle(btn).width).toBe(`fit-content`)
+  expect(getComputedStyle(btn).whiteSpace).toBe(`nowrap`)
   const open_states = () => details.map((el) => el.open)
 
   expect(open_states()).toEqual([false, false, false]) // initially closed

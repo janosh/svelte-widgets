@@ -2,6 +2,7 @@ import { Icon } from '$lib'
 import * as icons from '$lib/icons'
 import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
+import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
@@ -13,6 +14,38 @@ test.each([
   [`\${value}`, `\\\${value}`],
 ])(`escapes template-literal input %j as %j`, (input, expected) => {
   expect(escape_template_literal(input)).toBe(expected)
+})
+
+// The manifest is edited by hand and merged across branches, so both invariants drift easily.
+// The generator rejects duplicate ids and custom.ts clashes; ordering has no other guard.
+describe(`icons-manifest`, () => {
+  const source = readFileSync(
+    `${import.meta.dirname}/../../scripts/icons-manifest.ts`,
+    `utf8`,
+  )
+  const sections = source.split(/^  \/\/ /mu).slice(1)
+  const names_in = (section: string) =>
+    [...section.matchAll(/^ {2}(?<name>\w+): `/gmu)].map(
+      (match) => match.groups?.name ?? ``,
+    )
+
+  test(`lists every section alphabetically`, () => {
+    const out_of_order = sections.flatMap((section) => {
+      const names = names_in(section)
+      return names.filter(
+        (name, idx) => idx > 0 && names[idx - 1].toLowerCase() > name.toLowerCase(),
+      )
+    })
+    expect(out_of_order).toEqual([])
+  })
+
+  test(`spells acronyms consistently`, () => {
+    // `API`/`DOI`/`SQLite`/`GraphQL` set the convention: acronyms stay upper-case
+    const lower_cased =
+      /(?<![A-Z])(?:Api|Css|Html|Json|Pdf|Csv|Xml|Sql|Cpu|Gpu|Ssh|Usb|Vpn|Dna|Qr)(?![a-z])/u
+    const offenders = sections.flatMap(names_in).filter((name) => lower_cased.test(name))
+    expect(offenders).toEqual([])
+  })
 })
 
 describe(`Icon`, () => {

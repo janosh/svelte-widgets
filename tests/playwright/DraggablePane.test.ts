@@ -59,8 +59,10 @@ test(`the outermost pixel of the right edge still resizes`, async ({ page }) => 
   expect(Math.round(after.width - before.width)).toBe(-70)
 })
 
-// Corner strip paint order (right over bottom) is a browser fact; happy-dom cannot decide it.
-test(`a corner drag resizes width only, the strip painted last`, async ({ page }) => {
+// Which handle a corner press lands on is a browser hit-test fact; happy-dom cannot decide
+// it. The corner has its own square handle painted over the two edge strips it overlaps, so
+// it drives BOTH axes — the edge strips still drive one axis each.
+test(`a corner drag resizes both axes`, async ({ page }) => {
   const { pane } = await open_pane(page)
   const before = await box_of(pane)
   const corner = { x: before.x + before.width - 3, y: before.y + before.height - 3 }
@@ -69,7 +71,7 @@ test(`a corner drag resizes width only, the strip painted last`, async ({ page }
 
   const after = await box_of(pane)
   expect(Math.round(after.width - before.width)).toBe(-80)
-  expect(after.height).toBeCloseTo(before.height, 0)
+  expect(Math.round(after.height - before.height)).toBe(50)
 })
 
 test.describe(`touch`, () => {

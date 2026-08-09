@@ -95,11 +95,15 @@ describe(`DraggablePane`, () => {
     drag(doc_query(`.drag-handle`), [0, 0], [dx, dy])
   // resizable hit-tests nothing itself: each edge gets a strip, and pressing one is the
   // only way in. happy-dom paints nothing, so the corner's precedence lives in playwright.
-  const strip_of = (pane: HTMLElement, edge: `right` | `bottom`) => {
-    const strip = pane.querySelector<HTMLElement>(`[data-resize-edge="${edge}"]`)
-    if (!strip) throw new Error(`pane has no ${edge} grab strip`)
-    return strip
+  const handle_of = (pane: HTMLElement, attribute: string, value: string) => {
+    const handle = pane.querySelector<HTMLElement>(`[${attribute}="${value}"]`)
+    if (!handle) throw new Error(`pane has no ${value} ${attribute}`)
+    return handle
   }
+  const strip_of = (pane: HTMLElement, edge: `right` | `bottom`) =>
+    handle_of(pane, `data-resize-edge`, edge)
+  const corner_of = (pane: HTMLElement, corner = `bottom-right`) =>
+    handle_of(pane, `data-resize-corner`, corner)
 
   test(`toggle opens the pane, flips aria-expanded and swaps the icon`, async () => {
     const { toggle, pane } = await setup()
@@ -397,11 +401,13 @@ describe(`DraggablePane`, () => {
     },
   )
 
+  // An edge strip writes only its own axis; the other stays with the stylesheet, so a
+  // height drag cannot freeze the pane's responsive width (and vice versa).
   test.each([
-    [`both`, `right`, [545, 150], { width: `550px`, height: `300px` }],
-    [`both`, `bottom`, [200, 395], { width: `450px`, height: `400px` }],
-    [`width`, `right`, [545, 150], { width: `550px`, height: `300px` }],
-    [`height`, `bottom`, [200, 395], { width: `450px`, height: `400px` }],
+    [`both`, `right`, [545, 150], { width: `550px`, height: `` }],
+    [`both`, `bottom`, [200, 395], { width: ``, height: `400px` }],
+    [`width`, `right`, [545, 150], { width: `550px`, height: `` }],
+    [`height`, `bottom`, [200, 395], { width: ``, height: `400px` }],
   ] as const)(
     `resize=%s dragging the %s strip sets the pane size`,
     async (resize, edge, [end_x, end_y], expected) => {
@@ -412,11 +418,67 @@ describe(`DraggablePane`, () => {
       await tick()
 
       expect({ width: pane.style.width, height: pane.style.height }).toEqual(expected)
+      expect(pane.style.maxWidth).toBe(edge === `right` ? `calc(100vw - 16px)` : `450px`)
     },
   )
 
-  // The corner grip is `pointer-events: none` decoration sized to sit over the gutter,
-  // so the double-click that undoes a manual resize has to reach the strip beneath it.
+  test(`a narrow viewport preserves width until a horizontal resize changes it`, async () => {
+    mock_viewport(400, 500)
+    const { pane } = await open_pane({ resize: `both` })
+    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+
+    strip_of(pane, `right`).dispatchEvent(pointer_event(`pointerdown`, 445, 150))
+    await tick()
+    expect(pane.style.maxWidth).toBe(`450px`)
+
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 600, 150))
+    await tick()
+    expect(pane.style.width).toBe(`450px`)
+
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 425, 150))
+    await tick()
+    expect(pane.style.width).toBe(`430px`)
+    expect(pane.style.maxWidth).toBe(`max(calc(100vw - 16px), 430px)`)
+    release_pointer()
+  })
+
+  test(`the default max width caps natural size but not a manual viewport-safe resize`, async () => {
+    mock_viewport(700, 500)
+    const { pane } = await open_pane({ resize: `both` })
+    mock_rect(pane, { left: 100, top: 50, width: 450, height: 300 })
+    expect(pane.style.maxWidth).toBe(`450px`)
+
+    drag(corner_of(pane), [550, 350], [900, 900])
+    await tick()
+
+    // Width is capped so 8px on the far edge stays visible: 700 - left 100 - margin 8 = 592.
+    // Height takes the full drag: it is already bounded by the CSS `max-height`, and a second
+    // JS cap there only fought the gesture (it could even shrink a pane being dragged larger).
+    expect(pane.style.width).toBe(`592px`)
+    expect(pane.style.height).toBe(`850px`)
+    expect(pane.style.maxWidth).toBe(`calc(100vw - 16px)`)
+
+    doc_query<HTMLButtonElement>(`.reset-button`).click()
+    await tick()
+    expect(pane.style.width).toBe(``)
+    expect(pane.style.height).toBe(``)
+    expect(pane.style.maxWidth).toBe(`450px`)
+  })
+
+  test(`an explicit max_width remains authoritative after resizing`, async () => {
+    const { pane } = await open_pane({ resize: `width`, max_width: `600px` })
+    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    const right_strip = strip_of(pane, `right`)
+
+    drag(right_strip, [450, 150], [700, 150])
+    await tick()
+
+    expect(pane.style.width).toBe(`600px`)
+    expect(pane.style.maxWidth).toBe(`600px`)
+    expect(right_strip.getAttribute(`aria-valuenow`)).toBe(`600`)
+  })
+
+  // The visible grip is pointer-transparent decoration over the attachment's corner handle.
   test(`double-clicking the corner resets a manual resize`, async () => {
     const { pane } = await open_pane({ resize: `both` })
     mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
@@ -424,15 +486,14 @@ describe(`DraggablePane`, () => {
     drag(strip_of(pane, `right`), [445, 295], [545, 150])
     await tick()
     expect(pane.style.width).toBe(`550px`)
+    expect(pane.style.maxWidth).toBe(`calc(100vw - 16px)`)
 
-    // aimed at the grip, which paints under the right strip at the corner
-    strip_of(pane, `right`).dispatchEvent(pointer_event(`dblclick`, 445, 295))
+    corner_of(pane).dispatchEvent(pointer_event(`dblclick`, 445, 295))
     await tick()
 
-    expect({ width: pane.style.width, height: pane.style.height }).toEqual({
-      width: ``,
-      height: ``,
-    })
+    expect(pane.style.width).toBe(``)
+    expect(pane.style.height).toBe(``)
+    expect(pane.style.maxWidth).toBe(`450px`)
   })
 
   test(`a resize opts the pane out of repositioning and reveals the controls`, async () => {

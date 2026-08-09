@@ -18,6 +18,7 @@ import {
   is_object,
   matches_shortcut,
   normalize_combo,
+  observe_subtree,
   parse_shortcut,
   sanitize_shortcut_overrides,
   slug_to_title,
@@ -766,5 +767,42 @@ describe(`step_focus`, () => {
     const { target, event } = press(`ArrowDown`)
     expect(target).toBeUndefined()
     expect(event.defaultPrevented).toBe(false)
+  })
+})
+
+describe(`observe_subtree`, () => {
+  const flush = () => new Promise((resolve) => queueMicrotask(() => resolve(null)))
+
+  test(`coalesces a burst of mutations into one deferred call`, async () => {
+    const root = document.createElement(`div`)
+    document.body.append(root)
+    const refresh = vi.fn()
+    const stop = observe_subtree(root, [`data-key`], refresh)
+
+    // the caller owns the first pass, so that `$effect(refresh)` can run it while tracking
+    expect(refresh).not.toHaveBeenCalled()
+
+    const child = document.createElement(`span`)
+    root.append(child)
+    child.setAttribute(`data-key`, `radius`)
+    root.append(document.createElement(`b`))
+    expect(refresh).not.toHaveBeenCalled() // deferred, not synchronous
+    await flush()
+    expect(refresh).toHaveBeenCalledOnce()
+
+    child.setAttribute(`data-key`, `diameter`)
+    await flush()
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    // attributes outside the filter, and anything at all after teardown, are ignored
+    child.setAttribute(`data-label`, `Diameter`)
+    await flush()
+    expect(refresh).toHaveBeenCalledTimes(2)
+
+    child.setAttribute(`data-key`, `radius`)
+    stop()
+    await flush()
+    expect(refresh).toHaveBeenCalledTimes(2)
+    root.remove()
   })
 })

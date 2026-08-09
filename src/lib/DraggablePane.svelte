@@ -26,7 +26,7 @@
     closed_icon = Expand,
     icon_style,
     offset = { x: 5, y: 5 },
-    max_width = `450px`,
+    max_width,
     pane_props = {},
     persistent = false,
     // default `release`: outside bind:checked can close; pan-behind does not. See attachments.
@@ -80,7 +80,16 @@
   // Doubles as `resizable`'s handle_size and as the padding reserved for it, so the
   // grab zone never overlaps content or the content area's own scrollbar
   const resize_gutter_px = 8
+  const default_pane_width_px = 450
   const fallback_position = { left: 50, top: 50 }
+  let resized_max_width = $state<string | null>(null)
+  let resize_start_width = 0
+  // An explicit consumer cap stays authoritative. The bundled default cap only shapes the
+  // natural width; after a manual resize, the attachment's viewport bound takes over.
+  const viewport_max_width = `calc(100vw - ${2 * viewport_margin_px}px)`
+  const pane_max_width = $derived(
+    max_width ?? resized_max_width ?? `${default_pane_width_px}px`,
+  )
 
   const pane_state = $derived({
     open,
@@ -114,7 +123,7 @@
   const anchor_position = (): { left: number; top: number } => {
     if (!toggle_btn) return fallback_position
     const toggle_rect = toggle_btn.getBoundingClientRect()
-    const pane_width = pane?.getBoundingClientRect().width || 450
+    const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
     const offset_x = offset.x ?? 5
     const offset_y = offset.y ?? 5
 
@@ -170,6 +179,7 @@
   const reset_position = () => {
     position_pane()
     has_been_dragged = false
+    resized_max_width = null
   }
 
   const reanchor = () => {
@@ -184,6 +194,21 @@
   const handle_viewport_resize = () => {
     clearTimeout(resize_timeout)
     resize_timeout = setTimeout(reanchor, 50)
+  }
+
+  // Resolve at gesture time: the pane may have been dragged or reanchored since attach.
+  // Bounding-client coordinates make the same calculation work for fixed and absolute panes.
+  const resize_width_limit = (pane_node: HTMLElement) => {
+    const { left, width } = pane_node.getBoundingClientRect()
+    const room =
+      globalThis.innerWidth - Math.max(viewport_margin_px, left) - viewport_margin_px
+    const explicit_limit = Number(max_width?.trim().match(/^.*(?=px$)/u)?.[0])
+    // Keep the viewport cap at least as wide as the pane so starting a resize does not yank
+    // an overflowing pane narrower; an explicit pixel cap remains authoritative.
+    return Math.min(
+      Math.max(room, width),
+      explicit_limit >= 0 ? explicit_limit : Infinity,
+    )
   }
 </script>
 
@@ -218,7 +243,7 @@ aria-label sits before the spread, so a page with several panes renames them via
   data-resize={resize}
   data-dragging={dragging}
   style:position
-  style:max-width={max_width}
+  style:max-width={pane_max_width}
   style:top="{fallback_position.top}px"
   style:left="{fallback_position.left}px"
   style:display={open ? `grid` : `none`}
@@ -240,8 +265,23 @@ aria-label sits before the spread, so a page with several panes renames them via
     edges: resize_edges,
     min_width: 200,
     min_height: 100,
+    // Width only. Height is already bounded by the CSS `max-height` (--pane-max-height
+    // min'd with --pane-viewport-clamp); adding a second JS cap on top of it only fought
+    // the user's drag.
+    max_width: resize_width_limit,
     handle_size: resize_gutter_px,
-    on_resize_start: () => (has_been_dragged = true),
+    on_resize_start: (_event, { width }) => {
+      has_been_dragged = true
+      resize_start_width = width
+    },
+    on_resize: (_event, { width }) => {
+      if (width === resize_start_width) return
+      resized_max_width =
+        width > globalThis.innerWidth - 2 * viewport_margin_px
+          ? `max(${viewport_max_width}, ${width}px)`
+          : viewport_max_width
+    },
+    on_resize_reset: () => (resized_max_width = null),
   })}
   {@attach click_outside({
     enabled: open,
@@ -340,6 +380,11 @@ aria-label sits before the spread, so a page with several panes renames them via
       padding: var(--pane-padding, 1ex);
       display: grid;
       gap: var(--pane-gap, 4pt);
+      /* Rows size to their content and sit at the top. Without this, `normal` stretches the
+         auto rows to fill a pane taller than its content — which only shows up once content
+         gets short, e.g. a settings pane filtered down to one row, where it inflates that
+         row (and any input in it) to hundreds of pixels. */
+      align-content: var(--pane-align-content, start);
       box-sizing: border-box;
       min-height: 0; /* or the row refuses to shrink below its content */
       overflow-x: var(--pane-overflow-x, hidden);

@@ -130,14 +130,12 @@ describe(`FindBar`, () => {
     expect(details.map(({ open }) => open)).toEqual([true, true])
   })
 
-  test(`labels the region, the input and the close button from one prop`, () => {
-    mount_bar(`<p>alpha</p>`, { label: `dashboard` })
+  test(`required labels and role override rest props`, () => {
+    mount_bar(`<p>alpha</p>`, { label: `x`, 'aria-label': `y`, role: `none` })
 
-    expect(doc_query(`.find-bar`).getAttribute(`aria-label`)).toBe(`Find in dashboard`)
-    expect(input().placeholder).toBe(`Find in dashboard…`)
-    expect(doc_query(`.find-close`).getAttribute(`aria-label`)).toBe(
-      `Close dashboard search`,
-    )
+    expect(input().closest(`[role=search]`)?.getAttribute(`aria-label`)).toBe(`Find in x`)
+    expect(input().placeholder).toBe(`Find in x…`)
+    expect(doc_query(`.find-close`).getAttribute(`aria-label`)).toBe(`Close x search`)
   })
 
   // Fixture: plain, aria-hidden, sr-only, and .skip; also_ignore extends defaults.
@@ -174,19 +172,25 @@ describe(`create_find_state`, () => {
     const root = render_root(html)
     return { root, find: create_find_state(() => options) }
   }
+  const run_search = (
+    root: Element,
+    find: ReturnType<typeof create_find_state>,
+    query: string,
+  ) => {
+    find.query = query
+    find.refresh(root)
+  }
 
   test(`setting a query resets navigation and refresh recomputes matches`, () => {
     const { root, find } = setup(`<p>alpha two</p><p>alpha two</p>`)
 
-    find.query = `alpha`
-    find.refresh(root)
+    run_search(root, find, `alpha`)
     expect(find.matches).toHaveLength(2)
     expect(find.status).toBe(`1 of 2`) // idx -1 reads as the first match
 
     find.jump_to(1)
     expect(find.status).toBe(`2 of 2`)
-    find.query = `two`
-    find.refresh(root)
+    run_search(root, find, `two`)
     expect(find.status).toBe(`1 of 2`)
   })
 
@@ -197,8 +201,7 @@ describe(`create_find_state`, () => {
     [4, 1],
   ])(`jump_to(%i) wraps into range`, (idx, expected) => {
     const { root, find } = setup(`<p>a x</p><p>b x</p><p>c x</p>`)
-    find.query = `x`
-    find.refresh(root)
+    run_search(root, find, `x`)
 
     find.jump_to(idx)
     expect(find.status).toBe(`${expected + 1} of 3`)
@@ -206,8 +209,7 @@ describe(`create_find_state`, () => {
 
   test(`refresh with no root clears the matches`, () => {
     const { root, find } = setup(`<p>alpha</p>`)
-    find.query = `alpha`
-    find.refresh(root)
+    run_search(root, find, `alpha`)
     expect(find.matches).toHaveLength(1)
 
     find.refresh(undefined)
@@ -217,8 +219,7 @@ describe(`create_find_state`, () => {
 
   test(`keeps the cursor on the same element when a re-search preserves it`, () => {
     const { root, find } = setup(`<p>alpha one</p><p>alpha two</p><p>alpha three</p>`)
-    find.query = `alpha`
-    find.refresh(root)
+    run_search(root, find, `alpha`)
     find.jump_to(2)
     const current = find.matches[2]
 
@@ -230,8 +231,7 @@ describe(`create_find_state`, () => {
 
   test(`clamps the cursor when its element is gone`, () => {
     const { root, find } = setup(`<p>alpha one</p><p>alpha two</p><p>alpha three</p>`)
-    find.query = `alpha`
-    find.refresh(root)
+    run_search(root, find, `alpha`)
     find.jump_to(2)
 
     root.querySelectorAll(`p`)[2].remove()
@@ -246,8 +246,7 @@ describe(`create_find_state`, () => {
       },
     })
 
-    find.query = `alpha`
-    find.refresh(root)
+    run_search(root, find, `alpha`)
     expect(find.matches).toHaveLength(1)
   })
 
@@ -257,8 +256,7 @@ describe(`create_find_state`, () => {
       vi.useRealTimers()
     })
     const { root, find } = setup(`<p>nothing here</p>`)
-    find.query = `late`
-    find.refresh(root)
+    run_search(root, find, `late`)
     expect(find.matches).toEqual([])
 
     const stop = find.observe(root)
