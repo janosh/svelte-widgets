@@ -416,12 +416,15 @@ describe(`get_option_key`, () => {
 })
 
 describe(`compute_position`, () => {
-  const viewport = (width: number, height: number) => {
-    stub_prop(globalThis, `innerWidth`, width)
-    stub_prop(globalThis, `innerHeight`, height)
-  }
-  const [real_width, real_height] = [globalThis.innerWidth, globalThis.innerHeight]
-  afterEach(() => viewport(real_width, real_height)) // later suites keep the defaults
+  const viewport_cleanups: (() => void)[] = []
+  const viewport = (width: number, height: number) =>
+    viewport_cleanups.push(
+      stub_prop(globalThis, `innerWidth`, width),
+      stub_prop(globalThis, `innerHeight`, height),
+    )
+  afterEach(() => {
+    for (const cleanup of viewport_cleanups.splice(0).toReversed()) cleanup()
+  })
   const rect = (top: number, height: number, left = 100, width = 200) => ({
     top,
     left,

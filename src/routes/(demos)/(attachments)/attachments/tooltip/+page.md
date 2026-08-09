@@ -20,7 +20,6 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
   let placement = $state<Placement | `auto`>(`auto`)
   let align = $state<`start` | `center` | `end`>(`center`)
   let offset = $state(12)
-  let show_arrow = $state(true)
 </script>
 
 <div style="display: flex; gap: 1em; align-items: end; flex-wrap: wrap">
@@ -42,9 +41,6 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
     offset
     <input type="number" min="0" max="40" bind:value={offset} style="width: 5em" />
   </label>
-  <label>
-    <input type="checkbox" bind:checked={show_arrow} /> show_arrow
-  </label>
 </div>
 
 <div
@@ -57,7 +53,6 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
       placement,
       align,
       offset,
-      show_arrow,
     })}
   >
     Hover the target
@@ -169,32 +164,17 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 <div style="display: flex; gap: 1em; align-items: end; flex-wrap: wrap">
   <label>
     open_delay_ms
-    <input
-      type="number"
-      min="0"
-      step="50"
-      bind:value={open_delay_ms}
-      style="width: 6em"
-    />
+    <input type="number" min="0" step="50" bind:value={open_delay_ms} size="4" />
   </label>
   <label>
     close_delay_ms
-    <input
-      type="number"
-      min="0"
-      step="50"
-      bind:value={close_delay_ms}
-      style="width: 6em"
-    />
+    <input type="number" min="0" step="50" bind:value={close_delay_ms} size="4" />
   </label>
 </div>
 
 <div
   style="display: flex; gap: 1em; margin-top: 1em; flex-wrap: wrap; align-items: center"
 >
-  <button {@attach tooltip({ content: `Hover or focus`, open_delay_ms, close_delay_ms })}>
-    hover-focus
-  </button>
   <button
     {@attach tooltip({
       content: `A pointer opens this, Tab does not`,
@@ -243,12 +223,6 @@ Every CSS variable is read off the trigger, so a tooltip can be themed by the el
     {@attach tooltip({ content: `Themed through CSS variables`, placement: `top` })}
   >
     Info theme
-  </button>
-  <button
-    style="--tooltip-bg: rgba(255, 50, 50, 0.92); --text-color: white; --tooltip-border: 1px solid #c53030; --tooltip-radius: 3px; --tooltip-arrow-size: 10px"
-    {@attach tooltip({ content: `Warning theme`, placement: `bottom` })}
-  >
-    Warning theme
   </button>
   <button
     style="--tooltip-bg: #2d3748; --text-color: #e2e8f0; --tooltip-border: 2px solid #4299e1; --tooltip-arrow-size: 8px"
@@ -307,10 +281,6 @@ Width resolves to `min(--tooltip-max-width, viewport − padding)`, so a tooltip
   >
     Long text viewport-safe
   </button>
-</div>
-
-<!-- Unbreakable words wrap inside the max-width instead of escaping the viewport -->
-<div style="display: flex; gap: 1em; margin-top: 1em; flex-wrap: wrap">
   <button
     {@attach tooltip({
       content: `Donaudampfschifffahrtsgesellschaftskapitän is a German compound word`,
@@ -318,14 +288,6 @@ Width resolves to `min(--tooltip-max-width, viewport − padding)`, so a tooltip
     })}
   >
     Long German word
-  </button>
-  <button
-    {@attach tooltip({
-      content: `pneumonoultramicroscopicsilicovolcanoconiosis is very long`,
-      placement: `bottom`,
-    })}
-  >
-    Medical term
   </button>
   <button
     {@attach tooltip({ content: `antidisestablishmentarianism`, placement: `left` })}

@@ -147,13 +147,12 @@ export const file_drop =
         })
     }
     const event_controller = new AbortController()
-    node.addEventListener(`dragenter`, on_dragenter, { signal: event_controller.signal })
-    node.addEventListener(`dragover`, on_dragover, { signal: event_controller.signal })
-    node.addEventListener(`dragleave`, on_dragleave, { signal: event_controller.signal })
-    node.addEventListener(`drop`, on_drop, { signal: event_controller.signal })
-    globalThis.addEventListener(`dragend`, reset_drag, {
-      signal: event_controller.signal,
-    })
+    const { signal } = event_controller
+    node.addEventListener(`dragenter`, on_dragenter, { signal })
+    node.addEventListener(`dragover`, on_dragover, { signal })
+    node.addEventListener(`dragleave`, on_dragleave, { signal })
+    node.addEventListener(`drop`, on_drop, { signal })
+    globalThis.addEventListener(`dragend`, reset_drag, { signal })
 
     return () => {
       drop_generation += 1
@@ -216,6 +215,7 @@ export const draggable =
       )
       return undefined
     }
+    // Aliased so the narrowing survives into the hoisted handlers below
     const drag_handle = found
 
     function on_pointerdown(event: PointerEvent) {
@@ -225,17 +225,14 @@ export const draggable =
       if (!(event.target instanceof Node) || !drag_handle.contains(event.target)) return
 
       dragging = true
-
-      // For position: fixed elements, use getBoundingClientRect for viewport-relative position
-      const computed_style = getComputedStyle(node)
-      if (computed_style.position === `fixed`) {
-        const rect = node.getBoundingClientRect()
-        initial.left = rect.left
-        initial.top = rect.top
-      } else {
-        initial.left = node.offsetLeft
-        initial.top = node.offsetTop
-      }
+      // A fixed node is placed in viewport coordinates, which is what its rect reports;
+      // everything else is placed against its offset parent.
+      const origin =
+        getComputedStyle(node).position === `fixed`
+          ? node.getBoundingClientRect()
+          : { left: node.offsetLeft, top: node.offsetTop }
+      initial.left = origin.left
+      initial.top = origin.top
 
       node.style.left = `${initial.left}px`
       node.style.top = `${initial.top}px`
@@ -256,18 +253,13 @@ export const draggable =
 
     function on_pointermove(event: PointerEvent) {
       if (!dragging) return
-
-      const dx = event.clientX - start.x
-      const dy = event.clientY - start.y
-      node.style.left = `${initial.left + dx}px`
-      node.style.top = `${initial.top + dy}px`
-
+      node.style.left = `${initial.left + (event.clientX - start.x)}px`
+      node.style.top = `${initial.top + (event.clientY - start.y)}px`
       options.on_drag?.(event)
     }
 
     function on_pointerup(event: PointerEvent) {
       if (!dragging) return
-
       dragging = false
       event.stopPropagation()
       document.body.style.userSelect = ``
@@ -348,31 +340,23 @@ export const resizable =
 
     const measure = () => {
       const current_style = getComputedStyle(node)
-      const content_box_inset = (properties: string[]) =>
+      const style_px = (property: string) =>
+        css_px(current_style.getPropertyValue(property)) || 0
+      // What offsetWidth/Height carry beyond the CSS width/height on a content-box node.
+      const content_box_inset = (start: Edge, end: Edge) =>
         current_style.boxSizing === `border-box`
           ? 0
-          : properties.reduce(
-              (total, property) =>
-                total + (css_px(current_style.getPropertyValue(property)) || 0),
-              0,
-            )
+          : style_px(`padding-${start}`) +
+            style_px(`padding-${end}`) +
+            style_px(`border-${start}-width`) +
+            style_px(`border-${end}-width`)
       return {
         width: node.offsetWidth,
         height: node.offsetHeight,
         left: css_px(current_style.left) || 0,
         top: css_px(current_style.top) || 0,
-        width_inset: content_box_inset([
-          `padding-left`,
-          `padding-right`,
-          `border-left-width`,
-          `border-right-width`,
-        ]),
-        height_inset: content_box_inset([
-          `padding-top`,
-          `padding-bottom`,
-          `border-top-width`,
-          `border-bottom-width`,
-        ]),
+        width_inset: content_box_inset(`left`, `right`),
+        height_inset: content_box_inset(`top`, `bottom`),
       }
     }
     const read_maximum = (): Dimensions => {
@@ -633,9 +617,7 @@ export const resizable =
   }
 
 export function get_html_sort_value(element: HTMLElement): string {
-  if (element.dataset.sortValue !== undefined) {
-    return element.dataset.sortValue
-  }
+  if (element.dataset.sortValue !== undefined) return element.dataset.sortValue
   for (const child of Array.from(element.children)) {
     if (!(child instanceof HTMLElement)) continue
     const child_val = get_html_sort_value(child)
@@ -666,15 +648,13 @@ export const sortable =
 
     if (disabled) return undefined
 
-    const headers = Array.from(
-      node.querySelectorAll<HTMLTableCellElement>(header_selector),
-    )
+    const headers = node.querySelectorAll<HTMLTableCellElement>(header_selector)
     let sort_col_idx: number
     let sort_dir = 1 // 1 = asc, -1 = desc
 
+    const listeners = new AbortController()
     type HeaderState = {
       header: HTMLTableCellElement
-      handler: () => void
       original_html: string
       original_style: string
     }
@@ -748,15 +728,13 @@ export const sortable =
         for (const row of rows) table_body.append(row)
       }
 
-      header.addEventListener(`click`, click_handler)
-      header_state.push({ header, handler: click_handler, original_html, original_style })
+      header.addEventListener(`click`, click_handler, { signal: listeners.signal })
+      header_state.push({ header, original_html, original_style })
     })
 
     return () => {
-      for (const state of header_state) {
-        state.header.removeEventListener(`click`, state.handler)
-        restore_header(state)
-      }
+      listeners.abort()
+      for (const state of header_state) restore_header(state)
     }
   }
 
@@ -823,15 +801,11 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     let original_starts: number[] | null = null
     let original_ends: number[] | null = null
     // skip for ASCII, which is never astral nor length-changing when lowercased
-    let needs_offset_map = false
-    if (HAS_NON_ASCII.test(original_text)) {
-      for (const char of original_text) {
-        if (char.length > 1 || char.toLowerCase().length !== char.length) {
-          needs_offset_map = true
-          break
-        }
-      }
-    }
+    const needs_offset_map =
+      HAS_NON_ASCII.test(original_text) &&
+      Array.from(original_text).some(
+        (char) => char.length > 1 || char.toLowerCase().length !== char.length,
+      )
     if (needs_offset_map) {
       original_starts = []
       original_ends = []
@@ -839,10 +813,8 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
       for (const character of original_text) {
         const original_end = original_idx + character.length
         const lowered_length = character.toLowerCase().length
-        original_starts.push(
-          ...Array.from({ length: lowered_length }, () => original_idx),
-        )
-        original_ends.push(...Array.from({ length: lowered_length }, () => original_end))
+        original_starts.push(...Array<number>(lowered_length).fill(original_idx))
+        original_ends.push(...Array<number>(lowered_length).fill(original_end))
         original_idx = original_end
       }
     }
@@ -2089,20 +2061,18 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
   }
 
   const wait_for_release = dismiss_on === `release`
+  const listeners = new AbortController()
+  const capture = { capture: true, signal: listeners.signal }
   const press_event = wait_for_release ? `click` : `pointerdown`
-  document.addEventListener(press_event, handle_press, true)
+  document.addEventListener(press_event, handle_press, capture)
   if (wait_for_release) {
-    document.addEventListener(`pointerdown`, remember_press, true)
-    document.addEventListener(`pointercancel`, forget_press, true)
+    document.addEventListener(`pointerdown`, remember_press, capture)
+    document.addEventListener(`pointercancel`, forget_press, capture)
   }
   const unregister_escape = escape ? register_escape_layer(on_escape) : undefined
 
   return () => {
-    document.removeEventListener(press_event, handle_press, true)
-    if (wait_for_release) {
-      document.removeEventListener(`pointerdown`, remember_press, true)
-      document.removeEventListener(`pointercancel`, forget_press, true)
-    }
+    listeners.abort()
     unregister_escape?.()
   }
 }
@@ -2141,14 +2111,12 @@ export const backdrop_dismiss =
       if (press_outside && is_outside_box(event)) (callback ?? (() => node.close()))()
       press_outside = false
     }
-    node.addEventListener(`pointerdown`, on_pointerdown)
-    node.addEventListener(`pointercancel`, forget_press)
-    node.addEventListener(`click`, on_click)
-    return () => {
-      node.removeEventListener(`pointerdown`, on_pointerdown)
-      node.removeEventListener(`pointercancel`, forget_press)
-      node.removeEventListener(`click`, on_click)
-    }
+    const listeners = new AbortController()
+    const { signal } = listeners
+    node.addEventListener(`pointerdown`, on_pointerdown, { signal })
+    node.addEventListener(`pointercancel`, forget_press, { signal })
+    node.addEventListener(`click`, on_click, { signal })
+    return () => listeners.abort()
   }
 
 export type AnchorRect = { top: number; left: number; bottom: number; right: number }
@@ -2866,13 +2834,11 @@ export const forward_window_keydown =
       if (handle(event)) event.preventDefault()
     }
 
-    node.addEventListener(`pointerenter`, on_enter)
-    node.addEventListener(`pointerleave`, on_leave)
-    globalThis.addEventListener(`keydown`, on_keydown)
+    const listeners = new AbortController()
+    const { signal } = listeners
+    node.addEventListener(`pointerenter`, on_enter, { signal })
+    node.addEventListener(`pointerleave`, on_leave, { signal })
+    globalThis.addEventListener(`keydown`, on_keydown, { signal })
 
-    return () => {
-      node.removeEventListener(`pointerenter`, on_enter)
-      node.removeEventListener(`pointerleave`, on_leave)
-      globalThis.removeEventListener(`keydown`, on_keydown)
-    }
+    return () => listeners.abort()
   }

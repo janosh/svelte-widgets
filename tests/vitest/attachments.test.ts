@@ -106,7 +106,6 @@ describe(`tooltip manager`, () => {
       mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
     }
     options.strategy ??= `absolute`
-    options.placement ??= `bottom`
     options.open_delay_ms ??= 0
     options.close_delay_ms ??= 0
     const cleanup = tooltip(options)(element)
