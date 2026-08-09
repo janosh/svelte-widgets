@@ -1,3 +1,9 @@
+<script lang="ts">
+  import { resolve } from '$app/paths'
+
+  const popover_url = resolve(`/popover`)
+</script>
+
 ## `tooltip`
 
 One recycled tooltip node serves the whole document, rendered in the browser's top layer through the Popover API with an absolutely positioned fallback where that is unavailable. The defaults follow intent rather than raw events: keyboard focus opens immediately, pointer hover waits 400 ms, the pointer may travel onto the tooltip without closing it, Escape dismisses, touch-generated hover is ignored, and moving to a nearby trigger within 300 ms skips the opening delay.
@@ -108,7 +114,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ### Rich and interactive content
 
-`render(content_el, trigger)` receives the content element and may return a cleanup, so a tooltip can hold real DOM instead of a string. The surface accepts pointer events and stays open while the pointer is on it, so its text stays selectable. Keep that content non-interactive though: `role="tooltip"` sits outside the focus order, so a button or link inside is unreachable by keyboard — use [`Popover`](popover) when the surface needs controls. For a trusted HTML string `allow_html: true` is enough; pass untrusted input through `sanitize_html` first.
+`render(content_el, trigger)` receives the content element and may return a cleanup, so a tooltip can hold real DOM instead of a string. The surface accepts pointer events and stays open while the pointer is on it, so its text stays selectable. Keep that content non-interactive though: `role="tooltip"` sits outside the focus order, so a button or link inside is unreachable by keyboard — use <a href={popover_url}>Popover</a> when the surface needs controls. For a trusted HTML string `allow_html: true` is enough; pass untrusted input through `sanitize_html` first.
 
 ```svelte example id="attachments-tooltip-rich"
 <script lang="ts">
