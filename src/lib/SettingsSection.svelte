@@ -79,7 +79,7 @@
     if (!is_object(left) || !is_object(right)) return false
     const [left_scalar, right_scalar] = [scalar_of(left), scalar_of(right)]
     if (left_scalar !== undefined || right_scalar !== undefined)
-      return left_scalar === right_scalar
+      return Object.is(left_scalar, right_scalar)
     if (Array.isArray(left) || Array.isArray(right)) {
       return (
         Array.isArray(left) &&
@@ -239,7 +239,7 @@
 
       if (!on_reset_key || !changed_keys.includes(key)) remove_reset_button(row)
       else {
-        let reset_button = row.querySelector(RESET_SELECTOR)
+        let reset_button = row.querySelector<HTMLButtonElement>(RESET_SELECTOR)
         if (!reset_button) {
           reset_button = document.createElement(`button`)
           reset_button.setAttribute(`type`, `button`)

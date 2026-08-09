@@ -15,8 +15,7 @@ owning its own state:
 </script>
 ```
 
-A row opts into per-row reset and filtering by carrying `data-key`. Anything else in the
-section still renders, and still shows up in search.
+A row opts into per-row reset and filtering by carrying `data-key`. Direct `label` and `.setting` children without `data-key` are also searchable; other section content still renders but is not indexed.
 
 ### `SettingsSearch`
 

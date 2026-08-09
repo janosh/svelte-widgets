@@ -2,7 +2,7 @@
 
 This demo logs common selection, dropdown, search, activation, and native input events.
 
-```svelte example
+```svelte example id="multiselect-events"
 <script lang="ts">
   import { MultiSelect } from '$lib'
   import { ColorSnippet } from '$site'

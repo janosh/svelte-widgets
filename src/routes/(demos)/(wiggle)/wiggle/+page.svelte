@@ -6,7 +6,7 @@
   let scale = $state(1.2)
   let dx = $state(10)
   let dy = $state(10)
-  let duration = $state(200)
+  let duration_ms = $state(200)
   let stiffness = $state(0.05)
   let damping = $state(0.1)
 </script>
@@ -28,7 +28,7 @@
     {scale}
     {dx}
     {dy}
-    {duration}
+    {duration_ms}
     spring_options={{ stiffness, damping }}
     style="display: inline-block; padding: 0.5em 1em; background: var(--surface); border-radius: 6pt"
   >
@@ -54,8 +54,8 @@
     <input type="range" min="0" max="50" step="1" bind:value={dy} />
   </label>
   <label>
-    duration: {duration}ms
-    <input type="range" min="50" max="1000" step="50" bind:value={duration} />
+    duration_ms: {duration_ms}
+    <input type="range" min="50" max="1000" step="50" bind:value={duration_ms} />
   </label>
   <label>
     stiffness: {stiffness.toFixed(2)}

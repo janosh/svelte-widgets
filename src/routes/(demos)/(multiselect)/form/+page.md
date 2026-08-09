@@ -4,7 +4,7 @@ This example shows the JavaScript way of handling MultiSelect fields in form sub
 
 > Hint: Use <code>JSON.parse()</code> to convert the string value passed to form submit handler back to array.
 
-```svelte example
+```svelte example id="multiselect-form-data"
 <script lang="ts">
   import { MultiSelect } from '$lib'
   import { ColorSnippet } from '$site'

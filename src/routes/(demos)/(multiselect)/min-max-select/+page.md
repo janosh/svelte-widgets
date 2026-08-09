@@ -49,7 +49,7 @@ When setting an integer value for `maxSelect` Multiselect will
 
 `required={3}` means users have to pick at least 3 options before they can submit a form.
 
-```svelte example
+```svelte example id="required-three"
 <script lang="ts">
   import { MultiSelect } from '$lib'
 
@@ -73,7 +73,7 @@ When setting an integer value for `maxSelect` Multiselect will
 
 `maxSelect={n}` and `required={m}` can be combined when `n >= m`.
 
-```svelte example
+```svelte example id="max-select-with-required"
 <script lang="ts">
   import { MultiSelect } from '$lib'
 
@@ -99,7 +99,7 @@ When setting an integer value for `maxSelect` Multiselect will
 
 Use `selectAllOption` to add a "Select all" button at the top of the dropdown. It respects `maxSelect` (only selects up to the limit) and skips disabled options. Optionally set `shortcuts={{ select_all: 'ctrl+a' }}` to enable the keyboard shortcut (disabled by default to avoid hijacking the browser's native Ctrl+A).
 
-```svelte example
+```svelte example id="select-all-option"
 <script lang="ts">
   import { MultiSelect } from '$lib'
 
@@ -129,7 +129,7 @@ Use `selectAllOption` to add a "Select all" button at the top of the dropdown. I
 
 Pass a string to customize the label:
 
-```svelte example
+```svelte example id="select-all-custom-label"
 <script lang="ts">
   import { MultiSelect } from '$lib'
   import type { ObjectOption } from '$lib/types'
@@ -169,7 +169,7 @@ Pass a string to customize the label:
 
 For single select (`maxSelect={1}`), you can use `bind:value` to initialize the selected option. Simpler than `selected={[option]}`. Works with any option type (strings, numbers, objects).
 
-```svelte example
+```svelte example id="single-select-bind-value"
 <script lang="ts">
   import { MultiSelect } from '$lib'
   import type { ObjectOption } from '$lib/types'
@@ -193,7 +193,7 @@ For single select (`maxSelect={1}`), you can use `bind:value` to initialize the 
 </p>
 ```
 
-```svelte example
+```svelte example id="single-select-html-labels"
 <script lang="ts">
   // for https://github.com/janosh/svelte-widgets/issues/249
   import { MultiSelect } from '$lib'

@@ -69,7 +69,7 @@ default when set, so pass `autoplay: 1` along with the rest to keep playing on c
 ### `ContributorList`
 
 An avatar row, grayscale until hovered, with the username in a
-[`tooltip`](attachments#tooltip). `contributors` is structural — `login`, `avatar_url`
+[`tooltip`](attachments/tooltip). `contributors` is structural — `login`, `avatar_url`
 and `html_url` — so a GitHub API response drops straight in. `tooltip_options` forwards
 placement and delay, and `--contributor-avatar-size` and `--contributor-gap` size the
 row.

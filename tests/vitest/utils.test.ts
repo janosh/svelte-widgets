@@ -87,15 +87,15 @@ describe(`get_label`, () => {
 
 describe(`get_style`, () => {
   test.each([
-    [`plain string`, undefined, ``],
-    [{ style: `color: red` }, undefined, `color: red;`],
-    [{ style: `color: red;` }, undefined, `color: red;`],
-    [{ style: `` }, undefined, ``],
-    [{ style: `   ` }, undefined, `   `], // whitespace is preserved, not trimmed
-    [{ label: `Test`, value: 42 }, undefined, ``],
-  ])(`returns correct style for %j with key %s`, (option, key, expected) => {
+    [`plain string`, ``],
+    [{ style: `color: red` }, `color: red;`],
+    [{ style: `color: red;` }, `color: red;`],
+    [{ style: `` }, ``],
+    [{ style: `   ` }, `   `], // whitespace is preserved, not trimmed
+    [{ label: `Test`, value: 42 }, ``],
+  ])(`returns correct style for %j`, (option, expected) => {
     // @ts-expect-error testing with mixed types for get_style
-    expect(get_style(option, key)).toBe(expected)
+    expect(get_style(option)).toBe(expected)
   })
 
   const option_style: OptionStyle = {
@@ -416,14 +416,15 @@ describe(`get_option_key`, () => {
 })
 
 describe(`compute_position`, () => {
-  const viewport = (width: number, height: number) => {
-    const sizes = { innerWidth: width, innerHeight: height }
-    for (const [prop, value] of Object.entries(sizes)) {
-      Object.defineProperty(globalThis, prop, { value, writable: true })
-    }
-  }
-  const [real_width, real_height] = [globalThis.innerWidth, globalThis.innerHeight]
-  afterEach(() => viewport(real_width, real_height)) // later suites keep the defaults
+  const viewport_cleanups: (() => void)[] = []
+  const viewport = (width: number, height: number) =>
+    viewport_cleanups.push(
+      stub_prop(globalThis, `innerWidth`, width),
+      stub_prop(globalThis, `innerHeight`, height),
+    )
+  afterEach(() => {
+    for (const cleanup of viewport_cleanups.splice(0).toReversed()) cleanup()
+  })
   const rect = (top: number, height: number, left = 100, width = 200) => ({
     top,
     left,
@@ -455,6 +456,118 @@ describe(`compute_position`, () => {
     expect(aligned.left).toBe(100) // flush with the anchor's left edge
   })
 
+  test.each([
+    [`most room below`, 400, 400, rect(10, 20, 190, 20), `bottom`],
+    [`most room above`, 400, 400, rect(370, 20, 190, 20), `top`],
+    [`most room right`, 400, 400, rect(190, 20, 10, 20), `right`],
+    [`most room left`, 400, 400, rect(190, 20, 370, 20), `left`],
+    [`a stable four-way tie`, 400, 400, rect(190, 20, 190, 20), `bottom`],
+    [`a top/bottom tie`, 400, 400, rect(300, 20, 80, 20), `top`],
+    [`a right/left tie`, 600, 200, rect(90, 20, 290, 20), `right`],
+  ] as const)(`auto chooses %s`, (_description, width, height, anchor, expected) => {
+    viewport(width, height)
+    expect(
+      compute_position(anchor, { width: 40, height: 40 }, { placement: `auto` })
+        .placement,
+    ).toBe(expected)
+  })
+
+  test(`flip: false pins auto even with no room and explicit fallbacks`, () => {
+    viewport(400, 400)
+    expect(
+      compute_position(
+        rect(370, 20, 190, 20), // same anchor the `most room above` row flips to `top`
+        { width: 40, height: 40 },
+        { placement: `auto`, flip: false, fallback_placements: [`top`, `left`] },
+      ).placement,
+    ).toBe(`bottom`)
+  })
+
+  test(`auto prefers a fitting side over greater unusable clearance`, () => {
+    viewport(400, 400)
+    expect(
+      compute_position(
+        rect(180, 20, 50, 20),
+        { width: 350, height: 100 },
+        { placement: `auto`, shift: false },
+      ).placement,
+    ).toBe(`bottom`)
+  })
+
+  test.each([
+    [`aligns the end edge`, `bottom`, { align: `end` }, { top: 140, left: 250 }],
+    [`aligns the end edge`, `right`, { align: `end` }, { top: 120, left: 280 }],
+    [
+      `applies the cross-axis offset`,
+      `bottom`,
+      { align: `start`, cross_axis_offset: 7 },
+      { top: 140, left: 207 },
+    ],
+    [
+      `applies the cross-axis offset`,
+      `right`,
+      { align: `start`, cross_axis_offset: 7 },
+      { top: 107, left: 280 },
+    ],
+  ] as const)(`%s on %s`, (_description, placement, options, expected) => {
+    expect(
+      compute_position(
+        rect(100, 40, 200, 80),
+        { width: 30, height: 20 },
+        { placement, ...options, flip: false, shift: false },
+      ),
+    ).toMatchObject(expected)
+  })
+
+  test(`explicit fallback order wins equal overflow inside a custom boundary`, () => {
+    const placed = compute_position(
+      rect(290, 20, 290, 20),
+      { width: 300, height: 300 },
+      {
+        placement: `auto`,
+        boundary: { top: 100, left: 100, right: 500, bottom: 500 },
+        padding: 10,
+        fallback_placements: [`right`, `top`, `left`],
+        shift: false,
+      },
+    )
+    expect(placed.placement).toBe(`right`)
+  })
+
+  test.each([
+    [`keeps a named placement ahead of its fallbacks`, rect(180, 20, 200, 40), `left`],
+    [
+      `takes the fallbacks in order once the named side has no room`,
+      rect(180, 20, 10, 40),
+      `right`,
+    ],
+  ] as const)(`%s`, (_description, anchor, expected) => {
+    viewport(400, 400)
+    expect(
+      compute_position(
+        anchor,
+        { width: 100, height: 100 },
+        { placement: `left`, fallback_placements: [`right`, `top`], shift: false },
+      ).placement,
+    ).toBe(expected)
+  })
+
+  test(`offset and boundary padding count toward fallback overflow`, () => {
+    const placed = compute_position(
+      rect(110, 20, 90, 20),
+      { width: 50, height: 50 },
+      {
+        placement: `auto`,
+        boundary: { top: 0, left: 0, right: 200, bottom: 200 },
+        padding: 10,
+        offset: 15,
+        flip: [`bottom`, `top`],
+        shift: false,
+      },
+    )
+    expect(placed.placement).toBe(`top`)
+  })
+
   test(`shift pulls the box back inside the viewport, padding included`, () => {
     viewport(400, 800)
     const anchor = rect(100, 30, 380, 20) // near the right edge
@@ -462,9 +575,44 @@ describe(`compute_position`, () => {
 
     // flip off, else the box would simply move to the anchor's left where it fits
     const opts = { placement: `bottom`, padding: 8, flip: false } as const
-    expect(compute_position(anchor, box, opts).left).toBe(92) // 400 - 300 - 8
+    expect(compute_position(anchor, box, opts)).toEqual({
+      top: 130,
+      left: 92, // 400 - 300 - 8
+      placement: `bottom`,
+    })
     // centered, hanging off the right edge
-    expect(compute_position(anchor, box, { ...opts, shift: false }).left).toBe(240)
+    expect(compute_position(anchor, box, { ...opts, shift: false })).toEqual({
+      top: 130,
+      left: 240,
+      placement: `bottom`,
+    })
+  })
+
+  test(`custom boundaries clamp shifted coordinates`, () => {
+    expect(
+      compute_position(
+        rect(200, 20, 480, 20),
+        { width: 200, height: 100 },
+        {
+          placement: `bottom`,
+          align: `start`,
+          boundary: { top: 100, left: 100, right: 500, bottom: 500 },
+          padding: 10,
+          flip: false,
+        },
+      ),
+    ).toEqual({ top: 220, left: 290, placement: `bottom` })
+  })
+
+  test(`oversize boxes retain minimum-overflow cross-axis alignment`, () => {
+    viewport(100, 100)
+    expect(
+      compute_position(
+        rect(40, 20, 40, 20),
+        { width: 200, height: 200 },
+        { placement: `bottom`, padding: 10, flip: false },
+      ),
+    ).toEqual({ top: 10, left: -50, placement: `bottom` })
   })
 
   // The portalled dropdown used to carry its own above/below rule. Its replacement
@@ -803,6 +951,25 @@ describe(`observe_subtree`, () => {
     stop()
     await flush()
     expect(refresh).toHaveBeenCalledTimes(2)
+    root.remove()
+  })
+
+  test.each([
+    [`ignores text edits by default`, undefined, 0],
+    [`refreshes when text watching is enabled`, true, 1],
+  ] as const)(`%s`, async (_description, watch_text, calls) => {
+    const root = document.createElement(`div`)
+    const text_node = document.createTextNode(`before`)
+    root.append(text_node)
+    document.body.append(root)
+    const refresh = vi.fn()
+    const stop = observe_subtree(root, [], refresh, watch_text)
+
+    text_node.nodeValue = `after`
+    await flush()
+    expect(refresh).toHaveBeenCalledTimes(calls)
+
+    stop()
     root.remove()
   })
 })

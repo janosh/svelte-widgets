@@ -2,6 +2,8 @@ import type {
   ContrastOptions,
   FocusTrapOptions,
   ResizableOptions,
+  TooltipOpenReason,
+  TooltipOptions,
 } from '$lib/attachments'
 import {
   backdrop_dismiss,
@@ -29,6 +31,7 @@ import {
   doc_query,
   drag_event,
   escape_key,
+  hover as pointer_over,
   mock_rect,
   pointer_event,
   press_key as dispatch_key,
@@ -79,948 +82,795 @@ describe(`get_html_sort_value`, () => {
   })
 })
 
-// The mocks below swap prototype getters and put the originals back. A happy-dom that
-// moved one off HTMLElement.prototype must fail here rather than leave a patched
-// prototype behind for every later test — getBoundingClientRect already has no own
-// descriptor there, so this is not hypothetical.
-const own_prototype_descriptor = (prop: string): PropertyDescriptor => {
-  const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, prop)
-  if (!descriptor) throw new Error(`HTMLElement.prototype.${prop} is not an own property`)
-  return descriptor
-}
+describe(`tooltip manager`, () => {
+  const cleanups: (() => void)[] = []
 
-describe(`tooltip`, () => {
-  const setup_tooltip = (element: HTMLElement, options = {}) => tooltip(options)(element)
+  beforeEach(() => {
+    vi.useFakeTimers()
+    cleanups.push(
+      stub_prop(globalThis, `innerWidth`, 1000),
+      stub_prop(globalThis, `innerHeight`, 800),
+    )
+  })
 
-  const mock_bounds = (
+  afterEach(() => {
+    for (const cleanup of cleanups.splice(0).toReversed()) cleanup()
+    vi.useRealTimers()
+  })
+
+  const attach_tooltip = (
     element: HTMLElement,
-    bounds = { left: 100, top: 100, width: 50, height: 50 },
-  ) => mock_rect(element, bounds)
-
-  const mock_viewport = (width: number, height: number) => {
-    const set_size = (inner_width: number, inner_height: number) => {
-      const sizes = { innerWidth: inner_width, innerHeight: inner_height }
-      for (const [prop, value] of Object.entries(sizes)) {
-        Object.defineProperty(globalThis, prop, { configurable: true, value })
-      }
+    options: TooltipOptions = {},
+  ): (() => void) => {
+    if (!Object.hasOwn(element, `getBoundingClientRect`)) {
+      mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
     }
-    const [original_width, original_height] = [
-      globalThis.innerWidth,
-      globalThis.innerHeight,
-    ]
-    set_size(width, height)
-    return () => set_size(original_width, original_height)
+    options.strategy ??= `absolute`
+    options.open_delay_ms ??= 0
+    options.close_delay_ms ??= 0
+    const cleanup = tooltip(options)(element)
+    if (!cleanup) throw new Error(`tooltip did not return cleanup`)
+    cleanups.push(cleanup)
+    return cleanup
   }
 
-  // Only `.custom-tooltip` elements report the mocked size; everything else keeps
-  // its real (zero) geometry so trigger bounds stay under mock_bounds' control.
-  const mock_tooltip_size = (width: number, height: number) => {
-    const is_tooltip = (node: HTMLElement) => node.classList.contains(`custom-tooltip`)
-    const bounds_spy = vi
+  const register_tooltip = (title: string, options: TooltipOptions = {}) => {
+    const element = create_element(`button`)
+    element.title = title
+    return { cleanup: attach_tooltip(element, options), element }
+  }
+
+  const open_detail = (trigger: HTMLElement, reason: TooltipOpenReason) => ({
+    trigger,
+    reason,
+  })
+
+  const pointer_out = (
+    element: HTMLElement,
+    related_target: EventTarget = document.body,
+  ) => {
+    element.dispatchEvent(
+      pointer_event(`pointerout`, 110, 110, {
+        pointerType: `mouse`,
+        relatedTarget: related_target,
+      }),
+    )
+    vi.advanceTimersByTime(0)
+  }
+
+  const visible_tooltip = (): HTMLElement => {
+    const tooltip_el = doc_query(`.custom-tooltip`)
+    expect(tooltip_el.hidden).toBe(false)
+    return tooltip_el
+  }
+
+  const show_tooltip = (options: TooltipOptions = {}, title = `Tooltip content`) => {
+    const { cleanup, element } = register_tooltip(title, options)
+    pointer_over(element)
+    return { cleanup, element, tooltip_el: visible_tooltip() }
+  }
+
+  type QueuedCase = [string, readonly string[], boolean, string?]
+  const setup_controlled_handoff = (blur_on_open = false, content = `Controlled`) => {
+    const on_open_change = vi.fn()
+    const controlled = create_element(`button`)
+    const options: TooltipOptions = { content, open: true, on_open_change }
+    const close = attach_tooltip(controlled, options)
+    const root = create_element()
+    const child = document.createElement(`button`)
+    const other = document.createElement(`button`)
+    child.title = `Next`
+    other.title = `Other`
+    root.append(child, other)
+    attach_tooltip(
+      root,
+      blur_on_open
+        ? {
+            on_open_change: (open) => {
+              if (open) {
+                child.dispatchEvent(
+                  new FocusEvent(`focusout`, {
+                    bubbles: true,
+                    relatedTarget: document.body,
+                  }),
+                )
+              }
+            },
+          }
+        : {},
+    )
+    mock_rect(child, { left: 250, top: 100, width: 80, height: 30 })
+    mock_rect(other, { left: 350, top: 100, width: 80, height: 30 })
+    return { child, close, controlled, on_open_change, options, other }
+  }
+
+  const mock_tooltip_rect = (width: number, height: number) => {
+    const original = HTMLElement.prototype.getBoundingClientRect
+    return vi
       .spyOn(HTMLElement.prototype, `getBoundingClientRect`)
       .mockImplementation(function (this: HTMLElement) {
-        const [box_width, box_height] = is_tooltip(this) ? [width, height] : [0, 0]
-        return {
-          left: 0,
-          top: 0,
-          width: box_width,
-          height: box_height,
-          right: box_width,
-          bottom: box_height,
-          x: 0,
-          y: 0,
-          toJSON: () => ({}),
-        }
+        if (!this.classList.contains(`custom-tooltip`)) return original.call(this)
+        return new DOMRect(0, 0, width, height)
       })
-
-    const originals = (
-      [
-        [`offsetWidth`, width],
-        [`offsetHeight`, height],
-      ] as const
-    ).map(([prop, size]) => {
-      const original = own_prototype_descriptor(prop)
-      Object.defineProperty(HTMLElement.prototype, prop, {
-        configurable: true,
-        get(this: HTMLElement) {
-          return is_tooltip(this) ? size : (original.get?.call(this) ?? 0)
-        },
-      })
-      return [prop, original] as const
-    })
-
-    return () => {
-      bounds_spy.mockRestore()
-      for (const [prop, original] of originals) {
-        Object.defineProperty(HTMLElement.prototype, prop, original)
-      }
-    }
   }
 
-  // happy-dom does no layout, so the width balancer's binary search has nothing to
-  // bisect: every measurement returns the same number and it takes the min-content
-  // escape hatch instead. This stands in a box that really wraps — its height is the
-  // number of lines the text needs at the current width — and reports the padding and
-  // box-sizing the balancer reads, which happy-dom leaves empty (and so NaN).
-  const mock_wrapping_tooltip = ({
-    single_line,
-    min_content,
-    line_height,
-    max_width,
-  }: {
-    single_line: number
-    min_content: number
-    line_height: number
-    max_width: number
-  }) => {
-    const is_tooltip = (node: HTMLElement) => node.classList.contains(`custom-tooltip`)
-    const laid_out_width = ({ style }: HTMLElement) => {
-      if (style.width === `min-content`) return min_content
-      const explicit = Number(style.width.replace(/px$/u, ``))
-      if (Number.isFinite(explicit) && style.width !== ``) return explicit
-      // `auto`: a single line while wrapping is off, else as wide as the cap allows
-      if (style.whiteSpace === `nowrap`) return single_line
-      return Math.min(single_line, style.maxWidth === `none` ? Infinity : max_width)
-    }
+  it.each([
+    [`title`, `From title`],
+    [`aria-label`, `From aria`],
+    [`data-title`, `From data`],
+  ])(`resolves %s content and restores stripped titles`, (attribute, expected) => {
+    const element = create_element(`button`)
+    element.setAttribute(attribute, expected)
+    const cleanup = attach_tooltip(element)
+    pointer_over(element)
 
-    const undo_metrics = ([`offsetWidth`, `offsetHeight`] as const).map((prop) => {
-      const original = own_prototype_descriptor(prop)
-      Object.defineProperty(HTMLElement.prototype, prop, {
-        configurable: true,
-        get(this: HTMLElement) {
-          if (!is_tooltip(this)) return original.get?.call(this) ?? 0
-          const width = laid_out_width(this)
-          if (prop === `offsetWidth`) return width
-          return Math.ceil(single_line / width) * line_height
-        },
-      })
-      return () => Object.defineProperty(HTMLElement.prototype, prop, original)
-    })
+    expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
+    if (attribute === `title`) expect(element.hasAttribute(`title`)).toBe(false)
+    cleanup()
+    if (attribute === `title`) expect(element.title).toBe(expected)
+  })
 
-    const real_computed = globalThis.getComputedStyle.bind(globalThis)
-    const computed_spy = vi
-      .spyOn(globalThis, `getComputedStyle`)
-      .mockImplementation((node, pseudo) => {
-        const computed = real_computed(node, pseudo)
-        if (!(node instanceof HTMLElement) || !is_tooltip(node)) return computed
-        // border-box keeps style.width and offsetWidth the same number, so the search
-        // reads back exactly what it wrote
-        const overrides: Record<string, string> = {
-          boxSizing: `border-box`,
-          maxWidth: `${max_width}px`,
-        }
-        return new Proxy(computed, {
-          get: (target, key) => {
-            if (typeof key === `string` && key in overrides) return overrides[key]
-            const value = Reflect.get(target, key)
-            // CSSStyleDeclaration methods use private fields, so they reject the proxy
-            // as a receiver unless handed back already bound to the real declaration
-            return typeof value === `function` ? value.bind(target) : value
-          },
-        })
-      })
+  it(`gives explicit content precedence and treats an empty result as disabled`, () => {
+    const element = create_element(`button`)
+    element.title = `Native`
+    attach_tooltip(element, { content: `Explicit` })
+    pointer_over(element)
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Explicit`)
 
-    return () => {
-      computed_spy.mockRestore()
-      for (const undo of undo_metrics) undo()
-    }
-  }
+    const empty = create_element(`button`)
+    empty.setAttribute(`aria-label`, `Fallback must not win`)
+    attach_tooltip(empty, { content: () => `` })
+    pointer_over(empty)
+    const tooltip_el = doc_query(`.custom-tooltip`)
+    expect(tooltip_el.hidden).toBe(true)
+    expect(tooltip_el.style.display).toBe(`none`)
+  })
 
-  const with_mocked_tooltip_geometry = (
-    viewport: { width: number; height: number },
-    tooltip_size: { width: number; height: number },
-    callback: () => void,
-  ) => {
-    const restore_viewport = mock_viewport(viewport.width, viewport.height)
-    const restore_tooltip_size = mock_tooltip_size(
-      tooltip_size.width,
-      tooltip_size.height,
-    )
-    try {
-      callback()
-    } finally {
-      restore_tooltip_size()
-      restore_viewport()
-    }
-  }
-
-  // Intercepts cssText assignments and setProperty calls at the prototype level.
-  // Needed because happy-dom strips var()/light-dark() from parsed style values.
-  const capture_style_writes = () => {
-    const css_texts: string[] = []
-    const set_prop_values: string[] = []
-    const orig_css_desc = Object.getOwnPropertyDescriptor(
-      CSSStyleDeclaration.prototype,
-      `cssText`,
-    )
-    Object.defineProperty(CSSStyleDeclaration.prototype, `cssText`, {
-      configurable: true,
-      enumerable: orig_css_desc?.enumerable,
-      get() {
-        return orig_css_desc?.get?.call(this) ?? ``
-      },
-      set(value: string) {
-        css_texts.push(value)
-        orig_css_desc?.set?.call(this, value)
-      },
-    })
-    // eslint-disable-next-line @typescript-eslint/unbound-method -- storing for prototype swap, called with .call(this)
-    const orig_set_prop = CSSStyleDeclaration.prototype.setProperty
-    CSSStyleDeclaration.prototype.setProperty = function (
-      prop: string,
-      val: string | null,
-      priority?: string,
-    ) {
-      if (val) set_prop_values.push(`${prop}: ${val}`)
-      return orig_set_prop.call(this, prop, val, priority)
-    }
-    return {
-      css_texts,
-      set_prop_values,
-      restore: () => {
-        CSSStyleDeclaration.prototype.setProperty = orig_set_prop
-        if (orig_css_desc) {
-          Object.defineProperty(CSSStyleDeclaration.prototype, `cssText`, orig_css_desc)
-        }
-      },
-    }
-  }
-
-  const find_tooltip_css = (css_texts: string[]) =>
-    css_texts.find((text) => text.includes(`z-index`) && text.includes(`9999`))
-
-  // Arrow fill borders: the solid, non-transparent ones carry the background color
-  const arrow_border_values = (set_prop_values: string[]) =>
-    set_prop_values.filter(
-      (entry) =>
-        entry.startsWith(`border-`) &&
-        entry.includes(`solid`) &&
-        !entry.includes(`transparent`),
-    )
-
-  // Shared helper for triggering tooltip display (requires vi.useFakeTimers())
-  const trigger_tooltip = (element: HTMLElement) => {
-    element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-    vi.runAllTimers()
-  }
-
-  // Creates a trigger with the given title (default bounds: left/top 100, 50x50)
-  // and attaches a tooltip to it, returning the trigger and the attachment cleanup
-  const attach_tooltip = (title = `test`, options: Record<string, unknown> = {}) => {
+  it.each([
+    [
+      `disabled render with content`,
+      { content: `text`, disabled: true, render: (): undefined => undefined },
+      `render cannot be combined`,
+    ],
+    [
+      `render with allow_html: false`,
+      { allow_html: false, render: (): undefined => undefined },
+      `render cannot be combined`,
+    ],
+    [
+      `sanitizer without HTML`,
+      { sanitize_html: (html: string) => html },
+      `sanitize_html requires`,
+    ],
+    [`manual without open`, { trigger: `manual` as const }, `requires the open option`],
+  ])(`rejects invalid options: %s`, (_name, options, message) => {
     const element = create_element()
-    element.title = title
-    mock_bounds(element)
-    return [element, setup_tooltip(element, { delay_ms: 0, ...options })] as const
-  }
+    expect(() => tooltip(options)(element)).toThrow(message)
+  })
 
-  // Same, but also hovers the trigger so its tooltip becomes visible
-  const show_tooltip = (options: Record<string, unknown> = {}, title = `test`) => {
-    const [element] = attach_tooltip(title, options)
-    trigger_tooltip(element)
-    return element
-  }
+  it(`delegates to descendants added after attachment`, () => {
+    const root = create_element()
+    attach_tooltip(root)
+    const child = document.createElement(`button`)
+    child.title = `Dynamic child`
+    root.append(child)
+    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
 
-  // Shows a tooltip with style writes captured, restoring the prototype patches
-  // even if showing throws. Returns the captured cssText/setProperty values.
-  const show_with_captured_styles = (
-    customize: (element: HTMLElement) => void = () => {},
-    options: Record<string, unknown> = {},
-  ) => {
-    const { css_texts, set_prop_values, restore } = capture_style_writes()
-    try {
-      const element = create_element()
-      element.title = `styled tooltip`
-      customize(element)
-      mock_bounds(element)
-      setup_tooltip(element, { delay_ms: 0, ...options })
-      trigger_tooltip(element)
-    } finally {
-      restore()
+    pointer_over(child)
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Dynamic child`)
+    expect(child.hasAttribute(`title`)).toBe(false)
+    pointer_out(child)
+    expect(child.title).toBe(`Dynamic child`)
+    child.remove()
+    root.append(child)
+    pointer_over(child)
+    expect(visible_tooltip().textContent).toBe(`Dynamic child`)
+  })
+
+  it(`supports explicit delegated selectors with per-trigger content factories`, () => {
+    const root = create_element()
+    attach_tooltip(root, {
+      delegate: `[data-tip]`,
+      content: (trigger) => trigger.getAttribute(`data-tip`) ?? ``,
+    })
+    const child = document.createElement(`button`)
+    child.setAttribute(`data-tip`, `Selected child`)
+    root.append(child)
+    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
+
+    pointer_over(child)
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
+  })
+
+  it(`keeps one tooltip when pointer and focus states overlap`, () => {
+    const on_open_change = vi.fn()
+    const { element, tooltip_el } = show_tooltip({ on_open_change })
+    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    pointer_out(element)
+    expect(tooltip_el.hidden).toBe(false)
+
+    element.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    vi.advanceTimersByTime(0)
+    expect(tooltip_el.hidden).toBe(true)
+    expect(on_open_change).toHaveBeenLastCalledWith(false, open_detail(element, `blur`))
+  })
+
+  it(`stays open while the pointer crosses onto the tooltip`, () => {
+    const { element, tooltip_el } = show_tooltip({ close_delay_ms: 100 })
+    pointer_out(element, tooltip_el)
+    vi.advanceTimersByTime(100)
+    expect(tooltip_el.hidden).toBe(false)
+
+    tooltip_el.dispatchEvent(
+      pointer_event(`pointerleave`, 100, 140, {
+        pointerType: `mouse`,
+        relatedTarget: document.body,
+      }),
+    )
+    vi.advanceTimersByTime(100)
+    expect(tooltip_el.hidden).toBe(true)
+  })
+
+  it(`stays open while another pointer remains on the trigger`, () => {
+    const { tooltip_el } = show_tooltip()
+    tooltip_el.dispatchEvent(
+      pointer_event(`pointerenter`, 100, 140, { pointerType: `pen` }),
+    )
+    tooltip_el.dispatchEvent(
+      pointer_event(`pointerleave`, 100, 140, {
+        pointerType: `pen`,
+        relatedTarget: document.body,
+      }),
+    )
+    expect(tooltip_el.hidden).toBe(false)
+  })
+
+  it(`Escape dismisses one layer and blocks reopen until interaction exits`, () => {
+    const { element, tooltip_el } = show_tooltip()
+    const escape = escape_key()
+    document.dispatchEvent(escape)
+    expect(escape.defaultPrevented).toBe(true)
+    expect(tooltip_el.hidden).toBe(true)
+
+    pointer_over(element)
+    expect(tooltip_el.hidden).toBe(true)
+    pointer_out(element)
+    pointer_over(element)
+    expect(tooltip_el.hidden).toBe(false)
+  })
+
+  it(`restores trigger focus when Escape hides custom rendered content`, () => {
+    const element = create_element(`button`)
+    attach_tooltip(element, {
+      render: (content_el) => {
+        const control = document.createElement(`button`)
+        control.textContent = `Custom control`
+        content_el.append(control)
+        return undefined
+      },
+    })
+    pointer_over(element)
+    const control = doc_query<HTMLButtonElement>(`.tooltip-content button`)
+    control.focus()
+
+    document.dispatchEvent(escape_key())
+    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
+    expect(document.activeElement).toBe(element)
+  })
+
+  it(`stays dismissed when Escape hands focus back to the trigger`, () => {
+    const on_open_change = vi.fn()
+    const element = create_element(`button`)
+    attach_tooltip(element, {
+      trigger: `focus`,
+      on_open_change,
+      render: (content_el) => {
+        content_el.append(document.createElement(`button`))
+        return undefined
+      },
+    })
+    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    const tooltip_el = visible_tooltip()
+    doc_query<HTMLButtonElement>(`.tooltip-content button`).focus()
+    document.dispatchEvent(escape_key())
+    expect(tooltip_el.hidden).toBe(true)
+
+    // Handing focus back re-enters through focusout/focusin, which must not resurrect
+    // the dismissed tooltip — leaving the trigger afterwards is not a second close.
+    element.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    vi.advanceTimersByTime(0)
+    expect(tooltip_el.hidden).toBe(true)
+    expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
+      [false, open_detail(element, `escape`)],
+    ])
+  })
+
+  it(`focus opens immediately despite a long pointer delay`, () => {
+    const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
+    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
+    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+
+    expect(visible_tooltip().textContent).toBe(`Keyboard`)
+  })
+
+  it(`suppresses touch-induced default triggers but allows explicit focus mode`, () => {
+    const { element: automatic } = register_tooltip(`Automatic`)
+    // Browser ordering puts pointerover before pointerdown on first contact.
+    pointer_over(automatic, `touch`)
+    automatic.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
+    automatic.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+    pointer_over(automatic, `mouse`)
+    expect(visible_tooltip().textContent).toBe(`Automatic`)
+
+    const { element: focus_only } = register_tooltip(`Focus only`, { trigger: `focus` })
+    focus_only.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
+    focus_only.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    expect(visible_tooltip().textContent).toBe(`Focus only`)
+  })
+
+  it(`merges and removes only its aria-describedby token`, () => {
+    const element = create_element(`button`)
+    element.title = `Described`
+    element.setAttribute(`aria-describedby`, `help error`)
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_id = visible_tooltip().id
+
+    expect(element.getAttribute(`aria-describedby`)?.split(/\s+/u)).toEqual([
+      `help`,
+      `error`,
+      tooltip_id,
+    ])
+    pointer_out(element)
+    expect(element.getAttribute(`aria-describedby`)).toBe(`help error`)
+  })
+
+  it(`recycles one node across triggers and swaps owner relationships`, () => {
+    const { element: first } = register_tooltip(`First`)
+    const { element: second } = register_tooltip(`Second`)
+
+    pointer_over(first)
+    const shared = visible_tooltip()
+    pointer_over(second)
+    expect(visible_tooltip()).toBe(shared)
+    expect(shared.textContent).toBe(`Second`)
+    expect(first.hasAttribute(`aria-describedby`)).toBe(false)
+    expect(second.getAttribute(`aria-describedby`)).toBe(shared.id)
+  })
+
+  it(`shares one document listener pair across all registrations`, () => {
+    const add_listener = vi.spyOn(document, `addEventListener`)
+    const remove_listener = vi.spyOn(document, `removeEventListener`)
+    const { cleanup: cleanup_first } = register_tooltip(`First`)
+    const { cleanup: cleanup_second } = register_tooltip(`Second`)
+    const manager_events = (calls: unknown[][]) =>
+      calls
+        .filter(
+          ([event_name]) => event_name === `pointerdown` || event_name === `keydown`,
+        )
+        .map(([event_name]) => event_name)
+
+    expect(manager_events(add_listener.mock.calls)).toEqual([`pointerdown`, `keydown`])
+    cleanup_first()
+    expect(manager_events(remove_listener.mock.calls)).toEqual([])
+    cleanup_second()
+    expect(manager_events(remove_listener.mock.calls)).toEqual([`pointerdown`, `keydown`])
+  })
+
+  it(`uses first-hover delay and skips it for the next tooltip`, () => {
+    const options = { open_delay_ms: 100, close_delay_ms: 0, skip_delay_ms: 300 }
+    const { element: first } = register_tooltip(`First`, options)
+    const { element: second } = register_tooltip(`Second`, options)
+
+    first.dispatchEvent(pointer_event(`pointerover`, 0, 0, { pointerType: `mouse` }))
+    vi.advanceTimersByTime(99)
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+    vi.advanceTimersByTime(1)
+    expect(visible_tooltip().textContent).toBe(`First`)
+    pointer_out(first)
+    pointer_over(second)
+    expect(visible_tooltip().textContent).toBe(`Second`)
+  })
+
+  it(`supports controlled manual opening and reports lifecycle reasons`, async () => {
+    const changes = vi.fn()
+    const element = create_element(`button`)
+    attach_tooltip(element, {
+      content: `Controlled`,
+      trigger: `manual`,
+      open: true,
+      on_open_change: changes,
+    })
+    await Promise.resolve()
+
+    expect(visible_tooltip().textContent).toBe(`Controlled`)
+    expect(changes).toHaveBeenCalledWith(true, open_detail(element, `controlled`))
+    pointer_out(element)
+    element.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    vi.advanceTimersByTime(0)
+    expect(visible_tooltip().textContent).toBe(`Controlled`)
+
+    document.dispatchEvent(escape_key())
+    expect(visible_tooltip().textContent).toBe(`Controlled`)
+    expect(changes).toHaveBeenLastCalledWith(false, open_detail(element, `escape`))
+  })
+
+  it(`keeps controlled hover tooltips visible until open changes`, async () => {
+    const on_open_change = vi.fn()
+    const element = create_element(`button`)
+    attach_tooltip(element, { content: `Controlled`, open: true, on_open_change })
+    await Promise.resolve()
+    const tooltip_el = visible_tooltip()
+
+    pointer_out(element)
+    expect(tooltip_el.hidden).toBe(false)
+    expect(on_open_change).toHaveBeenLastCalledWith(
+      false,
+      open_detail(element, `pointer`),
+    )
+  })
+
+  it.each([
+    [`hands off immediately after controlled close`, [`close`], true],
+    [`hands off after controlled state closes`, [`release`], true],
+    [`hands off when controlled content never opened`, [`release`], true, ``],
+    [`cancels after its pointer leaves`, [`leave-child`, `close`], false],
+    [
+      `survives blur while its pointer remains`,
+      [`focus-child`, `blur-child`, `close`],
+      true,
+    ],
+    [
+      `keeps its pointer state when blur follows controlled close`,
+      [`focus-child`, `close`, `blur-child`],
+      true,
+    ],
+    [
+      `survives reentrant blur from its open callback`,
+      [`focus-child-reentrant`, `close`],
+      true,
+    ],
+    [
+      `keeps a focused trigger ahead of a transient hover`,
+      [`leave-child`, `focus-child`, `hover-other`, `leave-other`, `close`],
+      true,
+    ],
+    [
+      `restores a hovered trigger after transient focus elsewhere`,
+      [`focus-other`, `blur-other`, `close`],
+      true,
+    ],
+    [
+      `drops a stale hover after focus elsewhere also leaves`,
+      [`focus-other`, `leave-child`, `blur-other`, `close`],
+      false,
+    ],
+  ] as const)(`queued %s`, async (...[, actions, opens, content]: QueuedCase) => {
+    const controlled_content = content ?? `Controlled`
+    const reentrant = actions.some((action) => action === `focus-child-reentrant`)
+    const { child, close, controlled, on_open_change, options, other } =
+      setup_controlled_handoff(reentrant, controlled_content)
+    await Promise.resolve()
+
+    pointer_over(child)
+    expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
+      controlled_content || undefined,
+    )
+    expect(child.title).toBe(`Next`)
+    expect(on_open_change).toHaveBeenLastCalledWith(
+      false,
+      open_detail(controlled, `pointer`),
+    )
+    for (const action of actions) {
+      if (action === `close`) close()
+      else if (action === `release`) {
+        options.open = false
+        pointer_out(controlled)
+      } else if (action === `leave-child`) pointer_out(child)
+      else if (action === `hover-other`) pointer_over(other)
+      else if (action === `leave-other`) pointer_out(other)
+      else {
+        const target = action.includes(`child`) ? child : other
+        const event_type = action.startsWith(`focus`) ? `focusin` : `focusout`
+        target.dispatchEvent(
+          new FocusEvent(event_type, {
+            bubbles: true,
+            relatedTarget: event_type === `focusout` ? document.body : null,
+          }),
+        )
+      }
     }
-    return { css_texts, set_prop_values }
-  }
+    vi.advanceTimersByTime(0)
 
-  describe(`Content Sources`, () => {
-    beforeEach(() => vi.useFakeTimers())
-    afterEach(() => vi.useRealTimers())
-
-    it.each([
-      [`title`, `title`, `Title tooltip`, true],
-      [`custom content`, `content`, `Custom content`, false],
-      [`aria-label`, `aria-label`, `Aria label tooltip`, false],
-      [`data-title`, `data-title`, `Data title tooltip`, false],
-    ])(`creates a tooltip from %s`, (_desc, attr, content, stores_title) => {
-      const element = create_element()
-      const options = attr === `content` ? { content, delay_ms: 0 } : { delay_ms: 0 }
-      if (attr !== `content`) element.setAttribute(attr, content)
-      mock_bounds(element)
-
-      const cleanup = setup_tooltip(element, options)
-
-      expect(cleanup).toBeTypeOf(`function`)
-      expect(element.hasAttribute(`data-original-title`)).toBe(stores_title)
-      if (stores_title) expect(element.getAttribute(`data-original-title`)).toBe(content)
-      if (attr !== `content`) {
-        expect(element.getAttribute(attr)).toBe(stores_title ? null : content)
-      }
-
-      // the attachment must actually render this content source on hover
-      trigger_tooltip(element)
-      expect(document.querySelectorAll(`.custom-tooltip`)).toHaveLength(1)
-      expect(doc_query(`.tooltip-content`).textContent).toBe(content)
-
-      cleanup?.()
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-      if (stores_title) {
-        expect(element.getAttribute(`title`)).toBe(content)
-        expect(element.hasAttribute(`data-original-title`)).toBe(false)
-      }
-    })
-
-    it.each([
-      [`custom content over title`, { content: `Custom content` }, `Custom content`],
-      [`title over aria-label`, {}, `Title content`],
-    ])(`prioritizes %s`, (_description, options, expected_content) => {
-      const element = create_element()
-      element.title = `Title content`
-      element.setAttribute(`aria-label`, `Aria content`)
-      mock_bounds(element)
-      setup_tooltip(element, { ...options, delay_ms: 0 })
-      trigger_tooltip(element)
-
-      expect(element.getAttribute(`data-original-title`)).toBe(`Title content`)
-      expect(element.hasAttribute(`title`)).toBe(false)
-      expect(doc_query(`.tooltip-content`).textContent).toBe(expected_content)
-    })
-
-    it.each([
-      [`empty content strings`, ``, undefined],
-      [`missing content`, undefined, undefined],
-    ])(`handles %s`, (_desc, content, expected) => {
-      const element = create_element()
-      if (content !== undefined) element.title = content
-      mock_bounds(element)
-      expect(tooltip({ content })(element)).toBe(expected)
-
-      // no content means no listeners should have been attached either
-      trigger_tooltip(element)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
-
-    it(`handles the disabled option`, () => {
-      const [element, cleanup] = attach_tooltip(`Disabled tooltip`, { disabled: true })
-      expect(cleanup).toBeUndefined()
-      expect(element.hasAttribute(`data-original-title`)).toBe(false)
-      expect(element.getAttribute(`title`)).toBe(`Disabled tooltip`)
-
-      trigger_tooltip(element)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
+    if (opens) {
+      expect(visible_tooltip().textContent).toBe(`Next`)
+      expect(child.hasAttribute(`title`)).toBe(false)
+    } else {
+      expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
+      expect(child.title).toBe(`Next`)
+    }
   })
 
-  describe(`Child Element Handling`, () => {
-    it.each([
-      [`title`, `title`, `Child title tooltip`],
-      [`aria-label`, `aria-label`, `Child aria tooltip`],
-      [`data-title`, `data-title`, `Child data tooltip`],
-    ])(`sets up tooltips for child elements with %s`, (_desc, attr, content) => {
-      const parent = create_element()
-      const wrapper = document.createElement(`div`)
-      const child = document.createElement(`span`)
-      child.setAttribute(attr, content)
-      wrapper.append(child)
-      parent.append(wrapper)
-      const cleanup = setup_tooltip(parent)
-
-      expect(cleanup).toBeTypeOf(`function`)
-      if (attr === `title`) {
-        expect(child.hasAttribute(`title`)).toBe(false)
-        expect(child.getAttribute(`data-original-title`)).toBe(content)
-      }
-      cleanup?.()
+  it(`drops queued triggers once an activation succeeds`, async () => {
+    // Nesting the controlled trigger inside a queued one is the only way the pointer
+    // reaches it without leaving the outer trigger, so a two-deep queue survives to
+    // see a successful activation.
+    const outer = create_element()
+    outer.title = `Outer`
+    const controlled = document.createElement(`button`)
+    outer.append(controlled)
+    mock_rect(controlled, { left: 20, top: 20, width: 80, height: 30 })
+    attach_tooltip(outer)
+    const cleanup_controlled = attach_tooltip(controlled, {
+      content: `Controlled`,
+      open: true,
     })
+    const { element: elsewhere } = register_tooltip(`Elsewhere`)
+    await Promise.resolve()
 
-    it(`does not set up children added after initialization`, async () => {
-      const parent = create_element()
-      parent.title = `Parent tooltip` // keep the attachment live, else nothing is observed
-      const cleanup = setup_tooltip(parent)
-      expect(cleanup).toBeTypeOf(`function`)
-      expect(parent.getAttribute(`data-original-title`)).toBe(`Parent tooltip`)
+    pointer_over(outer) // queues behind the controlled tooltip
+    elsewhere.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true })) // queues ahead
+    pointer_out(outer, controlled) // stays inside `outer`, so its entry survives
+    pointer_over(controlled) // reactivating the controlled trigger clears the queue
+    elsewhere.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
+    cleanup_controlled()
+    vi.advanceTimersByTime(0)
 
-      const child = document.createElement(`div`)
-      child.title = `Dynamic`
-      parent.append(child)
-      await Promise.resolve() // flush MutationObserver microtask
-
-      expect(child.hasAttribute(`data-original-title`)).toBe(false)
-      expect(child.getAttribute(`title`)).toBe(`Dynamic`)
-      cleanup?.()
-    })
+    // Nothing replays: the queue was superseded, not merely reordered.
+    expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
   })
 
-  describe(`Event Handling and Cleanup`, () => {
-    it(`handles an invalid element gracefully`, () => {
-      const attach = tooltip()
-      // @ts-expect-error testing a null input
-      expect(attach(null)).toBeUndefined()
-    })
+  it(`requests controlled opening without showing against open: false`, () => {
+    const on_open_change = vi.fn()
+    const { element } = register_tooltip(`Controlled`, { open: false, on_open_change })
+    pointer_over(element)
 
-    it(`removes the scroll listener on cleanup`, () => {
-      const element = create_element()
-      element.title = `test`
-      const spy = vi.spyOn(globalThis, `removeEventListener`)
-      setup_tooltip(element)?.()
-      expect(spy).toHaveBeenCalledWith(`scroll`, expect.any(Function), true)
-      spy.mockRestore()
-    })
-
-    it(`suppresses a dynamically set title with custom content`, async () => {
-      const element = create_element()
-      element.setAttribute(`aria-label`, `initial label`)
-      const cleanup = setup_tooltip(element, { content: `Custom content` })
-
-      element.setAttribute(`title`, `Late title`)
-      await Promise.resolve()
-
-      expect(element.hasAttribute(`title`)).toBe(false)
-      expect(element.getAttribute(`data-original-title`)).toBe(`Late title`)
-
-      cleanup?.()
-      expect(element.getAttribute(`title`)).toBe(`Late title`)
-      expect(element.hasAttribute(`data-original-title`)).toBe(false)
-    })
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+    expect(on_open_change).toHaveBeenCalledWith(true, open_detail(element, `pointer`))
   })
 
-  describe(`Reactive Content and Scroll Behavior`, () => {
-    // MutationObserver callbacks don't fire in happy-dom, so we test setup/cleanup/ownership.
-    beforeEach(() => vi.useFakeTimers())
-
-    it(`hides on ancestor scroll but ignores unrelated scroll`, () => {
-      const ancestor = document.createElement(`div`)
-      const element = create_element()
-      ancestor.append(element)
-      document.body.append(ancestor)
-      element.title = `test`
-      mock_bounds(element)
-      setup_tooltip(element, { delay_ms: 0 })
-      trigger_tooltip(element)
-
-      const unrelated_scroll = new Event(`scroll`, { bubbles: true })
-      Object.defineProperty(unrelated_scroll, `target`, {
-        value: document.createElement(`div`),
-      })
-      globalThis.dispatchEvent(unrelated_scroll)
-      expect(document.querySelector(`.custom-tooltip`)).toBeInstanceOf(HTMLDivElement)
-
-      const scroll_event = new Event(`scroll`, { bubbles: true })
-      Object.defineProperty(scroll_event, `target`, { value: ancestor })
-      globalThis.dispatchEvent(scroll_event)
-
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-      ancestor.remove()
+  it(`runs custom render cleanup when switching owners`, () => {
+    const cleanup = vi.fn()
+    const first = create_element(`button`)
+    attach_tooltip(first, {
+      render: (content_el) => {
+        content_el.textContent = `Rendered`
+        return cleanup
+      },
     })
+    const { element: second } = register_tooltip(`Second`)
 
-    it(`shows only one tooltip at a time`, () => {
-      show_tooltip({}, `tooltip1`)
-      show_tooltip({}, `tooltip2`)
-
-      expect(document.querySelectorAll(`.custom-tooltip`)).toHaveLength(1)
-      expect(doc_query(`.custom-tooltip`).textContent).toContain(`tooltip2`)
-    })
-
-    it(`shows/hides on focus/blur for accessibility`, () => {
-      const element = create_element(`button`)
-      element.title = `focus tooltip`
-      mock_bounds(element)
-      setup_tooltip(element, { delay_ms: 0 })
-
-      element.dispatchEvent(new FocusEvent(`focus`, { bubbles: true }))
-      vi.runAllTimers()
-      expect(doc_query(`.custom-tooltip`).textContent).toContain(`focus tooltip`)
-
-      element.dispatchEvent(new FocusEvent(`blur`, { bubbles: true }))
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
+    pointer_over(first)
+    expect(visible_tooltip().textContent).toBe(`Rendered`)
+    pointer_over(second)
+    expect(cleanup).toHaveBeenCalledOnce()
   })
 
-  describe(`Cross-Instance Cleanup`, () => {
-    beforeEach(() => vi.useFakeTimers())
-
-    it(`cleanup of one instance keeps another instance's visible tooltip`, () => {
-      const [, cleanup_a] = attach_tooltip(`tooltip A`)
-      const el_b = show_tooltip({}, `tooltip B`)
-      expect(doc_query(`.custom-tooltip`).textContent).toContain(`tooltip B`)
-
-      cleanup_a?.()
-      expect(doc_query(`.custom-tooltip`).textContent).toContain(`tooltip B`)
-      expect(el_b.getAttribute(`aria-describedby`)).toBe(doc_query(`.custom-tooltip`).id)
-    })
-
-    it(`cleanup of one instance keeps another instance's pending show`, () => {
-      const [, cleanup_a] = attach_tooltip(`tooltip A`, { delay_ms: 100 })
-      const [el_b] = attach_tooltip(`tooltip B`, { delay_ms: 100 })
-
-      el_b.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      cleanup_a?.() // must not cancel B's pending show timeout
-
-      vi.runAllTimers()
-      expect(doc_query(`.custom-tooltip`).textContent).toContain(`tooltip B`)
-    })
-
-    it(`cleanup cancels its own pending show`, () => {
-      const [element, cleanup] = attach_tooltip(`own pending`, { delay_ms: 100 })
-
-      element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      cleanup?.()
-
-      vi.runAllTimers()
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
-
-    it(`removing the element from the DOM cancels its pending show`, async () => {
-      const [element] = attach_tooltip(`pending on removed element`, { delay_ms: 100 })
-
-      element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      element.remove() // element leaves the DOM before the show delay elapses
-      // MutationObserver callbacks are microtasks — flush before advancing timers
-      await Promise.resolve()
-
-      vi.runAllTimers()
-      // previously the timeout still fired and appended an orphaned tooltip
-      // positioned against the detached element
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
-  })
-
-  describe(`Placement, Styling and Content`, () => {
-    beforeEach(() => vi.useFakeTimers())
-
-    it.each([
-      {
-        test_name: `auto-flips bottom to top when bottom overflows`,
-        trigger_bounds: { left: 100, top: 120, width: 40, height: 20 },
-        viewport: { width: 300, height: 180 },
-        tooltip_size: { width: 120, height: 60 },
-        expected_placement: `top`,
-      },
-      {
-        test_name: `falls back to right when top and bottom overflow`,
-        trigger_bounds: { left: 100, top: 40, width: 40, height: 20 },
-        viewport: { width: 320, height: 120 },
-        tooltip_size: { width: 80, height: 70 },
-        expected_placement: `right`,
-      },
-      {
-        test_name: `falls back to left when right also overflows`,
-        trigger_bounds: { left: 260, top: 40, width: 40, height: 20 },
-        viewport: { width: 320, height: 120 },
-        tooltip_size: { width: 80, height: 70 },
-        expected_placement: `left`,
-      },
-      {
-        test_name: `keeps bottom placement when there is no overflow`,
-        trigger_bounds: { left: 100, top: 100, width: 40, height: 20 },
-        viewport: { width: 320, height: 300 },
-        tooltip_size: { width: 120, height: 60 },
-        expected_placement: `bottom`,
-      },
-      {
-        test_name: `auto-flips top to bottom when top overflows`,
-        trigger_bounds: { left: 100, top: 30, width: 40, height: 20 },
-        viewport: { width: 300, height: 300 },
-        tooltip_size: { width: 120, height: 60 },
-        expected_placement: `bottom`,
-        requested_placement: `top`,
-      },
-      {
-        test_name: `auto-flips left to right when left overflows`,
-        trigger_bounds: { left: 30, top: 100, width: 40, height: 20 },
-        viewport: { width: 300, height: 300 },
-        tooltip_size: { width: 80, height: 40 },
-        expected_placement: `right`,
-        requested_placement: `left`,
-      },
-      {
-        test_name: `auto-flips right to left when right overflows`,
-        trigger_bounds: { left: 230, top: 100, width: 40, height: 20 },
-        viewport: { width: 300, height: 300 },
-        tooltip_size: { width: 80, height: 40 },
-        expected_placement: `left`,
-        requested_placement: `right`,
-      },
-    ])(
-      `$test_name`,
-      ({
-        trigger_bounds,
-        viewport,
-        tooltip_size,
-        expected_placement,
-        requested_placement,
-      }) => {
-        // Arrow points away from trigger: the side opposite the placement carries
-        // the negative offset, the placement side itself stays unset
-        const opposite_side: Record<string, string> = {
-          top: `bottom`,
-          bottom: `top`,
-          left: `right`,
-          right: `left`,
-        }
-
-        with_mocked_tooltip_geometry(viewport, tooltip_size, () => {
-          const element = create_element()
-          element.title = `test`
-          mock_bounds(element, trigger_bounds)
-          setup_tooltip(element, {
-            delay_ms: 0,
-            placement: requested_placement ?? `bottom`,
-          })
-
-          trigger_tooltip(element)
-          const tooltip_el = doc_query(`.custom-tooltip`)
-          expect(tooltip_el.getAttribute(`data-placement`)).toBe(expected_placement)
-          const { style } = doc_query(`.custom-tooltip-arrow`)
-
-          // exact value: the perpendicular axis holds `calc(50% - 6px)`, so a
-          // substring check for `-` would also pass on swapped axes
-          expect(style.getPropertyValue(opposite_side[expected_placement])).toBe(`-6px`)
-          expect(style.getPropertyValue(expected_placement)).toBe(``)
-        })
-      },
+  it(`sanitizes trusted HTML and normalizes newline markup`, () => {
+    const sanitizer = vi.fn((html: string) =>
+      html.replaceAll(/<script[^>]*>.*?<\/script>/giu, ``),
+    )
+    const { tooltip_el } = show_tooltip(
+      { allow_html: true, sanitize_html: sanitizer },
+      `<script>bad()</script><b>Safe</b>\nNext`,
     )
 
-    it(`hide_delay_ms delays hiding`, () => {
-      const element = show_tooltip({ hide_delay_ms: 200 })
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement)
+    expect(sanitizer).toHaveBeenCalledOnce()
+    expect(tooltip_el.querySelector(`script`)).toBeNull()
+    expect(tooltip_el.querySelector(`b`)?.textContent).toBe(`Safe`)
+    expect(tooltip_el.querySelector(`br`)).not.toBeNull()
+  })
 
-      element.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLDivElement)
-      vi.advanceTimersByTime(200)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+  it.each([
+    [`balance`, `balance`, `anywhere`, `normal`],
+    [`normal`, `wrap`, `anywhere`, `normal`],
+    [`nowrap`, `nowrap`, `normal`, `nowrap`],
+  ] as const)(
+    `applies the %s wrapping policy`,
+    (wrap, text_wrap, overflow_wrap, white_space) => {
+      const { tooltip_el } = show_tooltip({ wrap })
+      expect(tooltip_el.style.textWrap).toBe(text_wrap)
+      expect(tooltip_el.style.overflowWrap).toBe(overflow_wrap)
+      expect(tooltip_el.style.whiteSpace).toBe(white_space)
+    },
+  )
+
+  it(`copies language, direction, theme variables and honors reduced motion`, () => {
+    vi.mocked(matchMedia).mockReturnValueOnce({
+      media: `(prefers-reduced-motion: reduce)`,
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    } as unknown as MediaQueryList)
+    const wrapper = create_element()
+    wrapper.lang = `ar`
+    wrapper.dir = `rtl`
+    const element = document.createElement(`button`)
+    element.title = `مرحبا`
+    element.style.setProperty(`--tooltip-bg`, `red`)
+    wrapper.append(element)
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+
+    expect(tooltip_el.lang).toBe(`ar`)
+    expect(tooltip_el.dir).toBe(`rtl`)
+    expect(tooltip_el.style.getPropertyValue(`--tooltip-bg`)).toBe(`red`)
+    expect(tooltip_el.style.transition).toBe(`none`)
+
+    // the trigger's own lang/dir outrank the wrapper's
+    element.lang = `he`
+    element.dir = `ltr`
+    pointer_out(element)
+    pointer_over(element)
+    expect([visible_tooltip().lang, visible_tooltip().dir]).toEqual([`he`, `ltr`])
+  })
+
+  it(`updates active attribute content and repositions it`, async () => {
+    const element = create_element(`button`)
+    element.setAttribute(`aria-label`, `Initial`)
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    const initial_left = tooltip_el.style.left
+
+    mock_rect(element, { left: 300, top: 100, width: 80, height: 30 })
+    element.setAttribute(`aria-label`, `Updated`)
+    await Promise.resolve()
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Updated`)
+    expect(tooltip_el.style.left).not.toBe(initial_left)
+  })
+
+  it(`uses the final title from a batched update and restores it`, async () => {
+    const { cleanup, element } = show_tooltip({}, `Initial`)
+
+    element.title = `Intermediate`
+    element.title = `Final`
+    await Promise.resolve()
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Final`)
+    expect(element.hasAttribute(`title`)).toBe(false)
+
+    cleanup()
+    expect(element.title).toBe(`Final`)
+  })
+
+  it(`keeps synchronous context mutations caused by title stripping`, async () => {
+    const tag_name = `tooltip-title-context`
+    if (!customElements.get(tag_name)) {
+      customElements.define(
+        tag_name,
+        class extends HTMLElement {
+          static observedAttributes = [`title`]
+          attributeChangedCallback(): void {
+            if (this.hasAttribute(`title`)) return
+            this.style.setProperty(`--tooltip-bg`, `blue`)
+            if (this.dataset.normalizeTitle === `true` && !this.dataset.normalized) {
+              this.dataset.normalized = `true`
+              this.title = `Normalized`
+            }
+          }
+        },
+      )
+    }
+    const element = create_element(tag_name)
+    element.title = `Initial`
+    const cleanup = attach_tooltip(element)
+    element.style.setProperty(`--tooltip-bg`, `red`)
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    expect(tooltip_el.style.getPropertyValue(`--tooltip-bg`)).toBe(`red`)
+
+    element.dataset.normalizeTitle = `true`
+    element.title = `Updated`
+    await Promise.resolve()
+    expect(tooltip_el.style.getPropertyValue(`--tooltip-bg`)).toBe(`blue`)
+    expect(tooltip_el.textContent).toBe(`Normalized`)
+    expect(element.hasAttribute(`title`)).toBe(false)
+    cleanup()
+    expect(element.title).toBe(`Normalized`)
+  })
+
+  it(`repositions on scroll through one coalesced animation frame`, () => {
+    const element = create_element(`button`)
+    element.title = `Moving`
+    mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    const first_top = tooltip_el.style.top
+
+    mock_rect(element, { left: 100, top: 200, width: 80, height: 30 })
+    window.dispatchEvent(new Event(`scroll`))
+    vi.advanceTimersByTime(20)
+    expect(tooltip_el.style.top).not.toBe(first_top)
+  })
+
+  it(`aims the arrow at an edge trigger after shifting`, () => {
+    mock_tooltip_rect(200, 40)
+    const element = create_element(`button`)
+    element.title = `Edge`
+    mock_rect(element, { left: 940, top: 100, width: 40, height: 20 })
+    attach_tooltip(element, { placement: `bottom` })
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    const arrow = doc_query(`.custom-tooltip-arrow`)
+
+    expect(Number(tooltip_el.style.left.replace(/px$/u, ``))).toBeLessThan(860)
+    expect(arrow.style.left).not.toBe(`calc(50% - 6px)`)
+    expect(Number(arrow.style.left.replace(/px$/u, ``))).toBeGreaterThan(150)
+  })
+
+  it(`clips placement to a boundary element and appends the style option`, () => {
+    mock_tooltip_rect(200, 100)
+    const boundary = create_element()
+    mock_rect(boundary, { left: 0, top: 0, width: 300, height: 200 })
+    const element = create_element(`button`)
+    element.title = `Bounded`
+    mock_rect(element, { left: 100, top: 150, width: 80, height: 30 })
+    // The 1000x800 viewport leaves room to the right; the boundary leaves only above.
+    attach_tooltip(element, {
+      placement: `auto`,
+      boundary,
+      style: `font-weight: bold`,
     })
+    pointer_over(element)
 
-    it(`cleanup during hide_delay_ms cancels the pending hide`, () => {
-      const [element, cleanup] = attach_tooltip(`cleanup`, {
-        delay_ms: 0,
-        hide_delay_ms: 200,
+    const tooltip_el = visible_tooltip()
+    expect(tooltip_el.dataset.placement).toBe(`top`)
+    expect(tooltip_el.style.fontWeight).toBe(`bold`)
+  })
+
+  it(`uses the Popover top layer when available`, () => {
+    const show_popover = vi.fn()
+    const hide_popover = vi.fn()
+    cleanups.push(
+      stub_prop(HTMLElement.prototype, `popover`, null),
+      stub_prop(HTMLElement.prototype, `showPopover`, show_popover),
+      stub_prop(HTMLElement.prototype, `hidePopover`, hide_popover),
+    )
+    const { element } = register_tooltip(`Top layer`, { strategy: `top-layer` })
+    pointer_over(element)
+
+    expect(show_popover).toHaveBeenCalledWith({ source: element })
+    pointer_out(element)
+    expect(hide_popover).toHaveBeenCalledOnce()
+  })
+
+  it(`falls back to the document layer without the Popover API`, () => {
+    const properties = [`popover`, `showPopover`, `hidePopover`] as const
+    const descriptors = properties.map((property) =>
+      Object.getOwnPropertyDescriptor(HTMLElement.prototype, property),
+    )
+    properties.forEach((property) =>
+      Reflect.deleteProperty(HTMLElement.prototype, property),
+    )
+    cleanups.push(() => {
+      properties.forEach((property, idx) => {
+        const descriptor = descriptors[idx]
+        if (descriptor) Object.defineProperty(HTMLElement.prototype, property, descriptor)
       })
-      trigger_tooltip(element)
-
-      element.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      expect(vi.getTimerCount()).toBe(1)
-      cleanup?.()
-
-      expect(vi.getTimerCount()).toBe(0)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
     })
+    const { cleanup, element, tooltip_el } = show_tooltip(
+      { strategy: `top-layer` },
+      `Fallback`,
+    )
 
-    // leave then blur both schedule hide; without clearing the first timer id, a re-show
-    // is wiped when that orphaned timeout fires
-    it(`hide_delay_ms clears prior hide timer on re-show`, () => {
-      const element = show_tooltip({ hide_delay_ms: 200, delay_ms: 0 })
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement)
-
-      element.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      element.dispatchEvent(new FocusEvent(`blur`, { bubbles: true }))
-      vi.advanceTimersByTime(50)
-      element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      vi.advanceTimersByTime(0) // delay_ms: 0 show
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement)
-
-      vi.advanceTimersByTime(200)
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement)
-    })
-
-    it(`stale hide events do not cancel another element's pending tooltip`, () => {
-      const first = show_tooltip({ hide_delay_ms: 200, delay_ms: 0 }, `first`)
-      const [second] = attach_tooltip(`second`, { hide_delay_ms: 200, delay_ms: 100 })
-
-      first.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      second.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      first.dispatchEvent(new FocusEvent(`blur`, { bubbles: true }))
-      vi.advanceTimersByTime(100)
-
-      expect(doc_query(`.tooltip-content`).textContent).toBe(`second`)
-    })
-
-    it(`mouseleave before delay expires cancels pending tooltip`, () => {
-      const [element] = attach_tooltip(`delayed tooltip`, { delay_ms: 100 })
-
-      element.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-      vi.advanceTimersByTime(99)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-
-      element.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      vi.advanceTimersByTime(1)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    })
-
-    it(`disabled: 'touch-devices' skips tooltip on touch input`, () => {
-      // With runtime detection, tooltip is set up but skipped when last pointer was touch
-      const [element, cleanup] = attach_tooltip(`test`, { disabled: `touch-devices` })
-
-      // Simulate touch input, then try to show tooltip
-      document.dispatchEvent(
-        new PointerEvent(`pointerdown`, { pointerType: `touch`, bubbles: true }),
-      )
-      trigger_tooltip(element)
-      expect(document.querySelector(`.custom-tooltip`)).toBeNull() // No tooltip on touch
-
-      // Simulate mouse input, then show tooltip
-      document.dispatchEvent(
-        new PointerEvent(`pointerdown`, { pointerType: `mouse`, bubbles: true }),
-      )
-      trigger_tooltip(element)
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement) // Tooltip works with mouse
-
-      cleanup?.()
-    })
-
-    it.each([
-      [`Escape dismisses tooltip`, `Escape`, false],
-      [`Enter does not dismiss`, `Enter`, true],
-    ])(`%s`, (_desc, key, should_remain) => {
-      show_tooltip()
-      expect(doc_query(`.custom-tooltip`)).toBeInstanceOf(HTMLElement)
-
-      document.dispatchEvent(new KeyboardEvent(`keydown`, { key }))
-      expect(document.querySelector(`.custom-tooltip`)).toEqual(
-        should_remain ? expect.any(HTMLDivElement) : null,
-      )
-    })
-
-    it(`show_arrow: false hides the arrow`, () => {
-      show_tooltip({ show_arrow: false })
-      expect(document.querySelector(`.custom-tooltip-arrow`)).toBeNull()
-    })
-
-    it(`manages aria-describedby on show/hide`, () => {
-      const [element] = attach_tooltip()
-      expect(element.hasAttribute(`aria-describedby`)).toBe(false)
-
-      trigger_tooltip(element)
-      const tooltip_el = doc_query(`.custom-tooltip`)
-      expect(tooltip_el.getAttribute(`role`)).toBe(`tooltip`)
-      expect(tooltip_el.id).toMatch(/^tooltip-/u)
-      expect(element.getAttribute(`aria-describedby`)).toBe(tooltip_el.id)
-
-      element.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
-      expect(element.hasAttribute(`aria-describedby`)).toBe(false)
-    })
-
-    it.each([
-      [`offset: 20`, 20, 170], // top (100) + height (50) + offset (20) = 170
-      [`default offset: 12`, undefined, 162], // top (100) + height (50) + default (12) = 162
-    ])(`applies %s`, (_desc, offset, expected_top) => {
-      show_tooltip({ offset, placement: `bottom` })
-      expect(doc_query(`.custom-tooltip`).style.top).toBe(`${expected_top}px`)
-    })
-
-    it.each([
-      [`called and strips XSS`, true, `<script>xss</script>Safe`, 1, `Safe`],
-      [`skipped when allow_html: false`, false, `Plain`, 0, `Plain`],
-    ])(`sanitize_html %s`, (_desc, allow_html, title, call_count, expected_text) => {
-      const sanitizer = vi.fn((html: string) =>
-        html.replaceAll(/<script[^>]*>.*?<\/script>/giu, ``),
-      )
-      show_tooltip({ allow_html, sanitize_html: sanitizer }, title)
-
-      expect(sanitizer).toHaveBeenCalledTimes(call_count)
-      expect(doc_query(`.custom-tooltip`).textContent).toBe(expected_text)
-    })
-
-    it.each([
-      // short enough for one line, so the balancer pins that width and stops wrapping
-      [`pins a one-line tooltip to its own text width`, 150, `150px`, `nowrap`],
-      // 600px of text capped at 280 wraps onto 3 lines, and 200px is the narrowest box
-      // that still holds 3 — wider wastes space, a pixel less spills onto a 4th
-      [
-        `balances a wrapped tooltip to the narrowest width holding its lines`,
-        600,
-        `200px`,
-        ``,
-      ],
-    ])(`%s`, (_desc, single_line, expected_width, expected_wrap) => {
-      const restore = mock_wrapping_tooltip({
-        single_line,
-        min_content: 100,
-        line_height: 20,
-        max_width: 280,
-      })
-      try {
-        show_tooltip({}, `a tooltip long enough to wrap onto several lines`)
-        const tip = doc_query(`.custom-tooltip`)
-        expect(tip.style.width).toBe(expected_width)
-        // happy-dom reports an unset textWrap as undefined rather than an empty string
-        expect(tip.style.textWrap || ``).toBe(expected_wrap)
-      } finally {
-        restore()
-      }
-    })
-
-    it(`tooltip uses theme-aware light-dark() defaults`, () => {
-      // Base styles must not carry a color-scheme (page-declared schemes stay in
-      // control, see #405); the schemeless-page fallback is covered below. Asserts
-      // via raw cssText/setProperty spies because happy-dom strips var()/light-dark().
-      const { css_texts, set_prop_values } = show_with_captured_styles()
-
-      const tooltip_css = find_tooltip_css(css_texts)
-      expect(tooltip_css).toBeDefined()
-      expect(tooltip_css).not.toContain(`color-scheme`)
-      expect(tooltip_css).toMatch(/background-color:.*light-dark\(\s*#fff,\s*#2a2a2e/u)
-      expect(tooltip_css).toMatch(/\bcolor:.*light-dark\(\s*#222,\s*#eee/u)
-      expect(tooltip_css).toMatch(
-        /border:.*var\(--tooltip-border,\s*1px solid light-dark\(\s*lightgray,\s*#555\)/u,
-      )
-
-      const arrow_borders = arrow_border_values(set_prop_values)
-      expect(arrow_borders.length).toBeGreaterThan(0)
-      for (const entry of arrow_borders) {
-        expect(entry).toMatch(/light-dark\(\s*#fff,\s*#2a2a2e/u)
-      }
-    })
-
-    it.each([
-      [`background`, `--tooltip-bg`, `red`],
-      [`border`, `--tooltip-border`, `2px solid red`],
-    ])(`custom %s variable overrides its default`, (_description, css_var, value) => {
-      const { css_texts } = show_with_captured_styles((element) =>
-        element.style.setProperty(css_var, value),
-      )
-
-      expect(doc_query(`.custom-tooltip`).style.getPropertyValue(css_var)).toBe(value)
-      expect(find_tooltip_css(css_texts)).toContain(`var(${css_var},`)
-    })
-
-    // Dark-styled pages that never declare `color-scheme` resolve the default
-    // light-dark() background to LIGHT while their inherited --text-color may be
-    // near-white → unreadable tooltip. The fallback pairs scheme + text color, and
-    // only a page-level (body-inherited) scheme may suppress it — a scheme on the
-    // trigger never reaches the tooltip, which is appended to document.body.
-    it.each([
-      [`page declares no scheme`, () => {}, true],
-      [
-        `only the trigger has a color-scheme`,
-        (element: HTMLElement) => (element.style.colorScheme = `dark`),
-        true,
-      ],
-      [
-        `page declares a color-scheme`,
-        () => (document.body.style.colorScheme = `dark`),
-        false,
-      ],
-      [
-        `trigger customizes --tooltip-bg`,
-        (element: HTMLElement) => element.style.setProperty(`--tooltip-bg`, `red`),
-        false,
-      ],
-      [
-        `trigger carries its own --text-color`,
-        (element: HTMLElement) => element.style.setProperty(`--text-color`, `#0ff`),
-        false,
-      ],
-    ])(`scheme fallback when %s`, (_desc, customize, expect_fallback) => {
-      const { set_prop_values } = show_with_captured_styles(customize)
-      document.body.style.colorScheme = ``
-
-      // anchors the negative cases: no tooltip would satisfy them trivially
-      expect(document.querySelectorAll(`.custom-tooltip`)).toHaveLength(1)
-      const fallback_props = [
-        `color-scheme: light dark`,
-        `--text-color: light-dark(#222, #eee)`,
-      ]
-      expect(fallback_props.filter((prop) => set_prop_values.includes(prop))).toEqual(
-        expect_fallback ? fallback_props : [],
-      )
-    })
-
-    it(`updates visible tooltip content when tooltip attributes change`, () => {
-      const mutation_callbacks: MutationCallback[] = []
-      const original_mutation_observer = globalThis.MutationObserver
-      class MockMutationObserver implements MutationObserver {
-        observe = vi.fn((_target: Node, _options?: MutationObserverInit): void => {})
-        disconnect = vi.fn((): void => {})
-        takeRecords = vi.fn((): MutationRecord[] => [])
-        constructor(callback: MutationCallback) {
-          mutation_callbacks.push(callback)
-        }
-      }
-      globalThis.MutationObserver = MockMutationObserver
-      window.MutationObserver = MockMutationObserver
-
-      const restore_size = mock_tooltip_size(120, 60)
-      const restore_viewport = mock_viewport(300, 180) // no room below the trigger
-      try {
-        const element = create_element()
-        element.title = `initial tooltip`
-        mock_bounds(element, { left: 100, top: 120, width: 40, height: 20 })
-        setup_tooltip(element, { delay_ms: 0, placement: `bottom` })
-        trigger_tooltip(element)
-        expect(doc_query(`.tooltip-content`).textContent).toBe(`initial tooltip`)
-        expect(doc_query(`.custom-tooltip`).getAttribute(`data-placement`)).toBe(`top`)
-
-        // both sides fit again; the first restore still holds the real viewport
-        mock_viewport(300, 300)
-        element.setAttribute(`aria-label`, `updated tooltip`)
-        // only the fields the attachment reads; the rest of MutationRecord is unused
-        const record = {
-          type: `attributes`,
-          attributeName: `aria-label`,
-          target: element,
-        } as unknown as MutationRecord
-        mutation_callbacks[0]?.([record], new MockMutationObserver(() => {}))
-        vi.runAllTimers() // flush the rAF the reposition runs in
-
-        expect(doc_query(`.tooltip-content`).textContent).toBe(`updated tooltip`)
-        // reposition starts from the configured side again; reading back the resolved
-        // data-placement would have pinned it to `top` for the rest of its life
-        expect(doc_query(`.custom-tooltip`).getAttribute(`data-placement`)).toBe(`bottom`)
-      } finally {
-        restore_viewport()
-        restore_size()
-        globalThis.MutationObserver = original_mutation_observer
-        window.MutationObserver = original_mutation_observer
-      }
-    })
-
-    it(`applies valid custom style declarations and ignores malformed ones`, () => {
-      show_tooltip({
-        style: `background-color: red; background-image: url("https://example.com/tooltip.svg"); color: blue; invalid; empty:`,
-      })
-
-      const { style } = doc_query(`.custom-tooltip`)
-      expect(style.backgroundColor).toBe(`red`)
-      expect(style.backgroundImage).toContain(`https://example.com/tooltip.svg`)
-      expect(style.color).toBe(`blue`)
-      expect(style.getPropertyValue(`invalid`)).toBe(``)
-      expect(style.getPropertyValue(`empty`)).toBe(``)
-    })
-
-    it.each([
-      [`LF`, `line1\nline2`],
-      [`CRLF`, `line1\r\nline2`],
-      [`CR`, `line1\rline2`],
-    ])(`converts %s newlines to <br/> in allow_html content`, (_desc, content) => {
-      const element = create_element()
-      mock_bounds(element)
-      setup_tooltip(element, { delay_ms: 0, allow_html: true, content })
-
-      trigger_tooltip(element)
-      const content_el = doc_query(`.tooltip-content`)
-      expect(content_el.querySelectorAll(`br`)).toHaveLength(1)
-      expect(content_el.textContent).toBe(`line1line2`)
-    })
-
-    it(`uses custom style background-color for tooltip arrow fill`, () => {
-      const { set_prop_values } = show_with_captured_styles(undefined, {
-        style: `background-color: red`,
-      })
-
-      expect(
-        arrow_border_values(set_prop_values).some((entry) =>
-          /\b(?:red|rgb\(255,\s*0,\s*0\))/u.test(entry),
-        ),
-      ).toBe(true)
-    })
+    expect(tooltip_el.style.position).toBe(`absolute`)
+    pointer_out(element)
+    expect(tooltip_el.hidden).toBe(true)
+    expect(tooltip_el.style.display).toBe(`none`)
+    cleanup()
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+    expect(element.title).toBe(`Fallback`)
   })
 })
 
@@ -3365,13 +3215,23 @@ describe(`float`, () => {
     expect(attach_float().style.width).toBe(``)
   })
 
-  it(`records the resolved placement and repositions on scroll`, () => {
-    const node = attach_float({ placement: `bottom` })
-    expect(node.dataset.placement).toBe(`bottom`)
-
+  it(`repositions on scroll using the floating element's window`, () => {
+    const animation_host = Object.assign(new EventTarget(), {
+      requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
+        callback(0)
+        return 42
+      }),
+      cancelAnimationFrame: vi.fn(),
+    }) as unknown as Window
+    const node = create_element()
+    mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
+    cleanups.push(stub_prop(node, `ownerDocument`, { defaultView: animation_host }))
+    const cleanup = float({ anchor: anchor_rect, placement: `bottom` })(node)
     node.style.top = `0px`
-    globalThis.dispatchEvent(new Event(`scroll`))
+    animation_host.dispatchEvent(new Event(`scroll`))
     expect(node.style.top).toBe(`140px`)
+    cleanup?.()
+    expect(animation_host.cancelAnimationFrame).toHaveBeenCalledWith(42)
   })
 
   it.each([
