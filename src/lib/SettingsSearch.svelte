@@ -212,18 +212,17 @@
 </div>
 
 <style>
-  /* `contents` lets the pane lay out our children directly; the corner trigger needs a
+  /* Neither the wrapper nor the observed row group should exist as far as layout is
+     concerned — the pane lays our children out directly. Only the corner trigger needs a
      positioning context, so only that mode opts into being a box. */
-  .settings-search.inline {
+  .settings-search.inline,
+  .settings-rows {
     display: contents;
   }
   .settings-search.icon {
     position: relative;
     display: grid;
     gap: var(--pane-gap, 4pt);
-  }
-  .settings-rows {
-    display: contents;
   }
   .settings-search :global(:is([hidden], [data-search-hidden])) {
     display: none !important;
@@ -232,7 +231,9 @@
     position: relative;
     display: grid;
     gap: 2pt;
-    margin-block-end: 4pt;
+    &.open {
+      margin-block-end: 4pt;
+    }
     label {
       font-size: 0.78em;
       font-weight: 600;
@@ -263,7 +264,6 @@
     right: 0;
     display: flex;
     justify-content: flex-end;
-    margin-block-end: 0;
     z-index: 1;
   }
   :is(.open-search, .clear-search) {

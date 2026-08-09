@@ -490,8 +490,8 @@ chords always fire.
   const record = (label: string) => (log = [label, ...log].slice(0, 5))
 </script>
 
-<div
-  style="display: grid; gap: 6pt"
+<input
+  placeholder="mod+b works here, ? does not, Enter does"
   {@attach hotkey({
     global: true,
     bindings: [
@@ -500,12 +500,10 @@ chords always fire.
       { keys: `Enter`, handler: () => record(`submit`), allow_in_inputs: true },
     ],
   })}
->
-  <input placeholder="mod+b works here, ? does not, Enter does" />
-  <ol>
-    {#each log as entry, idx (idx)}<li>{entry}</li>{/each}
-  </ol>
-</div>
+/>
+<ol style="margin: 6pt 0 0">
+  {#each log as entry, idx (idx)}<li>{entry}</li>{/each}
+</ol>
 ```
 
 Pass `global: false` (the default) to scope a binding to the node it is attached to, so
