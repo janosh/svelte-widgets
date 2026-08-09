@@ -10,6 +10,8 @@ const set_query = async (input: HTMLInputElement, query: string): Promise<void> 
   await tick()
 }
 const setting_row = (key: string) => doc_query(`[data-key="${key}"]`)
+// Filtering marks its own attribute, so `hidden` stays whatever the caller set it to
+const filtered_out = (element: Element) => element.hasAttribute(`data-search-hidden`)
 
 const mounted_search = async () => {
   mount(SettingsSearchHarness, { target: document.body })
@@ -42,18 +44,18 @@ describe(`SettingsSearch`, () => {
     const { input, appearance, camera } = await mounted_search()
 
     await set_query(input, `radius`)
-    expect(appearance.hidden).toBe(false)
-    expect(camera.hidden).toBe(true)
-    expect(setting_row(`atom_radius`).hidden).toBe(false)
-    expect(setting_row(`color_scheme`).hidden).toBe(true)
-    expect(setting_row(`chart-legend`).hidden).toBe(false)
+    expect(filtered_out(appearance)).toBe(false)
+    expect(filtered_out(camera)).toBe(true)
+    expect(filtered_out(setting_row(`atom_radius`))).toBe(false)
+    expect(filtered_out(setting_row(`color_scheme`))).toBe(true)
+    expect(filtered_out(setting_row(`chart-legend`))).toBe(false)
 
     await set_query(input, `motion inertia`)
-    expect(appearance.hidden).toBe(true)
-    expect(camera.hidden).toBe(false)
+    expect(filtered_out(appearance)).toBe(true)
+    expect(filtered_out(camera)).toBe(false)
     expect(camera.open).toBe(true)
-    expect(setting_row(`rotation_damping`).hidden).toBe(false)
-    expect(setting_row(`zoom_speed`).hidden).toBe(true)
+    expect(filtered_out(setting_row(`rotation_damping`))).toBe(false)
+    expect(filtered_out(setting_row(`zoom_speed`))).toBe(true)
   })
 
   test(`Escape clears filtering and restores each group's prior open state`, async () => {
@@ -64,7 +66,7 @@ describe(`SettingsSearch`, () => {
     expect(color_scheme.hidden).toBe(true)
 
     await set_query(input, `damping`)
-    expect(appearance.hidden).toBe(true)
+    expect(filtered_out(appearance)).toBe(true)
     expect(camera.open).toBe(true)
 
     input.dispatchEvent(
@@ -73,9 +75,9 @@ describe(`SettingsSearch`, () => {
     await tick()
 
     expect(input.value).toBe(``)
-    expect(appearance.hidden).toBe(false)
+    expect(filtered_out(appearance)).toBe(false)
     expect(appearance.open).toBe(true)
-    expect(camera.hidden).toBe(false)
+    expect(filtered_out(camera)).toBe(false)
     expect(camera.open).toBe(false)
     expect(color_scheme.hidden).toBe(true)
     expect(document.querySelectorAll(`[data-key][hidden]`)).toHaveLength(1)
@@ -89,7 +91,7 @@ describe(`SettingsSearch`, () => {
     camera.dispatchEvent(new Event(`toggle`))
 
     await set_query(input, `damping`)
-    expect(appearance.hidden).toBe(true)
+    expect(filtered_out(appearance)).toBe(true)
     expect(camera.open).toBe(true)
 
     await set_query(input, ``)
@@ -116,7 +118,7 @@ describe(`SettingsSearch`, () => {
     // ...nor may a match drag it back into view
     await set_query(input, `zoom speed`)
     expect(zoom_speed.hidden).toBe(true)
-    expect(camera.hidden).toBe(true)
+    expect(filtered_out(camera)).toBe(true)
     expect(document.querySelector(`[role="status"]`)?.textContent).toContain(
       `No settings match`,
     )
@@ -129,16 +131,18 @@ describe(`SettingsSearch`, () => {
     const { input, appearance, camera } = await mounted_search()
     const segments = doc_query(`section.grid > label:not([data-key])`)
     const surface_quality = doc_query(`section.grid > .setting:not([data-key])`)
-    // `hidden` alone loses to the `display: grid` a grid section puts on its rows, so the
+    // The marker alone loses to the `display: grid` a grid section puts on its rows, so the
     // keyless row needs the component's own override to actually disappear. happy-dom does
     // not apply Svelte's scoped styles, so the source is the only place to assert it from.
-    expect(settings_search_source).toContain(`.settings-search :global([hidden])`)
+    expect(settings_search_source).toContain(
+      `:global(:is([hidden], [data-search-hidden]))`,
+    )
 
     await set_query(input, `sphere`)
-    expect(segments.hidden).toBe(false)
-    expect(surface_quality.hidden).toBe(true)
-    expect(appearance.hidden).toBe(false)
-    expect(setting_row(`atom_radius`).hidden).toBe(true)
+    expect(filtered_out(segments)).toBe(false)
+    expect(filtered_out(surface_quality)).toBe(true)
+    expect(filtered_out(appearance)).toBe(false)
+    expect(filtered_out(setting_row(`atom_radius`))).toBe(true)
 
     // Camera starts collapsed; search opens it, and typing on must not drop that state — not
     // even for an instant, which is what re-running the whole attachment per keystroke did.
@@ -151,19 +155,73 @@ describe(`SettingsSearch`, () => {
     observer.disconnect()
     expect(open_writes).toEqual([])
     expect(camera.open).toBe(true)
-    expect(segments.hidden).toBe(true)
+    expect(filtered_out(segments)).toBe(true)
 
     await set_query(input, ``)
     expect(camera.open).toBe(false)
-    expect(segments.hidden).toBe(false)
+    expect(filtered_out(segments)).toBe(false)
+  })
+
+  // A pane with no room for a standing field parks a magnifier in the corner instead
+  test(`trigger="icon" opens on click and collapses back to the trigger on Escape`, async () => {
+    mount(SettingsSearchHarness, { target: document.body, props: { trigger: `icon` } })
+    await tick()
+    expect(document.querySelector(`input[type="search"]`)).toBeNull()
+
+    doc_query<HTMLButtonElement>(`.open-search`).click()
+    await tick()
+    const input = doc_query<HTMLInputElement>(`input[type="search"]`)
+    expect(document.activeElement).toBe(input)
+    expect(input.getAttribute(`aria-label`)).toBe(`Search settings`)
+
+    await set_query(input, `damping`)
+    expect(filtered_out(setting_row(`zoom_speed`))).toBe(true)
+
+    input.dispatchEvent(
+      new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true, cancelable: true }),
+    )
+    await tick()
+    expect(document.querySelector(`input[type="search"]`)).toBeNull()
+    expect(document.activeElement).toBe(doc_query(`.open-search`))
+    expect(filtered_out(setting_row(`zoom_speed`))).toBe(false)
+  })
+
+  // Rows nest when a keyed wrapper holds keyed rows. A hit on either end keeps the whole
+  // group on screen, so a wrapper matched by its own label never hides its children.
+  test(`keeps nested rows visible when either end of the nesting matches`, async () => {
+    const { input } = await mounted_search()
+
+    await set_query(input, `rotation axes`) // matches the wrapper's data-label only
+    expect(filtered_out(setting_row(`rotation`))).toBe(false)
+    expect(filtered_out(setting_row(`rotation_x`))).toBe(false)
+
+    await set_query(input, `sphere`) // matches neither end
+    expect(filtered_out(setting_row(`rotation`))).toBe(true)
+    expect(filtered_out(setting_row(`rotation_x`))).toBe(true)
+  })
+
+  // Typing a heading reveals what it holds, even though no row repeats the heading's words
+  test(`matches rows by their section and group titles`, async () => {
+    const { input, appearance, camera } = await mounted_search()
+
+    await set_query(input, `camera`)
+    expect(filtered_out(camera)).toBe(false)
+    expect(filtered_out(appearance)).toBe(true)
+    expect(filtered_out(setting_row(`rotation_damping`))).toBe(false)
+    expect(filtered_out(setting_row(`zoom_speed`))).toBe(false)
+
+    await set_query(input, `atoms`)
+    expect(filtered_out(appearance)).toBe(false)
+    expect(filtered_out(camera)).toBe(true)
+    expect(filtered_out(setting_row(`atom_radius`))).toBe(false)
   })
 
   test(`shows a status message for no matches and offers a clear button`, async () => {
     const { input, appearance, camera } = await mounted_search()
     await set_query(input, `unobtainium`)
 
-    expect(appearance.hidden).toBe(true)
-    expect(camera.hidden).toBe(true)
+    expect(filtered_out(appearance)).toBe(true)
+    expect(filtered_out(camera)).toBe(true)
     const status = doc_query(`[role="status"]`)
     expect(status.textContent).toContain(`No settings match “unobtainium”.`)
 
