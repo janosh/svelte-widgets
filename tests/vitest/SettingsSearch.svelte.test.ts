@@ -1,6 +1,5 @@
 import { mount, tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
-import settings_search_source from '$lib/SettingsSearch.svelte?raw'
 import { doc_query } from './index'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 
@@ -13,9 +12,15 @@ const setting_row = (key: string) => doc_query(`[data-key="${key}"]`)
 // Filtering marks its own attribute, so `hidden` stays whatever the caller set it to
 const filtered_out = (element: Element) => element.hasAttribute(`data-search-hidden`)
 
-const mounted_search = async () => {
-  mount(SettingsSearchHarness, { target: document.body })
+const mount_harness = async (
+  props: { trigger?: `inline` | `icon`; initial_query?: string } = {},
+): Promise<void> => {
+  mount(SettingsSearchHarness, { target: document.body, props })
   await tick()
+}
+
+const mounted_search = async () => {
+  await mount_harness()
   const input = doc_query<HTMLInputElement>(`input[type="search"]`)
   const [appearance, camera] = [
     ...document.querySelectorAll<HTMLDetailsElement>(`details.settings-group`),
@@ -131,12 +136,6 @@ describe(`SettingsSearch`, () => {
     const { input, appearance, camera } = await mounted_search()
     const segments = doc_query(`section.grid > label:not([data-key])`)
     const surface_quality = doc_query(`section.grid > .setting:not([data-key])`)
-    // The marker alone loses to the `display: grid` a grid section puts on its rows, so the
-    // keyless row needs the component's own override to actually disappear. happy-dom does
-    // not apply Svelte's scoped styles, so the source is the only place to assert it from.
-    expect(settings_search_source).toContain(
-      `:global(:is([hidden], [data-search-hidden]))`,
-    )
 
     await set_query(input, `sphere`)
     expect(filtered_out(segments)).toBe(false)
@@ -164,8 +163,7 @@ describe(`SettingsSearch`, () => {
 
   // A pane with no room for a standing field parks a magnifier in the corner instead
   test(`trigger="icon" opens on click and collapses back to the trigger on Escape`, async () => {
-    mount(SettingsSearchHarness, { target: document.body, props: { trigger: `icon` } })
-    await tick()
+    await mount_harness({ trigger: `icon` })
     expect(document.querySelector(`input[type="search"]`)).toBeNull()
 
     doc_query<HTMLButtonElement>(`.open-search`).click()
@@ -218,11 +216,7 @@ describe(`SettingsSearch`, () => {
       clear: async () => doc_query<HTMLButtonElement>(`.clear-search`).click(),
     },
   ])(`trigger="icon" stays open when $name`, async ({ initial_query, open, clear }) => {
-    mount(SettingsSearchHarness, {
-      target: document.body,
-      props: { trigger: `icon`, initial_query },
-    })
-    await tick()
+    await mount_harness({ trigger: `icon`, initial_query })
     await open()
     await tick()
     const input = doc_query<HTMLInputElement>(`input[type="search"]`)

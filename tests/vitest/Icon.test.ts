@@ -79,12 +79,16 @@ describe(`Icon`, () => {
   })
 
   // Only hand-drawn glyphs are stroked; every generated one paints with `fill`
-  test.each([`Issues`, `Materials`, `Magnetic`, `NeuralNetwork`, `RepoFork`] as const)(
-    `defines %s as a currentColor stroke`,
-    (name) => {
-      expect(icons[name].stroke).toBe(`currentColor`)
-    },
-  )
+  test.each([
+    `Histogram`,
+    `Issues`,
+    `Materials`,
+    `Magnetic`,
+    `NeuralNetwork`,
+    `RepoFork`,
+  ] as const)(`defines %s as a currentColor stroke`, (name) => {
+    expect(icons[name].stroke).toBe(`currentColor`)
+  })
 
   test(`Histogram contains one baseline subpath`, () => {
     expect(icons.Histogram.d.match(/M4 42h40/g)).toHaveLength(1)
