@@ -76,7 +76,8 @@ describe(`Icon`, () => {
     expect(offenders).toEqual([])
   })
 
-  test.each([`Issues`, `Materials`, `Maximize`, `NeuralNetwork`, `Versions`] as const)(
+  // Only hand-drawn glyphs are stroked; every generated one paints with `fill`
+  test.each([`Issues`, `Materials`, `Magnetic`, `NeuralNetwork`, `RepoFork`] as const)(
     `defines %s as a currentColor stroke`,
     (name) => {
       expect(icons[name].stroke).toBe(`currentColor`)
