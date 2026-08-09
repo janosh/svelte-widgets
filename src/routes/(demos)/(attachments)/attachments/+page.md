@@ -46,7 +46,7 @@ Every attachment is a function you call and spread onto an element. They compose
 so a surface can be positioned, dismissed and trapped at once:
 
 ```svelte
-<script>
+<script lang="ts">
   import { click_outside, float, focus_trap } from 'svelte-widgets/attachments'
 
   let open = $state(false)

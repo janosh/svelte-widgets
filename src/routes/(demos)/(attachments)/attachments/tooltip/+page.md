@@ -113,31 +113,28 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ### Rich and interactive content
 
-`render(content_el, trigger)` receives the content element and may return a cleanup, so a tooltip can hold real DOM instead of a string. The surface accepts pointer events and stays open while the pointer is on it, which keeps links and buttons inside reachable. For a trusted HTML string `allow_html: true` is enough; pass untrusted input through `sanitize_html` first.
+`render(content_el, trigger)` receives the content element and may return a cleanup, so a tooltip can hold real DOM instead of a string. The surface accepts pointer events and stays open while the pointer is on it, so its text stays selectable. Keep that content non-interactive though: `role="tooltip"` sits outside the focus order, so a button or link inside is unreachable by keyboard — use [`Popover`](popover) when the surface needs controls. For a trusted HTML string `allow_html: true` is enough; pass untrusted input through `sanitize_html` first.
 
 ```svelte example id="attachments-tooltip-rich"
 <script lang="ts">
   import { tooltip } from '$lib/attachments'
-
-  let clicks = $state(0)
 </script>
 
 <div style="display: flex; gap: 1em; flex-wrap: wrap">
   <button
     {@attach tooltip({
       placement: `top`,
-      render: (content_el) => {
-        const heading = document.createElement('strong')
-        heading.textContent = 'Built with render()'
-        const action = document.createElement('button')
-        action.textContent = 'Click without closing'
-        action.onclick = () => (clicks += 1)
-        content_el.append(heading, document.createElement('br'), action)
-        return () => action.remove() // optional cleanup
+      render: (content_el, trigger) => {
+        const heading = document.createElement(`strong`)
+        heading.textContent = `Built with render()`
+        content_el.append(heading, ` describing “${trigger.textContent?.trim()}”`)
+        // content_el is emptied for you; cleanup is for what you touch outside it
+        trigger.dataset.described = ``
+        return () => delete trigger.dataset.described
       },
     })}
   >
-    Interactive tooltip
+    Rich tooltip
   </button>
 
   <button
@@ -152,8 +149,6 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
   >
     allow_html
   </button>
-
-  <span>clicked {clicks}×</span>
 </div>
 ```
 

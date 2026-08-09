@@ -22,8 +22,11 @@
     multiple: allow_multiple,
     on_drag_active: (active) => (drag_active = active),
     on_files: async (files, signal) => {
+      // `signal` only aborts on a newer drop, so the picker below would lose a race
+      // with this await. Every writer replaces `names`, so its identity settles it.
+      const reported = names
       await Promise.all(files.map((file) => file.arrayBuffer()))
-      if (!signal.aborted) show_files(files)
+      if (!signal.aborted && names === reported) show_files(files)
     },
     on_error: (error) => (names = [`Error: ${String(error)}`]),
   })}

@@ -174,6 +174,8 @@ describe(`icon catalog page`, () => {
       expect(doc_query(`[role="alert"]`).textContent).toContain(`denied`),
     )
     copy_button.click()
+    // the alert clears before the write, so only the count proves the retry ran
     await vi.waitFor(() => expect(document.querySelector(`[role="alert"]`)).toBeNull())
+    expect(write_text).toHaveBeenCalledTimes(2)
   })
 })

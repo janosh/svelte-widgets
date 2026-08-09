@@ -10,7 +10,7 @@
 </script>
 
 <button onclick={() => dialog?.showModal()}>Open native dialog</button>
-<dialog bind:this={dialog} {@attach backdrop_dismiss()}>
+<dialog aria-label="Native dialog" bind:this={dialog} {@attach backdrop_dismiss()}>
   <p>Click the backdrop to close.</p>
   <button onclick={() => dialog?.close()}>Close</button>
 </dialog>

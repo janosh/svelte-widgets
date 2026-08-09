@@ -1009,6 +1009,8 @@ type ActiveTooltip = {
   phase: TooltipPhase
 }
 
+type HideOptions = { keep_active?: boolean; notify?: boolean; replay_queued?: boolean }
+
 type QueuedActivation = {
   registration: TooltipRegistration
   trigger: HTMLElement
@@ -1074,8 +1076,10 @@ const changed_attribute_names = (records: MutationRecord[], skip?: string): stri
 const described_by_tokens = (element: Element): string[] =>
   (element.getAttribute(`aria-describedby`) ?? ``).split(/\s+/u).filter(Boolean)
 
-const first_nonempty = (...values: (string | null | undefined)[]): string | undefined =>
-  values.find((value): value is string => typeof value === `string` && value.length > 0)
+const first_nonempty = (...values: (string | null | undefined)[]): string | null =>
+  values.find(
+    (value): value is string => typeof value === `string` && value.length > 0,
+  ) ?? null
 
 const add_description = (element: Element, id: string): void => {
   const tokens = described_by_tokens(element)
@@ -1275,17 +1279,13 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   ): string | null => {
     const { content } = registration.options
     if (content !== undefined) {
-      return (
-        first_nonempty(typeof content === `function` ? content(trigger) : content) ?? null
-      )
+      return first_nonempty(typeof content === `function` ? content(trigger) : content)
     }
     const title = remember_and_strip_title(registration, trigger)
-    return (
-      first_nonempty(
-        title,
-        trigger.getAttribute(`aria-label`),
-        trigger.getAttribute(`data-title`),
-      ) ?? null
+    return first_nonempty(
+      title,
+      trigger.getAttribute(`aria-label`),
+      trigger.getAttribute(`data-title`),
     )
   }
 
@@ -1434,11 +1434,10 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     request_open(next.reason)
   }
 
+  // Callers that install an owner of their own right after pass replay_queued: false.
   function hide_active(
     reason: TooltipOpenReason,
-    keep_active = false,
-    notify = true,
-    replay_queued = true,
+    { keep_active = false, notify = true, replay_queued = true }: HideOptions = {},
   ): void {
     const closing = active
     clear_open_timeout()
@@ -1492,7 +1491,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (!active) return
     const { options } = active.registration
     if (options.open !== true) {
-      hide_active(reason, keep_active)
+      hide_active(reason, { keep_active })
       return
     }
     if (active.phase === `close-requested`) return
@@ -1512,7 +1511,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         // so strip until it stops returning rather than trading one write per round.
         for (let strip_count = 0; title !== null; strip_count += 1) {
           if (strip_count >= 10) {
-            hide_active(`visibility`, false, false)
+            hide_active(`visibility`, { notify: false })
             throw new Error(
               `tooltip title could not be stripped from <${observed.trigger.tagName.toLowerCase()}>`,
             )
@@ -1572,11 +1571,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     }
     surface.replaceChildren(content_el)
     if (options.show_arrow !== false) {
-      const border_arrow = doc.createElement(`div`)
-      border_arrow.className = `custom-tooltip-arrow-border`
-      const arrow = doc.createElement(`div`)
-      arrow.className = `custom-tooltip-arrow`
-      surface.append(border_arrow, arrow)
+      for (const class_name of [`custom-tooltip-arrow-border`, `custom-tooltip-arrow`]) {
+        surface.append(Object.assign(doc.createElement(`div`), { className: class_name }))
+      }
     }
     surface.hidden = false
     if (!surface.isConnected) doc.body.append(surface)
@@ -1672,7 +1669,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         request_close(close_reason)
         return
       }
-      hide_active(close_reason, false, true, false)
+      hide_active(close_reason, { replay_queued: false })
     }
     queued = []
     remember_and_strip_title(registration, trigger)
@@ -1744,14 +1741,16 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   const sync_controlled = (registration: TooltipRegistration): void => {
     if (registration.cleaned) return
     if (registration.options.open !== true) {
-      if (active?.registration === registration) hide_active(`controlled`, false, false)
+      if (active?.registration === registration) {
+        hide_active(`controlled`, { notify: false })
+      }
       return
     }
     if (
       active &&
       (active.registration !== registration || active.trigger !== registration.root)
     ) {
-      hide_active(`controlled`, false, true, false)
+      hide_active(`controlled`, { replay_queued: false })
     }
     active ??= create_active_tooltip(registration, registration.root)
     request_open(`controlled`)
@@ -1763,7 +1762,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       if (registration.cleaned) return
       registration.cleaned = true
       if (active?.registration === registration)
-        hide_active(`controlled`, false, false, false)
+        hide_active(`controlled`, { notify: false, replay_queued: false })
       queued = queued.filter((entry) => entry.registration !== registration)
       for (const [element, title] of registration.original_titles) {
         if (!element.hasAttribute(`title`)) element.setAttribute(`title`, title)

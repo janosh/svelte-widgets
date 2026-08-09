@@ -15,7 +15,8 @@ which is how `ContextMenu` hangs a menu off the pointer.
   let placement = $state<Placement>(`bottom`)
 </script>
 
-<select bind:value={placement}>
+<label for="float-placement">Placement</label>
+<select id="float-placement" bind:value={placement}>
   {#each [`top`, `right`, `bottom`, `left`] as side (side)}<option>{side}</option>{/each}
 </select>
 
