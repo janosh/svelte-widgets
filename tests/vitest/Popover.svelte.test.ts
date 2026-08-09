@@ -354,7 +354,7 @@ describe(`Popover`, () => {
   })
 
   // A torn-down component cannot render a surface either way, so asserting on the DOM
-  // alone cannot tell a cancelled timer from one that still fires. Watch the timer id.
+  // alone cannot tell a canceled timer from one that still fires. Watch the timer id.
   test(`unmount cancels a pending delayed open`, async () => {
     vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, open_delay_ms: 50 })

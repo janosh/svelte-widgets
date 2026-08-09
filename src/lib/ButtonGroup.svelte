@@ -225,7 +225,7 @@
       gap: inherit;
     }
     /* the pill: the `option_suffix` wrapper where there is one, the button itself
-       everywhere else. Box and state colours live here so slotted content renders inside
+       everywhere else. Box and state colors live here so slotted content renders inside
        the pill, while padding stays on the button so its edges still toggle. */
     .option,
     button:not(.option > button) {
@@ -250,7 +250,7 @@
           --btn-group-btn-hover-bg,
           light-dark(rgba(0, 0, 0, 0.07), rgba(255, 255, 255, 0.12))
         );
-        /* chains to btn-color so leaving this unset keeps the resting colour on hover */
+        /* chains to btn-color so leaving this unset keeps the resting color on hover */
         color: var(--btn-group-btn-hover-color, var(--btn-group-btn-color, inherit));
         transform: var(--btn-group-btn-hover-transform, none);
       }

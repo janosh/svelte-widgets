@@ -1213,7 +1213,7 @@
     if (open) return
     open = true
     if (focus_input && !(event instanceof FocusEvent)) {
-      // avoid double-focussing input when event that opened dropdown was already input FocusEvent
+      // avoid double-focusing input when event that opened dropdown was already input FocusEvent
       input?.focus()
     }
     onopen?.({ event })

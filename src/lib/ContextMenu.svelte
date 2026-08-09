@@ -52,7 +52,7 @@
   const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
     !(`action` in entry)
   // Tagged by source field, so a section titled `Copy`, an action with id `Copy` and one
-  // labelled `Copy` stay three keys. Serialized, not a tuple: Svelte keys by identity.
+  // labeled `Copy` stay three keys. Serialized, not a tuple: Svelte keys by identity.
   const action_key = (action: CmdAction): string =>
     JSON.stringify(action.id === undefined ? [`label`, action.label] : [`id`, action.id])
   // A section has no id, so its title is a heading two of them may share — position

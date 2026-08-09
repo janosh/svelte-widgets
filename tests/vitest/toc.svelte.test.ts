@@ -103,7 +103,7 @@ const find_matching_css_selector = (style_text: string, declaration_pattern: Reg
     /(?<selector>[^{}]+)\{(?<block>[^{}]+)\}/g,
   )) {
     // every component's CSS lands in the same head here, so a generic declaration like
-    // `box-sizing: border-box` would otherwise match a neighbour's rule first
+    // `box-sizing: border-box` would otherwise match a neighbor's rule first
     if (!groups?.selector.includes(`toc`)) continue
     if (declaration_pattern.test(groups.block)) return groups.selector.trim()
   }

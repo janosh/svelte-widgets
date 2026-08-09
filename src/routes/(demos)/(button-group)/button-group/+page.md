@@ -57,7 +57,7 @@ stop, since there is nothing mutually exclusive left for a radio group to announ
 `selected` is an array here.
 
 The `option` snippet replaces a button's contents, `on_change` fires with the new
-selection, and every colour is a `--btn-group-*` custom property.
+selection, and every color is a `--btn-group-*` custom property.
 
 ```svelte example id="button-group-multi"
 <script lang="ts">
@@ -113,7 +113,7 @@ flex row and takes no position of its own, so placing it is the call site's job.
 
 Two only pay off together: a hover lift needs `btn-hover-transform` _and_
 `btn-transition`, since neither animates alone. `btn-hover-color` falls back to
-`btn-color`, so setting only the resting colour keeps it through hover.
+`btn-color`, so setting only the resting color keeps it through hover.
 
 Font size needs no property of its own — the buttons resolve theirs to `inherit`, so
 `style="font-size: 1.2em"` on the group reaches them. Weight and style are the exception:

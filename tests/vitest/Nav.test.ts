@@ -18,7 +18,7 @@ describe(`Nav`, () => {
   // two submenu links, so Tab/ArrowDown have somewhere to move
   const two_child_route: NavRoute[] = [[`/p`, [`/p`, `/p/child1`, `/p/child2`]]]
   const one_child_route: NavRoute[] = [[`/p`, [`/p`, `/p/1`]]]
-  // no hover cooldown, so a menu still open afterwards is open because it was pinned
+  // no hover cooldown, so a menu still open afterward is open because it was pinned
   const pinned_props = { routes: two_child_route, dropdown_cooldown_ms: 0 }
   const mount_nav = (props: ComponentProps<typeof Nav>) =>
     mount(Nav, { target: document.body, props })
@@ -439,7 +439,7 @@ describe(`Nav`, () => {
     expect(children.dataset.open).toBe(`true`)
   })
 
-  test(`dropdown accessibility uses native navigation links and labelled toggles`, () => {
+  test(`dropdown accessibility uses native navigation links and labeled toggles`, () => {
     const { dropdown, dropdown_menu, toggle } = mount_dropdown({
       routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
     })

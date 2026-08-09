@@ -40,7 +40,7 @@ The component handles the required state management:
 - Loading initial options when dropdown opens
 - Loading more as user scrolls
 - Debounced search with automatic reset
-- Cancelling superseded requests through `signal`
+- Canceling superseded requests through `signal`
 - Loading indicators
 
 ### REST API Example

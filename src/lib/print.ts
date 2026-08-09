@@ -4,7 +4,7 @@
 
 export interface PrintOptions {
   // Suggested PDF filename, applied by swapping document.title for the duration of the
-  // print and restoring it afterwards. Omit to leave the title alone.
+  // print and restoring it afterward. Omit to leave the title alone.
   filename?: string
   // Size the page to the element instead of paginating it, so the output is a single
   // continuous sheet however long the element is.
@@ -95,7 +95,7 @@ export const print_element = (node: HTMLElement, options: PrintOptions = {}): vo
 
   // No setup means no listener/watchdog needs to retain `node`.
   if (restore_title !== null || style) {
-    // afterprint covers both saving and cancelling the print dialog.
+    // afterprint covers both saving and canceling the print dialog.
     globalThis.addEventListener(`afterprint`, cleanup, { once: true })
     watchdog = setTimeout(cleanup, AFTERPRINT_TIMEOUT_MS)
   }

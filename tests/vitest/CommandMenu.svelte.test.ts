@@ -195,9 +195,9 @@ test.each([
 )
 
 // showModal is preferred, but a throwing or missing implementation must still end up
-// with an open, labelled dialog via the plain `open` attribute fallback
+// with an open, labeled dialog via the plain `open` attribute fallback
 test.each([`available`, `throws`, `unavailable`] as const)(
-  `opens a labelled dialog when showModal is %s`,
+  `opens a labeled dialog when showModal is %s`,
   async (show_modal_state) => {
     const show_modal = vi.fn(function showModal(this: HTMLDialogElement) {
       if (show_modal_state === `throws`) throw new Error(`showModal failed`)

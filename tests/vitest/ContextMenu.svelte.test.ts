@@ -252,7 +252,7 @@ describe(`ContextMenu`, () => {
       expect(items().map((btn) => btn.textContent?.trim())).toEqual([`First`, `Second`])
     })
 
-    test(`render as labelled groups of radios, flat actions keep menuitem`, async () => {
+    test(`render as labeled groups of radios, flat actions keep menuitem`, async () => {
       // `Other` doubles as the second section's title, where a bare entry_key would
       // collide; the empty section is a heading over nothing, so it drops out
       await open_menu([

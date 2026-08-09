@@ -54,7 +54,7 @@ Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')
       validate: (value) =>
         value.trim().length < 2 ? `Enter at least two characters` : undefined,
     })
-    record(`ask_prompt resolved ${name ?? `cancelled`}`)
+    record(`ask_prompt resolved ${name ?? `canceled`}`)
   }
 
   const ask_rich = async () => {
