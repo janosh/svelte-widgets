@@ -10,7 +10,8 @@
     .filter((entry): entry is [string, IconData] =>
       Boolean(entry[1] && typeof entry[1] === `object` && `viewBox` in entry[1]),
     )
-    .toSorted(([left], [right]) => left.localeCompare(right))
+    // eslint-disable-next-line unicorn/no-array-sort -- fresh array; Firefox 114 lacks toSorted
+    .sort(([left], [right]) => left.localeCompare(right))
 
   let query = $state(``)
   let size = $state(24)
@@ -20,6 +21,10 @@
   const { copied, copy } = create_clipboard_feedback(1200, (error, text) => {
     copy_error = `Could not copy “${text}”: ${error instanceof Error ? error.message : error}`
   })
+  const copy_icon = (name: string): Promise<boolean> => {
+    copy_error = ``
+    return copy(name)
+  }
 
   const needle = $derived(query.trim())
   const matches = $derived.by(() => {
@@ -80,7 +85,7 @@ import { Download } from 'svelte-widgets/icons'
 <ul class="grid" style="--icon-size: {size}px">
   {#each matches as [name, icon] (name)}
     <li>
-      <button type="button" onclick={() => void copy(name)} title="Copy “{name}”">
+      <button type="button" onclick={() => void copy_icon(name)} title="Copy “{name}”">
         <Icon {icon} />
         <span class="name">{copied.has(name) ? `copied!` : name}</span>
       </button>

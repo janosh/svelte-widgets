@@ -1,6 +1,6 @@
 ## ActionButton
 
-Use `ActionButton` for save, retry, refresh, download or any other action worth reporting on. It runs a sync or async `action`, walks itself through `ready → pending → success | error`, blocks duplicate activation while pending, hands the result or the thrown error to callbacks and snippets, and returns to `ready` after `reset_ms`.
+Use `ActionButton` for save, retry, refresh, download or any other action worth reporting on. It runs a sync or async `action`, walks itself through `ready → pending → success | error`, blocks duplicate activation while pending, hands the result or the thrown error to callbacks and snippets, and returns to `ready` after `reset_ms`. Set `reset_ms={0}` to keep the terminal state until the next activation.
 
 The button reserves the width of its widest label up front, so swapping `Save` for `Saving…` never nudges the layout around it.
 
@@ -59,7 +59,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 
   const roll = async (): Promise<number> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 700))
-    return Math.ceil(Math.random() * 6)
+    return Math.floor(Math.random() * 6) + 1
   }
 </script>
 

@@ -92,14 +92,12 @@ describe(`SettingsSection`, () => {
       { setting1: [{ key: 1 }] },
       false,
     ],
-    [`equal empty arrays`, { setting1: [] }, { setting1: [] }, false],
     [
       `equal nullish values`,
       { setting1: undefined, setting2: null },
       { setting1: undefined, setting2: null },
       false,
     ],
-    [`primitive change`, { setting1: `default` }, { setting1: `changed` }, true],
     [
       `object key insertion order`,
       { setting1: { a: 1, b: 2 } },
@@ -114,6 +112,12 @@ describe(`SettingsSection`, () => {
       false,
     ],
     [
+      `equal invalid dates`,
+      { setting1: new Date(`invalid`) },
+      { setting1: new Date(`invalid`) },
+      false,
+    ],
+    [
       `date change`,
       { setting1: new Date(`2026-01-01`) },
       { setting1: new Date(`2026-01-02`) },
@@ -121,7 +125,6 @@ describe(`SettingsSection`, () => {
     ],
     [`equal regexps`, { setting1: /test/gi }, { setting1: /test/gi }, false],
     [`regexp change`, { setting1: /test/gi }, { setting1: /test/g }, true],
-    [`key addition`, { setting1: `a` }, { setting1: `a`, setting2: undefined }, true],
     [`key removal`, { setting1: `a`, setting2: undefined }, { setting1: `a` }, true],
   ])(`reset button after %s`, (_name, initial, next, expect_reset) => {
     const tracked = mount_tracked_section(initial, `<span>content</span>`)

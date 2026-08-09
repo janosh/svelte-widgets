@@ -79,7 +79,7 @@
     if (!is_object(left) || !is_object(right)) return false
     const [left_scalar, right_scalar] = [scalar_of(left), scalar_of(right)]
     if (left_scalar !== undefined || right_scalar !== undefined)
-      return left_scalar === right_scalar
+      return Object.is(left_scalar, right_scalar)
     if (Array.isArray(left) || Array.isArray(right)) {
       return (
         Array.isArray(left) &&

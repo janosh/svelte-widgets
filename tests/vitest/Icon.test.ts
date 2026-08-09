@@ -4,7 +4,7 @@ import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
 test.each([
@@ -148,5 +148,31 @@ describe(`Icon`, () => {
     expect(svg.querySelector(`path`)?.getAttribute(`d`)).toBe(injection)
     expect(svg.getAttribute(`stroke`)).toBe(`red`)
     expect(svg.getAttribute(`fill`)).toBe(`none`)
+  })
+
+  test(`the catalog clears a stale copy error before retrying`, async () => {
+    const write_text = vi
+      .fn<(text: string) => Promise<void>>()
+      .mockRejectedValueOnce(new Error(`denied`))
+      .mockResolvedValue(undefined)
+    vi.stubGlobal(`navigator`, { clipboard: { writeText: write_text } })
+
+    try {
+      const { default: IconsPage } = await import(
+        `$root/src/routes/(demos)/(icons)/icons/+page.svelte`
+      )
+      document.body.innerHTML = ``
+      mount(IconsPage, { target: document.body })
+      const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
+
+      copy_button.click()
+      await vi.waitFor(() =>
+        expect(doc_query(`[role="alert"]`).textContent).toContain(`denied`),
+      )
+      copy_button.click()
+      await vi.waitFor(() => expect(document.querySelector(`[role="alert"]`)).toBeNull())
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
