@@ -217,7 +217,7 @@
       // whenever the mapping drops the key again.
       const metadata = setting_metadata?.[key]
       const description =
-        (typeof metadata === `string` ? metadata : metadata?.description) ||
+        (typeof metadata === `string` ? metadata : metadata?.description) ??
         original_descriptions.get(row)
       if (description) row.setAttribute(`data-description`, description)
       else row.removeAttribute(`data-description`)

@@ -252,20 +252,17 @@ describe(`SettingsSection`, () => {
     )
   })
 
-  test(`only offers descriptions mapped to rows in this section`, async () => {
-    const target = document.createElement(`div`)
-    document.body.append(target)
-    mount(SettingsSection, {
-      target,
-      props: {
-        title: `Atoms`,
-        current_values: { radius: 1 },
-        setting_metadata: { unrelated: `Not rendered here` },
-        children: snippet(`<label data-key="radius"><span>Radius</span><input></label>`),
-      },
+  test(`ignores unmapped and explicitly empty descriptions`, async () => {
+    mount_section({
+      title: `Atoms`,
+      setting_metadata: { radius: ``, unrelated: `Not rendered here` },
+      children: snippet(`<div data-key="radius" data-description="Fallback"></div>`),
     })
     await tick()
-    expect(target.querySelector(`.description-toggle`)).toBeNull()
+    expect(document.querySelector(`.description-toggle`)).toBeNull()
+    expect(
+      document.querySelector(`[data-key="radius"]`)?.hasAttribute(`data-description`),
+    ).toBe(false)
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {
