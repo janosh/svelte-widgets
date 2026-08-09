@@ -30,13 +30,24 @@ describe(`icons-manifest`, () => {
   for (const line of source.split(`\n`)) {
     if (/^ {2}\/\/ [a-z][a-z\d &:]*$/u.test(line)) sections.push([])
     const name = /^ {2}(?<name>\w+): `/u.exec(line)?.groups?.name
-    if (name) sections.at(-1)?.push(name)
+    if (!name) continue
+    const section = sections.at(-1)
+    // Dropping it instead would exempt the entry from both checks below
+    if (!section) throw new Error(`icon \`${name}\` precedes the first section header`)
+    section.push(name)
   }
+  const names = sections.flat()
+
+  test(`finds icon names in the manifest`, () => {
+    // Both checks below are satisfied by an empty parse, so a manifest reformat that broke
+    // either regex would quietly retire them rather than fail.
+    expect(names.length).toBeGreaterThan(0)
+  })
 
   test(`lists every section alphabetically`, () => {
-    const out_of_order = sections.flatMap((names) =>
-      names.filter(
-        (name, idx) => idx > 0 && names[idx - 1].toLowerCase() > name.toLowerCase(),
+    const out_of_order = sections.flatMap((section) =>
+      section.filter(
+        (name, idx) => idx > 0 && section[idx - 1].toLowerCase() > name.toLowerCase(),
       ),
     )
     expect(out_of_order).toEqual([])
@@ -46,8 +57,7 @@ describe(`icons-manifest`, () => {
     // `API`/`DOI`/`SQLite`/`GraphQL` set the convention: acronyms stay upper-case
     const lower_cased =
       /(?<![A-Z])(?:Api|Css|Html|Json|Pdf|Csv|Xml|Sql|Cpu|Gpu|Ssh|Usb|Vpn|Dna|Qr)(?![a-z])/u
-    const offenders = sections.flat().filter((name) => lower_cased.test(name))
-    expect(offenders).toEqual([])
+    expect(names.filter((name) => lower_cased.test(name))).toEqual([])
   })
 })
 
