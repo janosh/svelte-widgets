@@ -1,10 +1,9 @@
-// E2e tests for the tooltip attachment's shrink-to-fit width fitting
-// (resize_and_position_tooltip in src/lib/attachments.ts). The binary-search
-// sizing needs real browser text layout, which happy-dom can't provide.
+// Real-browser coverage for tooltip layout, top-layer rendering and live updates.
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 type TooltipMetrics = {
   content_width: number
+  text_width: number
   max_width: number
   line_count: number
   left: number
@@ -15,9 +14,7 @@ type TooltipMetrics = {
   viewport_height: number
 }
 
-// Measure final tooltip geometry. The tooltip div is content-box sized, so
-// max-width constrains the content box: subtract padding+border from the rect
-// the same way resize_and_position_tooltip's box_adjust does.
+// Measure final tooltip geometry. The tooltip uses border-box sizing.
 const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
   tooltip_el.evaluate((el) => {
     const rect = el.getBoundingClientRect()
@@ -25,15 +22,14 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
     // computed lengths are `<number>px` strings — strip the unit for Number()
     const css_px = (css_length: string) => Number(css_length.replace(/px$/, ``))
     const box_adjust =
-      style.boxSizing === `border-box`
-        ? 0
-        : css_px(style.paddingLeft) +
-          css_px(style.paddingRight) +
-          css_px(style.borderLeftWidth) +
-          css_px(style.borderRightWidth)
+      css_px(style.paddingLeft) +
+      css_px(style.paddingRight) +
+      css_px(style.borderLeftWidth) +
+      css_px(style.borderRightWidth)
     const content_el = el.querySelector(`.tooltip-content`)
     return {
       content_width: rect.width - box_adjust,
+      text_width: content_el?.getBoundingClientRect().width ?? 0,
       max_width: css_px(style.maxWidth),
       // the content span is inline, so it produces one client rect per rendered line
       line_count: content_el ? content_el.getClientRects().length : 0,
@@ -46,26 +42,7 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
     }
   })
 
-// Width the given text renders at in the tooltip's own font, for
-// platform-independent shrink-to-fit assertions
-const measure_text_width = (tooltip_el: Locator, text: string): Promise<number> =>
-  tooltip_el.evaluate((el, text_content) => {
-    const style = getComputedStyle(el)
-    const probe = document.createElement(`span`)
-    probe.style.cssText = `position: absolute; visibility: hidden; white-space: nowrap`
-    for (const prop of [`font-family`, `font-size`, `font-weight`, `letter-spacing`]) {
-      probe.style.setProperty(prop, style.getPropertyValue(prop))
-    }
-    probe.textContent = text_content
-    document.body.append(probe)
-    const width = probe.getBoundingClientRect().width
-    probe.remove()
-    return width
-  }, text)
-
-// Hover a button until its tooltip shows (pre-hydration mouseenter is a no-op)
-// and wait for the rAF sizing/positioning pass to finish (it ends by fading
-// opacity to 1, so geometry is final once fully opaque)
+// Hover until hydration has attached the delegated pointer listeners.
 const hover_tooltip = async (
   page: Page,
   button_name: string,
@@ -73,7 +50,7 @@ const hover_tooltip = async (
 ): Promise<Locator> => {
   const tooltip_el = page.locator(`.custom-tooltip`)
   await expect(async () => {
-    await page.mouse.move(0, 0) // move off the button so mouseenter re-fires
+    await page.mouse.move(0, 0) // move off the button so pointerover re-fires
     await page.getByRole(`button`, { name: button_name, exact: true }).hover()
     await expect(tooltip_el).toBeVisible({ timeout: 1000 })
   }).toPass({ timeout: 15_000 })
@@ -89,9 +66,9 @@ const expect_within_viewport = (metrics: TooltipMetrics) => {
   expect(metrics.bottom).toBeLessThanOrEqual(metrics.viewport_height)
 }
 
-test.describe(`tooltip shrink-to-fit sizing`, () => {
+test.describe(`tooltip layout and lifecycle`, () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`/attachments`, { waitUntil: `networkidle` })
+    await page.goto(`/attachments/tooltip`, { waitUntil: `networkidle` })
   })
 
   test(`short single-word tooltip renders one snug line below its max-width`, async ({
@@ -100,46 +77,29 @@ test.describe(`tooltip shrink-to-fit sizing`, () => {
     const content = `antidisestablishmentarianism`
     const tooltip_el = await hover_tooltip(page, `Single long word`, content)
     const metrics = await measure_tooltip(tooltip_el)
-    const text_width = await measure_text_width(tooltip_el, content)
 
     expect(metrics.max_width).toBe(280)
     expect(metrics.line_count).toBe(1)
     expect(metrics.content_width).toBeLessThan(metrics.max_width)
     // snug: width matches the rendered text, not the max-width cap
-    expect(Math.abs(metrics.content_width - text_width)).toBeLessThanOrEqual(3)
+    expect(Math.abs(metrics.content_width - metrics.text_width)).toBeLessThanOrEqual(3)
     expect_within_viewport(metrics)
   })
 
-  test(`unbreakable long word shrinks the wrapped tooltip to the word's width`, async ({
-    page,
-  }) => {
+  test(`unbreakable long words wrap inside the max-width`, async ({ page }) => {
     const long_word = `Donaudampfschifffahrtsgesellschaftskapitän`
     const tooltip_el = await hover_tooltip(page, `Long German word`, long_word)
     const metrics = await measure_tooltip(tooltip_el)
-    const word_width = await measure_text_width(tooltip_el, long_word)
 
     expect(metrics.line_count).toBeGreaterThanOrEqual(2)
-    // shrink-to-fit grows past the CSS max-width when needed so the longest
-    // unbreakable word stays intact; width matches that word
-    expect(metrics.content_width).toBeGreaterThanOrEqual(word_width - 3)
-    expect(metrics.content_width).toBeLessThanOrEqual(word_width + 20)
+    expect(metrics.content_width).toBeLessThanOrEqual(metrics.max_width + 1)
     expect_within_viewport(metrics)
   })
 
-  for (const { button_name, snippet, expected_max_width, min_lines } of [
-    {
-      button_name: `Balanced wrapping`,
-      snippet: `balanced text wrapping`,
-      expected_max_width: 200,
-      min_lines: 2,
-    },
-    {
-      button_name: `Long text shrink-to-fit`,
-      snippet: `Lorem ipsum`,
-      expected_max_width: 220,
-      min_lines: 5,
-    },
-  ]) {
+  for (const [button_name, snippet, expected_max_width, min_lines] of [
+    [`Balanced wrapping`, `balanced text wrapping`, 200, 2],
+    [`Long text viewport-safe`, `Lorem ipsum`, 220, 5],
+  ] as const) {
     test(`${button_name} tooltip wraps to ≥${min_lines} lines within its ${expected_max_width}px max-width`, async ({
       page,
     }) => {
@@ -152,4 +112,50 @@ test.describe(`tooltip shrink-to-fit sizing`, () => {
       expect_within_viewport(metrics)
     })
   }
+
+  test(`narrow viewports keep the top-layer tooltip and shifted arrow on screen`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 360, height: 560 })
+    const button = page.getByRole(`button`, {
+      name: `Long text viewport-safe`,
+      exact: true,
+    })
+    const tooltip_el = await hover_tooltip(page, `Long text viewport-safe`, `Lorem ipsum`)
+    const metrics = await measure_tooltip(tooltip_el)
+    expect(metrics.left).toBeGreaterThanOrEqual(7)
+    expect(metrics.right).toBeLessThanOrEqual(353)
+    expect(await tooltip_el.evaluate((element) => element.matches(`:popover-open`))).toBe(
+      true,
+    )
+
+    const [button_box, arrow_box, placement] = await Promise.all([
+      button.boundingBox(),
+      tooltip_el.locator(`.custom-tooltip-arrow`).boundingBox(),
+      tooltip_el.getAttribute(`data-placement`),
+    ])
+    if (!button_box || !arrow_box) throw new Error(`Missing tooltip arrow geometry`)
+    const arrow_center_x = arrow_box.x + arrow_box.width / 2
+    const arrow_center_y = arrow_box.y + arrow_box.height / 2
+    const button_center_x = button_box.x + button_box.width / 2
+    const button_center_y = button_box.y + button_box.height / 2
+    const cross_axis_error =
+      placement === `top` || placement === `bottom`
+        ? Math.abs(arrow_center_x - button_center_x)
+        : Math.abs(arrow_center_y - button_center_y)
+    expect(cross_axis_error).toBeLessThanOrEqual(3)
+  })
+
+  test(`active attribute content rerenders without leaving the viewport`, async ({
+    page,
+  }) => {
+    const tooltip_el = await hover_tooltip(page, `Hover me`, `Edit me!`)
+    await page
+      .getByRole(`button`, { name: `Hover me`, exact: true })
+      .locator(`xpath=preceding-sibling::input[1]`)
+      .fill(`A much longer reactive tooltip value that must reposition and wrap safely`)
+
+    await expect(tooltip_el).toContainText(`A much longer reactive tooltip value`)
+    expect_within_viewport(await measure_tooltip(tooltip_el))
+  })
 })

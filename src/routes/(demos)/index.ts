@@ -13,6 +13,27 @@ export const demo_labels: Record<string, string> = {
   '/min-max-select': `Min/Max`,
   '/allow-user-options': `User Options`,
   '/parse-labels-as-html': `HTML Labels`,
+  // attachments are named after their exports, so the nav shows the exact snake_case
+  // symbol rather than slug_to_title's "Click Outside"
+  ...Object.fromEntries(
+    [
+      `tooltip`,
+      `draggable`,
+      `resizable`,
+      `sortable`,
+      `highlight_matches`,
+      `click_outside`,
+      `dismiss_on_outside_press`,
+      `backdrop_dismiss`,
+      `focus_trap`,
+      `hotkey`,
+      `float`,
+      `portal`,
+      `contrast_color`,
+      `forward_window_keydown`,
+      `file_drop`,
+    ].map((name) => [`/attachments/${name.replaceAll(`_`, `-`)}`, name]),
+  ),
 }
 
 export const routes = Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))
