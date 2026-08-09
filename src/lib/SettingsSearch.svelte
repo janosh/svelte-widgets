@@ -151,10 +151,9 @@
     {/if}
   </div>
   {@render children()}
-  <p id={status_id} class="no-matches" role="status" hidden={!no_matches}>
-    {#if no_matches}
-      No settings match “{query.trim()}”.
-    {/if}
+  <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
+  <p id={status_id} class="no-matches" role="status">
+    {#if no_matches}No settings match “{query.trim()}”.{/if}
   </p>
 </div>
 
@@ -162,16 +161,7 @@
   .settings-search {
     display: contents;
   }
-  .settings-search :global(section.settings-section > :is(label, .setting)[hidden]),
-  .settings-search
-    :global(
-      :is(
-        [data-key][hidden],
-        section.settings-section[hidden],
-        .settings-section-heading[hidden],
-        details.settings-group[hidden]
-      )
-    ) {
+  .settings-search :global([hidden]) {
     display: none !important;
   }
   .search-field {
@@ -218,5 +208,10 @@
     color: var(--text-color-muted, #6b7280);
     font-size: 0.85em;
     text-align: center;
+    /* `display: none` would drop the region from the accessibility tree and silence it.
+       Empty plus absolute is zero-sized and no grid item, so it claims no row either. */
+    &:empty {
+      position: absolute;
+    }
   }
 </style>

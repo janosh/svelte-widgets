@@ -2812,11 +2812,33 @@ describe(`resizable`, () => {
         handle.tabIndex,
         handle.getAttribute(`role`),
         handle.getAttribute(`aria-orientation`),
+        handle.getAttribute(`aria-valuemin`),
+        // an uncapped axis has no infinite aria value, so it reports the largest safe one
+        handle.getAttribute(`aria-valuemax`),
         handle.getAttribute(`aria-valuenow`),
         handle.getAttribute(`aria-label`),
-      ]).toEqual([0, `separator`, orientation, value, `Resize from ${edge} edge`])
+      ]).toEqual([
+        0,
+        `separator`,
+        orientation,
+        `50`,
+        `${Number.MAX_SAFE_INTEGER}`,
+        value,
+        `Resize from ${edge} edge`,
+      ])
     },
   )
+
+  it(`reports a functional width cap below the minimum as both aria limits`, () => {
+    const element = create_box()
+    resizable({ edges: [`right`], max_width: () => 30 })(element)
+    const handle = grip(element)
+
+    expect([
+      handle.getAttribute(`aria-valuemin`),
+      handle.getAttribute(`aria-valuemax`),
+    ]).toEqual([`30`, `30`])
+  })
 
   // Absolute children anchor to the padding box, so a strip flush with its edge sits inside
   // the border, leaving the visible edge — grabbable back when this hit-tested — dead.

@@ -46,7 +46,7 @@ describe(`SettingsSearch`, () => {
     expect(camera.hidden).toBe(true)
     expect(setting_row(`atom_radius`).hidden).toBe(false)
     expect(setting_row(`color_scheme`).hidden).toBe(true)
-    expect(setting_row(`chart-legend`)?.hidden).toBe(false)
+    expect(setting_row(`chart-legend`).hidden).toBe(false)
 
     await set_query(input, `motion inertia`)
     expect(appearance.hidden).toBe(true)
@@ -129,7 +129,10 @@ describe(`SettingsSearch`, () => {
     const { input, appearance, camera } = await mounted_search()
     const segments = doc_query(`section.grid > label:not([data-key])`)
     const surface_quality = doc_query(`section.grid > .setting:not([data-key])`)
-    expect(settings_search_source).toContain(`:is(label, .setting)[hidden]`)
+    // `hidden` alone loses to the `display: grid` a grid section puts on its rows, so the
+    // keyless row needs the component's own override to actually disappear. happy-dom does
+    // not apply Svelte's scoped styles, so the source is the only place to assert it from.
+    expect(settings_search_source).toContain(`.settings-search :global([hidden])`)
 
     await set_query(input, `sphere`)
     expect(segments.hidden).toBe(false)
@@ -167,8 +170,9 @@ describe(`SettingsSearch`, () => {
     doc_query<HTMLButtonElement>(`.clear-search`).click()
     await tick()
     expect(input.value).toBe(``)
+    // The mounted, visible live-region node stays observable while its text clears.
     expect(document.querySelector(`[role="status"]`)).toBe(status)
-    expect(status.hidden).toBe(true)
-    expect(status.textContent?.trim()).toBe(``)
+    expect(status.hidden).toBe(false)
+    expect(status.textContent).toBe(``)
   })
 })

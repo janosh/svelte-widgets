@@ -130,11 +130,8 @@
     else for (const key of changed_keys.slice()) reset_key(key)
   })
 
-  type EnhancedRow = {
-    original_description: string | null
-    description_element: HTMLElement | null
-    reset_button: HTMLButtonElement | null
-  }
+  const DESCRIPTION_SELECTOR = `:scope > .settings-row-description`
+  const RESET_SELECTOR = `:scope > .setting-reset-button`
 
   // A <label> only names its first control, so the slider paired with a number input would go
   // unnamed. Mark every control we name with the exact text used: that is enough to rename or
@@ -152,27 +149,25 @@
   // Enhance only explicitly keyed rows. Callers that omit both opt-in props never attach this
   // behavior, preserving the historical DOM and event handling.
   const enhance_rows = (section: HTMLElement): (() => void) => {
-    // Deliberately a plain Map, not a SvelteMap: `refresh` runs inside an effect and both
-    // reads and writes this bookkeeping, which reactive entries turn into an endless loop.
-    const enhanced_rows = new Map<HTMLElement, EnhancedRow>()
+    // The only thing worth remembering per row: everything else we add is findable in the row
+    // itself, and a cached node goes stale the moment Svelte re-renders around it. Deliberately
+    // a plain Map, not a SvelteMap: `refresh` runs inside an effect and both reads and writes
+    // this, which reactive entries turn into an endless loop.
+    const original_descriptions = new Map<HTMLElement, string | null>()
 
-    const remove_reset_button = (row: HTMLElement, enhancement: EnhancedRow): void => {
-      enhancement.reset_button?.remove()
-      enhancement.reset_button = null
+    const remove_reset_button = (row: HTMLElement): void => {
+      row.querySelector(RESET_SELECTOR)?.remove()
       row.classList.remove(`has-setting-reset`)
     }
 
-    const cleanup_enhancement = (row: HTMLElement, enhancement: EnhancedRow): void => {
-      enhancement.description_element?.remove()
-      remove_reset_button(row, enhancement)
+    const cleanup_enhancement = (row: HTMLElement, original: string | null): void => {
+      row.querySelector(DESCRIPTION_SELECTOR)?.remove()
+      remove_reset_button(row)
       for (const control of row.querySelectorAll(`[${AUTO_LABEL_ATTR}]`)) {
         release_auto_label(control)
       }
-      if (enhancement.original_description === null) {
-        row.removeAttribute(`data-description`)
-      } else {
-        row.setAttribute(`data-description`, enhancement.original_description)
-      }
+      if (original === null) row.removeAttribute(`data-description`)
+      else row.setAttribute(`data-description`, original)
     }
 
     // `data-label` short-circuits the clone, which only exists to strip the controls and our
@@ -195,17 +190,14 @@
       const label = row instanceof HTMLLabelElement ? label_text(row) : ``
       for (const control of row.querySelectorAll(`input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
-        const own_label = control.getAttribute(`aria-label`)
-        // An author-set name always wins, whether it was there first or replaced ours
-        if (
-          marker === null &&
-          (own_label !== null || control.hasAttribute(`aria-labelledby`))
-        ) {
+        // An author-set name always wins, whether it was there first or replaced ours: any
+        // name that is not the one we recorded is theirs, so drop our claim and leave it be.
+        if (control.getAttribute(`aria-label`) !== marker) {
+          control.removeAttribute(AUTO_LABEL_ATTR)
           continue
         }
-        if (marker !== null && own_label !== marker)
-          control.removeAttribute(AUTO_LABEL_ATTR)
-        else if (!label) release_auto_label(control)
+        if (marker === null && control.hasAttribute(`aria-labelledby`)) continue
+        if (!label) release_auto_label(control)
         else if (marker !== label) {
           control.setAttribute(`aria-label`, label)
           control.setAttribute(AUTO_LABEL_ATTR, label)
@@ -216,14 +208,8 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      let enhancement = enhanced_rows.get(row)
-      if (!enhancement) {
-        enhancement = {
-          original_description: row.getAttribute(`data-description`),
-          description_element: null,
-          reset_button: null,
-        }
-        enhanced_rows.set(row, enhancement)
+      if (!original_descriptions.has(row)) {
+        original_descriptions.set(row, row.getAttribute(`data-description`))
       }
       sync_labelled_controls(row)
 
@@ -232,33 +218,31 @@
       const metadata = setting_metadata?.[key]
       const description =
         (typeof metadata === `string` ? metadata : metadata?.description) ||
-        enhancement.original_description
+        original_descriptions.get(row)
       if (description) row.setAttribute(`data-description`, description)
       else row.removeAttribute(`data-description`)
 
-      if (descriptions_open && description) {
-        if (!enhancement.description_element) {
-          const description_element = document.createElement(`small`)
+      let description_element = row.querySelector(DESCRIPTION_SELECTOR)
+      if (!descriptions_open || !description) description_element?.remove()
+      else {
+        if (!description_element) {
+          description_element = document.createElement(`small`)
           description_element.className = `settings-row-description`
-          enhancement.description_element = description_element
           row.append(description_element)
         }
         // Avoid notifying our own subtree observer forever: assigning textContent replaces
         // the text node even when the string is unchanged.
-        if (enhancement.description_element.textContent !== description) {
-          enhancement.description_element.textContent = description
+        if (description_element.textContent !== description) {
+          description_element.textContent = description
         }
-      } else {
-        enhancement.description_element?.remove()
-        enhancement.description_element = null
       }
 
-      if (!on_reset_key || !changed_keys.includes(key)) {
-        remove_reset_button(row, enhancement)
-      } else {
-        if (!enhancement.reset_button) {
-          const reset_button = document.createElement(`button`)
-          reset_button.type = `button`
+      if (!on_reset_key || !changed_keys.includes(key)) remove_reset_button(row)
+      else {
+        let reset_button = row.querySelector(RESET_SELECTOR)
+        if (!reset_button) {
+          reset_button = document.createElement(`button`)
+          reset_button.setAttribute(`type`, `button`)
           reset_button.className = `setting-reset-button`
           reset_button.textContent = `↶`
           // Resolve the key at click time so a row that changes data-key needs no rewiring
@@ -268,13 +252,12 @@
               if (row.dataset.key) reset_key(row.dataset.key)
             }),
           )
-          enhancement.reset_button = reset_button
           row.classList.add(`has-setting-reset`)
           row.append(reset_button)
         }
-        const reset_label = `Reset ${key} to default`
-        enhancement.reset_button.setAttribute(`aria-label`, reset_label)
-        enhancement.reset_button.title = reset_label
+        for (const attribute of [`aria-label`, `title`]) {
+          reset_button.setAttribute(attribute, `Reset ${key} to default`)
+        }
       }
       return Boolean(description)
     }
@@ -283,10 +266,10 @@
       // `map`, not `some`: every row has to be enhanced, short-circuiting would skip the rest
       const rows = [...section.querySelectorAll<HTMLElement>(`[data-key]`)]
       has_descriptions = rows.map(enhance_row).includes(true)
-      for (const [row, enhancement] of enhanced_rows) {
+      for (const [row, original] of original_descriptions) {
         if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
-          cleanup_enhancement(row, enhancement)
-          enhanced_rows.delete(row)
+          cleanup_enhancement(row, original)
+          original_descriptions.delete(row)
         }
       }
     }
@@ -299,8 +282,8 @@
 
     return () => {
       stop_observing()
-      for (const [row, enhancement] of enhanced_rows)
-        cleanup_enhancement(row, enhancement)
+      for (const [row, original] of original_descriptions)
+        cleanup_enhancement(row, original)
       has_descriptions = false
     }
   }
@@ -348,11 +331,18 @@
 </section>
 
 <style>
+  /* A flex row rather than absolutely positioned actions, so a long title is squeezed by the
+     buttons instead of running underneath them. */
   .settings-section-heading {
-    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 3pt;
   }
   h4 {
     margin: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   :is(.reset-button, .description-toggle) {
     padding: var(--reset-btn-padding, 1pt 4pt);
@@ -364,15 +354,13 @@
     cursor: pointer;
     box-shadow: none;
     opacity: 0.7;
-  }
-  :is(
-    .reset-button:hover,
-    .description-toggle:hover,
-    .description-toggle[aria-expanded='true']
-  ) {
-    background: var(--btn-bg-hover, rgba(0, 0, 0, 0.2));
-    color: var(--text-color, #374151);
-    opacity: 1;
+    /* only the toggle carries aria-expanded, so it reads as pressed while descriptions show */
+    &:hover,
+    &[aria-expanded='true'] {
+      background: var(--btn-bg-hover, rgba(0, 0, 0, 0.2));
+      color: var(--text-color, #374151);
+      opacity: 1;
+    }
   }
   .reset-button {
     display: flex;
@@ -384,13 +372,11 @@
     }
   }
   .heading-actions {
-    position: absolute;
-    top: 0;
-    right: 0;
     display: flex;
+    flex: none;
     align-items: center;
     gap: 3pt;
-    z-index: 5;
+    margin-inline-start: auto;
   }
   section :global([data-key].has-setting-reset) {
     position: relative;

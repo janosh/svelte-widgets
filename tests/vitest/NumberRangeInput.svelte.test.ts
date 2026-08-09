@@ -1,6 +1,11 @@
 import { NumberRangeInput } from '$lib'
-import { mount, tick, type ComponentProps } from 'svelte'
+import { createRawSnippet, mount, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
+
+const label_snippet = createRawSnippet(() => ({
+  render: () => `<span>Atom radius</span>`,
+}))
+const named_props = { min: 0, max: 1, step: 0.1, value: 0, title: `Atom radius` }
 
 const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
   const target = document.createElement(`div`)
@@ -34,12 +39,17 @@ describe(`NumberRangeInput`, () => {
     await tick()
     expect(props.value).toBe(0.3)
     expect(number.valueAsNumber).toBe(0.3)
+  })
 
-    expect(
-      mount_range({ min: 0, max: 1, step: 0.1, value: 0 }).range.getAttribute(
-        `aria-label`,
-      ),
-    ).toBe(`Value`)
+  // The wrapping <label> only names its first control, so the range always carries an explicit
+  // name. Without children that label is empty, leaving the number input unnamed as well.
+  test.each([
+    [`children name the number input`, { children: label_snippet }, null, `Atom radius`],
+    [`a bare title names both inputs`, {}, `Atom radius`, `Atom radius`],
+    [`neither falls back to a generic name`, { title: undefined }, `Value`, `Value`],
+  ])(`%s`, (_name, overrides, ...expected) => {
+    const { inputs } = mount_range({ ...named_props, ...overrides })
+    expect(inputs.map((input) => input.getAttribute(`aria-label`))).toEqual(expected)
   })
 
   const schema = {

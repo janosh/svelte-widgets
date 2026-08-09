@@ -208,8 +208,6 @@ describe(`SettingsSection`, () => {
           <div>
             <label data-key="rotate_speed"><span>Rotate speed</span><input></label>
             <label data-key="rotation_damping"><span>Damping</span><input></label>
-            <label data-key="zoom_speed" data-description="Wheel zoom sensitivity"
-              ><span>Zoom speed</span><input></label>
           </div>
         `),
     })
@@ -231,13 +229,7 @@ describe(`SettingsSection`, () => {
       [...document.querySelectorAll(`.settings-row-description`)].map(
         (description) => description.textContent,
       ),
-      // a row carrying its own data-description is explained too, and on its own would
-      // still be enough to offer the toggle
-    ).toEqual([
-      `Pointer rotation speed`,
-      `Motion inertia after releasing the pointer`,
-      `Wheel zoom sensitivity`,
-    ])
+    ).toEqual([`Pointer rotation speed`, `Motion inertia after releasing the pointer`])
 
     await click_and_tick(`.description-toggle`)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)

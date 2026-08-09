@@ -15,6 +15,7 @@
 </button>
 
 <SettingsSearch>
+  <!-- Keyed content outside settings sections must remain visible while filtering. -->
   <div data-key="chart-legend">Unrelated chart legend</div>
   <SettingsGroup title="Appearance" class="appearance-group" bind:open={appearance_open}>
     <SettingsSection

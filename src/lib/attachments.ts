@@ -433,20 +433,19 @@ export const resizable =
         measured.width > 0 &&
         measured.height > 0
       ) {
+        // Both axes are clamped in width space — scaling the height bounds by the ratio makes
+        // the two directions the same computation — and the axis that moved further drives.
         const aspect_ratio = measured.width / measured.height
         const width_change = Math.abs(width - measured.width) / measured.width
         const height_change = Math.abs(height - measured.height) / measured.height
-        if (width_change >= height_change) {
-          const lower = Math.max(minimum_width, minimum_height * aspect_ratio)
-          const upper = Math.min(maximum.width, maximum.height * aspect_ratio)
-          width = clamp(width, Math.min(lower, upper), upper)
-          height = width / aspect_ratio
-        } else {
-          const lower = Math.max(minimum_height, minimum_width / aspect_ratio)
-          const upper = Math.min(maximum.height, maximum.width / aspect_ratio)
-          height = clamp(height, Math.min(lower, upper), upper)
-          width = height * aspect_ratio
-        }
+        const upper = Math.min(maximum.width, maximum.height * aspect_ratio)
+        const lower = Math.min(
+          Math.max(minimum_width, minimum_height * aspect_ratio),
+          upper,
+        )
+        const driven = width_change >= height_change ? width : height * aspect_ratio
+        width = clamp(driven, lower, upper)
+        height = width / aspect_ratio
       } else {
         if (grab.horizontal) width = clamp(width, minimum_width, maximum.width)
         if (grab.vertical) height = clamp(height, minimum_height, maximum.height)

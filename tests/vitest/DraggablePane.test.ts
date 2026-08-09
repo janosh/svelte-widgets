@@ -431,6 +431,10 @@ describe(`DraggablePane`, () => {
     await tick()
     expect(pane.style.maxWidth).toBe(`450px`)
 
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 600, 150))
+    await tick()
+    expect(pane.style.width).toBe(`450px`)
+
     globalThis.dispatchEvent(pointer_event(`pointermove`, 425, 150))
     await tick()
     expect(pane.style.width).toBe(`430px`)
@@ -457,6 +461,7 @@ describe(`DraggablePane`, () => {
     doc_query<HTMLButtonElement>(`.reset-button`).click()
     await tick()
     expect(pane.style.width).toBe(``)
+    expect(pane.style.height).toBe(``)
     expect(pane.style.maxWidth).toBe(`450px`)
   })
 
@@ -486,15 +491,9 @@ describe(`DraggablePane`, () => {
     corner_of(pane).dispatchEvent(pointer_event(`dblclick`, 445, 295))
     await tick()
 
-    expect({
-      width: pane.style.width,
-      height: pane.style.height,
-      max_width: pane.style.maxWidth,
-    }).toEqual({
-      width: ``,
-      height: ``,
-      max_width: `450px`,
-    })
+    expect(pane.style.width).toBe(``)
+    expect(pane.style.height).toBe(``)
+    expect(pane.style.maxWidth).toBe(`450px`)
   })
 
   test(`a resize opts the pane out of repositioning and reveals the controls`, async () => {

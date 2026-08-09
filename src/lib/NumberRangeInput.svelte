@@ -13,21 +13,11 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments'
 
-  type RangeValue = number | string
-  type SchemaBounds = {
-    setting: string
-    schema: NumberRangeSchema
-    min?: RangeValue
-    max?: RangeValue
-    step?: RangeValue
-  }
-  type ExplicitBounds = {
-    setting?: string
-    schema?: undefined
-    min: RangeValue
-    max: RangeValue
-    step: RangeValue
-  }
+  // The same three bounds either way: optional when a schema entry can supply them, required
+  // when nothing else can.
+  type Bounds = { min?: number | string; max?: number | string; step?: number | string }
+  type SchemaBounds = Bounds & { setting: string; schema: NumberRangeSchema }
+  type ExplicitBounds = Required<Bounds> & { setting?: string; schema?: undefined }
 
   // Paired number + range input bound to the same value, wrapped in a flex <label>.
   // The label text/markup is passed as children (supports inline units like <small>Å</small>).
@@ -67,13 +57,16 @@
   })
   let resolved_title = $derived(title ?? setting_config?.description)
   let range_label = $derived(resolved_title?.trim() || setting?.trim() || `Value`)
+  // With children the wrapping <label> already names the number input and an aria-label would
+  // override that visible text; without them the label is empty, so it needs the fallback too.
+  const number_label = $derived(children ? undefined : range_label)
 </script>
 
 <!-- data-key defaults to `setting` so a settings pane's per-row reset and search find the row
 without every call site repeating the key; `rest` comes last so a caller can still override -->
 <label {@attach tooltip()} title={resolved_title} data-key={setting} {...rest}>
   <span>{@render children?.()}</span>
-  <input type="number" {...input_bounds} bind:value />
+  <input type="number" {...input_bounds} bind:value aria-label={number_label} />
   <input type="range" {...input_bounds} bind:value aria-label={range_label} />
 </label>
 
