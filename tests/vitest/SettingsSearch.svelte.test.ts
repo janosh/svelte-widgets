@@ -200,6 +200,43 @@ describe(`SettingsSearch`, () => {
     expect(filtered_out(setting_row(`rotation_x`))).toBe(true)
   })
 
+  // Emptying the query must never collapse the field under the cursor, however it was opened
+  // and however it is cleared. Deriving the open state from `query` alone breaks the first
+  // case; unmounting the clear button without rehoming focus breaks the second.
+  test.each([
+    {
+      name: `opened by the trigger and cleared by typing`,
+      initial_query: ``,
+      open: async () => doc_query<HTMLButtonElement>(`.open-search`).click(),
+      clear: (input: HTMLInputElement) => set_query(input, ``),
+    },
+    {
+      // a query the user never typed: a restored session, or a deep link
+      name: `opened by an initial query and cleared by the button`,
+      initial_query: `radius`,
+      open: async () => {},
+      clear: async () => doc_query<HTMLButtonElement>(`.clear-search`).click(),
+    },
+  ])(`trigger="icon" stays open when $name`, async ({ initial_query, open, clear }) => {
+    mount(SettingsSearchHarness, {
+      target: document.body,
+      props: { trigger: `icon`, initial_query },
+    })
+    await tick()
+    await open()
+    await tick()
+    const input = doc_query<HTMLInputElement>(`input[type="search"]`)
+    await set_query(input, `radius`)
+
+    await clear(input)
+    await tick()
+
+    expect(document.querySelector(`input[type="search"]`)).toBe(input)
+    expect(input.value).toBe(``)
+    expect(document.activeElement).toBe(input)
+    expect(document.querySelector(`.open-search`)).toBeNull()
+  })
+
   // Typing a heading reveals what it holds, even though no row repeats the heading's words
   test(`matches rows by their section and group titles`, async () => {
     const { input, appearance, camera } = await mounted_search()
@@ -228,6 +265,8 @@ describe(`SettingsSearch`, () => {
     doc_query<HTMLButtonElement>(`.clear-search`).click()
     await tick()
     expect(input.value).toBe(``)
+    // the button unmounts on clear, so focus has to land back in the field
+    expect(document.activeElement).toBe(input)
     // The mounted, visible live-region node stays observable while its text clears.
     expect(document.querySelector(`[role="status"]`)).toBe(status)
     expect(status.hidden).toBe(false)

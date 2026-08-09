@@ -8,6 +8,9 @@ import { expect, test } from '@playwright/test'
 const open_demo = async (page: Page) => {
   await page.goto(`/settings`, { waitUntil: `networkidle` })
   const demo = page.locator(`#settings-search`).first()
+  // `networkidle` lands before mdsvex has compiled the live examples on a cold dev server,
+  // so the first test to arrive would otherwise scroll to an element that is not there yet
+  await expect(demo).toBeVisible()
   await demo.scrollIntoViewIfNeeded()
   return {
     pane: demo.locator(`.settings-search`).first(),

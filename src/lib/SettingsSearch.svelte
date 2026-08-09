@@ -31,9 +31,10 @@
   let search_input = $state<HTMLInputElement>()
   let search_trigger = $state<HTMLButtonElement>()
   let collapsible = $derived(trigger === `icon`)
-  // writable derived: a query always forces the field open, and the collapse handlers below
-  // reassign it without needing a second piece of state to track "opened by click"
-  let field_open = $derived(!collapsible || Boolean(query))
+  // Tracked separately from `query`, or backspacing the last character would recompute the
+  // field shut while the user is still typing in it.
+  let opened = $state(false)
+  let field_open = $derived(!collapsible || opened || Boolean(query))
 
   // Rows opt into per-row reset with `data-key`, but a setting must not be unreachable by search
   // just because nothing resets it individually, so plain section rows count too.
@@ -140,7 +141,7 @@
   }
 
   const open_search = async (): Promise<void> => {
-    field_open = true
+    opened = true
     await tick()
     search_input?.focus()
   }
@@ -151,7 +152,7 @@
     event.stopPropagation()
     query = ``
     if (!collapsible) return
-    field_open = false
+    opened = false
     await tick()
     search_trigger?.focus()
   }
@@ -170,7 +171,7 @@
         aria-label={collapsible ? label : undefined}
         onkeydown={handle_keydown}
         onblur={() => {
-          if (collapsible && !query) field_open = false
+          if (collapsible && !query) opened = false
         }}
         aria-describedby={no_matches ? status_id : undefined}
       />
@@ -179,7 +180,14 @@
           type="button"
           class="clear-search"
           aria-label="Clear settings search"
-          onclick={() => (query = ``)}>×</button
+          onclick={() => {
+            // this button unmounts the moment the query empties, so hand focus back to the
+            // field rather than dropping it on the body. A query the caller supplied leaves
+            // `opened` false, so the field needs pinning open before it can take focus.
+            opened = true
+            query = ``
+            search_input?.focus()
+          }}>×</button
         >
       {/if}
     {:else}
