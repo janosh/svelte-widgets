@@ -158,7 +158,7 @@
   }
 </script>
 
-<div {...rest} class={[`settings-search`, rest.class, trigger]} {@attach filter_settings}>
+<div {...rest} class={[`settings-search`, rest.class, trigger]}>
   <div class="search-field" class:open={field_open}>
     {#if field_open}
       {#if !collapsible}<label for={input_id}>{label}</label>{/if}
@@ -201,7 +201,10 @@
       >
     {/if}
   </div>
-  {@render children()}
+  <!-- Observe the caller's rows only. Observing the whole component fed our own chrome back
+  into the filter — the clear button mounts and unmounts, the status text rewrites — costing
+  an extra pass per keystroke. `display: contents` keeps this wrapper out of the layout. -->
+  <div class="settings-rows" {@attach filter_settings}>{@render children()}</div>
   <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
   <p id={status_id} class="no-matches" role="status">
     {#if no_matches}No settings match “{query.trim()}”.{/if}
@@ -218,6 +221,9 @@
     position: relative;
     display: grid;
     gap: var(--pane-gap, 4pt);
+  }
+  .settings-rows {
+    display: contents;
   }
   .settings-search :global(:is([hidden], [data-search-hidden])) {
     display: none !important;

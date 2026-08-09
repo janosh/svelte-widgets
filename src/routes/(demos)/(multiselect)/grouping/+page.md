@@ -274,14 +274,13 @@ Use the `groupHeader` snippet for complete control over header rendering:
   collapsibleGroups
   groupSelectAll
   placeholder="Select cities..."
+  liGroupHeaderStyle="gap: 8px"
 >
   {#snippet groupHeader({ group, options, collapsed })}
-    <span style="display: flex; align-items: center; gap: 8px; width: 100%">
-      <span style="font-size: 1.2em">{emojis[group]}</span>
-      <strong>{group}</strong>
-      <span style="opacity: 0.6; font-size: 0.85em">({options.length})</span>
-      <span style="margin-left: auto">{collapsed ? `▶` : `▼`}</span>
-    </span>
+    <span style="font-size: 1.2em">{emojis[group]}</span>
+    <strong>{group}</strong>
+    <span style="opacity: 0.6; font-size: 0.85em">({options.length})</span>
+    <span style="margin-left: auto">{collapsed ? `▶` : `▼`}</span>
   {/snippet}
 </MultiSelect>
 ```

@@ -48,7 +48,8 @@ field and returns focus to the magnifier.
 {#if query}<small>filtering on <code>{query}</code></small>{/if}
 
 <div
-  style="position: relative; max-width: 26em; margin: 1em 0; padding: 1ex; border: 1px dashed gray; border-radius: 5pt"
+  class="demo-box"
+  style="position: relative; max-width: 26em; margin-block: 1em; padding: 1ex"
 >
   <SettingsSearch {trigger} bind:query>
     <SettingsGroup title="Appearance" open>
@@ -121,7 +122,7 @@ controls line up down the section instead of starting wherever each label ends.
   let settings = $state({ ...defaults })
 </script>
 
-<div style="max-width: 26em; padding: 1ex; border: 1px dashed gray; border-radius: 5pt">
+<div class="demo-box" style="max-width: 26em; padding: 1ex">
   <SettingsSection
     title="Atoms"
     layout="grid"
@@ -162,7 +163,7 @@ screen. `open` is bindable and `subtitle` shows a short hint — a count, or the
   let open = $state(true)
 </script>
 
-<div style="max-width: 26em; padding: 1ex; border: 1px dashed gray; border-radius: 5pt">
+<div class="demo-box" style="max-width: 26em; padding: 1ex">
   <SettingsGroup title="Appearance" subtitle={open ? `` : `3 settings`} bind:open>
     <label>Background <input type="color" value="#1a1a1a" /></label>
     <label>Grid <input type="checkbox" checked /></label>
@@ -200,9 +201,7 @@ without repeating the key at the call site.
   let opacity = $state(0.5)
 </script>
 
-<div
-  style="display: grid; gap: 4pt; max-width: 26em; padding: 1ex; border: 1px dashed gray; border-radius: 5pt"
->
+<div class="demo-box" style="display: grid; gap: 4pt; max-width: 26em; padding: 1ex">
   <NumberRangeInput setting="atom_radius" {schema} bind:value={radius}>
     Radius <small>&times;</small>
   </NumberRangeInput>

@@ -348,22 +348,21 @@ receives ranges without the CSS Highlight API and reruns when observed content c
   </button>
 
   {#if open_menu}
-    <div
+    <ul
       class="dropdown"
+      style="list-style: none; margin: 0"
       {@attach click_outside({
         inside: ['.toggle'],
         escape: true,
         callback: () => (open_menu = false),
       })}
     >
-      <ul style="list-style: none; padding: 0; margin: 0">
-        <li><a href="#one">First</a></li>
-        <li><a href="#two">Second</a></li>
-        <li>
-          <a href="#noop" class="toggle">Clicking me won’t close (counts as inside)</a>
-        </li>
-      </ul>
-    </div>
+      <li><a href="#one">First</a></li>
+      <li><a href="#two">Second</a></li>
+      <li>
+        <a href="#noop" class="toggle">Clicking me won’t close (counts as inside)</a>
+      </li>
+    </ul>
   {/if}
 </div>
 

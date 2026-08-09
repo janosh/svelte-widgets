@@ -90,9 +90,7 @@ the same shape `CommandMenu` takes, so a command can appear in both.
 </script>
 
 <ContextMenu {actions}>
-  <div
-    style="display: grid; place-items: center; height: 8em; border: 1px dashed gray; border-radius: 5pt"
-  >
+  <div class="demo-box" style="display: grid; place-items: center; height: 8em">
     Right-click me
   </div>
 </ContextMenu>

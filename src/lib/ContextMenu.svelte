@@ -163,6 +163,9 @@
     z-index: var(--context-menu-z-index, 20);
     margin: 0;
     padding: var(--context-menu-padding, 3pt);
+    /* Rows inherit the page's line-height otherwise, which on a 16px/1.6 body makes every
+       item 33px tall before its own padding. Menu rows want to be tighter than prose. */
+    line-height: var(--context-menu-line-height, 1.35);
     list-style: none;
     min-width: var(--context-menu-min-width, 10rem);
     background: var(--context-menu-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
@@ -175,7 +178,7 @@
       justify-content: space-between;
       gap: 1em;
       width: 100%;
-      padding: var(--context-menu-item-padding, 3pt 6pt);
+      padding: var(--context-menu-item-padding, 2pt 6pt);
       background: none;
       border: none;
       border-radius: 3pt;
@@ -204,8 +207,12 @@
       font-weight: 600;
     }
     kbd {
-      font-size: 0.8em;
-      opacity: 0.7;
+      /* A bare `monospace` family makes browsers resolve `em` against their monospace
+         default (13px, not 16px), so a relative size renders a fifth smaller than asked for
+         and symbol keys like ⌘ ⇧ ⌥ shrink past legibility. Inherit the menu's font instead. */
+      font-family: inherit;
+      font-size: 0.9em;
+      opacity: 0.85;
     }
     li[role='group'] + li[role='group'] {
       margin-top: 3pt;
@@ -217,7 +224,7 @@
     }
     .section-title {
       display: block;
-      padding: var(--context-menu-item-padding, 3pt 6pt);
+      padding: var(--context-menu-item-padding, 2pt 6pt);
       font-size: 0.75em;
       letter-spacing: 0.05em;
       opacity: 0.6;
