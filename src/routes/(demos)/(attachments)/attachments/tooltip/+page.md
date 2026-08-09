@@ -47,7 +47,10 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
   </label>
 </div>
 
-<div class="demo-box" style="display: grid; place-items: center; height: 9em">
+<div
+  class="demo-box"
+  style="display: grid; place-items: center; height: 9em; margin-top: 1em"
+>
   <button
     {@attach tooltip({
       content: `placement: ${placement} · align: ${align}`,
