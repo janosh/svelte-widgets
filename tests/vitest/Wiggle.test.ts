@@ -65,6 +65,6 @@ describe(`Wiggle`, () => {
 
     void unmount(component)
     vi.advanceTimersByTime(500)
-    expect(state.wiggle).toBe(true) // timer was cancelled, no write-after-destroy
+    expect(state.wiggle).toBe(true) // timer was canceled, no write-after-destroy
   })
 })

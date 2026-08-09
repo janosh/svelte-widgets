@@ -1172,7 +1172,7 @@ The second method allows you to pass in custom classes to the important DOM elem
 - `liSelectAllClass`: the "Select All" option at the top of the dropdown (when `selectAllOption` is enabled)
 - `liUserMsgClass`: user message (last child of dropdown list when no options match user input)
 - `liActiveUserMsgClass`: user message when active (i.e. hovered or navigated to with arrow keys)
-- `maxSelectMsgClass`: small span towards the right end of the input field displaying to the user how many of the allowed number of options they've already selected
+- `maxSelectMsgClass`: small span toward the right end of the input field displaying to the user how many of the allowed number of options they've already selected
 
 This simplified version of the DOM structure of the component shows where these classes are inserted:
 

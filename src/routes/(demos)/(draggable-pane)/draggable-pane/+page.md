@@ -34,26 +34,25 @@ dropdown too small.
 </div>
 
 <div
-  style="position: relative; height: 22em; margin: 1em 0; padding: 6pt; border: 1px dashed gray; border-radius: 5pt"
+  class="demo-box"
+  style="position: relative; height: 22em; margin-block: 1em; padding: 6pt; display: flex; justify-content: flex-end"
 >
-  <div style="display: flex; justify-content: flex-end">
-    <DraggablePane
-      bind:open
-      {persistent}
-      {resize}
-      on_close={({ via }) => (last_close = via)}
-      toggle_props={{ title: `Pane options` }}
-    >
-      {#snippet children({ has_been_dragged, dragging })}
-        <h4 style="margin: 0">Pane options</h4>
-        <label>Name <input placeholder="type something" /></label>
-        <label>Amount <input type="range" /></label>
-        <p style="margin: 0; font-size: 0.85em; opacity: 0.7">
-          dragged: {has_been_dragged} · dragging: {dragging}
-        </p>
-      {/snippet}
-    </DraggablePane>
-  </div>
+  <DraggablePane
+    bind:open
+    {persistent}
+    {resize}
+    on_close={({ via }) => (last_close = via)}
+    toggle_props={{ title: `Pane options` }}
+  >
+    {#snippet children({ has_been_dragged, dragging })}
+      <h4 style="margin: 0">Pane options</h4>
+      <label>Name <input placeholder="type something" /></label>
+      <label>Amount <input type="range" /></label>
+      <p style="margin: 0; font-size: 0.85em; opacity: 0.7">
+        dragged: {has_been_dragged} · dragging: {dragging}
+      </p>
+    {/snippet}
+  </DraggablePane>
 </div>
 ```
 
@@ -77,7 +76,8 @@ click handling, stays with the component. It receives the same state as `childre
 </script>
 
 <div
-  style="position: relative; height: 10em; padding: 6pt; border: 1px dashed gray; border-radius: 5pt; display: flex; justify-content: flex-end"
+  class="demo-box"
+  style="position: relative; height: 10em; padding: 6pt; display: flex; justify-content: flex-end"
 >
   <DraggablePane toggle_props={{ title: `Layer info` }}>
     {#snippet toggle({ open })}
@@ -111,7 +111,8 @@ remains below.
 </script>
 
 <div
-  style="height: 6em; overflow: hidden; border: 1px dashed gray; border-radius: 5pt; padding: 6pt; display: flex; justify-content: flex-end"
+  class="demo-box"
+  style="height: 6em; overflow: hidden; padding: 6pt; display: flex; justify-content: flex-end"
 >
   <DraggablePane position="fixed" resize="height" max_width="320px">
     {#snippet children()}

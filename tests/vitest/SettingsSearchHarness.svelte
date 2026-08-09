@@ -1,6 +1,17 @@
 <script lang="ts">
   import { SettingsGroup, SettingsSearch, SettingsSection } from '$lib'
+  import { untrack } from 'svelte'
 
+  // Seeds the field the way a restored session or a deep link would, without the user
+  // ever touching the trigger. Owned here so the component's writes land somewhere live.
+  let {
+    trigger = `inline`,
+    initial_query = ``,
+  }: {
+    trigger?: `inline` | `icon`
+    initial_query?: string
+  } = $props()
+  let query = $state(untrack(() => initial_query))
   let appearance_open = $state(true)
   let camera_open = $state(false)
   let zoom_speed_hidden = $state(false)
@@ -14,7 +25,7 @@
   Hide zoom speed
 </button>
 
-<SettingsSearch>
+<SettingsSearch {trigger} bind:query>
   <!-- Keyed content outside settings sections must remain visible while filtering. -->
   <div data-key="chart-legend">Unrelated chart legend</div>
   <SettingsGroup title="Appearance" class="appearance-group" bind:open={appearance_open}>
@@ -33,6 +44,11 @@
       >
       <!-- no data-key: nothing resets it individually, but search must still find it -->
       <label><span>Sphere segments</span><input type="number" /></label>
+      <!-- a keyed wrapper whose own rows are keyed too, so the two nest -->
+      <div class="setting" data-key="rotation" data-label="Rotation axes">
+        <label data-key="rotation_x"><span>X</span><input type="number" /></label>
+        <label data-key="rotation_y"><span>Y</span><input type="number" /></label>
+      </div>
       <div class="setting"><span>Surface quality</span><select></select></div>
     </SettingsSection>
   </SettingsGroup>

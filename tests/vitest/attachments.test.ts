@@ -1624,7 +1624,7 @@ describe(`focus_trap`, () => {
 
   // an <a href> inside an <svg> is focusable and matches tabbable_selector, but it is an
   // SVGElement, so looking the active element up with a HTMLElement-typed indexOf misses
-  // it and Tab jumps back to the edge instead of stepping to the neighbour
+  // it and Tab jumps back to the edge instead of stepping to the neighbor
   it(`steps past an SVG focusable instead of jumping to the edge`, () => {
     const { surface, buttons } = make_surface()
     const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
@@ -1809,7 +1809,7 @@ describe(`focus_trap`, () => {
     const event = press_escape()
     expect(on_inner).toHaveBeenCalledTimes(1)
     expect(on_outer).not.toHaveBeenCalled()
-    // cancelled on purpose: a native <dialog> around the surface then stays open
+    // canceled on purpose: a native <dialog> around the surface then stays open
     // until a second Escape lands with this layer gone
     expect(event.defaultPrevented).toBe(true)
 
@@ -1882,7 +1882,7 @@ describe(`focus_trap`, () => {
     expect(await focus_out_to(outside)).toBe(outside) // a torn-down trap stops recapturing
   })
 
-  // Hygiene rather than behaviour — the guard above already silences a late microtask —
+  // Hygiene rather than behavior — the guard above already silences a late microtask —
   // but without this every surface that opens leaks a pair of document listeners for
   // the rest of the page's life.
   it(`recapture takes its document listeners off again on teardown`, () => {
@@ -2004,7 +2004,7 @@ describe(`draggable`, () => {
     expect([element.style.left, element.style.top]).toEqual([``, ``])
   })
 
-  // Either ends the drag: nothing further arrives for a pointer that was cancelled or whose
+  // Either ends the drag: nothing further arrives for a pointer that was canceled or whose
   // capture went away. `lostpointercapture` is dispatched on the capture target, not window.
   it.each([
     [

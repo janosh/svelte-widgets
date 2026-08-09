@@ -181,7 +181,7 @@ describe(`search_text`, () => {
 
   // Pins the binary search against the linear scan it replaced: a match on every
   // boundary of the offset table is where an off-by-one would show up.
-  // The quadratic scan it also fixes is a cost, not a behaviour, so nothing asserts it.
+  // The quadratic scan it also fixes is a cost, not a behavior, so nothing asserts it.
   it(`maps every match onto its node in a segment split across many nodes`, () => {
     const texts = Array.from({ length: 30 }, (_unused, idx) => `a${idx}b`)
     const root = render(`<p>${texts.map((text) => `<b>${text}</b>`).join(``)}</p>`)
@@ -460,7 +460,7 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
     vi.advanceTimersByTime(200)
     expect(callback).not.toHaveBeenCalled()
 
-    // carrying the cancelled burst's start forward would leave the ceiling already
+    // carrying the canceled burst's start forward would leave the ceiling already
     // spent, collapsing the debounce to zero and firing on the first trigger
     trigger()
     vi.advanceTimersByTime(49)

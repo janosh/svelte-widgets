@@ -318,7 +318,7 @@ describe(`fullscreen background`, () => {
 
       expect(wrapper.style.getPropertyValue(css_var)).toBe(`rgb(7, 8, 9)`)
 
-      // and dropped on the way out: kept, it would still read the pre-switch colour
+      // and dropped on the way out: kept, it would still read the pre-switch color
       // after a theme change, until the next entry happened to refresh it
       button.click()
       await settle()

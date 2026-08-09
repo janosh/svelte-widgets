@@ -600,7 +600,7 @@ describe(`<Toast />`, () => {
     expect(document.querySelector(`.toast`)).toBeNull()
   })
 
-  test(`the dismiss button is labelled and removes the toast`, async () => {
+  test(`the dismiss button is labeled and removes the toast`, async () => {
     const store = render({ dismiss_label: `Close` })
     store.show(`a`)
     await tick()

@@ -441,7 +441,7 @@ describe(`compute_position`, () => {
     expect(placed).toEqual({ top: 138, left: 100, placement: `bottom` })
   })
 
-  test(`flips to the side with room, and centre vs start line up differently`, () => {
+  test(`flips to the side with room, and center vs start line up differently`, () => {
     viewport(1000, 800)
     const anchor = rect(700, 30) // only 70px below, 700px above
     const box = { width: 300, height: 200 }
@@ -449,7 +449,7 @@ describe(`compute_position`, () => {
     const centered = compute_position(anchor, box, { placement: `bottom` })
     expect(centered.placement).toBe(`top`)
     expect(centered.top).toBe(500) // 700 - 200
-    expect(centered.left).toBe(50) // centred on an anchor spanning 100..300
+    expect(centered.left).toBe(50) // centered on an anchor spanning 100..300
 
     const aligned = compute_position(anchor, box, { placement: `bottom`, align: `start` })
     expect(aligned.left).toBe(100) // flush with the anchor's left edge
@@ -463,7 +463,7 @@ describe(`compute_position`, () => {
     // flip off, else the box would simply move to the anchor's left where it fits
     const opts = { placement: `bottom`, padding: 8, flip: false } as const
     expect(compute_position(anchor, box, opts).left).toBe(92) // 400 - 300 - 8
-    // centred, hanging off the right edge
+    // centered, hanging off the right edge
     expect(compute_position(anchor, box, { ...opts, shift: false }).left).toBe(240)
   })
 
@@ -661,7 +661,7 @@ describe(`cmd_action_matches`, () => {
     description: `Switch between light and dark`,
     badge: `New`,
     group: `Appearance`,
-    keywords: [`colour`, `scheme`],
+    keywords: [`color`, `scheme`],
     metadata: [`site`, `chrome`],
     shortcut: `mod+j`,
   }
@@ -672,7 +672,7 @@ describe(`cmd_action_matches`, () => {
     [`dark`],
     [`new`],
     [`appearance`],
-    [`colour`],
+    [`color`],
     [`chrome`],
     [`mod+j`],
   ])(`matches haystack term %j`, (search) => {
@@ -727,8 +727,8 @@ describe(`step_focus`, () => {
     [-1, `Home`, 0],
     [-1, `End`, 2],
     [0, `ArrowDown`, 1],
-    [0, `ArrowUp`, 2], // wraps backwards off the first item
-    [2, `ArrowDown`, 0], // wraps forwards off the last
+    [0, `ArrowUp`, 2], // wraps backward off the first item
+    [2, `ArrowDown`, 0], // wraps forward off the last
     [1, `Home`, 0],
     [1, `End`, 2],
   ])(`from idx %s, %s focuses idx %s`, (from, key, expected) => {

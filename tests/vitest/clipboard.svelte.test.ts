@@ -69,7 +69,7 @@ test(`on_error takes over the failure and copy reports false`, async () => {
   expect([...copied]).toEqual([])
 })
 
-test(`clear drops one key or all of them, cancelling their timers`, async () => {
+test(`clear drops one key or all of them, canceling their timers`, async () => {
   const { copied, copy, clear } = create_clipboard_feedback(1000)
   await copy(`a`, `first`)
   await copy(`b`, `second`)

@@ -243,11 +243,11 @@ Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
   let menu_status = $state('closed')
 </script>
 
-<div style="margin-bottom: 1em">
+<p>
   <strong>Last action:</strong>
   {nav_message || 'None'} | <strong>Menu:</strong>
   {menu_status}
-</div>
+</p>
 
 <Nav
   {routes}

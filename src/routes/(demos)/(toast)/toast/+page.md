@@ -49,7 +49,7 @@ below every real tier, which is how a stray name silently inverts a queue. Reque
 name no priority land on `default_priority` — `info` where the ladder has that rung,
 required where it does not — and the top two rungs stay up until dismissed unless
 `sticky_priorities` says otherwise. The accent stripe is keyed off `data-priority`, so
-custom tiers can be coloured from your own CSS:
+custom tiers can be colored from your own CSS:
 
 ```ts
 const store = new ToastStore({

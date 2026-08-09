@@ -186,7 +186,7 @@
       return text.replaceAll(/\s+/gu, ` `).trim()
     }
 
-    const sync_labelled_controls = (row: HTMLElement): void => {
+    const sync_labeled_controls = (row: HTMLElement): void => {
       const label = row instanceof HTMLLabelElement ? label_text(row) : ``
       for (const control of row.querySelectorAll(`input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
@@ -211,7 +211,7 @@
       if (!original_descriptions.has(row)) {
         original_descriptions.set(row, row.getAttribute(`data-description`))
       }
-      sync_labelled_controls(row)
+      sync_labeled_controls(row)
 
       // `setting_metadata` overrides the row's own `data-description`, which is restored
       // whenever the mapping drops the key again.

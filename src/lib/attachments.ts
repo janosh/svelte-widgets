@@ -1634,7 +1634,7 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
 
   const on_escape = (event: KeyboardEvent) => {
     // Safe to swallow the key: only the innermost layer gets here, so no outer
-    // surface is waiting on it. Cancelling the default keeps a native <dialog>
+    // surface is waiting on it. Canceling the default keeps a native <dialog>
     // around the surface open until a second Escape, once this layer is gone.
     event.preventDefault()
     event.stopPropagation()
@@ -1880,7 +1880,7 @@ const focus_element = (element: Element | null | undefined) => {
 
 // Keep Tab inside a surface and hand focus back when it closes. Pair with
 // click_outside: that one decides when a surface goes away, this one decides where
-// the keyboard is while it is up and where it lands afterwards.
+// the keyboard is while it is up and where it lands afterward.
 export const focus_trap =
   (options: FocusTrapOptions = {}) =>
   (node: Element): (() => void) | undefined => {

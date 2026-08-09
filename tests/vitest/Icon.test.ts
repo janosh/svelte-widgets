@@ -23,19 +23,33 @@ describe(`icons-manifest`, () => {
     `${import.meta.dirname}/../../scripts/icons-manifest.ts`,
     `utf8`,
   )
-  const sections = source.split(/^  \/\/ /mu).slice(1)
-  const names_in = (section: string) =>
-    [...section.matchAll(/^ {2}(?<name>\w+): `/gmu)].map(
-      (match) => match.groups?.name ?? ``,
-    )
+  // A section header is a bare lowercase tag. Explanatory notes sit at the same indent, so
+  // anything wordier continues the current section instead of opening a new one — treating
+  // one as a header would silently restart the ordering run and hide entries after it.
+  const sections: string[][] = []
+  for (const line of source.split(`\n`)) {
+    if (/^ {2}\/\/ [a-z][a-z\d &:]*$/u.test(line)) sections.push([])
+    const name = /^ {2}(?<name>\w+): `/u.exec(line)?.groups?.name
+    if (!name) continue
+    const section = sections.at(-1)
+    // Dropping it instead would exempt the entry from both checks below
+    if (!section) throw new Error(`icon \`${name}\` precedes the first section header`)
+    section.push(name)
+  }
+  const names = sections.flat()
+
+  test(`finds icon names in the manifest`, () => {
+    // Both checks below are satisfied by an empty parse, so a manifest reformat that broke
+    // either regex would quietly retire them rather than fail.
+    expect(names.length).toBeGreaterThan(0)
+  })
 
   test(`lists every section alphabetically`, () => {
-    const out_of_order = sections.flatMap((section) => {
-      const names = names_in(section)
-      return names.filter(
-        (name, idx) => idx > 0 && names[idx - 1].toLowerCase() > name.toLowerCase(),
-      )
-    })
+    const out_of_order = sections.flatMap((section) =>
+      section.filter(
+        (name, idx) => idx > 0 && section[idx - 1].toLowerCase() > name.toLowerCase(),
+      ),
+    )
     expect(out_of_order).toEqual([])
   })
 
@@ -43,8 +57,7 @@ describe(`icons-manifest`, () => {
     // `API`/`DOI`/`SQLite`/`GraphQL` set the convention: acronyms stay upper-case
     const lower_cased =
       /(?<![A-Z])(?:Api|Css|Html|Json|Pdf|Csv|Xml|Sql|Cpu|Gpu|Ssh|Usb|Vpn|Dna|Qr)(?![a-z])/u
-    const offenders = sections.flatMap(names_in).filter((name) => lower_cased.test(name))
-    expect(offenders).toEqual([])
+    expect(names.filter((name) => lower_cased.test(name))).toEqual([])
   })
 })
 
@@ -63,9 +76,8 @@ describe(`Icon`, () => {
 
       if (svg.getAttribute(`viewBox`) !== viewBox) offenders.push(`${name}: viewBox`)
       if (svg.getAttribute(`fill`) !== fill) offenders.push(`${name}: fill`)
-      if ((svg.getAttribute(`stroke`) ?? undefined) !== stroke) {
+      if ((svg.getAttribute(`stroke`) ?? undefined) !== stroke)
         offenders.push(`${name}: stroke`)
-      }
       if (`markup` in entry) {
         if (svg.childElementCount === 0) offenders.push(`${name}: markup`)
         if (svg.innerHTML.includes(`d="<`)) offenders.push(`${name}: markup in d`)
@@ -76,12 +88,17 @@ describe(`Icon`, () => {
     expect(offenders).toEqual([])
   })
 
-  test.each([`Issues`, `Materials`, `Maximize`, `NeuralNetwork`, `Versions`] as const)(
-    `defines %s as a currentColor stroke`,
-    (name) => {
-      expect(icons[name].stroke).toBe(`currentColor`)
-    },
-  )
+  // Only hand-drawn glyphs are stroked; every generated one paints with `fill`
+  test.each([
+    `Histogram`,
+    `Issues`,
+    `Materials`,
+    `Magnetic`,
+    `NeuralNetwork`,
+    `RepoFork`,
+  ] as const)(`defines %s as a currentColor stroke`, (name) => {
+    expect(icons[name].stroke).toBe(`currentColor`)
+  })
 
   test(`Histogram contains one baseline subpath`, () => {
     expect(icons.Histogram.d.match(/M4 42h40/g)).toHaveLength(1)
@@ -100,10 +117,9 @@ describe(`Icon`, () => {
     })
 
     const svg = doc_query<SVGSVGElement>(`svg`)
-    const applied = Object.fromEntries(
-      Object.keys(rest_props).map((attr) => [attr, svg.getAttribute(attr)]),
-    )
-    expect(applied).toEqual(rest_props)
+    for (const [attr, value] of Object.entries(rest_props)) {
+      expect(svg.getAttribute(attr)).toBe(value)
+    }
     // class merges with Svelte's scoped class, so it has no verbatim value to compare
     expect(svg.classList.contains(`custom-class`)).toBe(true)
   })
@@ -130,9 +146,7 @@ describe(`Icon`, () => {
     const svg = doc_query<SVGSVGElement>(`svg`)
     expect(svg.querySelector(`circle`)).toBeNull()
     expect(svg.querySelector(`path`)?.getAttribute(`d`)).toBe(injection)
-    expect([svg.getAttribute(`stroke`), svg.getAttribute(`fill`)]).toEqual([
-      `red`,
-      `none`,
-    ])
+    expect(svg.getAttribute(`stroke`)).toBe(`red`)
+    expect(svg.getAttribute(`fill`)).toBe(`none`)
   })
 })

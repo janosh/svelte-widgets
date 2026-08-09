@@ -33,10 +33,10 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `ContextMenu`      | Right-click menu anchored to the pointer, with arrow-key navigation                      | [docs](https://svelte-widgets.janosh.dev/popover#contextmenu)          |
 | `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                 | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
-| `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | —                                                                      |
-| `SettingsGroup`    | Collapsible group for organizing related settings sections                               | —                                                                      |
-| `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | —                                                                      |
-| `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | —                                                                      |
+| `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
+| `SettingsGroup`    | Collapsible group for organizing related settings sections                               | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
+| `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
+| `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
 | `Sheet`            | Native modal edge panel with backdrop dismissal and focus restoration                    | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |

@@ -348,22 +348,21 @@ receives ranges without the CSS Highlight API and reruns when observed content c
   </button>
 
   {#if open_menu}
-    <div
+    <ul
       class="dropdown"
+      style="list-style: none; margin: 0"
       {@attach click_outside({
         inside: ['.toggle'],
         escape: true,
         callback: () => (open_menu = false),
       })}
     >
-      <ul style="list-style: none; padding: 0; margin: 0">
-        <li><a href="#one">First</a></li>
-        <li><a href="#two">Second</a></li>
-        <li>
-          <a href="#noop" class="toggle">Clicking me won’t close (counts as inside)</a>
-        </li>
-      </ul>
-    </div>
+      <li><a href="#one">First</a></li>
+      <li><a href="#two">Second</a></li>
+      <li>
+        <a href="#noop" class="toggle">Clicking me won’t close (counts as inside)</a>
+      </li>
+    </ul>
   {/if}
 </div>
 
@@ -491,8 +490,8 @@ chords always fire.
   const record = (label: string) => (log = [label, ...log].slice(0, 5))
 </script>
 
-<div
-  style="display: grid; gap: 6pt"
+<input
+  placeholder="mod+b works here, ? does not, Enter does"
   {@attach hotkey({
     global: true,
     bindings: [
@@ -501,12 +500,10 @@ chords always fire.
       { keys: `Enter`, handler: () => record(`submit`), allow_in_inputs: true },
     ],
   })}
->
-  <input placeholder="mod+b works here, ? does not, Enter does" />
-  <ol>
-    {#each log as entry, idx (idx)}<li>{entry}</li>{/each}
-  </ol>
-</div>
+/>
+<ol style="margin: 6pt 0 0">
+  {#each log as entry, idx (idx)}<li>{entry}</li>{/each}
+</ol>
 ```
 
 Pass `global: false` (the default) to scope a binding to the node it is attached to, so

@@ -59,7 +59,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
   await tick()
   expect(props.activeIndex).toBe(1)
 
-  // test internal changes to activeIndex bind outwards
+  // test internal changes to activeIndex bind outward
   for (const idx of [1, 2]) {
     const li = doc_query(`ul.options li:nth-child(${idx})`)
     li.dispatchEvent(mouseover)
@@ -67,7 +67,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
     expect(props.activeIndex).toEqual(idx - 1)
   }
 
-  // test external changes to activeIndex bind inwards
+  // test external changes to activeIndex bind inward
   props.activeIndex = 2
   await tick()
 
@@ -92,7 +92,7 @@ test(`clears active state when replacement identity is ambiguous`, async () => {
 })
 
 test(`1-way binding of activeOption and hovering an option makes it active`, async () => {
-  // test internal change to activeOption binds outwards
+  // test internal change to activeOption binds outward
   let activeOption: Option | null | undefined = 0
   const cb = vi.fn()
 
@@ -2020,7 +2020,7 @@ test(`2-way binding of selected`, async () => {
 
   mount(Test2WayBind, { target: document.body, props })
 
-  // test internal changes to selected bind outwards
+  // test internal changes to selected bind outward
   for (const _ of Array.from({ length: 2 })) {
     const li = doc_query(`ul.options li`)
     li.click()
@@ -2029,7 +2029,7 @@ test(`2-way binding of selected`, async () => {
 
   expect(selected).toEqual([1, 2])
 
-  // test external changes to selected bind inwards
+  // test external changes to selected bind inward
   props.selected = [3]
   await tick()
 
@@ -2055,7 +2055,7 @@ test.each([
       },
     })
 
-    // test internal changes bind outwards
+    // test internal changes bind outward
     for (const _ of [1, 2]) {
       const li = doc_query(`ul.options li`)
       li.click()
@@ -2601,7 +2601,7 @@ test(`dragging selected options across each other reorders them and fires onreor
   })
 })
 
-test(`cancelled drag clears the active drop-target highlight`, async () => {
+test(`canceled drag clears the active drop-target highlight`, async () => {
   const options = [1, 2, 3]
   mount(MultiSelect, { target: document.body, props: { options, selected: options } })
 

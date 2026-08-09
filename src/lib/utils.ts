@@ -89,7 +89,7 @@ export type Placement = `top` | `right` | `bottom` | `left`
 export type PositionOptions = {
   placement?: Placement | `auto` // `auto` prefers bottom, then flips
   // `start` lines the floating box up with the anchor's edge (dropdowns), `center`
-  // centres it on the anchor (tooltips)
+  // centers it on the anchor (tooltips)
   align?: `center` | `start`
   offset?: number // gap between anchor and floating box
   padding?: number // closest the floating box may come to a viewport edge
@@ -525,10 +525,14 @@ export function cmd_action_matches(
 
 // Coalesces subtree mutations into one refresh per microtask, including mutations caused by
 // `refresh` itself. Callers perform their own initial refresh.
+// Svelte updates a reactive `{value}` by writing the text node's `nodeValue`, which is a
+// characterData mutation and fires no childList record — so text that changes in place is
+// invisible to an observer that does not opt in.
 export function observe_subtree(
   root: Element,
   attribute_filter: string[],
   refresh: () => void,
+  watch_text = false,
 ): () => void {
   let queued = false
   let disposed = false
@@ -545,6 +549,7 @@ export function observe_subtree(
     subtree: true,
     attributes: true,
     attributeFilter: attribute_filter,
+    characterData: watch_text,
   })
   return () => {
     disposed = true

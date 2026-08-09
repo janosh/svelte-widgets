@@ -28,7 +28,7 @@ describe(`Accordion`, () => {
     await tick()
   }
 
-  test(`renders heading buttons linked to labelled regions`, async () => {
+  test(`renders heading buttons linked to labeled regions`, async () => {
     const props = mount_accordion({ value: `gamma`, heading_level: 4 })
     expect(document.querySelectorAll(`h4.accordion-heading`)).toHaveLength(3)
     const trigger_nodes = triggers()

@@ -502,7 +502,7 @@ describe(`ButtonGroup`, () => {
         `btn-padding btn-radius btn-transition display gap justify-content ` +
         `option-btn-padding-right padding radius`,
     )
-    // hover colour chains to the resting one, so setting only that survives hover
+    // hover color chains to the resting one, so setting only that survives hover
     expect(styles).toMatch(
       /--btn-group-btn-hover-color,\s*var\(\s*--btn-group-btn-color/u,
     )

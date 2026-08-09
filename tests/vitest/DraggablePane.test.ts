@@ -225,7 +225,7 @@ describe(`DraggablePane`, () => {
     },
   )
 
-  test(`persistent ignores an outside press but honours Escape`, async () => {
+  test(`persistent ignores an outside press but honors Escape`, async () => {
     const on_close = vi.fn()
     const { pane } = await open_pane({ persistent: true, on_close })
 
