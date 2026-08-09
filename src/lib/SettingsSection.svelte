@@ -239,7 +239,7 @@
 
       if (!on_reset_key || !changed_keys.includes(key)) remove_reset_button(row)
       else {
-        let reset_button = row.querySelector(RESET_SELECTOR)
+        let reset_button = row.querySelector<HTMLButtonElement>(RESET_SELECTOR)
         if (!reset_button) {
           reset_button = document.createElement(`button`)
           reset_button.setAttribute(`type`, `button`)

@@ -6,7 +6,7 @@ When `parseLabelsAsHtml={true}`, MultiSelect renders HTML in option labels.
 > runtime warning only detects combining `parseLabelsAsHtml` with `allowUserOptions`;
 > it does not sanitize labels.
 
-```svelte example
+```svelte example id="multiselect-html-labels"
 <script lang="ts">
   import { MultiSelect } from '$lib'
   import type { ObjectOption } from '$lib/types'
