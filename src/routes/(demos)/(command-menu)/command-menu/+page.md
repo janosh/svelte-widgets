@@ -1,12 +1,6 @@
-<script lang="ts">
-  import command_menu_src from '$lib/CommandMenu.svelte?raw'
-  import page_search_src from '$lib/PageSearch.svelte?raw'
-  import { FileDetails } from '$lib'
-</script>
-
 ## `CommandMenu`
 
-`<MultiSelect />` powers a full navigation command menu. Its source is shown at the bottom of this page.
+[`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">
@@ -28,7 +22,7 @@
 
 ## `PageSearch`
 
-`PageSearch` wraps `CommandMenu` with full-text search over statically generated pages.
+[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages.
 `fallback_actions` are matched locally on every keystroke, so known routes show up without
 waiting on the index (and remain the only results when the index is absent). Install
 `pagefind` as a development dependency, then index the rendered site after the application
@@ -71,7 +65,7 @@ build. Run this script before previewing or deploying:
 
 The `navigate` callback receives the selected result's `query`, `label`, and `description`
 as its second argument. A persistent layout can carry the query across client-side
-navigation and apply `highlight_matches` to the destination content:
+navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/attachments/highlight-matches.ts) to the destination content:
 
 ```svelte
 <script lang="ts">
@@ -108,7 +102,7 @@ navigation and apply `highlight_matches` to the destination content:
 </style>
 ```
 
-See the [attachments demo](attachments) for `highlight_matches` options and effects.
+See the [`highlight_matches` attachments demo](attachments) for options and effects.
 Stemmed Pagefind results may have no exact substring.
 
 ## Shortcuts, Descriptions & Recent Actions
@@ -163,8 +157,3 @@ when the menu reopens.
   <strong>{last_triggered || `none`}</strong>
 </p>
 ```
-
-<FileDetails files={[
-{ title: `<code>CommandMenu.svelte</code> source code`, content: command_menu_src },
-{ title: `<code>PageSearch.svelte</code> source code`, content: page_search_src },
-]} />

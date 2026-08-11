@@ -22,8 +22,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   expect(doc_query(`div.code-example#${id}`).classList.contains(`code-above`)).toBe(true)
 
   const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
-  const toggle_label = () =>
-    toggle_button.querySelector(`[aria-hidden="false"]`)?.textContent
+  const toggle_label = () => toggle_button.textContent?.trim()
   expect(toggle_button.type).toBe(`button`)
   expect(toggle_label()).toBe(`View code`)
   expect(getComputedStyle(toggle_button).whiteSpace).toBe(`nowrap`)

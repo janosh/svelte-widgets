@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
-  import { tooltip, type TooltipOptions } from './attachments'
+  import { tooltip, type TooltipOptions } from './attachments/index'
   import type { Contributor } from './types'
 
   let {

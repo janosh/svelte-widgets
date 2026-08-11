@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { tooltip, type TooltipOptions } from './attachments'
+  import { tooltip, type TooltipOptions } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
   import {
@@ -52,12 +52,7 @@
   {title}
   aria-label={title}
   style:visibility={is_hydrated ? `visible` : `hidden`}
-  {@attach tooltip_opts !== false &&
-    tooltip({
-      placement: `bottom`,
-      style: `font-size: 0.7rem; padding: 2pt 4pt;`,
-      ...tooltip_opts,
-    })}
+  {@attach tooltip_opts !== false && tooltip({ placement: `bottom`, ...tooltip_opts })}
   {...rest}
   onclick={chain_handlers(() => apply_theme_mode(next_mode), rest.onclick)}
 >

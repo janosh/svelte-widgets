@@ -13,6 +13,7 @@
     class="drag-box"
     style="position: absolute; left: 1rem; top: 1rem"
     {@attach draggable({
+      bounds: `parent`,
       on_drag: (event: PointerEvent) =>
         (last_drag = `${event.clientX}, ${event.clientY}`),
     })}
@@ -27,6 +28,8 @@
     style="position: absolute; left: 12rem; top: 8rem; width: 14rem"
     {@attach draggable({
       handle_selector: `.drag-handle`,
+      axis: `x`,
+      bounds: `parent`,
       on_drag_start: () => (last_drag = `start`),
       on_drag: (event: PointerEvent) =>
         (last_drag = `${event.clientX}, ${event.clientY}`),
@@ -57,3 +60,8 @@
   }
 </style>
 ```
+
+`axis` defaults to `both`; use `x` or `y` to lock movement. `bounds` is sampled when
+dragging starts and clamps the node to its parent's or another element's border box, or
+to a viewport-coordinate `{ top, right, bottom, left }` rectangle. A node larger than
+its bounds pins its top-left edge.

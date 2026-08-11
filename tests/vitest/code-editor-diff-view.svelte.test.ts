@@ -347,6 +347,12 @@ describe(`states and backend wiring`, () => {
     await mount_diff(diff_result({ oldLineCount: 9, newLineCount: 9 }))
     expect(query_element(`[data-empty]`).textContent).toContain(`No changes`)
     expect(query_element(`[data-empty]`).textContent).toContain(`9 lines`)
+    expect(
+      [`Previous`, `Next`].map(
+        (direction) =>
+          query_element<HTMLButtonElement>(`[aria-label='${direction} change']`).disabled,
+      ),
+    ).toEqual([true, true])
   })
 
   test.each([
@@ -427,6 +433,11 @@ describe(`virtualization`, () => {
 
   test(`renders a bounded window and navigates to the next change`, async () => {
     await mount_diff(large_result(2000))
+    const previous_change = query_element<HTMLButtonElement>(
+      `[aria-label='Previous change']`,
+    )
+    const next_change = query_element<HTMLButtonElement>(`[aria-label='Next change']`)
+    expect([previous_change.disabled, next_change.disabled]).toEqual([true, false])
     expect(document.querySelectorAll(`.diff-row`).length).toBeLessThan(100)
     expect(code_texts()).not.toContain(`old 1000`)
     expect(code_texts()).not.toContain(`new 1000`)
@@ -435,13 +446,37 @@ describe(`virtualization`, () => {
     scroller.scrollTop = ROW_HEIGHT * 1000
     scroller.dispatchEvent(new Event(`scroll`))
     await flush_async()
+    expect([previous_change.disabled, next_change.disabled]).toEqual([false, false])
     expect(code_texts()).toContain(`old 1000`)
     expect(code_texts()).not.toContain(`line 1`)
 
+    scroller.scrollTop = ROW_HEIGHT * 1900
+    scroller.dispatchEvent(new Event(`scroll`))
+    await flush_async()
+    expect([previous_change.disabled, next_change.disabled]).toEqual([false, true])
+
     scroller.scrollTop = 0
     scroller.dispatchEvent(new Event(`scroll`))
-    await click(query_element(`[aria-label='Next change']`))
+    await flush_async()
+    await click(next_change)
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 100)
     expect(code_texts()).toContain(`old 100`)
+
+    const assigned: number[] = []
+    let scroll_top = 0
+    Object.defineProperty(scroller, `scrollTop`, {
+      configurable: true,
+      get: () => scroll_top,
+      set: (value: number) => {
+        assigned.push(value)
+        scroll_top = Math.min(value, ROW_HEIGHT * 10)
+      },
+    })
+    scroller.dispatchEvent(new Event(`scroll`))
+    await click(next_change)
+    await click(next_change)
+
+    expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 200])
+    expect(scroller.scrollTop).toBe(ROW_HEIGHT * 10)
   })
 })

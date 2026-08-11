@@ -375,18 +375,18 @@ test.describe(`virtualList`, () => {
   const item_height = 30
   const total_options = 2000
   const rendered_options = (page: Page): Locator =>
-    page.locator(`#virtual ul.options > li[role="option"]`)
+    page.locator(`.virtual ul.options > li[role="option"]`)
   const spacers = (page: Page): Locator =>
-    page.locator(`#virtual ul.options > li[aria-hidden="true"]`)
+    page.locator(`.virtual ul.options > li[aria-hidden="true"]`)
 
   const goto_virtual_list = async (page: Page): Promise<void> => {
     await page.goto(`/virtual-list`, { waitUntil: `networkidle` })
-    await expect(page.locator(`#virtual ul.options`)).toBeVisible()
+    await expect(page.locator(`.virtual ul.options`)).toBeVisible()
     // scroll + keyboard handlers only work once hydration installs the
     // component's input.focus override (same readiness signal as goto_persistent)
     await page.waitForFunction(() => {
       const input_el = document.querySelector<HTMLInputElement>(
-        `#virtual input[autocomplete]`,
+        `.virtual input[autocomplete]`,
       )
       return input_el && !String(input_el.focus).includes(`[native code]`)
     })
@@ -403,7 +403,7 @@ test.describe(`virtualList`, () => {
     // spacers keep scrollHeight at the full 2000 * 30px list height
     await expect(spacers(page)).toHaveCount(2)
     const scroll_height = await page
-      .locator(`#virtual ul.options`)
+      .locator(`.virtual ul.options`)
       .evaluate((ul_el) => ul_el.scrollHeight)
     expect(Math.abs(scroll_height - total_options * item_height)).toBeLessThanOrEqual(100)
   })
@@ -412,7 +412,7 @@ test.describe(`virtualList`, () => {
     page,
   }) => {
     await goto_virtual_list(page)
-    const options_list = page.locator(`#virtual ul.options`)
+    const options_list = page.locator(`.virtual ul.options`)
     await expect(rendered_options(page).first()).toHaveText(`Option 0`)
 
     const target_scroll = 15_000 // row 500 of 2000
@@ -445,10 +445,10 @@ test.describe(`virtualList`, () => {
     page,
   }) => {
     await goto_virtual_list(page)
-    const input = page.locator(`#virtual input[autocomplete]`)
+    const input = page.locator(`.virtual input[autocomplete]`)
     await input.click()
 
-    const active_option = page.locator(`#virtual ul.options > li.active`)
+    const active_option = page.locator(`.virtual ul.options > li.active`)
     // 15 rows * 30px > 300px dropdown viewport → navigation must scroll the window
     for (let idx = 0; idx < 15; idx++) {
       await input.press(`ArrowDown`)
@@ -458,7 +458,7 @@ test.describe(`virtualList`, () => {
 
     // the active row must lie fully inside the dropdown's scroll viewport
     const in_view = await page.waitForFunction(() => {
-      const ul_el = document.querySelector(`#virtual ul.options`)
+      const ul_el = document.querySelector(`.virtual ul.options`)
       const active_el = ul_el?.querySelector(`li.active`)
       if (!ul_el || !active_el) return false
       const ul_rect = ul_el.getBoundingClientRect()

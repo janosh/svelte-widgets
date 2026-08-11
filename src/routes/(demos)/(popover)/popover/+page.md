@@ -1,8 +1,6 @@
-## Popover & ContextMenu
+## Popover & ActionMenu
 
-Two surfaces built from the same three attachments: [`float`](attachments/float) puts
-them where they fit, [`click_outside`](attachments/click-outside) takes them away, and
-[`focus_trap`](attachments/focus-trap) owns the keyboard while they are up.
+Both surfaces use [`float`](attachments/float) for placement and [`click_outside`](attachments/click-outside) for dismissal. `Popover` can add [`focus_trap`](attachments/focus-trap) for dialog-like content; `ActionMenu` uses menu-specific arrow keys and lets Tab resume the page order.
 
 ### `Popover`
 
@@ -51,7 +49,7 @@ and Escape closes the innermost surface only.
 `escape={false}` and `trap_focus={false}` opt out of those behaviors,
 `strategy="absolute"` survives a transformed ancestor at the cost of tracking page
 scroll, and `match_width` sizes the surface to the trigger for dropdown-like menus.
-Set `role` to `menu`, `listbox`, `tree` or `grid` when appropriate; the trigger mirrors it in `aria-haspopup` and only sets `aria-controls` while the surface is mounted.
+Set `role` to `listbox`, `tree` or `grid` when appropriate; the trigger mirrors it in `aria-haspopup` and only sets `aria-controls` while the surface is mounted. Use `ActionMenu` rather than `role="menu"` when you need complete ARIA menu keyboard behavior.
 
 Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions. Hover mode also opens on focus, and `open_delay_ms`/`close_delay_ms` keep the surface stable while the pointer crosses from its trigger. Non-click modes default to a 150 ms close delay.
 
@@ -68,15 +66,16 @@ Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions.
 </Popover>
 ```
 
-### `ContextMenu`
+### `ActionMenu`
 
-Right-click a region to replace the browser's own menu. Actions are
-[`CmdAction`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/types.ts)s,
+Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children
+to replace its browser right-click menu. Actions are
+[`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts)s,
 the same shape `CommandMenu` takes, so a command can appear in both.
 
-```svelte example id="context-menu-basic"
+```svelte example id="action-menu-basic"
 <script lang="ts">
-  import { ContextMenu } from '$lib'
+  import { ActionMenu } from '$lib'
   import type { CmdAction } from '$lib/types'
 
   let log = $state<string[]>([])
@@ -89,22 +88,28 @@ the same shape `CommandMenu` takes, so a command can appear in both.
   ]
 </script>
 
-<ContextMenu {actions}>
+<ActionMenu {actions} match_width>
+  {#snippet trigger(props)}
+    <button {...props}>Edit actions</button>
+  {/snippet}
+</ActionMenu>
+<button type="button">After menu</button>
+
+<ActionMenu {actions}>
   <div class="demo-box" style="display: grid; place-items: center; height: 8em">
     Right-click me
   </div>
-</ContextMenu>
+</ActionMenu>
 
 <ol>
   {#each log as entry, idx (idx)}<li>{entry}</li>{/each}
 </ol>
 ```
 
-Arrow keys walk the items (skipping disabled ones and wrapping at both ends), Home and
-End jump to either end, Tab stays inside, and Escape or a press anywhere else closes.
+Both forms share the same menu semantics: Arrow keys walk the items (skipping disabled ones and wrapping at both ends), Home and End jump to either end, Tab/Shift+Tab close and continue after/before the trigger, and Escape or a press anywhere else closes. The trigger form supports `bind:open`, `placement`, `align`, `offset`, `padding`, `match_width` and `strategy`.
 
-Drop the region and the whole page qualifies, `trigger="none"` neither — bind `at` and
-open the menu yourself from a long-press, a keyboard shortcut or a trigger that must
-record _what_ was clicked. `dismiss` merges over the default `{ escape: true }` to reach
-the whole [`click_outside`](attachments/click-outside) config, and an `item` snippet
-renders rows your own way.
+In context mode, drop the region and the whole page qualifies; `trigger="none"` installs
+no right-click handler, so you can bind `at` and open from a long-press or keyboard
+shortcut. `dismiss` merges over the default `{ escape: true }` to reach the whole
+[`click_outside`](attachments/click-outside) config, and an `item` snippet renders rows
+your own way.

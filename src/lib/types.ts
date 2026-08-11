@@ -1,7 +1,7 @@
 import type { Snippet } from 'svelte'
 import type { FlipParams } from 'svelte/animate'
 import type { HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
-import type { DismissConfig } from './attachments'
+import type { DismissConfig } from './attachments/index'
 import type { IconData } from './icons/types'
 
 export type Option = string | number | ObjectOption

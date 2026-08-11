@@ -1029,7 +1029,7 @@ const num_options = [42, 69]
 
 The inferred type of `Option` is used to enforce type-safety on derived props like `selected` as well as snippets. E.g. you'll get an error when trying to use a snippet that expects a string if your options are objects (see [this comment](https://github.com/janosh/svelte-widgets/pull/189/files#r1058853697) for example screenshots).
 
-You can also import [the types this component uses](https://github.com/janosh/svelte-widgets/blob/main/src/lib/index.ts) for downstream applications:
+You can also import [the types this component uses](https://github.com/janosh/svelte-widgets/blob/-/src/lib/index.ts) for downstream applications:
 
 ```ts
 import {

@@ -9,8 +9,7 @@
     on_success_next?: (content: string) => void
   } = $props()
 
-  let use_next_callback = $state(false)
-  let disabled = $state(false)
+  let [use_next_callback, disabled] = $state([false, false])
 </script>
 
 <button data-test-use-next-callback onclick={() => (use_next_callback = true)}>

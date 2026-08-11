@@ -73,7 +73,10 @@ body > div {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 0.4em;
+  align-self: center;
+  gap: 0.5em;
+  margin: 1.5rem 0;
+  font-size: 2.5rem;
   font-weight: 700;
   color: inherit;
   text-decoration: none;

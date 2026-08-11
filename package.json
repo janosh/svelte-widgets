@@ -1,6 +1,6 @@
 {
   "name": "svelte-widgets",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Accessible, keyboard-friendly Svelte components and attachments",
   "keywords": [
     "accessibility",
@@ -32,6 +32,11 @@
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
   "exports": {
+    "./DiffView.svelte": {
+      "types": "./dist/code-editor/DiffView.svelte.d.ts",
+      "svelte": "./dist/code-editor/DiffView.svelte",
+      "default": "./dist/code-editor/DiffView.svelte"
+    },
     "./*.svelte": {
       "types": "./dist/*.svelte.d.ts",
       "svelte": "./dist/*.svelte",
@@ -43,8 +48,8 @@
       "default": "./dist/index.js"
     },
     "./attachments": {
-      "types": "./dist/attachments.d.ts",
-      "default": "./dist/attachments.js"
+      "types": "./dist/attachments/index.d.ts",
+      "default": "./dist/attachments/index.js"
     },
     "./utils": {
       "types": "./dist/utils.d.ts",
@@ -138,7 +143,7 @@
     "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.svelte' -delete",
     "prepare": "npm run package",
     "prepublishOnly": "npm run package",
-    "changelog": "npx tsx https://github.com/janosh/workflows/raw/refs/heads/main/scripts/make-release-notes.ts",
+    "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
   },
   "devDependencies": {

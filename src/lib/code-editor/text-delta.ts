@@ -109,8 +109,7 @@ export const line_at_offset = (index: LineIndex, offset: number): number => {
     0,
     line_index_length(index),
   )
-  let low = 0
-  let high = index.lines.length - 1
+  let [low, high] = [0, index.lines.length - 1]
   while (low < high) {
     const mid = (low + high + 1) >> 1
     if (index.starts[mid] <= target) low = mid
@@ -180,14 +179,12 @@ export const derive_line_splice = (
   )
     return null
 
-  const sel_start = before.selection_start
-  const sel_end = before.selection_end
+  const [sel_start, sel_end] = [before.selection_start, before.selection_end]
   const delta = next_value.length - old_length
 
   // A selected range is the deletion. At a collapsed caret, length delta gives the
   // extent, including deleteWord* without encoding word rules.
-  let region_start = sel_start
-  let region_end = sel_end
+  let [region_start, region_end] = [sel_start, sel_end]
   if (sel_start === sel_end && shape !== `replace_selection`) {
     if (delta > 0) return null // a "delete" that grew the document: give up
     if (shape === `delete_backward`) region_start = sel_end + delta

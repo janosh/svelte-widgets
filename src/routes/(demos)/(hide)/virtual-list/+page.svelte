@@ -8,14 +8,13 @@
 
 <h2>Virtual List</h2>
 
-<div id="virtual">
-  <!-- liOptionStyle pins row height to the default virtualList itemHeight (30px) so
-    windowing math matches real layout regardless of platform fonts -->
-  <MultiSelect
-    options={virtual_options}
-    virtualList
-    open
-    ulOptionsStyle="max-height: 300px"
-    liOptionStyle="height: 30px; box-sizing: border-box"
-  />
-</div>
+<!-- liOptionStyle pins row height to the default virtualList itemHeight (30px) so
+  windowing math matches real layout regardless of platform fonts -->
+<MultiSelect
+  outerDivClass="virtual"
+  options={virtual_options}
+  virtualList
+  open
+  ulOptionsStyle="max-height: 300px"
+  liOptionStyle="height: 30px; box-sizing: border-box"
+/>

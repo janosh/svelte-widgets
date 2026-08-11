@@ -40,11 +40,12 @@
   --tok-punctuation: #57606a;
   --tok-invalid: #b31d28;
 
-  /* Faint line backgrounds preserve syntax; stronger word backgrounds add emphasis. */
-  --diff-add-bg: rgba(46, 160, 67, 0.13);
-  --diff-del-bg: rgba(248, 81, 73, 0.13);
-  --diff-add-word-bg: rgba(46, 160, 67, 0.32);
-  --diff-del-word-bg: rgba(248, 81, 73, 0.32);
+  /* Strong line backgrounds preserve syntax; word decorations also distinguish changes
+   * without relying on red/green perception. */
+  --diff-add-bg: rgba(46, 160, 67, 0.23);
+  --diff-del-bg: rgba(248, 81, 73, 0.23);
+  --diff-add-word-bg: rgba(46, 160, 67, 0.48);
+  --diff-del-word-bg: rgba(248, 81, 73, 0.48);
   --diff-add-marker: #1a7f37;
   --diff-del-marker: #cf222e;
   /* Filler shown opposite an added or removed line in the side-by-side layout,
@@ -72,10 +73,10 @@
   --tok-punctuation: #8b949e;
   --tok-invalid: #ffa198;
 
-  --diff-add-bg: rgba(63, 185, 80, 0.15);
-  --diff-del-bg: rgba(248, 81, 73, 0.15);
-  --diff-add-word-bg: rgba(63, 185, 80, 0.4);
-  --diff-del-word-bg: rgba(248, 81, 73, 0.4);
+  --diff-add-bg: rgba(63, 185, 80, 0.25);
+  --diff-del-bg: rgba(248, 81, 73, 0.25);
+  --diff-add-word-bg: rgba(63, 185, 80, 0.55);
+  --diff-del-word-bg: rgba(248, 81, 73, 0.55);
   --diff-add-marker: #3fb950;
   --diff-del-marker: #f85149;
   --diff-spacer-bg: rgba(255, 255, 255, 0.03);
@@ -144,8 +145,11 @@
 .diff-row-insert .tok-emph {
   background: var(--diff-add-word-bg);
   border-radius: 2px;
+  text-decoration: underline 1px var(--diff-add-marker);
+  text-underline-offset: 2px;
 }
 .diff-row-delete .tok-emph {
   background: var(--diff-del-word-bg);
   border-radius: 2px;
+  text-decoration: line-through 1px var(--diff-del-marker);
 }

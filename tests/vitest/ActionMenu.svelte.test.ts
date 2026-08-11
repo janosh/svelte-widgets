@@ -1,14 +1,17 @@
-import { ContextMenu } from '$lib'
+import { ActionMenu } from '$lib'
 import type { CmdAction } from '$lib/types'
 import type { CmdSection } from '$lib/utils'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, escape_key, stub_prop } from './index'
+import { afterEach, describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { doc_query, escape_key, mock_rect, stub_prop } from './index'
+import TestActionMenu from './TestActionMenu.svelte'
 
-describe(`ContextMenu`, () => {
-  type MenuProps = Partial<Omit<ComponentProps<typeof ContextMenu>, `actions`>>
-  type MenuEntries = ComponentProps<typeof ContextMenu>[`actions`]
+describe(`ActionMenu`, () => {
+  type ActionMenuProps = ComponentProps<typeof ActionMenu>
+  type ContextProps = Extract<ActionMenuProps, { trigger?: string }>
+  type MenuProps = Partial<Omit<ContextProps, `actions`>>
+  type MenuEntries = ActionMenuProps[`actions`]
   const make_actions = (): CmdAction[] => [
     { label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { label: `Delete`, action: vi.fn(), disabled: true },
@@ -16,14 +19,11 @@ describe(`ContextMenu`, () => {
   // svelte:body listeners outlive document.body.innerHTML = '', so unmount for real
   // or a previous test's menu keeps answering right-clicks
   const mounted: Record<string, unknown>[] = []
-  afterEach(() => {
-    for (const app of mounted.splice(0)) void unmount(app)
-    Reflect.deleteProperty(globalThis.navigator, `userAgent`)
-  })
+  afterEach(() => mounted.splice(0).forEach((app) => void unmount(app)))
   // returns the reactive props, so a test can drive `at` the way a consumer would
   const mount_menu = (actions: MenuEntries, extra: MenuProps = {}) => {
     const props: MenuProps & { actions: MenuEntries } = $state({ actions, ...extra })
-    mounted.push(mount(ContextMenu, { target: document.body, props }))
+    mounted.push(mount(ActionMenu, { target: document.body, props }))
     return props
   }
   const right_click = (target: EventTarget, clientX = 120, clientY = 240) => {
@@ -59,25 +59,35 @@ describe(`ContextMenu`, () => {
     )
 
   test(`a right-click opens the menu at the pointer, replacing the native one`, async () => {
-    mount_menu(make_actions(), { class: `consumer-class` })
+    mount_menu(make_actions(), { class: `consumer-class`, id: `consumer-menu` })
     expect(menu()).toBeNull()
 
     const event = right_click(document.body)
     await tick()
 
     expect(event.defaultPrevented).toBe(true)
-    expect(items().map((item) => item.querySelector(`span`)?.textContent)).toEqual([
-      `Copy`,
+    expect(items().map((item) => item.textContent?.trim())).toEqual([
+      expect.stringMatching(/^Copy/u),
       `Delete`,
     ])
     // float anchored the menu on the pointer rather than on any element
     const surface = doc_query(`menu[role="menu"]`)
     const { position, left, top } = surface.style
     expect([position, left, top]).toEqual([`fixed`, `120px`, `240px`])
-    // .context-menu comes after the {...rest} spread, so a consumer class adds to the
+    expect([surface.id, surface.getAttribute(`aria-label`), surface.tabIndex]).toEqual([
+      `consumer-menu`,
+      `Actions`,
+      -1,
+    ])
+    // .action-menu comes after the {...rest} spread, so a consumer class adds to the
     // styling hook instead of replacing it
-    expect(surface.classList.contains(`context-menu`)).toBe(true)
+    expect(surface.classList.contains(`action-menu`)).toBe(true)
     expect(surface.classList.contains(`consumer-class`)).toBe(true)
+  })
+
+  test(`preserves a consumer-provided menu tabindex`, async () => {
+    await open_menu(make_actions(), { tabindex: 0 })
+    expect(doc_query<HTMLMenuElement>(`menu[role="menu"]`).tabIndex).toBe(0)
   })
 
   // with a region, svelte:body's handler is dropped, so the rest of the page keeps
@@ -118,12 +128,50 @@ describe(`ContextMenu`, () => {
     [`Macintosh; Intel Mac OS X 10_15`, [`⌘`, `C`]],
     [`X11; Linux x86_64`, [`Ctrl`, `C`]],
   ])(`renders mod as the platform's key (%s)`, async (user_agent, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent) // undone in afterEach
+    onTestFinished(stub_prop(globalThis.navigator, `userAgent`, user_agent))
     await open_menu()
 
     expect([...items()[0].querySelectorAll(`kbd`)].map((key) => key.textContent)).toEqual(
       expected,
     )
+  })
+
+  test(`a trigger snippet toggles an anchored dropdown and restores focus`, async () => {
+    const props = $state({
+      actions: make_actions(),
+      open: false,
+      match_width: true,
+    })
+    mounted.push(mount(TestActionMenu, { target: document.body, props }))
+    const anchor = doc_query(`[data-testid="action-menu-anchor"]`)
+    const trigger = doc_query<HTMLButtonElement>(`[data-testid="action-menu-trigger"]`)
+    mock_rect(anchor, { left: 40, top: 60, width: 80, height: 20 })
+
+    expect(trigger.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(trigger.getAttribute(`aria-controls`)).toBeNull()
+    trigger.dispatchEvent(outside_press())
+    trigger.click()
+    await tick()
+
+    const surface = doc_query<HTMLMenuElement>(`menu[role="menu"]`)
+    expect(props.open).toBe(true)
+    expect(trigger.getAttribute(`aria-expanded`)).toBe(`true`)
+    expect(trigger.getAttribute(`aria-controls`)).toBe(surface.id)
+    expect([
+      surface.style.left,
+      surface.style.top,
+      surface.style.width,
+      surface.style.minWidth,
+      surface.style.boxSizing,
+    ]).toEqual([`40px`, `84px`, `80px`, `80px`, `border-box`])
+    expect(document.activeElement).toBe(items()[0])
+
+    items()[0].click()
+    await tick()
+    expect(props.open).toBe(false)
+    expect(menu()).toBeNull()
+    expect(trigger.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(document.activeElement).toBe(trigger)
   })
 
   // reachable by clicking menu chrome rather than an item: focus leaves the list, and
@@ -190,6 +238,16 @@ describe(`ContextMenu`, () => {
     document.body.dispatchEvent(make_event())
     await tick()
     expect(menu() === null).toBe(closes)
+  })
+
+  test(`dismiss preserves consumer-provided inside regions`, async () => {
+    const inside = document.createElement(`button`)
+    document.body.append(inside)
+    await open_menu(make_actions(), { dismiss: { inside: [inside] } })
+
+    inside.dispatchEvent(outside_press())
+    await tick()
+    expect(menu()).not.toBeNull()
   })
 
   test(`stays shut when disabled or when there is nothing to show`, async () => {

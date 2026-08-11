@@ -22,7 +22,8 @@
   // match a single arm. Same widening as DemoNav; every demo route is param-free.
   const resolve_path = resolve as (path: Pathname) => string
   const actions = routes.map(({ route }) => ({
-    label: route,
+    label: demo_labels[route] ?? route,
+    keywords: [route],
     action: () => goto(resolve_path(route)),
   }))
   const is_home = $derived(page.route.id === `/`)
@@ -69,7 +70,7 @@
 {#if !is_home}
   <header class="site-header">
     <a class="brand" href={resolve_path(`/`)}>
-      <img src={favicon} alt="" width="28" height="28" />
+      <img src={favicon} alt="Logo" style="width: 1.2em; height: 1.2em;" />
       Svelte Widgets
     </a>
     <DemoNav />

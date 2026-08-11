@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { DismissConfig } from './attachments'
-  import { click_outside, float, focus_trap, tabbable_selector } from './attachments'
+  import type { DismissConfig } from './attachments/index'
+  import { click_outside, float, focus_trap } from './attachments/index'
   import { chain_handlers, type Placement } from './utils'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
@@ -73,9 +73,12 @@
   const anchor = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
   let open_timeout: ReturnType<typeof setTimeout> | undefined
   let close_timeout: ReturnType<typeof setTimeout> | undefined
-  let pointer_inside = false
-  let focus_inside = false
+  let [pointer_inside, focus_inside] = [false, false]
   let focus_open_blocked = false
+  let trigger_focus = $state<HTMLElement | SVGElement | null>(null)
+  let next_trigger_focus: HTMLElement | SVGElement | null = null
+  const focus_target = (target: EventTarget | null) =>
+    target instanceof HTMLElement || target instanceof SVGElement ? target : null
 
   const clear_close_timeout = () => {
     clearTimeout(close_timeout)
@@ -96,19 +99,18 @@
     on_close?.({ via })
   }
 
-  // Every close runs through here, including a consumer flipping `open` directly, which
-  // never reaches close(). Removing a focused surface delivers no focusout, so
-  // focus_inside would stay true and wedge close_if_interaction_ended on the branch that
-  // only cancels the pending close. focus_trap then hands focus back to the trigger, and
-  // in hover/focus modes that focusin would reopen what was just dismissed.
+  // Reset stale interaction state on every close and block focus restoration from
+  // immediately reopening a hover/focus popover.
   let was_open = false
   let trap_was_enabled = false
   $effect.pre(() => {
+    if (!was_open && open) {
+      trigger_focus = next_trigger_focus
+      next_trigger_focus = null
+    }
     if (was_open && !open) {
       focus_open_blocked =
-        focus_inside &&
-        trap_was_enabled &&
-        Boolean(trigger_wrapper?.querySelector(tabbable_selector))
+        focus_inside && trap_was_enabled && Boolean(trigger_focus?.isConnected)
       focus_inside = false
       pointer_inside = false
     }
@@ -116,13 +118,16 @@
     trap_was_enabled = trap_focus
   })
 
-  const open_after_delay = () => {
+  const open_after_delay = (target: EventTarget | null) => {
     clear_timeouts()
     if (open) return
     const scheduled_mode = trigger_mode
     open_timeout = setTimeout(() => {
       open_timeout = undefined
-      if (trigger_mode === scheduled_mode) open = true
+      if (trigger_mode === scheduled_mode) {
+        next_trigger_focus = focus_target(target)
+        open = true
+      }
     }, open_delay_ms)
   }
   const close_after_delay = () => {
@@ -145,17 +150,17 @@
       clear_close_timeout()
     else close_after_delay()
   }
-  const enter_pointer = () => {
+  const enter_pointer = (event: MouseEvent) => {
     pointer_inside = true
-    open_after_delay()
+    open_after_delay(event.currentTarget)
   }
   const leave_pointer = (event: MouseEvent) => {
     pointer_inside = contains_interaction_target(event.relatedTarget)
     close_if_interaction_ended()
   }
-  const enter_focus = () => {
+  const enter_focus = (event: FocusEvent) => {
     focus_inside = true
-    if (!focus_open_blocked) open_after_delay()
+    if (!focus_open_blocked) open_after_delay(event.currentTarget)
   }
   const leave_focus = (event: FocusEvent) => {
     focus_inside = contains_interaction_target(event.relatedTarget)
@@ -163,10 +168,11 @@
     close_if_interaction_ended()
   }
   // Cancel a delayed timer left by an earlier trigger mode.
-  const toggle_from_click = () => {
+  const toggle_from_click = (event: MouseEvent) => {
+    if (open) return close(`trigger`)
     clear_timeouts()
-    if (open) close(`trigger`)
-    else open = true
+    next_trigger_focus = focus_target(event.currentTarget)
+    open = true
   }
 
   const trigger_props: TriggerProps = $derived.by(() => {
@@ -175,8 +181,7 @@
       'aria-haspopup': role === `alertdialog` ? `dialog` : role,
       'aria-controls': open ? surface_id : undefined,
     }
-    // the press already went through click_outside, which counts the trigger as
-    // inside — so this click toggles rather than fighting a dismissal
+    // click_outside already treats the trigger as inside, so this can toggle directly.
     if (trigger_mode === `click`) return { ...aria, onclick: toggle_from_click }
     const on_focus = { ...aria, onfocusin: enter_focus, onfocusout: leave_focus }
     if (trigger_mode === `focus`) return on_focus
@@ -184,8 +189,7 @@
     return { ...on_focus, onmouseenter: enter_pointer, onmouseleave: leave_pointer }
   })
 
-  // Returns (not calls) clear_timeouts, so Svelte runs it as the teardown and no
-  // pending open/close survives unmount.
+  // Returning the function clears pending timers on teardown.
   $effect(() => clear_timeouts)
 </script>
 
@@ -210,10 +214,11 @@
     })}
     {@attach focus_trap({
       enabled: trap_focus,
-      // Hover/focus opening must not steal focus merely because the surface appeared.
+      // Hover/focus opening must not steal focus.
       initial: trigger_mode === `click` ? undefined : false,
-      // hand the keyboard back to the trigger, not to wherever the pointer left it
-      restore: trigger_wrapper?.querySelector(tabbable_selector) ?? false,
+      // Return focus to the exact trigger that opened this instance; `false` for one the
+      // surface removed. Opened from outside, leave the default (focus before opening).
+      restore: trigger_focus?.isConnected === false ? false : trigger_focus || undefined,
     })}
     onmouseenter={chain_handlers(
       trigger_mode === `hover` ? enter_pointer : undefined,

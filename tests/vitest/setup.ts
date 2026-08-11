@@ -1,7 +1,7 @@
 import { beforeAll, beforeEach, vi } from 'vite-plus/test'
 
 beforeAll(() => {
-  Element.prototype.animate = vi.fn().mockReturnValue({})
+  Element.prototype.animate = vi.fn().mockReturnValue({ cancel: vi.fn() })
   Element.prototype.getAnimations = vi.fn().mockReturnValue([{}])
 })
 

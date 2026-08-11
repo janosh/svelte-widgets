@@ -1,5 +1,5 @@
 <h1 align="center">
-  <img src="https://raw.githubusercontent.com/janosh/svelte-widgets/main/src/site/favicon.svg" alt="Svelte Widgets" height="60" width="60">
+  <img src="https://raw.githubusercontent.com/janosh/svelte-widgets/HEAD/src/site/favicon.svg" alt="Svelte Widgets" height="60" width="60">
   <br class="hide-in-docs"> Svelte Widgets
 </h1>
 
@@ -8,7 +8,7 @@
 [![Tests](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml/badge.svg)](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml)
 [![GitHub Pages](https://github.com/janosh/svelte-widgets/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/janosh/svelte-widgets/actions/workflows/gh-pages.yml)
 [![NPM version](https://img.shields.io/npm/v/svelte-widgets?logo=NPM&color=purple)](https://npmjs.com/package/svelte-widgets)
-[![Needs Svelte version](https://img.shields.io/npm/dependency-version/svelte-widgets/peer/svelte?color=teal&logo=Svelte&label=Svelte)](https://github.com/sveltejs/svelte/blob/master/packages/svelte/CHANGELOG.md)
+[![Needs Svelte version](https://img.shields.io/npm/dependency-version/svelte-widgets/peer/svelte?color=teal&logo=Svelte&label=Svelte)](https://github.com/sveltejs/svelte/blob/-/packages/svelte/CHANGELOG.md)
 [![Playground](https://img.shields.io/badge/Svelte-Playground-blue?label=Try%20it!)](https://svelte.dev/playground/a5a14b8f15d64cb083b567292480db05)
 [![Open in StackBlitz](https://img.shields.io/badge/Open%20in-StackBlitz-darkblue?logo=stackblitz)](https://stackblitz.com/github/janosh/svelte-widgets)
 
@@ -30,7 +30,7 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `CommandMenu`      | Command palette with fuzzy search, hotkeys, recents and async actions                    | [docs](https://svelte-widgets.janosh.dev/command-menu)                 |
 | `PageSearch`       | Pagefind-backed site search built on `CommandMenu`                                       | [docs](https://svelte-widgets.janosh.dev/command-menu#pagesearch)      |
 | `Popover`          | Floating surface that positions, dismisses and traps focus for you                       | [docs](https://svelte-widgets.janosh.dev/popover)                      |
-| `ContextMenu`      | Right-click menu anchored to the pointer, with arrow-key navigation                      | [docs](https://svelte-widgets.janosh.dev/popover#contextmenu)          |
+| `ActionMenu`       | Action list opened from a trigger or right-click, with complete menu keyboard semantics  | [docs](https://svelte-widgets.janosh.dev/popover#actionmenu)           |
 | `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                 | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
 | `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
@@ -41,6 +41,7 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
 | `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches                | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
+| `DiffView`         | Virtualized side-by-side and unified diffs with an injectable backend                    | [docs](https://svelte-widgets.janosh.dev/code-editor)                  |
 | `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                            | [docs](https://svelte-widgets.janosh.dev/toast)                        |
 | `Nav`              | Navigation bar with dropdowns, pinning and active-route styling                          | [docs](https://svelte-widgets.janosh.dev/nav)                          |
 | `Toc`              | Sticky table of contents that finds and tracks its own headings                          | [docs](https://svelte-widgets.janosh.dev/toc)                          |
@@ -123,12 +124,14 @@ Components have direct `.svelte` entry points, and headless/build-time APIs have
 
 ```ts
 import {
+  auto_update_position, // coalesce floating-position updates and clean up listeners
   click_outside, // dismiss a surface when a press lands outside it
   draggable,
   float, // park an element next to an anchor and keep it there
   focus_trap, // keep Tab inside a surface, hand focus back when it closes
   highlight_matches,
   hotkey, // declarative keybindings, `mod` maps to Cmd or Ctrl
+  register_escape_layer, // add a handler to the shared LIFO Escape stack
   sortable,
   tooltip,
 } from 'svelte-widgets/attachments'
@@ -177,13 +180,13 @@ export default {
 
 Import `katex/dist/katex.min.css` once in the app so the generated markup is styled.
 
-`Popover` and `ContextMenu` compose these three: a surface positioned by `float`,
-dismissed by `click_outside` (on the press, so a right-click closes it too) and
-keyboard-scoped by `focus_trap`.
+`Popover` and `ActionMenu` both use `float` for placement and `click_outside` for dismissal (on the press, so a right-click closes it too). Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
 
 ```svelte
 <script lang="ts">
-  import { ContextMenu, Popover } from 'svelte-widgets'
+  import { ActionMenu, Popover } from 'svelte-widgets'
+
+  const actions = [{ label: `Reload`, action: () => location.reload() }]
 </script>
 
 <Popover placement="bottom" align="start">
@@ -193,12 +196,18 @@ keyboard-scoped by `focus_trap`.
   <p>Anything you like in here.</p>
 </Popover>
 
-<ContextMenu actions={[{ label: `Reload`, action: () => location.reload() }]}>
+<ActionMenu {actions}>
+  {#snippet trigger(props)}
+    <button {...props}>Page actions</button>
+  {/snippet}
+</ActionMenu>
+
+<ActionMenu {actions}>
   <div>Right-click anywhere in this region</div>
-</ContextMenu>
+</ActionMenu>
 ```
 
-See [src/lib/live-examples/readme.md](https://github.com/janosh/svelte-widgets/blob/main/src/lib/live-examples/readme.md) for optional live-example helpers.
+See [src/lib/live-examples/readme.md](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md) for optional live-example helpers.
 
 ## 🆕 &thinsp; Changelog
 

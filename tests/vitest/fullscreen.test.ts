@@ -86,8 +86,7 @@ const icon_path = (button: HTMLElement): string | null =>
 
 describe(`per-wrapper isolation`, () => {
   test(`an unrelated element going fullscreen flips no flag`, async () => {
-    const first = mount_button()
-    const second = mount_button()
+    const [first, second] = [mount_button(), mount_button()]
     const outsider = document.createElement(`div`)
     document.body.append(outsider)
 
@@ -100,8 +99,7 @@ describe(`per-wrapper isolation`, () => {
   })
 
   test(`exiting one wrapper does not clear a second wrapper that took over`, async () => {
-    const first = mount_button()
-    const second = mount_button()
+    const [first, second] = [mount_button(), mount_button()]
 
     first.button.click()
     await settle()

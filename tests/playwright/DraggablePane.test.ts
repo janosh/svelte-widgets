@@ -30,7 +30,7 @@ const open_pane = async (page: Page) => {
   const pane = page.locator(`div.draggable-pane`).first()
   await expect(pane).toBeVisible()
   await pane.scrollIntoViewIfNeeded() // coords outside the viewport hit nothing
-  return { pane, handle: pane.locator(`span.drag-handle`) }
+  return { pane, handle: pane.locator(`.drag-handle`) }
 }
 
 test(`a mouse drag moves the pane`, async ({ page }) => {

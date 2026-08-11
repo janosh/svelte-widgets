@@ -216,8 +216,7 @@ test(`property: 400 random edits round trip through derive + apply`, () => {
   for (let step = 0; step < 400; step++) {
     const bound_a = random(text.length + 1)
     const bound_b = random(text.length + 1)
-    const sel_start = Math.min(bound_a, bound_b)
-    const sel_end = Math.max(bound_a, bound_b)
+    const [sel_start, sel_end] = [Math.min(bound_a, bound_b), Math.max(bound_a, bound_b)]
     const has_range = sel_start !== sel_end
 
     let input_type: string

@@ -16,8 +16,11 @@ document with `headingSelector`, so it lists those headings rather than the page
 
 <div class="toc-demo-doc" style="display: flex; gap: 2em">
   <article style="flex: 1">
-    <h3>Getting started</h3>
+    <h2>Getting started</h2>
     <p>Scoped with <code>headingSelector</code> so it ignores the rest of the page.</p>
+    <h3>Installation</h3>
+    <p>Subheadings collapse beneath their nearest section.</p>
+    <h2>Reference</h2>
     <h3>Configuration</h3>
     <p>Pass <code>collapseSubheadings</code> to fold levels under their parent.</p>
     <h3>Troubleshooting</h3>
@@ -26,10 +29,10 @@ document with `headingSelector`, so it lists those headings rather than the page
 
   <Toc
     bind:open
-    headingSelector=".toc-demo-doc h3"
-    breakpoint={0}
+    headingSelector=".toc-demo-doc :is(h2, h3)"
+    collapseSubheadings="h3"
     title="On this page"
-    asideProps={{ style: `position: static; width: 14em` }}
+    asideProps={{ style: `width: 14em` }}
   />
 </div>
 ```

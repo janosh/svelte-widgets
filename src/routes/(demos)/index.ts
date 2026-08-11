@@ -7,6 +7,7 @@ export const demo_labels: Record<string, string> = {
   '/multiselect': `MultiSelect`,
   '/command-menu': `CommandMenu`,
   '/action-button': `ActionButton`,
+  '/code-editor': `DiffView`,
   '/ui': `UI`,
   '/css-classes': `CSS Classes`,
   '/kit-form-actions': `Form Actions`,

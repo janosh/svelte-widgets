@@ -144,8 +144,7 @@ describe(`get_style`, () => {
   })
 })
 
-const mac = `Macintosh; Intel Mac OS X 10_15`
-const linux = `X11; Linux x86_64`
+const [mac, linux] = [`Macintosh; Intel Mac OS X 10_15`, `X11; Linux x86_64`]
 
 describe(`keyboard shortcut parsing`, () => {
   afterEach(() => Reflect.deleteProperty(globalThis.navigator, `userAgent`))
@@ -404,8 +403,7 @@ describe(`get_option_key`, () => {
   })
 
   test(`preserves object value identity`, () => {
-    const obj1 = { id: 1 }
-    const obj2 = { id: 2 }
+    const [obj1, obj2] = [{ id: 1 }, { id: 2 }]
     const opt1 = { label: `Item`, value: obj1 }
     const opt2 = { label: `Item`, value: obj2 }
     // Keys are the actual objects, not stringified

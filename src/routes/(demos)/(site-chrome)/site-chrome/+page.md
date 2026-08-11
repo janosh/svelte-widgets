@@ -33,7 +33,7 @@ from `$lib/icons`, such as `GitHub`. `children` renders after the nav, and the
   --footer-padding="1em 2em"
   --footer-nav-margin="0 0 1em"
 >
-  <small>© Janosh Riebesell (<a href="{repo}/blob/main/license">MIT</a>)</small>
+  <small>© Janosh Riebesell (<a href="{repo}/blob/-/license">MIT</a>)</small>
 </Footer>
 ```
 

@@ -3,7 +3,8 @@
   // we only flatten hunks, elisions, and no-newline markers for virtualization.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
-  import { tooltip } from '../attachments'
+  import type { HTMLAttributes } from 'svelte/elements'
+  import { tooltip } from '../attachments/index'
   import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
   import { render_tokens } from './tokens'
   import { resolve_diff_backend, to_error } from './types'
@@ -28,7 +29,8 @@
     single_col = false,
     on_error,
     backend,
-  }: {
+    ...rest
+  }: HTMLAttributes<HTMLDivElement> & {
     // The two versions as written to disk; the backend normalizes CRLF itself.
     old_text: string
     new_text: string
@@ -232,20 +234,23 @@
       is_change_row(entry) && !is_change_row(display_rows[row_idx - 1]) ? [row_idx] : [],
     ),
   )
+  let navigation_row = $derived(Math.round(scroll_top / row_height))
+  const previous_change = $derived(
+    change_anchors.findLast((row_idx) => row_idx < navigation_row),
+  )
+  const next_change = $derived(change_anchors.find((row_idx) => row_idx > navigation_row))
 
   const scroll_to_row = (row_idx: number) => {
     const target = Math.max(0, row_idx * row_height)
-    scroll_top = target
+    // Keep virtualization on the browser-clamped offset but navigation on the requested row.
     if (scroll_container) scroll_container.scrollTop = target
+    scroll_top = scroll_container?.scrollTop ?? target
+    navigation_row = row_idx
   }
 
   const go_to_change = (direction: 1 | -1) => {
-    const current = Math.round(scroll_top / row_height)
-    const next =
-      direction === 1
-        ? change_anchors.find((row_idx) => row_idx > current)
-        : change_anchors.findLast((row_idx) => row_idx < current)
-    if (next !== undefined) scroll_to_row(next)
+    const target = direction === 1 ? next_change : previous_change
+    if (target !== undefined) scroll_to_row(target)
   }
 
   // Must wrap token spans on both replace sides: editor.css colors .tok-emph through
@@ -281,7 +286,7 @@
   <button
     aria-label={label}
     class="icon-btn"
-    disabled={change_anchors.length === 0}
+    disabled={(direction === 1 ? next_change : previous_change) === undefined}
     onclick={() => go_to_change(direction)}
     title={label}
     type="button"
@@ -321,9 +326,13 @@
 {/snippet}
 
 <div
+  {...rest}
   aria-busy={is_loading}
-  class="diff-view"
-  style="--editor-font-size: {options.font_size}px; --editor-line-height: {row_height}px"
+  class={[`diff-view`, rest.class]}
+  style:--editor-font-size={`${options.font_size}px`}
+  style:--editor-line-height={`${row_height}px`}
+  style:--diff-old-gutter={`${String(diff?.oldLineCount ?? 1).length + 2}ch`}
+  style:--diff-new-gutter={`${String(diff?.newLineCount ?? 1).length + 2}ch`}
 >
   {#if !single_col}
     <header class="panel-header">
@@ -453,7 +462,7 @@
     justify-content: space-between;
     gap: 1rem;
     min-width: 0;
-    padding: 0.6rem 1rem;
+    padding: 0.125rem 1rem;
     border-bottom: 1px solid color-mix(in srgb, currentColor 9%, transparent);
     background: var(--surface-bg, light-dark(#f6f8fa, #181b22));
   }
@@ -487,8 +496,8 @@
     display: inline-grid;
     flex: 0 0 auto;
     place-items: center;
-    inline-size: var(--icon-btn-size, 26px);
-    block-size: var(--icon-btn-size, 26px);
+    inline-size: var(--icon-btn-size, 24px);
+    block-size: var(--icon-btn-size, 24px);
     padding: 0;
     border: 1px solid transparent;
     border-radius: 6px;
@@ -587,20 +596,23 @@
     min-width: max-content;
   }
   .diff-row {
-    --diff-gutter: 3.4rem;
     display: grid;
     box-sizing: border-box;
     height: var(--editor-line-height);
     line-height: var(--editor-line-height);
   }
   .diff-row.pair {
-    grid-template-columns: var(--diff-gutter) 1fr var(--diff-gutter) 1fr;
+    grid-template-columns:
+      var(--diff-old-gutter) 1fr var(--diff-new-gutter)
+      1fr;
   }
   .diff-row.unified {
-    grid-template-columns: var(--diff-gutter) var(--diff-gutter) 1.6ch 1fr;
+    grid-template-columns:
+      var(--diff-old-gutter) var(--diff-new-gutter)
+      1.6ch 1fr;
   }
   .diff-row.solo {
-    grid-template-columns: var(--diff-gutter) 1fr;
+    grid-template-columns: var(--diff-new-gutter) 1fr;
   }
   .gutter {
     padding-inline: 0.4rem;

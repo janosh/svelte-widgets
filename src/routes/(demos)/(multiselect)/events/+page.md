@@ -193,7 +193,7 @@ This demo logs common selection, dropdown, search, activation, and native input 
 
 ### Covered Event Reference
 
-The tables below list only the events wired up in the demo above. `MultiSelect` also emits `onselectAll`, `onrangeSelect`, `onreorder`, `ongroupToggle`, `oncollapseAll`, `onexpandAll`, `onparsed_paste`, `onundo` and `onredo` — see [`MultiSelectEvents`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/types.ts) for their payloads.
+The tables below list only the events wired up in the demo above. `MultiSelect` also emits `onselectAll`, `onrangeSelect`, `onreorder`, `ongroupToggle`, `oncollapseAll`, `onexpandAll`, `onparsed_paste`, `onundo` and `onredo` — see [`MultiSelectEvents`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) for their payloads.
 
 #### Custom Events
 

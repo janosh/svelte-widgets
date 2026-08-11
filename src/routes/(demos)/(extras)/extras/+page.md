@@ -1,3 +1,8 @@
+<script>
+  // eslint-disable-next-line import/no-unassigned-import -- styles this route's KaTeX demo
+  import 'katex/dist/katex.min.css'
+</script>
+
 ## Extras
 
 The small components that ship alongside the headline ones. Each is a named export from
@@ -18,8 +23,7 @@ so the label can react to the state. Everything else spreads onto the wrapping `
 <script lang="ts">
   import { Toggle } from '$lib'
 
-  let notifications = $state(true)
-  let telemetry = $state(false)
+  let [notifications, telemetry] = $state([true, false])
 </script>
 
 <div style="display: flex; flex-direction: column; gap: 8pt">
@@ -210,3 +214,16 @@ export default { Wrapper: CodeExample }
 
 Fence metadata drives it: `collapsible` hides the source behind a button, `code_above`
 puts the source before the rendered example, and `repl`/`github` add external links.
+
+## Build-time helpers
+
+### `katex_preprocess`
+
+The docs site's `svelte.config.ts` wraps mdsvex with `katex_preprocess()`, turning inline
+math such as $e^{i\pi} + 1 = 0$ and display math into static KaTeX markup:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+Import `katex/dist/katex.min.css` once in the app to style the generated markup.

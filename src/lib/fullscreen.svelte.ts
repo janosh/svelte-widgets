@@ -1,4 +1,4 @@
-import { get_bg_color } from './attachments'
+import { get_bg_color } from './attachments/index'
 
 export type FullscreenSyncOptions = {
   // the element that goes fullscreen; sync is inert until this resolves

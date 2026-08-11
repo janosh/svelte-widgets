@@ -1,7 +1,7 @@
 <script lang="ts">
   import { type Snippet, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { hotkey } from './attachments'
+  import { hotkey } from './attachments/index'
   import { toast as default_store } from './toast-queue.svelte.ts'
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
   import { chain_handlers } from './utils'
@@ -37,8 +37,7 @@
   } = $props()
 
   let stack: HTMLDivElement | null = $state(null)
-  let is_hovered = $state(false)
-  let is_focused = $state(false)
+  let [is_hovered, is_focused] = $state([false, false])
 
   const active_toast = $derived(store.active_toast)
   // read off the store's own sticky set, not a second copy of its top-two rule: a toast

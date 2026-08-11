@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { fade } from 'svelte/transition'
-  import { backdrop_dismiss } from './attachments'
+  import { backdrop_dismiss } from './attachments/index'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
   import type { CmdAction, MultiSelectProps } from './types'

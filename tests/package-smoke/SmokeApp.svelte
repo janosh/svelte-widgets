@@ -1,7 +1,9 @@
 <script lang="ts">
   import {
     Accordion,
+    ActionMenu,
     CommandMenu,
+    DiffView,
     FindBar,
     fuzzy_match,
     MultiSelect,
@@ -9,13 +11,20 @@
     Sheet,
     Tabs,
   } from 'svelte-widgets'
+  import DirectActionMenu from 'svelte-widgets/ActionMenu.svelte'
   import DirectCommandMenu from 'svelte-widgets/CommandMenu.svelte'
+  import DirectDiffView from 'svelte-widgets/DiffView.svelte'
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import DirectPageSearch from 'svelte-widgets/PageSearch.svelte'
   import type { Option } from 'svelte-widgets'
-  import { click_outside, file_drop } from 'svelte-widgets/attachments'
-  import { BOM, count_lines, DiffView, editor_text } from 'svelte-widgets/code-editor'
+  import {
+    auto_update_position,
+    click_outside,
+    file_drop,
+    register_escape_layer,
+  } from 'svelte-widgets/attachments'
+  import { BOM, count_lines, editor_text } from 'svelte-widgets/code-editor'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
   import 'svelte-widgets/code-editor/editor.css'
   import { ask_prompt } from 'svelte-widgets/dialogs'
@@ -32,7 +41,9 @@
   const actions: CmdAction[] = [{ label: `Open`, action: () => undefined }]
   const katex_options: KatexOptions = { throwOnError: true }
   const package_api_works =
+    DirectActionMenu === ActionMenu &&
     DirectCommandMenu === CommandMenu &&
+    DirectDiffView === DiffView &&
     DirectFindBar === FindBar &&
     DirectMultiSelect === MultiSelect &&
     DirectPageSearch === PageSearch &&
@@ -42,7 +53,9 @@
     typeof Sheet === `function` &&
     typeof Tabs === `function` &&
     typeof ask_prompt === `function` &&
+    typeof auto_update_position === `function` &&
     typeof file_drop === `function` &&
+    typeof register_escape_layer === `function` &&
     typeof create_find_state === `function` &&
     count_lines(`one\ntwo`) === 2 &&
     editor_text(`${BOM}a\r\nb`) === `a\nb` &&

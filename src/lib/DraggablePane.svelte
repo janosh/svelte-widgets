@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
-  import type { ResizableOptions } from './attachments'
-  import { click_outside, draggable, resizable, tooltip } from './attachments'
+  import type { ResizableOptions } from './attachments/index'
+  import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Cross, DragIndicator, Expand, Reset, type IconData } from './icons'
   import { chain_handlers } from './utils'
@@ -124,8 +124,7 @@
     if (!toggle_btn) return fallback_position
     const toggle_rect = toggle_btn.getBoundingClientRect()
     const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
-    const offset_x = offset.x ?? 5
-    const offset_y = offset.y ?? 5
+    const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
 
     if (position === `fixed`) {
       return {

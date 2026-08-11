@@ -6,7 +6,7 @@
   import { fromAction } from 'svelte/attachments'
   import type { FocusEventHandler } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
-  import { click_outside, highlight_matches } from './attachments'
+  import { click_outside, highlight_matches } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
@@ -381,8 +381,7 @@
 
   // Internal state for loadOptions feature
   let loaded_options = $state<Option[]>([])
-  let load_options_has_more = $state(true)
-  let is_loading_options = $state(false)
+  let [load_options_has_more, is_loading_options] = $state([true, false])
   let load_options_last_search: string | null = $state(null) // null = nothing dispatched yet
   let load_request_id = 0 // monotonic counter to invalidate stale in-flight fetches
   let load_abort_controller: AbortController | null = null
@@ -2243,10 +2242,12 @@
     {/if}
   {:else if !input_display && selected.length > 0}
     {#if maxSelect && (maxSelect > 1 || maxSelectMsg)}
-      <Wiggle bind:wiggle={should_wiggle} angle={20}>
-        <span class="max-select-msg {maxSelectMsgClass}">
-          {maxSelectMsg?.(selected.length, maxSelect)}
-        </span>
+      <Wiggle
+        bind:wiggle={should_wiggle}
+        angle={20}
+        class={[`max-select-msg`, maxSelectMsgClass]}
+      >
+        {maxSelectMsg?.(selected.length, maxSelect)}
       </Wiggle>
     {/if}
     {#if maxSelect !== 1 && selected.length > 1 && can_remove}
@@ -2884,7 +2885,7 @@
   :is(ul.options > li.group-header button.group-select-all.deselect) {
     color: var(--sms-group-deselect-color, light-dark(#c44, #f77));
   }
-  :where(span.max-select-msg) {
+  :where(div.multiselect) :global(:where(span.max-select-msg)) {
     padding: 0 3pt;
   }
   :global(::highlight(sms-search-matches)) {

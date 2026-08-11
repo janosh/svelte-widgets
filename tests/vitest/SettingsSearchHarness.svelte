@@ -12,9 +12,7 @@
     initial_query?: string
   } = $props()
   let query = $state(untrack(() => initial_query))
-  let appearance_open = $state(true)
-  let camera_open = $state(false)
-  let zoom_speed_hidden = $state(false)
+  let [appearance_open, camera_open, zoom_speed_hidden] = $state([true, false, false])
 </script>
 
 <button
