@@ -1,5 +1,5 @@
 import type { TooltipOpenReason, TooltipOptions } from '$lib/attachments'
-import { tooltip } from '$lib/attachments'
+import { register_escape_layer, tooltip } from '$lib/attachments'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -66,6 +66,12 @@ describe(`tooltip manager`, () => {
     )
     vi.advanceTimersByTime(0)
   }
+  const focus_in = (element: HTMLElement) =>
+    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+  const focus_out = (element: HTMLElement) =>
+    element.dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
+    )
 
   const visible_tooltip = (): HTMLElement => {
     const tooltip_el = doc_query(`.custom-tooltip`)
@@ -79,38 +85,21 @@ describe(`tooltip manager`, () => {
     return { cleanup, element, tooltip_el: visible_tooltip() }
   }
 
-  type QueuedCase = [string, readonly string[], boolean, string?]
-  const setup_controlled_handoff = (blur_on_open = false, content = `Controlled`) => {
+  const setup_controlled_handoff = () => {
     const on_open_change = vi.fn()
     const controlled = create_element(`button`)
-    const options: TooltipOptions = { content, open: true, on_open_change }
-    const close = attach_tooltip(controlled, options)
+    const close = attach_tooltip(controlled, {
+      content: `Controlled`,
+      open: true,
+      on_open_change,
+    })
     const root = create_element()
     const child = document.createElement(`button`)
-    const other = document.createElement(`button`)
     child.title = `Next`
-    other.title = `Other`
-    root.append(child, other)
-    attach_tooltip(
-      root,
-      blur_on_open
-        ? {
-            on_open_change: (open) => {
-              if (open) {
-                child.dispatchEvent(
-                  new FocusEvent(`focusout`, {
-                    bubbles: true,
-                    relatedTarget: document.body,
-                  }),
-                )
-              }
-            },
-          }
-        : {},
-    )
+    root.append(child)
+    attach_tooltip(root, { trigger: `hover-focus` })
     mock_rect(child, { left: 250, top: 100, width: 80, height: 30 })
-    mock_rect(other, { left: 350, top: 100, width: 80, height: 30 })
-    return { child, close, controlled, on_open_change, options, other }
+    return { child, close, controlled, on_open_change }
   }
 
   const mock_tooltip_rect = (width: number, height: number) => {
@@ -171,6 +160,11 @@ describe(`tooltip manager`, () => {
       { sanitize_html: (html: string) => html },
       `sanitize_html requires`,
     ],
+    [
+      `delegated HTML without a sanitizer`,
+      { allow_html: true, delegate: true },
+      `delegated allow_html requires sanitize_html`,
+    ],
     [`manual without open`, { trigger: `manual` as const }, `requires the open option`],
   ])(`rejects invalid options: %s`, (_name, options, message) => {
     const element = create_element()
@@ -196,6 +190,32 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Dynamic child`)
   })
 
+  it(`does not infer delegation from explicitly undefined content`, () => {
+    const root = create_element()
+    const child = document.createElement(`button`)
+    child.title = `<b>Untrusted</b>`
+    root.append(child)
+    attach_tooltip(root, { allow_html: true, content: undefined })
+
+    pointer_over(child)
+    expect(document.querySelector(`.tooltip-content`)).toBeNull()
+  })
+
+  it(`sanitizes delegated attribute HTML before rendering`, () => {
+    const root = create_element()
+    attach_tooltip(root, {
+      allow_html: true,
+      sanitize_html: (html) => html.replaceAll(/<script.*?<\/script>/giu, ``),
+    })
+    const child = document.createElement(`button`)
+    child.title = `<script>bad()</script><b>Safe</b>`
+    root.append(child)
+    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
+
+    pointer_over(child)
+    expect(doc_query(`.tooltip-content`).innerHTML).toBe(`<b>Safe</b>`)
+  })
+
   it(`supports explicit delegated selectors with per-trigger content factories`, () => {
     const root = create_element()
     attach_tooltip(root, {
@@ -211,16 +231,33 @@ describe(`tooltip manager`, () => {
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
   })
 
+  it(`defaults to hover and stays dismissed after a press until re-entered`, () => {
+    const { element } = register_tooltip(`Hover only`)
+    focus_in(element)
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))
+    focus_in(element)
+    expect(tooltip_el.hidden).toBe(true)
+
+    pointer_out(element)
+    pointer_over(element)
+    expect(visible_tooltip()).toBe(tooltip_el)
+  })
+
   it(`keeps one tooltip when pointer and focus states overlap`, () => {
     const on_open_change = vi.fn()
-    const { element, tooltip_el } = show_tooltip({ on_open_change })
-    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    const { element, tooltip_el } = show_tooltip({
+      trigger: `hover-focus`,
+      on_open_change,
+    })
+    focus_in(element)
     pointer_out(element)
     expect(tooltip_el.hidden).toBe(false)
 
-    element.dispatchEvent(
-      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
-    )
+    focus_out(element)
     vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change).toHaveBeenLastCalledWith(false, open_detail(element, `blur`))
@@ -270,9 +307,15 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(false)
   })
 
-  it(`restores trigger focus when Escape hides custom rendered content`, () => {
+  it(`restores trigger focus without reopening after Escape`, () => {
+    const on_open_change = vi.fn()
+    // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
+    const surrounding_layer = vi.fn(() => true)
+    cleanups.push(register_escape_layer(surrounding_layer))
     const element = create_element(`button`)
     attach_tooltip(element, {
+      trigger: `focus`,
+      on_open_change,
       render: (content_el) => {
         const control = document.createElement(`button`)
         control.textContent = `Custom control`
@@ -280,48 +323,37 @@ describe(`tooltip manager`, () => {
         return undefined
       },
     })
-    pointer_over(element)
+    focus_in(element)
+    const tooltip_el = visible_tooltip()
     const control = doc_query<HTMLButtonElement>(`.tooltip-content button`)
     control.focus()
 
     document.dispatchEvent(escape_key())
-    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
-    expect(document.activeElement).toBe(element)
-  })
-
-  it(`stays dismissed when Escape hands focus back to the trigger`, () => {
-    const on_open_change = vi.fn()
-    const element = create_element(`button`)
-    attach_tooltip(element, {
-      trigger: `focus`,
-      on_open_change,
-      render: (content_el) => {
-        content_el.append(document.createElement(`button`))
-        return undefined
-      },
-    })
-    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
-    const tooltip_el = visible_tooltip()
-    doc_query<HTMLButtonElement>(`.tooltip-content button`).focus()
-    document.dispatchEvent(escape_key())
     expect(tooltip_el.hidden).toBe(true)
+    expect(document.activeElement).toBe(element)
 
     // Handing focus back re-enters through focusout/focusin, which must not resurrect
     // the dismissed tooltip — leaving the trigger afterwards is not a second close.
-    element.dispatchEvent(
-      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
-    )
+    focus_out(element)
     vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
       [false, open_detail(element, `escape`)],
     ])
+
+    // The reopen the handoff caused subscribed an Escape layer of its own. Left on the
+    // stack it answers for the surface underneath, which never hears Escape again.
+    document.dispatchEvent(escape_key())
+    expect(surrounding_layer).toHaveBeenCalledOnce()
   })
 
   it(`focus opens immediately despite a long pointer delay`, () => {
-    const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
+    const { element } = register_tooltip(`Keyboard`, {
+      trigger: `focus`,
+      open_delay_ms: 1000,
+    })
     document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
-    element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    focus_in(element)
 
     expect(visible_tooltip().textContent).toBe(`Keyboard`)
   })
@@ -331,14 +363,14 @@ describe(`tooltip manager`, () => {
     // Browser ordering puts pointerover before pointerdown on first contact.
     pointer_over(automatic, `touch`)
     automatic.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
-    automatic.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    focus_in(automatic)
     expect(document.querySelector(`.custom-tooltip`)).toBeNull()
     pointer_over(automatic, `mouse`)
     expect(visible_tooltip().textContent).toBe(`Automatic`)
 
     const { element: focus_only } = register_tooltip(`Focus only`, { trigger: `focus` })
     focus_only.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
-    focus_only.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+    focus_in(focus_only)
     expect(visible_tooltip().textContent).toBe(`Focus only`)
   })
 
@@ -359,8 +391,15 @@ describe(`tooltip manager`, () => {
     expect(element.getAttribute(`aria-describedby`)).toBe(`help error`)
   })
 
-  it(`recycles one node across triggers and swaps owner relationships`, () => {
-    const { element: first } = register_tooltip(`First`)
+  it(`recycles one node across owners, relationships and render cleanup`, () => {
+    const render_cleanup = vi.fn()
+    const first = create_element(`button`)
+    attach_tooltip(first, {
+      render: (content_el) => {
+        content_el.textContent = `First`
+        return render_cleanup
+      },
+    })
     const { element: second } = register_tooltip(`Second`)
 
     pointer_over(first)
@@ -368,6 +407,7 @@ describe(`tooltip manager`, () => {
     pointer_over(second)
     expect(visible_tooltip()).toBe(shared)
     expect(shared.textContent).toBe(`Second`)
+    expect(render_cleanup).toHaveBeenCalledOnce()
     expect(first.hasAttribute(`aria-describedby`)).toBe(false)
     expect(second.getAttribute(`aria-describedby`)).toBe(shared.id)
   })
@@ -420,9 +460,7 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Controlled`)
     expect(changes).toHaveBeenCalledWith(true, open_detail(element, `controlled`))
     pointer_out(element)
-    element.dispatchEvent(
-      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
-    )
+    focus_out(element)
     vi.advanceTimersByTime(0)
     expect(visible_tooltip().textContent).toBe(`Controlled`)
 
@@ -446,116 +484,25 @@ describe(`tooltip manager`, () => {
     )
   })
 
-  it.each([
-    [`hands off immediately after controlled close`, [`close`], true],
-    [`hands off after controlled state closes`, [`release`], true],
-    [`hands off when controlled content never opened`, [`release`], true, ``],
-    [`cancels after its pointer leaves`, [`leave-child`, `close`], false],
-    [
-      `survives blur while its pointer remains`,
-      [`focus-child`, `blur-child`, `close`],
-      true,
-    ],
-    [
-      `keeps its pointer state when blur follows controlled close`,
-      [`focus-child`, `close`, `blur-child`],
-      true,
-    ],
-    [
-      `survives reentrant blur from its open callback`,
-      [`focus-child-reentrant`, `close`],
-      true,
-    ],
-    [
-      `keeps a focused trigger ahead of a transient hover`,
-      [`leave-child`, `focus-child`, `hover-other`, `leave-other`, `close`],
-      true,
-    ],
-    [
-      `restores a hovered trigger after transient focus elsewhere`,
-      [`focus-other`, `blur-other`, `close`],
-      true,
-    ],
-    [
-      `drops a stale hover after focus elsewhere also leaves`,
-      [`focus-other`, `leave-child`, `blur-other`, `close`],
-      false,
-    ],
-  ] as const)(`queued %s`, async (...[, actions, opens, content]: QueuedCase) => {
-    const controlled_content = content ?? `Controlled`
-    const reentrant = actions.some((action) => action === `focus-child-reentrant`)
-    const { child, close, controlled, on_open_change, options, other } =
-      setup_controlled_handoff(reentrant, controlled_content)
+  it(`preempts a controlled tooltip without replaying it`, async () => {
+    const { child, close, controlled, on_open_change } = setup_controlled_handoff()
     await Promise.resolve()
+    expect(visible_tooltip().textContent).toBe(`Controlled`)
 
     pointer_over(child)
-    expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
-      controlled_content || undefined,
-    )
-    expect(child.title).toBe(`Next`)
+    expect(visible_tooltip().textContent).toBe(`Next`)
+    expect(child.hasAttribute(`title`)).toBe(false)
     expect(on_open_change).toHaveBeenLastCalledWith(
       false,
       open_detail(controlled, `pointer`),
     )
-    for (const action of actions) {
-      if (action === `close`) close()
-      else if (action === `release`) {
-        options.open = false
-        pointer_out(controlled)
-      } else if (action === `leave-child`) pointer_out(child)
-      else if (action === `hover-other`) pointer_over(other)
-      else if (action === `leave-other`) pointer_out(other)
-      else {
-        const target = action.includes(`child`) ? child : other
-        const event_type = action.startsWith(`focus`) ? `focusin` : `focusout`
-        target.dispatchEvent(
-          new FocusEvent(event_type, {
-            bubbles: true,
-            relatedTarget: event_type === `focusout` ? document.body : null,
-          }),
-        )
-      }
-    }
+
+    pointer_out(child)
+    close() // releasing the controlled registration must not resurrect anything
     vi.advanceTimersByTime(0)
 
-    if (opens) {
-      expect(visible_tooltip().textContent).toBe(`Next`)
-      expect(child.hasAttribute(`title`)).toBe(false)
-    } else {
-      expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
-      expect(child.title).toBe(`Next`)
-    }
-  })
-
-  it(`drops queued triggers once an activation succeeds`, async () => {
-    // Nesting the controlled trigger inside a queued one is the only way the pointer
-    // reaches it without leaving the outer trigger, so a two-deep queue survives to
-    // see a successful activation.
-    const outer = create_element()
-    outer.title = `Outer`
-    const controlled = document.createElement(`button`)
-    outer.append(controlled)
-    mock_rect(controlled, { left: 20, top: 20, width: 80, height: 30 })
-    attach_tooltip(outer)
-    const cleanup_controlled = attach_tooltip(controlled, {
-      content: `Controlled`,
-      open: true,
-    })
-    const { element: elsewhere } = register_tooltip(`Elsewhere`)
-    await Promise.resolve()
-
-    pointer_over(outer) // queues behind the controlled tooltip
-    elsewhere.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true })) // queues ahead
-    pointer_out(outer, controlled) // stays inside `outer`, so its entry survives
-    pointer_over(controlled) // reactivating the controlled trigger clears the queue
-    elsewhere.dispatchEvent(
-      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
-    )
-    cleanup_controlled()
-    vi.advanceTimersByTime(0)
-
-    // Nothing replays: the queue was superseded, not merely reordered.
-    expect(document.querySelector<HTMLElement>(`.custom-tooltip`)?.hidden).toBe(true)
+    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
+    expect(child.title).toBe(`Next`)
   })
 
   it(`requests controlled opening without showing against open: false`, () => {
@@ -565,23 +512,6 @@ describe(`tooltip manager`, () => {
 
     expect(document.querySelector(`.custom-tooltip`)).toBeNull()
     expect(on_open_change).toHaveBeenCalledWith(true, open_detail(element, `pointer`))
-  })
-
-  it(`runs custom render cleanup when switching owners`, () => {
-    const cleanup = vi.fn()
-    const first = create_element(`button`)
-    attach_tooltip(first, {
-      render: (content_el) => {
-        content_el.textContent = `Rendered`
-        return cleanup
-      },
-    })
-    const { element: second } = register_tooltip(`Second`)
-
-    pointer_over(first)
-    expect(visible_tooltip().textContent).toBe(`Rendered`)
-    pointer_over(second)
-    expect(cleanup).toHaveBeenCalledOnce()
   })
 
   it(`sanitizes trusted HTML and normalizes newline markup`, () => {
@@ -708,6 +638,54 @@ describe(`tooltip manager`, () => {
     expect(element.title).toBe(`Normalized`)
   })
 
+  it(`gives up on a title it cannot strip without throwing`, async () => {
+    const tag_name = `tooltip-title-restorer`
+    if (!customElements.get(tag_name)) {
+      customElements.define(
+        tag_name,
+        class extends HTMLElement {
+          static observedAttributes = [`title`]
+          attributeChangedCallback(): void {
+            if (!this.hasAttribute(`title`)) this.setAttribute(`title`, `Insistent`)
+          }
+        },
+      )
+    }
+    const errors = vi.spyOn(console, `error`).mockImplementation(() => {})
+    cleanups.push(() => errors.mockRestore())
+    const element = create_element(tag_name)
+    const cleanup = attach_tooltip(element, { content: `Custom` })
+    pointer_over(element)
+    visible_tooltip()
+
+    element.setAttribute(`title`, `Insistent`)
+    await Promise.resolve()
+
+    expect(errors).toHaveBeenCalledOnce()
+    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
+    cleanup()
+  })
+
+  it(`hides once the trigger leaves the document`, async () => {
+    const { element, tooltip_el } = show_tooltip({}, `Transient`)
+
+    // No scroll or resize follows a detachment, so only the removal observer sees it.
+    element.remove()
+    await Promise.resolve()
+    expect(tooltip_el.hidden).toBe(true)
+  })
+
+  it(`hides once the trigger stops rendering`, () => {
+    const { element, tooltip_el } = show_tooltip({}, `Vanishing`)
+
+    element.style.display = `none`
+    // Synchronous throughout, so the reposition runs before any observer callback and
+    // the visibility check there is the only thing that can close the tooltip.
+    window.dispatchEvent(new Event(`scroll`))
+    vi.advanceTimersByTime(20)
+    expect(tooltip_el.hidden).toBe(true)
+  })
+
   it(`repositions on scroll through one coalesced animation frame`, () => {
     const element = create_element(`button`)
     element.title = `Moving`
@@ -721,6 +699,18 @@ describe(`tooltip manager`, () => {
     window.dispatchEvent(new Event(`scroll`))
     vi.advanceTimersByTime(20)
     expect(tooltip_el.style.top).not.toBe(first_top)
+  })
+
+  it(`stops listening for repositions once closed`, () => {
+    const { element } = show_tooltip({}, `Temporary`)
+    pointer_out(element)
+
+    // A surviving scroll subscription still schedules a frame, even though the guard
+    // inside would make that frame a no-op, so the frame is what proves the release.
+    const frame = vi.spyOn(window, `requestAnimationFrame`)
+    cleanups.push(() => frame.mockRestore())
+    window.dispatchEvent(new Event(`scroll`))
+    expect(frame).not.toHaveBeenCalled()
   })
 
   it(`aims the arrow at an edge trigger after shifting`, () => {
@@ -758,9 +748,14 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.style.fontWeight).toBe(`bold`)
   })
 
-  it(`uses the Popover top layer when available`, () => {
-    const show_popover = vi.fn()
-    const hide_popover = vi.fn()
+  it(`reuses the Popover top layer after Escape dismissal`, () => {
+    let popover_open = false
+    const show_popover = vi.fn(() => (popover_open = true))
+    const hide_popover = vi.fn(() => {
+      if (!popover_open)
+        throw new DOMException(`Popover is not open`, `InvalidStateError`)
+      popover_open = false
+    })
     cleanups.push(
       stub_prop(HTMLElement.prototype, `popover`, null),
       stub_prop(HTMLElement.prototype, `showPopover`, show_popover),
@@ -768,10 +763,26 @@ describe(`tooltip manager`, () => {
     )
     const { element } = register_tooltip(`Top layer`, { strategy: `top-layer` })
     pointer_over(element)
+    const tooltip_el = visible_tooltip()
+    const native_matches = tooltip_el.matches.bind(tooltip_el)
+    vi.spyOn(tooltip_el, `matches`).mockImplementation((selector) =>
+      selector === `:popover-open` ? popover_open : native_matches(selector),
+    )
 
     expect(show_popover).toHaveBeenCalledWith({ source: element })
+    document.dispatchEvent(escape_key())
+    expect(hide_popover).toHaveBeenCalledOnce()
+    expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
+
+    // Exiting the dismissed trigger closes the retained state without rehiding a
+    // popover Escape already closed. The same surface remains reusable afterwards.
     pointer_out(element)
     expect(hide_popover).toHaveBeenCalledOnce()
+    pointer_over(element)
+    pointer_out(element)
+    expect(show_popover).toHaveBeenCalledTimes(2)
+    expect(hide_popover).toHaveBeenCalledTimes(2)
+    expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
   })
 
   it(`falls back to the document layer without the Popover API`, () => {

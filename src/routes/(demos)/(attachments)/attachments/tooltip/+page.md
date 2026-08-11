@@ -6,7 +6,7 @@
 
 ## `tooltip`
 
-One recycled tooltip node serves the whole document, rendered in the browser's top layer through the Popover API with an absolutely positioned fallback where that is unavailable. The defaults follow intent rather than raw events: keyboard focus opens immediately, pointer hover waits 400 ms, the pointer may travel onto the tooltip without closing it, Escape dismisses, touch-generated hover is ignored, and moving to a nearby trigger within 300 ms skips the opening delay.
+One recycled tooltip node serves the whole document, rendered in the browser's top layer through the Popover API with an absolutely positioned fallback where that is unavailable. The defaults follow intent rather than raw events: keyboard focus opens immediately, pointer hover waits 100 ms, the pointer may travel onto the tooltip without closing it, Escape dismisses, touch-generated hover is ignored, and moving to a nearby trigger within 300 ms skips the opening delay.
 
 - Content: `content`, a per-trigger `content(trigger)`, or `render(content_el, trigger)` for custom DOM. With none of those, `title`, `aria-label`, then `data-title` are read. Attaching once to a container delegates to matching descendants; `delegate` takes a selector.
 - Position: `placement` defaults to `auto`. `align`, `fallback_placements`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
@@ -167,13 +167,13 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ### Interaction and controlled state
 
-`trigger` picks `hover-focus` (the default), `hover`, `focus` or `manual`. `open_delay_ms` applies to pointer hover only — focus opens at once so keyboard users are never made to wait — while `skip_delay_ms` keeps that delay skipped when moving between neighbouring triggers. Passing `open` makes the tooltip controlled: the attachment stops opening on its own, reports every intent through `on_open_change`, and shows only what you hand back.
+`trigger` picks `hover` (the default), `hover-focus`, `focus` or `manual`. `open_delay_ms` applies to pointer hover only — focus opens at once so keyboard users are never made to wait — while `skip_delay_ms` keeps that delay skipped when moving between neighbouring triggers. Passing `open` makes the tooltip controlled: the attachment stops opening on its own, reports every intent through `on_open_change`, and shows only what you hand back. Controlled tooltips are not modal — one surface serves the document, so hovering or focusing another trigger takes it over and the controlled consumer hears the close through `on_open_change`.
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">
   import { tooltip } from '$lib/attachments'
 
-  let open_delay_ms = $state(400)
+  let open_delay_ms = $state(100)
   let close_delay_ms = $state(100)
   let manual_open = $state(false)
   let last_reason = $state(`—`)
