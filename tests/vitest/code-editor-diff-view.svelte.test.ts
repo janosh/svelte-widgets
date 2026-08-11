@@ -443,5 +443,23 @@ describe(`virtualization`, () => {
     await click(query_element(`[aria-label='Next change']`))
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 100)
     expect(code_texts()).toContain(`old 100`)
+
+    const assigned: number[] = []
+    let scroll_top = 0
+    Object.defineProperty(scroller, `scrollTop`, {
+      configurable: true,
+      get: () => scroll_top,
+      set: (value: number) => {
+        assigned.push(value)
+        scroll_top = Math.min(value, ROW_HEIGHT * 10)
+      },
+    })
+    scroller.dispatchEvent(new Event(`scroll`))
+    const next_change = query_element(`[aria-label='Next change']`)
+    await click(next_change)
+    await click(next_change)
+
+    expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 100])
+    expect(scroller.scrollTop).toBe(ROW_HEIGHT * 10)
   })
 })

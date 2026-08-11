@@ -235,8 +235,9 @@
 
   const scroll_to_row = (row_idx: number) => {
     const target = Math.max(0, row_idx * row_height)
-    scroll_top = target
+    // Read back the browser-clamped value so the virtual window stays aligned.
     if (scroll_container) scroll_container.scrollTop = target
+    scroll_top = scroll_container?.scrollTop ?? target
   }
 
   const go_to_change = (direction: 1 | -1) => {

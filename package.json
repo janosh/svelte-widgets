@@ -1,6 +1,6 @@
 {
   "name": "svelte-widgets",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Accessible, keyboard-friendly Svelte components and attachments",
   "keywords": [
     "accessibility",
@@ -32,6 +32,11 @@
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
   "exports": {
+    "./DiffView.svelte": {
+      "types": "./dist/code-editor/DiffView.svelte.d.ts",
+      "svelte": "./dist/code-editor/DiffView.svelte",
+      "default": "./dist/code-editor/DiffView.svelte"
+    },
     "./*.svelte": {
       "types": "./dist/*.svelte.d.ts",
       "svelte": "./dist/*.svelte",
