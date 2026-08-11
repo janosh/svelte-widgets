@@ -673,10 +673,11 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     })
     stop_auto_update = auto_update_position(opening.trigger, surface, position_active)
     stop_escape_layer = register_escape_layer((event) => {
-      if (!active?.open) return
+      if (!active?.open) return true
       event.preventDefault()
       event.stopPropagation()
       request_close(`escape`, true)
+      return true
     })
     position_active()
     if (active !== opening || !opening.open) return

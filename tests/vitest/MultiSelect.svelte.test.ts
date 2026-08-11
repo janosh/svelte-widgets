@@ -184,6 +184,7 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
   document.querySelector(`ul.options > li`)?.dispatchEvent(mouseover)
   await tick()
 
+  expect(doc_query(`.maxSelectMsg`).textContent?.trim()).toBe(`1/2`)
   for (const [class_name, elem_type] of Object.entries(prop_elem_map)) {
     const el = doc_query(`.${class_name}`)
 
@@ -1036,6 +1037,10 @@ test(`expand icon click toggles dropdown in chips mode`, async () => {
     await click_expand()
     expect(input.getAttribute(`aria-expanded`)).toBe(expanded)
   }
+
+  doc_query(`div.multiselect`).dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
+  await tick()
+  expect(input.getAttribute(`aria-expanded`)).toBe(`true`)
 })
 
 test(`removeIcon snippet receives option for per-item and isRemoveAll flag`, async () => {

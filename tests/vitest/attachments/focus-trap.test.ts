@@ -1,6 +1,6 @@
 import type { FocusTrapOptions } from '$lib/attachments'
 import { focus_trap } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key as dispatch_key } from '../index'
 
 describe(`focus_trap`, () => {
@@ -23,11 +23,9 @@ describe(`focus_trap`, () => {
   }
 
   // the trap layer stack is module-global, so a leaked trap steers a later test's Tab
-  const cleanups: (() => void)[] = []
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
   const attach_trap = (surface: HTMLElement, options: FocusTrapOptions = {}) => {
     const cleanup = focus_trap(options)(surface)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     return cleanup
   }
 
@@ -54,10 +52,20 @@ describe(`focus_trap`, () => {
       <details><summary id="summary"></summary><button></button></details>
       <fieldset disabled><legend><button id="legend"></button></legend><button></button></fieldset>
       <div hidden><button></button></div>
+      <div style="display: none"><button style="display: block"></button></div>
+      <div style="visibility: hidden"><button id="visible" style="visibility: visible"></button></div>
     `
     attach_trap(surface)
 
-    for (const id of [`three`, `plain`, `checked`, `summary`, `legend`, `one`]) {
+    for (const id of [
+      `three`,
+      `plain`,
+      `checked`,
+      `summary`,
+      `legend`,
+      `visible`,
+      `one`,
+    ]) {
       press_tab()
       expect(document.activeElement).toBe(surface.querySelector(`#${id}`))
     }
@@ -127,17 +135,19 @@ describe(`focus_trap`, () => {
     expect(document.activeElement).toBe(elsewhere)
   })
 
-  it(`gives Tab to the innermost trap only`, () => {
+  it(`gives Tab to the innermost focused trap`, () => {
     const outer = make_surface()
     const inner = make_surface()
     attach_trap(outer.surface)
-    const cleanup_inner = attach_trap(inner.surface)
-    expect(document.activeElement).toBe(inner.buttons[0])
+    const cleanup_inner = attach_trap(inner.surface, { initial: false })
 
+    press_tab()
+    expect(document.activeElement).toBe(outer.buttons[1])
+
+    inner.buttons[0].focus()
     press_tab()
     expect(document.activeElement).toBe(inner.buttons[1])
 
-    // the outer trap takes over once the inner surface is gone
     cleanup_inner?.()
     outer.buttons[0].focus()
     press_tab()

@@ -22,7 +22,8 @@
   // match a single arm. Same widening as DemoNav; every demo route is param-free.
   const resolve_path = resolve as (path: Pathname) => string
   const actions = routes.map(({ route }) => ({
-    label: route,
+    label: demo_labels[route] ?? route,
+    keywords: [route],
     action: () => goto(resolve_path(route)),
   }))
   const is_home = $derived(page.route.id === `/`)

@@ -72,7 +72,9 @@
       focus_origin = active
     surface.showModal()
   })
-  onDestroy(() => focus_origin?.focus())
+  onDestroy(() => {
+    if (surface?.open) focus_origin?.focus()
+  })
 </script>
 
 {@render trigger?.(trigger_props)}

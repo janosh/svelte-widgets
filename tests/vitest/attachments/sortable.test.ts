@@ -1,7 +1,18 @@
-import { sortable } from '$lib/attachments'
-import { describe, expect, it } from 'vite-plus/test'
+import { sortable, type SortableOptions } from '$lib/attachments'
+import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 
 describe(`sortable`, () => {
+  const mount_table = (table: HTMLTableElement) => {
+    document.body.append(table)
+    onTestFinished(() => table.remove())
+    return table
+  }
+  const attach_sortable = (table: HTMLTableElement, options: SortableOptions = {}) => {
+    const cleanup = sortable(options)(table)
+    if (cleanup) onTestFinished(cleanup)
+    return cleanup
+  }
+
   const get_required_header = (
     table: HTMLTableElement,
     selector = `thead th`,
@@ -19,8 +30,7 @@ describe(`sortable`, () => {
       <tbody><tr><td>Mars</td><td>2</td></tr>
       <tr><td>Earth</td><td>1</td></tr>
       <tr><td>Jupiter</td><td>95</td></tr></tbody>`
-    document.body.append(table)
-    return table
+    return mount_table(table)
   }
 
   const get_column_values = (table: HTMLTableElement, col_idx: number) =>
@@ -30,7 +40,7 @@ describe(`sortable`, () => {
 
   it(`sorts ascending then descending when clicking the same header`, () => {
     const table = create_table()
-    const cleanup = sortable()(table)
+    attach_sortable(table)
     const [planet_header] = Array.from(table.querySelectorAll(`thead th`))
 
     planet_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
@@ -38,13 +48,11 @@ describe(`sortable`, () => {
 
     planet_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
     expect(get_column_values(table, 0)).toEqual([`Mars`, `Jupiter`, `Earth`])
-
-    cleanup?.()
   })
 
   it(`does not set up sorting when disabled`, () => {
     const table = create_table()
-    expect(sortable({ disabled: true })(table)).toBeUndefined()
+    expect(attach_sortable(table, { disabled: true })).toBeUndefined()
     const header = get_required_header(table)
     expect(header.style.cursor).toBe(``)
 
@@ -55,11 +63,11 @@ describe(`sortable`, () => {
 
   it(`applies custom classes and sorted_style, resetting other columns`, () => {
     const table = create_table()
-    sortable({
+    attach_sortable(table, {
       asc_class: `asc`,
       desc_class: `desc`,
       sorted_style: { backgroundColor: `red` },
-    })(table)
+    })
     const [h1, h2] = Array.from(table.querySelectorAll<HTMLTableCellElement>(`thead th`))
 
     h1.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
@@ -82,9 +90,9 @@ describe(`sortable`, () => {
   it(`handles an empty table body and a custom header_selector`, () => {
     const table = document.createElement(`table`)
     table.innerHTML = `<thead><tr><th class="sortable">A</th><th>B</th></tr></thead>`
-    document.body.append(table)
+    mount_table(table)
 
-    sortable({ header_selector: `th.sortable` })(table)
+    attach_sortable(table, { header_selector: `th.sortable` })
 
     const sortable_header = get_required_header(table, `th.sortable`)
     const second_header = table.querySelectorAll<HTMLTableCellElement>(`th`)[1]
@@ -106,9 +114,9 @@ describe(`sortable`, () => {
     const table = document.createElement(`table`)
     const rows = cells.map((val: string) => `<tr><td>${val}</td></tr>`).join(``)
     table.innerHTML = `<thead><tr><th>Col</th></tr></thead><tbody>${rows}</tbody>`
-    document.body.append(table)
+    mount_table(table)
 
-    sortable()(table)
+    attach_sortable(table)
     get_required_header(table).dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
 
     expect(get_column_values(table, 0).map((val) => val?.trim())).toEqual(expected)
@@ -122,9 +130,9 @@ describe(`sortable`, () => {
       `<tr><td>Alice</td><td>3</td></tr>` +
       `<tr><td>Bob</td><td>1</td></tr>` +
       `</tbody>`
-    document.body.append(table)
+    mount_table(table)
 
-    sortable()(table)
+    attach_sortable(table)
     // click 2nd column header; placeholder row has no cell at index 1
     const score_header = table.querySelectorAll(`thead th`)[1]
     score_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
@@ -142,9 +150,9 @@ describe(`sortable`, () => {
       `<tr><td>Beta</td><td><table><tbody><tr><td>nested</td></tr></tbody></table></td></tr>` +
       `<tr><td>Alpha</td><td>plain</td></tr>` +
       `</tbody>`
-    document.body.append(table)
+    mount_table(table)
 
-    sortable()(table)
+    attach_sortable(table)
     get_required_header(table).dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
 
     const nested_table = table.querySelector(`tbody table`)
@@ -165,7 +173,7 @@ describe(`sortable`, () => {
     header.innerHTML = `<span class="icon">▲</span> Planet`
     header.style.color = `blue`
 
-    const cleanup = sortable()(table)
+    const cleanup = attach_sortable(table)
     expect(headers.map(({ style }) => style.cursor)).toEqual([`pointer`, `pointer`])
     header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
 

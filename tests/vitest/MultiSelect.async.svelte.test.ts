@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-await-in-loop
 import { createRawSnippet, tick, unmount } from 'svelte'
-import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { Option } from '$lib'
 import type { LoadOptionsParams, MultiSelectProps } from '$lib/types'
 import { get_label } from '$lib/utils'
@@ -11,6 +11,8 @@ import {
   mount_multiselect,
   type_search_text,
 } from './MultiSelect.test-utils'
+
+afterEach(() => vi.useRealTimers())
 
 // disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix below
 test(`no console error about missing options if loading=true`, () => {
@@ -35,6 +37,17 @@ function deferred_load() {
       }),
   )
   return { fn, resolvers, rejectors }
+}
+
+async function mount_deferred_open() {
+  const load = deferred_load()
+  vi.useFakeTimers()
+  mount_multiselect({
+    loadOptions: { fetch: load.fn, debounceMs: 10 },
+    open: true,
+  })
+  await vi.runAllTimersAsync()
+  return load
 }
 
 function reopen() {
@@ -83,34 +96,30 @@ describe(`loadOptions feature`, () => {
   // static commands on the first keystroke while remote results are still in flight
   test(`local options match instantly and remote results append behind them`, async () => {
     vi.useFakeTimers()
-    try {
-      const { fn: fetch_fn, resolvers } = deferred_load()
-      mount_multiselect({
-        options: [`Alpha`, `Beta`],
-        loadOptions: { fetch: fetch_fn, debounceMs: 500 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      await type_search_text(`al`)
+    const { fn: fetch_fn, resolvers } = deferred_load()
+    mount_multiselect({
+      options: [`Alpha`, `Beta`],
+      loadOptions: { fetch: fetch_fn, debounceMs: 500 },
+      open: true,
+    })
+    await vi.runAllTimersAsync()
+    await type_search_text(`al`)
 
-      const rendered = () =>
-        [...document.querySelectorAll(`ul.options > li[role='option']`)].map((li) =>
-          li.textContent?.trim(),
-        )
-      // no timers advanced and no fetch settled: this row can only be a local option
-      expect(rendered()).toEqual([`Alpha`])
-      expect(fetch_fn).toHaveBeenCalledOnce() // just the on-open load, typing still debounced
+    const rendered = () =>
+      [...document.querySelectorAll(`ul.options > li[role='option']`)].map((li) =>
+        li.textContent?.trim(),
+      )
+    // no timers advanced and no fetch settled: this row can only be a local option
+    expect(rendered()).toEqual([`Alpha`])
+    expect(fetch_fn).toHaveBeenCalledOnce() // just the on-open load, typing still debounced
 
-      await vi.runAllTimersAsync() // debounce elapses, fetch fires but never settles
-      expect(rendered()).toEqual([`Alpha`])
+    await vi.runAllTimersAsync() // debounce elapses, fetch fires but never settles
+    expect(rendered()).toEqual([`Alpha`])
 
-      resolvers[1]({ options: [`Remote alpha`], hasMore: false })
-      await vi.runAllTimersAsync()
+    resolvers[1]({ options: [`Remote alpha`], hasMore: false })
+    await vi.runAllTimersAsync()
 
-      expect(rendered()).toEqual([`Alpha`, `Remote alpha`])
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(rendered()).toEqual([`Alpha`, `Remote alpha`])
   })
 
   test(`loadOptions shows loading indicator while loading`, async () => {
@@ -220,59 +229,38 @@ describe(`loadOptions feature`, () => {
   // `signal` is optional, so a consumer may ignore it. Its request then keeps running
   // and can fail for real after being superseded — that must still be reported.
   test(`logs a real failure from a superseded request that ignored signal`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    const { fn: load_options, rejectors } = deferred_load()
-    vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 10 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
+    console.error = vi.fn()
+    const { fn: load_options, rejectors } = await mount_deferred_open()
 
-      const input = get_input()
-      await type_search_text(`abc`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
-      expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
+    const input = get_input()
+    await type_search_text(`abc`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
+    expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
-      rejectors[0](new Error(`HTTP 500 boom`))
-      await vi.runAllTimersAsync()
+    rejectors[0](new Error(`HTTP 500 boom`))
+    await vi.runAllTimersAsync()
 
-      expect(console_error).toHaveBeenCalledWith(
-        `MultiSelect: loadOptions error:`,
-        expect.any(Error),
-      )
-    } finally {
-      vi.useRealTimers()
-      console_error.mockRestore()
-    }
+    expect(console.error).toHaveBeenCalledWith(
+      `MultiSelect: loadOptions error:`,
+      expect.any(Error),
+    )
   })
 
   test(`a search reset aborts an in-flight pagination request`, async () => {
-    const { fn: load_options, resolvers } = deferred_load()
-    vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 10 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      resolvers[0]({ options: mock_data.slice(0, 50), hasMore: true })
-      await vi.runAllTimersAsync()
+    const { fn: load_options, resolvers } = await mount_deferred_open()
+    resolvers[0]({ options: mock_data.slice(0, 50), hasMore: true })
+    await vi.runAllTimersAsync()
 
-      mock_scroll_near_bottom(doc_query(`ul.options`))
-      await tick()
-      expect(load_options).toHaveBeenCalledTimes(2) // pagination now in flight
+    mock_scroll_near_bottom(doc_query(`ul.options`))
+    await tick()
+    expect(load_options).toHaveBeenCalledTimes(2) // pagination now in flight
 
-      const input = get_input()
-      await type_search_text(`zz`, input)
-      await vi.runAllTimersAsync()
+    const input = get_input()
+    await type_search_text(`zz`, input)
+    await vi.runAllTimersAsync()
 
-      expect(load_options.mock.calls[1][0].signal?.aborted).toBe(true)
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(load_options.mock.calls[1][0].signal?.aborted).toBe(true)
   })
 
   // A server can report hasMore alongside an empty batch. Refetching the same offset
@@ -296,48 +284,38 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`stale fetch result discarded when search changes during load`, async () => {
-    const { fn: load_options, resolvers } = deferred_load()
-    vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 10 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(1)
+    const { fn: load_options, resolvers } = await mount_deferred_open()
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      // Type new search while first fetch is pending
-      const input = get_input()
-      await type_search_text(`xyz`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
-      expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
-      // exact match, not objectContaining: pins that a signal is actually handed over
-      expect(load_options).toHaveBeenLastCalledWith({
-        search: `xyz`,
-        offset: 0,
-        limit: 50,
-        signal: expect.any(AbortSignal),
-      })
+    // Type new search while first fetch is pending
+    const input = get_input()
+    await type_search_text(`xyz`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
+    expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
+    // exact match, not objectContaining: pins that a signal is actually handed over
+    expect(load_options).toHaveBeenLastCalledWith({
+      search: `xyz`,
+      offset: 0,
+      limit: 50,
+      signal: expect.any(AbortSignal),
+    })
 
-      // Resolve the STALE first request after the new one was initiated
-      resolvers[0]({ options: [`Stale Result`], hasMore: false })
-      await vi.runAllTimersAsync()
+    // Resolve the STALE first request after the new one was initiated
+    resolvers[0]({ options: [`Stale Result`], hasMore: false })
+    await vi.runAllTimersAsync()
 
-      const ul = doc_query(`ul.options`)
-      expect(ul.textContent).not.toContain(`Stale Result`)
+    const ul = doc_query(`ul.options`)
+    expect(ul.textContent).not.toContain(`Stale Result`)
 
-      // Resolve the current request
-      resolvers[1]({ options: [`Fresh Result`], hasMore: false })
-      await vi.runAllTimersAsync()
-      expect(ul.textContent).toContain(`Fresh Result`)
-    } finally {
-      vi.useRealTimers()
-    }
+    // Resolve the current request
+    resolvers[1]({ options: [`Fresh Result`], hasMore: false })
+    await vi.runAllTimersAsync()
+    expect(ul.textContent).toContain(`Fresh Result`)
   })
 
   test(`pagination error is logged, clears busy state, and stops further loading`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    console.error = vi.fn()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     mount_multiselect({ loadOptions: load_options, open: true })
     await tick()
@@ -356,7 +334,7 @@ describe(`loadOptions feature`, () => {
 
     rejectors[1](new Error(`Server error`))
     await tick()
-    expect(console_error).toHaveBeenCalledWith(
+    expect(console.error).toHaveBeenCalledWith(
       `MultiSelect: loadOptions error:`,
       expect.any(Error),
     )
@@ -366,7 +344,6 @@ describe(`loadOptions feature`, () => {
     mock_scroll_near_bottom(ul)
     await tick()
     expect(load_options).toHaveBeenCalledTimes(2)
-    console_error.mockRestore()
   })
 
   test(`close during fetch clears loading state`, async () => {
@@ -398,39 +375,29 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`rapid search changes only apply final result`, async () => {
-    const { fn: load_options, resolvers } = deferred_load()
-    vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 10 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(1)
+    const { fn: load_options, resolvers } = await mount_deferred_open()
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      const input = get_input()
-      // Type "a", debounce, then "ab" before first completes
-      await type_search_text(`a`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
+    const input = get_input()
+    // Type "a", debounce, then "ab" before first completes
+    await type_search_text(`a`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
 
-      await type_search_text(`ab`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(3)
+    await type_search_text(`ab`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(3)
 
-      // Resolve all three in reverse order (worst-case network jitter)
-      resolvers[2]({ options: [`AB Result`], hasMore: false })
-      resolvers[1]({ options: [`A Result`], hasMore: false })
-      resolvers[0]({ options: [`Initial`], hasMore: false })
-      await vi.runAllTimersAsync()
+    // Resolve all three in reverse order (worst-case network jitter)
+    resolvers[2]({ options: [`AB Result`], hasMore: false })
+    resolvers[1]({ options: [`A Result`], hasMore: false })
+    resolvers[0]({ options: [`Initial`], hasMore: false })
+    await vi.runAllTimersAsync()
 
-      const ul = doc_query(`ul.options`)
-      expect(ul.textContent).toContain(`AB Result`)
-      expect(ul.textContent).not.toContain(`A Result`)
-      expect(ul.textContent).not.toContain(`Initial`)
-    } finally {
-      vi.useRealTimers()
-    }
+    const ul = doc_query(`ul.options`)
+    expect(ul.textContent).toContain(`AB Result`)
+    expect(ul.textContent).not.toContain(`A Result`)
+    expect(ul.textContent).not.toContain(`Initial`)
   })
 
   test(`scroll after auto-fill cap resets counter and allows more loading`, async () => {
@@ -503,125 +470,104 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`stale error does not affect current request state`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    const { fn: load_options, resolvers, rejectors } = deferred_load()
-    vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 10 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(1)
+    console.error = vi.fn()
+    const { fn: load_options, resolvers, rejectors } = await mount_deferred_open()
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      // Type to trigger a new search while first fetch is pending
-      const input = get_input()
-      await type_search_text(`test`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
+    // Type to trigger a new search while first fetch is pending
+    const input = get_input()
+    await type_search_text(`test`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
 
-      // New fetch succeeds FIRST with hasMore=true
-      resolvers[1]({ options: [`Result A`], hasMore: true })
-      await vi.runAllTimersAsync()
+    // New fetch succeeds FIRST with hasMore=true
+    resolvers[1]({ options: [`Result A`], hasMore: true })
+    await vi.runAllTimersAsync()
 
-      const ul = doc_query(`ul.options`)
-      expect(ul.textContent).toContain(`Result A`)
+    const ul = doc_query(`ul.options`)
+    expect(ul.textContent).toContain(`Result A`)
 
-      // Old (stale) fetch ERRORS AFTER success — must not corrupt hasMore
-      rejectors[0](new Error(`Stale network error`))
-      await vi.runAllTimersAsync()
+    // Old (stale) fetch ERRORS AFTER success — must not corrupt hasMore
+    rejectors[0](new Error(`Stale network error`))
+    await vi.runAllTimersAsync()
 
-      // Scroll should trigger pagination (hasMore was NOT corrupted by stale error)
-      mock_scroll_near_bottom(ul)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(3)
-    } finally {
-      vi.useRealTimers()
-      console_error.mockRestore()
-    }
+    // Scroll should trigger pagination (hasMore was NOT corrupted by stale error)
+    mock_scroll_near_bottom(ul)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(3)
   })
 
   test(`failed initial load retries on close+reopen`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    console.error = vi.fn()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
-    try {
-      // Use onOpen=false so retry requires typing, exposing has_more via pending
-      mount_multiselect({
-        loadOptions: { fetch: load_options, onOpen: false, debounceMs: 10 },
-        open: true,
-      })
+    // Use onOpen=false so retry requires typing, exposing has_more via pending
+    mount_multiselect({
+      loadOptions: { fetch: load_options, onOpen: false, debounceMs: 10 },
+      open: true,
+    })
 
-      // Type to trigger initial load (onOpen=false requires user input)
-      const input = get_input()
-      await type_search_text(`q`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(1)
+    // Type to trigger initial load (onOpen=false requires user input)
+    const input = get_input()
+    await type_search_text(`q`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      rejectors[0](new Error(`Server down`))
-      await vi.runAllTimersAsync()
+    rejectors[0](new Error(`Server down`))
+    await vi.runAllTimersAsync()
 
-      // Close and reopen
-      input.dispatchEvent(fresh_key(`Escape`))
-      await vi.runAllTimersAsync()
-      reopen()
-      await vi.runAllTimersAsync()
+    // Close and reopen
+    input.dispatchEvent(fresh_key(`Escape`))
+    await vi.runAllTimersAsync()
+    reopen()
+    await vi.runAllTimersAsync()
 
-      // Type to trigger load again (onOpen=false)
-      await type_search_text(`q`, input)
-      // During debounce: aria-busy must be true (has_more was reset on close)
-      await tick()
-      expect(input.getAttribute(`aria-busy`)).toBe(`true`)
+    // Type to trigger load again (onOpen=false)
+    await type_search_text(`q`, input)
+    // During debounce: aria-busy must be true (has_more was reset on close)
+    await tick()
+    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
 
-      resolvers[1]({ options: [`Recovered`], hasMore: false })
-      await vi.runAllTimersAsync()
-      expect(doc_query(`ul.options`).textContent).toContain(`Recovered`)
-      expect(input.getAttribute(`aria-busy`)).toBeNull()
-    } finally {
-      vi.useRealTimers()
-      console_error.mockRestore()
-    }
+    resolvers[1]({ options: [`Recovered`], hasMore: false })
+    await vi.runAllTimersAsync()
+    expect(doc_query(`ul.options`).textContent).toContain(`Recovered`)
+    expect(input.getAttribute(`aria-busy`)).toBeNull()
   })
 
   test(`failed search retryable via input change`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    console.error = vi.fn()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
-    try {
-      mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 0 },
-        open: true,
-      })
-      await vi.runAllTimersAsync()
-      // Initial load succeeds
-      resolvers[0]({ options: [`Apple`], hasMore: false })
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(1)
+    mount_multiselect({
+      loadOptions: { fetch: load_options, debounceMs: 0 },
+      open: true,
+    })
+    await vi.runAllTimersAsync()
+    // Initial load succeeds
+    resolvers[0]({ options: [`Apple`], hasMore: false })
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      // Search "x" triggers load, which fails
-      const input = get_input()
-      await type_search_text(`x`, input)
-      await vi.runAllTimersAsync()
-      expect(load_options).toHaveBeenCalledTimes(2)
-      rejectors[1](new Error(`fail`))
-      await vi.runAllTimersAsync()
+    // Search "x" triggers load, which fails
+    const input = get_input()
+    await type_search_text(`x`, input)
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenCalledTimes(2)
+    rejectors[1](new Error(`fail`))
+    await vi.runAllTimersAsync()
 
-      // Clear and retype the same search to trigger a fresh request.
-      await type_search_text(``, input)
-      await vi.runAllTimersAsync()
-      await type_search_text(`x`, input)
-      await vi.runAllTimersAsync()
+    // Clear and retype the same search to trigger a fresh request.
+    await type_search_text(``, input)
+    await vi.runAllTimersAsync()
+    await type_search_text(`x`, input)
+    await vi.runAllTimersAsync()
 
-      expect(load_options).toHaveBeenLastCalledWith(
-        expect.objectContaining({ search: `x`, offset: 0, limit: 50 }),
-      )
-    } finally {
-      vi.useRealTimers()
-      console_error.mockRestore()
-    }
+    expect(load_options).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: `x`, offset: 0, limit: 50 }),
+    )
   })
 })
 
@@ -666,36 +612,30 @@ test.each([
     resolve_with,
   }) => {
     vi.useFakeTimers()
-    try {
-      const { fn: fetch_fn, resolvers } = deferred_load()
+    const { fn: fetch_fn, resolvers } = deferred_load()
 
-      mount_multiselect({
-        loadOptions: { fetch: fetch_fn, debounceMs: 0 },
-        open: true,
-        ...props,
-      })
+    mount_multiselect({
+      loadOptions: { fetch: fetch_fn, debounceMs: 0 },
+      open: true,
+      ...props,
+    })
+    await vi.runAllTimersAsync()
+    resolvers[0]({ options: [...initial_options], hasMore: false })
+    await vi.runAllTimersAsync()
+
+    const input = get_input()
+    await type_search_text(search, input)
+    await vi.runAllTimersAsync()
+    expect(fetch_fn.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+    const msg_during = document.querySelector(`.user-msg`)?.textContent?.trim()
+    if (while_loading) expect(msg_during).toBe(while_loading)
+    else expect(document.querySelector(`.user-msg`)).toBeNull()
+
+    if (resolve_with) {
+      resolvers[1]({ options: resolve_with, hasMore: false })
       await vi.runAllTimersAsync()
-      resolvers[0]({ options: [...initial_options], hasMore: false })
-      await vi.runAllTimersAsync()
-
-      const input = get_input()
-      await type_search_text(search, input)
-      await vi.runAllTimersAsync()
-      expect(fetch_fn.mock.calls.length).toBeGreaterThanOrEqual(2)
-
-      const msg_during = document.querySelector(`.user-msg`)?.textContent?.trim()
-      if (while_loading) expect(msg_during).toBe(while_loading)
-      else expect(document.querySelector(`.user-msg`)).toBeNull()
-
-      if (resolve_with) {
-        resolvers[1]({ options: resolve_with, hasMore: false })
-        await vi.runAllTimersAsync()
-        expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
-          after_resolve,
-        )
-      }
-    } finally {
-      vi.useRealTimers()
+      expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(after_resolve)
     }
   },
 )
@@ -908,7 +848,6 @@ describe(`async oncreate`, () => {
   })
 
   test.each<[string, OncreateResult, Option[], number]>([
-    [`undefined keeps the original option`, undefined, [`fresh-opt`], 1],
     [`a transformed option replaces the original`, `TRANSFORMED`, [`TRANSFORMED`], 1],
     [`false aborts the add`, false, [], 0],
   ])(

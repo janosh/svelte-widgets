@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, pointer_event } from './index'
+import { create_element, doc_query, pointer_event } from './index'
 import TestSheet from './TestSheet.svelte'
 
 describe(`Sheet`, () => {
@@ -16,6 +16,11 @@ describe(`Sheet`, () => {
     const props = $state({ ...extra })
     mounted.push(mount(TestSheet, { target: document.body, props }))
     return props
+  }
+  const unmount_sheet = async () => {
+    const app = mounted.pop()
+    if (!app) throw new Error(`Sheet test app was not mounted`)
+    await unmount(app)
   }
   const trigger = () => doc_query<HTMLButtonElement>(`[data-testid="sheet-trigger"]`)
   const surface = () => document.querySelector<HTMLDialogElement>(`dialog.sheet`)
@@ -65,26 +70,34 @@ describe(`Sheet`, () => {
   test.each([
     [`Escape`, `escape`],
     [`the backdrop`, `pointer`],
-  ] as const)(`%s closes and restores focus`, async (_label, via) => {
-    const on_close = vi.fn()
-    mount_sheet({ on_close })
-    trigger().focus()
-    trigger().click()
-    await tick()
+  ] as const)(
+    `%s closes, restores focus once, and leaves later focus alone`,
+    async (_label, via) => {
+      const on_close = vi.fn()
+      mount_sheet({ on_close })
+      trigger().focus()
+      trigger().click()
+      await tick()
 
-    const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
-    if (via === `pointer`) {
-      press_dialog_at(dialog, 50, 50)
-      expect(surface()).toBe(dialog)
-      press_dialog_at(dialog)
-    } else dialog.dispatchEvent(new Event(`cancel`, { cancelable: true }))
-    await tick()
+      const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
+      if (via === `pointer`) {
+        press_dialog_at(dialog, 50, 50)
+        expect(surface()).toBe(dialog)
+        press_dialog_at(dialog)
+      } else dialog.dispatchEvent(new Event(`cancel`, { cancelable: true }))
+      await tick()
 
-    expect(surface()).toBeNull()
-    expect(on_close).toHaveBeenCalledWith({ via })
-    expect(document.activeElement).toBe(trigger())
-    expect(trigger().getAttribute(`aria-controls`)).toBeNull()
-  })
+      expect(surface()).toBeNull()
+      expect(on_close).toHaveBeenCalledWith({ via })
+      expect(document.activeElement).toBe(trigger())
+      expect(trigger().getAttribute(`aria-controls`)).toBeNull()
+
+      const next_target = create_element(`button`)
+      next_target.focus()
+      await unmount_sheet()
+      expect(document.activeElement).toBe(next_target)
+    },
+  )
 
   test(`snippet controls and native dialog.close sync open/on_close`, async () => {
     const on_close = vi.fn()
@@ -158,17 +171,18 @@ describe(`Sheet`, () => {
 
   test(`unmount removes an open native dialog without reporting a close`, async () => {
     const on_close = vi.fn()
+    const focus_origin = create_element(`button`)
+    focus_origin.focus()
     mount_sheet({ open: true, on_close })
     await tick()
     const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
     expect(dialog.open).toBe(true)
 
-    const app = mounted.pop()
-    if (!app) throw new Error(`Sheet test app was not mounted`)
-    await unmount(app)
+    await unmount_sheet()
     await tick()
 
     expect(document.querySelector(`dialog.sheet`)).toBeNull()
     expect(on_close).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(focus_origin)
   })
 })

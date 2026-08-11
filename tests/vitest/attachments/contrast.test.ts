@@ -1,9 +1,11 @@
 import type { ContrastOptions } from '$lib/attachments'
 import { contrast_color, get_bg_color, pick_contrast_color } from '$lib/attachments'
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
 import { create_element } from '../index'
 
 describe(`contrast_color`, () => {
+  afterEach(() => vi.restoreAllMocks())
+
   // brackets a color's luminance from both sides: a threshold just below it has to read
   // as `over` and one just above as `under`, which pins the value without exposing it
   const luminance_brackets = (bg_color: string, expected: number, tolerance: number) => {

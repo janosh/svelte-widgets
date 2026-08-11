@@ -38,12 +38,15 @@ export const follow_pointer = (
 // inside a modal and leaves the modal standing, and a dialog opened from a dialog
 // owns Tab. Layers register in attach order, which matches nesting in practice.
 // Capture phase so a handler calling stopPropagation cannot suppress them.
-type KeyLayer = (event: KeyboardEvent) => void
+type KeyLayer = (event: KeyboardEvent) => boolean
 
 const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
   const layers: KeyLayer[] = []
   const on_keydown = (event: KeyboardEvent) => {
-    if (!event.defaultPrevented && wants(event)) layers.at(-1)?.(event)
+    if (event.defaultPrevented || !wants(event)) return
+    for (let idx = layers.length - 1; idx >= 0; idx--) {
+      if (layers[idx](event)) return
+    }
   }
   return (layer: KeyLayer) => {
     if (layers.length === 0) document.addEventListener(`keydown`, on_keydown, true)

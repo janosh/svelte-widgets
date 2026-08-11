@@ -7,7 +7,7 @@
     HTMLButtonAttributes,
   } from 'svelte/elements'
   import Icon from './Icon.svelte'
-  import { Collapse, Expand, GitHub, Svelte } from './icons'
+  import { ChevronCollapse, ChevronExpand, GitHub, Svelte } from './icons'
   import { chain_handlers } from './utils'
 
   let {
@@ -97,11 +97,8 @@
       type="button"
       onclick={chain_handlers(() => (open = !open), button_props?.onclick)}
     >
-      <Icon icon={open ? Collapse : Expand} />
-      <span class="toggle-label">
-        <span aria-hidden={open}>View code</span>
-        <span aria-hidden={!open}>Close</span>
-      </span>
+      <Icon icon={open ? ChevronCollapse : ChevronExpand} />
+      {open ? `Close` : `View code`}
     </button>
   {/if}
 </nav>
@@ -137,16 +134,6 @@
   }
   nav > button {
     white-space: nowrap;
-  }
-  .toggle-label {
-    display: inline-grid;
-    > span {
-      grid-area: 1 / 1;
-      text-align: center;
-    }
-    > [aria-hidden='true'] {
-      visibility: hidden;
-    }
   }
   pre code {
     background-color: transparent;

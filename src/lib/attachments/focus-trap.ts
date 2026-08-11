@@ -55,13 +55,14 @@ const candidate_order = (element: Element) =>
 const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement => {
   if (!is_focusable(element) || candidate_tab_index(element) < 0) return false
   if (element.matches(`:disabled`)) return false
+  // Descendants can override inherited visibility, so only the candidate's value matters.
+  if (getComputedStyle(element).visibility === `hidden`) return false
   let current: Element | null = element
   while (current) {
     const style = getComputedStyle(current)
     if (
       current.matches(`[hidden],[inert]`) ||
       style.display === `none` ||
-      style.visibility === `hidden` ||
       (current.matches(`details:not([open])`) &&
         !current.querySelector(`:scope > summary`)?.contains(element)) ||
       (element.matches(`button,input,select,textarea`) &&
@@ -203,10 +204,10 @@ export const focus_trap =
 
     const on_tab = (event: KeyboardEvent) => {
       // A document-wide trap must ignore Tab until focus has entered it.
-      if (!holds_focus()) return
+      if (!holds_focus()) return false
       const items = tabbables()
       event.preventDefault() // even with nothing to focus, Tab must not leave
-      if (items.length === 0) return
+      if (items.length === 0) return true
       const step = event.shiftKey ? -1 : 1
       // findIndex keeps the SVG candidate type compatible.
       const active = deep_active_element()
@@ -215,6 +216,7 @@ export const focus_trap =
       const edge = event.shiftKey ? items.at(-1) : items[0]
       const next = idx === -1 ? edge : items[(idx + step + items.length) % items.length]
       next?.focus()
+      return true
     }
 
     const unregister = register_trap_layer(on_tab)
@@ -224,6 +226,7 @@ export const focus_trap =
           event.preventDefault()
           event.stopPropagation()
           on_escape(event)
+          return true
         })
       : undefined
 

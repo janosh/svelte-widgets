@@ -191,6 +191,7 @@
 {#if anchor}
   <menu
     role="menu"
+    tabindex="-1"
     {...rest}
     id={menu_id}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Actions`)}

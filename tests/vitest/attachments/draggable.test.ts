@@ -1,5 +1,5 @@
 import { draggable } from '$lib/attachments'
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, pointer_event } from '../index'
 
 describe(`draggable`, () => {
@@ -238,8 +238,8 @@ describe(`draggable`, () => {
     handle.className = `drag-handle`
     element.append(handle)
 
-    const attach = draggable({ handle_selector: `.drag-handle` })
-    attach(element)
+    const cleanup = draggable({ handle_selector: `.drag-handle` })(element)
+    if (cleanup) onTestFinished(cleanup)
 
     // press on element (not handle) should not start dragging
     element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))

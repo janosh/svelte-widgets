@@ -1,5 +1,13 @@
 import { highlight_matches } from '$lib/attachments'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  onTestFinished,
+  vi,
+} from 'vite-plus/test'
 import { stub_css_highlights } from '../index'
 
 describe(`highlight_matches`, () => {
@@ -123,7 +131,8 @@ describe(`highlight_matches`, () => {
   it(`fuzzy highlighting marks matching characters in order`, () => {
     mock_element.innerHTML = `<p>allow-user-options</p>`
 
-    highlight_matches({ query: `auo`, fuzzy: true })(mock_element)
+    const cleanup = highlight_matches({ query: `auo`, fuzzy: true })(mock_element)
+    if (cleanup) onTestFinished(cleanup)
 
     const ranges = get_highlight_ranges()
     expect(ranges.map((range) => [range.startOffset, range.endOffset])).toEqual([
@@ -145,7 +154,8 @@ describe(`highlight_matches`, () => {
     (_desc, fuzzy) => {
       mock_element.innerHTML = `<p>İİİab</p>`
 
-      expect(() => highlight_matches({ query: `ab`, fuzzy })(mock_element)).not.toThrow()
+      const cleanup = highlight_matches({ query: `ab`, fuzzy })(mock_element)
+      if (cleanup) onTestFinished(cleanup)
       const ranges = get_highlight_ranges()
       const offsets = ranges.map((range) => [range.startOffset, range.endOffset])
       // substring: one 'ab' range; fuzzy: single-char ranges for 'a' and 'b'
@@ -168,7 +178,8 @@ describe(`highlight_matches`, () => {
     (_description, text, query, expected) => {
       mock_element.textContent = text
 
-      highlight_matches({ query, fuzzy: true })(mock_element)
+      const cleanup = highlight_matches({ query, fuzzy: true })(mock_element)
+      if (cleanup) onTestFinished(cleanup)
 
       expect(
         get_highlight_ranges().map((range) => [range.startOffset, range.endOffset]),

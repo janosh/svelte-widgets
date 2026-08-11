@@ -4,7 +4,7 @@ import { ask_prompt, dialog_queue, request_choice } from '$lib/dialogs.svelte'
 import { type ComponentProps, createRawSnippet, mount, tick, unmount } from 'svelte'
 import { render } from 'svelte/server'
 import { afterEach, expect, test, vi } from 'vite-plus/test'
-import { doc_query, track } from './index'
+import { create_element, doc_query, track } from './index'
 
 // happy-dom implements <dialog>: showModal(), .open, close() and the close event all
 // behave, so nothing about the dialog is stubbed here. What it does not implement is
@@ -225,9 +225,8 @@ test.each([
 // Answering removes the button that had focus. Without a hand-off the next question
 // comes up with the keyboard on <body>, outside the trap.
 test(`focus enters each question and returns to the opener`, async () => {
-  const trigger = document.createElement(`button`)
-  document.body.append(trigger)
-  await mount_dialog()
+  const trigger = create_element(`button`)
+  const dialog = await mount_dialog()
   trigger.focus()
 
   ask(`First?`, `First`)
@@ -248,6 +247,12 @@ test(`focus enters each question and returns to the opener`, async () => {
   second_question_buttons[0].click()
   await flush()
   expect(document.activeElement).toBe(buttons()[0]) // moved on to the third question
+
+  const elsewhere = create_element(`button`)
+  elsewhere.focus()
+  dialog.close()
+  await flush()
+  expect(document.activeElement).toBe(elsewhere)
 })
 
 test(`unmount safely dismisses every queued request`, async () => {

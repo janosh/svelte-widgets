@@ -58,7 +58,9 @@
     if (!dialog) return
     if (!request) {
       if (dialog.open) dialog.close()
-      focus_origin?.focus()
+      const active_element = document.activeElement
+      if (dialog.contains(active_element) || active_element === document.body)
+        focus_origin?.focus()
       focus_origin = null
       return
     }

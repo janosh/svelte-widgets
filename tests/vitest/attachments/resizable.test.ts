@@ -1,6 +1,6 @@
 import type { ResizableOptions } from '$lib/attachments'
 import { resizable } from '$lib/attachments'
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
   mock_rect,
@@ -126,7 +126,11 @@ describe(`resizable`, () => {
     })
     mock_rect(element, { left: 0, top: 0, width: 230, height: 176 })
     const on_resize = vi.fn()
-    resizable({ min_width: 20, on_resize })(element)
+    const cleanup = resizable({ min_width: 20, on_resize })(element)
+    onTestFinished(() => {
+      globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 80))
+      cleanup?.()
+    })
 
     grip(element).dispatchEvent(pointer_event(`pointerdown`, 230, 80))
     globalThis.dispatchEvent(pointer_event(`pointermove`, 230, 80))

@@ -3,7 +3,7 @@ import type { CmdAction } from '$lib/types'
 import type { CmdSection } from '$lib/utils'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, escape_key, mock_rect, stub_prop } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
 
@@ -19,10 +19,7 @@ describe(`ActionMenu`, () => {
   // svelte:body listeners outlive document.body.innerHTML = '', so unmount for real
   // or a previous test's menu keeps answering right-clicks
   const mounted: Record<string, unknown>[] = []
-  afterEach(() => {
-    for (const app of mounted.splice(0)) void unmount(app)
-    Reflect.deleteProperty(globalThis.navigator, `userAgent`)
-  })
+  afterEach(() => mounted.splice(0).forEach((app) => void unmount(app)))
   // returns the reactive props, so a test can drive `at` the way a consumer would
   const mount_menu = (actions: MenuEntries, extra: MenuProps = {}) => {
     const props: MenuProps & { actions: MenuEntries } = $state({ actions, ...extra })
@@ -77,14 +74,20 @@ describe(`ActionMenu`, () => {
     const surface = doc_query(`menu[role="menu"]`)
     const { position, left, top } = surface.style
     expect([position, left, top]).toEqual([`fixed`, `120px`, `240px`])
-    expect([surface.id, surface.getAttribute(`aria-label`)]).toEqual([
+    expect([surface.id, surface.getAttribute(`aria-label`), surface.tabIndex]).toEqual([
       `consumer-menu`,
       `Actions`,
+      -1,
     ])
     // .action-menu comes after the {...rest} spread, so a consumer class adds to the
     // styling hook instead of replacing it
     expect(surface.classList.contains(`action-menu`)).toBe(true)
     expect(surface.classList.contains(`consumer-class`)).toBe(true)
+  })
+
+  test(`preserves a consumer-provided menu tabindex`, async () => {
+    await open_menu(make_actions(), { tabindex: 0 })
+    expect(doc_query<HTMLMenuElement>(`menu[role="menu"]`).tabIndex).toBe(0)
   })
 
   // with a region, svelte:body's handler is dropped, so the rest of the page keeps
@@ -125,7 +128,7 @@ describe(`ActionMenu`, () => {
     [`Macintosh; Intel Mac OS X 10_15`, [`⌘`, `C`]],
     [`X11; Linux x86_64`, [`Ctrl`, `C`]],
   ])(`renders mod as the platform's key (%s)`, async (user_agent, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent) // undone in afterEach
+    onTestFinished(stub_prop(globalThis.navigator, `userAgent`, user_agent))
     await open_menu()
 
     expect([...items()[0].querySelectorAll(`kbd`)].map((key) => key.textContent)).toEqual(

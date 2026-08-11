@@ -295,7 +295,9 @@ aria-label sits before the spread, so a page with several panes renames them via
   })}
 >
   <div class="control-tab">
-    <Icon icon={DragIndicator} class="drag-handle" aria-hidden="true" />
+    <span class="drag-handle" aria-hidden="true">
+      <Icon icon={DragIndicator} style="width: 100%; height: 100%" />
+    </span>
     {#if has_been_dragged}
       <button
         type="button"

@@ -52,7 +52,7 @@ describe(`virtualList`, () => {
   )
 
   test(`spacers pad the rendered window to the full list height`, () => {
-    mount_multiselect({ ...virtual_props })
+    mount_multiselect(virtual_props)
 
     const [top_spacer, bottom_spacer] = get_spacers()
     expect(top_spacer.style.height).toBe(`0px`)
@@ -62,7 +62,7 @@ describe(`virtualList`, () => {
   })
 
   test(`scrolling the dropdown re-windows which options are rendered`, async () => {
-    mount_multiselect({ ...virtual_props })
+    mount_multiselect(virtual_props)
 
     const ul_options = doc_query<HTMLUListElement>(`ul.options`)
     const scroll_top = 600
@@ -93,7 +93,7 @@ describe(`virtualList`, () => {
   })
 
   test(`arrow keys keep the active option rendered beyond the initial window`, async () => {
-    mount_multiselect({ ...virtual_props })
+    mount_multiselect(virtual_props)
 
     const input = get_input()
     const n_presses = 25 // activeIndex 24 lies past the initial window end of 19
@@ -112,7 +112,7 @@ describe(`virtualList`, () => {
   })
 
   test(`fuzzy search filtering still works in virtual mode`, async () => {
-    mount_multiselect({ ...virtual_props })
+    mount_multiselect(virtual_props)
 
     const input = get_input()
     await type_search_text(`999`, input)

@@ -2886,7 +2886,7 @@
   :is(ul.options > li.group-header button.group-select-all.deselect) {
     color: var(--sms-group-deselect-color, light-dark(#c44, #f77));
   }
-  :where(div.multiselect) :global(span.max-select-msg) {
+  :where(div.multiselect) :global(:where(span.max-select-msg)) {
     padding: 0 3pt;
   }
   :global(::highlight(sms-search-matches)) {

@@ -158,6 +158,7 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
     event.preventDefault()
     event.stopPropagation()
     dismiss({ focus_inside: focus_is_inside(), via: `escape`, event })
+    return true
   }
 
   const wait_for_release = dismiss_on === `release`

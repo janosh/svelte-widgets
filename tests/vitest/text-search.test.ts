@@ -362,9 +362,8 @@ describe(`highlight_ranges`, () => {
     expect(set_spy).not.toHaveBeenCalled()
   })
 
-  // The reconciliation this module is designed for: highlight_matches keeps its own
-  // owner bookkeeping in attachments/highlight-matches.ts. Sharing a css class between the two must
-  // stay safe until they are merged onto one implementation.
+  // highlight_matches keeps separate owner bookkeeping in attachments/highlight-matches.ts.
+  // Sharing a CSS class must stay safe until both implementations are merged.
   it(`unions ranges with the highlight_matches attachment on a shared css class`, () => {
     const root = render(`<p>Hello <b>wo</b>rld</p>`)
     const attachment_cleanup = highlight_matches({
