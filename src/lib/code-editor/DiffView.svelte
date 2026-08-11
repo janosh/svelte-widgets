@@ -4,7 +4,7 @@
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { tooltip } from '../attachments'
+  import { tooltip } from '../attachments/index'
   import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
   import { render_tokens } from './tokens'
   import { resolve_diff_backend, to_error } from './types'

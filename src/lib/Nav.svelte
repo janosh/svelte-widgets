@@ -6,8 +6,8 @@
     HTMLAttributes,
     HTMLButtonAttributes,
   } from 'svelte/elements'
-  import type { TooltipOptions } from './attachments'
-  import { click_outside, focus_trap, tooltip } from './attachments'
+  import type { TooltipOptions } from './attachments/index'
+  import { click_outside, focus_trap, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import type { NavRoute, NavRouteObject } from './types'
   import { chain_handlers } from './utils'

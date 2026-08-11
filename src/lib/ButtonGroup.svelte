@@ -36,7 +36,7 @@
 <script lang="ts" generics="Value extends string = string">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
-  import { tooltip, type TooltipOptions } from './attachments'
+  import { tooltip, type TooltipOptions } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
 

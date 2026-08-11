@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { click_outside, type DismissConfig, float } from './attachments'
+  import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction } from './types'
   import {
     chain_handlers,
@@ -248,7 +248,7 @@
     {#if item}
       {@render item({ action, section, checked })}
     {:else}
-      <span>{action.label}</span>
+      {action.label}
       {#if action.shortcut}
         <span aria-hidden="true">
           {#each format_shortcut(action.shortcut) as part, idx (idx)}

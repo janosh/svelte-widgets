@@ -11,7 +11,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { tooltip } from './attachments'
+  import { tooltip } from './attachments/index'
 
   // The same three bounds either way: optional when a schema entry can supply them, required
   // when nothing else can.

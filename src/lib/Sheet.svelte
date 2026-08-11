@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
-  import { backdrop_dismiss } from './attachments'
+  import { backdrop_dismiss } from './attachments/index'
   import { chain_handlers } from './utils'
 
   type SheetSide = `top` | `right` | `bottom` | `left`

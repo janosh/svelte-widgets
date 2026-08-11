@@ -48,8 +48,8 @@
       "default": "./dist/index.js"
     },
     "./attachments": {
-      "types": "./dist/attachments.d.ts",
-      "default": "./dist/attachments.js"
+      "types": "./dist/attachments/index.d.ts",
+      "default": "./dist/attachments/index.js"
     },
     "./utils": {
       "types": "./dist/utils.d.ts",

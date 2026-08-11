@@ -6,7 +6,7 @@
   // Mount once high in the app tree; it renders the head of the shared dialog queue.
   import { onMount } from 'svelte'
   import type { HTMLDialogAttributes, HTMLInputAttributes } from 'svelte/elements'
-  import { backdrop_dismiss } from './attachments'
+  import { backdrop_dismiss } from './attachments/index'
   import {
     answer_dialog,
     dialog_queue,
@@ -102,7 +102,7 @@
     {#if request.body.kind === `text`}
       <p class="message">{request.body.text}</p>
     {:else}
-      <div class="body">{@render request.body.snippet()}</div>
+      {@render request.body.snippet()}
     {/if}
     <!-- Rebuilds the controls between questions. Keyed on choice id alone, Svelte reused
     the same DOM nodes when consecutive requests offer the same ids, so the second half
@@ -163,6 +163,8 @@
     background: var(--confirm-dialog-bg, light-dark(#fff, #2a2a2e));
     color: var(--confirm-dialog-color, light-dark(#222, #eee));
     box-shadow: var(--confirm-dialog-shadow, 0 3px 12px rgba(0, 0, 0, 0.3));
+    /* paths and directory lists are long and must not be clipped */
+    overflow-wrap: anywhere;
     &::backdrop {
       background: var(--confirm-dialog-backdrop, rgba(0, 0, 0, 0.42));
       backdrop-filter: var(--confirm-dialog-backdrop-filter, blur(4px));
@@ -171,11 +173,6 @@
   h2 {
     margin: 0 0 0.4rem;
     font-size: 1em;
-  }
-  .message,
-  .body {
-    /* paths and directory lists are long and must not be clipped */
-    overflow-wrap: anywhere;
   }
   .message {
     margin: 0;

@@ -69,8 +69,8 @@ describe(`ActionMenu`, () => {
     await tick()
 
     expect(event.defaultPrevented).toBe(true)
-    expect(items().map((item) => item.querySelector(`span`)?.textContent)).toEqual([
-      `Copy`,
+    expect(items().map((item) => item.textContent?.trim())).toEqual([
+      expect.stringMatching(/^Copy/u),
       `Delete`,
     ])
     // float anchored the menu on the pointer rather than on any element

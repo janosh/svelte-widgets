@@ -1,7 +1,7 @@
 <script lang="ts">
   import { type Snippet, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { hotkey } from './attachments'
+  import { hotkey } from './attachments/index'
   import { toast as default_store } from './toast-queue.svelte.ts'
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
   import { chain_handlers } from './utils'

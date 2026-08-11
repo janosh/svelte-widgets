@@ -1,8 +1,8 @@
 <script lang="ts">
   import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
-  import type { ResizableOptions } from './attachments'
-  import { click_outside, draggable, resizable, tooltip } from './attachments'
+  import type { ResizableOptions } from './attachments/index'
+  import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Cross, DragIndicator, Expand, Reset, type IconData } from './icons'
   import { chain_handlers } from './utils'
@@ -295,9 +295,7 @@ aria-label sits before the spread, so a page with several panes renames them via
   })}
 >
   <div class="control-tab">
-    <span class="drag-handle" aria-hidden="true">
-      <Icon icon={DragIndicator} style="width: 100%; height: 100%" />
-    </span>
+    <Icon icon={DragIndicator} class="drag-handle" aria-hidden="true" />
     {#if has_been_dragged}
       <button
         type="button"

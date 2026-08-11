@@ -363,7 +363,7 @@ describe(`highlight_ranges`, () => {
   })
 
   // The reconciliation this module is designed for: highlight_matches keeps its own
-  // owner bookkeeping in attachments.ts. Sharing a css class between the two must
+  // owner bookkeeping in attachments/highlight-matches.ts. Sharing a css class between the two must
   // stay safe until they are merged onto one implementation.
   it(`unions ranges with the highlight_matches attachment on a shared css class`, () => {
     const root = render(`<p>Hello <b>wo</b>rld</p>`)

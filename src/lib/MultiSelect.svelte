@@ -6,7 +6,7 @@
   import { fromAction } from 'svelte/attachments'
   import type { FocusEventHandler } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
-  import { click_outside, highlight_matches } from './attachments'
+  import { click_outside, highlight_matches } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
@@ -2243,10 +2243,12 @@
     {/if}
   {:else if !input_display && selected.length > 0}
     {#if maxSelect && (maxSelect > 1 || maxSelectMsg)}
-      <Wiggle bind:wiggle={should_wiggle} angle={20}>
-        <span class="max-select-msg {maxSelectMsgClass}">
-          {maxSelectMsg?.(selected.length, maxSelect)}
-        </span>
+      <Wiggle
+        bind:wiggle={should_wiggle}
+        angle={20}
+        class={[`max-select-msg`, maxSelectMsgClass]}
+      >
+        {maxSelectMsg?.(selected.length, maxSelect)}
       </Wiggle>
     {/if}
     {#if maxSelect !== 1 && selected.length > 1 && can_remove}
@@ -2884,7 +2886,7 @@
   :is(ul.options > li.group-header button.group-select-all.deselect) {
     color: var(--sms-group-deselect-color, light-dark(#c44, #f77));
   }
-  :where(span.max-select-msg) {
+  :where(div.multiselect) :global(span.max-select-msg) {
     padding: 0 3pt;
   }
   :global(::highlight(sms-search-matches)) {

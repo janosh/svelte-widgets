@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { tooltip, type TooltipOptions } from './attachments'
+  import { tooltip, type TooltipOptions } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
   import {

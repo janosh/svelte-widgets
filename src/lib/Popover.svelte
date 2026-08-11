@@ -1,8 +1,8 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { DismissConfig } from './attachments'
-  import { click_outside, float, focus_trap } from './attachments'
+  import type { DismissConfig } from './attachments/index'
+  import { click_outside, float, focus_trap } from './attachments/index'
   import { chain_handlers, type Placement } from './utils'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
