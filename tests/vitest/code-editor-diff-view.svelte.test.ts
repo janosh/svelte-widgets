@@ -476,7 +476,7 @@ describe(`virtualization`, () => {
     await click(next_change)
     await click(next_change)
 
-    expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 100])
+    expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 200])
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 10)
   })
 })

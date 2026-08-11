@@ -234,17 +234,18 @@
       is_change_row(entry) && !is_change_row(display_rows[row_idx - 1]) ? [row_idx] : [],
     ),
   )
-  const current_row = $derived(Math.round(scroll_top / row_height))
+  let navigation_row = $derived(Math.round(scroll_top / row_height))
   const previous_change = $derived(
-    change_anchors.findLast((row_idx) => row_idx < current_row),
+    change_anchors.findLast((row_idx) => row_idx < navigation_row),
   )
-  const next_change = $derived(change_anchors.find((row_idx) => row_idx > current_row))
+  const next_change = $derived(change_anchors.find((row_idx) => row_idx > navigation_row))
 
   const scroll_to_row = (row_idx: number) => {
     const target = Math.max(0, row_idx * row_height)
-    // Read back the browser-clamped value so the virtual window stays aligned.
+    // Keep virtualization on the browser-clamped offset but navigation on the requested row.
     if (scroll_container) scroll_container.scrollTop = target
     scroll_top = scroll_container?.scrollTop ?? target
+    navigation_row = row_idx
   }
 
   const go_to_change = (direction: 1 | -1) => {

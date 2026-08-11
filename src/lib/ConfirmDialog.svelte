@@ -81,7 +81,9 @@
       mounted_hosts -= 1
       if (mounted_hosts === 0) {
         dismiss_all_dialogs()
-        focus_origin?.focus()
+        const active_element = document.activeElement
+        if (dialog?.contains(active_element) || active_element === document.body)
+          focus_origin?.focus()
       }
     }
   })

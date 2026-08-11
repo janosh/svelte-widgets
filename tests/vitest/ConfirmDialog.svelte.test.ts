@@ -261,6 +261,8 @@ test(`unmount safely dismisses every queued request`, async () => {
   const second = track(ask_prompt(`Name?`, `Profile`))
   await flush()
 
+  const elsewhere = create_element(`button`)
+  elsewhere.focus()
   const app = mounted.pop()
   if (!app) throw new Error(`ConfirmDialog test app was not mounted`)
   await unmount(app)
@@ -269,6 +271,7 @@ test(`unmount safely dismisses every queued request`, async () => {
   expect([first.settled, first.value]).toEqual([true, `cancel`])
   expect([second.settled, second.value]).toEqual([true, null])
   expect(dialog_queue).toHaveLength(0)
+  expect(document.activeElement).toBe(elsewhere)
 })
 
 test(`only the last mounted host dismisses queued requests`, async () => {
