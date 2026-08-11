@@ -6,7 +6,7 @@
   // Mount once high in the app tree; it renders the head of the shared dialog queue.
   import { onMount } from 'svelte'
   import type { HTMLDialogAttributes, HTMLInputAttributes } from 'svelte/elements'
-  import { backdrop_dismiss, focus_trap } from './attachments'
+  import { backdrop_dismiss } from './attachments'
   import {
     answer_dialog,
     dialog_queue,
@@ -30,6 +30,7 @@
   const title_id = `confirm-dialog-${unique_id}-title`
   const error_id = `confirm-dialog-${unique_id}-error`
   let dialog = $state<HTMLDialogElement | null>(null)
+  let focus_origin: HTMLElement | SVGElement | null = null
   let prompt_value = $derived(request?.kind === `prompt` ? request.initial_value : ``)
   // Writable derived on `request`: submitting an invalid value assigns the error, and
   // advancing the queue re-runs this and clears it, so no stale error survives a request.
@@ -51,13 +52,24 @@
     if (prompt_result.status === `invalid`) validation_message = prompt_result.message
   }
 
-  // showModal() puts the dialog in the top layer with native Escape handling. focus_trap
-  // re-runs on every request, which is what moves the keyboard into each new question
-  // (answering removes the button that had focus) and hands it back to the opener.
+  // showModal() supplies top-layer containment and native Escape handling. The queue can
+  // replace the focused controls without closing, so each request gets a known entry point.
   $effect(() => {
     if (!dialog) return
-    if (!request) dialog.close()
-    else if (!dialog.open) dialog.showModal()
+    if (!request) {
+      if (dialog.open) dialog.close()
+      focus_origin?.focus()
+      focus_origin = null
+      return
+    }
+    if (!dialog.open) {
+      const active = document.activeElement
+      if (active instanceof HTMLElement || active instanceof SVGElement)
+        focus_origin = active
+      dialog.showModal()
+    }
+    const selector = request.kind === `prompt` ? `input` : `.actions button`
+    dialog.querySelector<HTMLElement>(selector)?.focus()
   })
 
   // Register only in the browser: SSR must not mutate this process-global queue.
@@ -65,7 +77,10 @@
     mounted_hosts += 1
     return () => {
       mounted_hosts -= 1
-      if (mounted_hosts === 0) dismiss_all_dialogs()
+      if (mounted_hosts === 0) {
+        dismiss_all_dialogs()
+        focus_origin?.focus()
+      }
     }
   })
 </script>
@@ -75,10 +90,6 @@
   {...rest}
   class={[`confirm-dialog`, rest.class]}
   aria-labelledby={title_id}
-  {@attach focus_trap({
-    enabled: Boolean(request),
-    initial: request?.kind === `prompt` ? `input` : undefined,
-  })}
   {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
     // Escape and backdrop clicks land here. Answering already shifted the queue, so the

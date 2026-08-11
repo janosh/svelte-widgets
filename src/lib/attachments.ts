@@ -2496,7 +2496,7 @@ export const focus_trap =
 
     const focus_origin = deep_active_element()
     // Recapture can inject tabindex into several roots; teardown restores them all.
-    const tabindex_added_to = new Set<Element>()
+    const tabindex_added_to: Element[] = []
     let last_inside: Element | null = null
     let trap_active = true
 
@@ -2512,7 +2512,7 @@ export const focus_trap =
       const target = preferred ?? requested ?? tabbables()[0] ?? root_el
       if (target === root_el && !root_el.hasAttribute(`tabindex`)) {
         root_el.setAttribute(`tabindex`, `-1`)
-        tabindex_added_to.add(root_el)
+        tabindex_added_to.push(root_el)
       }
       focus_element(target)
     }

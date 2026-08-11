@@ -1,7 +1,7 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
-  import { backdrop_dismiss, focus_trap, tabbable_selector } from './attachments'
+  import { backdrop_dismiss } from './attachments'
   import { chain_handlers } from './utils'
 
   type SheetSide = `top` | `right` | `bottom` | `left`
@@ -46,7 +46,7 @@
   } = $props()
 
   const sheet_id = $derived(id ?? unique_id)
-  let trigger_wrapper = $state<HTMLSpanElement | null>(null)
+  let focus_origin: HTMLElement | SVGElement | null = null
 
   const close = (via: CloseVia) => {
     if (!open) return
@@ -66,13 +66,16 @@
     if (!open && surface?.open) surface.close()
   })
   $effect(() => {
-    if (open && surface && !surface.open) surface.showModal()
+    if (!open || !surface || surface.open) return
+    const active = document.activeElement
+    if (active instanceof HTMLElement || active instanceof SVGElement)
+      focus_origin = active
+    surface.showModal()
   })
+  onDestroy(() => focus_origin?.focus())
 </script>
 
-<span bind:this={trigger_wrapper} style="display: contents">
-  {@render trigger?.(trigger_props)}
-</span>
+{@render trigger?.(trigger_props)}
 
 {#if open}
   <dialog
@@ -84,9 +87,6 @@
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Sheet`)}
     aria-labelledby={aria_labelledby}
     {@attach backdrop_dismiss(() => close_on_backdrop && close(`pointer`))}
-    {@attach focus_trap({
-      restore: trigger_wrapper?.querySelector(tabbable_selector) ?? undefined,
-    })}
     oncancel={chain_handlers((event) => {
       if (close_on_escape) close(`escape`)
       else event.preventDefault()

@@ -26,7 +26,7 @@ describe(`Sheet`, () => {
     dialog.dispatchEvent(pointer_event(`click`, client_x, client_y))
   }
 
-  test(`trigger opens a native dialog and moves focus inside`, async () => {
+  test(`trigger opens a native dialog`, async () => {
     const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
     mount_sheet({ id: `settings-sheet` })
     expect(surface()).toBeNull()
@@ -44,7 +44,6 @@ describe(`Sheet`, () => {
     expect(dialog.id).toBe(`settings-sheet`)
     expect(dialog.id).toBe(trigger().getAttribute(`aria-controls`))
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
-    expect(document.activeElement).toBe(doc_query(`[data-testid="sheet-close"]`))
     expect(doc_query(`[data-testid="sheet-footer"]`).textContent).toBe(`Unsaved changes`)
 
     const closed_clone = dialog.cloneNode(true) as HTMLDialogElement

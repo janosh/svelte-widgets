@@ -76,7 +76,7 @@ Use tuple syntax `[parent, [children...]]` for nested routes. When the parent ex
 
 ## Keyboard Navigation
 
-- **Tab**: Navigate between items
+- **Tab**: Follow page order; once focus enters a pinned submenu, cycle its links
 - **Enter/Space**: Open dropdown or follow link
 - **Arrow Down/Up**: Navigate dropdown items
 - **Escape**: Close menus
