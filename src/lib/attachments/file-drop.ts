@@ -57,6 +57,8 @@ export const file_drop =
     }
     const on_dragover = (event: DragEvent) => {
       if (!event.dataTransfer || !carries_files(event.dataTransfer)) return
+      // preventDefault alone leaves the browser guessing at the cursor, often `move`
+      event.dataTransfer.dropEffect = disabled ? `none` : `copy`
       event.preventDefault()
     }
     const on_dragleave = (event: DragEvent) => {

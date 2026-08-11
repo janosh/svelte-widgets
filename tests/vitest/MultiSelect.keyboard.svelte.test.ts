@@ -274,7 +274,7 @@ describe(`arrow key navigation between selected items`, () => {
     expect(highlighted()).toHaveLength(0)
   })
 
-  test.each([
+  test.each<[key: string, selected: string[]]>([
     [`ArrowLeft`, []],
     [`ArrowRight`, [`Red`, `Green`, `Blue`]],
   ])(`%s is a no-op when highlight cannot start`, async (key, selected) => {
@@ -404,7 +404,7 @@ describe(`arrow key navigation between selected items`, () => {
     expect(highlighted()).toHaveLength(0)
   })
 
-  test.each([
+  test.each<[name: string, next_selected: string[], expected_idx: number | null]>([
     // externally shrinking past the highlighted idx should clamp to the last valid index;
     // clearing should drop the highlight entirely (expected_idx null)
     [`shrink clamps highlighted_idx`, [`Red`, `Green`], 1],

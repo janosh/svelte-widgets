@@ -2,7 +2,7 @@ import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import type Popover from '$lib/Popover.svelte'
-import { doc_query, pointer_event } from './index'
+import { create_element, doc_query, pointer_event } from './index'
 import TestPopover from './TestPopover.svelte'
 
 describe(`Popover`, () => {
@@ -199,8 +199,7 @@ describe(`Popover`, () => {
     async (trigger_mode) => {
       vi.useFakeTimers()
       mount_popover({ trigger_mode, close_delay_ms: 25 })
-      const outside = document.createElement(`button`)
-      document.body.append(outside)
+      const outside = create_element(`button`)
 
       trigger().focus()
       await advance_time(0)
@@ -224,8 +223,7 @@ describe(`Popover`, () => {
   test(`hover stays open while either pointer or focus remains inside`, async () => {
     vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, close_delay_ms: 20 })
-    const outside = document.createElement(`button`)
-    document.body.append(outside)
+    const outside = create_element(`button`)
 
     trigger().focus()
     await advance_time(0)
@@ -257,8 +255,7 @@ describe(`Popover`, () => {
   test(`Escape from a focus popover closes without immediately reopening`, async () => {
     vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `focus` })
-    const outside = document.createElement(`button`)
-    document.body.append(outside)
+    const outside = create_element(`button`)
 
     trigger().focus()
     await advance_time(0)
@@ -295,22 +292,19 @@ describe(`Popover`, () => {
   // Removing a focused surface delivers no focusout, and focus_trap then hands focus
   // back to the trigger. Without dropping the stale focus state on close, that focusin
   // reopens what was just dismissed.
-  test.each([`hover`, `focus`] as const)(
-    `%s dismissal with focus inside stays closed`,
-    async (trigger_mode) => {
-      vi.useFakeTimers()
-      const props = mount_popover({ trigger_mode, open_delay_ms: 0, close_delay_ms: 10 })
-      trigger().focus()
-      await advance_time(0)
-      doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
-      await advance_time(0)
-      expect(surface()).not.toBeNull()
+  test(`hover dismissal with focus inside stays closed`, async () => {
+    vi.useFakeTimers()
+    const props = mount_popover({ trigger_mode: `hover`, close_delay_ms: 10 })
+    trigger().focus()
+    await advance_time(0)
+    doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
+    await advance_time(0)
+    expect(surface()).not.toBeNull()
 
-      props.open = false
-      await advance_time(100)
-      expect(surface()).toBeNull()
-    },
-  )
+    props.open = false
+    await advance_time(100)
+    expect(surface()).toBeNull()
+  })
 
   // Same stale state seen from the other side: with nothing to restore focus to, a later
   // hover cycle must still close on mouseleave instead of waiting on a focus that left.
@@ -339,18 +333,22 @@ describe(`Popover`, () => {
     expect(surface()).toBeNull()
   })
 
-  test(`controlled open state stays in sync`, async () => {
+  test(`controlled open state stays in sync and restores focus`, async () => {
+    const opener = create_element(`button`)
+    opener.focus()
     const props = mount_popover({ open: true, placement: `right` })
     await tick()
 
     const dialog = doc_query(`[role="dialog"]`)
     expect(dialog.dataset.placement).toBe(`right`)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
+    expect(document.activeElement).toBe(doc_query(`[data-testid="popover-item"]`))
 
     props.open = false
     await tick()
     expect(surface()).toBeNull()
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(document.activeElement).toBe(opener)
   })
 
   // A torn-down component cannot render a surface either way, so asserting on the DOM

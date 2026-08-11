@@ -182,17 +182,23 @@ test(`storage events synchronize the theme key until unmount`, async () => {
   expect(applied_theme()).toEqual([`light`, `light`])
 })
 
-// both rows needed: tooltip=false alone passes even if the attachment never strips title
-test.each([
-  [`default`, {}, null],
-  [`false`, false, `Switch to dark theme`],
-] as const)(
-  `tooltip=%s decides whether the tooltip takes over the native title`,
-  async (_label, tooltip, title) => {
-    const button = await mount_theme_toggle({ tooltip })
-    expect(button.getAttribute(`title`)).toBe(title)
-  },
-)
+test(`tooltip=false preserves the native title`, async () => {
+  const button = await mount_theme_toggle({ tooltip: false })
+  expect(button.getAttribute(`title`)).toBe(`Switch to dark theme`)
+})
+
+test(`tooltip defaults to hover without opening on focus`, async () => {
+  const button = await mount_theme_toggle({ tooltip: { open_delay_ms: 0 } })
+  expect(button.getAttribute(`title`)).toBeNull()
+
+  button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+  expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+
+  button.dispatchEvent(
+    new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
+  )
+  expect(doc_query(`.custom-tooltip`).textContent).toBe(`Switch to dark theme`)
+})
 
 // CommandMenu / PageSearch call apply_theme_mode without clicking the toggles
 test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {

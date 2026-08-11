@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-await-in-loop
-import { tick } from 'svelte'
+import { tick, unmount } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
@@ -228,7 +228,11 @@ test(`clearing searchText while create-option message is active drops aria-activ
 
 describe(`ARIA correctness`, () => {
   test(`select-all aria-selected tracks all-selectable-selected, not max capacity`, async () => {
-    mount_multiselect({ options: [1, 2], selectAllOption: true, open: true })
+    const first = mount_multiselect({
+      options: [1, 2],
+      selectAllOption: true,
+      open: true,
+    })
 
     const select_all = doc_query(`ul.options li.select-all`)
     expect(select_all.getAttribute(`aria-selected`)).toBe(`false`)
@@ -242,7 +246,7 @@ describe(`ARIA correctness`, () => {
     // at max capacity the row is disabled but must NOT be announced as selected:
     // aria-selected tracks only whether all selectable options are selected
     // (option 3 is not) — not the maxSelect capacity limit
-    document.body.innerHTML = ``
+    await unmount(first)
     mount_multiselect({
       options: [1, 2, 3],
       selected: [1, 2],

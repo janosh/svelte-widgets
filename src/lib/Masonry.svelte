@@ -348,6 +348,10 @@
   let css_height = $derived(
     typeof height === `number` ? `${height}px` : (height ?? `400px`),
   )
+  // Emitted after any consumer style so virtualization keeps the sizing it depends on
+  let virtual_style = $derived(
+    virtualize ? `overflow-y: auto; height: ${css_height};` : ``,
+  )
 
   // Only enable virtualization once we have a valid container height measurement
   // This prevents flicker when using CSS units like "80vh" that need DOM measurement
@@ -398,7 +402,7 @@
   {...rest}
   onscroll={chain_handlers(virtualize ? on_scroll : undefined, rest.onscroll)}
   style="display: flex; width: 100%; justify-content: center; box-sizing: border-box;
-  {virtualize ? `overflow-y: auto; height: ${css_height};` : ``} {rest.style ?? ``}"
+  {rest.style ? `${rest.style};` : ``} {virtual_style}"
   class={[`masonry`, rest.class]}
   data-masonry-id={unique_id}
 >

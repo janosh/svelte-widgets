@@ -23,6 +23,7 @@ const HEX_COLOR = /^#(?<digits>[\da-f]+)$/iu
 const COLOR_FN = /^(?<name>oklch|oklab|lch|lab|hsla?|hwb|color)\((?<args>[^)]*)\)$/iu
 
 type Triple = [number, number, number]
+type Rgba = [...Triple, number]
 
 const dot3 = (matrix: readonly number[], [x_val, y_val, z_val]: Triple): Triple => [
   matrix[0] * x_val + matrix[1] * y_val + matrix[2] * z_val,
@@ -44,11 +45,8 @@ const parse_alpha = (token: string | undefined): number =>
   token === undefined ? 1 : clamp_unit(parse_component(token, 1))
 // Junk anywhere in a component reaches here as NaN, so one check at the end rejects
 // the whole color rather than every parse site having to guard
-const finite_rgba = (
-  rgb: Triple,
-  alpha: number,
-): [number, number, number, number] | null => {
-  const parsed: [number, number, number, number] = [...rgb, alpha]
+const finite_rgba = (rgb: Triple, alpha: number): Rgba | null => {
+  const parsed: Rgba = [...rgb, alpha]
   return parsed.every(Number.isFinite) ? parsed : null
 }
 
@@ -256,10 +254,7 @@ const function_to_rgb255 = (name: string, tokens: string[]): Triple | null => {
   )
 }
 
-const parse_color_function = (
-  name: string,
-  args: string,
-): [number, number, number, number] | null => {
+const parse_color_function = (name: string, args: string): Rgba | null => {
   const [main = ``, alpha_arg] = args.split(`/`)
   const tokens = main
     .trim()
@@ -275,7 +270,7 @@ const parse_color_function = (
   return finite_rgba(rgb, parse_alpha(alpha_arg?.trim() ?? legacy_alpha))
 }
 
-const parse_color = (color: string): [number, number, number, number] | null => {
+const parse_color = (color: string): Rgba | null => {
   const trimmed = color.trim()
   const channels = RGB_COLOR.exec(trimmed)?.groups?.channels
   if (channels) {
@@ -320,15 +315,36 @@ const luminance = (color: string): number => {
   return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
 }
 
-// Nearest ancestor background that is not fully transparent, or `` when every one of
-// them is — a node's own background is usually transparent, so the color that decides
-// readability belongs to some container further up.
+// Computed alphas round-trip through 8 bits, so a nominally opaque one can land just shy of 1
+const OPAQUE = 0.999
+
+// Paint `top` over `bottom` (source-over), keeping alpha until a layer is opaque.
+const composite_color = (top: Rgba, bottom: Rgba): Rgba => {
+  const share = bottom[3] * (1 - top[3])
+  const alpha = top[3] + share
+  const channel = (idx: 0 | 1 | 2) => (top[idx] * top[3] + bottom[idx] * share) / alpha
+  return [channel(0), channel(1), channel(2), alpha]
+}
+
+// The browser reports 8-bit channels; match that rather than emit blend fractions
+const rgb_string = ([red, green, blue]: Rgba): string =>
+  `rgb(${Math.round(red)} ${Math.round(green)} ${Math.round(blue)})`
+
+// The effective background behind a node: a translucent ancestor tints whatever it sits
+// on rather than deciding readability alone, so keep walking and blend the layers. A
+// chain with nothing opaque in it shows through to the browser's white canvas.
 export const get_bg_color = (element: Element | null): string => {
+  let composite: Rgba | undefined
   for (let node = element; node; node = node.parentElement) {
     const bg_color = getComputedStyle(node).backgroundColor
-    if ((parse_color(bg_color)?.[3] ?? 0) > 0) return bg_color
+    const layer = parse_color(bg_color)
+    if (!layer || layer[3] === 0) continue
+    // Nothing translucent above it: hand back the color as authored, unconverted
+    if (!composite && layer[3] >= OPAQUE) return bg_color
+    composite = composite ? composite_color(composite, layer) : layer
+    if (composite[3] >= OPAQUE) return rgb_string(composite)
   }
-  return ``
+  return composite ? rgb_string(composite_color(composite, [255, 255, 255, 1])) : ``
 }
 
 export const pick_contrast_color = (options: ContrastOptions = {}): string => {

@@ -212,8 +212,9 @@
       enabled: trap_focus,
       // Hover/focus opening must not steal focus.
       initial: trigger_mode === `click` ? undefined : false,
-      // Return focus to the exact trigger that opened this instance.
-      restore: trigger_focus?.isConnected ? trigger_focus : false,
+      // Return focus to the exact trigger that opened this instance; `false` for one the
+      // surface removed. Opened from outside, leave the default (focus before opening).
+      restore: trigger_focus?.isConnected === false ? false : trigger_focus || undefined,
     })}
     onmouseenter={chain_handlers(
       trigger_mode === `hover` ? enter_pointer : undefined,

@@ -80,11 +80,10 @@ const is_named_radio = (element: Element): element is HTMLInputElement =>
 
 const collect_tab_candidates = (
   root: Element | ShadowRoot,
-  candidates: Element[],
+  candidates: Set<Element>,
 ): void => {
   for (const child of root.children) {
-    if (child.matches(tabbable_selector) && !candidates.includes(child))
-      candidates.push(child)
+    if (child.matches(tabbable_selector)) candidates.add(child)
     if (child.shadowRoot) collect_tab_candidates(child.shadowRoot, candidates)
     collect_tab_candidates(child, candidates)
   }
@@ -92,8 +91,9 @@ const collect_tab_candidates = (
 
 // Covers light DOM and open shadow roots; closed roots are necessarily opaque.
 const get_tab_candidates = (roots: Element[]): (HTMLElement | SVGElement)[] => {
-  const candidates: Element[] = []
-  for (const root of roots) collect_tab_candidates(root, candidates)
+  const candidate_set = new Set<Element>()
+  for (const root of roots) collect_tab_candidates(root, candidate_set)
+  const candidates = [...candidate_set]
 
   return candidates
     .filter(is_tab_candidate)

@@ -73,6 +73,11 @@ describe(`file_drop`, () => {
     expect(node.hasAttribute(`data-drag-active`)).toBe(true)
     expect(on_drag_active).toHaveBeenCalledExactlyOnceWith(true, enter)
 
+    const over = drag_event(`dragover`, transfer)
+    node.dispatchEvent(over)
+    expect(over.defaultPrevented).toBe(true)
+    expect(transfer.dropEffect).toBe(`copy`)
+
     node.dispatchEvent(drag_event(`dragleave`, transfer))
     expect(node.hasAttribute(`data-drag-active`)).toBe(true)
     node.dispatchEvent(drag_event(`drop`, transfer))
@@ -214,6 +219,7 @@ describe(`file_drop`, () => {
     node.dispatchEvent(drop)
     expect(cleanup).toBeTypeOf(`function`)
     expect(dragover.defaultPrevented).toBe(true)
+    expect(transfer.dropEffect).toBe(`none`)
     expect(drop.defaultPrevented).toBe(true)
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
     expect(on_drag_active).not.toHaveBeenCalled()

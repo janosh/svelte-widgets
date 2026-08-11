@@ -514,13 +514,13 @@ describe(`Masonry virtualization`, () => {
   })
 
   test.each([
-    [500, `500px`],
-    [`80vh`, `80vh`],
-  ])(`applies height=%s correctly when virtualize=true`, async (height, expected) => {
-    mount_masonry({ items: indices, virtualize: true, height })
-    const masonry = masonry_el()
-    expect(masonry?.style.overflowY).toBe(`auto`)
-    expect(masonry?.style.height).toBe(expected)
+    [`a numeric height`, 500, `500px`, undefined],
+    [`a CSS height`, `80vh`, `80vh`, undefined],
+    [`conflicting styles`, 300, `300px`, `height: 900px; overflow-y: hidden`],
+  ] as const)(`handles %s when virtualize=true`, (_desc, height, expected, style) => {
+    mount_masonry({ items: indices, virtualize: true, height, style })
+    expect(masonry_el()?.style.height).toBe(expected)
+    expect(masonry_el()?.style.overflowY).toBe(`auto`)
   })
 
   test(`calls getEstimatedHeight and applies column padding`, async () => {

@@ -84,6 +84,15 @@ describe(`forward_window_keydown`, () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
+  it(`handles body and document-element targets while page focus is idle`, () => {
+    const { node, handle } = attach()
+    hover(node)
+    for (const target of [document.body, document.documentElement]) {
+      expect(dispatch_key(target, `f`).defaultPrevented).toBe(true)
+    }
+    expect(handle).toHaveBeenCalledTimes(2)
+  })
+
   it(`leaves the browser default alone when unhandled`, () => {
     const { node } = attach(false)
     hover(node)

@@ -5,8 +5,6 @@ import { MultiSelect } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 
-export const mouseover = new MouseEvent(`mouseover`, { bubbles: true })
-
 export const mount_multiselect = (
   props: MultiSelectProps,
   target: HTMLElement = document.body,
@@ -14,6 +12,7 @@ export const mount_multiselect = (
 
 // fresh event per dispatch: happy-dom never resets the stop-propagation flag,
 // so shared event instances go inert once a handler calls stopPropagation()
+export const fresh_mouseover = () => new MouseEvent(`mouseover`, { bubbles: true })
 export const fresh_key = (key: string) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true })
 

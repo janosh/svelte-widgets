@@ -134,12 +134,16 @@ describe(`contrast_color`, () => {
 
   // a chain with nothing painted in it reports no background at all, and a page with
   // nothing behind the node is assumed white
+  const tint = `rgba(0, 0, 0, 0.05)`
   it.each([
-    [`the first painted ancestor`, `rgb(10, 10, 10)`, `rgb(10, 10, 10)`, `white`],
-    [`nothing when every ancestor is transparent`, `rgba(0, 0, 0, 0)`, ``, `black`],
-  ])(`the ancestor walk finds %s`, (_desc, background, expected_bg, expected_color) => {
+    [`the first painted ancestor`, `rgb(10, 10, 10)`, ``, `rgb(10, 10, 10)`, `white`],
+    [`nothing when all are transparent`, `rgba(0, 0, 0, 0)`, ``, ``, `black`],
+    [`translucent over white`, `rgb(255, 255, 255)`, tint, `rgb(242 242 242)`, `black`],
+    [`translucent over the page`, `rgba(0, 0, 0, 0)`, tint, `rgb(242 242 242)`, `black`],
+  ])(`resolves %s`, (_desc, background, overlay, expected_bg, expected_color) => {
     const painted = create_element(`div`, { backgroundColor: background })
     const middle = document.createElement(`div`)
+    middle.style.backgroundColor = overlay
     const node = document.createElement(`span`)
     painted.append(middle)
     middle.append(node)

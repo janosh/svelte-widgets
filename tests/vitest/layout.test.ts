@@ -49,6 +49,7 @@ test(`command search includes custom demo labels`, async () => {
   mocks.page.url = new URL(`https://x.co/`)
   // Leave this final instance mounted: happy-dom's animation stub cannot cancel the
   // open CommandMenu transition during unmount, and the worker tears it down next.
+  onTestFinished(() => document.body.replaceChildren())
   mount(Layout, { target: document.body })
 
   window.dispatchEvent(

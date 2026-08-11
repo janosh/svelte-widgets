@@ -61,9 +61,12 @@ export const resizable =
     type Grab = { horizontal?: `left` | `right`; vertical?: `top` | `bottom` }
     let is_resizing = false
     let stop_pointer_follow: (() => void) | undefined
+    let previous_user_select = ``
 
     const computed = getComputedStyle(node)
-    if (computed.position === `static`) node.style.position = `relative`
+    const previous_position =
+      computed.position === `static` ? node.style.position : undefined
+    if (previous_position !== undefined) node.style.position = `relative`
     // Absolute children anchor to the padding box, so a strip at `edge: 0` sits inside the
     // border and leaves the visible edge ungrabbable. Negative insets put it back on the
     // border box, the region the pointer used to be hit-tested against.
@@ -201,7 +204,8 @@ export const resizable =
       const origin = { x: event.clientX, y: event.clientY }
       const measured = measure()
       const maximum = read_maximum()
-      document.body.style.userSelect = `none`
+      previous_user_select = node.ownerDocument.body.style.userSelect
+      node.ownerDocument.body.style.userSelect = `none`
       on_resize_start?.(event, { width: measured.width, height: measured.height })
       stop_pointer_follow = follow_pointer(
         node,
@@ -224,7 +228,7 @@ export const resizable =
 
     function on_pointerup(event: PointerEvent) {
       if (!is_resizing) return
-      document.body.style.userSelect = ``
+      node.ownerDocument.body.style.userSelect = previous_user_select
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })
       stop_pointer_follow?.()
       is_resizing = false
@@ -346,8 +350,9 @@ export const resizable =
 
     return () => {
       stop_pointer_follow?.()
-      if (is_resizing) document.body.style.userSelect = ``
+      if (is_resizing) node.ownerDocument.body.style.userSelect = previous_user_select
       abort_controller.abort() // removal alone leaves a retained strip ref able to fire on_pointerdown
       for (const handle of handles) handle.remove()
+      if (previous_position !== undefined) node.style.position = previous_position
     }
   }

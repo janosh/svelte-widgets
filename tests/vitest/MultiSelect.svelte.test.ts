@@ -11,8 +11,8 @@ import TestMultiSelectSnippets from './TestMultiSelectSnippets.svelte'
 import {
   focus_input,
   fresh_key,
+  fresh_mouseover,
   get_input,
-  mouseover,
   mount_multiselect,
   normalized_text,
   type_search_text,
@@ -33,7 +33,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
   // test internal changes to activeIndex bind outward
   for (const idx of [1, 2]) {
     const li = doc_query(`ul.options li:nth-child(${idx})`)
-    li.dispatchEvent(mouseover)
+    li.dispatchEvent(fresh_mouseover())
 
     expect(props.activeIndex).toEqual(idx - 1)
   }
@@ -79,7 +79,7 @@ test(`1-way binding of activeOption and hovering an option makes it active`, asy
   })
 
   const firstOption = doc_query(`ul.options > li`)
-  firstOption.dispatchEvent(mouseover)
+  firstOption.dispatchEvent(fresh_mouseover())
   await tick()
 
   expect(activeOption).toBe(1)
@@ -181,7 +181,7 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
   mount_multiselect({ options: [1, 2, 3], ...css_classes, selected: [1], maxSelect: 2 })
 
   // make an option active hovering it so it gets the active class
-  document.querySelector(`ul.options > li`)?.dispatchEvent(mouseover)
+  document.querySelector(`ul.options > li`)?.dispatchEvent(fresh_mouseover())
   await tick()
 
   expect(doc_query(`.maxSelectMsg`).textContent?.trim()).toBe(`1/2`)
@@ -3196,7 +3196,10 @@ describe(`binding update event count`, () => {
 })
 
 describe(`CSS static analysis`, () => {
-  const component_source = readFileSync(`src/lib/MultiSelect.svelte`, `utf-8`)
+  const component_source = readFileSync(
+    `${import.meta.dirname}/../../src/lib/MultiSelect.svelte`,
+    `utf-8`,
+  )
   const css =
     /<style>(?<style>[\s\S]*?)<\/style>/u.exec(component_source)?.groups?.style ?? ``
   const get_css_block = (pattern: RegExp) => pattern.exec(css)?.groups?.block ?? ``
@@ -3592,7 +3595,7 @@ describe(`onactivate event`, () => {
 
     doc_query(`ul.options`).dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
     const option3 = doc_query(`ul.options li:nth-child(3)`)
-    option3.dispatchEvent(mouseover)
+    option3.dispatchEvent(fresh_mouseover())
     await tick()
     expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(`3`)
 

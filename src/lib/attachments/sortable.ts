@@ -31,26 +31,25 @@ export const sortable =
     if (disabled) return undefined
 
     const headers = node.querySelectorAll<HTMLTableCellElement>(header_selector)
-    let sort_col_idx: number
+    let sort_col_idx = -1
     let sort_dir = 1 // 1 = asc, -1 = desc
 
     const listeners = new AbortController()
     type HeaderState = {
       header: HTMLTableCellElement
-      original_html: string
       original_style: string
     }
     const header_state: HeaderState[] = []
-    const restore_header = ({ header, original_html, original_style }: HeaderState) => {
-      // Restore innerHTML (not textContent) to preserve child markup like icons
-      header.innerHTML = original_html
+    // Drop only what this attachment added, leaving the header's own markup and any
+    // listeners on it in place — the arrow lives in a span of its own for that reason.
+    const restore_header = ({ header, original_style }: HeaderState) => {
+      header.querySelector(`:scope > .sort-arrow`)?.remove()
       header.classList.remove(asc_class, desc_class)
       if (original_style) header.setAttribute(`style`, original_style)
       else header.removeAttribute(`style`)
     }
 
     headers.forEach((header, idx) => {
-      const original_html = header.innerHTML
       const original_style = header.getAttribute(`style`) ?? ``
       header.style.cursor = `pointer`
 
@@ -68,8 +67,7 @@ export const sortable =
         }
         header.classList.add(sort_dir > 0 ? asc_class : desc_class)
         Object.assign(header.style, sorted_style)
-        // Render arrow in a separate span so the header's own markup stays intact
-        // (restore_header above already removed any previous arrow span)
+        // the reset above already dropped any previous arrow
         const arrow_span = document.createElement(`span`)
         arrow_span.className = `sort-arrow`
         arrow_span.textContent = ` ${sort_dir > 0 ? `↑` : `↓`}`
@@ -83,8 +81,8 @@ export const sortable =
           table_body.querySelectorAll<HTMLTableRowElement>(`:scope > tr`),
         )
         rows.sort((row_1, row_2) => {
-          const cell_1 = row_1.cells[sort_col_idx]
-          const cell_2 = row_2.cells[sort_col_idx]
+          const cell_1 = row_1.cells[idx]
+          const cell_2 = row_2.cells[idx]
           // Rows can have fewer cells than the sort column (colspan placeholders,
           // ragged rows) — treat missing cells as empty so they sort last
           const val_1 = cell_1 ? get_html_sort_value(cell_1) : ``
@@ -111,7 +109,7 @@ export const sortable =
       }
 
       header.addEventListener(`click`, click_handler, { signal: listeners.signal })
-      header_state.push({ header, original_html, original_style })
+      header_state.push({ header, original_style })
     })
 
     return () => {

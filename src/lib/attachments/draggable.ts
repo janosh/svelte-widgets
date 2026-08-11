@@ -24,6 +24,7 @@ export const draggable =
 
     let dragging = false
     let stop_pointer_follow: (() => void) | undefined
+    let previous_user_select = ``
     let start = { x: 0, y: 0 }
     let min_delta_x = -Infinity
     let max_delta_x = Infinity
@@ -89,17 +90,17 @@ export const draggable =
         max_delta_y = Math.max(min_delta_y, bounds_rect.bottom - node_rect.bottom)
       }
       start = { x: event.clientX, y: event.clientY }
-      document.body.style.userSelect = `none` // Prevent text selection during drag
+      previous_user_select = node.ownerDocument.body.style.userSelect
+      node.ownerDocument.body.style.userSelect = `none` // Prevent text selection during drag
       drag_handle.style.cursor = `grabbing`
 
+      options.on_drag_start?.(event)
       stop_pointer_follow = follow_pointer(
         drag_handle,
         event.pointerId,
         on_pointermove,
         on_pointerup,
       )
-
-      options.on_drag_start?.(event)
     }
 
     function on_pointermove(event: PointerEvent) {
@@ -119,7 +120,7 @@ export const draggable =
       if (!dragging) return
       dragging = false
       event.stopPropagation()
-      document.body.style.userSelect = ``
+      node.ownerDocument.body.style.userSelect = previous_user_select
       drag_handle.style.cursor = `grab`
       stop_pointer_follow?.()
       options.on_drag_end?.(event)
@@ -136,7 +137,7 @@ export const draggable =
 
     return () => {
       stop_pointer_follow?.()
-      if (dragging) document.body.style.userSelect = ``
+      if (dragging) node.ownerDocument.body.style.userSelect = previous_user_select
       drag_handle.removeEventListener(`pointerdown`, on_pointerdown)
       drag_handle.style.cursor = previous_styles.cursor
       drag_handle.style.touchAction = previous_styles.touch_action

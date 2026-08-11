@@ -48,18 +48,20 @@ describe(`float`, () => {
     expect(attach_float().style.width).toBe(``)
 
     const node = create_element()
-    node.style.cssText = `box-sizing: content-box; min-width: 10rem; width: 20px`
-    const original_sizing = [node.style.boxSizing, node.style.minWidth, node.style.width]
+    node.style.cssText = `position: sticky; left: 1px; top: 2px; box-sizing: content-box; min-width: 10rem; width: 20px`
+    node.dataset.placement = `original`
+    const original_style = node.style.cssText
     mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
     const cleanup = float({ anchor: anchor_rect, match_width: true })(node)
     cleanup?.()
-    expect([node.style.boxSizing, node.style.minWidth, node.style.width]).toEqual(
-      original_sizing,
-    )
+    expect(node.style.cssText).toBe(original_style)
+    expect(node.dataset.placement).toBe(`original`)
   })
 
-  it(`repositions on scroll using the floating element's window`, () => {
+  it(`uses the floating window's scroll and stops updating after cleanup`, () => {
     const animation_host = Object.assign(new EventTarget(), {
+      scrollX: 25,
+      scrollY: 35,
       requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
         callback(0)
         return 42
@@ -69,11 +71,19 @@ describe(`float`, () => {
     const node = create_element()
     mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
     cleanups.push(stub_prop(node, `ownerDocument`, { defaultView: animation_host }))
-    const cleanup = float({ anchor: anchor_rect, placement: `bottom` })(node)
+    const cleanup = float({
+      anchor: anchor_rect,
+      placement: `bottom`,
+      strategy: `absolute`,
+    })(node)
+    expect([node.style.left, node.style.top]).toEqual([`130px`, `175px`])
+
     node.style.top = `0px`
     animation_host.dispatchEvent(new Event(`scroll`))
-    expect(node.style.top).toBe(`140px`)
+    expect(node.style.top).toBe(`175px`)
     cleanup?.()
+    animation_host.dispatchEvent(new Event(`scroll`))
+    expect(node.style.top).toBe(``)
   })
 
   it.each([

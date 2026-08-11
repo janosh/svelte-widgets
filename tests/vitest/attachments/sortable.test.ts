@@ -98,7 +98,7 @@ describe(`sortable`, () => {
     const second_header = table.querySelectorAll<HTMLTableCellElement>(`th`)[1]
     expect(sortable_header.style.cursor).toBe(`pointer`)
     expect(second_header?.style.cursor).toBe(``)
-    sortable_header.dispatchEvent(new MouseEvent(`click`))
+    sortable_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
     expect(sortable_header.textContent).toBe(`A ↑`)
     expect(sortable_header.classList.contains(`table-sort-asc`)).toBe(true)
   })
@@ -171,20 +171,21 @@ describe(`sortable`, () => {
     const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>(`thead th`))
     const [header] = headers
     header.innerHTML = `<span class="icon">▲</span> Planet`
+    const icon = header.querySelector<HTMLSpanElement>(`.icon`)
+    if (!icon) throw new Error(`expected header icon`)
     header.style.color = `blue`
 
     const cleanup = attach_sortable(table)
     expect(headers.map(({ style }) => style.cursor)).toEqual([`pointer`, `pointer`])
     header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
 
-    expect(header.querySelector(`span.icon`)?.textContent).toBe(`▲`)
+    expect(header.querySelector(`span.icon`)).toBe(icon)
     expect(header.querySelector(`span.sort-arrow`)?.textContent).toContain(`↑`)
 
     // repeated clicks must not accumulate arrows
     header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
     expect(header.querySelectorAll(`span.sort-arrow`)).toHaveLength(1)
     expect(header.querySelector(`span.sort-arrow`)?.textContent).toContain(`↓`)
-    expect(header.querySelector(`span.icon`)?.textContent).toBe(`▲`)
 
     cleanup?.()
     expect(header.innerHTML).toBe(`<span class="icon">▲</span> Planet`)

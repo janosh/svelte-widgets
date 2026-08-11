@@ -69,13 +69,18 @@ export const float =
     if (!enabled || !anchor || !(node instanceof HTMLElement)) return undefined
 
     const anchor_element = anchor instanceof Element ? anchor : null
-    const original_size_styles = match_width
-      ? {
-          boxSizing: node.style.boxSizing,
-          minWidth: node.style.minWidth,
-          width: node.style.width,
-        }
-      : undefined
+    // Every inline value `update` may write, so a node that outlives the attachment
+    // (a persistent surface toggled by `enabled`) is handed back as it arrived.
+    const original_styles = {
+      position: node.style.position,
+      left: node.style.left,
+      top: node.style.top,
+      boxSizing: node.style.boxSizing,
+      minWidth: node.style.minWidth,
+      width: node.style.width,
+    }
+    const original_placement = node.dataset.placement
+    const scroll_view = strategy === `absolute` ? node.ownerDocument.defaultView : null
     const update = () => {
       // Out of flow before measuring: an in-flow surface is a sibling that pushes the
       // very anchor it is about to measure, which lands it half its height off.
@@ -93,18 +98,20 @@ export const float =
         node.getBoundingClientRect(),
         position_options,
       )
-      const add_page_scroll = strategy === `absolute`
-      node.style.left = `${left + (add_page_scroll ? globalThis.scrollX : 0)}px`
-      node.style.top = `${top + (add_page_scroll ? globalThis.scrollY : 0)}px`
+      // compute_position works in viewport coordinates, which `absolute` offsets from
+      // the page origin. Scroll comes from the node's own view, not the top window.
+      node.style.left = `${left + (scroll_view?.scrollX ?? 0)}px`
+      node.style.top = `${top + (scroll_view?.scrollY ?? 0)}px`
       node.dataset.placement = placement
     }
 
     update()
     const stop_auto_update = auto_update_position(anchor_element, node, update)
-    if (!original_size_styles) return stop_auto_update
     return () => {
       stop_auto_update()
-      Object.assign(node.style, original_size_styles)
+      Object.assign(node.style, original_styles)
+      if (original_placement === undefined) delete node.dataset.placement
+      else node.dataset.placement = original_placement
     }
   }
 

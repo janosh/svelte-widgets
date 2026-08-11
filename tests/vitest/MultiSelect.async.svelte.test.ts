@@ -12,15 +12,20 @@ import {
   type_search_text,
 } from './MultiSelect.test-utils'
 
-afterEach(() => vi.useRealTimers())
+afterEach(() => {
+  vi.useRealTimers()
+  vi.restoreAllMocks()
+})
+const mock_console_error = () =>
+  vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
 // disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix below
 test(`no console error about missing options if loading=true`, () => {
-  console.error = vi.fn()
+  const console_error = mock_console_error()
 
   mount_multiselect({ options: [], loading: true })
 
-  expect(console.error).not.toHaveBeenCalled()
+  expect(console_error).not.toHaveBeenCalled()
 })
 
 // deferred loadOptions fetch: tests decide exactly when each request settles
@@ -229,7 +234,7 @@ describe(`loadOptions feature`, () => {
   // `signal` is optional, so a consumer may ignore it. Its request then keeps running
   // and can fail for real after being superseded — that must still be reported.
   test(`logs a real failure from a superseded request that ignored signal`, async () => {
-    console.error = vi.fn()
+    const console_error = mock_console_error()
     const { fn: load_options, rejectors } = await mount_deferred_open()
 
     const input = get_input()
@@ -241,7 +246,7 @@ describe(`loadOptions feature`, () => {
     rejectors[0](new Error(`HTTP 500 boom`))
     await vi.runAllTimersAsync()
 
-    expect(console.error).toHaveBeenCalledWith(
+    expect(console_error).toHaveBeenCalledWith(
       `MultiSelect: loadOptions error:`,
       expect.any(Error),
     )
@@ -315,7 +320,7 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`pagination error is logged, clears busy state, and stops further loading`, async () => {
-    console.error = vi.fn()
+    const console_error = mock_console_error()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     mount_multiselect({ loadOptions: load_options, open: true })
     await tick()
@@ -334,7 +339,7 @@ describe(`loadOptions feature`, () => {
 
     rejectors[1](new Error(`Server error`))
     await tick()
-    expect(console.error).toHaveBeenCalledWith(
+    expect(console_error).toHaveBeenCalledWith(
       `MultiSelect: loadOptions error:`,
       expect.any(Error),
     )
@@ -470,7 +475,7 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`stale error does not affect current request state`, async () => {
-    console.error = vi.fn()
+    mock_console_error()
     const { fn: load_options, resolvers, rejectors } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -498,7 +503,7 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`failed initial load retries on close+reopen`, async () => {
-    console.error = vi.fn()
+    mock_console_error()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
     // Use onOpen=false so retry requires typing, exposing has_more via pending
@@ -538,7 +543,7 @@ describe(`loadOptions feature`, () => {
   })
 
   test(`failed search retryable via input change`, async () => {
-    console.error = vi.fn()
+    mock_console_error()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
     mount_multiselect({
@@ -720,7 +725,7 @@ describe(`load_options_pending`, () => {
   )
 
   test(`fetch failure unblocks pending state`, async () => {
-    console.error = vi.fn()
+    const console_error = mock_console_error()
     const fetch_fn = vi
       .fn()
       .mockResolvedValueOnce({ options: [`Apple`], hasMore: false })
@@ -742,7 +747,7 @@ describe(`load_options_pending`, () => {
     expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
       `Create this option`,
     )
-    expect(console.error).toHaveBeenCalledWith(
+    expect(console_error).toHaveBeenCalledWith(
       `MultiSelect: loadOptions error:`,
       expect.any(Error),
     )
@@ -853,7 +858,7 @@ describe(`async oncreate`, () => {
   ])(
     `resolving %s`,
     async (_label, resolved_value, expected_selected, expected_onadd_calls) => {
-      console.error = vi.fn()
+      const console_error = mock_console_error()
       const { promise, resolve_fn } = make_deferred<OncreateResult>()
       const onadd = vi.fn()
       const props = $state<MultiSelectProps>({
@@ -875,7 +880,7 @@ describe(`async oncreate`, () => {
 
       expect(props.selected).toEqual(expected_selected)
       expect(onadd).toHaveBeenCalledTimes(expected_onadd_calls)
-      expect(console.error).not.toHaveBeenCalled()
+      expect(console_error).not.toHaveBeenCalled()
     },
   )
 
@@ -906,7 +911,7 @@ describe(`async oncreate`, () => {
   })
 
   test(`oncreate throwing synchronously adds nothing and logs console.error`, async () => {
-    console.error = vi.fn()
+    const console_error = mock_console_error()
     const onadd = vi.fn()
     const sync_error = new Error(`validation blew up`)
     const props = $state<MultiSelectProps>({
@@ -926,11 +931,11 @@ describe(`async oncreate`, () => {
 
     expect(props.selected).toEqual([])
     expect(onadd).not.toHaveBeenCalled()
-    expect(console.error).toHaveBeenCalledWith(`MultiSelect: oncreate threw:`, sync_error)
+    expect(console_error).toHaveBeenCalledWith(`MultiSelect: oncreate threw:`, sync_error)
   })
 
   test(`rejecting adds nothing and logs console.error`, async () => {
-    console.error = vi.fn()
+    const console_error = mock_console_error()
     const { promise, reject_fn } = make_deferred<OncreateResult>()
     const onadd = vi.fn()
     const props = $state<MultiSelectProps>({
@@ -954,8 +959,8 @@ describe(`async oncreate`, () => {
 
     expect(props.selected).toEqual([])
     expect(onadd).not.toHaveBeenCalled()
-    expect(console.error).toHaveBeenCalledTimes(1)
-    expect(console.error).toHaveBeenCalledWith(
+    expect(console_error).toHaveBeenCalledTimes(1)
+    expect(console_error).toHaveBeenCalledWith(
       `MultiSelect: oncreate promise rejected:`,
       rejection,
     )

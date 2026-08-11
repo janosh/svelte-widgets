@@ -17,7 +17,7 @@ export const hotkey =
     const { bindings, global = false, enabled = true } = options
     if (!enabled || bindings.length === 0) return undefined
 
-    const target: EventTarget = global ? document : node
+    const target = global ? node.ownerDocument : node
     const on_keydown = (event: Event) => {
       if (event instanceof KeyboardEvent) run_hotkeys(event, bindings)
     }
@@ -47,12 +47,14 @@ export const forward_window_keydown =
     const on_leave = () => (is_hovered = false)
     const on_keydown = (event: Event) => {
       if (!is_hovered || !(event instanceof KeyboardEvent)) return
-      // The root itself may be focusable so keyboard users can aim shortcuts at it.
-      // Any other focused element, including one retargeted through a shadow root, keeps
-      // its own keys. composedPath()[0] exposes that original shadow-DOM target.
+      // The root itself may be focusable so keyboard users can aim shortcuts at it, and
+      // an unfocused page targets body or the html element. Anything else, including a
+      // target retargeted through a shadow root, keeps its own keys — composedPath()[0]
+      // exposes that original shadow-DOM target.
+      const { activeElement, body, documentElement } = node.ownerDocument
       const event_target = event.composedPath()[0]
-      if (event_target instanceof Element && event_target !== node) return
-      const { activeElement, body } = node.ownerDocument
+      const idle = [node, body, documentElement]
+      if (event_target instanceof Element && !idle.includes(event_target)) return
       if (activeElement && activeElement !== body && activeElement !== node) return
       if (handle(event)) event.preventDefault()
     }

@@ -26,7 +26,7 @@ describe(`hotkey`, () => {
     return { node, cleanup }
   }
 
-  it(`fires on its own node only, and anywhere on the page when global`, () => {
+  it(`fires on its own node, or anywhere in its document when global`, () => {
     const handler = vi.fn()
     const { node, cleanup } = attach_hotkey({ bindings: [{ keys: `ctrl+k`, handler }] })
 
@@ -42,9 +42,17 @@ describe(`hotkey`, () => {
     expect(handler).toHaveBeenCalledTimes(1)
 
     // `global` is the opt-out: that binding answers from anywhere on the page
+    const foreign_doc = document.implementation.createHTMLDocument()
+    const foreign_node = foreign_doc.createElement(`div`)
+    foreign_doc.body.append(foreign_node)
     const anywhere = vi.fn()
-    attach_hotkey({ bindings: [{ keys: `ctrl+j`, handler: anywhere }], global: true })
-    keydown(create_element(), `j`, { ctrlKey: true })
+    attach_hotkey(
+      { bindings: [{ keys: `ctrl+j`, handler: anywhere }], global: true },
+      foreign_node,
+    )
+    keydown(document, `j`, { ctrlKey: true })
+    expect(anywhere).not.toHaveBeenCalled()
+    keydown(foreign_node, `j`, { ctrlKey: true })
     expect(anywhere).toHaveBeenCalledTimes(1)
   })
 

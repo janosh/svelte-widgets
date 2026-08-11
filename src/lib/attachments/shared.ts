@@ -16,9 +16,16 @@ export const follow_pointer = (
   on_move: (event: PointerEvent) => void,
   on_end: (event: PointerEvent) => void,
 ) => {
+  try {
+    target.setPointerCapture(pointer_id)
+  } catch (error) {
+    if (!(error instanceof DOMException && error.name === `NotFoundError`)) throw error
+    on_end(new PointerEvent(`pointercancel`, { pointerId: pointer_id }))
+    return () => {}
+  }
+
   const abort_controller = new AbortController()
   const { signal } = abort_controller
-  target.setPointerCapture(pointer_id)
   const on_pointer = (event: PointerEvent) => {
     if (event.pointerId !== pointer_id) return
     if (event.type === `pointermove`) on_move(event)
@@ -28,10 +35,11 @@ export const follow_pointer = (
     globalThis.addEventListener(type, on_pointer, { signal })
   }
   target.addEventListener(`lostpointercapture`, on_pointer, { signal })
-  return () => {
+  const stop = () => {
     abort_controller.abort() // before release, or lostpointercapture re-enters on_end
     if (target.hasPointerCapture(pointer_id)) target.releasePointerCapture(pointer_id)
   }
+  return stop
 }
 
 // Layered keys: only the innermost surface hears one, so Escape closes a dropdown
