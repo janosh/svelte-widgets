@@ -167,7 +167,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ### Interaction and controlled state
 
-`trigger` picks `hover` (the default), `hover-focus`, `focus` or `manual`. `open_delay_ms` applies to pointer hover only — focus opens at once so keyboard users are never made to wait — while `skip_delay_ms` keeps that delay skipped when moving between neighbouring triggers. Passing `open` makes the tooltip controlled: the attachment stops opening on its own, reports every intent through `on_open_change`, and shows only what you hand back. Controlled tooltips are not modal — one surface serves the document, so hovering or focusing another trigger takes it over and the controlled consumer hears the close through `on_open_change`.
+`trigger` picks `hover-focus` (the default), `hover`, `focus` or `manual`. `open_delay_ms` applies to pointer hover only — focus opens at once so keyboard users are never made to wait — while `skip_delay_ms` keeps that delay skipped when moving between neighbouring triggers. Passing `open` makes the tooltip controlled: the attachment stops opening on its own, reports every intent through `on_open_change`, and shows only what you hand back. Controlled tooltips are not modal — one surface serves the document, so hovering or focusing another trigger takes it over and the controlled consumer hears the close through `on_open_change`.
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">

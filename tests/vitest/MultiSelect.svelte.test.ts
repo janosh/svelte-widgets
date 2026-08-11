@@ -1695,8 +1695,7 @@ test.each([[[1]], [[1, 2]], [[1, 2, 3]]])(
 test(`remove all button does not remove items when minSelect constraint would be violated`, async () => {
   const options = [`Red`, `Green`, `Yellow`]
   const selected = [`Red`]
-  const minSelect = 1
-  const maxSelect = 2
+  const [minSelect, maxSelect] = [1, 2]
 
   mount_multiselect({ options, selected, minSelect, maxSelect })
 

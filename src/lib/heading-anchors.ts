@@ -63,8 +63,9 @@ function insert_with_source_map(
   }
   code += source.slice(source_cursor)
 
-  let [insertion_idx, original_offset, previous_original_line, previous_original_column] =
-    [0, 0, 0, 0]
+  let insertion_idx = 0
+  let original_offset = 0
+  let [previous_original_line, previous_original_column] = [0, 0]
   const mappings = source
     .split(`\n`)
     .map((line, original_line) => {

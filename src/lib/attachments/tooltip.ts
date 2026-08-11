@@ -121,10 +121,12 @@ const css_px_or = (css_length: string, fallback: number): number => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const tooltip_trigger = (options: TooltipOptions): TooltipTrigger =>
+  options.trigger ?? `hover-focus`
 const accepts_tooltip_trigger = (
   options: TooltipOptions,
   trigger: `hover` | `focus`,
-): boolean => [trigger, `hover-focus`].includes(options.trigger ?? `hover`)
+): boolean => [trigger, `hover-focus`].includes(tooltip_trigger(options))
 
 // A trigger that left the document or stopped rendering cannot anchor anything.
 // `checkVisibility` covers detachment, `display: none` and `content-visibility` alike;
@@ -331,7 +333,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // A press dismisses a hover tooltip, which would otherwise hang over whatever the
     // press opened; the pointer leaving and re-entering the trigger brings it back.
     // `hover-focus` keeps its own: the press focuses the trigger, which is a show state.
-    if ((active.registration.options.trigger ?? `hover`) !== `hover`) return
+    if (tooltip_trigger(active.registration.options) !== `hover`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
       request_close(`pointer`, true)
     }
@@ -635,9 +637,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   })
 
   // Detaching a trigger fires no scroll or resize, so repositioning alone would leave
-  // the surface pinned to geometry nothing owns any more.
+  // the surface pinned to geometry nothing owns any more. Detaching is also all a
+  // childList record can report, so this asks `isConnected` rather than paying for the
+  // style resolution behind `checkVisibility` on every batch the whole body produces.
+  // A trigger that stops rendering while still connected is the reposition's business.
   const removal_observer = new MutationObserver(() => {
-    if (active?.open && !is_trigger_visible(active.trigger)) hide_active(`visibility`)
+    if (active?.open && !active.trigger.isConnected) hide_active(`visibility`)
   })
 
   const show_active = (reason: TooltipOpenReason): void => {

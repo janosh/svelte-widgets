@@ -23,8 +23,7 @@ const DISPLAY_BLOCK_MATH =
 const DISPLAY_INLINE_MATH = /(?<![\\$])\$\$(?<tex>[^\r\n]+?)\$\$(?!\$)/gu
 
 // Private-use sentinels survive markdown; a per-instance nonce prevents source collisions.
-const SLOT_OPEN = `\uE000`
-const SLOT_CLOSE = `\uE001`
+const [SLOT_OPEN, SLOT_CLOSE] = [`\uE000`, `\uE001`]
 
 // Fences first (they wrap <script> in live examples), then indented code, comments,
 // script/style outside fences and inline code. Overlaps can nest placeholders.

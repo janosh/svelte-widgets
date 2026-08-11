@@ -1441,8 +1441,7 @@ test(`global shortcuts skip disabled duplicate bindings`, async () => {
 })
 
 test(`recent_actions_key ranks, persists, and reloads recently triggered actions`, async () => {
-  const storage_key = `test-cmd-recents`
-  const next_storage_key = `test-cmd-recents-next`
+  const [storage_key, next_storage_key] = [`test-cmd-recents`, `test-cmd-recents-next`]
   localStorage.setItem(next_storage_key, JSON.stringify([`beta`]))
   const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
     label,

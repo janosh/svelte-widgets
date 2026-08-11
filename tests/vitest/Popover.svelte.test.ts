@@ -24,6 +24,10 @@ describe(`Popover`, () => {
   // pointer_event sets isPrimary; a bare PointerEvent reads as a second finger
   const press = (target: EventTarget) =>
     target.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+  const mouse_enter = (target: EventTarget = trigger()) =>
+    target.dispatchEvent(new MouseEvent(`mouseenter`))
+  const mouse_leave = (target: EventTarget = trigger()) =>
+    target.dispatchEvent(new MouseEvent(`mouseleave`, { relatedTarget: document.body }))
   const advance_time = async (milliseconds: number) => {
     await vi.advanceTimersByTimeAsync(milliseconds)
     await tick()
@@ -171,7 +175,7 @@ describe(`Popover`, () => {
     vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, open_delay_ms: 40 })
 
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     await advance_time(39)
     expect(surface()).toBeNull()
 
@@ -179,15 +183,13 @@ describe(`Popover`, () => {
     const dialog = doc_query(`[role="dialog"]`)
 
     // An 8px CSS gap reports body, not the surface, as relatedTarget while crossed.
-    trigger().dispatchEvent(
-      new MouseEvent(`mouseleave`, { relatedTarget: document.body }),
-    )
+    mouse_leave()
     await vi.advanceTimersByTimeAsync(100)
-    dialog.dispatchEvent(new MouseEvent(`mouseenter`, { relatedTarget: document.body }))
+    mouse_enter(dialog)
     await advance_time(150)
     expect(surface()).toBe(dialog)
 
-    dialog.dispatchEvent(new MouseEvent(`mouseleave`, { relatedTarget: document.body }))
+    mouse_leave(dialog)
     await advance_time(149)
     expect(surface()).toBe(dialog)
     await advance_time(1)
@@ -227,23 +229,19 @@ describe(`Popover`, () => {
 
     trigger().focus()
     await advance_time(0)
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     outside.focus()
     await advance_time(20)
     expect(surface()).not.toBeNull()
 
-    trigger().dispatchEvent(
-      new MouseEvent(`mouseleave`, { relatedTarget: document.body }),
-    )
+    mouse_leave()
     await advance_time(20)
     expect(surface()).toBeNull()
 
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     await advance_time(0)
     trigger().focus()
-    trigger().dispatchEvent(
-      new MouseEvent(`mouseleave`, { relatedTarget: document.body }),
-    )
+    mouse_leave()
     await advance_time(20)
     expect(surface()).not.toBeNull()
 
@@ -316,27 +314,31 @@ describe(`Popover`, () => {
       close_delay_ms: 10,
       trap_focus: false,
     })
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     await advance_time(0)
     doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
     await advance_time(0)
     props.open = false
     await advance_time(100)
 
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     await advance_time(0)
     expect(surface()).not.toBeNull()
-    trigger().dispatchEvent(
-      new MouseEvent(`mouseleave`, { relatedTarget: document.body }),
-    )
+    mouse_leave()
     await advance_time(100)
     expect(surface()).toBeNull()
   })
 
-  test(`controlled open state stays in sync and restores focus`, async () => {
+  test(`controlled state scopes focus restoration to each open cycle`, async () => {
     const opener = create_element(`button`)
     opener.focus()
     const props = mount_popover({ open: true, placement: `right` })
+    const close_and_expect_focus = async (expected: HTMLElement) => {
+      props.open = false
+      await tick()
+      expect(surface()).toBeNull()
+      expect(document.activeElement).toBe(expected)
+    }
     await tick()
 
     const dialog = doc_query(`[role="dialog"]`)
@@ -344,11 +346,18 @@ describe(`Popover`, () => {
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
     expect(document.activeElement).toBe(doc_query(`[data-testid="popover-item"]`))
 
-    props.open = false
-    await tick()
-    expect(surface()).toBeNull()
+    await close_and_expect_focus(opener)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`false`)
-    expect(document.activeElement).toBe(opener)
+
+    trigger().click()
+    await tick()
+    await close_and_expect_focus(trigger())
+
+    const next_opener = create_element(`button`)
+    next_opener.focus()
+    props.open = true
+    await tick()
+    await close_and_expect_focus(next_opener)
   })
 
   // A torn-down component cannot render a surface either way, so asserting on the DOM
@@ -359,7 +368,7 @@ describe(`Popover`, () => {
     await tick()
     const set_timeout = vi.spyOn(globalThis, `setTimeout`)
     const clear_timeout = vi.spyOn(globalThis, `clearTimeout`)
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
     const pending_timer = set_timeout.mock.results.at(-1)?.value as unknown
     expect(pending_timer).toBeDefined()
 
@@ -372,7 +381,7 @@ describe(`Popover`, () => {
   test(`changing trigger mode invalidates a pending delayed open`, async () => {
     vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `hover`, open_delay_ms: 50 })
-    trigger().dispatchEvent(new MouseEvent(`mouseenter`))
+    mouse_enter()
 
     props.trigger_mode = `click`
     await tick()

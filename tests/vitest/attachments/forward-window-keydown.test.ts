@@ -44,8 +44,7 @@ describe(`forward_window_keydown`, () => {
   })
 
   it(`two hovered-by-turns components never both answer one key`, () => {
-    const first = attach()
-    const second = attach()
+    const [first, second] = [attach(), attach()]
 
     hover(first.node)
     press_key()

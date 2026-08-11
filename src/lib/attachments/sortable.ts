@@ -1,6 +1,6 @@
 export function get_html_sort_value(element: HTMLElement): string {
   if (element.dataset.sortValue !== undefined) return element.dataset.sortValue
-  for (const child of Array.from(element.children)) {
+  for (const child of element.children) {
     if (!(child instanceof HTMLElement)) continue
     const child_val = get_html_sort_value(child)
     if (child_val !== ``) return child_val
@@ -38,40 +38,56 @@ export const sortable =
     type HeaderState = {
       header: HTMLTableCellElement
       original_style: string
+      original_tabindex: string | null
+      original_aria_sort: string | null
+      arrow?: HTMLSpanElement
     }
-    const header_state: HeaderState[] = []
-    // Drop only what this attachment added, leaving the header's own markup and any
-    // listeners on it in place — the arrow lives in a span of its own for that reason.
-    const restore_header = ({ header, original_style }: HeaderState) => {
-      header.querySelector(`:scope > .sort-arrow`)?.remove()
+    const header_states: HeaderState[] = []
+    const reset_header = (state: HeaderState) => {
+      const { header, original_style } = state
+      state.arrow?.remove()
+      state.arrow = undefined
       header.classList.remove(asc_class, desc_class)
       if (original_style) header.setAttribute(`style`, original_style)
       else header.removeAttribute(`style`)
+      header.removeAttribute(`aria-sort`)
+    }
+    const restore_header = (state: HeaderState) => {
+      reset_header(state)
+      const { header, original_tabindex, original_aria_sort } = state
+      if (original_tabindex === null) header.removeAttribute(`tabindex`)
+      else header.setAttribute(`tabindex`, original_tabindex)
+      if (original_aria_sort === null) header.removeAttribute(`aria-sort`)
+      else header.setAttribute(`aria-sort`, original_aria_sort)
     }
 
     headers.forEach((header, idx) => {
-      const original_style = header.getAttribute(`style`) ?? ``
+      const state: HeaderState = {
+        header,
+        original_style: header.getAttribute(`style`) ?? ``,
+        original_tabindex: header.getAttribute(`tabindex`),
+        original_aria_sort: header.getAttribute(`aria-sort`),
+      }
+      header_states.push(state)
       header.style.cursor = `pointer`
+      header.tabIndex = 0
+      header.removeAttribute(`aria-sort`)
 
-      const click_handler = () => {
+      const sort_column = () => {
         // reset all headers to unsorted state
-        for (const state of header_state) {
-          restore_header(state)
-          state.header.style.cursor = `pointer`
+        for (const stored of header_states) {
+          reset_header(stored)
+          stored.header.style.cursor = `pointer`
         }
-        if (idx === sort_col_idx) {
-          sort_dir *= -1
-        } else {
-          sort_col_idx = idx
-          sort_dir = 1
-        }
+        sort_dir = idx === sort_col_idx ? -sort_dir : 1
+        sort_col_idx = idx
         header.classList.add(sort_dir > 0 ? asc_class : desc_class)
+        header.setAttribute(`aria-sort`, sort_dir > 0 ? `ascending` : `descending`)
         Object.assign(header.style, sorted_style)
-        // the reset above already dropped any previous arrow
-        const arrow_span = document.createElement(`span`)
-        arrow_span.className = `sort-arrow`
-        arrow_span.textContent = ` ${sort_dir > 0 ? `↑` : `↓`}`
-        header.append(arrow_span)
+        state.arrow = header.ownerDocument.createElement(`span`)
+        state.arrow.className = `sort-arrow`
+        state.arrow.textContent = ` ${sort_dir > 0 ? `↑` : `↓`}`
+        header.append(state.arrow)
 
         const table_body = node.querySelector(`tbody`)
         if (!table_body) return
@@ -92,26 +108,31 @@ export const sortable =
           if (trimmed_1 === ``) return 1 // treat empty/whitespace as lower than any value
           if (trimmed_2 === ``) return -1
           const [num_1, num_2] = [Number(trimmed_1), Number(trimmed_2)]
-          if (isNaN(num_1) && isNaN(num_2)) {
+          if (Number.isNaN(num_1) && Number.isNaN(num_2)) {
             return (
               sort_dir * trimmed_1.localeCompare(trimmed_2, undefined, { numeric: true })
             )
           }
           // sort non-numeric values after numeric ones
-          if (isNaN(num_1)) return sort_dir
-          if (isNaN(num_2)) return -sort_dir
+          if (Number.isNaN(num_1)) return sort_dir
+          if (Number.isNaN(num_2)) return -sort_dir
           return sort_dir * (num_1 - num_2)
         })
 
         for (const row of rows) table_body.append(row)
       }
 
-      header.addEventListener(`click`, click_handler, { signal: listeners.signal })
-      header_state.push({ header, original_style })
+      const on_keydown = (event: KeyboardEvent) => {
+        if (event.key !== `Enter` && event.key !== ` `) return
+        event.preventDefault()
+        sort_column()
+      }
+      header.addEventListener(`click`, sort_column, { signal: listeners.signal })
+      header.addEventListener(`keydown`, on_keydown, { signal: listeners.signal })
     })
 
     return () => {
       listeners.abort()
-      for (const state of header_state) restore_header(state)
+      for (const state of header_states) restore_header(state)
     }
   }

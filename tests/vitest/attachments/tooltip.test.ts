@@ -231,11 +231,18 @@ describe(`tooltip manager`, () => {
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
   })
 
-  it(`defaults to hover and stays dismissed after a press until re-entered`, () => {
-    const { element } = register_tooltip(`Hover only`)
+  it(`defaults to hover-focus`, () => {
+    const { element } = register_tooltip(`Keyboard`)
     focus_in(element)
-    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+    const tooltip_el = visible_tooltip()
+    expect(tooltip_el.textContent).toBe(`Keyboard`)
+    focus_out(element)
+    vi.advanceTimersByTime(0)
+    expect(tooltip_el.hidden).toBe(true)
+  })
 
+  it(`explicit hover stays dismissed after a press until re-entered`, () => {
+    const { element } = register_tooltip(`Hover only`, { trigger: `hover` })
     pointer_over(element)
     const tooltip_el = visible_tooltip()
     element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))

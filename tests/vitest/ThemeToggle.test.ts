@@ -187,16 +187,11 @@ test(`tooltip=false preserves the native title`, async () => {
   expect(button.getAttribute(`title`)).toBe(`Switch to dark theme`)
 })
 
-test(`tooltip defaults to hover without opening on focus`, async () => {
-  const button = await mount_theme_toggle({ tooltip: { open_delay_ms: 0 } })
+test(`tooltip defaults to opening on keyboard focus`, async () => {
+  const button = await mount_theme_toggle()
   expect(button.getAttribute(`title`)).toBeNull()
 
   button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
-  expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-
-  button.dispatchEvent(
-    new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
-  )
   expect(doc_query(`.custom-tooltip`).textContent).toBe(`Switch to dark theme`)
 })
 

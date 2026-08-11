@@ -1,5 +1,6 @@
 import { sortable, type SortableOptions } from '$lib/attachments'
 import { describe, expect, it, onTestFinished } from 'vite-plus/test'
+import { press_key } from '../index'
 
 describe(`sortable`, () => {
   const mount_table = (table: HTMLTableElement) => {
@@ -38,16 +39,53 @@ describe(`sortable`, () => {
       (row) => row.children[col_idx].textContent,
     )
 
-  it(`sorts ascending then descending when clicking the same header`, () => {
+  it.each<[string, (header: HTMLTableCellElement) => unknown]>([
+    [
+      `a click`,
+      (header) => header.dispatchEvent(new MouseEvent(`click`, { bubbles: true })),
+    ],
+    [`Enter`, (header) => press_key(header, `Enter`)],
+    [`Space`, (header) => press_key(header, ` `)],
+  ])(`sorts ascending then descending on repeated %s`, (_activation, activate) => {
     const table = create_table()
     attach_sortable(table)
-    const [planet_header] = Array.from(table.querySelectorAll(`thead th`))
+    const planet_header = get_required_header(table)
 
-    planet_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    activate(planet_header)
     expect(get_column_values(table, 0)).toEqual([`Earth`, `Jupiter`, `Mars`])
 
-    planet_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    activate(planet_header)
     expect(get_column_values(table, 0)).toEqual([`Mars`, `Jupiter`, `Earth`])
+  })
+
+  it(`exposes headers to the keyboard and restores their a11y attributes`, () => {
+    const table = create_table()
+    const [first, second] = table.querySelectorAll<HTMLTableCellElement>(`thead th`)
+    first.setAttribute(`tabindex`, `-1`)
+    first.setAttribute(`aria-sort`, `other`)
+    const cleanup = attach_sortable(table)
+
+    expect([first.tabIndex, second.tabIndex]).toEqual([0, 0])
+    expect(press_key(first, `Enter`).defaultPrevented).toBe(true)
+    expect(first.getAttribute(`aria-sort`)).toBe(`ascending`)
+
+    expect(press_key(first, ` `).defaultPrevented).toBe(true)
+    expect(first.getAttribute(`aria-sort`)).toBe(`descending`)
+
+    press_key(second, `Enter`)
+    expect(first.hasAttribute(`aria-sort`)).toBe(false)
+    expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
+    const sorted = get_column_values(table, 0)
+
+    cleanup?.()
+    expect([first.getAttribute(`tabindex`), first.getAttribute(`aria-sort`)]).toEqual([
+      `-1`,
+      `other`,
+    ])
+    expect(second.hasAttribute(`tabindex`)).toBe(false)
+    expect(second.hasAttribute(`aria-sort`)).toBe(false)
+    press_key(first, `Enter`)
+    expect(get_column_values(table, 0)).toEqual(sorted)
   })
 
   it(`does not set up sorting when disabled`, () => {
@@ -170,7 +208,7 @@ describe(`sortable`, () => {
     const table = create_table()
     const headers = Array.from(table.querySelectorAll<HTMLTableCellElement>(`thead th`))
     const [header] = headers
-    header.innerHTML = `<span class="icon">▲</span> Planet`
+    header.innerHTML = `<span class="icon sort-arrow">▲</span> Planet`
     const icon = header.querySelector<HTMLSpanElement>(`.icon`)
     if (!icon) throw new Error(`expected header icon`)
     header.style.color = `blue`
@@ -180,15 +218,15 @@ describe(`sortable`, () => {
     header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
 
     expect(header.querySelector(`span.icon`)).toBe(icon)
-    expect(header.querySelector(`span.sort-arrow`)?.textContent).toContain(`↑`)
+    expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↑`)
 
-    // repeated clicks must not accumulate arrows
+    // repeated clicks replace only the attachment's arrow, preserving the consumer's
     header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-    expect(header.querySelectorAll(`span.sort-arrow`)).toHaveLength(1)
-    expect(header.querySelector(`span.sort-arrow`)?.textContent).toContain(`↓`)
+    expect(header.querySelectorAll(`span.sort-arrow`)).toHaveLength(2)
+    expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↓`)
 
     cleanup?.()
-    expect(header.innerHTML).toBe(`<span class="icon">▲</span> Planet`)
+    expect(header.innerHTML).toBe(`<span class="icon sort-arrow">▲</span> Planet`)
     expect(header.style.color).toBe(`blue`)
     expect(headers.map(({ style }) => style.cursor)).toEqual([``, ``])
     expect(

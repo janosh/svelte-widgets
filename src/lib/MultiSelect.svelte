@@ -597,7 +597,8 @@
     Boolean(virtual_config) && !(stickyGroupHeaders && has_grouped_options),
   )
   let warned_virtual_grouped = false // only warn once per component instance
-  let [options_scroll_top, options_client_height] = $state([0, 0])
+  let options_scroll_top = $state(0)
+  let options_client_height = $state(0)
   // happy-dom and SSR report clientHeight 0 — fall back to a 400px viewport estimate
   const virtual_viewport = $derived(
     options_client_height > 0 ? options_client_height : 400,
