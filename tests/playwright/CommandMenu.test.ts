@@ -15,6 +15,17 @@ test(`closing the native dialog restores focus to the opener`, async ({ page }) 
   await expect(opener).toBeFocused()
 })
 
+test(`PageSearch navigates through the generated Pagefind index`, async ({ page }) => {
+  test.skip(!process.env.CI, `Pagefind index requires the CI build:site server`)
+
+  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  await page.keyboard.press(`Control+k`)
+  const search = page.getByRole(`dialog`, { name: `Site search` })
+  await search.getByRole(`combobox`).fill(`whitespace collapsing`)
+  await search.getByRole(`option`, { name: /^Patterns › FindBar\b/u }).click()
+  await expect(page).toHaveURL(/\/patterns#findbar$/u)
+})
+
 // close_if_outside reads composedPath() rather than event.target, which only matters once
 // the menu sits in a shadow root: by the time the click reaches window its target is the
 // host element, so containment against the dialog fails. happy-dom retargets nothing, so

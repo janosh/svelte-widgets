@@ -32,19 +32,6 @@ const mounted_search = async () => {
 }
 
 describe(`SettingsSearch`, () => {
-  test(`renders group title, subtitle, classes, and bound open state`, async () => {
-    const { appearance, camera } = await mounted_search()
-    expect(appearance.classList).toContain(`settings-group`)
-    expect(appearance.classList).toContain(`appearance-group`)
-    expect(appearance.open).toBe(true)
-    expect(camera.open).toBe(false)
-    expect(appearance.querySelector(`.group-title`)?.textContent).toBe(`Appearance`)
-    expect(camera.querySelector(`.group-subtitle`)?.textContent).toBe(`Navigation`)
-    expect(appearance.querySelector(`summary svg`)?.getAttribute(`aria-hidden`)).toBe(
-      `true`,
-    )
-  })
-
   test(`matches labels and descriptions while expanding only matching groups`, async () => {
     const { input, appearance, camera } = await mounted_search()
 

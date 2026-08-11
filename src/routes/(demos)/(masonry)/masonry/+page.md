@@ -51,8 +51,46 @@ tightest result, at the cost of items jumping around.
 Set `virtualize` with a `height` to render only the items near the viewport. Useful past a
 few hundred items, where the DOM node count starts to cost more than the measuring does.
 
-```svelte
-<Masonry {items} virtualize height={600} overscan={5} />
+```svelte example id="masonry-virtualized"
+<script lang="ts">
+  import { Masonry } from '$lib'
+
+  let virtualize = $state(true)
+  const items = Array.from({ length: 500 }, (_, idx) => ({
+    id: idx,
+    height: 48 + ((idx * 29) % 72),
+  }))
+</script>
+
+<label>
+  <input type="checkbox" bind:checked={virtualize} />
+  Render only the visible window
+</label>
+
+<div
+  style="margin-top: 0.75em; border: 1px solid var(--border)"
+  style:max-height={virtualize ? undefined : `360px`}
+  style:overflow-y={virtualize ? undefined : `auto`}
+>
+  <Masonry
+    {items}
+    {virtualize}
+    height={360}
+    overscan={3}
+    minColWidth={130}
+    gap={8}
+    getEstimatedHeight={(item) => item.height}
+  >
+    {#snippet children({ item })}
+      <div
+        style="height: {item.height}px; display: grid; place-items: center; background:
+        var(--surface); border: 1px solid var(--border)"
+      >
+        Item {item.id}
+      </div>
+    {/snippet}
+  </Masonry>
+</div>
 ```
 
 Two things change while virtualizing, because off-screen items are never measured:
