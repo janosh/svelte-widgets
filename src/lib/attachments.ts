@@ -167,6 +167,8 @@ export const file_drop =
 
 export interface DraggableOptions {
   handle_selector?: string
+  axis?: `x` | `y` | `both`
+  bounds?: `parent` | Element | AnchorRect
   disabled?: boolean
   on_drag_start?: (event: PointerEvent) => void
   on_drag?: (event: PointerEvent) => void
@@ -196,23 +198,26 @@ export interface ResizableOptions {
 export const draggable =
   (options: DraggableOptions = {}): Attachment =>
   (element: Element): (() => void) | undefined => {
-    if (options.disabled) return undefined
-
-    if (!(element instanceof HTMLElement)) return undefined
+    const { handle_selector, axis = `both`, bounds } = options
+    if (options.disabled || !(element instanceof HTMLElement)) return undefined
     const node = element
+    const move_x = axis !== `y`
+    const move_y = axis !== `x`
 
     let dragging = false
     let stop_pointer_follow: (() => void) | undefined
     let start = { x: 0, y: 0 }
+    let min_delta_x = -Infinity
+    let max_delta_x = Infinity
+    let min_delta_y = -Infinity
+    let max_delta_y = Infinity
     const initial = { left: 0, top: 0 }
 
-    const found = options.handle_selector
-      ? node.querySelector<HTMLElement>(options.handle_selector)
+    const found = handle_selector
+      ? node.querySelector<HTMLElement>(handle_selector)
       : node
     if (!found) {
-      console.warn(
-        `Draggable: handle not found with selector "${options.handle_selector}"`,
-      )
+      console.warn(`Draggable: handle not found with selector "${handle_selector}"`)
       return undefined
     }
     // Aliased so the narrowing survives into the hoisted handlers below
@@ -234,9 +239,37 @@ export const draggable =
       initial.left = origin.left
       initial.top = origin.top
 
-      node.style.left = `${initial.left}px`
-      node.style.top = `${initial.top}px`
-      node.style.right = `auto` // Prevent conflict with left
+      if (move_x) {
+        node.style.left = `${initial.left}px`
+        node.style.right = `auto` // Prevent conflict with left
+      }
+      if (move_y) {
+        node.style.top = `${initial.top}px`
+        node.style.bottom = `auto`
+      }
+
+      min_delta_x = -Infinity
+      max_delta_x = Infinity
+      min_delta_y = -Infinity
+      max_delta_y = Infinity
+      const boundary = bounds === `parent` ? node.parentElement : bounds
+      const bounds_rect =
+        boundary instanceof Element ? boundary.getBoundingClientRect() : boundary
+      // A box-less Element (not an explicit zero-sized rect) cannot contain anything.
+      if (
+        bounds_rect &&
+        (!(boundary instanceof Element) ||
+          bounds_rect.left !== bounds_rect.right ||
+          bounds_rect.top !== bounds_rect.bottom)
+      ) {
+        // Measure after normalizing active inset styles, since that can move a node
+        // originally positioned from its right or bottom edge.
+        const node_rect = node.getBoundingClientRect()
+        min_delta_x = bounds_rect.left - node_rect.left
+        max_delta_x = Math.max(min_delta_x, bounds_rect.right - node_rect.right)
+        min_delta_y = bounds_rect.top - node_rect.top
+        max_delta_y = Math.max(min_delta_y, bounds_rect.bottom - node_rect.bottom)
+      }
       start = { x: event.clientX, y: event.clientY }
       document.body.style.userSelect = `none` // Prevent text selection during drag
       drag_handle.style.cursor = `grabbing`
@@ -253,8 +286,14 @@ export const draggable =
 
     function on_pointermove(event: PointerEvent) {
       if (!dragging) return
-      node.style.left = `${initial.left + (event.clientX - start.x)}px`
-      node.style.top = `${initial.top + (event.clientY - start.y)}px`
+      if (move_x) {
+        const delta_x = clamp(event.clientX - start.x, min_delta_x, max_delta_x)
+        node.style.left = `${initial.left + delta_x}px`
+      }
+      if (move_y) {
+        const delta_y = clamp(event.clientY - start.y, min_delta_y, max_delta_y)
+        node.style.top = `${initial.top + delta_y}px`
+      }
       options.on_drag?.(event)
     }
 
@@ -1955,8 +1994,9 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
   }
 }
 
-// isComposing: Escape cancels an IME composition, it is not a dismissal
-const register_escape_layer = key_layer_stack(
+// Register a handler on the shared LIFO Escape stack. Only the latest handler runs;
+// already-handled and IME-composition events are skipped. Returns an unregister function.
+export const register_escape_layer = key_layer_stack(
   (event) => event.key === `Escape` && !event.isComposing,
 )
 
@@ -2139,9 +2179,9 @@ export const backdrop_dismiss =
 
 export type AnchorRect = { top: number; left: number; bottom: number; right: number }
 
-// Keep geometry work to one pass per frame even when scroll, resize and observers all
-// report the same change. Tooltip and float share this lifecycle.
-const auto_update_position = (
+// Coalesce position updates from scrolling, resizing and observed element size changes.
+// The caller performs the initial update; this returns a cleanup function.
+export const auto_update_position = (
   anchor: Element | null,
   floating: Element,
   update: () => void,
@@ -2185,7 +2225,7 @@ export interface FloatOptions extends PositionOptions {
   // `fixed` needs no scroll bookkeeping but is clipped by an ancestor's transform;
   // `absolute` survives that at the cost of adding page scroll to every update.
   strategy?: `fixed` | `absolute`
-  match_width?: boolean // size the floating box to the anchor, for dropdowns
+  match_width?: boolean // use the anchor's exact border-box width, for dropdowns
 }
 
 // Park an element next to an anchor and keep it there while the page moves.
@@ -2203,13 +2243,25 @@ export const float =
     } = options
     if (!enabled || !anchor || !(node instanceof HTMLElement)) return undefined
 
+    const original_size_styles = match_width
+      ? {
+          boxSizing: node.style.boxSizing,
+          minWidth: node.style.minWidth,
+          width: node.style.width,
+        }
+      : undefined
     const update = () => {
       // Out of flow before measuring: an in-flow surface is a sibling that pushes the
       // very anchor it is about to measure, which lands it half its height off.
       node.style.position = strategy
       const anchor_rect =
         anchor instanceof Element ? anchor.getBoundingClientRect() : anchor
-      if (match_width) node.style.width = `${anchor_rect.right - anchor_rect.left}px`
+      if (match_width) {
+        const width = `${anchor_rect.right - anchor_rect.left}px`
+        node.style.boxSizing = `border-box`
+        node.style.minWidth = width
+        node.style.width = width
+      }
       const { top, left, placement } = compute_position(
         anchor_rect,
         node.getBoundingClientRect(),
@@ -2222,7 +2274,16 @@ export const float =
     }
 
     update()
-    return auto_update_position(anchor instanceof Element ? anchor : null, node, update)
+    const stop_auto_update = auto_update_position(
+      anchor instanceof Element ? anchor : null,
+      node,
+      update,
+    )
+    if (!original_size_styles) return stop_auto_update
+    return () => {
+      stop_auto_update()
+      Object.assign(node.style, original_size_styles)
+    }
   }
 
 // Teleport an element into `target` and put it back on teardown, marking where it
@@ -2280,21 +2341,16 @@ export interface FocusTrapOptions {
   restore?: Element | false
   // Further containers the trap covers, for portalled parts of the same surface
   include?: (Element | null | undefined)[]
-  // Narrows the trap to a descendant, for a node that wraps the surface together with
-  // siblings Tab must not reach — a modal's backdrop button above all. Resolved per
-  // keystroke like `click_outside`'s `scope`: a selector picks up markup rendered after
-  // setup, a function covers a `bind:this` still null then. Falls back to the node.
+  // Narrows Tab cycling to a descendant. Resolved per keystroke; falls back to the node.
   root?: Element | string | null | (() => Element | null | undefined)
   // Escape handler, on the same layer stack `click_outside` uses, so only the innermost
   // trap hears the key. Omit and Escape passes through untouched.
   on_escape?: (event: KeyboardEvent) => void
   // Pull focus back to where it last sat inside whenever something outside takes it.
-  // Off by default: a trap that re-runs per state change (ConfirmDialog, once per
-  // queued question) has to be able to hand focus over, and recapture would fight it.
   recapture?: boolean
 }
 
-// Exported so surfaces can find their own trigger to hand focus back to
+// CSS candidates only; filtering and ordering stay private below.
 export const tabbable_selector = [
   `a[href]`,
   `area[href]`,
@@ -2312,19 +2368,90 @@ export const tabbable_selector = [
   `[tabindex]`,
 ].join(`,`)
 
-// tabbable_selector matches SVG too (an <a href> inside an <svg> is focusable), and only
-// these two have focus(), so this is the narrowing every candidate has to pass
+// Selector matches can include SVG anchors; only these two element types expose focus().
 const is_focusable = (element: unknown): element is HTMLElement | SVGElement =>
   element instanceof HTMLElement || element instanceof SVGElement
 
-// Visibility read from computed style rather than measured boxes: test DOMs skip
-// layout, so getClientRects would report every candidate as hidden and empty the trap.
-const is_tabbable = (element: Element): element is HTMLElement | SVGElement => {
-  if (!is_focusable(element)) return false
-  if (element.closest(`[inert],[hidden],[disabled]`)) return false
-  if (Number(element.getAttribute(`tabindex`) ?? 0) < 0) return false
-  const style = getComputedStyle(element)
-  return style.display !== `none` && style.visibility !== `hidden`
+const composed_parent = (element: Element): Element | null => {
+  if (element.parentElement) return element.parentElement
+  const root = element.getRootNode()
+  return root instanceof ShadowRoot ? root.host : null
+}
+
+const candidate_tab_index = (element: Element) =>
+  Number(element.getAttribute(`tabindex`) ?? 0)
+const candidate_order = (element: Element) =>
+  candidate_tab_index(element) || Number.MAX_SAFE_INTEGER
+
+const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement => {
+  if (!is_focusable(element) || candidate_tab_index(element) < 0) return false
+  if (element.matches(`:disabled`)) return false
+  let current: Element | null = element
+  while (current) {
+    const style = getComputedStyle(current)
+    if (
+      current.matches(`[hidden],[inert]`) ||
+      style.display === `none` ||
+      style.visibility === `hidden` ||
+      (current.matches(`details:not([open])`) &&
+        !current.querySelector(`:scope > summary`)?.contains(element)) ||
+      (element.matches(`button,input,select,textarea`) &&
+        current.matches(`fieldset[disabled]`) &&
+        !current.querySelector(`:scope > legend`)?.contains(element))
+    )
+      return false
+    current = composed_parent(current)
+  }
+  return true
+}
+
+const is_named_radio = (element: Element): element is HTMLInputElement =>
+  element instanceof HTMLInputElement && element.type === `radio` && Boolean(element.name)
+
+const collect_tab_candidates = (
+  root: Element | ShadowRoot,
+  candidates: Element[],
+): void => {
+  for (const child of root.children) {
+    if (child.matches(tabbable_selector) && !candidates.includes(child))
+      candidates.push(child)
+    if (child.shadowRoot) collect_tab_candidates(child.shadowRoot, candidates)
+    collect_tab_candidates(child, candidates)
+  }
+}
+
+// Covers light DOM and open shadow roots; closed roots are necessarily opaque.
+const get_tab_candidates = (roots: Element[]): (HTMLElement | SVGElement)[] => {
+  const candidates: Element[] = []
+  for (const root of roots) collect_tab_candidates(root, candidates)
+
+  return candidates
+    .filter(is_tab_candidate)
+    .filter((element) => {
+      if (!is_named_radio(element)) return true
+      const checked_peer = candidates.find(
+        (peer) =>
+          is_named_radio(peer) &&
+          peer.name === element.name &&
+          peer.form === element.form &&
+          peer.getRootNode() === element.getRootNode() &&
+          peer.checked,
+      )
+      return !checked_peer || checked_peer === element
+    })
+    .toSorted((left, right) => candidate_order(left) - candidate_order(right))
+}
+
+const deep_active_element = (): Element | null => {
+  let active = document.activeElement
+  while (active?.shadowRoot?.activeElement) active = active.shadowRoot.activeElement
+  return active
+}
+
+const composed_contains = (container: Element, target: Element): boolean => {
+  let current: Element | null = target
+  while (current && current !== container) current = composed_parent(current)
+  return current === container
 }
 
 // isComposing for the same reason the Escape layer above filters it: Tab cycles IME
@@ -2337,9 +2464,7 @@ const focus_element = (element: Element | null | undefined) => {
   if (is_focusable(element)) element.focus()
 }
 
-// Keep Tab inside a surface and hand focus back when it closes. Pair with
-// click_outside: that one decides when a surface goes away, this one decides where
-// the keyboard is while it is up and where it lands afterward.
+// Keep Tab inside a surface and hand focus back when it closes.
 export const focus_trap =
   (options: FocusTrapOptions = {}) =>
   (node: Element): (() => void) | undefined => {
@@ -2361,37 +2486,26 @@ export const focus_trap =
         : typeof root === `string`
           ? node.querySelector(root)
           : root) ?? node
-    // The node stays the containment boundary while `root` only narrows what Tab cycles.
-    // Narrowing both would make a focusable sibling of the root — the backdrop button in
-    // a modal, which a click focuses — read as outside: Tab would stop being trapped and
-    // teardown would skip the focus restore.
-    const containers = (): Element[] => [node, ...extra_containers]
-    const tab_scopes = (): Element[] => [resolve_root(), ...extra_containers]
+    // `root` narrows Tab order, but the whole node remains inside the trap.
     // Recollected per keystroke: menus grow, filter and disable items while open
-    const tabbables = (): (HTMLElement | SVGElement)[] =>
-      tab_scopes().flatMap((parent) =>
-        [...parent.querySelectorAll(tabbable_selector)].filter(is_tabbable),
-      )
+    const tabbables = () => get_tab_candidates([resolve_root(), ...extra_containers])
     const is_inside = (target: unknown): target is Element =>
-      target instanceof Element && containers().some((el) => el.contains(target))
-    const holds_focus = () => is_inside(document.activeElement)
+      target instanceof Element &&
+      [node, ...extra_containers].some((el) => composed_contains(el, target))
+    const holds_focus = () => is_inside(deep_active_element())
 
-    const focus_origin = document.activeElement
-    // The root itself is the fallback focus target, so it needs to accept focus.
-    // Track where we added tabindex so cleanup can leave the markup as it was. A set
-    // because a recapture can resolve a root the last one did not, and all get put back.
+    const focus_origin = deep_active_element()
+    // Recapture can inject tabindex into several roots; teardown restores them all.
     const tabindex_added_to = new Set<Element>()
     let last_inside: Element | null = null
     let trap_active = true
 
-    // `initial: false` keeps focus put by never reaching focus_into at setup, but a
-    // recapture has to land somewhere, so there it only means "no entry point named"
+    // Recapture still needs a fallback when initial activation left focus alone.
     const wanted = initial === false ? undefined : initial
 
     const focus_into = () => {
       const root_el = resolve_root()
-      // Only a recapture focusin ever sets `last_inside`, so this is that path's
-      // preference: focus goes back where it sat, not to the trap's entry point.
+      // Recapture prefers the last focused element over the initial entry point.
       const preferred = is_inside(last_inside) ? last_inside : null
       const requested =
         typeof wanted === `string` ? root_el.querySelector(wanted) : wanted
@@ -2404,13 +2518,11 @@ export const focus_trap =
     }
 
     const on_focusin = (event: FocusEvent) => {
-      if (is_inside(event.target)) last_inside = event.target
+      const active = deep_active_element() ?? event.target
+      if (is_inside(active)) last_inside = active
     }
 
-    // Deferred to a microtask: focus sits on body between one element losing it and
-    // the next taking it, so answering at event time would recapture on every step
-    // within the trap. Only focus leaving the trap is the trap's business, hence the
-    // containment check, and `trap_active` covers the microtask a teardown outruns.
+    // Wait through the transient body focus between normal focus moves.
     const on_focusout = (event: FocusEvent) => {
       if (!is_inside(event.target)) return
       queueMicrotask(() => {
@@ -2427,20 +2539,16 @@ export const focus_trap =
     if (initial !== false) focus_into()
 
     const on_tab = (event: KeyboardEvent) => {
-      // This is a document-wide capture layer, so without this guard a trap that was
-      // never given focus still confiscates every Tab on the page and drags focus in.
-      // Nav hits that: pinning a submenu leaves focus on the toggle outside it.
+      // A document-wide trap must ignore Tab until focus has entered it.
       if (!holds_focus()) return
       const items = tabbables()
       event.preventDefault() // even with nothing to focus, Tab must not leave
       if (items.length === 0) return
       const step = event.shiftKey ? -1 : 1
-      // findIndex over indexOf so an SVG focusable still matches: tabbable_selector
-      // admits them and they are not HTMLElement, which indexOf's typing would demand
-      const active = document.activeElement
+      // findIndex keeps the SVG candidate type compatible.
+      const active = deep_active_element()
       const idx = items.findIndex((item) => item === active)
-      // Focus on the container itself rather than an item enters at the edge Tab
-      // would have reached first
+      // Focus on the container enters at the edge Tab would reach first.
       const edge = event.shiftKey ? items.at(-1) : items[0]
       const next = idx === -1 ? edge : items[(idx + step + items.length) % items.length]
       next?.focus()
@@ -2464,8 +2572,7 @@ export const focus_trap =
       document.removeEventListener(`focusout`, on_focusout)
       for (const element of tabindex_added_to) element.removeAttribute(`tabindex`)
       if (restore === false) return
-      // Don't yank focus if the user already placed it elsewhere. A closing surface
-      // usually leaves focus on body, which counts as ours to hand back.
+      // Preserve a deliberate focus move outside the trap.
       if (!holds_focus() && document.activeElement !== document.body) return
       focus_element(restore ?? focus_origin)
     }

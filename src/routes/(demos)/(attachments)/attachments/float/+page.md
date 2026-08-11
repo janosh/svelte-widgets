@@ -4,7 +4,7 @@ Parks an element next to an anchor and keeps it there while the page scrolls or
 resizes. The geometry — flip to the side that fits, then shift to stay on screen —
 comes from `compute_position` in `svelte-widgets/utils`, which the tooltip and the
 portalled dropdown also use. The anchor can be a plain rect instead of an element,
-which is how `ContextMenu` hangs a menu off the pointer.
+which is how `ActionMenu` hangs its context form off the pointer.
 
 ```svelte example id="attachments-float"
 <script lang="ts">

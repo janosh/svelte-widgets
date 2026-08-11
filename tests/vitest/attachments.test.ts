@@ -6,6 +6,7 @@ import type {
   TooltipOptions,
 } from '$lib/attachments'
 import {
+  auto_update_position,
   backdrop_dismiss,
   click_outside,
   contrast_color,
@@ -21,6 +22,7 @@ import {
   hotkey,
   pick_contrast_color,
   portal,
+  register_escape_layer,
   resizable,
   sortable,
   tooltip,
@@ -874,6 +876,26 @@ describe(`tooltip manager`, () => {
   })
 })
 
+it(`register_escape_layer skips handled Escape and captures through stopped propagation`, () => {
+  const layer = vi.fn()
+  const unregister = register_escape_layer(layer)
+  try {
+    const handled = escape_key()
+    handled.preventDefault()
+    document.dispatchEvent(handled)
+    expect(layer).not.toHaveBeenCalled()
+
+    const blocker = create_element()
+    const child = document.createElement(`button`)
+    blocker.append(child)
+    blocker.addEventListener(`keydown`, (event) => event.stopPropagation())
+    const event = dispatch_key(child, `Escape`)
+    expect(layer).toHaveBeenCalledWith(event)
+  } finally {
+    unregister()
+  }
+})
+
 describe(`click_outside`, () => {
   const dispatch_press = (
     target: Element,
@@ -1412,19 +1434,14 @@ describe(`hotkey`, () => {
 describe(`focus_trap`, () => {
   const make_surface = (count = 3) => {
     const surface = create_element()
-    const buttons = Array.from({ length: count }, () => {
-      const button = document.createElement(`button`)
-      surface.append(button)
-      return button
-    })
+    const buttons = Array.from({ length: count }, () => document.createElement(`button`))
+    surface.append(...buttons)
     return { surface, buttons }
   }
 
   // returned so callers can assert whether the key was swallowed
-  const press_key = (key: string, shiftKey = false) =>
-    dispatch_key(document, key, { shiftKey })
-  const press_tab = (shiftKey = false) => press_key(`Tab`, shiftKey)
-  const press_escape = () => press_key(`Escape`)
+  const press_tab = (shiftKey = false) => dispatch_key(document, `Tab`, { shiftKey })
+  const press_escape = () => dispatch_key(document, `Escape`)
 
   // focus lands outside, then the microtask a recapture would schedule gets to run
   const focus_out_to = async (target: HTMLElement) => {
@@ -1458,18 +1475,35 @@ describe(`focus_trap`, () => {
     expect(document.activeElement).toBe(buttons[2]) // and back past the first
   })
 
-  it(`skips candidates the keyboard cannot reach`, () => {
-    const { surface, buttons } = make_surface()
-    buttons[1].disabled = true
-    buttons[2].tabIndex = -1
-    const reachable = document.createElement(`a`)
-    reachable.href = `#target`
-    surface.append(reachable)
+  it(`orders and filters structural Tab candidates`, () => {
+    const surface = create_element()
+    surface.innerHTML = `
+      <button id="three" tabindex="3"></button><button id="one" tabindex="1"></button>
+      <button id="plain"></button><button disabled></button><button tabindex="-1"></button>
+      <input type="radio" name="choice"><input id="checked" type="radio" name="choice" checked>
+      <details><summary id="summary"></summary><button></button></details>
+      <fieldset disabled><legend><button id="legend"></button></legend><button></button></fieldset>
+      <div hidden><button></button></div>
+    `
+    attach_trap(surface)
+
+    for (const id of [`three`, `plain`, `checked`, `summary`, `legend`, `one`]) {
+      press_tab()
+      expect(document.activeElement).toBe(surface.querySelector(`#${id}`))
+    }
+  })
+
+  it(`walks into an open shadow root`, () => {
+    const { surface, buttons } = make_surface(1)
+    const host = document.createElement(`div`)
+    const shadow = host.attachShadow({ mode: `open` })
+    shadow.append(document.createElement(`button`))
+    buttons[0].before(host)
 
     attach_trap(surface)
-    expect(document.activeElement).toBe(buttons[0])
+    expect(shadow.activeElement).toBe(shadow.querySelector(`button`))
     press_tab()
-    expect(document.activeElement).toBe(reachable)
+    expect(document.activeElement).toBe(buttons[0])
   })
 
   // an <a href> inside an <svg> is focusable and matches tabbable_selector, but it is an
@@ -1749,7 +1783,9 @@ describe(`focus_trap`, () => {
 describe(`draggable`, () => {
   // fixed positioning makes the attachment read getBoundingClientRect, which mock_rect
   // controls; the offset* fallback path has its own case below
-  const create_fixed_box = (rect = { left: 10, top: 20 }) => {
+  const create_fixed_box = (
+    rect: Parameters<typeof mock_rect>[1] = { left: 10, top: 20 },
+  ) => {
     const element = create_element(`div`, { position: `fixed` })
     mock_rect(element, rect)
     return element
@@ -1771,21 +1807,14 @@ describe(`draggable`, () => {
     expect(on_drag).not.toHaveBeenCalled()
   })
 
-  // the handle may carry the consumer's own inline styles, which are not ours to discard
-  it(`restores inline cursor and touch-action rather than blanking them`, () => {
-    const element = create_fixed_box()
-    element.style.cursor = `pointer`
-    element.style.touchAction = `pan-y`
-
-    draggable({})(element)?.()
-    expect([element.style.cursor, element.style.touchAction]).toEqual([
-      `pointer`,
-      `pan-y`,
-    ])
-  })
-
   it(`updates position, callbacks, cursor and userSelect while dragging`, () => {
     const element = create_fixed_box()
+    Object.assign(element.style, {
+      right: `3px`,
+      bottom: `4px`,
+      cursor: `pointer`,
+      touchAction: `pan-y`,
+    })
     const [on_drag_start, on_drag, on_drag_end] = [vi.fn(), vi.fn(), vi.fn()]
 
     const cleanup = draggable({ on_drag_start, on_drag, on_drag_end })(element)
@@ -1802,6 +1831,8 @@ describe(`draggable`, () => {
     globalThis.dispatchEvent(pointer_event(`pointermove`, 15, 25))
     expect(element.style.left).toBe(`20px`)
     expect(element.style.top).toBe(`40px`)
+    expect(element.style.right).toBe(`auto`)
+    expect(element.style.bottom).toBe(`auto`)
     expect(on_drag).toHaveBeenCalledOnce()
 
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
@@ -1810,20 +1841,93 @@ describe(`draggable`, () => {
     expect(document.body.style.userSelect).toBe(``)
 
     cleanup?.()
-    expect(element.style.cursor).toBe(``)
-    expect(element.style.touchAction).toBe(``)
+    expect(element.style.cursor).toBe(`pointer`)
+    expect(element.style.touchAction).toBe(`pan-y`)
   })
 
-  it(`drags from a touch and sets touch-action`, () => {
+  it.each([
+    [`x`, [`40px`, `2px`, `auto`, `4px`]],
+    [`y`, [`1px`, `60px`, `3px`, `auto`]],
+  ] as const)(`locks dragging to the %s axis`, (axis, expected) => {
     const element = create_fixed_box()
-    draggable({})(element)
-    expect(element.style.touchAction).toBe(`none`)
+    Object.assign(element.style, {
+      left: `1px`,
+      top: `2px`,
+      right: `3px`,
+      bottom: `4px`,
+    })
+    draggable({ axis })(element)
 
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, { pointerType: `touch` }))
+    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 35, 45))
+
+    expect([
+      element.style.left,
+      element.style.top,
+      element.style.right,
+      element.style.bottom,
+    ]).toEqual(expected)
+    globalThis.dispatchEvent(pointer_event(`pointerup`, 35, 45))
+  })
+
+  it(`keeps a fixed node within viewport-coordinate bounds`, () => {
+    const element = create_fixed_box()
+    draggable({ bounds: { top: 0, right: 120, bottom: 80, left: 0 } })(element)
+    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
+
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 100))
+    expect([element.style.left, element.style.top]).toEqual([`20px`, `30px`])
+
+    globalThis.dispatchEvent(pointer_event(`pointermove`, -100, -100))
+    expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
+    globalThis.dispatchEvent(pointer_event(`pointerup`, -100, -100))
+  })
+
+  it.each([`parent`, `element`] as const)(
+    `contains offset-positioned nodes within a %s bound`,
+    (kind) => {
+      const parent = create_element()
+      mock_rect(parent, { left: 100, top: 200, width: 300, height: 200 })
+      const element = create_element(`div`, { position: `absolute` })
+      parent.append(element)
+      mock_rect(element, { left: 125, top: 235, width: 50, height: 40 })
+      Object.defineProperties(element, {
+        offsetLeft: { value: 25, configurable: true },
+        offsetTop: { value: 35, configurable: true },
+      })
+      draggable({ bounds: kind === `parent` ? `parent` : parent })(element)
+      element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+
+      globalThis.dispatchEvent(pointer_event(`pointermove`, 500, 500))
+      expect([element.style.left, element.style.top]).toEqual([`250px`, `160px`])
+
+      globalThis.dispatchEvent(pointer_event(`pointermove`, -500, -500))
+      expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
+      globalThis.dispatchEvent(pointer_event(`pointerup`, -500, -500))
+    },
+  )
+
+  it(`ignores element bounds that generate no box`, () => {
+    const parent = create_element()
+    mock_rect(parent, { left: 0, top: 0, width: 0, height: 0 })
+    const element = create_fixed_box()
+    parent.append(element)
+    draggable({ bounds: `parent` })(element)
+    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
     globalThis.dispatchEvent(pointer_event(`pointermove`, 15, 25))
+
     expect([element.style.left, element.style.top]).toEqual([`20px`, `40px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 15, 25, { pointerType: `touch` }))
-    expect(document.body.style.userSelect).toBe(``)
+    globalThis.dispatchEvent(pointer_event(`pointerup`, 15, 25))
+  })
+
+  it(`pins the leading edge when the node is larger than its bounds`, () => {
+    const element = create_fixed_box({ left: 10, top: 20, width: 150, height: 100 })
+    draggable({ bounds: new DOMRect(0, 0, 100, 80) })(element)
+    element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 100))
+
+    expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
+    globalThis.dispatchEvent(pointer_event(`pointerup`, 100, 100))
   })
 
   it(`ignores moves and releases from another pointer`, () => {
@@ -1926,27 +2030,6 @@ describe(`draggable`, () => {
     globalThis.dispatchEvent(pointer_event(`pointermove`, 30, 40))
     expect(element.style.left).toBe(`30px`)
     expect(element.style.top).toBe(`40px`)
-  })
-
-  it(`uses offsetLeft/offsetTop for non-fixed positioning`, () => {
-    const element = create_element()
-    element.style.position = `absolute`
-    // Mock offsetLeft and offsetTop (these are read-only, so we use Object.defineProperty)
-    Object.defineProperty(element, `offsetLeft`, { value: 25, configurable: true })
-    Object.defineProperty(element, `offsetTop`, { value: 35, configurable: true })
-
-    const attach = draggable()
-    attach(element)
-
-    element.dispatchEvent(pointer_event(`pointerdown`, 10, 10))
-
-    expect(element.style.left).toBe(`25px`)
-    expect(element.style.top).toBe(`35px`)
-
-    // Drag to new position
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 30, 50))
-    expect(element.style.left).toBe(`45px`) // 25 + (30-10)
-    expect(element.style.top).toBe(`75px`) // 35 + (50-10)
   })
 
   it(`resets body userSelect and cursor when cleaned up mid-drag`, () => {
@@ -3210,9 +3293,24 @@ describe(`float`, () => {
     },
   )
 
-  it(`match_width sizes the surface to the anchor`, () => {
-    expect(attach_float({ match_width: true }).style.width).toBe(`140px`) // 200 - 60
+  it(`match_width sets the exact border-box width and restores inline sizing`, () => {
+    const matched = attach_float({ match_width: true })
+    expect([
+      matched.style.width,
+      matched.style.minWidth,
+      matched.style.boxSizing,
+    ]).toEqual([`140px`, `140px`, `border-box`])
     expect(attach_float().style.width).toBe(``)
+
+    const node = create_element()
+    node.style.cssText = `box-sizing: content-box; min-width: 10rem; width: 20px`
+    const original_sizing = [node.style.boxSizing, node.style.minWidth, node.style.width]
+    mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
+    const cleanup = float({ anchor: anchor_rect, match_width: true })(node)
+    cleanup?.()
+    expect([node.style.boxSizing, node.style.minWidth, node.style.width]).toEqual(
+      original_sizing,
+    )
   })
 
   it(`repositions on scroll using the floating element's window`, () => {
@@ -3231,7 +3329,6 @@ describe(`float`, () => {
     animation_host.dispatchEvent(new Event(`scroll`))
     expect(node.style.top).toBe(`140px`)
     cleanup?.()
-    expect(animation_host.cancelAnimationFrame).toHaveBeenCalledWith(42)
   })
 
   it.each([
@@ -3241,6 +3338,67 @@ describe(`float`, () => {
     const node = create_element()
     expect(float({ anchor: anchor_rect, ...options })(node)).toBeUndefined()
     expect(node.style.position).toBe(``)
+  })
+})
+
+describe(`auto_update_position`, () => {
+  const cleanups: (() => void)[] = []
+  afterEach(() => {
+    for (const cleanup of cleanups.splice(0).toReversed()) cleanup()
+  })
+
+  it(`coalesces observed changes and cleans up`, () => {
+    let run_frame: FrameRequestCallback = () => undefined
+    const visual_viewport = new EventTarget()
+    const animation_host = Object.assign(new EventTarget(), {
+      visualViewport: visual_viewport,
+      requestAnimationFrame: vi.fn((callback: FrameRequestCallback) => {
+        run_frame = callback
+        return 42
+      }),
+      cancelAnimationFrame: vi.fn(),
+    }) as unknown as Window
+    const observe = vi.fn()
+    const disconnect = vi.fn()
+    let resize_callback: ResizeObserverCallback = () => undefined
+    class MockResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resize_callback = callback
+      }
+      observe = observe
+      disconnect = disconnect
+    }
+    cleanups.push(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
+
+    const anchor = create_element()
+    const floating = create_element()
+    cleanups.push(stub_prop(floating, `ownerDocument`, { defaultView: animation_host }))
+    const update = vi.fn()
+    const cleanup = auto_update_position(anchor, floating, update)
+    cleanups.push(cleanup)
+    expect(observe.mock.calls.map(([element]) => element)).toEqual([floating, anchor])
+
+    animation_host.dispatchEvent(new Event(`scroll`))
+    animation_host.dispatchEvent(new Event(`resize`))
+    visual_viewport.dispatchEvent(new Event(`scroll`))
+    expect(animation_host.requestAnimationFrame).toHaveBeenCalledTimes(1)
+    expect(update).not.toHaveBeenCalled()
+
+    run_frame(0)
+    expect(update).toHaveBeenCalledTimes(1)
+
+    resize_callback([], {} as ResizeObserver)
+    expect(animation_host.requestAnimationFrame).toHaveBeenCalledTimes(2)
+    cleanup()
+    expect(disconnect).toHaveBeenCalledOnce()
+    expect(animation_host.cancelAnimationFrame).toHaveBeenCalledWith(42)
+
+    animation_host.dispatchEvent(new Event(`scroll`))
+    expect(animation_host.requestAnimationFrame).toHaveBeenCalledTimes(2)
+
+    observe.mockClear()
+    cleanups.push(auto_update_position(null, floating, update))
+    expect(observe).toHaveBeenCalledExactlyOnceWith(floating)
   })
 })
 
