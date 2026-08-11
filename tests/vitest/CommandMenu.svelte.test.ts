@@ -141,8 +141,7 @@ test.each([
 test.each([`Escape`, `x`])(
   `focused input close key %s does not also trigger its global action shortcut`,
   async (close_key) => {
-    const action = vi.fn()
-    const onkeydown = vi.fn()
+    const [action, onkeydown] = [vi.fn(), vi.fn()]
     const props = $state({
       open: true,
       close_keys: [close_key],
@@ -1095,9 +1094,7 @@ describe(`PageSearch`, () => {
   })
 
   test(`keeps the loader stable while using current callback props`, async () => {
-    const first_navigate = vi.fn()
-    const second_navigate = vi.fn()
-    const onadd = vi.fn()
+    const [first_navigate, second_navigate, onadd] = [vi.fn(), vi.fn(), vi.fn()]
     const search = vi.fn(async () => make_pagefind_response(`Fresh`))
     const props = $state({
       ...base_props,
@@ -1420,8 +1417,7 @@ test.each([`n`, `shift+n`])(
 )
 
 test(`global shortcuts skip disabled duplicate bindings`, async () => {
-  const disabled_action = vi.fn()
-  const enabled_action = vi.fn()
+  const [disabled_action, enabled_action] = [vi.fn(), vi.fn()]
   mount(CommandMenu, {
     target: document.body,
     props: {

@@ -164,8 +164,7 @@ const remove_description = (element: Element, id: string): void => {
 const resolve_boundary = (options: TooltipOptions, doc: Document) => {
   const view = doc.defaultView
   const visual = view?.visualViewport
-  const left = visual?.offsetLeft ?? 0
-  const top = visual?.offsetTop ?? 0
+  const [left, top] = [visual?.offsetLeft ?? 0, visual?.offsetTop ?? 0]
   const right = left + (visual?.width ?? view?.innerWidth ?? 0)
   const bottom = top + (visual?.height ?? view?.innerHeight ?? 0)
   if (!(options.boundary instanceof Element)) return { top, left, right, bottom }

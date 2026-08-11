@@ -19,8 +19,7 @@ Selection history is **enabled by default** with a max of 50 entries, letting us
   let selected: string[] = $state([])
   let undo: (() => boolean) | undefined = $state()
   let redo: (() => boolean) | undefined = $state()
-  let canUndo = $state(false)
-  let canRedo = $state(false)
+  let [canUndo, canRedo] = $state([false, false])
   let events: EventLogEntry[] = $state([])
   // same platform detection as the component
   const is_mac: boolean =

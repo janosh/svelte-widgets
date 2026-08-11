@@ -114,9 +114,30 @@ test.describe(`Nav dropdown`, () => {
     const dropdown = page.locator(`.dropdown`).first()
     const menu = dropdown.locator(`[data-submenu]`)
     const toggle = dropdown.locator(`[data-dropdown-toggle]`)
+    const toggle_metrics = await toggle.evaluate((button) => {
+      const icon = button.querySelector(`svg`)
+      if (!icon) throw new Error(`Dropdown toggle has no icon`)
+      const label = button.previousElementSibling
+      if (!label) throw new Error(`Dropdown toggle has no label`)
+      const button_rect = button.getBoundingClientRect()
+      const icon_rect = icon.getBoundingClientRect()
+      const font_size = Number(getComputedStyle(button).fontSize.replace(`px`, ``))
+      return {
+        icon_em: icon_rect.width / font_size,
+        label_gap: Number(getComputedStyle(label).paddingInlineEnd.replace(`px`, ``)),
+        leading_gap: icon_rect.left - button_rect.left,
+        trailing_gap: button_rect.right - icon_rect.right,
+      }
+    })
+    expect(toggle_metrics.icon_em).toBeGreaterThanOrEqual(0.95)
+    expect(toggle_metrics.label_gap).toBeLessThan(3)
+    expect(toggle_metrics.leading_gap).toBeLessThan(1)
+    expect(toggle_metrics.trailing_gap).toBeLessThan(1)
 
     await toggle.click()
     await expect(menu).toHaveCSS(`display`, `flex`)
+    await expect(toggle).toHaveCSS(`transform`, `none`)
+    await expect(toggle.locator(`svg`)).not.toHaveCSS(`transform`, `none`)
     await page.mouse.move(0, 0)
     await expect(menu).toHaveCSS(`display`, `flex`)
 

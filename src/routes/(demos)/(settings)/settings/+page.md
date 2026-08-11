@@ -196,8 +196,7 @@ without repeating the key at the call site.
       description: `Radius multiplier applied to every rendered atom`,
     },
   }
-  let radius = $state(1)
-  let opacity = $state(0.5)
+  let [radius, opacity] = $state([1, 0.5])
 </script>
 
 <div class="demo-box" style="display: grid; gap: 4pt; max-width: 26em; padding: 1ex">

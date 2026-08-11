@@ -136,8 +136,7 @@ describe(`focus_trap`, () => {
   })
 
   it(`gives Tab to the innermost focused trap`, () => {
-    const outer = make_surface()
-    const inner = make_surface()
+    const [outer, inner] = [make_surface(), make_surface()]
     attach_trap(outer.surface)
     const cleanup_inner = attach_trap(inner.surface, { initial: false })
 
@@ -204,8 +203,10 @@ describe(`focus_trap`, () => {
     const backdrop = document.createElement(`button`)
     const dialog = document.createElement(`section`)
     dialog.className = `dialog`
-    const first = document.createElement(`button`)
-    const last = document.createElement(`button`)
+    const [first, last] = [
+      document.createElement(`button`),
+      document.createElement(`button`),
+    ]
     dialog.append(first, last)
     layer.append(backdrop, dialog)
     return { layer, backdrop, dialog, first, last }
@@ -263,10 +264,8 @@ describe(`focus_trap`, () => {
     expect(press_escape().defaultPrevented).toBe(false)
     cleanup_plain?.()
 
-    const outer = make_surface()
-    const inner = make_surface()
-    const on_outer = vi.fn()
-    const on_inner = vi.fn()
+    const [outer, inner] = [make_surface(), make_surface()]
+    const [on_outer, on_inner] = [vi.fn(), vi.fn()]
     attach_trap(outer.surface, { on_escape: on_outer })
     const cleanup_inner = attach_trap(inner.surface, { on_escape: on_inner })
 

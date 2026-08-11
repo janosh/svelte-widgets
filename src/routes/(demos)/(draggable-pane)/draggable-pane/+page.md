@@ -15,8 +15,7 @@ dropdown too small.
   import DraggablePane from '$lib/DraggablePane.svelte'
   import { Toggle } from '$lib'
 
-  let open = $state(false)
-  let persistent = $state(false)
+  let [open, persistent] = $state([false, false])
   let resize = $state<`both` | `width` | `height` | `none`>(`both`)
   let last_close = $state(``)
 </script>

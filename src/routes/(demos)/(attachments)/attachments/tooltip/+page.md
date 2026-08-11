@@ -173,8 +173,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 <script lang="ts">
   import { tooltip } from '$lib/attachments'
 
-  let open_delay_ms = $state(100)
-  let close_delay_ms = $state(100)
+  let [open_delay_ms, close_delay_ms] = $state([100, 100])
   let manual_open = $state(false)
   let last_reason = $state(`—`)
 </script>

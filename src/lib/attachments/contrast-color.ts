@@ -111,8 +111,7 @@ const oklab_to_rgb255 = ([lightness, a_axis, b_axis]: Triple): Triple => {
   ])
 }
 
-const KAPPA = 24389 / 27
-const EPSILON = 216 / 24389
+const [KAPPA, EPSILON] = [24389 / 27, 216 / 24389]
 const D50_WHITE: Triple = [0.3457 / 0.3585, 1, (1 - 0.3457 - 0.3585) / 0.3585]
 
 const lab_to_rgb255 = ([lightness, a_axis, b_axis]: Triple): Triple => {

@@ -216,8 +216,7 @@ describe(`history / undo-redo`, () => {
   })
 
   test(`undo and redo callbacks receive changes and new actions clear redo`, async () => {
-    const onundo = vi.fn()
-    const onredo = vi.fn()
+    const [onundo, onredo] = [vi.fn(), vi.fn()]
     const props = await mount_history({ onundo, onredo })
 
     const click_option = async (label: string) => {

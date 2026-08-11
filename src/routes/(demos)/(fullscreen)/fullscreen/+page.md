@@ -24,8 +24,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
   let left_wrapper = $state<HTMLElement | undefined>(undefined)
   let right_wrapper = $state<HTMLElement | undefined>(undefined)
-  let left_fullscreen = $state(false)
-  let right_fullscreen = $state(false)
+  let [left_fullscreen, right_fullscreen] = $state([false, false])
 </script>
 
 <div style="display: flex; gap: 1em; flex-wrap: wrap">

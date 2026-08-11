@@ -19,8 +19,7 @@ export const draggable =
     const { handle_selector, axis = `both`, bounds } = options
     if (options.disabled || !(element instanceof HTMLElement)) return undefined
     const node = element
-    const move_x = axis !== `y`
-    const move_y = axis !== `x`
+    const [move_x, move_y] = [axis !== `y`, axis !== `x`]
 
     let dragging = false
     let stop_pointer_follow: (() => void) | undefined

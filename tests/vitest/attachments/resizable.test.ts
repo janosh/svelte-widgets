@@ -30,8 +30,7 @@ describe(`resizable`, () => {
 
   it(`cleans up when pointer capture is rejected`, () => {
     const element = create_box()
-    const on_resize = vi.fn()
-    const on_resize_end = vi.fn()
+    const [on_resize, on_resize_end] = [vi.fn(), vi.fn()]
     attach_resizable(element, { on_resize, on_resize_end })
     vi.spyOn(element, `setPointerCapture`).mockImplementation(() => {
       throw new DOMException(`stale pointer`, `NotFoundError`)
@@ -299,8 +298,7 @@ describe(`resizable`, () => {
 
   it(`resets a keyboard resize with Enter`, () => {
     const element = create_box()
-    const on_resize_start = vi.fn()
-    const on_resize_reset = vi.fn()
+    const [on_resize_start, on_resize_reset] = [vi.fn(), vi.fn()]
     attach_resizable(element, { edges: [`right`], on_resize_start, on_resize_reset })
     const handle = grip(element, `right`)
 
@@ -443,9 +441,7 @@ describe(`resizable`, () => {
     ],
   ])(`does not start resizing on %s`, (_desc, gesture) => {
     const element = create_box()
-    const on_resize_start = vi.fn()
-    const on_resize = vi.fn()
-    const on_resize_end = vi.fn()
+    const [on_resize_start, on_resize, on_resize_end] = [vi.fn(), vi.fn(), vi.fn()]
     attach_resizable(element, { on_resize_start, on_resize, on_resize_end })
 
     gesture(element)
@@ -461,9 +457,7 @@ describe(`resizable`, () => {
   it(`fires on_resize_start, on_resize and on_resize_end callbacks`, () => {
     const element = create_box()
 
-    const on_resize_start = vi.fn()
-    const on_resize = vi.fn()
-    const on_resize_end = vi.fn()
+    const [on_resize_start, on_resize, on_resize_end] = [vi.fn(), vi.fn(), vi.fn()]
 
     attach_resizable(element, { on_resize_start, on_resize, on_resize_end })
 

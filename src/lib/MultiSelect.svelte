@@ -381,8 +381,7 @@
 
   // Internal state for loadOptions feature
   let loaded_options = $state<Option[]>([])
-  let load_options_has_more = $state(true)
-  let is_loading_options = $state(false)
+  let [load_options_has_more, is_loading_options] = $state([true, false])
   let load_options_last_search: string | null = $state(null) // null = nothing dispatched yet
   let load_request_id = 0 // monotonic counter to invalidate stale in-flight fetches
   let load_abort_controller: AbortController | null = null
@@ -598,8 +597,7 @@
     Boolean(virtual_config) && !(stickyGroupHeaders && has_grouped_options),
   )
   let warned_virtual_grouped = false // only warn once per component instance
-  let options_scroll_top = $state(0)
-  let options_client_height = $state(0)
+  let [options_scroll_top, options_client_height] = $state([0, 0])
   // happy-dom and SSR report clientHeight 0 — fall back to a 400px viewport estimate
   const virtual_viewport = $derived(
     options_client_height > 0 ? options_client_height : 400,

@@ -5,8 +5,7 @@ import { create_element } from '../index'
 describe(`portal`, () => {
   // home has siblings on both sides, so restoring to the wrong index is visible
   const setup = () => {
-    const home = create_element()
-    const target = create_element()
+    const [home, target] = [create_element(), create_element()]
     const [before, node, after] = [
       document.createElement(`i`),
       document.createElement(`b`),

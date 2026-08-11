@@ -709,8 +709,7 @@ describe(`option grouping feature`, () => {
   })
 
   test(`collapseAllGroups and expandAllGroups functions are bindable`, async () => {
-    const oncollapseAll_spy = vi.fn()
-    const onexpandAll_spy = vi.fn()
+    const [oncollapseAll_spy, onexpandAll_spy] = [vi.fn(), vi.fn()]
     const props = $state<MultiSelectProps>({
       options: grouped_options,
       collapsibleGroups: true,

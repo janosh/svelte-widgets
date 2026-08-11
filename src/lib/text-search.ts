@@ -153,8 +153,7 @@ const normalize_with_offsets = (source: string): NormalizedText => {
 
 // Binary-search cumulative node ends to avoid quadratic scans over tokenized blocks.
 const node_reaching = (nodes: SegmentNode[], min_end: number): SegmentNode => {
-  let low = 0
-  let high = nodes.length - 1
+  let [low, high] = [0, nodes.length - 1]
   while (low < high) {
     const mid = (low + high) >> 1
     if (nodes[mid].end >= min_end) high = mid

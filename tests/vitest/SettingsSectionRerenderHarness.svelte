@@ -2,11 +2,9 @@
   import { SettingsSection } from '$lib'
 
   let current_values = $state({ radius: 1, diameter: 2, palette: `warm` })
-  let generation = $state(0)
-  let input_generation = $state(0)
+  let [generation, input_generation] = $state([0, 0])
   let row_key = $state<`radius` | `diameter`>(`radius`)
-  let radius_visible = $state(true)
-  let descriptions_open = $state(true)
+  let [radius_visible, descriptions_open] = $state([true, true])
 
   const reset_key = (
     key: string,

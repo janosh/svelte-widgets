@@ -523,8 +523,7 @@ describe(`create_search_jump`, () => {
     [`scrolling disabled`, false, true],
   ])(`supports %s`, (_desc, use_scroll_target, disable_scroll) => {
     render(`<p id="match">first</p><section id="wrapper"></section>`)
-    const match = doc_query(`#match`)
-    const wrapper = doc_query(`#wrapper`)
+    const [match, wrapper] = [doc_query(`#match`), doc_query(`#wrapper`)]
     match.scrollIntoView = vi.fn()
     wrapper.scrollIntoView = vi.fn()
     const jump = create_search_jump()

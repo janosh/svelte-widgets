@@ -19,8 +19,7 @@ describe(`auto_update_position`, () => {
       }),
       cancelAnimationFrame: vi.fn(),
     }) as unknown as Window
-    const observe = vi.fn()
-    const disconnect = vi.fn()
+    const [observe, disconnect] = [vi.fn(), vi.fn()]
     let resize_callback: ResizeObserverCallback = () => undefined
     class MockResizeObserver {
       constructor(callback: ResizeObserverCallback) {
@@ -31,8 +30,7 @@ describe(`auto_update_position`, () => {
     }
     cleanups.push(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
 
-    const anchor = create_element()
-    const floating = create_element()
+    const [anchor, floating] = [create_element(), create_element()]
     cleanups.push(stub_prop(floating, `ownerDocument`, { defaultView: animation_host }))
     const update = vi.fn()
     const cleanup = auto_update_position(anchor, floating, update)

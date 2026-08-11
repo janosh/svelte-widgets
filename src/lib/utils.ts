@@ -578,8 +578,7 @@ export function observe_subtree(
   refresh: () => void,
   watch_text = false,
 ): () => void {
-  let queued = false
-  let disposed = false
+  let [queued, disposed] = [false, false]
   const observer = new MutationObserver(() => {
     if (queued || disposed) return
     queued = true

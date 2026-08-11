@@ -73,8 +73,7 @@
   const anchor = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
   let open_timeout: ReturnType<typeof setTimeout> | undefined
   let close_timeout: ReturnType<typeof setTimeout> | undefined
-  let pointer_inside = false
-  let focus_inside = false
+  let [pointer_inside, focus_inside] = [false, false]
   let focus_open_blocked = false
   let trigger_focus = $state<HTMLElement | SVGElement | null>(null)
 

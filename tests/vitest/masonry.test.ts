@@ -521,6 +521,7 @@ describe(`Masonry virtualization`, () => {
     mount_masonry({ items: indices, virtualize: true, height, style })
     expect(masonry_el()?.style.height).toBe(expected)
     expect(masonry_el()?.style.overflowY).toBe(`auto`)
+    expect(masonry_el()?.getAttribute(`style`)).not.toContain(`\n`)
   })
 
   test(`calls getEstimatedHeight and applies column padding`, async () => {

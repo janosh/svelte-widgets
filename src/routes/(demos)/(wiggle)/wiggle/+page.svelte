@@ -2,13 +2,9 @@
   import Wiggle from '$lib/Wiggle.svelte'
 
   let wiggle = $state(false)
-  let angle = $state(20)
-  let scale = $state(1.2)
-  let dx = $state(10)
-  let dy = $state(10)
-  let duration_ms = $state(200)
-  let stiffness = $state(0.05)
-  let damping = $state(0.1)
+  let [angle, scale, dx, dy, duration_ms, stiffness, damping] = $state([
+    20, 1.2, 10, 10, 200, 0.05, 0.1,
+  ])
 </script>
 
 <h2>Wiggle</h2>

@@ -124,8 +124,7 @@
     if (!toggle_btn) return fallback_position
     const toggle_rect = toggle_btn.getBoundingClientRect()
     const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
-    const offset_x = offset.x ?? 5
-    const offset_y = offset.y ?? 5
+    const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
 
     if (position === `fixed`) {
       return {

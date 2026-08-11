@@ -263,8 +263,10 @@ describe(`click_outside`, () => {
   // which the surface does not contain, so only descending the chain finds the focus
   it(`escape sees focus on a node that shares the surface's shadow tree`, () => {
     const host = create_element()
-    const surface = document.createElement(`div`)
-    const inner = document.createElement(`button`)
+    const [surface, inner] = [
+      document.createElement(`div`),
+      document.createElement(`button`),
+    ]
     surface.append(inner)
     host.attachShadow({ mode: `open` }).append(surface)
     inner.focus()

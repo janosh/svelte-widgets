@@ -84,8 +84,7 @@ describe(`Nav`, () => {
       onkeydown: vi.fn((event: KeyboardEvent) => event.stopPropagation()),
     }
     mount_nav({ routes: default_routes, link_props, menu_props })
-    const button = doc_query(`.burger`)
-    const menu = doc_query(`.menu`)
+    const [button, menu] = [doc_query(`.burger`), doc_query(`.menu`)]
     const panel_id = button.getAttribute(`aria-controls`)
 
     expect(button.tagName).toBe(`BUTTON`)
@@ -141,9 +140,11 @@ describe(`Nav`, () => {
       link_props,
       burger_props,
     })
-    const nav = doc_query(`nav`)
-    const menu = doc_query(`.menu`)
-    const burger = doc_query(`.burger`)
+    const [nav, menu, burger] = [
+      doc_query(`nav`),
+      doc_query(`.menu`),
+      doc_query(`.burger`),
+    ]
     expect(nav.classList.contains(`custom-class`)).toBe(true)
     expect(menu.getAttribute(`style`)).toBe(`background: red;`)
     // consumer class merges with the component's own rather than replacing it
@@ -688,8 +689,7 @@ describe(`Nav`, () => {
     })
 
     test(`onopen and onclose callbacks on menu toggle`, async () => {
-      const on_open = vi.fn()
-      const on_close = vi.fn()
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
       set_window_width(500)
 
       mount_nav({

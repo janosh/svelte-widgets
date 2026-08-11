@@ -112,16 +112,14 @@ const rewrite_block = (
   // A no-op would cost an undo entry, emit a pointless splice, and swallow the key.
   if (total_delta === 0) return null
 
-  const first_line = lines[0]
-  const next_first_line = next_lines[0]
+  const [first_line, next_first_line] = [lines[0], next_lines[0]]
   const next_start =
     sel_start === block_start && sel_start < sel_end
       ? block_start
       : block_start +
         map_rewritten_column(first_line, next_first_line, sel_start - block_start)
   const last_line_idx = lines.length - 1
-  const last_line = lines[last_line_idx]
-  const next_last_line = next_lines[last_line_idx]
+  const [last_line, next_last_line] = [lines[last_line_idx], next_lines[last_line_idx]]
   const last_line_start = block_end - last_line.length
   const next_last_line_start =
     last_line_start + total_delta - (next_last_line.length - last_line.length)

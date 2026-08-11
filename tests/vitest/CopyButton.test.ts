@@ -34,8 +34,7 @@ const create_pre_with_code = (
   code_text: string,
   class_name = ``,
 ): { pre: HTMLPreElement; code: HTMLElement } => {
-  const pre = document.createElement(`pre`)
-  const code = document.createElement(`code`)
+  const [pre, code] = [document.createElement(`pre`), document.createElement(`code`)]
   code.className = class_name
   code.textContent = code_text
   pre.append(code)
@@ -159,8 +158,7 @@ test.each([
 
 test(`calls on_copy_success with copied content`, async () => {
   const content = `copied text`
-  const onclick = vi.fn()
-  const on_copy_success = vi.fn()
+  const [onclick, on_copy_success] = [vi.fn(), vi.fn()]
   const { copy_button } = mount_copy_button({ content, on_copy_success, onclick })
   await click_copy_button(copy_button)
   expect(on_copy_success).toHaveBeenCalledWith(content)
@@ -325,8 +323,7 @@ test(`global=true propagates disabled prop to mounted buttons`, async () => {
 })
 
 test(`global_selector updates mounted button props when callbacks change`, async () => {
-  const on_copy_success_initial = vi.fn()
-  const on_copy_success_next = vi.fn()
+  const [on_copy_success_initial, on_copy_success_next] = [vi.fn(), vi.fn()]
   const { pre } = create_pre_with_code(`selector content`, `copy-target`)
 
   const copy_button_component = mount(TestCopyButtonGlobalUpdate, {
@@ -362,8 +359,7 @@ test(`global_selector updates mounted button props when callbacks change`, async
 })
 
 test(`global_selector remount uses latest callback after parent remount`, async () => {
-  const on_copy_success_initial = vi.fn()
-  const on_copy_success_next = vi.fn()
+  const [on_copy_success_initial, on_copy_success_next] = [vi.fn(), vi.fn()]
   const { pre } = create_pre_with_code(`selector content`, `copy-target`)
   const global_props = { global_selector: `.copy-target`, reset_ms: 1000 }
 

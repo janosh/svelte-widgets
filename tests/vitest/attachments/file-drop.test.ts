@@ -51,8 +51,7 @@ describe(`file_drop`, () => {
   }
 
   it(`tracks nested drag activity, filters accept types, and honors multiple`, async () => {
-    const on_files = vi.fn()
-    const on_drag_active = vi.fn()
+    const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
     const transfer = data_transfer([
       new File([`one`], `one.TXT`, { type: `text/plain` }),
       new File([`image`], `photo.webp`, { type: `image/webp` }),
@@ -192,8 +191,7 @@ describe(`file_drop`, () => {
       kind: `file`,
       webkitGetAsEntry: () => broken_entry,
     } as unknown as DataTransferItem
-    const on_files = vi.fn()
-    const on_error = vi.fn()
+    const [on_files, on_error] = [vi.fn(), vi.fn()]
     const { node } = attach_file_drop({ multiple: true, on_files, on_error })
 
     node.dispatchEvent(drag_event(`drop`, data_transfer([], [item])))
@@ -202,8 +200,7 @@ describe(`file_drop`, () => {
   })
 
   it(`disabled mode prevents browser navigation without activating or processing`, () => {
-    const on_files = vi.fn()
-    const on_drag_active = vi.fn()
+    const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
     const { node, cleanup } = attach_file_drop({
       disabled: true,
       on_files,
@@ -291,8 +288,7 @@ describe(`file_drop`, () => {
   it(`cleanup removes handlers, resets state, and restores the prior data attribute`, () => {
     const node = create_element()
     node.setAttribute(`data-drag-active`, `consumer-value`)
-    const on_files = vi.fn()
-    const on_drag_active = vi.fn()
+    const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
     const transfer = data_transfer([new File([``], `file.txt`)])
     const { cleanup } = attach_file_drop({ on_files, on_drag_active }, node)
 

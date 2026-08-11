@@ -202,8 +202,7 @@ export const resizable =
       is_resizing = true
 
       const origin = { x: event.clientX, y: event.clientY }
-      const measured = measure()
-      const maximum = read_maximum()
+      const [measured, maximum] = [measure(), read_maximum()]
       previous_user_select = node.ownerDocument.body.style.userSelect
       node.ownerDocument.body.style.userSelect = `none`
       on_resize_start?.(event, { width: measured.width, height: measured.height })
@@ -265,8 +264,7 @@ export const resizable =
       if ((direction.x && !grab.horizontal) || (direction.y && !grab.vertical)) return
       event.preventDefault()
       const step = event.shiftKey ? 50 : 10
-      const measured = measure()
-      const maximum = read_maximum()
+      const [measured, maximum] = [measure(), read_maximum()]
       on_resize_start?.(event, { width: measured.width, height: measured.height })
       const dimensions = apply_resize(
         event,

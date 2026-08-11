@@ -273,8 +273,7 @@ describe(`create_find_state`, () => {
     document.body.innerHTML =
       `<main id="first"><p>alpha first</p></main>` +
       `<main id="second"><p>alpha second</p></main><div id="bar"></div>`
-    const first_root = doc_query(`#first`)
-    const second_root = doc_query(`#second`)
+    const [first_root, second_root] = [doc_query(`#first`), doc_query(`#second`)]
     const props = $state<Props>({ root: first_root, on_close: vi.fn() })
     const bar = mount(FindBar, { target: doc_query(`#bar`), props })
     onTestFinished(() => unmount(bar))

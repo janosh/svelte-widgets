@@ -162,8 +162,10 @@ describe(`contrast_color`, () => {
     [`rgb(0 0 0 / 0%)`, `black`, false], // a percentage alpha reads as transparent too
     [`color(display-p3 1 1 1)`, `black`, true],
   ])(`sees %s as a painted ancestor: %s`, (background, expected_color, painted) => {
-    const ancestor = document.createElement(`div`)
-    const node = document.createElement(`span`)
+    const [ancestor, node] = [
+      document.createElement(`div`),
+      document.createElement(`span`),
+    ]
     ancestor.append(node)
     document.body.append(ancestor)
     vi.spyOn(globalThis, `getComputedStyle`).mockImplementation(

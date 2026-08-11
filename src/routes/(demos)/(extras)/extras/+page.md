@@ -23,8 +23,7 @@ so the label can react to the state. Everything else spreads onto the wrapping `
 <script lang="ts">
   import { Toggle } from '$lib'
 
-  let notifications = $state(true)
-  let telemetry = $state(false)
+  let [notifications, telemetry] = $state([true, false])
 </script>
 
 <div style="display: flex; flex-direction: column; gap: 8pt">

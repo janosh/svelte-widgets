@@ -9,8 +9,7 @@
     { value: `inner-one`, label: `Inner one` },
     { value: `inner-two`, label: `Inner two` },
   ]
-  let outer_value = $state(`outer-one`)
-  let inner_value = $state(`inner-one`)
+  let [outer_value, inner_value] = $state([`outer-one`, `inner-one`])
 </script>
 
 <Accordion items={outer_items} bind:value={outer_value}>

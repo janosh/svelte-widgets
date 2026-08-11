@@ -435,7 +435,7 @@
               onkeydown={(event: KeyboardEvent) =>
                 handle_dropdown_keydown(event, parsed_route.href, filtered_sub_routes)}
             >
-              <Icon icon={ChevronDown} style="width: 0.7em; height: 0.7em" />
+              <Icon icon={ChevronDown} style="width: 1em; height: 1em" />
             </button>
           </div>
           <!-- svelte-ignore a11y_no_static_element_interactions -- hover keeps the native-link submenu open while traversing it -->
@@ -616,6 +616,7 @@
   .dropdown > div:first-child > :is(a, span) {
     line-height: 1.3;
     padding: var(--nav-item-padding, 1pt 4pt);
+    padding-inline-end: 2pt;
     text-decoration: none;
     color: inherit;
     border-start-start-radius: var(--nav-border-radius);
@@ -625,7 +626,8 @@
     color: var(--nav-link-active-color);
   }
   .dropdown > div:first-child > button {
-    padding: 2pt 4pt;
+    padding-block: 2pt;
+    padding-inline: 0;
     border: none;
     background: transparent;
     color: inherit;
@@ -637,15 +639,18 @@
     border-end-end-radius: var(--nav-border-radius);
     outline-offset: -1px;
     opacity: 0.6;
-    transition:
-      opacity 0.15s,
-      transform 0.2s ease;
+    transition: opacity 0.15s;
+  }
+  .dropdown > div:first-child > button :global(svg) {
+    transition: transform 0.2s ease;
   }
   .dropdown > div:first-child > button:hover {
     opacity: 1;
   }
   .dropdown > div:first-child > button.open {
     opacity: 1;
+  }
+  .dropdown > div:first-child > button.open :global(svg) {
     transform: rotate(180deg);
   }
   .dropdown > div:first-child > button:focus-visible {

@@ -1007,8 +1007,10 @@ test.each([undefined, `left`, `right`] as const)(
   `expandIconPosition=%s places expand icon around selected list`,
   (position) => {
     mount_multiselect({ options: [1, 2, 3], expandIconPosition: position })
-    const expand_icon = doc_query(`.expand-icon`)
-    const selected_list = doc_query(`ul.selected`)
+    const [expand_icon, selected_list] = [
+      doc_query(`.expand-icon`),
+      doc_query(`ul.selected`),
+    ]
     if (position === `right`) expect(selected_list.nextElementSibling).toBe(expand_icon)
     else expect(expand_icon.nextElementSibling).toBe(selected_list)
   },
@@ -1961,8 +1963,7 @@ test.each([
 ])(
   `fires oncreate event with correct payload when user creates new option for different option types`,
   async (options, search_text, expected_created_option) => {
-    const oncreate_spy = vi.fn()
-    const onadd_spy = vi.fn()
+    const [oncreate_spy, onadd_spy] = [vi.fn(), vi.fn()]
 
     mount_multiselect({
       options,
@@ -2853,8 +2854,7 @@ describe(`selectAllOption feature`, () => {
     [`visible`, undefined],
     [`matching`, 1],
   ] as const)(`selects all %s options and fires events`, async (scope, maxOptions) => {
-    const onselectAll_spy = vi.fn()
-    const onchange_spy = vi.fn()
+    const [onselectAll_spy, onchange_spy] = [vi.fn(), vi.fn()]
     mount_multiselect({
       options,
       maxOptions,
@@ -3537,8 +3537,7 @@ describe(`onduplicate event`, () => {
   )
 
   test(`fires when both maxSelect reached AND duplicate attempted`, async () => {
-    const onduplicate_spy = vi.fn()
-    const onmaxreached_spy = vi.fn()
+    const [onduplicate_spy, onmaxreached_spy] = [vi.fn(), vi.fn()]
 
     mount_multiselect({
       options: [1, 2, 3],
@@ -3790,8 +3789,7 @@ describe(`duplicates prop variants`, () => {
       value,
     }))
 
-    const onadd_spy = vi.fn()
-    const onduplicate_spy = vi.fn()
+    const [onadd_spy, onduplicate_spy] = [vi.fn(), vi.fn()]
 
     mount_multiselect({
       options,

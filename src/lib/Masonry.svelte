@@ -401,8 +401,7 @@
   style:gap="{gap}px"
   {...rest}
   onscroll={chain_handlers(virtualize ? on_scroll : undefined, rest.onscroll)}
-  style="display: flex; width: 100%; justify-content: center; box-sizing: border-box;
-  {rest.style ? `${rest.style};` : ``} {virtual_style}"
+  style={`display: flex; width: 100%; justify-content: center; box-sizing: border-box; ${rest.style ? `${rest.style}; ` : ``}${virtual_style}`}
   class={[`masonry`, rest.class]}
   data-masonry-id={unique_id}
 >

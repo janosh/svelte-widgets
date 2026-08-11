@@ -81,8 +81,7 @@ export const sortable =
           table_body.querySelectorAll<HTMLTableRowElement>(`:scope > tr`),
         )
         rows.sort((row_1, row_2) => {
-          const cell_1 = row_1.cells[idx]
-          const cell_2 = row_2.cells[idx]
+          const [cell_1, cell_2] = [row_1.cells[idx], row_2.cells[idx]]
           // Rows can have fewer cells than the sort column (colspan placeholders,
           // ragged rows) — treat missing cells as empty so they sort last
           const val_1 = cell_1 ? get_html_sort_value(cell_1) : ``
@@ -92,8 +91,7 @@ export const sortable =
           if (trimmed_1 === trimmed_2) return 0
           if (trimmed_1 === ``) return 1 // treat empty/whitespace as lower than any value
           if (trimmed_2 === ``) return -1
-          const num_1 = Number(trimmed_1)
-          const num_2 = Number(trimmed_2)
+          const [num_1, num_2] = [Number(trimmed_1), Number(trimmed_2)]
           if (isNaN(num_1) && isNaN(num_2)) {
             return (
               sort_dir * trimmed_1.localeCompare(trimmed_2, undefined, { numeric: true })
