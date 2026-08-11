@@ -2243,6 +2243,7 @@ export const float =
     } = options
     if (!enabled || !anchor || !(node instanceof HTMLElement)) return undefined
 
+    const anchor_element = anchor instanceof Element ? anchor : null
     const original_size_styles = match_width
       ? {
           boxSizing: node.style.boxSizing,
@@ -2274,11 +2275,7 @@ export const float =
     }
 
     update()
-    const stop_auto_update = auto_update_position(
-      anchor instanceof Element ? anchor : null,
-      node,
-      update,
-    )
+    const stop_auto_update = auto_update_position(anchor_element, node, update)
     if (!original_size_styles) return stop_auto_update
     return () => {
       stop_auto_update()

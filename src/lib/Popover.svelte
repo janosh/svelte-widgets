@@ -165,12 +165,10 @@
   }
   // Cancel a delayed timer left by an earlier trigger mode.
   const toggle_from_click = (event: MouseEvent) => {
+    if (open) return close(`trigger`)
     clear_timeouts()
-    if (open) close(`trigger`)
-    else {
-      remember_trigger(event.currentTarget)
-      open = true
-    }
+    remember_trigger(event.currentTarget)
+    open = true
   }
 
   const trigger_props: TriggerProps = $derived.by(() => {

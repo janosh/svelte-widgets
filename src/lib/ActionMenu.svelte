@@ -11,7 +11,6 @@
     step_focus,
   } from './utils'
 
-  type ContextTrigger = `body` | `region` | `none`
   type TriggerProps = {
     onclick: (event: MouseEvent) => void
     'aria-controls': string | undefined
@@ -26,7 +25,7 @@
     children?: Snippet
     // What picks up the opening right-click: the region when `children` is given, the
     // document otherwise. `none` installs no handler, for a consumer that sets `at`.
-    trigger?: ContextTrigger
+    trigger?: `body` | `region` | `none`
     open?: never
     placement?: never
     align?: never
