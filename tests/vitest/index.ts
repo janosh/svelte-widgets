@@ -1,6 +1,16 @@
 import type { MultiSelectProps } from '$lib'
 import { assert, onTestFinished, vi } from 'vite-plus/test'
 
+export const create_element = (
+  tag = `div`,
+  styles: Partial<CSSStyleDeclaration> = {},
+): HTMLElement => {
+  const element = document.createElement(tag)
+  Object.assign(element.style, styles)
+  document.body.append(element)
+  return element
+}
+
 // Generic return type keeps call sites concise for DOM-specific assertions.
 // eslint-disable-next-line @typescript-eslint/no-unnecessary-type-parameters
 export function doc_query<T extends Element = HTMLElement>(selector: string): T {
