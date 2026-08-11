@@ -3,6 +3,7 @@
   // we only flatten hunks, elisions, and no-newline markers for virtualization.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
+  import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from '../attachments'
   import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
   import { render_tokens } from './tokens'
@@ -28,7 +29,8 @@
     single_col = false,
     on_error,
     backend,
-  }: {
+    ...rest
+  }: HTMLAttributes<HTMLDivElement> & {
     // The two versions as written to disk; the backend normalizes CRLF itself.
     old_text: string
     new_text: string
@@ -322,9 +324,11 @@
 {/snippet}
 
 <div
+  {...rest}
   aria-busy={is_loading}
-  class="diff-view"
-  style="--editor-font-size: {options.font_size}px; --editor-line-height: {row_height}px"
+  class={[`diff-view`, rest.class]}
+  style:--editor-font-size={`${options.font_size}px`}
+  style:--editor-line-height={`${row_height}px`}
 >
   {#if !single_col}
     <header class="panel-header">

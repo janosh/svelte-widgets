@@ -395,12 +395,10 @@
   bind:clientHeight={masonryHeight}
   bind:this={div}
   style:gap="{gap}px"
-  style:overflow-y={virtualize ? `auto` : undefined}
-  style:height={virtualize ? css_height : undefined}
   {...rest}
   onscroll={chain_handlers(virtualize ? on_scroll : undefined, rest.onscroll)}
-  style="display: flex; width: 100%; justify-content: center; box-sizing: border-box; {rest.style ??
-    ``}"
+  style="display: flex; width: 100%; justify-content: center; box-sizing: border-box;
+  {virtualize ? `overflow-y: auto; height: ${css_height};` : ``} {rest.style ?? ``}"
   class={[`masonry`, rest.class]}
   data-masonry-id={unique_id}
 >

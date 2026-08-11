@@ -56,6 +56,18 @@ few hundred items, where the DOM node count starts to cost more than the measuri
   import { Masonry } from '$lib'
 
   let virtualize = $state(true)
+  let rendered = $state(0)
+  let masonry = $state<HTMLDivElement>()
+  const count_rendered = (node: Element) => {
+    const update = () => (rendered = node.querySelectorAll(`:scope > .col > div`).length)
+    const observer = new MutationObserver(update)
+    observer.observe(node, { childList: true, subtree: true })
+    update()
+    return () => observer.disconnect()
+  }
+  $effect(() => {
+    if (masonry) return count_rendered(masonry)
+  })
   const items = Array.from({ length: 500 }, (_, idx) => ({
     id: idx,
     height: 48 + ((idx * 29) % 72),
@@ -66,31 +78,29 @@ few hundred items, where the DOM node count starts to cost more than the measuri
   <input type="checkbox" bind:checked={virtualize} />
   Render only the visible window
 </label>
+<output>{rendered} of {items.length} item nodes mounted</output>
 
-<div
-  style="margin-top: 0.75em; border: 1px solid var(--border)"
-  style:max-height={virtualize ? undefined : `360px`}
-  style:overflow-y={virtualize ? undefined : `auto`}
+<Masonry
+  bind:div={masonry}
+  {items}
+  {virtualize}
+  height={360}
+  overscan={3}
+  minColWidth={130}
+  gap={8}
+  getEstimatedHeight={(item) => item.height}
+  style="margin-top: 0.75em; padding: 8px; border: 1px solid var(--border);
+  {virtualize ? `` : `max-height: 360px; overflow-y: auto`}"
 >
-  <Masonry
-    {items}
-    {virtualize}
-    height={360}
-    overscan={3}
-    minColWidth={130}
-    gap={8}
-    getEstimatedHeight={(item) => item.height}
-  >
-    {#snippet children({ item })}
-      <div
-        style="height: {item.height}px; display: grid; place-items: center; background:
-        var(--surface); border: 1px solid var(--border)"
-      >
-        Item {item.id}
-      </div>
-    {/snippet}
-  </Masonry>
-</div>
+  {#snippet children({ item })}
+    <div
+      style="height: {item.height}px; display: grid; place-items: center; background:
+      var(--surface); border: 1px solid var(--border)"
+    >
+      Item {item.id}
+    </div>
+  {/snippet}
+</Masonry>
 ```
 
 Two things change while virtualizing, because off-screen items are never measured:

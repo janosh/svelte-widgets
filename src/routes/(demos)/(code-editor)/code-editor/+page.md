@@ -123,17 +123,16 @@ app startup.
   }
 </script>
 
-<div style="height: 12rem; border: 1px solid lightgray">
-  <DiffView
-    {backend}
-    {old_text}
-    {new_text}
-    options={{ font_size: 13, context_lines: 2, layout: `side-by-side` }}
-    filename="greeting.ts"
-    old_label="Before"
-    new_label="After"
-  />
-</div>
+<DiffView
+  {backend}
+  {old_text}
+  {new_text}
+  options={{ font_size: 13, context_lines: 2, layout: `side-by-side` }}
+  filename="greeting.ts"
+  old_label="Before"
+  new_label="After"
+  style="height: 12rem; border: 1px solid lightgray"
+/>
 ```
 
 The demo backend returns a fixed `DiffResult` to keep the browser bundle dependency-free.
