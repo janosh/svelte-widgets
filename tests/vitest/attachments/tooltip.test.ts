@@ -102,6 +102,12 @@ describe(`tooltip manager`, () => {
     return { child, close, controlled, on_open_change }
   }
 
+  // the registry outlives a retry of the same test, so defining twice would throw
+  const define_once = (tag_name: string, element_class: CustomElementConstructor) => {
+    if (!customElements.get(tag_name)) customElements.define(tag_name, element_class)
+    return tag_name
+  }
+
   const mock_tooltip_rect = (width: number, height: number) => {
     const original = HTMLElement.prototype.getBoundingClientRect
     return vi
@@ -231,8 +237,9 @@ describe(`tooltip manager`, () => {
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
   })
 
-  it(`defaults to hover-focus`, () => {
-    const { element } = register_tooltip(`Keyboard`)
+  it(`defaults to hover-focus and focus ignores pointer delay`, () => {
+    const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
+    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
     focus_in(element)
     const tooltip_el = visible_tooltip()
     expect(tooltip_el.textContent).toBe(`Keyboard`)
@@ -270,34 +277,29 @@ describe(`tooltip manager`, () => {
     expect(on_open_change).toHaveBeenLastCalledWith(false, open_detail(element, `blur`))
   })
 
-  it(`stays open while the pointer crosses onto the tooltip`, () => {
+  it(`closes only once every pointer has left both trigger and tooltip`, () => {
     const { element, tooltip_el } = show_tooltip({ close_delay_ms: 100 })
-    pointer_out(element, tooltip_el)
+    const surface_pointer = (type: string, pointer_type = `mouse`) =>
+      tooltip_el.dispatchEvent(
+        pointer_event(type, 100, 140, {
+          pointerType: pointer_type,
+          relatedTarget: document.body,
+        }),
+      )
+
+    // a second pointer touring the surface cannot close what the trigger still holds
+    surface_pointer(`pointerenter`, `pen`)
+    surface_pointer(`pointerleave`, `pen`)
     vi.advanceTimersByTime(100)
     expect(tooltip_el.hidden).toBe(false)
 
-    tooltip_el.dispatchEvent(
-      pointer_event(`pointerleave`, 100, 140, {
-        pointerType: `mouse`,
-        relatedTarget: document.body,
-      }),
-    )
+    pointer_out(element, tooltip_el) // crossing the gap onto the tooltip keeps it up
+    vi.advanceTimersByTime(100)
+    expect(tooltip_el.hidden).toBe(false)
+
+    surface_pointer(`pointerleave`)
     vi.advanceTimersByTime(100)
     expect(tooltip_el.hidden).toBe(true)
-  })
-
-  it(`stays open while another pointer remains on the trigger`, () => {
-    const { tooltip_el } = show_tooltip()
-    tooltip_el.dispatchEvent(
-      pointer_event(`pointerenter`, 100, 140, { pointerType: `pen` }),
-    )
-    tooltip_el.dispatchEvent(
-      pointer_event(`pointerleave`, 100, 140, {
-        pointerType: `pen`,
-        relatedTarget: document.body,
-      }),
-    )
-    expect(tooltip_el.hidden).toBe(false)
   })
 
   it(`Escape dismisses one layer and blocks reopen until interaction exits`, () => {
@@ -352,17 +354,6 @@ describe(`tooltip manager`, () => {
     // stack it answers for the surface underneath, which never hears Escape again.
     document.dispatchEvent(escape_key())
     expect(surrounding_layer).toHaveBeenCalledOnce()
-  })
-
-  it(`focus opens immediately despite a long pointer delay`, () => {
-    const { element } = register_tooltip(`Keyboard`, {
-      trigger: `focus`,
-      open_delay_ms: 1000,
-    })
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
-    focus_in(element)
-
-    expect(visible_tooltip().textContent).toBe(`Keyboard`)
   })
 
   it(`suppresses touch-induced default triggers but allows explicit focus mode`, () => {
@@ -581,6 +572,32 @@ describe(`tooltip manager`, () => {
     expect([visible_tooltip().lang, visible_tooltip().dir]).toEqual([`he`, `ltr`])
   })
 
+  it.each([
+    [`follows the OS scheme on a page that declares none`, {}, `light dark`],
+    [`defers to a trigger that overrides the background`, { bg: `red` }, ``],
+    [`defers to a page that declares its own scheme`, { page_scheme: `dark` }, ``],
+  ])(
+    `%s`,
+    (_desc, { bg, page_scheme }: { bg?: string; page_scheme?: string }, scheme) => {
+      if (page_scheme) {
+        document.body.style.colorScheme = page_scheme
+        cleanups.push(() => document.body.style.removeProperty(`color-scheme`))
+      }
+      const element = create_element(`button`)
+      element.title = `Themed`
+      if (bg) element.style.setProperty(`--tooltip-bg`, bg)
+      attach_tooltip(element)
+      pointer_over(element)
+
+      const tooltip_el = visible_tooltip()
+      expect(tooltip_el.style.getPropertyValue(`color-scheme`)).toBe(scheme)
+      // The paired text color only makes sense alongside the scheme it was chosen for
+      expect(tooltip_el.style.getPropertyValue(`--text-color`)).toBe(
+        scheme ? `light-dark(#222, #eee)` : ``,
+      )
+    },
+  )
+
   it(`updates active attribute content and repositions it`, async () => {
     const element = create_element(`button`)
     element.setAttribute(`aria-label`, `Initial`)
@@ -610,23 +627,20 @@ describe(`tooltip manager`, () => {
   })
 
   it(`keeps synchronous context mutations caused by title stripping`, async () => {
-    const tag_name = `tooltip-title-context`
-    if (!customElements.get(tag_name)) {
-      customElements.define(
-        tag_name,
-        class extends HTMLElement {
-          static observedAttributes = [`title`]
-          attributeChangedCallback(): void {
-            if (this.hasAttribute(`title`)) return
-            this.style.setProperty(`--tooltip-bg`, `blue`)
-            if (this.dataset.normalizeTitle === `true` && !this.dataset.normalized) {
-              this.dataset.normalized = `true`
-              this.title = `Normalized`
-            }
+    const tag_name = define_once(
+      `tooltip-title-context`,
+      class extends HTMLElement {
+        static observedAttributes = [`title`]
+        attributeChangedCallback(): void {
+          if (this.hasAttribute(`title`)) return
+          this.style.setProperty(`--tooltip-bg`, `blue`)
+          if (this.dataset.normalizeTitle === `true` && !this.dataset.normalized) {
+            this.dataset.normalized = `true`
+            this.title = `Normalized`
           }
-        },
-      )
-    }
+        }
+      },
+    )
     const element = create_element(tag_name)
     element.title = `Initial`
     const cleanup = attach_tooltip(element)
@@ -646,20 +660,16 @@ describe(`tooltip manager`, () => {
   })
 
   it(`gives up on a title it cannot strip without throwing`, async () => {
-    const tag_name = `tooltip-title-restorer`
-    if (!customElements.get(tag_name)) {
-      customElements.define(
-        tag_name,
-        class extends HTMLElement {
-          static observedAttributes = [`title`]
-          attributeChangedCallback(): void {
-            if (!this.hasAttribute(`title`)) this.setAttribute(`title`, `Insistent`)
-          }
-        },
-      )
-    }
+    const tag_name = define_once(
+      `tooltip-title-restorer`,
+      class extends HTMLElement {
+        static observedAttributes = [`title`]
+        attributeChangedCallback(): void {
+          if (!this.hasAttribute(`title`)) this.setAttribute(`title`, `Insistent`)
+        }
+      },
+    )
     const errors = vi.spyOn(console, `error`).mockImplementation(() => {})
-    cleanups.push(() => errors.mockRestore())
     const element = create_element(tag_name)
     const cleanup = attach_tooltip(element, { content: `Custom` })
     pointer_over(element)
@@ -682,30 +692,19 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(true)
   })
 
-  it(`hides once the trigger stops rendering`, () => {
-    const { element, tooltip_el } = show_tooltip({}, `Vanishing`)
-
-    element.style.display = `none`
-    // Synchronous throughout, so the reposition runs before any observer callback and
-    // the visibility check there is the only thing that can close the tooltip.
-    window.dispatchEvent(new Event(`scroll`))
-    vi.advanceTimersByTime(20)
-    expect(tooltip_el.hidden).toBe(true)
-  })
-
-  it(`repositions on scroll through one coalesced animation frame`, () => {
-    const element = create_element(`button`)
-    element.title = `Moving`
-    mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
-    attach_tooltip(element)
-    pointer_over(element)
-    const tooltip_el = visible_tooltip()
+  it(`repositions on scroll and hides when the trigger stops rendering`, () => {
+    const { element, tooltip_el } = show_tooltip({}, `Moving`)
     const first_top = tooltip_el.style.top
 
     mock_rect(element, { left: 100, top: 200, width: 80, height: 30 })
     window.dispatchEvent(new Event(`scroll`))
     vi.advanceTimersByTime(20)
     expect(tooltip_el.style.top).not.toBe(first_top)
+
+    element.style.display = `none`
+    window.dispatchEvent(new Event(`scroll`))
+    vi.advanceTimersByTime(20)
+    expect(tooltip_el.hidden).toBe(true)
   })
 
   it(`stops listening for repositions once closed`, () => {
@@ -715,7 +714,6 @@ describe(`tooltip manager`, () => {
     // A surviving scroll subscription still schedules a frame, even though the guard
     // inside would make that frame a no-op, so the frame is what proves the release.
     const frame = vi.spyOn(window, `requestAnimationFrame`)
-    cleanups.push(() => frame.mockRestore())
     window.dispatchEvent(new Event(`scroll`))
     expect(frame).not.toHaveBeenCalled()
   })
@@ -793,19 +791,13 @@ describe(`tooltip manager`, () => {
   })
 
   it(`falls back to the document layer without the Popover API`, () => {
-    const properties = [`popover`, `showPopover`, `hidePopover`] as const
-    const descriptors = properties.map((property) =>
-      Object.getOwnPropertyDescriptor(HTMLElement.prototype, property),
-    )
-    properties.forEach((property) =>
-      Reflect.deleteProperty(HTMLElement.prototype, property),
-    )
-    cleanups.push(() => {
-      properties.forEach((property, idx) => {
-        const descriptor = descriptors[idx]
+    for (const property of [`popover`, `showPopover`, `hidePopover`] as const) {
+      const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, property)
+      Reflect.deleteProperty(HTMLElement.prototype, property)
+      cleanups.push(() => {
         if (descriptor) Object.defineProperty(HTMLElement.prototype, property, descriptor)
       })
-    })
+    }
     const { cleanup, element, tooltip_el } = show_tooltip(
       { strategy: `top-layer` },
       `Fallback`,

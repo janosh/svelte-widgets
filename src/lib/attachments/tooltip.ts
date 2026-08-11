@@ -391,7 +391,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     )
   }
 
-  const apply_surface_context = (trigger: HTMLElement, options: TooltipOptions): void => {
+  // Wipes whatever the previous owner left inline, so nothing leaks between triggers.
+  const reset_surface_styles = () => {
     surface.style.cssText = `
       position: fixed; inset: auto; margin: 0; z-index: var(--tooltip-z-index, 9999);
       opacity: 0; display: inline-block; box-sizing: border-box; width: max-content;
@@ -406,6 +407,11 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       pointer-events: auto; filter: var(--tooltip-shadow, drop-shadow(0 2px 8px rgba(0,0,0,0.25)));
       transition: opacity var(--tooltip-transition, 0.15s ease-out);
     `
+  }
+
+  // Theme vars, typography and writing direction come from the trigger, so the surface
+  // reads as part of the thing it describes rather than as page chrome.
+  const inherit_trigger_styles = (trigger: HTMLElement) => {
     const trigger_styles = getComputedStyle(trigger)
     for (const css_var_name of TOOLTIP_CSS_VARS) {
       const value = trigger_styles.getPropertyValue(css_var_name).trim()
@@ -425,7 +431,28 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       ) ?? ``
     surface.lang = nearest(`lang`, doc.documentElement.lang)
     surface.dir = nearest(`dir`, doc.documentElement.dir, trigger_styles.direction)
+  }
 
+  // A page that goes dark through CSS vars alone resolves the default light-dark()
+  // background to LIGHT while inheriting near-white text. Follow the OS preference
+  // instead, unless the page declares a scheme or the trigger overrides either var.
+  const apply_color_scheme_fallback = () => {
+    const body_styles = getComputedStyle(doc.body)
+    if (body_styles.colorScheme && body_styles.colorScheme !== `normal`) return
+    const overrides_page = (css_var: string) => {
+      const value = surface.style.getPropertyValue(css_var)
+      return value && value !== body_styles.getPropertyValue(css_var).trim()
+    }
+    if (overrides_page(`--tooltip-bg`) || overrides_page(`--text-color`)) return
+    surface.style.setProperty(`color-scheme`, `light dark`)
+    surface.style.setProperty(`--text-color`, `light-dark(#222, #eee)`)
+  }
+
+  // Ordering is the whole contract here: the consumer's `style` is the last word, and
+  // the scheme fallback judges vars every earlier step may have set.
+  const apply_surface_context = (trigger: HTMLElement, options: TooltipOptions): void => {
+    reset_surface_styles()
+    inherit_trigger_styles(trigger)
     // The base rules already wrap; only `nowrap` has to undo them.
     const wrap = options.wrap ?? `balance`
     surface.style.textWrap = wrap === `normal` ? `wrap` : wrap
@@ -437,21 +464,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       surface.style.transition = `none`
     }
     if (options.style) surface.style.cssText += options.style
-
-    // A page that goes dark through CSS vars alone resolves the default light-dark()
-    // background to LIGHT while inheriting near-white text. Follow the OS preference
-    // instead, unless the page declares a scheme or the trigger overrides either var.
-    const body_styles = getComputedStyle(doc.body)
-    if (!body_styles.colorScheme || body_styles.colorScheme === `normal`) {
-      const overrides_page = (css_var: string) => {
-        const value = surface.style.getPropertyValue(css_var)
-        return value && value !== body_styles.getPropertyValue(css_var).trim()
-      }
-      if (!overrides_page(`--tooltip-bg`) && !overrides_page(`--text-color`)) {
-        surface.style.setProperty(`color-scheme`, `light dark`)
-        surface.style.setProperty(`--text-color`, `light-dark(#222, #eee)`)
-      }
-    }
+    apply_color_scheme_fallback()
   }
 
   const render_active_content = (): boolean => {
@@ -645,6 +658,24 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (active?.open && !active.trigger.isConnected) hide_active(`visibility`)
   })
 
+  // Fill the recycled surface and put it on screen, in the top layer where the Popover
+  // API allows it so no ancestor's overflow, transform or stacking context can clip it.
+  const mount_surface = (trigger: HTMLElement, options: TooltipOptions) => {
+    surface.replaceChildren(content_el)
+    if (options.show_arrow !== false) {
+      for (const class_name of [`custom-tooltip-arrow-border`, `custom-tooltip-arrow`]) {
+        surface.append(Object.assign(doc.createElement(`div`), { className: class_name }))
+      }
+    }
+    surface.hidden = false
+    if (!surface.isConnected) doc.body.append(surface)
+    const supports_top_layer = typeof surface.showPopover === `function`
+    if ((options.strategy ?? `top-layer`) === `top-layer` && supports_top_layer) {
+      surface.setAttribute(`popover`, `manual`)
+      surface.showPopover({ source: trigger })
+    } else surface.removeAttribute(`popover`)
+  }
+
   const show_active = (reason: TooltipOpenReason): void => {
     clear_open_timeout()
     if (
@@ -668,20 +699,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       hide_surface()
       return
     }
-    surface.replaceChildren(content_el)
-    if (options.show_arrow !== false) {
-      for (const class_name of [`custom-tooltip-arrow-border`, `custom-tooltip-arrow`]) {
-        surface.append(Object.assign(doc.createElement(`div`), { className: class_name }))
-      }
-    }
-    surface.hidden = false
-    if (!surface.isConnected) doc.body.append(surface)
-    const supports_top_layer =
-      `popover` in surface && typeof surface.showPopover === `function`
-    if ((options.strategy ?? `top-layer`) === `top-layer` && supports_top_layer) {
-      surface.setAttribute(`popover`, `manual`)
-      surface.showPopover({ source: opening.trigger })
-    } else surface.removeAttribute(`popover`)
+    mount_surface(opening.trigger, options)
     add_description(opening.trigger, surface.id)
     opening.open = true
     opening.phase = `idle`
@@ -735,6 +753,10 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     )
   }
 
+  // Whether the surface currently serves this registration aimed at this exact trigger.
+  const owns = (registration: TooltipRegistration, trigger: HTMLElement): boolean =>
+    active?.registration === registration && active.trigger === trigger
+
   const activate = (
     registration: TooltipRegistration,
     trigger: HTMLElement,
@@ -742,9 +764,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   ): void => {
     // One surface serves the document, so the newest interaction takes it — a controlled
     // tooltip is preempted like any other and hears the close through on_open_change.
-    if (active && (active.registration !== registration || active.trigger !== trigger)) {
-      hide_active(CLOSE_REASON[reason])
-    }
+    if (active && !owns(registration, trigger)) hide_active(CLOSE_REASON[reason])
     remember_and_strip_title(registration, trigger)
     active ??= create_active_tooltip(registration, trigger)
     if (active.phase === `close-requested`) active.phase = `idle`
@@ -770,16 +790,17 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     reason: `pointer` | `focus`,
   ): void => {
     if (!active || active.registration !== registration) return
-    if (event.relatedTarget instanceof Node) {
-      if (active.trigger.contains(event.relatedTarget)) return
-      if (surface.contains(event.relatedTarget)) {
-        if (reason === `pointer`) {
-          active.pointer_trigger = false
-          active.pointer_surface = true
-        } else active.focus = `surface`
-        clear_close_timeout()
-        return
-      }
+    const entered = event.relatedTarget instanceof Node ? event.relatedTarget : null
+    // Moving within the trigger never counts as leaving it.
+    if (entered && active.trigger.contains(entered)) return
+    // Crossing onto the hoverable surface hands the interaction over instead of ending it.
+    if (entered && surface.contains(entered)) {
+      if (reason === `pointer`) {
+        active.pointer_trigger = false
+        active.pointer_surface = true
+      } else active.focus = `surface`
+      clear_close_timeout()
+      return
     }
     if (reason === `pointer`) active.pointer_trigger = false
     else active.focus = null
@@ -803,12 +824,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       }
       return
     }
-    if (
-      active &&
-      (active.registration !== registration || active.trigger !== registration.root)
-    ) {
-      hide_active(`controlled`)
-    }
+    if (active && !owns(registration, registration.root)) hide_active(`controlled`)
     active ??= create_active_tooltip(registration, registration.root)
     request_open(`controlled`)
   }

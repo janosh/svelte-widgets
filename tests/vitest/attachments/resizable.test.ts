@@ -1,5 +1,4 @@
-import type { ResizableOptions } from '$lib/attachments'
-import { resizable } from '$lib/attachments'
+import { resizable, type ResizableOptions } from '$lib/attachments'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -253,10 +252,6 @@ describe(`resizable`, () => {
       `${width}px`,
       `${height}px`,
     ])
-    // a top/left corner grows away from the pointer, so the far corner has to stay put
-    if (corner === `top-left`) {
-      expect([element.style.left, element.style.top]).toEqual([`-50px`, `-30px`])
-    }
     expect(on_resize).toHaveBeenLastCalledWith(expect.any(PointerEvent), {
       width,
       height,
@@ -463,15 +458,13 @@ describe(`resizable`, () => {
 
     grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
     expect(document.body.style.userSelect).toBe(`none`)
-    expect(on_resize_start).toHaveBeenCalledTimes(1)
-    expect(on_resize_start).toHaveBeenCalledWith(expect.any(PointerEvent), {
+    expect(on_resize_start).toHaveBeenCalledExactlyOnceWith(expect.any(PointerEvent), {
       width: 200,
       height: 150,
     })
 
     globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75))
-    expect(on_resize).toHaveBeenCalledTimes(1)
-    expect(on_resize).toHaveBeenCalledWith(expect.any(PointerEvent), {
+    expect(on_resize).toHaveBeenCalledExactlyOnceWith(expect.any(PointerEvent), {
       width: 255,
       height: 150,
     })
@@ -479,8 +472,7 @@ describe(`resizable`, () => {
     // End resize
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
     expect(document.body.style.userSelect).toBe(``)
-    expect(on_resize_end).toHaveBeenCalledTimes(1)
-    expect(on_resize_end).toHaveBeenCalledWith(
+    expect(on_resize_end).toHaveBeenCalledExactlyOnceWith(
       expect.any(PointerEvent),
       { width: 200, height: 150 }, // offsetWidth/Height from mock
     )

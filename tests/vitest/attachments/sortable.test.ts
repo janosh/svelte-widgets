@@ -3,11 +3,16 @@ import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { press_key } from '../index'
 
 describe(`sortable`, () => {
-  const mount_table = (table: HTMLTableElement) => {
+  const create_table_from = (inner_html: string) => {
+    const table = document.createElement(`table`)
+    table.innerHTML = inner_html
     document.body.append(table)
     onTestFinished(() => table.remove())
     return table
   }
+  const click_header = (header: Element) =>
+    header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+
   const attach_sortable = (table: HTMLTableElement, options: SortableOptions = {}) => {
     const cleanup = sortable(options)(table)
     if (cleanup) onTestFinished(cleanup)
@@ -25,14 +30,13 @@ describe(`sortable`, () => {
     return header
   }
 
-  const create_table = () => {
-    const table = document.createElement(`table`)
-    table.innerHTML = `<thead><tr><th>Planet</th><th>Moons</th></tr></thead>
+  const create_table = () =>
+    create_table_from(
+      `<thead><tr><th>Planet</th><th>Moons</th></tr></thead>
       <tbody><tr><td>Mars</td><td>2</td></tr>
       <tr><td>Earth</td><td>1</td></tr>
-      <tr><td>Jupiter</td><td>95</td></tr></tbody>`
-    return mount_table(table)
-  }
+      <tr><td>Jupiter</td><td>95</td></tr></tbody>`,
+    )
 
   const get_column_values = (table: HTMLTableElement, col_idx: number) =>
     Array.from(table.querySelectorAll(`tbody tr`)).map(
@@ -40,10 +44,7 @@ describe(`sortable`, () => {
     )
 
   it.each<[string, (header: HTMLTableCellElement) => unknown]>([
-    [
-      `a click`,
-      (header) => header.dispatchEvent(new MouseEvent(`click`, { bubbles: true })),
-    ],
+    [`a click`, click_header],
     [`Enter`, (header) => press_key(header, `Enter`)],
     [`Space`, (header) => press_key(header, ` `)],
   ])(`sorts ascending then descending on repeated %s`, (_activation, activate) => {
@@ -94,7 +95,7 @@ describe(`sortable`, () => {
     const header = get_required_header(table)
     expect(header.style.cursor).toBe(``)
 
-    header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(header)
     expect(get_column_values(table, 0)).toEqual([`Mars`, `Earth`, `Jupiter`]) // unsorted
     expect(header.classList.contains(`table-sort-asc`)).toBe(false)
   })
@@ -108,14 +109,14 @@ describe(`sortable`, () => {
     })
     const [h1, h2] = Array.from(table.querySelectorAll<HTMLTableCellElement>(`thead th`))
 
-    h1.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(h1)
     expect(h1.classList.contains(`asc`)).toBe(true)
     expect(h1.style.backgroundColor).toBe(`red`)
 
-    h1.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(h1)
     expect(h1.classList.contains(`desc`)).toBe(true)
 
-    h2.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(h2)
     expect(h1.textContent).not.toContain(`↑`)
     expect(h1.classList.contains(`asc`)).toBe(false)
     expect(h1.classList.contains(`desc`)).toBe(false)
@@ -126,9 +127,9 @@ describe(`sortable`, () => {
   })
 
   it(`handles an empty table body and a custom header_selector`, () => {
-    const table = document.createElement(`table`)
-    table.innerHTML = `<thead><tr><th class="sortable">A</th><th>B</th></tr></thead>`
-    mount_table(table)
+    const table = create_table_from(
+      `<thead><tr><th class="sortable">A</th><th>B</th></tr></thead>`,
+    )
 
     attach_sortable(table, { header_selector: `th.sortable` })
 
@@ -136,7 +137,7 @@ describe(`sortable`, () => {
     const second_header = table.querySelectorAll<HTMLTableCellElement>(`th`)[1]
     expect(sortable_header.style.cursor).toBe(`pointer`)
     expect(second_header?.style.cursor).toBe(``)
-    sortable_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(sortable_header)
     expect(sortable_header.textContent).toBe(`A ↑`)
     expect(sortable_header.classList.contains(`table-sort-asc`)).toBe(true)
   })
@@ -149,31 +150,29 @@ describe(`sortable`, () => {
       [`2`, `10`, `bar`, `foo`],
     ],
   ])(`sorts %s correctly`, (_desc, cells, expected) => {
-    const table = document.createElement(`table`)
     const rows = cells.map((val: string) => `<tr><td>${val}</td></tr>`).join(``)
-    table.innerHTML = `<thead><tr><th>Col</th></tr></thead><tbody>${rows}</tbody>`
-    mount_table(table)
+    const table = create_table_from(
+      `<thead><tr><th>Col</th></tr></thead><tbody>${rows}</tbody>`,
+    )
 
     attach_sortable(table)
-    get_required_header(table).dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(get_required_header(table))
 
     expect(get_column_values(table, 0).map((val) => val?.trim())).toEqual(expected)
   })
 
   it(`treats rows with missing cells (colspan placeholder) as empty and sorts them last`, () => {
-    const table = document.createElement(`table`)
-    table.innerHTML =
+    const table = create_table_from(
       `<thead><tr><th>Name</th><th>Score</th></tr></thead><tbody>` +
-      `<tr><td colspan="2">No data</td></tr>` +
-      `<tr><td>Alice</td><td>3</td></tr>` +
-      `<tr><td>Bob</td><td>1</td></tr>` +
-      `</tbody>`
-    mount_table(table)
+        `<tr><td colspan="2">No data</td></tr>` +
+        `<tr><td>Alice</td><td>3</td></tr>` +
+        `<tr><td>Bob</td><td>1</td></tr>` +
+        `</tbody>`,
+    )
 
     attach_sortable(table)
     // click 2nd column header; placeholder row has no cell at index 1
-    const score_header = table.querySelectorAll(`thead th`)[1]
-    score_header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(table.querySelectorAll(`thead th`)[1])
 
     const first_cells = Array.from(
       table.querySelectorAll<HTMLTableRowElement>(`tbody tr`),
@@ -182,16 +181,15 @@ describe(`sortable`, () => {
   })
 
   it(`does not re-parent rows of nested tables when sorting`, () => {
-    const table = document.createElement(`table`)
-    table.innerHTML =
+    const table = create_table_from(
       `<thead><tr><th>Name</th><th>Data</th></tr></thead><tbody>` +
-      `<tr><td>Beta</td><td><table><tbody><tr><td>nested</td></tr></tbody></table></td></tr>` +
-      `<tr><td>Alpha</td><td>plain</td></tr>` +
-      `</tbody>`
-    mount_table(table)
+        `<tr><td>Beta</td><td><table><tbody><tr><td>nested</td></tr></tbody></table></td></tr>` +
+        `<tr><td>Alpha</td><td>plain</td></tr>` +
+        `</tbody>`,
+    )
 
     attach_sortable(table)
-    get_required_header(table).dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(get_required_header(table))
 
     const nested_table = table.querySelector(`tbody table`)
     expect(nested_table?.querySelectorAll(`tr`)).toHaveLength(1)
@@ -215,13 +213,13 @@ describe(`sortable`, () => {
 
     const cleanup = attach_sortable(table)
     expect(headers.map(({ style }) => style.cursor)).toEqual([`pointer`, `pointer`])
-    header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(header)
 
     expect(header.querySelector(`span.icon`)).toBe(icon)
     expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↑`)
 
     // repeated clicks replace only the attachment's arrow, preserving the consumer's
-    header.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
+    click_header(header)
     expect(header.querySelectorAll(`span.sort-arrow`)).toHaveLength(2)
     expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↓`)
 

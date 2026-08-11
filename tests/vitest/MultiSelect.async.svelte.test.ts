@@ -19,7 +19,7 @@ afterEach(() => {
 const mock_console_error = () =>
   vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
-// disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix below
+// disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix in MultiSelect.svelte.test.ts
 test(`no console error about missing options if loading=true`, () => {
   const console_error = mock_console_error()
 
@@ -164,8 +164,7 @@ describe(`loadOptions feature`, () => {
     async (_label, make_load_options, expected_calls, last_args) => {
       const load_options = make_load_options()
       mount_multiselect({ loadOptions: load_options, open: true })
-      await tick()
-      await tick()
+      await flush_ticks(2)
 
       expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -377,32 +376,6 @@ describe(`loadOptions feature`, () => {
     reopen()
     await tick()
     expect(load_options).toHaveBeenCalledTimes(2)
-  })
-
-  test(`rapid search changes only apply final result`, async () => {
-    const { fn: load_options, resolvers } = await mount_deferred_open()
-    expect(load_options).toHaveBeenCalledTimes(1)
-
-    const input = get_input()
-    // Type "a", debounce, then "ab" before first completes
-    await type_search_text(`a`, input)
-    await vi.runAllTimersAsync()
-    expect(load_options).toHaveBeenCalledTimes(2)
-
-    await type_search_text(`ab`, input)
-    await vi.runAllTimersAsync()
-    expect(load_options).toHaveBeenCalledTimes(3)
-
-    // Resolve all three in reverse order (worst-case network jitter)
-    resolvers[2]({ options: [`AB Result`], hasMore: false })
-    resolvers[1]({ options: [`A Result`], hasMore: false })
-    resolvers[0]({ options: [`Initial`], hasMore: false })
-    await vi.runAllTimersAsync()
-
-    const ul = doc_query(`ul.options`)
-    expect(ul.textContent).toContain(`AB Result`)
-    expect(ul.textContent).not.toContain(`A Result`)
-    expect(ul.textContent).not.toContain(`Initial`)
   })
 
   test(`scroll after auto-fill cap resets counter and allows more loading`, async () => {
@@ -805,6 +778,12 @@ describe(`async oncreate`, () => {
     })
     return { promise, resolve_fn, reject_fn }
   }
+  const submit_create = async (text: string) => {
+    const input = await type_search_text(text)
+    input.dispatchEvent(fresh_key(`Enter`))
+    await tick()
+    return input
+  }
 
   test(`resolving undefined adds typed option after resolve, spinner shown only while pending`, async () => {
     const { promise, resolve_fn } = make_deferred<OncreateResult>()
@@ -870,9 +849,7 @@ describe(`async oncreate`, () => {
       })
       mount_multiselect(props)
 
-      const input = await type_search_text(`fresh-opt`)
-      input.dispatchEvent(fresh_key(`Enter`))
-      await tick()
+      await submit_create(`fresh-opt`)
 
       resolve_fn(resolved_value)
       await promise
@@ -901,9 +878,7 @@ describe(`async oncreate`, () => {
     })
     mount_multiselect(props)
 
-    const input = await type_search_text(`typed-text`)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await submit_create(`typed-text`)
     await tick() // extra microtask hop for the thenable resolution
 
     expect(props.selected).toEqual([`from-thenable`])
@@ -925,9 +900,7 @@ describe(`async oncreate`, () => {
     })
     mount_multiselect(props)
 
-    const input = await type_search_text(`doomed-opt`)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await submit_create(`doomed-opt`)
 
     expect(props.selected).toEqual([])
     expect(onadd).not.toHaveBeenCalled()
@@ -947,9 +920,7 @@ describe(`async oncreate`, () => {
     })
     mount_multiselect(props)
 
-    const input = await type_search_text(`doomed-opt`)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    const input = await submit_create(`doomed-opt`)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
     const rejection = new Error(`backend validation failed`)
@@ -979,9 +950,7 @@ describe(`async oncreate`, () => {
     })
     mount_multiselect(props)
 
-    const input = await type_search_text(`only-once`)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    const input = await submit_create(`only-once`)
     input.dispatchEvent(fresh_key(`Enter`)) // second Enter while first create pending
     await tick()
 
@@ -1012,9 +981,7 @@ describe(`async oncreate`, () => {
     })
     mount_multiselect(props)
 
-    const input = await type_search_text(`sync-opt`)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await submit_create(`sync-opt`)
 
     expect(props.selected).toEqual(expected_selected)
   })

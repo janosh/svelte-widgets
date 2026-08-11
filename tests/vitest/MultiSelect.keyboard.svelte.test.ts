@@ -1,10 +1,8 @@
 // deno-lint-ignore-file no-await-in-loop
-import { mount, tick } from 'svelte'
+import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import type { Option } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
-import Test2WayBind from './Test2WayBind.svelte'
 import {
   focus_input,
   fresh_key,
@@ -15,45 +13,29 @@ import {
 } from './MultiSelect.test-utils'
 
 // https://github.com/janosh/svelte-widgets/issues/111
-test(`arrow down makes first option active`, async () => {
-  mount_multiselect({ options: [1, 2, 3], open: true })
-
-  const input = get_input()
-
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-
-  await tick()
-
-  const active_option = doc_query(`ul.options > li.active`)
-
-  expect(active_option.textContent?.trim()).toBe(`1`)
-})
-
 // https://github.com/janosh/svelte-widgets/issues/112
 test(`can select 1st and last option with arrow and enter key`, async () => {
-  let selected: Option[] = []
-  mount(Test2WayBind, {
-    target: document.body,
-    props: {
-      open: true,
-      options: [1, 2, 3],
-      onSelectedChanged: (data: Option[] | undefined) => (selected = data ?? []),
-    },
+  const props = $state<MultiSelectProps>({
+    open: true,
+    options: [1, 2, 3],
+    selected: [],
   })
+  mount_multiselect(props)
 
   const input = get_input()
 
   input.dispatchEvent(fresh_key(`ArrowDown`))
   await tick()
+  expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(selected).toEqual([1])
+  expect(props.selected).toEqual([1])
 
   input.dispatchEvent(fresh_key(`ArrowUp`))
   await tick()
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(selected).toEqual([1, 3])
+  expect(props.selected).toEqual([1, 3])
 })
 
 // https://github.com/janosh/svelte-widgets/issues/183
@@ -171,7 +153,7 @@ test(`Enter key deselection preserves searchText (matching mouse behavior)`, asy
   expect(selected_items).toHaveLength(1)
 })
 
-test.each([[null], [`custom add option message`]])(
+test.each([null, `custom add option message`])(
   `arrow keys on empty multiselect toggle createOptionMsg as active with createOptionMsg=%s`,
   async (createOptionMsg) => {
     mount_multiselect({
@@ -200,9 +182,9 @@ test(`backspace does not remove items when minSelect would be violated`, async (
   // https://github.com/janosh/svelte-widgets/issues/327
   const options = [`Red`, `Green`, `Yellow`]
   const selected = [`Red`]
-  const [minSelect, maxSelect] = [1, 1]
+  const minSelect = 1
 
-  mount_multiselect({ options, selected, minSelect, maxSelect })
+  mount_multiselect({ options, selected, minSelect })
 
   // Try to remove the only selected item with backspace
   const backspace = fresh_key(`Backspace`)
@@ -230,18 +212,14 @@ describe(`arrow key navigation between selected items`, () => {
     return get_input()
   }
 
-  test(`repeated ArrowLeft moves highlight leftward and stops at 0`, async () => {
+  test(`arrow keys move highlight across bounds and clear past the right edge`, async () => {
     const input = setup()
     for (let step = 0; step < 4; step++) input.dispatchEvent(press(`ArrowLeft`))
     await tick()
     expect(is_highlighted(0)).toBe(true)
     expect(is_highlighted(1)).toBe(false)
-  })
 
-  test(`ArrowRight moves highlight rightward, then clears`, async () => {
-    const input = setup()
-    input.dispatchEvent(press(`ArrowLeft`)) // idx 2
-    input.dispatchEvent(press(`ArrowLeft`)) // idx 1
+    input.dispatchEvent(press(`ArrowRight`)) // idx 1
     input.dispatchEvent(press(`ArrowRight`)) // idx 2
     await tick()
     expect(is_highlighted(2)).toBe(true)
@@ -264,21 +242,17 @@ describe(`arrow key navigation between selected items`, () => {
     expect(is_highlighted(0)).toBe(false)
   })
 
-  test(`ArrowLeft does nothing when input has text`, async () => {
-    const input = setup()
-    input.value = `R`
-    input.dispatchEvent(new Event(`input`, { bubbles: true }))
-    await tick()
-    input.dispatchEvent(press(`ArrowLeft`))
-    await tick()
-    expect(highlighted()).toHaveLength(0)
-  })
-
-  test.each<[key: string, selected: string[]]>([
-    [`ArrowLeft`, []],
-    [`ArrowRight`, [`Red`, `Green`, `Blue`]],
-  ])(`%s is a no-op when highlight cannot start`, async (key, selected) => {
+  test.each<[name: string, key: string, selected: string[], input_text: string]>([
+    [`ArrowLeft with input text`, `ArrowLeft`, options, `R`],
+    [`ArrowLeft without selected items`, `ArrowLeft`, [], ``],
+    [`ArrowRight without a highlight`, `ArrowRight`, options, ``],
+  ])(`%s is a no-op`, async (_name, key, selected, input_text) => {
     const input = setup(selected)
+    if (input_text) {
+      input.value = input_text
+      input.dispatchEvent(new Event(`input`, { bubbles: true }))
+      await tick()
+    }
     input.dispatchEvent(press(key))
     await tick()
     expect(highlighted()).toHaveLength(0)
@@ -590,38 +564,27 @@ describe(`keyboard shortcuts`, () => {
     expect(props.selected).toEqual([])
   })
 
-  test(`custom open shortcut opens the dropdown`, async () => {
+  test(`custom open and close shortcuts toggle the dropdown`, async () => {
     const props = $state<MultiSelectProps>({
       options: [`a`, `b`, `c`],
-      shortcuts: { open: `ctrl+o` },
-      open: true, // Start with dropdown open
+      shortcuts: { open: `ctrl+o`, close: `ctrl+w` },
+      open: true,
     })
-
     mount_multiselect(props)
     await tick()
-
     const input = await focus_input()
 
-    // Close dropdown via Escape (keeps focus on input)
-    input.dispatchEvent(fresh_key(`Escape`))
+    input.dispatchEvent(
+      new KeyboardEvent(`keydown`, { key: `w`, ctrlKey: true, bubbles: true }),
+    )
     await tick()
-    expect(props.open).toBe(false) // Verify dropdown is closed
+    expect(props.open).toBe(false)
 
-    // Now use open shortcut to reopen
     input.dispatchEvent(
       new KeyboardEvent(`keydown`, { key: `o`, ctrlKey: true, bubbles: true }),
     )
     await tick()
-
-    expect(props.open).toBe(true) // Verify shortcut reopened dropdown
-  })
-
-  test(`custom close shortcut closes the dropdown`, async () => {
-    const { props } = await test_shortcut(
-      { shortcuts: { close: `ctrl+w` } },
-      { key: `w`, ctrlKey: true },
-    )
-    expect(props.open).toBe(false)
+    expect(props.open).toBe(true)
   })
 
   test.each([
