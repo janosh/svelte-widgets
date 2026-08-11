@@ -61,14 +61,14 @@ an outside press. [Popover docs &rarr;](popover)
 </Popover>
 ```
 
-### ContextMenu
+### ActionMenu
 
-Replaces the browser's right-click menu for a region. Takes the same actions as
-`CommandMenu`. [ContextMenu docs &rarr;](popover#contextmenu)
+Shows the same action list from a button trigger or a right-click region. Takes the same
+actions as `CommandMenu`. [ActionMenu docs &rarr;](popover#actionmenu)
 
 ```svelte example
 <script lang="ts">
-  import { ContextMenu } from 'svelte-widgets'
+  import { ActionMenu } from 'svelte-widgets'
 
   let last_run = $state(``)
   const record = (label: string) => (last_run = label)
@@ -79,13 +79,19 @@ Replaces the browser's right-click menu for a region. Takes the same actions as
   ]
 </script>
 
-<ContextMenu {actions}>
+<ActionMenu {actions}>
+  {#snippet trigger(props)}
+    <button {...props}>Actions</button>
+  {/snippet}
+</ActionMenu>
+
+<ActionMenu {actions}>
   <div
     style="display: grid; place-items: center; height: 6em; border: 1px dashed gray; border-radius: 5pt"
   >
     Right-click me
   </div>
-</ContextMenu>
+</ActionMenu>
 
 {#if last_run}<p>ran: <code>{last_run}</code></p>{/if}
 ```

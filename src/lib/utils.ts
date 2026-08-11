@@ -532,7 +532,7 @@ export function fuzzy_match(search_text: string, target_text: string): boolean {
   return fuzzy_match_indices(search_text, target_text) !== null
 }
 
-// A titled run of actions for ContextMenu, optionally a radio group: `selected` matches
+// A titled run of actions for ActionMenu, optionally a radio group: `selected` matches
 // an action's `id ?? label`, null being a group with nothing chosen yet. Left off, the
 // section is a plain heading and its items stay ordinary menu items.
 export type CmdSection = {
