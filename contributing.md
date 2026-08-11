@@ -39,10 +39,10 @@ New features should include corresponding tests. Bug fixes should include a test
 
 These CI checks have to pass for every PR before merging:
 
-- tests: run as [GitHub Action](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/test.yml))
-- linting and type checks: `vp check` plus `svelte-check-rs`, run as [GitHub Action](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/lint.yml)
-- links: [lychee](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/link-check.yml) over every markdown, Svelte and TS file
-- docs: [continuous deployment](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/gh-pages.yml) through GitHub Pages
+- tests: run as [GitHub Action](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/test.yml))
+- linting and type checks: `vp check` plus `svelte-check-rs`, run as [GitHub Action](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/lint.yml)
+- links: [lychee](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/link-check.yml) over every markdown, Svelte and TS file
+- docs: [continuous deployment](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/gh-pages.yml) through GitHub Pages
 
 ## 🆕 New release
 
@@ -73,6 +73,6 @@ git push && git push --tags
 ```
 
 Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new).
-Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/publish.yml),
+Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/publish.yml),
 which pushes the package to npm through trusted publishing (OIDC), so no manual
 `npm publish` is needed.

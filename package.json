@@ -143,7 +143,7 @@
     "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.svelte' -delete",
     "prepare": "npm run package",
     "prepublishOnly": "npm run package",
-    "changelog": "npx tsx https://github.com/janosh/workflows/raw/refs/heads/main/scripts/make-release-notes.ts",
+    "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
   },
   "devDependencies": {

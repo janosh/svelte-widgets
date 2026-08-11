@@ -70,7 +70,7 @@ Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions.
 
 Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children
 to replace its browser right-click menu. Actions are
-[`CmdAction`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/types.ts)s,
+[`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts)s,
 the same shape `CommandMenu` takes, so a command can appear in both.
 
 ```svelte example id="action-menu-basic"

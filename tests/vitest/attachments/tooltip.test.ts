@@ -572,31 +572,35 @@ describe(`tooltip manager`, () => {
     expect([visible_tooltip().lang, visible_tooltip().dir]).toEqual([`he`, `ltr`])
   })
 
-  it.each([
+  type SchemeCase = { bg?: string; page_scheme?: string; style?: string }
+  it.each<[string, SchemeCase, string]>([
     [`follows the OS scheme on a page that declares none`, {}, `light dark`],
     [`defers to a trigger that overrides the background`, { bg: `red` }, ``],
     [`defers to a page that declares its own scheme`, { page_scheme: `dark` }, ``],
-  ])(
-    `%s`,
-    (_desc, { bg, page_scheme }: { bg?: string; page_scheme?: string }, scheme) => {
-      if (page_scheme) {
-        document.body.style.colorScheme = page_scheme
-        cleanups.push(() => document.body.style.removeProperty(`color-scheme`))
-      }
-      const element = create_element(`button`)
-      element.title = `Themed`
-      if (bg) element.style.setProperty(`--tooltip-bg`, bg)
-      attach_tooltip(element)
-      pointer_over(element)
+    // Pins the ordering: the fallback judges what `style` left, so it cannot precede it
+    [
+      `defers to a background the style option sets`,
+      { style: `--tooltip-bg: black;` },
+      ``,
+    ],
+  ])(`%s`, (_desc, { bg, page_scheme, style }, scheme) => {
+    if (page_scheme) {
+      document.body.style.colorScheme = page_scheme
+      cleanups.push(() => document.body.style.removeProperty(`color-scheme`))
+    }
+    const element = create_element(`button`)
+    element.title = `Themed`
+    if (bg) element.style.setProperty(`--tooltip-bg`, bg)
+    attach_tooltip(element, style ? { style } : {})
+    pointer_over(element)
 
-      const tooltip_el = visible_tooltip()
-      expect(tooltip_el.style.getPropertyValue(`color-scheme`)).toBe(scheme)
-      // The paired text color only makes sense alongside the scheme it was chosen for
-      expect(tooltip_el.style.getPropertyValue(`--text-color`)).toBe(
-        scheme ? `light-dark(#222, #eee)` : ``,
-      )
-    },
-  )
+    const tooltip_el = visible_tooltip()
+    expect(tooltip_el.style.getPropertyValue(`color-scheme`)).toBe(scheme)
+    // The paired text color only makes sense alongside the scheme it was chosen for
+    expect(tooltip_el.style.getPropertyValue(`--text-color`)).toBe(
+      scheme ? `light-dark(#222, #eee)` : ``,
+    )
+  })
 
   it(`updates active attribute content and repositions it`, async () => {
     const element = create_element(`button`)

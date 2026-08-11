@@ -1,6 +1,6 @@
 ## `CommandMenu`
 
-[`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/CommandMenu.svelte).
+[`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">
@@ -22,7 +22,7 @@
 
 ## `PageSearch`
 
-[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/CommandMenu.svelte) with full-text search over statically generated pages.
+[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages.
 `fallback_actions` are matched locally on every keystroke, so known routes show up without
 waiting on the index (and remain the only results when the index is absent). Install
 `pagefind` as a development dependency, then index the rendered site after the application
@@ -65,7 +65,7 @@ build. Run this script before previewing or deploying:
 
 The `navigate` callback receives the selected result's `query`, `label`, and `description`
 as its second argument. A persistent layout can carry the query across client-side
-navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/attachments/highlight-matches.ts) to the destination content:
+navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/attachments/highlight-matches.ts) to the destination content:
 
 ```svelte
 <script lang="ts">
