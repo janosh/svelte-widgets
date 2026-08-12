@@ -20,10 +20,8 @@ export interface HighlightClientOptions {
   // Unique per open editor. Sharing ids would let either editor close the other's doc.
   doc_id: string
   filename: string
-  // Textarea-normalized initial text (LF, no BOM).
+  // Initial host buffer. The local index normalizes it; open_doc receives it verbatim.
   text: string
-  // Optional disk form, used only by open_doc so the backend can detect EOL/BOM.
-  raw_text?: string
   backend: EditorBackend
   on_spans?: (event: HighlightSpansEvent) => void
   on_error?: (message: string) => void
@@ -240,7 +238,7 @@ export const create_highlight_client = (
       const result = await backend.open_doc({
         docId: doc_id,
         filename,
-        text: options.raw_text ?? line_index_text(index),
+        text: options.text,
       })
       opened = true
       return result

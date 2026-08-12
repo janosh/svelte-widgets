@@ -21,7 +21,7 @@
   import { create_highlight_client } from './highlight-client'
   import type { HighlightClient, HighlightSpansEvent } from './highlight-client'
   import { line_comment_token } from './languages'
-  import { editor_text, line_at_offset, splice_within_limits } from './text-delta'
+  import { line_at_offset, splice_within_limits } from './text-delta'
   import type { BeforeInputSnapshot } from './text-delta'
   import { render_tokens } from './tokens'
   import { resolve_editor_backend, to_error } from './types'
@@ -84,9 +84,6 @@
   let tab_moves_focus = false
   let unregister_escape: (() => void) | undefined
 
-  const normalized_text = $derived(
-    text === open_document?.bound_text ? text : editor_text(text),
-  )
   const font_size = $derived.by(() => {
     const value = Number(options.font_size)
     return Number.isFinite(value) && value > 0 ? value : 13
@@ -139,8 +136,7 @@
     const created = create_highlight_client({
       doc_id: `code-editor-${next_doc_seq}`,
       filename,
-      text: normalized_text,
-      raw_text: text,
+      text,
       backend: resolved_backend,
       on_spans: receive_spans,
       on_error: report_error,
@@ -153,6 +149,7 @@
     }
     return created
   })
+  const normalized_text = $derived(client.text())
 
   const line_count = $derived.by(() => {
     void doc_revision

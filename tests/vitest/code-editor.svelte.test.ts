@@ -154,11 +154,28 @@ test(`editing writes through bind:text, repaints immediately, and sends one line
 test(`initial disk text keeps its raw open shape but binds the normalized buffer`, async () => {
   const raw_text = `\uFEFFfirst\r\nsecond\r\n`
   const { props, recorder, textarea } = await mount_editor({ text: raw_text })
+  const normalized_text = `first\nsecond\n`
 
   expect(recorder.opened_text).toEqual([raw_text])
-  expect(textarea.value).toBe(`first\nsecond\n`)
-  expect(props.text).toBe(`first\nsecond\n`)
+  expect(textarea.value).toBe(normalized_text)
+  expect(props.text).toBe(normalized_text)
   expect(overlay_lines()).toEqual([`first`, `second`, ``])
+
+  emit_edit(textarea, `!`, 0)
+  await flush_async()
+
+  const edited_text = `!${normalized_text}`
+  expect(props.text).toBe(edited_text)
+  expect(recorder.edits).toEqual([
+    expect.objectContaining({
+      startLine: 0,
+      removedCount: 1,
+      insertedLines: [`!first`],
+      expectedLineCount: 3,
+      expectedTotalLength: edited_text.length,
+    }),
+  ])
+  expect(recorder.resyncs).toEqual([])
 })
 
 test(`same-line edits request fresh visible highlights`, async () => {
