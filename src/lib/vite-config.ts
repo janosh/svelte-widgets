@@ -139,6 +139,9 @@ const lint: SharedConfig[`lint`] = {
   rules: {
     ...Object.fromEntries(error_rules.map((rule) => [rule, `error`] as const)),
     // the rest carry an option, or a reason for being off
+    'no-promise-executor-return': [`error`, { allowVoid: true }],
+    // `void` explicitly marks intentionally ignored Promise-executor return values.
+    'typescript/no-meaningless-void-operator': `off`,
     'no-console': [`error`, { allow: [`info`, `warn`, `error`] }],
     'eslint-plugin-unicorn/max-nested-calls': [`error`, { max: 3 }],
     'eslint-plugin-unicorn/numeric-separators-style': [

@@ -46,8 +46,8 @@
   } = $props()
 
   let items_arr = $derived(
-    (items ?? []).map(
-      (item): NavItem => (typeof item === `string` ? [item, item] : item),
+    (items ?? []).map((item): NavItem =>
+      typeof item === `string` ? [item, item] : item,
     ),
   )
 

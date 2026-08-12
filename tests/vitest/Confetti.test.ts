@@ -35,6 +35,6 @@ test(`freeze stops the animation`, async () => {
   const initial_tops = span_tops()
   // without this, an empty span list would make the comparison below [] === []
   expect(initial_tops).toHaveLength(3)
-  await new Promise((resolve) => setTimeout(resolve, 100))
+  await new Promise((resolve) => void setTimeout(resolve, 100))
   expect(span_tops()).toEqual(initial_tops)
 })

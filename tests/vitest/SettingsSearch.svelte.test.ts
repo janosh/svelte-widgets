@@ -104,7 +104,7 @@ describe(`SettingsSearch`, () => {
     document
       .querySelector(`[data-key="rotation_damping"]`)
       ?.append(document.createComment(``))
-    await new Promise((resolve) => queueMicrotask(() => resolve(null)))
+    await new Promise((resolve) => void queueMicrotask(() => resolve(null)))
     expect(zoom_speed.hidden).toBe(true)
 
     // ...nor may a match drag it back into view
@@ -137,7 +137,7 @@ describe(`SettingsSearch`, () => {
     const open_writes: boolean[] = []
     const observer = new MutationObserver(() => open_writes.push(camera.open))
     observer.observe(camera, { attributes: true, attributeFilter: [`open`] })
-    await set_query(input, `dampin`)
+    await set_query(input, `damping `)
     observer.disconnect()
     expect(open_writes).toEqual([])
     expect(camera.open).toBe(true)

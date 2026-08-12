@@ -248,8 +248,7 @@ aria-label sits before the spread, so a page with several panes renames them via
   style:display={open ? `grid` : `none`}
   style:padding-right={gutter(`right`)}
   style:padding-bottom={gutter(`bottom`)}
-  class={[`draggable-pane`, `toc-exclude`, pane_props.class]}
-  class:pane-open={open}
+  class={[`draggable-pane`, `toc-exclude`, pane_props.class, { 'pane-open': open }]}
   {@attach draggable({
     handle_selector: `.drag-handle`,
     on_drag_start: () => {

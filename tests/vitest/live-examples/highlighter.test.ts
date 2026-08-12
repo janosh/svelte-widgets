@@ -150,7 +150,7 @@ describe(`create_highlighter`, () => {
     )
     const highlighter = create([grammar_typst])
     // a timer flushes every pending microtask, so an eagerly started load would show up
-    await new Promise((resolve) => setTimeout(resolve, 0))
+    await new Promise((resolve) => void setTimeout(resolve, 0))
     expect(load_count).toBe(0)
 
     const peer_error = `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`

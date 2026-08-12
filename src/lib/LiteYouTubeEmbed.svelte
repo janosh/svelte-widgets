@@ -53,8 +53,7 @@
 <!-- the nested play button is the keyboard affordance; its click bubbles up to here -->
 <div
   {...rest}
-  class={[`lite-youtube`, rest.class]}
-  class:activated
+  class={[`lite-youtube`, rest.class, { activated }]}
   onclick={chain_handlers(() => (activated = true), rest.onclick)}
   role="presentation"
 >

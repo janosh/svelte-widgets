@@ -16,7 +16,7 @@ describe(`file_drop`, () => {
     if (cleanup) cleanups.push(cleanup)
     return { node, cleanup }
   }
-  const flush_tasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0))
+  const flush_tasks = () => new Promise<void>((resolve) => void setTimeout(resolve, 0))
   const pending_until_aborted = (signal: AbortSignal) =>
     new Promise<void>((_resolve, reject) => {
       signal.addEventListener(

@@ -16,7 +16,7 @@ afterEach(dismiss_all_dialogs)
 
 // An answer can take several microtask hops to reach track (`ask_confirm` awaits
 // `request_choice` before mapping the id to a boolean). A macrotask drains them all.
-const flush = () => new Promise((resolve) => setTimeout(resolve, 0))
+const flush = () => new Promise((resolve) => void setTimeout(resolve, 0))
 
 const yes_no: DialogChoice<`yes` | `no`>[] = [
   { id: `no`, label: `No` },

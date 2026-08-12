@@ -48,9 +48,7 @@ const read_all_entries = async (
   // readEntries hands back at most 100 per call and signals the end with an empty batch,
   // so one call is only enough for a small directory
   while (true) {
-    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) =>
-      reader.readEntries(resolve, reject),
-    )
+    const batch = await new Promise<FileSystemEntry[]>(reader.readEntries.bind(reader))
     if (batch.length === 0) return entries
     entries.push(...batch)
   }
@@ -71,7 +69,7 @@ const files_from_entry = async (
   depth = 0,
 ): Promise<File[]> => {
   if (is_file_entry(entry)) {
-    return [await new Promise<File>((resolve, reject) => entry.file(resolve, reject))]
+    return [await new Promise<File>(entry.file.bind(entry))]
   }
   if (!is_directory_entry(entry)) return []
   if (depth >= MAX_DEPTH) {

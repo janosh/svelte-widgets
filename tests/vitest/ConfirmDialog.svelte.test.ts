@@ -20,7 +20,7 @@ afterEach(async () => {
 
 const flush = async () => {
   await tick()
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => void setTimeout(resolve, 0))
   await tick()
 }
 

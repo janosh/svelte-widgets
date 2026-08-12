@@ -141,7 +141,7 @@
     "test:coverage": "vp test --run --coverage",
     "test:package": "npm pack --dry-run && tsc -p tests/package-smoke/tsconfig.json && vp build --config tests/package-smoke/vite.config.ts",
     "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.svelte' -delete",
-    "prepare": "npm run package",
+    "prepare": "vp config --no-agent && npm run package",
     "prepublishOnly": "npm run package",
     "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
@@ -153,7 +153,7 @@
     "@iconify-json/file-icons": "^1.2.2",
     "@iconify-json/gis": "^1.2.5",
     "@iconify-json/iconoir": "^1.2.11",
-    "@iconify-json/lucide": "^1.2.122",
+    "@iconify-json/lucide": "^1.2.123",
     "@iconify-json/material-symbols": "^1.2.88",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify-json/octicon": "^1.2.32",
@@ -172,13 +172,13 @@
     "@vitest/coverage-v8": "4.1.10",
     "@wooorm/starry-night": "^3.10.0",
     "happy-dom": "^20.11.2",
-    "katex": "^0.18.3",
+    "katex": "^0.18.4",
     "mdsvex": "^0.12.8",
     "pagefind": "^1.5.2",
     "svelte": "^5.56.8",
-    "typescript": "^6.0.3",
+    "typescript": "^7.0.2",
     "vite": "^8.2.1",
-    "vite-plus": "0.2.8"
+    "vite-plus": "0.2.9"
   },
   "peerDependencies": {
     "@wooorm/starry-night": "^3.0.0",

@@ -79,13 +79,13 @@
   let recent_action_ids = $state<string[]>([])
 
   const get_action_id = (action: CmdAction): string => `${action.id ?? action.label}`
-  const recent_actions = $derived.by(() =>
+  const normalize_max_recent = (value: number) =>
+    Number.isFinite(value) ? Math.floor(Math.max(0, value)) : 20
+  const recent_actions = $derived(
     recent_actions_key
       ? create_recent_list<string>({
           storage_key: recent_actions_key,
-          max_items: Number.isFinite(max_recent)
-            ? Math.max(0, Math.floor(max_recent))
-            : 20,
+          max_items: normalize_max_recent(max_recent),
           key_of: (action_id) => action_id,
           is_valid: (value): value is string => typeof value === `string`,
         })
