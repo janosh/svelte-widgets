@@ -162,14 +162,12 @@ test(`initial disk text keeps its raw open shape but binds the normalized buffer
 })
 
 test(`same-line edits request fresh visible highlights`, async () => {
-  const { backend } = create_backend()
-  const highlight_lines = vi.spyOn(backend, `highlight_lines`)
-  const { textarea } = await mount_editor({ backend })
-  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
+  const { recorder, textarea } = await mount_editor()
+  const highlight_lines = vi.spyOn(recorder.backend, `highlight_lines`)
 
   emit_edit(textarea, `x`, 0)
 
-  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
 })
 
 test(`keyboard edit commands use configurable indentation and filename comments`, async () => {

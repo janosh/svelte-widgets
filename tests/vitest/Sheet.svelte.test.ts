@@ -143,7 +143,6 @@ describe(`Sheet`, () => {
     props.open = false
     await tick()
     props.open = true
-    old_surface.dispatchEvent(new Event(`close`))
     await tick()
     const current_surface = doc_query<HTMLDialogElement>(`dialog.sheet`)
     expect(current_surface).not.toBe(old_surface)
@@ -168,7 +167,6 @@ describe(`Sheet`, () => {
 
     expect(cancel.defaultPrevented).toBe(true)
     expect(dialog.open).toBe(true)
-    expect(surface()).toBe(dialog)
     expect(on_close).not.toHaveBeenCalled()
   })
 

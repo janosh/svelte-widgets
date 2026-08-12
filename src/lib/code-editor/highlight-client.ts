@@ -46,7 +46,7 @@ export interface HighlightClient {
 const DEFAULT_HIGHLIGHT_INTERVAL_MS = 30
 
 interface QueuedTask {
-  kind?: `edit` | `resync` | `close`
+  kind?: `edit` | `resync`
   run: () => Promise<void>
   abort?: (error: Error) => void
 }
@@ -91,7 +91,7 @@ export const create_highlight_client = (
     new Error(`Editor document ${doc_id} was closed before the request ran`)
 
   const enqueue = (task: QueuedTask): void => {
-    if (disposed && task.kind !== `close`) {
+    if (disposed) {
       task.abort?.(closed_error())
       return
     }
@@ -130,17 +130,15 @@ export const create_highlight_client = (
           backend_synced = true
         } catch (error) {
           backend_synced = false
-          revision += 1
           report(error)
         }
       },
     }
     // Recovery already knows every pending edit through the latest local index. Put its
     // full-text replacement before queued highlights and discard those obsolete edits.
-    if (recovering) {
-      queue.unshift(task)
-      void pump()
-    } else enqueue(task)
+    if (recovering) queue.unshift(task)
+    else queue.push(task)
+    void pump()
   }
 
   const enqueue_edit = (splice: LineSplice): void => {
@@ -223,8 +221,7 @@ export const create_highlight_client = (
     highlight_timer = null
     for (const task of queue) task.abort?.(closed_error())
     queue = []
-    enqueue({
-      kind: `close`,
+    queue.push({
       run: async () => {
         try {
           await backend.close_doc({ docId: doc_id })
@@ -234,6 +231,7 @@ export const create_highlight_client = (
         }
       },
     })
+    void pump()
     close_promise = settled()
     return close_promise
   }

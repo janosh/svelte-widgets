@@ -14,6 +14,7 @@
     dismiss_dialog,
     submit_prompt,
   } from './dialogs.svelte'
+  import { restore_dialog_focus } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element
@@ -62,9 +63,7 @@
         programmatic_close_pending = true
         dialog.close()
       }
-      const active_element = document.activeElement
-      if (dialog.contains(active_element) || active_element === document.body)
-        focus_origin?.focus()
+      restore_dialog_focus(dialog, focus_origin)
       focus_origin = null
       return
     }
@@ -85,9 +84,7 @@
       mounted_hosts -= 1
       if (mounted_hosts === 0) {
         dismiss_all_dialogs()
-        const active_element = document.activeElement
-        if (dialog?.contains(active_element) || active_element === document.body)
-          focus_origin?.focus()
+        restore_dialog_focus(dialog, focus_origin)
       }
     }
   })
@@ -100,8 +97,7 @@
   aria-labelledby={title_id}
   {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
-    // Escape and backdrop clicks land here. Answering already shifted the queue, so the
-    // programmatic close that follows must not resolve a request queued before its event.
+    // Don't let a delayed programmatic close dismiss a newly queued request.
     if (programmatic_close_pending) programmatic_close_pending = false
     else if (!dialog?.open && request) dismiss_dialog()
   }, rest.onclose)}

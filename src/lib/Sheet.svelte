@@ -2,17 +2,16 @@
   import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { backdrop_dismiss } from './attachments/index'
+  import {
+    restore_dialog_focus,
+    type DialogCloseDetail,
+    type DialogCloseVia,
+    type DialogControls,
+    type DialogTriggerProps,
+  } from './dialog'
   import { chain_handlers } from './utils'
 
   type SheetSide = `top` | `right` | `bottom` | `left`
-  type SheetControls = { close: () => void }
-  type TriggerProps = {
-    onclick: () => void
-    'aria-controls': string | undefined
-    'aria-expanded': boolean
-    'aria-haspopup': `dialog`
-  }
-  type CloseVia = `pointer` | `escape` | `close`
 
   const unique_id = $props.id()
   let {
@@ -38,28 +37,23 @@
     surface?: HTMLDialogElement | null
     // Snippets remain owned by the declaring parent. Sheet renders them in that
     // parent's scope and only supplies stable controls; it does not retain them.
-    trigger?: Snippet<[TriggerProps]>
-    header?: Snippet<[SheetControls]>
-    footer?: Snippet<[SheetControls]>
-    children: Snippet<[SheetControls]>
-    on_close?: (detail: { via: CloseVia }) => void
+    trigger?: Snippet<[DialogTriggerProps]>
+    header?: Snippet<[DialogControls]>
+    footer?: Snippet<[DialogControls]>
+    children: Snippet<[DialogControls]>
+    on_close?: (detail: DialogCloseDetail) => void
   } = $props()
 
   const sheet_id = $derived(id ?? unique_id)
   let focus_origin: HTMLElement | SVGElement | null = null
 
-  const close = (via: CloseVia) => {
+  const close = (via: DialogCloseVia) => {
     if (!open) return
     open = false
     on_close?.({ via })
   }
-  const restore_focus = () => {
-    const active_element = document.activeElement
-    if (surface?.contains(active_element) || active_element === document.body)
-      focus_origin?.focus()
-  }
-  const controls: SheetControls = { close: () => close(`close`) }
-  const trigger_props: TriggerProps = $derived({
+  const controls: DialogControls = { close: () => close(`close`) }
+  const trigger_props: DialogTriggerProps = $derived({
     onclick: () => (open = true),
     'aria-controls': open ? sheet_id : undefined,
     'aria-expanded': open,
@@ -78,7 +72,7 @@
     surface.showModal()
   })
   onDestroy(() => {
-    if (surface?.open) restore_focus()
+    if (surface?.open) restore_dialog_focus(surface, focus_origin)
   })
 </script>
 
@@ -101,7 +95,7 @@
     })}
     onclose={chain_handlers((event) => {
       if (open && event.currentTarget !== surface) return
-      restore_focus()
+      restore_dialog_focus(surface, focus_origin)
       close(`close`)
     }, rest.onclose)}
   >

@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import { backdrop_dismiss } from './attachments/index'
-  import type {
-    DialogCloseVia,
-    DialogControls,
-    DialogProps,
-    DialogTriggerProps,
+  import {
+    restore_dialog_focus,
+    type DialogCloseVia,
+    type DialogControls,
+    type DialogProps,
+    type DialogTriggerProps,
   } from './dialog'
   import { chain_handlers } from './utils'
 
@@ -34,11 +35,6 @@
     open = false
     on_close?.({ via })
   }
-  const restore_focus = () => {
-    const active_element = document.activeElement
-    if (surface?.contains(active_element) || active_element === document.body)
-      focus_origin?.focus()
-  }
   const controls: DialogControls = { close: () => close(`close`) }
   const trigger_props: DialogTriggerProps = $derived({
     onclick: () => (open = true),
@@ -62,7 +58,7 @@
     surface.showModal()
   })
   onDestroy(() => {
-    if (surface?.open) restore_focus()
+    if (surface?.open) restore_dialog_focus(surface, focus_origin)
   })
 </script>
 
@@ -89,7 +85,7 @@
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
       if (open && event.currentTarget !== surface) return
       // Explicit restoration also covers removed openers and partial DOM implementations.
-      restore_focus()
+      restore_dialog_focus(surface, focus_origin)
       close(`close`)
     }, rest.onclose)}
   >

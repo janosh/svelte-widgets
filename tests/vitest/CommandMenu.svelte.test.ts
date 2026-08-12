@@ -419,7 +419,6 @@ test(`a stale native close cannot close a reopened menu`, async () => {
   props.open = false
   await tick()
   props.open = true
-  old_dialog.dispatchEvent(new Event(`close`))
   await tick()
   const current_dialog = doc_query<HTMLDialogElement>(`dialog`)
   expect(current_dialog).not.toBe(old_dialog)

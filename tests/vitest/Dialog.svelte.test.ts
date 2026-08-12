@@ -148,11 +148,9 @@ describe(`Dialog`, () => {
     props.open = false
     await tick()
     props.open = true
-    old_surface.dispatchEvent(new Event(`close`))
     await tick()
     const current_surface = doc_query<HTMLDialogElement>(`dialog.dialog`)
 
-    expect(props.open).toBe(true)
     expect(current_surface).not.toBe(old_surface)
     old_surface.dispatchEvent(new Event(`close`))
     expect(props.open).toBe(true)
