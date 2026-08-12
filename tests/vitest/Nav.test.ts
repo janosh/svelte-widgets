@@ -49,7 +49,7 @@ describe(`Nav`, () => {
     outside.remove()
   }
   // flush a macrotask (focus moves inside setTimeout(..., 0) in the component)
-  const next_task = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const next_task = () => new Promise((resolve) => void setTimeout(resolve, 0))
   const set_window_width = (width: number) =>
     Object.defineProperty(globalThis, `innerWidth`, { value: width, writable: true })
   afterEach(() => set_window_width(1024)) // reset any per-test viewport override

@@ -410,6 +410,26 @@ test(`an onclose callback can reopen without another close event`, async () => {
   expect(doc_query<HTMLDialogElement>(`dialog`).open).toBe(true)
 })
 
+test(`a stale native close cannot close a reopened menu`, async () => {
+  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
+  mount(CommandMenu, { target: document.body, props })
+  await tick()
+  const old_dialog = doc_query<HTMLDialogElement>(`dialog`)
+
+  props.open = false
+  await tick()
+  props.open = true
+  await tick()
+  const current_dialog = doc_query<HTMLDialogElement>(`dialog`)
+  expect(current_dialog).not.toBe(old_dialog)
+
+  old_dialog.dispatchEvent(new Event(`close`))
+  await tick()
+
+  expect(props.open).toBe(true)
+  expect(current_dialog.open).toBe(true)
+})
+
 test(`non-modal fallback closes on click of an unrelated page multiselect`, async () => {
   // force the non-modal fallback so outside clicks land on real page elements (with a
   // modal dialog they'd hit the backdrop instead, which is covered above)

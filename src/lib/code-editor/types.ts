@@ -106,6 +106,15 @@ export interface DiffViewOptions {
   layout: DiffLayout
 }
 
+export interface CodeEditorOptions {
+  font_size?: number
+  tab_size?: number
+  insert_spaces?: boolean
+  line_numbers?: boolean
+  // Override filename-based comment detection; null disables the command.
+  line_comment?: string | null
+}
+
 export const to_error = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error))
 
@@ -175,20 +184,26 @@ export interface DiffBackend {
 
 // === Default backends ===
 //
-// Register the usual DiffBackend once; the prop override remains for tests/special views.
-
-let default_diff_backend: DiffBackend | null = null
-
-export const set_diff_backend = (backend: DiffBackend | null): void => {
-  default_diff_backend = backend
-}
-
-export const resolve_diff_backend = (override?: DiffBackend): DiffBackend => {
-  const backend = override ?? default_diff_backend
-  if (!backend) {
-    throw new Error(
-      `No DiffBackend available: pass a \`backend\` prop or call set_diff_backend() once at startup`,
-    )
+// Register usual backends once; prop overrides remain for tests and special views.
+const backend_registry = <Backend>(backend_name: string, setter_name: string) => {
+  let default_backend: Backend | null = null
+  const set_backend = (backend: Backend | null): void => {
+    default_backend = backend
   }
-  return backend
+  const resolve_backend = (override?: Backend): Backend => {
+    const backend = override ?? default_backend
+    if (!backend)
+      throw new Error(
+        `No ${backend_name} available: pass a \`backend\` prop or call ${setter_name}() once at startup`,
+      )
+    return backend
+  }
+  return [set_backend, resolve_backend] as const
 }
+
+export const [set_editor_backend, resolve_editor_backend] =
+  backend_registry<EditorBackend>(`EditorBackend`, `set_editor_backend`)
+export const [set_diff_backend, resolve_diff_backend] = backend_registry<DiffBackend>(
+  `DiffBackend`,
+  `set_diff_backend`,
+)

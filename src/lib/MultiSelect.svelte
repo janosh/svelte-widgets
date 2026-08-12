@@ -300,8 +300,8 @@
   const max_history = $derived(
     history === true
       ? 50
-      : typeof history === `number` && Number.isFinite(history)
-        ? Math.max(0, Math.floor(history))
+      : typeof history === `number`
+        ? utils.clamp_integer(history, 0)
         : 0,
   )
   let history_stack = $state<Option[][]>([])
@@ -2060,8 +2060,7 @@
     onkeydown={if_enter_or_space(handler)}
     type="button"
     {title}
-    class="remove"
-    class:remove-all={icon_props.isRemoveAll}
+    class={[`remove`, { 'remove-all': icon_props.isRemoveAll }]}
     class:default-icon={!removeIcon}
   >
     {#if removeIcon}
@@ -2110,7 +2109,7 @@
     {@render render_expand_icon()}
   {/if}
   <ul
-    class="selected {ulSelectedClass}"
+    class={[`selected`, ulSelectedClass]}
     aria-label="selected options"
     style={ulSelectedStyle}
   >
@@ -2275,8 +2274,7 @@
             : NodeFilter.FILTER_ACCEPT,
       })}
       id={listbox_id}
-      class:hidden={!open}
-      class="options {ulOptionsClass}"
+      class={[`options`, ulOptionsClass, { hidden: !open }]}
       role="listbox"
       aria-multiselectable={multi_select}
       aria-disabled={disabled ? `true` : null}
@@ -2298,8 +2296,7 @@
           all_selectable_selected,
         )}
         <li
-          class="select-all {liSelectAllClass}"
-          class:disabled={all_selected}
+          class={[`select-all`, liSelectAllClass, { disabled: all_selected }]}
           onclick={all_selected ? undefined : select_all}
           onkeydown={all_selected ? undefined : if_enter_or_space(select_all)}
           role="option"
@@ -2325,7 +2322,7 @@
           class:selected={view.selected}
           class:active={view.active}
           class:disabled={view.disabled}
-          class="{liOptionClass} {view.active ? liActiveOptionClass : ``}"
+          class={[liOptionClass, view.active && liActiveOptionClass]}
           onmouseover={() => {
             if (!view.disabled && !should_ignore_hover) activeIndex = flat_idx
           }}
@@ -2389,7 +2386,7 @@
             toggle_group_selection(selectable, all_selected, event)}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
           <li
-            class="group-header {liGroupHeaderClass}"
+            class={[`group-header`, liGroupHeaderClass]}
             class:collapsible={collapsibleGroups}
             class:sticky={stickyGroupHeaders}
             role={collapsibleGroups ? `button` : `presentation`}
@@ -2418,8 +2415,7 @@
                   !all_selected && (at_max_capacity() || selectable.length === 0)}
                 <button
                   type="button"
-                  class="group-select-all"
-                  class:deselect={all_selected}
+                  class={[`group-select-all`, { deselect: all_selected }]}
                   disabled={group_blocked}
                   onclick={handle_group_select}
                   onkeydown={if_enter_or_space(handle_group_select)}
@@ -2469,9 +2465,11 @@
           onblur={() => (is_user_message_active = false)}
           role="option"
           aria-selected="false"
-          class="user-msg {liUserMsgClass} {is_user_message_active
-            ? liActiveUserMsgClass
-            : ``}"
+          class={[
+            `user-msg`,
+            liUserMsgClass,
+            is_user_message_active && liActiveUserMsgClass,
+          ]}
           style:cursor={{
             dupe: `not-allowed`,
             create: `pointer`,

@@ -86,9 +86,48 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 </style>
 ```
 
+## Dialog
+
+`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close` for dismissals started inside the dialog; it does not fire when you set the bound `open` state to `false` yourself. Turn off `close_on_backdrop` or `close_on_escape` when dismissal would lose work. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
+
+```svelte example id="patterns-dialog"
+<script lang="ts">
+  import { Dialog } from '$lib'
+
+  let open = $state(false)
+  let last_close = $state(`none`)
+</script>
+
+<Dialog
+  bind:open
+  aria-labelledby="profile-dialog-title"
+  on_close={({ via }) => (last_close = via)}
+>
+  {#snippet trigger(props)}
+    <button {...props}>Edit profile</button>
+  {/snippet}
+  {#snippet header({ close })}
+    <h2 id="profile-dialog-title" style="margin: 0">Edit profile</h2>
+    <button onclick={close}>Close</button>
+  {/snippet}
+  <label>Display name <input value="Ada" /></label>
+  <Dialog aria-label="Advanced profile settings">
+    {#snippet trigger(props)}
+      <button {...props}>Advanced</button>
+    {/snippet}
+    Nested modal content
+  </Dialog>
+  {#snippet footer({ close })}
+    <button onclick={close}>Save</button>
+  {/snippet}
+</Dialog>
+
+<p>Last close: <code>{last_close}</code></p>
+```
+
 ## Sheet
 
-`Sheet` uses a native modal `<dialog>`, dismisses from its backdrop or Escape and returns focus to its trigger. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
+`Sheet` composes `Dialog` as a side-positioned variant, so it shares the same snippets, close policies, focus restoration and nested-modal behavior. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
 
 ```svelte example id="patterns-sheet"
 <script lang="ts">

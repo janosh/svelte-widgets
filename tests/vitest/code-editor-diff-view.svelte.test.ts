@@ -372,7 +372,7 @@ describe(`states and backend wiring`, () => {
     const resolvers: ((result: DiffResult) => void)[] = []
     const diff_text = vi.fn(
       (_args: DiffTextArgs) =>
-        new Promise<DiffResult>((resolve) => resolvers.push(resolve)),
+        new Promise<DiffResult>((resolve) => void resolvers.push(resolve)),
     )
     // Reactive props make reassignment rerun effects (hence `.svelte.test.ts`).
     const props = $state({

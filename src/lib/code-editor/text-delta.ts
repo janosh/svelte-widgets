@@ -8,7 +8,7 @@
 // Offsets are UTF-16 (selectionStart). Textarea values are LF; the backend restores
 // file EOL on save (OpenDocResult.eol).
 
-import { clamp } from '../utils'
+import { clamp, clamp_integer } from '../utils'
 
 export interface LineIndex {
   lines: string[]
@@ -104,11 +104,7 @@ export const line_index_length = (index: LineIndex): number =>
 // Index of the line containing `offset`. An offset sitting on a newline belongs to
 // the line the newline terminates; offsets outside the document clamp to its ends.
 export const line_at_offset = (index: LineIndex, offset: number): number => {
-  const target = clamp(
-    Number.isFinite(offset) ? Math.floor(offset) : 0,
-    0,
-    line_index_length(index),
-  )
+  const target = clamp_integer(offset, 0, line_index_length(index))
   let [low, high] = [0, index.lines.length - 1]
   while (low < high) {
     const mid = (low + high + 1) >> 1

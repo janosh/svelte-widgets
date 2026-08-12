@@ -73,7 +73,8 @@
   let pinned_dropdown = $state<string | null>(null)
   let focused_item_index = $state<number>(-1)
   let is_touch_device = $state(false)
-  let is_mobile = $state(false)
+  let viewport_width = $state(Infinity)
+  let is_mobile = $derived(viewport_width <= breakpoint)
   let hide_timeout: ReturnType<typeof setTimeout> | null = null
   // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
   const unique_id = $props.id()
@@ -83,18 +84,9 @@
   // written inside the $effect below, which would re-trigger the effect if reactive.
   let prev_is_open = false
 
-  // Detect touch device and handle responsive breakpoint
+  // Detect touch support after mounting so SSR never touches navigator.
   $effect(() => {
-    if (typeof globalThis === `undefined`) return
     is_touch_device = `ontouchstart` in globalThis || navigator.maxTouchPoints > 0
-
-    // Handle responsive breakpoint via JS since CSS variables don't work in media queries
-    const check_mobile = () => {
-      is_mobile = globalThis.innerWidth <= breakpoint
-    }
-    check_mobile()
-    globalThis.addEventListener(`resize`, check_mobile)
-    return () => globalThis.removeEventListener(`resize`, check_mobile)
   })
 
   $effect(() => {
@@ -286,7 +278,7 @@
   }
 </script>
 
-<svelte:window {onkeydown} />
+<svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
 <!-- Default item rendering snippet for escape hatch -->
 {#snippet default_item_render(
@@ -352,8 +344,7 @@
   <div
     {...menu_props}
     id={panel_id}
-    class={[`menu`, menu_props?.class]}
-    class:open={is_open}
+    class={[`menu`, menu_props?.class, { open: is_open }]}
     onkeydown={chain_handlers(onkeydown, menu_props?.onkeydown)}
   >
     {#each routes as route, route_idx (get_route_key(route, route_idx))}
@@ -379,9 +370,7 @@
         {@const is_dropdown_open = hovered_dropdown === parsed_route.href || is_pinned}
         <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; mouse handlers only control hover disclosure -->
         <div
-          class="dropdown"
-          class:active={child_is_active}
-          class:align-right={is_right}
+          class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
           data-href={parsed_route.href}
           onmouseenter={() => open_dropdown(parsed_route.href, true)}
           onmouseleave={() => schedule_hide(parsed_route.href, is_pinned)}
@@ -425,8 +414,7 @@
             {/if}
             <button
               type="button"
-              class="dropdown-toggle"
-              class:open={is_dropdown_open}
+              class={[`dropdown-toggle`, { open: is_dropdown_open }]}
               data-dropdown-toggle
               aria-label="Toggle {formatted.label} submenu"
               aria-expanded={is_dropdown_open}

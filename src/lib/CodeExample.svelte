@@ -106,8 +106,7 @@
 <div
   {...rest}
   id={meta_id ?? rest.id}
-  class={[`code-example`, rest.class]}
-  class:code-above={code_above}
+  class={[`code-example`, rest.class, { 'code-above': code_above }]}
 >
   {@render example?.()}
   <pre class:open>{#if lang}<span class="lang-label">{lang}</span>{/if}<code

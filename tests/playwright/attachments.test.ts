@@ -13,6 +13,9 @@ type TooltipMetrics = {
   bottom: number
   viewport_width: number
   viewport_height: number
+  surface_overflow: string
+  content_overflow_y: string
+  content_scrolls: boolean
 }
 
 // Measure final tooltip geometry. The tooltip uses border-box sizing.
@@ -28,19 +31,24 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
       css_px(style.borderLeftWidth) +
       css_px(style.borderRightWidth)
     const content_el = el.querySelector(`.tooltip-content`)
+    const content_range = document.createRange()
+    if (content_el) content_range.selectNodeContents(content_el)
+    const content_style = content_el ? getComputedStyle(content_el) : null
     return {
       border_box_width: rect.width,
       content_width: rect.width - box_adjust,
       text_width: content_el?.getBoundingClientRect().width ?? 0,
       max_width: css_px(style.maxWidth),
-      // the content span is inline, so it produces one client rect per rendered line
-      line_count: content_el ? content_el.getClientRects().length : 0,
+      line_count: content_el ? content_range.getClientRects().length : 0,
       left: rect.left,
       top: rect.top,
       right: rect.right,
       bottom: rect.bottom,
       viewport_width: globalThis.innerWidth,
       viewport_height: globalThis.innerHeight,
+      surface_overflow: style.overflow,
+      content_overflow_y: content_style?.overflowY ?? ``,
+      content_scrolls: (content_el?.scrollHeight ?? 0) > (content_el?.clientHeight ?? 0),
     }
   })
 
@@ -128,6 +136,10 @@ test.describe(`tooltip layout and lifecycle`, () => {
   }) => {
     const button_name = `Long text viewport-safe`
     await page.setViewportSize({ width: 360, height: 560 })
+    const button = page.getByRole(`button`, { name: button_name, exact: true })
+    await button.evaluate((element) =>
+      element.style.setProperty(`--tooltip-max-height`, `80px`),
+    )
     const tooltip_el = await hover_tooltip(page, button_name, `Lorem ipsum`)
     const metrics = await measure_tooltip(tooltip_el)
     // the 8px viewport padding, less a pixel for sub-pixel rounding
@@ -137,13 +149,18 @@ test.describe(`tooltip layout and lifecycle`, () => {
       true,
     )
 
-    const button = page.getByRole(`button`, { name: button_name, exact: true })
     const [button_box, arrow_box, placement] = await Promise.all([
       button.boundingBox(),
       tooltip_el.locator(`.custom-tooltip-arrow`).boundingBox(),
       tooltip_el.getAttribute(`data-placement`),
     ])
     if (!button_box || !arrow_box) throw new Error(`Missing tooltip arrow geometry`)
+    await expect(tooltip_el.locator(`[class^="custom-tooltip-arrow"]`)).toHaveCount(1)
+    expect(metrics).toMatchObject({
+      surface_overflow: `visible`,
+      content_overflow_y: `auto`,
+      content_scrolls: true,
+    })
     const arrow_center_x = arrow_box.x + arrow_box.width / 2
     const arrow_center_y = arrow_box.y + arrow_box.height / 2
     const button_center_x = button_box.x + button_box.width / 2

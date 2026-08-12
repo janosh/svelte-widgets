@@ -14,6 +14,7 @@
     dismiss_dialog,
     submit_prompt,
   } from './dialogs.svelte'
+  import { restore_dialog_focus } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element
@@ -31,6 +32,7 @@
   const error_id = `confirm-dialog-${unique_id}-error`
   let dialog = $state<HTMLDialogElement | null>(null)
   let focus_origin: HTMLElement | SVGElement | null = null
+  let programmatic_close_pending = false
   let prompt_value = $derived(request?.kind === `prompt` ? request.initial_value : ``)
   // Writable derived on `request`: submitting an invalid value assigns the error, and
   // advancing the queue re-runs this and clears it, so no stale error survives a request.
@@ -57,10 +59,11 @@
   $effect(() => {
     if (!dialog) return
     if (!request) {
-      if (dialog.open) dialog.close()
-      const active_element = document.activeElement
-      if (dialog.contains(active_element) || active_element === document.body)
-        focus_origin?.focus()
+      if (dialog.open) {
+        programmatic_close_pending = true
+        dialog.close()
+      }
+      restore_dialog_focus(dialog, focus_origin)
       focus_origin = null
       return
     }
@@ -78,13 +81,9 @@
   onMount(() => {
     mounted_hosts += 1
     return () => {
-      mounted_hosts -= 1
-      if (mounted_hosts === 0) {
-        dismiss_all_dialogs()
-        const active_element = document.activeElement
-        if (dialog?.contains(active_element) || active_element === document.body)
-          focus_origin?.focus()
-      }
+      if (--mounted_hosts > 0) return
+      dismiss_all_dialogs()
+      restore_dialog_focus(dialog, focus_origin)
     }
   })
 </script>
@@ -96,9 +95,9 @@
   aria-labelledby={title_id}
   {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
-    // Escape and backdrop clicks land here. Answering already shifted the queue, so the
-    // close that follows sees no request and resolves nothing.
-    if (request) dismiss_dialog()
+    // Don't let a delayed programmatic close dismiss a newly queued request.
+    if (programmatic_close_pending) programmatic_close_pending = false
+    else if (!dialog?.open && request) dismiss_dialog()
   }, rest.onclose)}
 >
   {#if request}
@@ -161,7 +160,7 @@
     /* zero margins are what center a modal dialog in the top layer */
     margin: auto;
     inline-size: var(--confirm-dialog-width, min(30rem, calc(100vw - 2rem)));
-    padding: var(--confirm-dialog-padding, 1rem 1.1rem);
+    padding: var(--confirm-dialog-padding, 0.75rem);
     border: var(--confirm-dialog-border, 1px solid light-dark(lightgray, #555));
     border-radius: var(--confirm-dialog-radius, 5pt);
     background: var(--confirm-dialog-bg, light-dark(#fff, #2a2a2e));
@@ -210,16 +209,18 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.3rem;
     justify-content: flex-end;
-    margin-block-start: 1rem;
+    margin-block-start: 0.75rem;
     button {
-      padding: var(--confirm-dialog-button-padding, 3pt 8pt);
+      padding: var(--confirm-dialog-button-padding, 2pt 6pt);
       border: 1px solid transparent;
       border-radius: 3pt;
       background: var(--confirm-dialog-button-bg, rgba(125, 125, 125, 0.2));
       color: inherit;
       font: inherit;
+      font-size: var(--confirm-dialog-button-font-size, 0.9em);
+      line-height: 1.3;
       cursor: pointer;
     }
     button.accent {

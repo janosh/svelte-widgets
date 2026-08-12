@@ -1,7 +1,7 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
   import type { ComponentProps } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
+  import { SvelteMap } from 'svelte/reactivity'
   import { fade } from 'svelte/transition'
   import { backdrop_dismiss } from './attachments/index'
   import MultiSelect from './MultiSelect.svelte'
@@ -11,6 +11,7 @@
   import {
     cmd_action_matches,
     chain_handlers,
+    clamp_integer,
     format_cmd_metadata,
     format_shortcut,
     run_hotkeys,
@@ -79,13 +80,11 @@
   let recent_action_ids = $state<string[]>([])
 
   const get_action_id = (action: CmdAction): string => `${action.id ?? action.label}`
-  const recent_actions = $derived.by(() =>
+  const recent_actions = $derived(
     recent_actions_key
       ? create_recent_list<string>({
           storage_key: recent_actions_key,
-          max_items: Number.isFinite(max_recent)
-            ? Math.max(0, Math.floor(max_recent))
-            : 20,
+          max_items: clamp_integer(max_recent, 0, Infinity, 20),
           key_of: (action_id) => action_id,
           is_valid: (value): value is string => typeof value === `string`,
         })
@@ -136,12 +135,10 @@
       return actions
     // drop stale persisted ids (actions removed/renamed since) so they don't
     // occupy low ranks and push real recents below non-recent actions
-    const current_ids = new SvelteSet(actions.map(get_action_id))
-    const rank = new SvelteMap(
-      recent_action_ids
-        .filter((recent_id) => current_ids.has(recent_id))
-        .map((action_id, idx) => [action_id, idx]),
-    )
+    const rank = new SvelteMap<string, number>()
+    for (const action_id of recent_action_ids) {
+      if (action_id_counts.has(action_id)) rank.set(action_id, rank.size)
+    }
     return actions.toSorted(
       (left_action, right_action) =>
         (rank.get(get_action_id(left_action)) ?? actions.length) -
@@ -179,6 +176,11 @@
     active_idx = null
     active_option = null
     search_text = ``
+  }
+
+  function handle_dialog_close(event: Event) {
+    if (open && event.currentTarget !== dialog) return
+    close_menu()
   }
 
   // Cmd and Ctrl both open the menu on every platform, so `mod` is too narrow here
@@ -271,7 +273,7 @@
     transition:fade={{ duration: fade_duration_ms }}
     aria-label={aria_label}
     {...dialog_props}
-    onclose={chain_handlers(close_menu, dialog_props?.onclose)}
+    onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
     {@attach backdrop_dismiss()}
   >

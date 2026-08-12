@@ -20,7 +20,7 @@ afterEach(async () => {
 
 const flush = async () => {
   await tick()
-  await new Promise((resolve) => setTimeout(resolve, 0))
+  await new Promise((resolve) => void setTimeout(resolve, 0))
   await tick()
 }
 
@@ -69,6 +69,27 @@ test(`shows the queued question and closes once the queue drains`, async () => {
   expect([answer.settled, answer.value]).toEqual([true, `write`])
   expect(dialog.open).toBe(false)
   expect(buttons()).toHaveLength(0)
+})
+
+test(`a stale native close cannot dismiss a newly queued request`, async () => {
+  const dialog = await mount_dialog()
+  const close_dialog = vi
+    .spyOn(dialog, `close`)
+    .mockImplementation(() => dialog.removeAttribute(`open`))
+  const first = ask(`First?`, `First`)
+  await flush()
+  buttons()[1].click()
+  await flush()
+  expect(first.settled).toBe(true)
+  expect(close_dialog).toHaveBeenCalledOnce()
+
+  const second = ask(`Second?`, `Second`)
+  dialog.dispatchEvent(new Event(`close`))
+  await flush()
+
+  expect(second.settled).toBe(false)
+  expect(dialog.open).toBe(true)
+  expect(doc_query(`dialog h2`).textContent).toBe(`Second`)
 })
 
 test(`renders a typed rich body snippet`, async () => {

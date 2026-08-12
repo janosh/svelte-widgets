@@ -179,24 +179,6 @@ const resolve_boundary = (options: TooltipOptions, doc: Document) => {
   }
 }
 
-const apply_triangle_style = (
-  triangle_el: HTMLElement,
-  placement: Placement,
-  px: number,
-  color: string,
-  cross_axis_center: number,
-): void => {
-  triangle_el.style.cssText = `position: absolute; width: 0; height: 0; pointer-events: none;`
-  const vertical = placement === `top` || placement === `bottom`
-  const set = (property: string, value: string) =>
-    triangle_el.style.setProperty(property, value)
-  set(vertical ? `left` : `top`, `${cross_axis_center - px}px`)
-  set(OPPOSITE_PLACEMENT[placement], `-${px}px`)
-  set(`border-${vertical ? `left` : `top`}`, `${px}px solid transparent`)
-  set(`border-${vertical ? `right` : `bottom`}`, `${px}px solid transparent`)
-  set(`border-${placement}`, `${px}px solid ${color}`)
-}
-
 const sync_arrow_styles = (
   tooltip_el: HTMLElement,
   placement: Placement,
@@ -223,25 +205,16 @@ const sync_arrow_styles = (
   const fill_color = is_transparent(background)
     ? `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
     : background
-  apply_triangle_style(arrow, placement, arrow_px, fill_color, cross_axis_center)
-
-  const border_arrow = tooltip_el.querySelector<HTMLElement>(
-    `.custom-tooltip-arrow-border`,
-  )
-  if (!border_arrow) return
-  const border_width = css_px_or(styles.borderTopWidth, 0)
   const border_color = styles.borderTopColor
-  if (border_width <= 0 || is_transparent(border_color)) {
-    border_arrow.remove()
-    return
-  }
-  apply_triangle_style(
-    border_arrow,
-    placement,
-    arrow_px + border_width * 1.4,
-    border_color,
-    cross_axis_center,
-  )
+  const border_width = is_transparent(border_color)
+    ? 0
+    : css_px_or(styles.borderTopWidth, 0)
+  const arrow_side = (arrow_px + border_width) * Math.SQRT2
+  arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; z-index: -1; background: ${fill_color}; border: ${border_width}px solid ${border_color}; transform: rotate(45deg);`
+  const set = (property: string, value: string) =>
+    arrow.style.setProperty(property, value)
+  set(vertical ? `left` : `top`, `${cross_axis_center - arrow_side / 2}px`)
+  set(OPPOSITE_PLACEMENT[placement], `${-arrow_side / 2}px`)
 }
 
 const remember_and_strip_title = (
@@ -275,8 +248,10 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   surface.className = `custom-tooltip`
   surface.id = `tooltip-${get_uuid()}`
   surface.setAttribute(`role`, `tooltip`)
-  const content_el = doc.createElement(`span`)
+  const content_el = doc.createElement(`div`)
   content_el.className = `tooltip-content`
+  const arrow_el = doc.createElement(`div`)
+  arrow_el.className = `custom-tooltip-arrow`
   let open_timeout: ReturnType<typeof setTimeout> | undefined
   let close_timeout: ReturnType<typeof setTimeout> | undefined
   // Subscriptions that live exactly as long as the tooltip is open, each returning its
@@ -292,7 +267,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       surface.style.textWrap === `balance` &&
       content_el.childElementCount === 0
     if (!can_compact) return
-    const line_widths = Array.from(content_el.getClientRects(), ({ width }) => width)
+    const content_range = doc.createRange()
+    content_range.selectNodeContents(content_el)
+    const line_widths = Array.from(content_range.getClientRects(), ({ width }) => width)
     if (line_widths.length < 2) return
     const styles = getComputedStyle(surface)
     const chrome_width =
@@ -397,7 +374,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       position: fixed; inset: auto; margin: 0; z-index: var(--tooltip-z-index, 9999);
       opacity: 0; display: inline-block; box-sizing: border-box; width: max-content;
       max-width: min(var(--tooltip-max-width, 280px), var(--tooltip-available-width, calc(100dvw - 16px)));
-      max-height: var(--tooltip-max-height, min(50dvh, 480px)); overflow-y: auto;
+      overflow: visible;
       background-color: var(--tooltip-bg, light-dark(#fff, #2a2a2e));
       color: var(--text-color, light-dark(#222, #eee));
       border: var(--tooltip-border, 1px solid light-dark(lightgray, #555));
@@ -406,6 +383,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       line-height: 1.4; overflow-wrap: anywhere; text-wrap: balance; white-space: normal;
       pointer-events: auto; filter: var(--tooltip-shadow, drop-shadow(0 2px 8px rgba(0,0,0,0.25)));
       transition: opacity var(--tooltip-transition, 0.15s ease-out);
+    `
+    content_el.style.cssText = `
+      max-height: var(--tooltip-max-height, min(50dvh, 480px)); overflow-y: auto;
     `
   }
 
@@ -662,11 +642,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   // API allows it so no ancestor's overflow, transform or stacking context can clip it.
   const mount_surface = (trigger: HTMLElement, options: TooltipOptions) => {
     surface.replaceChildren(content_el)
-    if (options.show_arrow !== false) {
-      for (const class_name of [`custom-tooltip-arrow-border`, `custom-tooltip-arrow`]) {
-        surface.append(Object.assign(doc.createElement(`div`), { className: class_name }))
-      }
-    }
+    if (options.show_arrow !== false) surface.append(arrow_el)
     surface.hidden = false
     if (!surface.isConnected) doc.body.append(surface)
     const supports_top_layer = typeof surface.showPopover === `function`

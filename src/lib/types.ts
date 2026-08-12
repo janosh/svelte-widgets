@@ -1,6 +1,6 @@
 import type { Snippet } from 'svelte'
 import type { FlipParams } from 'svelte/animate'
-import type { HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
+import type { ClassValue, HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
 import type { DismissConfig } from './attachments/index'
 import type { IconData } from './icons/types'
 
@@ -247,18 +247,18 @@ export interface MultiSelectProps<T extends Option = Option>
   highlightMatches?: boolean
   id?: string | null
   input?: HTMLInputElement | null
-  inputClass?: string
+  inputClass?: ClassValue
   inputProps?: InputProps
   inputStyle?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   invalid?: boolean
-  liActiveOptionClass?: string
-  liActiveUserMsgClass?: string
-  liOptionClass?: string
+  liActiveOptionClass?: ClassValue
+  liActiveUserMsgClass?: ClassValue
+  liOptionClass?: ClassValue
   liOptionStyle?: string | null
-  liSelectedClass?: string
+  liSelectedClass?: ClassValue
   liSelectedStyle?: string | null
-  liUserMsgClass?: string
+  liUserMsgClass?: ClassValue
   loading?: boolean
   matchingOptions?: T[]
   maxOptions?: number | undefined
@@ -271,7 +271,7 @@ export interface MultiSelectProps<T extends Option = Option>
   virtualList?: boolean | { itemHeight?: number; overscan?: number }
   maxSelect?: number | null // null means there is no upper limit for selected.length
   maxSelectMsg?: ((current: number, max: number) => string) | null
-  maxSelectMsgClass?: string
+  maxSelectMsgClass?: ClassValue
   // Max selected chips rendered before the rest collapse into a "+N more" toggle
   // chip (click to expand/collapse). null (default) renders all chips. Ignored in
   // selectedDisplay="input" mode. Keyboard chip navigation auto-expands.
@@ -284,7 +284,7 @@ export interface MultiSelectProps<T extends Option = Option>
   dismiss_on?: DismissConfig[`dismiss_on`]
   options?: T[] // static options, or omit when using loadOptions
   outerDiv?: HTMLDivElement | null
-  outerDivClass?: string
+  outerDivClass?: ClassValue
   parseLabelsAsHtml?: boolean // should not be combined with allowUserOptions!
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
@@ -304,8 +304,8 @@ export interface MultiSelectProps<T extends Option = Option>
   selectedOptionsDraggable?: boolean
   rangeSelect?: boolean
   style?: string | null
-  ulOptionsClass?: string
-  ulSelectedClass?: string
+  ulOptionsClass?: ClassValue
+  ulSelectedClass?: ClassValue
   ulSelectedStyle?: string | null
   ulOptionsStyle?: string | null
   value?: T | T[] | null
@@ -321,7 +321,7 @@ export interface MultiSelectProps<T extends Option = Option>
         selected_count: number
       }) => string)
     | null
-  liSelectAllClass?: string // CSS class for the select all <li>
+  liSelectAllClass?: ClassValue // CSS class for the select all <li>
   loadOptions?: LoadOptions<T>
   // Animation parameters for selected options flip animation (https://github.com/janosh/svelte-widgets/issues/356)
   // Set { duration: 0 } to disable animation
@@ -336,7 +336,7 @@ export interface MultiSelectProps<T extends Option = Option>
   searchMatchesGroups?: boolean // include group name in search matching
   keyboardExpandsCollapsedGroups?: boolean // auto-expand collapsed groups when navigating with arrow keys
   stickyGroupHeaders?: boolean // keep group headers visible at top when scrolling
-  liGroupHeaderClass?: string // CSS class for group header <li>
+  liGroupHeaderClass?: ClassValue // CSS class for group header <li>
   liGroupHeaderStyle?: string | null // inline style for group headers
   // Programmatic group control (exposed via bindable)
   collapseAllGroups?: () => void
@@ -379,7 +379,7 @@ export type NavRouteObject = {
   align?: `left` | `right` // default: `left`
   external?: boolean // add target="_blank" rel="noopener noreferrer"
   tooltip?: string // on-hover tooltip (takes precedence over top-level tooltips prop)
-  class?: string // custom CSS class
+  class?: ClassValue // custom CSS class
   style?: string // custom inline style
   [key: string]: unknown // allow additional custom properties
 } & ({ href: string } | { separator: true; href?: string })

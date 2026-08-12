@@ -917,7 +917,7 @@ describe(`step_focus`, () => {
 })
 
 describe(`observe_subtree`, () => {
-  const flush = () => new Promise((resolve) => queueMicrotask(() => resolve(null)))
+  const flush = () => new Promise((resolve) => void queueMicrotask(() => resolve(null)))
 
   test(`coalesces a burst of mutations into one deferred call`, async () => {
     const root = document.createElement(`div`)

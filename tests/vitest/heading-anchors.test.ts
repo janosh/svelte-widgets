@@ -200,7 +200,7 @@ describe(`heading_anchors attachment`, () => {
     return doc_query(`main`)
   }
   const anchor_selector = `a[aria-hidden="true"]`
-  const tick = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const tick = () => new Promise((resolve) => void setTimeout(resolve, 0))
 
   it.each([`h2`, `h6`])(`adds anchor as last child of %s`, (tag: string) => {
     const container = create_container(`<${tag} id="test">T <span>x</span></${tag}>`)

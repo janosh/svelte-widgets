@@ -11,6 +11,7 @@ import {
   visible_line_window,
 } from '$lib/code-editor'
 import type { EditorState, RangeEdit } from '$lib/code-editor'
+import { line_comment_token } from '$lib/code-editor/languages'
 import { expect, test } from 'vite-plus/test'
 
 const state = (text: string, start: number, end = start): EditorState => ({
@@ -41,6 +42,17 @@ const block_op = (op: BlockOp, before_marked: string, unit: string): string => {
   const before = unmarked(before_marked)
   return marked(applied(before, op(before, unit)))
 }
+
+test.each([
+  [`.env`, `#`],
+  [`.env.local`, `#`],
+  [`.bashrc.local`, `#`],
+  [`Dockerfile.prod`, `#`],
+  [`component.svelte`, `//`],
+  [`notes.txt`, null],
+])(`line_comment_token detects %s`, (filename, expected) => {
+  expect(line_comment_token(filename)).toBe(expected)
+})
 
 test.each([
   [9, 14],

@@ -5,7 +5,7 @@
     LoadOptionsResult,
     PageSearchNavigateDetails,
   } from './types'
-  import { slug_to_title } from './utils'
+  import { clamp_integer, slug_to_title } from './utils'
 
   type PagefindSubResult = { title: string; url: string; plain_excerpt: string }
 
@@ -177,11 +177,9 @@
               ),
             ),
           )
-          cache.actions.push(
-            ...settled_results.flatMap((result) =>
-              result.status === `fulfilled` ? result.value : [],
-            ),
-          )
+          for (const result of settled_results) {
+            if (result.status === `fulfilled`) cache.actions.push(...result.value)
+          }
         }
         if (cache.actions.length === 0) return no_results()
 
@@ -265,7 +263,7 @@
   loadOptions={{
     fetch: load_options,
     debounceMs: debounce_ms,
-    batchSize: Number.isFinite(batch_size) ? Math.max(1, Math.floor(batch_size)) : 12,
+    batchSize: clamp_integer(batch_size, 1, Infinity, 12),
   }}
   placeholder="Search every page..."
   noMatchingOptionsMsg="No matching pages"

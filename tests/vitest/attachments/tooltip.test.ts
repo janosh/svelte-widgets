@@ -722,19 +722,43 @@ describe(`tooltip manager`, () => {
     expect(frame).not.toHaveBeenCalled()
   })
 
-  it(`aims the arrow at an edge trigger after shifting`, () => {
+  it(`keeps one bordered arrow visible and aimed after shifting`, () => {
     mock_tooltip_rect(200, 40)
     const element = create_element(`button`)
     element.title = `Edge`
     mock_rect(element, { left: 940, top: 100, width: 40, height: 20 })
-    attach_tooltip(element, { placement: `bottom` })
+    attach_tooltip(element, {
+      placement: `bottom`,
+      style: `background: rgb(1, 2, 3); border: 2px solid rgb(4, 5, 6)`,
+    })
     pointer_over(element)
     const tooltip_el = visible_tooltip()
     const arrow = doc_query(`.custom-tooltip-arrow`)
+    const content_el = doc_query(`.tooltip-content`)
 
+    expect(tooltip_el.style.overflow).toBe(`visible`)
+    expect(tooltip_el.style.maxHeight).toBe(``)
+    expect(content_el.style.maxHeight).toBe(
+      `var(--tooltip-max-height, min(50dvh, 480px))`,
+    )
+    expect(content_el.style.overflowY).toBe(`auto`)
+    expect(tooltip_el.querySelectorAll(`[class^="custom-tooltip-arrow"]`)).toHaveLength(1)
+    expect(arrow.style.border).toBe(`2px solid rgb(4, 5, 6)`)
     expect(Number(tooltip_el.style.left.replace(/px$/u, ``))).toBeLessThan(860)
-    expect(arrow.style.left).not.toBe(`calc(50% - 6px)`)
     expect(Number(arrow.style.left.replace(/px$/u, ``))).toBeGreaterThan(150)
+  })
+
+  it.each([
+    [`top`, `bottom`],
+    [`bottom`, `top`],
+    [`left`, `right`],
+    [`right`, `left`],
+  ] as const)(`positions the arrow for %s placement`, (placement, inset_side) => {
+    mock_tooltip_rect(200, 40)
+    show_tooltip({ placement, flip: false }, `Arrow`)
+    const arrow = doc_query(`.custom-tooltip-arrow`)
+
+    expect(arrow.style.getPropertyValue(inset_side)).not.toBe(``)
   })
 
   it(`clips placement to a boundary element and appends the style option`, () => {

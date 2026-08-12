@@ -27,6 +27,14 @@ export const is_object = (val: unknown): val is Record<string, unknown> =>
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
 
+export const clamp_integer = (
+  value: number,
+  minimum: number,
+  maximum = Infinity,
+  fallback = minimum,
+): number =>
+  Number.isFinite(value) ? clamp(Math.floor(value), minimum, maximum) : fallback
+
 export const slug_to_title = (slug: string): string =>
   slug
     .replaceAll(`-`, ` `)

@@ -32,15 +32,17 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `Popover`          | Floating surface that positions, dismisses and traps focus for you                       | [docs](https://svelte-widgets.janosh.dev/popover)                      |
 | `ActionMenu`       | Action list opened from a trigger or right-click, with complete menu keyboard semantics  | [docs](https://svelte-widgets.janosh.dev/popover#actionmenu)           |
 | `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                 | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
+| `Dialog`           | Native modal with composable sections, close reasons and nested-dialog handling          | [docs](https://svelte-widgets.janosh.dev/patterns#dialog)              |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
 | `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
 | `SettingsGroup`    | Collapsible group for organizing related settings sections                               | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
 | `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
 | `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
-| `Sheet`            | Native modal edge panel with backdrop dismissal and focus restoration                    | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
+| `Sheet`            | Dialog-based modal edge panel with side placement and shared dismissal policies          | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
 | `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches                | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
+| `CodeEditor`       | Virtualized editable code surface with injectable highlighting and persistence           | [docs](https://svelte-widgets.janosh.dev/code-editor#codeeditor)       |
 | `DiffView`         | Virtualized side-by-side and unified diffs with an injectable backend                    | [docs](https://svelte-widgets.janosh.dev/code-editor)                  |
 | `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                            | [docs](https://svelte-widgets.janosh.dev/toast)                        |
 | `Nav`              | Navigation bar with dropdowns, pinning and active-route styling                          | [docs](https://svelte-widgets.janosh.dev/nav)                          |
@@ -143,7 +145,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | ----------------------------------- | ---------------------------------------------------------- |
 | `/attachments`                      | Element attachments and dismissal primitives               |
 | `/clipboard`                        | Clipboard feedback state                                   |
-| `/code-editor`                      | Backend-agnostic diff rendering and editor primitives      |
+| `/code-editor`                      | Backend-agnostic editing, diff rendering and primitives    |
 | `/code-editor/editor.css`           | Shared syntax-token and diff-view styles                   |
 | `/dialogs`                          | Queued choice, confirmation and prompt requests            |
 | `/file-drop`                        | Directory expansion and accept filtering                   |
@@ -163,7 +165,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers   |
 | `/vite-config`                      | This repository's Vite Plus configuration helper           |
 
-`DiffView` takes a host-supplied `DiffBackend`, either through its `backend` prop or once per app with `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside it for the token palette and shared line metrics. The backend contract is runtime-agnostic, so the implementation can call a native process, worker, WASM module or server route.
+`CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor binds its normalized buffer through `text`; saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
 
 For `$…$` and `$$…$$` math in mdsvex, wrap mdsvex with `katex_preprocess()` and run `heading_ids()` last:
 
