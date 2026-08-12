@@ -22,6 +22,7 @@
     children,
     on_close,
     id,
+    closedby = `closerequest`,
     'aria-label': aria_label,
     'aria-labelledby': aria_labelledby,
     ...rest
@@ -70,7 +71,7 @@
     {...rest}
     id={dialog_id}
     class={[`dialog`, rest.class]}
-    closedby="closerequest"
+    {closedby}
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Dialog`)}
     aria-labelledby={aria_labelledby}
     {@attach backdrop_dismiss(() => close_on_backdrop && close(`pointer`))}

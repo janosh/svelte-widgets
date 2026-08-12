@@ -24,7 +24,7 @@
 </main>
 
 <style>
-  main :global(h2) {
+  main > :global(h2) {
     margin-top: 2em;
   }
   /* Frames a live example so it reads as a surface rather than page background. Size,

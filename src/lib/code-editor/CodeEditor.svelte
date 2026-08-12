@@ -20,14 +20,13 @@
   import type { EditorState, RangeEdit } from './edit-ops'
   import { create_highlight_client } from './highlight-client'
   import type { HighlightClient, HighlightSpansEvent } from './highlight-client'
-  import { indent_unit, line_comment_token } from './languages'
+  import { line_comment_token } from './languages'
   import { editor_text, line_at_offset, splice_within_limits } from './text-delta'
   import type { BeforeInputSnapshot } from './text-delta'
   import { render_tokens } from './tokens'
   import { resolve_editor_backend, to_error } from './types'
   import type { CodeEditorOptions, EditorBackend, OpenDocResult, SpanList } from './types'
 
-  type SaveHandler = (text: string, document: OpenDocResult) => Promise<void> | void
   const keyboard_help_id = $props.id()
 
   let {
@@ -54,7 +53,7 @@
     on_ready?: (document: OpenDocResult) => void
     // Persistence is deliberately host-owned. Successful resolution marks the
     // current buffer clean; rejection leaves it dirty and reaches on_error.
-    on_save?: SaveHandler
+    on_save?: (text: string, document: OpenDocResult) => Promise<void> | void
     on_error?: (message: string) => void
   } = $props()
 
@@ -74,13 +73,20 @@
   let saving = $state(false)
   let baseline_text = ``
   let last_reported_dirty = false
-  let last_local_write = $state<string | null>(null)
+  let open_document: {
+    filename: string
+    backend: EditorBackend
+    bound_text: string
+    client: HighlightClient
+  } | null = null
   let tokens_by_line: (SpanList | undefined)[] = []
   let before_snapshot: BeforeInputSnapshot | null = null
   let tab_moves_focus = false
   let unregister_escape: (() => void) | undefined
 
-  const normalized_text = $derived(text === last_local_write ? text : editor_text(text))
+  const normalized_text = $derived(
+    text === open_document?.bound_text ? text : editor_text(text),
+  )
   const font_size = $derived.by(() => {
     const value = Number(options.font_size)
     return Number.isFinite(value) && value > 0 ? value : 13
@@ -90,7 +96,7 @@
     return Number.isFinite(integer) ? Math.min(Math.max(integer, 1), 16) : 2
   })
   const line_height = $derived(editor_line_height(font_size))
-  const indent = $derived(indent_unit(tab_size, options.insert_spaces ?? true))
+  const indent = $derived(options.insert_spaces === false ? `\t` : ` `.repeat(tab_size))
   const comment_token = $derived(
     options.line_comment === undefined
       ? line_comment_token(filename)
@@ -113,17 +119,10 @@
     tokens_revision += 1
   }
 
-  // Track the bound source separately so local writes reuse the client without joining
-  // its full line index; a genuinely external replacement creates a new document.
-  let open_document: {
-    filename: string
-    backend: EditorBackend
-    source_text: string
-    client: HighlightClient
-  } | null = null
+  // Track the expected bound value so local writes reuse the client without joining its
+  // full line index; a genuinely external replacement creates a new document.
   const write_text = (value: string): void => {
-    last_local_write = value
-    if (open_document) open_document.source_text = value
+    if (open_document) open_document.bound_text = value
     text = value
   }
   const client = $derived.by(() => {
@@ -132,7 +131,7 @@
     if (
       current?.filename === filename &&
       current.backend === resolved_backend &&
-      current.source_text === text
+      current.bound_text === text
     ) {
       return current.client
     }
@@ -149,7 +148,7 @@
     open_document = {
       filename,
       backend: resolved_backend,
-      source_text: text,
+      bound_text: text,
       client: created,
     }
     return created
@@ -157,7 +156,7 @@
 
   const line_count = $derived.by(() => {
     void doc_revision
-    return client.line_count()
+    return client.line_index().lines.length
   })
   const window_lines = $derived(
     visible_line_window(
@@ -197,7 +196,7 @@
     const document_filename = filename
     let cancelled = false
     const is_current = (): boolean => !cancelled && open_document?.client === active
-    tokens_by_line = blank_tokens(active.line_count())
+    tokens_by_line = blank_tokens(active.line_index().lines.length)
     doc_info = null
     error_message = null
     scroll_top = 0
@@ -312,7 +311,7 @@
         splice.removed_count,
         blank_tokens(splice.inserted_lines.length),
       )
-    } else tokens_by_line = blank_tokens(active.line_count())
+    } else tokens_by_line = blank_tokens(active.line_index().lines.length)
     write_text(next_value)
     doc_revision += 1
     sync_caret()
@@ -493,7 +492,7 @@
         autocapitalize="off"
         autocomplete="off"
         bind:this={textarea}
-        {...{ autocorrect: `off` }}
+        autocorrect="off"
         onbeforeinput={on_before_input}
         onblur={on_blur}
         onfocus={on_focus}

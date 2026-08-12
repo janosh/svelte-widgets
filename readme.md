@@ -38,7 +38,7 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `SettingsGroup`    | Collapsible group for organizing related settings sections                               | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
 | `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
 | `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
-| `Sheet`            | Native modal edge panel with backdrop dismissal and focus restoration                    | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
+| `Sheet`            | Dialog-based modal edge panel with side placement and shared dismissal policies          | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
 | `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches                | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |

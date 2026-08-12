@@ -10,7 +10,7 @@ export type DialogTriggerProps = {
   'aria-expanded': boolean
   'aria-haspopup': `dialog`
 }
-export type DialogProps = Omit<HTMLDialogAttributes, `children` | `closedby`> & {
+export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   open?: boolean
   close_on_backdrop?: boolean
   close_on_escape?: boolean

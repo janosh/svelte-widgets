@@ -21,6 +21,8 @@ test(`Sheet backdrop closes and restores focus`, async ({ page }) => {
 
   const sheet = page.getByRole(`dialog`, { name: `Settings` })
   await expect(sheet.getByRole(`button`, { name: `Close` })).toBeFocused()
+  await expect(sheet).toHaveCSS(`right`, `0px`)
+  await expect(sheet).toHaveCSS(`border-radius`, `0px`)
 
   await page.mouse.click(1, 1)
   await expect(sheet).toBeHidden()

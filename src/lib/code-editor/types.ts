@@ -185,35 +185,25 @@ export interface DiffBackend {
 // === Default backends ===
 //
 // Register usual backends once; prop overrides remain for tests and special views.
-
-let default_editor_backend: EditorBackend | null = null
-
-export const set_editor_backend = (backend: EditorBackend | null): void => {
-  default_editor_backend = backend
-}
-
-export const resolve_editor_backend = (override?: EditorBackend): EditorBackend => {
-  const backend = override ?? default_editor_backend
-  if (!backend) {
-    throw new Error(
-      `No EditorBackend available: pass a \`backend\` prop or call set_editor_backend() once at startup`,
-    )
+const backend_registry = <Backend>(backend_name: string, setter_name: string) => {
+  let default_backend: Backend | null = null
+  const set_backend = (backend: Backend | null): void => {
+    default_backend = backend
   }
-  return backend
-}
-
-let default_diff_backend: DiffBackend | null = null
-
-export const set_diff_backend = (backend: DiffBackend | null): void => {
-  default_diff_backend = backend
-}
-
-export const resolve_diff_backend = (override?: DiffBackend): DiffBackend => {
-  const backend = override ?? default_diff_backend
-  if (!backend) {
-    throw new Error(
-      `No DiffBackend available: pass a \`backend\` prop or call set_diff_backend() once at startup`,
-    )
+  const resolve_backend = (override?: Backend): Backend => {
+    const backend = override ?? default_backend
+    if (!backend)
+      throw new Error(
+        `No ${backend_name} available: pass a \`backend\` prop or call ${setter_name}() once at startup`,
+      )
+    return backend
   }
-  return backend
+  return [set_backend, resolve_backend] as const
 }
+
+export const [set_editor_backend, resolve_editor_backend] =
+  backend_registry<EditorBackend>(`EditorBackend`, `set_editor_backend`)
+export const [set_diff_backend, resolve_diff_backend] = backend_registry<DiffBackend>(
+  `DiffBackend`,
+  `set_diff_backend`,
+)

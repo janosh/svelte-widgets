@@ -127,7 +127,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ## Sheet
 
-`Sheet` uses a native modal `<dialog>`, dismisses from its backdrop or Escape and returns focus to its trigger. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
+`Sheet` composes `Dialog` as a side-positioned variant, so it shares the same snippets, close policies, focus restoration and nested-modal behavior. Keep overlays inside its dialog; portalling them to `body` moves them outside the modal subtree and makes them inert.
 
 ```svelte example id="patterns-sheet"
 <script lang="ts">

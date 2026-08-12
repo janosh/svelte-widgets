@@ -27,6 +27,7 @@ export const editor_options: CodeEditorOptions = {
   line_numbers: true,
 }
 export const dialog_close_detail: DialogCloseDetail = { via: `close` }
+export const dialog_closedby: DialogProps[`closedby`] = `closerequest`
 export const dialog_open: DialogProps[`open`] = false
 export const line_window: LineWindow = { start: 0, end: 0 }
 export const start_theme_storage_listener = () => listen_theme_storage()

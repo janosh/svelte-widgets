@@ -33,7 +33,6 @@ export interface HighlightClientOptions {
 export interface HighlightClient {
   open: () => Promise<OpenDocResult>
   line_index: () => LineIndex
-  line_count: () => number
   text: () => string
   handle_input: (before: BeforeInputSnapshot, next_value: string) => LineSplice | null
   set_text: (text: string) => void
@@ -250,7 +249,6 @@ export const create_highlight_client = (
   return {
     open,
     line_index: () => index,
-    line_count: () => index.lines.length,
     text: () => line_index_text(index),
     handle_input,
     set_text,

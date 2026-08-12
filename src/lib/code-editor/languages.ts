@@ -42,9 +42,3 @@ export const line_comment_token = (filename: string): string | null => {
   if (hash_comment_basenames.has(basename) || hash_comment_basenames.has(stem)) return `#`
   return token_by_extension.get(segments.at(-1) ?? ``) ?? null
 }
-
-export const indent_unit = (tab_size: number, insert_spaces: boolean): string => {
-  if (!insert_spaces) return `\t`
-  const width = Number.isFinite(tab_size) ? Math.floor(tab_size) : 2
-  return ` `.repeat(Math.min(Math.max(width, 1), 16))
-}

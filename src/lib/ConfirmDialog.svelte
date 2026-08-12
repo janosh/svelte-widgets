@@ -162,7 +162,7 @@
     /* zero margins are what center a modal dialog in the top layer */
     margin: auto;
     inline-size: var(--confirm-dialog-width, min(30rem, calc(100vw - 2rem)));
-    padding: var(--confirm-dialog-padding, 1rem 1.1rem);
+    padding: var(--confirm-dialog-padding, 0.75rem);
     border: var(--confirm-dialog-border, 1px solid light-dark(lightgray, #555));
     border-radius: var(--confirm-dialog-radius, 5pt);
     background: var(--confirm-dialog-bg, light-dark(#fff, #2a2a2e));
@@ -211,16 +211,18 @@
   .actions {
     display: flex;
     flex-wrap: wrap;
-    gap: 0.4rem;
+    gap: 0.3rem;
     justify-content: flex-end;
-    margin-block-start: 1rem;
+    margin-block-start: 0.75rem;
     button {
-      padding: var(--confirm-dialog-button-padding, 3pt 8pt);
+      padding: var(--confirm-dialog-button-padding, 2pt 6pt);
       border: 1px solid transparent;
       border-radius: 3pt;
       background: var(--confirm-dialog-button-bg, rgba(125, 125, 125, 0.2));
       color: inherit;
       font: inherit;
+      font-size: var(--confirm-dialog-button-font-size, 0.9em);
+      line-height: 1.3;
       cursor: pointer;
     }
     button.accent {
