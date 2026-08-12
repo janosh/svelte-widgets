@@ -114,13 +114,13 @@
     background: var(--dialog-bg, light-dark(#fff, #2a2a2e));
     color: var(--dialog-color, inherit);
     box-shadow: var(--dialog-shadow, 0 3px 18px rgba(0, 0, 0, 0.3));
-  }
-  .dialog[open] {
-    display: flex;
-  }
-  .dialog::backdrop {
-    background: var(--dialog-backdrop, rgba(0, 0, 0, 0.42));
-    backdrop-filter: var(--dialog-backdrop-filter, blur(2px));
+    &[open] {
+      display: flex;
+    }
+    &::backdrop {
+      background: var(--dialog-backdrop, rgba(0, 0, 0, 0.42));
+      backdrop-filter: var(--dialog-backdrop-filter, blur(2px));
+    }
   }
   header,
   footer {

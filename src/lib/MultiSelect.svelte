@@ -300,8 +300,8 @@
   const max_history = $derived(
     history === true
       ? 50
-      : typeof history === `number` && Number.isFinite(history)
-        ? Math.max(0, Math.floor(history))
+      : typeof history === `number`
+        ? utils.clamp_integer(history, 0)
         : 0,
   )
   let history_stack = $state<Option[][]>([])

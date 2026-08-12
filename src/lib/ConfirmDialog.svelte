@@ -81,11 +81,9 @@
   onMount(() => {
     mounted_hosts += 1
     return () => {
-      mounted_hosts -= 1
-      if (mounted_hosts === 0) {
-        dismiss_all_dialogs()
-        restore_dialog_focus(dialog, focus_origin)
-      }
+      if (--mounted_hosts > 0) return
+      dismiss_all_dialogs()
+      restore_dialog_focus(dialog, focus_origin)
     }
   })
 </script>

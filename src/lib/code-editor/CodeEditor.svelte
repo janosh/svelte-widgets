@@ -8,10 +8,12 @@
   import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { register_escape_layer } from '../attachments/index'
+  import { clamp_integer } from '../utils'
   import {
     auto_close_pair,
     auto_indent_newline,
     dedent_selection,
+    editor_font_size,
     editor_line_height,
     indent_selection,
     toggle_line_comment,
@@ -84,14 +86,8 @@
   let tab_moves_focus = false
   let unregister_escape: (() => void) | undefined
 
-  const font_size = $derived.by(() => {
-    const value = Number(options.font_size)
-    return Number.isFinite(value) && value > 0 ? value : 13
-  })
-  const tab_size = $derived.by(() => {
-    const integer = Math.floor(Number(options.tab_size))
-    return Number.isFinite(integer) ? Math.min(Math.max(integer, 1), 16) : 2
-  })
+  const font_size = $derived(editor_font_size(Number(options.font_size)))
+  const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
   const line_height = $derived(editor_line_height(font_size))
   const indent = $derived(options.insert_spaces === false ? `\t` : ` `.repeat(tab_size))
   const comment_token = $derived(

@@ -116,15 +116,13 @@ export const submit_prompt = (value: string): PromptSubmitResult => {
   return { status: `submitted` }
 }
 
-const dismiss_request = (request: DialogRequest): void => {
+const dismiss_request = (request: DialogRequest | undefined): void => {
+  if (!request) return
   if (request.kind === `choice`) request.resolve(request.dismiss_id)
   else request.resolve(null)
 }
 
-export const dismiss_dialog = (): void => {
-  const request = dialog_queue.shift()
-  if (request) dismiss_request(request)
-}
+export const dismiss_dialog = (): void => dismiss_request(dialog_queue.shift())
 
 // Safely settle queued callers when their dialog host is torn down.
 export const dismiss_all_dialogs = (): void => {

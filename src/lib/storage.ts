@@ -2,7 +2,7 @@
 // state still works. Also provides persisted choices and MRU lists.
 
 import { SvelteSet } from 'svelte/reactivity'
-import { clamp, is_object } from './utils'
+import { clamp_integer, is_object } from './utils'
 
 // Single catch-all for storage failures; callers retain working state in memory.
 const guarded = <Result>(access: () => Result, fallback: Result): Result => {
@@ -93,11 +93,7 @@ export const create_recent_list = <T>(config: RecentListConfig<T>) => {
     // Re-insert a just-forgotten item at its original position (undo support)
     restore: (item: T, index: number, items: T[]): T[] => {
       const rest = without(items, key_of(item))
-      const clamped = clamp(
-        Number.isFinite(index) ? Math.floor(index) : 0,
-        0,
-        rest.length,
-      )
+      const clamped = clamp_integer(index, 0, rest.length)
       return persist(
         [...rest.slice(0, clamped), item, ...rest.slice(clamped)].slice(0, max_items),
       )

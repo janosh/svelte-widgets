@@ -4,7 +4,7 @@
 // Malformed spans are a backend bug, but throwing would blank the editor; fall back to
 // unstyled text.
 
-import { clamp } from '../utils'
+import { clamp_integer } from '../utils'
 import { CLASS_MASK, EMPHASIS_BIT, TOKEN_CLASS_NAMES } from './types'
 import type { SpanList, TokenClassName } from './types'
 
@@ -20,39 +20,26 @@ const PLAIN: TokenClassName = `plain`
 // Gap-free ranges covering [0, line_length). Empty lines yield []; unusable spans on a
 // non-empty line yield one Plain span, so renderers need no unhighlighted special case.
 export const decode_spans = (spans: SpanList, line_length: number): DecodedSpan[] => {
-  const length = Number.isFinite(line_length) ? Math.max(0, Math.floor(line_length)) : 0
+  const length = clamp_integer(line_length, 0)
   if (length === 0) return []
 
-  const whole_line_plain: DecodedSpan[] = [
-    { start: 0, end: length, class_name: PLAIN, emphasized: false },
-  ]
-  if (!Array.isArray(spans)) return whole_line_plain
+  if (!Array.isArray(spans) || spans.length < 2)
+    return [{ start: 0, end: length, class_name: PLAIN, emphasized: false }]
   // A trailing odd element is a truncated pair with no class; drop it.
   const pair_count = Math.floor(spans.length / 2)
-  if (pair_count === 0) return whole_line_plain
-
-  // Force the starts monotonic first so ends (which are the next start) can never
-  // precede their own start, no matter how scrambled the input is.
-  const starts: number[] = []
-  let lowest_allowed = 0
-  for (let pair_idx = 0; pair_idx < pair_count; pair_idx++) {
-    const raw_start = spans[pair_idx * 2]
-    const start = Number.isFinite(raw_start)
-      ? clamp(Math.floor(raw_start), lowest_allowed, length)
-      : lowest_allowed
-    starts.push(start)
-    lowest_allowed = start
-  }
 
   const decoded: DecodedSpan[] = []
+  let start = clamp_integer(spans[0], 0, length)
   // A first span starting past 0 would silently drop the line's prefix, so paint
   // the prefix as Plain rather than losing characters.
-  if (starts[0] > 0) {
-    decoded.push({ start: 0, end: starts[0], class_name: PLAIN, emphasized: false })
+  if (start > 0) {
+    decoded.push({ start: 0, end: start, class_name: PLAIN, emphasized: false })
   }
   for (let pair_idx = 0; pair_idx < pair_count; pair_idx++) {
-    const start = starts[pair_idx]
-    const end = pair_idx + 1 < pair_count ? starts[pair_idx + 1] : length
+    const end =
+      pair_idx + 1 < pair_count
+        ? clamp_integer(spans[(pair_idx + 1) * 2], start, length, start)
+        : length
     if (end <= start) continue // zero-width span, nothing to render
     const raw_packed = spans[pair_idx * 2 + 1]
     const packed = Number.isFinite(raw_packed) ? Math.floor(raw_packed) : 0
@@ -64,6 +51,7 @@ export const decode_spans = (spans: SpanList, line_length: number): DecodedSpan[
       class_name: TOKEN_CLASS_NAMES[packed & CLASS_MASK] ?? PLAIN,
       emphasized: (packed & EMPHASIS_BIT) !== 0,
     })
+    start = end
   }
   // Non-empty lines always yield a span; prefix gaps are filled above.
   return decoded

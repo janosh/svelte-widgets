@@ -3,7 +3,7 @@
 //
 // From editor_line_height down: view arithmetic shared with DiffView (no EditorState).
 
-import { clamp } from '../utils'
+import { clamp, clamp_integer } from '../utils'
 
 export interface EditorState {
   text: string
@@ -46,10 +46,8 @@ export const apply_range_edit = (state: EditorState, edit: RangeEdit): EditorSta
 // A non-finite end collapses at the start.
 const clamp_selection = (state: EditorState): [number, number] => {
   const limit = state.text.length
-  const offset = (value: number, low: number): number =>
-    Number.isFinite(value) ? clamp(Math.floor(value), low, limit) : low
-  const start = offset(state.selection_start, 0)
-  return [start, offset(state.selection_end, start)]
+  const start = clamp_integer(state.selection_start, 0, limit)
+  return [start, clamp_integer(state.selection_end, start, limit)]
 }
 
 const line_start_offset = (text: string, offset: number): number =>
@@ -286,13 +284,13 @@ export const auto_close_pair = (
   return { text, ...advanced }
 }
 
-// Shared whole-pixel row height for editor and DiffView. Fractional heights round
-// differently in stacked textarea/token layers and drift over long files.
-export const editor_line_height = (font_size: number): number => {
-  // Non-positive/NaN uses the default; 1px rows would make virtualization render all.
-  const size = Number.isFinite(font_size) && font_size > 0 ? font_size : 13
-  return Math.max(1, Math.round(size * 1.5))
-}
+// Shared editor font metrics. Fractional row heights round differently in stacked
+// textarea/token layers and drift over long files.
+export const editor_font_size = (font_size: number): number =>
+  Number.isFinite(font_size) && font_size > 0 ? font_size : 13
+
+export const editor_line_height = (font_size: number): number =>
+  Math.max(1, Math.round(editor_font_size(font_size) * 1.5))
 
 // Backend line convention: CRLF/CR → LF; a trailing newline terminates its line without
 // adding a blank. Shared so displayed counts match DiffResult.
@@ -323,9 +321,9 @@ export const visible_line_window = (
   line_count: number,
   overscan = 0,
 ): LineWindow => {
-  const count = Math.floor(non_negative(line_count))
+  const count = clamp_integer(line_count, 0)
   if (count === 0) return { start: 0, end: 0 }
-  const rows = Math.floor(non_negative(overscan))
+  const rows = clamp_integer(overscan, 0)
   const first_visible = Math.floor(non_negative(scroll_top) / line_height)
   // Include a possible partial row at the bottom.
   const visible_rows = Math.ceil(non_negative(viewport_height) / line_height) + 1

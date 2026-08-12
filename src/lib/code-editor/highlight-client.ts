@@ -71,7 +71,7 @@ export const create_highlight_client = (
   }
 
   const drain = async (): Promise<void> => {
-    while (queue.length > 0) await queue.shift()?.run()
+    while (queue.length) await queue.shift()?.run()
   }
 
   const pump = (): Promise<void> => {
@@ -161,26 +161,25 @@ export const create_highlight_client = (
     })
   }
 
+  const set_text = (text: string): void => {
+    index = build_line_index(text)
+    revision += 1
+    enqueue_resync(text)
+  }
+
   const handle_input = (
     before: BeforeInputSnapshot,
     next_value: string,
   ): LineSplice | null => {
     const splice = derive_line_splice(index, before, next_value)
-    revision += 1
     if (splice === null) {
-      index = build_line_index(next_value)
-      enqueue_resync(next_value)
+      set_text(next_value)
       return null
     }
+    revision += 1
     apply_splice(index, splice)
     enqueue_edit(splice)
     return splice
-  }
-
-  const set_text = (text: string): void => {
-    index = build_line_index(text)
-    revision += 1
-    enqueue_resync(text)
   }
 
   const highlight_lines = (start_line: number, end_line: number): Promise<SpanList[]> =>
@@ -211,27 +210,21 @@ export const create_highlight_client = (
     }, highlight_interval_ms)
   }
 
-  const close = (): Promise<void> => {
-    if (close_promise) return close_promise
+  const dispose = async (): Promise<void> => {
     disposed = true
     if (highlight_timer !== null) clearTimeout(highlight_timer)
     highlight_timer = null
-    for (const task of queue) task.abort?.(closed_error())
-    queue = []
-    queue.push({
-      run: async () => {
-        try {
-          await backend.close_doc({ docId: doc_id })
-        } catch (error) {
-          // Closing a document that never finished opening needs no recovery.
-          if (opened) throw to_error(error)
-        }
-      },
-    })
-    void pump()
-    close_promise = settled()
-    return close_promise
+    for (const task of queue.splice(0)) task.abort?.(closed_error())
+    await settled()
+    try {
+      await backend.close_doc({ docId: doc_id })
+    } catch (error) {
+      // Closing a document that never finished opening needs no recovery.
+      if (opened) throw to_error(error)
+    }
   }
+
+  const close = (): Promise<void> => (close_promise ??= dispose())
 
   const open = (): Promise<OpenDocResult> =>
     enqueue_request(async () => {
