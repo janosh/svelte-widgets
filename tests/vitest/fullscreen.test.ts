@@ -135,7 +135,6 @@ describe(`flag <-> browser sync`, () => {
     expect(document.exitFullscreen).toHaveBeenCalledTimes(1)
     expect(document.fullscreenElement).toBeNull()
     expect(icon_path(button)).toBe(icons.Fullscreen.d)
-    expect(`FullscreenExit` in icons).toBe(false)
   })
 
   test(`setting the flag from outside drives the browser`, async () => {

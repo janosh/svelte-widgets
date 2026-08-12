@@ -66,5 +66,5 @@ test(`command search includes custom demo labels`, async () => {
   const labels = Array.from(document.querySelectorAll(`li[role="option"]`), (option) =>
     option.textContent?.trim(),
   )
-  expect(labels).toContain(`DiffView`)
+  expect(labels).toContain(`CodeEditor / DiffView`)
 })
