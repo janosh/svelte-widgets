@@ -27,6 +27,7 @@
   import type { CodeEditorOptions, EditorBackend, OpenDocResult, SpanList } from './types'
 
   type SaveHandler = (text: string, document: OpenDocResult) => Promise<void> | void
+  const keyboard_help_id = $props.id()
 
   let {
     text = $bindable(``),
@@ -74,6 +75,7 @@
   let last_local_write = $state<string | null>(null)
   let tokens_by_line: (SpanList | undefined)[] = []
   let before_snapshot: BeforeInputSnapshot | null = null
+  let tab_moves_focus = false
 
   const normalized_text = $derived(text === last_local_write ? text : editor_text(text))
   const font_size = $derived.by(() => {
@@ -367,6 +369,15 @@
   const on_keydown = (event: KeyboardEvent): void => {
     const area = textarea
     if (!area || editing_disabled || event.isComposing) return
+    if (event.key === `Escape`) {
+      tab_moves_focus = true
+      return
+    }
+    if (event.key === `Tab` && tab_moves_focus) {
+      tab_moves_focus = false
+      return
+    }
+    tab_moves_focus = false
     if (
       event.key.toLowerCase() === `s` &&
       (event.metaKey || event.ctrlKey) &&
@@ -433,6 +444,9 @@
   style:--editor-line-height={`${line_height}px`}
   style:--editor-tab-size={tab_size}
 >
+  <span class="sr-only" id={keyboard_help_id}>
+    Press Escape, then Tab to move focus away
+  </span>
   {#if error_message}
     <div class="editor-bar error" role="alert">{error_message}</div>
   {/if}
@@ -469,12 +483,14 @@
                 class={token.css}>{token.text}</span
               >{/each}</div>{/each}</pre>
       <textarea
+        aria-describedby={keyboard_help_id}
         aria-label={aria_label ?? `${filename} source`}
         autocapitalize="off"
         autocomplete="off"
         bind:this={textarea}
         {...{ autocorrect: `off` }}
         onbeforeinput={on_before_input}
+        onblur={() => (tab_moves_focus = false)}
         oninput={on_input}
         onkeydown={on_keydown}
         onkeyup={sync_caret}
@@ -587,5 +603,13 @@
   }
   textarea::selection {
     background: var(--editor-selection-bg);
+  }
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 </style>

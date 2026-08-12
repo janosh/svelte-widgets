@@ -27,7 +27,7 @@ export interface HighlightClientOptions {
   backend: EditorBackend
   on_spans?: (event: HighlightSpansEvent) => void
   on_error?: (message: string) => void
-  highlight_debounce_ms?: number
+  highlight_interval_ms?: number
 }
 
 export interface HighlightClient {
@@ -43,7 +43,7 @@ export interface HighlightClient {
   settled: () => Promise<void>
 }
 
-const DEFAULT_HIGHLIGHT_DEBOUNCE_MS = 30
+const DEFAULT_HIGHLIGHT_INTERVAL_MS = 30
 
 interface QueuedTask {
   kind?: `resync` | `close`
@@ -55,7 +55,8 @@ export const create_highlight_client = (
   options: HighlightClientOptions,
 ): HighlightClient => {
   const { backend, doc_id, filename, on_spans, on_error } = options
-  const debounce_ms = options.highlight_debounce_ms ?? DEFAULT_HIGHLIGHT_DEBOUNCE_MS
+  const highlight_interval_ms =
+    options.highlight_interval_ms ?? DEFAULT_HIGHLIGHT_INTERVAL_MS
 
   let index = build_line_index(options.text)
   let revision = 0
@@ -63,7 +64,7 @@ export const create_highlight_client = (
   let disposed = false
   let queue: QueuedTask[] = []
   let pump_promise: Promise<void> | null = null
-  let debounce_timer: ReturnType<typeof setTimeout> | null = null
+  let highlight_timer: ReturnType<typeof setTimeout> | null = null
   let pending_window: { start_line: number; end_line: number } | null = null
 
   const report = (error: unknown): void => {
@@ -185,9 +186,9 @@ export const create_highlight_client = (
   const request_highlight = (start_line: number, end_line: number): void => {
     if (disposed) return
     pending_window = { start_line, end_line }
-    if (debounce_timer !== null) return
-    debounce_timer = setTimeout(() => {
-      debounce_timer = null
+    if (highlight_timer !== null) return
+    highlight_timer = setTimeout(() => {
+      highlight_timer = null
       const window = pending_window
       pending_window = null
       if (window === null) return
@@ -198,14 +199,14 @@ export const create_highlight_client = (
           on_spans?.({ start_line: window.start_line, spans })
         })
         .catch(report)
-    }, debounce_ms)
+    }, highlight_interval_ms)
   }
 
   const close = async (): Promise<void> => {
     if (!disposed) {
       disposed = true
-      if (debounce_timer !== null) clearTimeout(debounce_timer)
-      debounce_timer = null
+      if (highlight_timer !== null) clearTimeout(highlight_timer)
+      highlight_timer = null
       for (const task of queue) task.abort?.(closed_error())
       queue = []
       enqueue({

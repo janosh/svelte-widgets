@@ -88,7 +88,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ## Dialog
 
-`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close`; turn off `close_on_backdrop` or `close_on_escape` when dismissal would lose work. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
+`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close` for dismissals started inside the dialog; it does not fire when you set the bound `open` state to `false` yourself. Turn off `close_on_backdrop` or `close_on_escape` when dismissal would lose work. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
 
 ```svelte example id="patterns-dialog"
 <script lang="ts">

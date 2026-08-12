@@ -87,7 +87,7 @@
     })}
     onclose={chain_handlers((event) => {
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
-      if (event.currentTarget !== surface) return
+      if (surface && event.currentTarget !== surface) return
       // Explicit restoration also covers removed openers and partial DOM implementations.
       restore_focus()
       close(`close`)

@@ -128,7 +128,9 @@ describe(`Dialog`, () => {
 
   test(`controlled open=false forwards the native close event`, async () => {
     const onclose = vi.fn()
-    const props = mount_dialog({ open: true, onclose })
+    const props = mount_dialog({ onclose })
+    trigger().focus()
+    props.open = true
     await tick()
 
     props.open = false
@@ -136,6 +138,7 @@ describe(`Dialog`, () => {
 
     expect(onclose).toHaveBeenCalledOnce()
     expect(surface()).toBeNull()
+    expect(document.activeElement).toBe(trigger())
   })
 
   test(`dismissal policies can keep backdrop and Escape open`, async () => {

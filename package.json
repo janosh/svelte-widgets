@@ -181,7 +181,7 @@
     "mdsvex": "^0.12.8",
     "pagefind": "^1.5.2",
     "svelte": "^5.56.8",
-    "typescript": "^7.0.2",
+    "typescript": "^6.0.3",
     "vite": "^8.2.1",
     "vite-plus": "0.2.9"
   },

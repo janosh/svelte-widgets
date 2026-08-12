@@ -146,6 +146,13 @@ test(`editing writes through bind:text, repaints immediately, and sends one line
   const on_dirty_change = vi.fn()
   const { props, recorder, textarea } = await mount_editor({ on_dirty_change })
 
+  expect(textarea.getAttribute(`aria-label`)).toBe(`demo.ts source`)
+  const description_id = textarea.getAttribute(`aria-describedby`)
+  if (!description_id) throw new Error(`CodeEditor help text is not referenced`)
+  expect(doc_query(`[id="${description_id}"]`).textContent?.trim()).toBe(
+    `Press Escape, then Tab to move focus away`,
+  )
+
   emit_edit(textarea, `xy`, 6)
   await flush_async()
 
@@ -195,6 +202,11 @@ test(`keyboard edit commands use configurable indentation and filename comments`
   press_key(textarea, `Enter`)
   await flush_async()
   expect(textarea.value.startsWith(`  // \n  const`)).toBe(true)
+
+  const before_escape = textarea.value
+  press_key(textarea, `Escape`)
+  expect(press_key(textarea, `Tab`).defaultPrevented).toBe(false)
+  expect(textarea.value).toBe(before_escape)
 })
 
 test.each([
@@ -237,10 +249,11 @@ test(`a cancelled fallback beforeinput cannot leak into the next edit`, async ()
 })
 
 test(`saving is injected, recovers from errors, and rebases dirty state`, async () => {
+  const save_result = Promise.withResolvers<undefined>()
   const on_save = vi
     .fn<NonNullable<ComponentProps<typeof CodeEditor>[`on_save`]>>()
     .mockRejectedValueOnce(new Error(`disk full`))
-    .mockResolvedValueOnce(undefined)
+    .mockReturnValueOnce(save_result.promise)
   const dirty_states: boolean[] = []
   const { instance, recorder, textarea } = await mount_editor({
     on_save,
@@ -251,7 +264,16 @@ test(`saving is injected, recovers from errors, and rebases dirty state`, async 
 
   await expect(instance.save()).resolves.toBe(false)
   expect(doc_query(`[role="alert"]`).textContent).toBe(`disk full`)
-  await expect(instance.save()).resolves.toBe(true)
+  const backend_calls = [
+    recorder.edits.length,
+    recorder.resyncs.length,
+    recorder.closed.length,
+  ]
+  const save_request = instance.save()
+  await tick()
+  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`true`)
+  save_result.resolve(undefined)
+  await expect(save_request).resolves.toBe(true)
   await flush_async()
 
   expect(on_save.mock.calls).toEqual([
@@ -259,7 +281,12 @@ test(`saving is injected, recovers from errors, and rebases dirty state`, async 
     [`!${DEMO_TEXT}`, OPEN_RESULT],
   ])
   expect(dirty_states).toEqual([true, false])
-  expect(Object.keys(recorder.backend)).not.toContain(`save`)
+  expect([
+    recorder.edits.length,
+    recorder.resyncs.length,
+    recorder.closed.length,
+  ]).toEqual(backend_calls)
+  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`false`)
   expect(document.querySelector(`[role="alert"]`)).toBeNull()
 })
 
@@ -267,8 +294,13 @@ test(`editing stays disabled until the backend confirms the document is editable
   const open_result = Promise.withResolvers<OpenDocResult>()
   const recorder = create_backend()
   recorder.backend.open_doc = () => open_result.promise
-  const { props, textarea } = await mount_editor({ backend: recorder.backend })
+  const { props, textarea } = await mount_editor({
+    aria_label: `Custom source`,
+    backend: recorder.backend,
+  })
 
+  expect(textarea.getAttribute(`aria-label`)).toBe(`Custom source`)
+  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`true`)
   expect(textarea.readOnly).toBe(true)
   emit_edit(textarea, `!`, 0)
   await flush_async()
@@ -277,6 +309,7 @@ test(`editing stays disabled until the backend confirms the document is editable
 
   open_result.resolve({ ...OPEN_RESULT, editable: false })
   await flush_async()
+  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`false`)
   expect(textarea.readOnly).toBe(true)
   expect(props.text).toBe(DEMO_TEXT)
 })

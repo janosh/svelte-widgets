@@ -119,14 +119,14 @@ test(`a rejected incremental edit resyncs with the latest local text`, async () 
   expect(recorder.resyncs).toEqual([{ docId: `doc-1`, text: value() }])
 })
 
-test(`debounced highlighting coalesces and drops spans from an older revision`, async () => {
+test(`throttled highlighting coalesces and drops spans from an older revision`, async () => {
   vi.useFakeTimers()
   const response = Promise.withResolvers<SpanList[]>()
   const highlight_lines = vi.fn(() => response.promise)
   const on_spans = vi.fn()
   const { client, type_text } = setup(create_backend({ highlight_lines }), {
     on_spans,
-    highlight_debounce_ms: 20,
+    highlight_interval_ms: 20,
   })
 
   client.request_highlight(0, 1)
@@ -158,10 +158,7 @@ test(`queue work arriving at the drain boundary is not stranded`, async () => {
     }),
   )
   await first_request
-  await Promise.resolve()
-  await Promise.resolve()
-
-  expect(highlight_lines).toHaveBeenCalledTimes(2)
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
   if (!second_request) throw new Error(`Second highlight request was not queued`)
 
   let close_request: Promise<void> | undefined
@@ -171,9 +168,7 @@ test(`queue work arriving at the drain boundary is not stranded`, async () => {
     }),
   )
   await second_request
-  await Promise.resolve()
-  await Promise.resolve()
-
+  await vi.waitFor(() => expect(close_request).toBeDefined())
   if (!close_request) throw new Error(`Close request was not queued`)
   await close_request
   expect(recorder.closes).toEqual([`doc-1`])
@@ -198,4 +193,46 @@ test(`close ignores a missing backend document when open never succeeded`, async
   await expect(client.open()).rejects.toThrow(`open failed`)
 
   await expect(client.close()).resolves.toBeUndefined()
+})
+
+test(`close aborts queued and later requests without running them`, async () => {
+  const response = Promise.withResolvers<SpanList[]>()
+  const highlight_lines = vi.fn(() => response.promise)
+  const { client } = setup(create_backend({ highlight_lines }))
+  await client.open()
+
+  const running = client.highlight_lines(0, 1)
+  const queued = client.highlight_lines(1, 2)
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
+  const close_request = client.close()
+
+  await expect(queued).rejects.toThrow(`was closed before the request ran`)
+  await expect(client.highlight_lines(0, 2)).rejects.toThrow(
+    `was closed before the request ran`,
+  )
+  response.resolve([[]])
+  await running
+  await close_request
+  expect(highlight_lines).toHaveBeenCalledOnce()
+})
+
+test(`an uncertain input falls back to a full-document resync`, async () => {
+  const { client, recorder } = setup()
+  const next_text = `x${DEMO_TEXT}`
+
+  const splice = client.handle_input(
+    {
+      selection_start: 0,
+      selection_end: 0,
+      input_type: `insertText`,
+      value_length: DEMO_TEXT.length + 1,
+    },
+    next_text,
+  )
+  await client.settled()
+
+  expect(splice).toBeNull()
+  expect(client.text()).toBe(next_text)
+  expect(recorder.edits).toEqual([])
+  expect(recorder.resyncs).toEqual([{ docId: `doc-1`, text: next_text }])
 })

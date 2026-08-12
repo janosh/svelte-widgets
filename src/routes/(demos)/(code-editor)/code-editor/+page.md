@@ -1,6 +1,6 @@
 ## `CodeEditor`
 
-`CodeEditor` combines a native textarea with a virtualized syntax-token overlay. It updates a bindable LF-normalized `text` buffer synchronously, sends incremental line edits to a host-supplied `EditorBackend`, and supports indentation, comment toggling, bracket pairing, active line numbers, and Cmd/Ctrl+S. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
+`CodeEditor` combines a native textarea with a virtualized syntax-token overlay. It updates a bindable LF-normalized `text` buffer synchronously, sends incremental line edits to a host-supplied `EditorBackend`, and supports indentation, comment toggling, bracket pairing, active line numbers, and Cmd/Ctrl+S. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
 
 Import the shared token palette once wherever the editor or diff view is used:
 
@@ -47,8 +47,21 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
     },
     highlight_lines: ({ startLine, endLine }) =>
       Promise.resolve(lines.slice(startLine, endLine).map(spans_for)),
-    apply_edit: ({ startLine, removedCount, insertedLines }) => {
-      lines.splice(startLine, removedCount, ...insertedLines)
+    apply_edit: ({
+      startLine,
+      removedCount,
+      insertedLines,
+      expectedLineCount,
+      expectedTotalLength,
+    }) => {
+      const next_lines = lines.toSpliced(startLine, removedCount, ...insertedLines)
+      if (
+        next_lines.length !== expectedLineCount ||
+        next_lines.join(`\n`).length !== expectedTotalLength
+      ) {
+        return Promise.reject(new Error(`Editor buffers diverged`))
+      }
+      lines = next_lines
       return Promise.resolve(lines.length)
     },
     set_text: ({ text: next_text }) => {
