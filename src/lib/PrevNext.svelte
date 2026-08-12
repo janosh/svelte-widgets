@@ -138,10 +138,13 @@
     margin: var(--prev-next-margin, 3em auto);
   }
   .prev-next a {
-    color: var(--prev-next-color);
+    color: var(--prev-next-color, var(--accent, cornflowerblue));
     background: var(--prev-next-link-bg);
     padding: var(--prev-next-link-padding);
     border-radius: var(--prev-next-link-border-radius);
+    &:hover {
+      color: var(--prev-next-hover-color, var(--accent-hover, orange));
+    }
   }
   .prev-next span {
     display: block;

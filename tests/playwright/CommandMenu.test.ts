@@ -1,5 +1,14 @@
 import { expect, test } from '@playwright/test'
 
+test(`page navigation links use the blue accent`, async ({ page }) => {
+  await page.emulateMedia({ colorScheme: `light` })
+  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  await expect(page.locator(`nav.prev-next a`).first()).toHaveCSS(
+    `color`,
+    `rgb(74, 122, 191)`,
+  )
+})
+
 test(`closing the native dialog restores focus to the opener`, async ({ page }) => {
   await page.goto(`/command-menu`, { waitUntil: `networkidle` })
   const opener = page.getByRole(`button`, { name: `View code` }).first()
