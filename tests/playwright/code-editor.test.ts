@@ -17,6 +17,7 @@ test(`CodeEditor releases focus and tracks viewport width`, async ({ page }) => 
   const layer_width = () =>
     token_layer.evaluate((node) => Number(node.style.minWidth.replace(`px`, ``)))
   const wide_width = await layer_width()
+  expect(wide_width).toBeGreaterThan(0)
   await page
     .locator(`#code-editor-basic .code-editor`)
     .evaluate((node) => (node.style.width = `300px`))
