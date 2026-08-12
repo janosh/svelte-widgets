@@ -46,7 +46,7 @@ export interface HighlightClient {
 const DEFAULT_HIGHLIGHT_INTERVAL_MS = 30
 
 interface QueuedTask {
-  kind?: `resync` | `close`
+  kind?: `edit` | `resync` | `close`
   run: () => Promise<void>
   abort?: (error: Error) => void
 }
@@ -62,8 +62,10 @@ export const create_highlight_client = (
   let revision = 0
   let opened = false
   let disposed = false
+  let backend_synced = true
   let queue: QueuedTask[] = []
   let pump_promise: Promise<void> | null = null
+  let close_promise: Promise<void> | null = null
   let highlight_timer: ReturnType<typeof setTimeout> | null = null
   let pending_window: { start_line: number; end_line: number } | null = null
 
@@ -115,19 +117,30 @@ export const create_highlight_client = (
     for (let running = pump_promise; running; running = pump_promise) await running
   }
 
-  const enqueue_resync = (text: string): void => {
-    queue = queue.filter((task) => task.kind !== `resync`)
-    const args = { docId: doc_id, text }
-    enqueue({
+  const enqueue_resync = (text: string, recovering = false): void => {
+    if (disposed) return
+    queue = queue.filter(
+      (task) => task.kind !== `resync` && (!recovering || task.kind !== `edit`),
+    )
+    const task: QueuedTask = {
       kind: `resync`,
       run: async () => {
         try {
-          await backend.set_text(args)
+          await backend.set_text({ docId: doc_id, text })
+          backend_synced = true
         } catch (error) {
+          backend_synced = false
+          revision += 1
           report(error)
         }
       },
-    })
+    }
+    // Recovery already knows every pending edit through the latest local index. Put its
+    // full-text replacement before queued highlights and discard those obsolete edits.
+    if (recovering) {
+      queue.unshift(task)
+      void pump()
+    } else enqueue(task)
   }
 
   const enqueue_edit = (splice: LineSplice): void => {
@@ -140,13 +153,14 @@ export const create_highlight_client = (
       expectedTotalLength: splice.expected_total_length,
     }
     enqueue({
+      kind: `edit`,
       run: async () => {
         try {
           await backend.apply_edit(args)
         } catch {
           // A rejected incremental edit means the buffers diverged. Resync with the
-          // latest local document rather than the older text that produced the edit.
-          enqueue_resync(line_index_text(index))
+          // latest local document before any already-queued highlight can read stale text.
+          enqueue_resync(line_index_text(index), true)
         }
       },
     })
@@ -195,33 +209,33 @@ export const create_highlight_client = (
       const at_revision = revision
       highlight_lines(window.start_line, window.end_line)
         .then((spans) => {
-          if (disposed || revision !== at_revision) return
+          if (disposed || !backend_synced || revision !== at_revision) return
           on_spans?.({ start_line: window.start_line, spans })
         })
         .catch(report)
     }, highlight_interval_ms)
   }
 
-  const close = async (): Promise<void> => {
-    if (!disposed) {
-      disposed = true
-      if (highlight_timer !== null) clearTimeout(highlight_timer)
-      highlight_timer = null
-      for (const task of queue) task.abort?.(closed_error())
-      queue = []
-      enqueue({
-        kind: `close`,
-        run: async () => {
-          try {
-            await backend.close_doc({ docId: doc_id })
-          } catch (error) {
-            // Closing a document that never finished opening needs no recovery.
-            if (opened) throw to_error(error)
-          }
-        },
-      })
-    }
-    await settled()
+  const close = (): Promise<void> => {
+    if (close_promise) return close_promise
+    disposed = true
+    if (highlight_timer !== null) clearTimeout(highlight_timer)
+    highlight_timer = null
+    for (const task of queue) task.abort?.(closed_error())
+    queue = []
+    enqueue({
+      kind: `close`,
+      run: async () => {
+        try {
+          await backend.close_doc({ docId: doc_id })
+        } catch (error) {
+          // Closing a document that never finished opening needs no recovery.
+          if (opened) throw to_error(error)
+        }
+      },
+    })
+    close_promise = settled()
+    return close_promise
   }
 
   const open = (): Promise<OpenDocResult> =>

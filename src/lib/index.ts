@@ -7,13 +7,7 @@ export { default as CircleSpinner } from './CircleSpinner.svelte'
 export { default as CommandMenu } from './CommandMenu.svelte'
 export { default as ConfirmDialog } from './ConfirmDialog.svelte'
 export { default as Dialog } from './Dialog.svelte'
-export type {
-  DialogCloseDetail,
-  DialogCloseVia,
-  DialogControls,
-  DialogProps,
-  DialogTriggerProps,
-} from './dialog'
+export type * from './dialog'
 export { default as ContributorList } from './ContributorList.svelte'
 export { default as Popover } from './Popover.svelte'
 export { default as PageSearch } from './PageSearch.svelte'

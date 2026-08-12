@@ -53,6 +53,11 @@
     open = false
     on_close?.({ via })
   }
+  const restore_focus = () => {
+    const active_element = document.activeElement
+    if (surface?.contains(active_element) || active_element === document.body)
+      focus_origin?.focus()
+  }
   const controls: SheetControls = { close: () => close(`close`) }
   const trigger_props: TriggerProps = $derived({
     onclick: () => (open = true),
@@ -73,7 +78,7 @@
     surface.showModal()
   })
   onDestroy(() => {
-    if (surface?.open) focus_origin?.focus()
+    if (surface?.open) restore_focus()
   })
 </script>
 
@@ -89,11 +94,16 @@
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Sheet`)}
     aria-labelledby={aria_labelledby}
     {@attach backdrop_dismiss(() => close_on_backdrop && close(`pointer`))}
-    oncancel={chain_handlers((event) => {
+    oncancel={chain_handlers(rest.oncancel, (event) => {
+      if (event.defaultPrevented) return
+      event.preventDefault()
       if (close_on_escape) close(`escape`)
-      else event.preventDefault()
-    }, rest.oncancel)}
-    onclose={chain_handlers(() => close(`close`), rest.onclose)}
+    })}
+    onclose={chain_handlers((event) => {
+      if (open && event.currentTarget !== surface) return
+      restore_focus()
+      close(`close`)
+    }, rest.onclose)}
   >
     {#if header}<header>{@render header(controls)}</header>{/if}
     <div class="sheet-content">{@render children(controls)}</div>

@@ -1,5 +1,4 @@
-import type { ComponentProps } from 'svelte'
-import { mount, tick, unmount } from 'svelte'
+import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import { create_element, doc_query, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
@@ -139,6 +138,24 @@ describe(`Dialog`, () => {
     expect(onclose).toHaveBeenCalledOnce()
     expect(surface()).toBeNull()
     expect(document.activeElement).toBe(trigger())
+  })
+
+  test(`a stale native close cannot close a rapidly reopened dialog`, async () => {
+    const props = mount_dialog({ open: true })
+    await tick()
+    const old_surface = doc_query<HTMLDialogElement>(`dialog.dialog`)
+
+    props.open = false
+    await tick()
+    props.open = true
+    old_surface.dispatchEvent(new Event(`close`))
+    await tick()
+    const current_surface = doc_query<HTMLDialogElement>(`dialog.dialog`)
+
+    expect(props.open).toBe(true)
+    expect(current_surface).not.toBe(old_surface)
+    old_surface.dispatchEvent(new Event(`close`))
+    expect(props.open).toBe(true)
   })
 
   test(`dismissal policies can keep backdrop and Escape open`, async () => {

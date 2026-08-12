@@ -5,8 +5,9 @@
 <script lang="ts">
   // Editable code view: a transparent textarea supplies selection, caret, keyboard
   // input, and native undo while a virtualized pre paints the current text and tokens.
-  import { untrack } from 'svelte'
+  import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
+  import { register_escape_layer } from '../attachments/index'
   import {
     auto_close_pair,
     auto_indent_newline,
@@ -67,15 +68,17 @@
   let scroll_top = $state(0)
   let scroll_left = $state(0)
   let viewport_height = $state(0)
+  let viewport_width = $state(0)
   let overlay_width = $state(0)
   let caret_line = $state(0)
   let saving = $state(false)
-  let baseline_text = $state(``)
+  let baseline_text = ``
   let last_reported_dirty = false
   let last_local_write = $state<string | null>(null)
   let tokens_by_line: (SpanList | undefined)[] = []
   let before_snapshot: BeforeInputSnapshot | null = null
   let tab_moves_focus = false
+  let unregister_escape: (() => void) | undefined
 
   const normalized_text = $derived(text === last_local_write ? text : editor_text(text))
   const font_size = $derived.by(() => {
@@ -94,7 +97,7 @@
       : options.line_comment,
   )
   const show_line_numbers = $derived(options.line_numbers ?? true)
-  const editing_disabled = $derived(read_only || doc_info?.editable !== true)
+  const editing_disabled = $derived(read_only || !doc_info?.editable)
 
   const blank_tokens = (count: number): (SpanList | undefined)[] =>
     Array.from({ length: count })
@@ -105,8 +108,8 @@
     on_error?.(message)
   }
 
-  const receive_spans = (event: HighlightSpansEvent): void => {
-    tokens_by_line.splice(event.start_line, event.spans.length, ...event.spans)
+  const receive_spans = ({ start_line, spans }: HighlightSpansEvent): void => {
+    tokens_by_line.splice(start_line, spans.length, ...spans)
     tokens_revision += 1
   }
 
@@ -118,13 +121,12 @@
     source_text: string
     client: HighlightClient
   } | null = null
-  const write_text = (active: HighlightClient, value: string): void => {
+  const write_text = (value: string): void => {
     last_local_write = value
-    if (open_document?.client === active) open_document.source_text = value
+    if (open_document) open_document.source_text = value
     text = value
   }
   const client = $derived.by(() => {
-    const normalized = normalized_text
     const resolved_backend = resolve_editor_backend(backend)
     const current = open_document
     if (
@@ -138,7 +140,7 @@
     const created = create_highlight_client({
       doc_id: `code-editor-${next_doc_seq}`,
       filename,
-      text: normalized,
+      text: normalized_text,
       raw_text: text,
       backend: resolved_backend,
       on_spans: receive_spans,
@@ -157,16 +159,15 @@
     void doc_revision
     return client.line_count()
   })
-  const window_lines = $derived.by(() => {
-    void doc_revision
-    return visible_line_window(
+  const window_lines = $derived(
+    visible_line_window(
       scroll_top,
       viewport_height,
       line_height,
-      client.line_count(),
+      line_count,
       OVERSCAN_ROWS,
-    )
-  })
+    ),
+  )
   const visible_rows = $derived.by(() => {
     void doc_revision
     void tokens_revision
@@ -205,7 +206,7 @@
     caret_line = 0
     before_snapshot = null
     const active_text = active.text()
-    if (untrack(() => text) !== active_text) write_text(active, active_text)
+    if (untrack(() => text) !== active_text) write_text(active_text)
     queueMicrotask(() => {
       if (!is_current() || !textarea) return
       textarea.scrollTop = 0
@@ -241,6 +242,7 @@
   })
 
   $effect(() => {
+    void doc_revision
     const { start, end } = window_lines
     if (doc_info?.highlightable) client.request_highlight(start, end)
   })
@@ -251,20 +253,28 @@
     const width = Math.max(area.scrollWidth, area.clientWidth)
     if (width !== overlay_width) overlay_width = width
   }
-
-  const track_viewport = (element: HTMLElement): (() => void) => {
-    const measure = (): void => {
-      viewport_height = element.clientHeight
-      measure_overlay_width()
-    }
-    measure()
-    if (typeof ResizeObserver === `undefined`) return () => undefined
-    const observer = new ResizeObserver(measure)
-    observer.observe(element)
-    return () => observer.disconnect()
-  }
+  $effect(() => {
+    void viewport_height
+    void viewport_width
+    measure_overlay_width()
+  })
 
   const current_text = (): string => textarea?.value ?? client.text()
+
+  const on_focus = (): void => {
+    unregister_escape ??= register_escape_layer((event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      tab_moves_focus = true
+      return true
+    })
+  }
+  const on_blur = (): void => {
+    unregister_escape?.()
+    unregister_escape = undefined
+    tab_moves_focus = false
+  }
+  onDestroy(on_blur)
 
   const sync_caret = (): void => {
     const area = textarea
@@ -303,7 +313,7 @@
         blank_tokens(splice.inserted_lines.length),
       )
     } else tokens_by_line = blank_tokens(active.line_count())
-    write_text(active, next_value)
+    write_text(next_value)
     doc_revision += 1
     sync_caret()
     measure_overlay_width()
@@ -345,9 +355,8 @@
   }
 
   const run_save = async (): Promise<boolean> => {
-    if (!on_save || editing_disabled || saving) return false
     const info = doc_info
-    if (!info) return false
+    if (!on_save || editing_disabled || saving || !info) return false
     const active = client
     saving = true
     try {
@@ -369,21 +378,13 @@
   const on_keydown = (event: KeyboardEvent): void => {
     const area = textarea
     if (!area || editing_disabled || event.isComposing) return
-    if (event.key === `Escape`) {
-      tab_moves_focus = true
-      return
-    }
     if (event.key === `Tab` && tab_moves_focus) {
       tab_moves_focus = false
       return
     }
     tab_moves_focus = false
-    if (
-      event.key.toLowerCase() === `s` &&
-      (event.metaKey || event.ctrlKey) &&
-      !event.altKey &&
-      on_save
-    ) {
+    const command_modifier = event.metaKey || event.ctrlKey
+    if (event.key.toLowerCase() === `s` && command_modifier && !event.altKey && on_save) {
       event.preventDefault()
       void run_save()
       return
@@ -406,7 +407,7 @@
       )
       return
     }
-    if (event.key === `Enter` && !event.metaKey && !event.ctrlKey && !event.altKey) {
+    if (event.key === `Enter` && !command_modifier && !event.altKey) {
       event.preventDefault()
       const insertion = auto_indent_newline(state, indent)
       if (!insert_text(area, insertion.insert_text)) return
@@ -414,11 +415,11 @@
       area.setSelectionRange(caret, caret)
       return
     }
-    if (event.key === `/` && (event.metaKey || event.ctrlKey) && comment_token) {
+    if (event.key === `/` && command_modifier && comment_token) {
       apply_or_fall_through(toggle_line_comment(state, comment_token))
       return
     }
-    if (event.metaKey || event.ctrlKey || event.altKey) return
+    if (command_modifier || event.altKey) return
     const pair = auto_close_pair(state, event.key)
     if (!pair) return
     event.preventDefault()
@@ -432,7 +433,7 @@
     area.setSelectionRange(pair.selection_start, pair.selection_end)
   }
 
-  export const save = (): Promise<boolean> => run_save()
+  export const save = run_save
   export const focus = (): void => textarea?.focus()
 </script>
 
@@ -448,7 +449,7 @@
     Press Escape, then Tab to move focus away
   </span>
   {#if error_message}
-    <div class="editor-bar error" role="alert">{error_message}</div>
+    <div class="editor-error" role="alert">{error_message}</div>
   {/if}
   <div class="editor-body">
     {#if show_line_numbers}
@@ -469,7 +470,11 @@
         </div>
       </div>
     {/if}
-    <div class="content" {@attach track_viewport}>
+    <div
+      class="content"
+      bind:clientHeight={viewport_height}
+      bind:clientWidth={viewport_width}
+    >
       <!-- Whitespace inside pre is preserved, so source indentation between spans must
       remain absent. Text always comes from the line index; stale tokens never do. -->
       <pre
@@ -490,7 +495,8 @@
         bind:this={textarea}
         {...{ autocorrect: `off` }}
         onbeforeinput={on_before_input}
-        onblur={() => (tab_moves_focus = false)}
+        onblur={on_blur}
+        onfocus={on_focus}
         oninput={on_input}
         onkeydown={on_keydown}
         onkeyup={sync_caret}
@@ -516,16 +522,13 @@
     background: var(--page-bg, light-dark(#fff, #0d0f14));
     --editor-pad-x: 8px;
   }
-  .editor-bar {
+  .editor-error {
     flex: 0 0 auto;
     padding: 0.35rem 0.65rem;
     border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-    color: var(--text-color-muted, light-dark(#5c6270, #aab0bf));
-    font-size: 0.78rem;
-  }
-  .editor-bar.error {
     color: var(--error-color, #cf222e);
     background: color-mix(in srgb, var(--error-color, #f85149) 10%, transparent);
+    font-size: 0.78rem;
   }
   .editor-body {
     display: flex;

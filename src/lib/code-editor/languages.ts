@@ -26,7 +26,7 @@ const COMMENT_TOKEN_BASENAMES = `.bash_profile .bashrc .dockerignore .env .gitat
   .gitignore .npmignore .profile .zshrc cmakelists.txt containerfile contcar dockerfile
   gnumakefile incar kpoints makefile outcar poscar xdatcar`
 
-const words = (list: string): string[] => list.split(/\s+/).filter(Boolean)
+const words = (list: string) => list.trim().split(/\s+/)
 
 const token_by_extension = new SvelteMap<string, string>(
   COMMENT_TOKEN_GROUPS.flatMap(([token, extensions]) =>
@@ -38,8 +38,8 @@ const hash_comment_basenames = new SvelteSet(words(COMMENT_TOKEN_BASENAMES))
 export const line_comment_token = (filename: string): string | null => {
   const basename = filename.toLowerCase().split(/[\\/]/u).at(-1) ?? ``
   const segments = basename.split(`.`)
-  if (hash_comment_basenames.has(basename) || hash_comment_basenames.has(segments[0]))
-    return `#`
+  const stem = basename.startsWith(`.`) ? `.${segments[1] ?? ``}` : segments[0]
+  if (hash_comment_basenames.has(basename) || hash_comment_basenames.has(stem)) return `#`
   return token_by_extension.get(segments.at(-1) ?? ``) ?? null
 }
 

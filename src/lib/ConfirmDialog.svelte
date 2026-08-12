@@ -31,6 +31,7 @@
   const error_id = `confirm-dialog-${unique_id}-error`
   let dialog = $state<HTMLDialogElement | null>(null)
   let focus_origin: HTMLElement | SVGElement | null = null
+  let programmatic_close_pending = false
   let prompt_value = $derived(request?.kind === `prompt` ? request.initial_value : ``)
   // Writable derived on `request`: submitting an invalid value assigns the error, and
   // advancing the queue re-runs this and clears it, so no stale error survives a request.
@@ -57,7 +58,10 @@
   $effect(() => {
     if (!dialog) return
     if (!request) {
-      if (dialog.open) dialog.close()
+      if (dialog.open) {
+        programmatic_close_pending = true
+        dialog.close()
+      }
       const active_element = document.activeElement
       if (dialog.contains(active_element) || active_element === document.body)
         focus_origin?.focus()
@@ -97,8 +101,9 @@
   {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
     // Escape and backdrop clicks land here. Answering already shifted the queue, so the
-    // close that follows sees no request and resolves nothing.
-    if (request) dismiss_dialog()
+    // programmatic close that follows must not resolve a request queued before its event.
+    if (programmatic_close_pending) programmatic_close_pending = false
+    else if (!dialog?.open && request) dismiss_dialog()
   }, rest.onclose)}
 >
   {#if request}

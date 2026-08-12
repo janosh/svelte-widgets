@@ -135,6 +135,43 @@ describe(`Sheet`, () => {
     expect(surface()).toBeNull()
   })
 
+  test(`a stale native close cannot close a reopened sheet`, async () => {
+    const props = mount_sheet({ open: true })
+    await tick()
+    const old_surface = doc_query<HTMLDialogElement>(`dialog.sheet`)
+
+    props.open = false
+    await tick()
+    props.open = true
+    old_surface.dispatchEvent(new Event(`close`))
+    await tick()
+    const current_surface = doc_query<HTMLDialogElement>(`dialog.sheet`)
+    expect(current_surface).not.toBe(old_surface)
+
+    old_surface.dispatchEvent(new Event(`close`))
+    await tick()
+
+    expect(props.open).toBe(true)
+    expect(surface()).toBe(current_surface)
+  })
+
+  test(`consumer cancel prevention keeps the sheet open`, async () => {
+    const on_close = vi.fn()
+    const oncancel = vi.fn((event: Event) => event.preventDefault())
+    mount_sheet({ open: true, on_close, oncancel })
+    await tick()
+
+    const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
+    const cancel = new Event(`cancel`, { cancelable: true })
+    dialog.dispatchEvent(cancel)
+    await tick()
+
+    expect(cancel.defaultPrevented).toBe(true)
+    expect(dialog.open).toBe(true)
+    expect(surface()).toBe(dialog)
+    expect(on_close).not.toHaveBeenCalled()
+  })
+
   test(`dismissal options can leave backdrop and Escape to the consumer`, async () => {
     mount_sheet({
       open: true,

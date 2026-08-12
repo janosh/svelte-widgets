@@ -78,13 +78,7 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 </script>
 
 <div style="height: 13rem; border: 1px solid lightgray">
-  <CodeEditor
-    {backend}
-    bind:text
-    filename="greeting.ts"
-    on_save={save}
-    options={{ font_size: 13, tab_size: 2, insert_spaces: true, line_numbers: true }}
-  />
+  <CodeEditor {backend} bind:text filename="greeting.ts" on_save={save} />
 </div>
 
 <p>{status}. Saved buffer matches: {saved_text === text ? `yes` : `no`}.</p>

@@ -181,6 +181,11 @@
     search_text = ``
   }
 
+  function handle_dialog_close(event: Event) {
+    if (open && event.currentTarget !== dialog) return
+    close_menu()
+  }
+
   // Cmd and Ctrl both open the menu on every platform, so `mod` is too narrow here
   const open_shortcuts = $derived(
     triggers.flatMap((key) => [`meta+${key}`, `ctrl+${key}`]),
@@ -271,7 +276,7 @@
     transition:fade={{ duration: fade_duration_ms }}
     aria-label={aria_label}
     {...dialog_props}
-    onclose={chain_handlers(close_menu, dialog_props?.onclose)}
+    onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
     {@attach backdrop_dismiss()}
   >

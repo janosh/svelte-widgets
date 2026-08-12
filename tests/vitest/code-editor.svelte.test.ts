@@ -1,14 +1,12 @@
 import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
+import { register_escape_layer } from '$lib/attachments'
 import type {
   ApplyEditArgs,
   EditorBackend,
-  HighlightLinesArgs,
   OpenDocResult,
   SetTextArgs,
-  SpanList,
 } from '$lib/code-editor'
-import { mount, tick, unmount } from 'svelte'
-import type { ComponentProps } from 'svelte'
+import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, press_key } from './index'
 
@@ -22,19 +20,9 @@ const OPEN_RESULT: OpenDocResult = {
   editable: true,
 }
 
-interface BackendRecorder {
-  backend: EditorBackend
-  edits: ApplyEditArgs[]
-  resyncs: SetTextArgs[]
-  highlights: HighlightLinesArgs[]
-  closed: string[]
-  opened_text: string[]
-}
-
-const create_backend = (spans: SpanList[] = [[0, 6], [0, 2], []]): BackendRecorder => {
+const create_backend = () => {
   const edits: ApplyEditArgs[] = []
   const resyncs: SetTextArgs[] = []
-  const highlights: HighlightLinesArgs[] = []
   const closed: string[] = []
   const opened_text: string[] = []
   const backend: EditorBackend = {
@@ -42,10 +30,8 @@ const create_backend = (spans: SpanList[] = [[0, 6], [0, 2], []]): BackendRecord
       opened_text.push(text)
       return Promise.resolve(OPEN_RESULT)
     },
-    highlight_lines: (args) => {
-      highlights.push(args)
-      return Promise.resolve(spans.slice(args.startLine, args.endLine))
-    },
+    highlight_lines: ({ startLine, endLine }) =>
+      Promise.resolve([[0, 6], [0, 2], []].slice(startLine, endLine)),
     apply_edit: (args) => {
       edits.push(args)
       return Promise.resolve(args.expectedLineCount)
@@ -59,7 +45,7 @@ const create_backend = (spans: SpanList[] = [[0, 6], [0, 2], []]): BackendRecord
       return Promise.resolve()
     },
   }
-  return { backend, edits, resyncs, highlights, closed, opened_text }
+  return { backend, edits, resyncs, closed, opened_text }
 }
 
 const flush_async = async (): Promise<void> => {
@@ -73,16 +59,15 @@ const emit_edit = (
   insert: string,
   at: number,
   through = at,
-  input_type = `insertText`,
 ): void => {
   area.setSelectionRange(at, through)
   area.dispatchEvent(
-    new InputEvent(`beforeinput`, { inputType: input_type, bubbles: true }),
+    new InputEvent(`beforeinput`, { inputType: `insertText`, bubbles: true }),
   )
   area.value = area.value.slice(0, at) + insert + area.value.slice(through)
   const caret = at + insert.length
   area.setSelectionRange(caret, caret)
-  area.dispatchEvent(new InputEvent(`input`, { inputType: input_type, bubbles: true }))
+  area.dispatchEvent(new InputEvent(`input`, { inputType: `insertText`, bubbles: true }))
 }
 
 type ExecCommand = (command: string, show_ui?: boolean, value?: string) => boolean
@@ -118,12 +103,6 @@ const mount_editor = async (
     text: DEMO_TEXT,
     filename: `demo.ts`,
     backend: recorder.backend,
-    options: {
-      font_size: 13,
-      tab_size: 2,
-      insert_spaces: true,
-      line_numbers: true,
-    },
     ...overrides,
   })
   const instance = mount(CodeEditor, { target: document.body, props })
@@ -169,8 +148,7 @@ test(`editing writes through bind:text, repaints immediately, and sends one line
   ])
   expect(recorder.resyncs).toEqual([])
   expect(recorder.opened_text).toEqual([DEMO_TEXT])
-  expect(on_dirty_change).toHaveBeenCalledTimes(1)
-  expect(on_dirty_change).toHaveBeenCalledWith(true)
+  expect(on_dirty_change).toHaveBeenCalledExactlyOnceWith(true)
 })
 
 test(`initial disk text keeps its raw open shape but binds the normalized buffer`, async () => {
@@ -183,9 +161,23 @@ test(`initial disk text keeps its raw open shape but binds the normalized buffer
   expect(overlay_lines()).toEqual([`first`, `second`, ``])
 })
 
+test(`same-line edits request fresh visible highlights`, async () => {
+  const { backend } = create_backend()
+  const highlight_lines = vi.spyOn(backend, `highlight_lines`)
+  const { textarea } = await mount_editor({ backend })
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
+
+  emit_edit(textarea, `x`, 0)
+
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
+})
+
 test(`keyboard edit commands use configurable indentation and filename comments`, async () => {
   install_exec_command()
   const { textarea } = await mount_editor()
+  const parent_escape = vi.fn(() => true)
+  const unregister_parent_escape = register_escape_layer(parent_escape)
+  onTestFinished(unregister_parent_escape)
   textarea.focus()
   textarea.setSelectionRange(0, 0)
 
@@ -204,7 +196,8 @@ test(`keyboard edit commands use configurable indentation and filename comments`
   expect(textarea.value.startsWith(`  // \n  const`)).toBe(true)
 
   const before_escape = textarea.value
-  press_key(textarea, `Escape`)
+  expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)
+  expect(parent_escape).not.toHaveBeenCalled()
   expect(press_key(textarea, `Tab`).defaultPrevented).toBe(false)
   expect(textarea.value).toBe(before_escape)
 })

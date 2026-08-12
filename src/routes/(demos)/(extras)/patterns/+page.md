@@ -95,7 +95,6 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
   import { Dialog } from '$lib'
 
   let open = $state(false)
-  let nested_open = $state(false)
   let last_close = $state(`none`)
 </script>
 
@@ -112,7 +111,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
     <button onclick={close}>Close</button>
   {/snippet}
   <label>Display name <input value="Ada" /></label>
-  <Dialog bind:open={nested_open} aria-label="Advanced profile settings">
+  <Dialog aria-label="Advanced profile settings">
     {#snippet trigger(props)}
       <button {...props}>Advanced</button>
     {/snippet}
