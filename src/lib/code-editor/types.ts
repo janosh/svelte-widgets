@@ -106,6 +106,15 @@ export interface DiffViewOptions {
   layout: DiffLayout
 }
 
+export interface CodeEditorOptions {
+  font_size?: number
+  tab_size?: number
+  insert_spaces?: boolean
+  line_numbers?: boolean
+  // Override filename-based comment detection; null disables the command.
+  line_comment?: string | null
+}
+
 export const to_error = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error))
 
@@ -175,7 +184,23 @@ export interface DiffBackend {
 
 // === Default backends ===
 //
-// Register the usual DiffBackend once; the prop override remains for tests/special views.
+// Register usual backends once; prop overrides remain for tests and special views.
+
+let default_editor_backend: EditorBackend | null = null
+
+export const set_editor_backend = (backend: EditorBackend | null): void => {
+  default_editor_backend = backend
+}
+
+export const resolve_editor_backend = (override?: EditorBackend): EditorBackend => {
+  const backend = override ?? default_editor_backend
+  if (!backend) {
+    throw new Error(
+      `No EditorBackend available: pass a \`backend\` prop or call set_editor_backend() once at startup`,
+    )
+  }
+  return backend
+}
 
 let default_diff_backend: DiffBackend | null = null
 

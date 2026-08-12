@@ -32,6 +32,11 @@
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
   "exports": {
+    "./CodeEditor.svelte": {
+      "types": "./dist/code-editor/CodeEditor.svelte.d.ts",
+      "svelte": "./dist/code-editor/CodeEditor.svelte",
+      "default": "./dist/code-editor/CodeEditor.svelte"
+    },
     "./DiffView.svelte": {
       "types": "./dist/code-editor/DiffView.svelte.d.ts",
       "svelte": "./dist/code-editor/DiffView.svelte",

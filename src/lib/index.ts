@@ -6,10 +6,19 @@ export { default as ButtonGroup } from './ButtonGroup.svelte'
 export { default as CircleSpinner } from './CircleSpinner.svelte'
 export { default as CommandMenu } from './CommandMenu.svelte'
 export { default as ConfirmDialog } from './ConfirmDialog.svelte'
+export { default as Dialog } from './Dialog.svelte'
+export type {
+  DialogCloseDetail,
+  DialogCloseVia,
+  DialogControls,
+  DialogProps,
+  DialogTriggerProps,
+} from './dialog'
 export { default as ContributorList } from './ContributorList.svelte'
 export { default as Popover } from './Popover.svelte'
 export { default as PageSearch } from './PageSearch.svelte'
 export { default as CodeExample } from './CodeExample.svelte'
+export { default as CodeEditor } from './code-editor/CodeEditor.svelte'
 export { default as CopyButton } from './CopyButton.svelte'
 export { default as DraggablePane } from './DraggablePane.svelte'
 export { default as DiffView } from './code-editor/DiffView.svelte'

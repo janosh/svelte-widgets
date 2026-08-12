@@ -2,7 +2,9 @@
   import {
     Accordion,
     ActionMenu,
+    CodeEditor,
     CommandMenu,
+    Dialog,
     DiffView,
     FindBar,
     fuzzy_match,
@@ -12,7 +14,9 @@
     Tabs,
   } from 'svelte-widgets'
   import DirectActionMenu from 'svelte-widgets/ActionMenu.svelte'
+  import DirectCodeEditor from 'svelte-widgets/CodeEditor.svelte'
   import DirectCommandMenu from 'svelte-widgets/CommandMenu.svelte'
+  import DirectDialog from 'svelte-widgets/Dialog.svelte'
   import DirectDiffView from 'svelte-widgets/DiffView.svelte'
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
@@ -42,12 +46,16 @@
   const katex_options: KatexOptions = { throwOnError: true }
   const package_api_works =
     DirectActionMenu === ActionMenu &&
+    DirectCodeEditor === CodeEditor &&
     DirectCommandMenu === CommandMenu &&
+    DirectDialog === Dialog &&
     DirectDiffView === DiffView &&
     DirectFindBar === FindBar &&
     DirectMultiSelect === MultiSelect &&
     DirectPageSearch === PageSearch &&
     typeof Accordion === `function` &&
+    typeof CodeEditor === `function` &&
+    typeof Dialog === `function` &&
     typeof DiffView === `function` &&
     typeof FindBar === `function` &&
     typeof Sheet === `function` &&
