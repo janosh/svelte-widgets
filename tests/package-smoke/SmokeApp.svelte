@@ -33,7 +33,7 @@
   import 'svelte-widgets/code-editor/editor.css'
   import { ask_prompt } from 'svelte-widgets/dialogs'
   import { create_find_state } from 'svelte-widgets/find-in-page'
-  import { Alert as direct_alert } from 'svelte-widgets/icons'
+  import { Claude as direct_claude } from 'svelte-widgets/icons'
   import { heading_ids } from 'svelte-widgets/heading-anchors'
   import type { KatexOptions } from 'svelte-widgets/katex'
   import { storage_get } from 'svelte-widgets/storage'
@@ -69,7 +69,7 @@
     storage_get(`package-smoke-missing`) === null &&
     typeof apply_theme_from_subpath === `function` &&
     typeof heading_ids === `function` &&
-    Boolean(direct_alert.d) &&
+    Boolean(direct_claude.d) &&
     katex_options.throwOnError === true &&
     fuzzy_match(`tw`, String(get_label(options[1])))
   let selected = $state<Option[]>([])
