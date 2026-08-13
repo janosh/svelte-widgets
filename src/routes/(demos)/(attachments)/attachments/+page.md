@@ -13,7 +13,6 @@
     'highlight-matches': `Mark search matches in text using the CSS Custom Highlight API.`,
     'click-outside': `Dismiss a surface on an outside press or Escape.`,
     'dismiss-on-outside-press': `The imperative form of click_outside, for surfaces built from several elements.`,
-    'backdrop-dismiss': `Close a native dialog when press and release both land on its backdrop.`,
     'focus-trap': `Keep Tab inside a surface and hand the keyboard back when it closes.`,
     hotkey: `Declarative keybindings scoped to a node or the whole page.`,
     float: `Park an element beside an anchor and keep it there while the page moves.`,
