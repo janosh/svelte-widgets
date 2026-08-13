@@ -1049,10 +1049,23 @@
   // true while an async oncreate callback is pending, blocks further create attempts
   let creating_option = $state(false)
 
+  function add(option_to_add: Option, event: Event, from_paste = false) {
+    event.stopPropagation()
+    if (!is_non_empty_option(option_to_add)) {
+      throw new TypeError(
+        `MultiSelect: cannot add an empty option, got ${JSON.stringify(option_to_add)}`,
+      )
+    }
+    return add_valid_option(option_to_add, event, from_paste)
+  }
+
   // from_paste: when true, skip option reconstruction so parse_paste() objects
   // are preserved as-is (extra fields like value/group/metadata aren't stripped)
-  async function add(option_to_add: Option, event: Event, from_paste = false) {
-    event.stopPropagation()
+  async function add_valid_option(
+    option_to_add: Option,
+    event: Event,
+    from_paste = false,
+  ) {
     if (
       !isNaN(Number(option_to_add)) &&
       (typeof option_to_add !== `string` || option_to_add.trim().length > 0) &&
@@ -1120,7 +1133,7 @@
           }
         } else oncreate_result = raw_result as CreateResult
       } catch (error) {
-        // sync throws are caught too: add() is async, so an uncaught throw would
+        // sync throws are caught too: add_valid_option() is async, so an uncaught throw would
         // surface as an unhandled rejection in non-awaiting event handlers
         const failure = was_async ? `promise rejected` : `threw`
         console.error(`MultiSelect: oncreate ${failure}:`, error)
@@ -1138,11 +1151,6 @@
       }
     }
 
-    if (!is_non_empty_option(option_to_add)) {
-      throw new TypeError(
-        `MultiSelect: cannot add an empty option, got ${JSON.stringify(option_to_add)}`,
-      )
-    }
     if (input_display) searchText = `${utils.get_label(option_to_add)}`
     else if (resetFilterOnAdd) searchText = ``
     // for maxSelect = 1 we always replace current option with new one
@@ -1432,7 +1440,7 @@
       event.stopPropagation()
       event.preventDefault() // prevent enter key from triggering form submission
 
-      // != null (not truthiness) so falsy options like 0 or `` can be selected via Enter
+      // != null (not truthiness) so a falsy numeric option like 0 can be selected via Enter
       if (activeOption != null) {
         if (is_disabled(activeOption)) return
         handle_option_interact(activeOption, event, activeIndex)

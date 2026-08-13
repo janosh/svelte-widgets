@@ -186,6 +186,42 @@ describe(`Dialog`, () => {
     expect(on_close).not.toHaveBeenCalled()
   })
 
+  test.each([
+    [`none`, `pointer`, true, true, false],
+    [`none`, `escape`, true, true, false],
+    [`closerequest`, `pointer`, true, false, false],
+    [`closerequest`, `escape`, true, false, true],
+    [`any`, `pointer`, false, false, true],
+    [`any`, `escape`, false, false, true],
+  ] as const)(
+    `closedby=%s overrides legacy flags for %s dismissal`,
+    async (closedby, via, close_on_backdrop, close_on_escape, should_close) => {
+      const on_close = vi.fn()
+      mount_dialog({
+        open: true,
+        closedby,
+        close_on_backdrop,
+        close_on_escape,
+        on_close,
+      })
+      await tick()
+
+      const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
+      if (via === `pointer`) press_dialog_at(dialog)
+      else cancel_dialog(dialog)
+      await tick()
+
+      expect(surface() === null).toBe(should_close)
+      if (should_close) {
+        expect(on_close).toHaveBeenCalledExactlyOnceWith({ via })
+      } else {
+        doc_query<HTMLButtonElement>(`[data-testid="dialog-action"]`).click()
+        await tick()
+        expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `close` })
+      }
+    },
+  )
+
   test(`nested dialogs stack, close independently, and restore each opener`, async () => {
     const on_close = vi.fn()
     const on_nested_close = vi.fn()

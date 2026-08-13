@@ -1840,6 +1840,29 @@ test(`rejects empty options without an empty-state mode`, () => {
   )
 })
 
+test(`throws synchronously when adding an empty option`, () => {
+  mount_multiselect({ options: [``] })
+  const empty_option = doc_query<HTMLLIElement>(`ul.options > li`)
+  // Invoke Svelte's delegated handler directly so a rejected promise cannot masquerade
+  // as a synchronous exception.
+  const event_symbol = Object.getOwnPropertySymbols(empty_option).find(
+    (symbol) => symbol.description === `events`,
+  )
+  if (!event_symbol) throw new Error(`Svelte event handlers not found`)
+  const event_handlers = (
+    empty_option as HTMLLIElement & Record<symbol, { click?: unknown }>
+  )[event_symbol]
+  const click_handler = event_handlers.click
+  if (typeof click_handler !== `function`) {
+    throw new TypeError(`Svelte click handler not found`)
+  }
+  const click_event = new MouseEvent(`click`)
+
+  expect(() => click_handler.call(empty_option, click_event)).toThrow(
+    `MultiSelect: cannot add an empty option, got ""`,
+  )
+})
+
 test.each([
   [`allowEmpty`, { allowEmpty: true }],
   [`disabled`, { disabled: true }],

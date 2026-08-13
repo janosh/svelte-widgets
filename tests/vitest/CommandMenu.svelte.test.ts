@@ -92,19 +92,42 @@ test.each([
 )
 
 test.each([
-  { close_keys: [`Escape`], key_to_press: `Escape`, should_close: true },
+  {
+    close_keys: [`Escape`],
+    key_to_press: `Escape`,
+    should_close: true,
+    dialog_props: undefined,
+  },
   // any key in the list closes, not just the first
-  { close_keys: [`Escape`, `x`], key_to_press: `x`, should_close: true },
+  {
+    close_keys: [`Escape`, `x`],
+    key_to_press: `x`,
+    should_close: true,
+    dialog_props: undefined,
+  },
   // non-close key (even default Escape) does nothing when not configured
-  { close_keys: [`q`], key_to_press: `Escape`, should_close: false },
+  {
+    close_keys: [`q`],
+    key_to_press: `Escape`,
+    should_close: false,
+    dialog_props: undefined,
+  },
+  // explicit native policy remains authoritative over the close-key shortcut
+  {
+    close_keys: [`Escape`],
+    key_to_press: `Escape`,
+    should_close: false,
+    dialog_props: { closedby: `none` as const },
+  },
 ])(
   `handles close keys: $close_keys with key $key_to_press -> $should_close`,
-  async ({ close_keys, key_to_press, should_close }) => {
+  async ({ close_keys, key_to_press, should_close, dialog_props }) => {
     const props = $state({
       open: true,
       close_keys,
       actions: mock_actions,
       fade_duration_ms: 0,
+      dialog_props,
     })
     mount(CommandMenu, { target: document.body, props })
 
@@ -152,11 +175,33 @@ test.each([`Escape`, `x`])(
 )
 
 test.each([
-  { close_keys: [`Escape`], default_prevented: false },
-  { close_keys: [`q`], default_prevented: true },
+  {
+    close_keys: [`Escape`],
+    closedby: undefined,
+    default_prevented: false,
+    effective_closedby: `any`,
+  },
+  {
+    close_keys: [`q`],
+    closedby: undefined,
+    default_prevented: true,
+    effective_closedby: `none`,
+  },
+  {
+    close_keys: [`Escape`],
+    closedby: `none` as const,
+    default_prevented: true,
+    effective_closedby: `none`,
+  },
+  {
+    close_keys: [`q`],
+    closedby: `closerequest` as const,
+    default_prevented: false,
+    effective_closedby: `closerequest`,
+  },
 ])(
   `dialog cancel with close_keys=$close_keys prevents default: $default_prevented`,
-  async ({ close_keys, default_prevented }) => {
+  async ({ close_keys, closedby, default_prevented, effective_closedby }) => {
     const oncancel = vi.fn()
     mount(CommandMenu, {
       target: document.body,
@@ -164,7 +209,7 @@ test.each([
         open: true,
         close_keys,
         actions: mock_actions,
-        dialog_props: { oncancel },
+        dialog_props: { oncancel, closedby },
         fade_duration_ms: 0,
       },
     })
@@ -175,7 +220,7 @@ test.each([
     dialog.dispatchEvent(cancel_event)
 
     expect(cancel_event.defaultPrevented).toBe(default_prevented)
-    expect(dialog.getAttribute(`closedby`)).toBe(default_prevented ? `none` : `any`)
+    expect(dialog.getAttribute(`closedby`)).toBe(effective_closedby)
     expect(oncancel).toHaveBeenCalledOnce()
   },
 )

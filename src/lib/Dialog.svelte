@@ -76,7 +76,7 @@
   const track_backdrop_release = (event: MouseEvent) => {
     if (backdrop_press_started && is_dialog_backdrop_event(surface, event)) {
       if (custom_backdrop_dismiss) close(`pointer`)
-      else pending_close_via = `pointer`
+      else if (effective_closedby === `any`) pending_close_via = `pointer`
     }
     backdrop_press_started = false
   }
@@ -101,7 +101,7 @@
     oncancel={(event) => {
       rest.oncancel?.(event)
       if (event.defaultPrevented) return
-      if (!close_on_escape) event.preventDefault()
+      if (effective_closedby === `none`) event.preventDefault()
       else pending_close_via = `escape`
     }}
     onclose={chain_handlers((event) => {

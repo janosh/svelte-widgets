@@ -183,12 +183,18 @@
   const open_shortcuts = $derived(
     triggers.flatMap((key) => [`meta+${key}`, `ctrl+${key}`]),
   )
+  const escape_closes = $derived(close_keys.includes(`Escape`))
+  const effective_closedby = $derived(
+    dialog_props?.closedby ?? (escape_closes ? `any` : `none`),
+  )
+  const close_hotkeys = $derived(
+    close_keys.filter((key) => key !== `Escape` || effective_closedby !== `none`),
+  )
   const toggle_bindings = $derived<Hotkey[]>([
     { keys: open_shortcuts, handler: () => (open = true), enabled: !open },
     // Escape has to work while the search input has focus, hence allow_in_inputs
-    { keys: close_keys, handler: close_menu, enabled: open, allow_in_inputs: true },
+    { keys: close_hotkeys, handler: close_menu, enabled: open, allow_in_inputs: true },
   ])
-  const escape_closes = $derived(close_keys.includes(`Escape`))
   const custom_backdrop_dismiss = $derived(
     !escape_closes && dialog_props?.closedby === undefined,
   )
@@ -207,7 +213,7 @@
   ])
 
   function handle_dialog_cancel(event: DialogEvent) {
-    if (!escape_closes) event.preventDefault()
+    if (effective_closedby === `none`) event.preventDefault()
     dialog_props?.oncancel?.(event)
   }
 
@@ -270,10 +276,10 @@
 {#if open}
   <dialog
     bind:this={dialog}
-    closedby={dialog_props?.closedby ?? (escape_closes ? `any` : `none`)}
     transition:fade={{ duration: fade_duration_ms }}
     aria-label={aria_label}
     {...dialog_props}
+    closedby={effective_closedby}
     onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
     onpointerdown={chain_handlers(track_backdrop_press, dialog_props?.onpointerdown)}
