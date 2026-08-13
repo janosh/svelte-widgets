@@ -50,6 +50,25 @@ test(`nested Dialogs give Escape and focus to the innermost modal`, async ({ pag
   await expect(opener).toBeFocused()
 })
 
+test(`Dialog backdrop dims without blurring by default`, async ({ page }) => {
+  const demo = page.locator(`#patterns-dialog`)
+  await demo.getByRole(`button`, { name: `Edit profile` }).click()
+  const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
+
+  const backdrop_style = () =>
+    dialog.evaluate((element) => {
+      const style = getComputedStyle(element, `::backdrop`)
+      return [style.backgroundColor, style.backdropFilter]
+    })
+  await expect.poll(backdrop_style).toEqual([`rgba(0, 0, 0, 0.42)`, `none`])
+
+  await dialog.evaluate((element) => {
+    element.removeAttribute(`data-backdrop-dim`)
+    element.setAttribute(`data-backdrop-blur`, `true`)
+  })
+  await expect.poll(backdrop_style).toEqual([`rgba(0, 0, 0, 0)`, `blur(2px)`])
+})
+
 test(`Dialog supports every backdrop and Escape dismissal policy`, async ({ page }) => {
   for (const [close_on_backdrop, close_on_escape] of [
     [true, true],

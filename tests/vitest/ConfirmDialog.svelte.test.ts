@@ -51,8 +51,10 @@ const press_backdrop = (dialog: HTMLDialogElement) => {
 }
 
 test(`shows the queued question and closes once the queue drains`, async () => {
-  const dialog = await mount_dialog()
+  const dialog = await mount_dialog({ backdrop_dim: false, backdrop_blur: true })
   expect(dialog.open).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
   expect(buttons()).toHaveLength(0)
 
   const answer = ask(`Overwrite src/lib?`, `Write files`)

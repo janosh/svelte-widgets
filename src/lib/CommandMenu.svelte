@@ -32,6 +32,8 @@
     activeOption: active_option = $bindable(null),
     triggers = [`k`],
     close_keys = [`Escape`],
+    backdrop_dim = true,
+    backdrop_blur = false,
     fade_duration_ms = 200,
     open = $bindable(false),
     dialog = $bindable(null),
@@ -60,6 +62,8 @@
     actions: Action[]
     triggers?: string[]
     close_keys?: string[]
+    backdrop_dim?: boolean
+    backdrop_blur?: boolean
     fade_duration_ms?: number
     open?: boolean
     dialog?: HTMLDialogElement | null
@@ -279,6 +283,8 @@
     transition:fade={{ duration: fade_duration_ms }}
     aria-label={aria_label}
     {...dialog_props}
+    data-backdrop-dim={backdrop_dim || undefined}
+    data-backdrop-blur={backdrop_blur || undefined}
     closedby={effective_closedby}
     onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
@@ -386,5 +392,15 @@
     color: light-dark(#222, #eee);
     z-index: var(--cmd-menu-z-index, 10);
     font-size: 2.4ex;
+  }
+  :where(dialog)::backdrop {
+    background: transparent;
+    backdrop-filter: none;
+  }
+  :where(dialog)[data-backdrop-dim]::backdrop {
+    background: var(--cmd-dialog-backdrop, rgba(0, 0, 0, 0.42));
+  }
+  :where(dialog)[data-backdrop-blur]::backdrop {
+    backdrop-filter: var(--cmd-dialog-backdrop-filter, blur(2px));
   }
 </style>

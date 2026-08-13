@@ -12,6 +12,8 @@ export type DialogTriggerProps = {
 }
 export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   open?: boolean
+  backdrop_dim?: boolean // default: true
+  backdrop_blur?: boolean // default: false
   close_on_backdrop?: boolean
   close_on_escape?: boolean
   surface?: HTMLDialogElement | null

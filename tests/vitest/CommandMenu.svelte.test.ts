@@ -233,6 +233,8 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
       actions: mock_actions,
       aria_label: `Run command`,
       open: true,
+      backdrop_dim: false,
+      backdrop_blur: true,
       fade_duration_ms: 0,
     },
   })
@@ -242,6 +244,8 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
   expect(dialog.getAttribute(`aria-label`)).toBe(`Run command`)
   expect(dialog.getAttribute(`closedby`)).toBe(`any`)
   expect(dialog.open).toBe(true)
+  expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
   expect(show_modal).toHaveBeenCalledOnce()
 })
 

@@ -42,7 +42,12 @@ describe(`Dialog`, () => {
 
   test(`trigger opens a native surface with header, footer, attributes and binding`, async () => {
     const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
-    mount_dialog({ id: `profile-dialog`, class: `consumer-class` })
+    mount_dialog({
+      id: `profile-dialog`,
+      class: `consumer-class`,
+      backdrop_dim: false,
+      backdrop_blur: true,
+    })
     expect(surface()).toBeNull()
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`false`)
     expect(trigger().getAttribute(`aria-controls`)).toBeNull()
@@ -58,6 +63,8 @@ describe(`Dialog`, () => {
     expect(dialog.getAttribute(`closedby`)).toBe(`any`)
     expect(dialog.getAttribute(`aria-labelledby`)).toBe(`test-dialog-title`)
     expect(dialog.classList.contains(`consumer-class`)).toBe(true)
+    expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
+    expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
     expect(doc_query(`[data-testid="dialog-footer"]`).textContent).toBe(
       `Changes are local`,

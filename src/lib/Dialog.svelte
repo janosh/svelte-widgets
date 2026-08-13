@@ -13,6 +13,8 @@
   const unique_id = $props.id()
   let {
     open = $bindable(false),
+    backdrop_dim = true,
+    backdrop_blur = false,
     close_on_backdrop = true,
     close_on_escape = true,
     surface = $bindable(null),
@@ -93,6 +95,8 @@
     {...rest}
     id={dialog_id}
     class={[`dialog`, rest.class]}
+    data-backdrop-dim={backdrop_dim || undefined}
+    data-backdrop-blur={backdrop_blur || undefined}
     closedby={effective_closedby}
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Dialog`)}
     aria-labelledby={aria_labelledby}
@@ -144,7 +148,13 @@
       display: flex;
     }
     &::backdrop {
+      background: transparent;
+      backdrop-filter: none;
+    }
+    &[data-backdrop-dim]::backdrop {
       background: var(--dialog-backdrop, rgba(0, 0, 0, 0.42));
+    }
+    &[data-backdrop-blur]::backdrop {
       backdrop-filter: var(--dialog-backdrop-filter, blur(2px));
     }
   }
