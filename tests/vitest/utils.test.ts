@@ -62,26 +62,22 @@ test.each([
 
 describe(`get_label`, () => {
   test.each([
-    [{ label: `Test Label`, value: 42 }, `Test Label`, false],
-    [`Simple String`, `Simple String`, false],
-    [123, `123`, false],
-    [null, `null`, false],
-    [undefined, `undefined`, false],
-    [{ value: 42, name: `Test` }, undefined, true],
-  ])(`handles option %j correctly`, (input, expected, should_log_error) => {
-    // spyOn, not assignment: only a spy is undone by the suite's restoreAllMocks,
-    // otherwise console.error stays mocked for every later test in the file
-    vi.spyOn(console, `error`).mockImplementation(() => {})
+    [{ label: `Test Label`, value: 42 }, `Test Label`],
+    [`Simple String`, `Simple String`],
+    [123, `123`],
+    [null, `null`],
+    [undefined, `undefined`],
+  ])(`handles option %j correctly`, (input, expected) => {
     // @ts-expect-error testing runtime behavior with non-Option types
     const result = get_label(input)
     expect(result).toBe(expected)
+  })
 
-    if (should_log_error) {
-      expect(console.error).toHaveBeenCalledWith(
-        `MultiSelect: option is an object but has no label key`,
-        JSON.stringify(input),
-      )
-    } else expect(console.error).not.toHaveBeenCalled()
+  test(`rejects object options without a label`, () => {
+    // @ts-expect-error testing runtime behavior with a non-Option object
+    expect(() => get_label({ value: 42, name: `Test` })).toThrow(
+      `MultiSelect: option object must have a label key`,
+    )
   })
 })
 
@@ -104,42 +100,36 @@ describe(`get_style`, () => {
   }
   // object styles get the same trailing-semicolon normalization as string styles;
   // partial style objects (e.g. only `selected`) are fine, but any key other than
-  // `option`/`selected` logs an error, even when a valid key is also present.
+  // `option`/`selected` is rejected, even when a valid key is also present.
   // A null/undefined key selects no sub-style but still validates the style object.
   test.each([
-    [option_style, `selected`, `color: blue;`, false],
-    [option_style, `option`, `color: green;`, false],
-    [{ selected: `color: blue` }, `option`, ``, false], // missing key → empty, no error
-    [{}, `option`, ``, false],
-    [option_style, null, ``, false],
-    [option_style, undefined, ``, false],
-    // unknown keys log even when a valid key is also present and selected
-    [{ selected: `color: blue`, custom: `color: red` }, `selected`, `color: blue;`, true],
-    [{ selected: `color: blue`, custom: `color: red` }, `option`, ``, true],
-    [{ invalid_key: `some-style` }, `selected`, ``, true],
-    [{ custom: `color: red` }, null, ``, true],
-  ] as const)(
-    `object style %j with key %s returns %j (logs error: %s)`,
-    (style, key, expected, should_log_error) => {
-      vi.spyOn(console, `error`).mockImplementation(() => {})
-      const option = { label: `test`, style }
-      // @ts-expect-error style objects with unknown keys test runtime validation
-      expect(get_style(option, key)).toBe(expected)
-      if (should_log_error) {
-        expect(console.error).toHaveBeenCalledWith(
-          `MultiSelect: invalid style object for option`,
-          option,
-        )
-      } else expect(console.error).not.toHaveBeenCalled()
-    },
-  )
+    [option_style, `selected`, `color: blue;`],
+    [option_style, `option`, `color: green;`],
+    [{ selected: `color: blue` }, `option`, ``], // missing key → empty, no error
+    [{}, `option`, ``],
+    [option_style, null, ``],
+    [option_style, undefined, ``],
+    // unknown keys are covered by the fail-fast cases below
+  ] as const)(`object style %j with key %s returns %j`, (style, key, expected) => {
+    const option = { label: `test`, style }
+    expect(get_style(option, key)).toBe(expected)
+  })
 
-  test(`logs error and returns empty for an invalid key before reading style`, () => {
-    vi.spyOn(console, `error`).mockImplementation(() => {})
+  test.each([
+    { selected: `color: blue`, custom: `color: red` },
+    { invalid_key: `some-style` },
+    { custom: `color: red` },
+  ])(`rejects unknown object style keys in %j`, (style) => {
+    const option = { label: `test`, style }
+    expect(() => get_style(option, `selected`)).toThrow(
+      `option style may only contain "option" and "selected" keys`,
+    )
+  })
+
+  test(`rejects an invalid key before reading style`, () => {
     // @ts-expect-error invalid key — style is never consulted once the key fails
-    expect(get_style({ style: `color: red;` }, `invalid_key`)).toBe(``)
-    expect(console.error).toHaveBeenCalledWith(
-      `MultiSelect: Invalid key=invalid_key for get_style`,
+    expect(() => get_style({ style: `color: red;` }, `invalid_key`)).toThrow(
+      `MultiSelect: invalid key=invalid_key for get_style`,
     )
   })
 })

@@ -48,10 +48,7 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
 
 <FileDetails files={[{ title: `<code>options.ts</code>`, content: options_src }]} />
 
-MultiSelect by default renders selected items in the order they were chosen. Enabling
-`sortSelected` implicitly disables drag reordering because `selectedOptionsDraggable`
-defaults to `!sortSelected`. Explicitly setting `selectedOptionsDraggable={true}` enables
-dragging while sorting, but the next sorted update overrides the manual order. The prop
+MultiSelect by default renders selected items in the order they were chosen. Enabling `sortSelected` implicitly disables drag reordering because `selectedOptionsDraggable` defaults to `!sortSelected`. Explicitly combining sorting with `selectedOptionsDraggable={true}` throws because the two ordering contracts conflict. The prop
 
 ```ts
 sortSelected: boolean | ((op1: Option, op2: Option) => number) = false

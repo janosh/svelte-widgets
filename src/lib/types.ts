@@ -265,9 +265,9 @@ export interface MultiSelectProps<T extends Option = Option>
   // Virtualized dropdown rendering for large option lists: only rows near the scroll
   // viewport are rendered as DOM nodes. Pass true for defaults or { itemHeight, overscan }
   // to tune row height (px, default 30, applies to group headers too) and extra rows
-  // rendered above/below the visible window (default 10). Grouped options are supported
-  // except in combination with stickyGroupHeaders, which falls back to full rendering
-  // (with a console.warn).
+  // rendered above/below the visible window (default 10). Grouped options are supported,
+  // but combining them with stickyGroupHeaders is invalid because a virtualized header that
+  // has left the render window cannot remain pinned.
   virtualList?: boolean | { itemHeight?: number; overscan?: number }
   maxSelect?: number | null // null means there is no upper limit for selected.length
   maxSelectMsg?: ((current: number, max: number) => string) | null
@@ -285,7 +285,7 @@ export interface MultiSelectProps<T extends Option = Option>
   options?: T[] // static options, or omit when using loadOptions
   outerDiv?: HTMLDivElement | null
   outerDivClass?: ClassValue
-  parseLabelsAsHtml?: boolean // should not be combined with allowUserOptions!
+  parseLabelsAsHtml?: boolean // combining with allowUserOptions throws (XSS risk)
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
   removeAllTitle?: string
@@ -297,8 +297,7 @@ export interface MultiSelectProps<T extends Option = Option>
   searchText?: string
   selected?: T[] // don't allow more than maxSelect preselected options
   // Defaults to 'chips', which renders selected options as tags. 'input' is only
-  // valid with maxSelect === 1; other maxSelect values are unsupported and fall
-  // back to chip display at runtime.
+  // valid with maxSelect === 1; other maxSelect values are rejected.
   selectedDisplay?: `chips` | `input`
   sortSelected?: boolean | ((op1: T, op2: T) => number)
   selectedOptionsDraggable?: boolean

@@ -45,14 +45,13 @@ export const has_group = <T extends Option>(opt: T): opt is T & { group: string 
 
 // Label of an object option, or the primitive option stringified
 export const get_label = (opt: Option) => {
-  if (is_object(opt)) {
-    if (opt.label === undefined) {
-      const opt_str = JSON.stringify(opt)
-      console.error(`MultiSelect: option is an object but has no label key`, opt_str)
-    }
-    return opt.label
+  if (!is_object(opt)) return `${opt}`
+  if (opt.label === undefined) {
+    throw new TypeError(
+      `MultiSelect: option object must have a label key, got ${JSON.stringify(opt)}`,
+    )
   }
-  return `${opt}`
+  return opt.label
 }
 
 // Unique option key: value ?? label for objects, the primitive itself otherwise
@@ -67,22 +66,23 @@ export function get_style(
 ) {
   let css_str = ``
   if (key !== null && key !== `selected` && key !== `option`) {
-    console.error(`MultiSelect: Invalid key=${String(key)} for get_style`)
-    return css_str
+    throw new TypeError(`MultiSelect: invalid key=${String(key)} for get_style`)
   }
-  if (typeof option === `object` && option.style) {
-    if (typeof option.style === `string`) css_str = option.style
-    if (typeof option.style === `object`) {
-      if (key && key in option.style) css_str = option.style[key] ?? ``
-      // partial style objects (e.g. only `selected`) are fine; flag any keys
-      // other than the known ones, even when a valid key is also present
-      const has_unknown_key = Object.keys(option.style).some(
+  if (!is_object(option) || !option.style) return css_str
+  const { style } = option
+  if (typeof style === `string`) css_str = style
+  else {
+    // partial style objects (e.g. only `selected`) are fine; reject unknown keys
+    if (
+      Object.keys(style).some(
         (style_key) => style_key !== `option` && style_key !== `selected`,
       )
-      if (has_unknown_key) {
-        console.error(`MultiSelect: invalid style object for option`, option)
-      }
+    ) {
+      throw new TypeError(
+        `MultiSelect: option style may only contain "option" and "selected" keys`,
+      )
     }
+    if (key) css_str = style[key] ?? ``
   }
   const trimmed = css_str.trim()
   if (trimmed && !trimmed.endsWith(`;`)) css_str += `;`

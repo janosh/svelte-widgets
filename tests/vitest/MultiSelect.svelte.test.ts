@@ -608,14 +608,10 @@ describe(`selectedDisplay=input`, () => {
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
   })
 
-  test(`invalid maxSelect combination reports config error`, async () => {
-    console.error = vi.fn()
-    mount_multiselect({ options: [`Red`], selectedDisplay: `input` })
-    await tick()
-
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(`selectedDisplay="input" requires maxSelect={1}`),
-    )
+  test(`input display rejects maxSelect other than 1`, () => {
+    expect(() =>
+      mount_multiselect({ options: [`Red`], selectedDisplay: `input` }),
+    ).toThrow(`selectedDisplay="input" requires maxSelect={1}`)
   })
 
   test(`form submits visible text for draft and object-option values`, async () => {
@@ -762,27 +758,20 @@ describe(`selectedDisplay=input`, () => {
   })
 })
 
-test.each<[string, boolean | number, number[], number | null, boolean, boolean]>([
-  [`optional empty selection`, false, [], null, false, true],
-  [`required empty selection`, true, [], null, false, false],
-  [`one required at max boundary`, 1, [1], 1, false, true],
-  [`two required with one selected`, 2, [1], null, false, false],
-  [`max below required`, 2, [1, 2], 1, true, false],
-  [`two required and selected`, 2, [1, 2], 2, false, true],
+test.each<[string, boolean | number, number[], number | null, boolean]>([
+  [`optional empty selection`, false, [], null, true],
+  [`required empty selection`, true, [], null, false],
+  [`one required at max boundary`, 1, [1], 1, true],
+  [`two required with one selected`, 2, [1], null, false],
+  [`two required and selected`, 2, [1, 2], 2, true],
 ])(
   `form validation: %s`,
-  async (_description, required, selected, maxSelect, expected_error, form_valid) => {
+  async (_description, required, selected, maxSelect, form_valid) => {
     const form = document.createElement(`form`)
     document.body.append(form)
-    console.error = vi.fn()
     try {
       mount_multiselect({ options: [1, 2, 3], required, selected, maxSelect }, form)
       await tick()
-      if (expected_error) {
-        expect(console.error).toHaveBeenCalledWith(
-          `MultiSelect: maxSelect=${maxSelect} < required=${required}, makes it impossible for users to submit a valid form`,
-        )
-      } else expect(console.error).not.toHaveBeenCalled()
 
       // Form is valid if required count is met without exceeding maxSelect.
       expect(form.checkValidity(), `form_valid=${form_valid}`).toBe(form_valid)
@@ -809,6 +798,17 @@ test.each<[string, boolean | number, number[], number | null, boolean, boolean]>
     }
   },
 )
+
+test(`rejects a required count above maxSelect`, () => {
+  expect(() =>
+    mount_multiselect({
+      options: [1, 2, 3],
+      required: 2,
+      selected: [1, 2],
+      maxSelect: 1,
+    }),
+  ).toThrow(`maxSelect=1 < required=2`)
+})
 
 test.each([
   [[1, 2, 3]],
@@ -913,6 +913,16 @@ test(`parseLabelsAsHtml renders anchor tags as links`, () => {
 
   const anchor = doc_query(`a[href='https://example.com']`)
   expect(anchor).toBeInstanceOf(HTMLAnchorElement)
+})
+
+test(`parseLabelsAsHtml rejects user-created options`, () => {
+  expect(() =>
+    mount_multiselect({
+      options: [`safe`],
+      parseLabelsAsHtml: true,
+      allowUserOptions: true,
+    }),
+  ).toThrow(`parseLabelsAsHtml cannot be combined with allowUserOptions`)
 })
 
 test(`children snippet receives type='selected' for pills and type='option' for dropdown items`, () => {
@@ -1806,74 +1816,59 @@ test(`canceled drag clears the active drop-target highlight`, async () => {
   expect(li.classList.contains(`active`)).toBe(false)
 })
 
-test.each([[true], [false]])(
-  `console warning when combining sortSelected=%s and selectedOptionsDraggable`,
-  async (sortSelected) => {
-    console.warn = vi.fn()
-
-    mount_multiselect({
-      options: [1, 2, 3],
-      sortSelected,
-      selectedOptionsDraggable: true,
-    })
-    await tick() // wait for $effect to run
-
-    if (sortSelected) {
-      expect(console.warn).toHaveBeenCalledTimes(1)
-      expect(console.warn).toHaveBeenCalledWith(
-        `MultiSelect: sortSelected and selectedOptionsDraggable should not be combined as any ` +
-          `user re-orderings of selected options will be undone by sortSelected on component re-renders.`,
-      )
-    } else {
-      expect(console.warn).not.toHaveBeenCalled()
-    }
+test.each([
+  [
+    `sorted draggable selections`,
+    { options: [1, 2, 3], sortSelected: true, selectedOptionsDraggable: true },
+    `sortSelected cannot be combined with selectedOptionsDraggable`,
+  ],
+  [
+    `user-created options without a creation message`,
+    { options: [1, 2, 3], createOptionMsg: ``, allowUserOptions: true },
+    `requires a non-empty createOptionMsg or explicit null`,
+  ],
+] satisfies [string, MultiSelectProps, string][])(
+  `rejects %s`,
+  (_name, props, message) => {
+    expect(() => mount_multiselect(props)).toThrow(message)
   },
 )
 
-test.each<[boolean, string | null]>([
-  [true, `create option`],
-  [true, ``],
-  [true, null], // explicit null opts out of the warning
-  [false, ``],
-])(
-  `console.error when allowUserOptions=%s but createOptionMsg=%s is falsy`,
-  async (allowUserOptions, createOptionMsg) => {
-    console.error = vi.fn()
-
-    mount_multiselect({ options: [1, 2, 3], createOptionMsg, allowUserOptions })
-    await tick() // wait for $effect to run
-
-    if (allowUserOptions && !createOptionMsg && createOptionMsg !== null) {
-      expect(console.error).toHaveBeenCalledTimes(1)
-      expect(console.error).toHaveBeenCalledWith(
-        `MultiSelect: allowUserOptions=${allowUserOptions} but createOptionMsg=${createOptionMsg} is falsy. ` +
-          `This prevents the "Add option" <span> from showing up, resulting in a confusing user experience.`,
-      )
-    } else {
-      expect(console.error).not.toHaveBeenCalled()
-    }
-  },
-)
-
-describe.each([[true], [false]])(`allowUserOptions=%s`, (allowUserOptions) => {
-  describe.each([[true], [false]])(`disabled=%s`, (disabled) => {
-    test.each([[true], [false]])(
-      `console.error when allowEmpty=false and multiselect has no options`,
-      (allowEmpty) => {
-        console.error = vi.fn()
-
-        mount_multiselect({ options: [], allowEmpty, disabled, allowUserOptions })
-
-        if (!allowEmpty && !disabled && !allowUserOptions) {
-          expect(console.error).toHaveBeenCalledTimes(1)
-          expect(console.error).toHaveBeenCalledWith(`MultiSelect: received no options`)
-        } else {
-          expect(console.error).not.toHaveBeenCalled()
-        }
-      },
-    )
-  })
+test(`rejects empty options without an empty-state mode`, () => {
+  expect(() => mount_multiselect({ options: [] })).toThrow(
+    `MultiSelect: received no options`,
+  )
 })
+
+test.each([
+  [`allowEmpty`, { allowEmpty: true }],
+  [`disabled`, { disabled: true }],
+  [`allowUserOptions`, { allowUserOptions: true }],
+  [`loading`, { loading: true }],
+] satisfies [string, Partial<MultiSelectProps>][])(
+  `accepts empty options in %s mode`,
+  (_name, props) => {
+    expect(() => mount_multiselect({ options: [], ...props })).not.toThrow()
+  },
+)
+
+test.each([
+  [
+    `maxSelect`,
+    { options: [1], maxSelect: 0 },
+    `maxSelect must be null or a positive integer`,
+  ],
+  [
+    `selected`,
+    { options: [1], selected: `not-an-array` as unknown as number[] },
+    `selected prop must be an array`,
+  ],
+] satisfies [string, MultiSelectProps, string][])(
+  `rejects an invalid %s invariant`,
+  (_label, props, message) => {
+    expect(() => mount_multiselect(props)).toThrow(message)
+  },
+)
 
 test.each([[[1]], [[1, 2, 3]]])(
   `buttons to remove selected options have CSS class "remove"`,
@@ -1904,16 +1899,11 @@ test(`remove buttons lack default-icon class when removeIcon snippet is provided
   expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(0)
 })
 
-test(`errors to console when option is an object but has no label key`, () => {
-  console.error = vi.fn()
-
+test(`rejects an object option without a label key`, () => {
   // ObjectOption requires a label, so the shape under test is only reachable past the
   // type system — which is the point: the guard exists for untyped runtime data
-  mount_multiselect({ options: [{ foo: 42 }] as never })
-
-  expect(console.error).toHaveBeenCalledWith(
-    `MultiSelect: option is an object but has no label key`,
-    `{"foo":42}`,
+  expect(() => mount_multiselect({ options: [{ foo: 42 }] as never })).toThrow(
+    `MultiSelect: option object must have a label key`,
   )
 })
 
@@ -2338,24 +2328,23 @@ test.each(
 )(
   `user-msg rendering with allowUserOptions=%s, noMatchingOptionsMsg=%s, createOptionMsg=%s`,
   async (allowUserOptions, noMatchingOptionsMsg, createOptionMsg) => {
-    const expected_error = allowUserOptions && !createOptionMsg
-    if (expected_error) console.error = vi.fn()
-    mount_multiselect({
+    const props = {
       options: [`foo`],
       selected: [`foo`],
       noMatchingOptionsMsg,
       createOptionMsg,
       allowUserOptions,
-    })
+    }
+    if (allowUserOptions && !createOptionMsg) {
+      expect(() => mount_multiselect(props)).toThrow(
+        `requires a non-empty createOptionMsg or explicit null`,
+      )
+      return
+    }
+    mount_multiselect(props)
 
     // create a state where no options match the search text
     await type_search_text(`bar`)
-    if (expected_error) {
-      expect(console.error).toHaveBeenCalledWith(
-        `MultiSelect: allowUserOptions=${allowUserOptions} but createOptionMsg=${createOptionMsg} is falsy. ` +
-          `This prevents the "Add option" <span> from showing up, resulting in a confusing user experience.`,
-      )
-    }
 
     if (allowUserOptions && createOptionMsg) {
       expect(doc_query(`.user-msg`).textContent?.trim()).toBe(createOptionMsg)
@@ -2418,17 +2407,12 @@ test.each([[0], [1], [5], [undefined]])(
 )
 
 test.each([[true], [-1], [3.5], [`foo`], [{}]])(
-  `console.error when maxOptions=%s is not a positive integer or undefined`,
-  async (maxOptions) => {
-    console.error = vi.fn()
-
-    mount_multiselect({ options: [1, 2, 3], maxOptions: maxOptions as number })
-    await tick() // wait for $effect to run
-
-    expect(console.error).toHaveBeenCalledTimes(1)
-    expect(console.error).toHaveBeenCalledWith(
-      // eslint-disable-next-line @typescript-eslint/no-base-to-string -- testing console.error message with invalid maxOptions values
-      `MultiSelect: maxOptions must be undefined or a positive integer, got ${String(maxOptions)}`,
+  `rejects invalid maxOptions=%s`,
+  (maxOptions) => {
+    expect(() =>
+      mount_multiselect({ options: [1, 2, 3], maxOptions: maxOptions as number }),
+    ).toThrow(
+      `MultiSelect: maxOptions must be null, undefined, or a non-negative integer`,
     )
   },
 )
@@ -2457,15 +2441,13 @@ test.each<[OptionStyle, string | null, string]>([
     const options: Option[] = [{ label: `foo`, style }]
     const expect_invalid_style_error =
       typeof style === `object` && style !== null && `invalid` in style
-    if (expect_invalid_style_error) console.error = vi.fn()
-
-    mount_multiselect({ options, selected: key === `selected` ? options : [] })
     if (expect_invalid_style_error) {
-      expect(console.error).toHaveBeenCalledWith(
-        `MultiSelect: invalid style object for option`,
-        options[0],
-      )
+      expect(() =>
+        mount_multiselect({ options, selected: key === `selected` ? options : [] }),
+      ).toThrow(`MultiSelect: option style may only contain "option" and "selected" keys`)
+      return
     }
+    mount_multiselect({ options, selected: key === `selected` ? options : [] })
 
     if (key === `selected`) {
       const selected_li = doc_query(`ul.selected > li`)
@@ -3978,16 +3960,10 @@ describe(`maxVisibleChips`, () => {
     expect(chips()).toHaveLength(2)
   })
 
-  test(`invalid maxVisibleChips logs console.error and renders all chips (no +0 more)`, async () => {
-    console.error = vi.fn()
-    mount_multiselect({ options, selected: [...options], maxVisibleChips: -2 })
-    await tick() // validation runs in an effect
-    expect(console.error).toHaveBeenCalledWith(
-      `MultiSelect: maxVisibleChips must be null or a non-negative integer, got -2`,
-    )
-    // invalid limit is ignored: every chip renders and no toggle appears
-    expect(chips()).toHaveLength(5)
-    expect(document.querySelector(`li.more-chip`)).toBeNull()
+  test(`rejects invalid maxVisibleChips`, () => {
+    expect(() =>
+      mount_multiselect({ options, selected: [...options], maxVisibleChips: -2 }),
+    ).toThrow(`maxVisibleChips must be null or a non-negative integer`)
   })
 })
 
