@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import { slug_to_title, SubpageGrid } from '$lib'
+  import { SubpageGrid } from '$lib'
+  import { slug_to_title } from '$lib/utils'
   import { demo_labels } from '../..'
 
   // card titles and hrefs are derived from the slug so they can't drift from the nav

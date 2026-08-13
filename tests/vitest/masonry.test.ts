@@ -1,4 +1,5 @@
-import { Masonry, order_options as ALL_ORDER_MODES } from '$lib'
+import { Masonry } from '$lib'
+import { order_options as ALL_ORDER_MODES } from '$lib/utils'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'

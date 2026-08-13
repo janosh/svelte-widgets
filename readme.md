@@ -161,7 +161,6 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/text-search`                      | Text ranges, highlighting and search-jump helpers          |
 | `/theme`                            | Headless light/dark/system state                           |
 | `/toast-queue`                      | Toast reducer and reactive store                           |
-| `/types`                            | Shared component/action types                              |
 | `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers   |
 | `/vite-config`                      | This repository's Vite Plus configuration helper           |
 

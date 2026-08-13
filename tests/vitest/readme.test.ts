@@ -1,5 +1,6 @@
 // These links only resolve after deployment, so the regular link checker cannot check them.
 import * as lib from '$lib'
+import * as utils from '$lib/utils'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
 import { expect, test } from 'vite-plus/test'
@@ -91,6 +92,11 @@ test(`every non-component subpath appears in the readme export table`, () => {
   )
 
   expect(documented.toSorted()).toEqual(subpaths.toSorted())
+})
+
+test(`utilities stay on their focused subpath`, () => {
+  expect(Object.keys(utils).filter((name) => name in lib)).toEqual([])
+  expect(pkg_exports).not.toHaveProperty(`./types`)
 })
 
 test(`every exported component appears in the readme component table`, () => {
