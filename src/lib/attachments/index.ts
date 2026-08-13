@@ -23,11 +23,7 @@ export type {
   TooltipTrigger,
   TooltipWrap,
 } from './tooltip'
-export {
-  backdrop_dismiss,
-  click_outside,
-  dismiss_on_outside_press,
-} from './click-outside'
+export { click_outside, dismiss_on_outside_press } from './click-outside'
 export type {
   ClickOutsideConfig,
   DismissConfig,

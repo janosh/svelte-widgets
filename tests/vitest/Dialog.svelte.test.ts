@@ -28,6 +28,16 @@ describe(`Dialog`, () => {
       ({ top: 10, right: 110, bottom: 110, left: 10 }) as DOMRect
     dialog.dispatchEvent(pointer_event(`pointerdown`, client_x, client_y))
     dialog.dispatchEvent(pointer_event(`click`, client_x, client_y))
+    const outside = client_x < 10 || client_x > 110 || client_y < 10 || client_y > 110
+    if (outside && dialog.getAttribute(`closedby`) === `any`) dialog.close()
+  }
+  const cancel_dialog = (dialog: HTMLDialogElement) => {
+    const event = new Event(`cancel`, { cancelable: true })
+    dialog.dispatchEvent(event)
+    if (!event.defaultPrevented && dialog.getAttribute(`closedby`) !== `none`) {
+      dialog.close()
+    }
+    return event
   }
 
   test(`trigger opens a native surface with header, footer, attributes and binding`, async () => {
@@ -45,7 +55,7 @@ describe(`Dialog`, () => {
     expect(dialog.open).toBe(true)
     expect(dialog.id).toBe(`profile-dialog`)
     expect(dialog.id).toBe(trigger().getAttribute(`aria-controls`))
-    expect(dialog.getAttribute(`closedby`)).toBe(`closerequest`)
+    expect(dialog.getAttribute(`closedby`)).toBe(`any`)
     expect(dialog.getAttribute(`aria-labelledby`)).toBe(`test-dialog-title`)
     expect(dialog.classList.contains(`consumer-class`)).toBe(true)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
@@ -72,7 +82,7 @@ describe(`Dialog`, () => {
         press_dialog_at(dialog, 50, 50)
         expect(surface()).toBe(dialog)
         press_dialog_at(dialog)
-      } else dialog.dispatchEvent(new Event(`cancel`, { cancelable: true }))
+      } else cancel_dialog(dialog)
       await tick()
 
       expect(surface()).toBeNull()
@@ -116,8 +126,7 @@ describe(`Dialog`, () => {
     mount_dialog({ open: true, on_close, oncancel })
     await tick()
 
-    const cancel = new Event(`cancel`, { cancelable: true })
-    doc_query<HTMLDialogElement>(`dialog.dialog`).dispatchEvent(cancel)
+    const cancel = cancel_dialog(doc_query<HTMLDialogElement>(`dialog.dialog`))
     await tick()
 
     expect(cancel.defaultPrevented).toBe(true)
@@ -168,8 +177,7 @@ describe(`Dialog`, () => {
 
     const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
     press_dialog_at(dialog)
-    const cancel = new Event(`cancel`, { cancelable: true })
-    dialog.dispatchEvent(cancel)
+    const cancel = cancel_dialog(dialog)
     await tick()
 
     expect(surface()).toBe(dialog)
@@ -196,7 +204,7 @@ describe(`Dialog`, () => {
     expect(dialogs.every(({ open }) => open)).toBe(true)
     expect(dialogs[0].contains(dialogs[1])).toBe(true)
 
-    dialogs[1].dispatchEvent(new Event(`cancel`, { cancelable: true }))
+    cancel_dialog(dialogs[1])
     await tick()
     expect(document.querySelectorAll(`dialog.dialog`)).toHaveLength(1)
     expect(dialogs[0].open).toBe(true)
@@ -204,7 +212,7 @@ describe(`Dialog`, () => {
     expect(on_nested_close).toHaveBeenCalledExactlyOnceWith({ via: `escape` })
     expect(on_close).not.toHaveBeenCalled()
 
-    dialogs[0].dispatchEvent(new Event(`cancel`, { cancelable: true }))
+    cancel_dialog(dialogs[0])
     await tick()
     expect(surface()).toBeNull()
     expect(document.activeElement).toBe(trigger())

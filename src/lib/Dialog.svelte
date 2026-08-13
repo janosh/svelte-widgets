@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
-  import { backdrop_dismiss } from './attachments/index'
   import {
+    is_dialog_backdrop_event,
     restore_dialog_focus,
     type DialogCloseVia,
     type DialogControls,
@@ -22,19 +22,28 @@
     children,
     on_close,
     id,
-    closedby = `closerequest`,
+    closedby,
     'aria-label': aria_label,
     'aria-labelledby': aria_labelledby,
     ...rest
   }: DialogProps = $props()
 
   const dialog_id = $derived(id ?? unique_id)
+  const effective_closedby = $derived(
+    closedby ?? (close_on_escape ? (close_on_backdrop ? `any` : `closerequest`) : `none`),
+  )
+  const custom_backdrop_dismiss = $derived(
+    closedby === undefined && close_on_backdrop && !close_on_escape,
+  )
   let focus_origin: HTMLElement | SVGElement | null = null
+  let pending_close_via: DialogCloseVia | null = null
+  let backdrop_press_started = false
 
   const close = (via: DialogCloseVia) => {
     if (!open) return
-    open = false
-    on_close?.({ via })
+    if (!surface?.open) throw new Error(`Dialog: cannot close without an open surface`)
+    pending_close_via = via
+    surface.close()
   }
   const controls: DialogControls = { close: () => close(`close`) }
   const trigger_props: DialogTriggerProps = $derived({
@@ -47,7 +56,10 @@
   // Close while the element is still mounted so the browser can restore the focus that
   // showModal() recorded. This also lets a consumer's native onclose handler run.
   $effect.pre(() => {
-    if (!open && surface?.open) surface.close()
+    if (!open && surface?.open) {
+      pending_close_via = null
+      surface.close()
+    }
   })
   $effect(() => {
     if (!open || !surface || surface.open) return
@@ -58,6 +70,16 @@
     // Escape to that dialog before its ancestors.
     surface.showModal()
   })
+  const track_backdrop_press = (event: PointerEvent) => {
+    backdrop_press_started = event.isPrimary && is_dialog_backdrop_event(surface, event)
+  }
+  const track_backdrop_release = (event: MouseEvent) => {
+    if (backdrop_press_started && is_dialog_backdrop_event(surface, event)) {
+      if (custom_backdrop_dismiss) close(`pointer`)
+      else pending_close_via = `pointer`
+    }
+    backdrop_press_started = false
+  }
   onDestroy(() => {
     if (surface?.open) restore_dialog_focus(surface, focus_origin)
   })
@@ -71,23 +93,27 @@
     {...rest}
     id={dialog_id}
     class={[`dialog`, rest.class]}
-    {closedby}
+    closedby={effective_closedby}
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Dialog`)}
     aria-labelledby={aria_labelledby}
-    {@attach backdrop_dismiss(() => close_on_backdrop && close(`pointer`))}
-    oncancel={chain_handlers(rest.oncancel, (event) => {
+    onpointerdown={chain_handlers(track_backdrop_press, rest.onpointerdown)}
+    onclick={chain_handlers(track_backdrop_release, rest.onclick)}
+    oncancel={(event) => {
+      rest.oncancel?.(event)
       if (event.defaultPrevented) return
-      // Own the native default so a disabled policy keeps this dialog open and an enabled
-      // one closes through the same state/reason path as every other dismissal.
-      event.preventDefault()
-      if (close_on_escape) close(`escape`)
-    })}
+      if (!close_on_escape) event.preventDefault()
+      else pending_close_via = `escape`
+    }}
     onclose={chain_handlers((event) => {
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
       if (open && event.currentTarget !== surface) return
+      const was_open = open
+      const close_via = pending_close_via ?? `close`
+      pending_close_via = null
+      open = false
       // Explicit restoration also covers removed openers and partial DOM implementations.
       restore_dialog_focus(surface, focus_origin)
-      close(`close`)
+      if (was_open) on_close?.({ via: close_via })
     }, rest.onclose)}
   >
     {#if header}<header>{@render header(controls)}</header>{/if}

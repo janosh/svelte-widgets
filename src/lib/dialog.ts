@@ -22,6 +22,20 @@ export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   on_close?: (detail: DialogCloseDetail) => void
 }
 
+export const is_dialog_backdrop_event = (
+  dialog: HTMLDialogElement | null,
+  event: MouseEvent,
+): boolean => {
+  if (event.target !== dialog || !dialog) return false
+  const { top, right, bottom, left } = dialog.getBoundingClientRect()
+  return (
+    event.clientX < left ||
+    event.clientX > right ||
+    event.clientY < top ||
+    event.clientY > bottom
+  )
+}
+
 export const restore_dialog_focus = (
   surface: HTMLDialogElement | null,
   focus_origin: HTMLElement | SVGElement | null,

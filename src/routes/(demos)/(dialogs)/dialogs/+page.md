@@ -20,6 +20,8 @@ Two details carry their weight:
 
 Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')` is the two-button shorthand and resolves to a boolean. A body can be text or a trusted Svelte snippet. `ask_prompt(body, title, options)` adds a text field, returns `string | null` and keeps the dialog open when its validator returns an error message. Configure the shared prompt field with `input_props` on `ConfirmDialog`; these attributes apply to every prompt, request-specific placeholders win when set, and `oninput` chains so validation still clears.
 
+`ConfirmDialog`, `CommandMenu`, and `Dialog` use native modal dialogs with `closedby` for Escape and backdrop dismissal; the browser owns top-layer stacking, modality, and light-dismiss ordering.
+
 ```svelte example id="confirm-dialog-demo"
 <script lang="ts">
   import ConfirmDialog from '$lib/ConfirmDialog.svelte'

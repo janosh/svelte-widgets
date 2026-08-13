@@ -30,7 +30,7 @@
     match_width = false,
     strategy = `fixed`,
     escape = true,
-    dismiss_on = `press`,
+    dismiss_on = `release`,
     trap_focus = true,
     open_delay_ms = 0,
     close_delay_ms,
@@ -67,6 +67,7 @@
   } = $props()
 
   const surface_id = $derived(id ?? unique_id)
+  const native_dismiss = $derived(escape && dismiss_on === `release`)
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   // The wrapper is `display: contents` and has no box of its own — measuring it would
   // pin every popover to the viewport corner. Anchor to what the snippet rendered.
@@ -77,6 +78,7 @@
   let focus_open_blocked = false
   let trigger_focus = $state<HTMLElement | SVGElement | null>(null)
   let next_trigger_focus: HTMLElement | SVGElement | null = null
+  let native_close_via: `pointer` | `escape` = `pointer`
   const focus_target = (target: EventTarget | null) =>
     target instanceof HTMLElement || target instanceof SVGElement ? target : null
 
@@ -97,6 +99,26 @@
     if (!open) return
     open = false
     on_close?.({ via })
+  }
+
+  // Native auto popovers own light dismissal and Escape. This listener only retains
+  // the non-default reason for on_close; it never performs the dismissal itself.
+  const track_native_escape = (event: KeyboardEvent) => {
+    if (native_dismiss && open && event.key === `Escape`) native_close_via = `escape`
+  }
+  const track_native_pointer = (event: PointerEvent) => {
+    if (native_dismiss && open && event.isPrimary) native_close_via = `pointer`
+  }
+  const handle_native_toggle = (event: ToggleEvent) => {
+    if (event.newState === `closed` && open) close(native_close_via)
+  }
+  const show_native_popover = (node: HTMLElement): (() => void) => {
+    native_close_via = `pointer`
+    const source = anchor instanceof HTMLElement ? anchor : undefined
+    node.showPopover(source ? { source } : undefined)
+    return () => {
+      if (node.matches(`:popover-open`)) node.hidePopover()
+    }
   }
 
   // Reset stale interaction state on every close and block focus restoration from
@@ -193,6 +215,8 @@
   $effect(() => clear_timeouts)
 </script>
 
+<svelte:document onkeydown={track_native_escape} onpointerdown={track_native_pointer} />
+
 <span bind:this={trigger_wrapper} style="display: contents">
   {@render trigger?.(trigger_props)}
 </span>
@@ -202,16 +226,21 @@
     bind:this={surface}
     {...rest}
     id={surface_id}
+    popover={native_dismiss ? `auto` : `manual`}
     {role}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Popover`)}
     class={[`popover`, rest.class]}
+    ontoggle={handle_native_toggle}
+    {@attach show_native_popover}
     {@attach float({ anchor, placement, align, offset, padding, match_width, strategy })}
-    {@attach click_outside({
-      inside: [trigger_wrapper],
-      escape,
-      dismiss_on,
-      callback: (_node, _config, { via }) => close(via),
-    })}
+    {@attach native_dismiss
+      ? null
+      : click_outside({
+          inside: [trigger_wrapper],
+          escape,
+          dismiss_on,
+          callback: (_node, _config, { via }) => close(via),
+        })}
     {@attach focus_trap({
       enabled: trap_focus,
       // Hover/focus opening must not steal focus.
@@ -243,6 +272,8 @@
 
 <style>
   .popover {
+    inset: auto;
+    margin: 0;
     z-index: var(--popover-z-index, 10);
     background: var(--popover-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
     color: var(--popover-color, inherit);

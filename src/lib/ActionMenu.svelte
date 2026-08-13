@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction } from './types'
@@ -45,7 +45,8 @@
   type Props = Omit<HTMLAttributes<HTMLMenuElement>, `children`> & {
     actions: (CmdAction | CmdSection)[]
     disabled?: boolean
-    // Merged over `{ escape: true }`. `dismiss_on: 'release'` supports right-click toggles.
+    // Native light-dismiss is the default. Supplying press dismissal, escape: false,
+    // enabled: false, or extra inside regions switches to the custom dismissal path.
     dismiss?: DismissConfig
     item?: Snippet<[{ action: CmdAction; section?: CmdSection; checked?: boolean }]>
     on_select?: (action: CmdAction, section?: CmdSection) => void
@@ -84,7 +85,15 @@
   })
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   const trigger_element = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
+  const native_dismiss = $derived(
+    dismiss?.enabled !== false &&
+      dismiss?.escape !== false &&
+      (dismiss?.dismiss_on ?? `release`) === `release` &&
+      !dismiss?.inside?.some(Boolean) &&
+      !dismiss?.scope,
+  )
   let focus_origin: HTMLElement | SVGElement | null = null
+  let context_open_timeout: ReturnType<typeof setTimeout> | undefined
 
   // A right-click is a zero-size anchor; dropdown mode uses the rendered trigger element.
   const anchor = $derived.by(() => {
@@ -144,8 +153,16 @@
   function open_at(event: MouseEvent) {
     if (disabled || all_empty) return
     event.preventDefault() // replace the browser's own menu
-    at = { x: event.clientX, y: event.clientY }
+    const point = { x: event.clientX, y: event.clientY }
+    clearTimeout(context_open_timeout)
+    // Chromium fires contextmenu before pointerup. Opening an auto popover immediately
+    // would let that pointerup light-dismiss the menu from the gesture that opened it.
+    context_open_timeout = setTimeout(() => {
+      if (!disabled && !all_empty) at = point
+    }, 0)
   }
+
+  onDestroy(() => clearTimeout(context_open_timeout))
 
   function run(action: CmdAction, section?: CmdSection) {
     close()
@@ -158,10 +175,19 @@
   const enabled_items = (parent: ParentNode) => [
     ...parent.querySelectorAll<HTMLButtonElement>(`[role^=menuitem]:not(:disabled)`),
   ]
-  const focus_menu = (node: HTMLMenuElement) => {
+  const show_menu = (node: HTMLMenuElement) => {
     remember_focus_origin()
+    const source = trigger_element instanceof HTMLElement ? trigger_element : undefined
+    node.showPopover(source ? { source } : undefined)
     enabled_items(node)[0]?.focus()
-    return () => restore_focus(node)
+    return () => {
+      if (node.matches(`:popover-open`)) node.hidePopover()
+      restore_focus(node)
+    }
+  }
+
+  const handle_popover_toggle = (event: ToggleEvent) => {
+    if (event.newState === `closed` && anchor) close()
   }
 
   // Arrows wrap enabled items; Tab closes and resumes page order.
@@ -194,10 +220,12 @@
     tabindex="-1"
     {...rest}
     id={menu_id}
+    popover={native_dismiss ? `auto` : `manual`}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Actions`)}
     class={[`action-menu`, rest.class]}
+    ontoggle={handle_popover_toggle}
     onkeydown={chain_handlers(handle_menu_keys, rest.onkeydown)}
-    {@attach focus_menu}
+    {@attach show_menu}
     {@attach float({
       anchor,
       placement: trigger_snippet ? placement : `bottom`,
@@ -207,14 +235,16 @@
       match_width: trigger_snippet && match_width,
       strategy,
     })}
-    {@attach click_outside({
-      escape: true,
-      ...dismiss,
-      inside: trigger_snippet
-        ? [...(dismiss?.inside ?? []), trigger_wrapper]
-        : dismiss?.inside,
-      callback: close,
-    })}
+    {@attach native_dismiss
+      ? null
+      : click_outside({
+          escape: true,
+          ...dismiss,
+          inside: trigger_snippet
+            ? [...(dismiss?.inside ?? []), trigger_wrapper]
+            : dismiss?.inside,
+          callback: close,
+        })}
   >
     {#each actions as entry, idx (entry_key(entry, idx))}
       {#if is_section(entry)}
@@ -263,6 +293,7 @@
 
 <style>
   .action-menu {
+    inset: auto;
     z-index: var(--action-menu-z-index, 20);
     margin: 0;
     padding: var(--action-menu-padding, 3pt);

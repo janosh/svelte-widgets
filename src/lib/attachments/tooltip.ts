@@ -638,15 +638,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (active?.open && !active.trigger.isConnected) hide_active(`visibility`)
   })
 
-  // Fill the recycled surface and put it on screen, in the top layer where the Popover
-  // API allows it so no ancestor's overflow, transform or stacking context can clip it.
+  // Fill the recycled surface and put it on screen. Top-layer mode requires the Popover
+  // API; fixed and absolute remain explicit alternatives for consumers that need them.
   const mount_surface = (trigger: HTMLElement, options: TooltipOptions) => {
     surface.replaceChildren(content_el)
     if (options.show_arrow !== false) surface.append(arrow_el)
     surface.hidden = false
     if (!surface.isConnected) doc.body.append(surface)
-    const supports_top_layer = typeof surface.showPopover === `function`
-    if ((options.strategy ?? `top-layer`) === `top-layer` && supports_top_layer) {
+    if ((options.strategy ?? `top-layer`) === `top-layer`) {
       surface.setAttribute(`popover`, `manual`)
       surface.showPopover({ source: trigger })
     } else surface.removeAttribute(`popover`)

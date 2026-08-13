@@ -36,6 +36,12 @@ describe(`ActionMenu`, () => {
     target.dispatchEvent(event)
     return event
   }
+  const flush_context_open = async () => {
+    await new Promise<void>((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    await tick()
+  }
   // mounts a menu and right-clicks the page to open it, returning the contextmenu event
   const open_menu = async (
     actions: MenuEntries = make_actions(),
@@ -43,7 +49,7 @@ describe(`ActionMenu`, () => {
   ) => {
     mount_menu(actions, extra)
     const event = right_click(document.body)
-    await tick()
+    await flush_context_open()
     return event
   }
   const region = createRawSnippet(() => ({
@@ -63,7 +69,7 @@ describe(`ActionMenu`, () => {
     expect(menu()).toBeNull()
 
     const event = right_click(document.body)
-    await tick()
+    await flush_context_open()
 
     expect(event.defaultPrevented).toBe(true)
     expect(items().map((item) => item.textContent?.trim())).toEqual([
@@ -72,6 +78,7 @@ describe(`ActionMenu`, () => {
     ])
     // float anchored the menu on the pointer rather than on any element
     const surface = doc_query(`menu[role="menu"]`)
+    expect(surface.getAttribute(`popover`)).toBe(`auto`)
     const { position, left, top } = surface.style
     expect([position, left, top]).toEqual([`fixed`, `120px`, `240px`])
     expect([surface.id, surface.getAttribute(`aria-label`), surface.tabIndex]).toEqual([
@@ -101,7 +108,7 @@ describe(`ActionMenu`, () => {
     expect(outside.defaultPrevented).toBe(false)
 
     right_click(doc_query(`[data-testid="region"]`))
-    await tick()
+    await flush_context_open()
     expect(menu()).not.toBeNull()
   })
 
@@ -217,20 +224,15 @@ describe(`ActionMenu`, () => {
     expect(menu()).toBeNull()
   })
 
-  // both defaults ride document listeners; `dismiss` merges over them, reaching the
-  // whole click_outside config — `escape: false` and `release` opt each one out
+  // Custom dismissal can opt into press timing or leave Escape to the page. Native
+  // light-dismiss is exercised in Playwright rather than emulated in happy-dom.
   const outside_press = () => new PointerEvent(`pointerdown`, { bubbles: true })
   const outside_click = () => new MouseEvent(`click`, { bubbles: true })
   const release: MenuProps = { dismiss: { dismiss_on: `release`, escape: false } }
   test.each([
-    [`Escape dismisses the menu`, {}, escape_key, true],
-    [`a press outside dismisses the menu`, {}, outside_press, true],
     [`escape: false leaves Escape to the page`, release, escape_key, false],
     [`dismiss_on: release ignores the press`, release, outside_press, false],
     [`dismiss_on: release waits for the click`, release, outside_click, true],
-    // the mirror of the two rows above: without it, a listener bound to both events
-    // would still satisfy them and the press/release distinction would go unproven
-    [`the default press ignores a stray click`, {}, outside_click, false],
   ] as const)(`%s`, async (_desc, extra, make_event, closes) => {
     await open_menu(make_actions(), extra)
     expect(menu()).not.toBeNull()
@@ -244,6 +246,7 @@ describe(`ActionMenu`, () => {
     const inside = document.createElement(`button`)
     document.body.append(inside)
     await open_menu(make_actions(), { dismiss: { inside: [inside] } })
+    expect(doc_query(`menu`).getAttribute(`popover`)).toBe(`manual`)
 
     inside.dispatchEvent(outside_press())
     await tick()

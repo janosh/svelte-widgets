@@ -6,7 +6,6 @@
   // Mount once high in the app tree; it renders the head of the shared dialog queue.
   import { onMount } from 'svelte'
   import type { HTMLDialogAttributes, HTMLInputAttributes } from 'svelte/elements'
-  import { backdrop_dismiss } from './attachments/index'
   import {
     answer_dialog,
     dialog_queue,
@@ -90,10 +89,10 @@
 
 <dialog
   bind:this={dialog}
+  closedby="any"
   {...rest}
   class={[`confirm-dialog`, rest.class]}
   aria-labelledby={title_id}
-  {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
     // Don't let a delayed programmatic close dismiss a newly queued request.
     if (programmatic_close_pending) programmatic_close_pending = false

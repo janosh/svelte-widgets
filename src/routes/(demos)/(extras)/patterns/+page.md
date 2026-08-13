@@ -96,10 +96,18 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
   let open = $state(false)
   let last_close = $state(`none`)
+  let close_on_backdrop = $state(true)
+  let close_on_escape = $state(true)
 </script>
 
+<label
+  ><input type="checkbox" bind:checked={close_on_backdrop} /> Backdrop dismissal</label
+>
+<label><input type="checkbox" bind:checked={close_on_escape} /> Escape dismissal</label>
 <Dialog
   bind:open
+  {close_on_backdrop}
+  {close_on_escape}
   aria-labelledby="profile-dialog-title"
   on_close={({ via }) => (last_close = via)}
 >
