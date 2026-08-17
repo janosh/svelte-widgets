@@ -47,11 +47,14 @@ const press_backdrop = (dialog: HTMLDialogElement) => {
   const init = { bubbles: true, clientX: 10, clientY: 10 }
   dialog.dispatchEvent(new PointerEvent(`pointerdown`, { isPrimary: true, ...init }))
   dialog.dispatchEvent(new MouseEvent(`click`, init))
+  dialog.close() // happy-dom does not implement native closedby="any" light dismissal
 }
 
 test(`shows the queued question and closes once the queue drains`, async () => {
-  const dialog = await mount_dialog()
+  const dialog = await mount_dialog({ backdrop_dim: false, backdrop_blur: true })
   expect(dialog.open).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
   expect(buttons()).toHaveLength(0)
 
   const answer = ask(`Overwrite src/lib?`, `Write files`)

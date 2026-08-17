@@ -73,7 +73,7 @@
     noMatchingOptionsMsg = `No matching options`,
     open = $bindable(false),
     dismiss_on = `press`,
-    options = $bindable(),
+    options = $bindable([]),
     outerDiv = $bindable(null),
     outerDivClass = ``,
     parseLabelsAsHtml = false,
@@ -92,9 +92,9 @@
         ? Array.isArray(value)
           ? value
           : [value]
-        : (options
-            ?.filter((opt) => typeof opt === `object` && opt !== null && opt?.preselected)
-            .slice(0, maxSelect ?? undefined) ?? []),
+        : options
+            .filter((opt) => typeof opt === `object` && opt !== null && opt?.preselected)
+            .slice(0, maxSelect ?? undefined),
     ),
     sortSelected = false,
     selectedOptionsDraggable = !sortSelected,
@@ -181,12 +181,91 @@
     ...rest
   }: MultiSelectProps<Option> = $props()
 
+  const invalid_config = (message: string): never => {
+    throw new TypeError(`MultiSelect: ${message}`)
+  }
+  const is_integer_at_least = (
+    candidate: unknown,
+    minimum: number,
+  ): candidate is number =>
+    typeof candidate === `number` && Number.isInteger(candidate) && candidate >= minimum
+
+  const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
+    if (!loadOptions && !options.length) {
+      if (!(allowUserOptions || loading || disabled || allowEmpty))
+        invalid_config(`received no options`)
+    }
+    if (maxSelect !== null && !is_integer_at_least(maxSelect, 1)) {
+      invalid_config(`maxSelect must be null or a positive integer, got ${maxSelect}`)
+    }
+    if (!Array.isArray(selected)) {
+      invalid_config(`selected prop must be an array, got ${selected}`)
+    }
+    if (maxSelect && typeof required === `number` && required > maxSelect) {
+      invalid_config(
+        `maxSelect=${maxSelect} < required=${required}, which makes valid form submission impossible`,
+      )
+    }
+    if (parseLabelsAsHtml && allowUserOptions) {
+      invalid_config(
+        `parseLabelsAsHtml cannot be combined with allowUserOptions because user-provided HTML would enable XSS`,
+      )
+    }
+    if (sortSelected && selectedOptionsDraggable) {
+      invalid_config(
+        `sortSelected cannot be combined with selectedOptionsDraggable because sorting would overwrite the user's order`,
+      )
+    }
+    if (selected_display === `input` && maxSelect !== 1) {
+      invalid_config(
+        `selectedDisplay="input" requires maxSelect={1}, got maxSelect=${maxSelect}`,
+      )
+    }
+    if (allowUserOptions && !createOptionMsg && createOptionMsg !== null) {
+      invalid_config(
+        `allowUserOptions=${allowUserOptions} requires a non-empty createOptionMsg or explicit null, got ${createOptionMsg}`,
+      )
+    }
+    if (maxOptions != null && !is_integer_at_least(maxOptions, 0)) {
+      invalid_config(
+        `maxOptions must be null, undefined, or a non-negative integer, got ${maxOptions}`,
+      )
+    }
+    if (maxVisibleChips !== null && !is_integer_at_least(maxVisibleChips, 0)) {
+      invalid_config(
+        `maxVisibleChips must be null or a non-negative integer, got ${maxVisibleChips}`,
+      )
+    }
+    if (typeof virtualList === `object`) {
+      const { itemHeight: item_height, overscan } = virtualList
+      if (
+        item_height !== undefined &&
+        (!Number.isFinite(item_height) || item_height <= 0)
+      ) {
+        invalid_config(`virtualList.itemHeight must be positive, got ${item_height}`)
+      }
+      if (overscan !== undefined && !is_integer_at_least(overscan, 0)) {
+        invalid_config(
+          `virtualList.overscan must be a non-negative integer, got ${overscan}`,
+        )
+      }
+    }
+    if (virtualList && stickyGroupHeaders && has_grouped_options) {
+      invalid_config(
+        `virtualList cannot be combined with stickyGroupHeaders for grouped options`,
+      )
+    }
+  }
+
+  // Initial props must fail before any synchronization effect can normalize them.
+  untrack(validate_config)
+
   // === Config normalization ===
   // ARIA combobox ids; `$props.id()` survives hydration when the caller omits `id`
   const unique_id = $props.id()
   const base_id = $derived(id ?? `sms-${unique_id}`)
   const listbox_id = $derived(`${base_id}-listbox`)
-  const input_display = $derived(selected_display === `input` && maxSelect === 1)
+  const input_display = $derived(selected_display === `input`)
   const multi_select = $derived(maxSelect === null || maxSelect > 1) // can hold 2+ selections
 
   // Shared fuzzy/substring text matching (used by the default filterFunc and group-name matching)
@@ -254,14 +333,8 @@
   let range_anchor: { option: Option; idx: number | null } | null = null
 
   // maxVisibleChips: chips beyond the limit collapse into a "+N more" toggle.
-  // chip_limit normalizes invalid values to null (error logged in the validation
-  // effect) so they can't leak a nonsensical "+N more" chip into the template.
   let is_chip_list_expanded = $state(false)
-  const chip_limit = $derived(
-    maxVisibleChips !== null && Number.isInteger(maxVisibleChips) && maxVisibleChips >= 0
-      ? maxVisibleChips
-      : null,
-  )
+  const chip_limit = $derived(maxVisibleChips)
   const visible_chips = $derived(
     chip_limit !== null && !is_chip_list_expanded
       ? selected.slice(0, chip_limit)
@@ -421,7 +494,7 @@
   // client-side and lead the list, so they render with no debounce and no request while
   // remote batches append behind them (e.g. PageSearch matching routes as you type).
   let effective_options = $derived.by(() => {
-    const local_options = options ?? []
+    const local_options = options
     if (!load_options_config) return local_options
     const local_matches = local_options.filter((opt) =>
       matches_search(opt, effective_filter_text),
@@ -579,24 +652,15 @@
     if (!virtualList) return null
     const { itemHeight: item_height_prop = 30, overscan: overscan_prop = 10 } =
       typeof virtualList === `object` ? virtualList : {}
-    // clamp to sane values: itemHeight <= 0 would break the window division
-    const item_height =
-      Number.isFinite(item_height_prop) && item_height_prop > 0 ? item_height_prop : 30
-    const overscan =
-      Number.isFinite(overscan_prop) && overscan_prop >= 0 ? overscan_prop : 10
-    return { item_height, overscan }
+    return { item_height: item_height_prop, overscan: overscan_prop }
   })
   const has_grouped_options = $derived(
     grouped_options.some(({ group }) => group !== null),
   )
   // Virtualization supports flat and grouped lists (headers become rows of the same
-  // itemHeight). stickyGroupHeaders is the exception: a sticky header scrolled out
-  // of the render window can't stay pinned, so fall back to full rendering (see
-  // console.warn in the validation effect below).
-  const is_virtual_list_enabled = $derived(
-    Boolean(virtual_config) && !(stickyGroupHeaders && has_grouped_options),
-  )
-  let warned_virtual_grouped = false // only warn once per component instance
+  // itemHeight). The validation below rejects sticky grouped headers because a header
+  // scrolled out of the render window cannot stay pinned.
+  const is_virtual_list_enabled = $derived(Boolean(virtual_config))
   let options_scroll_top = $state(0)
   let options_client_height = $state(0)
   // happy-dom and SSR report clientHeight 0 — fall back to a 400px viewport estimate
@@ -802,84 +866,8 @@
     return items
   }
 
-  untrack(() => {
-    if (!loadOptions && !((options?.length ?? 0) > 0)) {
-      if (allowUserOptions || loading || disabled || allowEmpty) {
-        options = [] // initializing as array avoids errors when component mounts
-      } else {
-        console.error(`MultiSelect: received no options`)
-      }
-    }
-  })
-  if (maxSelect !== null && maxSelect < 1) {
-    console.error(
-      `MultiSelect: maxSelect must be null or positive integer, got ${maxSelect}`,
-    )
-  }
-  if (!Array.isArray(selected)) {
-    console.error(`MultiSelect: selected prop should always be an array, got ${selected}`)
-  }
-  $effect(() => {
-    if (maxSelect && typeof required === `number` && required > maxSelect) {
-      console.error(
-        `MultiSelect: maxSelect=${maxSelect} < required=${required}, makes it impossible for users to submit a valid form`,
-      )
-    }
-    if (parseLabelsAsHtml && allowUserOptions) {
-      console.warn(
-        `MultiSelect: don't combine parseLabelsAsHtml and allowUserOptions. It's susceptible to XSS attacks!`,
-      )
-    }
-    if (sortSelected && selectedOptionsDraggable) {
-      console.warn(
-        `MultiSelect: sortSelected and selectedOptionsDraggable should not be combined as any ` +
-          `user re-orderings of selected options will be undone by sortSelected on component re-renders.`,
-      )
-    }
-    if (selected_display === `input` && maxSelect !== 1) {
-      console.error(
-        `MultiSelect: selectedDisplay="input" requires maxSelect={1}, got maxSelect=${maxSelect}. ` +
-          `Falling back to chip display.`,
-      )
-    }
-    if (allowUserOptions && !createOptionMsg && createOptionMsg !== null) {
-      console.error(
-        `MultiSelect: allowUserOptions=${allowUserOptions} but createOptionMsg=${createOptionMsg} is falsy. ` +
-          `This prevents the "Add option" <span> from showing up, resulting in a confusing user experience.`,
-      )
-    }
-    if (
-      maxOptions &&
-      (typeof maxOptions !== `number` || maxOptions < 0 || maxOptions % 1 !== 0)
-    ) {
-      console.error(
-        `MultiSelect: maxOptions must be undefined or a positive integer, got ${maxOptions}`,
-      )
-    }
-    if (
-      maxVisibleChips !== null &&
-      (!Number.isInteger(maxVisibleChips) || maxVisibleChips < 0)
-    ) {
-      console.error(
-        `MultiSelect: maxVisibleChips must be null or a non-negative integer, got ${maxVisibleChips}`,
-      )
-    }
-    // short-circuit keeps has_grouped_options out of this effect's dependencies
-    // unless the sticky+virtual combo is on and the warning hasn't fired yet
-    if (
-      virtualList &&
-      stickyGroupHeaders &&
-      !warned_virtual_grouped &&
-      has_grouped_options
-    ) {
-      warned_virtual_grouped = true
-      console.warn(
-        `MultiSelect: virtualList does not support stickyGroupHeaders (a sticky header ` +
-          `scrolled out of the render window can't stay pinned). Falling back to ` +
-          `non-virtual rendering.`,
-      )
-    }
-  })
+  // Revalidate reactive props and remote option groups after mount.
+  $effect(() => validate_config(has_grouped_options))
 
   // Resolve createOptionMsg to a string (supports string, function, or null)
   const resolved_create_msg = $derived.by(() => {
@@ -1061,10 +1049,23 @@
   // true while an async oncreate callback is pending, blocks further create attempts
   let creating_option = $state(false)
 
+  function add(option_to_add: Option, event: Event, from_paste = false) {
+    event.stopPropagation()
+    if (!is_non_empty_option(option_to_add)) {
+      throw new TypeError(
+        `MultiSelect: cannot add an empty option, got ${JSON.stringify(option_to_add)}`,
+      )
+    }
+    return add_valid_option(option_to_add, event, from_paste)
+  }
+
   // from_paste: when true, skip option reconstruction so parse_paste() objects
   // are preserved as-is (extra fields like value/group/metadata aren't stripped)
-  async function add(option_to_add: Option, event: Event, from_paste = false) {
-    event.stopPropagation()
+  async function add_valid_option(
+    option_to_add: Option,
+    event: Event,
+    from_paste = false,
+  ) {
     if (
       !isNaN(Number(option_to_add)) &&
       (typeof option_to_add !== `string` || option_to_add.trim().length > 0) &&
@@ -1132,7 +1133,7 @@
           }
         } else oncreate_result = raw_result as CreateResult
       } catch (error) {
-        // sync throws are caught too: add() is async, so an uncaught throw would
+        // sync throws are caught too: add_valid_option() is async, so an uncaught throw would
         // surface as an unhandled rejection in non-awaiting event handlers
         const failure = was_async ? `promise rejected` : `threw`
         console.error(`MultiSelect: oncreate ${failure}:`, error)
@@ -1146,14 +1147,10 @@
       }
       if (allowUserOptions === `append`) {
         if (load_options_config) loaded_options = [...loaded_options, option_to_add]
-        else options = [...(options ?? []), option_to_add]
+        else options = [...options, option_to_add]
       }
     }
 
-    if (!is_non_empty_option(option_to_add)) {
-      console.error(`MultiSelect: encountered falsy option`, option_to_add)
-      return
-    }
     if (input_display) searchText = `${utils.get_label(option_to_add)}`
     else if (resetFilterOnAdd) searchText = ``
     // for maxSelect = 1 we always replace current option with new one
@@ -1186,10 +1183,9 @@
       ) as Option
     }
     if (option_removed === undefined) {
-      console.error(
-        `MultiSelect: can't remove option ${JSON.stringify(option_to_drop)}, not found in selected list`,
+      throw new Error(
+        `MultiSelect: cannot remove option ${JSON.stringify(option_to_drop)} because it is not selected`,
       )
-      return
     }
 
     selected = selected.filter((_, remove_idx) => remove_idx !== idx)
@@ -1444,7 +1440,7 @@
       event.stopPropagation()
       event.preventDefault() // prevent enter key from triggering form submission
 
-      // != null (not truthiness) so falsy options like 0 or `` can be selected via Enter
+      // != null (not truthiness) so a falsy numeric option like 0 can be selected via Enter
       if (activeOption != null) {
         if (is_disabled(activeOption)) return
         handle_option_interact(activeOption, event, activeIndex)

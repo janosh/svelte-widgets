@@ -1,5 +1,5 @@
 import { ActionButton, type ActionState } from '$lib'
-import { mount, tick, type ComponentProps } from 'svelte'
+import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { afterEach, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
@@ -82,6 +82,44 @@ test(`blocks duplicate actions while pending and resets after success`, async ()
   expect(button.dataset.state).toBe(`ready`)
 })
 
+test.each([
+  [`click`, new MouseEvent(`click`, { bubbles: true, cancelable: true })],
+  [
+    `Enter`,
+    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true, cancelable: true }),
+  ],
+  [`Space`, new KeyboardEvent(`keydown`, { key: ` `, bubbles: true, cancelable: true })],
+] as const)(
+  `disabled custom elements suppress %s activation and consumer handlers`,
+  (_name, event) => {
+    const action = vi.fn()
+    const onclick = vi.fn()
+    const onkeydown = vi.fn()
+    const props = { action, as: `a`, disabled: true, onclick, onkeydown }
+    Reflect.set(props, `href`, `#should-not-navigate`)
+    mount_action_button(props)
+
+    doc_query<HTMLAnchorElement>(`a[data-sms-action]`).dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(action).not.toHaveBeenCalled()
+    expect(onclick).not.toHaveBeenCalled()
+    expect(onkeydown).not.toHaveBeenCalled()
+  },
+)
+
+test(`enabled custom elements run the action without following href`, () => {
+  const action = vi.fn(() => `saved`)
+  const props = { action, as: `a` }
+  Reflect.set(props, `href`, `#should-not-navigate`)
+  const click = new MouseEvent(`click`, { bubbles: true, cancelable: true })
+
+  mount_action_button(props).dispatchEvent(click)
+
+  expect(click.defaultPrevented).toBe(true)
+  expect(action).toHaveBeenCalledOnce()
+})
+
 test(`reports action errors without throwing from the event handler`, async () => {
   const action_error = new Error(`save failed`)
   const on_error = vi.fn()
@@ -118,6 +156,29 @@ test(`keeps success state when its success callback throws`, async () => {
     `ActionButton on_success callback failed`,
     callback_error,
   )
+})
+
+test(`does not schedule a reset after its success callback unmounts it`, async () => {
+  vi.useFakeTimers()
+  type MountedActionButton = Parameters<typeof unmount>[0]
+  let component: MountedActionButton | undefined
+  component = mount(ActionButton, {
+    target: document.body,
+    props: {
+      action: () => `saved`,
+      labels,
+      reset_ms: 100,
+      on_success: async () => {
+        if (!component) throw new Error(`ActionButton component was not mounted`)
+        await unmount(component)
+      },
+    },
+  })
+
+  doc_query<HTMLButtonElement>(`[data-sms-action]`).click()
+  await flush_action()
+
+  expect(vi.getTimerCount()).toBe(0)
 })
 
 test(`children receive the generic action result`, async () => {

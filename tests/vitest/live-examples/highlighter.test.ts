@@ -1,11 +1,16 @@
 // Tests for starry-night syntax highlighter
 import { create_highlighter } from '$lib/live-examples/create-highlighter'
+import { default_highlighter } from '$lib/live-examples/default-highlighter'
 import { starry_night, starry_night_highlighter } from '$lib/live-examples/highlighter'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { describe, expect, test, vi } from 'vite-plus/test'
 
 describe(`starry_night_highlighter`, () => {
+  test(`shares one default instance with lazy component consumers`, async () => {
+    expect(await default_highlighter.ready()).toBe(starry_night)
+  })
+
   test(`reports missing optional starry-night peer dependency`, async () => {
     vi.resetModules()
     vi.doMock(`@wooorm/starry-night`, () => {

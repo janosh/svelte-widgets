@@ -71,7 +71,7 @@ navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widg
 <script lang="ts">
   import { afterNavigate, goto } from '$app/navigation'
   import { highlight_matches } from 'svelte-widgets/attachments'
-  import type { PageSearchNavigateDetails } from 'svelte-widgets/types'
+  import type { PageSearchNavigateDetails } from 'svelte-widgets'
 
   let highlight_query = $state(``)
 

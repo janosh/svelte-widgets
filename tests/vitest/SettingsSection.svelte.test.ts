@@ -1,5 +1,6 @@
 import { SettingsSection } from '$lib'
 import { createRawSnippet, flushSync, mount, tick, type ComponentProps } from 'svelte'
+import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
@@ -19,7 +20,11 @@ const click_and_tick = async (
 }
 
 // A section whose caller writes reference values back, the way a real settings pane does
-const mount_tracked_section = (initial: SettingValues, children: string) => {
+const mount_tracked_section = (
+  initial: SettingValues,
+  children: string,
+  reset_values?: SettingValues,
+) => {
   let current_values = $state<SettingValues>({ ...initial })
   const reset_calls: [string, unknown, boolean][] = []
   mount_section({
@@ -27,6 +32,7 @@ const mount_tracked_section = (initial: SettingValues, children: string) => {
     get current_values() {
       return current_values
     },
+    reset_values,
     children: snippet(children),
     on_reset_key: (key: string, value: unknown, present: boolean) => {
       reset_calls.push([key, value, present])
@@ -98,6 +104,7 @@ describe(`SettingsSection`, () => {
       { setting1: undefined, setting2: null },
       false,
     ],
+    [`negative zero`, { setting1: 0 }, { setting1: -0 }, false],
     [
       `object key insertion order`,
       { setting1: { a: 1, b: 2 } },
@@ -134,6 +141,58 @@ describe(`SettingsSection`, () => {
     const reset_button = document.querySelector<HTMLButtonElement>(`.reset-button`)
     expect(Boolean(reset_button)).toBe(expect_reset)
     if (expect_reset) expect(reset_button?.type).toBe(`button`)
+  })
+
+  test.each([
+    [`Set`, new SvelteSet([`a`]), `must not contain Set or Map`],
+    [`Map`, new SvelteMap([[`key`, `value`]]), `must not contain Set or Map`],
+    [`custom-prototype`, Object.create({ inherited: true }), `must be plain objects`],
+  ])(`rejects %s-valued settings`, (_name, value, message) => {
+    expect(() =>
+      mount_section({
+        title: `Unsupported`,
+        current_values: { value },
+        children: snippet(`content`),
+      }),
+    ).toThrow(message)
+  })
+
+  test.each([
+    [`Set`, () => new SvelteSet([`a`]), `must not contain Set or Map`],
+    [`Map`, () => new SvelteMap([[`key`, `value`]]), `must not contain Set or Map`],
+    [
+      `custom-prototype`,
+      () => Object.create({ inherited: true }),
+      `must be plain objects`,
+    ],
+  ])(`rejects %s-valued reactive updates`, (_name, make_value, message) => {
+    const tracked = mount_tracked_section({ value: {} }, `<span>content</span>`)
+    expect(() =>
+      flushSync(() => {
+        tracked.values = { value: make_value() }
+      }),
+    ).toThrow(message)
+  })
+
+  test(`reset_values overrides mounted values and deletes keys absent from the baseline`, async () => {
+    const tracked = mount_tracked_section(
+      { radius: 3, temporary: true },
+      `<div>
+        <label data-key="radius"><span>Radius</span><input></label>
+        <label data-key="temporary"><span>Temporary</span><input></label>
+      </div>`,
+      { radius: 1 },
+    )
+    await tick()
+
+    expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(2)
+    await click_and_tick(`.settings-section-heading .reset-button`)
+
+    expect(tracked.values).toEqual({ radius: 1 })
+    expect(tracked.reset_calls).toEqual([
+      [`radius`, 1, true],
+      [`temporary`, undefined, false],
+    ])
   })
 
   test.each([

@@ -5,8 +5,8 @@
     HTMLButtonAttributes,
     HTMLDetailsAttributes,
   } from 'svelte/elements'
-  import type { HastNode } from './live-examples/hast'
-  import { escape_html_text, hast_to_html } from './live-examples/hast'
+  import { language_label_html } from './internal/language-label'
+  import { default_highlighter } from './live-examples/default-highlighter'
   import { chain_handlers } from './utils'
 
   type File = {
@@ -88,41 +88,25 @@
 
   const resolve_lang = (file: File): string =>
     file.language ?? lang_from_title(file.title) ?? default_lang
+  const highlight_key = (language: string, content: string): string =>
+    JSON.stringify([language, content])
 
-  // Lazy-loaded starry-night (CSS already loaded in app.css). Deliberately not
-  // imported from ./live-examples/highlighter.ts, whose top-level await initializes
-  // starry-night at module load.
-  let highlighter:
-    | {
-        highlight: (code: string, scope: string) => HastNode
-        flagToScope: (flag: string) => string | undefined
-      }
-    | undefined
-  async function highlight(code: string, lang: string): Promise<string> {
-    if (!highlighter) {
-      const { createStarryNight, common } = await import(`@wooorm/starry-night`)
-      const source_svelte = (await import(`@wooorm/starry-night/source.svelte`)).default
-      highlighter = await createStarryNight([...common, source_svelte])
-    }
-    const scope = highlighter.flagToScope(lang)
-    if (!scope) return escape_html_text(code)
-    return hast_to_html(highlighter.highlight(code, scope))
-  }
-
-  // Cache of highlighted HTML keyed by content+language
   let highlighted_cache = $state<Record<string, string>>({})
   $effect(() => {
+    let cancelled = false
     for (const file of files) {
-      const lang = resolve_lang(file)
-      const key = `${lang}:${file.content}`
-      if (!(key in highlighted_cache)) {
-        highlight(file.content, lang).then(
-          (html) => {
-            highlighted_cache[key] = html
-          },
-          () => {}, // silently skip unsupported languages
-        )
-      }
+      const language = resolve_lang(file)
+      const key = highlight_key(language, file.content)
+      if (key in highlighted_cache) continue
+      default_highlighter.highlight(file.content, language).then(
+        (html) => {
+          if (!cancelled) highlighted_cache[key] = html
+        },
+        () => {}, // silently skip unsupported languages
+      )
+    }
+    return () => {
+      cancelled = true
     }
   })
 </script>
@@ -144,7 +128,7 @@
   {#each files as file, idx (file)}
     {@const { title, content } = file}
     {@const language = resolve_lang(file)}
-    {@const cache_key = `${language}:${content}`}
+    {@const cache_key = highlight_key(language, content)}
     <li>
       <details
         bind:this={detail_elements[idx]}
@@ -164,7 +148,7 @@
           </summary>
         {/if}
 
-        <pre class="language-{language}"><span class="lang-label">{language}</span><code
+        <pre class="language-{language}">{@html language_label_html(language)}<code
             >{#if highlighted_cache[cache_key]}{@html highlighted_cache[
                 cache_key
               ]}{:else}{content}{/if}</code
@@ -197,18 +181,5 @@
   pre {
     position: relative;
     background: var(--pre-bg, light-dark(#f3f5f8, rgba(0, 0, 0, 0.3)));
-  }
-  /* the label is emitted inline before <code>; pre is white-space: pre, so it
-  must be taken out of flow or it indents the first code line */
-  .lang-label {
-    position: absolute;
-    bottom: 2px;
-    inset-inline-end: 6px;
-    font-size: 0.65rem;
-    opacity: 0.35;
-    text-transform: uppercase;
-    pointer-events: none;
-    user-select: none;
-    line-height: 1;
   }
 </style>

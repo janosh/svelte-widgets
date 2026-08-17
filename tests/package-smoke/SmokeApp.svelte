@@ -4,11 +4,12 @@
     ActionMenu,
     CodeEditor,
     CommandMenu,
+    type CmdAction,
     Dialog,
     DiffView,
     FindBar,
-    fuzzy_match,
     MultiSelect,
+    type Option,
     PageSearch,
     Sheet,
     Tabs,
@@ -21,7 +22,6 @@
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import DirectPageSearch from 'svelte-widgets/PageSearch.svelte'
-  import type { Option } from 'svelte-widgets'
   import {
     auto_update_position,
     click_outside,
@@ -33,13 +33,12 @@
   import 'svelte-widgets/code-editor/editor.css'
   import { ask_prompt } from 'svelte-widgets/dialogs'
   import { create_find_state } from 'svelte-widgets/find-in-page'
-  import { Alert as direct_alert } from 'svelte-widgets/icons'
+  import { Claude as direct_claude } from 'svelte-widgets/icons'
   import { heading_ids } from 'svelte-widgets/heading-anchors'
   import type { KatexOptions } from 'svelte-widgets/katex'
   import { storage_get } from 'svelte-widgets/storage'
   import { apply_theme_mode as apply_theme_from_subpath } from 'svelte-widgets/theme'
-  import type { CmdAction } from 'svelte-widgets/types'
-  import { get_label } from 'svelte-widgets/utils'
+  import { fuzzy_match, get_label } from 'svelte-widgets/utils'
 
   const options: Option[] = [`One`, { label: `Two`, value: 2 }]
   const actions: CmdAction[] = [{ label: `Open`, action: () => undefined }]
@@ -70,7 +69,7 @@
     storage_get(`package-smoke-missing`) === null &&
     typeof apply_theme_from_subpath === `function` &&
     typeof heading_ids === `function` &&
-    Boolean(direct_alert.d) &&
+    Boolean(direct_claude.d) &&
     katex_options.throwOnError === true &&
     fuzzy_match(`tw`, String(get_label(options[1])))
   let selected = $state<Option[]>([])

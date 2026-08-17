@@ -1,4 +1,3 @@
-import type { Attachment } from 'svelte/attachments'
 import { is_primary_press, register_escape_layer } from './shared'
 
 export type DismissDetail = {
@@ -189,33 +188,4 @@ export const click_outside =
       node,
       callback: (detail) => config.callback?.(node, config, detail),
     })
-  }
-
-// ::backdrop (and dialog padding) both target the dialog — only coordinates tell them
-// apart. Start must be outside too, or a selection dragged onto the backdrop dismisses.
-export const backdrop_dismiss =
-  (callback?: () => void): Attachment<HTMLDialogElement> =>
-  (node) => {
-    let press_outside = false
-    const is_outside_box = ({ target, clientX, clientY }: MouseEvent) => {
-      if (target !== node) return false
-      const { top, right, bottom, left } = node.getBoundingClientRect()
-      return clientX < left || clientX > right || clientY < top || clientY > bottom
-    }
-    // Same primary/cancel gating as dismiss_on_outside_press: a right-click or second finger
-    // must not leave a stale outside verdict for the next click.
-    const on_pointerdown = (event: PointerEvent) => {
-      press_outside = is_primary_press(event) && is_outside_box(event)
-    }
-    const forget_press = () => (press_outside = false)
-    const on_click = (event: MouseEvent) => {
-      if (press_outside && is_outside_box(event)) (callback ?? (() => node.close()))()
-      press_outside = false
-    }
-    const listeners = new AbortController()
-    const { signal } = listeners
-    node.addEventListener(`pointerdown`, on_pointerdown, { signal })
-    node.addEventListener(`pointercancel`, forget_press, { signal })
-    node.addEventListener(`click`, on_click, { signal })
-    return () => listeners.abort()
   }

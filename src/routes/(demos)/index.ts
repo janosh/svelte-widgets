@@ -25,7 +25,6 @@ export const demo_labels: Record<string, string> = {
       `highlight_matches`,
       `click_outside`,
       `dismiss_on_outside_press`,
-      `backdrop_dismiss`,
       `focus_trap`,
       `hotkey`,
       `float`,

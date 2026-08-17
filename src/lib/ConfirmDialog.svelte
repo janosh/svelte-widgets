@@ -6,7 +6,6 @@
   // Mount once high in the app tree; it renders the head of the shared dialog queue.
   import { onMount } from 'svelte'
   import type { HTMLDialogAttributes, HTMLInputAttributes } from 'svelte/elements'
-  import { backdrop_dismiss } from './attachments/index'
   import {
     answer_dialog,
     dialog_queue,
@@ -19,9 +18,13 @@
 
   // An app mounting this alongside its own dialogs needs its card class on the element
   let {
+    backdrop_dim = true,
+    backdrop_blur = false,
     input_props,
     ...rest
   }: Omit<HTMLDialogAttributes, `children`> & {
+    backdrop_dim?: boolean
+    backdrop_blur?: boolean
     // prompt <input> only; choice dialogs ignore this
     input_props?: Omit<HTMLInputAttributes, `aria-invalid` | `type` | `value`>
   } = $props()
@@ -90,10 +93,12 @@
 
 <dialog
   bind:this={dialog}
+  closedby="any"
   {...rest}
   class={[`confirm-dialog`, rest.class]}
+  data-backdrop-dim={backdrop_dim || undefined}
+  data-backdrop-blur={backdrop_blur || undefined}
   aria-labelledby={title_id}
-  {@attach backdrop_dismiss()}
   onclose={chain_handlers(() => {
     // Don't let a delayed programmatic close dismiss a newly queued request.
     if (programmatic_close_pending) programmatic_close_pending = false
@@ -169,7 +174,13 @@
     /* paths and directory lists are long and must not be clipped */
     overflow-wrap: anywhere;
     &::backdrop {
+      background: transparent;
+      backdrop-filter: none;
+    }
+    &[data-backdrop-dim]::backdrop {
       background: var(--confirm-dialog-backdrop, rgba(0, 0, 0, 0.42));
+    }
+    &[data-backdrop-blur]::backdrop {
       backdrop-filter: var(--confirm-dialog-backdrop-filter, blur(4px));
     }
   }

@@ -24,6 +24,14 @@ describe(`Popover`, () => {
   // pointer_event sets isPrimary; a bare PointerEvent reads as a second finger
   const press = (target: EventTarget) =>
     target.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+  const release = (target: EventTarget) => {
+    press(target)
+    target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
+  }
+  const escape_native_popover = () => {
+    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
+    doc_query(`.popover`).hidePopover()
+  }
   const mouse_enter = (target: EventTarget = trigger()) =>
     target.dispatchEvent(new MouseEvent(`mouseenter`))
   const mouse_leave = (target: EventTarget = trigger()) =>
@@ -58,6 +66,7 @@ describe(`Popover`, () => {
       expect(trigger().getAttribute(`aria-controls`)).toBe(`consumer-id`)
       expect(popup.id).toBe(`consumer-id`)
       expect(popup.getAttribute(`role`)).toBe(role)
+      expect(popup.getAttribute(`popover`)).toBe(`auto`)
       expect(popup.getAttribute(`aria-label`)).toBe(`Actions`)
       expect(popup.classList.contains(`consumer-class`)).toBe(true)
       // focus_trap moved the keyboard into the surface
@@ -83,73 +92,37 @@ describe(`Popover`, () => {
     expect(popup.style.top).toBe(`58px`) // 50 + 8
   })
 
-  test.each([
-    [`a press outside`, `pointer`, () => press(document.body)],
-    [
-      `Escape`,
-      `escape`,
-      () =>
-        document.dispatchEvent(
-          new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }),
-        ),
-    ],
-  ] as const)(`%s closes it, reporting via=%s`, async (_desc, via, dismiss) => {
+  test(`native dismissals report their reason`, async () => {
     const on_close = vi.fn()
     mount_popover({ on_close })
     trigger().click()
     await tick()
 
-    dismiss()
+    escape_native_popover()
+    await tick()
+    expect(on_close).toHaveBeenLastCalledWith({ via: `escape` })
+
+    trigger().click()
+    await tick()
+    release(document.body)
+    doc_query(`.popover`).hidePopover()
     await tick()
 
     expect(surface()).toBeNull()
-    expect(on_close).toHaveBeenCalledWith({ via })
+    expect(on_close).toHaveBeenLastCalledWith({ via: `pointer` })
     // the trap handed the keyboard back to where it came from
     expect(document.activeElement).toBe(trigger())
   })
 
-  test(`presses inside leave it open, so the trigger click can close it`, async () => {
-    const on_close = vi.fn()
-    mount_popover({ on_close })
+  test(`dismiss_on: 'press' uses a manual popover and closes on pointerdown`, async () => {
+    mount_popover({ dismiss_on: `press` })
     trigger().click()
     await tick()
-
-    // the trigger sits in click_outside's inside list and the item is in the surface,
-    // so neither press dismisses and only the click that follows acts
-    press(trigger())
-    press(doc_query(`[data-testid="popover-item"]`))
-    await tick()
-    expect(surface()).not.toBeNull()
-    expect(on_close).not.toHaveBeenCalled()
-
-    trigger().click()
-    await tick()
-    expect(surface()).toBeNull()
-    expect(on_close).toHaveBeenCalledWith({ via: `trigger` })
-  })
-
-  // Dismissal waits for the click, so a gesture behind the popover — a pan, a drag — keeps
-  // it visible until the release instead of having it vanish underneath
-  test(`dismiss_on: 'release' waits for the click`, async () => {
-    const on_close = vi.fn()
-    mount_popover({ dismiss_on: `release`, on_close })
-    trigger().click()
-    await tick()
-
-    press(doc_query(`[data-testid="popover-item"]`))
-    document.body.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
-    await tick()
-    expect(surface()).not.toBeNull()
+    expect(doc_query(`.popover`).getAttribute(`popover`)).toBe(`manual`)
 
     press(document.body)
     await tick()
-    expect(surface()).not.toBeNull()
-    expect(on_close).not.toHaveBeenCalled()
-
-    document.body.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
-    await tick()
     expect(surface()).toBeNull()
-    expect(on_close).toHaveBeenCalledWith({ via: `pointer` })
   })
 
   test(`escape: false leaves Escape to the consumer`, async () => {
@@ -260,7 +233,7 @@ describe(`Popover`, () => {
     doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
 
     props.trap_focus = false
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
+    escape_native_popover()
     await advance_time(0)
     expect(surface()).toBeNull()
     expect(document.activeElement).toBe(trigger())
@@ -278,7 +251,7 @@ describe(`Popover`, () => {
     doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
 
     props.trap_focus = true
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
+    escape_native_popover()
     await advance_time(0)
     expect(surface()).toBeNull()
 

@@ -4,6 +4,7 @@ import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
+import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
@@ -99,6 +100,13 @@ describe(`Icon`, () => {
 
   test(`Histogram contains one baseline subpath`, () => {
     expect(icons.Histogram.d.match(/M4 42h40/g)).toHaveLength(1)
+  })
+
+  test(`multi-shape glyphs have distinct markup`, () => {
+    const shapes = Object.values<IconData>(icons).flatMap(({ markup }) =>
+      markup === undefined ? [] : [markup],
+    )
+    expect(new SvelteSet(shapes).size).toBe(shapes.length)
   })
 
   test(`applies attributes via rest props`, () => {

@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteMap } from 'svelte/reactivity'
   import { fade } from 'svelte/transition'
-  import { backdrop_dismiss } from './attachments/index'
+  import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
   import type { CmdAction, MultiSelectProps } from './types'
@@ -32,6 +32,8 @@
     activeOption: active_option = $bindable(null),
     triggers = [`k`],
     close_keys = [`Escape`],
+    backdrop_dim = true,
+    backdrop_blur = false,
     fade_duration_ms = 200,
     open = $bindable(false),
     dialog = $bindable(null),
@@ -60,6 +62,8 @@
     actions: Action[]
     triggers?: string[]
     close_keys?: string[]
+    backdrop_dim?: boolean
+    backdrop_blur?: boolean
     fade_duration_ms?: number
     open?: boolean
     dialog?: HTMLDialogElement | null
@@ -78,6 +82,7 @@
 
   // === Recent actions (most-recently-used ranking) ===
   let recent_action_ids = $state<string[]>([])
+  let backdrop_press_started = false
 
   const get_action_id = (action: CmdAction): string => `${action.id ?? action.label}`
   const recent_actions = $derived(
@@ -161,12 +166,7 @@
   $effect(() => {
     if (!open) return
     if (dialog && !dialog.open) {
-      try {
-        dialog.showModal()
-      } catch {
-        // showModal missing (older DOM impls) or dialog not in document
-        dialog.setAttribute(`open`, ``)
-      }
+      dialog.showModal()
     }
     if (input && document.activeElement !== input) input.focus()
   })
@@ -187,11 +187,21 @@
   const open_shortcuts = $derived(
     triggers.flatMap((key) => [`meta+${key}`, `ctrl+${key}`]),
   )
+  const escape_closes = $derived(close_keys.includes(`Escape`))
+  const effective_closedby = $derived(
+    dialog_props?.closedby ?? (escape_closes ? `any` : `none`),
+  )
+  const close_hotkeys = $derived(
+    close_keys.filter((key) => key !== `Escape` || effective_closedby !== `none`),
+  )
   const toggle_bindings = $derived<Hotkey[]>([
     { keys: open_shortcuts, handler: () => (open = true), enabled: !open },
     // Escape has to work while the search input has focus, hence allow_in_inputs
-    { keys: close_keys, handler: close_menu, enabled: open, allow_in_inputs: true },
+    { keys: close_hotkeys, handler: close_menu, enabled: open, allow_in_inputs: true },
   ])
+  const custom_backdrop_dismiss = $derived(
+    !escape_closes && dialog_props?.closedby === undefined,
+  )
   // Bare action shortcuts stay inert while the menu is up: there the keyboard
   // belongs to the search input. An action without a shortcut has no keys to match.
   const key_bindings = $derived<Hotkey[]>([
@@ -207,8 +217,19 @@
   ])
 
   function handle_dialog_cancel(event: DialogEvent) {
-    if (!close_keys.includes(`Escape`)) event.preventDefault()
+    if (effective_closedby === `none`) event.preventDefault()
     dialog_props?.oncancel?.(event)
+  }
+
+  const track_backdrop_press = (event: PointerEvent) => {
+    backdrop_press_started =
+      custom_backdrop_dismiss &&
+      event.isPrimary &&
+      is_dialog_backdrop_event(dialog, event)
+  }
+  const track_backdrop_release = (event: MouseEvent) => {
+    if (backdrop_press_started && is_dialog_backdrop_event(dialog, event)) close_menu()
+    backdrop_press_started = false
   }
 
   const run_toggle_hotkeys = (event: KeyboardEvent) => run_hotkeys(event, toggle_bindings)
@@ -217,17 +238,6 @@
     // a close key still lands after another handler already called preventDefault
     if (event.defaultPrevented && !(open && close_keys.includes(event.key))) return
     run_hotkeys(event, key_bindings)
-  }
-
-  // Window bubble so an outside toggle sees its click first. Backdrop → backdrop_dismiss.
-  function close_if_outside(event: MouseEvent) {
-    if (!open || !dialog) return // null until flush after open=true
-    const path = event.composedPath()
-    if (path.includes(dialog)) return
-    const listbox_id = input?.getAttribute(`aria-controls`)
-    const listbox = listbox_id && document.querySelector(`#${CSS.escape(listbox_id)}`)
-    if (listbox && path.includes(listbox)) return
-    close_menu()
   }
 
   function trigger_action_and_close(params: AddParams) {
@@ -240,7 +250,7 @@
   }
 </script>
 
-<svelte:window onkeydown={handle_window_keydown} onclick={close_if_outside} />
+<svelte:window onkeydown={handle_window_keydown} />
 
 {#snippet action_item({ option }: OptionSnippetParams)}
   {@const metadata = format_cmd_metadata(option.metadata)}
@@ -273,9 +283,17 @@
     transition:fade={{ duration: fade_duration_ms }}
     aria-label={aria_label}
     {...dialog_props}
+    data-backdrop-dim={backdrop_dim || undefined}
+    data-backdrop-blur={backdrop_blur || undefined}
+    closedby={effective_closedby}
     onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
-    {@attach backdrop_dismiss()}
+    onpointerdown={chain_handlers(track_backdrop_press, dialog_props?.onpointerdown)}
+    onpointercancel={chain_handlers(
+      () => (backdrop_press_started = false),
+      dialog_props?.onpointercancel,
+    )}
+    onclick={chain_handlers(track_backdrop_release, dialog_props?.onclick)}
   >
     <MultiSelect
       {...rest}
@@ -374,5 +392,15 @@
     color: light-dark(#222, #eee);
     z-index: var(--cmd-menu-z-index, 10);
     font-size: 2.4ex;
+  }
+  :where(dialog)::backdrop {
+    background: transparent;
+    backdrop-filter: none;
+  }
+  :where(dialog)[data-backdrop-dim]::backdrop {
+    background: var(--cmd-dialog-backdrop, rgba(0, 0, 0, 0.42));
+  }
+  :where(dialog)[data-backdrop-blur]::backdrop {
+    backdrop-filter: var(--cmd-dialog-backdrop-filter, blur(2px));
   }
 </style>

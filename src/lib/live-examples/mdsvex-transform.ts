@@ -1,6 +1,7 @@
 // Remark plugin - transforms ```svelte example code blocks into rendered components
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
+import { language_label_html } from '../internal/language-label.ts'
 import { hast_to_html } from './hast.ts'
 import { starry_night } from './highlighter.ts'
 
@@ -24,11 +25,6 @@ export const EXAMPLE_COMPONENT_PREFIX = `LiveExample___`
 
 // Languages that render as live Svelte components
 const LIVE_LANGUAGES = new Set([`svelte`, `html`])
-
-// Inline lang-label style for code-only examples, which are raw HTML with no
-// component scope (pre is white-space: pre; an in-flow label would indent the
-// first code line). Components emit the same label but style it via scoped CSS.
-const LABEL_STYLE = `position:absolute;bottom:2px;right:6px;font-size:0.65rem;opacity:0.35;text-transform:uppercase;pointer-events:none;user-select:none;line-height:1`
 
 interface RemarkMeta {
   Wrapper?: string | [string, string]
@@ -209,7 +205,7 @@ function create_example_component(
 
   if (index === -1) {
     // Close and reopen <p> to avoid block-in-inline HTML nesting issues
-    return `</p><pre class="highlight highlight-${lang}" style="position:relative"><span class="lang-label" style="${LABEL_STYLE}">${lang}</span><code>{@html ${JSON.stringify(
+    return `</p><pre class="highlight highlight-${lang}" style="position:relative">${language_label_html(lang)}<code>{@html ${JSON.stringify(
       highlighted,
     )}}</code></pre><p>`
   }

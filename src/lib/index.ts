@@ -49,5 +49,5 @@ export {
   type ThemeMode,
 } from './theme.svelte.ts'
 export type * from './types'
-export * from './utils'
+export type * from './utils'
 export { default as Wiggle } from './Wiggle.svelte'

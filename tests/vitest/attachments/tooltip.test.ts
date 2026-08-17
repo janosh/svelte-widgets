@@ -818,25 +818,17 @@ describe(`tooltip manager`, () => {
     expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
   })
 
-  it(`falls back to the document layer without the Popover API`, () => {
-    for (const property of [`popover`, `showPopover`, `hidePopover`] as const) {
-      const descriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, property)
-      Reflect.deleteProperty(HTMLElement.prototype, property)
-      cleanups.push(() => {
-        if (descriptor) Object.defineProperty(HTMLElement.prototype, property, descriptor)
-      })
-    }
-    const { cleanup, element, tooltip_el } = show_tooltip(
-      { strategy: `top-layer` },
-      `Fallback`,
+  it(`propagates a top-layer Popover API failure`, () => {
+    const show_error = new Error(`showPopover failed`)
+    cleanups.push(
+      stub_prop(HTMLElement.prototype, `showPopover`, () => {
+        throw show_error
+      }),
     )
+    const element = create_element(`button`)
+    element.title = `Top layer`
+    attach_tooltip(element, { strategy: `top-layer` })
 
-    expect(tooltip_el.style.position).toBe(`absolute`)
-    pointer_out(element)
-    expect(tooltip_el.hidden).toBe(true)
-    expect(tooltip_el.style.display).toBe(`none`)
-    cleanup()
-    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    expect(element.title).toBe(`Fallback`)
+    expect(() => pointer_over(element)).toThrow(show_error)
   })
 })

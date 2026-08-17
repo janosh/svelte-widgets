@@ -50,6 +50,57 @@ test(`nested Dialogs give Escape and focus to the innermost modal`, async ({ pag
   await expect(opener).toBeFocused()
 })
 
+test(`Dialog backdrop dims without blurring by default`, async ({ page }) => {
+  const demo = page.locator(`#patterns-dialog`)
+  await demo.getByRole(`button`, { name: `Edit profile` }).click()
+  const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
+
+  const backdrop_style = () =>
+    dialog.evaluate((element) => {
+      const style = getComputedStyle(element, `::backdrop`)
+      return [style.backgroundColor, style.backdropFilter]
+    })
+  await expect.poll(backdrop_style).toEqual([`rgba(0, 0, 0, 0.42)`, `none`])
+
+  await dialog.evaluate((element) => {
+    element.removeAttribute(`data-backdrop-dim`)
+    element.setAttribute(`data-backdrop-blur`, `true`)
+  })
+  await expect.poll(backdrop_style).toEqual([`rgba(0, 0, 0, 0)`, `blur(2px)`])
+})
+
+test(`Dialog supports every backdrop and Escape dismissal policy`, async ({ page }) => {
+  for (const [close_on_backdrop, close_on_escape] of [
+    [true, true],
+    [true, false],
+    [false, true],
+    [false, false],
+  ] as const) {
+    const demo = page.locator(`#patterns-dialog`)
+    await demo.getByLabel(`Backdrop dismissal`).setChecked(close_on_backdrop)
+    await demo.getByLabel(`Escape dismissal`).setChecked(close_on_escape)
+    const opener = demo.getByRole(`button`, { name: `Edit profile` })
+    const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
+
+    await opener.click()
+    await page.keyboard.press(`Escape`)
+    if (close_on_escape) {
+      await expect(dialog).toBeHidden()
+      await expect(demo.getByText(`Last close: escape`)).toBeVisible()
+      await opener.click()
+    } else await expect(dialog).toBeVisible()
+
+    await page.mouse.click(1, 1)
+    if (close_on_backdrop) {
+      await expect(dialog).toBeHidden()
+      await expect(demo.getByText(`Last close: pointer`)).toBeVisible()
+    } else {
+      await expect(dialog).toBeVisible()
+      await dialog.getByRole(`button`, { name: `Close` }).click()
+    }
+  }
+})
+
 test(`a stale native close event cannot close a reopened Dialog`, async ({ page }) => {
   const demo = page.locator(`#patterns-dialog`)
   const opener = demo.getByRole(`button`, { name: `Edit profile` })
@@ -59,11 +110,20 @@ test(`a stale native close event cannot close a reopened Dialog`, async ({ page 
     const dialog_opener = document.querySelector<HTMLButtonElement>(
       `#patterns-dialog button`,
     )
-    const close_button = document.querySelector<HTMLButtonElement>(`dialog.dialog button`)
-    if (!dialog_opener || !close_button) throw new Error(`Dialog controls not found`)
+    const old_dialog = document.querySelector<HTMLDialogElement>(`dialog.dialog`)
+    const close_button = old_dialog?.querySelector<HTMLButtonElement>(`button`)
+    if (!dialog_opener || !old_dialog || !close_button) {
+      throw new Error(`Dialog controls not found`)
+    }
+    const closed = new Promise<void>((resolve) => {
+      old_dialog.addEventListener(`close`, () => resolve(), { once: true })
+    })
     close_button.click()
-    await Promise.resolve()
+    await closed
+    await new Promise(requestAnimationFrame)
     dialog_opener.click()
+    await new Promise(requestAnimationFrame)
+    old_dialog.dispatchEvent(new Event(`close`))
   })
 
   const dialog = page.getByRole(`dialog`, { name: `Edit profile` })

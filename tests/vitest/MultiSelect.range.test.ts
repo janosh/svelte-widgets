@@ -1,8 +1,8 @@
-import { mount, tick } from 'svelte'
+import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
-import MultiSelect from '$lib/MultiSelect.svelte'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
+import { mount_multiselect } from './MultiSelect.test-utils'
 
 const alpha_options = [`Alpha`, `Beta`, `Gamma`, `Delta`]
 const dup_options = [
@@ -26,12 +26,9 @@ const option_row = (label: string): HTMLLIElement => {
   return row
 }
 
-const mount_multiselect = (props: MultiSelectProps) => {
+const mount_range = (props: MultiSelectProps) => {
   const onrangeSelect = vi.fn()
-  mount(MultiSelect, {
-    target: document.body,
-    props: { rangeSelect: true, ...props, onrangeSelect },
-  })
+  mount_multiselect({ rangeSelect: true, ...props, onrangeSelect })
   return onrangeSelect
 }
 
@@ -55,7 +52,7 @@ const select_range = async (anchor: string, target: string): Promise<void> => {
 }
 
 test(`backward range selects upward from the anchor`, async () => {
-  const onrange_select = mount_multiselect({ options: alpha_options, open: true })
+  const onrange_select = mount_range({ options: alpha_options, open: true })
 
   await select_range(`Delta`, `Alpha`)
 
@@ -77,7 +74,7 @@ test.each([
 ])(
   `shift-click resolves to the clicked duplicate row, with %s`,
   async (_label, options, extra_props, shift_idx) => {
-    const onrange_select = mount_multiselect({ options, open: true, ...extra_props })
+    const onrange_select = mount_range({ options, open: true, ...extra_props })
 
     option_rows()[1]?.click()
     await tick()
@@ -92,7 +89,7 @@ test.each([
 
 test(`Shift+Enter adds one option instead of extending a range`, async () => {
   const onadd = vi.fn()
-  const onrange_select = mount_multiselect({
+  const onrange_select = mount_range({
     options: [`Alpha`, `Beta`, `Gamma`],
     open: true,
     onadd,
@@ -115,7 +112,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
 })
 
 test(`Shift-click adds one visible range and one history entry`, async () => {
-  const onrange_select = mount_multiselect({
+  const onrange_select = mount_range({
     options: alpha_options,
     selected: [],
     maxOptions: 3,
@@ -137,7 +134,7 @@ test(`Shift-click adds one visible range and one history entry`, async () => {
 })
 
 test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async () => {
-  const onrange_select = mount_multiselect({
+  const onrange_select = mount_range({
     options: alpha_options,
     open: true,
     autoScroll: false,
@@ -164,7 +161,7 @@ test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async
 })
 
 test(`Shift-click is an ordinary click while rangeSelect is off`, async () => {
-  const onrange_select = mount_multiselect({
+  const onrange_select = mount_range({
     options: alpha_options,
     selected: [],
     rangeSelect: false,
@@ -184,7 +181,7 @@ test(`range selection skips disabled rows and obeys maxSelect`, async () => {
     { label: `Gamma` },
     { label: `Delta` },
   ]
-  const onrange_select = mount_multiselect({
+  const onrange_select = mount_range({
     options,
     selected: [],
     maxSelect: 2,
@@ -200,7 +197,7 @@ test(`range selection skips disabled rows and obeys maxSelect`, async () => {
 
 test(`an invalidated anchor falls back to one ordinary add`, async () => {
   const onadd = vi.fn()
-  const onrange_select = mount_multiselect({ options: [`Anchor`, `Target`], onadd })
+  const onrange_select = mount_range({ options: [`Anchor`, `Target`], onadd })
 
   option_row(`Anchor`).click()
   await tick()
@@ -222,7 +219,7 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
 // Two equal-sized ranges in a row yield the same text. With a plain string the live
 // region's DOM would be untouched and a screen reader would stay silent on the repeat.
 test(`an identical repeat announcement still replaces the live region node`, async () => {
-  mount_multiselect({ options: [`A`, `B`, `C`, `D`, `E`], open: true })
+  mount_range({ options: [`A`, `B`, `C`, `D`, `E`], open: true })
   const live = doc_query(`.sr-only[aria-live="polite"]`)
   const text_node = () =>
     [...live.childNodes].find((node) => node.nodeType === 3 && node.textContent?.trim())

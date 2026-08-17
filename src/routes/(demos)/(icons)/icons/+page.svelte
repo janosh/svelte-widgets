@@ -73,7 +73,6 @@ import { Download } from 'svelte-widgets/icons'
   </p>
 {/if}
 
-<!-- doubles as the empty state: "0 of 1126 match zzz" needs no extra message -->
 <p class="count" role="status">
   {#if needle}
     {matches.length} of {catalog.length} match <code>{needle}</code>

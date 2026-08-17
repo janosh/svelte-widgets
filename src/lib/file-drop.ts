@@ -97,13 +97,19 @@ const files_from_entry = async (
 export const files_from_data_transfer = async (
   data_transfer: DataTransfer,
 ): Promise<File[]> => {
-  const entries = Array.from(data_transfer.items)
-    .map((item) => item.webkitGetAsEntry?.())
-    .filter((entry) => entry !== null && entry !== undefined)
-  if (entries.length === 0) return Array.from(data_transfer.files)
+  const items = Array.from(data_transfer.items)
+  const entries = items.map((item) => item.webkitGetAsEntry?.())
+  if (!entries.some(Boolean)) return Array.from(data_transfer.files)
   // one budget for the whole drop, so branches cannot each spend the full allowance
   const budget = { remaining: MAX_DIRS }
   return (
-    await Promise.all(entries.map((entry) => files_from_entry(entry, budget)))
+    await Promise.all(
+      items.map(async (item, item_idx) => {
+        const entry = entries[item_idx]
+        if (entry) return files_from_entry(entry, budget)
+        const file = item.kind === `file` ? item.getAsFile() : null
+        return file ? [file] : []
+      }),
+    )
   ).flat()
 }

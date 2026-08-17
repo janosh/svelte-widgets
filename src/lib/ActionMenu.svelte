@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction } from './types'
@@ -45,7 +45,8 @@
   type Props = Omit<HTMLAttributes<HTMLMenuElement>, `children`> & {
     actions: (CmdAction | CmdSection)[]
     disabled?: boolean
-    // Merged over `{ escape: true }`. `dismiss_on: 'release'` supports right-click toggles.
+    // Native light-dismiss is the default. Supplying press dismissal, escape: false,
+    // enabled: false, or extra inside regions switches to the custom dismissal path.
     dismiss?: DismissConfig
     item?: Snippet<[{ action: CmdAction; section?: CmdSection; checked?: boolean }]>
     on_select?: (action: CmdAction, section?: CmdSection) => void
@@ -84,7 +85,15 @@
   })
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   const trigger_element = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
+  const native_dismiss = $derived(
+    dismiss?.enabled !== false &&
+      dismiss?.escape !== false &&
+      (dismiss?.dismiss_on ?? `release`) === `release` &&
+      !dismiss?.inside?.some(Boolean) &&
+      !dismiss?.scope,
+  )
   let focus_origin: HTMLElement | SVGElement | null = null
+  let context_open_timeout: ReturnType<typeof setTimeout> | undefined
 
   // A right-click is a zero-size anchor; dropdown mode uses the rendered trigger element.
   const anchor = $derived.by(() => {
@@ -96,14 +105,22 @@
   // section; its required `action` callback is what one entry has and the other lacks.
   const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
     !(`action` in entry)
-  // Tagged by source field, so a section titled `Copy`, an action with id `Copy` and one
-  // labeled `Copy` stay three keys. Serialized, not a tuple: Svelte keys by identity.
-  const action_key = (action: CmdAction): string =>
-    JSON.stringify(action.id === undefined ? [`label`, action.label] : [`id`, action.id])
-  // A section has no id, so its title is a heading two of them may share — position
-  // disambiguates, since a duplicate key takes down the whole menu, not just the repeat.
-  const entry_key = (entry: CmdAction | CmdSection, idx: number): string =>
-    is_section(entry) ? JSON.stringify([`section`, entry.title, idx]) : action_key(entry)
+  // Tag by source field so id `Copy`, label `Copy`, and section `Copy` stay distinct.
+  // Index is appended only when that tag repeats in the same each — unique ids stay
+  // stable across reorder.
+  const tag = (entry: CmdAction | CmdSection): string =>
+    is_section(entry)
+      ? JSON.stringify([`section`, entry.title])
+      : JSON.stringify(entry.id === undefined ? [`label`, entry.label] : [`id`, entry.id])
+  const keys_of = (entries: readonly (CmdAction | CmdSection)[]): string[] => {
+    const tags = entries.map(tag)
+    return tags.map((serialized, idx) =>
+      tags.indexOf(serialized) === tags.lastIndexOf(serialized)
+        ? serialized
+        : `${serialized}:${idx}`,
+    )
+  }
+  const entry_keys = $derived(keys_of(actions))
   // An empty section is a heading over nothing, so it is dropped once anything else has
   // something to show. A menu of nothing but empty sections stays externally controllable.
   const all_empty = $derived(
@@ -144,8 +161,16 @@
   function open_at(event: MouseEvent) {
     if (disabled || all_empty) return
     event.preventDefault() // replace the browser's own menu
-    at = { x: event.clientX, y: event.clientY }
+    const point = { x: event.clientX, y: event.clientY }
+    clearTimeout(context_open_timeout)
+    // Chromium fires contextmenu before pointerup. Opening an auto popover immediately
+    // would let that pointerup light-dismiss the menu from the gesture that opened it.
+    context_open_timeout = setTimeout(() => {
+      if (!disabled && !all_empty) at = point
+    }, 0)
   }
+
+  onDestroy(() => clearTimeout(context_open_timeout))
 
   function run(action: CmdAction, section?: CmdSection) {
     close()
@@ -158,10 +183,19 @@
   const enabled_items = (parent: ParentNode) => [
     ...parent.querySelectorAll<HTMLButtonElement>(`[role^=menuitem]:not(:disabled)`),
   ]
-  const focus_menu = (node: HTMLMenuElement) => {
+  const show_menu = (node: HTMLMenuElement) => {
     remember_focus_origin()
+    const source = trigger_element instanceof HTMLElement ? trigger_element : undefined
+    node.showPopover(source ? { source } : undefined)
     enabled_items(node)[0]?.focus()
-    return () => restore_focus(node)
+    return () => {
+      if (node.matches(`:popover-open`)) node.hidePopover()
+      restore_focus(node)
+    }
+  }
+
+  const handle_popover_toggle = (event: ToggleEvent) => {
+    if (event.newState === `closed` && anchor) close()
   }
 
   // Arrows wrap enabled items; Tab closes and resumes page order.
@@ -194,10 +228,12 @@
     tabindex="-1"
     {...rest}
     id={menu_id}
+    popover={native_dismiss ? `auto` : `manual`}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Actions`)}
     class={[`action-menu`, rest.class]}
+    ontoggle={handle_popover_toggle}
     onkeydown={chain_handlers(handle_menu_keys, rest.onkeydown)}
-    {@attach focus_menu}
+    {@attach show_menu}
     {@attach float({
       anchor,
       placement: trigger_snippet ? placement : `bottom`,
@@ -207,23 +243,26 @@
       match_width: trigger_snippet && match_width,
       strategy,
     })}
-    {@attach click_outside({
-      escape: true,
-      ...dismiss,
-      inside: trigger_snippet
-        ? [...(dismiss?.inside ?? []), trigger_wrapper]
-        : dismiss?.inside,
-      callback: close,
-    })}
+    {@attach native_dismiss
+      ? null
+      : click_outside({
+          escape: true,
+          ...dismiss,
+          inside: trigger_snippet
+            ? [...(dismiss?.inside ?? []), trigger_wrapper]
+            : dismiss?.inside,
+          callback: close,
+        })}
   >
-    {#each actions as entry, idx (entry_key(entry, idx))}
+    {#each actions as entry, idx (entry_keys[idx])}
       {#if is_section(entry)}
         {#if entry.actions.length || all_empty}
+          {@const action_keys = keys_of(entry.actions)}
           <!-- role="group" names the run of items without taking them out of the menu;
           the title is hidden from AT because aria-label already announces it -->
           <li role="group" aria-label={entry.title}>
             <span class="section-title" aria-hidden="true">{entry.title}</span>
-            {#each entry.actions as action (action_key(action))}
+            {#each entry.actions as action, action_idx (action_keys[action_idx])}
               {@render menu_item(action, entry)}
             {/each}
           </li>
@@ -263,6 +302,7 @@
 
 <style>
   .action-menu {
+    inset: auto;
     z-index: var(--action-menu-z-index, 20);
     margin: 0;
     padding: var(--action-menu-padding, 3pt);

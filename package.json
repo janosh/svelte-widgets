@@ -76,10 +76,6 @@
       "types": "./dist/katex.d.ts",
       "default": "./dist/katex.js"
     },
-    "./types": {
-      "types": "./dist/types.d.ts",
-      "default": "./dist/types.js"
-    },
     "./live-examples": {
       "types": "./dist/live-examples/index.d.ts",
       "default": "./dist/live-examples/index.js"

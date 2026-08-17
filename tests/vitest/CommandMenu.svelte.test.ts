@@ -19,21 +19,6 @@ async function type_search(text: string): Promise<HTMLInputElement> {
   return input
 }
 
-// tests that exercise the non-modal fallback assign showModal directly rather than
-// spying, so vi.restoreAllMocks() in the global setup can't undo it
-const original_show_modal = Object.getOwnPropertyDescriptor(
-  HTMLDialogElement.prototype,
-  `showModal`,
-)
-afterEach(() => {
-  if (original_show_modal) {
-    Object.defineProperty(HTMLDialogElement.prototype, `showModal`, original_show_modal)
-  } else Reflect.deleteProperty(HTMLDialogElement.prototype, `showModal`)
-  // recents tests write to localStorage; clear here so a failing test can't leak
-  // stored recents into the next one
-  localStorage.clear()
-})
-
 test.each([
   {
     triggers: [`k`],
@@ -107,19 +92,42 @@ test.each([
 )
 
 test.each([
-  { close_keys: [`Escape`], key_to_press: `Escape`, should_close: true },
+  {
+    close_keys: [`Escape`],
+    key_to_press: `Escape`,
+    should_close: true,
+    dialog_props: undefined,
+  },
   // any key in the list closes, not just the first
-  { close_keys: [`Escape`, `x`], key_to_press: `x`, should_close: true },
+  {
+    close_keys: [`Escape`, `x`],
+    key_to_press: `x`,
+    should_close: true,
+    dialog_props: undefined,
+  },
   // non-close key (even default Escape) does nothing when not configured
-  { close_keys: [`q`], key_to_press: `Escape`, should_close: false },
+  {
+    close_keys: [`q`],
+    key_to_press: `Escape`,
+    should_close: false,
+    dialog_props: undefined,
+  },
+  // explicit native policy remains authoritative over the close-key shortcut
+  {
+    close_keys: [`Escape`],
+    key_to_press: `Escape`,
+    should_close: false,
+    dialog_props: { closedby: `none` as const },
+  },
 ])(
   `handles close keys: $close_keys with key $key_to_press -> $should_close`,
-  async ({ close_keys, key_to_press, should_close }) => {
+  async ({ close_keys, key_to_press, should_close, dialog_props }) => {
     const props = $state({
       open: true,
       close_keys,
       actions: mock_actions,
       fade_duration_ms: 0,
+      dialog_props,
     })
     mount(CommandMenu, { target: document.body, props })
 
@@ -167,11 +175,33 @@ test.each([`Escape`, `x`])(
 )
 
 test.each([
-  { close_keys: [`Escape`], default_prevented: false },
-  { close_keys: [`q`], default_prevented: true },
+  {
+    close_keys: [`Escape`],
+    closedby: undefined,
+    default_prevented: false,
+    effective_closedby: `any`,
+  },
+  {
+    close_keys: [`q`],
+    closedby: undefined,
+    default_prevented: true,
+    effective_closedby: `none`,
+  },
+  {
+    close_keys: [`Escape`],
+    closedby: `none` as const,
+    default_prevented: true,
+    effective_closedby: `none`,
+  },
+  {
+    close_keys: [`q`],
+    closedby: `closerequest` as const,
+    default_prevented: false,
+    effective_closedby: `closerequest`,
+  },
 ])(
   `dialog cancel with close_keys=$close_keys prevents default: $default_prevented`,
-  async ({ close_keys, default_prevented }) => {
+  async ({ close_keys, closedby, default_prevented, effective_closedby }) => {
     const oncancel = vi.fn()
     mount(CommandMenu, {
       target: document.body,
@@ -179,50 +209,45 @@ test.each([
         open: true,
         close_keys,
         actions: mock_actions,
-        dialog_props: { oncancel },
+        dialog_props: { oncancel, closedby },
         fade_duration_ms: 0,
       },
     })
     await tick()
 
     const cancel_event = new Event(`cancel`, { cancelable: true })
-    doc_query<HTMLDialogElement>(`dialog`).dispatchEvent(cancel_event)
+    const dialog = doc_query<HTMLDialogElement>(`dialog`)
+    dialog.dispatchEvent(cancel_event)
 
     expect(cancel_event.defaultPrevented).toBe(default_prevented)
+    expect(dialog.getAttribute(`closedby`)).toBe(effective_closedby)
     expect(oncancel).toHaveBeenCalledOnce()
   },
 )
 
-// showModal is preferred, but a throwing or missing implementation must still end up
-// with an open, labeled dialog via the plain `open` attribute fallback
-test.each([`available`, `throws`, `unavailable`] as const)(
-  `opens a labeled dialog when showModal is %s`,
-  async (show_modal_state) => {
-    const show_modal = vi.fn(function showModal(this: HTMLDialogElement) {
-      if (show_modal_state === `throws`) throw new Error(`showModal failed`)
-      this.setAttribute(`open`, ``)
-    })
-    if (show_modal_state === `unavailable`) {
-      Reflect.deleteProperty(HTMLDialogElement.prototype, `showModal`)
-    } else HTMLDialogElement.prototype.showModal = show_modal
+test(`opens a labeled native light-dismiss dialog`, async () => {
+  const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
+  mount(CommandMenu, {
+    target: document.body,
+    props: {
+      actions: mock_actions,
+      aria_label: `Run command`,
+      open: true,
+      backdrop_dim: false,
+      backdrop_blur: true,
+      fade_duration_ms: 0,
+    },
+  })
+  await tick()
 
-    mount(CommandMenu, {
-      target: document.body,
-      props: {
-        actions: mock_actions,
-        aria_label: `Run command`,
-        open: true,
-        fade_duration_ms: 0,
-      },
-    })
-    await tick()
-
-    const dialog = doc_query<HTMLDialogElement>(`dialog`)
-    expect(dialog.getAttribute(`aria-label`)).toBe(`Run command`)
-    expect(dialog.hasAttribute(`open`)).toBe(true)
-    expect(show_modal).toHaveBeenCalledTimes(show_modal_state === `unavailable` ? 0 : 1)
-  },
-)
+  const dialog = doc_query<HTMLDialogElement>(`dialog`)
+  expect(dialog.getAttribute(`aria-label`)).toBe(`Run command`)
+  expect(dialog.getAttribute(`closedby`)).toBe(`any`)
+  expect(dialog.open).toBe(true)
+  expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
+  expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
+  expect(show_modal).toHaveBeenCalledOnce()
+})
 
 test(`handles action selection and execution`, async () => {
   const actions_with_spies = mock_actions.map(({ label }) => ({
@@ -278,78 +303,6 @@ test(`ignores user-created options without action handlers`, async () => {
 
   expect(action).not.toHaveBeenCalled()
   expect(props.open).toBe(true)
-})
-
-test.each([
-  [`page body`, () => document.body],
-  // SVG targets are Element but not HTMLElement - an instanceof HTMLElement guard
-  // would wrongly ignore them and leave the menu open
-  [
-    `svg element outside dialog`,
-    () => {
-      const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
-      document.body.append(svg)
-      return svg
-    },
-  ],
-  // a portalled options list belonging to some other component is still outside, unlike
-  // this menu's own listbox (covered by the nested-portalled-option test below)
-  [
-    `unrelated portalled options list`,
-    () => {
-      const other_options = document.createElement(`ul`)
-      other_options.id = `unrelated-options`
-      other_options.className = `options`
-      other_options.innerHTML = `<li>Other option</li>`
-      document.body.append(other_options)
-      return doc_query(`#unrelated-options li`)
-    },
-  ],
-])(`closes dialog on outside click: %s`, async (_label, get_target) => {
-  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
-  await tick()
-
-  get_target().dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-  await tick()
-
-  expect(props.open).toBe(false)
-  expect(document.querySelector(`dialog`)).toBeNull()
-})
-
-// A press on the ::backdrop of a modal dialog reports the dialog as its target, and so
-// does one on the dialog's own padding ring (6pt of it here). Only the coordinates tell
-// them apart, so the padding used to close the menu the user was aiming at.
-test.each([
-  [`the backdrop`, 10, 10, false],
-  [`its own padding`, 105, 105, true],
-])(`a press on %s`, async (_label, clientX, clientY, stays_open) => {
-  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
-  await tick()
-
-  // happy-dom does no layout, so the dialog's box has to be supplied
-  const dialog = doc_query<HTMLDialogElement>(`dialog`)
-  const rect = { left: 100, top: 100, right: 300, bottom: 200, width: 200, height: 100 }
-  dialog.getBoundingClientRect = () => rect as DOMRect
-  const init = { bubbles: true, clientX, clientY }
-  dialog.dispatchEvent(new PointerEvent(`pointerdown`, { isPrimary: true, ...init }))
-  dialog.dispatchEvent(new MouseEvent(`click`, init))
-  await tick()
-
-  expect(props.open).toBe(stays_open)
-})
-
-test(`keeps dialog open when clicking inside the menu`, async () => {
-  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
-  await tick()
-
-  menu_input().dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-  await tick()
-
-  expect(props.open).toBe(true)
-  expect(document.querySelector(`dialog`)).toBeInstanceOf(HTMLDialogElement)
 })
 
 // open=false must call dialog.close() before `{#if open}` unmounts, including while
@@ -430,70 +383,6 @@ test(`a stale native close cannot close a reopened menu`, async () => {
   expect(current_dialog.open).toBe(true)
 })
 
-test(`non-modal fallback closes on click of an unrelated page multiselect`, async () => {
-  // force the non-modal fallback so outside clicks land on real page elements (with a
-  // modal dialog they'd hit the backdrop instead, which is covered above)
-  HTMLDialogElement.prototype.showModal = vi.fn(() => {
-    throw new Error(`showModal unavailable`)
-  })
-  const other_multiselect = document.createElement(`div`)
-  other_multiselect.className = `multiselect`
-  document.body.append(other_multiselect)
-  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-
-  mount(CommandMenu, { target: document.body, props })
-  await tick()
-
-  other_multiselect.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-  await tick()
-
-  expect(props.open).toBe(false)
-})
-
-test(`keeps dialog open when clicking a nested portalled option`, async () => {
-  const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
-  await tick()
-
-  const input = menu_input()
-  const real_listbox_id = input.getAttribute(`aria-controls`)
-  if (!real_listbox_id) throw new Error(`Menu input has no aria-controls listbox id`)
-  const listbox_id = `${real_listbox_id}-portalled`
-  input.setAttribute(`aria-controls`, listbox_id)
-
-  const container = document.createElement(`div`)
-  container.innerHTML = `<ul class="options" id="${listbox_id}"><li><span>Nested option</span></li></ul>`
-  document.body.append(container)
-
-  doc_query(`#${listbox_id} span`).dispatchEvent(
-    new MouseEvent(`click`, { bubbles: true }),
-  )
-  await tick()
-
-  expect(props.open).toBe(true)
-  expect(document.querySelector(`dialog`)).not.toBeNull()
-})
-
-test(`stays open when a button's click handler sets open=true and the click bubbles to window`, async () => {
-  // the very click that opens the menu bubbles to <svelte:window onclick> while
-  // dialog is still null (not rendered until next flush) - close_if_outside must
-  // not treat it as an outside click and instantly close the menu
-  const props = $state({ open: false, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
-
-  const open_button = document.createElement(`button`)
-  open_button.addEventListener(`click`, () => {
-    props.open = true
-  })
-  document.body.append(open_button)
-
-  open_button.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-  await tick()
-
-  expect(props.open).toBe(true)
-  expect(document.querySelector(`dialog`)).toBeInstanceOf(HTMLDialogElement)
-})
-
 test(`applies custom styles and props correctly`, async () => {
   const custom_class = `my-custom-class`
   const custom_placeholder = `Custom placeholder`
@@ -557,16 +446,13 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
   })
 })
 
-test(`handles empty actions array`, () => {
-  const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
-  mount(CommandMenu, {
-    target: document.body,
-    props: { open: true, actions: [], fade_duration_ms: 0 },
-  })
-
-  expect(doc_query(`dialog`)).toBeInstanceOf(HTMLDialogElement)
-  expect(document.querySelector(`dialog ul.options`)?.children.length ?? 0).toBe(0)
-  expect(console_error).toHaveBeenCalledWith(`MultiSelect: received no options`)
+test(`rejects an empty static action list`, () => {
+  expect(() =>
+    mount(CommandMenu, {
+      target: document.body,
+      props: { open: true, actions: [], fade_duration_ms: 0 },
+    }),
+  ).toThrow(`MultiSelect: received no options`)
 })
 
 test(`remains open when trigger keys are pressed while already open`, async () => {

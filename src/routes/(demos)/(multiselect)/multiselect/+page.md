@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
-  import { slug_to_title, SubpageGrid } from '$lib'
+  import { SubpageGrid } from '$lib'
+  import { slug_to_title } from '$lib/utils'
   import { demo_labels } from '../..'
 
   // card titles and hrefs are derived from the slug so they can't drift from the nav
@@ -509,13 +510,13 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    selectedDisplay: 'chips' | 'input' = 'chips'
    ```
 
-   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and is only valid with `maxSelect={1}`; other values log a config error and fall back to chips. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
+   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and requires `maxSelect={1}`; other values throw a configuration error. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
 
 1. ```ts
    virtualList: boolean | { itemHeight?: number; overscan?: number } = false
    ```
 
-   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `itemHeight` (px per row, default 30, also applies to group headers) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported except in combination with `stickyGroupHeaders`, which falls back to full rendering with a console warning.
+   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `itemHeight` (px per row, default 30, also applies to group headers) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported, but combining them with `stickyGroupHeaders` throws a configuration error.
 
 1. ```ts
    minSelect: number | null = null
@@ -581,7 +582,7 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    parseLabelsAsHtml: boolean = false
    ```
 
-   Whether to render option labels as HTML. **Warning:** Don't combine with `allowUserOptions` (XSS risk).
+   Whether to render option labels as HTML. Combining this with `allowUserOptions` throws because user-provided HTML would enable XSS.
 
 1. ```ts
    selectedOptionsDraggable: boolean = !sortSelected

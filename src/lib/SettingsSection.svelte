@@ -13,6 +13,7 @@
   let {
     title,
     current_values = {},
+    reset_values,
     children,
     layout = `flow`,
     on_reset,
@@ -26,6 +27,9 @@
     // Values may be primitives, arrays, plain objects, Date, or RegExp. Map, Set, and typed
     // arrays are unsupported because reset snapshots and comparisons only cover these shapes.
     current_values?: Record<string, unknown>
+    // Optional reset baseline. Keys absent from this object are treated as additions and
+    // removed when reset; keys not present in current_values are ignored.
+    reset_values?: Record<string, unknown>
     children: Snippet
     // `grid` puts every direct label/.setting row on one shared [label][value][wide control]
     // column rhythm, so controls line up down the whole section instead of starting wherever
@@ -46,8 +50,20 @@
     descriptions_open?: boolean
   } = $props()
 
+  const validate_object_shape = (value: object): void => {
+    if (value instanceof Set || value instanceof Map) {
+      throw new TypeError(`SettingsSection values must not contain Set or Map instances`)
+    }
+    if (value instanceof Date || value instanceof RegExp || Array.isArray(value)) return
+    const prototype = Object.getPrototypeOf(value)
+    if (prototype && prototype !== Object.prototype) {
+      throw new TypeError(`SettingsSection values must be plain objects`)
+    }
+  }
+
   const deep_copy = (value: unknown): unknown => {
     if (!is_object(value)) return value
+    validate_object_shape(value)
     if (value instanceof Date) return new Date(value)
     if (value instanceof RegExp) return new RegExp(value)
     if (Array.isArray(value)) return value.map(deep_copy)
@@ -56,11 +72,26 @@
     )
   }
 
-  // Capture initial values once at mount - must NOT be $derived or it tracks changes
-  const reference_values = untrack(() => deep_copy(current_values)) as Record<
-    string,
-    unknown
-  >
+  const validate_value_shape = (value: unknown): void => {
+    if (!is_object(value)) return
+    validate_object_shape(value)
+    if (value instanceof Date || value instanceof RegExp) return
+    if (Array.isArray(value)) {
+      for (const item of value) validate_value_shape(item)
+      return
+    }
+    for (const item of Object.values(value)) validate_value_shape(item)
+  }
+
+  // Capture reset values once at mount - must NOT be $derived or it tracks changes.
+  const reference_values = untrack(() => {
+    if (!reset_values) return deep_copy(current_values) as Record<string, unknown>
+    return Object.fromEntries(
+      Object.keys(current_values)
+        .filter((key) => Object.hasOwn(reset_values, key))
+        .map((key) => [key, deep_copy(reset_values[key])]),
+    )
+  })
 
   // unique per-instance id so aria-labelledby stays valid with multiple sections on a page
   const section_id = $props.id()
@@ -75,7 +106,7 @@
 
   // Order-independent deep equality over the shapes `deep_copy` preserves
   const setting_equal = (left: unknown, right: unknown): boolean => {
-    if (Object.is(left, right)) return true
+    if (left === right || Object.is(left, right)) return true
     if (!is_object(left) || !is_object(right)) return false
     const [left_scalar, right_scalar] = [scalar_of(left), scalar_of(right)]
     if (left_scalar !== undefined || right_scalar !== undefined)
@@ -99,13 +130,14 @@
 
   // Key presence is independent of value: additions/removals count even when the
   // value is undefined. Only compare values when both sides own the key.
-  const changed_keys = $derived(
-    Object.keys({ ...reference_values, ...current_values }).filter(
+  const changed_keys = $derived.by(() => {
+    validate_value_shape(current_values)
+    return Object.keys({ ...reference_values, ...current_values }).filter(
       (key) =>
         Object.hasOwn(reference_values, key) !== Object.hasOwn(current_values, key) ||
         !setting_equal(reference_values[key], current_values[key]),
-    ),
-  )
+    )
+  })
   let has_descriptions = $state(false)
   const show_reset = $derived(
     changed_keys.length > 0 && Boolean(on_reset || on_reset_key),

@@ -41,6 +41,12 @@ test(`lang-label is positioned out of flow so it can't indent code`, () => {
   expect(getComputedStyle(doc_query(`.lang-label`)).position).toBe(`absolute`)
 })
 
+test(`lang-label escapes HTML in the language name`, () => {
+  mount_files({ files: [{ title: `x`, content: `a`, language: `<b>ts</b>` }] })
+  expect(doc_query(`.lang-label`).textContent).toBe(`<b>ts</b>`)
+  expect(doc_query(`.lang-label`).querySelector(`b`)).toBeNull()
+})
+
 test(`content with HTML characters is escaped before highlighting loads`, () => {
   const html_content = `<div class="foo">&amp; bar</div>`
   mount_files({ files: [{ title: `test.svelte`, content: html_content }] })
@@ -71,6 +77,22 @@ test(`syntax highlighting produces starry-night spans`, async () => {
     { timeout: 5000 },
   )
   expect(doc_query(`pre code`).textContent).toContain(`let count`)
+})
+
+test(`distinct language-content pairs cannot collide in the highlight cache`, async () => {
+  const contents = [`bar`, `foo:bar`]
+  mount_files({
+    files: [
+      { title: `plain`, content: contents[0], language: `typescript:foo` },
+      { title: `typed.ts`, content: contents[1], language: `typescript` },
+    ],
+  })
+
+  await vi.waitFor(
+    () => expect(document.querySelector(`pre code span[class^="pl-"]`)).not.toBeNull(),
+    { timeout: 5000 },
+  )
+  expect(all_text(`pre code`)).toEqual(contents)
 })
 
 test(`toggle all button opens/closes all, tracks label, and handles partial/native toggles`, async () => {

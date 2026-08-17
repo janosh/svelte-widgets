@@ -3,7 +3,6 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import type { ActionButtonSnippetProps, ActionState } from './types'
-  import { chain_handlers } from './utils'
 
   type ActionLabel = Pick<ActionButtonSnippetProps, `icon` | `text`>
 
@@ -90,18 +89,21 @@
       set_state(`error`)
       void invoke_callback(`on_error`, () => on_error?.(action_error))
     }
-    if (reset_ms > 0) {
-      reset_timeout = setTimeout(() => {
-        set_state(`ready`)
-        reset_timeout = null
-      }, reset_ms)
-    }
+    if (destroyed || reset_ms <= 0) return
+    reset_timeout = setTimeout(() => {
+      reset_timeout = null
+      if (!destroyed) set_state(`ready`)
+    }, reset_ms)
   }
 
-  function handle_action_keydown(event: KeyboardEvent): void {
-    if (event.key !== `Enter` && event.key !== ` `) return
+  const activate = (event: Event): boolean => {
     event.preventDefault()
+    if (action_disabled) {
+      event.stopPropagation()
+      return false
+    }
     void run_action()
+    return true
   }
 </script>
 
@@ -115,8 +117,13 @@
   data-sms-action=""
   data-state={state}
   {...rest}
-  onclick={chain_handlers(run_action, rest.onclick)}
-  onkeydown={chain_handlers(handle_action_keydown, rest.onkeydown)}
+  onclick={(event) => {
+    if (activate(event)) rest.onclick?.(event)
+  }}
+  onkeydown={(event) => {
+    if ((event.key === `Enter` || event.key === ` `) && !activate(event)) return
+    rest.onkeydown?.(event)
+  }}
 >
   <span data-sms-action-content="" style="justify-content: center">
     {#if children}

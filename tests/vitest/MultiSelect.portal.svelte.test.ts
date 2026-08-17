@@ -1,8 +1,8 @@
-import { tick, unmount } from 'svelte'
+import { tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps, PortalParams } from '$lib/types'
 import { doc_query } from './index'
-import { mount_multiselect } from './MultiSelect.test-utils'
+import { mount_multiselect, unmount_component } from './MultiSelect.test-utils'
 
 describe(`portal placement`, () => {
   afterEach(() => vi.unstubAllGlobals()) // don't leak innerHeight overrides to other tests
@@ -244,7 +244,7 @@ test(`press on the portalled dropdown does not close it`, async () => {
   await tick()
   expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(false)
   outside.remove()
-  await unmount(app)
+  await unmount_component(app)
 })
 
 // Portalled blur must not close (issue #335); in-place skips blur (it closes on its own).
@@ -280,6 +280,6 @@ test.each([
     await tick()
     expect(is_open()).toBe(false)
     outside.remove()
-    await unmount(app)
+    await unmount_component(app)
   },
 )

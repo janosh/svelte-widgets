@@ -9,7 +9,7 @@
   const in_shadow_root = (node: HTMLElement) => {
     const app = mount(CommandMenu, {
       target: node.attachShadow({ mode: `open` }),
-      props: { actions, open: true, fade_duration_ms: 0 },
+      props: { actions, open: true, close_keys: [], fade_duration_ms: 0 },
     })
     return () => void unmount(app)
   }

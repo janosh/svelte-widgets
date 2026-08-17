@@ -2,9 +2,7 @@
 
 When `parseLabelsAsHtml={true}`, MultiSelect renders HTML in option labels.
 
-> **Security:** Only use trusted or sanitized labels. Raw HTML can enable XSS. The
-> runtime warning only detects combining `parseLabelsAsHtml` with `allowUserOptions`;
-> it does not sanitize labels.
+> **Security:** Only use trusted or sanitized labels. Raw HTML can enable XSS. Combining `parseLabelsAsHtml` with `allowUserOptions` throws at runtime; labels are not sanitized for you.
 
 ```svelte example id="multiselect-html-labels"
 <script lang="ts">

@@ -8,6 +8,7 @@
   } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { ChevronCollapse, ChevronExpand, GitHub, Svelte } from './icons'
+  import { language_label_html } from './internal/language-label'
   import { chain_handlers } from './utils'
 
   let {
@@ -109,7 +110,7 @@
   class={[`code-example`, rest.class, { 'code-above': code_above }]}
 >
   {@render example?.()}
-  <pre class:open>{#if lang}<span class="lang-label">{lang}</span>{/if}<code
+  <pre class:open>{#if lang}{@html language_label_html(lang)}{/if}<code
       >{#if code}{@render code()}{:else}{src}{/if}</code
     ></pre>
 </div>
@@ -161,18 +162,5 @@
   }
   .code-above > pre.open {
     margin: var(--code-example-pre-margin, 0 0 1em 0);
-  }
-  /* the label is emitted inline before <code>; pre is white-space: pre, so it
-  must be taken out of flow or it indents the first code line */
-  .lang-label {
-    position: absolute;
-    bottom: 2px;
-    inset-inline-end: 6px;
-    font-size: 0.65rem;
-    opacity: 0.35;
-    text-transform: uppercase;
-    pointer-events: none;
-    user-select: none;
-    line-height: 1;
   }
 </style>

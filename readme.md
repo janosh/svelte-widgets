@@ -161,7 +161,6 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/text-search`                      | Text ranges, highlighting and search-jump helpers          |
 | `/theme`                            | Headless light/dark/system state                           |
 | `/toast-queue`                      | Toast reducer and reactive store                           |
-| `/types`                            | Shared component/action types                              |
 | `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers   |
 | `/vite-config`                      | This repository's Vite Plus configuration helper           |
 
@@ -182,7 +181,7 @@ export default {
 
 Import `katex/dist/katex.min.css` once in the app so the generated markup is styled.
 
-`Popover` and `ActionMenu` both use `float` for placement and `click_outside` for dismissal (on the press, so a right-click closes it too). Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
+`Popover` and `ActionMenu` use the browser Popover API for top-layer rendering, light dismissal and Escape handling, while `float` supplies placement. Explicit custom dismissal policies still use `click_outside`. Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
 
 ```svelte
 <script lang="ts">

@@ -167,6 +167,21 @@ test(`an item without webkitGetAsEntry is skipped, not fatal`, async () => {
   expect(names(await files_from_data_transfer(dropped))).toEqual([`kept.txt`])
 })
 
+test(`flat file items are kept when only some items expose entries`, async () => {
+  const flat_file = new File([`flat`], `flat.txt`)
+  const dropped = {
+    items: [
+      { kind: `file`, webkitGetAsEntry: () => file_entry(`entry.txt`) },
+      { kind: `file`, webkitGetAsEntry: () => null, getAsFile: () => flat_file },
+    ],
+  } as unknown as DataTransfer
+
+  expect(names(await files_from_data_transfer(dropped))).toEqual([
+    `entry.txt`,
+    `flat.txt`,
+  ])
+})
+
 test(`a rejected entry.file call rejects the whole expansion`, async () => {
   const failure = new DOMException(`NotFoundError`)
   const broken = file_entry(`broken.txt`, (_on_file, on_error) => on_error?.(failure))

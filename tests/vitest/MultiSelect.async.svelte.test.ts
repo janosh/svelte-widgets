@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-await-in-loop
-import { createRawSnippet, tick, unmount } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { Option } from '$lib'
 import type { LoadOptionsParams, MultiSelectProps } from '$lib/types'
@@ -10,6 +10,7 @@ import {
   get_input,
   mount_multiselect,
   type_search_text,
+  unmount_component,
 } from './MultiSelect.test-utils'
 
 afterEach(() => {
@@ -20,12 +21,8 @@ const mock_console_error = () =>
   vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
 // disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix in MultiSelect.svelte.test.ts
-test(`no console error about missing options if loading=true`, () => {
-  const console_error = mock_console_error()
-
-  mount_multiselect({ options: [], loading: true })
-
-  expect(console_error).not.toHaveBeenCalled()
+test(`empty options are valid while loading`, () => {
+  expect(() => mount_multiselect({ options: [], loading: true })).not.toThrow()
 })
 
 // deferred loadOptions fetch: tests decide exactly when each request settles
@@ -224,7 +221,7 @@ describe(`loadOptions feature`, () => {
     expect(load_options).toHaveBeenCalledTimes(1)
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(false)
 
-    void unmount(component)
+    void unmount_component(component)
     await tick()
 
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)

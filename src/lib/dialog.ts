@@ -12,6 +12,8 @@ export type DialogTriggerProps = {
 }
 export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   open?: boolean
+  backdrop_dim?: boolean // default: true
+  backdrop_blur?: boolean // default: false
   close_on_backdrop?: boolean
   close_on_escape?: boolean
   surface?: HTMLDialogElement | null
@@ -20,6 +22,20 @@ export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   footer?: Snippet<[DialogControls]>
   children: Snippet<[DialogControls]>
   on_close?: (detail: DialogCloseDetail) => void
+}
+
+export const is_dialog_backdrop_event = (
+  dialog: HTMLDialogElement | null,
+  event: MouseEvent,
+): boolean => {
+  if (event.target !== dialog || !dialog) return false
+  const { top, right, bottom, left } = dialog.getBoundingClientRect()
+  return (
+    event.clientX < left ||
+    event.clientX > right ||
+    event.clientY < top ||
+    event.clientY > bottom
+  )
 }
 
 export const restore_dialog_focus = (

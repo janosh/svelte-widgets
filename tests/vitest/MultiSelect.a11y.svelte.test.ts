@@ -1,5 +1,5 @@
 // deno-lint-ignore-file no-await-in-loop
-import { tick, unmount } from 'svelte'
+import { tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
@@ -9,6 +9,7 @@ import {
   get_input,
   mount_multiselect,
   type_search_text,
+  unmount_component,
 } from './MultiSelect.test-utils'
 
 describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
@@ -246,7 +247,7 @@ describe(`ARIA correctness`, () => {
     // at max capacity the row is disabled but must NOT be announced as selected:
     // aria-selected tracks only whether all selectable options are selected
     // (option 3 is not) — not the maxSelect capacity limit
-    await unmount(first)
+    await unmount_component(first)
     mount_multiselect({
       options: [1, 2, 3],
       selected: [1, 2],

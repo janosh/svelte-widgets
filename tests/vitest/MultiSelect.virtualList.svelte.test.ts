@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-await-in-loop
 import { tick } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test } from 'vite-plus/test'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import {
@@ -175,21 +175,24 @@ describe(`virtualList`, () => {
     expect(active.textContent?.trim()).toBe(`option 6`)
   })
 
-  test(`stickyGroupHeaders + groups falls back to full rendering with a console.warn`, async () => {
-    console.warn = vi.fn()
-    mount_multiselect({
-      options: make_grouped(50),
-      open: true,
-      virtualList: true,
-      stickyGroupHeaders: true,
-    })
-    await tick() // wait for validation $effect to run
+  test(`rejects virtual grouped lists with sticky headers`, () => {
+    expect(() =>
+      mount_multiselect({
+        options: make_grouped(50),
+        open: true,
+        virtualList: true,
+        stickyGroupHeaders: true,
+      }),
+    ).toThrow(`virtualList cannot be combined with stickyGroupHeaders`)
+  })
 
-    expect(console.warn).toHaveBeenCalledTimes(1)
-    expect(console.warn).toHaveBeenCalledWith(
-      expect.stringContaining(`virtualList does not support stickyGroupHeaders`),
+  test.each([
+    [{ itemHeight: 0 }, `virtualList.itemHeight must be positive`],
+    [{ overscan: -1 }, `virtualList.overscan must be a non-negative integer`],
+    [{ overscan: 1.5 }, `virtualList.overscan must be a non-negative integer`],
+  ] as const)(`rejects invalid virtual config %j`, (virtualList, message) => {
+    expect(() => mount_multiselect({ options: virtual_options, virtualList })).toThrow(
+      message,
     )
-    expect(get_rendered_options()).toHaveLength(50) // fallback renders ALL options
-    expect(get_spacers()).toHaveLength(0)
   })
 })
