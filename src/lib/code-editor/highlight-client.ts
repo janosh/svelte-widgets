@@ -42,7 +42,12 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   let cancellation: Promise<void> = Promise.resolve()
   let next_request_id = 0
   const report = (error: unknown): void => {
-    if (!disposed) on_error?.(to_error(error).message)
+    if (disposed) return
+    try {
+      on_error?.(to_error(error).message)
+    } catch (callback_error) {
+      console.error(`Editor error callback failed for ${doc_id}`, callback_error)
+    }
   }
   const drain = async (): Promise<void> => {
     while (queue_head < queue.length) await queue[queue_head++]?.run()

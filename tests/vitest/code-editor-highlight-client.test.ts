@@ -95,9 +95,14 @@ test.each([`reject`, `wrong revision`] as const)(
   },
 )
 
-test(`a highlight request retries a failed resync`, async () => {
+test(`a highlight request retries a failed resync despite a throwing error callback`, async () => {
   vi.useFakeTimers()
   const current = setup()
+  vi.spyOn(console, `error`).mockImplementation(() => {})
+  current.errors.mockImplementationOnce(() => {
+    throw new Error(`error callback failed`)
+  })
+  const close_doc = vi.spyOn(current.backend, `close_doc`)
   current.backend.apply_edits = vi.fn(() => Promise.reject(new Error(`desync`)))
   current.backend.set_text = vi
     .fn()
@@ -119,6 +124,8 @@ test(`a highlight request retries a failed resync`, async () => {
     endLine: 1,
   })
   expect(current.errors).toHaveBeenCalledWith(`resync failed`)
+  await expect(current.client.close()).resolves.toBeUndefined()
+  expect(close_doc).toHaveBeenCalledOnce()
 })
 
 test(`viewport and edit cancellation suppress stale spans and highlighting waits for edits`, async () => {
