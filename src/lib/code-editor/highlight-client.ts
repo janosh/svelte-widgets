@@ -37,6 +37,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   let close_promise: Promise<void> | null = null
   let highlight_timer: ReturnType<typeof setTimeout> | null = null
   let pending_window: { start_line: number; end_line: number } | null = null
+  let backend_synced = true
   let active_highlight: { request_id: number; revision: number } | null = null
   let cancellation: Promise<void> = Promise.resolve()
   let next_request_id = 0
@@ -83,6 +84,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   }
   const enqueue_resync = (): void => {
     if (disposed) return
+    backend_synced = false
     const pending = queue
       .splice(queue_head)
       .filter((task) => task.kind !== `resync` && task.kind !== `edit`)
@@ -100,6 +102,10 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
             throw new Error(
               `Backend resync revision mismatch: expected ${revision}, received ${applied}`,
             )
+          backend_synced = true
+          const window = pending_window
+          if (window && highlight_timer === null)
+            request_highlight(window.start_line, window.end_line)
         } catch (error) {
           report(error)
         }
@@ -135,7 +141,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   }
   const run_highlight = async (): Promise<void> => {
     await settled()
-    if (disposed) return
+    if (disposed || !backend_synced) return
     const window = pending_window
     pending_window = null
     if (!window) return

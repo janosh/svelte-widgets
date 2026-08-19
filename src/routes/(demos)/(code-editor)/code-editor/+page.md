@@ -36,7 +36,7 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
       ? [0, 0, match.index, keyword_class, match.index + match[0].length, 0]
       : []
   }
-  const apply_edits = (text: string, edits: readonly TextEdit[]) => {
+  const apply_text_edits = (text: string, edits: readonly TextEdit[]) => {
     for (const { from, to, insert } of edits)
       text = text.slice(0, from) + insert + text.slice(to)
     return text
@@ -65,7 +65,7 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
         return Promise.reject(
           new Error(`Expected revision ${backend_revision}, received ${baseRevision}`),
         )
-      const next_text = apply_edits(backend_text, edits)
+      const next_text = apply_text_edits(backend_text, edits)
       if (
         next_text.split(`\n`).length !== expectedLineCount ||
         next_text.length !== expectedLength

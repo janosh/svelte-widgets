@@ -84,11 +84,12 @@ test(`native input, selection, history, commands, and backend deltas share the m
   const { instance, model, recorder, textarea } = await mount_editor(undefined, {
     on_update,
   })
+  expect(doc_query(`.gutter`).style.width).toBe(`2ch`)
   const text_spy = vi.spyOn(model, `text`)
   text_spy.mockClear()
   emit_input(textarea, `insertText`, 6, 6, `xy`)
   textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
-  emit_input(textarea, `insertCompositionText`, 8, 8, `λ`)
+  emit_input(textarea, `insertText`, 8, 8, `λ`)
   emit_input(textarea, `insertCompositionText`, 9, 9, `lambda`, 8, 9)
   textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
   emit_input(textarea, `insertFromComposition`, 14, 14, `lambda`, 8, 14)
@@ -202,7 +203,7 @@ test(`save preserves disk format, external transactions sync, and model replacem
     `Unsupported editor input type formatBold`,
   )
 })
-test.each([`read-only`, `unsupported input`] as const)(
+test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
   `%s restores the model value`,
   async (mode) => {
     const on_error = vi.fn()
@@ -210,7 +211,13 @@ test.each([`read-only`, `unsupported input`] as const)(
       read_only: mode === `read-only`,
       on_error,
     })
-    emit_input(textarea, mode === `read-only` ? `insertText` : `formatBold`, 0, 0, `!`)
+    if (mode === `rejected command`) {
+      vi.spyOn(model, `transact`).mockImplementationOnce(() => {
+        throw new Error(`rejected command`)
+      })
+      press_key(textarea, `Tab`)
+    } else
+      emit_input(textarea, mode === `read-only` ? `insertText` : `formatBold`, 0, 0, `!`)
     await flush_async()
     expect([textarea.value, model.text(), recorder.edits]).toEqual([
       DEMO_TEXT,
@@ -220,6 +227,8 @@ test.each([`read-only`, `unsupported input`] as const)(
     expect(on_error).toHaveBeenCalledTimes(mode === `read-only` ? 0 : 1)
     if (mode === `unsupported input`)
       expect(on_error).toHaveBeenCalledWith(`Unsupported editor input type formatBold`)
+    if (mode === `rejected command`)
+      expect(on_error).toHaveBeenCalledWith(`rejected command`)
   },
 )
 test.each([
@@ -269,6 +278,7 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
   textarea.scrollTop = 0
   textarea.dispatchEvent(new Event(`scroll`))
   await tick()
+  expect(highlight_lines).toHaveBeenCalledTimes(2)
   expect(doc_query(`.token-layer .line span`).classList.contains(`tok-keyword`)).toBe(
     true,
   )

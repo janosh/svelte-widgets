@@ -42,6 +42,7 @@ test(`transactions span rope chunks and map inverse edits exactly`, () => {
   const selection = { anchor: chunk.length + 4, head: chunk.length + 4 }
   const updates: unknown[] = []
   const listener = (update: unknown): void => void updates.push(update)
+  // Duplicate subscriptions are independent; unsubscribe removes only its registration.
   const unsubscribe = model.subscribe(listener)
   model.subscribe(listener)
   model.transact(

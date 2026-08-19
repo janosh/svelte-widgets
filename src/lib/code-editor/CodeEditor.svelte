@@ -106,13 +106,18 @@
     error_message = message
     on_error?.(message)
   }
-  const touch_tokens = (start: number, end: number): void => {
+  const touch_tokens = (start: number, end: number): boolean => {
+    let complete = true
     for (let line_idx = start; line_idx < end; line_idx++) {
       const spans = token_cache.get(line_idx)
-      if (!spans) continue
+      if (!spans) {
+        complete = false
+        continue
+      }
       token_cache.delete(line_idx)
       token_cache.set(line_idx, spans)
     }
+    return complete
   }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
     if (revision !== model.revision) return
@@ -127,22 +132,7 @@
       token_cache.delete(oldest)
     }
   }
-  const client = $derived.by(() => {
-    const resolved_backend = resolve_editor_backend(backend)
-    if (open_document?.model === model && open_document.backend === resolved_backend)
-      return open_document.client
-    const created = create_highlight_client({
-      doc_id: `code-editor-${++next_doc_seq}`,
-      model,
-      backend: resolved_backend,
-      on_spans: (event) => {
-        if (open_document?.client === created) receive_spans(event)
-      },
-      on_error: report_error,
-    })
-    open_document = { model, backend: resolved_backend, client: created }
-    return created
-  })
+  const resolved_backend = $derived(resolve_editor_backend(backend))
   const line_count = $derived.by(() => {
     void model_revision
     return model.line_count
@@ -170,7 +160,7 @@
     })
   })
   const total_height = $derived(line_count * line_height)
-  const gutter_digits = $derived(Math.max(2, String(line_count).length))
+  const gutter_digits = $derived(String(line_count).length)
   const set_dom_selection = (
     area: HTMLTextAreaElement,
     { anchor, head }: EditorSelection,
@@ -187,8 +177,18 @@
     area.scrollLeft = scroll_left
   }
   $effect(() => {
-    const active = client
     const active_model = model
+    const active_backend = resolved_backend
+    const active = create_highlight_client({
+      doc_id: `code-editor-${++next_doc_seq}`,
+      model: active_model,
+      backend: active_backend,
+      on_spans: (event) => {
+        if (open_document?.client === active) receive_spans(event)
+      },
+      on_error: report_error,
+    })
+    open_document = { model: active_model, backend: active_backend, client: active }
     let cancelled = false
     const is_current = (): boolean =>
       !cancelled && open_document?.client === active && model === active_model
@@ -250,8 +250,9 @@
   $effect(() => {
     void model_revision
     const { start, end } = window_lines
-    untrack(() => touch_tokens(start, end))
-    if (doc_info?.highlightable) client.request_highlight(start, end)
+    const cached = untrack(() => touch_tokens(start, end))
+    if (doc_info?.highlightable && !cached)
+      open_document?.client.request_highlight(start, end)
   })
   const measure_overlay_width = (): void => {
     const area = textarea
@@ -304,7 +305,8 @@
       ;(event.inputType === `historyUndo` ? model.undo : model.redo)()
       return
     }
-    const composition = event.inputType.includes(`Composition`) ? composition_range : null
+    const composition =
+      event.inputType.includes(`Composition`) || composing ? composition_range : null
     before_snapshot = {
       ...(composition ?? selection_of(area)),
       input_type: event.inputType,
@@ -387,11 +389,11 @@
     return { from, to, insert: next_value.slice(from, from + insert_length) }
   }
   const history_group = (input_type: string): string | null => {
+    if (input_type.includes(`Composition`) || composing)
+      return `composition-${composition_seq}`
     if (input_type === `insertText`) return `insert`
     if (input_type === `deleteContentBackward`) return `backspace`
     if (input_type === `deleteContentForward`) return `delete`
-    if (input_type.includes(`Composition`) || composing)
-      return `composition-${composition_seq}`
     return null
   }
   const on_input = (): void => {
@@ -417,7 +419,7 @@
             source: `input`,
             history_group: history_group(snapshot?.input_type ?? ``),
           })
-        if (snapshot?.input_type.includes(`Composition`))
+        if (snapshot?.input_type.includes(`Composition`) || composing)
           composition_range = {
             anchor: edit.from,
             head: edit.from + edit.insert.length,
@@ -463,14 +465,21 @@
       sync_selection()
       return
     }
-    update_locally(() => {
-      area.setRangeText(insert, from, to, `end`)
-      area.setSelectionRange(anchor, head)
-      model.transact([{ from, to, insert }], {
-        selection: { anchor, head },
-        source,
+    try {
+      update_locally(() => {
+        area.setRangeText(insert, from, to, `end`)
+        area.setSelectionRange(anchor, head)
+        model.transact([{ from, to, insert }], {
+          selection: { anchor, head },
+          source,
+        })
       })
-    })
+    } catch (error) {
+      area.value = model.text()
+      set_dom_selection(area, model.selection)
+      report_error(error)
+      return
+    }
     sync_selection()
     measure_overlay_width()
   }
@@ -576,7 +585,7 @@
   {/if}
   <div class="editor-body">
     {#if show_line_numbers}
-      <div class="gutter" aria-hidden="true" style:width={`${gutter_digits + 2}ch`}>
+      <div class="gutter" aria-hidden="true" style:width={`${gutter_digits + 1}ch`}>
         <div
           class="layer"
           style:height={`${total_height}px`}

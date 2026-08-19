@@ -1,7 +1,7 @@
 import { create_highlight_client } from '$lib/code-editor/highlight-client'
 import { create_editor_model } from '$lib/code-editor/model'
 import type { ApplyEditsArgs, EditorBackend } from '$lib/code-editor/types'
-import { expect, test, vi } from 'vite-plus/test'
+import { afterEach, expect, test, vi } from 'vite-plus/test'
 
 const OPEN_RESULT = { language: `typescript`, highlightable: true, editable: true }
 const setup = () => {
@@ -36,6 +36,7 @@ const setup = () => {
   })
   return { backend, model, client, edits, resyncs, cancellations, spans, errors }
 }
+afterEach(() => vi.useRealTimers())
 const edit_model = (
   current: ReturnType<typeof setup>,
   from: number,
@@ -94,7 +95,38 @@ test.each([`reject`, `wrong revision`] as const)(
   },
 )
 
+test(`failed resync blocks highlighting until a later resync succeeds`, async () => {
+  vi.useFakeTimers()
+  const current = setup()
+  current.backend.apply_edits = vi.fn(() => Promise.reject(new Error(`desync`)))
+  current.backend.set_text = vi
+    .fn()
+    .mockRejectedValueOnce(new Error(`resync failed`))
+    .mockImplementation((args) => Promise.resolve(args.revision))
+  current.backend.highlight_lines = vi.fn(() => Promise.resolve([[]]))
+  await current.client.open()
+  edit_model(current, 0, `a`)
+  await current.client.settled()
+
+  current.client.request_highlight(0, 1)
+  await vi.runOnlyPendingTimersAsync()
+  expect(current.backend.highlight_lines).not.toHaveBeenCalled()
+
+  edit_model(current, 1, `b`)
+  await current.client.settled()
+  await vi.runOnlyPendingTimersAsync()
+  expect(current.backend.highlight_lines).toHaveBeenCalledExactlyOnceWith({
+    docId: `doc`,
+    requestId: 1,
+    revision: 2,
+    startLine: 0,
+    endLine: 1,
+  })
+  expect(current.errors).toHaveBeenCalledWith(`resync failed`)
+})
+
 test(`viewport and edit cancellation suppress stale spans and highlighting waits for edits`, async () => {
+  vi.useFakeTimers()
   const current = setup()
   const first = Promise.withResolvers<number[][]>()
   const second = Promise.withResolvers<number[][]>()
@@ -115,7 +147,7 @@ test(`viewport and edit cancellation suppress stale spans and highlighting waits
   edit_model(current, 0, `x`)
   current.client.request_highlight(0, 2)
   second.resolve([[0, 2]])
-  await new Promise((resolve) => void setTimeout(resolve, 5))
+  await vi.runOnlyPendingTimersAsync()
   expect(current.backend.highlight_lines).toHaveBeenCalledTimes(2)
   edit.resolve(1)
   await current.client.settled()

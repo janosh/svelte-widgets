@@ -74,7 +74,7 @@ test(`block commands slice only touched lines and handle very large blocks`, () 
     (_unused, line_idx) => `${` `.repeat(line_idx % 4)}x`,
   )
   const text = lines.join(`\n`)
-  const from = text.indexOf(lines[100_000])
+  const from = lines.slice(0, 100_000).join(`\n`).length + 1
   expect(indent_selection(state(text, from, from + 1), `  `)?.replacement).toBe(`  x`)
   expect(
     toggle_line_comment(state(text, 0, text.length), `#`)
