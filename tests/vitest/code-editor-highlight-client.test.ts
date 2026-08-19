@@ -95,7 +95,7 @@ test.each([`reject`, `wrong revision`] as const)(
   },
 )
 
-test(`failed resync blocks highlighting until a later resync succeeds`, async () => {
+test(`a highlight request retries a failed resync`, async () => {
   vi.useFakeTimers()
   const current = setup()
   current.backend.apply_edits = vi.fn(() => Promise.reject(new Error(`desync`)))
@@ -110,15 +110,12 @@ test(`failed resync blocks highlighting until a later resync succeeds`, async ()
 
   current.client.request_highlight(0, 1)
   await vi.runOnlyPendingTimersAsync()
-  expect(current.backend.highlight_lines).not.toHaveBeenCalled()
-
-  edit_model(current, 1, `b`)
   await current.client.settled()
   await vi.runOnlyPendingTimersAsync()
   expect(current.backend.highlight_lines).toHaveBeenCalledExactlyOnceWith({
     docId: `doc`,
     requestId: 1,
-    revision: 2,
+    revision: 1,
     startLine: 0,
     endLine: 1,
   })
