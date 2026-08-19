@@ -28,10 +28,7 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
   await page.locator(`#code-editor-basic [data-load-large]`).click()
   await expect
     .poll(() =>
-      editor.evaluate((area) => {
-        if (!(area instanceof HTMLTextAreaElement)) throw new Error(`Expected textarea`)
-        return area.value.split(`\n`).length
-      }),
+      editor.evaluate((area: HTMLTextAreaElement) => area.value.split(`\n`).length),
     )
     .toBe(100_000)
   const visible_row_count = await page
@@ -39,7 +36,10 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
     .count()
   expect(visible_row_count).toBeGreaterThan(0)
   expect(visible_row_count).toBeLessThan(50)
-  await editor.evaluate((area) => {
+  await editor.evaluate((area: HTMLTextAreaElement) => {
+    const document_end = area.value.length
+    area.focus()
+    area.setSelectionRange(document_end, document_end)
     area.scrollTop = area.scrollHeight
     area.dispatchEvent(new Event(`scroll`))
   })
@@ -61,17 +61,9 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
     })
   expect(Math.abs(gutter_side_gap_difference)).toBeLessThan(0.5)
 
-  await editor.focus()
-  await editor.evaluate((area) => {
-    if (!(area instanceof HTMLTextAreaElement)) throw new Error(`Expected textarea`)
-    area.setSelectionRange(area.value.length, area.value.length)
-  })
   await page.keyboard.type(`!`)
   const ends_with_bang = () =>
-    editor.evaluate((area) => {
-      if (!(area instanceof HTMLTextAreaElement)) throw new Error(`Expected textarea`)
-      return area.value.endsWith(`!`)
-    })
+    editor.evaluate((area: HTMLTextAreaElement) => area.value.endsWith(`!`))
   await expect.poll(ends_with_bang).toBe(true)
   await page.keyboard.press(`ControlOrMeta+z`)
   await expect.poll(ends_with_bang).toBe(false)

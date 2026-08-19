@@ -200,12 +200,10 @@ const merge_typed_records = (
   next: HistoryRecord,
   key: string,
 ): boolean => {
-  const [left, right, left_inverse, right_inverse] = [
-    previous.forward[0],
-    next.forward[0],
-    previous.inverse[0],
-    next.inverse[0],
-  ]
+  const left = previous.forward[0]
+  const right = next.forward[0]
+  const left_inverse = previous.inverse[0]
+  const right_inverse = next.inverse[0]
   if (
     previous.forward.length !== 1 ||
     next.forward.length !== 1 ||
@@ -273,19 +271,16 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
     value: unknown,
     label: string,
     length = rope_length(root),
-  ): number => {
+  ): void => {
     if (!Number.isInteger(value) || Number(value) < 0 || Number(value) > length)
       throw new Error(`Invalid ${label}=${String(value)} for length ${length}`)
-    return Number(value)
   }
   const validate_selection = (
     next: EditorSelection,
     length = rope_length(root),
   ): EditorSelection => {
-    for (const name of [`anchor`, `head`] as const) {
-      const value = next?.[name]
-      validate_offset(value, `selection ${name}`, length)
-    }
+    validate_offset(next?.anchor, `selection anchor`, length)
+    validate_offset(next?.head, `selection head`, length)
     return copy_selection(next)
   }
   const notify = (transaction?: EditorTransaction): void => {
@@ -389,18 +384,17 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
     if (add_to_history) {
       const key = options.history_group ?? null
       const previous = history.at(-1)
+      const previous_record = previous?.records.at(-1)
       const elapsed = timestamp - (previous?.timestamp ?? timestamp)
       if (
         key !== null &&
         previous?.key === key &&
+        previous_record &&
         elapsed >= 0 &&
         (elapsed <= GROUP_INTERVAL_MS || key.startsWith(`composition-`)) &&
-        same_selection(
-          previous.records.at(-1)?.selection ?? selection,
-          record.selection_before,
-        )
+        same_selection(previous_record.selection, record.selection_before)
       ) {
-        if (!merge_typed_records(previous.records.at(-1) ?? record, record, key))
+        if (!merge_typed_records(previous_record, record, key))
           previous.records.push(record)
         previous.timestamp = timestamp
         previous.cost += cost

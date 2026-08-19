@@ -78,17 +78,9 @@
   let composition_seq = 0
   let composition_range: EditorSelection | null = null
   let unregister_escape: (() => void) | undefined
-  let before_snapshot:
-    | (EditorSelection & {
-        input_type: string
-        value_length: number
-      })
-    | null = null
-  let open_document: {
-    model: EditorModel
-    backend: EditorBackend
-    client: ReturnType<typeof create_highlight_client>
-  } | null = null
+  type InputSnapshot = EditorSelection & { input_type: string; value_length: number }
+  let before_snapshot: InputSnapshot | null = null
+  let active_client: ReturnType<typeof create_highlight_client> | null = null
   const token_cache = new SvelteMap<number, SpanList>()
   const font_size = $derived(editor_font_size(Number(options.font_size)))
   const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
@@ -132,7 +124,6 @@
       token_cache.delete(oldest)
     }
   }
-  const resolved_backend = $derived(resolve_editor_backend(backend))
   const line_count = $derived.by(() => {
     void model_revision
     return model.line_count
@@ -178,20 +169,17 @@
   }
   $effect(() => {
     const active_model = model
-    const active_backend = resolved_backend
     const active = create_highlight_client({
       doc_id: `code-editor-${++next_doc_seq}`,
       model: active_model,
-      backend: active_backend,
+      backend: resolve_editor_backend(backend),
       on_spans: (event) => {
-        if (open_document?.client === active) receive_spans(event)
+        if (active_client === active) receive_spans(event)
       },
       on_error: report_error,
     })
-    open_document = { model: active_model, backend: active_backend, client: active }
-    let cancelled = false
-    const is_current = (): boolean =>
-      !cancelled && open_document?.client === active && model === active_model
+    active_client = active
+    const is_current = (): boolean => active_client === active && model === active_model
     untrack(() => token_cache.clear())
     doc_info = null
     error_message = null
@@ -237,7 +225,7 @@
         if (is_current()) report_error(error)
       })
     return () => {
-      cancelled = true
+      active_client = null
       unsubscribe()
       void active.close().catch((error) => {
         console.error(
@@ -251,8 +239,7 @@
     void model_revision
     const { start, end } = window_lines
     const cached = untrack(() => touch_tokens(start, end))
-    if (doc_info?.highlightable && !cached)
-      open_document?.client.request_highlight(start, end)
+    if (doc_info?.highlightable && !cached) active_client?.request_highlight(start, end)
   })
   const measure_overlay_width = (): void => {
     const area = textarea
@@ -325,11 +312,10 @@
       INPUT_TYPES[shape].includes(` ${input_type} `),
     )
   const derive_input_edit = (
+    before: InputSnapshot,
     next_value: string,
     next_selection: EditorSelection,
   ): TextEdit => {
-    const before = before_snapshot
-    if (!before) throw new Error(`Input arrived without a beforeinput snapshot`)
     const shape = input_shape(before.input_type)
     if (!shape) throw new Error(`Unsupported editor input type ${before.input_type}`)
     if (before.value_length !== model.length)
@@ -406,9 +392,10 @@
     }
     const snapshot = before_snapshot
     try {
+      if (!snapshot) throw new Error(`Input arrived without a beforeinput snapshot`)
       update_locally(() => {
         const next_selection = selection_of(area)
-        const edit = derive_input_edit(area.value, next_selection)
+        const edit = derive_input_edit(snapshot, area.value, next_selection)
         const unchanged =
           edit.to - edit.from === edit.insert.length &&
           model.slice(edit.from, edit.to) === edit.insert
@@ -417,14 +404,14 @@
           model.transact([edit], {
             selection: next_selection,
             source: `input`,
-            history_group: history_group(snapshot?.input_type ?? ``),
+            history_group: history_group(snapshot.input_type),
           })
-        if (snapshot?.input_type.includes(`Composition`) || composing)
+        if (snapshot.input_type.includes(`Composition`) || composing)
           composition_range = {
             anchor: edit.from,
             head: edit.from + edit.insert.length,
           }
-        if (snapshot?.input_type === `insertFromComposition`) composition_range = null
+        if (snapshot.input_type === `insertFromComposition`) composition_range = null
       })
     } catch (error) {
       area.value = model.text()
