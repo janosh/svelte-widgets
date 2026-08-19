@@ -119,6 +119,7 @@
       filename,
       contextLines: options.context_lines,
     })
+    return () => void load_generation++
   })
 
   // Rebuild expanded gaps from props; DiffResult only keeps hunk lines. Gap text is

@@ -1,6 +1,8 @@
 import Confetti from '$site/Confetti.svelte'
 import { mount } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { afterEach, expect, test, vi } from 'vite-plus/test'
+
+afterEach(() => vi.useRealTimers())
 
 const spans = () => [...document.querySelectorAll<HTMLSpanElement>(`div > span`)]
 const span_tops = () => spans().map((span) => span.style.top)
@@ -27,6 +29,7 @@ test(`renders n_items spans and reuses DOM nodes across animation frames`, async
 })
 
 test(`freeze stops the animation`, async () => {
+  vi.useFakeTimers()
   mount(Confetti, {
     target: document.body,
     props: { n_items: 3, speed: 5, freeze: true },
@@ -35,6 +38,6 @@ test(`freeze stops the animation`, async () => {
   const initial_tops = span_tops()
   // without this, an empty span list would make the comparison below [] === []
   expect(initial_tops).toHaveLength(3)
-  await new Promise((resolve) => void setTimeout(resolve, 100))
+  await vi.advanceTimersByTimeAsync(100)
   expect(span_tops()).toEqual(initial_tops)
 })

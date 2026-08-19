@@ -124,10 +124,9 @@ test(`a stale native close event cannot close a reopened Dialog`, async ({ page 
     dialog_opener.click()
     await new Promise(requestAnimationFrame)
     old_dialog.dispatchEvent(new Event(`close`))
+    await new Promise(requestAnimationFrame)
   })
 
   const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
-  await expect(dialog).toBeVisible()
-  await page.waitForTimeout(100)
   await expect(dialog).toBeVisible()
 })

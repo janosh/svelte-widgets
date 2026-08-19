@@ -1078,6 +1078,10 @@
     // additionally applies to user-typed options, or to all when duplicates='case-insensitive'
     const option_key = key(option_to_add)
     const is_from_options = effective_options.some((opt) => key(opt) === option_key)
+    const is_user_option =
+      !is_from_options &&
+      [true, `append`].includes(allowUserOptions) &&
+      (has_search_text || from_paste)
     const check_label = duplicates === `case-insensitive` || !is_from_options
     // closure so the guard can be re-evaluated after an async oncreate resolves
     const is_dupe = () =>
@@ -1093,13 +1097,8 @@
     if (is_duplicate && duplicates !== true) onduplicate?.({ option: option_to_add })
 
     if (max_reached || (duplicates !== true && is_duplicate)) return
-    if (
-      !is_from_options && // first check if we find option in the options list
-      // this has the side-effect of not allowing to user to add the same
-      // custom option twice in append mode
-      [true, `append`].includes(allowUserOptions) &&
-      (has_search_text || from_paste)
-    ) {
+    // This also prevents adding the same custom option twice in append mode.
+    if (is_user_option) {
       if (!(from_paste && typeof option_to_add === `object`)) {
         const label_text = from_paste ? `${utils.get_label(option_to_add)}` : searchText
         if (typeof effective_options[0] === `object`) {
@@ -1145,17 +1144,19 @@
       if (was_async && (at_max_capacity() || (is_dupe() && duplicates !== true))) {
         return
       }
-      if (allowUserOptions === `append`) {
-        if (load_options_config) loaded_options = [...loaded_options, option_to_add]
-        else options = [...options, option_to_add]
-      }
     }
 
+    // Finish fallible consumer sorting before mutating editor state.
+    const next_selected =
+      maxSelect === 1 ? [option_to_add] : sort_selected([...selected, option_to_add])
+    if (is_user_option && allowUserOptions === `append`) {
+      if (load_options_config) loaded_options = [...loaded_options, option_to_add]
+      else options = [...options, option_to_add]
+    }
     if (input_display) searchText = `${utils.get_label(option_to_add)}`
     else if (resetFilterOnAdd) searchText = ``
     // for maxSelect = 1 we always replace current option with new one
-    selected =
-      maxSelect === 1 ? [option_to_add] : sort_selected([...selected, option_to_add])
+    selected = next_selected
 
     clear_validity()
     handle_dropdown_after_select(event)

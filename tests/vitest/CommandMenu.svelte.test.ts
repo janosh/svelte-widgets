@@ -902,6 +902,7 @@ describe(`PageSearch`, () => {
       doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
       await vi.runAllTimersAsync()
       await tick()
+      expect(search).toHaveBeenCalledOnce()
       const options = document.querySelectorAll<HTMLLIElement>(`li[role='option']`)
       expect(Array.from(options, (option) => option.textContent?.trim())).toEqual([
         `Phase diagrams › Overview General phase diagram`,
@@ -1027,6 +1028,32 @@ describe(`PageSearch`, () => {
       label: `Fresh`,
       description: `Fresh content`,
     })
+  })
+
+  test(`switching indexes retires an in-flight result and reloads the current query`, async () => {
+    const stale_response =
+      Promise.withResolvers<ReturnType<typeof make_pagefind_response>>()
+    const fresh_search = vi.fn(async () => make_pagefind_response(`Fresh`))
+    const props = $state({
+      ...base_props,
+      pagefind_key: `stale`,
+      load_pagefind: async () => ({ search: () => stale_response.promise }),
+    })
+    mount(PageSearch, { target: document.body, props })
+
+    await search_pagefind(`same query`)
+    props.pagefind_key = `fresh`
+    props.load_pagefind = async () => ({ search: fresh_search })
+    await tick()
+    await vi.runAllTimersAsync()
+    await tick()
+
+    expect(fresh_search).toHaveBeenCalledExactlyOnceWith(`same query`)
+    expect(doc_query(`.cmd-label`).textContent).toContain(`Fresh`)
+
+    stale_response.resolve(make_pagefind_response(`Stale`))
+    await tick()
+    expect(doc_query(`.cmd-label`).textContent).toContain(`Fresh`)
   })
 
   test.each([

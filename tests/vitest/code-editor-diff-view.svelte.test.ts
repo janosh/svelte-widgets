@@ -400,6 +400,29 @@ describe(`states and backend wiring`, () => {
     expect(code_texts()).toEqual([`fresh`])
   })
 
+  test(`a pending diff cannot report an error after unmount`, async () => {
+    const request = Promise.withResolvers<DiffResult>()
+    const on_error = vi.fn()
+    const instance = mount(DiffView, {
+      target: document.body,
+      props: {
+        old_text: `a`,
+        new_text: `b`,
+        filename: `main.rs`,
+        options: DEFAULT_OPTIONS,
+        backend: { diff_text: () => request.promise },
+        on_error,
+      },
+    })
+    await flush_async(`.diff-view[aria-busy='true']`)
+
+    await unmount(instance)
+    request.reject(new Error(`late failure`))
+    await Promise.resolve()
+
+    expect(on_error).not.toHaveBeenCalled()
+  })
+
   test(`uses the registered backend and forwards diff arguments once`, async () => {
     const diff_text = await mount_diff(
       diff_result({ oldLineCount: 1, newLineCount: 1 }),
