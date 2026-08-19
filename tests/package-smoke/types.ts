@@ -11,6 +11,7 @@ import type { FileDropOptions } from 'svelte-widgets/attachments'
 import type {
   CodeEditorOptions,
   DiffViewOptions,
+  EditorModel,
   LineWindow,
 } from 'svelte-widgets/code-editor'
 import { theme } from 'svelte-widgets/theme'
@@ -29,6 +30,7 @@ export const editor_options: CodeEditorOptions = {
   insert_spaces: true,
   line_numbers: true,
 }
+export const editor_model_type: EditorModel | null = null
 export const dialog_close_detail: DialogCloseDetail = { via: `close` }
 export const dialog_closedby: DialogProps[`closedby`] = `closerequest`
 export const dialog_open: DialogProps[`open`] = false

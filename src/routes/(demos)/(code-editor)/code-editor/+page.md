@@ -1,11 +1,13 @@
 ## `CodeEditor`
 
-`CodeEditor` combines a native textarea with a virtualized syntax-token overlay. It updates a bindable LF-normalized `text` buffer synchronously, sends incremental line edits to a host-supplied `EditorBackend`, and supports indentation, comment toggling, bracket pairing, active line numbers, and Cmd/Ctrl+S. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
+`CodeEditor` combines a host-owned rope model with a native textarea and virtualized syntax-token overlay. The model owns UTF-16 offsets, transactions, selection, dirty checkpoints, and bounded undo/redo history; the component sends ordered edits to a host-supplied `EditorBackend`. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
+
+The rope model is validated with generated 100 MB / 1,000,000-line documents. Editing still uses a full-document textarea in this phase, so usable document size remains subject to browser textarea and scroll-height limits. A later input-proxy phase must replace native input and scrolling together.
 
 Import the shared token palette once wherever the editor or diff view is used:
 
 ```ts
-import { CodeEditor } from 'svelte-widgets'
+import { CodeEditor, create_editor_model } from 'svelte-widgets'
 import type { EditorBackend } from 'svelte-widgets/code-editor'
 import 'svelte-widgets/code-editor/editor.css'
 ```
@@ -16,14 +18,16 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 <script lang="ts">
   import '$lib/code-editor/editor.css'
   import { CodeEditor } from '$lib'
-  import { editor_text, TOKEN_CLASS_NAMES } from '$lib/code-editor'
-  import type { EditorBackend } from '$lib/code-editor'
+  import { create_editor_model, TOKEN_CLASS_NAMES } from '$lib/code-editor'
+  import type { EditorBackend, EditorUpdate, TextEdit } from '$lib/code-editor'
 
   const initial_text = `const greeting = \`Hello\`\nconsole.log(greeting)\n`
-  let text = $state(initial_text)
+  const model = create_editor_model({ uri: `greeting.ts`, text: initial_text })
   let saved_text = $state(initial_text)
   let status = $state(`Edit the buffer, then press Cmd/Ctrl+S`)
-  let lines = initial_text.split(`\n`)
+  let dirty = $state(false)
+  let backend_text = initial_text
+  let backend_revision = 0
 
   const keyword_class = TOKEN_CLASS_NAMES.indexOf(`keyword`)
   const spans_for = (line: string) => {
@@ -32,42 +36,51 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
       ? [0, 0, match.index, keyword_class, match.index + match[0].length, 0]
       : []
   }
+  const apply_edits = (text: string, edits: readonly TextEdit[]) => {
+    for (const { from, to, insert } of edits)
+      text = text.slice(0, from) + insert + text.slice(to)
+    return text
+  }
 
   const backend: EditorBackend = {
-    open_doc: ({ text: raw_text }) => {
-      lines = editor_text(raw_text).split(`\n`)
+    open_doc: ({ text, revision }) => {
+      backend_text = text
+      backend_revision = revision
       return Promise.resolve({
         language: `TypeScript`,
-        lineCount: lines.length,
-        eol: raw_text.includes(`\r\n`) ? `crlf` : `lf`,
-        hadBom: raw_text.startsWith(`\uFEFF`),
         highlightable: true,
         editable: true,
       })
     },
     highlight_lines: ({ startLine, endLine }) =>
-      Promise.resolve(lines.slice(startLine, endLine).map(spans_for)),
-    apply_edit: ({
-      startLine,
-      removedCount,
-      insertedLines,
+      Promise.resolve(backend_text.split(`\n`).slice(startLine, endLine).map(spans_for)),
+    apply_edits: ({
+      baseRevision,
+      revision,
+      edits,
       expectedLineCount,
-      expectedTotalLength,
+      expectedLength,
     }) => {
-      const next_lines = lines.toSpliced(startLine, removedCount, ...insertedLines)
+      if (baseRevision !== backend_revision)
+        return Promise.reject(
+          new Error(`Expected revision ${backend_revision}, received ${baseRevision}`),
+        )
+      const next_text = apply_edits(backend_text, edits)
       if (
-        next_lines.length !== expectedLineCount ||
-        next_lines.join(`\n`).length !== expectedTotalLength
-      ) {
+        next_text.split(`\n`).length !== expectedLineCount ||
+        next_text.length !== expectedLength
+      )
         return Promise.reject(new Error(`Editor buffers diverged`))
-      }
-      lines = next_lines
-      return Promise.resolve(lines.length)
+      backend_text = next_text
+      backend_revision = revision
+      return Promise.resolve(revision)
     },
-    set_text: ({ text: next_text }) => {
-      lines = next_text.split(`\n`)
-      return Promise.resolve(lines.length)
+    set_text: ({ text, revision }) => {
+      backend_text = text
+      backend_revision = revision
+      return Promise.resolve(revision)
     },
+    cancel_highlight: () => undefined,
     close_doc: () => Promise.resolve(),
   }
 
@@ -75,16 +88,31 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
     saved_text = buffer
     status = `Saved ${buffer.length} characters in host memory`
   }
+  const on_update = (update: EditorUpdate) => {
+    dirty = update.dirty
+  }
+  const load_large = () => {
+    const text = Array.from(
+      { length: 100_000 },
+      (_unused, line_idx) => `line ${line_idx + 1}`,
+    ).join(`\n`)
+    model.transact([{ from: 0, to: model.length, insert: text }], {
+      selection: { anchor: text.length, head: text.length },
+      source: `external`,
+    })
+    status = `Loaded a generated 100,000-line document`
+  }
 </script>
 
 <div style="height: 13rem; border: 1px solid lightgray">
-  <CodeEditor {backend} bind:text filename="greeting.ts" on_save={save} />
+  <CodeEditor {backend} {model} {on_update} on_save={save} />
 </div>
 
-<p>{status}. Saved buffer matches: {saved_text === text ? `yes` : `no`}.</p>
+<button data-load-large onclick={load_large}>Load 100k generated lines</button>
+<p>{status}. Unsaved changes: {dirty ? `yes` : `no`}. Saved {saved_text.length} bytes.</p>
 ```
 
-The backend never receives file paths or save requests. It only owns the open document and token/edit protocol; binding `text` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook.
+The backend receives the model URI and normalized open text, but never receives save requests. It owns only the open document and token/edit protocol; `model.subscribe()` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook. Successful saves call `model.mark_saved()`.
 
 ## `DiffView`
 
