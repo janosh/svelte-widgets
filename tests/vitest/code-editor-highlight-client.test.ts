@@ -111,7 +111,6 @@ test(`a highlight request retries a failed resync`, async () => {
   current.client.request_highlight(0, 1)
   await vi.runOnlyPendingTimersAsync()
   await current.client.settled()
-  await vi.runOnlyPendingTimersAsync()
   expect(current.backend.highlight_lines).toHaveBeenCalledExactlyOnceWith({
     docId: `doc`,
     requestId: 1,

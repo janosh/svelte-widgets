@@ -82,8 +82,8 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
       // Cancellation is best-effort; revision checks still reject the result.
     }
   }
-  const enqueue_resync = (): void => {
-    if (disposed) return
+  const enqueue_resync = (): Promise<void> => {
+    if (disposed) return Promise.resolve()
     backend_synced = false
     const pending = queue
       .splice(queue_head)
@@ -103,16 +103,13 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
               `Backend resync revision mismatch: expected ${revision}, received ${applied}`,
             )
           backend_synced = true
-          const window = pending_window
-          if (window && highlight_timer === null)
-            request_highlight(window.start_line, window.end_line)
         } catch (error) {
           report(error)
         }
       },
     }
     queue.push(task, ...pending)
-    void pump()
+    return pump()
   }
   const apply_transaction = (transaction: EditorTransaction): void => {
     cancel_highlight()
@@ -134,7 +131,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
               `Backend edit revision mismatch: expected ${transaction.revision}, received ${applied}`,
             )
         } catch {
-          enqueue_resync()
+          void enqueue_resync()
         }
       },
     })
@@ -142,10 +139,8 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   const run_highlight = async (): Promise<void> => {
     await settled()
     if (disposed) return
-    if (!backend_synced) {
-      enqueue_resync()
-      return
-    }
+    if (!backend_synced) await enqueue_resync()
+    if (disposed || !backend_synced) return
     const window = pending_window
     pending_window = null
     if (!window) return
