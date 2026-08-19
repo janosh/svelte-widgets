@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.6.0](https://github.com/janosh/svelte-widgets/compare/v1.5.0...v1.6.0)
+
+> 19 August 2026
+
+- **Breaking:** Stop re-exporting runtime utilities from the package root, remove the `svelte-widgets/types` entry point and retire `backdrop_dismiss`; import helpers from `svelte-widgets/utils`, continue importing shared types from the package root and use the native dialog/popover dismissal APIs instead
+- Add `Dialog`, a native modal primitive with composable trigger, header, body and footer snippets, explicit close reasons, configurable backdrop/Escape dismissal, focus restoration and nested-dialog handling [`#446`](https://github.com/janosh/svelte-widgets/pull/446)
+- Add `CodeEditor` with a host-owned rope model, UTF-16 transactions and selection, dirty checkpoints, bounded grouped undo/redo, exact native-input edits, injectable persistence/highlighting backends, revision recovery and virtualized token rows; validate the model at 100 MB / 1 million lines while documenting the temporary browser textarea ceiling [`#446`](https://github.com/janosh/svelte-widgets/pull/446) [`#448`](https://github.com/janosh/svelte-widgets/pull/448)
+- Move `Popover`, `ActionMenu`, `Dialog` and `Sheet` onto browser top-layer primitives; preserve focus and keyboard behavior across nested, rapidly reopened and controlled surfaces
+- Reject invalid `MultiSelect` configurations early, support Svelte `ClassValue` props, preserve two-way selection ordering, and harden asynchronous loading, grouping, virtualization, search and comparator failures
+- Expand `SettingsSection` reset behavior and the icon catalog; preserve mixed file drops, suppress disabled custom actions, keep `ActionMenu` item keys stable and share escaped language labels
+- Harden asynchronous lifecycle handling across editor highlighting, `DiffView`, `PageSearch`, fullscreen state and tooltips so stale or failed work cannot overwrite newer state or block teardown
+
 ## [v1.5.0](https://github.com/janosh/svelte-widgets/compare/v1.4.0...v1.5.0)
 
 > 10 August 2026
