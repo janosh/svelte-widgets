@@ -103,40 +103,22 @@
     })
   }
 
-  const create_pagefind_loader = (get_options: () => PagefindLoaderOptions) => {
+  const create_pagefind_loader = (
+    pagefind_source: string,
+    get_options: () => PagefindLoaderOptions,
+  ) => {
     let pagefind_api_promise: Promise<PagefindApi> | undefined
     let search_cache: PagefindSearchCache | undefined
-    let previous_pagefind_source: string | undefined
-    let pagefind_generation = 0
 
     return async ({
       search,
       offset,
       limit,
     }: LoadOptionsParams): Promise<LoadOptionsResult<CmdAction>> => {
-      const {
-        load_pagefind,
-        pagefind_key = ``,
-        pagefind_path = `/pagefind/pagefind.js`,
-      } = get_options()
-      // Key the cache on the source, not on closure identity: an inline load_pagefind
-      // arrow gets a fresh identity every render, and treating that as a source change
-      // would re-import pagefind and re-run the search on each keystroke. Callers that
-      // swap between custom loaders over different indexes distinguish them with
-      // pagefind_key, since their identity alone can't tell one index from another.
-      const pagefind_source = load_pagefind
-        ? `custom-loader:${pagefind_key}`
-        : pagefind_path
-      if (pagefind_source !== previous_pagefind_source) {
-        pagefind_api_promise = undefined
-        search_cache = undefined
-        previous_pagefind_source = pagefind_source
-        pagefind_generation++
-      }
-      const generation = pagefind_generation
+      const { load_pagefind } = get_options()
       const load_api =
         load_pagefind ??
-        (async () => (await import(/* @vite-ignore */ pagefind_path)) as PagefindApi)
+        (async () => (await import(/* @vite-ignore */ pagefind_source)) as PagefindApi)
       const query = search.trim()
       // fallback_actions are handed to CommandMenu as static options, which match them
       // locally without waiting on Pagefind, so this loader only returns index hits
@@ -190,9 +172,7 @@
             cache.next_result_idx < page_results.length,
         }
       } catch {
-        // only retire our own loader promise: the source may have switched while this
-        // request was in flight, and the newer one has already installed its own
-        if (generation === pagefind_generation) pagefind_api_promise = undefined
+        pagefind_api_promise = undefined
         return no_results()
       }
     }
@@ -229,7 +209,7 @@
     load_pagefind,
     navigate,
     pagefind_key,
-    pagefind_path,
+    pagefind_path = `/pagefind/pagefind.js`,
     transform_url,
     strip_html_suffix = false,
     batch_size = 12,
@@ -241,16 +221,20 @@
     ...rest
   }: Props = $props()
 
-  const load_options = create_pagefind_loader(() => ({
-    load_pagefind,
-    navigate,
-    pagefind_key,
-    pagefind_path,
-    transform_url: (url) => {
-      const normalized_url = strip_html_suffix ? strip_html_extension(url) : url
-      return transform_url?.(normalized_url) ?? normalized_url
-    },
-  }))
+  const pagefind_source = $derived(
+    load_pagefind ? `custom-loader:${pagefind_key ?? ``}` : pagefind_path,
+  )
+  // MultiSelect reloads when fetch identity changes, so key it only to the index.
+  const load_options = $derived.by(() =>
+    create_pagefind_loader(pagefind_source, () => ({
+      load_pagefind,
+      navigate,
+      transform_url: (url) => {
+        const normalized_url = strip_html_suffix ? strip_html_extension(url) : url
+        return transform_url?.(normalized_url) ?? normalized_url
+      },
+    })),
+  )
 </script>
 
 <CommandMenu

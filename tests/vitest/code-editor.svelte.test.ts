@@ -1,386 +1,285 @@
-import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
 import { register_escape_layer } from '$lib/attachments'
-import type {
-  ApplyEditArgs,
-  EditorBackend,
-  OpenDocResult,
-  SetTextArgs,
-} from '$lib/code-editor'
+import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
+import { create_editor_model } from '$lib/code-editor/model'
+import type { ApplyEditsArgs, EditorBackend, OpenDocArgs } from '$lib/code-editor/types'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, press_key } from './index'
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
-const OPEN_RESULT: OpenDocResult = {
-  language: `TypeScript`,
-  lineCount: 3,
-  eol: `lf`,
-  hadBom: false,
-  highlightable: true,
-  editable: true,
+const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
+const apply_text = (text: string, edits: ApplyEditsArgs[`edits`]): string => {
+  for (const { from, to, insert } of edits)
+    text = text.slice(0, from) + insert + text.slice(to)
+  return text
 }
-
 const create_backend = () => {
-  const edits: ApplyEditArgs[] = []
-  const resyncs: SetTextArgs[] = []
+  const edits: ApplyEditsArgs[] = []
+  const opens: OpenDocArgs[] = []
   const closed: string[] = []
-  const opened_text: string[] = []
+  let text = ``
   const backend: EditorBackend = {
-    open_doc: ({ text }) => {
-      opened_text.push(text)
+    open_doc: (args) => {
+      opens.push(args)
+      text = args.text
       return Promise.resolve(OPEN_RESULT)
     },
-    highlight_lines: ({ startLine, endLine }) =>
-      Promise.resolve([[0, 6], [0, 2], []].slice(startLine, endLine)),
-    apply_edit: (args) => {
+    apply_edits: (args) => {
       edits.push(args)
-      return Promise.resolve(args.expectedLineCount)
+      text = apply_text(text, args.edits)
+      return Promise.resolve(args.revision)
     },
     set_text: (args) => {
-      resyncs.push(args)
-      return Promise.resolve(args.text.split(`\n`).length)
+      text = args.text
+      return Promise.resolve(args.revision)
     },
-    close_doc: ({ docId }) => {
-      closed.push(docId)
-      return Promise.resolve()
-    },
+    highlight_lines: ({ startLine, endLine }) =>
+      Promise.resolve(Array.from({ length: endLine - startLine }, () => [])),
+    cancel_highlight: () => undefined,
+    close_doc: ({ docId }) => Promise.resolve(void closed.push(docId)),
   }
-  return { backend, edits, resyncs, closed, opened_text }
+  return { backend, edits, opens, closed, get_text: () => text }
 }
-
 const flush_async = async (): Promise<void> => {
   await tick()
   await Promise.resolve()
   await tick()
 }
-
-const emit_edit = (
+const emit_input = (
   area: HTMLTextAreaElement,
+  input_type: string,
+  selection_start: number,
+  selection_end: number,
   insert: string,
-  at: number,
-  through = at,
+  replace_from = selection_start,
+  replace_to = selection_end,
 ): void => {
-  area.setSelectionRange(at, through)
+  area.setSelectionRange(selection_start, selection_end)
   area.dispatchEvent(
-    new InputEvent(`beforeinput`, { inputType: `insertText`, bubbles: true }),
+    new InputEvent(`beforeinput`, {
+      inputType: input_type,
+      bubbles: true,
+      cancelable: true,
+    }),
   )
-  area.value = area.value.slice(0, at) + insert + area.value.slice(through)
-  const caret = at + insert.length
+  area.value = area.value.slice(0, replace_from) + insert + area.value.slice(replace_to)
+  const caret = replace_from + insert.length
   area.setSelectionRange(caret, caret)
-  area.dispatchEvent(new InputEvent(`input`, { inputType: `insertText`, bubbles: true }))
+  area.dispatchEvent(new InputEvent(`input`, { inputType: input_type, bubbles: true }))
 }
-
-type ExecCommand = (command: string, show_ui?: boolean, value?: string) => boolean
-
-const default_exec_command: ExecCommand = (command, _show_ui, value) => {
-  const area = document.activeElement
-  if (command !== `insertText` || !(area instanceof HTMLTextAreaElement)) return false
-  emit_edit(area, value ?? ``, area.selectionStart, area.selectionEnd)
-  return true
-}
-
-const install_exec_command = (
-  implementation: ExecCommand | null = default_exec_command,
-): void => {
-  const original = Object.getOwnPropertyDescriptor(document, `execCommand`)
-  if (implementation) {
-    Object.defineProperty(document, `execCommand`, {
-      configurable: true,
-      value: implementation,
-    })
-  } else Reflect.deleteProperty(document, `execCommand`)
-  onTestFinished(() => {
-    if (original) Object.defineProperty(document, `execCommand`, original)
-    else Reflect.deleteProperty(document, `execCommand`)
-  })
-}
-
 const mount_editor = async (
+  model = create_editor_model({ uri: `demo.ts`, text: DEMO_TEXT }),
   overrides: Partial<ComponentProps<typeof CodeEditor>> = {},
 ) => {
   const recorder = create_backend()
-  const props = $state({
-    text: DEMO_TEXT,
-    filename: `demo.ts`,
-    backend: recorder.backend,
-    ...overrides,
-  })
+  const props = $state({ model, backend: recorder.backend, ...overrides })
   const instance = mount(CodeEditor, { target: document.body, props })
   onTestFinished(() => unmount(instance))
   await flush_async()
-  return {
-    instance,
-    props,
-    recorder,
-    textarea: doc_query<HTMLTextAreaElement>(`textarea`),
-  }
+  const textarea = doc_query<HTMLTextAreaElement>(`textarea`)
+  return { instance, model, props, recorder, textarea }
 }
-
-const overlay_lines = (): string[] =>
-  [...document.querySelectorAll(`.token-layer .line`)].map(
-    (line) => line.textContent ?? ``,
-  )
-
-test(`editing writes through bind:text, repaints immediately, and sends one line edit`, async () => {
-  const on_dirty_change = vi.fn()
-  const { props, recorder, textarea } = await mount_editor({ on_dirty_change })
-
-  expect(textarea.getAttribute(`aria-label`)).toBe(`demo.ts source`)
-  const description_id = textarea.getAttribute(`aria-describedby`)
-  if (!description_id) throw new Error(`CodeEditor help text is not referenced`)
-  expect(doc_query(`[id="${description_id}"]`).textContent?.trim()).toBe(
-    `Press Escape, then Tab to move focus away`,
-  )
-
-  emit_edit(textarea, `xy`, 6)
+test(`native input, selection, history, commands, and backend deltas share the model`, async () => {
+  const on_update = vi.fn()
+  const { instance, model, recorder, textarea } = await mount_editor(undefined, {
+    on_update,
+  })
+  expect(doc_query(`.gutter`).style.width).toBe(`2ch`)
+  const text_spy = vi.spyOn(model, `text`)
+  text_spy.mockClear()
+  emit_input(textarea, `insertText`, 6, 6, `xy`)
+  textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
+  emit_input(textarea, `insertText`, 8, 8, `λ`)
+  emit_input(textarea, `insertCompositionText`, 9, 9, `lambda`, 8, 9)
+  textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
+  emit_input(textarea, `insertFromComposition`, 14, 14, `lambda`, 8, 14)
+  emit_input(textarea, `insertFromPaste`, 14, 14, `!`)
   await flush_async()
-
-  const expected = `const xyfirst = 1\nconst second = 2\nconst third = 3`
-  expect(props.text).toBe(expected)
-  expect(overlay_lines()).toEqual(expected.split(`\n`))
-  expect(recorder.edits).toEqual([
-    expect.objectContaining({
-      startLine: 0,
-      removedCount: 1,
-      insertedLines: [`const xyfirst = 1`],
-      expectedTotalLength: expected.length,
-    }),
+  expect(model.text()).toBe(`const xylambda!first = 1\nconst second = 2\nconst third = 3`)
+  expect(text_spy).toHaveBeenCalledTimes(1)
+  expect(
+    recorder.edits.map(({ baseRevision, revision, edits }) => [
+      baseRevision,
+      revision,
+      edits,
+    ]),
+  ).toEqual([
+    [0, 1, [{ from: 6, to: 6, insert: `xy` }]],
+    [1, 2, [{ from: 8, to: 8, insert: `λ` }]],
+    [2, 3, [{ from: 8, to: 9, insert: `lambda` }]],
+    [3, 4, [{ from: 14, to: 14, insert: `!` }]],
   ])
-  expect(recorder.resyncs).toEqual([])
-  expect(recorder.opened_text).toEqual([DEMO_TEXT])
-  expect(on_dirty_change).toHaveBeenCalledExactlyOnceWith(true)
-})
-
-test(`initial disk text keeps its raw open shape but binds the normalized buffer`, async () => {
-  const raw_text = `\uFEFFfirst\r\nsecond\r\n`
-  const { props, recorder, textarea } = await mount_editor({ text: raw_text })
-  const normalized_text = `first\nsecond\n`
-
-  expect(recorder.opened_text).toEqual([raw_text])
-  expect(textarea.value).toBe(normalized_text)
-  expect(props.text).toBe(normalized_text)
-  expect(overlay_lines()).toEqual([`first`, `second`, ``])
-
-  emit_edit(textarea, `!`, 0)
-  await flush_async()
-
-  const edited_text = `!${normalized_text}`
-  expect(props.text).toBe(edited_text)
-  expect(recorder.edits).toEqual([
-    expect.objectContaining({
-      startLine: 0,
-      removedCount: 1,
-      insertedLines: [`!first`],
-      expectedLineCount: 3,
-      expectedTotalLength: edited_text.length,
+  expect(recorder.get_text()).toBe(model.text())
+  textarea.setSelectionRange(0, 5)
+  textarea.dispatchEvent(new Event(`select`))
+  expect(model.selection).toEqual({ anchor: 0, head: 5 })
+  textarea.dispatchEvent(
+    new InputEvent(`beforeinput`, {
+      inputType: `historyUndo`,
+      bubbles: true,
+      cancelable: true,
     }),
-  ])
-  expect(recorder.resyncs).toEqual([])
-})
-
-test(`same-line edits request fresh visible highlights`, async () => {
-  const { backend } = create_backend()
-  const highlight_lines = vi.spyOn(backend, `highlight_lines`)
-  const { textarea } = await mount_editor({ backend })
-  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
-
-  emit_edit(textarea, `x`, 0)
-
-  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
-})
-
-test(`keyboard edit commands use configurable indentation and filename comments`, async () => {
-  install_exec_command()
-  const { textarea } = await mount_editor()
-  const parent_escape = vi.fn(() => true)
-  const unregister_parent_escape = register_escape_layer(parent_escape)
-  onTestFinished(unregister_parent_escape)
-  textarea.focus()
+  )
+  expect(model.text()).toContain(`xylambdafirst`)
+  expect(instance.undo()).toBe(true)
+  expect(model.text()).toContain(`xyfirst`)
+  expect(
+    on_update.mock.calls.filter(([update]) => update.transaction?.source === `undo`),
+  ).toHaveLength(2)
+  expect(instance.redo()).toBe(true)
+  expect(instance.redo()).toBe(true)
   textarea.setSelectionRange(0, 0)
-
   press_key(textarea, `Tab`)
-  await flush_async()
-  expect(textarea.value.split(`\n`)[0]).toBe(`  const first = 1`)
-
-  textarea.setSelectionRange(0, 0)
   press_key(textarea, `/`, { metaKey: true })
-  await flush_async()
-  expect(textarea.value.split(`\n`)[0]).toBe(`  // const first = 1`)
-
-  textarea.setSelectionRange(5, 5)
   press_key(textarea, `Enter`)
   await flush_async()
   expect(textarea.value.startsWith(`  // \n  const`)).toBe(true)
-
-  const before_escape = textarea.value
-  expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)
-  expect(parent_escape).not.toHaveBeenCalled()
-  expect(press_key(textarea, `Tab`).defaultPrevented).toBe(false)
-  expect(textarea.value).toBe(before_escape)
-})
-
-test.each([
-  { label: `missing`, implementation: null },
-  { label: `returning false`, implementation: () => false },
-])(
-  `keyboard commands fall back when execCommand is $label`,
-  async ({ implementation }) => {
-    install_exec_command(implementation)
-    const { textarea } = await mount_editor()
-    textarea.focus()
-    textarea.setSelectionRange(0, 0)
-
-    press_key(textarea, `Tab`)
-    await flush_async()
-
-    expect(textarea.value.startsWith(`  const first`)).toBe(true)
-  },
-)
-
-test(`a cancelled fallback beforeinput cannot leak into the next edit`, async () => {
-  install_exec_command(null)
-  const { recorder, textarea } = await mount_editor()
-  const cancel_input = (event: Event) => event.preventDefault()
-  textarea.addEventListener(`beforeinput`, cancel_input)
+  expect(model.dirty).toBe(true)
+  expect(on_update).toHaveBeenCalled()
+  const parent_escape = vi.fn(() => true)
+  const unregister = register_escape_layer(parent_escape)
+  onTestFinished(unregister)
   textarea.focus()
-  textarea.setSelectionRange(0, 0)
-  press_key(textarea, `Tab`)
-  textarea.removeEventListener(`beforeinput`, cancel_input)
-
-  textarea.value = `x${textarea.value}`
-  textarea.setSelectionRange(1, 1)
-  textarea.dispatchEvent(
-    new InputEvent(`input`, { bubbles: true, inputType: `insertText` }),
-  )
-  await flush_async()
-
-  expect(recorder.edits).toEqual([])
-  expect(recorder.resyncs).toEqual([{ docId: expect.any(String), text: `x${DEMO_TEXT}` }])
+  expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)
+  expect(press_key(textarea, `Tab`).defaultPrevented).toBe(false)
+  expect(parent_escape).not.toHaveBeenCalled()
 })
-
-test(`saving is injected, recovers from errors, and rebases dirty state`, async () => {
-  const save_result = Promise.withResolvers<undefined>()
-  const on_save = vi
-    .fn<NonNullable<ComponentProps<typeof CodeEditor>[`on_save`]>>()
-    .mockRejectedValueOnce(new Error(`disk full`))
-    .mockReturnValueOnce(save_result.promise)
-  const dirty_states: boolean[] = []
-  const { instance, recorder, textarea } = await mount_editor({
-    on_save,
-    on_dirty_change: (dirty: boolean) => void dirty_states.push(dirty),
+test(`save preserves disk format, external transactions sync, and model replacement reopens`, async () => {
+  const first = create_editor_model({
+    uri: `file:///first.ts`,
+    text: `\uFEFFone\r\ntwo\r\n`,
   })
-  emit_edit(textarea, `!`, 0)
-  await flush_async()
-
+  const on_save = vi
+    .fn()
+    .mockRejectedValueOnce(new Error(`disk full`))
+    .mockResolvedValue(undefined)
+  const { instance, props, recorder, textarea } = await mount_editor(first, { on_save })
+  expect([textarea.value, recorder.opens[0].text]).toEqual([`one\ntwo\n`, `one\ntwo\n`])
+  emit_input(textarea, `insertText`, 0, 0, `!`)
   await expect(instance.save()).resolves.toBe(false)
   expect(doc_query(`[role="alert"]`).textContent).toBe(`disk full`)
-  const backend_calls = [
-    recorder.edits.length,
-    recorder.resyncs.length,
-    recorder.closed.length,
-  ]
-  const save_request = instance.save()
-  await tick()
-  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`true`)
-  save_result.resolve(undefined)
-  await expect(save_request).resolves.toBe(true)
-  await flush_async()
-
-  expect(on_save.mock.calls).toEqual([
-    [`!${DEMO_TEXT}`, OPEN_RESULT],
-    [`!${DEMO_TEXT}`, OPEN_RESULT],
+  await expect(instance.save()).resolves.toBe(true)
+  expect(on_save.mock.calls.map(([text]) => text)).toEqual([
+    `\uFEFF!one\r\ntwo\r\n`,
+    `\uFEFF!one\r\ntwo\r\n`,
   ])
-  expect(dirty_states).toEqual([true, false])
-  expect([
-    recorder.edits.length,
-    recorder.resyncs.length,
-    recorder.closed.length,
-  ]).toEqual(backend_calls)
-  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`false`)
-  expect(document.querySelector(`[role="alert"]`)).toBeNull()
+  expect(first.dirty).toBe(false)
+  first.set_selection({ anchor: 5, head: 1 })
+  await flush_async()
+  expect([textarea.selectionStart, textarea.selectionEnd]).toEqual([1, 5])
+  expect(textarea.selectionDirection).toBe(`backward`)
+  first.set_selection({ anchor: 6, head: 6 })
+  await flush_async()
+  expect(doc_query(`.gutter-line.active`).textContent).toBe(`2`)
+  first.transact([{ from: 1, to: 4, insert: `ONE` }], { source: `external` })
+  await flush_async()
+  expect(textarea.value).toBe(`!ONE\ntwo\n`)
+  const second = create_editor_model({ uri: `file:///second.ts`, text: `replacement` })
+  props.model = second
+  await flush_async()
+  expect([textarea.value, recorder.opens.at(-1)?.uri, recorder.closed.length]).toEqual([
+    `replacement`,
+    `file:///second.ts`,
+    1,
+  ])
+  const deferred = Promise.withResolvers<undefined>()
+  on_save.mockImplementationOnce(() => deferred.promise)
+  second.transact([{ from: 11, to: 11, insert: `!` }])
+  const save = instance.save()
+  second.transact([{ from: 12, to: 12, insert: `?` }])
+  const third = create_editor_model({ uri: `memory:third`, text: `x` })
+  third.transact([{ from: 1, to: 1, insert: `y` }])
+  props.model = third
+  await flush_async()
+  emit_input(textarea, `formatBold`, 0, 0, ``)
+  await flush_async()
+  expect(doc_query(`[role="alert"]`).textContent).toBe(
+    `Unsupported editor input type formatBold`,
+  )
+  deferred.resolve(undefined)
+  await expect(save).resolves.toBe(true)
+  expect([second.dirty, third.dirty]).toEqual([true, true])
+  expect(doc_query(`[role="alert"]`).textContent).toBe(
+    `Unsupported editor input type formatBold`,
+  )
 })
-
-test(`editing stays disabled until the backend confirms the document is editable`, async () => {
-  const open_result = Promise.withResolvers<OpenDocResult>()
-  const recorder = create_backend()
-  recorder.backend.open_doc = () => open_result.promise
-  const { props, textarea } = await mount_editor({
-    aria_label: `Custom source`,
-    backend: recorder.backend,
-  })
-
-  expect(textarea.getAttribute(`aria-label`)).toBe(`Custom source`)
-  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`true`)
-  expect(textarea.readOnly).toBe(true)
-  emit_edit(textarea, `!`, 0)
-  await flush_async()
-  expect([textarea.value, props.text]).toEqual([DEMO_TEXT, DEMO_TEXT])
-  expect([recorder.edits, recorder.resyncs]).toEqual([[], []])
-
-  open_result.resolve({ ...OPEN_RESULT, editable: false })
-  await flush_async()
-  expect(doc_query(`.code-editor`).getAttribute(`aria-busy`)).toBe(`false`)
-  expect(textarea.readOnly).toBe(true)
-  expect(props.text).toBe(DEMO_TEXT)
-})
-
-test(`an external buffer replacement opens a fresh backend document and resets dirty`, async () => {
-  const dirty_states: boolean[] = []
-  const { props, recorder, textarea } = await mount_editor({
-    on_dirty_change: (dirty: boolean) => void dirty_states.push(dirty),
-  })
-  emit_edit(textarea, `!`, 0)
-  await flush_async()
-  Object.defineProperty(textarea, `scrollWidth`, {
-    configurable: true,
-    get: () => (textarea.value.startsWith(`external`) ? 120 : 500),
-  })
-  textarea.scrollTop = 60
-  textarea.scrollLeft = 20
-  textarea.setSelectionRange(10, 18)
-  textarea.dispatchEvent(new Event(`scroll`))
-
-  props.text = `external\nreplacement`
-  await flush_async()
-
-  expect(textarea.value).toBe(`external\nreplacement`)
-  expect(overlay_lines()).toEqual([`external`, `replacement`])
-  expect(recorder.closed).toHaveLength(1)
-  expect(dirty_states).toEqual([true, false])
-  expect({
-    scroll_top: textarea.scrollTop,
-    scroll_left: textarea.scrollLeft,
-    selection_start: textarea.selectionStart,
-    selection_end: textarea.selectionEnd,
-  }).toEqual({ scroll_top: 0, scroll_left: 0, selection_start: 0, selection_end: 0 })
-  expect(doc_query(`.token-layer`).style.minWidth).toBe(`120px`)
-})
-
-test.each([`resolve`, `reject`] as const)(
-  `unmount suppresses callbacks when open later %s`,
-  async (outcome) => {
-    const open_result = Promise.withResolvers<OpenDocResult>()
-    const recorder = create_backend()
-    recorder.backend.open_doc = () => open_result.promise
-    const on_ready = vi.fn()
+test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
+  `%s restores the model value`,
+  async (mode) => {
     const on_error = vi.fn()
-    const instance = mount(CodeEditor, {
-      target: document.body,
-      props: {
-        text: DEMO_TEXT,
-        filename: `deferred.ts`,
-        backend: recorder.backend,
-        on_ready,
-        on_error,
-      },
+    const { model, textarea, recorder } = await mount_editor(undefined, {
+      read_only: mode === `read-only`,
+      on_error,
     })
-    await tick()
-    await unmount(instance)
-
-    if (outcome === `resolve`) open_result.resolve(OPEN_RESULT)
-    else open_result.reject(new Error(`open failed`))
+    if (mode === `rejected command`) {
+      vi.spyOn(model, `transact`).mockImplementationOnce(() => {
+        throw new Error(`rejected command`)
+      })
+      press_key(textarea, `Tab`)
+    } else
+      emit_input(textarea, mode === `read-only` ? `insertText` : `formatBold`, 0, 0, `!`)
     await flush_async()
-
-    expect([on_ready, on_error].map((callback) => callback.mock.calls)).toEqual([[], []])
+    expect([textarea.value, model.text(), recorder.edits]).toEqual([
+      DEMO_TEXT,
+      DEMO_TEXT,
+      [],
+    ])
+    expect(on_error).toHaveBeenCalledTimes(mode === `read-only` ? 0 : 1)
+    if (mode === `unsupported input`)
+      expect(on_error).toHaveBeenCalledWith(`Unsupported editor input type formatBold`)
+    if (mode === `rejected command`)
+      expect(on_error).toHaveBeenCalledWith(`rejected command`)
   },
 )
+test.each([
+  [`deleteContentBackward`, 2, 2, ``, 1, 2, `ac`],
+  [`deleteWordBackward`, 2, 2, ``, 0, 2, `c`],
+  [`deleteHardLineBackward`, 2, 2, ``, 0, 2, `c`],
+  [`deleteContentForward`, 1, 1, ``, 1, 2, `ac`],
+  [`deleteWordForward`, 1, 1, ``, 1, 3, `a`],
+  [`deleteHardLineForward`, 1, 1, ``, 1, 3, `a`],
+  [`deleteEntireSoftLine`, 1, 1, ``, 0, 3, ``],
+  [`deleteByCut`, 1, 2, ``, 1, 2, `ac`],
+  [`insertReplacementText`, 1, 2, `X`, 1, 2, `aXc`],
+  [`insertReplacementText`, 3, 3, `acb`, 0, 3, `acb`],
+  [`insertLineBreak`, 1, 1, `\n`, 1, 1, `a\nbc`],
+] as const)(
+  `%s derives one bounded transaction`,
+  async (input_type, selection_start, selection_end, insert, from, to, expected) => {
+    const model = create_editor_model({ uri: `memory:input`, text: `abc` })
+    const { textarea } = await mount_editor(model)
+    emit_input(textarea, input_type, selection_start, selection_end, insert, from, to)
+    expect(model.text()).toBe(expected)
+  },
+)
+test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {
+  const recorder = create_backend()
+  const model = create_editor_model({
+    uri: `memory:tokens`,
+    text: Array.from({ length: 2050 }, (_unused, line_idx) => `line ${line_idx}`).join(
+      `\n`,
+    ),
+  })
+  const highlight_lines = vi
+    .fn()
+    .mockResolvedValueOnce(Array.from({ length: 2048 }, () => [0, 6]))
+    .mockImplementation(({ startLine, endLine }) =>
+      Promise.resolve(Array.from({ length: endLine - startLine }, () => [0, 6])),
+    )
+  recorder.backend.highlight_lines = highlight_lines
+  const { textarea } = await mount_editor(model, { backend: recorder.backend })
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
+  await flush_async()
+  model.set_selection({ anchor: 1, head: 1 })
+  await flush_async()
+  textarea.scrollTop = 2049 * 20
+  textarea.dispatchEvent(new Event(`scroll`))
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
+  textarea.scrollTop = 0
+  textarea.dispatchEvent(new Event(`scroll`))
+  await tick()
+  expect(highlight_lines).toHaveBeenCalledTimes(2)
+  expect(doc_query(`.token-layer .line span`).classList.contains(`tok-keyword`)).toBe(
+    true,
+  )
+})

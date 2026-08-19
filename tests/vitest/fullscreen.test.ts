@@ -149,6 +149,60 @@ describe(`flag <-> browser sync`, () => {
     expect(document.fullscreenElement).toBeNull()
   })
 
+  test(`canceling a pending entry does not re-enter when the request settles`, async () => {
+    const entry_request = Promise.withResolvers<undefined>()
+    const exit_request = Promise.withResolvers<undefined>()
+    const set_fullscreen_without_event = (element: Element) =>
+      void (fullscreen_element = element)
+    Element.prototype.requestFullscreen = vi.fn(function (this: Element) {
+      request_calls.push(this)
+      return entry_request.promise.then(() => set_fullscreen_without_event(this))
+    })
+    document.exitFullscreen = vi.fn(() =>
+      exit_request.promise.then(() => set_fullscreen_element(null)),
+    )
+    const { button, flag } = mount_button()
+
+    button.click()
+    await tick()
+    button.click()
+    await tick()
+
+    entry_request.resolve(undefined)
+    await settle()
+    expect(document.exitFullscreen).not.toHaveBeenCalled()
+    document.dispatchEvent(new Event(`fullscreenchange`))
+    await tick()
+    exit_request.resolve(undefined)
+    await settle()
+
+    expect(document.fullscreenElement).toBeNull()
+    expect(get(flag)).toBe(false)
+  })
+
+  test(`re-entering during a pending exit survives when the exit settles`, async () => {
+    const { button, flag, wrapper } = mount_button()
+    button.click()
+    await settle()
+    const request = Promise.withResolvers<undefined>()
+    document.exitFullscreen = vi.fn(() =>
+      request.promise.then(() => set_fullscreen_element(null)),
+    )
+
+    button.click()
+    await tick()
+    button.click()
+    await tick()
+
+    request.resolve(undefined)
+    await settle()
+    await settle()
+
+    expect(document.fullscreenElement).toBe(wrapper)
+    expect(get(flag)).toBe(true)
+    expect(request_calls).toEqual([wrapper, wrapper])
+  })
+
   test(`Esc-style external exit clears the flag and calls on_change`, async () => {
     const on_change = vi.fn()
     const { button, flag } = mount_button({ on_change })

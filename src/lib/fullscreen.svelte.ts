@@ -28,32 +28,46 @@ export function get_page_background(
 // Two-way sync between a bindable `fullscreen` flag and the browser's fullscreen state,
 // scoped to one wrapper element. Creates $effects, so call during component init.
 export function sync_fullscreen(options: FullscreenSyncOptions): void {
+  let pending_request: { wrapper: HTMLElement; entering: boolean } | null = null
+
+  function reconcile(wrapper: HTMLElement): void {
+    if (options.get_wrapper() !== wrapper) return
+    const entering = options.get_fullscreen()
+    if (entering !== (document.fullscreenElement === wrapper)) {
+      void request_fullscreen(wrapper, entering)
+    }
+  }
+
+  async function request_fullscreen(
+    wrapper: HTMLElement,
+    entering: boolean,
+  ): Promise<void> {
+    if (pending_request?.wrapper === wrapper && pending_request.entering === entering)
+      return
+    const request = { wrapper, entering }
+    pending_request = request
+    try {
+      if (entering) await wrapper.requestFullscreen()
+      else await document.exitFullscreen()
+    } catch (error) {
+      if (pending_request !== request) return
+      pending_request = null
+      if (options.get_wrapper() !== wrapper) return
+      if (entering && !options.get_fullscreen()) return
+      if (entering || document.fullscreenElement === wrapper)
+        options.set_fullscreen(!entering)
+      const operation = entering ? `requestFullscreen` : `exitFullscreen`
+      console.error(`${operation} failed for`, wrapper, error)
+      options.on_request_error?.(error)
+    }
+  }
+
   // flag -> browser
   $effect(() => {
     const wrapper = options.get_wrapper()
     if (!wrapper) return
     const fullscreen = options.get_fullscreen()
-    const fullscreen_element = document.fullscreenElement
-
-    if (fullscreen && fullscreen_element !== wrapper) {
-      wrapper.requestFullscreen().catch((error: unknown) => {
-        // The browser refused (no user gesture, permissions policy), so the flag is now
-        // lying about the document. Clearing it both tells the consumer the truth and
-        // lets the next true transition be seen as a change worth retrying.
-        options.set_fullscreen(false)
-        console.error(`requestFullscreen failed for`, wrapper, error)
-        options.on_request_error?.(error)
-      })
-    } else if (!fullscreen && fullscreen_element === wrapper) {
-      document.exitFullscreen().catch((error: unknown) => {
-        // Exit refused while still fullscreen — put the flag back so UI/ARIA match
-        // the document. If the browser exited independently while this request was
-        // pending, restoring true would immediately request fullscreen again.
-        if (document.fullscreenElement === wrapper) options.set_fullscreen(true)
-        console.error(`exitFullscreen failed for`, wrapper, error)
-        options.on_request_error?.(error)
-      })
-    }
+    reconcile(wrapper)
 
     // a fullscreened element inherits nothing from the page and would render on black.
     // Dropped again on the way out so a later theme switch cannot be read off a stale value.
@@ -72,11 +86,23 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
       // would flip every mounted flag whenever any element goes fullscreen, and each
       // flipped flag then fires its own requestFullscreen
       const is_fullscreen = document.fullscreenElement === wrapper
+      const request_settling =
+        pending_request?.wrapper === wrapper && pending_request.entering === is_fullscreen
+      if (request_settling) {
+        pending_request = null
+        if (is_fullscreen !== options.get_fullscreen()) {
+          reconcile(wrapper)
+          return
+        }
+      }
       if (is_fullscreen === options.get_fullscreen()) return
       options.set_fullscreen(is_fullscreen)
       options.on_change?.(is_fullscreen)
     }
     document.addEventListener(`fullscreenchange`, handle_change)
-    return () => document.removeEventListener(`fullscreenchange`, handle_change)
+    return () => {
+      pending_request = null
+      document.removeEventListener(`fullscreenchange`, handle_change)
+    }
   })
 }

@@ -4000,22 +4000,32 @@ test(`whitespace-only search shows all options instead of a blank dropdown`, asy
   expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
 })
 
-test(`sortSelected function comparator controls chip order on add`, async () => {
-  const reverse_alphabetical = (opt_1: Option, opt_2: Option) =>
-    `${get_label(opt_2)}`.localeCompare(`${get_label(opt_1)}`)
-  mount_multiselect({
+test(`sortSelected orders chips before clearing the accepted search`, async () => {
+  let search_seen_by_comparator: string | undefined
+  const props = $state<Test2WayBindProps>({
     options: [`a`, `b`, `c`],
-    sortSelected: reverse_alphabetical,
+    searchText: ``,
     selectedOptionsDraggable: false,
   })
+  props.sortSelected = (opt_1: Option, opt_2: Option) => {
+    search_seen_by_comparator = props.searchText
+    return `${get_label(opt_2)}`.localeCompare(`${get_label(opt_1)}`)
+  }
+  mount(Test2WayBind, { target: document.body, props })
 
-  for (const label of [`a`, `c`, `b`]) {
+  for (const label of [`a`, `c`]) {
     const li = [
       ...document.querySelectorAll<HTMLLIElement>(`ul.options li[role='option']`),
     ].find((el) => el.textContent?.trim() === label)
     li?.click()
     await tick()
   }
+  props.searchText = `b`
+  await tick()
+  doc_query<HTMLLIElement>(`ul.options li[role='option']`).click()
+  await tick()
 
+  expect(search_seen_by_comparator).toBe(`b`)
+  expect(props.searchText).toBe(``)
   expect(normalized_text(doc_query(`ul.selected`))).toBe(`c b a`)
 })

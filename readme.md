@@ -164,7 +164,9 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers   |
 | `/vite-config`                      | This repository's Vite Plus configuration helper           |
 
-`CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor binds its normalized buffer through `text`; saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
+`CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM temporarily remains a full-document textarea and is therefore still subject to browser textarea and scroll-height limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
+
+Run the opt-in, hardware-sensitive editor stress target locally with `RUN_LARGE_EDITOR_TESTS=1 npx vp test --run tests/vitest/code-editor-model.test.ts`; normal CI deliberately skips it.
 
 For `$…$` and `$$…$$` math in mdsvex, wrap mdsvex with `katex_preprocess()` and run `heading_ids()` last:
 

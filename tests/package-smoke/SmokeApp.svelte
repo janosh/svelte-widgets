@@ -5,6 +5,7 @@
     CodeEditor,
     CommandMenu,
     type CmdAction,
+    create_editor_model,
     Dialog,
     DiffView,
     FindBar,
@@ -28,7 +29,7 @@
     file_drop,
     register_escape_layer,
   } from 'svelte-widgets/attachments'
-  import { BOM, count_lines, editor_text } from 'svelte-widgets/code-editor'
+  import { count_lines } from 'svelte-widgets/code-editor'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
   import 'svelte-widgets/code-editor/editor.css'
   import { ask_prompt } from 'svelte-widgets/dialogs'
@@ -43,6 +44,7 @@
   const options: Option[] = [`One`, { label: `Two`, value: 2 }]
   const actions: CmdAction[] = [{ label: `Open`, action: () => undefined }]
   const katex_options: KatexOptions = { throwOnError: true }
+  const editor_model = create_editor_model({ uri: `memory:smoke`, text: `a\r\nb` })
   const package_api_works =
     DirectActionMenu === ActionMenu &&
     DirectCodeEditor === CodeEditor &&
@@ -65,7 +67,8 @@
     typeof register_escape_layer === `function` &&
     typeof create_find_state === `function` &&
     count_lines(`one\ntwo`) === 2 &&
-    editor_text(`${BOM}a\r\nb`) === `a\nb` &&
+    editor_model.text() === `a\nb` &&
+    editor_model.line_count === 2 &&
     storage_get(`package-smoke-missing`) === null &&
     typeof apply_theme_from_subpath === `function` &&
     typeof heading_ids === `function` &&
