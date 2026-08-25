@@ -1,6 +1,6 @@
 import { create_highlight_client } from '$lib/code-editor/highlight-client'
 import { create_editor_model } from '$lib/code-editor/model'
-import type { ApplyEditsArgs, EditorBackend } from '$lib/code-editor/types'
+import type { ApplyEditsArgs, EditorBackend, SetTextArgs } from '$lib/code-editor/types'
 import { afterEach, expect, test, vi } from 'vite-plus/test'
 
 const OPEN_RESULT = { language: `typescript`, highlightable: true, editable: true }
@@ -83,14 +83,27 @@ test.each([`reject`, `wrong revision`] as const)(
     await current.client.open()
     edit_model(current, 0, `a`)
     edit_model(current, 1, `b`)
+    const resync_result = Promise.withResolvers<number>()
+    current.backend.set_text = vi.fn((args: SetTextArgs) => {
+      current.resyncs.push(args)
+      return resync_result.promise
+    })
     if (failure === `reject`) first_result.reject(new Error(`desync`))
     else first_result.resolve(99)
+    await vi.waitFor(() => expect(current.resyncs).toHaveLength(1))
+    // An edit made while the resync is in flight must apply on top of the snapshot.
+    edit_model(current, 2, `c`)
+    resync_result.resolve(2)
     await current.client.settled()
 
-    expect(current.resyncs).toEqual([
-      { docId: `doc`, revision: 2, text: current.model.text() },
-    ])
-    expect(current.backend.apply_edits).toHaveBeenCalledOnce()
+    expect(current.resyncs).toEqual([{ docId: `doc`, revision: 2, text: `abone\ntwo` }])
+    expect(current.backend.apply_edits).toHaveBeenCalledTimes(2)
+    expect(current.backend.apply_edits).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        baseRevision: 2,
+        edits: [{ from: 2, to: 2, insert: `c` }],
+      }),
+    )
     expect(current.errors).not.toHaveBeenCalled()
   },
 )

@@ -176,6 +176,17 @@ test.each([
   expect(() => model.transact(edits)).toThrow(/Invalid edit/u)
   expect(model.text()).toBe(`abc`)
 })
+test(`omitted selections map through sequential edits`, () => {
+  const model = create_editor_model({ uri: `memory:map`, text: `abcdef` })
+  model.set_selection({ anchor: 1, head: 5 })
+  model.transact([
+    { from: 0, to: 2, insert: `XYZ` },
+    { from: 4, to: 5, insert: `` },
+  ])
+  expect([model.text(), model.selection]).toEqual([`XYZcef`, { anchor: 3, head: 5 }])
+  model.transact([{ from: 0, to: 6, insert: `` }])
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+})
 test(`invalid resulting selections leave the model unchanged`, () => {
   const model = create_editor_model({ uri: `memory:invalid-selection`, text: `abc` })
   expect(() =>

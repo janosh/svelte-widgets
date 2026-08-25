@@ -93,16 +93,14 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     const pending = queue
       .splice(queue_head)
       .filter((task) => task.kind !== `resync` && task.kind !== `edit`)
+    // Snapshot now: edits queued behind this task expect the backend at this revision.
+    const args = { docId: doc_id, revision: model.revision, text: model.text() }
     const task: QueuedTask = {
       kind: `resync`,
       run: async () => {
-        const revision = model.revision
+        const { revision } = args
         try {
-          const applied = await backend.set_text({
-            docId: doc_id,
-            revision,
-            text: model.text(),
-          })
+          const applied = await backend.set_text(args)
           if (applied !== revision)
             throw new Error(
               `Backend resync revision mismatch: expected ${revision}, received ${applied}`,

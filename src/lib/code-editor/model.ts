@@ -195,6 +195,22 @@ interface HistoryGroup {
 const same_selection = (left: EditorSelection, right: EditorSelection): boolean =>
   left.anchor === right.anchor && left.head === right.head
 const copy_selection = (selection: EditorSelection): EditorSelection => ({ ...selection })
+// Edits are sequential (each in the coordinates left by the previous one), so an offset
+// inside a replaced range lands after its replacement and later offsets shift once.
+const map_offset = (offset: number, edits: readonly TextEdit[]): number => {
+  for (const { from, to, insert } of edits) {
+    if (offset <= from) break
+    offset = offset <= to ? from + insert.length : offset + insert.length - (to - from)
+  }
+  return offset
+}
+const map_selection = (
+  { anchor, head }: EditorSelection,
+  edits: readonly TextEdit[],
+): EditorSelection => ({
+  anchor: map_offset(anchor, edits),
+  head: map_offset(head, edits),
+})
 const merge_typed_records = (
   previous: HistoryRecord,
   next: HistoryRecord,
@@ -374,7 +390,7 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
     if (add_to_history && !Number.isFinite(timestamp))
       throw new Error(`Invalid history timestamp=${timestamp}`)
     const source = options.source ?? `external`
-    const next_selection = options.selection ?? selection
+    const next_selection = options.selection ?? map_selection(selection, edits)
     const { transaction, record, cost } = apply(
       edits,
       next_selection,

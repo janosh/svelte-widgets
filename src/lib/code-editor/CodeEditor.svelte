@@ -162,8 +162,11 @@
   const sync_dom_from_model = (update: EditorUpdate): void => {
     const area = textarea
     if (!area || local_model_update) return
+    const { anchor, head } = selection_of(area)
+    const moved = anchor !== update.selection.anchor || head !== update.selection.head
     if (update.transaction) area.value = model.text()
-    set_dom_selection(area, update.selection)
+    // Re-selecting an unchanged range would still cancel an active IME composition.
+    if (update.transaction || moved) set_dom_selection(area, update.selection)
     area.scrollTop = scroll_top
     area.scrollLeft = scroll_left
   }
@@ -533,6 +536,7 @@
       selection_end: area.selectionEnd,
     }
     if (event.key === `Tab`) {
+      event.preventDefault() // a no-op dedent must not move focus
       apply_command(
         event,
         (event.shiftKey ? dedent_selection : indent_selection)(state, indent),
