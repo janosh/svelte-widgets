@@ -34,9 +34,7 @@
   const effective_closedby = $derived(
     closedby ?? (close_on_escape ? (close_on_backdrop ? `any` : `closerequest`) : `none`),
   )
-  const custom_backdrop_dismiss = $derived(
-    closedby === undefined && close_on_backdrop && !close_on_escape,
-  )
+  const dismiss_on_backdrop = $derived(closedby ? closedby === `any` : close_on_backdrop)
   let focus_origin: HTMLElement | SVGElement | null = null
   let pending_close_via: DialogCloseVia | null = null
   let backdrop_press_started = false
@@ -76,9 +74,15 @@
     backdrop_press_started = event.isPrimary && is_dialog_backdrop_event(surface, event)
   }
   const track_backdrop_release = (event: MouseEvent) => {
-    if (backdrop_press_started && is_dialog_backdrop_event(surface, event)) {
-      if (custom_backdrop_dismiss) close(`pointer`)
-      else if (effective_closedby === `any`) pending_close_via = `pointer`
+    if (
+      backdrop_press_started &&
+      dismiss_on_backdrop &&
+      is_dialog_backdrop_event(surface, event)
+    ) {
+      // Browsers without `closedby` support leave the surface open; those with it have
+      // already light-dismissed it and only need the reason recorded before `close` fires.
+      if (surface?.open) close(`pointer`)
+      else pending_close_via = `pointer`
     }
     backdrop_press_started = false
   }

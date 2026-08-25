@@ -240,6 +240,18 @@ describe(`DraggablePane`, () => {
     expect(on_close).toHaveBeenCalledWith({ via: `escape` })
   })
 
+  test(`closing hands focus inside the pane back to the toggle`, async () => {
+    const { pane, toggle } = await open_pane()
+    const field = document.createElement(`input`)
+    pane.querySelector(`.pane-content`)?.append(field)
+    field.focus()
+    expect(document.activeElement).toBe(field)
+
+    escape()
+    await tick()
+    expect(document.activeElement).toBe(toggle)
+  })
+
   test(`Escape while closed leaves the pane alone and the key to the page`, async () => {
     const on_close = vi.fn()
     await setup({ on_close })

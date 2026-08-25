@@ -157,6 +157,9 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter |
 | `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory             |
 | `/print`                            | Element printing                                           |
+| `/source-links`                     | Link inline code mentions of your source to GitHub         |
+| `/source-links/vite-plugin`         | Vite plugin emitting the file/export index those links use |
+| `/source-links/virtual`             | Types for the plugin's `virtual:source-symbols` module     |
 | `/storage`                          | Non-throwing localStorage, persisted choices and MRU lists |
 | `/text-search`                      | Text ranges, highlighting and search-jump helpers          |
 | `/theme`                            | Headless light/dark/system state                           |
@@ -211,6 +214,28 @@ Import `katex/dist/katex.min.css` once in the app so the generated markup is sty
 ```
 
 See [src/lib/live-examples/readme.md](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md) for optional live-example helpers.
+
+Docs that mention source files or exports in inline code (`` `Footer` ``, `` `make_config` ``) can link them to the GitHub line they live on, pinned to the commit the site was built from. Add the plugin to `vite.config.ts`, reference its virtual-module types from `src/app.d.ts` and attach the linker to the element that wraps your pages:
+
+```ts
+// vite.config.ts
+import source_links from 'svelte-widgets/source-links/vite-plugin'
+export default { plugins: [sveltekit(), source_links()] } // indexes src/lib by default
+
+// src/app.d.ts
+/// <reference types="svelte-widgets/source-links/virtual" />
+
+// src/site/source-links.ts
+import { create_source_links } from 'svelte-widgets/source-links'
+import * as source_symbols from 'virtual:source-symbols'
+export const { link_source_mentions, source_href } = create_source_links(source_symbols)
+```
+
+```svelte
+<main {@attach link_source_mentions}>{@render children()}</main>
+```
+
+Only exact, unambiguous names link: a file name or bare component name (`Footer`, `utils.ts`) points at the file, an exported definition (`make_config`) at its line, and names defined in several files (`index.ts`) or that aren't source (`label`) are left alone. `source_href(name)` gives the same URL for use in your own markup.
 
 ## 🆕 &thinsp; Changelog
 

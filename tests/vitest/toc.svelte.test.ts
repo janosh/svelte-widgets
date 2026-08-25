@@ -822,6 +822,17 @@ describe(`Toc`, () => {
     }
   })
 
+  test(`Escape with a focused desktop ToC has nothing to close and stays un-prevented`, async () => {
+    set_headings(2)
+    mount_toc()
+    await tick()
+    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+
+    const key_event = new KeyboardEvent(`keydown`, { key: `Escape`, cancelable: true })
+    globalThis.dispatchEvent(key_event)
+    expect(key_event.defaultPrevented).toBe(false)
+  })
+
   test(`mutation observer tracks headings added and removed after mount`, async () => {
     set_body(`<div id="content"><h2 id="initial">Initial Heading</h2></div>`)
     const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()

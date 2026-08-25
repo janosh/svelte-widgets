@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.6.1](https://github.com/janosh/svelte-widgets/compare/v1.6.0...v1.6.1)
+
+> 25 August 2026
+
+- Add `svelte-widgets/source-links`: a Vite plugin indexes a project's source files and exported definitions into `virtual:source-symbols`, and `create_source_links` turns inline code mentions of them into GitHub links pinned to the build commit, via `source_href` or the `link_source_mentions` attachment [`#449`](https://github.com/janosh/svelte-widgets/pull/449)
+- Add 493 icons from the installed Iconify sets with new transport, maps & GIS, shapes & math and accessibility blocks [`#449`](https://github.com/janosh/svelte-widgets/pull/449)
+- `tooltip`: re-entering during the close delay keeps it open, top-layer mode falls back to absolute positioning without the Popover API instead of throwing, Escape passes through when nothing is open and `on_open_change(true)` always precedes a close; `portal` no longer re-inserts nodes Svelte already removed; `draggable` no longer jumps `position: relative` nodes and moves static ones [`#449`](https://github.com/janosh/svelte-widgets/pull/449)
+- `CodeEditor`: `transact` without a selection maps it through the edits instead of throwing, Shift+Tab on an unindented line keeps focus, highlight resyncs snapshot at enqueue time and unchanged DOM selections are left alone so IME composition survives [`#449`](https://github.com/janosh/svelte-widgets/pull/449)
+- `Nav` submenu arrow keys work from links (wrapping, with Home/End) and Escape returns focus to the toggle; `MultiSelect` only auto-activates while open and stops Escape/Tab propagation only while open; `Dialog` backdrop clicks close without native `closedby`; global `CopyButton` instances coexist, release removed blocks and copy live content; `Toast` no longer stays paused after dismissing a focused toast; `FileDetails` highlights each file once; `DraggablePane` and `Toc` hand Escape and focus back correctly; `Popover` chains a consumer's `ontoggle`; build-time heading ids decode HTML entities [`#449`](https://github.com/janosh/svelte-widgets/pull/449)
+
 ## [v1.6.0](https://github.com/janosh/svelte-widgets/compare/v1.5.0...v1.6.0)
 
 > 19 August 2026

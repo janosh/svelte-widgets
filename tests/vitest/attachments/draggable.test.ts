@@ -131,6 +131,24 @@ describe(`draggable`, () => {
     },
   )
 
+  it.each([`relative`, `static`] as const)(
+    `drags an in-flow %s node from its insets, not its offset`,
+    (position) => {
+      const element = create_element(`div`, { position, left: `5px` })
+      Object.defineProperties(element, {
+        offsetLeft: { value: 25, configurable: true },
+        offsetTop: { value: 35, configurable: true },
+      })
+      attach_draggable(element)
+      element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+      globalThis.dispatchEvent(pointer_event(`pointermove`, 10, 10))
+
+      expect(element.style.position).toBe(`relative`)
+      expect([element.style.left, element.style.top]).toEqual([`15px`, `10px`])
+      globalThis.dispatchEvent(pointer_event(`pointerup`, 10, 10))
+    },
+  )
+
   it(`ignores element bounds that generate no box`, () => {
     const parent = create_element()
     mock_rect(parent, { left: 0, top: 0, width: 0, height: 0 })

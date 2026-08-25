@@ -110,6 +110,8 @@
     resize_edges.includes(edge) ? `${resize_gutter_px}px` : null
 
   const close_pane = (via: CloseVia) => {
+    // display: none drops focus on the body; hand it back to the toggle instead
+    if (pane?.contains(document.activeElement)) toggle_btn?.focus()
     open = false
     on_close?.({ via })
   }

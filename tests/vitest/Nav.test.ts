@@ -353,16 +353,18 @@ describe(`Nav`, () => {
       keydown(`Escape`)
     }
 
-    // Arrow navigation
+    // Arrow navigation: keys land on whichever element has focus, links included
     const [item1, item2] = Array.from(menu.querySelectorAll(`a`))
     keydown(`Enter`, toggle_button)
     await next_task()
     expect(document.activeElement).toBe(item1)
-    keydown(`ArrowDown`, toggle_button)
+    keydown(`ArrowDown`, item1)
     expect(document.activeElement).toBe(item2)
-    keydown(`ArrowDown`, toggle_button)
-    expect(document.activeElement).toBe(item2) // stays at end
-    keydown(`ArrowUp`, toggle_button)
+    keydown(`ArrowDown`, item2)
+    expect(document.activeElement).toBe(item1) // wraps
+    keydown(`ArrowUp`, item1)
+    expect(document.activeElement).toBe(item2)
+    keydown(`Home`, item2)
     expect(document.activeElement).toBe(item1)
 
     // Escape from item returns focus to toggle button
@@ -370,7 +372,8 @@ describe(`Nav`, () => {
     await next_task()
     expect(is_visible(menu)).toBe(false)
     expect(document.activeElement).toBe(toggle_button)
-    expect(link_props.onkeydown).toHaveBeenCalledOnce()
+    // consumer handler still sees every key that landed on a link
+    expect(link_props.onkeydown).toHaveBeenCalledTimes(5)
   })
 
   test(`dropdown focus behavior`, async () => {

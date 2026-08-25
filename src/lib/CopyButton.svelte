@@ -12,7 +12,7 @@
 
   let {
     content = ``,
-    state = $bindable(`ready`),
+    state: copy_state = $bindable(`ready`),
     disabled = false,
     reset_ms = 2000,
     on_copy_success = (_content: string) => {},
@@ -44,49 +44,48 @@
   } = $props()
 
   const copy_button_selector = `[data-sms-copy]`
-  const action_labels = $derived({ ...labels, pending: labels[state] })
+  const action_labels = $derived({ ...labels, pending: labels[copy_state] })
 
   $effect(() => {
     if (!global && !global_selector) return
 
-    type MountedCopyButton = Parameters<typeof unmount>[0]
-    const mounted_copy_buttons: { pre: HTMLElement; component: MountedCopyButton }[] = []
+    let mounted_copy_buttons: {
+      code: Element
+      props: { content: string }
+      component: Parameters<typeof unmount>[0]
+    }[] = []
     const apply_copy_buttons = () => {
+      // release buttons whose code block left the document; re-read the rest so the
+      // button copies what the block shows now, not what it showed when mounted
+      mounted_copy_buttons = mounted_copy_buttons.filter(({ code, props, component }) => {
+        if (code.isConnected) props.content = code.textContent ?? ``
+        else void unmount(component)
+        return code.isConnected
+      })
       const style = `position: absolute; top: 6pt; inset-inline-end: 6pt; ${
         rest.style ?? ``
       }`
       const skip_sel = skip_selector ?? as
       for (const code of document.querySelectorAll(global_selector ?? `pre > code`)) {
         const pre = code.parentElement
-        if (!pre) continue
-        const existing_copy_button = pre.querySelector(copy_button_selector)
-        const already_mounted = mounted_copy_buttons.some((entry) => entry.pre === pre)
-        // If a stale button from a previous effect pass still exists, remove it synchronously
-        // so this pass can mount a fresh button with updated props/callbacks.
-        if (
-          existing_copy_button &&
-          (!already_mounted || existing_copy_button.localName !== as)
-        ) {
-          existing_copy_button.remove()
-        }
-        if (existing_copy_button?.isConnected) continue
+        // Any existing copy button wins, including one from a second global instance:
+        // replacing it would have both instances swap buttons in an endless observer loop.
+        if (!pre || pre.querySelector(copy_button_selector)) continue
         if (skip_sel && pre.querySelector(skip_sel)) continue
 
-        const mounted_copy_button = mount(Self, {
-          target: pre,
-          props: {
-            content: code.textContent ?? ``,
-            as,
-            labels,
-            disabled,
-            reset_ms,
-            on_copy_success,
-            on_copy_error,
-            ...rest,
-            style,
-          },
+        const props = $state({
+          content: code.textContent ?? ``,
+          as,
+          labels,
+          disabled,
+          reset_ms,
+          on_copy_success,
+          on_copy_error,
+          ...rest,
+          style,
         })
-        mounted_copy_buttons.push({ pre, component: mounted_copy_button })
+        const component = mount(Self, { target: pre, props })
+        mounted_copy_buttons.push({ code, props, component })
       }
     }
 
@@ -95,30 +94,26 @@
     observer.observe(document.body, { childList: true, subtree: true })
     return () => {
       observer.disconnect()
-      for (const { pre, component } of mounted_copy_buttons) {
-        // unmount() is async; remove marker node now to avoid blocking remount on next effect run.
-        pre.querySelector(copy_button_selector)?.remove()
-        void unmount(component)
-      }
+      for (const { component } of mounted_copy_buttons) void unmount(component)
     }
   })
 
   const handle_action_state = (next_state: ActionState): void => {
-    if (next_state !== `pending`) state = next_state
+    if (next_state !== `pending`) copy_state = next_state
   }
 </script>
 
 {#snippet copy_content({ state: action_state, disabled }: ActionButtonContent)}
-  {@const copy_state = action_state === `pending` ? state : action_state}
-  {@const { text, icon } = labels[copy_state]}
-  {@render copy_children?.({ state: copy_state, icon, text, disabled })}
+  {@const shown_state = action_state === `pending` ? copy_state : action_state}
+  {@const { text, icon } = labels[shown_state]}
+  {@render copy_children?.({ state: shown_state, icon, text, disabled })}
 {/snippet}
 
 {#if !(global || global_selector)}
   <ActionButton
     {...rest}
     action={() => navigator.clipboard.writeText(content)}
-    {state}
+    state={copy_state}
     disabled={disabled || !content}
     {reset_ms}
     {as}

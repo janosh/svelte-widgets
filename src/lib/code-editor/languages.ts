@@ -1,8 +1,6 @@
 // Filename-driven defaults used by CodeEditor keyboard commands. Backends remain the
 // source of truth for grammar detection and the language label.
 
-import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-
 const COMMENT_TOKEN_GROUPS: readonly (readonly [string, string])[] = [
   [
     `#`,
@@ -28,12 +26,12 @@ const COMMENT_TOKEN_BASENAMES = `.bash_profile .bashrc .dockerignore .env .gitat
 
 const words = (list: string) => list.trim().split(/\s+/)
 
-const token_by_extension = new SvelteMap<string, string>(
+const token_by_extension = new Map<string, string>(
   COMMENT_TOKEN_GROUPS.flatMap(([token, extensions]) =>
     words(extensions).map((extension): [string, string] => [extension, token]),
   ),
 )
-const hash_comment_basenames = new SvelteSet(words(COMMENT_TOKEN_BASENAMES))
+const hash_comment_basenames = new Set(words(COMMENT_TOKEN_BASENAMES))
 
 export const line_comment_token = (filename: string): string | null => {
   const basename = filename.toLowerCase().split(/[\\/]/u).at(-1) ?? ``

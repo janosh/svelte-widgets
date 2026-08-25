@@ -1,6 +1,7 @@
 import { sveltekit } from '@sveltejs/kit/vite'
 import { generate_icons } from './scripts/generate-icons.ts'
 import live_examples from './src/lib/live-examples/vite-plugin.ts'
+import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 
 await generate_icons()
@@ -17,7 +18,7 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(), ...live_examples()],
+  plugins: [sveltekit(), ...live_examples(), source_links()],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],

@@ -1,7 +1,6 @@
 <script lang="ts">
   import { tick, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { SvelteSet } from 'svelte/reactivity'
   import Icon from './Icon.svelte'
   import { Search } from './icons'
   import { observe_subtree } from './utils'
@@ -45,7 +44,7 @@
   const HIDDEN_ATTR = `data-search-hidden`
 
   const filter_settings = (root: HTMLElement): (() => void) => {
-    const opened_by_search = new SvelteSet<HTMLDetailsElement>()
+    const opened_by_search = new Set<HTMLDetailsElement>()
 
     const restore_visibility = (): void => {
       for (const element of root.querySelectorAll(`[${HIDDEN_ATTR}]`)) {

@@ -1,5 +1,4 @@
-import { untrack } from 'svelte'
-import { SvelteMap, SvelteSet } from 'svelte/reactivity'
+import { SvelteSet } from 'svelte/reactivity'
 
 // Headless "recently copied" state for UIs that render their own copy affordances, where
 // CopyButton's markup would be in the way: a table of values each with its own checkmark,
@@ -22,17 +21,16 @@ export const create_clipboard_feedback = (
   on_error?: (error: unknown, text: string) => void,
 ): ClipboardFeedback => {
   const copied = new SvelteSet<string>()
-  const timers = new SvelteMap<string, ReturnType<typeof setTimeout>>()
+  // plain Map: timer bookkeeping is not UI state and must not subscribe callers
+  const timers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  // Timer bookkeeping must not subscribe an effect that calls clear().
-  const clear = (key?: string): void =>
-    untrack(() => {
-      for (const timer_key of key === undefined ? timers.keys() : [key]) {
-        clearTimeout(timers.get(timer_key))
-        timers.delete(timer_key)
-        copied.delete(timer_key)
-      }
-    })
+  const clear = (key?: string): void => {
+    for (const timer_key of key === undefined ? [...timers.keys()] : [key]) {
+      clearTimeout(timers.get(timer_key))
+      timers.delete(timer_key)
+      copied.delete(timer_key)
+    }
+  }
 
   const copy = async (text: string, key: string = text): Promise<boolean> => {
     try {

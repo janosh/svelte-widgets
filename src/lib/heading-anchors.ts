@@ -187,6 +187,27 @@ const get_static_id_attr = (attrs: string): string | undefined => {
   return undefined
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: `&`,
+  lt: `<`,
+  gt: `>`,
+  quot: `"`,
+  apos: `'`,
+  nbsp: ` `,
+}
+
+// mdsvex escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as
+// `Using &#123;foo&#125;`; slugging the raw source would bake `123` into the id.
+const decode_entities = (html: string): string =>
+  html.replaceAll(
+    /&(?:#x(?<hex>[0-9a-f]+)|#(?<dec>\d+)|(?<name>[a-z]+));/giu,
+    (entity, hex?: string, dec?: string, name?: string) => {
+      if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? entity
+      const code_point = hex ? Number.parseInt(hex, 16) : Number(dec)
+      return code_point <= 0x10ffff ? String.fromCodePoint(code_point) : entity
+    },
+  )
+
 const extract_math_sources = (inner: string): string =>
   inner.replaceAll(html_string_expression_regex, (expression, json: string) => {
     let html: unknown
@@ -197,13 +218,7 @@ const extract_math_sources = (inner: string): string =>
     }
     if (typeof html !== `string`) return expression
     const tex = katex_annotation_regex.exec(html)?.groups?.tex
-    return (
-      tex
-        ?.replaceAll(`&lt;`, `<`)
-        .replaceAll(`&gt;`, `>`)
-        .replaceAll(`&amp;`, `&`)
-        .replaceAll(/[{}]/gu, ``) ?? expression
-    )
+    return tex ? decode_entities(tex).replaceAll(/[{}]/gu, ``) : expression
   })
 
 // Preserve Unicode letters and marks, normalize equivalent spellings to NFC, and turn
@@ -236,8 +251,11 @@ export function heading_ids() {
       const insertions: TextInsertion[] = []
 
       const get_heading_id = (inner: string): string | null => {
-        const text = strip_svelte_expressions(
-          extract_math_sources(inner).replaceAll(/<[^>]+>/gu, ``),
+        // decode last so `&lt;b&gt;` stays text rather than becoming a stripped tag
+        const text = decode_entities(
+          strip_svelte_expressions(
+            extract_math_sources(inner).replaceAll(/<[^>]+>/gu, ``),
+          ),
         ).trim()
         if (!text) return null
 

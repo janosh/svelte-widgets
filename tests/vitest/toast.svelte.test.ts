@@ -612,6 +612,26 @@ describe(`<Toast />`, () => {
     expect(store.active_toast).toBeNull()
   })
 
+  // removing the focused button fires no focusout, so the focus pause must be re-derived
+  // or the promoted toast would sit paused until the pointer or keyboard came back
+  test(`dismissing a focused toast does not leave the next one paused`, async () => {
+    fake_clock()
+    const store = render()
+    store.show(`a`, { duration_ms: 1000 })
+    store.show(`b`, { duration_ms: 1000 })
+    await tick()
+
+    const button = doc_query<HTMLButtonElement>(`.toast-dismiss`)
+    button.focus()
+    button.click()
+    await tick()
+    expect(store.active_toast?.message).toBe(`b`)
+    expect(document.activeElement).toBe(document.body)
+
+    vi.advanceTimersByTime(1500)
+    expect(store.active_toast).toBeNull()
+  })
+
   test(`a children snippet replaces the message markup`, async () => {
     const children = createRawSnippet<[ToastItem]>((item) => ({
       render: () => `<em class="custom">${item().message}!</em>`,

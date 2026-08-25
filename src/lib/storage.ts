@@ -1,7 +1,6 @@
 // Best-effort localStorage: disabled/private/full stores become no-ops so in-memory UI
 // state still works. Also provides persisted choices and MRU lists.
 
-import { SvelteSet } from 'svelte/reactivity'
 import { clamp_integer, is_object } from './utils'
 
 // Single catch-all for storage failures; callers retain working state in memory.
@@ -76,7 +75,7 @@ export const create_recent_list = <T>(config: RecentListConfig<T>) => {
     load: (): T[] => {
       const parsed: unknown = storage_get_json(storage_key, [])
       if (!Array.isArray(parsed)) return []
-      const seen_keys = new SvelteSet<string>()
+      const seen_keys = new Set<string>()
       return parsed
         .filter(is_valid)
         .filter((item) => {

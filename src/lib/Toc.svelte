@@ -587,11 +587,17 @@
       return
     }
 
+    if (event.key === `Escape`) {
+      // nothing to close on desktop, so leave the key to e.g. an open dialog
+      if (!is_open) return
+      event.preventDefault()
+      set_open(false, `escape`)
+      return
+    }
     event.preventDefault()
     const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)
 
-    if (event.key === `Escape` && is_open) set_open(false, `escape`)
-    else if (current_toc_li) {
+    if (current_toc_li) {
       const sibling_prop =
         event.key === `ArrowDown`
           ? `nextElementSibling`

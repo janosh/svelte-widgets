@@ -95,6 +95,25 @@ test(`distinct language-content pairs cannot collide in the highlight cache`, as
   expect(all_text(`pre code`)).toEqual(contents)
 })
 
+test(`each file is highlighted exactly once, even as siblings resolve`, async () => {
+  const { default_highlighter } = await import(`$lib/live-examples/default-highlighter`)
+  // staggered, so one result lands while the others are still pending
+  const highlight = vi.spyOn(default_highlighter, `highlight`).mockImplementation(
+    (code) =>
+      new Promise((resolve) => {
+        setTimeout(() => resolve(`<span class="pl-x">${code}</span>`), code.length)
+      }),
+  )
+  const files = [`a`, `bb`, `ccc`].map((content) => ({ title: `${content}.ts`, content }))
+  mount_files({ files })
+
+  await vi.waitFor(() =>
+    expect(document.querySelectorAll(`pre code span[class^="pl-"]`)).toHaveLength(3),
+  )
+  expect(highlight).toHaveBeenCalledTimes(3)
+  highlight.mockRestore()
+})
+
 test(`toggle all button opens/closes all, tracks label, and handles partial/native toggles`, async () => {
   const onclick = vi.fn()
   const files = [`file1`, `file2`, `file3`].map((title) => ({

@@ -298,6 +298,12 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(false)
 
     surface_pointer(`pointerleave`)
+    vi.advanceTimersByTime(50)
+    pointer_over(element) // back onto the trigger inside the delay cancels the close
+    vi.advanceTimersByTime(100)
+    expect(tooltip_el.hidden).toBe(false)
+
+    pointer_out(element)
     vi.advanceTimersByTime(100)
     expect(tooltip_el.hidden).toBe(true)
   })
@@ -744,6 +750,7 @@ describe(`tooltip manager`, () => {
     expect(content_el.style.overflowY).toBe(`auto`)
     expect(tooltip_el.querySelectorAll(`[class^="custom-tooltip-arrow"]`)).toHaveLength(1)
     expect(arrow.style.border).toBe(`2px solid rgb(4, 5, 6)`)
+    expect(arrow.style.clipPath).toBe(`polygon(0 0, 100% 0, 100% 100%)`)
     expect(Number(tooltip_el.style.left.replace(/px$/u, ``))).toBeLessThan(860)
     expect(Number(arrow.style.left.replace(/px$/u, ``))).toBeGreaterThan(150)
   })
@@ -816,6 +823,18 @@ describe(`tooltip manager`, () => {
     expect(show_popover).toHaveBeenCalledTimes(2)
     expect(hide_popover).toHaveBeenCalledTimes(2)
     expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
+  })
+
+  it(`falls back to absolute positioning without the Popover API`, () => {
+    cleanups.push(stub_prop(HTMLElement.prototype, `showPopover`, undefined))
+    const { element } = register_tooltip(`No popover`, { strategy: `top-layer` })
+    pointer_over(element)
+    const tooltip_el = visible_tooltip()
+
+    expect(tooltip_el.hasAttribute(`popover`)).toBe(false)
+    expect(tooltip_el.style.position).toBe(`absolute`)
+    pointer_out(element)
+    expect(tooltip_el.hidden).toBe(true)
   })
 
   it(`propagates a top-layer Popover API failure`, () => {

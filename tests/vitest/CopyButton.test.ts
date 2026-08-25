@@ -385,22 +385,40 @@ test(`global_selector remount uses latest callback after parent remount`, async 
   void unmount(remounted)
 })
 
-test.each([
-  [`different element type`, `a`],
-  [`same element type`, `button`],
-] as const)(`global mode replaces stale %s copy marker`, async (_label, tag) => {
-  const { pre } = create_pre_with_code(`stale content`)
-  const stale_marker = document.createElement(tag)
-  stale_marker.setAttribute(`data-sms-copy`, ``)
-  stale_marker.textContent = `stale`
-  pre.append(stale_marker)
+// two global instances must not swap each other's buttons in an endless observer loop
+test(`global mode leaves a pre that already has a copy button alone`, async () => {
+  const { pre } = create_pre_with_code(`shared content`)
+  const first = await mount_global({ global: true, as: `a`, skip_selector: null })
+  const second = await mount_global({ global: true, skip_selector: null })
+  await tick()
 
-  const component = await mount_global({ global: true, as: `button` })
-
-  expect(stale_marker.isConnected).toBe(false)
   expect(pre.querySelectorAll(`[data-sms-copy]`)).toHaveLength(1)
-  expect(get_single_mounted_button(pre).textContent).not.toContain(`stale`)
+  expect(pre.querySelector(`[data-sms-copy]`)?.localName).toBe(`a`)
 
+  void unmount(first)
+  void unmount(second)
+})
+
+test(`global mode copies the code block's current text, not the text at mount`, async () => {
+  const { pre, code } = create_pre_with_code(`before`)
+  const component = await mount_global({ global: true })
+  code.textContent = `after`
+  await tick()
+
+  await click_copy_button(get_single_mounted_button(pre))
+  expect(mock_write_text).toHaveBeenCalledWith(`after`)
+  void unmount(component)
+})
+
+test(`global mode unmounts buttons whose pre left the document`, async () => {
+  const { pre } = create_pre_with_code(`transient`)
+  const component = await mount_global({ global: true })
+  const button = get_single_mounted_button(pre)
+  pre.remove()
+  document.body.append(document.createElement(`div`)) // a mutation after the removal
+  await tick()
+
+  expect(button.isConnected).toBe(false)
   void unmount(component)
 })
 

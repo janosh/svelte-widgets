@@ -103,11 +103,11 @@ const TOOLTIP_CSS_VARS = [
 // its own name.
 const CLOSE_REASON = { pointer: `pointer`, focus: `blur` } as const
 
-const OPPOSITE_PLACEMENT: Record<Placement, Placement> = {
-  top: `bottom`,
-  bottom: `top`,
-  left: `right`,
-  right: `left`,
+const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
+  top: [`bottom`, 135],
+  bottom: [`top`, 315],
+  left: [`right`, 45],
+  right: [`left`, 225],
 }
 
 const handled_tooltip_events = new WeakSet<Event>()
@@ -210,11 +210,12 @@ const sync_arrow_styles = (
     ? 0
     : css_px_or(styles.borderTopWidth, 0)
   const arrow_side = (arrow_px + border_width) * Math.SQRT2
-  arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; z-index: -1; background: ${fill_color}; border: ${border_width}px solid ${border_color}; transform: rotate(45deg);`
+  const [inset_side, rotation_deg] = ARROW_PLACEMENT[placement]
+  arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
   set(vertical ? `left` : `top`, `${cross_axis_center - arrow_side / 2}px`)
-  set(OPPOSITE_PLACEMENT[placement], `${-arrow_side / 2}px`)
+  set(inset_side, `${-arrow_side / 2}px`)
 }
 
 const remember_and_strip_title = (
@@ -638,14 +639,15 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (active?.open && !active.trigger.isConnected) hide_active(`visibility`)
   })
 
-  // Fill the recycled surface and put it on screen. Top-layer mode requires the Popover
-  // API; fixed and absolute remain explicit alternatives for consumers that need them.
+  // Fill the recycled surface and put it on screen. Top-layer mode degrades to absolute
+  // positioning where the Popover API is missing rather than throwing on every hover.
   const mount_surface = (trigger: HTMLElement, options: TooltipOptions) => {
     surface.replaceChildren(content_el)
     if (options.show_arrow !== false) surface.append(arrow_el)
     surface.hidden = false
     if (!surface.isConnected) doc.body.append(surface)
-    if ((options.strategy ?? `top-layer`) === `top-layer`) {
+    const top_layer = (options.strategy ?? `top-layer`) === `top-layer`
+    if (top_layer && typeof surface.showPopover === `function`) {
       surface.setAttribute(`popover`, `manual`)
       surface.showPopover({ source: trigger })
     } else surface.removeAttribute(`popover`)
@@ -686,19 +688,22 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     stop_open_effects = [
       auto_update_position(opening.trigger, surface, position_active),
       register_escape_layer((event) => {
-        if (!active?.open) return true
+        if (!active?.open) return false
         event.preventDefault()
         event.stopPropagation()
         request_close(`escape`, true)
         return true
       }),
     ]
-    position_active()
-    if (active !== opening || !opening.open) return
+    // Before positioning, which may hide again and must then report a close that
+    // follows an open rather than one out of nowhere.
     options.on_open_change?.(true, { trigger: opening.trigger, reason })
+    position_active()
   }
 
   const request_open = (reason: `pointer` | `focus` | `controlled`): void => {
+    // Re-entering during the close delay supersedes the pending close.
+    clear_close_timeout()
     if (!active || active.phase === `dismissed` || active.open) return
     clear_open_timeout()
     const { options } = active.registration
