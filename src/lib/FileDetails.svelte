@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { type Snippet, untrack } from 'svelte'
   import type {
     HTMLAttributes,
     HTMLButtonAttributes,
@@ -91,22 +91,19 @@
   const highlight_key = (language: string, content: string): string =>
     JSON.stringify([language, content])
 
+  // Keyed by language+content, so a result can never go stale and in-flight requests need
+  // no cancellation. The empty marker keeps a cache write from re-requesting every sibling.
   let highlighted_cache = $state<Record<string, string>>({})
   $effect(() => {
-    let cancelled = false
     for (const file of files) {
       const language = resolve_lang(file)
       const key = highlight_key(language, file.content)
-      if (key in highlighted_cache) continue
+      if (untrack(() => key in highlighted_cache)) continue
+      highlighted_cache[key] = ``
       default_highlighter.highlight(file.content, language).then(
-        (html) => {
-          if (!cancelled) highlighted_cache[key] = html
-        },
+        (html) => (highlighted_cache[key] = html),
         () => {}, // silently skip unsupported languages
       )
-    }
-    return () => {
-      cancelled = true
     }
   })
 </script>

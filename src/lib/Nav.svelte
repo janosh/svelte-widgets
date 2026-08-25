@@ -10,7 +10,7 @@
   import { click_outside, focus_trap, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import type { NavRoute, NavRouteObject } from './types'
-  import { chain_handlers } from './utils'
+  import { chain_handlers, step_focus } from './utils'
 
   type NavLinkRouteObject = NavRouteObject & { href: string }
 
@@ -71,9 +71,9 @@
   let is_open = $state(false)
   let hovered_dropdown = $state<string | null>(null)
   let pinned_dropdown = $state<string | null>(null)
-  let focused_item_index = $state<number>(-1)
   let is_touch_device = $state(false)
-  let viewport_width = $state(Infinity)
+  // Start from the real width on the client so hydration doesn't flash the desktop nav on phones
+  let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   let is_mobile = $derived(viewport_width <= breakpoint)
   let hide_timeout: ReturnType<typeof setTimeout> | null = null
   // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
@@ -107,7 +107,6 @@
     is_open = false
     hovered_dropdown = null
     pinned_dropdown = null
-    focused_item_index = -1
   }
 
   // Query the submenu links / toggle button of the dropdown for a given route href
@@ -124,7 +123,6 @@
     const is_opening = pinned_dropdown !== href
     pinned_dropdown = is_opening ? href : null
     hovered_dropdown = is_opening ? href : null
-    focused_item_index = is_opening && focus_first ? 0 : -1
     if (is_opening && focus_first) {
       setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
     }
@@ -149,44 +147,27 @@
     if (event.key === `Escape`) close_menus()
   }
 
-  function handle_dropdown_keydown(
-    event: KeyboardEvent,
-    href: string,
-    sub_routes: string[],
-  ) {
+  const is_dropdown_open = (href: string) =>
+    hovered_dropdown === href || pinned_dropdown === href
+
+  function handle_toggle_keydown(event: KeyboardEvent, href: string) {
     const { key } = event
-
-    if (key === `Enter` || key === ` `) {
-      event.preventDefault()
-      toggle_dropdown(href, true)
-      return
-    }
-
-    const is_dropdown_open = hovered_dropdown === href || pinned_dropdown === href
-    // Arrow key navigation within open dropdown
-    if (is_dropdown_open && (key === `ArrowDown` || key === `ArrowUp`)) {
-      event.preventDefault()
-      const direction = key === `ArrowDown` ? 1 : -1
-      focused_item_index = Math.max(
-        0,
-        Math.min(sub_routes.length - 1, focused_item_index + direction),
-      )
-      dropdown_links(href)[focused_item_index]?.focus()
-    }
-
-    // Open dropdown with ArrowDown when closed
-    if (!is_dropdown_open && key === `ArrowDown`) {
-      event.preventDefault()
-      toggle_dropdown(href, true)
-    }
+    const opens =
+      key === `Enter` || key === ` ` || (key === `ArrowDown` && !is_dropdown_open(href))
+    if (!opens) return
+    event.preventDefault()
+    toggle_dropdown(href, true)
   }
 
-  function handle_dropdown_item_keydown(event: KeyboardEvent, href: string) {
+  // On the whole dropdown, so arrows keep working after focus has moved from the toggle
+  // onto a link and Escape hands focus back to the toggle from anywhere inside.
+  function handle_dropdown_keydown(event: KeyboardEvent, href: string) {
+    if (!is_dropdown_open(href)) return
     if (event.key === `Escape`) {
       event.preventDefault()
       close_menus()
       dropdown_toggle(href)?.focus()
-    }
+    } else step_focus(event, [...dropdown_links(href)])
   }
 
   function is_current(path: string | undefined) {
@@ -266,12 +247,6 @@
     if (target instanceof Element && target.closest(`[data-dropdown-toggle]`)) return
     open_dropdown(href)
   }
-  const dropdown_item_keydown_handler = (parent_href: string) =>
-    chain_handlers(
-      (event: KeyboardEvent) => handle_dropdown_item_keydown(event, parent_href),
-      link_props?.onkeydown,
-    )
-
   function get_external_attrs(route: NavRouteObject) {
     if (!route.external) return {}
     return { target: `_blank`, rel: `noopener noreferrer` }
@@ -367,13 +342,15 @@
           (route) => route !== parsed_route.href,
         )}
         {@const is_pinned = pinned_dropdown === parsed_route.href}
-        {@const is_dropdown_open = hovered_dropdown === parsed_route.href || is_pinned}
+        {@const dropdown_open = is_dropdown_open(parsed_route.href)}
         <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; mouse handlers only control hover disclosure -->
         <div
           class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
           data-href={parsed_route.href}
           onmouseenter={() => open_dropdown(parsed_route.href, true)}
           onmouseleave={() => schedule_hide(parsed_route.href, is_pinned)}
+          onkeydown={(event: KeyboardEvent) =>
+            handle_dropdown_keydown(event, parsed_route.href)}
           onfocusin={dropdown_focusin_handler(parsed_route.href)}
           onfocusout={(event: FocusEvent) => {
             if (
@@ -414,21 +391,21 @@
             {/if}
             <button
               type="button"
-              class={[`dropdown-toggle`, { open: is_dropdown_open }]}
+              class={[`dropdown-toggle`, { open: dropdown_open }]}
               data-dropdown-toggle
               aria-label="Toggle {formatted.label} submenu"
-              aria-expanded={is_dropdown_open}
+              aria-expanded={dropdown_open}
               aria-haspopup="true"
               onclick={() => toggle_dropdown(parsed_route.href, false)}
               onkeydown={(event: KeyboardEvent) =>
-                handle_dropdown_keydown(event, parsed_route.href, filtered_sub_routes)}
+                handle_toggle_keydown(event, parsed_route.href)}
             >
               <Icon icon={ChevronDown} style="width: 1em; height: 1em" />
             </button>
           </div>
           <!-- svelte-ignore a11y_no_static_element_interactions -- hover keeps the native-link submenu open while traversing it -->
           <div
-            class:visible={is_dropdown_open}
+            class:visible={dropdown_open}
             data-submenu
             tabindex="-1"
             onmouseenter={() => open_dropdown(parsed_route.href, true)}
@@ -464,7 +441,6 @@
                   aria-current={is_current(child_href)}
                   style={`${child_formatted.style}; ${link_props?.style ?? ``}`}
                   onclick={link_click_handler({ href: child_href })}
-                  onkeydown={dropdown_item_keydown_handler(parsed_route.href)}
                   {@attach child_tooltip}
                 >
                   {@html child_formatted.label}
@@ -689,16 +665,20 @@
     inset-inline-start: 1rem;
     flex-direction: column;
     justify-content: space-around;
+    /* 1.4rem bars inside a ~2.4rem hit area: a finger-sized target without moving the bars */
     width: 1.4rem;
     height: 1.4rem;
+    box-sizing: content-box;
+    padding: 0.5rem;
+    margin: -0.5rem;
     background: transparent;
-    padding: 0;
     z-index: var(--nav-toggle-btn-z-index, 10);
   }
   .burger span {
     width: 100%;
     height: 0.18rem;
-    background-color: var(--text);
+    /* hosts that don't define --text still get visible bars */
+    background-color: var(--text, currentColor);
     border-radius: 8pt;
     transition:
       opacity 0.2s linear,
@@ -732,10 +712,16 @@
       visibility 0.3s ease;
     z-index: var(--nav-mobile-z-index, 2);
     flex-direction: column;
+    /* one scrollable column: with several submenus expanded the menu outgrows a phone
+       screen, and wrapping would spill entries into a second column off the panel */
+    flex-wrap: nowrap;
     align-items: stretch;
     justify-content: start;
     gap: 0.2em;
     max-width: 90vw;
+    max-height: calc(100dvh - 4rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
     border-radius: 6pt;
   }
   nav.mobile .menu.open {

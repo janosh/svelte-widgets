@@ -88,12 +88,14 @@
   const restore_focus = async () => {
     const origin = focus_origin
     focus_origin = null
-    if (!origin) return
     await tick() // the toast that had focus is gone only after the DOM catches up
     // Only reclaim focus the toast still holds, or that its removal dropped on <body>:
     // once the user has tabbed elsewhere, yanking them back is worse than not restoring.
     const holder = document.activeElement ?? document.body
-    if (holder === document.body || stack?.contains(holder)) origin.focus()
+    if (origin && (holder === document.body || stack?.contains(holder))) origin.focus()
+    // Removing the focused button fires no focusout, so re-derive the focus pause or the
+    // promoted toast sits paused until the keyboard or pointer comes back.
+    set_focused(Boolean(stack?.contains(document.activeElement)))
   }
 
   // The buttons below restore focus themselves, since dismissing one toast can promote

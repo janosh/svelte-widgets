@@ -230,7 +230,7 @@
     {role}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Popover`)}
     class={[`popover`, rest.class]}
-    ontoggle={handle_native_toggle}
+    ontoggle={chain_handlers(handle_native_toggle, rest.ontoggle)}
     {@attach show_native_popover}
     {@attach float({ anchor, placement, align, offset, padding, match_width, strategy })}
     {@attach native_dismiss

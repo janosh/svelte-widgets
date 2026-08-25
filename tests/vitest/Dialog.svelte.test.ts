@@ -23,13 +23,12 @@ describe(`Dialog`, () => {
   }
   const trigger = () => doc_query<HTMLButtonElement>(`[data-testid="dialog-trigger"]`)
   const surface = () => document.querySelector<HTMLDialogElement>(`dialog.dialog`)
+  // jsdom has no `closedby` light dismiss, so this doubles as the no-support fallback test
   const press_dialog_at = (dialog: HTMLDialogElement, client_x = 0, client_y = 0) => {
     dialog.getBoundingClientRect = () =>
       ({ top: 10, right: 110, bottom: 110, left: 10 }) as DOMRect
     dialog.dispatchEvent(pointer_event(`pointerdown`, client_x, client_y))
     dialog.dispatchEvent(pointer_event(`click`, client_x, client_y))
-    const outside = client_x < 10 || client_x > 110 || client_y < 10 || client_y > 110
-    if (outside && dialog.getAttribute(`closedby`) === `any`) dialog.close()
   }
   const cancel_dialog = (dialog: HTMLDialogElement) => {
     const event = new Event(`cancel`, { cancelable: true })

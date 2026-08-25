@@ -33,9 +33,19 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     expect(listbox.id).toBe(listbox_id)
     expect(listbox.getAttribute(`role`)).toBe(`listbox`)
 
-    input.dispatchEvent(fresh_key(`Escape`))
+    // Escape is consumed while the dropdown is open, then left to an enclosing dialog
+    const reaches_window = () => {
+      let reached = false
+      const spy = () => (reached = true)
+      globalThis.addEventListener(`keydown`, spy)
+      input.dispatchEvent(fresh_key(`Escape`))
+      globalThis.removeEventListener(`keydown`, spy)
+      return reached
+    }
+    expect(reaches_window()).toBe(false)
     await tick()
     expect(input.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(reaches_window()).toBe(true)
   })
 
   test(`aria-activedescendant tracks keyboard navigation with unique option IDs`, async () => {

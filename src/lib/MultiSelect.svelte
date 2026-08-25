@@ -968,7 +968,9 @@
       (!is_user_message_active &&
         (current_option === undefined || is_disabled(current_option))) ||
       (filter_changed && !option_changed)
-    if (autoActiveFirstOption && should_auto_activate) {
+    // only while open: a collapsed combobox with an active option would select it on
+    // Enter instead of reopening, and point aria-activedescendant at a hidden row
+    if (autoActiveFirstOption && open && should_auto_activate) {
       const first_enabled_idx = rendered_options.findIndex(
         (candidate) => !is_disabled(candidate),
       )
@@ -1435,7 +1437,9 @@
       highlighted_idx = null
 
     if (event.key === `Escape` || event.key === `Tab`) {
-      event.stopPropagation()
+      // a closed dropdown has nothing to dismiss, so the key belongs to the enclosing
+      // dialog/pane
+      if (open) event.stopPropagation()
       close_and_clear(event)
     } else if (event.key === `Enter`) {
       event.stopPropagation()

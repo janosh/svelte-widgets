@@ -104,6 +104,30 @@ test(`option row Enter key selects option`, async () => {
   expect(props.selected).toEqual([`Red`])
 })
 
+test(`Enter on a closed dropdown reopens it instead of selecting the auto-active option`, async () => {
+  const props = $state<MultiSelectProps>({
+    options: [`Alpha`, `Beta`],
+    autoActiveFirstOption: true,
+    selected: [],
+    activeIndex: null,
+    open: false,
+  })
+  mount_multiselect(props)
+  const input = await focus_input()
+  expect(props.activeIndex).toBe(0)
+
+  input.dispatchEvent(fresh_key(`Escape`))
+  await tick()
+  expect(props.open).toBe(false)
+  expect(props.activeIndex).toBeNull() // nothing active while collapsed
+
+  input.dispatchEvent(fresh_key(`Enter`))
+  await tick()
+  expect(props.selected).toEqual([])
+  expect(props.open).toBe(true)
+  expect(props.activeIndex).toBe(0)
+})
+
 test(`closes dropdown on tab out and blur to external element`, async () => {
   const onclose = vi.fn()
   mount_multiselect({ options: [1, 2, 3], onclose })
