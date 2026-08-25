@@ -108,6 +108,10 @@ describe(`heading_ids preprocessor`, () => {
       `<h2>Using <code>someFunction</code></h2>`,
       `<h2 id="using-somefunction">Using <code>someFunction</code></h2>`,
     ],
+    // entities decode to what the browser renders (mdsvex escapes `&`, `<`, `{`)
+    [`<h2>Foo &amp; Bar</h2>`, `<h2 id="foo-bar">Foo &amp; Bar</h2>`],
+    [`<h2>Using &#123;foo&#125;</h2>`, `<h2 id="using-foo">Using &#123;foo&#125;</h2>`],
+    [`<h2>&lt;b&gt;x &#x1F600;</h2>`, `<h2 id="b-x">&lt;b&gt;x &#x1F600;</h2>`],
   ])(`%s → %s`, (input: string, expected: string) => {
     expect(preprocess(input).code).toBe(expected)
   })
