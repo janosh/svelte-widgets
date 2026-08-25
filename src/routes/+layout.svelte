@@ -10,6 +10,7 @@
   import { apply_theme_mode, resolve_theme_mode } from '$lib/theme.svelte'
   import { repository } from '$root/package.json'
   import { DemoNav, Footer } from '$site'
+  import { link_source_mentions } from '$site/source-links'
   import favicon from '$site/favicon.svg'
   import type { Snippet } from 'svelte'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
@@ -102,6 +103,7 @@
       css_class: `page-search-match`,
       duration_ms: 8000,
     })}
+    {@attach link_source_mentions}
   >
     {@render children?.()}
   </div>
