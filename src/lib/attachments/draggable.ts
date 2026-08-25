@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
 import { clamp } from '../utils'
 import type { AnchorRect } from './float'
-import { follow_pointer, is_primary_press } from './shared'
+import { css_px, follow_pointer, is_primary_press } from './shared'
 
 export interface DraggableOptions {
   handle_selector?: string
@@ -49,11 +49,17 @@ export const draggable =
 
       dragging = true
       // A fixed node is placed in viewport coordinates, which is what its rect reports;
-      // everything else is placed against its offset parent.
+      // an absolute one against its offset parent. A relative (or static, promoted so
+      // left/top take effect) node is already in flow, so offsetLeft would double its
+      // position: continue from its current insets instead.
+      const styles = getComputedStyle(node)
       const origin =
-        getComputedStyle(node).position === `fixed`
+        styles.position === `fixed`
           ? node.getBoundingClientRect()
-          : { left: node.offsetLeft, top: node.offsetTop }
+          : styles.position === `absolute`
+            ? { left: node.offsetLeft, top: node.offsetTop }
+            : { left: css_px(styles.left) || 0, top: css_px(styles.top) || 0 }
+      if (styles.position === `static`) node.style.position = `relative`
       initial.left = origin.left
       initial.top = origin.top
 

@@ -129,9 +129,12 @@ export const portal =
     node.before(anchor)
     target.append(node)
     return () => {
+      // Svelte removes a destroyed block's nodes before running teardown, so a node no
+      // longer in the target must not be put back: its home is still live markup.
+      if (node.parentNode !== target) anchor.remove()
       // Original parent already gone: replaceWith would be a no-op and strand the
       // node inside the target, outliving the markup that owns it.
-      if (anchor.parentNode) anchor.replaceWith(node)
+      else if (anchor.parentNode) anchor.replaceWith(node)
       else node.remove()
     }
   }

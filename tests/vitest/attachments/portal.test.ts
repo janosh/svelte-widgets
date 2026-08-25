@@ -53,6 +53,17 @@ describe(`portal`, () => {
     expect(target.childNodes).toHaveLength(0)
   })
 
+  it(`does not resurrect a node its block already removed`, () => {
+    const { home, target, node } = setup()
+    const cleanup = portal(target)(node)
+
+    node.remove() // Svelte tears the block's DOM down before running teardown
+    cleanup?.()
+
+    expect(node.parentElement).toBeNull()
+    expect(home.innerHTML).toBe(`<i></i><u></u>`) // anchor gone too
+  })
+
   it(`restores into a detached home rather than dropping the node`, () => {
     const { home, target, node } = setup()
     const cleanup = portal(target)(node)
