@@ -49,23 +49,19 @@
   $effect(() => {
     if (!global && !global_selector) return
 
-    type MountedCopyButton = Parameters<typeof unmount>[0]
-    type Entry = {
+    let mounted_copy_buttons: {
       code: Element
       props: { content: string }
-      component: MountedCopyButton
-    }
-    const mounted_copy_buttons: Entry[] = []
+      component: Parameters<typeof unmount>[0]
+    }[] = []
     const apply_copy_buttons = () => {
       // release buttons whose code block left the document; re-read the rest so the
       // button copies what the block shows now, not what it showed when mounted
-      for (const entry of mounted_copy_buttons.splice(0)) {
-        if (!entry.code.isConnected) void unmount(entry.component)
-        else {
-          entry.props.content = entry.code.textContent ?? ``
-          mounted_copy_buttons.push(entry)
-        }
-      }
+      mounted_copy_buttons = mounted_copy_buttons.filter(({ code, props, component }) => {
+        if (code.isConnected) props.content = code.textContent ?? ``
+        else void unmount(component)
+        return code.isConnected
+      })
       const style = `position: absolute; top: 6pt; inset-inline-end: 6pt; ${
         rest.style ?? ``
       }`

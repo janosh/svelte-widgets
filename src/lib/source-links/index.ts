@@ -51,20 +51,19 @@ export function create_source_links({
 
   // Client-side navigation swaps the page inside the same root, so a MutationObserver keeps
   // linking. The anchor goes inside the code element and adopts its existing child nodes, so
-  // Svelte's references to those nodes (dynamic text, block boundaries) stay valid.
+  // Svelte's references to those nodes (dynamic text, block boundaries) stay valid; code
+  // that already holds a link (ours or the author's) is left alone.
   const link_source_mentions = (root: HTMLElement): (() => void) => {
-    const linked = new WeakSet<Element>()
     const scan = (): void => {
       for (const code of root.querySelectorAll(`code`)) {
-        if (linked.has(code) || code.closest(`a, pre`)) continue
+        if (code.closest(`a, pre`) || code.querySelector(`a`)) continue
         const location = source_location(code.textContent ?? ``)
         if (!location) continue
-        linked.add(code)
         const link = document.createElement(`a`)
         link.href = href_of(location)
         link.target = `_blank`
         link.rel = `noopener`
-        link.title = `Source: ${location.replace(/^\//, ``)}`
+        link.title = `Source: ${location.slice(1)}`
         link.append(...code.childNodes)
         code.append(link)
       }
