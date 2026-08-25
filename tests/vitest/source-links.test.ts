@@ -86,7 +86,8 @@ describe(`source_links vite plugin`, () => {
   it.each([
     [`https://github.com/user/repo`, `https://github.com/user/repo`],
     [`git+https://github.com/user/repo.git`, `https://github.com/user/repo`],
-    [{ url: `git+ssh://git@github.com/user/repo.git` }, `ssh://git@github.com/user/repo`],
+    [{ url: `git+ssh://git@github.com/user/repo.git` }, `https://github.com/user/repo`],
+    [`git@gitlab.com:group/repo.git`, `https://gitlab.com/group/repo`],
     [`user/repo`, `https://github.com/user/repo`],
   ])(`normalizes repository %j to %s`, (repository, expected) => {
     expect(repository_url(repository)).toBe(expected)

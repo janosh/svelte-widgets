@@ -16,7 +16,8 @@ const EXPORT_DEFINITION_RE =
   /^export (?:async function|function|abstract class|class|const|let|interface|type|enum) (?<name>[A-Za-z_$][\w$]*)/
 
 // `repository` as package.json allows it: a URL string, a `{ url }` record (often with a
-// `git+` prefix and `.git` suffix) or a GitHub shorthand like `user/repo`
+// `git+` prefix and `.git` suffix, or an SSH remote) or a GitHub shorthand like `user/repo`.
+// Always yields the browsable https URL.
 export const repository_url = (repository: unknown): string => {
   const raw =
     typeof repository === `string` ? repository : (repository as { url?: unknown })?.url
@@ -26,7 +27,10 @@ export const repository_url = (repository: unknown): string => {
     )
   }
   if (/^[\w.-]+\/[\w.-]+$/.test(raw)) return `https://github.com/${raw}`
-  return raw.replace(/^git\+/, ``).replace(/\.git$/, ``)
+  return raw
+    .replace(/^git\+/, ``)
+    .replace(/^(?:ssh:\/\/)?git@(?<host>[^/:]+)[/:]/, `https://$<host>/`)
+    .replace(/\.git$/, ``)
 }
 
 export type SourceLinksPluginOptions = {
