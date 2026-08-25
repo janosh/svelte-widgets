@@ -121,6 +121,8 @@
     flex-direction: column;
     margin: var(--code-example-margin, 1em auto);
     position: relative;
+    /* a wide example scrolls inside its own pre/preview instead of widening the page */
+    min-width: 0;
   }
   div.code-example.code-above > pre {
     order: -1;
