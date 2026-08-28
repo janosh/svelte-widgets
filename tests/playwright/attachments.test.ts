@@ -172,6 +172,61 @@ test.describe(`tooltip layout and lifecycle`, () => {
     expect(cross_axis_error).toBeLessThanOrEqual(3)
   })
 
+  // The arrow's absolute insets resolve against the padding box while its geometry is
+  // measured in border-box space, so both axes have to add the surface's border back.
+  // A transparent border still occupies layout, hence the second case.
+  for (const border of [`unset`, `4px solid transparent`]) {
+    test(`arrow tip clears and centers on the trigger on every side (border: ${border})`, async ({
+      page,
+    }) => {
+      const demo = page.locator(`#attachments-tooltip-placement`)
+      const button = demo.getByRole(`button`, { name: `Hover the target` })
+      await button.evaluate(
+        (element, value) => element.style.setProperty(`--tooltip-border`, value),
+        border,
+      )
+      const tooltip_el = page.locator(`.custom-tooltip`)
+
+      for (const placement of [`top`, `right`, `bottom`, `left`] as const) {
+        await demo.getByLabel(`placement`).selectOption(placement)
+        await expect(async () => {
+          await page.mouse.move(0, 0) // move off the button so pointerover re-fires
+          await button.hover()
+          await expect(tooltip_el).toHaveAttribute(`data-placement`, placement, {
+            timeout: 1000,
+          })
+        }).toPass({ timeout: 15_000 })
+        await expect(tooltip_el).toHaveCSS(`opacity`, `1`)
+
+        const [button_box, arrow_box, surface_box] = await Promise.all([
+          button.boundingBox(),
+          tooltip_el.locator(`.custom-tooltip-arrow`).boundingBox(),
+          tooltip_el.boundingBox(),
+        ])
+        if (!button_box || !arrow_box || !surface_box) {
+          throw new Error(`Missing ${placement} arrow geometry`)
+        }
+        // A square rotated 45° has a bounding box centred on its tip, so the box's cross
+        // axis gives the tip's position and its leading edge gives the tip itself.
+        const vertical = placement === `top` || placement === `bottom`
+        const cross = (box: typeof arrow_box) =>
+          vertical ? box.x + box.width / 2 : box.y + box.height / 2
+        expect(
+          Math.abs(cross(arrow_box) - cross(button_box)),
+          `${placement} arrow off the trigger's center`,
+        ).toBeLessThanOrEqual(0.5)
+        // The tip stands the default 6px --tooltip-arrow-size clear of the surface.
+        const protrusion = {
+          top: arrow_box.y + arrow_box.height - surface_box.y - surface_box.height,
+          bottom: surface_box.y - arrow_box.y,
+          left: arrow_box.x + arrow_box.width - surface_box.x - surface_box.width,
+          right: surface_box.x - arrow_box.x,
+        }[placement]
+        expect(protrusion, `${placement} arrow protrusion`).toBeCloseTo(6, 0)
+      }
+    })
+  }
+
   test(`active attribute content rerenders without leaving the viewport`, async ({
     page,
   }) => {

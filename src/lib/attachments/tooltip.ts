@@ -214,8 +214,17 @@ const sync_arrow_styles = (
   arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
-  set(vertical ? `left` : `top`, `${cross_axis_center - arrow_side / 2}px`)
-  set(inset_side, `${-arrow_side / 2}px`)
+  // Absolute insets resolve against the padding box, but everything measured above is in
+  // border-box space, so both axes have to put the surface's border back. A transparent
+  // border still takes up layout, so this is the computed width rather than
+  // `border_width`, which is the painted one and goes to zero on a see-through color.
+  const layout_border = (side: string) =>
+    css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
+  const cross_side = vertical ? `left` : `top`
+  set(cross_side, `${cross_axis_center - arrow_side / 2 - layout_border(cross_side)}px`)
+  // On the main axis the square's center lands on the border edge, which puts the tip
+  // exactly `arrow_px` clear of the surface — the painted border covers the overlap.
+  set(inset_side, `${-arrow_side / 2 - (layout_border(inset_side) - border_width)}px`)
 }
 
 const remember_and_strip_title = (
@@ -705,14 +714,17 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // Re-entering during the close delay supersedes the pending close.
     clear_close_timeout()
     if (!active || active.phase === `dismissed` || active.open) return
-    clear_open_timeout()
     const { options } = active.registration
     const elapsed_since_close = Date.now() - last_closed_at
     const warm =
       elapsed_since_close >= 0 && elapsed_since_close <= (options.skip_delay_ms ?? 300)
     const delay = reason === `pointer` && !warm ? (options.open_delay_ms ?? 100) : 0
-    if (delay === 0) show_active(reason)
-    else open_timeout = setTimeout(() => show_active(reason), delay)
+    // show_active clears the pending timer itself, so an immediate open supersedes it.
+    if (delay === 0) return show_active(reason)
+    // `pointerover` fires again on every crossing between the trigger's own children, so
+    // a pending open rides out its original delay: restarting it here would keep a
+    // tooltip on a trigger built from several elements from ever reaching its deadline.
+    open_timeout ??= setTimeout(() => show_active(reason), delay)
   }
 
   function close_if_interaction_ended(reason: `pointer` | `blur`): void {

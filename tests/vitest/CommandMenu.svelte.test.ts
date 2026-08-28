@@ -1,5 +1,5 @@
 import { CommandMenu, PageSearch } from '$lib'
-import { flushSync, mount, tick } from 'svelte'
+import { type ComponentProps, flushSync, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
@@ -10,6 +10,11 @@ const mock_actions = [
 ]
 
 const menu_input = () => doc_query<HTMLInputElement>(`dialog input[autocomplete]`)
+
+// Passes props straight through rather than merging in defaults: several tests mount a
+// $state proxy and then mutate it, which spreading into a fresh object would sever.
+const mount_menu = (props: ComponentProps<typeof CommandMenu>) =>
+  mount(CommandMenu, { target: document.body, props })
 
 async function type_search(text: string): Promise<HTMLInputElement> {
   const input = menu_input()
@@ -68,7 +73,7 @@ test.each([
       actions: mock_actions,
       fade_duration_ms: 0,
     })
-    mount(CommandMenu, { target: document.body, props })
+    mount_menu(props)
 
     const event = new KeyboardEvent(`keydown`, {
       key: key_to_press,
@@ -129,7 +134,7 @@ test.each([
       fade_duration_ms: 0,
       dialog_props,
     })
-    mount(CommandMenu, { target: document.body, props })
+    mount_menu(props)
 
     const event = new KeyboardEvent(`keydown`, {
       key: key_to_press,
@@ -157,7 +162,7 @@ test.each([`Escape`, `x`])(
       fade_duration_ms: 0,
       onkeydown,
     })
-    mount(CommandMenu, { target: document.body, props })
+    mount_menu(props)
     await tick()
 
     const event = new KeyboardEvent(`keydown`, {
@@ -203,15 +208,12 @@ test.each([
   `dialog cancel with close_keys=$close_keys prevents default: $default_prevented`,
   async ({ close_keys, closedby, default_prevented, effective_closedby }) => {
     const oncancel = vi.fn()
-    mount(CommandMenu, {
-      target: document.body,
-      props: {
-        open: true,
-        close_keys,
-        actions: mock_actions,
-        dialog_props: { oncancel, closedby },
-        fade_duration_ms: 0,
-      },
+    mount_menu({
+      open: true,
+      close_keys,
+      actions: mock_actions,
+      dialog_props: { oncancel, closedby },
+      fade_duration_ms: 0,
     })
     await tick()
 
@@ -227,16 +229,13 @@ test.each([
 
 test(`opens a labeled native light-dismiss dialog`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
-  mount(CommandMenu, {
-    target: document.body,
-    props: {
-      actions: mock_actions,
-      aria_label: `Run command`,
-      open: true,
-      backdrop_dim: false,
-      backdrop_blur: true,
-      fade_duration_ms: 0,
-    },
+  mount_menu({
+    actions: mock_actions,
+    aria_label: `Run command`,
+    open: true,
+    backdrop_dim: false,
+    backdrop_blur: true,
+    fade_duration_ms: 0,
   })
   await tick()
 
@@ -263,7 +262,7 @@ test(`handles action selection and execution`, async () => {
     fade_duration_ms: 0,
     onadd,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   const input_el = menu_input()
@@ -293,7 +292,7 @@ test(`ignores user-created options without action handlers`, async () => {
     allowUserOptions: true,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   await type_search(`custom command`)
@@ -320,7 +319,7 @@ test.each([0, 50])(
         fade_duration_ms,
         dialog_props: { onclose },
       })
-      mount(CommandMenu, { target: document.body, props })
+      mount_menu(props)
       await tick()
 
       const dialog = doc_query<HTMLDialogElement>(`dialog`)
@@ -351,7 +350,7 @@ test(`an onclose callback can reopen without another close event`, async () => {
       }),
     },
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   props.open = false
@@ -365,7 +364,7 @@ test(`an onclose callback can reopen without another close event`, async () => {
 
 test(`a stale native close cannot close a reopened menu`, async () => {
   const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
   const old_dialog = doc_query<HTMLDialogElement>(`dialog`)
 
@@ -398,7 +397,7 @@ test(`applies custom styles and props correctly`, async () => {
     liOptionStyle: custom_li_style,
   })
 
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   const select_wrapper = doc_query(`dialog div.multiselect`)
@@ -427,7 +426,7 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
     fade_duration_ms: 0,
     dialog_props: { class: `custom-dialog`, onclose: on_close },
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   const dialog = doc_query<HTMLDialogElement>(`dialog`)
@@ -447,17 +446,14 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
 })
 
 test(`rejects an empty static action list`, () => {
-  expect(() =>
-    mount(CommandMenu, {
-      target: document.body,
-      props: { open: true, actions: [], fade_duration_ms: 0 },
-    }),
-  ).toThrow(`MultiSelect: received no options`)
+  expect(() => mount_menu({ open: true, actions: [], fade_duration_ms: 0 })).toThrow(
+    `MultiSelect: received no options`,
+  )
 })
 
 test(`remains open when trigger keys are pressed while already open`, async () => {
   const props = $state({ open: true, actions: mock_actions, fade_duration_ms: 0 })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
 
   expect(props.open).toBe(true)
 
@@ -470,10 +466,7 @@ test(`remains open when trigger keys are pressed while already open`, async () =
 })
 
 test(`lets command menu dropdown overflow dialog box`, async () => {
-  mount(CommandMenu, {
-    target: document.body,
-    props: { open: true, actions: mock_actions, fade_duration_ms: 0 },
-  })
+  mount_menu({ open: true, actions: mock_actions, fade_duration_ms: 0 })
   await tick()
 
   const dialog = doc_query<HTMLDialogElement>(`dialog`)
@@ -515,10 +508,7 @@ test.each([
     { label: `delete file`, action: vi.fn() },
     { label: `update config`, action: vi.fn() },
   ]
-  mount(CommandMenu, {
-    target: document.body,
-    props: { open: true, actions, fuzzy, fade_duration_ms: 0 },
-  })
+  mount_menu({ open: true, actions, fuzzy, fade_duration_ms: 0 })
 
   await type_search(search)
 
@@ -538,7 +528,7 @@ test(`handles bindable props correctly`, async () => {
     input: null,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
 
   expect(props.dialog).toBeNull()
   expect(props.input).toBeNull()
@@ -565,7 +555,7 @@ test(`selects the first enabled action and preserves pointer selection across gr
     activeIndex: null as number | null,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
@@ -605,7 +595,7 @@ test(`auto-active considers only visible enabled actions`, async () => {
     maxOptions: 1,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   expect(props.activeIndex).toBeNull()
@@ -639,7 +629,7 @@ test(`preserves duplicate action identity across independent key changes`, async
     activeIndex: 1,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   expect(props.activeIndex).toBe(1)
@@ -683,7 +673,7 @@ test(`does not retain an ambiguous index when duplicate actions are rebuilt`, as
     activeIndex: 1,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   props.actions = make_actions()
@@ -704,7 +694,7 @@ test(`preserves the active action by its unique ID amid rebuilt duplicates`, asy
     activeIndex: 1,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
   const active_option = doc_query<HTMLLIElement>(`li.active`)
 
@@ -739,7 +729,7 @@ test(`groupSelectAll selects a whole action group without executing actions or c
     onselectAll: on_select_all,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   doc_query<HTMLButtonElement>(`dialog li.group-header button.group-select-all`).click()
@@ -781,10 +771,7 @@ test(`renders and searches action descriptions, metadata, badges, and keywords`,
     },
     { label: `quit`, action: vi.fn() },
   ]
-  mount(CommandMenu, {
-    target: document.body,
-    props: { open: true, actions, fade_duration_ms: 0 },
-  })
+  mount_menu({ open: true, actions, fade_duration_ms: 0 })
   await tick()
 
   expect(doc_query(`.cmd-description`).textContent).toBe(`Write buffer to disk`)
@@ -1206,13 +1193,10 @@ test.each([
   [`ctrl++`, [`Ctrl`, `+`]], // '+' is both the separator and the key
   [`ctrl+tab`, [`Ctrl`, `Tab`]], // segment without a symbol is title-cased
 ])(`renders shortcut %s as %j`, async (shortcut, expected_parts) => {
-  mount(CommandMenu, {
-    target: document.body,
-    props: {
-      open: true,
-      fade_duration_ms: 0,
-      actions: [{ label: `zoom in`, action: vi.fn(), shortcut }],
-    },
+  mount_menu({
+    open: true,
+    fade_duration_ms: 0,
+    actions: [{ label: `zoom in`, action: vi.fn(), shortcut }],
   })
   await tick()
 
@@ -1220,10 +1204,7 @@ test.each([
 })
 
 test(`plain actions without shortcut/description use default option rendering`, async () => {
-  mount(CommandMenu, {
-    target: document.body,
-    props: { open: true, actions: mock_actions, fade_duration_ms: 0 },
-  })
+  mount_menu({ open: true, actions: mock_actions, fade_duration_ms: 0 })
   await tick()
   expect(document.querySelector(`.cmd-action`)).toBeNull()
 })
@@ -1233,47 +1214,39 @@ test.each([
     desc: `fires when closed`,
     open: false,
     global_shortcuts: true,
-    action_disabled: false,
     calls: 1,
   },
   {
     desc: `disabled via prop`,
     open: false,
     global_shortcuts: false,
-    action_disabled: false,
     calls: 0,
   },
   {
     desc: `inactive while open`,
     open: true,
     global_shortcuts: true,
-    action_disabled: false,
     calls: 0,
   },
   {
     desc: `ignores wrong modifiers`,
     open: false,
     global_shortcuts: true,
-    action_disabled: false,
     calls: 0,
     shift: false,
   },
 ])(
   `global action shortcuts: $desc`,
-  async ({ open, global_shortcuts, calls, shift = true, action_disabled }) => {
+  async ({ open, global_shortcuts, calls, shift = true }) => {
     const spy = vi.fn()
     const actions = [
       {
         label: `save`,
         action: spy,
         shortcut: `ctrl+shift+s`,
-        disabled: action_disabled,
       },
     ]
-    mount(CommandMenu, {
-      target: document.body,
-      props: { actions, open, global_shortcuts, fade_duration_ms: 0 },
-    })
+    mount_menu({ actions, open, global_shortcuts, fade_duration_ms: 0 })
     await tick()
 
     globalThis.dispatchEvent(
@@ -1293,12 +1266,9 @@ test.each([
 
 test(`global shortcuts ignore events consumed by editable controls`, () => {
   const action = vi.fn()
-  mount(CommandMenu, {
-    target: document.body,
-    props: {
-      actions: [{ label: `save`, action, shortcut: `ctrl+shift+s` }],
-      fade_duration_ms: 0,
-    },
+  mount_menu({
+    actions: [{ label: `save`, action, shortcut: `ctrl+shift+s` }],
+    fade_duration_ms: 0,
   })
   const textarea = document.createElement(`textarea`)
   textarea.addEventListener(`keydown`, (event) => event.preventDefault())
@@ -1324,9 +1294,9 @@ test.each([`n`, `shift+n`])(
   `global shortcut %s fires only outside editable targets`,
   (shortcut) => {
     const action = vi.fn()
-    mount(CommandMenu, {
-      target: document.body,
-      props: { actions: [{ label: `new note`, action, shortcut }], fade_duration_ms: 0 },
+    mount_menu({
+      actions: [{ label: `new note`, action, shortcut }],
+      fade_duration_ms: 0,
     })
     const press = (tag: string) => {
       const target = document.createElement(tag)
@@ -1351,19 +1321,16 @@ test.each([`n`, `shift+n`])(
 
 test(`global shortcuts skip disabled duplicate bindings`, async () => {
   const [disabled_action, enabled_action] = [vi.fn(), vi.fn()]
-  mount(CommandMenu, {
-    target: document.body,
-    props: {
-      actions: [
-        {
-          label: `disabled save`,
-          action: disabled_action,
-          shortcut: `ctrl+shift+s`,
-          disabled: true,
-        },
-        { label: `save`, action: enabled_action, shortcut: `ctrl+shift+s` },
-      ],
-    },
+  mount_menu({
+    actions: [
+      {
+        label: `disabled save`,
+        action: disabled_action,
+        shortcut: `ctrl+shift+s`,
+        disabled: true,
+      },
+      { label: `save`, action: enabled_action, shortcut: `ctrl+shift+s` },
+    ],
   })
 
   press_ctrl_shift(`s`)
@@ -1386,7 +1353,7 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
     recent_actions_key: storage_key,
     fade_duration_ms: 0,
   })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   // no recents yet: original order
@@ -1424,7 +1391,7 @@ test(`recent_actions_key uses action ids for duplicate labels`, async () => {
     { label: `save`, description: `No id`, action: vi.fn() },
   ]
   const props = $state({ open: true, actions, recent_actions_key: storage_key })
-  mount(CommandMenu, { target: document.body, props })
+  mount_menu(props)
   await tick()
 
   expect(doc_query(`li[role='option'] .cmd-description`).textContent).toBe(`Mixed`)
@@ -1478,15 +1445,12 @@ test.each([
     }))
     // flushSync so render errors from bad storage data fail this test, not the suite
     flushSync(() => {
-      mount(CommandMenu, {
-        target: document.body,
-        props: {
-          open: true,
-          actions,
-          recent_actions_key: storage_key,
-          max_recent,
-          fade_duration_ms: 0,
-        },
+      mount_menu({
+        open: true,
+        actions,
+        recent_actions_key: storage_key,
+        max_recent,
+        fade_duration_ms: 0,
       })
     })
     await tick()
@@ -1522,15 +1486,12 @@ test.each([
   `global shortcut recents persistence: $desc`,
   async ({ actions, max_recent, keys, expected }) => {
     const storage_key = `test-cmd-recents-${expected.join(`-`)}`
-    mount(CommandMenu, {
-      target: document.body,
-      props: {
-        actions,
-        open: false,
-        recent_actions_key: storage_key,
-        max_recent,
-        fade_duration_ms: 0,
-      },
+    mount_menu({
+      actions,
+      open: false,
+      recent_actions_key: storage_key,
+      max_recent,
+      fade_duration_ms: 0,
     })
     await tick()
 

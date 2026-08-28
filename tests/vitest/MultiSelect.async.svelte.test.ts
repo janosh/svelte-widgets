@@ -20,11 +20,8 @@ afterEach(() => {
 const mock_console_error = () =>
   vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
-// disabled=true and the base error case are covered by the allowEmpty/disabled/allowUserOptions matrix in MultiSelect.svelte.test.ts
-test(`empty options are valid while loading`, () => {
-  expect(() => mount_multiselect({ options: [], loading: true })).not.toThrow()
-})
-
+// Empty options while loading, disabled, or allowing user options, and the base error
+// case, all live in the `accepts empty options in %s mode` matrix in MultiSelect.svelte.test.ts
 // deferred loadOptions fetch: tests decide exactly when each request settles
 type LoadResult = { options: string[]; hasMore: boolean }
 

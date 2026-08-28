@@ -2441,13 +2441,13 @@ test.each([[true], [-1], [3.5], [`foo`], [{}]])(
   },
 )
 
-test.each<[OptionStyle, string | null, string]>([
-  // Invalid key cases
-  [`color: red;`, `invalid`, ``],
-  // Valid key cases
+// A key outside 'selected' | 'option' used to appear here as two more rows, but the body
+// queries one list per key and so asserted nothing for them — same mount as the `option`
+// row, no expectation reached.
+test.each<[OptionStyle, `selected` | `option`, string]>([
+  // String style cases
   [`color: red;`, `selected`, `color: red;`],
   [`color: red;`, `option`, `color: red;`],
-  [`color: red;`, null, `color: red;`],
   // Object style cases
   [{ selected: `color: red;`, option: `color: blue;` }, `selected`, `color: red;`],
   [{ selected: `color: red;`, option: `color: blue;` }, `option`, `color: blue;`],
@@ -2473,13 +2473,8 @@ test.each<[OptionStyle, string | null, string]>([
     }
     mount_multiselect({ options, selected: key === `selected` ? options : [] })
 
-    if (key === `selected`) {
-      const selected_li = doc_query(`ul.selected > li`)
-      expect(selected_li.style.cssText).toBe(expected_css)
-    } else if (key === `option`) {
-      const option_li = doc_query(`ul.options > li`)
-      expect(option_li.style.cssText).toBe(expected_css)
-    }
+    const li = doc_query(key === `selected` ? `ul.selected > li` : `ul.options > li`)
+    expect(li.style.cssText).toBe(expected_css)
   },
 )
 
@@ -3101,33 +3096,30 @@ describe(`selectAllOption feature`, () => {
   })
 })
 
-// Test that value prop can initialize selected options for both single (maxSelect=1) and multi-select (maxSelect=null)
-// Covers string, number, and object options, with single values for maxSelect=1 and arrays for maxSelect=null
-describe.each([[1], [null]])(`initial value prop with maxSelect=%s`, (max_select) => {
-  test.each([
-    [`Red`, [`Red`, `Green`, `Blue`], `Red`],
-    [1, [1, 2, 3], `1`],
-    [{ label: `Red` }, [{ label: `Red` }, { label: `Green` }], `Red`],
-    [[`Red`, `Green`], [`Red`, `Green`, `Blue`], `Red Green`],
-    [[1, 2], [1, 2, 3], `1 2`],
-    [
-      [{ label: `Red` }, { label: `Green` }],
-      [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
-      `Red Green`,
-    ],
-  ])(`works when value=%s`, (value, options, expected_text) => {
-    const is_single_value = !Array.isArray(value)
-    const is_single_select = max_select === 1
-
-    // Skip invalid combinations: single value with multi-select, array value with single select
-    if (is_single_value !== is_single_select) return
-
+// value initializes selected for single (maxSelect=1) and multi-select (maxSelect=null)
+// alike, over string, number and object options. Each row carries its own maxSelect: a
+// shared describe.each over both crossed with every value shape spent half its runs
+// returning at a validity guard, reporting six passing tests that asserted nothing.
+test.each<[1 | null, Option | Option[], Option[], string]>([
+  [1, `Red`, [`Red`, `Green`, `Blue`], `Red`],
+  [1, 1, [1, 2, 3], `1`],
+  [1, { label: `Red` }, [{ label: `Red` }, { label: `Green` }], `Red`],
+  [null, [`Red`, `Green`], [`Red`, `Green`, `Blue`], `Red Green`],
+  [null, [1, 2], [1, 2, 3], `1 2`],
+  [
+    null,
+    [{ label: `Red` }, { label: `Green` }],
+    [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
+    `Red Green`,
+  ],
+])(
+  `maxSelect=%s initializes selected from value=%j`,
+  (max_select, value, options, expected_text) => {
     mount_multiselect({ options, value, maxSelect: max_select })
 
-    const selected_ul = doc_query(`ul.selected`)
-    expect(selected_ul.textContent?.trim()).toBe(expected_text)
-  })
-})
+    expect(doc_query(`ul.selected`).textContent?.trim()).toBe(expected_text)
+  },
+)
 
 test(`createOptionMsg shows immediately with static options`, async () => {
   mount_multiselect({

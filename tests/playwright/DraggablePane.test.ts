@@ -59,6 +59,35 @@ test(`the outermost pixel of the right edge still resizes`, async ({ page }) => 
   expect(Math.round(after.width - before.width)).toBe(-70)
 })
 
+// The pane's left/top resolve against the positioned ancestor's padding box, but it is
+// anchored from that ancestor's border-box rect, so a bordered host used to push the pane
+// off the toggle by the border width. Only a browser knows where the padding box starts.
+test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, async ({
+  page,
+}) => {
+  const { pane } = await open_pane(page)
+  const toggle = page.locator(`button.pane-toggle`).first()
+  const anchoring_error = async () => {
+    const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
+    return {
+      // the default offset={ x: 5, y: 5 } hangs the pane off the toggle's bottom right
+      right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
+      top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
+    }
+  }
+  expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
+
+  await toggle.evaluate((element: HTMLElement) => {
+    const ancestor = element.offsetParent as HTMLElement
+    ancestor.style.border = `10px solid transparent`
+  })
+  // reset_position() reruns the anchoring maths against the now-bordered ancestor
+  await toggle.click()
+  await toggle.click()
+  await expect(pane).toBeVisible()
+  expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
+})
+
 // Which handle a corner press lands on is a browser hit-test fact; happy-dom cannot decide
 // it. The corner has its own square handle painted over the two edge strips it overlaps, so
 // it drives BOTH axes — the edge strips still drive one axis each.

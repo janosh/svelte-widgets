@@ -38,7 +38,11 @@ const touched_line_range = (
       : sel_end
   return [block_start, model.line_at(effective_end).to]
 }
-const leading_whitespace = (line: string): string => /^[ \t]*/.exec(line)?.[0] ?? ``
+// Every whitespace character trimStart() would take except the line terminators, so the
+// commented-ness test and the width the uncomment slices off agree. Counting only [ \t]
+// let an exotic indent (a non-breaking space, a form feed) shift the slice into the token
+// and leave half of it behind.
+const leading_whitespace = (line: string): string => /^[^\S\r\n]*/u.exec(line)?.[0] ?? ``
 const map_rewritten_column = (
   line: string,
   next_line: string,

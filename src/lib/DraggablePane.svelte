@@ -141,17 +141,26 @@
       }
     }
 
-    const ancestor_rect = toggle_btn.offsetParent?.getBoundingClientRect()
+    const ancestor = toggle_btn.offsetParent
     // No positioned ancestor means the pane is placed against the document
-    if (!ancestor_rect) {
+    if (!ancestor) {
       return {
         left: toggle_rect.right - pane_width + offset_x + globalThis.scrollX,
         top: toggle_rect.bottom + offset_y + globalThis.scrollY,
       }
     }
+    // left/top on an absolute child resolve against the ancestor's padding box, whereas
+    // its rect is the border box, so the border comes off. clientLeft/clientTop are that
+    // border, already in used-value terms.
+    const ancestor_rect = ancestor.getBoundingClientRect()
     return {
-      left: toggle_rect.right - ancestor_rect.left - pane_width + offset_x,
-      top: toggle_rect.bottom - ancestor_rect.top + offset_y,
+      left:
+        toggle_rect.right -
+        ancestor_rect.left -
+        ancestor.clientLeft -
+        pane_width +
+        offset_x,
+      top: toggle_rect.bottom - ancestor_rect.top - ancestor.clientTop + offset_y,
     }
   }
 

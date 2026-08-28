@@ -6,6 +6,10 @@ import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, escape_key, mock_rect, pointer_event, stub_prop } from './index'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 
+// Every drag/resize test works against the same 450x300 pane; only the origin varies.
+const mock_pane_rect = (pane: HTMLElement, left = 0, top = 0) =>
+  mock_rect(pane, { left, top, width: 450, height: 300 })
+
 describe(`DraggablePane`, () => {
   // click_outside registers document listeners that outlive innerHTML = '', and
   // stubbed globals must not leak into the next case
@@ -275,7 +279,7 @@ describe(`DraggablePane`, () => {
     mock_viewport()
     const { toggle, pane } = await setup({ position: `fixed` })
     mock_rect(toggle, { ...rect, width: 20, height: 20 })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     toggle.click()
     await tick()
@@ -293,7 +297,7 @@ describe(`DraggablePane`, () => {
     const { toggle, pane } = await setup()
     cleanups.push(stub_prop(toggle, `offsetParent`, ancestor))
     mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     toggle.click()
     await tick()
@@ -312,7 +316,7 @@ describe(`DraggablePane`, () => {
     const { toggle, pane } = await setup()
     cleanups.push(stub_prop(toggle, `offsetParent`, null))
     mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     toggle.click()
     await tick()
@@ -328,7 +332,7 @@ describe(`DraggablePane`, () => {
     const { toggle, pane } = await setup()
     cleanups.push(stub_prop(toggle, `offsetParent`, ancestor))
     mock_rect(toggle, { left: 500, top: 100, width: 20, height: 20 })
-    mock_rect(pane, { left: 75, top: 125, width: 450, height: 300 })
+    mock_pane_rect(pane, 75, 125)
 
     toggle.click()
     await tick()
@@ -424,7 +428,7 @@ describe(`DraggablePane`, () => {
     `resize=%s dragging the %s strip sets the pane size`,
     async (resize, edge, [end_x, end_y], expected) => {
       const { pane } = await open_pane({ resize })
-      mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+      mock_pane_rect(pane)
 
       drag(strip_of(pane, edge), [445, 295], [end_x, end_y])
       await tick()
@@ -437,7 +441,7 @@ describe(`DraggablePane`, () => {
   test(`a narrow viewport preserves width until a horizontal resize changes it`, async () => {
     mock_viewport(400, 500)
     const { pane } = await open_pane({ resize: `both` })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     strip_of(pane, `right`).dispatchEvent(pointer_event(`pointerdown`, 445, 150))
     await tick()
@@ -457,7 +461,7 @@ describe(`DraggablePane`, () => {
   test(`the default max width caps natural size but not a manual viewport-safe resize`, async () => {
     mock_viewport(700, 500)
     const { pane } = await open_pane({ resize: `both` })
-    mock_rect(pane, { left: 100, top: 50, width: 450, height: 300 })
+    mock_pane_rect(pane, 100, 50)
     expect(pane.style.maxWidth).toBe(`450px`)
 
     drag(corner_of(pane), [550, 350], [900, 900])
@@ -479,7 +483,7 @@ describe(`DraggablePane`, () => {
 
   test(`an explicit max_width remains authoritative after resizing`, async () => {
     const { pane } = await open_pane({ resize: `width`, max_width: `600px` })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
     const right_strip = strip_of(pane, `right`)
 
     drag(right_strip, [450, 150], [700, 150])
@@ -493,7 +497,7 @@ describe(`DraggablePane`, () => {
   // The visible grip is pointer-transparent decoration over the attachment's corner handle.
   test(`double-clicking the corner resets a manual resize`, async () => {
     const { pane } = await open_pane({ resize: `both` })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     drag(strip_of(pane, `right`), [445, 295], [545, 150])
     await tick()
@@ -510,7 +514,7 @@ describe(`DraggablePane`, () => {
 
   test(`a resize opts the pane out of repositioning and reveals the controls`, async () => {
     const { pane } = await open_pane({ resize: `both` })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
     expect(document.querySelector(`.reset-button`)).toBeNull()
 
     strip_of(pane, `right`).dispatchEvent(pointer_event(`pointerdown`, 445, 150))
@@ -526,7 +530,7 @@ describe(`DraggablePane`, () => {
   test(`a resize released outside the pane does not dismiss it`, async () => {
     const on_close = vi.fn()
     const { pane } = await open_pane({ resize: `both`, on_close })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     // press the grab strip, drag past the pane, release over the page
     drag(strip_of(pane, `right`), [445, 150], [900, 150])
@@ -559,7 +563,7 @@ describe(`DraggablePane`, () => {
     mock_viewport()
     const { toggle, pane } = await setup({ position: `fixed` })
     mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
-    mock_rect(pane, { left: 0, top: 0, width: 450, height: 300 })
+    mock_pane_rect(pane)
 
     toggle.click()
     await tick()

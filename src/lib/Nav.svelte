@@ -136,7 +136,10 @@
   }
 
   function schedule_hide(href: string, is_pinned: boolean) {
-    if (is_touch_device || is_pinned) return
+    // Same gate as the hover-open above: a touchscreen laptop opens dropdowns on hover
+    // like any desktop, so suppressing the hide on touch support alone would strand them
+    // open. Only the mobile layout, where a tap is what opened the menu, keeps them.
+    if ((is_touch_device && is_mobile) || is_pinned) return
     if (hide_timeout) clearTimeout(hide_timeout)
     hide_timeout = setTimeout(() => {
       if (hovered_dropdown === href) hovered_dropdown = null

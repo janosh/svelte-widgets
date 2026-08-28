@@ -126,12 +126,7 @@ describe(`toast queue reducer`, () => {
         [`p0`, `p1`, `p2`],
       ],
       [
-        `skips past actions to the newest plain notice`,
-        [false, true, true, false],
-        [`p3`],
-        [`p0`, `p1`, `p2`],
-      ],
-      [
+        // the genuine skip-past-actions case: findLastIndex has to walk back to p0
         `drops the only actionless toast, wherever it sits`,
         [false, true, true, true],
         [`p0`],
