@@ -206,20 +206,19 @@ const sync_arrow_styles = (
     ? `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
     : background
   const border_color = styles.borderTopColor
-  const border_width = is_transparent(border_color)
-    ? 0
-    : css_px_or(styles.borderTopWidth, 0)
+  // The width the surface's border actually occupies, per side. `border_width` is the
+  // painted one: the same measurement, zeroed on a see-through color, which is what the
+  // arrow draws on itself. A transparent border still takes up layout, so the two differ.
+  const layout_border = (side: string) =>
+    css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
+  const border_width = is_transparent(border_color) ? 0 : layout_border(`top`)
   const arrow_side = (arrow_px + border_width) * Math.SQRT2
   const [inset_side, rotation_deg] = ARROW_PLACEMENT[placement]
   arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
-  // Absolute insets resolve against the padding box, but everything measured above is in
-  // border-box space, so both axes have to put the surface's border back. A transparent
-  // border still takes up layout, so this is the computed width rather than
-  // `border_width`, which is the painted one and goes to zero on a see-through color.
-  const layout_border = (side: string) =>
-    css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
+  // Absolute insets resolve against the padding box while everything measured above is in
+  // border-box space, so both axes have to put the surface's border back.
   const cross_side = vertical ? `left` : `top`
   set(cross_side, `${cross_axis_center - arrow_side / 2 - layout_border(cross_side)}px`)
   // On the main axis the square's center lands on the border edge, which puts the tip

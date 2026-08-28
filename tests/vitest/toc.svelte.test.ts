@@ -46,11 +46,8 @@ const set_window_width = (width: number) => {
 
 // Element.prototype is the only place to intercept this: happy-dom has no layout, so the
 // component's own scrollIntoView call is all there is to observe.
-const spy_scroll_into_view = () => {
-  const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()
-  vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(scroll_into_view_mock)
-  return scroll_into_view_mock
-}
+const spy_scroll_into_view = () =>
+  vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
 
 const scroll = async () => {
   globalThis.dispatchEvent(new Event(`scroll`))
@@ -262,7 +259,7 @@ describe(`Toc`, () => {
   test(`replaceState uses the raw id while the link href is URL-encoded`, async () => {
     set_body(`<h2 id="sec:1">Section</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
+    spy_scroll_into_view()
 
     mount_toc()
     await tick()
@@ -713,7 +710,7 @@ describe(`Toc`, () => {
     set_headings(2)
     set_window_width(1200)
     mock_active_heading(`heading-1`)
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
+    spy_scroll_into_view()
     const replace_mock = vi.spyOn(history, `replaceState`)
 
     mount_toc()
