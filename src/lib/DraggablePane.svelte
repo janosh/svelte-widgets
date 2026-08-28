@@ -141,7 +141,11 @@
       }
     }
 
-    const ancestor = toggle_btn.offsetParent
+    // The pane's containing block, not the toggle's: they are siblings and normally share
+    // one, but toggle_props can position the toggle independently, and it is the pane's
+    // own left/top being computed here. Always laid out at this point — every caller
+    // either holds an open pane or is a control inside it.
+    const ancestor = pane?.offsetParent
     // No positioned ancestor means the pane is placed against the document
     if (!ancestor) {
       return {

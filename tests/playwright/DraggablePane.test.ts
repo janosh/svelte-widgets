@@ -88,6 +88,38 @@ test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, asy
   expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
 })
 
+// toggle_props can position the toggle out of the pane's containing block, at which point
+// the toggle's offsetParent is null (viewport) while the pane's is still the host. Reading
+// the toggle's would take the document-coordinate branch and write those as host-local
+// insets, dropping the pane by the host's offset down the page.
+test(`a fixed toggle still anchors the pane to its own offset parent`, async ({
+  page,
+}) => {
+  const { pane } = await open_pane(page)
+  const toggle = page.locator(`button.pane-toggle`).first()
+
+  await toggle.evaluate((element: HTMLElement) => {
+    const host = element.offsetParent as HTMLElement
+    // push the host well down the page so a document/host mix-up cannot coincide
+    host.style.marginTop = `400px`
+    const { top, left } = element.getBoundingClientRect()
+    Object.assign(element.style, {
+      position: `fixed`,
+      top: `${top}px`,
+      left: `${left}px`,
+    })
+  })
+  await toggle.click()
+  await toggle.click()
+  await expect(pane).toBeVisible()
+
+  const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
+  expect({
+    right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
+    top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
+  }).toEqual({ right: 0, top: 0 })
+})
+
 // Which handle a corner press lands on is a browser hit-test fact; happy-dom cannot decide
 // it. The corner has its own square handle painted over the two edge strips it overlaps, so
 // it drives BOTH axes — the edge strips still drive one axis each.

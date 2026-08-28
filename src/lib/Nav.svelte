@@ -746,9 +746,14 @@
     padding: 1pt 8pt;
   }
   /* Fill the pill, matching the flex:1 that dropdown rows already give their link, so the
-     whole row is tappable rather than just the text */
+     whole row is tappable rather than just the text. flex:1 only fills the content box, so
+     the negative margin pulls the link back out over the span's padding and its own padding
+     puts the text back where it was — otherwise the padding is a dead band inside the
+     painted pill. The padding stays on the span so a custom `item` snippet still gets it. */
   nav.mobile .menu > span > a {
     flex: 1;
+    margin: -1pt -8pt;
+    padding: 1pt 8pt;
   }
   /* Mobile separator */
   nav.mobile .menu > .separator {

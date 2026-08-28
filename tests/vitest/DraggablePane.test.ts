@@ -290,12 +290,15 @@ describe(`DraggablePane`, () => {
     expect(pane.style.getPropertyValue(`--pane-viewport-clamp`)).toBe(clamp)
   })
 
-  test(`absolute positioning measures against the offsetParent`, async () => {
+  // Stubbed on the pane, not the toggle: the pane's own containing block is what its
+  // left/top resolve against, and the two only coincide while nothing repositions the
+  // toggle out of it.
+  test(`absolute positioning measures against the pane's offsetParent`, async () => {
     const ancestor = document.createElement(`div`)
     document.body.append(ancestor)
     mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
     const { toggle, pane } = await setup()
-    cleanups.push(stub_prop(toggle, `offsetParent`, ancestor))
+    cleanups.push(stub_prop(pane, `offsetParent`, ancestor))
     mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
     mock_pane_rect(pane)
 

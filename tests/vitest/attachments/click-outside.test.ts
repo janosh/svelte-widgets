@@ -229,7 +229,9 @@ describe(`click_outside`, () => {
   it(`locates a scroller's gutter past its border, not at its rect edge`, () => {
     const { callback } = attach_outside()
     const scroller = create_element()
-    mock_rect(scroller, { left: 100, top: 50 })
+    // Border box wide enough to hold border + scrollport + a 15px gutter on each axis, so
+    // every press below lands inside it the way a real hit test would deliver them.
+    mock_rect(scroller, { left: 100, top: 50, width: 225, height: 125 })
     cleanups.push(
       stub_prop(scroller, `clientLeft`, 10), // a 10px border, then...
       stub_prop(scroller, `clientTop`, 10),
