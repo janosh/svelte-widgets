@@ -740,10 +740,6 @@ describe(`fuzzy_match_indices`, () => {
 })
 
 describe(`is_editable_event_target`, () => {
-  afterEach(() => {
-    document.body.innerHTML = ``
-  })
-
   test.each([
     [`<input />`, `input`, true],
     [`<textarea></textarea>`, `textarea`, true],
@@ -846,9 +842,6 @@ describe(`step_focus`, () => {
   beforeEach(() => {
     document.body.innerHTML = `<button>0</button><button>1</button><button>2</button>`
     items = [...document.querySelectorAll(`button`)]
-  })
-  afterEach(() => {
-    document.body.innerHTML = ``
   })
 
   const press = (key: string, options?: { horizontal?: boolean }) => {

@@ -1,6 +1,6 @@
 import { click_outside } from '$lib/attachments'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { create_element, escape_key, stub_prop } from '../index'
+import { create_element, escape_key, mock_rect, stub_prop } from '../index'
 
 describe(`click_outside`, () => {
   const dispatch_press = (
@@ -220,6 +220,35 @@ describe(`click_outside`, () => {
     expect(callback).not.toHaveBeenCalled()
 
     press(400, 300) // control: same target inside the client box does dismiss
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
+
+  // The rect is the border box but clientWidth/Height are the padding box, so the gutter
+  // starts a border in from where the rect alone suggests. Getting that wrong swallows
+  // presses on the last border-width of content in any bordered scroller.
+  it(`locates a scroller's gutter past its border, not at its rect edge`, () => {
+    const { callback } = attach_outside()
+    const scroller = create_element()
+    // Border box wide enough to hold border + scrollport + a 15px gutter on each axis, so
+    // every press below lands inside it the way a real hit test would deliver them.
+    mock_rect(scroller, { left: 100, top: 50, width: 225, height: 125 })
+    cleanups.push(
+      stub_prop(scroller, `clientLeft`, 10), // a 10px border, then...
+      stub_prop(scroller, `clientTop`, 10),
+      stub_prop(scroller, `clientWidth`, 200), // ...200px of scrollport, so the vertical
+      stub_prop(scroller, `clientHeight`, 100), // gutter opens at x 310 and the horizontal at y 160
+      stub_prop(scroller, `scrollWidth`, 400), // overflowing on both axes puts both there
+      stub_prop(scroller, `scrollHeight`, 400),
+    )
+    const press = (clientX: number, clientY: number) =>
+      dispatch_press(scroller, [], `pointerdown`, { clientX, clientY })
+
+    press(315, 100) // vertical gutter
+    press(150, 165) // horizontal gutter
+    expect(callback).not.toHaveBeenCalled()
+
+    // Inside both gutters but outside the border-box-only reading of them
+    press(305, 155)
     expect(callback).toHaveBeenCalledTimes(1)
   })
 

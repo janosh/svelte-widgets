@@ -366,9 +366,11 @@
     prefix_heights.map((ph) => {
       if (!can_virtualize) return { start: 0, end: ph.length, pad_top: 0, pad_bottom: 0 }
       const start = Math.max(0, binary_search_ge(ph, scroll_top) - 1 - overscan)
+      // The item found at the viewport's bottom edge straddles it, so it is on screen and
+      // the exclusive end has to clear it — mirroring the row of margin `start` takes.
       const end = Math.min(
         ph.length,
-        binary_search_ge(ph, scroll_top + container_height) + overscan,
+        binary_search_ge(ph, scroll_top + container_height) + 1 + overscan,
       )
       return {
         start,

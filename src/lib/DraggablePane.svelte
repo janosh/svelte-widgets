@@ -127,31 +127,40 @@
     const toggle_rect = toggle_btn.getBoundingClientRect()
     const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
     const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
+    // The anchor in viewport coordinates; each strategy below only restates it in the
+    // space its own left/top are read in.
+    const left = toggle_rect.right - pane_width + offset_x
+    const top = toggle_rect.bottom + offset_y
 
     if (position === `fixed`) {
       return {
         left: clamp_to_viewport(
-          toggle_rect.right - pane_width + offset_x,
+          left,
           globalThis.innerWidth - pane_width - viewport_margin_px,
         ),
         top: clamp_to_viewport(
-          toggle_rect.bottom + offset_y,
+          top,
           globalThis.innerHeight - min_reachable_height_px - viewport_margin_px,
         ),
       }
     }
 
-    const ancestor_rect = toggle_btn.offsetParent?.getBoundingClientRect()
+    // The pane's containing block, not the toggle's: they are siblings and normally share
+    // one, but toggle_props can position the toggle independently, and it is the pane's
+    // own left/top being computed here. Always laid out at this point — every caller
+    // either holds an open pane or is a control inside it.
+    const ancestor = pane?.offsetParent
     // No positioned ancestor means the pane is placed against the document
-    if (!ancestor_rect) {
-      return {
-        left: toggle_rect.right - pane_width + offset_x + globalThis.scrollX,
-        top: toggle_rect.bottom + offset_y + globalThis.scrollY,
-      }
+    if (!ancestor) {
+      return { left: left + globalThis.scrollX, top: top + globalThis.scrollY }
     }
+    // An absolute child's insets resolve against the ancestor's padding box, whereas its
+    // rect is the border box, so the border comes off too. clientLeft/clientTop are that
+    // border, already in used-value terms.
+    const ancestor_rect = ancestor.getBoundingClientRect()
     return {
-      left: toggle_rect.right - ancestor_rect.left - pane_width + offset_x,
-      top: toggle_rect.bottom - ancestor_rect.top + offset_y,
+      left: left - ancestor_rect.left - ancestor.clientLeft,
+      top: top - ancestor_rect.top - ancestor.clientTop,
     }
   }
 

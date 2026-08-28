@@ -144,6 +144,17 @@ const pause_visibility_timeout = <Priority extends string>(
             : Math.max(0, toast.expires_at_ms - now_ms),
       }
 
+// A budget beats a deadline (see ToastRequest.visible_duration_ms), so a queued toast
+// carrying both stops running its wall clock. The budget itself is untouched: nothing has
+// been spent yet, and banking here would mistake the caller's deadline for one this queue
+// had derived and adopt the distance to it as the budget.
+const drop_unseen_deadline = <Priority extends string>(
+  toast: ToastItem<Priority>,
+): ToastItem<Priority> =>
+  toast.visible_duration_ms === undefined || toast.expires_at_ms === null
+    ? toast
+    : { ...toast, expires_at_ms: null }
+
 const start_visibility_timeout = <Priority extends string>(
   toast: ToastItem<Priority>,
   now_ms: number,
@@ -163,7 +174,7 @@ const rebalance_queue = <Priority extends string>(
     rank(right) - rank(left) ||
     left.created_at_ms - right.created_at_ms ||
     left.seq - right.seq
-  const pending = queue.pending.map((toast) => pause_visibility_timeout(toast, now_ms))
+  const pending = queue.pending.map(drop_unseen_deadline)
   pending.sort(highest_first)
   if (!active_toast) {
     const promoted = pending.shift()

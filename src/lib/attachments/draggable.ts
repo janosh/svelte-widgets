@@ -60,8 +60,12 @@ export const draggable =
             ? { left: node.offsetLeft, top: node.offsetTop }
             : { left: css_px(styles.left) || 0, top: css_px(styles.top) || 0 }
       if (styles.position === `static`) node.style.position = `relative`
-      initial.left = origin.left
-      initial.top = origin.top
+      // A rect and offsetLeft both report the border edge, but left/top place the margin
+      // edge, so an out-of-flow node with margins would jump by them on the first press.
+      // The in-flow branch read the insets themselves, so it is already in that space.
+      const out_of_flow = [`fixed`, `absolute`].includes(styles.position)
+      initial.left = origin.left - (out_of_flow ? css_px(styles.marginLeft) || 0 : 0)
+      initial.top = origin.top - (out_of_flow ? css_px(styles.marginTop) || 0 : 0)
 
       if (move_x) {
         node.style.left = `${initial.left}px`

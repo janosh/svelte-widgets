@@ -64,6 +64,14 @@ test.each<[string, BlockCommand, string, string, string]>([
   ],
   [`uncomment`, toggle_line_comment, `[# one\n  #two]`, `#`, `[one\n  two]`],
   [`mixed comment`, toggle_line_comment, `[// one\ntwo]`, `//`, `[// // one\n// two]`],
+  // An indent of whitespace outside [ \t] used to slice into the token, leaving `/ one`
+  [
+    `uncomment past an exotic indent`,
+    toggle_line_comment,
+    `[ // one\n// two]`,
+    `//`,
+    `[ one\ntwo]`,
+  ],
 ])(`block command: %s`, (_label, command, before, unit, expected) => {
   expect(run(command, before, unit)).toBe(expected)
 })

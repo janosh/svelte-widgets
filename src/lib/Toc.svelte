@@ -544,8 +544,10 @@
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
     if (keepActiveTocItemInView && activeTocLi && nav) {
-      // scroll the active ToC item into the middle of the ToC container
-      const top = activeTocLi.offsetTop - nav.offsetHeight / 2
+      // scroll the active ToC item into the middle of the ToC container. offsetTop and
+      // scrollTop both count from the padding box, so the height to halve is the
+      // scrollport's (clientHeight), not the border box's.
+      const top = activeTocLi.offsetTop - nav.clientHeight / 2
       nav.scrollTo?.({ top, behavior })
     }
   }

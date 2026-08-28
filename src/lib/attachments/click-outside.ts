@@ -59,12 +59,13 @@ const is_scrollbar_press = (event: Event): boolean => {
   const rect = target.getBoundingClientRect()
   // clientWidth/Height are 0 for non-scrollable boxes (inline elements above all),
   // hence the overflow check — otherwise every press right of such a box looks like
-  // a scrollbar hit and silently suppresses dismissal.
+  // a scrollbar hit and silently suppresses dismissal. The gutter starts past the
+  // border too, which the border-box rect includes but clientWidth/Height do not.
   return (
     (target.scrollHeight > target.clientHeight &&
-      event.clientX > rect.left + target.clientWidth) ||
+      event.clientX > rect.left + target.clientLeft + target.clientWidth) ||
     (target.scrollWidth > target.clientWidth &&
-      event.clientY > rect.top + target.clientHeight)
+      event.clientY > rect.top + target.clientTop + target.clientHeight)
   )
 }
 

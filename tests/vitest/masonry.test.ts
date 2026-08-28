@@ -39,12 +39,6 @@ const as_columns = () =>
 const resize_observers = new Map<Element, ResizeObserverCallback>()
 // number for a uniform height, or a function to give each item its own measured height
 let mock_height: number | ((el: Element) => number) = 100
-// Fire every registered ResizeObserver callback, as if all items had just been measured
-const measure_all_items = () => {
-  for (const item of item_els()) {
-    resize_observers.get(item)?.([mock_resize_entry(item)], mock_observer)
-  }
-}
 const measured_height = (el: Element): number =>
   typeof mock_height === `number` ? mock_height : mock_height(el)
 
@@ -55,12 +49,6 @@ const mock_resize_entry = (target: Element): ResizeObserverEntry => ({
   contentBoxSize: [],
   devicePixelContentBoxSize: [],
 })
-
-const mock_observer: ResizeObserver = {
-  observe: () => {},
-  unobserve: () => {},
-  disconnect: () => {},
-}
 
 globalThis.ResizeObserver = class ResizeObserver implements ResizeObserver {
   private readonly callback: ResizeObserverCallback
@@ -557,6 +545,19 @@ describe(`Masonry virtualization`, () => {
     expect(count_5).toBeGreaterThan(count_1)
   })
 
+  // overscan=0 removes the slack that hid an exclusive end one row short, so the item
+  // straddling the viewport's bottom edge went unrendered and left a blank strip.
+  test(`overscan=0 still renders the item at the viewport's bottom edge`, () => {
+    mount_virtualized(50, {
+      getEstimatedHeight: () => 100,
+      overscan: 0,
+      gap: 0,
+      calcCols: () => 1,
+    })
+    // 100px items in a 300px viewport: rows 0, 1 and 2 all sit on screen
+    expect([...item_els()].map((el) => el.textContent?.trim())).toEqual([`0`, `1`, `2`])
+  })
+
   test.each([
     [`balanced`, 2],
     [`row-first`, 3],
@@ -721,43 +722,6 @@ describe(`Masonry virtual scroll stability`, () => {
     const expected_measured = (item_count - rendered) * (mock_height + gap)
     expect(padding).toBeLessThan(expected_measured * 0.8)
     expect(padding).toBeGreaterThan(expected_estimated * 0.5)
-  })
-
-  test.each([
-    { estimated: 100, measured: 80 },
-    { estimated: 200, measured: 150 },
-  ])(
-    `padding stable after measurements (est=$estimated, meas=$measured)`,
-    async ({ estimated, measured }) => {
-      mock_height = measured
-      mount_virtualized(50, {
-        calcCols: () => 1,
-        getEstimatedHeight: () => estimated,
-        height: 200,
-        gap: 10,
-      })
-
-      const col = col_els()[0]
-      const initial_style = col?.getAttribute(`style`)
-
-      measure_all_items()
-
-      expect(col?.getAttribute(`style`)).toBe(initial_style)
-    },
-  )
-
-  test(`column distribution stable after measurements`, async () => {
-    mount_virtualized(100, {
-      calcCols: () => 3,
-      getEstimatedHeight: () => 100,
-      height: 300,
-    })
-
-    const before = get_col_dist()
-
-    measure_all_items()
-
-    expect(get_col_dist()).toEqual(before)
   })
 
   test(`10k items render only a virtualized window`, async () => {

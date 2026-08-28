@@ -153,3 +153,39 @@ test.describe(`Nav dropdown`, () => {
     await expect(menu).toHaveCSS(`display`, `none`)
   })
 })
+
+// The pill is painted on `.menu > span`, but the link inside it is `flex: 1`, which fills
+// only the content box. Without the link stretching back over the span's padding, that
+// padding is a dead band inside the visible row. Only a browser resolves these boxes.
+test(`the whole painted mobile row is part of its link's hit area`, async ({ page }) => {
+  await page.setViewportSize({ width: 420, height: 800 })
+  await page.goto(`/nav`, { waitUntil: `networkidle` })
+
+  // .click() here races a decorative overlay for the press; the burger's own hit area is
+  // not what this test is about, so open the menu directly
+  await page
+    .locator(`nav.mobile button.burger`)
+    .first()
+    .evaluate((element: HTMLElement) => element.click())
+  const row = page
+    .locator(`nav.mobile .menu > span`)
+    .filter({ has: page.locator(`a`) })
+    .first()
+  const link = row.locator(`> a`).first()
+  await expect(link).toBeVisible()
+
+  const [row_box, link_box] = await Promise.all([row.boundingBox(), link.boundingBox()])
+  if (!row_box || !link_box) throw new Error(`Missing mobile nav row geometry`)
+  // the link covers the pill exactly: no padding band left over on any side
+  for (const [edge, delta] of Object.entries({
+    left: link_box.x - row_box.x,
+    top: link_box.y - row_box.y,
+    right: row_box.x + row_box.width - (link_box.x + link_box.width),
+    bottom: row_box.y + row_box.height - (link_box.y + link_box.height),
+  })) {
+    expect(
+      Math.abs(delta),
+      `${edge} of the pill is outside the link`,
+    ).toBeLessThanOrEqual(0.5)
+  }
+})

@@ -110,6 +110,16 @@ const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
   right: [`left`, 225],
 }
 
+// The two corners flanking each arrow side, in cross-axis order. The arrow tracks the edge
+// it hangs off, for these and for its border below, which differs from any fixed side only
+// under a consumer stylesheet: every --tooltip-* shorthand sets all four alike.
+const SIDE_CORNERS: Record<Placement, readonly [string, string]> = {
+  top: [`top-left`, `top-right`],
+  bottom: [`bottom-left`, `bottom-right`],
+  left: [`top-left`, `bottom-left`],
+  right: [`top-right`, `bottom-right`],
+}
+
 const handled_tooltip_events = new WeakSet<Event>()
 
 const is_transparent = (color: string): boolean =>
@@ -192,30 +202,42 @@ const sync_arrow_styles = (
   const styles = getComputedStyle(tooltip_el)
   const background = styles.backgroundColor.trim()
   const arrow_px = css_px_or(styles.getPropertyValue(`--tooltip-arrow-size`), 6)
-  const radius_px = css_px_or(styles.borderTopLeftRadius, 0)
+  const [inset_side, rotation_deg] = ARROW_PLACEMENT[placement]
   const vertical = placement === `top` || placement === `bottom`
   const dimension = vertical ? tooltip_rect.width : tooltip_rect.height
   const anchor_center = vertical
     ? (trigger_rect.left + trigger_rect.right) / 2 - left
     : (trigger_rect.top + trigger_rect.bottom) / 2 - top
-  const min_center = arrow_px + radius_px
-  const max_center = dimension - arrow_px - radius_px
+  // This clamp exists to hold the tip off a curve, so it measures the near corners.
+  const corner_radius = (corner: string) =>
+    css_px_or(styles.getPropertyValue(`border-${corner}-radius`), 0)
+  const [start_corner, end_corner] = SIDE_CORNERS[inset_side]
+  const min_center = arrow_px + corner_radius(start_corner)
+  const max_center = dimension - arrow_px - corner_radius(end_corner)
   const cross_axis_center =
     max_center < min_center ? dimension / 2 : clamp(anchor_center, min_center, max_center)
   const fill_color = is_transparent(background)
     ? `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
     : background
-  const border_color = styles.borderTopColor
-  const border_width = is_transparent(border_color)
-    ? 0
-    : css_px_or(styles.borderTopWidth, 0)
+  // The width the surface's border actually occupies, per side. `border_width` is the
+  // painted one: the same measurement, zeroed on a see-through color, which is what the
+  // arrow draws on itself. A transparent border still takes up layout, so the two differ.
+  const layout_border = (side: string) =>
+    css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
+  // The arrow paints the border of the edge it continues, at that edge's width.
+  const border_color = styles.getPropertyValue(`border-${inset_side}-color`)
+  const border_width = is_transparent(border_color) ? 0 : layout_border(inset_side)
   const arrow_side = (arrow_px + border_width) * Math.SQRT2
-  const [inset_side, rotation_deg] = ARROW_PLACEMENT[placement]
   arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
-  set(vertical ? `left` : `top`, `${cross_axis_center - arrow_side / 2}px`)
-  set(inset_side, `${-arrow_side / 2}px`)
+  // Absolute insets resolve against the padding box while everything measured above is in
+  // border-box space, so both axes have to put the surface's border back.
+  const cross_side = vertical ? `left` : `top`
+  set(cross_side, `${cross_axis_center - arrow_side / 2 - layout_border(cross_side)}px`)
+  // On the main axis the square's center lands on the border edge, which puts the tip
+  // exactly `arrow_px` clear of the surface — the painted border covers the overlap.
+  set(inset_side, `${-arrow_side / 2 - (layout_border(inset_side) - border_width)}px`)
 }
 
 const remember_and_strip_title = (
@@ -705,14 +727,17 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // Re-entering during the close delay supersedes the pending close.
     clear_close_timeout()
     if (!active || active.phase === `dismissed` || active.open) return
-    clear_open_timeout()
     const { options } = active.registration
     const elapsed_since_close = Date.now() - last_closed_at
     const warm =
       elapsed_since_close >= 0 && elapsed_since_close <= (options.skip_delay_ms ?? 300)
     const delay = reason === `pointer` && !warm ? (options.open_delay_ms ?? 100) : 0
-    if (delay === 0) show_active(reason)
-    else open_timeout = setTimeout(() => show_active(reason), delay)
+    // show_active clears the pending timer itself, so an immediate open supersedes it.
+    if (delay === 0) return show_active(reason)
+    // `pointerover` fires again on every crossing between the trigger's own children, so
+    // a pending open rides out its original delay: restarting it here would keep a
+    // tooltip on a trigger built from several elements from ever reaching its deadline.
+    open_timeout ??= setTimeout(() => show_active(reason), delay)
   }
 
   function close_if_interaction_ended(reason: `pointer` | `blur`): void {

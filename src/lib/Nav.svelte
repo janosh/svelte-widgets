@@ -136,7 +136,10 @@
   }
 
   function schedule_hide(href: string, is_pinned: boolean) {
-    if (is_touch_device || is_pinned) return
+    // Same gate as the hover-open above: a touchscreen laptop opens dropdowns on hover
+    // like any desktop, so suppressing the hide on touch support alone would strand them
+    // open. Only the mobile layout, where a tap is what opened the menu, keeps them.
+    if ((is_touch_device && is_mobile) || is_pinned) return
     if (hide_timeout) clearTimeout(hide_timeout)
     hide_timeout = setTimeout(() => {
       if (hovered_dropdown === href) hovered_dropdown = null
@@ -666,8 +669,8 @@
     flex-direction: column;
     justify-content: space-around;
     /* 1.4rem bars inside a ~2.4rem hit area: a finger-sized target without moving the bars */
-    width: 1.4rem;
-    height: 1.4rem;
+    width: var(--nav-burger-size, 1.4rem);
+    height: var(--nav-burger-size, 1.4rem);
     box-sizing: content-box;
     padding: 0.5rem;
     margin: -0.5rem;
@@ -685,14 +688,18 @@
       transform 0.2s linear;
     transform-origin: center;
   }
+  /* Both strokes must land on the box's centre line or the X reads as lopsided. Under
+     `space-around` with three equal bars, adjacent bar centres are exactly height/3 apart —
+     the outer bars are one step from the middle one, which is already centred. A hardcoded
+     offset (0.4rem against a 1.4rem box) left them ~1px shy of meeting. */
   .burger[aria-expanded='true'] span:first-child {
-    transform: translateY(0.4rem) rotate(45deg);
+    transform: translateY(calc(var(--nav-burger-size, 1.4rem) / 3)) rotate(45deg);
   }
   .burger[aria-expanded='true'] span:nth-child(2) {
     opacity: 0;
   }
   .burger[aria-expanded='true'] span:nth-child(3) {
-    transform: translateY(-0.4rem) rotate(-45deg);
+    transform: translateY(calc(var(--nav-burger-size, 1.4rem) / -3)) rotate(-45deg);
   }
   /* Mobile styles - using .mobile class set via JS based on breakpoint prop */
   nav.mobile .burger {
@@ -701,7 +708,11 @@
   nav.mobile .menu {
     position: fixed;
     top: 3rem;
-    inset-inline-start: 1rem;
+    /* Span the viewport rather than hugging its content: a content-width panel anchored to
+       one side leaves page text visible right beside the open menu, which reads as a stray
+       box instead of a menu. Hosts wanting the old floating panel can set --nav-mobile-inset
+       to `1rem auto` (or any inset-inline pair) and cap it with a max-width of their own. */
+    inset-inline: var(--nav-mobile-inset, 0.5rem);
     background-color: var(--nav-surface-bg);
     border: 1px solid var(--nav-surface-border);
     box-shadow: var(--nav-surface-shadow);
@@ -718,7 +729,6 @@
     align-items: stretch;
     justify-content: start;
     gap: 0.2em;
-    max-width: 90vw;
     max-height: calc(100dvh - 4rem);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -728,8 +738,22 @@
     opacity: 1;
     visibility: visible;
   }
-  nav.mobile :is(.menu > span, .menu > span > a, .dropdown) {
-    padding: 2pt 8pt;
+  /* `.menu > span` and `.dropdown > div:first-child` are the two elements that paint a row's
+     highlight. Padding must land on both or neither: padding `.dropdown` instead of its inner
+     wrapper grew the row around the pill rather than the pill itself, so plain links rendered
+     visibly wider and taller pills than dropdown rows. */
+  nav.mobile :is(.menu > span, .dropdown > div:first-child) {
+    padding: 1pt 8pt;
+  }
+  /* Fill the pill, matching the flex:1 that dropdown rows already give their link, so the
+     whole row is tappable rather than just the text. flex:1 only fills the content box, so
+     the negative margin pulls the link back out over the span's padding and its own padding
+     puts the text back where it was — otherwise the padding is a dead band inside the
+     painted pill. The padding stays on the span so a custom `item` snippet still gets it. */
+  nav.mobile .menu > span > a {
+    flex: 1;
+    margin: -1pt -8pt;
+    padding: 1pt 8pt;
   }
   /* Mobile separator */
   nav.mobile .menu > .separator {
@@ -752,7 +776,9 @@
     border-radius: var(--nav-border-radius);
   }
   nav.mobile .dropdown > div:first-child > button {
-    padding: 4pt 8pt;
+    /* Sit against the row's trailing edge: the row's own padding is the only gap wanted,
+       so the caret's trailing padding would double it */
+    padding: 4pt 0 4pt 8pt;
     border-radius: var(--nav-border-radius);
     opacity: 0.6;
   }
@@ -770,7 +796,8 @@
   nav.mobile .dropdown > div:last-child a {
     padding-block: 4pt;
     padding-inline: 6pt 8pt;
-    margin-inline-start: 8pt;
+    /* 8pt of its own indent plus the 8pt the `.dropdown` padding used to contribute */
+    margin-inline-start: 16pt;
     border-inline-start: 2px solid transparent;
     font-size: 0.9em;
   }

@@ -44,6 +44,11 @@ const set_window_width = (width: number) => {
   globalThis.dispatchEvent(new Event(`resize`))
 }
 
+// Element.prototype is the only place to intercept this: happy-dom has no layout, so the
+// component's own scrollIntoView call is all there is to observe.
+const spy_scroll_into_view = () =>
+  vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
+
 const scroll = async () => {
   globalThis.dispatchEvent(new Event(`scroll`))
   await tick()
@@ -254,7 +259,7 @@ describe(`Toc`, () => {
   test(`replaceState uses the raw id while the link href is URL-encoded`, async () => {
     set_body(`<h2 id="sec:1">Section</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
+    spy_scroll_into_view()
 
     mount_toc()
     await tick()
@@ -392,10 +397,7 @@ describe(`Toc`, () => {
       set_body(`<h2 id="first">First</h2><h2 id="second">Second</h2>`)
       mock_active_heading(`first`)
       const replace_state_mock = vi.spyOn(history, `replaceState`)
-      const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()
-      vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(
-        scroll_into_view_mock,
-      )
+      const scroll_into_view_mock = spy_scroll_into_view()
 
       mount_toc({
         tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
@@ -446,10 +448,7 @@ describe(`Toc`, () => {
   test(`modified clicks on ToC links keep native browser behavior`, async () => {
     set_body(`<h2 id="intro">Intro</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
-    const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(
-      scroll_into_view_mock,
-    )
+    const scroll_into_view_mock = spy_scroll_into_view()
 
     mount_toc()
     await tick()
@@ -711,7 +710,7 @@ describe(`Toc`, () => {
     set_headings(2)
     set_window_width(1200)
     mock_active_heading(`heading-1`)
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
+    spy_scroll_into_view()
     const replace_mock = vi.spyOn(history, `replaceState`)
 
     mount_toc()
@@ -768,10 +767,7 @@ describe(`Toc`, () => {
     async (_, key, scrollBehavior, expected_behavior) => {
       set_headings(2)
 
-      const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()
-      vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(
-        scroll_into_view_mock,
-      )
+      const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
 
       // breakpoint above the happy-dom window width forces mobile mode, where open=true is
@@ -835,10 +831,7 @@ describe(`Toc`, () => {
 
   test(`mutation observer tracks headings added and removed after mount`, async () => {
     set_body(`<div id="content"><h2 id="initial">Initial Heading</h2></div>`)
-    const scroll_into_view_mock = vi.fn<Element[`scrollIntoView`]>()
-    vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(
-      scroll_into_view_mock,
-    )
+    const scroll_into_view_mock = spy_scroll_into_view()
 
     mount_toc()
     await tick()

@@ -713,22 +713,9 @@ describe(`Nav`, () => {
       expect(on_close).toHaveBeenCalledTimes(1)
     })
 
-    test.each([
-      [`clicking link`, () => click(doc_query(`a`))],
-      [`pressing Escape`, escape],
-    ])(`onclose called when %s closes menu`, async (_desc, close_action) => {
-      const on_close = vi.fn()
-      set_window_width(500)
-
-      mount_nav({ routes: [`/home`], onclose: on_close, breakpoint: 767 })
-      await tick()
-      await click(doc_query(`.burger`))
-      await tick()
-      await close_action()
-      await tick()
-      expect(on_close).toHaveBeenCalledTimes(1)
-      expect(doc_query(`.burger`).getAttribute(`aria-expanded`)).toBe(`false`)
-    })
+    // No per-cause onclose test: the callback fires from one $effect watching is_open go
+    // true->false, which the burger case above covers, and `closes on Escape or link
+    // click` already pins those two causes reaching that transition.
   })
 
   describe(`breakpoint prop`, () => {
@@ -1170,10 +1157,12 @@ describe(`Nav`, () => {
       expect(is_visible(dropdown_menu)).toBe(true)
     })
 
-    test(`schedule_hide early-returns on touch devices so dropdown survives mouseleave`, async () => {
+    // A touchscreen laptop reports touch support at desktop width, where the pointer is
+    // still a mouse: hover opens the dropdown, so hover has to be able to close it again.
+    // Suppressing the hide on touch support alone stranded it open until a click outside.
+    test(`a hover-opened dropdown still closes on a touch-capable desktop`, async () => {
       vi.useFakeTimers()
       vi.stubGlobal(`ontouchstart`, () => {})
-      // desktop width: hover-open is only blocked when touch AND mobile
       const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 0 })
       await tick()
 
@@ -1182,7 +1171,25 @@ describe(`Nav`, () => {
       expect(is_visible(dropdown_menu)).toBe(true)
 
       mouse_leave(dropdown)
-      // with cooldown=0 a scheduled hide would fire immediately - the touch guard skips it
+      await vi.advanceTimersByTimeAsync(500)
+      expect(is_visible(dropdown_menu)).toBe(false)
+      vi.useRealTimers()
+    })
+
+    // What the touch guard was really protecting: a tap pins the dropdown, and the
+    // synthetic mouseleave that follows it must not undo the tap.
+    test(`a tap-pinned dropdown survives the mouseleave that follows the tap`, async () => {
+      vi.useFakeTimers()
+      vi.stubGlobal(`ontouchstart`, () => {})
+      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
+        dropdown_cooldown_ms: 0,
+      })
+      await tick()
+
+      await click(toggle)
+      expect(is_visible(dropdown_menu)).toBe(true)
+
+      mouse_leave(dropdown)
       await vi.advanceTimersByTimeAsync(500)
       expect(is_visible(dropdown_menu)).toBe(true)
       vi.useRealTimers()
