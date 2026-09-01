@@ -204,7 +204,8 @@ Colors come from `--github-corner-bg` and `--github-corner-color`, or the `fill`
 
 The wrapper the [live-examples plugin](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md)
 mounts around every runnable code fence in these docs. Every "View code" button on this
-site is one. Set it up once in `svelte.config.ts` rather than using it directly:
+site is one. Set it up once in your Svelte config (`svelte.config.ts`, or the config passed
+inline to `sveltekit()` in `vite.config.ts`) rather than using it directly:
 
 ```ts
 import { CodeExample } from 'svelte-widgets'
@@ -219,7 +220,7 @@ puts the source before the rendered example, and `repl`/`github` add external li
 
 ### `katex_preprocess`
 
-The docs site's `svelte.config.ts` wraps mdsvex with `katex_preprocess()`, turning inline
+The docs site's Svelte config (inline in `vite.config.ts`) wraps mdsvex with `katex_preprocess()`, turning inline
 math such as $e^{i\pi} + 1 = 0$ and display math into static KaTeX markup:
 
 $$

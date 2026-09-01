@@ -1,0 +1,108 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      - name: Lint, format, and type check
+        run: npx vp check
+
+      - name: Svelte type check
+        run: npx svelte-kit sync && npx svelte-check-rs --threshold error
+
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      - name: Unit tests with coverage
+        run: npm run test:coverage
+
+      - name: Package smoke test
+        run: npm run test:package
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: npm install
+
+      - name: Install Playwright
+        run: npx playwright install chromium
+
+      - name: E2E tests
+        run: npx playwright test
+
+  link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v6
+
+      - name: Discover broken links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          # Deployed docs and unreleased compare tags are unavailable until after merge.
+          # The prerender crawl validates internal docs links.
+          args: --exclude '%7B' --exclude '^file://' --exclude '^https://svelte-widgets\.janosh\.dev' --exclude '^https://github\.com/janosh/svelte-widgets/compare/' --root-dir . --accept 100..=103,200..=299,403,429,502,503 -- ./**/*.{md,svelte,ts}
+
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - run: npm install
+      - run: npm run build:site
+        env:
+          BASE_PATH: /${{ github.event.repository.name }}
+
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build
+
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

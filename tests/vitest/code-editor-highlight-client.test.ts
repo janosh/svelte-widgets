@@ -191,6 +191,7 @@ test(`close aborts queued work after a pending open rejects`, async () => {
   await expect(close).resolves.toBeUndefined()
   expect(close_doc).toHaveBeenCalledOnce()
 })
+
 test(`close awaits asynchronous highlight cancellation`, async () => {
   const current = setup()
   const highlight = Promise.withResolvers<number[][]>()

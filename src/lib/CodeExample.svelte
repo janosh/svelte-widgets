@@ -1,5 +1,5 @@
 <script lang="ts">
-  // see svelte.config.ts where this component is set as the live-examples Wrapper
+  // see vite.config.ts where this component is set as the live-examples Wrapper
   import type { Snippet } from 'svelte'
   import type {
     HTMLAnchorAttributes,

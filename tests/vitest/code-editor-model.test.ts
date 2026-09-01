@@ -36,6 +36,7 @@ test(`normalizes disk text and indexes lines with UTF-16 offsets`, () => {
     { line_idx: 2, from: 6, to: 6, text: `` },
   ])
 })
+
 test(`transactions span rope chunks and map inverse edits exactly`, () => {
   const chunk = `x`.repeat(32 * 1024)
   const model = create_editor_model({ uri: `memory:test`, text: `${chunk}\nend` })
@@ -66,6 +67,7 @@ test(`transactions span rope chunks and map inverse edits exactly`, () => {
   expect(model.slice(chunk.length - 3)).toBe(`xxA\nB!d`)
   expect(updates).toHaveLength(4)
 })
+
 test(`typing groups, saved checkpoints, redo invalidation, and history limits compose`, () => {
   const model = create_editor_model({
     uri: `memory:history`,
@@ -86,6 +88,7 @@ test(`typing groups, saved checkpoints, redo invalidation, and history limits co
   expect(model.redo()).toBe(false)
   expect(model.text()).toBe(`Abcxy`)
 })
+
 test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   const model = create_editor_model({ uri: `memory:barriers`, text: `` })
   type_text(model, `a`, 0)
@@ -108,6 +111,7 @@ test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   type_text(backward, `b`, 0)
   expect([backward.undo(), backward.text()]).toEqual([true, `a`])
 })
+
 test.each([`backspace`, `delete`] as const)(`%s groups replay as one update`, (key) => {
   const model = create_editor_model({ uri: `memory:${key}`, text: `abc` })
   const edits =
@@ -130,6 +134,7 @@ test.each([`backspace`, `delete`] as const)(`%s groups replay as one update`, (k
   model.subscribe((update) => updates.push(update))
   expect([model.undo(), model.text(), updates.length]).toEqual([true, `abc`, 1])
 })
+
 test(`composition replacement retains the pre-composition undo text`, () => {
   const model = create_editor_model({ uri: `memory:composition`, text: `selected` })
   model.transact([{ from: 0, to: 8, insert: `λ` }], {
@@ -147,6 +152,7 @@ test(`composition replacement retains the pre-composition undo text`, () => {
     `lambda`,
   ])
 })
+
 test(`a large typing group undoes in one immutable transaction`, () => {
   const model = create_editor_model({ uri: `memory:group`, text: `` })
   for (let offset = 0; offset < 1000; offset++) type_text(model, `x`, offset)
@@ -159,6 +165,7 @@ test(`a large typing group undoes in one immutable transaction`, () => {
   }).toThrow(/read only|Cannot assign/u)
   expect([model.undo(), model.redo(), model.text()]).toEqual([true, true, `a`])
 })
+
 test.each([
   [
     `overlapping edits`,
@@ -176,6 +183,7 @@ test.each([
   expect(() => model.transact(edits)).toThrow(/Invalid edit/u)
   expect(model.text()).toBe(`abc`)
 })
+
 test(`omitted selections map through sequential edits`, () => {
   const model = create_editor_model({ uri: `memory:map`, text: `abcdef` })
   model.set_selection({ anchor: 1, head: 5 })
@@ -187,6 +195,7 @@ test(`omitted selections map through sequential edits`, () => {
   model.transact([{ from: 0, to: 6, insert: `` }])
   expect(model.selection).toEqual({ anchor: 0, head: 0 })
 })
+
 test(`invalid resulting selections leave the model unchanged`, () => {
   const model = create_editor_model({ uri: `memory:invalid-selection`, text: `abc` })
   expect(() =>
@@ -203,6 +212,7 @@ test(`invalid resulting selections leave the model unchanged`, () => {
   ).toThrow(`Invalid history timestamp=Infinity`)
   expect(model.text()).toBe(`abc`)
 })
+
 test(`property: random edits, lines, undo, and redo match a string oracle`, () => {
   let rng_state = 20_260_819
   const random = (bound: number): number => {
@@ -234,6 +244,7 @@ test(`property: random edits, lines, undo, and redo match a string oracle`, () =
   for (let state_idx = 1; state_idx < states.length; state_idx++)
     expect([model.redo(), model.text()]).toEqual([true, states[state_idx]])
 })
+
 test.skipIf(!process.env.RUN_LARGE_EDITOR_TESTS)(
   `100MB / 1M-line model stress target`,
   () => {
