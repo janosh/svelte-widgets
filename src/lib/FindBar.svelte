@@ -8,6 +8,7 @@
   import { tooltip } from './attachments/index'
   import { create_find_state, type FindOptions } from './find-in-page.svelte'
   import Icon from './Icon.svelte'
+  import { FIND_BAR_LABELS, type FindBarLabels } from './labels'
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     FindOptions & {
@@ -16,12 +17,14 @@
       on_close: () => void
       // Region name for placeholder and accessible labels.
       label?: string
+      labels?: Partial<FindBarLabels>
     }
 
   let {
     root,
     on_close,
     label = `page`,
+    labels,
     only_within,
     also_ignore,
     before_search,
@@ -33,7 +36,13 @@
     also_ignore,
     before_search,
   }))
-  const find_label = $derived(`Find in ${label}`)
+  const msg = $derived({ ...FIND_BAR_LABELS, ...labels })
+  const find_label = $derived(msg.find_in(label))
+  type StepButton = { direction: -1 | 1; arrow: string; shortcut: string; label: string }
+  const step_buttons: StepButton[] = $derived([
+    { direction: -1, arrow: `↑`, shortcut: `Shift+Enter`, label: msg.prev_match },
+    { direction: 1, arrow: `↓`, shortcut: `Enter`, label: msg.next_match },
+  ])
   let input_element = $state<HTMLInputElement>()
 
   export const focus_input = (): void => {
@@ -76,26 +85,26 @@
     bind:this={input_element}
     oninput={(event) => void update_query(event.currentTarget.value)}
     onkeydown={handle_keydown}
-    placeholder="{find_label}…"
+    placeholder={`${find_label}…`}
     type="search"
     value={find.query}
   />
   <span aria-live="polite" class="find-status">{find.status}</span>
-  {#each [[-1, `Previous`, `↑`, `Shift+Enter`], [1, `Next`, `↓`, `Enter`]] as const as [direction, name, arrow, combo] (direction)}
+  {#each step_buttons as { direction, arrow, shortcut, label: match_label } (direction)}
     <button
-      aria-label="{name} match"
+      aria-label={match_label}
       disabled={find.matches.length === 0}
       onclick={() => find.step(direction)}
-      title="{name} match ({combo})"
+      title={msg.match_shortcut(match_label, shortcut)}
       type="button"
       {@attach tooltip()}>{arrow}</button
     >
   {/each}
   <button
-    aria-label="Close {label} search"
+    aria-label={msg.close(label)}
     class="find-close"
     onclick={on_close}
-    title="Close (Escape)"
+    title={msg.close_shortcut}
     type="button"
     {@attach tooltip()}>×</button
   >

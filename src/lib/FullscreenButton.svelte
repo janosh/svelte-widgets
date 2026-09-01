@@ -4,15 +4,18 @@
   import { sync_fullscreen } from './fullscreen.svelte'
   import Icon from './Icon.svelte'
   import { ExitFullscreen, Fullscreen, type IconData } from './icons'
+  import { FULLSCREEN_BUTTON_LABELS, type FullscreenButtonLabels } from './labels'
   import { chain_handlers } from './utils'
+
+  const DEFAULT_ICONS = { enter: Fullscreen, exit: ExitFullscreen }
 
   let {
     fullscreen = $bindable(false),
     wrapper,
     placement = `inline`,
     bg_css_var = `--fullscreen-bg`,
-    icons = { enter: Fullscreen, exit: ExitFullscreen },
-    labels = { enter: `Enter fullscreen`, exit: `Exit fullscreen` },
+    icons,
+    labels,
     on_change,
     on_request_error,
     children,
@@ -24,14 +27,16 @@
     // `corner`: top-right of nearest positioned ancestor (CSS vars, overridable)
     placement?: `inline` | `corner`
     bg_css_var?: string
-    icons?: { enter: IconData; exit: IconData }
-    labels?: { enter: string; exit: string }
+    icons?: Partial<{ enter: IconData; exit: IconData }>
+    labels?: Partial<FullscreenButtonLabels>
     on_change?: (fullscreen: boolean) => void
     on_request_error?: (error: unknown) => void
     children?: Snippet<[{ fullscreen: boolean }]>
   } = $props()
 
-  const label = $derived(fullscreen ? labels.exit : labels.enter)
+  const msg = $derived({ ...FULLSCREEN_BUTTON_LABELS, ...labels })
+  const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
+  const label = $derived(fullscreen ? msg.exit : msg.enter)
 
   // the flag is the single source of truth: clicking flips it, the effects below turn
   // that into requestFullscreen/exitFullscreen and flip it back on Esc
@@ -57,7 +62,7 @@
   {#if children}
     {@render children({ fullscreen })}
   {:else}
-    <Icon icon={fullscreen ? icons.exit : icons.enter} />
+    <Icon icon={fullscreen ? icon_set.exit : icon_set.enter} />
   {/if}
 </button>
 

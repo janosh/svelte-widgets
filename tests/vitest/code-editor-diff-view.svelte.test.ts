@@ -16,6 +16,7 @@ import type {
   SpanList,
   TokenClassName,
 } from '$lib/code-editor'
+import type { DiffViewLabels } from '$lib/labels'
 import { flushSync, mount, unmount } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -78,6 +79,7 @@ interface MountOptions {
   use_default_backend?: boolean
   rejects_with?: unknown
   no_backend?: boolean
+  labels?: Partial<DiffViewLabels>
 }
 
 const flush_async = async (
@@ -442,6 +444,37 @@ describe(`states and backend wiring`, () => {
     })
   })
 })
+
+test.each([[1], [9]])(
+  `labels override rendered strings and fall back per key (%i lines)`,
+  async (line_count) => {
+    await mount_diff(
+      diff_result({ oldLineCount: line_count, newLineCount: line_count }),
+      {
+        labels: {
+          no_changes: `Keine Änderungen`,
+          identical: (old_label, new_label, count) =>
+            `${old_label}/${new_label}: ${count} Zeile${count === 1 ? `` : `n`}`,
+        },
+      },
+    )
+    const empty = query_element(`[data-empty]`)
+    expect(text_of(empty.querySelector(`strong`))).toBe(`Keine Änderungen`)
+    expect(text_of(empty.querySelector(`span`))).toBe(
+      `Original/Modified: ${line_count} Zeile${line_count === 1 ? `` : `n`}`,
+    )
+    // omitted keys keep the English default
+    const nav_labels = [
+      ...document.querySelectorAll(`.panel-actions button.icon-btn`),
+    ].map((btn) => btn.getAttribute(`aria-label`))
+    expect(nav_labels).toEqual([
+      `Previous change`,
+      `Next change`,
+      `Side by side`,
+      `Unified`,
+    ])
+  },
+)
 
 describe(`virtualization`, () => {
   const large_result = (row_count: number): DiffResult => {

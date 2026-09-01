@@ -10,6 +10,7 @@
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
+  import { MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
   import type {
     GroupedOptions,
@@ -54,6 +55,7 @@
     inputStyle = null,
     inputmode = null,
     invalid = $bindable(false),
+    labels,
     liActiveOptionClass = ``,
     liActiveUserMsgClass = ``,
     liOptionClass = ``,
@@ -180,6 +182,9 @@
     rangeSelect = false,
     ...rest
   }: MultiSelectProps<Option> = $props()
+
+  // every string this component renders on its own, overridable key by key for i18n
+  const msg = $derived({ ...MULTI_SELECT_LABELS, ...labels })
 
   const invalid_config = (message: string): never => {
     throw new TypeError(`MultiSelect: ${message}`)
@@ -359,8 +364,6 @@
   const announce = (text: string) => {
     last_announcement = { text, id: ++announcement_count }
   }
-  const announce_bulk = (count: number, verb: `selected` | `removed`) =>
-    announce(`${count} option${count === 1 ? `` : `s`} ${verb}`)
 
   // Clear after announcement so option counts can be announced again.
   $effect(() => {
@@ -873,13 +876,13 @@
   const resolved_create_msg = $derived.by(() => {
     if (createOptionMsg === null || createOptionMsg === undefined) return null
     if (typeof createOptionMsg === `function`) {
-      const msg = createOptionMsg({
+      const create_msg = createOptionMsg({
         searchText,
         selected,
         options: effective_options,
         matchingOptions,
       })
-      return msg || null // coerce empty string to null so truthiness checks work
+      return create_msg || null // coerce empty string to null so truthiness checks work
     }
     return createOptionMsg
   })
@@ -1162,7 +1165,7 @@
 
     clear_validity()
     handle_dropdown_after_select(event)
-    announce(`${utils.get_label(option_to_add)} selected`)
+    announce(msg.option_selected(`${utils.get_label(option_to_add)}`))
     onadd?.({ option: option_to_add, selected })
     onchange?.({ option: option_to_add, type: `add` })
   }
@@ -1193,7 +1196,7 @@
 
     selected = selected.filter((_, remove_idx) => remove_idx !== idx)
     clear_validity()
-    announce(`${utils.get_label(option_removed)} removed`)
+    announce(msg.option_removed(`${utils.get_label(option_removed)}`))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -1265,13 +1268,13 @@
   function handle_invalid() {
     invalid = true
     const min_required = Number(required)
-    const msg =
+    const validity_msg =
       maxSelect && maxSelect > 1 && min_required > 1
-        ? `Please select between ${required} and ${maxSelect} options`
+        ? msg.select_between(min_required, maxSelect)
         : min_required > 1
-          ? `Please select at least ${required} options`
-          : `Please select an option`
-    form_input?.setCustomValidity(msg)
+          ? msg.select_at_least(min_required)
+          : msg.select_an_option
+    form_input?.setCustomValidity(validity_msg)
   }
 
   function handle_dropdown_after_select(event: Event) {
@@ -1502,7 +1505,7 @@
 
     selected = selected.slice(0, keep_count)
     searchText = `` // always clear on remove all (resetFilterOnAdd only applies to add operations)
-    announce_bulk(removed_options.length, `removed`)
+    announce(msg.options_removed(removed_options.length))
     onremoveAll?.({ options: removed_options })
     onchange?.({ options: selected, type: `removeAll` })
   }
@@ -1516,7 +1519,7 @@
       if (resetFilterOnAdd) searchText = ``
       clear_validity()
       handle_dropdown_after_select(event)
-      announce_bulk(added.length, `selected`)
+      announce(msg.options_selected(added.length))
     }
     if (added.length < unselected.length && maxSelect !== null) {
       should_wiggle = true
@@ -1579,7 +1582,7 @@
     all_selectable_selected: boolean,
   ) {
     if (matching_scope_unavailable) {
-      return `Matching select-all is only available with local options`
+      return msg.matching_scope_unavailable
     }
     if (selectAllDisabledTitle === null) return ``
     const default_title =
@@ -1766,7 +1769,7 @@
     if (option_removed === undefined) return
     selected = []
     clear_validity()
-    announce(`${utils.get_label(option_removed)} removed`)
+    announce(msg.option_removed(`${utils.get_label(option_removed)}`))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -2111,7 +2114,7 @@
   {/if}
   <ul
     class={[`selected`, ulSelectedClass]}
-    aria-label="selected options"
+    aria-label={msg.selected_options}
     style={ulSelectedStyle}
   >
     {@render beforeInput?.(input_snippet_props)}
@@ -2148,7 +2151,7 @@
           {#if !disabled && can_remove}
             {@render remove_btn(
               (event) => remove(option, event, idx),
-              `${removeBtnTitle} ${utils.get_label(option)}`,
+              msg.remove_option(removeBtnTitle, `${utils.get_label(option)}`),
               { option, isRemoveAll: false },
             )}
           {/if}
@@ -2169,7 +2172,7 @@
             }}
             onmouseup={(event) => event.stopPropagation()}
           >
-            {is_chip_list_expanded ? `show less` : `+${hidden_chip_count} more`}
+            {is_chip_list_expanded ? msg.show_less : msg.more_chips(hidden_chip_count)}
           </button>
         </li>
       {/if}
@@ -2345,7 +2348,7 @@
               type="checkbox"
               class="option-checkbox"
               checked={view.selected}
-              aria-label="Toggle {utils.get_label(option_item)}"
+              aria-label={msg.toggle_option(`${utils.get_label(option_item)}`)}
               tabindex="-1"
             />
           {/if}
@@ -2392,7 +2395,7 @@
             class:sticky={stickyGroupHeaders}
             role={collapsibleGroups ? `button` : `presentation`}
             aria-expanded={collapsibleGroups ? !collapsed : undefined}
-            aria-label="Group: {group_name}"
+            aria-label={msg.group(group_name)}
             style={liGroupHeaderStyle}
             onclick={handle_toggle}
             onkeydown={if_enter_or_space(handle_toggle)}
@@ -2407,9 +2410,7 @@
             {:else}
               <span class="group-label">{group_name}</span>
               <span class="group-count">
-                ({selected_count > 0
-                  ? `${selected_count}/${group_opts.length}`
-                  : group_opts.length})
+                {msg.group_count(selected_count, group_opts.length)}
               </span>
               {#if groupSelectAll && multi_select}
                 {@const group_blocked =
@@ -2421,7 +2422,7 @@
                   onclick={handle_group_select}
                   onkeydown={if_enter_or_space(handle_group_select)}
                 >
-                  {all_selected ? `Deselect all` : `Select all`}
+                  {all_selected ? msg.group_deselect_all : msg.group_select_all}
                 </button>
               {/if}
               {#if collapsibleGroups}
@@ -2450,15 +2451,15 @@
         )}
       {/if}
       {#if user_message && user_message.msg}
-        {@const { type: msgType, msg } = user_message}
-        {@const can_add_user_option = msgType === `create`}
+        {@const { type: msg_type, msg: user_msg_text } = user_message}
+        {@const can_add_user_option = msg_type === `create`}
         {@const handle_create = (event: Event) =>
           can_add_user_option && add(searchText as Option, event)}
         <li
           id={user_message_id}
           onclick={handle_create}
           onkeydown={can_add_user_option ? if_enter_or_space(handle_create) : undefined}
-          title={msgType !== `no-match` ? msg : ``}
+          title={msg_type !== `no-match` ? user_msg_text : ``}
           class:active={is_user_message_active}
           onmouseover={() => !should_ignore_hover && (is_user_message_active = true)}
           onfocus={() => (is_user_message_active = true)}
@@ -2475,17 +2476,17 @@
             dupe: `not-allowed`,
             create: `pointer`,
             'no-match': `default`,
-          }[msgType]}
+          }[msg_type]}
         >
           {#if userMsg}
-            {@render userMsg({ searchText, msgType, msg })}
+            {@render userMsg({ searchText, msgType: msg_type, msg: user_msg_text })}
           {:else}
-            {msg}
+            {user_msg_text}
           {/if}
         </li>
       {/if}
       {#if load_options_config && is_loading_options}
-        <li class="loading-more" role="status" aria-label="Loading more options">
+        <li class="loading-more" role="status" aria-label={msg.loading_more}>
           <CircleSpinner />
         </li>
       {/if}
@@ -2496,7 +2497,7 @@
     {#if last_announcement}
       {#key last_announcement.id}{last_announcement.text}{/key}
     {:else if open}
-      {matchingOptions.length} option{matchingOptions.length === 1 ? `` : `s`} available
+      {msg.options_available(matchingOptions.length)}
     {/if}
   </div>
 </div>

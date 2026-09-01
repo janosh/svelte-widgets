@@ -358,6 +358,20 @@ describe(`DraggablePane`, () => {
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
+  test(`labels prop renames the control-tab buttons, omitted keys fall back`, async () => {
+    await open_pane({
+      has_been_dragged: true,
+      labels: { close_pane: `Bereich schließen` },
+    })
+
+    const attrs = (selector: string) => {
+      const btn = doc_query(selector)
+      return [btn.getAttribute(`title`), btn.getAttribute(`aria-label`)]
+    }
+    expect(attrs(`.close-button`)).toEqual([`Bereich schließen`, `Bereich schließen`])
+    expect(attrs(`.reset-button`)).toEqual([`Reset pane position`, `Reset pane position`])
+  })
+
   test(`a drag reports through on_drag_start and data-dragging`, async () => {
     const on_drag_start = vi.fn()
     const { pane } = await open_pane({ on_drag_start })

@@ -178,6 +178,20 @@ test(`toggle all label reflects pre-opened details on mount`, async () => {
   )
 })
 
+test(`labels prop overrides toggle-all text, omitted keys keep their default`, async () => {
+  const files = [`a.ts`, `b.ts`].map((title) => ({ title, content: title }))
+  mount_files({ files, labels: { close_all: `Alle schließen` } })
+  await tick()
+
+  const btn = doc_query<HTMLButtonElement>(`button`)
+  const button_label = () => btn.querySelector(`[aria-hidden="false"]`)?.textContent
+  expect(button_label()).toBe(`Open all`) // open_all falls back
+
+  btn.click()
+  flushSync()
+  expect(button_label()).toBe(`Alle schließen`)
+})
+
 test(`detail element refs are trimmed when files are removed to prevent memory leaks`, async () => {
   type FileWithNode = { title: string; content: string; node?: HTMLDetailsElement | null }
   const reactive_files: FileWithNode[] = $state([

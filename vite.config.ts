@@ -80,8 +80,9 @@ export default {
       // shared hook runs the JS svelte-check; CI here uses the Rust port
       '*.{ts,svelte}': `sh -c 'npx svelte-kit sync && npx svelte-check-rs --threshold error'`,
       '*.test.ts': `sh -c '! grep -E "(test|describe)\\.only\\(" "$@"' --`,
-      // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup
-      '*': `codespell --ignore-words-list afterall,falsy,fo --check-filenames`,
+      // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup;
+      // `alle` is German for "all", used by the label-override tests
+      '*': `codespell --ignore-words-list afterall,falsy,fo,alle --check-filenames`,
     },
   }),
 

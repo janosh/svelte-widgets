@@ -3983,6 +3983,146 @@ describe(`maxVisibleChips`, () => {
   })
 })
 
+// every string MultiSelect renders itself must be overridable for i18n (issue #451)
+describe(`labels`, () => {
+  const options = [`a`, `b`, `c`]
+
+  test(`chip overflow toggle is configurable, omitted keys keep English`, async () => {
+    mount_multiselect({
+      options,
+      selected: [...options],
+      maxVisibleChips: 1,
+      labels: { more_chips: (hidden) => `noch ${hidden}` },
+    })
+
+    const toggle = doc_query<HTMLButtonElement>(`li.more-chip button.more-chips`)
+    expect(toggle.textContent?.trim()).toBe(`noch 2`)
+
+    toggle.click()
+    await tick()
+    expect(toggle.textContent?.trim()).toBe(`show less`)
+  })
+
+  test.each([
+    [
+      `chip list aria-label`,
+      { selected_options: `ausgewählte Optionen` },
+      { options },
+      () => doc_query(`ul.selected`).getAttribute(`aria-label`),
+      `ausgewählte Optionen`,
+    ],
+    [
+      `remove-button title composed with removeBtnTitle`,
+      { remove_option: (btn: string, label: string) => `${label} ${btn}` },
+      { options, selected: [`a`], removeBtnTitle: `entfernen` },
+      () => doc_query(`ul.selected button.remove`).getAttribute(`title`),
+      `a entfernen`,
+    ],
+    [
+      `group header aria-label`,
+      { group: (name: string) => `Gruppe: ${name}` },
+      { options: [{ label: `a`, group: `G` }], open: true },
+      () => doc_query(`ul.options > li.group-header`).getAttribute(`aria-label`),
+      `Gruppe: G`,
+    ],
+    [
+      `group option count`,
+      { group_count: (sel: number, total: number) => `${sel} von ${total}` },
+      {
+        options: [
+          { label: `a`, group: `G` },
+          { label: `b`, group: `G` },
+        ],
+        open: true,
+      },
+      () => doc_query(`li.group-header .group-count`).textContent?.trim(),
+      `0 von 2`,
+    ],
+    [
+      `group select-all button`,
+      { group_select_all: `Alle` },
+      { options: [{ label: `a`, group: `G` }], open: true, groupSelectAll: true },
+      () => doc_query(`button.group-select-all`).textContent?.trim(),
+      `Alle`,
+    ],
+    [
+      `checkbox aria-label`,
+      { toggle_option: (label: string) => `${label} umschalten` },
+      { options, open: true, keepSelectedInDropdown: `checkboxes` as const },
+      () => doc_query(`ul.options input[type="checkbox"]`).getAttribute(`aria-label`),
+      `a umschalten`,
+    ],
+    [
+      `idle live-region option count`,
+      { options_available: (count: number) => `${count} Optionen` },
+      { options, open: true },
+      () => doc_query(`.sr-only[aria-live="polite"]`).textContent?.trim(),
+      `3 Optionen`,
+    ],
+  ])(`%s`, (_desc, labels, props, read_dom, expected) => {
+    mount_multiselect({ ...props, labels })
+    expect(read_dom()).toBe(expected)
+  })
+
+  test(`live-region announcements are configurable`, async () => {
+    // only option_selected is overridden, so the removal announcement must stay English
+    mount_multiselect({
+      options,
+      labels: { option_selected: (label) => `${label} gewählt` },
+    })
+    await focus_input()
+
+    doc_query<HTMLLIElement>(`ul.options > li[role="option"]`).click()
+    await tick()
+    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
+    expect(live_region.textContent?.trim()).toBe(`a gewählt`)
+
+    doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
+    await tick()
+    expect(live_region.textContent?.trim()).toBe(`a removed`)
+  })
+
+  test(`bulk announcements are configurable and pluralize`, async () => {
+    mount_multiselect({
+      options,
+      selected: [...options],
+      labels: { options_removed: (count) => `${count} entfernt` },
+    })
+
+    doc_query<HTMLButtonElement>(`button.remove-all`).click()
+    await tick()
+    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
+    expect(live_region.textContent?.trim()).toBe(`3 entfernt`)
+  })
+
+  test.each([
+    [1, null, `Bitte etwas wählen`],
+    [2, null, `Bitte mindestens 2 wählen`],
+    [2, 3, `Bitte 2 bis 3 wählen`], // omitted select_between falls back to English
+  ])(
+    `form validity message for required=%s maxSelect=%s`,
+    async (required, maxSelect, expected) => {
+      mount_multiselect({
+        options,
+        required,
+        maxSelect,
+        labels: {
+          select_an_option: `Bitte etwas wählen`,
+          select_at_least: (min) => `Bitte mindestens ${min} wählen`,
+          select_between: (min, max) => `Bitte ${min} bis ${max} wählen`,
+        },
+      })
+      await tick() // bind:this on the hidden form control lands in a post-mount effect
+
+      // happy-dom's validationMessage getter ignores setCustomValidity, so spy on the call
+      const form_control = doc_query<HTMLInputElement>(`input.form-control`)
+      const set_validity = vi.spyOn(form_control, `setCustomValidity`)
+      form_control.dispatchEvent(new Event(`invalid`))
+      expect(set_validity).toHaveBeenCalledWith(expected)
+    },
+  )
+})
+
 test(`whitespace-only search shows all options instead of a blank dropdown`, async () => {
   mount_multiselect({ options: [1, 2, 3], open: true })
   const input = get_input()

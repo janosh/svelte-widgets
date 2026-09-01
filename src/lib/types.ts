@@ -3,6 +3,7 @@ import type { FlipParams } from 'svelte/animate'
 import type { ClassValue, HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
 import type { DismissConfig } from './attachments/index'
 import type { IconData } from './icons/types'
+import type { MultiSelectLabels } from './labels'
 
 export type Option = string | number | ObjectOption
 
@@ -252,6 +253,9 @@ export interface MultiSelectProps<T extends Option = Option>
   inputStyle?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   invalid?: boolean
+  // Override any string MultiSelect renders itself, for i18n. Shallow-merged over
+  // MULTI_SELECT_LABELS; see labels.ts for the full set and their defaults.
+  labels?: Partial<MultiSelectLabels>
   liActiveOptionClass?: ClassValue
   liActiveUserMsgClass?: ClassValue
   liOptionClass?: ClassValue

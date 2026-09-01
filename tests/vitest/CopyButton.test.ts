@@ -11,15 +11,18 @@ import TestSnippetHarness from './TestSnippetHarness.svelte'
 const mock_write_text = vi.fn()
 vi.stubGlobal(`navigator`, { clipboard: { writeText: mock_write_text } })
 
-const default_labels = {
-  ready: { icon: Copy, text: `ready` },
-  success: { icon: Check, text: `success` },
-  error: { icon: Alert, text: `error` },
-} as const
+const default_labels = { ready: `ready`, success: `success`, error: `error` } as const
+const default_icons = { ready: Copy, success: Check, error: Alert } as const
 const mount_copy_button = (props: Partial<ComponentProps<typeof CopyButton>> = {}) => {
   const copy_button_component = mount(CopyButton, {
     target: document.body,
-    props: { content: `test`, as: `div`, labels: default_labels, ...props },
+    props: {
+      content: `test`,
+      as: `div`,
+      labels: default_labels,
+      icons: default_icons,
+      ...props,
+    },
   })
   const copy_button = doc_query(`[data-sms-copy]`)
   return { copy_button_component, copy_button }
@@ -117,11 +120,7 @@ test.each([
   [`Copy me`, 1],
 ] as const)(`text label %j renders %d text span(s)`, (text, expected_spans) => {
   const { copy_button } = mount_copy_button({
-    labels: {
-      ready: { icon: Copy, text },
-      success: { icon: Check, text },
-      error: { icon: Alert, text },
-    },
+    labels: { ready: text, success: text, error: text },
   })
   const wrapper = doc_query(`[data-sms-action-content]`)
   expect(getComputedStyle(copy_button).whiteSpace).toBe(`nowrap`)
@@ -272,6 +271,7 @@ const mount_bound_copy_button = () => {
       content: `bound content`,
       as: `div`,
       labels: default_labels,
+      icons: default_icons,
       reset_ms: 0,
       get state() {
         return state_proxy.current

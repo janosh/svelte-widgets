@@ -1,4 +1,5 @@
-import { mount, tick } from 'svelte'
+import { SettingsSearch } from '$lib'
+import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
@@ -252,5 +253,22 @@ describe(`SettingsSearch`, () => {
     expect(document.querySelector(`[role="status"]`)).toBe(status)
     expect(status.hidden).toBe(false)
     expect(status.textContent).toBe(``)
+  })
+
+  // mounted bare rather than through the harness, which forwards no `labels`
+  test.each([
+    [`an empty partial keeps the default`, {}, `Clear settings search`],
+    [`a custom entry reaches the DOM`, { clear_search: `Suche leeren` }, `Suche leeren`],
+  ])(`labels: %s`, async (_desc, labels, expected) => {
+    mount(SettingsSearch, {
+      target: document.body,
+      props: {
+        query: `radius`,
+        labels,
+        children: createRawSnippet(() => ({ render: () => `<div></div>` })),
+      },
+    })
+    await tick()
+    expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(expected)
   })
 })

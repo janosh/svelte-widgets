@@ -3,12 +3,14 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Search } from './icons'
+  import { SETTINGS_SEARCH_LABELS, type SettingsSearchLabels } from './labels'
   import { observe_subtree } from './utils'
 
   let {
     query = $bindable(``),
     label = `Search settings`,
     placeholder = `Search settings`,
+    labels,
     // `inline` keeps the field permanently in flow. `icon` parks a magnifier in the top-right
     // corner and expands it in flow once opened, for panes with no room for a standing field.
     trigger = `inline`,
@@ -18,9 +20,12 @@
     query?: string
     label?: string
     placeholder?: string
+    labels?: Partial<SettingsSearchLabels>
     trigger?: `inline` | `icon`
     children: Snippet
   } = $props()
+
+  const msg = $derived({ ...SETTINGS_SEARCH_LABELS, ...labels })
 
   const search_id = $props.id()
   const input_id = `settings-search-input-${search_id}`
@@ -178,7 +183,7 @@
         <button
           type="button"
           class="clear-search"
-          aria-label="Clear settings search"
+          aria-label={msg.clear_search}
           onclick={() => {
             // this button unmounts the moment the query empties, so hand focus back to the
             // field rather than dropping it on the body. A query the caller supplied leaves

@@ -9,6 +9,7 @@
   import Icon from './Icon.svelte'
   import { ChevronCollapse, ChevronExpand, GitHub, Svelte } from './icons'
   import { language_label_html } from './internal/language-label'
+  import { CODE_EXAMPLE_LABELS, type CodeExampleLabels } from './labels'
   import { chain_handlers } from './utils'
 
   let {
@@ -21,6 +22,7 @@
     // applied after the computed `title` and `target`/`rel`, so those stay overridable
     link_props,
     button_props,
+    labels,
     ...rest
   }: {
     // src+meta are passed in by live-examples remark plugin
@@ -47,7 +49,10 @@
     // point the repl, github and repo icons at the same URL
     link_props?: Omit<HTMLAnchorAttributes, `href`>
     button_props?: Omit<HTMLButtonAttributes, `type`>
+    labels?: Partial<CodeExampleLabels>
   } & Omit<HTMLAttributes<HTMLDivElement>, `title`> = $props()
+
+  const msg = $derived({ ...CODE_EXAMPLE_LABELS, ...labels })
 
   let {
     id: meta_id,
@@ -99,7 +104,7 @@
       onclick={chain_handlers(() => (open = !open), button_props?.onclick)}
     >
       <Icon icon={open ? ChevronCollapse : ChevronExpand} />
-      {open ? `Close` : `View code`}
+      {open ? msg.hide_code : msg.show_code}
     </button>
   {/if}
 </nav>

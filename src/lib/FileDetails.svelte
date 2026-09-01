@@ -6,6 +6,7 @@
     HTMLDetailsAttributes,
   } from 'svelte/elements'
   import { language_label_html } from './internal/language-label'
+  import { FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
   import { default_highlighter } from './live-examples/default-highlighter'
   import { chain_handlers } from './utils'
 
@@ -24,6 +25,7 @@
     title_snippet,
     button_props,
     details_props,
+    labels,
     ...rest
   }: {
     files?: File[]
@@ -33,7 +35,10 @@
     title_snippet?: Snippet<[{ idx: number } & File]>
     button_props?: Omit<HTMLButtonAttributes, `type`>
     details_props?: HTMLDetailsAttributes
+    labels?: Partial<FileDetailsLabels>
   } & HTMLAttributes<HTMLOListElement> = $props()
+
+  const msg = $derived({ ...FILE_DETAILS_LABELS, ...labels })
 
   // Use reactive state for node refs to avoid binding_property_non_reactive warning
   let detail_elements = $state<(HTMLDetailsElement | null)[]>([])
@@ -115,8 +120,8 @@
     type="button"
     onclick={chain_handlers(toggle_all, button_props?.onclick)}
   >
-    <span aria-hidden={has_open_details}>Open all</span>
-    <span aria-hidden={!has_open_details}>Close all</span>
+    <span aria-hidden={has_open_details}>{msg.open_all}</span>
+    <span aria-hidden={!has_open_details}>{msg.close_all}</span>
   </button>
 {/if}
 

@@ -555,6 +555,23 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    Controls whether selected options remain visible in dropdown. `false` (default) hides selected options. `'plain'` shows them with visual distinction. `'checkboxes'` prefixes each option with a checkbox.
 
 1. ```ts
+   labels: Partial<MultiSelectLabels> = {}
+   ```
+
+   Overrides for the strings MultiSelect renders itself, shallow-merged over the `MULTI_SELECT_LABELS` defaults exported from `svelte-widgets/labels`. Covers the `+N more` / `show less` chip toggle, group headers, screen-reader announcements and form-validity messages. Entries that interpolate a count or a label are functions, so a locale controls its own word order and plural rules. Strings with a dedicated prop (`removeBtnTitle`, `noMatchingOptionsMsg`, `selectAllDisabledTitle`, ...) are not part of this record. Every other component that renders text of its own takes the same prop.
+
+   ```svelte
+   <MultiSelect
+     {options}
+     maxVisibleChips={3}
+     labels={{
+       more_chips: (hidden) => `+${hidden} weitere`,
+       show_less: `weniger anzeigen`,
+     }}
+   />
+   ```
+
+1. ```ts
    selectAllOption: boolean | string = false
    ```
 

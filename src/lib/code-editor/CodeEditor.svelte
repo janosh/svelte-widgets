@@ -7,6 +7,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteMap } from 'svelte/reactivity'
   import { register_escape_layer } from '../attachments/index'
+  import { CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
   import {
     auto_close_pair,
@@ -49,6 +50,7 @@
     on_ready,
     on_save,
     on_error,
+    labels,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     model: EditorModel
@@ -60,7 +62,11 @@
     on_ready?: (document: EditorDocumentInfo) => void
     on_save?: (text: string, document: EditorDocumentInfo) => Promise<void> | void
     on_error?: (message: string) => void
+    // Override any user-facing string; omitted keys keep the English default.
+    labels?: Partial<CodeEditorLabels>
   } = $props()
+
+  const msg = $derived({ ...CODE_EDITOR_LABELS, ...labels })
   let textarea = $state<HTMLTextAreaElement>()
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
@@ -568,9 +574,7 @@
   style:--editor-line-height={`${line_height}px`}
   style:--editor-tab-size={tab_size}
 >
-  <span class="sr-only" id={keyboard_help_id}
-    >Press Escape, then Tab to move focus away</span
-  >
+  <span class="sr-only" id={keyboard_help_id}>{msg.keyboard_help}</span>
   {#if error_message}
     <div class="editor-error" role="alert">{error_message}</div>
   {/if}

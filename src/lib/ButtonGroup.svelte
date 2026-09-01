@@ -39,10 +39,12 @@
   import { tooltip, type TooltipOptions } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
+  import { BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
 
   type CommonProps<Value extends string> = {
     options: ButtonGroupOptions<Value>
     label?: string // aria-label for the group, since a bare row of buttons has none
+    labels?: Partial<ButtonGroupLabels> // overrides for the sort button's aria-label
     disabled?: boolean // disables every option, on top of per-option `disabled`
     // opt-in trailing asc/desc button; null (default) renders no arrow at all
     sort_order?: `asc` | `desc` | null
@@ -78,6 +80,7 @@
     selected = $bindable(),
     multiple = false,
     label,
+    labels,
     disabled = false,
     sort_order = $bindable(null),
     sort_button_props,
@@ -90,6 +93,8 @@
   }: Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     CommonProps<Value> &
     SelectionProps<Value> = $props()
+
+  const msg = $derived({ ...BUTTON_GROUP_LABELS, ...labels })
 
   const option_list = $derived(
     (Array.isArray(options) ? options : Object.entries(options)).map(to_option<Value>),
@@ -193,9 +198,7 @@
       {...sort_button_props}
       type="button"
       {disabled}
-      aria-label="Sorted {sort_order === `asc`
-        ? `ascending, activate to sort descending`
-        : `descending, activate to sort ascending`}"
+      aria-label={sort_order === `asc` ? msg.sort_ascending : msg.sort_descending}
       class={[`sort-order`, sort_button_props?.class]}
       onclick={chain_handlers(
         () => (sort_order = sort_order === `asc` ? `desc` : `asc`),

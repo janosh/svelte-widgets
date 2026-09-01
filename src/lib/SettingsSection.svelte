@@ -4,6 +4,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
+  import { SETTINGS_SECTION_LABELS, type SettingsSectionLabels } from './labels'
   import { is_object, observe_subtree } from './utils'
 
   type SettingMetadata = Readonly<
@@ -12,6 +13,7 @@
 
   let {
     title,
+    labels,
     current_values = {},
     reset_values,
     children,
@@ -23,6 +25,8 @@
     ...rest
   }: HTMLAttributes<HTMLElementTagNameMap[`section`]> & {
     title: string
+    // the Explain/Reset strings; the interpolating ones receive `title` verbatim
+    labels?: Partial<SettingsSectionLabels>
     // Omit for a section that only holds actions (export buttons, say) and has nothing to diff.
     // Values may be primitives, arrays, plain objects, Date, or RegExp. Map, Set, and typed
     // arrays are unsupported because reset snapshots and comparisons only cover these shapes.
@@ -49,6 +53,8 @@
     setting_metadata?: SettingMetadata
     descriptions_open?: boolean
   } = $props()
+
+  const msg = $derived({ ...SETTINGS_SECTION_LABELS, ...labels })
 
   const validate_object_shape = (value: object): void => {
     if (value instanceof Set || value instanceof Map) {
@@ -331,11 +337,9 @@
           class="description-toggle"
           onclick={swallow_click(() => (descriptions_open = !descriptions_open))}
           aria-expanded={descriptions_open}
-          aria-label="{descriptions_open
-            ? `Hide`
-            : `Show`} descriptions for {title.toLowerCase()}"
+          aria-label={msg.explain_toggle(descriptions_open, title)}
         >
-          Explain
+          {msg.explain}
         </button>
       {/if}
       {#if show_reset}
@@ -343,11 +347,11 @@
           type="button"
           class="reset-button"
           onclick={handle_reset}
-          title="Reset {title.toLowerCase()} to defaults"
-          aria-label="Reset {title.toLowerCase()} to defaults"
+          title={msg.reset_section(title)}
+          aria-label={msg.reset_section(title)}
         >
           <Icon icon={Reset} style="width: 0.9em; height: 0.9em" />
-          Reset
+          {msg.reset}
         </button>
       {/if}
     </span>

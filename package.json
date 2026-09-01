@@ -76,6 +76,10 @@
       "types": "./dist/katex.d.ts",
       "default": "./dist/katex.js"
     },
+    "./labels": {
+      "types": "./dist/labels.d.ts",
+      "default": "./dist/labels.js"
+    },
     "./live-examples": {
       "types": "./dist/live-examples/index.d.ts",
       "default": "./dist/live-examples/index.js"

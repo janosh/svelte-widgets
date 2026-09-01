@@ -486,6 +486,23 @@ describe(`ButtonGroup`, () => {
     },
   )
 
+  // one key overridden, the other omitted, so the merge over the defaults is what is tested
+  test(`labels reword the sort button, key by key`, async () => {
+    mount_group({
+      options: letters,
+      sort_order: `asc`,
+      labels: { sort_descending: `Absteigend sortiert` },
+    })
+    const arrow = doc_query<HTMLButtonElement>(`.sort-order`)
+    expect(arrow.getAttribute(`aria-label`)).toBe(
+      `Sorted ascending, activate to sort descending`,
+    )
+
+    arrow.click()
+    await tick()
+    expect(arrow.getAttribute(`aria-label`)).toBe(`Absteigend sortiert`)
+  })
+
   // The whole themable surface, not a handful of existence rows: this way a rename, a
   // deletion and an undocumented new knob all fail. `justify-content`, `btn-cursor`,
   // `btn-hover-transform` and `btn-transition` are here because each was a `:global`

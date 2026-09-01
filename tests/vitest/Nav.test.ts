@@ -285,12 +285,14 @@ describe(`Nav`, () => {
         '/hook-up-to-api': `Hook up to external API`,
       },
     ],
-  ])(`format_label: %s -> "%s"`, (route, expected, labels) => {
-    mount_nav({ routes: [route], labels })
+  ])(`format_label: %s -> "%s"`, (route, expected, route_labels) => {
+    mount_nav({ routes: [route], route_labels })
     const link = doc_query(`a[href="${route}"]`)
     expect(link.textContent?.trim()).toBe(expected)
     // Test inline style since format_label intentionally sets text-transform
-    expect(link.getAttribute(`style`)).toBe(labels ? `` : `text-transform: capitalize;`)
+    expect(link.getAttribute(`style`)).toBe(
+      route_labels ? `` : `text-transform: capitalize;`,
+    )
   })
 
   test.each<[string, NavRoute[], string, string | null, string, string[]]>([
@@ -459,6 +461,15 @@ describe(`Nav`, () => {
       toggle.getAttribute(`aria-label`),
       toggle.getAttribute(`aria-haspopup`),
     ]).toEqual([`BUTTON`, `Toggle docs submenu`, `true`])
+  })
+
+  // the default `Toggle docs submenu` is already pinned by the test above
+  test(`labels rewords the submenu toggle`, () => {
+    const { toggle } = mount_dropdown({
+      routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
+      labels: { toggle_submenu: (route_label: string) => `${route_label} aufklappen` },
+    })
+    expect(toggle.getAttribute(`aria-label`)).toBe(`docs aufklappen`)
   })
 
   test(`renders object routes with href, label, class, and style`, () => {

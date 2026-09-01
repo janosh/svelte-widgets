@@ -147,6 +147,7 @@ test(`native input, selection, history, commands, and backend deltas share the m
   expect(press_key(textarea, `Tab`).defaultPrevented).toBe(false)
   expect(parent_escape).not.toHaveBeenCalled()
 })
+
 test(`save preserves disk format, external transactions sync, and model replacement reopens`, async () => {
   const first = create_editor_model({
     uri: `file:///first.ts`,
@@ -206,6 +207,7 @@ test(`save preserves disk format, external transactions sync, and model replacem
     `Unsupported editor input type formatBold`,
   )
 })
+
 test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
   `%s restores the model value`,
   async (mode) => {
@@ -234,6 +236,7 @@ test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
       expect(on_error).toHaveBeenCalledWith(`rejected command`)
   },
 )
+
 test.each([
   [`deleteContentBackward`, 2, 2, ``, 1, 2, `ac`],
   [`deleteWordBackward`, 2, 2, ``, 0, 2, `c`],
@@ -255,6 +258,17 @@ test.each([
     expect(model.text()).toBe(expected)
   },
 )
+
+test.each([
+  [{ keyboard_help: `Escape, dann Tab` }, `Escape, dann Tab`],
+  [{}, `Press Escape, then Tab to move focus away`],
+])(`labels %o override the keyboard hint`, async (labels, expected) => {
+  const { textarea } = await mount_editor(undefined, { labels })
+  const help = doc_query(`.sr-only`)
+  expect(help.textContent).toBe(expected)
+  expect(textarea.getAttribute(`aria-describedby`)).toBe(help.id)
+})
+
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {
   const recorder = create_backend()
   const model = create_editor_model({

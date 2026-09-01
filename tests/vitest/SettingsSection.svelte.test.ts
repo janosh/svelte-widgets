@@ -297,6 +297,40 @@ describe(`SettingsSection`, () => {
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
   })
 
+  // `explain` and `reset_section` overridden, `explain_toggle` and `reset` omitted, so
+  // both halves of the merge are exercised. The interpolating default lowercases the title.
+  test(`labels reword the heading actions, key by key`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      reset_values: { radius: 2 }, // differs at mount, so the Reset button renders
+      on_reset_key: () => undefined,
+      labels: {
+        explain: `Erklären`,
+        reset_section: (section_title: string) => `${section_title} zurücksetzen`,
+      },
+      children: snippet(
+        `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input value="2"></label>`,
+      ),
+    })
+    await tick()
+
+    const explain = doc_query<HTMLButtonElement>(`.description-toggle`)
+    expect([explain.textContent?.trim(), explain.getAttribute(`aria-label`)]).toEqual([
+      `Erklären`,
+      `Show descriptions for atoms`,
+    ])
+    await click_and_tick(`.description-toggle`)
+    expect(explain.getAttribute(`aria-label`)).toBe(`Hide descriptions for atoms`)
+
+    const reset = doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`)
+    expect([
+      reset.textContent?.trim(),
+      reset.getAttribute(`title`),
+      reset.getAttribute(`aria-label`),
+    ]).toEqual([`Reset`, `Atoms zurücksetzen`, `Atoms zurücksetzen`])
+  })
+
   test(`offers the toggle for rows that only carry their own data-description`, async () => {
     mount_section({
       title: `Atoms`,

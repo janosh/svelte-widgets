@@ -9,6 +9,7 @@
   import type { TooltipOptions } from './attachments/index'
   import { click_outside, focus_trap, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
+  import { NAV_LABELS, type NavLabels } from './labels'
   import type { NavRoute, NavRouteObject } from './types'
   import { chain_handlers, step_focus } from './utils'
 
@@ -33,6 +34,7 @@
     link_props,
     burger_props,
     page,
+    route_labels,
     labels,
     tooltips,
     tooltip_options,
@@ -54,7 +56,9 @@
     // mobile menu toggle; style/class land here rather than on the <nav> host
     burger_props?: Omit<HTMLButtonAttributes, `aria-controls` | `aria-expanded` | `type`>
     page?: { url: { pathname: string } }
-    labels?: Record<string, string>
+    // renames individual routes, keyed by the auto-generated label
+    route_labels?: Record<string, string>
+    labels?: Partial<NavLabels>
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
     tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     breakpoint?: number
@@ -67,6 +71,8 @@
     onopen?: () => void
     onclose?: () => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
+
+  const msg = $derived({ ...NAV_LABELS, ...labels })
 
   let is_open = $state(false)
   let hovered_dropdown = $state<string | null>(null)
@@ -188,7 +194,7 @@
 
   function format_label(text: string | undefined, remove_parent = false) {
     if (!text) return { label: ``, style: `` }
-    const custom_label = labels?.[text]
+    const custom_label = route_labels?.[text]
     if (custom_label) return { label: custom_label, style: `` }
 
     if (remove_parent) text = text.split(`/`).findLast(Boolean) ?? text
@@ -396,7 +402,7 @@
               type="button"
               class={[`dropdown-toggle`, { open: dropdown_open }]}
               data-dropdown-toggle
-              aria-label="Toggle {formatted.label} submenu"
+              aria-label={msg.toggle_submenu(formatted.label)}
               aria-expanded={dropdown_open}
               aria-haspopup="true"
               onclick={() => toggle_dropdown(parsed_route.href, false)}

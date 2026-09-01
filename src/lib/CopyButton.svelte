@@ -10,6 +10,14 @@
 
   type State = Exclude<ActionState, `pending`>
 
+  // CopyButton is icon-only by default; the empty strings suppress ActionButton's text
+  const NO_TEXT: Record<State, string> = { ready: ``, success: ``, error: `` }
+  const DEFAULT_ICONS: Record<State, IconData> = {
+    ready: Copy,
+    success: Check,
+    error: Alert,
+  }
+
   let {
     content = ``,
     state: copy_state = $bindable(`ready`),
@@ -21,11 +29,8 @@
     global = false,
     skip_selector = `button`,
     as = `button`,
-    labels = {
-      ready: { icon: Copy, text: `` },
-      success: { icon: Check, text: `` },
-      error: { icon: Alert, text: `` },
-    },
+    labels,
+    icons,
     children: copy_children,
     ...rest
   }: Omit<HTMLAttributes<HTMLButtonElement>, `children`> & {
@@ -39,12 +44,17 @@
     global?: boolean
     skip_selector?: string | null
     as?: string
-    labels?: Record<State, { icon: IconData; text: string }>
+    labels?: Partial<Record<State, string>>
+    icons?: Partial<Record<State, IconData>>
     children?: Snippet<[ActionButtonContent<State> & { icon: IconData }]>
   } = $props()
 
   const copy_button_selector = `[data-sms-copy]`
-  const action_labels = $derived({ ...labels, pending: labels[copy_state] })
+  const msg = $derived({ ...NO_TEXT, ...labels })
+  const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
+  // CopyButton has no pending visual of its own: it keeps showing the current copy state
+  const action_labels = $derived({ ...msg, pending: msg[copy_state] })
+  const action_icons = $derived({ ...icon_set, pending: icon_set[copy_state] })
 
   $effect(() => {
     if (!global && !global_selector) return
@@ -77,6 +87,7 @@
           content: code.textContent ?? ``,
           as,
           labels,
+          icons,
           disabled,
           reset_ms,
           on_copy_success,
@@ -105,8 +116,12 @@
 
 {#snippet copy_content({ state: action_state, disabled }: ActionButtonContent)}
   {@const shown_state = action_state === `pending` ? copy_state : action_state}
-  {@const { text, icon } = labels[shown_state]}
-  {@render copy_children?.({ state: shown_state, icon, text, disabled })}
+  {@render copy_children?.({
+    state: shown_state,
+    icon: icon_set[shown_state],
+    text: msg[shown_state],
+    disabled,
+  })}
 {/snippet}
 
 {#if !(global || global_selector)}
@@ -118,6 +133,7 @@
     {reset_ms}
     {as}
     labels={action_labels}
+    icons={action_icons}
     on_state_change={handle_action_state}
     on_success={() => on_copy_success(content)}
     on_error={(error) => on_copy_error(error, content)}
