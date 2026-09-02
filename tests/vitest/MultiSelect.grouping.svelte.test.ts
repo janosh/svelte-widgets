@@ -21,6 +21,15 @@ const header_names = () =>
   [...document.querySelectorAll(`ul.options > li.group-header`)].map((header) =>
     header.querySelector(`.group-label`)?.textContent?.trim(),
   )
+// `aria-expanded` moved from the presentational <li> onto the real collapse <button>
+const group_expanded = (group: string | HTMLElement): string | null => {
+  const header = typeof group === `string` ? find_group_header(group) : group
+  return (
+    header
+      .querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)
+      ?.getAttribute(`aria-expanded`) ?? null
+  )
+}
 const group_select_all_btn = (group: string) =>
   find_group_header(group).querySelector<HTMLButtonElement>(`button.group-select-all`)
 const option_items = () =>
@@ -117,12 +126,13 @@ describe(`option grouping feature`, () => {
       (header: HTMLElement) => header.click(),
     ],
     [
-      `keyboard Enter/Space`,
-      (header: HTMLElement) => header.dispatchEvent(fresh_key(`Enter`)),
+      // The collapse control is a real <button> now, so Enter and Space activate it
+      // natively instead of going through a hand-rolled keydown handler on the <li>.
+      `keyboard activation of the toggle button`,
       (header: HTMLElement) =>
-        header.dispatchEvent(
-          new KeyboardEvent(`keydown`, { code: `Space`, bubbles: true }),
-        ),
+        header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
+      (header: HTMLElement) =>
+        header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
     ],
   ])(
     `collapsibleGroups toggles group visibility via %s`,
@@ -139,7 +149,7 @@ describe(`option grouping feature`, () => {
       collapse(genre_header)
       await tick()
       expect(count_options()).toBeLessThan(initial_count)
-      expect(genre_header.getAttribute(`aria-expanded`)).toBe(`false`)
+      expect(group_expanded(genre_header)).toBe(`false`)
       expect(ongroupToggle).toHaveBeenNthCalledWith(1, {
         group: `Genre`,
         collapsed: true,
@@ -148,7 +158,7 @@ describe(`option grouping feature`, () => {
       expand(genre_header)
       await tick()
       expect(count_options()).toBe(initial_count)
-      expect(genre_header.getAttribute(`aria-expanded`)).toBe(`true`)
+      expect(group_expanded(genre_header)).toBe(`true`)
       expect(ongroupToggle).toHaveBeenNthCalledWith(2, {
         group: `Genre`,
         collapsed: false,
@@ -338,7 +348,7 @@ describe(`option grouping feature`, () => {
     const genre_header = find_group_header(`Genre`)
     genre_header.click()
     await tick()
-    expect(genre_header.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(group_expanded(genre_header)).toBe(`false`)
 
     const select_all_btn = group_select_all_btn(`Genre`)
     expect(select_all_btn).toBeInstanceOf(HTMLButtonElement)
@@ -349,24 +359,65 @@ describe(`option grouping feature`, () => {
     expect(onselectAll_spy.mock.calls[0][0].options).toEqual(genre_options)
   })
 
-  test.each([
-    [true, `button`, `0`, `true`],
-    [false, `presentation`, `-1`, null],
-  ] as const)(
-    `group headers have correct a11y attrs when collapsibleGroups=%s`,
-    async (collapsibleGroups, expected_role, expected_tabindex, expected_expanded) => {
+  // A listbox may only own `option` and `group` elements. The header row is therefore
+  // presentational, which conflict resolution would undo if the <li> were focusable or
+  // carried any global ARIA attribute — so `aria-label`, `tabindex` and `role="button"`
+  // all had to come off it, and the group name reaches assistive tech through each
+  // option's `aria-describedby` instead.
+  test.each([true, false] as const)(
+    `group headers stay presentational when collapsibleGroups=%s`,
+    async (collapsibleGroups) => {
       await mount_grouped({ collapsibleGroups })
 
       const group_headers = document.querySelectorAll(`ul.options > li.group-header`)
       expect(group_headers).toHaveLength(2) // else the loop below asserts nothing
       for (const header of group_headers) {
-        expect(header.getAttribute(`role`)).toBe(expected_role)
-        expect(header.getAttribute(`tabindex`)).toBe(expected_tabindex)
-        expect(header.getAttribute(`aria-expanded`)).toBe(expected_expanded)
-        expect(header.getAttribute(`aria-label`)).toMatch(/^Group: /u)
+        expect(header.getAttribute(`role`)).toBe(`presentation`)
+        // either of these would demote it back to a listitem, an invalid listbox child
+        expect(header.getAttribute(`tabindex`)).toBeNull()
+        expect(header.getAttribute(`aria-label`)).toBeNull()
+        // the description lives on a hidden span inside, not on the <li>
+        expect(header.querySelector(`span.sr-only[id]`)).not.toBeNull()
+      }
+
+      // the collapse control is a real button, and only exists when it can do something
+      const toggles = document.querySelectorAll(
+        `li.group-header button.group-collapse-toggle`,
+      )
+      expect(toggles).toHaveLength(collapsibleGroups ? 2 : 0)
+      for (const toggle of toggles) {
+        expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
+        expect(toggle.getAttribute(`aria-label`)).toMatch(/^Group: /u)
       }
     },
   )
+
+  test(`options name their group through aria-describedby on the header`, async () => {
+    await mount_grouped({})
+    const header_ids = new Set(
+      [...document.querySelectorAll<HTMLElement>(`li.group-header span.sr-only[id]`)].map(
+        (span) => span.id,
+      ),
+    )
+    expect(header_ids.size).toBe(2)
+
+    const described = [...option_items()].map((option) => [
+      option.textContent?.trim(),
+      option.getAttribute(`aria-describedby`),
+    ])
+    // every grouped option points at its own header; the ungrouped one points at nothing
+    expect(described).toHaveLength(6)
+    for (const [label, described_by] of described) {
+      if (label === `Ungrouped Option`) {
+        expect(described_by).toBeNull()
+        continue
+      }
+      expect(header_ids.has(described_by ?? ``)).toBe(true)
+      expect(document.querySelector(`#${described_by}`)?.textContent).toContain(
+        label === `C Major` || label === `D Minor` ? `Key` : `Genre`,
+      )
+    }
+  })
 
   test(`collapsedGroups prop controls initial collapsed state`, async () => {
     await mount_grouped({
@@ -375,7 +426,7 @@ describe(`option grouping feature`, () => {
     })
 
     const genre_header = find_group_header(`Genre`)
-    expect(genre_header.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(group_expanded(genre_header)).toBe(`false`)
 
     const rock_option = Array.from(option_items()).find((item) =>
       item.textContent?.includes(`Rock`),
@@ -383,7 +434,7 @@ describe(`option grouping feature`, () => {
     expect(rock_option).toBeUndefined()
 
     const key_header = find_group_header(`Key`)
-    expect(key_header.getAttribute(`aria-expanded`)).toBe(`true`)
+    expect(group_expanded(key_header)).toBe(`true`)
   })
 
   test.each([
@@ -530,13 +581,13 @@ describe(`option grouping feature`, () => {
     const genre_header = find_group_header(`Genre`)
     genre_header.click()
     await tick()
-    expect(genre_header.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(group_expanded(genre_header)).toBe(`false`)
 
     const input = await focus_input()
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
 
-    expect(genre_header.getAttribute(`aria-expanded`)).toBe(`true`)
+    expect(group_expanded(genre_header)).toBe(`true`)
   })
 
   test(`collapseAllGroups and expandAllGroups functions are bindable`, async () => {
@@ -634,14 +685,14 @@ test(`searchExpandsCollapsedGroups: manually collapsed group stays collapsed unt
   const input = get_input()
   // typing auto-expands the collapsed group with matches
   await type_search_text(`a`, input)
-  expect(find_group_header(`Fruits`).getAttribute(`aria-expanded`)).toBe(`true`)
+  expect(group_expanded(`Fruits`)).toBe(`true`)
 
   // manual collapse mid-search must stick (previously insta-re-expanded)
   find_group_header(`Fruits`).click()
   await tick()
-  expect(find_group_header(`Fruits`).getAttribute(`aria-expanded`)).toBe(`false`)
+  expect(group_expanded(`Fruits`)).toBe(`false`)
 
   // a NEW search re-expands
   await type_search_text(`av`, input)
-  expect(find_group_header(`Fruits`).getAttribute(`aria-expanded`)).toBe(`true`)
+  expect(group_expanded(`Fruits`)).toBe(`true`)
 })

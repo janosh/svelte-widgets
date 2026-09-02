@@ -4075,10 +4075,11 @@ describe(`labels`, () => {
       `a entfernen`,
     ],
     [
-      `group header aria-label`,
+      // the group name is the option's description now, not a label on a presentational <li>
+      `group name described to each option`,
       { group: (name: string) => `Gruppe: ${name}` },
       { options: [{ label: `a`, group: `G` }], open: true },
-      () => doc_query(`ul.options > li.group-header`).getAttribute(`aria-label`),
+      () => doc_query(`li.group-header span.sr-only`).textContent?.trim(),
       `Gruppe: G`,
     ],
     [

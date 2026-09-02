@@ -42,7 +42,7 @@
     keepSelectedInDropdown = false,
     key = (opt) => utils.get_option_key(opt),
     filterFunc = (opt, searchText) =>
-      !searchText || text_matches(searchText, `${utils.get_label(opt)}`),
+      !searchText || text_matches(searchText, label_of(opt)),
     fuzzy = true,
     closeDropdownOnSelect = false,
     form_input = $bindable(null),
@@ -185,6 +185,9 @@
 
   // every string this component renders on its own, overridable key by key for i18n
   const msg = $derived({ ...MULTI_SELECT_LABELS, ...labels })
+  // `get_label` returns string | number; everything that compares, announces or renders a
+  // label as text wants the string form, so coerce once here rather than at each call site
+  const label_of = (option_item: Option): string => `${utils.get_label(option_item)}`
 
   const invalid_config = (message: string): never => {
     throw new TypeError(`MultiSelect: ${message}`)
@@ -470,7 +473,7 @@
   // Cache selected labels to avoid repeated .map() calls (keys are mapped once into the Set below)
   let selected_labels = $derived(selected.map((opt) => utils.get_label(opt)))
   let input_committed_label = $derived(
-    input_display && selected[0] !== undefined ? `${utils.get_label(selected[0])}` : null,
+    input_display && selected[0] !== undefined ? label_of(selected[0]) : null,
   )
   let input_text_is_committed = $derived(
     input_display && searchText === input_committed_label,
@@ -673,7 +676,13 @@
   // Rows eligible for rendering: group headers interleaved with their options
   // (maxOptions hides options past the limit, collapsed groups keep only their header)
   type RenderRow =
-    | { kind: `option`; option: Option; flat_idx: number; render_key: unknown }
+    | {
+        kind: `option`
+        option: Option
+        flat_idx: number
+        render_key: unknown
+        group: string | null
+      }
     | { kind: `header`; group_idx: number; render_key: unknown }
   // stable symbols as header render keys: can't collide with user option keys.
   // Cache is bounded by distinct group names seen over the component's life, so
@@ -699,6 +708,7 @@
             option: option_item,
             flat_idx,
             render_key: option_render_keys[group_idx][local_idx],
+            group,
           })
         }
         flat_idx++
@@ -769,7 +779,7 @@
   let option_render_keys = $derived.by(() => {
     const next_render_key = render_key_assigner()
     return grouped_options.map(({ options: group_items }) =>
-      group_items.map((option_item) => next_render_key(option_item)),
+      group_items.map(next_render_key),
     )
   })
   // The chips need the same treatment: two selected entries can share a key (duplicate
@@ -777,7 +787,7 @@
   // Symbols also beat keying by index, which would defeat move detection on reorder.
   let chip_render_keys = $derived.by(() => {
     const next_render_key = render_key_assigner()
-    return visible_chips.map((option_item) => next_render_key(option_item))
+    return visible_chips.map(next_render_key)
   })
 
   // Pre-computed group header state (avoids repeated calculations in template)
@@ -874,7 +884,7 @@
   function sort_selected(items: Option[]): Option[] {
     if (sortSelected === true) {
       return items.toSorted((opt_1, opt_2) =>
-        `${utils.get_label(opt_1)}`.localeCompare(`${utils.get_label(opt_2)}`),
+        label_of(opt_1).localeCompare(label_of(opt_2)),
       )
     }
     if (typeof sortSelected === `function`) return items.toSorted(sortSelected)
@@ -1012,6 +1022,10 @@
 
   // Selected chips are plain list items, so left/right chip highlighting stays visual.
   const user_message_id = $derived(`${base_id}-user-msg`)
+  // A group header is presentational, so its options reference it by id to pick the group
+  // name up as their description
+  const group_header_id = (group_name: string) =>
+    `${base_id}-group-${encodeURIComponent(group_name)}`
   const active_option_id = $derived(
     is_user_message_active
       ? user_message_id
@@ -1105,7 +1119,7 @@
     // closure so the guard can be re-evaluated after an async oncreate resolves
     const is_dupe = () =>
       selected_keys_set.has(key(option_to_add)) ||
-      (check_label && is_label_selected(`${utils.get_label(option_to_add)}`))
+      (check_label && is_label_selected(label_of(option_to_add)))
     const is_duplicate = is_dupe()
     const max_reached = at_max_capacity()
     // Fire events for blocked add attempts (redundant null check narrows maxSelect for TS)
@@ -1119,7 +1133,7 @@
     // This also prevents adding the same custom option twice in append mode.
     if (is_user_option) {
       if (!(from_paste && typeof option_to_add === `object`)) {
-        const label_text = from_paste ? `${utils.get_label(option_to_add)}` : searchText
+        const label_text = from_paste ? label_of(option_to_add) : searchText
         if (typeof effective_options[0] === `object`) {
           option_to_add = { label: label_text } as Option
         } else if (
@@ -1172,14 +1186,14 @@
       if (load_options_config) loaded_options = [...loaded_options, option_to_add]
       else options = [...options, option_to_add]
     }
-    if (input_display) searchText = `${utils.get_label(option_to_add)}`
+    if (input_display) searchText = label_of(option_to_add)
     else if (resetFilterOnAdd) searchText = ``
     // for maxSelect = 1 we always replace current option with new one
     selected = next_selected
 
     clear_validity()
     handle_dropdown_after_select(event)
-    announce(msg.option_selected(`${utils.get_label(option_to_add)}`))
+    announce(msg.option_selected(label_of(option_to_add)))
     onadd?.({ option: option_to_add, selected })
     onchange?.({ option: option_to_add, type: `add` })
   }
@@ -1210,7 +1224,7 @@
 
     selected = selected.filter((_, remove_idx) => remove_idx !== idx)
     clear_validity()
-    announce(msg.option_removed(`${utils.get_label(option_removed)}`))
+    announce(msg.option_removed(label_of(option_removed)))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -1797,7 +1811,7 @@
     if (option_removed === undefined) return
     selected = []
     clear_validity()
-    announce(msg.option_removed(`${utils.get_label(option_removed)}`))
+    announce(msg.option_removed(label_of(option_removed)))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -2095,9 +2109,10 @@
   title: string,
   icon_props: { option: Option; isRemoveAll: false } | { isRemoveAll: true },
 )}
+  {@const rescued = with_focus_rescue(handler)}
   <button
-    onclick={with_focus_rescue(handler)}
-    onkeydown={if_enter_or_space(with_focus_rescue(handler))}
+    onclick={rescued}
+    onkeydown={if_enter_or_space(rescued)}
     type="button"
     {title}
     class={[`remove`, { 'remove-all': icon_props.isRemoveAll }]}
@@ -2187,7 +2202,7 @@
           {#if !disabled && can_remove}
             {@render remove_btn(
               (event) => remove(option, event, idx),
-              msg.remove_option(removeBtnTitle, `${utils.get_label(option)}`),
+              msg.remove_option(removeBtnTitle, label_of(option)),
               { option, isRemoveAll: false },
             )}
           {/if}
@@ -2351,7 +2366,7 @@
       <!-- option <li> markup shared by the virtual and non-virtual render paths.
         flat_idx is passed positionally so duplicate option values still get
         unique DOM ids / aria-posinset / hover indices -->
-      {#snippet option_li(option_item: Option, flat_idx: number)}
+      {#snippet option_li(option_item: Option, flat_idx: number, group: string | null)}
         {@const view = get_option_view(option_item, flat_idx)}
         {@const is_active = activeIndex === flat_idx}
         <li
@@ -2379,6 +2394,7 @@
           role="option"
           aria-selected={view.selected ? `true` : `false`}
           aria-disabled={view.disabled ? `true` : undefined}
+          aria-describedby={group === null ? undefined : group_header_id(group)}
           aria-posinset={flat_idx + 1}
           aria-setsize={visible_navigable_count}
           style={view.style}
@@ -2395,7 +2411,7 @@
               type="checkbox"
               class="option-checkbox"
               checked={view.selected}
-              aria-label={msg.toggle_option(`${utils.get_label(option_item)}`)}
+              aria-label={msg.toggle_option(label_of(option_item))}
               tabindex="-1"
               onclick={(event) => event.preventDefault()}
             />
@@ -2432,23 +2448,33 @@
           {@const { all_selected, selected_count, selectable } = group_header_state.get(
             group_name,
           ) ?? { all_selected: false, selected_count: 0, selectable: [] }}
-          {@const handle_toggle = () =>
-            collapsibleGroups && toggle_group_collapsed(group_name)}
+          {@const handle_toggle = (event: Event) => {
+            // the collapse button sits inside the header, whose own click also toggles
+            event.stopPropagation()
+            if (collapsibleGroups) toggle_group_collapsed(group_name)
+          }}
           {@const handle_group_select = (event: Event) =>
             toggle_group_selection(selectable, all_selected, event)}
-          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+          <!-- A listbox may only own `option` (or `group`) elements, so the header row is
+            presentational and its options point back at it with `aria-describedby`, which
+            is what carries the group name to assistive tech now. `role="presentation"` is
+            dropped by conflict resolution if the element is focusable or carries a global
+            ARIA attribute, so this <li> must have neither: the collapse control is a real
+            nested <button> and the label lives in the text, not in `aria-label`. -->
           <li
             class={[`group-header`, liGroupHeaderClass]}
             class:collapsible={collapsibleGroups}
             class:sticky={stickyGroupHeaders}
-            role={collapsibleGroups ? `button` : `presentation`}
-            aria-expanded={collapsibleGroups ? !collapsed : undefined}
-            aria-label={msg.group(group_name)}
+            role="presentation"
             style={liGroupHeaderStyle}
             onclick={handle_toggle}
-            onkeydown={if_enter_or_space(handle_toggle)}
-            tabindex={collapsibleGroups ? 0 : -1}
           >
+            <!-- The description each option points at. A hidden span rather than the
+              <li> itself, so screen readers get exactly the group name and not the count,
+              the select-all button and the chevron along with it. -->
+            <span id={group_header_id(group_name)} class="sr-only">
+              {msg.group(group_name)}
+            </span>
             {#if groupHeader}
               {@render groupHeader({
                 group: group_name,
@@ -2474,10 +2500,18 @@
                 </button>
               {/if}
               {#if collapsibleGroups}
-                <Icon
-                  icon={collapsed ? ChevronRight : ChevronDown}
-                  style="width: 12px; margin-inline-start: auto"
-                />
+                <button
+                  type="button"
+                  class="group-collapse-toggle"
+                  aria-expanded={!collapsed}
+                  aria-label={msg.group(group_name)}
+                  onclick={handle_toggle}
+                >
+                  <Icon
+                    icon={collapsed ? ChevronRight : ChevronDown}
+                    style="width: 12px"
+                  />
+                </button>
               {/if}
             {/if}
           </li>
@@ -2488,7 +2522,7 @@
       {/if}
       {#each visible_render_rows as row (row.render_key)}
         {#if row.kind === `option`}
-          {@render option_li(row.option, row.flat_idx)}
+          {@render option_li(row.option, row.flat_idx, row.group)}
         {:else}
           {@render group_header_li(row.group_idx)}
         {/if}
@@ -2878,6 +2912,17 @@
       --sms-group-header-hover-bg,
       light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05))
     );
+  }
+  /* the chevron is a real button now, so it needs the <li>'s own look, not a control's */
+  :is(ul.options > li.group-header button.group-collapse-toggle) {
+    display: flex;
+    align-items: center;
+    margin-inline-start: auto;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
   }
   :is(ul.options > li.group-header .group-label) {
     flex: 1;
