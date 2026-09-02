@@ -264,11 +264,10 @@
       // Re-snapshot whenever the attribute holds something we did not write: that is the
       // caller updating a reactive `data-description`, and keeping the mount-time value
       // would write their new text straight back out on the next refresh.
+      // `getAttribute` returns string|null, never undefined, so an unseen row differs from
+      // its absent `written` entry and is snapshotted by the same comparison.
       const current_description = row.getAttribute(`data-description`)
-      if (
-        !original_descriptions.has(row) ||
-        current_description !== written_descriptions.get(row)
-      ) {
+      if (current_description !== written_descriptions.get(row)) {
         original_descriptions.set(row, current_description)
       }
       sync_labeled_controls(row)

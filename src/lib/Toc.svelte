@@ -339,30 +339,29 @@
   // the document — a toast, a tooltip, a dropdown, a virtualized editor row scrolling past —
   // re-queried every heading in the document. Only nodes that are or contain a heading can
   // change the result.
+  // NodeList is iterable, so this stays allocation-free on the mutation path
+  const some_element = (nodes: NodeList, match: (node: Element) => boolean): boolean => {
+    for (const node of nodes) if (node instanceof Element && match(node)) return true
+    return false
+  }
   const childlist_touches_headings = (record: MutationRecord): boolean => {
     if (!selector_is_valid(`headingSelector`, headingSelector)) return false
-    // `heading.textContent = '…'` swaps a text node, so neither list holds an Element —
-    // but the record's target is the heading itself.
-    const target = record.target
-    if (
-      element_matches_heading_selector(
-        target instanceof Element ? target : target.parentElement,
+    const { target } = record
+    // `heading.textContent = '…'` swaps a text node, so neither node list holds an Element,
+    // but the record targets the heading itself
+    if (target instanceof Element && element_matches_heading_selector(target)) return true
+    return (
+      some_element(
+        record.addedNodes,
+        (node) =>
+          node.matches(headingSelector) || Boolean(node.querySelector(headingSelector)),
+      ) ||
+      // a removed node is detached, so `main > h2` can no longer match it — compare
+      // against the headings currently held instead
+      some_element(record.removedNodes, (node) =>
+        headings.some((heading) => node === heading || node.contains(heading)),
       )
     )
-      return true
-    for (const node of record.addedNodes) {
-      if (!(node instanceof Element)) continue
-      if (node.matches(headingSelector) || node.querySelector(headingSelector))
-        return true
-    }
-    // A removed node is detached, so a selector like `main > h2` can no longer match it.
-    // Compare against the headings we currently hold instead.
-    for (const node of record.removedNodes) {
-      if (!(node instanceof Element)) continue
-      if (headings.some((heading) => node === heading || node.contains(heading)))
-        return true
-    }
-    return false
   }
 
   const should_update_for_mutations = (records: MutationRecord[]) =>

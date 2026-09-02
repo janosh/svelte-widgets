@@ -19,6 +19,13 @@ test.each([undefined, {}])(`merge_labels with %j keeps every default`, (override
   expect(merge_labels(MULTI_SELECT_LABELS, overrides)).toEqual(MULTI_SELECT_LABELS)
 })
 
+// the same hazard applies to the icon sets CopyButton and FullscreenButton merge
+test(`merge_labels guards non-label records too`, () => {
+  const defaults = { ready: `copy-icon`, error: `alert-icon` }
+  expect(merge_labels(defaults, { ready: undefined })).toEqual(defaults)
+  expect(merge_labels(defaults, { ready: `custom` }).ready).toBe(`custom`)
+})
+
 // the merge runs in every component, so pin it through one of them end to end
 test(`a conditionally undefined label renders the default, not nothing`, async () => {
   const translate = false // the shape of `condition ? translation : undefined`

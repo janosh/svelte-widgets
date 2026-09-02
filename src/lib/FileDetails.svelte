@@ -115,10 +115,9 @@
     // Every key holds a full copy of the content it was built from, so a caller streaming
     // edits through the bindable `files` would grow this without bound.
     untrack(() => {
-      const live_entries = Object.entries(highlighted_cache).filter(([cached_key]) =>
-        live_keys.has(cached_key),
-      )
-      if (live_entries.length !== Object.keys(highlighted_cache).length) {
+      const entries = Object.entries(highlighted_cache)
+      const live_entries = entries.filter(([cached_key]) => live_keys.has(cached_key))
+      if (live_entries.length !== entries.length) {
         highlighted_cache = Object.fromEntries(live_entries)
       }
     })

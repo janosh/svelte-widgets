@@ -50,7 +50,7 @@
 
   const copy_button_selector = `[data-sms-copy]`
   const msg = $derived(merge_labels(COPY_BUTTON_LABELS, labels))
-  const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
+  const icon_set = $derived(merge_labels(DEFAULT_ICONS, icons))
   // CopyButton has no pending visual of its own: it keeps showing the current copy state
   const action_labels = $derived({ ...msg, pending: msg[copy_state] })
   const action_icons = $derived({ ...icon_set, pending: icon_set[copy_state] })

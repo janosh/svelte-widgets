@@ -39,7 +39,7 @@
   } = $props()
 
   const msg = $derived(merge_labels(FULLSCREEN_BUTTON_LABELS, labels))
-  const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
+  const icon_set = $derived(merge_labels(DEFAULT_ICONS, icons))
   const label = $derived(fullscreen ? msg.exit : msg.enter)
 
   // the flag is the single source of truth: clicking flips it, the effects below turn
