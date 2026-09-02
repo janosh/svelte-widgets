@@ -11,9 +11,9 @@ export interface FileDropOptions {
   on_error?: (error: unknown) => unknown
 }
 
-// Headless file-drop handling. The data attribute gives CSS consumers the same state
-// the callback receives, while the depth counter prevents child-to-child drags from
-// flickering inactive. Directory expansion and its explicit errors live in file-drop.
+// Headless file-drop handling. The data attribute exposes the callback's state to CSS, and
+// the depth counter keeps child-to-child drags from flickering inactive. Directory expansion
+// and its errors live in file-drop.
 export const file_drop =
   (options: FileDropOptions): Attachment<HTMLElement> =>
   (node): (() => void) | undefined => {

@@ -1,15 +1,13 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
-// The corner trigger and the filtered-row override are pure CSS, and happy-dom applies
-// neither Svelte's scoped styles nor layout, so both only mean anything in a real browser.
-// Every locator is scoped to this demo: other examples on the page repeat these classes.
+// The corner trigger and the filtered-row override are pure CSS, which happy-dom applies no
+// layout for. Every locator is scoped to this demo: other examples repeat these classes.
 
 const open_demo = async (page: Page) => {
   await page.goto(`/settings`, { waitUntil: `networkidle` })
   const demo = page.locator(`#settings-search`).first()
-  // `networkidle` lands before mdsvex has compiled the live examples on a cold dev server,
-  // so the first test to arrive would otherwise scroll to an element that is not there yet
+  // `networkidle` lands before mdsvex compiles the live examples on a cold dev server
   await expect(demo).toBeVisible()
   await demo.scrollIntoViewIfNeeded()
   return {
@@ -36,7 +34,7 @@ test(`the corner trigger expands into the content flow`, async ({ page }) => {
   const trigger_box = await box_of(trigger)
   const group_before = await box_of(group)
 
-  // collapsed: flush with the pane's top-right corner, and out of flow — the first group
+  // collapsed: flush with the pane's top-right corner and out of flow, so the first group
   // starts at the pane's top edge rather than below the icon
   expect(trigger_box.x + trigger_box.width).toBeCloseTo(pane_box.x + pane_box.width, 0)
   expect(trigger_box.y).toBeCloseTo(pane_box.y, 0)
@@ -57,13 +55,12 @@ test(`filtering paints rows away and matches on group titles`, async ({ page }) 
 
   await field.fill(`radius`)
 
-  // `data-search-hidden` alone loses to the `display: grid` a grid section puts on its rows,
-  // so this only passes if the component's own override is in the stylesheet
+  // `data-search-hidden` alone loses to the `display: grid` a grid section puts on its rows
   await expect(color_row).toBeHidden()
   await expect(radius_row).toBeVisible()
   await expect(camera).toBeHidden() // the group holding no match goes with it
 
-  // no row says "camera"; the group heading above them does, and matching it opens the group
+  // no row says "camera"; only the group heading does, and matching it opens the group
   await field.fill(`camera`)
 
   await expect(camera).toBeVisible()

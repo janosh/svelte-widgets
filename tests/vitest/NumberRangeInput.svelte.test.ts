@@ -41,8 +41,8 @@ describe(`NumberRangeInput`, () => {
     expect(number.valueAsNumber).toBe(0.3)
   })
 
-  // The wrapping <label> only names its first control, so the range always carries an explicit
-  // name. Without children that label is empty, leaving the number input unnamed as well.
+  // a wrapping <label> names only its first control, so the range needs an explicit name;
+  // without children the label is empty and the number input goes unnamed too
   test.each([
     [`children name the number input`, { children: label_snippet }, null, `Atom radius`],
     [`a bare title names both inputs`, {}, `Atom radius`, `Atom radius`],

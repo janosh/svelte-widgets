@@ -66,8 +66,7 @@ const mount_global = async (props: Partial<ComponentProps<typeof CopyButton>>) =
   return component
 }
 
-// The initial scan is synchronous, but later ones ride the MutationObserver, which
-// coalesces them into one animation frame instead of rescanning on every render flush.
+// only the initial scan is sync; later ones ride the MutationObserver, coalesced per frame
 const flush_rescan = async () => {
   await tick()
   await new Promise(requestAnimationFrame)
@@ -261,13 +260,12 @@ test(`unmount clears outstanding reset timer`, async () => {
   const reset_timer_id = set_timeout_spy.mock.results[reset_idx].value
 
   void unmount(copy_button_component)
-  // that exact timer, not merely some clearTimeout call. toContain compares by
-  // identity; toHaveBeenCalledWith's deep equality matches any Timeout object
+  // identity match: toHaveBeenCalledWith's deep equality would accept any Timeout object
   expect(clear_timeout_spy.mock.calls.map((call) => call[0])).toContain(reset_timer_id)
 })
 
-// two-way binding tests: this file isn't compiled by the Svelte plugin so $state is
-// unavailable - a getter/setter pair backed by fromStore mimics a parent bind:state
+// $state is unavailable here (file isn't Svelte-compiled), so a fromStore getter/setter
+// pair stands in for a parent's bind:state
 type CopyState = `ready` | `success` | `error`
 
 const mount_bound_copy_button = () => {
@@ -303,7 +301,7 @@ test.each([
 
     const { copy_button, state_store } = mount_bound_copy_button()
     await click_copy_button(copy_button)
-    expect(get(state_store)).toBe(expected_state) // internal change reached the binding
+    expect(get(state_store)).toBe(expected_state)
     expect(icon_path(copy_button)).toBe(icon.d)
 
     // external write back to idle flows into the component and restores the Copy icon
@@ -489,8 +487,7 @@ test(`global mode as=a does not remount when the observer re-enters`, async () =
   void unmount(component)
 })
 
-// CopyButton was the one wired component whose defaults lived in a local const, so callers
-// could not import its record or derive its type the way the others allow.
+// these defaults used to live in a local const callers could neither import nor type off
 test(`COPY_BUTTON_LABELS is the exported default record, and partials merge over it`, () => {
   expect(COPY_BUTTON_LABELS).toEqual({ ready: ``, success: ``, error: `` })
 

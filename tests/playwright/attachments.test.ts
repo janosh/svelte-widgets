@@ -18,7 +18,7 @@ type TooltipMetrics = {
   content_scrolls: boolean
 }
 
-// Measure final tooltip geometry. The tooltip uses border-box sizing.
+// the tooltip uses border-box sizing
 const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
   tooltip_el.evaluate((el) => {
     const rect = el.getBoundingClientRect()
@@ -52,7 +52,7 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
     }
   })
 
-// Hover until hydration has attached the delegated pointer listeners.
+// retry until hydration has attached the delegated pointer listeners
 const hover_tooltip = async (
   page: Page,
   button_name: string,
@@ -172,9 +172,8 @@ test.describe(`tooltip layout and lifecycle`, () => {
     expect(cross_axis_error).toBeLessThanOrEqual(3)
   })
 
-  // The arrow's absolute insets resolve against the padding box while its geometry is
-  // measured in border-box space, so both axes have to add the surface's border back.
-  // A transparent border still occupies layout, hence the second case.
+  // The arrow's insets resolve against the padding box while its geometry is measured in
+  // border-box space, so both axes must add the border back — transparent ones included.
   for (const border of [`unset`, `4px solid transparent`]) {
     test(`arrow tip clears and centers on the trigger on every side (border: ${border})`, async ({
       page,
@@ -206,8 +205,8 @@ test.describe(`tooltip layout and lifecycle`, () => {
         if (!button_box || !arrow_box || !surface_box) {
           throw new Error(`Missing ${placement} arrow geometry`)
         }
-        // A square rotated 45° has a bounding box centred on its tip, so the box's cross
-        // axis gives the tip's position and its leading edge gives the tip itself.
+        // a square rotated 45° has a bounding box centred on its tip, so the box's cross axis
+        // gives the tip's position and its leading edge the tip itself
         const vertical = placement === `top` || placement === `bottom`
         const cross = (box: typeof arrow_box) =>
           vertical ? box.x + box.width / 2 : box.y + box.height / 2
@@ -215,7 +214,7 @@ test.describe(`tooltip layout and lifecycle`, () => {
           Math.abs(cross(arrow_box) - cross(button_box)),
           `${placement} arrow off the trigger's center`,
         ).toBeLessThanOrEqual(0.5)
-        // The tip stands the default 6px --tooltip-arrow-size clear of the surface.
+        // the tip stands the default 6px --tooltip-arrow-size clear of the surface
         const protrusion = {
           top: arrow_box.y + arrow_box.height - surface_box.y - surface_box.height,
           bottom: surface_box.y - arrow_box.y,
@@ -227,9 +226,8 @@ test.describe(`tooltip layout and lifecycle`, () => {
     })
   }
 
-  // The arrow continues the edge it hangs off, so it copies that side's border and keeps
-  // clear of that side's corners. Every --tooltip-* shorthand sets all four alike, so only
-  // a consumer stylesheet can tell a fixed side apart from the right one.
+  // The arrow copies the border and clears the corners of the side it hangs off. Every
+  // --tooltip-* shorthand sets all four alike, so only a consumer stylesheet can tell them apart.
   test(`the arrow follows the side it hangs off, not the top`, async ({ page }) => {
     const radius = 80
     await page.addStyleTag({
@@ -260,8 +258,8 @@ test.describe(`tooltip layout and lifecycle`, () => {
       arrow_box.x + arrow_box.width / 2 - box.x,
       `tip inside the corner`,
     ).toBeGreaterThanOrEqual(radius)
-    // Still 6px proud. Unlike the colour, this survives reading the wrong border, so it is
-    // the one guard that the arrow's size and its inset come off the SAME side.
+    // still 6px proud: unlike the colour this survives reading the wrong border, so it is the
+    // one guard that the arrow's size and inset come off the SAME side
     expect(arrow_box.y + arrow_box.height - box.y - box.height).toBeCloseTo(6, 0)
   })
 

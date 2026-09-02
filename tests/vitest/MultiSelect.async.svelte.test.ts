@@ -179,7 +179,7 @@ describe(`loadOptions feature`, () => {
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
-    // Mock a rendered but non-overflowing list
+    // a rendered list that does not overflow
     const ul = doc_query(`ul.options`)
     vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
@@ -209,8 +209,7 @@ describe(`loadOptions feature`, () => {
     expect(load_options).toHaveBeenCalledTimes(1)
   })
 
-  // The unmount abort lives in a teardown-returning $effect, whose shape is easy to
-  // misread as a missing call. This pins the behavior so a "fix" can't silently undo it.
+  // the unmount abort lives in a teardown-returning $effect that reads like a missing call
   test(`unmounting aborts the in-flight fetch`, async () => {
     const { fn: load_options } = deferred_load()
     const component = mount_multiselect({ loadOptions: load_options, open: true })
@@ -261,9 +260,8 @@ describe(`loadOptions feature`, () => {
     expect(load_options.mock.calls[1][0].signal?.aborted).toBe(true)
   })
 
-  // A server can report hasMore alongside an empty batch. Refetching the same offset
-  // can't make progress, and a non-reset load at offset 0 would break the documented
-  // cursor-pagination pattern that treats offset 0 as "reset your cursor".
+  // a server can report hasMore with an empty batch; refetching the same offset makes no
+  // progress, and offset 0 means "reset your cursor" in the documented pagination pattern
   test(`auto-fill stops on an empty batch and never reuses offset 0`, async () => {
     const offsets: number[] = []
     const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
@@ -285,7 +283,6 @@ describe(`loadOptions feature`, () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
 
-    // Type new search while first fetch is pending
     const input = get_input()
     await type_search_text(`xyz`, input)
     await vi.runAllTimersAsync()
@@ -299,14 +296,13 @@ describe(`loadOptions feature`, () => {
       signal: expect.any(AbortSignal),
     })
 
-    // Resolve the STALE first request after the new one was initiated
+    // resolve the stale first request
     resolvers[0]({ options: [`Stale Result`], hasMore: false })
     await vi.runAllTimersAsync()
 
     const ul = doc_query(`ul.options`)
     expect(ul.textContent).not.toContain(`Stale Result`)
 
-    // Resolve the current request
     resolvers[1]({ options: [`Fresh Result`], hasMore: false })
     await vi.runAllTimersAsync()
     expect(ul.textContent).toContain(`Fresh Result`)
@@ -353,20 +349,18 @@ describe(`loadOptions feature`, () => {
     const input = get_input()
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-    // Close dropdown via Escape while fetch is still pending
+    // close while the fetch is still pending
     input.dispatchEvent(fresh_key(`Escape`))
     await tick()
 
-    // aria-busy should clear immediately on close
     expect(input.getAttribute(`aria-busy`)).toBeNull()
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
-    // Stale fetch resolves after close — should not corrupt state
+    // a stale resolve after close must not corrupt state
     resolvers[0]({ options: [`Result`], hasMore: false })
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
 
-    // Reopen — should trigger fresh load, not be stuck
     reopen()
     await tick()
     expect(load_options).toHaveBeenCalledTimes(2)
@@ -394,15 +388,14 @@ describe(`loadOptions feature`, () => {
     await flush_ticks()
     expect(load_options).toHaveBeenCalledTimes(capped_count)
 
-    // Simulate user scroll — should reset counter and allow more loading
+    // a user scroll resets the auto-fill counter
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(500)
     vi.spyOn(ul, `scrollTop`, `get`).mockReturnValue(250)
     ul.dispatchEvent(new Event(`scroll`))
     await tick()
     expect(load_options).toHaveBeenCalledTimes(capped_count + 1)
 
-    // After scroll-triggered load resolves, auto-fill should resume
-    // (list still doesn't overflow), verifying that the counter was reset.
+    // auto-fill resumes once the scroll-triggered load resolves, proving the counter reset
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
     resolvers[capped_count]({ options: [`Post-scroll`], hasMore: true })
     await flush_ticks()
@@ -417,24 +410,23 @@ describe(`loadOptions feature`, () => {
 
     const input = get_input()
 
-    // Close while first fetch is still pending (NOT resolved)
+    // close while the first fetch is still pending
     input.dispatchEvent(fresh_key(`Escape`))
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
 
-    // Reopen BEFORE old fetch resolves — this is the critical timing
+    // reopen before the old fetch resolves — the critical timing
     reopen()
     await tick()
     expect(load_options).toHaveBeenCalledTimes(2)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-    // Old fetch resolves late — must be discarded, not corrupt new session
+    // the late resolve must be discarded, not corrupt the new session
     resolvers[0]({ options: [`Stale`], hasMore: false })
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
     expect(doc_query(`ul.options`).textContent).not.toContain(`Stale`)
 
-    // New fetch resolves — applied normally
     resolvers[1]({ options: [`Fresh`], hasMore: false })
     await tick()
     expect(doc_query(`ul.options`).textContent).toContain(`Fresh`)
@@ -446,24 +438,24 @@ describe(`loadOptions feature`, () => {
     const { fn: load_options, resolvers, rejectors } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
 
-    // Type to trigger a new search while first fetch is pending
+    // new search while the first fetch is pending
     const input = get_input()
     await type_search_text(`test`, input)
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(2)
 
-    // New fetch succeeds FIRST with hasMore=true
+    // the new fetch succeeds first, with hasMore=true
     resolvers[1]({ options: [`Result A`], hasMore: true })
     await vi.runAllTimersAsync()
 
     const ul = doc_query(`ul.options`)
     expect(ul.textContent).toContain(`Result A`)
 
-    // Old (stale) fetch ERRORS AFTER success — must not corrupt hasMore
+    // the stale fetch errors after that success and must not corrupt hasMore
     rejectors[0](new Error(`Stale network error`))
     await vi.runAllTimersAsync()
 
-    // Scroll should trigger pagination (hasMore was NOT corrupted by stale error)
+    // pagination still fires, so hasMore survived the stale error
     mock_scroll_near_bottom(ul)
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(3)
@@ -473,13 +465,13 @@ describe(`loadOptions feature`, () => {
     mock_console_error()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
-    // Use onOpen=false so retry requires typing, exposing has_more via pending
+    // onOpen=false so retry requires typing, exposing has_more via pending
     mount_multiselect({
       loadOptions: { fetch: load_options, onOpen: false, debounceMs: 10 },
       open: true,
     })
 
-    // Type to trigger initial load (onOpen=false requires user input)
+    // with onOpen=false, typing is what triggers the initial load
     const input = get_input()
     await type_search_text(`q`, input)
     await vi.runAllTimersAsync()
@@ -488,15 +480,13 @@ describe(`loadOptions feature`, () => {
     rejectors[0](new Error(`Server down`))
     await vi.runAllTimersAsync()
 
-    // Close and reopen
     input.dispatchEvent(fresh_key(`Escape`))
     await vi.runAllTimersAsync()
     reopen()
     await vi.runAllTimersAsync()
 
-    // Type to trigger load again (onOpen=false)
     await type_search_text(`q`, input)
-    // During debounce: aria-busy must be true (has_more was reset on close)
+    // has_more was reset on close, so aria-busy is true during the debounce
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
@@ -518,12 +508,11 @@ describe(`loadOptions feature`, () => {
       open: true,
     })
     await vi.runAllTimersAsync()
-    // Initial load succeeds
     resolvers[0]({ options: [`Apple`], hasMore: false })
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(1)
 
-    // Search "x" triggers load, which fails
+    // this search fails
     const input = get_input()
     await type_search_text(`x`, input)
     await vi.runAllTimersAsync()
@@ -531,7 +520,7 @@ describe(`loadOptions feature`, () => {
     rejectors[1](new Error(`fail`))
     await vi.runAllTimersAsync()
 
-    // Clear and retype the same search to trigger a fresh request.
+    // clearing and retyping the same search must refetch
     await type_search_text(``, input)
     await vi.runAllTimersAsync()
     await type_search_text(`x`, input)
@@ -623,9 +612,8 @@ describe(`load_options_pending`, () => {
     await tick()
     expect(fetch_fn).toHaveBeenCalledTimes(1) // immediate open load, still in-flight
 
-    // type two chars while the first fetch is still awaiting (load_options_last_search
-    // is null until it resolves). Pre-fix, each keystroke re-entered the first-load branch
-    // and fired another immediate load_dynamic_options(true); the fix routes them to debounce.
+    // typing while the first fetch is still awaiting: pre-fix each keystroke re-entered the
+    // first-load branch and fired another immediate load, instead of routing to the debounce
     const input = get_input()
     for (const value of [`a`, `ab`]) {
       await type_search_text(value, input)
@@ -668,13 +656,11 @@ describe(`load_options_pending`, () => {
 
       expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-      // Enter during debounce window should NOT create an option
       input.dispatchEvent(fresh_key(`Enter`))
       await tick()
       expect(oncreate_spy).not.toHaveBeenCalled()
       expect(document.querySelector(`.user-msg`)).toBeNull()
 
-      // Let debounce fire and fetch complete
       await vi.runAllTimersAsync()
       fetch_resolvers.at(-1)?.({ options: [], hasMore: false })
       await vi.runAllTimersAsync()
@@ -684,7 +670,6 @@ describe(`load_options_pending`, () => {
         `Create this option`,
       )
 
-      // Now Enter should create the option
       input.dispatchEvent(fresh_key(`Enter`))
       await tick()
       expect(oncreate_spy).toHaveBeenCalledTimes(1)
@@ -738,15 +723,14 @@ describe(`load_options_pending`, () => {
     await vi.runAllTimersAsync()
     expect(fetch_fn).toHaveBeenCalledTimes(2)
 
-    // Close dropdown while fetch is in-flight
     input.dispatchEvent(fresh_key(`Escape`))
     await tick()
 
-    // Late fetch resolves after close — stale results must be discarded
+    // the late resolve after close must be discarded
     fetch_resolvers[1]({ options: [`Rust Lang`], hasMore: false })
     await vi.runAllTimersAsync()
 
-    // Reopen — should trigger fresh load immediately (is_first_load path)
+    // reopen takes the is_first_load path, loading immediately
     reopen()
     await tick()
     // Fresh load fires immediately; stale path would debounce (not yet called)

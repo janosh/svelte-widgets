@@ -43,8 +43,8 @@ test(`backdrop still dismisses when CommandMenu disables Escape`, async ({ page 
   await page.keyboard.press(`Escape`)
   await expect(menu).toBeVisible()
 
-  // force: the host is what hit-testing reports at these coordinates, so Playwright refuses
-  // the click as intercepted — the browser still targets the input and retargets to the host
+  // force: hit-testing reports the host here so Playwright calls the click intercepted, but
+  // the browser still targets the input and retargets the event to the host
   await menu.getByRole(`combobox`).click({ force: true })
   await expect(menu).toBeVisible()
 

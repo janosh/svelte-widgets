@@ -2,20 +2,20 @@ import { register_escape_layer, register_trap_layer } from './shared'
 
 export interface FocusTrapOptions {
   enabled?: boolean
-  // What to focus on activation: an element, a selector resolved within the root, or
-  // `false` to leave focus where it is. Defaults to the first tabbable descendant.
+  // element, selector resolved within the root, or `false` to leave focus put; defaults to
+  // the first tabbable descendant
   initial?: Element | string | false
-  // Where focus returns on teardown. Defaults to whatever held it on activation;
-  // `false` leaves focus alone, for a trigger the surface itself removed.
+  // where focus returns on teardown, default whatever held it on activation; `false` leaves
+  // it alone, for a trigger the surface itself removed
   restore?: Element | false
   // Further containers the trap covers, for portalled parts of the same surface
   include?: (Element | null | undefined)[]
   // Narrows Tab cycling to a descendant. Resolved per keystroke; falls back to the node.
   root?: Element | string | null | (() => Element | null | undefined)
-  // Escape handler, on the same layer stack `click_outside` uses, so only the innermost
-  // trap hears the key. Omit and Escape passes through untouched.
+  // on `click_outside`'s layer stack, so only the innermost trap hears the key; omit and
+  // Escape passes through untouched
   on_escape?: (event: KeyboardEvent) => void
-  // Pull focus back to where it last sat inside whenever something outside takes it.
+  // pull focus back to where it last sat inside whenever something outside takes it
   recapture?: boolean
 }
 
@@ -150,8 +150,8 @@ export const focus_trap =
         : typeof root === `string`
           ? node.querySelector(root)
           : root) ?? node
-    // `root` narrows Tab order, but the whole node remains inside the trap.
-    // Recollected per keystroke: menus grow, filter and disable items while open
+    // `root` narrows Tab order, but the whole node stays inside the trap. Recollected per
+    // keystroke: menus grow, filter and disable items while open.
     const tabbables = () => get_tab_candidates([resolve_root(), ...extra_containers])
     const is_inside = (target: unknown): target is Element =>
       target instanceof Element &&

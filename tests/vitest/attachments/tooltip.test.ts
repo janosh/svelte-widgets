@@ -347,8 +347,8 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(true)
     expect(document.activeElement).toBe(element)
 
-    // Handing focus back re-enters through focusout/focusin, which must not resurrect
-    // the dismissed tooltip — leaving the trigger afterwards is not a second close.
+    // handing focus back re-enters via focusout/focusin, which must not resurrect the
+    // dismissed tooltip — leaving the trigger afterwards is not a second close
     focus_out(element)
     vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
@@ -356,8 +356,8 @@ describe(`tooltip manager`, () => {
       [false, open_detail(element, `escape`)],
     ])
 
-    // The reopen the handoff caused subscribed an Escape layer of its own. Left on the
-    // stack it answers for the surface underneath, which never hears Escape again.
+    // that reopen subscribed an Escape layer of its own; left on the stack it answers
+    // for the surface underneath, which then never hears Escape
     document.dispatchEvent(escape_key())
     expect(surrounding_layer).toHaveBeenCalledOnce()
   })
@@ -721,8 +721,8 @@ describe(`tooltip manager`, () => {
     const { element } = show_tooltip({}, `Temporary`)
     pointer_out(element)
 
-    // A surviving scroll subscription still schedules a frame, even though the guard
-    // inside would make that frame a no-op, so the frame is what proves the release.
+    // a surviving subscription still schedules a frame even though its guard no-ops it,
+    // so the frame is what proves the release
     const frame = vi.spyOn(window, `requestAnimationFrame`)
     window.dispatchEvent(new Event(`scroll`))
     expect(frame).not.toHaveBeenCalled()
@@ -814,8 +814,7 @@ describe(`tooltip manager`, () => {
     expect(hide_popover).toHaveBeenCalledOnce()
     expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
 
-    // Exiting the dismissed trigger closes the retained state without rehiding a
-    // popover Escape already closed. The same surface remains reusable afterwards.
+    // exiting the dismissed trigger must not rehide a popover Escape already closed
     pointer_out(element)
     expect(hide_popover).toHaveBeenCalledOnce()
     pointer_over(element)

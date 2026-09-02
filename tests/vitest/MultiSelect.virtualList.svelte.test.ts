@@ -106,7 +106,6 @@ describe(`virtualList`, () => {
     expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(
       `option ${n_presses - 1}`,
     )
-    // the window scrolled down: option 0 is no longer rendered
     expect(get_rendered_options()[0]?.textContent?.trim()).not.toBe(`option 0`)
     expect(get_rendered_options().length).toBeLessThan(50)
   })
@@ -157,16 +156,14 @@ describe(`virtualList`, () => {
     expect(top_spacer.style.height).toBe(`${15 * item_height}px`) // 15 rows above window
     expect(bottom_spacer.style.height).toBe(`${(55 - 39) * item_height}px`) // 16 below
 
-    // keyboard: first ArrowDown activates flat idx 0, whose ROW is 1 (the group 0
-    // header occupies row 0) — auto-scroll must clamp to the row offset, not the
-    // flat option index (which would scroll to 0)
+    // first ArrowDown activates flat idx 0, whose ROW is 1 (group 0's header is row 0) —
+    // auto-scroll must use the row offset, not the flat index (which would scroll to 0)
     const input = get_input()
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
     expect(ul_options.scrollTop).toBe(item_height) // row 1 (header row 0 above it)
 
-    // 11 more presses reach flat idx 11 (group 1's 2nd option = "option 6", row 13),
-    // still inside the viewport window — active li must be rendered
+    // 11 more presses reach flat idx 11 ("option 6", row 13), still inside the window
     for (let press = 0; press < 11; press++) {
       input.dispatchEvent(fresh_key(`ArrowDown`))
       await tick()

@@ -31,7 +31,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
   await tick()
   expect(props.activeIndex).toBe(1)
 
-  // test internal changes to activeIndex bind outward
+  // internal changes bind outward
   for (const idx of [1, 2]) {
     const li = doc_query(`ul.options li:nth-child(${idx})`)
     li.dispatchEvent(fresh_mouseover())
@@ -39,7 +39,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
     expect(props.activeIndex).toEqual(idx - 1)
   }
 
-  // test external changes to activeIndex bind inward
+  // external changes bind inward
   props.activeIndex = 2
   await tick()
 
@@ -64,7 +64,7 @@ test(`clears active state when replacement identity is ambiguous`, async () => {
 })
 
 test(`1-way binding of activeOption and hovering an option makes it active`, async () => {
-  // test internal change to activeOption binds outward
+  // internal changes bind outward
   let activeOption: Option | null | undefined = 0
   const cb = vi.fn()
 
@@ -132,7 +132,6 @@ test(`applies DOM attributes to input node`, () => {
   const input = get_input()
   const form_input = doc_query<HTMLInputElement>(`input.form-control`)
 
-  // make sure the search text filtered the dropdown options
   expect(lis).toHaveLength(1)
 
   expect(input?.value).toBe(searchText)
@@ -181,7 +180,7 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
 
   mount_multiselect({ options: [1, 2, 3], ...css_classes, selected: [1], maxSelect: 2 })
 
-  // make an option active hovering it so it gets the active class
+  // hover to make an option active
   document.querySelector(`ul.options > li`)?.dispatchEvent(fresh_mouseover())
   await tick()
 
@@ -287,7 +286,6 @@ test.each([
   expect(select.selected).toEqual([falsy_val])
 })
 
-// Bug: value/selected should update when maxSelect changes at runtime
 test.each([
   {
     initial: null,
@@ -817,7 +815,7 @@ test.each([
   [[{ label: `a` }, { label: `b` }, { label: `c` }]],
 ])(`passes selected options=%j to form submission handlers`, async (options) => {
   const form = document.createElement(`form`)
-  // actual form submission not supported in nodejs, would throw without preventing default behavior
+  // nodejs cannot really submit a form, so prevent the default
   form.addEventListener(`submit`, (event) => event.preventDefault())
   document.body.append(form)
 
@@ -880,7 +878,6 @@ test(`toggling required after invalid form submission allows submitting`, async 
   const props = $state({ options: [1, 2, 3], required: true })
   mount_multiselect(props, form)
 
-  // form should not be submittable due to missing required input
   expect(form.checkValidity()).toBe(false)
 
   props.required = false
@@ -897,7 +894,6 @@ test(`invalid=true gives top-level div class 'invalid' and input attribute of 'a
   const multiselect = doc_query(`div.multiselect`)
   expect(multiselect.classList.contains(`invalid`)).toBe(true)
 
-  // assert aria-invalid attribute is removed on selecting a new option
   const option_li = doc_query<HTMLLIElement>(`ul.options > li`)
   option_li.click()
   await tick()
@@ -982,7 +978,6 @@ test(`option snippet receives selected, active, and disabled booleans`, async ()
   expect(option_spans[1].dataset.disabled).toBe(`true`)
   expect(option_spans[1].dataset.active).toBe(`false`)
 
-  // hover first option to activate it
   doc_query(`ul.options > li`).dispatchEvent(
     new MouseEvent(`mouseover`, { bubbles: true }),
   )
@@ -1187,9 +1182,8 @@ test(`autoScroll=false skips scrolling active options into view`, async () => {
 test.each([
   [`highlightMatches=false suppresses highlighting`, { highlightMatches: false }, false],
   [`typed search text is highlighted`, {}, true],
-  // after committing, searchText is "Alpha" but it is no longer an active filter, so
-  // highlighting must stay off — pins that the dropdown highlights the *effective*
-  // filter text rather than the raw searchText
+  // after committing, searchText is "Alpha" but no longer an active filter: highlighting
+  // follows the effective filter text, not the raw searchText
   [
     `committed selectedDisplay=input text is not highlighted`,
     { maxSelect: 1, selectedDisplay: `input`, closeDropdownOnSelect: false },
@@ -1291,7 +1285,7 @@ test.each([
 test(`remove all button removes all selected options and is visible only if more than 1 option is selected`, async () => {
   const remove_all_btn_selector = `button[title='Remove all']`
 
-  // Scenario 1: Multiple items selected, button is visible, click removes all
+  // several selected: the button is visible and clicking it removes all
   mount_multiselect({ options: [1, 2, 3], selected: [1, 2, 3] })
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`1 2 3`)
 
@@ -1300,7 +1294,7 @@ test(`remove all button removes all selected options and is visible only if more
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(``)
   document.body.innerHTML = `` // Clean up for next mount
 
-  // Scenario 2: Select 2 items, button becomes visible only after 2nd selection
+  // the button appears only on the 2nd selection
   mount_multiselect({ options: [1, 2, 3], selected: [] })
 
   const option_lis = document.querySelectorAll<HTMLLIElement>(`ul.options > li`)
@@ -1449,7 +1443,7 @@ describe.each([
 
       const input = get_input()
 
-      // Type the selected value to trigger duplicate/create check
+      // typing the selected value triggers the duplicate/create check
       await type_search_text(`${selected[0]}`, input)
 
       const dropdown = doc_query(`ul.options`)
@@ -1540,7 +1534,7 @@ test(`2-way binding of selected`, async () => {
 
   mount(Test2WayBind, { target: document.body, props })
 
-  // test internal changes to selected bind outward
+  // internal changes bind outward
   for (const _ of Array.from({ length: 2 })) {
     const li = doc_query(`ul.options li`)
     li.click()
@@ -1549,7 +1543,7 @@ test(`2-way binding of selected`, async () => {
 
   expect(selected).toEqual([1, 2])
 
-  // test external changes to selected bind inward
+  // external changes bind inward
   props.selected = [3]
   await tick()
 
@@ -1575,7 +1569,7 @@ test.each([
       },
     })
 
-    // test internal changes bind outward
+    // internal changes bind outward
     for (const _ of [1, 2]) {
       const li = doc_query(`ul.options li`)
       li.click()
@@ -1607,11 +1601,10 @@ test(`disabled multiselect disables input, removal controls, and shows disabled 
 })
 
 test(`can remove user-created selected option which is not in dropdown list`, async () => {
-  // i.e. allowUserOptions=true, not 'append', meaning user options are only selected but
-  // aren't added to dropdown list yet remove() should still be able to delete them
+  // allowUserOptions=true (not 'append'): user options are selected without joining the
+  // dropdown list, and remove() must still delete them
   mount_multiselect({ options: [`1`, `2`, `3`], allowUserOptions: true })
 
-  // add a new option created from user text input
   const input = get_input()
   await type_search_text(`foo`, input)
 
@@ -1620,7 +1613,6 @@ test(`can remove user-created selected option which is not in dropdown list`, as
   await tick()
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`foo`)
 
-  // remove the new option
   const li_selected = doc_query(`ul.selected li button[title*='Remove']`)
   li_selected.click()
   await tick()
@@ -1731,7 +1723,7 @@ test(`remove all button does not remove items when minSelect constraint would be
   doc_query(`button.remove-all`).click()
   await tick()
 
-  // The first item should still be selected since minSelect=1
+  // minSelect=1 keeps the first item
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Red`)
 })
 
@@ -1844,8 +1836,7 @@ test(`rejects empty options without an empty-state mode`, () => {
 test(`throws synchronously when adding an empty option`, () => {
   mount_multiselect({ options: [``] })
   const empty_option = doc_query<HTMLLIElement>(`ul.options > li`)
-  // Invoke Svelte's delegated handler directly so a rejected promise cannot masquerade
-  // as a synchronous exception.
+  // invoke Svelte's delegated handler directly so a rejected promise can't look synchronous
   const event_symbol = Object.getOwnPropertySymbols(empty_option).find(
     (symbol) => symbol.description === `events`,
   )
@@ -2110,7 +2101,7 @@ test(`onopen fires once with FocusEvent, not again when already open`, async () 
   expect(open_spy).toHaveBeenCalledOnce()
   expect(open_spy.mock.calls[0][0].event).toBeInstanceOf(FocusEvent)
 
-  // clicking the input again while already open should NOT fire onopen again
+  // already open, so a second click must not re-fire
   input.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
   await tick()
   expect(open_spy).toHaveBeenCalledOnce()
@@ -2120,19 +2111,18 @@ test(`onclose fires once with KeyboardEvent, not again when already closed`, asy
   const close_spy = vi.fn()
   mount_multiselect({ options: [1, 2, 3], onclose: close_spy })
 
-  // dropdown starts closed — clicking outside should NOT fire onclose
+  // still closed, so an outside click must not fire
   document.body.click()
   await tick()
   expect(close_spy).not.toHaveBeenCalled()
 
-  // open then close — should fire exactly once with KeyboardEvent
   const input = await focus_input()
   input.dispatchEvent(fresh_key(`Escape`))
   await tick()
   expect(close_spy).toHaveBeenCalledOnce()
   expect(close_spy.mock.calls[0][0].event).toBeInstanceOf(KeyboardEvent)
 
-  // clicking outside again while already closed — still no extra fire
+  // closed again, so no extra fire
   document.body.click()
   await tick()
   expect(close_spy).toHaveBeenCalledOnce()
@@ -2208,9 +2198,8 @@ describe(`keepSelectedInDropdown feature`, () => {
     },
   )
 
-  // The box is one-way bound to `view.selected` with no change handler, so a native click
-  // flipped it before the <li> ran the real toggle. When that toggle was refused the
-  // selection never changed, Svelte saw no new value to write, and the box stayed wrong.
+  // the box is one-way bound with no change handler, so a native click flipped it before the
+  // <li> toggle ran; on a refusal Svelte saw no new value to write and the box stayed wrong
   test.each([
     // maxSelect 1 replaces rather than refuses, so a real refusal needs a full multi-select
     [
@@ -2270,7 +2259,6 @@ describe(`keepSelectedInDropdown feature`, () => {
 
       await focus_input()
 
-      // Toggle Apple off (selected → unselected)
       const apple_option = option_by_label(`Apple`)
       click_keep_selected_option(apple_option, mode)
       await tick()
@@ -2278,7 +2266,6 @@ describe(`keepSelectedInDropdown feature`, () => {
       expect(onChange_spy).toHaveBeenCalledWith({ option: `Apple`, type: `remove` })
       expect(apple_option?.classList.contains(`selected`)).toBe(false)
 
-      // Toggle Banana on (unselected → selected)
       const banana_option = option_by_label(`Banana`)
       click_keep_selected_option(banana_option, mode)
       await tick()
@@ -2291,8 +2278,7 @@ describe(`keepSelectedInDropdown feature`, () => {
   test.each(keep_selected_modes)(
     `keeps all options visible and styled selected when everything is selected in %s mode`,
     async (mode) => {
-      // the partially-selected case, where unselected rows must stay unstyled, is
-      // covered where only Apple is selected
+      // the partially-selected case is covered where only Apple is selected
       mount_multiselect({ options, selected: options, keepSelectedInDropdown: mode })
 
       await focus_input()
@@ -2322,14 +2308,14 @@ describe(`keepSelectedInDropdown feature`, () => {
 
       await focus_input()
 
-      // Remove Apple (should work as we'll still have Banana)
+      // removing Apple is allowed, Banana remains
       const apple_option = option_by_label(`Apple`)
       click_keep_selected_option(apple_option, mode)
       await tick()
 
       expect(apple_option?.classList.contains(`selected`)).toBe(false)
 
-      // Try to remove Banana as well – should be blocked by minSelect=1
+      // removing Banana too is blocked by minSelect=1
       const banana_option = option_by_label(`Banana`)
       click_keep_selected_option(banana_option, mode)
       await tick()
@@ -2423,7 +2409,7 @@ test.each(
     }
     mount_multiselect(props)
 
-    // create a state where no options match the search text
+    // no option matches this search text
     await type_search_text(`bar`)
 
     if (allowUserOptions && createOptionMsg) {
@@ -2497,9 +2483,8 @@ test.each([[true], [-1], [3.5], [`foo`], [{}]])(
   },
 )
 
-// A key outside 'selected' | 'option' used to appear here as two more rows, but the body
-// queries one list per key and so asserted nothing for them — same mount as the `option`
-// row, no expectation reached.
+// rows for a key outside 'selected' | 'option' asserted nothing: the body queries one list
+// per key, so they re-ran the `option` mount and reached no expectation
 test.each<[OptionStyle, `selected` | `option`, string]>([
   // String style cases
   [`color: red;`, `selected`, `color: red;`],
@@ -2787,7 +2772,7 @@ test(`Escape and Tab still blur input even with closeDropdownOnSelect='retain-fo
   input_el.focus()
   await tick()
 
-  // Escape should blur input (retain-focus only applies to selection, not keyboard closing)
+  // retain-focus applies to selection, not keyboard closing, so Escape blurs
   input_el.dispatchEvent(fresh_key(`Escape`))
 
   expect(document.activeElement).not.toBe(input_el)
@@ -3213,10 +3198,8 @@ describe(`selectAllOption feature`, () => {
   })
 })
 
-// value initializes selected for single (maxSelect=1) and multi-select (maxSelect=null)
-// alike, over string, number and object options. Each row carries its own maxSelect: a
-// shared describe.each over both crossed with every value shape spent half its runs
-// returning at a validity guard, reporting six passing tests that asserted nothing.
+// rows carry their own maxSelect: crossing a shared describe.each over both maxSelect modes
+// with every value shape spent half its runs returning at a validity guard, asserting nothing
 test.each<[1 | null, Option | Option[], Option[], string]>([
   [1, `Red`, [`Red`, `Green`, `Blue`], `Red`],
   [1, 1, [1, 2, 3], `1`],
@@ -3287,8 +3270,7 @@ describe(`binding update event count`, () => {
     },
   )
 
-  // This test catches the regression where value gets synced from null to []
-  // The bug: values_equal(null, []) returned false, causing value = [] assignment
+  // regression: values_equal(null, []) returned false, so value was synced from null to []
   test.each([null, 1])(
     `value binding with maxSelect=%s: no extra sync from null to [] on init`,
     async (maxSelect) => {
@@ -3368,10 +3350,8 @@ describe(`CSS static analysis`, () => {
     expect(options_block).toMatch(/--sms-options-bg,\s*light-dark\(#fcfcfc/u)
   })
 
-  // Guards the schemeless-dark-page readability fix: the primary text-bearing surfaces
-  // (root, input, dropdown) must pair their light-dark() background with a light-dark()
-  // text default, so the widget can't render white-on-white when the page never declares
-  // color-scheme (light-dark() → light).
+  // every text-bearing surface must pair its light-dark() background with a light-dark() text
+  // default, else a page that never declares color-scheme renders white-on-white
   test.each([
     [`div.multiselect root`, /:where\(div\.multiselect\)\s*\{(?<block>[\s\S]*?)\}/u],
     [
@@ -3417,10 +3397,9 @@ describe(`onsearch event`, () => {
 
     await type_search_text(`1`, input)
 
-    // Should not fire immediately due to debounce
     expect(onsearch_spy).not.toHaveBeenCalled()
 
-    // Advance timers past debounce (150ms)
+    // past the 150ms debounce
     await vi.advanceTimersByTimeAsync(200)
 
     expect(onsearch_spy).toHaveBeenCalledTimes(1)
@@ -3429,7 +3408,7 @@ describe(`onsearch event`, () => {
       matchingOptions: [1, 10],
     })
 
-    // Clear the search - should also fire
+    // clearing the search fires too
     await type_search_text(``, input)
     await vi.advanceTimersByTimeAsync(200)
 
@@ -3447,7 +3426,6 @@ describe(`onsearch event`, () => {
 
     await tick()
 
-    // Advance timers past the debounce period
     await vi.advanceTimersByTimeAsync(200)
 
     expect(onsearch_spy).not.toHaveBeenCalled()
@@ -3465,12 +3443,11 @@ describe(`onsearch event`, () => {
     // only part of the 150ms debounce, so nothing has fired yet
     await vi.advanceTimersByTimeAsync(100)
 
-    // Type another character before debounce completes
+    // another character before the debounce completes
     await type_search_text(`ap`, input)
 
     await vi.advanceTimersByTimeAsync(200)
 
-    // Should only fire once with final value
     expect(onsearch_spy).toHaveBeenCalledTimes(1)
     expect(onsearch_spy).toHaveBeenCalledWith({
       searchText: `ap`,
@@ -3525,8 +3502,7 @@ describe(`onmaxreached event`, () => {
       })
       const input = await focus_input()
 
-      // try to add a 3rd option when maxSelect is 2, via click or keyboard
-      // Fresh events avoid cross-test pollution from retained event flags.
+      // add a 3rd option past maxSelect=2; fresh events avoid retained defaultPrevented flags
       if (trigger === `keyboard`) {
         input.dispatchEvent(fresh_key(`ArrowDown`))
         input.dispatchEvent(fresh_key(`Enter`))
@@ -3587,9 +3563,8 @@ describe(`onduplicate event`, () => {
     expect(onduplicate_spy).not.toHaveBeenCalled()
   })
 
-  // Tests duplicate detection via allowUserOptions for both string and object options
-  // For object options, label-based detection fires even when keys differ (e.g., typing "Apple"
-  // when {label: "Apple", value: 1} is selected) - prevents confusing UX
+  // detection is label-based, so typing "Apple" hits a selected {label: "Apple", value: 1}
+  // even though the keys differ — otherwise the UX is confusing
   test.each<{
     desc: string
     options: Option[]
@@ -3640,8 +3615,7 @@ describe(`onduplicate event`, () => {
 
       await type_search_text(typed_value, input)
 
-      // Fresh Enter event per case: defaultPrevented persists across re-dispatch
-      // and would suppress later iterations.
+      // fresh Enter per case: defaultPrevented persists across re-dispatch
       input.dispatchEvent(fresh_key(`Enter`))
       await tick()
 
@@ -3665,12 +3639,11 @@ describe(`onduplicate event`, () => {
 
     const input = await focus_input()
 
-    // Type "1" which is a duplicate AND maxSelect is reached
+    // "1" is a duplicate and maxSelect is already reached
     await type_search_text(`1`, input)
     input.dispatchEvent(fresh_key(`Enter`))
     await tick()
 
-    // Both events should fire
     expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
     expect(onduplicate_spy).toHaveBeenCalledTimes(1)
   })
@@ -3727,7 +3700,6 @@ describe(`onactivate event`, () => {
 
     const input = await focus_input()
 
-    // Navigate to last option
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
     input.dispatchEvent(fresh_key(`ArrowDown`))
@@ -3735,7 +3707,6 @@ describe(`onactivate event`, () => {
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
 
-    // One more ArrowDown should wrap to first
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
 
@@ -3745,9 +3716,8 @@ describe(`onactivate event`, () => {
   })
 
   test(`does not fire when toggling user message with no matching options`, async () => {
-    // When there are no matching options and only the user message is shown,
-    // arrow navigation toggles the user message active state but doesn't fire onactivate
-    // because the function returns early before reaching the onactivate call
+    // with only the user message shown, arrow navigation toggles its active state but returns
+    // early, before the onactivate call
     const onactivate_spy = vi.fn()
 
     mount_multiselect({
@@ -3760,7 +3730,6 @@ describe(`onactivate event`, () => {
 
     const input = await focus_input()
 
-    // Type something to show the user message
     await type_search_text(`new option`, input)
 
     input.dispatchEvent(fresh_key(`ArrowDown`))
@@ -3782,26 +3751,23 @@ describe(`onactivate event`, () => {
 
     const input = await focus_input()
 
-    // Navigate to first option (sets activeIndex = 0)
+    // sets activeIndex = 0
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
     expect(onactivate_spy).toHaveBeenCalledTimes(1)
     expect(onactivate_spy).toHaveBeenCalledWith({ option: 1, index: 0 })
 
-    // Type something that filters all options away
+    // filters every option away
     await type_search_text(`xyz`, input)
 
-    // Press ArrowDown again - should be a no-op since nothing to navigate
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
 
-    // Should only have 1 call (from first ArrowDown), not 2
     expect(onactivate_spy).toHaveBeenCalledTimes(1)
   })
 })
 
-// Regression test for issue #391: case-variant labels should not crash
-// https://github.com/janosh/svelte-widgets/issues/391
+// case-variant labels used to crash: https://github.com/janosh/svelte-widgets/issues/391
 describe(`case-variant labels (issue #391)`, () => {
   const object_options = [
     { label: `pd`, value: `uuid-1` },
@@ -3895,8 +3861,7 @@ describe(`duplicates prop variants`, () => {
   })
 
   test(`same-label dropdown options respect duplicate rules`, async () => {
-    // Issue: label check was blocking dropdown options even when values differ
-    // The is_from_options check should skip label-based duplicate detection for dropdown items
+    // the label check blocked dropdown options with differing values; is_from_options skips
     const options = [1, 2, 3].map((value) => ({
       label: `apple`,
       selectedTitle: `Already selected`,
@@ -3965,8 +3930,7 @@ test.each([
   [`empty string`, ``],
   [`out-of-range numeric prefix`, `42 items`],
   [`negative index`, `-1`],
-  // numeric page text passes parseInt — must still be rejected since no
-  // dragstart fired on this instance (foreign drag source)
+  // passes parseInt but no dragstart fired on this instance, so it is a foreign source
   [`valid-looking numeric text without dragstart`, `0`],
 ])(`drop with foreign/invalid drag data (%s) is a no-op`, async (_desc, drag_data) => {
   const onreorder_spy = vi.fn()

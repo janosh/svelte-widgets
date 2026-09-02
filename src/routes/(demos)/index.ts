@@ -1,8 +1,8 @@
 import type { Pathname } from '$app/types'
 import { slug_to_title } from '$lib/utils'
 
-// Labels that slug_to_title (and the nav's capitalize fallback) can't derive, keyed by
-// unresolved route path. Shared by DemoNav's nav labels and the layout's page titles.
+// Labels slug_to_title cannot derive, keyed by unresolved route path. Shared by DemoNav's
+// nav labels and the layout's page titles.
 export const demo_labels: Record<string, string> = {
   '/multiselect': `MultiSelect`,
   '/command-menu': `CommandMenu`,
@@ -14,8 +14,8 @@ export const demo_labels: Record<string, string> = {
   '/min-max-select': `Min/Max`,
   '/allow-user-options': `User Options`,
   '/parse-labels-as-html': `HTML Labels`,
-  // attachments are named after their exports, so the nav shows the exact snake_case
-  // symbol rather than slug_to_title's "Click Outside"
+  // attachments are named after their exports, so the nav shows the snake_case symbol
+  // rather than slug_to_title's "Click Outside"
   ...Object.fromEntries(
     [
       `tooltip`,
@@ -63,12 +63,12 @@ export const demo_nav_routes = groups.map((group) => {
       if (right_route === overview_route) return 1
       return left_route.localeCompare(right_route)
     })
-  // a group holding a single page is that page, so link straight to it rather than
-  // opening a dropdown whose only entry repeats its parent
+  // a single-page group is that page, so link straight to it instead of a dropdown whose
+  // only entry repeats its parent
   return {
     href: children[0],
-    // Nav keys its labels prop on route.label when set, so a group label has to be
-    // correct here; the labels prop only reaches the dropdown children.
+    // Nav keys its labels prop on route.label when set, so a group label must be right
+    // here; the labels prop only reaches the dropdown children.
     label: demo_labels[overview_route] ?? slug_to_title(group),
     ...(children.length > 1 && { children }),
   }

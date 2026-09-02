@@ -66,8 +66,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
   </button>
 </div>
 
-<!-- Scrolling leaves too little room below or above, so the default flip changes sides.
-Padding leaves room to scroll both ways while keeping the button visible. -->
+<!-- scrolling starves one side, flipping the tooltip; padding keeps the button visible -->
 <div
   bind:this={scroll_boundary}
   class="demo-box"
@@ -153,8 +152,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
   <button
     aria-label="More info"
     {@attach tooltip({
-      // only enable allow_html for trusted or sanitized content, never raw
-      // user input — HTML tooltips are an XSS vector otherwise
+      // allow_html on raw user input is an XSS vector: trusted or sanitized content only
       content: `<strong>Bold</strong> and <em>italic</em> markup`,
       allow_html: true,
       placement: `right`,

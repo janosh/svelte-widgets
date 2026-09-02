@@ -29,11 +29,11 @@
     src?: string // code fence content, dedented by the remark plugin
     meta?: {
       // code fence metadata
-      collapsible?: boolean // whether to show a button to expand/collapse the code
-      code_above?: boolean // whether to show the code above the example (default: true when collapsible, false otherwise)
-      id?: string // id of the <div> wrapping the code and example (e.g. to write very specific testing selectors)
+      collapsible?: boolean // show an expand/collapse button
+      code_above?: boolean // code above the example (default: `collapsible`)
+      id?: string // id of the wrapping <div>, e.g. for precise test selectors
       repl?: string // Svelte REPL URL
-      github?: string | boolean // GitHub URL or true to link to the file serving the current page
+      github?: string | boolean // GitHub URL, or true to link the current page's file
       repo?: string // GitHub repo URL
       Wrapper?: string // Svelte component to wrap the example
       example?: boolean
@@ -45,8 +45,8 @@
     title?: Snippet<[]>
     example?: Snippet<[]>
     code?: Snippet<[]>
-    // one bag is shared by every external link, so an `href` on it could only ever
-    // point the repl, github and repo icons at the same URL
+    // one bag shared by every external link, so an `href` here would point all three icons
+    // at the same URL
     link_props?: Omit<HTMLAnchorAttributes, `href`>
     button_props?: Omit<HTMLButtonAttributes, `type`>
     labels?: Partial<CodeExampleLabels>
@@ -126,10 +126,9 @@
     flex-direction: column;
     margin: var(--code-example-margin, 1em auto);
     position: relative;
-    /* Deliberately not `contain: layout`, tempting though it is for examples that render
-       viewport-fixed chrome: it also makes this a stacking context, which traps a
-       portalled/absolute dropdown inside the example box. Such demos pass breakpoint={0}
-       (or position: static) instead so they never render fixed chrome in the first place. */
+    /* Deliberately not `contain: layout`: it makes this a stacking context, trapping
+       portalled/absolute dropdowns in the example box. Demos with viewport-fixed chrome
+       pass breakpoint={0} (or position: static) instead. */
     /* a wide example scrolls inside its own pre/preview instead of widening the page */
     min-width: 0;
   }

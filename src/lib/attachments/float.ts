@@ -4,8 +4,8 @@ import { compute_position } from '../utils'
 
 export type AnchorRect = { top: number; left: number; bottom: number; right: number }
 
-// Coalesce position updates from scrolling, resizing and observed element size changes.
-// The caller performs the initial update; this returns a cleanup function.
+// Coalesces position updates from scroll, resize and observed size changes; the caller
+// does the initial update.
 export const auto_update_position = (
   anchor: Element | null,
   floating: Element,
@@ -43,19 +43,18 @@ export const auto_update_position = (
 }
 
 export interface FloatOptions extends PositionOptions {
-  // A rect instead of an element covers anchors with no markup: the pointer position
-  // a context menu opens at, a text selection, a cell in a canvas.
+  // a rect covers anchors with no markup: a context menu's pointer position, a text
+  // selection, a canvas cell
   anchor?: Element | AnchorRect | null
   enabled?: boolean
-  // `fixed` needs no scroll bookkeeping but is clipped by an ancestor's transform;
-  // `absolute` survives that at the cost of adding page scroll to every update.
+  // `fixed` needs no scroll bookkeeping but an ancestor transform clips it; `absolute`
+  // survives that, paying page scroll on every update
   strategy?: `fixed` | `absolute`
   match_width?: boolean // use the anchor's exact border-box width, for dropdowns
 }
 
-// Park an element next to an anchor and keep it there while the page moves.
-// Geometry comes from compute_position, the same one the tooltip and the portalled
-// dropdown use, so all three flip and shift alike.
+// Parks an element next to an anchor and keeps it there while the page moves. Geometry
+// comes from compute_position, so tooltip, portalled dropdown and this flip and shift alike.
 export const float =
   (options: FloatOptions = {}) =>
   (node: Element): (() => void) | undefined => {
@@ -69,8 +68,8 @@ export const float =
     if (!enabled || !anchor || !(node instanceof HTMLElement)) return undefined
 
     const anchor_element = anchor instanceof Element ? anchor : null
-    // Every inline value `update` may write, so a node that outlives the attachment
-    // (a persistent surface toggled by `enabled`) is handed back as it arrived.
+    // every inline value `update` may write, so a node outliving the attachment (a
+    // persistent surface toggled by `enabled`) is handed back as it arrived
     const original_styles = {
       position: node.style.position,
       left: node.style.left,
@@ -82,8 +81,8 @@ export const float =
     const original_placement = node.dataset.placement
     const scroll_view = strategy === `absolute` ? node.ownerDocument.defaultView : null
     const update = () => {
-      // Out of flow before measuring: an in-flow surface is a sibling that pushes the
-      // very anchor it is about to measure, which lands it half its height off.
+      // out of flow before measuring: in flow it is a sibling pushing the very anchor it
+      // measures, landing half its height off
       node.style.position = strategy
       const anchor_rect =
         anchor instanceof Element ? anchor.getBoundingClientRect() : anchor
@@ -98,8 +97,8 @@ export const float =
         node.getBoundingClientRect(),
         position_options,
       )
-      // compute_position works in viewport coordinates, which `absolute` offsets from
-      // the page origin. Scroll comes from the node's own view, not the top window.
+      // compute_position is in viewport coordinates, which `absolute` offsets from the
+      // page origin; scroll comes from the node's own view, not the top window
       node.style.left = `${left + (scroll_view?.scrollX ?? 0)}px`
       node.style.top = `${top + (scroll_view?.scrollY ?? 0)}px`
       node.dataset.placement = placement

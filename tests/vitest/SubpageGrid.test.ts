@@ -54,8 +54,7 @@ test(`overview pages link to base-prefixed sibling routes`, () => {
   const hrefs = [...document.querySelectorAll(`nav.grid a`)].map((link) =>
     link.getAttribute(`href`),
   )
-  // every link goes through resolve() so it picks up the base path, and the grid is
-  // non-empty. Listing exact routes here would break every time a demo moves.
+  // listing exact routes would break every time a demo moves, so only pin the base prefix
   expect(hrefs.length).toBeGreaterThan(5)
   expect(hrefs.every((href) => href?.startsWith(`/docs/`))).toBe(true)
   expect(hrefs).toContain(`/docs/form`)

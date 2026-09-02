@@ -44,8 +44,7 @@ Tests that binding to reactive wrappers (Svelte stores, Superforms, etc.) that c
   import { MultiSelect } from '$lib'
   import { type Writable, writable } from 'svelte/store'
 
-  // Regression test for issue #309: store subscriptions would cause infinite
-  // loops without the values_equal() fix in MultiSelect.svelte
+  // issue #309: store subscriptions looped forever before values_equal() in MultiSelect.svelte
   const options: string[] = [`Red`, `Green`, `Blue`]
   let increment = $state(0)
   let list_store: Writable<string[]> = writable([])

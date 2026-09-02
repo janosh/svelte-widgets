@@ -218,7 +218,7 @@ describe(`sortable`, () => {
     expect(header.querySelector(`span.icon`)).toBe(icon)
     expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↑`)
 
-    // repeated clicks replace only the attachment's arrow, preserving the consumer's
+    // repeated clicks replace only the attachment's arrow, not the consumer's icon
     click_header(header)
     expect(header.querySelectorAll(`span.sort-arrow`)).toHaveLength(2)
     expect(header.querySelector(`span.sort-arrow:not(.icon)`)?.textContent).toContain(`↓`)

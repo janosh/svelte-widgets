@@ -1,9 +1,8 @@
-// Turns inline code spans that name a project's source into GitHub links, so docs never
-// hand-maintain source URLs: a file (`Footer`, `Footer.svelte`, `utils.ts`) links to the
-// file, an exported definition (`make_config`, `ThemeMode`) to its line. Only exact,
-// unambiguous names match: `index.ts` exists in many folders and `label` is a prop, so
-// neither links. Links pin the commit the site was built from so line numbers stay right.
-// The data comes from `virtual:source-symbols`, emitted by ./vite-plugin.ts.
+// Turns inline code spans naming a project's source into GitHub links, so docs never
+// hand-maintain URLs: a file (`Footer.svelte`) links to the file, an exported definition
+// (`make_config`) to its line. Only exact, unambiguous names match — `index.ts` exists in
+// many folders, `label` is a prop. Links pin the built commit so line numbers stay right.
+// Data comes from `virtual:source-symbols`, emitted by ./vite-plugin.ts.
 
 import { merge_defaults, SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
 
@@ -22,8 +21,8 @@ export type SourceLinks = {
   link_source_mentions: (root: HTMLElement) => () => void
 }
 
-// Marks the anchors this module owns, and records the code-span text each was built
-// from, so a later scan can tell a stale link from an up-to-date one.
+// marks our own anchors and records the code-span text each was built from, so a later
+// scan can tell a stale link from a current one
 const OWN_LINK_ATTR = `data-source-link`
 
 export function create_source_links(
@@ -54,10 +53,9 @@ export function create_source_links(
     return location && href_of(location)
   }
 
-  // Client-side navigation swaps the page inside the same root, so a MutationObserver keeps
-  // linking. The anchor goes inside the code element and adopts its existing child nodes, so
-  // Svelte's references to those nodes (dynamic text, block boundaries) stay valid; code
-  // that already holds a link (ours or the author's) is left alone.
+  // Client-side navigation swaps the page inside the same root, hence the MutationObserver.
+  // The anchor goes inside the code element and adopts its child nodes, keeping Svelte's
+  // references to them valid; code already holding a link is left alone.
   const link_source_mentions = (root: HTMLElement): (() => void) => {
     const scan = (): void => {
       for (const code of root.querySelectorAll(`code`)) {
@@ -68,9 +66,9 @@ export function create_source_links(
         if (existing && built_from === null) continue
         const name = (code.textContent ?? ``).trim()
         if (existing) {
-          // Our anchor owns the code span's text nodes, so Svelte patches the text in
-          // place and the span stops matching the name the link was built from. Without
-          // this the link keeps pointing at whatever the span used to say, forever.
+          // Our anchor owns the span's text nodes, so Svelte patches text in place and the
+          // span stops matching the name the link was built from — without this the link
+          // points at what the span used to say, forever.
           if (built_from === name) continue
           code.append(...existing.childNodes)
           existing.remove()
@@ -95,8 +93,8 @@ export function create_source_links(
     schedule()
     const observer = new MutationObserver(schedule)
     // `characterData` because a reactive `<code>{name}</code>` rewrites its text node in
-    // place: no childList change, but the link built from the old text is now wrong. The
-    // rAF above coalesces the extra traffic down to one scan per frame.
+    // place: no childList record, but the link built from the old text is now wrong. The
+    // rAF above coalesces the extra traffic to one scan per frame.
     observer.observe(root, { childList: true, subtree: true, characterData: true })
     return () => {
       observer.disconnect()

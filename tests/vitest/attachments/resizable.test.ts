@@ -43,8 +43,7 @@ describe(`resizable`, () => {
     expect(on_resize).not.toHaveBeenCalled()
   })
 
-  // `touch-action` has no per-region form, so each strip is a real element carrying its own
-  // — and its cursor, which needs no hover handler now
+  // `touch-action` has no per-region form, so each strip is a real element with its own
   it.each([
     [`right`, `ew-resize`, `width`, [`top`, `bottom`], `vertical`, `200`],
     [`bottom`, `ns-resize`, `height`, [`left`, `right`], `horizontal`, `150`],
@@ -88,8 +87,7 @@ describe(`resizable`, () => {
     },
   )
 
-  // Handles are focusable and arrow-key operable, so their names are announced. The edge
-  // itself is interpolated, which means a translation has to reach the noun too.
+  // handle labels are announced and interpolate the edge, so translations must reach it
   it(`labels rename every resize handle, edge included`, () => {
     const element = create_box()
     attach_resizable(element, {
@@ -117,8 +115,8 @@ describe(`resizable`, () => {
     ]).toEqual([`30`, `30`])
   })
 
-  // Absolute children anchor to the padding box, so a strip flush with its edge sits inside
-  // the border, leaving the visible edge — grabbable back when this hit-tested — dead.
+  // absolute children anchor to the padding box, so a strip flush with its edge sits inside
+  // the border, leaving the visible (grabbable) edge dead
   it(`offsets each strip outward by the border it covers`, () => {
     const element = create_box()
     element.style.borderStyle = `solid`
@@ -159,8 +157,7 @@ describe(`resizable`, () => {
     })
   })
 
-  // A height-only drag that also pinned the width would freeze a responsive element at
-  // whatever it happened to measure the first time anyone grabbed it
+  // pinning the untouched axis too would freeze a responsive element at its first measure
   it(`writes only the axis its grab controls`, () => {
     const element = create_box()
     Object.assign(element.style, { width: ``, height: `` })
@@ -173,8 +170,7 @@ describe(`resizable`, () => {
     globalThis.dispatchEvent(pointer_event(`pointerup`, 100, 245))
   })
 
-  // aria values describe the node a strip resizes, so an outer instance rewriting every
-  // separator it can find would make a nested pane's handles report the wrong size
+  // an outer instance rewriting every separator would make a nested pane report wrong sizes
   it(`leaves a nested resizable's separator values alone`, () => {
     const outer = create_box()
     const inner = create_element(`div`, { width: `80px`, height: `60px` })
@@ -194,8 +190,7 @@ describe(`resizable`, () => {
     globalThis.dispatchEvent(pointer_event(`pointerup`, 295, 75))
   })
 
-  // detaching a strip does not unbind its listeners, so a consumer holding one could still
-  // press it and resize a node this attachment no longer manages
+  // detaching a strip does not unbind its listeners, so a retained one could still resize
   it(`stops responding to a strip retained across cleanup`, () => {
     const element = create_box()
     const on_resize = vi.fn()
@@ -246,8 +241,7 @@ describe(`resizable`, () => {
     expect(element.querySelectorAll(`[data-resize-corner]`)).toHaveLength(0)
   })
 
-  // The whole point of a corner: dragging it moves both axes, where the edge strips it
-  // overlaps would each move only their own.
+  // the point of a corner: both axes at once, where the strips it overlaps move only one
   it.each([
     [`bottom-right`, 300, 250, 300, 250],
     [`top-left`, -50, -30, 250, 180],
@@ -359,8 +353,7 @@ describe(`resizable`, () => {
     expect(element.style.width).toBe(`320px`)
   })
 
-  // left/top are also written by `draggable` on the same node, so a reset that blanks them
-  // unconditionally would snap a dragged element back to wherever its stylesheet puts it
+  // `draggable` writes left/top on the same node, so a blanket reset would snap it back
   it(`double-click leaves a left/top this instance never wrote`, () => {
     const element = create_box()
     attach_resizable(element, { edges: [`left`, `top`] })
@@ -405,8 +398,7 @@ describe(`resizable`, () => {
     globalThis.dispatchEvent(pointer_event(`pointerup`, 500, 75))
   })
 
-  // a second finger drives and ends nothing; the resize belongs to the first, until the OS
-  // takes it away — cancel or lost capture both end it
+  // a second finger drives nothing; only the first pointer or the OS can end the resize
   it.each([
     [
       `pointercancel`,
@@ -440,8 +432,8 @@ describe(`resizable`, () => {
     expect(element.hasPointerCapture(1)).toBe(false)
   })
 
-  // every way a gesture can fail to be a resize. A non-primary press matters most: the
-  // context menu it opens can swallow the release, leaving the element stuck to the cursor
+  // the non-primary press matters most: the context menu it opens can swallow the release,
+  // leaving the element stuck to the cursor
   it.each([
     [
       `a press on the content, clear of every strip`,
@@ -487,7 +479,6 @@ describe(`resizable`, () => {
       height: 150,
     })
 
-    // End resize
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
     expect(document.body.style.userSelect).toBe(``)
     expect(on_resize_end).toHaveBeenCalledExactlyOnceWith(

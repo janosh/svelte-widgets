@@ -3,9 +3,8 @@
   import type { IconData } from './icons/types'
 
   // SVGAttributes, not HTMLAttributes, which rejects the `width`/`height` an <svg> takes.
-  // Either a glyph (`<Icon icon={Info} />`) or an ad-hoc `path`, never both and never
-  // neither — a bare <Icon /> is a type error. Pass the glyph value, not a name, so the
-  // bundler keeps only the icons this call site reaches.
+  // Exactly one of a glyph or an ad-hoc `path` — a bare <Icon /> is a type error. Pass the
+  // glyph value, not a name, so the bundler keeps only the icons this call site reaches.
   let {
     icon,
     path,

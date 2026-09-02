@@ -7,8 +7,7 @@ import { mount_multiselect, unmount_component } from './MultiSelect.test-utils'
 describe(`portal placement`, () => {
   afterEach(() => vi.unstubAllGlobals()) // don't leak innerHeight overrides to other tests
 
-  // happy-dom has no real layout engine, so stub getBoundingClientRect on the
-  // outer div, offsetHeight on the portalled dropdown, and the viewport height
+  // happy-dom has no layout engine: stub trigger rect, dropdown offsetHeight, viewport
   function stub_layout({
     trigger_rect,
     dropdown_height,
@@ -49,8 +48,7 @@ describe(`portal placement`, () => {
     await tick()
   }
 
-  // `top` positions the dropdown's margin edge, so the action subtracts the
-  // computed margin-top when placing above — mirror that in expected values
+  // `top` positions the margin edge, so the action subtracts margin-top when above
   function expected_top_style(
     expected_placement: `top` | `bottom`,
     trigger_rect: { top: number; bottom: number },
@@ -105,8 +103,7 @@ describe(`portal placement`, () => {
       desc: `unmeasured dropdown (offsetHeight 0) falls back to bottom`,
     },
     {
-      // omitted placement must default to auto: same tight-space-below setup as
-      // the auto row above, so a flip to top proves the default contract
+      // same tight-space-below setup as the auto row above, so a flip proves the default
       placement: undefined,
       trigger_rect: { top: 600, bottom: 630 },
       dropdown_height: 200,
@@ -175,7 +172,7 @@ describe(`portal placement`, () => {
     expect(dropdown.dataset.placement).toBe(`bottom`)
     expect(dropdown.style.top).toBe(`130px`)
 
-    // trigger moves near viewport bottom → auto placement flips above on next scroll
+    // trigger near viewport bottom → auto flips above on next scroll
     stub_layout({
       trigger_rect: { top: 600, bottom: 630 },
       dropdown_height: 200,
@@ -219,9 +216,8 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
   expect(back_inside.dataset.placement).toBeUndefined()
 })
 
-// The click_outside attachment receives `inside: [options_list_el]`, which is undefined
-// until bind:this lands. Attachments re-run on reactive reads, so the portalled list
-// must count as inside once bound — otherwise pressing it would close the dropdown.
+// click_outside gets `inside: [options_list_el]`, undefined until bind:this lands — the
+// attachment must re-run on that reactive read or pressing the list would close it
 test(`press on the portalled dropdown does not close it`, async () => {
   const props = $state<MultiSelectProps>({
     options: [1, 2, 3],

@@ -7,8 +7,8 @@
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
   import { chain_handlers } from './utils'
 
-  // Priorities are widened to `string` throughout: the component renders whatever
-  // ladder its store was built with and never ranks anything itself.
+  // Priorities are widened to `string`: this renders whatever ladder its store was built
+  // with and never ranks anything itself.
   let {
     store = default_store,
     position = `bottom-right`,
@@ -28,8 +28,8 @@
     dismissible?: boolean
     // Hovering suspends the countdown. Focus always does, hover or not.
     pause_on_hover?: boolean
-    // Moves the keyboard to the toast's own controls from anywhere on the page, since a
-    // toast lives at the end of the DOM and Tab may be a long way from it. `null` opts out.
+    // Jumps the keyboard to the toast's controls, which sit at the end of the DOM and can be
+    // a long Tab away. `null` opts out.
     focus_hotkey?: string | string[] | null
     // Rendered into the assertive live region, interrupting whatever is being read.
     // Defaults to the store's sticky priorities, so urgency tracks what stays on screen.
@@ -45,16 +45,15 @@
   let [is_hovered, is_focused] = $state([false, false])
 
   const active_toast = $derived(store.active_toast)
-  // read off the store's own sticky set, not a second copy of its top-two rule: a toast
-  // held on screen until dismissed has to interrupt, or it can sit there unread. Deriving
-  // it here let a custom sticky_priorities be announced politely while never leaving.
+  // Read off the store's own sticky set, not a copy of its rule: a toast held until
+  // dismissed must interrupt, or it can sit there unread.
   const assertive_priorities = $derived(assertive ?? store.sticky_priorities)
   const is_assertive = $derived(
     active_toast !== null && assertive_priorities.includes(active_toast.priority),
   )
 
-  // `is_hovered` records where the pointer is; pause_on_hover is policy applied on top, so
-  // flipping the prop over an already-hovered stack takes effect without a fresh enter
+  // pause_on_hover is applied on top of the recorded pointer state, so flipping the prop over
+  // an already-hovered stack takes effect without a fresh enter
   const should_pause = $derived((is_hovered && pause_on_hover) || is_focused)
   // Called straight from the handlers, not left to the effect below: an effect flushes a
   // microtask later, and a toast whose timer expires in between is already gone.
@@ -67,16 +66,15 @@
     is_focused = value
     sync_pause()
   }
-  // Covers what the handlers cannot: a toast promoted under a pointer that never left has
-  // no enter event, and flipping pause_on_hover fires none at all. pause()/resume() both
-  // early-return when there is nothing to do, so the queue change they cause settles.
+  // Covers what the handlers cannot: a toast promoted under a stationary pointer fires no
+  // enter event, and flipping pause_on_hover fires none at all.
   $effect(() => {
     void should_pause // pinned as a dependency, so a bare prop flip re-runs this too
     if (active_toast) untrack(sync_pause)
   })
 
-  // Where the keyboard was before focus_hotkey pulled it in: removing the toast unmounts
-  // the button holding focus, which would otherwise drop it on <body>.
+  // Where the keyboard was before focus_hotkey pulled it in: removing the toast unmounts the
+  // focused button, which would otherwise drop focus on <body>.
   let focus_origin: HTMLElement | null = null
 
   const focus_toast = () => {
@@ -94,8 +92,8 @@
     const origin = focus_origin
     focus_origin = null
     await tick() // the toast that had focus is gone only after the DOM catches up
-    // Only reclaim focus the toast still holds, or that its removal dropped on <body>:
-    // once the user has tabbed elsewhere, yanking them back is worse than not restoring.
+    // Only reclaim focus the toast still holds or dropped on <body>: once the user tabbed
+    // elsewhere, yanking them back is worse than not restoring.
     const holder = document.activeElement ?? document.body
     if (origin && (holder === document.body || stack?.contains(holder))) origin.focus()
     // Removing the focused button fires no focusout, so re-derive the focus pause or the
@@ -103,10 +101,8 @@
     set_focused(Boolean(stack?.contains(document.activeElement)))
   }
 
-  // The buttons below restore focus themselves, since dismissing one toast can promote
-  // the next and leave `active_toast` non-null. This covers every other way the last toast
-  // leaves — an absolute deadline that focus cannot pause, or the consumer clearing the
-  // queue — where there is no click to hang the restore off.
+  // The buttons restore focus themselves (dismissing can promote the next toast, leaving
+  // `active_toast` non-null); this covers the clickless exits: deadline or queue clear.
   $effect(() => {
     if (!active_toast) void restore_focus()
   })
@@ -125,9 +121,8 @@
       ? [{ keys: focus_hotkey, allow_in_inputs: true, handler: focus_toast }]
       : [],
   )
-  // Scoped to the stack, so Escape only dismisses when the keyboard is already in the
-  // toast — a global Escape would fight every dialog for the same key. Gated on
-  // `dismissible` too, or it stays the one way to close a toast declared undismissable.
+  // Scoped to the stack so a global Escape doesn't fight every dialog, and gated on
+  // `dismissible` or it stays the one way to close an undismissable toast.
   const escape_binding = $derived(
     active_toast && dismissible
       ? [{ keys: `Escape`, handler: () => dismiss(active_toast.id) }]
@@ -144,8 +139,8 @@
       <span class="toast-message" style="min-width: 0">{item.message}</span>
     {/if}
     {#if count > 0}
-      <!-- aria-atomic makes the region read the whole card, so an aria-label here would
-      splice the badge's wording into the message. The count is announced separately. -->
+      <!-- aria-atomic reads the whole card, so an aria-label here would splice the badge's
+      wording into the message; the count is announced separately -->
       <span class="toast-pending" aria-hidden="true">+{count}</span>
       <span class="sr-only">{msg.pending(count)}</span>
     {/if}
@@ -165,10 +160,8 @@
   </div>
 {/snippet}
 
-<!-- Both regions stay mounted and empty rather than being created with their first
-toast: a live region inserted at the same moment as its content is announced by only
-some screen readers. Two of them, because swapping aria-live on one region mid-flight
-is just as unreliable. -->
+<!-- Both regions stay mounted and empty: a live region inserted together with its content is
+announced by only some screen readers, and swapping aria-live mid-flight is as unreliable -->
 <div
   bind:this={stack}
   {...rest}
@@ -201,8 +194,7 @@ is just as unreliable. -->
     flex-direction: column;
     gap: var(--toast-gap, 0.4em);
     max-width: var(--toast-max-width, min(90vw, 28rem));
-    /* the empty region is a zero-height box, but the stack still spans the viewport
-    edge, so it must not swallow presses meant for the page underneath */
+    /* the stack spans the viewport edge even when empty, so it must not swallow presses */
     pointer-events: none;
     &[data-position^='top'] {
       top: var(--toast-inset, 1rem);

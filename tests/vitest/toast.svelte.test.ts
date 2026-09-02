@@ -57,8 +57,7 @@ describe(`toast queue reducer`, () => {
   })
 
   test(`a demoted toast keeps its unspent visibility budget`, () => {
-    // `a` is seen for 200 ms of its 1000 ms budget before `b` interrupts it, so it must
-    // come back with 800 ms left rather than a fresh 1000 or the 800 it never spends
+    // `a` is seen 200 ms of its 1000 ms budget before `b` interrupts, so it returns with 800
     const first = add(create_toast_queue(), `a`, { visible_duration_ms: 1000 }).queue
     expect(first.active_toast?.expires_at_ms).toBe(1000)
 
@@ -83,9 +82,8 @@ describe(`toast queue reducer`, () => {
   })
 
   test.each([
-    // A bare deadline is a wall-clock contract and keeps running off screen. Pair it with
-    // a visibility budget and the budget wins: the deadline is banked rather than left
-    // running on a toast nobody has seen yet.
+    // a bare deadline is wall-clock and runs off screen; pair it with a visibility budget
+    // and the budget wins, banking the deadline instead
     [`an absolute deadline keeps running while the toast waits`, {}, 1000, true],
     [
       `a visibility budget banks the deadline instead`,
@@ -166,9 +164,8 @@ describe(`toast queue reducer`, () => {
       expect(messages(louder.queue.pending)).toEqual([`on screen`])
     })
 
-    // What a repeat does to the toast it matches turns on the two priorities. Each case
-    // starts from the same `warning` toast carrying an action and a 900 ms budget, and
-    // the repeat is the same text with only its priority and `supplies` changed.
+    // what a repeat does to its match turns on the two priorities; every case starts from
+    // this `warning` toast and varies only the repeat's priority and `supplies`
     const original = {
       priority: `warning`,
       dedupe_key: `job`,
@@ -535,9 +532,8 @@ describe(`<Toast />`, () => {
     await tick()
 
     expect(doc_query(`.toast`).dataset.priority).toBe(`watch`)
-    // `watch` is the ladder's second-highest rung, so it is sticky — and urgency has to
-    // agree with that: announcing it politely would let a notice that never leaves the
-    // screen go unread. Both rules read the top two off the store's own ladder.
+    // `watch` is second-highest here, so sticky; urgency must agree, or a notice that
+    // never leaves the screen goes unread
     expect(assertive().textContent).toContain(`watching src/`)
     expect(polite().textContent).not.toContain(`watching src/`)
   })
@@ -777,9 +773,8 @@ describe(`<Toast />`, () => {
     expect(document.activeElement).toBe(target ?? before)
   })
 
-  // every route out of the toast unmounts the button holding focus, so each one has to
-  // hand the user's place back rather than dropping it on <body> — unless the user got
-  // there first, when reclaiming the origin would yank them out of where they went
+  // every exit unmounts the button holding focus, so each must restore the origin rather
+  // than drop focus on <body> — unless the user already moved, when restoring would yank
   test.each<[string, (store: ToastStore) => void, boolean?]>([
     [`the action button`, () => doc_query<HTMLButtonElement>(`.toast-action`).click()],
     [`the dismiss button`, () => doc_query<HTMLButtonElement>(`.toast-dismiss`).click()],
@@ -809,9 +804,8 @@ describe(`<Toast />`, () => {
     expect(document.activeElement).toBe(moved_on ? elsewhere : opener)
   })
 
-  // Escape is scoped to the stack, so a press anywhere else on the page is none of the
-  // toast's business, and gated on `dismissible` — with no close button rendered it
-  // would otherwise be the one way left to shut a toast declared undismissable.
+  // Escape is scoped to the stack and gated on `dismissible`, else it would be the one
+  // way left to shut a toast declared undismissable
   test.each([
     [true, undefined],
     [false, `a`],

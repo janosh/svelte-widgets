@@ -132,8 +132,8 @@ describe(`SettingsSearch`, () => {
     expect(filtered_out(appearance)).toBe(false)
     expect(filtered_out(setting_row(`atom_radius`))).toBe(true)
 
-    // Camera starts collapsed; search opens it, and typing on must not drop that state — not
-    // even for an instant, which is what re-running the whole attachment per keystroke did.
+    // search opens the collapsed Camera section; typing on must not drop that state, not
+    // an instant, which is what re-running the whole attachment per keystroke did
     await set_query(input, `damping`)
     expect(camera.open).toBe(true)
     const open_writes: boolean[] = []
@@ -173,8 +173,8 @@ describe(`SettingsSearch`, () => {
     expect(filtered_out(setting_row(`zoom_speed`))).toBe(false)
   })
 
-  // Rows nest when a keyed wrapper holds keyed rows. A hit on either end keeps the whole
-  // group on screen, so a wrapper matched by its own label never hides its children.
+  // rows nest when a keyed wrapper holds keyed rows: a hit on either end keeps the group,
+  // so a wrapper matched by its own label never hides its children
   test(`keeps nested rows visible when either end of the nesting matches`, async () => {
     const { input } = await mounted_search()
 
@@ -187,9 +187,8 @@ describe(`SettingsSearch`, () => {
     expect(filtered_out(setting_row(`rotation_x`))).toBe(true)
   })
 
-  // Emptying the query must never collapse the field under the cursor, however it was opened
-  // and however it is cleared. Deriving the open state from `query` alone breaks the first
-  // case; unmounting the clear button without rehoming focus breaks the second.
+  // emptying the query must never collapse the field under the cursor: deriving open
+  // state from `query` alone breaks the first case, dropping focus on clear the second
   test.each([
     {
       name: `opened by the trigger and cleared by typing`,
@@ -250,7 +249,7 @@ describe(`SettingsSearch`, () => {
     expect(input.value).toBe(``)
     // the button unmounts on clear, so focus has to land back in the field
     expect(document.activeElement).toBe(input)
-    // The mounted, visible live-region node stays observable while its text clears.
+    // the live region stays mounted and visible while its text clears
     expect(document.querySelector(`[role="status"]`)).toBe(status)
     expect(status.hidden).toBe(false)
     expect(status.textContent).toBe(``)

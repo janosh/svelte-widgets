@@ -2,14 +2,12 @@
 import { foods, languages, octicons } from '$site/options'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
-// Open the /portal demo modal and return its content locator
 async function open_portal_modal(page: Page): Promise<Locator> {
   await page.goto(`/portal`, { waitUntil: `networkidle` })
   await page.getByRole(`button`, { name: `Open Modal` }).click()
   return page.locator(`div.modal-content.modal`)
 }
 
-// Locate the visible portalled dropdown containing an option with the given label
 const portalled_options = (page: Page, label: string): Locator =>
   page.locator(`body > ul.options:not(.hidden):has(li:has-text("${label}"))`)
 
@@ -52,8 +50,8 @@ test.describe(`input`, () => {
   test(`programmatic focus opens dropdown`, async ({ page }) => {
     await page.goto(`/ui`, { waitUntil: `networkidle` })
     const dropdown = page.locator(`#foods div.multiselect > ul.options`)
-    // Raw DOM focus/blur (not locator.focus(), which skips an already-focused element
-    // and would bypass the component's .focus() override in the retry below).
+    // raw DOM focus/blur: locator.focus() skips an already-focused element and would bypass
+    // the component's .focus() override in the retry below
     const input_method = (method: `focus` | `blur`) =>
       page.evaluate((name) => {
         document.querySelector<HTMLInputElement>(`#foods input[autocomplete]`)?.[name]()
@@ -62,8 +60,7 @@ test.describe(`input`, () => {
     await expect(dropdown).toHaveClass(/hidden/u)
     await expect(dropdown).toBeHidden()
 
-    // Retry focus: it's a no-op if it fires before hydration installs the .focus()
-    // override; each retry re-invokes .focus() until the override opens the dropdown.
+    // focus is a no-op until hydration installs the .focus() override, so retry
     await expect(async () => {
       await input_method(`focus`)
       await expect(dropdown).not.toHaveClass(/hidden/u, { timeout: 1000 })
@@ -329,8 +326,8 @@ test.describe(`portal feature`, () => {
         const wrapper_rect = wrapper.getBoundingClientRect()
         const dropdown_rect = dropdown.getBoundingClientRect()
         const left_delta = Math.abs(dropdown_rect.left - wrapper_rect.left)
-        // auto placement may flip the dropdown above the trigger when space below
-        // is tight; measure the gap on whichever edge the portal chose
+        // auto placement may flip the dropdown above the trigger, so measure the gap on
+        // whichever edge the portal chose
         const top_delta =
           dropdown.dataset.placement === `top`
             ? Math.abs(wrapper_rect.top - dropdown_rect.bottom)
@@ -368,9 +365,8 @@ test.describe(`portal feature`, () => {
   })
 })
 
-// virtualList windowing needs real browser layout (happy-dom reports zero
-// heights), exercised on the internal /virtual-list test page which mounts
-// 2000 options with rows pinned to the default 30px itemHeight
+// Windowing needs real layout (happy-dom reports zero heights). The internal /virtual-list
+// page mounts 2000 options with rows pinned to the default 30px itemHeight.
 test.describe(`virtualList`, () => {
   const item_height = 30
   const total_options = 2000
@@ -382,8 +378,7 @@ test.describe(`virtualList`, () => {
   const goto_virtual_list = async (page: Page): Promise<void> => {
     await page.goto(`/virtual-list`, { waitUntil: `networkidle` })
     await expect(page.locator(`.virtual ul.options`)).toBeVisible()
-    // scroll + keyboard handlers only work once hydration installs the
-    // component's input.focus override (same readiness signal as goto_persistent)
+    // scroll + keyboard handlers only work once hydration installs the input.focus override
     await page.waitForFunction(() => {
       const input_el = document.querySelector<HTMLInputElement>(
         `.virtual input[autocomplete]`,
@@ -471,9 +466,8 @@ test.describe(`virtualList`, () => {
   })
 })
 
-// the portal's `auto` placement flips the dropdown above the input when it would
-// overflow the viewport bottom — needs real viewport geometry. Uses the /portal
-// modal: in a short viewport the lower (octicons) input has more space above.
+// `auto` placement flips the dropdown above the input when it would overflow the viewport
+// bottom. In the /portal modal's short viewport, the lower (octicons) input has more space above.
 test.describe(`portal placement auto-flip`, () => {
   const open_dropdown_at_viewport_height = async (
     page: Page,
@@ -484,8 +478,8 @@ test.describe(`portal placement auto-flip`, () => {
     await page.setViewportSize({ width: 800, height })
     const modal_content = await open_portal_modal(page)
     if (pin_modal_to_bottom) {
-      // the centered modal never leaves enough room above AND too little below;
-      // pin it to the viewport bottom so the flip geometry is deterministic
+      // the centered modal never leaves enough room above AND too little below, so pin it to
+      // the viewport bottom to make the flip geometry deterministic
       await page.evaluate(() => {
         const backdrop = document.querySelector<HTMLElement>(`.modal-backdrop`)
         if (!backdrop) throw new Error(`modal backdrop not found`)
@@ -576,14 +570,11 @@ test(`component buttons are styled correctly with border: none`, async ({ page }
   expect(border_style).toBe(`none`)
 })
 
-// Runtime regression tests for the schemeless-dark-page readability fix: the component
-// pairs a light-dark() text-color default with its light-dark() backgrounds so text can't
-// inherit a near-white page color on pages that never declare `color-scheme` (there
-// light-dark() resolves to its light branch). happy-dom strips light-dark()/var() from
-// computed styles, so this can only be verified in a real browser.
-// light-dark(#222, #eee) → #222 = rgb(34, 34, 34) under the schemeless (light) scheme.
+// The component pairs a light-dark() text-color default with its light-dark() backgrounds so
+// text can't inherit a near-white page color where `color-scheme` is never declared. happy-dom
+// strips light-dark() from computed styles. light-dark(#222, #eee) → #222 under light.
 test.describe(`schemeless-dark-page text-color readability`, () => {
-  test.use({ colorScheme: `light` }) // schemeless subtree resolves light-dark() to its light branch
+  test.use({ colorScheme: `light` }) // schemeless subtree takes light-dark()'s light branch
   const readable = `rgb(34, 34, 34)`
   const computed_color = (page: Page, selector: string) =>
     page
@@ -597,8 +588,7 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
   }) => {
     await page.goto(`/ui`, { waitUntil: `networkidle` })
 
-    // simulate a dark page that never declares color-scheme: force the schemeless (normal)
-    // scheme on the widget's subtree and give its parent a distinctive inherited color.
+    // simulate a dark page that never declares color-scheme, with a distinctive parent color
     await page.evaluate(() => {
       const parent =
         document.querySelector<HTMLElement>(`#foods div.multiselect`)?.parentElement
@@ -613,8 +603,8 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
     )
   })
 
-  // portalled: ul.options is moved to document.body and no longer inherits div.multiselect's
-  // color, so it needs its own default — this is the surface an in-place test can't verify.
+  // portalled ul.options moves to document.body and no longer inherits div.multiselect's
+  // color, so it needs its own default
   test(`portalled dropdown text uses the light-dark() default, not the inherited page color`, async ({
     page,
   }) => {
@@ -640,8 +630,8 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
   })
 })
 
-// the /form demo previews the submitted FormData; spreading it into JSON.stringify()
-// silently dropped every field but the first (extra entries land in the replacer/space args)
+// spreading the submitted FormData into JSON.stringify() silently dropped every field but the
+// first (extra entries land in the replacer/space args)
 test(`form demo previews every submitted FormData field`, async ({ page }) => {
   await page.goto(`/form`, { waitUntil: `networkidle` })
 

@@ -12,8 +12,8 @@ export type FullscreenSyncOptions = {
   on_request_error?: (error: unknown) => void
 }
 
-// Page background as an explicit color. `get_bg_color` walks body then html — themes
-// usually paint body — and the OS color scheme decides when both are transparent.
+// Page background as an explicit color: `get_bg_color` walks body (which themes usually
+// paint) then html, and the OS color scheme decides when both are transparent.
 export function get_page_background(
   fallback_dark = `#1a1a1a`,
   fallback_light = `#ffffff`,
@@ -69,8 +69,8 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
     const fullscreen = options.get_fullscreen()
     reconcile(wrapper)
 
-    // a fullscreened element inherits nothing from the page and would render on black.
-    // Dropped again on the way out so a later theme switch cannot be read off a stale value.
+    // a fullscreened element inherits nothing and would render on black; dropped on the way
+    // out so a later theme switch cannot read a stale value
     const bg_css_var = options.get_bg_css_var?.() ?? `--fullscreen-bg`
     if (fullscreen) wrapper.style.setProperty(bg_css_var, get_page_background())
     else wrapper.style.removeProperty(bg_css_var)
@@ -82,9 +82,8 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
     if (!wrapper) return undefined
 
     const handle_change = () => {
-      // key the flag to this wrapper: comparing against document.fullscreenElement alone
-      // would flip every mounted flag whenever any element goes fullscreen, and each
-      // flipped flag then fires its own requestFullscreen
+      // key the flag to this wrapper: a bare document.fullscreenElement check would flip
+      // every mounted flag on any fullscreen, each then firing its own requestFullscreen
       const is_fullscreen = document.fullscreenElement === wrapper
       const request_settling =
         pending_request?.wrapper === wrapper && pending_request.entering === is_fullscreen

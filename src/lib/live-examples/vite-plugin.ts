@@ -1,16 +1,16 @@
-// Vite plugin - handles virtual module resolution for example components
+// Vite plugin resolving virtual modules for example components
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
 import type { HmrContext, Plugin, ViteDevServer } from 'vite'
-// Vite's own ESTree parser (native OXC, no extra dependency): same node types
-// and start/end offsets acorn produced, module + latest syntax by default
+// Vite's own ESTree parser (native OXC, no extra dependency): acorn's node types and
+// start/end offsets, module + latest syntax by default
 import { parseSync } from 'vite'
 import { EXAMPLE_MODULE_PREFIX } from './mdsvex-transform.ts'
 
 // Matches import paths emitted by mdsvex-transform, e.g. ___live_example___0.svelte
 const RE_EXAMPLE_IMPORT = new RegExp(`${EXAMPLE_MODULE_PREFIX}(\\d+)\\.svelte`, `u`)
 
-// Edit operation: replace text at [start, end) with content
+// replaces text at [start, end)
 type Edit = { start: number; end: number; content: string }
 type TransformResult = {
   code: string
@@ -24,7 +24,7 @@ const with_empty_map = (code: string): TransformResult => ({
 // chars to scan past a property for trailing comma/whitespace (typically just ", ")
 const TRAILING_CLEANUP_BOUND = 50
 
-// Apply edits in reverse order so positions stay valid
+// reverse order so earlier positions stay valid
 const apply_edits = (source: string, edits: Edit[]): string =>
   edits
     .toSorted((a, b) => b.start - a.start)
@@ -39,8 +39,8 @@ function is_record(val: unknown): val is Record<string, unknown> {
 
 type AstNode = Record<string, unknown>
 
-// Single-pass AST walk collecting the two node kinds this plugin rewrites:
-// __live_example_src properties and import declarations/expressions
+// one walk for both node kinds this plugin rewrites: __live_example_src properties and
+// import declarations/expressions
 function collect_nodes(tree: unknown): { src_props: AstNode[]; imports: AstNode[] } {
   const src_props: AstNode[] = []
   const imports: AstNode[] = []
@@ -63,8 +63,8 @@ function collect_nodes(tree: unknown): { src_props: AstNode[]; imports: AstNode[
   return { src_props, imports }
 }
 
-// Normalize a module ID to absolute path for consistent lookups.
-// Can't use path.posix.join because it treats /src/... as already absolute.
+// Absolute module ID for consistent lookups. Not path.posix.join: it treats /src/... as
+// already absolute.
 function to_absolute(id: string, cwd: string): string {
   if (id.startsWith(`${cwd}/`) || id === cwd) return id
   return id.startsWith(`/`) ? `${cwd}${id}` : `${cwd}/${id}`
@@ -75,16 +75,15 @@ export default function live_examples_plugin(
 ): Plugin[] {
   const { extensions = [`.svelte.md`, `.md`, `.svx`] } = options
 
-  // Extracted examples as individual virtual files (id -> svelte source)
+  // extracted examples: virtual id -> svelte source
   const virtual_files = new Map<string, string>()
 
   let vite_server: ViteDevServer | undefined
   let pending_hmr_file: string | null = null
   const cwd = process.cwd().replaceAll(`\\`, `/`)
 
-  // Pre-enforce plugin ensures resolveId runs before vite-plugin-svelte's
-  // load-compiled-css:resolveId, so CSS derived modules get the same absolute
-  // path as the main component (needed for module graph CSS cache lookup).
+  // Pre-enforced so resolveId beats vite-plugin-svelte's load-compiled-css:resolveId and
+  // derived CSS modules get the component's absolute path, which its cache lookup needs.
   const resolve_plugin: Plugin = {
     name: `live-examples-resolve`,
     enforce: `pre`,
@@ -105,8 +104,8 @@ export default function live_examples_plugin(
 
       const [base_id, query = ``] = id.split(`?`)
 
-      // Skip derived module requests (CSS, scripts) - let vite-plugin-svelte handle them.
-      // Must check BEFORE virtual_files lookup to avoid returning Svelte source for CSS.
+      // Leave derived requests (CSS, scripts) to vite-plugin-svelte. Must precede the
+      // virtual_files lookup, else CSS requests get Svelte source back.
       if (/type=(?<type>style|script|module)/u.test(query)) return undefined
 
       const src = virtual_files.get(base_id)
@@ -116,7 +115,7 @@ export default function live_examples_plugin(
       if (process.env.NODE_ENV === `production`) {
         throw new Error(msg)
       }
-      // In dev, warn and return error component to surface issue visibly
+      // in dev, warn and return an error component so the issue is visible
       this.warn(msg)
       return `<script>console.error(${JSON.stringify(
         msg,
@@ -124,22 +123,19 @@ export default function live_examples_plugin(
     },
 
     transform(code: string, id: string): TransformResult | undefined {
-      // Strip query params for extension check (Vite adds ?query for HMR, styles, etc.)
+      // strip Vite's ?query (HMR, styles, ...) before the extension check
       const base_id = id.split(`?`)[0]
 
       const is_example_module = id.includes(EXAMPLE_MODULE_PREFIX)
       const is_markdown = extensions.some((ext) => base_id.endsWith(ext))
       if (!is_example_module && !is_markdown) return undefined
 
-      // Skip derived modules (styles, etc.) - only process the main markdown file.
-      // Match both ?svelte&type= and ?inline&svelte&type= (SSR adds ?inline prefix)
+      // only the main markdown file; matches ?svelte&type= and SSR's ?inline&svelte&type=
       if (id.includes(`svelte&type=`)) return with_empty_map(code)
 
       if (is_markdown) {
-        // Use AST for precise node location, collect edits to apply at end.
-        // parseSync reports errors instead of throwing (unlike acorn): code may
-        // contain Svelte syntax the JS parser can't handle (e.g., template
-        // blocks, special directives) — skip transformation then.
+        // parseSync reports errors instead of throwing (unlike acorn), which matters
+        // because Svelte syntax the JS parser can't handle just skips the transform
         const { program: tree, errors } = parseSync(`file.js`, code)
         if (errors.length > 0) return with_empty_map(code)
         const edits: Edit[] = []
@@ -156,9 +152,8 @@ export default function live_examples_plugin(
             if (mod) server.moduleGraph.invalidateModule(mod)
           }
 
-          // Trigger full-reload only during HMR (not initial page load).
-          // reloadModule alone doesn't work because vite-plugin-svelte's hot-update
-          // handler skips CSS-only changes when the JS output is identical.
+          // full reload during HMR only: reloadModule alone doesn't suffice, since
+          // vite-plugin-svelte skips CSS-only changes when the JS output is identical
           if (pending_hmr_file !== base_id) return
           pending_hmr_file = null
           setTimeout(() => {
@@ -167,7 +162,6 @@ export default function live_examples_plugin(
         }
 
         for (const [idx, prop] of src_props.entries()) {
-          // Read the property value directly instead of recursively searching nested literals.
           const prop_value = prop.value
           if (!is_record(prop_value)) continue
           if (prop_value.type !== `Literal` || typeof prop_value.value !== `string`)
@@ -175,12 +169,12 @@ export default function live_examples_plugin(
 
           const src = Buffer.from(prop_value.value, `base64`).toString(`utf-8`)
 
-          // Use base_id (without query params) to ensure consistent virtual file IDs
+          // base_id, without query params, keeps virtual file IDs consistent
           const virtual_id = `${base_id}${EXAMPLE_MODULE_PREFIX}${idx}.svelte`
 
           if (src !== virtual_files.get(virtual_id)) {
             virtual_files.set(virtual_id, src)
-            // Invalidate after updating the source so load() serves the new content.
+            // after updating the source, so load() serves the new content
             invalidate_virtual_modules(virtual_id)
           }
 
@@ -193,8 +187,7 @@ export default function live_examples_plugin(
           }
         }
 
-        // Clear pending state even if no examples changed — stale flag would
-        // cause an unnecessary full-reload on a future edit
+        // clear even when no examples changed; a stale flag forces a needless full reload
         if (pending_hmr_file === base_id) pending_hmr_file = null
 
         // Update import paths (static and dynamic) to use virtual file IDs
@@ -227,9 +220,9 @@ export default function live_examples_plugin(
       if (extensions.some((ext) => file.endsWith(ext))) {
         pending_hmr_file = file
       }
-      // Don't add virtual modules here — they'd be loaded with stale content
-      // since the parent .md hasn't been re-transformed yet. The transform
-      // hook handles invalidation + reload after virtual_files is updated.
+      // No virtual modules here: the parent .md is not re-transformed yet, so they'd load
+      // stale content. The transform hook invalidates and reloads once virtual_files is up
+      // to date.
       return ctx.modules
     },
   }

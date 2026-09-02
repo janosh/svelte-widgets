@@ -19,11 +19,11 @@ test.each<[string, string, string, string?]>([
   [`styles.css`, `.a{}`, `css`],
   [`script.py`, `x = 1`, `python`],
   [`config.yml`, `key: val`, `yaml`],
-  // HTML-wrapped title — extension extracted after stripping tags
+  // extension extracted after stripping tags
   [`<code>options.ts</code>`, `export const x = 1`, `typescript`],
   // explicit language overrides title inference
   [`data.json`, `{}`, `javascript`, `javascript`],
-  // unknown extension uses extension directly as language flag
+  // unknown extension used as the language flag
   [`readme.xyz`, `hello`, `xyz`],
   // no extension falls back to default_lang
   [`Makefile`, `all:`, `svelte`],
@@ -36,8 +36,8 @@ test.each<[string, string, string, string?]>([
 
 test(`lang-label is positioned out of flow so it can't indent code`, () => {
   mount_files({ files: [{ title: `util.ts`, content: `const x = 1` }] })
-  // pre is white-space: pre, so an in-flow label shifts the first code line right.
-  // absolute positioning takes it out of flow (regression guard, see FileDetails.svelte)
+  // pre is white-space: pre, so an in-flow label indents the first code line
+  // (regression guard, see FileDetails.svelte)
   expect(getComputedStyle(doc_query(`.lang-label`)).position).toBe(`absolute`)
 })
 
@@ -60,7 +60,6 @@ test(`unsupported language falls back to escaped raw content`, async () => {
   mount_files({
     files: [{ title: `file.xyz`, content, language: `nonexistent-lang-xyz` }],
   })
-  // wait for highlight attempt to complete and fall back
   await vi.waitFor(() => expect(doc_query(`pre code`).innerHTML).toContain(`&lt;`), {
     timeout: 5000,
   })
@@ -134,7 +133,7 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   expect(getComputedStyle(btn).whiteSpace).toBe(`nowrap`)
   const open_states = () => details.map((el) => el.open)
 
-  expect(open_states()).toEqual([false, false, false]) // initially closed
+  expect(open_states()).toEqual([false, false, false])
   expect(button_label()).toBe(`Open all`)
 
   btn.click()
@@ -147,8 +146,7 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   expect(open_states()).toEqual([false, false, false])
   expect(button_label()).toBe(`Open all`)
 
-  // user opens a single <details> directly - the DOM open property is not
-  // reactive, so the label must update via the native toggle event
+  // the DOM open property is not reactive, so the label must follow the native toggle
   details[0].open = true
   details[0].dispatchEvent(new Event(`toggle`))
   flushSync()
@@ -167,8 +165,7 @@ test(`toggle all label reflects pre-opened details on mount`, async () => {
     { title: `file1`, content: `content1` },
     { title: `file2`, content: `content2` },
   ]
-  // details render open from the start - the toggle event never fires on mount,
-  // so the label must be initialized from detail_elements in the sync $effect
+  // the toggle event never fires on mount, so the label must init from detail_elements
   mount_files({ files, details_props: { open: true } })
   await tick()
 
@@ -211,8 +208,7 @@ test(`detail element refs are trimmed when files are removed to prevent memory l
   await tick()
 
   const details_nodes = () => [...document.querySelectorAll(`details`)]
-  // by identity, not structural toEqual: [0, 1, ...] means every file points at its
-  // own <details>, -1 means the ref is null or stale
+  // by identity: [0, 1, ...] means each file points at its own <details>, -1 means stale
   const ref_positions = (nodes: (HTMLDetailsElement | null | undefined)[]) =>
     nodes.map((node) => (node ? details_nodes().indexOf(node) : -1))
   const file_nodes = () => reactive_files.map((file) => file.node)
@@ -220,10 +216,8 @@ test(`detail element refs are trimmed when files are removed to prevent memory l
   expect(details_nodes()).toHaveLength(3)
   expect(ref_positions(file_nodes())).toEqual([0, 1, 2])
 
-  // Store references to the old nodes before removal
   const old_nodes = file_nodes()
 
-  // Remove the last file
   flushSync(() => {
     reactive_files.pop()
   })
@@ -235,7 +229,6 @@ test(`detail element refs are trimmed when files are removed to prevent memory l
   expect(ref_positions(file_nodes())).toEqual([0, 1])
   expect(ref_positions(old_nodes.slice(0, 2))).toEqual([0, 1])
 
-  // The removed file's node should no longer be in the DOM
   expect(old_nodes[2]?.isConnected).toBe(false)
 })
 

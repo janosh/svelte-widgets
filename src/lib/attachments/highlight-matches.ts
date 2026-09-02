@@ -11,12 +11,10 @@ export type HighlightOptions = {
   duration_ms?: number
   scroll_to_match?: false | ScrollIntoViewOptions
   on_highlight?: (context: { node: HTMLElement; ranges: Range[] }) => unknown
-  // Re-run when the subtree changes, so consumers stop hand-rolling an observer
-  // around this. `true` re-runs on the mutation microtask; `false` freezes the
-  // highlight at whatever the DOM held on attach. An object coalesces bursts: the
-  // re-run lands `debounce_ms` after the last mutation but no later than
-  // `max_wait_ms` after the first of the burst, so a stream of appended log lines
-  // still refreshes at a steady rate instead of never settling.
+  // Re-run on subtree changes, so consumers need no observer of their own. `true` re-runs
+  // on the mutation microtask, `false` freezes at what the DOM held on attach. An object
+  // coalesces bursts (`debounce_ms` after the last mutation, at most `max_wait_ms` after
+  // the burst's first), so a stream of appended log lines still refreshes steadily.
   observe_mutations?: boolean | TextMutationOptions
 }
 
@@ -36,10 +34,9 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
   } = ops
 
   const search = query.trim().toLowerCase().replaceAll(/\s+/gu, ` `)
-  // if disabled or empty query, this instance owns no highlight
-  if (!search || disabled) return undefined
-  // both halves of the CSS Custom Highlight API are needed, same as highlight_ranges
-  // checks: a registry without the constructor would throw in sync_owned_highlight
+  if (!search || disabled) return undefined // this instance owns no highlight
+  // both halves of the CSS Custom Highlight API: a registry without the constructor would
+  // throw in sync_owned_highlight
   const highlight_registry =
     typeof globalThis.Highlight === `function` ? globalThis.CSS?.highlights : undefined
   const highlight_owner = Symbol(css_class)
@@ -57,10 +54,9 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     if (!original_text) return []
     const text = original_text.toLowerCase()
 
-    // Offsets are computed on the lowercased text but applied to the original
-    // node. Lowercasing can grow some Unicode chars (e.g. İ → i̇), while astral
-    // characters span two UTF-16 units. Map each lowered unit to the complete
-    // original code point so ranges never shift or split a character.
+    // Offsets are computed on lowercased text but applied to the original node, and
+    // lowercasing can grow chars (İ → i̇) while astral ones span two UTF-16 units. Map each
+    // lowered unit to its whole original code point so ranges never shift or split a char.
     const node_length = original_text.length
     let original_starts: number[] | null = null
     let original_ends: number[] | null = null
@@ -95,7 +91,7 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     }
 
     if (fuzzy) {
-      // null means not all characters matched, so highlight nothing.
+      // null means not all characters matched, so highlight nothing
       const matching_indices = fuzzy_match_indices(search, text)
       const unique_ranges = new Map<string, Range>()
       for (const index of matching_indices ?? []) {

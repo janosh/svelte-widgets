@@ -16,8 +16,7 @@ describe(`ActionMenu`, () => {
     { label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { label: `Delete`, action: vi.fn(), disabled: true },
   ]
-  // svelte:body listeners outlive document.body.innerHTML = '', so unmount for real
-  // or a previous test's menu keeps answering right-clicks
+  // svelte:body listeners outlive innerHTML = '', so unmount or old menus keep answering
   const mounted: Record<string, unknown>[] = []
   afterEach(() => mounted.splice(0).forEach((app) => void unmount(app)))
   // returns the reactive props, so a test can drive `at` the way a consumer would
@@ -42,7 +41,7 @@ describe(`ActionMenu`, () => {
     })
     await tick()
   }
-  // mounts a menu and right-clicks the page to open it, returning the contextmenu event
+  // opens a menu by right-clicking the page, returning the contextmenu event
   const open_menu = async (
     actions: MenuEntries = make_actions(),
     extra: MenuProps = {},
@@ -86,8 +85,7 @@ describe(`ActionMenu`, () => {
       `Actions`,
       -1,
     ])
-    // .action-menu comes after the {...rest} spread, so a consumer class adds to the
-    // styling hook instead of replacing it
+    // .action-menu comes after {...rest}, so a consumer class adds instead of replacing
     expect(surface.classList.contains(`action-menu`)).toBe(true)
     expect(surface.classList.contains(`consumer-class`)).toBe(true)
   })
@@ -97,8 +95,7 @@ describe(`ActionMenu`, () => {
     expect(doc_query<HTMLMenuElement>(`menu[role="menu"]`).tabIndex).toBe(0)
   })
 
-  // with a region, svelte:body's handler is dropped, so the rest of the page keeps
-  // the browser's own menu
+  // with a region, svelte:body's handler is dropped: the page keeps its native menu
   test(`a children region scopes the right-click to itself`, async () => {
     mount_menu(make_actions(), { children: region })
 
@@ -112,8 +109,7 @@ describe(`ActionMenu`, () => {
     expect(menu()).not.toBeNull()
   })
 
-  // for a consumer whose triggers must record *which* of their targets was
-  // right-clicked: neither the document nor a wrapper can, so it drives `at` itself
+  // for consumers that must record which target was right-clicked and drive `at` themselves
   test.each([
     [`no region`, {}, () => document.body],
     [`a region`, { children: region }, () => doc_query(`[data-testid="region"]`)],
@@ -181,8 +177,8 @@ describe(`ActionMenu`, () => {
     expect(document.activeElement).toBe(trigger)
   })
 
-  // reachable by clicking menu chrome rather than an item: focus leaves the list, and
-  // every key used to enter at the first item regardless of which end it pointed at
+  // clicking menu chrome takes focus out of the list, where every key used to enter at
+  // the first item regardless of which end it pointed at
   test.each([
     [`End`, 2],
     [`ArrowUp`, 2],
@@ -224,8 +220,8 @@ describe(`ActionMenu`, () => {
     expect(menu()).toBeNull()
   })
 
-  // Custom dismissal can opt into press timing or leave Escape to the page. Native
-  // light-dismiss is exercised in Playwright rather than emulated in happy-dom.
+  // custom dismissal can opt into press timing or leave Escape to the page; native
+  // light-dismiss is covered in Playwright rather than emulated in happy-dom
   const outside_press = () => new PointerEvent(`pointerdown`, { bubbles: true })
   const outside_click = () => new MouseEvent(`click`, { bubbles: true })
   const release: MenuProps = { dismiss: { dismiss_on: `release`, escape: false } }
@@ -279,8 +275,8 @@ describe(`ActionMenu`, () => {
       { title: `Other`, actions: [{ label: `Reset`, action: vi.fn() }] },
     ]
 
-    // Unique ids stay stable across reorder; duplicate tags append position so
-    // they cannot each_key_duplicate.
+    // unique ids stay stable across reorder; duplicates append position to avoid
+    // each_key_duplicate
     test(`ids, labels, and duplicates stay distinct keys`, async () => {
       await open_menu([
         { id: 1, label: `Numeric id`, action: vi.fn() },
@@ -321,8 +317,8 @@ describe(`ActionMenu`, () => {
       expect(items()).toEqual([second, first])
     })
 
-    // A section has no id, so its title is a heading rather than an identity. Keyed on
-    // title alone these two collided, and each_key_duplicate took down the whole menu.
+    // a section title is a heading, not an identity: keyed on title alone these collided
+    // and each_key_duplicate took down the whole menu
     test(`two sections may share a title`, async () => {
       await open_menu([
         { title: `Tools`, actions: [{ label: `First`, action: vi.fn() }] },
@@ -440,8 +436,7 @@ describe(`ActionMenu`, () => {
       expect(document.querySelector(`kbd`)).toBeNull() // default shortcut markup is gone
     })
 
-    // CmdAction allows arbitrary extra keys, so one carrying `actions` or `title` must
-    // not be mistaken for a section
+    // CmdAction allows extra keys, so `actions`/`title` must not make one read as a section
     test(`a flat action with section-shaped extras stays flat`, async () => {
       await open_menu([
         { label: `Copy`, action: vi.fn(), actions: [`audit`], title: `tooltip` },

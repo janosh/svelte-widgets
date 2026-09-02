@@ -187,8 +187,8 @@ test(`tooltip=false preserves the native title`, async () => {
   expect(button.getAttribute(`title`)).toBe(`Switch to dark theme`)
 })
 
-// The mode name varies with state, so a caller pinning a static title/aria-label through
-// `rest` loses that variation. `labels` translates the frame and the three mode names.
+// a static title pinned through `rest` loses the per-mode wording, so `labels` translates
+// both the frame and the three mode names
 test(`labels reword the title, mode names included`, async () => {
   localStorage.setItem(`theme`, `system`) // cycles system -> dark -> light
   const button = await mount_theme_toggle({

@@ -89,10 +89,8 @@
   type InputSnapshot = EditorSelection & { input_type: string; value_length: number }
   let before_snapshot: InputSnapshot | null = null
   let active_client: ReturnType<typeof create_highlight_client> | null = null
-  // A plain Map, not a SvelteMap: `touch_tokens` reorders it for the LRU on every render
-  // pass, and reactive entries turned each touch into a second full rebuild of
-  // `visible_rows` plus a second DOM reconciliation, for no visual difference. Reads are
-  // sequenced by `token_revision` instead, bumped wherever the contents actually change.
+  // Plain Map, not SvelteMap: the LRU touch on every render pass made reactive entries
+  // rebuild `visible_rows` and reconcile the DOM twice. `token_revision` sequences reads.
   const token_cache = new Map<number, SpanList>()
   const font_size = $derived(editor_font_size(Number(options.font_size)))
   const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
@@ -123,10 +121,8 @@
     }
     return complete
   }
-  // Drop only the cached spans an edit can actually have invalidated. Every line before
-  // the first edit's offset is untouched text, so its spans stay correct; clearing the
-  // whole cache on each transaction left the entire viewport unhighlighted until the
-  // debounced re-highlight returned, and evicted the full LRU on every keystroke.
+  // Drop only spans an edit can have invalidated: lines before the first edit are untouched.
+  // Clearing the whole cache blanked the viewport until the debounced re-highlight returned.
   const invalidate_tokens = (
     active_model: EditorModel,
     transaction: EditorTransaction,
@@ -135,12 +131,11 @@
     const { edits } = transaction
     if (edits.length === 0) return
     token_revision += 1
-    // `validate_edits` rejects `from < previous_end`, so edits ascend and the first one
-    // starts earliest. Text before it is identical in both documents, so this line index
-    // means the same thing before and after the transaction.
+    // `validate_edits` rejects `from < previous_end`, so edits ascend; text before the first
+    // is identical in both documents, so this line index means the same either side of it.
     const first_line = active_model.line_at(edits[0].from).line_idx
-    // A lone edit that inserts no newline and leaves the line count alone cannot have
-    // removed one either, so it is confined to its own line. That is ordinary typing.
+    // ordinary typing: a lone edit inserting no newline at an unchanged line count removed
+    // none either, so it is confined to its own line
     const single_line_edit =
       edits.length === 1 &&
       !edits[0].insert.includes(`\n`) &&
@@ -239,17 +234,15 @@
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
     before_snapshot = null
-    // Line count as of the previous notification, so a transaction can be classified as
-    // moving a line boundary or not without re-deriving the old document.
+    // count as of the previous notification, so a transaction can be classified as moving a
+    // line boundary without re-deriving the old document
     let previous_line_count = active_model.line_count
     const unsubscribe = active_model.subscribe((update) => {
       if (!is_current()) return
       caret_line = active_model.line_at(update.selection.head).line_idx
       if (update.transaction) {
-        // Only a transaction changes the text, and `line_count`/`visible_rows` read this
-        // to know when to re-read lines from the rope. The model also notifies on a bare
-        // selection change, and bumping it there re-read every visible line on each caret
-        // move — up to two rope descents per row, per keypress.
+        // Bumped only for transactions, which `line_count`/`visible_rows` read to re-read
+        // the rope; bumping on bare selection changes re-read every row on each caret move.
         model_revision += 1
         invalidate_tokens(active_model, update.transaction, previous_line_count)
         active.apply_transaction(update.transaction)
@@ -296,9 +289,8 @@
   })
   $effect(() => {
     void model_revision
-    // Spans arriving is what makes a previously-uncached window cached, so the LRU touch
-    // below has to re-run then. This used to ride on `model_revision`, which every caret
-    // move bumped; now that only a transaction does, the arrival needs its own signal.
+    // Arriving spans are what make an uncached window cached, so the LRU touch below must
+    // re-run then; `model_revision` no longer covers it, hence a signal of its own.
     void token_revision
     const { start, end } = window_lines
     const cached = untrack(() => touch_tokens(start, end))

@@ -117,10 +117,8 @@
     }
   }
 
-  // Through a $derived so the effect tracks the *value*, not the `options` object. Reading
-  // `options.context_lines` in the effect made a host passing an inline object re-run a full
-  // backend diff, clear every expanded gap and jump to the top whenever any other field
-  // changed — a font-size tweak was enough.
+  // Through a $derived so the effect tracks the *value*, not the `options` object: reading
+  // `options.context_lines` inside it re-ran the whole diff on any other field change.
   const context_lines = $derived(options.context_lines)
   $effect(() => {
     void load_diff({
@@ -132,8 +130,8 @@
     return () => void load_generation++
   })
 
-  // Rebuild expanded gaps from props; DiffResult only keeps hunk lines. Gap text is
-  // unchanged but has no spans, so renders unhighlighted.
+  // Expanded gaps are rebuilt from props since DiffResult keeps only hunk lines; gap text
+  // has no spans, so it renders unhighlighted.
   const old_lines = $derived(split_text_lines(old_text))
   const new_lines = $derived(split_text_lines(new_text))
 
@@ -306,8 +304,8 @@
 {/snippet}
 
 {#snippet code_cell(line: DiffLine | null, row_class: string, side: string)}
-  <!-- white-space: pre makes stray text nodes real spaces. Fragment-boundary trimming
-  avoids them; the diff-view test pins indented-line reassembly. -->
+  <!-- white-space: pre turns stray text nodes into real spaces, hence the tight fragment
+  boundaries; the diff-view test pins indented-line reassembly -->
   {#if line}
     <span class="code {row_class}" data-side={side}>
       {#each render_tokens(line.text, line.spans) as token (token.start)}

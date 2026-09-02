@@ -137,14 +137,12 @@ describe(`create_source_links`, () => {
     detach()
   })
 
-  // The anchor adopts the code span's text nodes so Svelte keeps patching them, which means
-  // a reactive `<code>{name}</code>` rewrites the text *inside* our link. Skipping every
-  // span that already holds an anchor left that link pointing at the old name forever.
+  // the anchor adopts the span's text nodes, so a reactive `<code>{name}</code>` rewrites
+  // text inside our link; skipping spans that already hold one froze the old name
   it(`re-resolves a link whose code span text changed, and unwraps it when it stops matching`, async () => {
     const root = document.createElement(`main`)
     const code = document.createElement(`code`)
-    // held across rescans: the anchor adopts this very node, which is how Svelte goes on
-    // patching a reactive `<code>{name}</code>` from inside our link
+    // held across rescans: the anchor adopts this very node
     const text = document.createTextNode(`Footer`)
     code.append(text)
     root.append(code)

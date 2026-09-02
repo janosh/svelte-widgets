@@ -133,7 +133,6 @@ test(`closes dropdown on tab out and blur to external element`, async () => {
   mount_multiselect({ options: [1, 2, 3], onclose })
   expect(doc_query(`ul.options.hidden`)).toBeInstanceOf(HTMLUListElement)
 
-  // opens dropdown on focus
   const input = await focus_input()
   expect(document.querySelector(`ul.options.hidden`)).toBeNull()
 
@@ -210,13 +209,11 @@ test(`backspace does not remove items when minSelect would be violated`, async (
 
   mount_multiselect({ options, selected, minSelect })
 
-  // Try to remove the only selected item with backspace
   const backspace = fresh_key(`Backspace`)
   const input = get_input()
   input.dispatchEvent(backspace)
   await tick()
 
-  // The item should still be selected since minSelect=1
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Red`)
 })
 
@@ -261,7 +258,7 @@ describe(`arrow key navigation between selected items`, () => {
     expect(selected_items()).toHaveLength(2)
     expect(selected_items()[0]?.textContent).toContain(`Red`)
     expect(selected_items()[1]?.textContent).toContain(`Blue`)
-    // highlight should stay at idx 1 (Blue), not jump to idx 0 (Red)
+    // idx 1 is Blue now, not Red
     expect(is_highlighted(1)).toBe(true)
     expect(is_highlighted(0)).toBe(false)
   })
@@ -321,7 +318,7 @@ describe(`arrow key navigation between selected items`, () => {
     input.dispatchEvent(press(`ArrowLeft`))
     await tick()
     expect(is_highlighted(1)).toBe(true)
-    // click X on last item (Blue) — selected becomes [Red, Green], stale idx 1 still valid
+    // remove Blue: selected becomes [Red, Green], so the stale idx 1 is still valid
     ;[...document.querySelectorAll<HTMLElement>(`ul.selected li button.remove`)]
       .at(-1)
       ?.click()
@@ -332,7 +329,7 @@ describe(`arrow key navigation between selected items`, () => {
   test(`remove-all button clears highlight`, async () => {
     // minSelect=1 so one item survives remove-all, exposing stale highlighted_idx
     const input = setup([`Red`, `Green`, `Blue`], { minSelect: 1 })
-    // highlight idx 0 (Red) — this item will survive remove-all
+    // highlight idx 0 (Red), the item that survives remove-all
     for (let step = 0; step < 3; step++) input.dispatchEvent(press(`ArrowLeft`))
     await tick()
     expect(is_highlighted(0)).toBe(true)
@@ -360,14 +357,12 @@ describe(`arrow key navigation between selected items`, () => {
   })
 
   test(`Backspace with duplicates removes correct occurrence`, async () => {
-    // with duplicates=true, selected can have repeated values
-    // backspace on highlighted idx 2 (second "Red") must remove idx 2, not idx 0
+    // backspace on highlighted idx 2 (the second Red) must remove idx 2, not idx 0
     const input = setup([`Red`, `Blue`, `Red`], { duplicates: true })
     input.dispatchEvent(press(`ArrowLeft`)) // idx 2 (second Red)
     input.dispatchEvent(press(`Backspace`))
     await tick()
     expect(selected_items()).toHaveLength(2)
-    // first Red (idx 0) should survive, Blue (idx 1) should survive
     expect(selected_items()[0]?.textContent).toContain(`Red`)
     expect(selected_items()[1]?.textContent).toContain(`Blue`)
   })
@@ -403,8 +398,7 @@ describe(`arrow key navigation between selected items`, () => {
   })
 
   test.each<[name: string, next_selected: string[], expected_idx: number | null]>([
-    // externally shrinking past the highlighted idx should clamp to the last valid index;
-    // clearing should drop the highlight entirely (expected_idx null)
+    // shrinking past the highlighted idx clamps to the last valid one, clearing drops it
     [`shrink clamps highlighted_idx`, [`Red`, `Green`], 1],
     [`clear nullifies highlighted_idx`, [], null],
   ])(`external selected %s`, async (_name, next_selected, expected_idx) => {
@@ -447,8 +441,8 @@ describe(`arrow key navigation between selected items`, () => {
 })
 
 describe(`keyboard shortcuts`, () => {
-  // Mount with shortcut props, focus the input, dispatch one keydown, and return the
-  // bound props plus the (cancelable) event so callers can assert selection + defaultPrevented.
+  // mounts, focuses the input and dispatches one keydown, returning the bound props and
+  // the cancelable event so callers can assert selection and defaultPrevented
   async function test_shortcut(
     shortcut_props: Partial<MultiSelectProps>,
     key_event: {
@@ -512,14 +506,13 @@ describe(`keyboard shortcuts`, () => {
   )
 
   test(`custom shortcuts override defaults`, async () => {
-    // Default ctrl+a should NOT work with a custom select_all binding
+    // the default ctrl+a must stop working once select_all is rebound
     const { props, input } = await test_shortcut(
       { selectAllOption: true, shortcuts: { select_all: `ctrl+e` } },
       { key: `a`, ctrlKey: true },
     )
     expect(props.selected).toEqual([])
 
-    // Custom ctrl+e SHOULD work
     input.dispatchEvent(
       new KeyboardEvent(`keydown`, { key: `e`, ctrlKey: true, bubbles: true }),
     )
@@ -584,7 +577,6 @@ describe(`keyboard shortcuts`, () => {
       { selectAllOption: false, shortcuts: { select_all: `ctrl+a` } },
       { key: `a`, ctrlKey: true },
     )
-    // Should NOT select all since selectAllOption is false
     expect(props.selected).toEqual([])
   })
 
@@ -627,7 +619,6 @@ describe(`keyboard shortcuts`, () => {
       { selectAllOption: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
       { key: `a`, ctrlKey: true },
     )
-    // Shortcuts should not work when component is disabled
     expect(props.selected).toEqual([])
   })
 
@@ -679,7 +670,6 @@ describe(`keyboard shortcuts`, () => {
     },
   )
 
-  // Tests for shortcut override behavior - custom shortcuts take precedence over built-in keys
   test.each([
     // [description, shortcuts, extra_props, key, expected_open, expected_selected]
     [
@@ -787,7 +777,7 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   await tick()
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`foo`)
 
-  // Enter mid-composition (e.g. confirming CJK text) must not select the active option
+  // Enter mid-composition (confirming CJK text) must not select the active option
   const composing_enter = fresh_key(`Enter`)
   Object.defineProperty(composing_enter, `isComposing`, { value: true })
   input.dispatchEvent(composing_enter)
@@ -800,7 +790,7 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   expect(props.selected).toEqual([`foo`])
 })
 
-// The remove button is unmounted by the removal it just ran, so focus fell to <body>.
+// the remove button is unmounted by the removal it just ran, so focus fell to <body>
 test.each([
   [`a single chip's remove button`, `ul.selected button.remove`],
   [`the remove-all button`, `button.remove-all`],

@@ -279,8 +279,8 @@ describe(`pending_hmr_file lifecycle`, () => {
     // re-transform with identical examples — fix clears pending_hmr_file
     transform(plugin, ctx, make_code(`<div>V1</div>`), id)
 
-    // later: examples change WITHOUT a preceding handleHotUpdate.
-    // Without the fix, stale pending_hmr_file causes spurious full-reload.
+    // examples change without a preceding handleHotUpdate: a stale pending_hmr_file
+    // used to trigger a spurious full-reload here
     transform(plugin, ctx, make_code(`<div>V2</div>`), id)
     vi.advanceTimersByTime(500)
 

@@ -17,16 +17,15 @@ test.each([
   expect(escape_template_literal(input)).toBe(expected)
 })
 
-// The manifest is edited by hand and merged across branches, so both invariants drift easily.
-// The generator rejects duplicate ids and custom.ts clashes; ordering has no other guard.
+// the hand-edited manifest drifts across merges; the generator catches duplicate ids and
+// custom.ts clashes, but ordering has no other guard
 describe(`icons-manifest`, () => {
   const source = readFileSync(
     `${import.meta.dirname}/../../scripts/icons-manifest.ts`,
     `utf8`,
   )
-  // A section header is a bare lowercase tag. Explanatory notes sit at the same indent, so
-  // anything wordier continues the current section instead of opening a new one — treating
-  // one as a header would silently restart the ordering run and hide entries after it.
+  // a section header is a bare lowercase tag; wordier notes at the same indent continue
+  // the section — reading one as a header would restart the run and hide later entries
   const sections: string[][] = []
   for (const line of source.split(`\n`)) {
     if (/^ {2}\/\/ [a-z][a-z\d &:]*$/u.test(line)) sections.push([])
@@ -40,8 +39,8 @@ describe(`icons-manifest`, () => {
   const names = sections.flat()
 
   test(`finds icon names in the manifest`, () => {
-    // Both checks below are satisfied by an empty parse, so a manifest reformat that broke
-    // either regex would quietly retire them rather than fail.
+    // an empty parse satisfies both checks below, so a reformat breaking either regex
+    // would quietly retire them rather than fail
     expect(names.length).toBeGreaterThan(0)
   })
 
@@ -63,9 +62,8 @@ describe(`icons-manifest`, () => {
 })
 
 describe(`Icon`, () => {
-  // Every entry, not a sample: the set is merged from another repo, and markup holding
-  // several shapes rather than one `d` renders as nothing unless Icon spots the markup.
-  // Offenders are collected so a bad merge names every icon it broke, not just the first.
+  // every entry, not a sample: the set is merged from another repo and multi-shape markup
+  // renders as nothing unless Icon spots it; offenders collected so a bad merge names all
   test(`every icon renders its viewBox, fill, stroke and shape`, () => {
     const offenders: string[] = []
     // annotated because the inferred literal types drop the optional keys entirely

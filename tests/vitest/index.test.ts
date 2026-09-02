@@ -23,9 +23,8 @@ test(`src/lib/index.ts re-exports all Svelte components`, () => {
   expect(components.filter((name) => !(name && name in lib))).toEqual([])
 })
 
-// Svelte types `class` as a ClassValue, so a consumer may hand any component an array or
-// an object. Interpolating that into a string renders `class="masonry [object Object]"`;
-// the array form passes it to Svelte's own clsx pass, which is what resolves the object.
+// Svelte types `class` as ClassValue, so consumers may pass arrays/objects; interpolating
+// one into a string renders `[object Object]` instead of letting Svelte's clsx resolve it
 test(`no component interpolates a class prop into a class string`, () => {
   const sources = import.meta.glob<string>(`$lib/**/*.svelte`, {
     eager: true,

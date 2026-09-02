@@ -1,12 +1,9 @@
-// Flatten a drop into the files it actually carries.
-//
-// DataTransfer.files stops at the top level: drop a directory and it reports one
-// zero-byte File named after the directory. webkitGetAsEntry is the only way to see
-// inside, and it is only readable during the drop event itself.
+// Flatten a drop into the files it actually carries. DataTransfer.files stops at the top
+// level — a dropped directory reports one zero-byte File named after it — and
+// webkitGetAsEntry, the only way inside, is readable during the drop event alone.
 
-// Match the comma-separated unique file type specifiers accepted by
-// `<input type="file" accept="…">`: filename extensions, exact MIME types and MIME
-// wildcards. Empty accept strings impose no restriction, like the native input.
+// Matches the comma-separated specifiers of `<input type="file" accept="…">`: extensions,
+// exact MIME types and MIME wildcards. Empty accept means no restriction, as natively.
 export const file_matches_accept = (file: File, accept = ``): boolean => {
   const tokens = accept
     .split(`,`)
@@ -23,9 +20,8 @@ export const file_matches_accept = (file: File, accept = ``): boolean => {
   })
 }
 
-// Apply drop/input selection constraints in the same order as a native picker:
-// disallowed files disappear first, then a single-select consumer gets the first
-// remaining file rather than an unacceptable first item blocking later matches.
+// Native picker order: drop disallowed files first, so a single-select consumer gets the
+// first acceptable one rather than being blocked by an unacceptable first item.
 export const filter_accepted_files = (
   files: Iterable<File>,
   accept = ``,
@@ -45,8 +41,7 @@ const read_all_entries = async (
   reader: FileSystemDirectoryReader,
 ): Promise<FileSystemEntry[]> => {
   const entries: FileSystemEntry[] = []
-  // readEntries hands back at most 100 per call and signals the end with an empty batch,
-  // so one call is only enough for a small directory
+  // readEntries returns at most 100 per call and ends with an empty batch
   while (true) {
     const batch = await new Promise<FileSystemEntry[]>(reader.readEntries.bind(reader))
     if (batch.length === 0) return entries
@@ -54,12 +49,11 @@ const read_all_entries = async (
   }
 }
 
-// The entry API resolves symlinks, so a directory linked to one of its own ancestors
-// recurses forever and hangs the tab. Both caps are needed: depth alone stops a single
-// chain before the stack does, but two sibling links to a common ancestor branch as fast
-// as they descend — measured at 300k reads by depth 17 — so only a budget over the whole
-// expansion bounds that. Reported rather than silently truncated: a drop that quietly
-// lost half its files is worse than one that failed.
+// The entry API resolves symlinks, so a directory linked to an ancestor recurses forever.
+// Both caps are needed: depth stops a single chain, but two sibling links to a common
+// ancestor branch as fast as they descend (300k reads by depth 17), which only a
+// whole-expansion budget bounds. Reported, not silently truncated — losing half a drop's
+// files quietly is worse than failing.
 const MAX_DEPTH = 32
 const MAX_DIRS = 20_000
 
@@ -88,12 +82,10 @@ const files_from_entry = async (
   ).flat()
 }
 
-// Every file in a drop, with dropped directories expanded depth-first and in the order
-// the browser lists them. Falls back to the flat DataTransfer.files list when the entry
-// API yields nothing, which is what a paste or a synthetic drop event gives.
-//
-// Rejects on a tree that nests or branches past the caps above, so a drop handler has to
-// catch — a symlink cycle is the realistic way to get there.
+// Every file in a drop, directories expanded depth-first in the browser's own order,
+// falling back to flat DataTransfer.files when the entry API yields nothing (a paste or a
+// synthetic drop). Rejects past the caps above, so drop handlers must catch — a symlink
+// cycle is the realistic way there.
 export const files_from_data_transfer = async (
   data_transfer: DataTransfer,
 ): Promise<File[]> => {

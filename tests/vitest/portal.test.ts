@@ -35,8 +35,7 @@ test(`restores from a shadow root after its anchor is removed`, async () => {
   expect(node.isConnected).toBe(false)
 })
 
-// closing must hide the dropdown in the same tick; deferring it to the reposition
-// microtask would leave a stale dropdown painted for a frame
+// deferring the hide to the reposition microtask would paint a stale dropdown for a frame
 test(`hides synchronously when open flips false`, () => {
   const { target, node } = create_fixture()
   const action = portal_action(node, { active: true, open: true, target_node: target })
@@ -45,9 +44,8 @@ test(`hides synchronously when open flips false`, () => {
   action.update({ active: true, open: false, target_node: target })
   expect(node.hidden).toBe(true)
 
-  // deactivating hands visibility back to the consumer's own markup. Latching the
-  // closed state here instead would stick: update() stops touching `hidden` once the
-  // node is home, so reopening with the portal still off could never show it again.
+  // deactivating hands visibility back to the consumer's markup. Latching the closed
+  // state would stick: update() stops touching `hidden` once the node is home.
   action.update({ active: false, open: false, target_node: target })
   expect(node.hidden).toBe(false)
 
@@ -62,7 +60,7 @@ test(`losing the target hides while portalled but not once deactivated`, () => {
   const action = portal_action(node, { active: true, open: true, target_node: target })
   expect(node.hidden).toBe(false)
 
-  // portalled with nowhere to anchor: no sane position to paint at
+  // portalled with nowhere to anchor: no position to paint at
   action.update({ active: true, open: true, target_node: null })
   expect(node.hidden).toBe(true)
 
@@ -97,8 +95,7 @@ test(`destroy detaches viewport listeners and cancels queued positioning`, async
   const action = portal_action(node, { active: true, open: true, target_node: target })
   action.destroy()
   await tick()
-  // the exact pairs matter: scroll must be removed with capture=true or the
-  // capturing listener added on activate stays bound forever
+  // scroll must be removed with capture=true or the capturing listener stays bound
   expect(
     remove_spy.mock.calls.slice(baseline).map(([type, , options]) => [type, options]),
   ).toEqual([

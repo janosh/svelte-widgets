@@ -177,8 +177,8 @@ app startup.
 
   const token = (name: (typeof TOKEN_CLASS_NAMES)[number], emphasized = false) =>
     TOKEN_CLASS_NAMES.indexOf(name) | (emphasized ? EMPHASIS_BIT : 0)
-  // A tiny fixture tokenizer: enough to demonstrate token color and changed-word emphasis
-  // without bundling a language grammar or diff engine into the docs site.
+  // fixture tokenizer: shows token color and changed-word emphasis without bundling a
+  // language grammar or diff engine into the docs site
   const spans_for = (text: string) => {
     const match = /\b(?:log|info|function|const)\b/u.exec(text)
     if (!match) return []
@@ -234,7 +234,7 @@ app startup.
   } satisfies DiffResult
 
   const backend: DiffBackend = {
-    // Fixed fixture: a production backend inspects all DiffTextArgs fields.
+    // fixed fixture; a production backend inspects all DiffTextArgs fields
     diff_text: () => Promise.resolve(result),
   }
 </script>

@@ -18,7 +18,7 @@ test(`inline code mentions of components link to their source, on load and after
   expect(await page.locator(`pre code a`).count()).toBe(0)
   expect(await page.locator(`a code a`).count()).toBe(0)
 
-  // client-side navigation swaps the page inside the same wrapper: new mentions link too
+  // client-side nav swaps the page inside the same wrapper: new mentions link too
   await page.goto(`/popover`)
   await expect(
     page.locator(`code > a[href$="/src/lib/Popover.svelte"]`).first(),

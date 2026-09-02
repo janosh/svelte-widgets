@@ -16,9 +16,8 @@ describe(`dismiss_on_outside_press`, () => {
     return { callback, cleanup }
   }
 
-  // One listener over several disjoint menus in a panel, which is exactly what the
-  // attachment cannot express: a wrapper around them all would count every press
-  // between them as inside.
+  // one listener over several disjoint menus in a panel: a wrapper around them all would
+  // count every press between them as inside
   it(`without a node, inside alone decides membership`, () => {
     const panel = create_element()
     const [menu_a, menu_b] = [create_element(), create_element()]
@@ -36,8 +35,7 @@ describe(`dismiss_on_outside_press`, () => {
     press(menu_b)
     expect(callback).not.toHaveBeenCalled()
 
-    // between the two menus but still inside the panel: an attached surface would
-    // have to count this as inside, a node-less listener must not
+    // between the menus but inside the panel: an attached surface would count this inside
     press(panel_filler)
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback.mock.calls[0][0]).toMatchObject({ via: `pointer` })

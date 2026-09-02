@@ -7,8 +7,8 @@ import TestPopover from './TestPopover.svelte'
 
 describe(`Popover`, () => {
   type PopoverProps = Omit<ComponentProps<typeof Popover>, `children`>
-  // click_outside and focus_trap register document listeners that outlive
-  // document.body.innerHTML = '', so unmount for real between cases
+  // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
+  // so unmount for real between cases
   const mounted: Record<string, unknown>[] = []
   afterEach(async () => {
     await Promise.all(mounted.splice(0).map((app) => unmount(app)))
@@ -77,8 +77,8 @@ describe(`Popover`, () => {
     },
   )
 
-  // The wrapper around the trigger snippet is `display: contents` and measures 0x0,
-  // so anchoring to it would pin every popover to the viewport corner
+  // the trigger wrapper is `display: contents` and measures 0x0, so anchoring to it
+  // would pin every popover to the viewport corner
   test(`positions against the trigger, not the wrapper around it`, async () => {
     mount_popover({ offset: 8 })
     const rect = { top: 20, bottom: 50, left: 100, right: 200, width: 100, height: 30 }
@@ -260,9 +260,8 @@ describe(`Popover`, () => {
     expect(surface()).not.toBeNull()
   })
 
-  // Removing a focused surface delivers no focusout, and focus_trap then hands focus
-  // back to the trigger. Without dropping the stale focus state on close, that focusin
-  // reopens what was just dismissed.
+  // removing a focused surface delivers no focusout, so focus_trap's handback to the
+  // trigger reopens what was dismissed unless close drops the stale focus state
   test(`hover dismissal with focus inside stays closed`, async () => {
     vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `hover`, close_delay_ms: 10 })
@@ -277,8 +276,8 @@ describe(`Popover`, () => {
     expect(surface()).toBeNull()
   })
 
-  // Same stale state seen from the other side: with nothing to restore focus to, a later
-  // hover cycle must still close on mouseleave instead of waiting on a focus that left.
+  // same stale state from the other side: with nothing to restore focus to, a later hover
+  // cycle must still close on mouseleave rather than wait on a focus that left
   test(`hover-out still closes after a dismissal that stranded focus`, async () => {
     vi.useFakeTimers()
     const props = mount_popover({
@@ -333,8 +332,8 @@ describe(`Popover`, () => {
     await close_and_expect_focus(next_opener)
   })
 
-  // A torn-down component cannot render a surface either way, so asserting on the DOM
-  // alone cannot tell a canceled timer from one that still fires. Watch the timer id.
+  // a torn-down component renders no surface either way, so only the timer id tells a
+  // canceled timer from one that still fires
   test(`unmount cancels a pending delayed open`, async () => {
     vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, open_delay_ms: 50 })

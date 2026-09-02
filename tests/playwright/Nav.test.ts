@@ -47,8 +47,8 @@ test(`generated Nav and MultiSelect ids survive hydration`, async ({ page }) => 
       hydration_warnings.push(text)
     }
   })
-  // This route renders MultiSelect directly during SSR; live-example routes mount
-  // their demo components client-side and cannot expose an SSR/client ID mismatch.
+  // This route renders MultiSelect during SSR; live-example routes mount client-side and so
+  // cannot expose an SSR/client ID mismatch.
   const response = await page.goto(`/range-select`, { waitUntil: `networkidle` })
   const server_html = await response?.text()
   if (!server_html) throw new Error(`Missing SSR response body for /range-select`)
@@ -140,15 +140,14 @@ test.describe(`Nav dropdown`, () => {
   })
 })
 
-// The pill is painted on `.menu > span`, but the link inside it is `flex: 1`, which fills
-// only the content box. Without the link stretching back over the span's padding, that
-// padding is a dead band inside the visible row. Only a browser resolves these boxes.
+// The pill is painted on `.menu > span` but its `flex: 1` link fills only the content box, so
+// without the link stretching over the span's padding that padding is a dead band.
 test(`the whole painted mobile row is part of its link's hit area`, async ({ page }) => {
   await page.setViewportSize({ width: 420, height: 800 })
   await page.goto(`/nav`, { waitUntil: `networkidle` })
 
-  // .click() here races a decorative overlay for the press; the burger's own hit area is
-  // not what this test is about, so open the menu directly
+  // .click() races a decorative overlay for the press, and the burger's hit area is not what
+  // this test is about
   await page
     .locator(`nav.mobile button.burger`)
     .first()
@@ -176,9 +175,9 @@ test(`the whole painted mobile row is part of its link's hit area`, async ({ pag
   }
 })
 
-// The submenu inherits its line-height from the host page, which once made every child row
-// taller than the parent it hangs under. Its guide line is one border on the wrapper, and the
-// active link recolours a segment of it by sitting exactly on top. Layout-only, so: a browser.
+// The submenu inherits line-height from the host page, which once made every child row taller
+// than its parent. Its guide line is one border on the wrapper, recoloured in part by the
+// active link sitting exactly on top.
 test(`expanded submenu rows are compact and share one continuous guide line`, async ({
   page,
 }) => {
@@ -193,7 +192,7 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
   const parent_row = dropdown.locator(`> div:first-child`)
   const caret = parent_row.locator(`> button`)
   // the caret is the only way to open a section, so it claims the row's full height and runs
-  // out to the painted trailing edge rather than stopping inside the row's padding
+  // out to the painted trailing edge
   const [caret_box, row_box] = await Promise.all([
     caret.boundingBox(),
     parent_row.boundingBox(),
@@ -208,8 +207,7 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
   await caret.evaluate((el: HTMLElement) => el.click())
   const links = dropdown.locator(`> div:last-child a`)
   await expect(links.first()).toBeVisible()
-  // the section opens over 0.25s; measuring mid-transition reads a wrapper still shorter
-  // than the links it clips
+  // the section opens over 0.25s; mid-transition the wrapper is still shorter than its links
   const wrapper_locator = dropdown.locator(`.submenu-inner`)
   await expect
     .poll(async () => (await wrapper_locator.boundingBox())?.height ?? 0)

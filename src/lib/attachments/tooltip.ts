@@ -44,8 +44,8 @@ export interface TooltipOptions {
   delegate?: boolean | string
   style?: string
   show_arrow?: boolean
-  // HTML is opt-in, including delegated title/aria-label/data-title. Only pass trusted
-  // content; pair user-controlled delegated attributes with sanitize_html.
+  // Opt-in, including delegated title/aria-label/data-title. Trusted content only; pair
+  // user-controlled delegated attributes with sanitize_html.
   allow_html?: boolean
   sanitize_html?: (html: string) => string
 }
@@ -99,8 +99,7 @@ const TOOLTIP_CSS_VARS = [
   `--tooltip-z-index`,
 ] as const
 
-// How an ending interaction names its close: a focus becomes a blur, a pointer keeps
-// its own name.
+// how an ending interaction names its close: focus becomes blur, pointer keeps its name
 const CLOSE_REASON = { pointer: `pointer`, focus: `blur` } as const
 
 const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
@@ -110,9 +109,9 @@ const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
   right: [`left`, 225],
 }
 
-// The two corners flanking each arrow side, in cross-axis order. The arrow tracks the edge
-// it hangs off, for these and for its border below, which differs from any fixed side only
-// under a consumer stylesheet: every --tooltip-* shorthand sets all four alike.
+// The two corners flanking each arrow side, cross-axis order. Arrow tracks the edge it
+// hangs off (here and for its border below), which only a consumer stylesheet can make
+// differ from a fixed side: every --tooltip-* shorthand sets all four alike.
 const SIDE_CORNERS: Record<Placement, readonly [string, string]> = {
   top: [`top-left`, `top-right`],
   bottom: [`bottom-left`, `bottom-right`],
@@ -125,7 +124,7 @@ const handled_tooltip_events = new WeakSet<Event>()
 const is_transparent = (color: string): boolean =>
   [``, `transparent`, `rgba(0, 0, 0, 0)`].includes(color.trim())
 
-// Computed length or a fallback when the property is unset or not in px.
+// computed length, falling back when the property is unset or not in px
 const css_px_or = (css_length: string, fallback: number): number => {
   const parsed = css_px(css_length)
   return Number.isFinite(parsed) ? parsed : fallback
@@ -138,9 +137,8 @@ const accepts_tooltip_trigger = (
   trigger: `hover` | `focus`,
 ): boolean => [trigger, `hover-focus`].includes(tooltip_trigger(options))
 
-// A trigger that left the document or stopped rendering cannot anchor anything.
-// `checkVisibility` covers detachment, `display: none` and `content-visibility` alike;
-// `isConnected` is the fallback where it is unavailable.
+// A detached or non-rendering trigger anchors nothing. `checkVisibility` covers detachment,
+// `display: none` and `content-visibility` alike; `isConnected` is the fallback.
 const is_trigger_visible = (trigger: HTMLElement): boolean =>
   typeof trigger.checkVisibility === `function`
     ? trigger.checkVisibility()
@@ -171,8 +169,7 @@ const remove_description = (element: Element, id: string): void => {
   else element.removeAttribute(`aria-describedby`)
 }
 
-// The visual viewport (so an open on-screen keyboard shrinks it), clipped to the
-// boundary element when one is given.
+// visual viewport (so an on-screen keyboard shrinks it), clipped to any boundary element
 const resolve_boundary = (options: TooltipOptions, doc: Document) => {
   const view = doc.defaultView
   const visual = view?.visualViewport
@@ -208,7 +205,7 @@ const sync_arrow_styles = (
   const anchor_center = vertical
     ? (trigger_rect.left + trigger_rect.right) / 2 - left
     : (trigger_rect.top + trigger_rect.bottom) / 2 - top
-  // This clamp exists to hold the tip off a curve, so it measures the near corners.
+  // clamp keeps the tip off a curve, so it measures the near corners
   const corner_radius = (corner: string) =>
     css_px_or(styles.getPropertyValue(`border-${corner}-radius`), 0)
   const [start_corner, end_corner] = SIDE_CORNERS[inset_side]
@@ -219,24 +216,24 @@ const sync_arrow_styles = (
   const fill_color = is_transparent(background)
     ? `var(--tooltip-bg, light-dark(#fff, #2a2a2e))`
     : background
-  // The width the surface's border actually occupies, per side. `border_width` is the
-  // painted one: the same measurement, zeroed on a see-through color, which is what the
-  // arrow draws on itself. A transparent border still takes up layout, so the two differ.
+  // Width the border occupies in layout. `border_width` below is the painted width — the
+  // same measurement zeroed on a see-through color — which is what the arrow draws; a
+  // transparent border still takes up layout, so the two differ.
   const layout_border = (side: string) =>
     css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
-  // The arrow paints the border of the edge it continues, at that edge's width.
+  // the arrow paints the border of the edge it continues, at that edge's width
   const border_color = styles.getPropertyValue(`border-${inset_side}-color`)
   const border_width = is_transparent(border_color) ? 0 : layout_border(inset_side)
   const arrow_side = (arrow_px + border_width) * Math.SQRT2
   arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
-  // Absolute insets resolve against the padding box while everything measured above is in
-  // border-box space, so both axes have to put the surface's border back.
+  // insets resolve against the padding box, measurements above are border-box, so both
+  // axes add the surface's border back
   const cross_side = vertical ? `left` : `top`
   set(cross_side, `${cross_axis_center - arrow_side / 2 - layout_border(cross_side)}px`)
-  // On the main axis the square's center lands on the border edge, which puts the tip
-  // exactly `arrow_px` clear of the surface — the painted border covers the overlap.
+  // main axis: the square's center sits on the border edge, so the tip clears the surface
+  // by exactly `arrow_px` and the painted border covers the overlap
   set(inset_side, `${-arrow_side / 2 - (layout_border(inset_side) - border_width)}px`)
 }
 
@@ -277,8 +274,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   arrow_el.className = `custom-tooltip-arrow`
   let open_timeout: ReturnType<typeof setTimeout> | undefined
   let close_timeout: ReturnType<typeof setTimeout> | undefined
-  // Subscriptions that live exactly as long as the tooltip is open, each returning its
-  // own stopper. Collecting them means opening cannot start one that closing forgets.
+  // subscriptions that live exactly as long as the tooltip is open; collecting their
+  // stoppers means opening can't start one that closing forgets
   let stop_open_effects: (() => void)[] = []
   let render_cleanup: (() => void) | undefined
   let last_closed_at = -Infinity
@@ -309,9 +306,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.style.display = `none`
   }
 
-  // Every exit path has to come through here. A dismissal that hands focus back to the
-  // trigger re-enters and can open again on the way out, so an owner being dropped is
-  // not proof that nothing is subscribed.
+  // Every exit path comes through here: a dismissal that hands focus back to the trigger
+  // re-enters and can reopen, so a dropped owner is no proof nothing is subscribed.
   const stop_open_subscriptions = () => {
     active_observer.disconnect()
     removal_observer.disconnect()
@@ -330,9 +326,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   const track_input = (event: PointerEvent | KeyboardEvent) => {
     last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
     if (!active || !(event instanceof PointerEvent)) return
-    // A press dismisses a hover tooltip, which would otherwise hang over whatever the
-    // press opened; the pointer leaving and re-entering the trigger brings it back.
-    // `hover-focus` keeps its own: the press focuses the trigger, which is a show state.
+    // A press dismisses a hover tooltip that would otherwise hang over whatever it opened;
+    // re-entering the trigger brings it back. `hover-focus` keeps its own, since the press
+    // focuses the trigger, itself a show state.
     if (tooltip_trigger(active.registration.options) !== `hover`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
       request_close(`pointer`, true)
@@ -391,7 +387,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     )
   }
 
-  // Wipes whatever the previous owner left inline, so nothing leaks between triggers.
+  // wipes the previous owner's inline styles, so nothing leaks between triggers
   const reset_surface_styles = () => {
     surface.style.cssText = `
       position: fixed; inset: auto; margin: 0; z-index: var(--tooltip-z-index, 9999);
@@ -412,8 +408,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     `
   }
 
-  // Theme vars, typography and writing direction come from the trigger, so the surface
-  // reads as part of the thing it describes rather than as page chrome.
+  // theme vars, typography and writing direction come from the trigger, so the surface
+  // reads as part of what it describes rather than as page chrome
   const inherit_trigger_styles = (trigger: HTMLElement) => {
     const trigger_styles = getComputedStyle(trigger)
     for (const css_var_name of TOOLTIP_CSS_VARS) {
@@ -426,7 +422,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.style.fontStyle = trigger_styles.fontStyle
     surface.style.fontWeight = trigger_styles.fontWeight
     surface.style.letterSpacing = trigger_styles.letterSpacing
-    // `closest` matches the trigger itself first, so it covers its own lang/dir too.
+    // `closest` matches the trigger itself first, covering its own lang/dir
     const nearest = (attribute: string, ...rest: (string | undefined)[]) =>
       first_nonempty(
         trigger.closest(`[${attribute}]`)?.getAttribute(attribute),
@@ -436,9 +432,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.dir = nearest(`dir`, doc.documentElement.dir, trigger_styles.direction)
   }
 
-  // A page that goes dark through CSS vars alone resolves the default light-dark()
-  // background to LIGHT while inheriting near-white text. Follow the OS preference
-  // instead, unless the page declares a scheme or the trigger overrides either var.
+  // A page going dark through CSS vars alone resolves the default light-dark() background
+  // to light while inheriting near-white text, so follow the OS preference unless the page
+  // declares a scheme or the trigger overrides either var.
   const apply_color_scheme_fallback = () => {
     const body_styles = getComputedStyle(doc.body)
     if (body_styles.colorScheme && body_styles.colorScheme !== `normal`) return
@@ -451,12 +447,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.style.setProperty(`--text-color`, `light-dark(#222, #eee)`)
   }
 
-  // Ordering is the whole contract here: the consumer's `style` is the last word, and
-  // the scheme fallback judges vars every earlier step may have set.
+  // Ordering is the contract: the consumer's `style` is the last word, and the scheme
+  // fallback judges vars every earlier step may have set.
   const apply_surface_context = (trigger: HTMLElement, options: TooltipOptions): void => {
     reset_surface_styles()
     inherit_trigger_styles(trigger)
-    // The base rules already wrap; only `nowrap` has to undo them.
+    // base rules already wrap; only `nowrap` has to undo them
     const wrap = options.wrap ?? `balance`
     surface.style.textWrap = wrap === `normal` ? `wrap` : wrap
     if (wrap === `nowrap`) {
@@ -507,7 +503,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.style.setProperty(`--tooltip-available-width`, available_width)
     compact_balanced_tooltip()
     const trigger_rect = active.trigger.getBoundingClientRect()
-    // A zero-area rect carries no position, so it can never count as scrolled away.
+    // a zero-area rect carries no position, so it never counts as scrolled away
     const has_area =
       trigger_rect.right > trigger_rect.left || trigger_rect.bottom > trigger_rect.top
     const off_screen =
@@ -520,8 +516,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       return
     }
     const tooltip_rect = surface.getBoundingClientRect()
-    // Only placement and offset differ from compute_position's own defaults, so the
-    // remaining options pass straight through.
+    // only placement and offset differ from compute_position's defaults
     const { top, left, placement } = compute_position(trigger_rect, tooltip_rect, {
       placement: options.placement ?? `auto`,
       offset: options.offset ?? 12,
@@ -569,8 +564,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (keep_active) {
       closing.pointer_surface = false
       if (closing.focus === `surface`) closing.focus = null
-      // Not a self-assignment: handing focus back above re-enters through focusout and
-      // focusin, which can null `active` or install a fresh one over the dismissal.
+      // not a self-assignment: handing focus back re-enters via focusout/focusin, which
+      // can null `active` or install a fresh one over the dismissal
       active = closing
     } else {
       release_delegated_title(closing.registration, closing.trigger)
@@ -599,9 +594,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     options.on_open_change?.(false, { trigger: active.trigger, reason })
   }
 
-  // A custom element can put `title` back from its own attributeChangedCallback, so
-  // strip until it stops returning rather than trading one write per round. Returns the
-  // further attributes those synchronous rounds changed, or null if the trigger won.
+  // A custom element can restore `title` from attributeChangedCallback, so strip until it
+  // stops coming back. Returns attributes those synchronous rounds also changed, or null
+  // if the trigger won.
   const restrip_title = (observed: ActiveTooltip): string[] | null => {
     const { original_titles } = observed.registration
     let title = observed.trigger.getAttribute(`title`)
@@ -625,8 +620,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (changed_attributes.includes(`title`)) {
       const also_changed = restrip_title(observed)
       if (!also_changed) {
-        // Throwing would only reach the global error handler, so give up loudly and
-        // leave the native title in place rather than looping forever.
+        // throwing would only reach the global error handler, so give up loudly and
+        // leave the native title in place rather than loop forever
         console.error(
           `tooltip title could not be stripped from <${observed.trigger.tagName.toLowerCase()}>`,
         )
@@ -652,17 +647,16 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     position_active()
   })
 
-  // Detaching a trigger fires no scroll or resize, so repositioning alone would leave
-  // the surface pinned to geometry nothing owns any more. Detaching is also all a
-  // childList record can report, so this asks `isConnected` rather than paying for the
-  // style resolution behind `checkVisibility` on every batch the whole body produces.
-  // A trigger that stops rendering while still connected is the reposition's business.
+  // Detaching fires no scroll or resize, so repositioning alone would leave the surface
+  // pinned to dead geometry. Detachment is also all a childList record reports, hence
+  // `isConnected` over `checkVisibility`'s style resolution on every body-wide batch; a
+  // still-connected trigger that stops rendering is the reposition's business.
   const removal_observer = new MutationObserver(() => {
     if (active?.open && !active.trigger.isConnected) hide_active(`visibility`)
   })
 
-  // Fill the recycled surface and put it on screen. Top-layer mode degrades to absolute
-  // positioning where the Popover API is missing rather than throwing on every hover.
+  // Fill the recycled surface and show it. Top-layer mode degrades to absolute positioning
+  // without the Popover API rather than throwing on every hover.
   const mount_surface = (trigger: HTMLElement, options: TooltipOptions) => {
     surface.replaceChildren(content_el)
     if (options.show_arrow !== false) surface.append(arrow_el)
@@ -717,26 +711,24 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         return true
       }),
     ]
-    // Before positioning, which may hide again and must then report a close that
-    // follows an open rather than one out of nowhere.
+    // before positioning, which may hide again and must report a close that follows an
+    // open rather than one out of nowhere
     options.on_open_change?.(true, { trigger: opening.trigger, reason })
     position_active()
   }
 
   const request_open = (reason: `pointer` | `focus` | `controlled`): void => {
-    // Re-entering during the close delay supersedes the pending close.
-    clear_close_timeout()
+    clear_close_timeout() // re-entering during the close delay supersedes it
     if (!active || active.phase === `dismissed` || active.open) return
     const { options } = active.registration
     const elapsed_since_close = Date.now() - last_closed_at
     const warm =
       elapsed_since_close >= 0 && elapsed_since_close <= (options.skip_delay_ms ?? 300)
     const delay = reason === `pointer` && !warm ? (options.open_delay_ms ?? 100) : 0
-    // show_active clears the pending timer itself, so an immediate open supersedes it.
+    // show_active clears the pending timer itself, so an immediate open supersedes it
     if (delay === 0) return show_active(reason)
-    // `pointerover` fires again on every crossing between the trigger's own children, so
-    // a pending open rides out its original delay: restarting it here would keep a
-    // tooltip on a trigger built from several elements from ever reaching its deadline.
+    // `pointerover` refires on every crossing between the trigger's own children, so a
+    // pending open keeps its original deadline instead of restarting forever
     open_timeout ??= setTimeout(() => show_active(reason), delay)
   }
 
@@ -758,7 +750,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     )
   }
 
-  // Whether the surface currently serves this registration aimed at this exact trigger.
+  // surface currently serves this registration aimed at this exact trigger
   const owns = (registration: TooltipRegistration, trigger: HTMLElement): boolean =>
     active?.registration === registration && active.trigger === trigger
 
@@ -767,8 +759,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     trigger: HTMLElement,
     reason: `pointer` | `focus`,
   ): void => {
-    // One surface serves the document, so the newest interaction takes it — a controlled
-    // tooltip is preempted like any other and hears the close through on_open_change.
+    // One surface serves the document, so the newest interaction takes it; a controlled
+    // tooltip is preempted like any other and hears the close via on_open_change.
     if (active && !owns(registration, trigger)) hide_active(CLOSE_REASON[reason])
     remember_and_strip_title(registration, trigger)
     active ??= create_active_tooltip(registration, trigger)
@@ -796,9 +788,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   ): void => {
     if (!active || active.registration !== registration) return
     const entered = event.relatedTarget instanceof Node ? event.relatedTarget : null
-    // Moving within the trigger never counts as leaving it.
-    if (entered && active.trigger.contains(entered)) return
-    // Crossing onto the hoverable surface hands the interaction over instead of ending it.
+    if (entered && active.trigger.contains(entered)) return // moving within the trigger
+    // crossing onto the hoverable surface hands the interaction over rather than ending it
     if (entered && surface.contains(entered)) {
       if (reason === `pointer`) {
         active.pointer_trigger = false
@@ -815,8 +806,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   const enter_focus = (registration: TooltipRegistration, trigger: HTMLElement): void => {
     const { options } = registration
     if (!accepts_tooltip_trigger(options, `focus`)) return
-    // A tap focuses right after suppressing the hover tooltip; only explicit focus
-    // mode still wants to open there.
+    // a tap focuses right after suppressing the hover tooltip; only explicit focus
+    // mode still wants to open there
     if (last_input_was_touch && options.trigger !== `focus`) return
     activate(registration, trigger, `focus`)
   }
@@ -906,8 +897,8 @@ const registration_target = (
   const { root, delegate_selector, original_titles } = registration
   if (!(event_target instanceof Element) || !root.contains(event_target)) return null
   if (!delegate_selector) return root
-  // Walk up to the root: a trigger whose title this registration already holds no longer
-  // matches the default selector, so past ownership counts alongside the selector.
+  // Walk up to the root. A trigger whose title this registration already holds no longer
+  // matches the default selector, so past ownership counts too.
   let candidate: Element | null = event_target
   while (candidate) {
     if (
@@ -951,7 +942,7 @@ export const tooltip =
     const manager = get_tooltip_manager(node.ownerDocument)
     const unregister = manager.register(registration)
 
-    // Nested tooltip containers both see the event; the innermost to claim it wins.
+    // nested tooltip containers both see the event; the innermost to claim it wins
     const claim = (event: Event): HTMLElement | null => {
       if (handled_tooltip_events.has(event)) return null
       const trigger = registration_target(registration, event.target)

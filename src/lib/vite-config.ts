@@ -5,13 +5,12 @@
 // Sections merge over the defaults — lint's object-valued members a second level down,
 // so retuning one rule or staged glob restates nothing else, while its arrays replace.
 //
-// The shapes below are spelled out instead of reused from vite-plus's UserConfig and
-// OxlintConfig (a test keeps that import out). Those come from the `oxlint` package, so a
-// consumer on a different vite-plus has a second, unrelated copy, and comparing the two
-// exhausts TS's stack depth where this config is spread into their `defineConfig`. For the
-// same reason the members are literal unions and carry no index signature: oxlint's own
-// names are unions a widened `string` cannot satisfy, and an unlisted option typed
-// `unknown` satisfies nothing. Extra options belong in the consumer's own literal.
+// Shapes are spelled out rather than reused from vite-plus's UserConfig/OxlintConfig (a test
+// keeps that import out): those originate in `oxlint`, so a consumer on a different vite-plus
+// has a second copy, and comparing the two exhausts TS's stack depth when this config is
+// spread into their `defineConfig`. Hence also literal unions and no index signature —
+// oxlint's names are unions a widened `string` cannot satisfy, and an unlisted `unknown`
+// option satisfies nothing. Extra options belong in the consumer's own literal.
 type Severity = `error` | `warn` | `off`
 // a rule is a severity, or a severity plus its options
 type Rules = Record<string, Severity | [Severity, ...unknown[]]>
@@ -27,8 +26,8 @@ export type SharedConfig = {
   }
   fmt: { semi: boolean; singleQuote: boolean; printWidth: number; svelte: boolean }
   build: { cssTarget: string }
-  // lint-staged lets a whole staged config be one function; ours is always a glob map, and
-  // vite-plus JSON.stringifies it to reach its Rust side, where a function is dropped
+  // lint-staged allows a function here, but vite-plus JSON.stringifies this to reach its
+  // Rust side, which drops functions, so ours is always a glob map
   staged: Record<string, string>
 }
 
@@ -123,8 +122,7 @@ const error_rules = [
   eslint-plugin-unicorn/prefer-string-replace-all @typescript-eslint/dot-notation radix
   prefer-exponentiation-operator no-implicit-coercion
   eslint-plugin-vitest/prefer-to-have-length`,
-  // named capture groups self-document a regex match; positional ones must be
-  // renamed. And `export ... from` beats importing purely to re-export
+  // named capture groups self-document a match; `export ... from` beats importing to re-export
   `prefer-named-capture-group eslint-plugin-unicorn/prefer-export-from`,
 ]
   .join(` `)
@@ -140,7 +138,7 @@ const lint: SharedConfig[`lint`] = {
     ...Object.fromEntries(error_rules.map((rule) => [rule, `error`] as const)),
     // the rest carry an option, or a reason for being off
     'no-promise-executor-return': [`error`, { allowVoid: true }],
-    // `void` explicitly marks intentionally ignored Promise-executor return values.
+    // `void` marks intentionally ignored Promise-executor return values
     'typescript/no-meaningless-void-operator': `off`,
     'no-console': [`error`, { allow: [`info`, `warn`, `error`] }],
     'eslint-plugin-unicorn/max-nested-calls': [`error`, { max: 3 }],
@@ -156,25 +154,25 @@ const lint: SharedConfig[`lint`] = {
     '@typescript-eslint/no-unsafe-type-assertion': `off`,
     '@typescript-eslint/restrict-template-expressions': `off`,
     'no-await-in-loop': `off`,
-    // Permit sorting fresh/local arrays as a standalone statement.
+    // permit sorting fresh/local arrays as a standalone statement
     'eslint-plugin-unicorn/no-array-sort': [`error`, { allowExpressionStatement: true }],
     'oxc/no-map-spread': `off`,
     'eslint-plugin-vitest/no-conditional-expect': `off`,
     // Vitest default rules — too noisy
     'eslint-plugin-vitest/require-mock-type-parameters': `off`,
-    // Tests mock non-existent globals/DOM APIs via assignment (`globalThis.fetch = vi.fn()`,
-    // `el.requestFullscreen = vi.fn()`); vi.spyOn throws on absent props and tightens mock types
+    // tests mock absent globals by assignment (`globalThis.fetch = vi.fn()`), which vi.spyOn
+    // throws on
     'eslint-plugin-vitest/prefer-spy-on': `off`,
-    // autofix rewrites `toHaveBeenCalled()` → `toHaveBeenCalledWith()` (asserts zero args, wrong);
-    // can't infer expected args, and `toHaveBeenCalled()` is the intended check in most spots
+    // its autofix rewrites `toHaveBeenCalled()` to `toHaveBeenCalledWith()`, wrongly asserting
+    // zero args; the plain check is what most call sites mean
     'eslint-plugin-vitest/prefer-called-with': `off`,
-    // benign barrel-file cycles (components import from their package `index.ts` that re-exports
-    // them); resolving them conflicts with the `$lib/foo` barrel-import convention
+    // benign barrel cycles (components import from the `index.ts` that re-exports them);
+    // breaking them conflicts with the `$lib/foo` barrel-import convention
     'eslint-plugin-import/no-cycle': `off`,
     // maxArgs 2 because vitest supports expect(actual, message)
     'eslint-plugin-vitest/valid-expect': [`error`, { maxArgs: 2 }],
-    // count any *assert*/*expect* helper as an assertion so expect-expect doesn't flag tests
-    // that delegate to helpers (oxlint glob `*` matches one [a-z\d] run, so name them camelCase)
+    // count *assert*/*expect* helpers as assertions so tests delegating to them pass
+    // (oxlint's `*` matches one [a-z\d] run, so such helpers must be camelCase)
     'eslint-plugin-vitest/expect-expect': [
       `error`,
       { assertFunctionNames: [`*assert*`, `*expect*`] },
@@ -182,9 +180,8 @@ const lint: SharedConfig[`lint`] = {
   },
   overrides: [
     {
-      // vitest mock assertions like `expect(obj.method).toHaveBeenCalled()` trip
-      // unbound-method (false positive on spies) and no-underscore-dangle (mock
-      // internals). Relaxing them in tests is the typescript-eslint-recommended approach.
+      // `expect(obj.method).toHaveBeenCalled()` trips unbound-method (false positive on
+      // spies) and no-underscore-dangle; typescript-eslint recommends relaxing both in tests
       files: [`tests/**`, `**/*.test.ts`, `**/*.test.svelte.ts`],
       rules: {
         '@typescript-eslint/unbound-method': `off`,
@@ -201,8 +198,7 @@ const fmt: SharedConfig[`fmt`] = {
   svelte: true,
 }
 
-// the default chrome111 lacks light-dark(), which LightningCSS then polyfills into
-// broken space toggles
+// the default chrome111 lacks light-dark(), which LightningCSS polyfills into broken toggles
 const build: SharedConfig[`build`] = { cssTarget: `esnext` }
 
 const staged: SharedConfig[`staged`] = {
@@ -210,8 +206,8 @@ const staged: SharedConfig[`staged`] = {
   '*.{ts,svelte}': `sh -c 'npx svelte-kit sync && npx svelte-check --threshold error'`,
 }
 
-// `staged` is not wrapped in Partial: it is an index-signature record, so a subset of
-// globs already type-checks, and Partial would widen every value to `| undefined`.
+// `staged` skips Partial: an index-signature record already accepts a subset of globs, and
+// Partial would widen every value to `| undefined`.
 export type ConfigOverrides = {
   lint?: Partial<SharedConfig[`lint`]>
   fmt?: Partial<SharedConfig[`fmt`]>
@@ -219,12 +215,10 @@ export type ConfigOverrides = {
   staged?: SharedConfig[`staged`]
 }
 
-// A factory rather than an object the caller spreads and patches: spreading a function
-// trips no-misused-spread, and vite-plus JSON.stringifies these members to reach its Rust
-// side, where a function value is dropped without a word.
+// A factory, not a spreadable object: spreading a function trips no-misused-spread, and
+// vite-plus JSON.stringifies these members to reach Rust, silently dropping functions.
 export const make_config = (overrides: ConfigOverrides = {}): SharedConfig => {
-  // deep copy, so a caller mutating `cfg.lint.rules` or pushing onto
-  // `cfg.lint.ignorePatterns` cannot rewrite the defaults behind the next call
+  // deep copy, so a caller mutating `cfg.lint.rules` can't rewrite the defaults
   const base = structuredClone({ lint, fmt, build, staged })
   return {
     lint: {

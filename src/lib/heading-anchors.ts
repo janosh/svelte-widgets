@@ -1,10 +1,9 @@
-// Svelte preprocessor that adds IDs to headings at build time, so fragment navigation
+// Svelte preprocessor adding heading IDs at build time, so fragment navigation
 // (#heading-id) works on the initial SSR page load
 
-// Match headings in two contexts:
-// 1. Start of line (for .svelte files with formatted HTML)
-// 2. After > (for mdsvex output where HTML is on single line, e.g., "</p> <h2>")
-// Quoted attributes may contain `>`; only an unquoted `>` ends the opening tag.
+// Headings appear at the start of a line (formatted .svelte HTML) or after `>` (mdsvex's
+// single-line output, e.g. "</p> <h2>"). Quoted attributes may contain `>`, so only an
+// unquoted one ends the opening tag.
 const heading_attrs = String.raw`(?:[^>"']|"[^"]*"|'[^']*')*`
 const heading_pattern = String.raw`<(?<tag>h[1-6])(?<attrs>${heading_attrs})>(?<inner>[\s\S]*?)<\/\k<tag>>`
 const heading_regex = new RegExp(String.raw`(?:^|(?<=>))\s*${heading_pattern}`, `gimu`)
@@ -41,8 +40,8 @@ const encode_vlq = (value: number): string => {
   return encoded
 }
 
-// Apply newline-free insertions and map every unchanged span back to its exact
-// original position. Inserted text maps to the insertion point.
+// Applies newline-free insertions, mapping unchanged spans to their original position and
+// inserted text to the insertion point.
 function insert_with_source_map(
   source: string,
   insertions: TextInsertion[],
@@ -139,8 +138,8 @@ function find_svelte_expression_end(str: string, start: number): number {
   return -1
 }
 
-// Remove Svelte expressions while ignoring braces inside quoted JS strings.
-// Unmatched } remains literal; unmatched { consumes the remaining text as before.
+// Removes Svelte expressions, ignoring braces inside quoted JS strings. An unmatched `}`
+// stays literal; an unmatched `{` consumes the rest.
 function strip_svelte_expressions(str: string): string {
   if (!str.includes(`{`)) return str
   let result = ``
@@ -221,21 +220,18 @@ const extract_math_sources = (inner: string): string =>
     return tex ? decode_entities(tex).replaceAll(/[{}]/gu, ``) : expression
   })
 
-// Preserve Unicode letters and marks, normalize equivalent spellings to NFC, and turn
-// punctuation runs into separators so distinct headings do not collapse to the same slug.
+// keeps Unicode letters and marks, normalizes to NFC, and separates on punctuation runs so
+// distinct headings don't collapse to one slug
 export const slugify_heading = (text: string): string =>
   text
     .toLowerCase()
     .normalize(`NFC`)
-    // Collapse punctuation and whitespace runs into separators so `foo.bar` cannot
-    // collide with `foobar`, while retaining Unicode letters, marks, and numbers.
+    // so `foo.bar` cannot collide with `foobar`
     .replaceAll(/[^\p{L}\p{M}\p{N}_]+/gu, `-`)
     .replaceAll(/^-|-$/gu, ``) // trim leading/trailing dashes
 
-// Allocate and reserve an ID in one operation. All heading-ID producers share this
-// `-1`, `-2`, ... collision policy, including collisions with already suffixed slugs.
-// Every id already in the document, for `unique_heading_id` to avoid. Lazy and memoized:
-// the scan is the expensive part and is only needed when some heading actually lacks an id.
+// Ids already in the document, for `unique_heading_id` to avoid. Lazy and memoized: the
+// scan is expensive and only needed when a heading actually lacks an id.
 export const document_used_ids = (): (() => Set<string>) => {
   let used_ids: Set<string> | undefined
   return () =>
@@ -244,6 +240,8 @@ export const document_used_ids = (): (() => Set<string>) => {
     ))
 }
 
+// Allocates and reserves an id in one step. Every heading-id producer shares this `-1`,
+// `-2`, ... collision policy, including collisions with already suffixed slugs.
 export function unique_heading_id(base_id: string, used_ids: Set<string>): string {
   const base = base_id || `section`
   let id = base
@@ -284,8 +282,8 @@ export function heading_ids() {
             tag: match.groups?.excluded_tag?.toLowerCase() ?? null,
           }),
         )
-        // Strictly inside an excluded span. The span's own opening tag sits at `start`
-        // and must stay eligible so its rendered `id` still reserves a collision slot.
+        // Strictly inside: the span's own opening tag sits at `start` and stays eligible,
+        // so its rendered `id` still reserves a collision slot.
         const is_inside_excluded = (
           index: number,
           range: { start: number; end: number },
@@ -324,12 +322,10 @@ export function heading_ids() {
 const link_svg = `<svg width="16" height="16" viewBox="0 0 16 16" aria-label="Link to heading" role="img"><path d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0z" fill="currentColor"/></svg>`
 
 export interface HeadingAnchorsOptions {
-  // CSS selector for headings (default: h1-h6 direct or 2nd-level children of attached node)
+  // heading selector, default h1-h6 direct or 2nd-level children of the attached node
   selector?: string
-  // Custom SVG icon HTML string (default: link icon)
-  // WARNING: Assigned via innerHTML - only pass trusted/sanitized content
-  // For untrusted input, sanitize first or use DOMParser:
-  // new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
+  // Assigned via innerHTML, so pass trusted content only; sanitize untrusted input first,
+  // e.g. new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
   icon_svg?: string
 }
 
@@ -342,7 +338,7 @@ function add_anchor_to_heading(
     heading.querySelector<HTMLAnchorElement>(`a[aria-hidden="true"]`)
   if (existing_anchor && !existing_anchor.hasAttribute(`data-heading-anchor`)) return
   if (!heading.id) {
-    // Generate ID from text content (fallback for dynamic headings)
+    // fall back to the text content, for dynamic headings
     const base_id = slugify_heading((heading.textContent ?? ``).trim())
     if (!base_id) return
     heading.id = unique_heading_id(base_id, get_used_ids())
@@ -364,7 +360,7 @@ const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagNa
 const get_default_headings = (node: Element): Element[] =>
   [...node.children].flatMap((child) => [child, ...child.children].filter(is_heading))
 
-// Svelte 5 attachment that adds anchor links to headings within a container
+// adds anchor links to headings within a container
 export const heading_anchors =
   (options: HeadingAnchorsOptions = {}) =>
   (node: Element): (() => void) | undefined => {
@@ -383,7 +379,7 @@ export const heading_anchors =
     }
     add_anchors()
 
-    // Requery for new headings and keep existing links aligned with dynamic IDs.
+    // requery for new headings and keep existing links aligned with dynamic IDs
     const observer = new MutationObserver(() => {
       add_anchors()
       observer.takeRecords()

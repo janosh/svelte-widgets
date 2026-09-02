@@ -183,8 +183,8 @@ describe(`draggable`, () => {
     expect([element.style.left, element.style.top]).toEqual([``, ``])
   })
 
-  // Either ends the drag: nothing further arrives for a pointer that was canceled or whose
-  // capture went away. `lostpointercapture` is dispatched on the capture target, not window.
+  // either ends the drag: nothing more arrives for a canceled pointer or one whose capture
+  // went away; `lostpointercapture` fires on the capture target, not window
   it.each([
     [
       `pointercancel`,
@@ -249,13 +249,11 @@ describe(`draggable`, () => {
 
     attach_draggable(element, { handle_selector: `.drag-handle` })
 
-    // press on element (not handle) should not start dragging
     element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
     globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50))
     expect(element.style.left).toBe(``)
     expect(element.style.top).toBe(``)
 
-    // press on handle should start dragging
     handle.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
     globalThis.dispatchEvent(pointer_event(`pointermove`, 30, 40))
     expect(element.style.left).toBe(`30px`)

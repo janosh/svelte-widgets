@@ -1,7 +1,6 @@
-// One in-app prompt for every question the app has to ask before proceeding. Mount a
-// single ConfirmDialog high in the tree and any code below can ask without owning a
-// modal of its own. Requests queue rather than overlap: two prompts racing in one modal
-// would leave the second answered by a click meant for the first.
+// One in-app prompt for every question the app must ask before proceeding: mount a single
+// ConfirmDialog high in the tree and any code below can ask without its own modal. Requests
+// queue rather than overlap, else a click meant for one prompt answers the next.
 
 import type { Snippet } from 'svelte'
 import { DIALOG_LABELS } from './labels'
@@ -9,8 +8,7 @@ import { DIALOG_LABELS } from './labels'
 export interface DialogChoice<Id extends string = string> {
   id: Id
   label: string
-  // Set on the answer to reach for, so it reads as the default without being the one a
-  // stray Escape picks.
+  // marks the answer to reach for: reads as the default without being what Escape picks
   tone?: `accent` | `danger`
 }
 
@@ -18,8 +16,8 @@ export type DialogBody =
   | { kind: `text`; text: string }
   | {
       kind: `snippet`
-      // The declaring component retains ownership of the snippet's scope and must stay
-      // mounted until this request settles. The queue stores only the callable reference.
+      // the queue stores only the callable, so the declaring component owns the snippet's
+      // scope and must stay mounted until this request settles
       snippet: Snippet
     }
 
@@ -33,8 +31,8 @@ interface DialogRequestBase {
 export interface ChoiceDialogRequest extends DialogRequestBase {
   kind: `choice`
   choices: DialogChoice[]
-  // Answer used when the dialog is dismissed rather than answered (Escape, a click on
-  // the backdrop). Always the safe one: dismissing is not consent.
+  // answer for a dismissal (Escape, backdrop click); always the safe one, since dismissing
+  // is not consent
   dismiss_id: string
   resolve: (id: string) => void
 }
@@ -86,14 +84,14 @@ export const request_choice = <Id extends string>(
       body: normalize_body(body),
       choices,
       dismiss_id,
-      // The queue is heterogeneous, so it holds the widened `string` form. Only a
-      // choice's own id or `dismiss_id` ever comes back, and both are `Id`.
+      // the heterogeneous queue holds the widened `string`; only a choice's id or
+      // `dismiss_id` comes back, and both are `Id`
       resolve: (id: string) => resolve(id as Id),
     })
   })
 
-// Resolves the request on screen. A no-op once the queue is empty, which is what keeps
-// the dialog's own close from answering the next question.
+// Resolves the on-screen request; a no-op on an empty queue, which keeps the dialog's own
+// close from answering the next question.
 export const answer_dialog = (id: string): void => {
   const request = dialog_queue[0]
   if (request?.kind !== `choice`) return
@@ -109,8 +107,7 @@ export const submit_prompt = (value: string): PromptSubmitResult => {
   const request = dialog_queue[0]
   if (request?.kind !== `prompt`) return { status: `no_prompt` }
   const validation_error = request.validate?.(value)
-  // Empty means valid: validators can directly return a conditional error string
-  // without having to convert their empty success branch to `undefined`.
+  // empty counts as valid, so a validator can return a conditional error string directly
   if (validation_error) return { status: `invalid`, message: validation_error }
   dialog_queue.shift()
   request.resolve(value)

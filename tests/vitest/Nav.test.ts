@@ -59,7 +59,6 @@ describe(`Nav`, () => {
     assert(dropdown_menu !== null, `No dropdown menu found`)
     return { dropdown, dropdown_menu }
   }
-  // mounts a nav with a single dropdown and hands back the parts most tests need
   const mount_dropdown = (props: Partial<ComponentProps<typeof Nav>> = {}) => {
     mount_nav({ routes: single_dropdown_route, ...props })
     const { dropdown, dropdown_menu } = query_dropdown_elements()
@@ -67,7 +66,6 @@ describe(`Nav`, () => {
     assert(toggle !== null, `No dropdown toggle found`)
     return { dropdown, dropdown_menu, toggle }
   }
-  // all dropdowns with their submenus (for multi-dropdown tests)
   const query_all_dropdowns = () =>
     [...document.querySelectorAll(`.dropdown`)].map((dropdown) => {
       const menu = dropdown.querySelector<HTMLElement>(`[data-submenu]`)
@@ -228,8 +226,7 @@ describe(`Nav`, () => {
       add_listener.mock.calls.filter(([type]) => type === `pointerdown`).length
     const { dropdown_menu, toggle } = mount_dropdown()
     const burger_button = doc_query(`.burger`)
-    // with nothing open there is nothing to dismiss, so the document stays clean — that
-    // handler does a layout read (the scrollbar guard) for every press on the page
+    // nothing open means no listener: it does a layout read on every press on the page
     expect(press_listeners()).toBe(0)
 
     await click(burger_button)
@@ -247,8 +244,7 @@ describe(`Nav`, () => {
     expect(burger_button.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(is_visible(dropdown_menu)).toBe(false)
 
-    // an open dropdown arms the listener on its own, with the burger menu shut: it is the
-    // only thing an outside click has to dismiss
+    // an open dropdown arms the listener on its own, with the burger menu shut
     const listeners_before = press_listeners()
     await click(toggle)
     expect(is_visible(dropdown_menu)).toBe(true)
@@ -287,7 +283,7 @@ describe(`Nav`, () => {
     mount_nav({ routes: [route], route_labels })
     const link = doc_query(`a[href="${route}"]`)
     expect(link.textContent?.trim()).toBe(expected)
-    // Test inline style since format_label intentionally sets text-transform
+    // format_label deliberately sets text-transform, but only for derived labels
     expect(link.getAttribute(`style`)).toBe(
       route_labels ? `` : `text-transform: capitalize;`,
     )
@@ -616,8 +612,7 @@ describe(`Nav`, () => {
       ]
       mount_nav({ routes })
       const dropdown = doc_query(`.dropdown`)
-      // `:scope` so these only match the dropdown's own row/submenu, not a nested wrapper
-      // that happens to be a first/last child too
+      // `:scope` so these match the dropdown's own row/submenu, not a nested wrapper
       const parent_span = dropdown.querySelector(
         `:scope > div:first-child > span.disabled`,
       )
@@ -787,9 +782,7 @@ describe(`Nav`, () => {
       expect(on_close).toHaveBeenCalledTimes(1)
     })
 
-    // No per-cause onclose test: the callback fires from one $effect watching is_open go
-    // true->false, which the burger case above covers, and `closes on Escape or link
-    // click` already pins those two causes reaching that transition.
+    // No per-cause onclose test: one $effect watches is_open go true->false, covered above.
   })
 
   describe(`breakpoint prop`, () => {
@@ -868,8 +861,7 @@ describe(`Nav`, () => {
       expect(is_visible(dropdown_menu)).toBe(false)
 
       await click(toggle)
-      // ...and moving off it used to close it again, so the synthetic mouseleave a tap
-      // emits could undo the tap
+      // ...and moving off used to close it, so a tap's synthetic mouseleave undid the tap
       mouse_leave(dropdown)
       await vi.advanceTimersByTimeAsync(500)
       expect(is_visible(dropdown_menu)).toBe(true)
@@ -923,8 +915,7 @@ describe(`Nav`, () => {
       await click(toggle)
       expect(is_visible(dropdown_menu)).toBe(true)
 
-      // ArrowDown navigates within the dropdown instead of closing it. toggle_dropdown
-      // focuses the first item in a setTimeout(..., 0), so flush a macrotask.
+      // ArrowDown navigates instead of closing; the focus move is in a setTimeout(.., 0)
       keydown(`ArrowDown`, toggle)
       await next_task()
       expect(is_visible(dropdown_menu)).toBe(true)
@@ -964,8 +955,7 @@ describe(`Nav`, () => {
       await click(doc_query(`[data-dropdown-toggle]`))
       expect(is_visible(dropdown_menu)).toBe(true)
 
-      // stays open whether focus moves inside the dropdown or out of it entirely
-      // (dropdowns close via click outside / Escape, not focusout)
+      // focus moving inside or fully out: dropdowns close on click-outside/Escape only
       for (const related of [
         dropdown_menu.querySelector(`a`),
         document.createElement(`button`),

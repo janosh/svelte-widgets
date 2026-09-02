@@ -615,12 +615,10 @@
       set_open(false, `escape`)
       return
     }
-    // Everything below drives the toc's own list and preventDefaults to do it, which cancels
-    // the activation of whatever else has focus: with the panel open (or the desktop toc merely
-    // hovered) every button on the page went dead to Enter, arrows stopped moving the caret in
-    // a text field, and the toc's own toggle re-activated the current heading instead of
-    // closing. Only run while focus is idle or already inside the list. Escape and Tab are
-    // handled above, so the panel still closes from anywhere.
+    // the list navigation below preventDefaults, which cancelled the activation of whatever
+    // else held focus: every page button went dead to Enter while the panel was open, and
+    // arrows stopped moving the caret in a text field. Escape and Tab are handled above, so
+    // the panel still closes from anywhere.
     const focused = document.activeElement
     const focus_is_idle =
       !focused || focused === document.body || focused === document.documentElement

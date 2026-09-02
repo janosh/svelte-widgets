@@ -84,9 +84,8 @@ describe(`focus_trap`, () => {
     expect(document.activeElement).toBe(buttons[0])
   })
 
-  // an <a href> inside an <svg> is focusable and matches tabbable_selector, but it is an
-  // SVGElement, so looking the active element up with a HTMLElement-typed indexOf misses
-  // it and Tab jumps back to the edge instead of stepping to the neighbor
+  // an <a href> in an <svg> is tabbable, but an HTMLElement-typed indexOf misses the
+  // SVGElement, so Tab jumped back to the edge instead of stepping to the neighbor
   it(`steps past an SVG focusable instead of jumping to the edge`, () => {
     const { surface, buttons } = make_surface()
     const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
@@ -153,9 +152,8 @@ describe(`focus_trap`, () => {
     expect(document.activeElement).toBe(outer.buttons[1])
   })
 
-  // The trap listens on the document, so a surface that was never given focus must
-  // not confiscate Tab from the rest of the page. Nav pins a submenu while focus
-  // stays on the toggle outside it, and Tab there has to keep walking the page.
+  // the trap listens on the document, so a surface never given focus must not confiscate
+  // Tab: Nav pins a submenu while focus stays on the toggle outside it
   it(`leaves Tab alone while focus sits outside the trap`, () => {
     const { surface, buttons } = make_surface()
     const outside = create_element(`button`)
@@ -236,8 +234,8 @@ describe(`focus_trap`, () => {
       press_tab(true)
       expect(document.activeElement).toBe(last)
 
-      // `root` narrows what Tab cycles, not what counts as inside: clicking the backdrop
-      // focuses it, and if that read as outside the trap it would disarm Tab entirely
+      // `root` narrows what Tab cycles, not what counts as inside: a focused backdrop
+      // reading as outside would disarm Tab entirely
       backdrop.focus()
       expect(press_tab().defaultPrevented).toBe(true)
       expect(document.activeElement).toBe(first)
@@ -272,8 +270,7 @@ describe(`focus_trap`, () => {
     const event = press_escape()
     expect(on_inner).toHaveBeenCalledTimes(1)
     expect(on_outer).not.toHaveBeenCalled()
-    // canceled on purpose: a native <dialog> around the surface then stays open
-    // until a second Escape lands with this layer gone
+    // canceled on purpose so a native <dialog> around the surface needs a second Escape
     expect(event.defaultPrevented).toBe(true)
 
     cleanup_inner?.()
@@ -282,7 +279,6 @@ describe(`focus_trap`, () => {
     expect(on_inner).toHaveBeenCalledTimes(1)
   })
 
-  // Recapture restores the last inside focus, not the trap's entry point.
   it(`recapture pulls focus back to the last element that held it inside`, async () => {
     const { surface, buttons } = make_surface()
     attach_trap(surface, { recapture: true })
@@ -292,8 +288,8 @@ describe(`focus_trap`, () => {
     expect(await focus_out_to(create_element(`button`))).toBe(buttons[2])
   })
 
-  // A recapture re-resolves `root`, so a trap can inject its fallback tabindex into
-  // more than one element over its life and owes all of them a cleanup.
+  // a recapture re-resolves `root`, so one trap can inject its fallback tabindex into
+  // several elements over its life and owes each a cleanup
   it(`takes the injected tabindex off every root it fell back to`, async () => {
     const surface = create_element()
     // no tabbables in either panel, so the root itself is the fallback focus target
@@ -319,8 +315,7 @@ describe(`focus_trap`, () => {
     expect(panels.map((panel) => panel.hasAttribute(`tabindex`))).toEqual([false, false])
   })
 
-  // the counterpart of the holds_focus guard on Tab: a trap that was never given
-  // focus must not summon it on every focus move elsewhere on the page
+  // counterpart of the Tab holds_focus guard: a trap never given focus must not summon it
   it(`recapture stays out of focus moves that never touched the trap`, async () => {
     const { surface } = make_surface()
     const elsewhere = create_element(`button`)
@@ -345,9 +340,8 @@ describe(`focus_trap`, () => {
     expect(await focus_out_to(outside)).toBe(outside) // a torn-down trap stops recapturing
   })
 
-  // Hygiene rather than behavior — the guard above already silences a late microtask —
-  // but without this every surface that opens leaks a pair of document listeners for
-  // the rest of the page's life.
+  // hygiene, not behavior (the guard above silences late microtasks), but without it every
+  // opened surface leaks a pair of document listeners for the page's life
   it(`recapture takes its document listeners off again on teardown`, () => {
     const removals = vi.spyOn(document, `removeEventListener`)
     focus_trap({ recapture: true, restore: false })(make_surface().surface)?.()

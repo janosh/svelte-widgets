@@ -1,10 +1,9 @@
 import { format_print_filename, print_element } from '$lib/print'
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
 
-// happy-dom has no window.print and never fires afterprint, so print is a spy and the
-// event is dispatched by hand. Nothing else is stubbed except the measured height: the
-// DOM does no layout, so every element reports height 0 and the mm arithmetic would be
-// vacuous without a real number to convert.
+// happy-dom has no window.print and never fires afterprint, so print is spied and the
+// event dispatched by hand. Heights are stubbed too: the DOM does no layout, so every
+// element reports 0 and the mm arithmetic would be vacuous.
 const print_spy = vi.fn()
 let original_title = ``
 
@@ -14,7 +13,7 @@ beforeEach(() => {
   original_title = document.title
 })
 afterEach(() => {
-  after_print() // the print dialog always closes eventually; let each test clean up
+  after_print() // the dialog always closes eventually
   vi.useRealTimers() // the watchdog cases opt into fake ones
   vi.unstubAllGlobals()
   document.title = original_title
@@ -23,7 +22,7 @@ afterEach(() => {
 const make_target = (height_px: number): HTMLElement => {
   const node = document.createElement(`section`)
   document.body.append(node)
-  // height is the only field read, so the cast stands in for the rest of DOMRect
+  // only height is read, so the cast stands in for the rest of DOMRect
   vi.spyOn(node, `getBoundingClientRect`).mockReturnValue({
     height: height_px,
   } as DOMRect)
@@ -52,14 +51,13 @@ test(`filename swaps document.title for the print and restores it after`, () => 
   expect(document.title).toBe(`Some Page`)
 })
 
-// afterprint arrives a turn late, so a second print can start while the first still has
-// the title swapped. Taken as the original, that filename would outlive both prints.
+// afterprint lands a turn late; the second print must not capture the swapped title.
 test(`overlapping prints restore the title the first one found`, () => {
   document.title = `Some Page`
   print_element(make_target(500), { filename: `first-print` })
   print_element(make_target(500), { filename: `second-print` })
 
-  expect(document.title).toBe(`first-print`) // the second call does not get to re-swap
+  expect(document.title).toBe(`first-print`) // the second call does not re-swap
   after_print()
   expect(document.title).toBe(`Some Page`)
 })
@@ -85,20 +83,20 @@ test.each([
   [960, {}, `210mm 254mm`], // 10in at 96 CSS px per inch
   [960, { page_width_mm: 148 }, `148mm 254mm`], // A5 instead of the A4 default
   [960, { px_per_inch: 192 }, `210mm 127mm`], // a context reporting scaled pixels
-  [100, {}, `210mm 27mm`], // 26.46mm rounded up, never down onto a second sheet
+  [100, {}, `210mm 27mm`], // 26.46mm rounded up, never onto a second sheet
 ])(`single_page sizes the page to the element (%i px)`, (height, options, expected) => {
   const node = make_target(height)
   print_element(node, { single_page: true, ...options })
 
   expect(page_rule()).toBe(`@page { size: ${expected}; margin: 0 }`)
   expect(node.hasAttribute(`data-print-target`)).toBe(true)
-  // the rules have to reach the element itself and the ancestors that would clip it
+  // rules must reach the element and the ancestors that would clip it
   const css = print_styles()[0].textContent ?? ``
   expect(css).toContain(`[data-print-target] { width: ${expected.split(` `)[0]}`)
   expect(css).toContain(`html, body, [data-print-target] { height: auto !important`)
 })
 
-// The injected rule outliving the print would resize every later @page on the document.
+// an injected rule outliving the print would resize every later @page on the document
 test(`afterprint removes the injected @page rule and the target marker`, () => {
   const node = make_target(960)
   document.title = `Docs`
@@ -112,7 +110,7 @@ test(`afterprint removes the injected @page rule and the target marker`, () => {
   expect(document.title).toBe(`Docs`)
 })
 
-// A print() that throws never fires afterprint, so nothing else would undo the swap
+// a print() that throws never fires afterprint, so nothing else would undo the swap
 test(`a print that throws still restores the title, marker and style`, () => {
   const node = make_target(960)
   document.title = `Docs`
@@ -143,9 +141,8 @@ test(`a second cleanup leaves a title the app set in the meantime alone`, () => 
   expect(document.title).toBe(`App Renamed`)
 })
 
-// Headless and embedded webviews return from print() without ever dispatching
-// afterprint. Left alone the swapped title and the injected rules stand for good, and
-// the in-flight flag disables every later filename swap for the page's lifetime.
+// headless and embedded webviews return from print() without ever firing afterprint,
+// leaving the title swapped, the rules injected and later filename swaps disabled
 test(`a print that never fires afterprint is undone by the watchdog`, () => {
   vi.useFakeTimers()
   const node = make_target(960)
@@ -158,16 +155,14 @@ test(`a print that never fires afterprint is undone by the watchdog`, () => {
   expect(document.title).toBe(`Docs`)
   expect(node.hasAttribute(`data-print-target`)).toBe(false)
   expect(print_styles()).toHaveLength(0)
-  // the swap flag went back too, so a later print still gets its filename
+  // the swap flag reset too, so a later print still gets its filename
   print_element(node, { filename: `later-print` })
   expect(document.title).toBe(`later-print`)
 })
 
-// Both prints target the same node, and the marker is shared state on it, so the first
-// print's cleanup must leave the second alone whichever way it arrives: disarmed by
-// afterprint, or fired by a watchdog that is still armed because its print never ended.
-// Without token ownership the armed one strips the live marker mid-dialog and leaves its
-// width rules matching nothing.
+// both prints share the marker on one node, so the first print's cleanup must leave the
+// second alone whether it was disarmed by afterprint or is still armed. Without token
+// ownership the armed one strips the live marker mid-dialog.
 test.each([
   [`disarmed by afterprint`, true],
   [`still armed, its own print never having ended`, false],
@@ -177,8 +172,7 @@ test.each([
   print_element(node, { single_page: true })
   if (first_print_ends) {
     after_print()
-    // pins the disarm itself: without it the assertions below still fail, but on a
-    // stripped marker rather than on the stale timer that stripped it
+    // pins the disarm: without it, failures blame the marker, not the stale timer
     expect(vi.getTimerCount()).toBe(0)
   }
 

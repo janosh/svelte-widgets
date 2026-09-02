@@ -4,12 +4,10 @@ import { type ComponentProps, mount, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
-// Every test mounts into the same body, so keep that boilerplate in one place
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
   mount(Masonry, { target: document.body, props })
 
-// Most harness tests only care about the exported append/remove/set_cols methods,
-// so `events` defaults to a throwaway array
+// most harness tests only use append/remove/set_cols, so `events` defaults to a throwaway
 const mount_harness = (
   props: ComponentProps<typeof MasonryAppendHarness> = { events: [] },
 ) => mount(MasonryAppendHarness, { target: document.body, props })
@@ -18,7 +16,6 @@ const n_items = 30
 const make_items = (count: number) => Array.from({ length: count }, (_, idx) => idx)
 const indices = make_items(n_items)
 
-// Rendered DOM shape lives here so tests don't hardcode selectors
 const masonry_el = () => document.querySelector<HTMLElement>(`div.masonry`)
 const col_els = () => document.querySelectorAll<HTMLElement>(`div.masonry > div.col`)
 // item wrappers (`> div`) vs any child (`> *`) - the latter also counts default spans
@@ -35,7 +32,6 @@ const as_columns = () =>
   get_col_dist()
     .map((col) => col.join(`,`))
     .join(` | `)
-// Track ResizeObserver registrations
 const resize_observers = new Map<Element, ResizeObserverCallback>()
 // number for a uniform height, or a function to give each item its own measured height
 let mock_height: number | ((el: Element) => number) = 100
@@ -295,8 +291,7 @@ describe(`Masonry append render stability`, () => {
 })
 
 describe(`Masonry order modes`, () => {
-  // Distinct heights so every mode yields a different distribution, pinning each
-  // algorithm's exact output rather than just item counts per column.
+  // distinct heights make every mode yield a different distribution, pinning exact output
   const dist_heights = [300, 80, 120, 400, 60, 220, 90]
   const dist_height = (item: number) => dist_heights[item]
 
@@ -321,10 +316,8 @@ describe(`Masonry order modes`, () => {
     expect(as_columns()).toBe(expected)
   })
 
-  // Appending alone can't tell the two balancing modes apart: greedy shortest-column
-  // placement is prefix-deterministic, so re-running it over a longer list reproduces
-  // the same columns. Removing from the middle re-packs everything after it, which is
-  // exactly what balanced-stable must not do (issue #53).
+  // Appending can't tell the balancing modes apart (greedy placement is prefix-deterministic);
+  // only a mid-list removal re-packs, which balanced-stable must not do (issue #53).
   test.each([
     [`balanced`, `2,4 | 3`], // re-packed from scratch
     [`balanced-stable`, `3 | 2,4`], // survivors keep their columns
@@ -469,8 +462,7 @@ describe(`Masonry default rendering`, () => {
     mount_masonry({ items, masonryWidth: 500, minColWidth: 200 })
     const spans = document.querySelectorAll(`div.masonry > div.col > div > span`) // default rendering
     expect(spans).toHaveLength(items.length)
-    // Default balanced-stable placement alternates equal-height items across 2 columns,
-    // while DOM order is grouped by column.
+    // balanced-stable alternates equal-height items across 2 columns; DOM order is by column
     expect(Array.from(spans).map((span) => span.textContent)).toEqual([
       `apple`,
       `cherry`,
@@ -545,8 +537,8 @@ describe(`Masonry virtualization`, () => {
     expect(count_5).toBeGreaterThan(count_1)
   })
 
-  // overscan=0 removes the slack that hid an exclusive end one row short, so the item
-  // straddling the viewport's bottom edge went unrendered and left a blank strip.
+  // overscan=0 removed the slack hiding an exclusive end one row short: the bottom-edge
+  // item went unrendered, leaving a blank strip
   test(`overscan=0 still renders the item at the viewport's bottom edge`, () => {
     mount_virtualized(50, {
       getEstimatedHeight: () => 100,
@@ -570,8 +562,8 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`scrolling moves the window, and a consumer's onscroll still fires`, async () => {
-    // `{...rest}` is spread after the component's own onscroll, so unchained a consumer
-    // handler replaces it outright and the window silently stops tracking the scroll
+    // `{...rest}` spreads after the component's own onscroll, so unless chained a consumer
+    // handler replaces it and the window silently stops tracking
     const consumer_scroll = vi.fn()
     mount_virtualized(200, {
       calcCols: () => 1,
@@ -596,7 +588,6 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`defers virtualization until masonryHeight is measured for string heights`, async () => {
-    // Mock clientHeight=0 to simulate unmeasured state
     const original = Object.getOwnPropertyDescriptor(
       HTMLElement.prototype,
       `clientHeight`,
@@ -614,7 +605,7 @@ describe(`Masonry virtualization`, () => {
         calcCols: () => 2,
       })
 
-      // With clientHeight=0 (unmeasured), all items render (virtualization deferred)
+      // clientHeight=0 means unmeasured, so virtualization is deferred
       expect(item_els()).toHaveLength(100)
     } finally {
       if (original) {
@@ -634,8 +625,8 @@ describe(`Masonry virtualization`, () => {
 })
 
 describe(`Masonry item cleanup`, () => {
-  // Regression: a removed id must be purged from stable_assignments, or re-adding it
-  // pins it back to its old column instead of the shortest one.
+  // Regression: a removed id must be purged from stable_assignments, else re-adding it
+  // pins it back to its old column.
   test(`re-adding a removed id places it fresh, not in its old column`, async () => {
     // item 3 is tall, so the column holding it stays clearly the longest
     mock_height = (el) => (el.textContent === `3` ? 500 : 100)
@@ -686,7 +677,7 @@ describe(`Masonry virtual scroll stability`, () => {
       getEstimatedHeight: () => 100,
     })
     const columns = col_els()
-    // Verify round-robin: item N should be in column N % 3
+    // round-robin: item N belongs in column N % 3
     for (let col_idx = 0; col_idx < columns.length; col_idx++) {
       const spans = columns[col_idx].querySelectorAll(`span`)
       const item_ids = Array.from(spans)
@@ -736,9 +727,8 @@ describe(`Masonry virtual scroll stability`, () => {
     expect(rendered).toBeGreaterThan(0)
   })
 
-  // A 0 estimate is meaningless, same as in get_height, so it has to fall through to the
-  // 150 default. With `??` the estimate stays 0, prefix sums are gaps alone and the window
-  // swells: 58 items render instead of 14.
+  // A 0 estimate must fall through to the 150 default; with `??` it stays 0, prefix sums
+  // become gaps alone and the window swells to 58 items instead of 14.
   test(`a zero getEstimatedHeight falls back to the default rather than collapsing`, () => {
     mount_virtualized(500, { getEstimatedHeight: () => 0, height: 500 })
 

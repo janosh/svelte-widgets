@@ -8,8 +8,8 @@ import { doc_query, hover as dispatch_hover } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
-  // the option object arm of the `options` union, i.e. ButtonGroupOption. Spelled out
-  // rather than imported: only svelte-check reads types out of a .svelte module script
+  // ButtonGroupOption, spelled out rather than imported: only svelte-check reads types
+  // out of a .svelte module script
   type Option = {
     value: string
     label?: string
@@ -44,9 +44,8 @@ describe(`ButtonGroup`, () => {
     )
 
   const letters = { alpha: `Alpha`, beta: `Beta`, gamma: `Gamma` }
-  // happy-dom drops nested CSS rules, so the mounted stylesheet reports `.button-group
-  // {}` as empty and computed styles say nothing. The styling assertions below read the
-  // source instead; the values they produce were checked in a real browser.
+  // happy-dom drops nested CSS rules, so computed styles say nothing; the styling
+  // assertions read the source instead (values verified in a real browser).
   const styles = button_group_source.slice(button_group_source.indexOf(`<style>`))
   // an info link, the affordance matbench-discovery had nested inside its buttons
   const remove_button = createRawSnippet<[{ option: { value: string } }]>(
@@ -103,8 +102,7 @@ describe(`ButtonGroup`, () => {
       null,
       `aria-pressed`,
       `aria-checked`,
-      // `selected` is bindable and reassigned by the component, so it must stay mutable
-      // even though `as const` freezes the rest of the row
+      // `selected` is bindable and reassigned, so it must stay mutable under `as const`
       { multiple: true, selected: [`beta`] as string[] },
     ],
   ] as const)(
@@ -260,7 +258,7 @@ describe(`ButtonGroup`, () => {
   })
 
   // multi select is a plain group, not a radiogroup, so it keeps every native tab stop
-  // rather than roving a single one. Joined so a row is one line: `` is an absent attr.
+  // instead of roving one. Expectations are joined; `` means the attribute is absent.
   test.each([
     [`the checked option`, { selected: `gamma` }, `-1,-1,0`],
     [`the first option when nothing is selected`, {}, `0,-1,-1`],
@@ -296,9 +294,8 @@ describe(`ButtonGroup`, () => {
     })
 
     const arrow = doc_query<HTMLButtonElement>(`.sort-order`)
-    // the label states the direction and what activating does. No aria-pressed: APG is
-    // explicit that a toggle's label must not change with its state, and this one does,
-    // so "Sorted ascending, not pressed" would read as the sort not being applied
+    // no aria-pressed: APG forbids a toggle label that changes with state, and this one
+    // does, so "Sorted ascending, not pressed" would read as the sort not being applied
     const arrow_state = () => [
       arrow.textContent?.trim(),
       arrow.getAttribute(`aria-label`),
@@ -334,8 +331,8 @@ describe(`ButtonGroup`, () => {
 
     expect(buttons[0].querySelector(`svg`)).not.toBeNull()
     expect(buttons[1].querySelector(`svg`)).toBeNull()
-    // Loading-capable options keep the spinner's width reserved while it is hidden. The
-    // spinner itself is decoration either way — `aria-busy` is what carries the state.
+    // loading-capable options reserve the spinner's width while hidden; the spinner is
+    // decoration, `aria-busy` carries the state
     expect(buttons[1].querySelector(`div`)?.style.width).toBe(`0.8em`)
     expect(buttons[1].querySelector(`div`)?.style.visibility).toBe(`visible`)
     expect(buttons[2].querySelector(`div`)?.style.visibility).toBe(`hidden`)
@@ -356,8 +353,7 @@ describe(`ButtonGroup`, () => {
   })
 
   test(`an option snippet replaces the default button content`, () => {
-    // wider than the component's own param type, which is how a snippet stays
-    // assignable to it (parameters are contravariant)
+    // wider than the component's param type: parameters are contravariant
     const option = createRawSnippet<[{ option: { label?: string }; selected: boolean }]>(
       (get_params) => ({
         render: () => {
@@ -375,9 +371,8 @@ describe(`ButtonGroup`, () => {
     ])
   })
 
-  // Escaping is the default because tooltip content is often user data; `tooltip_options`
-  // is the opt out, and without that pass-through no consumer with rich tooltips can
-  // migrate. Each row also pins that an option carrying no tooltip stays silent.
+  // tooltip content is often user data, so escaping is the default and `tooltip_options`
+  // the opt out; each row also pins that an option without a tooltip stays silent
   test.each([
     [`escapes markup by default`, undefined, `&lt;b&gt;bold&lt;/b&gt;`],
     [`renders it under allow_html`, { allow_html: true }, `<b>bold</b>`],
@@ -400,8 +395,8 @@ describe(`ButtonGroup`, () => {
     }
   })
 
-  // `as` exists so a group can sit in a heading or paragraph, where a div is invalid.
-  // The inner options wrapper has to follow, or the root is legal and its child isn't.
+  // `as` lets a group sit in a heading or paragraph where a div is invalid; the inner
+  // options wrapper must follow, or the root is legal and its child isn't
   test.each([
     [`div`, undefined],
     [`span`, `span` as const],
@@ -412,23 +407,19 @@ describe(`ButtonGroup`, () => {
     expect(doc_query(`.options`).tagName.toLowerCase()).toBe(`span`)
   })
 
-  // The `font` shorthand would also set weight and style, and since `.button-group
-  // button` outranks a consumer's own `button {}` rule it silently overrode their
-  // global button typography.
+  // the `font` shorthand also sets weight and style, and `.button-group button` outranks
+  // a consumer's own `button {}` rule, so it silently overrode their global typography
   test(`leaves font-weight and font-style to the consumer`, () => {
     expect(styles).toMatch(/font-family:\s*var\(--btn-group-btn-font-family/u)
-    // any `font:` shorthand, not just `font: inherit` — `font: var(--x, inherit)` sets
-    // weight and style just the same, and is the form a reintroduction would take
+    // any `font:` shorthand, since `font: var(--x, inherit)` sets weight and style too
     expect(styles).not.toMatch(/[^-]font:/u)
-    // a hook for either would have to be a declaration on the button, which is what
-    // reintroduces the override, so neither property is set anywhere
+    // a var hook would itself be a declaration on the button, reintroducing the override
     expect(styles).not.toMatch(/font-(?:weight|style):/u)
   })
 
-  // matbench-discovery's SelectToggle put an info link inside the button, which is an
-  // invalid content model. The `option` snippet renders inside the button and so cannot
-  // fix it; this one is a sibling, which is the whole point.
-  // Opt-in: wrappers break consumers' `.segmented > button` selectors.
+  // matbench-discovery's SelectToggle nested an info link inside the button (invalid
+  // content model); `option` renders inside the button, `option_suffix` is a sibling.
+  // Opt-in because wrappers break consumers' `.segmented > button` selectors.
   test.each([
     [`options`, `nothing is slotted`, undefined, 0],
     [`option`, `a suffix is slotted`, info_link, 3],
@@ -455,10 +446,9 @@ describe(`ButtonGroup`, () => {
     ).toEqual([`/docs/alpha:false`, `/docs/beta:true`, `/docs/gamma:false`])
   })
 
-  // A suffix rendering its own button is the second reason this prop exists, and it is
-  // what makes handle_keydown's query ambiguous: a bare `button` selector collects the
-  // suffixes too, so focus lands on one while the selection jumps an option ahead. An
-  // `<a>` suffix cannot catch that, since the selector never matched it either way.
+  // a suffix that renders its own button makes handle_keydown's query ambiguous: a bare
+  // `button` selector collects suffixes too, so focus lands on one while the selection
+  // jumps an option ahead. An `<a>` suffix can't catch that, the selector never matched it.
   test.each([
     [`a link`, info_link],
     [`a button`, remove_button],
@@ -503,9 +493,8 @@ describe(`ButtonGroup`, () => {
     expect(arrow.getAttribute(`aria-label`)).toBe(`Absteigend sortiert`)
   })
 
-  // The whole themable surface, not a handful of existence rows: this way a rename, a
-  // deletion and an undocumented new knob all fail. `justify-content`, `btn-cursor`,
-  // `btn-hover-transform` and `btn-transition` are here because each was a `:global`
+  // exhaustive so a rename, deletion or undocumented new knob all fail. `justify-content`,
+  // `btn-cursor`, `btn-hover-transform` and `btn-transition` each replaced a `:global`
   // escape hatch a downstream repo needed.
   test(`exposes exactly the documented custom properties`, () => {
     const matches = styles.matchAll(/var\(\s*--btn-group-(?<name>[\w-]+)/gu)

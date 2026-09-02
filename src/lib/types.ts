@@ -28,8 +28,7 @@ export type TabItem<Value extends string = string> = {
 export type AccordionItem<Value extends string = string> = TabItem<Value>
 export type AccordionValue<Value extends string = string> = Value | Value[] | null
 
-// single CSS string or an object with optional 'option' and 'selected' keys,
-// which only apply to the dropdown list and list of selected options, respectively
+// `option` styles the dropdown list, `selected` the list of selected options
 export type OptionStyle = string | { option?: string; selected?: string }
 
 export type ObjectOption = {
@@ -64,23 +63,21 @@ export type PageSearchNavigateDetails = {
   description: string
 }
 
-// placeholder can be a simple string or object with extended options
 export type PlaceholderConfig = {
   text: string
   persistent?: boolean // keep placeholder visible even when options are selected
 }
 
-// custom events created by MultiSelect
 export interface MultiSelectEvents<T extends Option = Option> {
   onadd?: (data: { option: T; selected: T[] }) => unknown
   oncreate?: (data: {
     option: T
-  }) => false | T | undefined | Promise<false | T | undefined> // return false to reject, return T to transform, undefined to accept as-is (sync or async)
+  }) => false | T | undefined | Promise<false | T | undefined> // false rejects, T transforms, undefined accepts as-is
   onremove?: (data: { option: T; selected: T[] }) => unknown
   onremoveAll?: (data: { options: T[] }) => unknown
   onselectAll?: (data: { options: T[]; scope?: SelectAllScope }) => unknown
   onrangeSelect?: (data: { added: T[]; from: T; to: T; selected: T[] }) => unknown
-  onreorder?: (data: { options: T[]; previous: T[] }) => unknown // fires when selected options are reordered via drag-and-drop
+  onreorder?: (data: { options: T[]; previous: T[] }) => unknown // drag-and-drop reorder
   onchange?: (data: {
     option?: T
     options?: T[]
@@ -91,21 +88,20 @@ export interface MultiSelectEvents<T extends Option = Option> {
   ongroupToggle?: (data: { group: string; collapsed: boolean }) => unknown
   oncollapseAll?: (data: { groups: string[] }) => unknown
   onexpandAll?: (data: { groups: string[] }) => unknown
-  onsearch?: (data: { searchText: string; matchingOptions: T[] }) => unknown // fires (debounced) when search text changes
+  onsearch?: (data: { searchText: string; matchingOptions: T[] }) => unknown // debounced
   onmaxreached?: (data: {
     selected: T[]
     maxSelect: number
     attemptedOption: T
-  }) => unknown // fires when user tries to exceed maxSelect
-  onduplicate?: (data: { option: T }) => unknown // fires when user tries to add duplicate (when duplicates=false)
+  }) => unknown // user tried to exceed maxSelect
+  onduplicate?: (data: { option: T }) => unknown // user tried to add a dupe (duplicates=false)
   onparsed_paste?: (data: {
     added: T[]
     rejected: T[]
     overflow: T[]
     raw_text: string
   }) => unknown
-  onactivate?: (data: { option: T | null; index: number | null }) => unknown // fires on keyboard navigation through options
-  // History/undo-redo events
+  onactivate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
   onundo?: (data: { previous: T[]; current: T[] }) => unknown
   onredo?: (data: { previous: T[]; current: T[] }) => unknown
 }
@@ -164,7 +160,7 @@ export type GroupedOptions<T extends Option = Option> = {
 }
 
 export interface MultiSelectSnippets<T extends Option = Option> {
-  // custom icon indicating the input is expandable into a dropdown (position controlled by expandIconPosition prop)
+  // icon marking the input as expandable into a dropdown; placed by expandIconPosition
   expandIcon?: Snippet<[{ open: boolean; disabled: boolean }]>
   selectedItem?: Snippet<[{ option: T; idx: number }]>
   children?: Snippet<[{ option: T; idx: number; type: `option` | `selected` }]>
@@ -184,21 +180,18 @@ export interface MultiSelectSnippets<T extends Option = Option> {
 
 export interface PortalParams {
   target_node?: HTMLElement | null
-  // portal the dropdown to document.body; honored at runtime, so toggling
-  // portals/un-portals the open dropdown in place
+  // portal the dropdown to document.body; honored at runtime, so toggling portals or
+  // un-portals the open dropdown in place
   active?: boolean
-  // `auto` (default): below the input, flips above when the dropdown would overflow
-  //   the viewport bottom and there's more space above
-  // `bottom`: always below the input
-  // `top`: always above the input
+  // `auto` (default) sits below the input and flips above when it would overflow the
+  // viewport bottom and there is more space above
   placement?: `auto` | `bottom` | `top`
 }
 
 export type SelectAllScope = `visible` | `matching`
 
-// why the select-all row is disabled, handed to a `selectAllDisabledTitle` callback. The
-// three booleans name the reason; `default_title` is the string the callback replaces, so
-// it can wrap or prefix the default rather than rebuilding the three-way choice.
+// Why the select-all row is disabled, handed to `selectAllDisabledTitle`. The booleans name
+// the reason; `default_title` lets a callback wrap the default instead of rebuilding it.
 export interface SelectAllDisabledState {
   max_reached: boolean
   maxSelect: number | null
@@ -236,24 +229,23 @@ export interface MultiSelectProps<T extends Option = Option>
   allowEmpty?: boolean // added for https://github.com/janosh/svelte-widgets/issues/192
   autocomplete?: HTMLInputAttributes[`autocomplete`]
   autoScroll?: boolean
-  breakpoint?: number // any screen with more horizontal pixels is considered desktop, below is mobile
+  breakpoint?: number // wider screens count as desktop, narrower as mobile
   defaultDisabledTitle?: string
   disabled?: boolean
   disabledInputTitle?: string
   duplicateOptionMsg?: string
-  // Controls duplicate detection: false (default, case-sensitive), true (allow all), 'case-insensitive' (block case variants)
+  // false (default) blocks dupes case-sensitively, true allows all, 'case-insensitive'
+  // also blocks case variants
   duplicates?: boolean | `case-insensitive`
-  // Where to render the expand icon, or 'none' to hide it.
   expandIconPosition?: `left` | `right` | `none`
-  // keepSelectedInDropdown controls whether selected options remain in dropdown: false (default),
-  // 'plain' (left border and background color to differentiate selected options),
-  // 'checkboxes' (each option is prefixed by a checkbox).
+  // keep selected options in the dropdown, marked either by a left border and background
+  // ('plain') or a checkbox prefix ('checkboxes')
   keepSelectedInDropdown?: false | `plain` | `checkboxes`
-  // Function to generate unique keys for options. Default: value ?? label for objects, primitive for strings/numbers.
-  // Duplicate detection also checks labels, so typing "Apple" when any "Apple" is selected is blocked (unless duplicates=true).
+  // Unique option key, default value ?? label for objects and the primitive otherwise.
+  // Dupe detection also checks labels, so a second "Apple" is blocked unless duplicates=true.
   key?: (opt: T) => unknown
   filterFunc?: (opt: T, searchText: string) => boolean
-  fuzzy?: boolean // whether to use fuzzy matching (default: true) or substring matching (false)
+  fuzzy?: boolean // fuzzy (default) vs substring matching
   closeDropdownOnSelect?: boolean | `if-mobile` | `retain-focus`
   form_input?: HTMLInputElement | null
   formSerialize?: FormSerialize<T>
@@ -265,8 +257,7 @@ export interface MultiSelectProps<T extends Option = Option>
   inputStyle?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   invalid?: boolean
-  // Override any string MultiSelect renders itself, for i18n. Shallow-merged over
-  // MULTI_SELECT_LABELS; see labels.ts for the full set and their defaults.
+  // i18n overrides, shallow-merged over MULTI_SELECT_LABELS (see labels.ts)
   labels?: Partial<MultiSelectLabels>
   liActiveOptionClass?: ClassValue
   liActiveUserMsgClass?: ClassValue
@@ -278,25 +269,21 @@ export interface MultiSelectProps<T extends Option = Option>
   loading?: boolean
   matchingOptions?: T[]
   maxOptions?: number | undefined
-  // Virtualized dropdown rendering for large option lists: only rows near the scroll
-  // viewport are rendered as DOM nodes. Pass true for defaults or { itemHeight, overscan }
-  // to tune row height (px, default 30, applies to group headers too) and extra rows
-  // rendered above/below the visible window (default 10). Grouped options are supported,
-  // but combining them with stickyGroupHeaders is invalid because a virtualized header that
-  // has left the render window cannot remain pinned.
+  // Render only rows near the scroll viewport. `itemHeight` (px, default 30, group headers
+  // included) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
+  // not with stickyGroupHeaders: a header outside the render window cannot stay pinned.
   virtualList?: boolean | { itemHeight?: number; overscan?: number }
   maxSelect?: number | null // null means there is no upper limit for selected.length
   maxSelectMsg?: ((current: number, max: number) => string) | null
   maxSelectMsgClass?: ClassValue
-  // Max selected chips rendered before the rest collapse into a "+N more" toggle
-  // chip (click to expand/collapse). null (default) renders all chips. Ignored in
-  // selectedDisplay="input" mode. Keyboard chip navigation auto-expands.
+  // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
+  // all. Ignored for selectedDisplay="input"; keyboard chip navigation auto-expands.
   maxVisibleChips?: number | null
   name?: string | null
   noMatchingOptionsMsg?: string
   open?: boolean
-  // Mostly reaches portalled dropdowns: with the input focused, a press outside blurs it and
-  // that closes an in-place dropdown before any click. See dismiss_on_outside_press.
+  // Mostly reaches portalled dropdowns: an outside press blurs the focused input, which
+  // already closes an in-place dropdown before any click. See dismiss_on_outside_press.
   dismiss_on?: DismissConfig[`dismiss_on`]
   options?: T[] // static options, or omit when using loadOptions
   outerDiv?: HTMLDivElement | null
@@ -312,8 +299,7 @@ export interface MultiSelectProps<T extends Option = Option>
   parse_paste?: (text: string) => T[]
   searchText?: string
   selected?: T[] // don't allow more than maxSelect preselected options
-  // Defaults to 'chips', which renders selected options as tags. 'input' is only
-  // valid with maxSelect === 1; other maxSelect values are rejected.
+  // 'chips' (default) renders selected options as tags; 'input' requires maxSelect === 1
   selectedDisplay?: `chips` | `input`
   sortSelected?: boolean | ((op1: T, op2: T) => number)
   selectedOptionsDraggable?: boolean
@@ -331,15 +317,16 @@ export interface MultiSelectProps<T extends Option = Option>
   selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
   liSelectAllClass?: ClassValue // CSS class for the select all <li>
   loadOptions?: LoadOptions<T>
-  // Animation parameters for selected options flip animation (https://github.com/janosh/svelte-widgets/issues/356)
-  // Set { duration: 0 } to disable animation
+  // flip animation for selected options; { duration: 0 } disables
+  // (https://github.com/janosh/svelte-widgets/issues/356)
   selectedFlipParams?: FlipParams
   // Option grouping feature (https://github.com/janosh/svelte-widgets/issues/135)
   collapsibleGroups?: boolean // enable click-to-collapse groups
   collapsedGroups?: Set<string> // externally controlled collapsed state (bindable)
-  groupSelectAll?: boolean // add "select all" action per group header (toggles between select/deselect)
+  groupSelectAll?: boolean // per-group header select/deselect-all toggle
   ungroupedPosition?: `first` | `last` // where to render options without a group
-  groupSortOrder?: `none` | `asc` | `desc` | ((a: string, b: string) => number) // group ordering, default 'none' (source order); 'asc'/'desc' sort alphabetically or pass a comparator
+  // group order: 'none' (default, source order), alphabetical 'asc'/'desc', or a comparator
+  groupSortOrder?: `none` | `asc` | `desc` | ((a: string, b: string) => number)
   searchExpandsCollapsedGroups?: boolean // auto-expand collapsed groups when search matches their options
   searchMatchesGroups?: boolean // include group name in search matching
   keyboardExpandsCollapsedGroups?: boolean // auto-expand collapsed groups when navigating with arrow keys
@@ -351,24 +338,18 @@ export interface MultiSelectProps<T extends Option = Option>
   expandAllGroups?: () => void
   // Keyboard shortcuts for common actions
   shortcuts?: Partial<KeyboardShortcuts>
-  // Selection history for undo/redo support (enabled by default)
-  // true (default) = 50 max states, number = custom max, false/0 = disabled
-  // Note: need at least 2 states for undo (history=2 allows 1 undo, history=1 effectively disables)
+  // Undo/redo history size: true (default) = 50 states, a number sets the max, false/0 is
+  // off. Undo needs 2 states, so history=1 disables it in effect.
   history?: boolean | number
-  undo?: () => boolean // bindable method to undo last selection change
-  redo?: () => boolean // bindable method to redo last undone change
-  canUndo?: boolean // bindable read-only state for UI indicators
-  canRedo?: boolean // bindable read-only state for UI indicators
+  undo?: () => boolean // bindable
+  redo?: () => boolean // bindable
+  canUndo?: boolean // bindable, read-only
+  canRedo?: boolean // bindable, read-only
 }
 
-// Keyboard shortcuts for MultiSelect actions.
-// Shortcut format: "modifier+...+key" where modifiers can be: ctrl, shift, alt, meta, cmd
-// Examples: 'ctrl+a', 'ctrl+shift+a', 'meta+a', 'cmd+a', 'alt+s'
-// Set to null to disable a shortcut.
-//
-// PRECEDENCE: Custom shortcuts are evaluated BEFORE built-in key handlers (Enter, Escape,
-// ArrowUp/Down, Backspace). This means if you set shortcuts={{ open: 'enter' }}, the Enter
-// key will open the dropdown instead of selecting the active option (intentional to allow full customization).
+// "modifier+...+key" with modifiers ctrl, shift, alt, meta, cmd (e.g. 'ctrl+shift+a');
+// null disables. Evaluated BEFORE built-in handlers (Enter, Escape, arrows, Backspace), so
+// shortcuts={{ open: 'enter' }} deliberately overrides Enter's select.
 export interface KeyboardShortcuts {
   select_all?: string | null // default: null (opt-in, e.g. 'ctrl+a')
   clear_all?: string | null // default: 'ctrl+backspace' (meta+backspace on Mac)
@@ -392,11 +373,7 @@ export type NavRouteObject = {
   [key: string]: unknown // allow additional custom properties
 } & ({ href: string } | { separator: true; href?: string })
 
-// NavRoute shorthand formats:
-// - string: path only ("/about")
-// - [string, string]: [path, custom_label] ("/about", "About Us")
-// - [string, string[]]: [parent_path, child_paths] ("/docs", ["/docs/intro"])
-// - NavRouteObject: full object with all options
+// shorthands: "/about", ["/about", "About Us"], ["/docs", ["/docs/intro"]]
 export type NavRoute = string | [string, string] | [string, string[]] | NavRouteObject
 
 // === Toc ===

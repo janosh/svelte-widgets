@@ -220,8 +220,8 @@ describe(`create_find_state`, () => {
     expect(find.status).toBe(`1 of 2`)
   })
 
-  // The status is the only text create_find_state renders, and it reaches an aria-live
-  // region, so both branches have to be reachable without forking the state module.
+  // status is the only text create_find_state renders and it feeds an aria-live region,
+  // so both branches are exercised at the state level
   test(`labels reword both status branches, falling back per key`, () => {
     const { root, find } = setup(`<p>alpha</p><p>alpha</p>`, {
       labels: { match_position: (position, total) => `${position} von ${total}` },
@@ -338,7 +338,6 @@ describe(`create_find_state`, () => {
     await unmount_bar()
     await tick()
     expect(disconnect).toHaveBeenCalled()
-    // Unmount must drop the highlight owner.
     expect(registry.has(`find-match`)).toBe(false)
     expect(root.isConnected).toBe(true) // the searched subtree is left alone
   })

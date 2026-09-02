@@ -72,9 +72,8 @@ describe(`Footer`, () => {
     expect(document.querySelector(`footer nav`)).toBeNull()
   })
 
-  // FooterLink has no id and href is not an identity: two links may point at the same
-  // page under different labels. A key that collided would throw each_key_duplicate and
-  // take down the whole nav rather than just the repeat.
+  // href is no identity: two links may point at one page under different labels, and a
+  // colliding each key would throw each_key_duplicate, taking down the whole nav
   test(`renders links sharing an href`, () => {
     mount_footer({
       links: [

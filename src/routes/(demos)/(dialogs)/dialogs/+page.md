@@ -220,8 +220,8 @@ an ancestor would otherwise recurse without end — which is why the handler bel
     event.preventDefault()
     is_dragging = false
     if (!event.dataTransfer) return
-    // rejects on a tree that nests or branches past its caps, which a symlink cycle
-    // reaches — unhandled, the drop would look like it silently did nothing
+    // rejects past its nesting/branching caps, which a symlink cycle reaches; unhandled, the
+    // drop would look like it silently did nothing
     try {
       dropped = await files_from_data_transfer(event.dataTransfer)
       drop_error = ``

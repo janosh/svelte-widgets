@@ -17,7 +17,6 @@ type TocProps = ComponentProps<typeof Toc>
 
 const mounted_components: Record<string, unknown>[] = []
 
-// mounts into document.body and registers for teardown in afterEach
 const mount_toc = (props: TocProps = {}) => {
   mounted_components.push(mount(Toc, { target: document.body, props }))
 }
@@ -29,8 +28,8 @@ const set_body = (html: string) => {
 const setup_empty_page = () =>
   set_body(`<h1>H1</h1><h2 class="toc-exclude">H2</h2><h5>H5</h5>`)
 
-// `Heading 1`..`Heading n` as h2s with matching `heading-n` ids, the shape most
-// interaction tests want. happy-dom gives every heading top=0, so the last one starts active.
+// `Heading 1`..`Heading n` as h2s with `heading-n` ids. happy-dom gives every heading
+// top=0, so the last one starts active.
 const set_headings = (count: number) =>
   set_body(
     Array.from(
@@ -44,8 +43,7 @@ const set_window_width = (width: number) => {
   globalThis.dispatchEvent(new Event(`resize`))
 }
 
-// Element.prototype is the only place to intercept this: happy-dom has no layout, so the
-// component's own scrollIntoView call is all there is to observe.
+// happy-dom has no layout, so the component's own scrollIntoView call is all we can observe
 const spy_scroll_into_view = () =>
   vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
 
@@ -70,9 +68,8 @@ const setup_nested_headings = () =>
       <h3 id="sub-2-1">Sub 2.1</h3>
     `)
 
-// only top/bottom/left/right matter to the component, so derive the rest from those.
-// bottom/right collapse onto top/left rather than 0, since a negative width or height
-// makes DOMRect normalize by swapping the edges back.
+// only top/bottom/left/right matter; bottom/right collapse onto top/left rather than 0,
+// since a negative width or height makes DOMRect swap the edges back
 const dom_rect = ({
   top = 0,
   left = 0,
@@ -109,8 +106,7 @@ const find_matching_css_selector = (style_text: string, declaration_pattern: Reg
   for (const { groups } of style_text
     .replaceAll(/\/\*[^]*?\*\//gu, ``)
     .matchAll(/(?<selector>[^{}]+)\{(?<block>[^{}]+)\}/g)) {
-    // every component's CSS lands in the same head here, so a generic declaration like
-    // `box-sizing: border-box` would otherwise match a neighbor's rule first
+    // every component's CSS shares one head, so a generic declaration could match a neighbor
     if (!groups?.selector.includes(`toc`)) continue
     if (declaration_pattern.test(groups.block)) return groups.selector.trim()
   }
@@ -125,10 +121,8 @@ beforeAll(() => {
   })
 })
 
-// Svelte merges `style:` directives and a spread `style` into one cssText write, and
-// happy-dom drops any declaration whose value holds a var() with a fallback, which is how
-// Toc expresses indent and font size. The element never shows those styles, so record the
-// strings Svelte writes and assert on those instead.
+// happy-dom drops declarations whose value holds a var() with a fallback, which is how Toc
+// expresses indent and font size, so record the cssText Svelte writes and assert on that
 const style_prototype = Object.getPrototypeOf(document.createElement(`div`).style)
 const css_text_property = Object.getOwnPropertyDescriptor(style_prototype, `cssText`)
 if (!css_text_property?.set) throw new Error(`cssText is not a setter on this DOM`)
@@ -269,8 +263,7 @@ describe(`Toc`, () => {
     // the <a href> is a valid percent-encoded URL string
     expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#sec%3A1`)
 
-    // but the history fragment must match the DOM id exactly (no encoding) so it resolves
-    // directly via getElementById rather than the browser's percent-decode fallback
+    // the history fragment must match the DOM id exactly so getElementById resolves it
     doc_query(`aside.toc li > a`).dispatchEvent(
       new MouseEvent(`click`, { bubbles: true }),
     )
@@ -416,8 +409,7 @@ describe(`Toc`, () => {
       const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
       doc_query(selector).dispatchEvent(event)
 
-      // a nested interactive element keeps native behavior (no preventDefault, no scroll);
-      // plain content falls through to the li handler which scrolls and updates the fragment
+      // nested interactive elements keep native behavior; plain content falls to the li
       expect(event.defaultPrevented).toBe(scrolls)
       expect(scroll_into_view_mock).toHaveBeenCalledTimes(scrolls ? 1 : 0)
       expect(replace_state_mock.mock.calls).toEqual(scrolls ? [[{}, ``, `#first`]] : [])
@@ -486,9 +478,8 @@ describe(`Toc`, () => {
     }
   })
 
-  // Each case needs its own invalid selector: happy-dom throws the first time it parses
-  // one, then caches the failure and lets later querySelector calls for the same string
-  // return null, which would hide the invalidity from Toc's validation
+  // each case needs its own invalid selector: happy-dom throws only on the first parse, then
+  // caches the failure and returns null, hiding the invalidity from Toc's validation
   test.each([
     [`headingSelector`, `[`, { headingSelector: `[` }],
     [`excludeSelector`, `((`, { excludeSelector: `((` }],
@@ -531,8 +522,8 @@ describe(`Toc`, () => {
     const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
     expect(warn_mock).toHaveBeenCalledExactlyOnceWith(msg)
 
-    // rendering the ToC itself and any later unrelated childList mutation both notify the
-    // MutationObserver. the empty heading set is unchanged, so neither may rebuild and re-warn
+    // both the ToC render and this unrelated mutation notify the observer, but the empty
+    // heading set is unchanged, so neither may rebuild and re-warn
     document.body.append(document.createElement(`p`))
     await tick()
     document.body.append(document.createElement(`p`))
@@ -561,9 +552,8 @@ describe(`Toc`, () => {
     const toc_list = doc_query(`aside.toc > nav > ol`)
     expect(toc_list.children).toHaveLength(3)
 
-    // Indent is applied via CSS calc with --toc-indent-per-level variable. happy-dom's
-    // parser rejects calc() wrapping var(), so the value never lands on the element and
-    // the styles Toc sets have to be read off setProperty instead.
+    // happy-dom's parser rejects calc() wrapping var(), so the indent never lands on the
+    // element and has to be read off what Toc wrote
     expect(written_style_values(`margin-left`)).toEqual([
       expect.stringContaining(`calc(0 *`),
       expect.stringContaining(`calc(1 *`),
@@ -664,8 +654,7 @@ describe(`Toc`, () => {
 
     mount_toc({ desktop: false })
     expect(document.querySelector(`aside.toc > nav`)).toBeNull()
-    // both glyphs stay mounted so CSS can transition between them; swapping one <svg> for
-    // the other would render the same states with no animation
+    // both glyphs stay mounted so CSS can transition between them
     const shown_icons = () =>
       [...document.querySelectorAll(`aside.toc > button > svg`)].map((svg) =>
         svg.classList.contains(`shown`),
@@ -780,8 +769,7 @@ describe(`Toc`, () => {
       const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
 
-      // breakpoint above the happy-dom window width forces mobile mode, where open=true is
-      // enough for keys to be handled (no hover check)
+      // a breakpoint above the window width forces mobile mode, where open=true suffices
       mount_toc({ open: true, breakpoint: 2000, scrollBehavior })
       await tick()
 
@@ -873,14 +861,12 @@ describe(`Toc`, () => {
 
     // arrange rects so any rebuild's set_active_heading() would switch active to Alpha
     mock_active_heading(`a`)
-    // Toc observes document.body with childList+subtree, and every childList record used to
-    // short-circuit to a full-document heading re-query. On a page with a Toc in the layout
-    // that meant any unrelated insertion — a toast, a virtualized editor row — paid for it.
-    // `doc_query` uses the singular `querySelector`, so the assertions below cannot trip it.
+    // every childList record used to trigger a full-document heading re-query, so any
+    // unrelated insertion paid for it. `doc_query` is singular, so it cannot trip this spy.
     const query_spy = vi.spyOn(document, `querySelectorAll`)
 
-    // a subtree with no heading in it, the shape virtualized rows and toasts have. The skip
-    // must avoid rebuilding (and re-running set_active_heading), so active stays put too
+    // a heading-less subtree (a toast, a virtualized row) must skip the rebuild,
+    // so set_active_heading never runs and active stays put
     const noise = document.createElement(`div`)
     noise.innerHTML = `<span>row</span><span>row</span>`
     document.body.append(noise)
@@ -1002,9 +988,8 @@ describe(`Toc`, () => {
     const active_text = () => doc_query(`aside.toc ol li.active`).textContent.trim()
     const scroll_mock = vi.fn<Element[`scrollIntoView`]>()
 
-    // happy-dom reports top=0 for every unmocked heading, so plain scroll detection lands
-    // on the last one. `Heading 3` therefore means scroll_target was released, `Heading 1`
-    // that it still pins the clicked heading.
+    // unmocked headings all report top=0, so plain detection lands on the last: `Heading 3`
+    // means scroll_target was released, `Heading 1` that it still pins the clicked heading
     beforeEach(() => {
       set_headings(3)
       scroll_mock.mockClear()
@@ -1099,8 +1084,7 @@ describe(`hideOnIntersect`, () => {
   const clear_of_toc = { top: 0, bottom: 50, left: 0, right: 1200 }
   const over_toc = { top: 150, bottom: 250, left: 0, right: 1200 }
 
-  // parks the ToC in the top-right corner so only a banner's vertical extent decides
-  // overlap, then leaves b1 clear of it and b2 wherever the case wants it
+  // parks the ToC top-right so only a banner's vertical extent decides overlap
   const setup_banners = async (
     target: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hideOnIntersect`],
     {
@@ -1175,8 +1159,7 @@ describe(`hideOnIntersect`, () => {
     const { aside, b2 } = await setup_banners(() => `.banner`)
     await scroll()
     expect(is_intersecting(aside)).toBe(true)
-    // opacity: 0 alone would leave the links tabbable while aria-hidden hides them from
-    // assistive tech, so the subtree has to be inert for as long as it is invisible
+    // opacity: 0 alone leaves the links tabbable, so the subtree must be inert while hidden
     expect(aside.hasAttribute(`inert`)).toBe(true)
 
     mock_bounding_rect(b2, { top: 500, bottom: 600, left: 0, right: 1200 })
@@ -1187,10 +1170,8 @@ describe(`hideOnIntersect`, () => {
 })
 
 describe(`Element Prop Bags`, () => {
-  // shared marker so one assertion covers style pass-through for every element. the class
-  // values deliberately vary (string / array / object) to cover Svelte's class forms.
-  // a longhand: the `style:` directives on these elements make happy-dom re-serialize
-  // the whole declaration, which would expand a shorthand like `outline` into parts
+  // one shared marker covers style pass-through everywhere; class values vary (string/array/
+  // object) to cover Svelte's forms. A longhand, since happy-dom would split a shorthand.
   const marker_style = `opacity: 0.5;`
 
   const prop_bag_cases = [
@@ -1304,8 +1285,7 @@ describe(`Element Prop Bags`, () => {
         )
         await tick()
       }
-      // happy-dom honors `disabled` for dispatched clicks, so a disabled control
-      // never sees the event that jsdom would have delivered
+      // happy-dom honors `disabled` for dispatched clicks, unlike jsdom
       const is_disabled = `disabled` in bag && bag.disabled === true
       expect(user_click).toHaveBeenCalledTimes(has_user_click && !is_disabled ? 1 : 0)
       expect(on_open_change).toHaveBeenCalledTimes(expected_open_change_count)
@@ -1325,8 +1305,7 @@ describe(`Element Prop Bags`, () => {
       `style`,
     )
     expect(style_attribute).toContain(`padding-left: 10px;`)
-    // the generated declarations survive the merge but not happy-dom's parser, so they
-    // are asserted on what Svelte wrote rather than on the element
+    // happy-dom's parser drops these, so assert on what Svelte wrote, not on the element
     expect(written_style_values(`margin-left`)).toContain(
       `margin-left: calc(1 * var(--toc-indent-per-level, 1em))`,
     )
@@ -1336,9 +1315,8 @@ describe(`Element Prop Bags`, () => {
     expect(written_css_texts.join(``)).not.toContain(`\n`)
   })
 
-  // equal specificity, so source order decides. With hover first, an unset --toc-active-bg
-  // made `background` invalid on the active row and swallowed its hover fill — the row most
-  // likely to be pointed at was the one row that did not light up.
+  // equal specificity, so source order decides: with hover first, an unset --toc-active-bg
+  // made `background` invalid on the active row and swallowed its hover fill
   test(`the hover rule is declared after the active rule`, async () => {
     set_body(`<h2>Heading 1</h2>`)
     mount_toc()
@@ -1379,9 +1357,8 @@ describe(`Element Prop Bags`, () => {
       selector_pattern: /aside\.toc.*> nav.*> ol/,
     },
     {
-      // the toggle's box is structural for the same reason: under `:where()` a host
-      // `button { padding }` reset outweighed it and resized the hit target, leaving the
-      // toggle a different size from Nav's burger on the same page
+      // under `:where()` a host `button { padding }` reset outweighed this and resized the
+      // hit target, leaving the toggle a different size from Nav's burger
       rule_name: `open button box rule`,
       declaration_pattern: /padding: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
       expects_where: false,
@@ -1414,7 +1391,6 @@ describe(`collapseSubheadings`, () => {
     expect(get_collapsed_states()).toEqual(Array.from({ length: 8 }, () => false))
   })
 
-  // Parameterized test for collapse behavior with different modes and active headings
   test.each([
     // [description, mode, active_id, expected_collapsed_states]
     [

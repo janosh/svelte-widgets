@@ -1,8 +1,6 @@
-// Decode backend SpanList (types.ts). UTF-16 offsets index JS strings directly; the
-// backend never emits a boundary inside a surrogate pair.
-//
-// Malformed spans are a backend bug, but throwing would blank the editor; fall back to
-// unstyled text.
+// Decode backend SpanList (types.ts). UTF-16 offsets index JS strings directly; the backend
+// never emits a boundary inside a surrogate pair. Malformed spans are a backend bug, but
+// throwing would blank the editor, so they fall back to unstyled text.
 
 import { clamp_integer } from '../utils'
 import { CLASS_MASK, EMPHASIS_BIT, TOKEN_CLASS_NAMES } from './types'
@@ -25,13 +23,12 @@ export const decode_spans = (spans: SpanList, line_length: number): DecodedSpan[
 
   if (!Array.isArray(spans) || spans.length < 2)
     return [{ start: 0, end: length, class_name: PLAIN, emphasized: false }]
-  // A trailing odd element is a truncated pair with no class; drop it.
+  // a trailing odd element is a truncated pair with no class
   const pair_count = Math.floor(spans.length / 2)
 
   const decoded: DecodedSpan[] = []
   let start = clamp_integer(spans[0], 0, length)
-  // A first span starting past 0 would silently drop the line's prefix, so paint
-  // the prefix as Plain rather than losing characters.
+  // paint a prefix the first span skips as Plain rather than lose those characters
   if (start > 0) {
     decoded.push({ start: 0, end: start, class_name: PLAIN, emphasized: false })
   }
@@ -46,14 +43,12 @@ export const decode_spans = (spans: SpanList, line_length: number): DecodedSpan[
     decoded.push({
       start,
       end,
-      // An out-of-range class index means the two sides of the wire contract
-      // drifted; render the text unstyled instead of crashing the line.
+      // an out-of-range index means the wire contract drifted; render unstyled, don't crash
       class_name: TOKEN_CLASS_NAMES[packed & CLASS_MASK] ?? PLAIN,
       emphasized: (packed & EMPHASIS_BIT) !== 0,
     })
     start = end
   }
-  // Non-empty lines always yield a span; prefix gaps are filled above.
   return decoded
 }
 
@@ -63,7 +58,7 @@ export interface RenderedToken {
   css: string
 }
 
-// Shared editor/diff tokenization; UTF-16 slicing stays in one place.
+// shared editor/diff tokenization, keeping UTF-16 slicing in one place
 export const render_tokens = (text: string, spans: SpanList): RenderedToken[] =>
   decode_spans(spans, text.length).map((span) => ({
     start: span.start,
