@@ -42,6 +42,7 @@
     nav = $bindable(),
     open = $bindable(false),
     openButtonLabel = `Open table of contents`,
+    closeButtonLabel = `Close table of contents`,
     reactToKeys = [`ArrowDown`, `ArrowUp`, ` `, `Enter`, `Escape`, `Tab`],
     scrollBehavior = `smooth`,
     title = `On this page`,
@@ -84,6 +85,9 @@
     nav?: HTMLElement | undefined
     open?: boolean
     openButtonLabel?: string
+    // the toggle stays put and becomes a close button while the panel is open, so it needs
+    // a second name — same shape as Nav's burger, which is the other pinned mobile toggle
+    closeButtonLabel?: string
     reactToKeys?: false | string[]
     scrollBehavior?: `auto` | `smooth`
     title?: string
@@ -108,6 +112,22 @@
     openButtonIconProps?: SVGAttributes<SVGSVGElement>
   } = $props()
 
+  // An indented bullet list, not a burger: the burger is Nav's, and two identical glyphs
+  // pinned to the same phone screen say nothing about which one opens what. Three rows at
+  // two indent levels is what a table of contents looks like.
+  // The list glyph's viewBox is cropped to its own path bounds so it renders at the button's
+  // full width, like the burger's bars do. The X keeps a roomier box: Nav folds its bars into
+  // an X spanning ~17.9px, and one drawn edge to edge across the same 22.4px button would be
+  // the larger of the two close buttons on a page showing both. Each stroke-width is the one
+  // that lands on Nav's 0.18rem bars once its own box is scaled to the button.
+  const TOGGLE_ICONS = {
+    closed: {
+      view_box: `1.9 3.9 16.2 12.2`,
+      stroke_width: 2.1,
+      path: `M3 5h.01M7 5h10M6 10h.01M10 10h7M6 15h.01M10 15h7`,
+    },
+    open: { view_box: `2.5 2.5 15 15`, stroke_width: 1.95, path: `M5 5l10 10M15 5L5 15` },
+  }
   // fallback to clear scroll_target if scrollend never fires (e.g. no scroll needed)
   const scroll_target_fallback_ms = 1000
   // distance increase (px) that counts as the user manually scrolling away from a target
@@ -696,7 +716,10 @@
     node.toggleAttribute(`inert`, is_overlapping_hide_target)
   }}
 >
-  {#if !open && !desktop && headings.length >= minItems}
+  <!-- The toggle stays mounted while open and becomes the close button, matching Nav's
+  burger. Unmounting it left the panel with no visible way out — only an outside click,
+  Escape or a tab-out, none of which a touch user can see. -->
+  {#if !desktop && headings.length >= minItems}
     <button
       {...openButtonProps}
       onclick={(event) => {
@@ -704,18 +727,32 @@
         if (event.defaultPrevented) return
         event.stopPropagation()
         event.preventDefault()
-        set_open(true, `button`)
+        set_open(!open, `button`)
       }}
       type="button"
-      aria-label={openButtonLabel}
+      aria-expanded={open}
+      aria-label={open ? closeButtonLabel : openButtonLabel}
     >
       {#if openTocIcon}{@render openTocIcon()}{:else}
-        <!-- https://iconify.design/icon-sets/heroicons-solid/menu.html -->
-        <svg width="1em" {...openButtonIconProps} viewBox="0 0 20 20" fill="currentColor">
-          <path
-            d="M3 5a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1zm0 5a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1zm0 5a1 1 0 0 1 1-1h12a1 1 0 1 1 0 2H4a1 1 0 0 1-1-1z"
-          />
-        </svg>
+        <!-- Both glyphs stay mounted and cross-fade, so the toggle animates on open/close
+        the way Nav's burger morphs into its X instead of swapping in one frame. -->
+        {#each Object.entries(TOGGLE_ICONS) as [state, icon] (state)}
+          <svg
+            width="1em"
+            height="1em"
+            {...openButtonIconProps}
+            viewBox={icon.view_box}
+            fill="none"
+            stroke="currentColor"
+            stroke-width={icon.stroke_width}
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            class:shown={open === (state === `open`)}
+            aria-hidden="true"
+          >
+            <path d={icon.path} />
+          </svg>
+        {/each}
       {/if}
     </button>
   {/if}
@@ -778,6 +815,20 @@
 
 <style>
   :where(aside.toc) {
+    /* A ToC row and a Nav row are the same thing to a reader — a link that lights up under
+       the pointer — so they share one hover language: Nav's --nav-link-bg-hover colour, its
+       --nav-border-radius and its 0.2s background fade. These are the fallbacks behind the
+       public --toc-li-* tokens, which still win. */
+    --toc-item-hover-bg: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
+    --toc-item-radius: 3pt;
+    /* shared by the mobile panel and its toggle so the two read as one surface. Values match
+       Nav's --nav-surface-* so a page showing both toggles gets one visual language. */
+    --toc-surface-border: 1px solid
+      light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
+    --toc-surface-shadow: light-dark(
+      0 2px 8px rgba(0, 0, 0, 0.15),
+      0 4px 12px rgba(0, 0, 0, 0.5)
+    );
     box-sizing: border-box;
     height: max-content;
     overflow-wrap: break-word;
@@ -812,11 +863,11 @@
     color: var(--toc-li-color);
     background: var(--toc-li-bg);
     border: var(--toc-li-border);
-    border-radius: var(--toc-li-border-radius);
+    border-radius: var(--toc-li-border-radius, var(--toc-item-radius));
     margin: var(--toc-li-margin);
     padding: var(--toc-li-padding, 2pt 4pt);
     font: var(--toc-li-font);
-    transition: var(--toc-li-transition);
+    transition: var(--toc-li-transition, background-color 0.2s);
   }
   :where(aside.toc > nav > ol > li > a) {
     color: inherit;
@@ -845,10 +896,6 @@
     padding-block: 0;
     margin-block: 0;
   }
-  aside.toc > nav > ol > li:hover {
-    color: var(--toc-li-hover-color);
-    background: var(--toc-li-hover-bg);
-  }
   aside.toc > nav > ol > li.active {
     background: var(--toc-active-bg);
     color: var(--toc-active-color);
@@ -856,39 +903,102 @@
     text-shadow: var(--toc-active-text-shadow);
     border: var(--toc-active-border);
     border-width: var(--toc-active-border-width);
-    border-radius: var(--toc-active-border-radius, 2pt);
+    border-radius: var(--toc-active-border-radius, var(--toc-item-radius));
   }
+  /* After `.active`, not before: the two selectors have equal specificity, so source order
+     decides, and the active row is the one most likely to be hovered. Nav's active row keeps
+     its hover fill too (there, active is a text colour), and an unset --toc-active-bg made
+     `background` invalid on that row, which swallowed the hover fill entirely. */
+  aside.toc > nav > ol > li:hover {
+    color: var(--toc-li-hover-color);
+    background: var(--toc-li-hover-bg, var(--toc-item-hover-bg));
+  }
+  /* Cosmetics stay in `:where()` so a host can restyle the toggle without fighting
+     specificity. Its box does not: see the structural rule below. */
   :where(aside.toc > button) {
-    border: none;
-    bottom: var(--toc-mobile-btn-bottom, 0);
     cursor: pointer;
-    font: var(--toc-mobile-btn-font, 2em sans-serif);
+    font: var(--toc-mobile-btn-font, 1.4rem sans-serif);
     line-height: var(--toc-mobile-btn-line-height, 0);
-    position: absolute;
+    /* relative, not absolute: the aside lays both children out now, but these two vars are
+       public and still have to be able to nudge the toggle off its flex slot */
+    position: relative;
+    bottom: var(--toc-mobile-btn-bottom, 0);
     right: var(--toc-mobile-btn-right, 0);
     z-index: var(--toc-mobile-btn-z-index, 2);
-    padding: var(--toc-mobile-btn-padding, 2pt 3pt);
-    border-radius: var(--toc-mobile-btn-border-radius, 4pt);
-    background: var(--toc-mobile-btn-bg, rgba(255, 255, 255, 0.2));
-    color: var(--toc-mobile-btn-color, black);
+    border: var(--toc-mobile-btn-border, var(--toc-surface-border));
+    border-radius: var(--toc-mobile-btn-border-radius, 6pt);
+    background: var(--toc-mobile-btn-bg, var(--toc-mobile-bg, rgba(255, 255, 255, 0.2)));
+    color: var(--toc-mobile-btn-color, var(--text, black));
+    box-shadow: var(--toc-mobile-btn-shadow, var(--toc-surface-shadow));
+  }
+  /* A 1.4rem glyph in a 0.3rem-padded box, matching Nav's burger: the two are the only pinned
+     mobile toggles a page has, and at different sizes they read as unrelated chrome. Not
+     `:where()`, for the same reason as the `ol` rule below — a host `button { padding }` reset
+     outweighs a zero-specificity selector and silently resized the hit target. Tune it with
+     --toc-mobile-btn-padding / --toc-mobile-btn-font, which still win. */
+  aside.toc > button {
+    display: grid;
+    place-items: center;
+    box-sizing: content-box;
+    /* 1em so the box tracks --toc-mobile-btn-font, which the icon already sizes itself from */
+    width: 1em;
+    height: 1em;
+    padding: var(--toc-mobile-btn-padding, 0.3rem);
+  }
+  /* Both glyphs share the single grid cell and swap by opacity + quarter turn, matching the
+     0.2s linear the burger's bars use to fold into their X. */
+  aside.toc > button > svg {
+    grid-area: 1 / 1;
+    opacity: 0;
+    transform: rotate(-90deg) scale(0.7);
+    transition:
+      opacity var(--toc-mobile-btn-transition-duration, 0.2s) linear,
+      transform var(--toc-mobile-btn-transition-duration, 0.2s) linear;
+  }
+  aside.toc > button > svg.shown {
+    opacity: 1;
+    transform: none;
   }
   :where(aside.toc > nav > .toc-title) {
     margin-top: var(--toc-title-margin-top, 0);
   }
+  /* column-reverse against the DOM order [button, nav] keeps the toggle pinned in the corner
+     and opens the panel upward above it. Both children used to be absolutely positioned off
+     this zero-size anchor, which stacked them on top of each other once the toggle stopped
+     unmounting on open. */
   aside.toc.mobile {
     position: fixed;
     bottom: var(--toc-mobile-bottom, 1em);
     right: var(--toc-mobile-right, 1em);
+    display: flex;
+    flex-direction: column-reverse;
+    align-items: end;
+    gap: var(--toc-mobile-gap, 0.5em);
+    /* override the desktop --toc-width the base rule applies: on mobile the aside is just a
+       corner anchor and has to size to whichever of the panel or the toggle is wider */
+    width: max-content;
+    /* a long page's toc outgrows a phone screen, and a fixed panel can't scroll with the
+       document, so cap the whole stack against the viewport and let the panel scroll inside */
+    max-height: calc(100dvh - 2 * var(--toc-mobile-bottom, 1em));
+    max-width: calc(100dvw - 2 * var(--toc-mobile-right, 1em));
   }
   aside.toc.mobile > nav {
-    border-radius: var(--toc-mobile-border-radius, 3pt);
-    right: var(--toc-mobile-right, 1em);
-    z-index: -1;
+    /* the desktop 3em inset makes room for the sticky column's left gutter; in a floating
+       panel it is just a blank band down the left of every entry */
+    padding: var(--toc-mobile-padding, 0.5em 1em 1em);
+    border-radius: var(--toc-mobile-border-radius, 6pt);
     box-sizing: border-box;
     background: var(--toc-mobile-bg, white);
     width: var(--toc-mobile-width, 18em);
-    box-shadow: var(--toc-mobile-shadow);
-    border: var(--toc-mobile-border);
+    max-width: 100%;
+    /* flex items floor at their content height without this, so a tall toc would push the
+       toggle off the bottom of the screen instead of scrolling */
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    z-index: var(--toc-mobile-z-index, 2);
+    box-shadow: var(--toc-mobile-shadow, var(--toc-surface-shadow));
+    border: var(--toc-mobile-border, var(--toc-surface-border));
   }
   aside.toc.desktop {
     position: sticky;

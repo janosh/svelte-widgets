@@ -104,9 +104,11 @@ const get_collapsed_states = () =>
   )
 
 const find_matching_css_selector = (style_text: string, declaration_pattern: RegExp) => {
-  for (const { groups } of style_text.matchAll(
-    /(?<selector>[^{}]+)\{(?<block>[^{}]+)\}/g,
-  )) {
+  // the selector group is "everything since the previous rule", so a comment above a rule
+  // lands inside it and a `:where(` check would read the comment instead of the selector
+  for (const { groups } of style_text
+    .replaceAll(/\/\*[^]*?\*\//gu, ``)
+    .matchAll(/(?<selector>[^{}]+)\{(?<block>[^{}]+)\}/g)) {
     // every component's CSS lands in the same head here, so a generic declaration like
     // `box-sizing: border-box` would otherwise match a neighbor's rule first
     if (!groups?.selector.includes(`toc`)) continue
@@ -656,17 +658,25 @@ describe(`Toc`, () => {
     )
   })
 
-  test(`mobile button opens the ToC`, async () => {
+  test(`mobile button opens the ToC and cross-fades its icon`, async () => {
     globalThis.innerWidth = 600
     set_headings(2)
 
     mount_toc({ desktop: false })
     expect(document.querySelector(`aside.toc > nav`)).toBeNull()
+    // both glyphs stay mounted so CSS can transition between them; swapping one <svg> for
+    // the other would render the same states with no animation
+    const shown_icons = () =>
+      [...document.querySelectorAll(`aside.toc > button > svg`)].map((svg) =>
+        svg.classList.contains(`shown`),
+      )
+    expect(shown_icons()).toEqual([true, false]) // [closed, open]
 
     doc_query(`aside.toc button`).click()
     await tick()
 
     expect(document.querySelector(`aside.toc > nav`)).not.toBeNull()
+    expect(shown_icons()).toEqual([false, true])
   })
 
   test(`active heading is scrolled into view and highlighted when opening ToC on mobile`, async () => {
@@ -1326,6 +1336,20 @@ describe(`Element Prop Bags`, () => {
     expect(written_css_texts.join(``)).not.toContain(`\n`)
   })
 
+  // equal specificity, so source order decides. With hover first, an unset --toc-active-bg
+  // made `background` invalid on the active row and swallowed its hover fill — the row most
+  // likely to be pointed at was the one row that did not light up.
+  test(`the hover rule is declared after the active rule`, async () => {
+    set_body(`<h2>Heading 1</h2>`)
+    mount_toc()
+    await tick()
+
+    const css = document.head.textContent
+    expect(css.indexOf(`--toc-li-hover-bg`)).toBeGreaterThan(
+      css.indexOf(`--toc-active-bg`),
+    )
+  })
+
   test.each([
     {
       rule_name: `aside base rule`,
@@ -1353,6 +1377,15 @@ describe(`Element Prop Bags`, () => {
       declaration_pattern: /list-style: var\(--toc-ol-list-style, none\);/,
       expects_where: false,
       selector_pattern: /aside\.toc.*> nav.*> ol/,
+    },
+    {
+      // the toggle's box is structural for the same reason: under `:where()` a host
+      // `button { padding }` reset outweighed it and resized the hit target, leaving the
+      // toggle a different size from Nav's burger on the same page
+      rule_name: `open button box rule`,
+      declaration_pattern: /padding: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
+      expects_where: false,
+      selector_pattern: /aside\.toc.*> button/,
     },
   ])(
     `uses expected selector specificity for $rule_name`,
