@@ -1,4 +1,3 @@
-import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
@@ -79,34 +78,21 @@ test(`generated Nav and MultiSelect ids survive hydration`, async ({ page }) => 
 })
 
 test.describe(`Nav dropdown`, () => {
-  const hover_open = async (
-    page: Page,
-    dropdown: Locator,
-    menu: Locator,
-  ): Promise<void> => {
-    const trigger = dropdown.locator(`:scope > div`).first()
-    await expect(trigger).toBeVisible()
-    await expect(async () => {
-      await page.mouse.move(0, 0)
-      await trigger.hover()
-      await expect(menu).toHaveCSS(`display`, `flex`, { timeout: 500 })
-    }).toPass({ timeout: 10_000 })
-  }
-
-  test(`opens on hover and closes on mouse leave`, async ({ page }) => {
+  test(`hover leaves the dropdown shut; only a click opens it`, async ({ page }) => {
     await page.goto(`/nav`, { waitUntil: `networkidle` })
 
     const dropdown = page.locator(`.dropdown`).first()
     const menu = dropdown.locator(`[data-submenu]`)
 
     await expect(menu).toHaveCSS(`display`, `none`)
-    await hover_open(page, dropdown, menu)
-    await expect(menu.locator(`a`).first()).toBeVisible()
-    await page.mouse.move(0, 0)
+    await dropdown.locator(`:scope > div`).first().hover()
     await expect(menu).toHaveCSS(`display`, `none`)
+
+    await dropdown.locator(`[data-dropdown-toggle]`).click()
+    await expect(menu.locator(`a`).first()).toBeVisible()
   })
 
-  test(`click pins dropdown until outside, Escape, or toggle closes it`, async ({
+  test(`click opens the dropdown until outside, Escape, or the toggle closes it`, async ({
     page,
   }) => {
     await page.goto(`/nav`, { waitUntil: `networkidle` })
@@ -188,4 +174,70 @@ test(`the whole painted mobile row is part of its link's hit area`, async ({ pag
       `${edge} of the pill is outside the link`,
     ).toBeLessThanOrEqual(0.5)
   }
+})
+
+// The submenu inherits its line-height from the host page, which once made every child row
+// taller than the parent it hangs under. Its guide line is one border on the wrapper, and the
+// active link recolours a segment of it by sitting exactly on top. Layout-only, so: a browser.
+test(`expanded submenu rows are compact and share one continuous guide line`, async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 420, height: 800 })
+  await page.goto(`/nav`, { waitUntil: `networkidle` })
+  await page
+    .locator(`nav.mobile button.burger`)
+    .first()
+    .evaluate((element: HTMLElement) => element.click())
+
+  const dropdown = page.locator(`nav.mobile .dropdown`).first()
+  const parent_row = dropdown.locator(`> div:first-child`)
+  const caret = parent_row.locator(`> button`)
+  // the caret is the only way to open a section, so it claims the row's full height and runs
+  // out to the painted trailing edge rather than stopping inside the row's padding
+  const [caret_box, row_box] = await Promise.all([
+    caret.boundingBox(),
+    parent_row.boundingBox(),
+  ])
+  if (!caret_box || !row_box) throw new Error(`Missing mobile dropdown caret geometry`)
+  expect(caret_box.height).toBeCloseTo(row_box.height, 0)
+  expect(row_box.x + row_box.width - (caret_box.x + caret_box.width)).toBeLessThanOrEqual(
+    0.5,
+  )
+  expect(caret_box.width).toBeGreaterThan(caret_box.height)
+
+  await caret.evaluate((el: HTMLElement) => el.click())
+  const links = dropdown.locator(`> div:last-child a`)
+  await expect(links.first()).toBeVisible()
+  // the section opens over 0.25s; measuring mid-transition reads a wrapper still shorter
+  // than the links it clips
+  const wrapper_locator = dropdown.locator(`.submenu-inner`)
+  await expect
+    .poll(async () => (await wrapper_locator.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(0)
+  await dropdown
+    .locator(`> div:last-child`)
+    .evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((anim) => anim.finished)),
+    )
+
+  const parent_box = await parent_row.boundingBox()
+  const link_boxes = await links.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().toJSON()),
+  )
+  const wrapper = await dropdown
+    .locator(`.submenu-inner`)
+    .evaluate((el) => el.getBoundingClientRect().toJSON())
+  if (!parent_box) throw new Error(`Missing mobile dropdown row geometry`)
+
+  for (const box of link_boxes) {
+    expect(box.height, `child row is taller than its parent`).toBeLessThanOrEqual(
+      parent_box.height,
+    )
+    // each link's own (transparent, or accent when current) border sits on the wrapper's line
+    expect(Math.abs(box.x - wrapper.x)).toBeLessThanOrEqual(0.5)
+  }
+  // one unbroken line: the wrapper spans from above the first row to below the last
+  const last = link_boxes[link_boxes.length - 1]
+  expect(wrapper.y).toBeLessThanOrEqual(link_boxes[0].y)
+  expect(wrapper.bottom).toBeGreaterThanOrEqual(last.bottom - 0.5)
 })

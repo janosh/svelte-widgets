@@ -18,8 +18,7 @@ describe(`Nav`, () => {
   // two submenu links, so Tab/ArrowDown have somewhere to move
   const two_child_route: NavRoute[] = [[`/p`, [`/p`, `/p/child1`, `/p/child2`]]]
   const one_child_route: NavRoute[] = [[`/p`, [`/p`, `/p/1`]]]
-  // no hover cooldown, so a menu still open afterward is open because it was pinned
-  const pinned_props = { routes: two_child_route, dropdown_cooldown_ms: 0 }
+  const two_child_props = { routes: two_child_route }
   const mount_nav = (props: ComponentProps<typeof Nav>) =>
     mount(Nav, { target: document.body, props })
   const click = (el?: Element | null) => {
@@ -227,7 +226,7 @@ describe(`Nav`, () => {
     const add_listener = vi.spyOn(document, `addEventListener`)
     const press_listeners = () =>
       add_listener.mock.calls.filter(([type]) => type === `pointerdown`).length
-    const { dropdown, dropdown_menu, toggle } = mount_dropdown()
+    const { dropdown_menu, toggle } = mount_dropdown()
     const burger_button = doc_query(`.burger`)
     // with nothing open there is nothing to dismiss, so the document stays clean — that
     // handler does a layout read (the scrollbar guard) for every press on the page
@@ -248,13 +247,12 @@ describe(`Nav`, () => {
     expect(burger_button.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(is_visible(dropdown_menu)).toBe(false)
 
-    // a dropdown left open by hover alone must arm the listener too — on a touch device
-    // that state has nothing to close it
-    const listeners_before_hover = press_listeners()
-    mouse_enter(dropdown)
-    await tick()
+    // an open dropdown arms the listener on its own, with the burger menu shut: it is the
+    // only thing an outside click has to dismiss
+    const listeners_before = press_listeners()
+    await click(toggle)
     expect(is_visible(dropdown_menu)).toBe(true)
-    expect(press_listeners()).toBe(listeners_before_hover + 1)
+    expect(press_listeners()).toBe(listeners_before + 1)
     await click_outside()
     expect(is_visible(dropdown_menu)).toBe(false)
   })
@@ -407,18 +405,26 @@ describe(`Nav`, () => {
     expect(link_props.onkeydown).toHaveBeenCalledTimes(5)
   })
 
-  test(`dropdown focus behavior`, async () => {
-    const { dropdown, dropdown_menu: menu } = mount_dropdown({ routes: one_child_route })
+  test(`focus alone neither opens nor closes a dropdown`, async () => {
+    const {
+      dropdown,
+      dropdown_menu: menu,
+      toggle,
+    } = mount_dropdown({
+      routes: one_child_route,
+    })
 
-    focus_in(dropdown)
+    focus_in(dropdown) // tabbing through the nav must not pop panels open
     await tick()
-    expect(is_visible(menu)).toBe(true)
+    expect(is_visible(menu)).toBe(false)
 
+    await click(toggle)
     const external = document.createElement(`button`)
     document.body.append(external)
     focus_out(dropdown, external)
     await tick()
-    expect(is_visible(menu)).toBe(false)
+    // what a click opened, only a click (on the toggle or outside) or Escape closes
+    expect(is_visible(menu)).toBe(true)
     external.remove()
   })
 
@@ -610,12 +616,16 @@ describe(`Nav`, () => {
       ]
       mount_nav({ routes })
       const dropdown = doc_query(`.dropdown`)
-      const parent_span = dropdown.querySelector(`div:first-child > span.disabled`)
+      // `:scope` so these only match the dropdown's own row/submenu, not a nested wrapper
+      // that happens to be a first/last child too
+      const parent_span = dropdown.querySelector(
+        `:scope > div:first-child > span.disabled`,
+      )
       expect(parent_span?.getAttribute(`aria-disabled`)).toBe(`true`)
-      expect(dropdown.querySelector(`div:first-child > a`)).toBeNull() // no parent link
+      expect(dropdown.querySelector(`:scope > div:first-child > a`)).toBeNull() // no parent link
       // dropdown children stay accessible
       expect(
-        dropdown.querySelector(`div:last-child`)?.querySelectorAll(`a`),
+        dropdown.querySelector(`:scope > div:last-child`)?.querySelectorAll(`a`),
       ).toHaveLength(1)
     })
   })
@@ -832,108 +842,38 @@ describe(`Nav`, () => {
     expect(document.querySelectorAll(`.dropdown`)).toHaveLength(1)
   })
 
-  describe(`pinned dropdown feature`, () => {
-    test(`click toggles pinned state and aria-expanded`, async () => {
-      // cooldown 0 so an unpinned dropdown would hide within one macrotask
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-        dropdown_cooldown_ms: 0,
-      })
+  describe(`dropdowns open on click, never on hover`, () => {
+    test(`click toggles the dropdown and aria-expanded`, async () => {
+      const { dropdown_menu, toggle } = mount_dropdown()
 
       expect(is_visible(dropdown_menu)).toBe(false)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
 
-      await click(toggle) // pin open
+      await click(toggle)
       expect(is_visible(dropdown_menu)).toBe(true)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
 
-      mouse_leave(dropdown) // stays open when pinned
-      await next_task()
-      expect(is_visible(dropdown_menu)).toBe(true)
-      expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
-
-      await click(toggle) // unpin
+      await click(toggle)
       expect(is_visible(dropdown_menu)).toBe(false)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
     })
 
-    describe(`dropdown_cooldown_ms`, () => {
-      beforeEach(() => vi.useFakeTimers())
-      afterEach(() => vi.useRealTimers())
+    test(`hover neither opens nor closes a dropdown`, async () => {
+      vi.useFakeTimers()
+      const { dropdown, dropdown_menu, toggle } = mount_dropdown()
 
-      test(`cooldown closes only after the full timeout`, async () => {
-        const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 100 })
+      // pointing at a nav entry used to pop its panel open over the page
+      mouse_enter(dropdown)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(is_visible(dropdown_menu)).toBe(false)
 
-        mouse_enter(dropdown)
-        await tick()
-        expect(is_visible(dropdown_menu)).toBe(true)
-
-        mouse_leave(dropdown)
-        await vi.advanceTimersByTimeAsync(99)
-        expect(is_visible(dropdown_menu)).toBe(true)
-        await vi.advanceTimersByTimeAsync(1)
-        expect(is_visible(dropdown_menu)).toBe(false)
-      })
-
-      test(`multiple rapid enter/leave cycles reset cooldown each time`, async () => {
-        const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 100 })
-
-        for (let idx = 0; idx < 3; idx++) {
-          mouse_enter(dropdown)
-          // deno-lint-ignore no-await-in-loop
-          await tick()
-          mouse_leave(dropdown)
-          // deno-lint-ignore no-await-in-loop
-          await vi.advanceTimersByTimeAsync(50)
-          expect(is_visible(dropdown_menu)).toBe(true)
-        }
-        await vi.advanceTimersByTimeAsync(51)
-        expect(is_visible(dropdown_menu)).toBe(false)
-      })
-
-      test.each([
-        [`re-entering menu`, (_dropdown: Element, menu: Element) => mouse_enter(menu)],
-        [`keyboard focus`, (dropdown: Element) => focus_in(dropdown)],
-      ])(`%s during cooldown cancels hide`, async (_desc, reinteract) => {
-        const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 150 })
-
-        mouse_enter(dropdown)
-        await tick()
-        mouse_leave(dropdown)
-        await vi.advanceTimersByTimeAsync(50)
-
-        reinteract(dropdown, dropdown_menu)
-        await vi.advanceTimersByTimeAsync(200)
-        expect(is_visible(dropdown_menu)).toBe(true)
-      })
-
-      test(`switching between multiple dropdowns respects cooldown`, async () => {
-        mount_nav({ routes: two_dropdown_routes, dropdown_cooldown_ms: 100 })
-        const [
-          { dropdown: dropdown1, menu: menu1 },
-          { dropdown: dropdown2, menu: menu2 },
-        ] = query_all_dropdowns()
-
-        mouse_enter(dropdown1)
-        await tick()
-        expect(is_visible(menu1)).toBe(true)
-
-        mouse_leave(dropdown1)
-        await vi.advanceTimersByTimeAsync(30)
-        mouse_enter(dropdown2)
-        await tick()
-
-        expect([is_visible(menu2), is_visible(menu1)]).toEqual([true, false]) // switches at once
-
-        // dropdown1's pending hide must not take dropdown2 down with it
-        await vi.advanceTimersByTimeAsync(100)
-        expect([is_visible(menu2), is_visible(menu1)]).toEqual([true, false])
-
-        mouse_leave(dropdown2) // leaving starts a fresh full cooldown
-        await vi.advanceTimersByTimeAsync(99)
-        expect(is_visible(menu2)).toBe(true)
-        await vi.advanceTimersByTimeAsync(1)
-        expect(is_visible(menu2)).toBe(false)
-      })
+      await click(toggle)
+      // ...and moving off it used to close it again, so the synthetic mouseleave a tap
+      // emits could undo the tap
+      mouse_leave(dropdown)
+      await vi.advanceTimersByTimeAsync(500)
+      expect(is_visible(dropdown_menu)).toBe(true)
+      vi.useRealTimers()
     })
 
     test.each([
@@ -945,7 +885,7 @@ describe(`Nav`, () => {
         },
       ],
       [`Escape key`, escape],
-    ])(`pinned dropdown closes on %s`, async (_trigger, close_action) => {
+    ])(`an open dropdown closes on %s`, async (_trigger, close_action) => {
       const { dropdown_menu, toggle } = mount_dropdown()
       await click(toggle)
       expect(is_visible(dropdown_menu)).toBe(true)
@@ -953,14 +893,8 @@ describe(`Nav`, () => {
       expect(is_visible(dropdown_menu)).toBe(false)
     })
 
-    // hover → open_dropdown; click → toggle_dropdown — both clear the other pin
-    test.each([
-      [`hover`, (dropdown: Element) => mouse_enter(dropdown)],
-      [
-        `click toggle`,
-        (dropdown: Element) => click(dropdown.querySelector(`[data-dropdown-toggle]`)),
-      ],
-    ])(`%s on different dropdown closes pinned dropdown`, async (_method, activate) => {
+    // one dropdown at a time: opening the second has to close the first
+    test(`opening a second dropdown closes the first`, async () => {
       mount_nav({ routes: two_dropdown_routes })
       const [{ dropdown: dropdown1, menu: menu1 }, { dropdown: dropdown2, menu: menu2 }] =
         query_all_dropdowns()
@@ -968,35 +902,25 @@ describe(`Nav`, () => {
       await click(dropdown1.querySelector(`[data-dropdown-toggle]`))
       expect(is_visible(menu1)).toBe(true)
 
-      await activate(dropdown2)
-      await tick()
+      await click(dropdown2.querySelector(`[data-dropdown-toggle]`))
       expect(is_visible(menu1)).toBe(false)
       expect(is_visible(menu2)).toBe(true)
     })
 
     // Enter/Space share one branch; ArrowDown opens when closed via another
-    test.each([`Enter`, `ArrowDown`])(`keyboard %s pins dropdown open`, async (key) => {
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-        dropdown_cooldown_ms: 0,
-      })
+    test.each([`Enter`, `ArrowDown`])(`keyboard %s opens the dropdown`, async (key) => {
+      const { dropdown_menu, toggle } = mount_dropdown()
 
       keydown(key, toggle)
       await next_task()
       expect(is_visible(dropdown_menu)).toBe(true)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
-
-      mouse_leave(dropdown)
-      await next_task()
-      expect(is_visible(dropdown_menu)).toBe(true)
     })
 
-    test(`ArrowDown navigates within pinned dropdown after mouse leave`, async () => {
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown(pinned_props)
+    test(`ArrowDown on the toggle of an open dropdown navigates into it`, async () => {
+      const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
 
-      await click(toggle) // pin open, then leave with the mouse
-      expect(is_visible(dropdown_menu)).toBe(true)
-      mouse_leave(dropdown)
-      await next_task()
+      await click(toggle)
       expect(is_visible(dropdown_menu)).toBe(true)
 
       // ArrowDown navigates within the dropdown instead of closing it. toggle_dropdown
@@ -1008,7 +932,7 @@ describe(`Nav`, () => {
     })
 
     test(`Escape on a submenu link closes it for good and restores focus`, async () => {
-      const { dropdown_menu, toggle } = mount_dropdown(pinned_props)
+      const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
 
       await click(toggle)
       const first_link = doc_query<HTMLAnchorElement>(`[data-submenu] a`)
@@ -1017,12 +941,11 @@ describe(`Nav`, () => {
       await next_task()
 
       expect(document.activeElement).toBe(toggle)
-      // handing focus back lands on the toggle, whose focusin must not reopen it
       expect(is_visible(dropdown_menu)).toBe(false)
     })
 
-    test(`Tab cycles within a pinned submenu instead of leaving it`, async () => {
-      const { dropdown_menu } = mount_dropdown(pinned_props)
+    test(`Tab cycles within an open submenu instead of leaving it`, async () => {
+      const { dropdown_menu } = mount_dropdown(two_child_props)
 
       await click(doc_query(`[data-dropdown-toggle]`))
       const links = [...dropdown_menu.querySelectorAll(`a`)]
@@ -1035,14 +958,14 @@ describe(`Nav`, () => {
       expect(document.activeElement).toBe(links[0])
     })
 
-    test(`pinned dropdown stays open on focus out`, async () => {
+    test(`an open dropdown stays open on focus out`, async () => {
       const { dropdown, dropdown_menu } = mount_dropdown({ routes: two_child_route })
 
       await click(doc_query(`[data-dropdown-toggle]`))
       expect(is_visible(dropdown_menu)).toBe(true)
 
       // stays open whether focus moves inside the dropdown or out of it entirely
-      // (pinned dropdowns close via click outside / Escape, not focusout)
+      // (dropdowns close via click outside / Escape, not focusout)
       for (const related of [
         dropdown_menu.querySelector(`a`),
         document.createElement(`button`),
@@ -1054,7 +977,7 @@ describe(`Nav`, () => {
       }
     })
 
-    test(`pinned state clears when burger menu closes`, async () => {
+    test(`open dropdown clears when burger menu closes`, async () => {
       set_window_width(500)
       const { dropdown_menu, toggle } = mount_dropdown({ breakpoint: 767 })
       await tick()
@@ -1085,62 +1008,6 @@ describe(`Nav`, () => {
       expect(
         [...document.querySelectorAll(`a`)].map((link) => link.getAttribute(`href`)),
       ).toEqual(routes.map((route) => route.href))
-    })
-  })
-
-  // Regression: dropdown panel mouseleave should not close when mouse moves to trigger
-  describe(`dropdown panel mouseleave relatedTarget`, () => {
-    beforeEach(() => vi.useFakeTimers())
-    afterEach(() => vi.useRealTimers())
-
-    // Open dropdown and enter the panel, returning elements for assertions
-    const open_and_enter_panel = async () => {
-      const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 50 })
-      mouse_enter(dropdown)
-      await tick()
-      mouse_enter(dropdown_menu)
-      await tick()
-      return { dropdown, dropdown_menu }
-    }
-
-    test.each([`div:first-child`, `[data-dropdown-toggle]`])(
-      `panel stays open when mouse moves to %s within dropdown`,
-      async (selector) => {
-        const { dropdown, dropdown_menu } = await open_and_enter_panel()
-        const related = dropdown.querySelector<HTMLElement>(selector)
-        dropdown_menu.dispatchEvent(
-          new MouseEvent(`mouseleave`, { relatedTarget: related }),
-        )
-        await vi.advanceTimersByTimeAsync(200)
-        expect(is_visible(dropdown_menu)).toBe(true)
-      },
-    )
-
-    test.each([
-      [`external element`, document.createElement(`div`)],
-      [`null (mouse left window)`, null],
-    ])(`panel closes when mouse leaves to %s`, async (_desc, related_target) => {
-      const { dropdown_menu } = await open_and_enter_panel()
-      dropdown_menu.dispatchEvent(
-        new MouseEvent(`mouseleave`, { relatedTarget: related_target }),
-      )
-      await vi.advanceTimersByTimeAsync(100)
-      expect(is_visible(dropdown_menu)).toBe(false)
-    })
-
-    test(`panel closes when mouse moves to a different dropdown`, async () => {
-      mount_nav({ routes: two_dropdown_routes, dropdown_cooldown_ms: 50 })
-      const [{ dropdown: dropdown1, menu: menu1 }, { dropdown: dropdown2 }] =
-        query_all_dropdowns()
-      const other_trigger = dropdown2.querySelector<HTMLElement>(`div:first-child`)
-
-      mouse_enter(dropdown1)
-      await tick()
-      mouse_enter(menu1)
-      await tick()
-      menu1.dispatchEvent(new MouseEvent(`mouseleave`, { relatedTarget: other_trigger }))
-      await vi.advanceTimersByTimeAsync(100)
-      expect(is_visible(menu1)).toBe(false)
     })
   })
 
@@ -1200,63 +1067,6 @@ describe(`Nav`, () => {
       expect(doc_query(`.custom-tooltip`).getAttribute(`data-placement`)).toBe(`right`)
       // per-route arrow option wins over the shared setting
       expect(document.querySelector(`.custom-tooltip-arrow`)).toBeNull()
-    })
-  })
-
-  describe(`touch device guards`, () => {
-    afterEach(() => vi.unstubAllGlobals())
-
-    test(`mouse hover does not open dropdowns on mobile touch devices`, async () => {
-      vi.stubGlobal(`ontouchstart`, () => {}) // makes `ontouchstart` in globalThis true
-      set_window_width(500)
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown()
-      await tick()
-
-      mouse_enter(dropdown)
-      await tick()
-      expect(is_visible(dropdown_menu)).toBe(false)
-
-      // explicit toggle click still opens the dropdown on touch devices
-      await click(toggle)
-      expect(is_visible(dropdown_menu)).toBe(true)
-    })
-
-    // A touchscreen laptop reports touch support at desktop width, where the pointer is
-    // still a mouse: hover opens the dropdown, so hover has to be able to close it again.
-    // Suppressing the hide on touch support alone stranded it open until a click outside.
-    test(`a hover-opened dropdown still closes on a touch-capable desktop`, async () => {
-      vi.useFakeTimers()
-      vi.stubGlobal(`ontouchstart`, () => {})
-      const { dropdown, dropdown_menu } = mount_dropdown({ dropdown_cooldown_ms: 0 })
-      await tick()
-
-      mouse_enter(dropdown)
-      await tick()
-      expect(is_visible(dropdown_menu)).toBe(true)
-
-      mouse_leave(dropdown)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(is_visible(dropdown_menu)).toBe(false)
-      vi.useRealTimers()
-    })
-
-    // What the touch guard was really protecting: a tap pins the dropdown, and the
-    // synthetic mouseleave that follows it must not undo the tap.
-    test(`a tap-pinned dropdown survives the mouseleave that follows the tap`, async () => {
-      vi.useFakeTimers()
-      vi.stubGlobal(`ontouchstart`, () => {})
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-        dropdown_cooldown_ms: 0,
-      })
-      await tick()
-
-      await click(toggle)
-      expect(is_visible(dropdown_menu)).toBe(true)
-
-      mouse_leave(dropdown)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(is_visible(dropdown_menu)).toBe(true)
-      vi.useRealTimers()
     })
   })
 })
