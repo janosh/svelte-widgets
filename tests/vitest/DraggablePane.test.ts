@@ -389,6 +389,21 @@ describe(`DraggablePane`, () => {
     expect(await tooltip_text(doc_query(`button.pane-toggle`))).toBe(`Bereich schließen`)
   })
 
+  // The pane builds its own `resizable` attachment, so without this pass-through a fully
+  // translated pane still announced four English separators.
+  test(`labels reach the resize handles the pane creates itself`, async () => {
+    const { pane } = await open_pane({
+      resize: `both`,
+      labels: { resize_handle: (edge: string) => `Kante ${edge}` },
+    })
+
+    expect(
+      [...pane.querySelectorAll(`[data-resize-edge]`)].map((strip) =>
+        strip.getAttribute(`aria-label`),
+      ),
+    ).toEqual([`Kante bottom`, `Kante right`])
+  })
+
   test(`the shut toggle tooltip uses open_pane, defaulting when omitted`, async () => {
     const { toggle } = await setup({ labels: { open_pane: `Bereich öffnen` } })
     expect(await tooltip_text(toggle)).toBe(`Bereich öffnen`)

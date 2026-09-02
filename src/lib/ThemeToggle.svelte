@@ -4,6 +4,7 @@
   import { tooltip, type TooltipOptions } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
+  import { THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
   import {
     apply_theme_mode,
     listen_theme_storage,
@@ -16,17 +17,19 @@
   let {
     tooltip: tooltip_opts = {},
     icon_props = {},
+    labels,
     ...rest
   }: HTMLAttributes<HTMLButtonElement> & {
     tooltip?: TooltipOptions | false
     icon_props?: HTMLAttributes<SVGSVGElement>
+    labels?: Partial<ThemeToggleLabels>
   } = $props()
 
   const mode_icons = { light: Sun, dark: Moon, system: Monitor } as const
-  const mode_labels = { light: `light`, dark: `dark`, system: `system (auto)` } as const
+  const msg = $derived({ ...THEME_TOGGLE_LABELS, ...labels })
   let is_hydrated = $state(false)
   let next_mode = $derived(THEME_MODE_CYCLE[theme.mode])
-  let title = $derived(`Switch to ${mode_labels[next_mode]} theme`)
+  let title = $derived(msg.switch_to(msg[next_mode]))
 
   onMount(() => {
     // Only hydrate from storage when still at the default. An externally applied mode

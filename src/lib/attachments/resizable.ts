@@ -1,4 +1,5 @@
 import type { Attachment } from 'svelte/attachments'
+import { RESIZABLE_LABELS, type ResizableLabels } from '../labels'
 import { clamp } from '../utils'
 import { css_px, follow_pointer, is_primary_press } from './shared'
 
@@ -16,6 +17,8 @@ export interface ResizableOptions {
   max_height?: ResizeLimit
   handle_size?: number // px, default 8
   disabled?: boolean
+  // names the focusable drag handles, which are keyboard-operable and so get announced
+  labels?: Partial<ResizableLabels>
   on_resize_start?: ResizeCallback
   on_resize?: ResizeCallback
   on_resize_end?: ResizeCallback
@@ -40,11 +43,13 @@ export const resizable =
       max_width = Infinity,
       max_height = Infinity,
       handle_size = 8,
+      labels,
       on_resize_start,
       on_resize,
       on_resize_end,
       on_resize_reset,
     } = options
+    const msg = { ...RESIZABLE_LABELS, ...labels }
 
     const invalid_width = typeof max_width === `number` && min_width > max_width
     const invalid_height = typeof max_height === `number` && min_height > max_height
@@ -292,7 +297,7 @@ export const resizable =
         )
         handle.dataset.resizeEdge = edge
         handle.setAttribute(`role`, `separator`)
-        handle.setAttribute(`aria-label`, `Resize from ${edge} edge`)
+        handle.setAttribute(`aria-label`, msg.handle(edge))
         handle.setAttribute(
           `aria-orientation`,
           grab.horizontal ? `vertical` : `horizontal`,

@@ -5,6 +5,8 @@
 // neither links. Links pin the commit the site was built from so line numbers stay right.
 // The data comes from `virtual:source-symbols`, emitted by ./vite-plugin.ts.
 
+import { SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
+
 export type SourceSymbols = {
   repo: string // repository URL, e.g. https://github.com/janosh/svelte-widgets
   ref: string // commit the site was built from (`main` when built outside git)
@@ -20,12 +22,11 @@ export type SourceLinks = {
   link_source_mentions: (root: HTMLElement) => () => void
 }
 
-export function create_source_links({
-  repo,
-  ref,
-  files,
-  symbols,
-}: SourceSymbols): SourceLinks {
+export function create_source_links(
+  { repo, ref, files, symbols }: SourceSymbols,
+  labels?: Partial<SourceLinksLabels>,
+): SourceLinks {
+  const msg = { ...SOURCE_LINKS_LABELS, ...labels }
   // name -> repo path, or null once two files claim the name
   const location_by_name = new Map<string, string | null>()
   const register = (name: string, location: string): void => {
@@ -63,7 +64,7 @@ export function create_source_links({
         link.href = href_of(location)
         link.target = `_blank`
         link.rel = `noopener`
-        link.title = `Source: ${location.slice(1)}`
+        link.title = msg.link_title(location.slice(1))
         link.append(...code.childNodes)
         code.append(link)
       }

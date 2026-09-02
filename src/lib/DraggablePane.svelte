@@ -283,6 +283,7 @@ aria-label sits before the spread, so a page with several panes renames them via
     // the user's drag.
     max_width: resize_width_limit,
     handle_size: resize_gutter_px,
+    labels: { handle: msg.resize_handle },
     on_resize_start: (_event, { width }) => {
       has_been_dragged = true
       resize_start_width = width

@@ -17,7 +17,7 @@
       on_close: () => void
       // Region name for placeholder and accessible labels.
       label?: string
-      labels?: Partial<FindBarLabels>
+      // `labels` itself comes from FindOptions, which reads the status strings out of it
     }
 
   let {
@@ -35,6 +35,7 @@
     only_within,
     also_ignore,
     before_search,
+    labels,
   }))
   const msg = $derived({ ...FIND_BAR_LABELS, ...labels })
   const find_label = $derived(msg.find_in(label))

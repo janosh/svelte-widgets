@@ -243,15 +243,20 @@ describe(`rows and layouts`, () => {
         oldEndsWithNewline: false,
         newEndsWithNewline: false,
       }),
-      { single_col: true, new_text: `first line\nsecond line` },
+      {
+        single_col: true,
+        new_text: `first line\nsecond line`,
+        labels: { no_newline: `\\ Keine neue Zeile am Dateiende` },
+      },
     )
     expect(code_texts()).toEqual([`first line`, `second line`])
     expect(document.querySelectorAll(`.diff-row.solo`)).toHaveLength(3)
     expect(document.querySelector(`.diff-row-delete, .diff-row-insert`)).toBeNull()
     expect(document.querySelector(`.panel-header`)).toBeNull()
     expect(document.querySelector(`[data-no-newline='old']`)).toBeNull()
+    // the default text is covered by `marks only the %s side ...` below
     expect(text_of(query_element(`[data-no-newline='new']`))).toBe(
-      String.raw`\ No newline at end of file`,
+      String.raw`\ Keine neue Zeile am Dateiende`,
     )
   })
 })

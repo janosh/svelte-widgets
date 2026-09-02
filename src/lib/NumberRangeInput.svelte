@@ -12,6 +12,7 @@
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
+  import { NUMBER_RANGE_INPUT_LABELS, type NumberRangeInputLabels } from './labels'
 
   // The same three bounds either way: optional when a schema entry can supply them, required
   // when nothing else can.
@@ -34,11 +35,13 @@
     step,
     title,
     children,
+    labels,
     ...rest
   }: {
     value: number | undefined
     title?: string
     children?: Snippet
+    labels?: Partial<NumberRangeInputLabels>
   } & (SchemaBounds | ExplicitBounds) &
     Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
 
@@ -56,7 +59,8 @@
     step: step ?? setting_config?.multipleOf ?? `any`,
   })
   let resolved_title = $derived(title ?? setting_config?.description)
-  let range_label = $derived(resolved_title?.trim() || setting?.trim() || `Value`)
+  const msg = $derived({ ...NUMBER_RANGE_INPUT_LABELS, ...labels })
+  let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)
   // With children the wrapping <label> already names the number input and an aria-label would
   // override that visible text; without them the label is empty, so it needs the fallback too.
   const number_label = $derived(children ? undefined : range_label)

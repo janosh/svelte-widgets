@@ -47,6 +47,12 @@ describe(`NumberRangeInput`, () => {
     [`children name the number input`, { children: label_snippet }, null, `Atom radius`],
     [`a bare title names both inputs`, {}, `Atom radius`, `Atom radius`],
     [`neither falls back to a generic name`, { title: undefined }, `Value`, `Value`],
+    [
+      `labels reword that generic fallback`,
+      { title: undefined, labels: { value: `Wert` } },
+      `Wert`,
+      `Wert`,
+    ],
   ])(`%s`, (_name, overrides, ...expected) => {
     const { inputs } = mount_range({ ...named_props, ...overrides })
     expect(inputs.map((input) => input.getAttribute(`aria-label`))).toEqual(expected)

@@ -122,6 +122,21 @@ describe(`create_source_links`, () => {
     document.body.innerHTML = ``
   })
 
+  it(`labels reword the generated link title`, async () => {
+    const root = document.createElement(`main`)
+    root.innerHTML = `<p><code>Footer</code></p>`
+    document.body.append(root)
+    const detach = create_source_links(data, {
+      link_title: (path) => `Quelle: ${path}`,
+    }).link_source_mentions(root)
+    await new Promise(requestAnimationFrame)
+
+    expect(root.querySelector(`code > a`)?.getAttribute(`title`)).toBe(
+      `Quelle: src/lib/Footer.svelte`,
+    )
+    detach()
+  })
+
   it.each([
     [`Footer`, `/src/lib/Footer.svelte`], // component by bare name beats a same-named export
     [`Footer.svelte`, `/src/lib/Footer.svelte`],

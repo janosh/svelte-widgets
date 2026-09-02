@@ -187,6 +187,22 @@ test(`tooltip=false preserves the native title`, async () => {
   expect(button.getAttribute(`title`)).toBe(`Switch to dark theme`)
 })
 
+// The mode name varies with state, so a caller pinning a static title/aria-label through
+// `rest` loses that variation. `labels` translates the frame and the three mode names.
+test(`labels reword the title, mode names included`, async () => {
+  localStorage.setItem(`theme`, `system`) // cycles system -> dark -> light
+  const button = await mount_theme_toggle({
+    tooltip: false,
+    labels: { dark: `dunkel`, switch_to: (mode: string) => `Zu ${mode} wechseln` },
+  })
+  expect(button.getAttribute(`aria-label`)).toBe(`Zu dunkel wechseln`)
+
+  button.click()
+  await tick()
+  // omitted key keeps the English default, and the frame still applies
+  expect(button.getAttribute(`aria-label`)).toBe(`Zu light wechseln`)
+})
+
 test(`tooltip defaults to opening on keyboard focus`, async () => {
   const button = await mount_theme_toggle()
   expect(button.getAttribute(`title`)).toBeNull()

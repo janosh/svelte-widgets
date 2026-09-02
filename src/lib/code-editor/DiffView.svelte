@@ -72,7 +72,6 @@
     | ({ kind: `single`; row_kind: RowKind; side: Cell; line: DiffLine } & Gutters)
     | { kind: `no_newline`; sides: Side[] }
 
-  const NO_NEWLINE_TEXT = String.raw`\ No newline at end of file`
   // Rows kept above/below the viewport so a fast scroll shows content, not blank space.
   const OVERSCAN_ROWS = 8
 
@@ -322,7 +321,7 @@
 
 {#snippet no_newline_cell(sides: Side[], side: Side)}
   {#if sides.includes(side)}
-    <span class="code no-newline-note" data-no-newline={side}>{NO_NEWLINE_TEXT}</span>
+    <span class="code no-newline-note" data-no-newline={side}>{msg.no_newline}</span>
   {:else}
     <span class="code spacer" data-spacer={side}></span>
   {/if}

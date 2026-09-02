@@ -220,6 +220,20 @@ describe(`create_find_state`, () => {
     expect(find.status).toBe(`1 of 2`)
   })
 
+  // The status is the only text create_find_state renders, and it reaches an aria-live
+  // region, so both branches have to be reachable without forking the state module.
+  test(`labels reword both status branches, falling back per key`, () => {
+    const { root, find } = setup(`<p>alpha</p><p>alpha</p>`, {
+      labels: { match_position: (position, total) => `${position} von ${total}` },
+    })
+
+    run_search(root, find, `alpha`)
+    expect(find.status).toBe(`1 von 2`)
+
+    run_search(root, find, `nothing`)
+    expect(find.status).toBe(`No matches`) // omitted key keeps the English default
+  })
+
   // Public jump_to must handle values below -length; bare `% length` stays negative.
   test.each([
     [-5, 1],

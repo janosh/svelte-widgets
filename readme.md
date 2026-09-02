@@ -153,7 +153,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment     |
 | `/icons`                            | Dynamic icon registry                                      |
 | `/katex`                            | KaTeX before/after preprocessor pair                       |
-| `/labels`                           | Default UI strings every component renders, for i18n       |
+| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers   |
 | `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter |
 | `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory             |
 | `/print`                            | Element printing                                           |
