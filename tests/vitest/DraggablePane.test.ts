@@ -404,13 +404,12 @@ describe(`DraggablePane`, () => {
     ).toEqual([`Kante bottom`, `Kante right`])
   })
 
-  test(`the shut toggle tooltip uses open_pane, defaulting when omitted`, async () => {
-    const { toggle } = await setup({ labels: { open_pane: `Bereich öffnen` } })
-    expect(await tooltip_text(toggle)).toBe(`Bereich öffnen`)
-
-    document.body.replaceChildren()
-    const fallback = await setup()
-    expect(await tooltip_text(fallback.toggle)).toBe(`Open pane`)
+  test.each([
+    [{ open_pane: `Bereich öffnen` }, `Bereich öffnen`],
+    [{}, `Open pane`], // omitted key keeps the English default
+  ])(`the shut toggle tooltip uses open_pane (%o)`, async (labels, expected) => {
+    const { toggle } = await setup({ labels })
+    expect(await tooltip_text(toggle)).toBe(expected)
   })
 
   test(`a drag reports through on_drag_start and data-dragging`, async () => {

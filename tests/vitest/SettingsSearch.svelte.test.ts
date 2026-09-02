@@ -1,4 +1,5 @@
 import { SettingsSearch } from '$lib'
+import type { SettingsSearchLabels } from '$lib/labels'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
@@ -256,10 +257,23 @@ describe(`SettingsSearch`, () => {
   })
 
   // mounted bare rather than through the harness, which forwards no `labels`
-  test.each([
-    [`an empty partial keeps the default`, {}, `Clear settings search`],
-    [`a custom entry reaches the DOM`, { clear_search: `Suche leeren` }, `Suche leeren`],
-  ])(`labels: %s`, async (_desc, labels, expected) => {
+  test.each<[string, Partial<SettingsSearchLabels>, string, string]>([
+    [
+      `an empty partial keeps them`,
+      {},
+      `Clear settings search`,
+      `No settings match “radius”.`,
+    ],
+    [
+      `custom entries reach the DOM, interpolating the query`,
+      {
+        clear_search: `Suche leeren`,
+        no_matches: (query) => `Nichts zu „${query}“ gefunden.`,
+      },
+      `Suche leeren`,
+      `Nichts zu „radius“ gefunden.`,
+    ],
+  ])(`labels: %s`, async (_desc, labels, clear_label, status_text) => {
     mount(SettingsSearch, {
       target: document.body,
       props: {
@@ -269,21 +283,7 @@ describe(`SettingsSearch`, () => {
       },
     })
     await tick()
-    expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(expected)
-  })
-
-  test(`labels reword the no-match status, interpolating the query`, async () => {
-    mount(SettingsSearch, {
-      target: document.body,
-      props: {
-        query: `radius`,
-        labels: { no_matches: (query: string) => `Nichts zu „${query}“ gefunden.` },
-        children: createRawSnippet(() => ({ render: () => `<div></div>` })),
-      },
-    })
-    await tick()
-    expect(doc_query(`.no-matches`).textContent?.trim()).toBe(
-      `Nichts zu „radius“ gefunden.`,
-    )
+    expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(clear_label)
+    expect(doc_query(`.no-matches`).textContent?.trim()).toBe(status_text)
   })
 })

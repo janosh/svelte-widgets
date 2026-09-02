@@ -494,32 +494,36 @@ describe(`Nav`, () => {
     expect(children.dataset.open).toBe(`true`)
   })
 
-  test(`dropdown accessibility uses native navigation links and labeled toggles`, () => {
-    const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-      routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
-    })
-    const links = [...dropdown_menu.querySelectorAll(`a`)]
-    // parent /docs is filtered out of the submenu
-    expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/docs/intro`])
-    // native <a>/<nav> semantics, no explicit ARIA roles anywhere
-    const roles = [dropdown, dropdown_menu, ...links].map((el) => el.getAttribute(`role`))
-    expect(roles).toEqual([null, null, null])
+  test.each<[string, ComponentProps<typeof Nav>[`labels`], string]>([
+    [`the default toggle name`, undefined, `Toggle docs submenu`],
+    [
+      `a labels override`,
+      { toggle_submenu: (route_label: string) => `${route_label} aufklappen` },
+      `docs aufklappen`,
+    ],
+  ])(
+    `dropdown accessibility uses native navigation links and labeled toggles, with %s`,
+    (_case, labels, toggle_label) => {
+      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
+        routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
+        labels,
+      })
+      const links = [...dropdown_menu.querySelectorAll(`a`)]
+      // parent /docs is filtered out of the submenu
+      expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/docs/intro`])
+      // native <a>/<nav> semantics, no explicit ARIA roles anywhere
+      const roles = [dropdown, dropdown_menu, ...links].map((el) =>
+        el.getAttribute(`role`),
+      )
+      expect(roles).toEqual([null, null, null])
 
-    expect([
-      toggle.tagName,
-      toggle.getAttribute(`aria-label`),
-      toggle.getAttribute(`aria-haspopup`),
-    ]).toEqual([`BUTTON`, `Toggle docs submenu`, `true`])
-  })
-
-  // the default `Toggle docs submenu` is already pinned by the test above
-  test(`labels rewords the submenu toggle`, () => {
-    const { toggle } = mount_dropdown({
-      routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
-      labels: { toggle_submenu: (route_label: string) => `${route_label} aufklappen` },
-    })
-    expect(toggle.getAttribute(`aria-label`)).toBe(`docs aufklappen`)
-  })
+      expect([
+        toggle.tagName,
+        toggle.getAttribute(`aria-label`),
+        toggle.getAttribute(`aria-haspopup`),
+      ]).toEqual([`BUTTON`, toggle_label, `true`])
+    },
+  )
 
   test(`renders object routes with href, label, class, and style`, () => {
     const routes: NavRoute[] = [
