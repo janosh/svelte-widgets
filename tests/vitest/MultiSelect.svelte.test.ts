@@ -3061,6 +3061,29 @@ describe(`selectAllOption feature`, () => {
       true,
       `All options already selected`,
     ],
+    // both default titles are `labels` keys, so a locale reaches them without having to
+    // reimplement the three-way choice through `selectAllDisabledTitle`
+    [
+      `maxSelect reached, count reworded through labels`,
+      {
+        options: [`a`, `b`, `c`, `d`],
+        selected: [`a`, `b`],
+        maxSelect: 2,
+        labels: { max_select_reached: (max) => `hochstens ${max}` },
+      },
+      true,
+      `hochstens 2`,
+    ],
+    [
+      `all selected, reworded through labels`,
+      {
+        options: [`a`, `b`],
+        selected: [`a`, `b`],
+        labels: { all_options_selected: `Alle bereits gewahlt` },
+      },
+      true,
+      `Alle bereits gewahlt`,
+    ],
     [
       `case-insensitive duplicates selected`,
       {
@@ -3104,6 +3127,20 @@ describe(`selectAllOption feature`, () => {
       },
       true,
       `Not available while loading remotely`,
+    ],
+    // the callback used to receive only max_reached/maxSelect/selected_count, which could not
+    // distinguish this state from `all options selected` nor rebuild the string it replaces
+    [
+      `matching scope, callback wraps the default it replaces`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: ({ matching_scope_unavailable, default_title }) =>
+          `${matching_scope_unavailable}: ${default_title}`,
+      },
+      true,
+      `true: Matching select-all is only available with local options`,
     ],
     [
       `loaded visible options selected`,

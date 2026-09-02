@@ -4,7 +4,7 @@
   import { tooltip, type TooltipOptions } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
-  import { merge_labels, THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
+  import { merge_defaults, THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
   import {
     apply_theme_mode,
     listen_theme_storage,
@@ -26,7 +26,7 @@
   } = $props()
 
   const mode_icons = { light: Sun, dark: Moon, system: Monitor } as const
-  const msg = $derived(merge_labels(THEME_TOGGLE_LABELS, labels))
+  const msg = $derived(merge_defaults(THEME_TOGGLE_LABELS, labels))
   let is_hydrated = $state(false)
   let next_mode = $derived(THEME_MODE_CYCLE[theme.mode])
   let title = $derived(msg.switch_to(msg[next_mode]))

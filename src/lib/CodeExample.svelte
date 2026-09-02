@@ -9,7 +9,7 @@
   import Icon from './Icon.svelte'
   import { ChevronCollapse, ChevronExpand, GitHub, Svelte } from './icons'
   import { language_label_html } from './internal/language-label'
-  import { merge_labels, CODE_EXAMPLE_LABELS, type CodeExampleLabels } from './labels'
+  import { merge_defaults, CODE_EXAMPLE_LABELS, type CodeExampleLabels } from './labels'
   import { chain_handlers } from './utils'
 
   let {
@@ -52,7 +52,7 @@
     labels?: Partial<CodeExampleLabels>
   } & Omit<HTMLAttributes<HTMLDivElement>, `title`> = $props()
 
-  const msg = $derived(merge_labels(CODE_EXAMPLE_LABELS, labels))
+  const msg = $derived(merge_defaults(CODE_EXAMPLE_LABELS, labels))
 
   let {
     id: meta_id,

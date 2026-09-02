@@ -5,7 +5,7 @@
   import Icon from './Icon.svelte'
   import { ExitFullscreen, Fullscreen, type IconData } from './icons'
   import {
-    merge_labels,
+    merge_defaults,
     FULLSCREEN_BUTTON_LABELS,
     type FullscreenButtonLabels,
   } from './labels'
@@ -38,8 +38,8 @@
     children?: Snippet<[{ fullscreen: boolean }]>
   } = $props()
 
-  const msg = $derived(merge_labels(FULLSCREEN_BUTTON_LABELS, labels))
-  const icon_set = $derived(merge_labels(DEFAULT_ICONS, icons))
+  const msg = $derived(merge_defaults(FULLSCREEN_BUTTON_LABELS, labels))
+  const icon_set = $derived(merge_defaults(DEFAULT_ICONS, icons))
   const label = $derived(fullscreen ? msg.exit : msg.enter)
 
   // the flag is the single source of truth: clicking flips it, the effects below turn

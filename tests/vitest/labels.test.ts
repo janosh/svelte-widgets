@@ -1,4 +1,4 @@
-import { MULTI_SELECT_LABELS, merge_labels } from '$lib/labels'
+import { MULTI_SELECT_LABELS, merge_defaults } from '$lib/labels'
 import { MultiSelect } from '$lib'
 import { mount, tick } from 'svelte'
 import { expect, test } from 'vite-plus/test'
@@ -11,19 +11,19 @@ test.each([
   [`an explicitly undefined key falls back`, { show_less: undefined }, `show less`],
   [`a provided key wins`, { show_less: `weniger` }, `weniger`],
   [`an empty string is a real value, not a miss`, { show_less: `` }, ``],
-])(`merge_labels: %s`, (_case, overrides, expected) => {
-  expect(merge_labels(MULTI_SELECT_LABELS, overrides).show_less).toBe(expected)
+])(`merge_defaults: %s`, (_case, overrides, expected) => {
+  expect(merge_defaults(MULTI_SELECT_LABELS, overrides).show_less).toBe(expected)
 })
 
-test.each([undefined, {}])(`merge_labels with %j keeps every default`, (overrides) => {
-  expect(merge_labels(MULTI_SELECT_LABELS, overrides)).toEqual(MULTI_SELECT_LABELS)
+test.each([undefined, {}])(`merge_defaults with %j keeps every default`, (overrides) => {
+  expect(merge_defaults(MULTI_SELECT_LABELS, overrides)).toEqual(MULTI_SELECT_LABELS)
 })
 
 // the same hazard applies to the icon sets CopyButton and FullscreenButton merge
-test(`merge_labels guards non-label records too`, () => {
+test(`merge_defaults guards non-label records too`, () => {
   const defaults = { ready: `copy-icon`, error: `alert-icon` }
-  expect(merge_labels(defaults, { ready: undefined })).toEqual(defaults)
-  expect(merge_labels(defaults, { ready: `custom` }).ready).toBe(`custom`)
+  expect(merge_defaults(defaults, { ready: undefined })).toEqual(defaults)
+  expect(merge_defaults(defaults, { ready: `custom` }).ready).toBe(`custom`)
 })
 
 // the merge runs in every component, so pin it through one of them end to end

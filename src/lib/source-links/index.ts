@@ -5,7 +5,7 @@
 // neither links. Links pin the commit the site was built from so line numbers stay right.
 // The data comes from `virtual:source-symbols`, emitted by ./vite-plugin.ts.
 
-import { merge_labels, SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
+import { merge_defaults, SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
 
 export type SourceSymbols = {
   repo: string // repository URL, e.g. https://github.com/janosh/svelte-widgets
@@ -30,7 +30,7 @@ export function create_source_links(
   { repo, ref, files, symbols }: SourceSymbols,
   labels?: Partial<SourceLinksLabels>,
 ): SourceLinks {
-  const msg = merge_labels(SOURCE_LINKS_LABELS, labels)
+  const msg = merge_defaults(SOURCE_LINKS_LABELS, labels)
   // name -> repo path, or null once two files claim the name
   const location_by_name = new Map<string, string | null>()
   const register = (name: string, location: string): void => {

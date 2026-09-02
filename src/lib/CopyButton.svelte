@@ -6,7 +6,7 @@
   import Self from './CopyButton.svelte'
   import ActionButton from './ActionButton.svelte'
   import { Alert, Check, Copy, type IconData } from './icons'
-  import { merge_labels, COPY_BUTTON_LABELS, type CopyButtonLabels } from './labels'
+  import { merge_defaults, COPY_BUTTON_LABELS, type CopyButtonLabels } from './labels'
   import type { ActionButtonContent, ActionState } from './types'
 
   type State = Exclude<ActionState, `pending`>
@@ -49,8 +49,8 @@
   } = $props()
 
   const copy_button_selector = `[data-sms-copy]`
-  const msg = $derived(merge_labels(COPY_BUTTON_LABELS, labels))
-  const icon_set = $derived(merge_labels(DEFAULT_ICONS, icons))
+  const msg = $derived(merge_defaults(COPY_BUTTON_LABELS, labels))
+  const icon_set = $derived(merge_defaults(DEFAULT_ICONS, icons))
   // CopyButton has no pending visual of its own: it keeps showing the current copy state
   const action_labels = $derived({ ...msg, pending: msg[copy_state] })
   const action_icons = $derived({ ...icon_set, pending: icon_set[copy_state] })

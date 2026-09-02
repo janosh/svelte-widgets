@@ -10,7 +10,7 @@
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
-  import { merge_labels, MULTI_SELECT_LABELS } from './labels'
+  import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
   import type {
     GroupedOptions,
@@ -184,7 +184,7 @@
   }: MultiSelectProps<Option> = $props()
 
   // every string this component renders on its own, overridable key by key for i18n
-  const msg = $derived(merge_labels(MULTI_SELECT_LABELS, labels))
+  const msg = $derived(merge_defaults(MULTI_SELECT_LABELS, labels))
   // `get_label` returns string | number; everything that compares, announces or renders a
   // label as text wants the string form, so coerce once here rather than at each call site
   const label_of = (option_item: Option): string => `${utils.get_label(option_item)}`
@@ -1627,16 +1627,22 @@
     // unavailable: returning that message ahead of the prop meant `null` could not suppress
     // the title and neither a string nor a function could replace it.
     if (selectAllDisabledTitle === null) return ``
+    // `max_reached` already implies a non-null maxSelect; the check re-narrows it for the label
     const default_title = matching_scope_unavailable
       ? msg.matching_scope_unavailable
-      : max_reached && !all_selectable_selected
-        ? `Maximum of ${maxSelect} options selected`
-        : `All options already selected`
+      : max_reached && maxSelect !== null && !all_selectable_selected
+        ? msg.max_select_reached(maxSelect)
+        : msg.all_options_selected
+    // the callback gets the state behind `default_title` too, so it can tell the three
+    // disabled reasons apart or wrap the default instead of rebuilding it
     return typeof selectAllDisabledTitle === `function`
       ? selectAllDisabledTitle({
           max_reached,
           maxSelect,
           selected_count: selected.length,
+          all_selectable_selected,
+          matching_scope_unavailable,
+          default_title,
         })
       : (selectAllDisabledTitle ?? default_title)
   }

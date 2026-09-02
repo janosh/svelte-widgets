@@ -1,14 +1,16 @@
 // Default user-facing strings for every widget, attachment and helper that renders text of
 // its own.
 //
-// Each one takes a `labels` prop (or option) accepting a partial of its record, shallow-merged
-// over the defaults below, so a caller can translate or reword any string without forking the
-// component. Entries that interpolate a count or a name are functions rather than templates so
+// Each one takes a `labels` prop (or option) accepting a partial of its record, merged over the
+// defaults below by `merge_defaults`, so a caller can translate or reword any string without
+// forking the component. Entries that interpolate a count or a name are functions rather than templates so
 // locales can control word order and their own plural rules (see https://github.com/janosh/svelte-widgets/issues/451).
 //
-// Strings already covered by a dedicated prop (MultiSelect's `removeBtnTitle`,
-// `noMatchingOptionsMsg`, `selectAllDisabledTitle`, `selectAllOption`, Toc's `title`, ...) are
-// deliberately absent, and so are non-string bits of chrome: icons keep their own `icons` prop.
+// Strings a dedicated prop already supplies (MultiSelect's `removeBtnTitle`,
+// `noMatchingOptionsMsg`, `selectAllOption`, Toc's `title`, ...) are deliberately absent, and
+// so are non-string bits of chrome: icons keep their own `icons` prop. A prop that overrides
+// a string rather than supplying it does keep its default here — `selectAllDisabledTitle`
+// replaces the three select-all titles below, which is why those are still records.
 //
 // Every record declares its defaults and derives its type from them, so the two cannot drift.
 
@@ -140,8 +142,12 @@ export const MULTI_SELECT_LABELS = {
   // composed from the removeBtnTitle prop and the option's label
   remove_option: (remove_btn_title: string, option_label: string) =>
     `${remove_btn_title} ${option_label}`,
-  // select-all row is inert while selectAllScope is 'matching' and options come from loadOptions
+  // the title the disabled select-all row gets for each of its three reasons, and what
+  // `selectAllDisabledTitle` falls back to. 'matching' scope needs local options,
+  // so loadOptions rules it out.
   matching_scope_unavailable: `Matching select-all is only available with local options`,
+  max_select_reached: (max_select: number) => `Maximum of ${max_select} options selected`,
+  all_options_selected: `All options already selected`,
   group: (group_name: string) => `Group: ${group_name}`,
   group_count: (selected_count: number, total_count: number) =>
     selected_count > 0 ? `(${selected_count}/${total_count})` : `(${total_count})`,
@@ -217,14 +223,14 @@ export const TOAST_LABELS = {
 }
 export type ToastLabels = typeof TOAST_LABELS
 
-// Merge a caller's partial over the defaults. Spreading would keep an explicitly-undefined
-// key as undefined rather than falling back, and `exactOptionalPropertyTypes` is off, so
-// `labels={{ close: condition ? `X` : undefined }}` — an ordinary Svelte idiom —
-// type-checks and then renders nothing at all instead of the default string.
-export const merge_labels = <Labels extends object>(
-  defaults: Labels,
-  overrides?: Partial<Labels>,
-): Labels => {
+// Merge a caller's partial over a defaults record — label records, but icon sets too.
+// Spreading would keep an explicitly-undefined key as undefined rather than falling back,
+// and `exactOptionalPropertyTypes` is off, so `labels={{ close: cond ? `X` : undefined }}`
+// — an ordinary Svelte idiom — type-checks and then renders nothing at all.
+export const merge_defaults = <Defaults extends object>(
+  defaults: Defaults,
+  overrides?: Partial<Defaults>,
+): Defaults => {
   if (!overrides) return defaults
   const merged = { ...defaults }
   for (const [key, value] of Object.entries(overrides)) {

@@ -5,7 +5,11 @@
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Cross, DragIndicator, Expand, Reset, type IconData } from './icons'
-  import { merge_labels, DRAGGABLE_PANE_LABELS, type DraggablePaneLabels } from './labels'
+  import {
+    merge_defaults,
+    DRAGGABLE_PANE_LABELS,
+    type DraggablePaneLabels,
+  } from './labels'
   import { chain_handlers } from './utils'
 
   type CloseVia = `toggle` | `button` | `pointer` | `escape`
@@ -76,7 +80,7 @@
     labels?: Partial<DraggablePaneLabels>
   } = $props()
 
-  const msg = $derived(merge_labels(DRAGGABLE_PANE_LABELS, labels))
+  const msg = $derived(merge_defaults(DRAGGABLE_PANE_LABELS, labels))
   const viewport_margin_px = 8
   // How much of the pane stays on screen when the toggle sits near the bottom edge.
   // Without it a low toggle parks the pane in the last few pixels of the viewport.

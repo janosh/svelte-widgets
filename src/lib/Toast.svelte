@@ -2,7 +2,7 @@
   import { type Snippet, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { hotkey } from './attachments/index'
-  import { merge_labels, TOAST_LABELS, type ToastLabels } from './labels'
+  import { merge_defaults, TOAST_LABELS, type ToastLabels } from './labels'
   import { toast as default_store } from './toast-queue.svelte.ts'
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
   import { chain_handlers } from './utils'
@@ -39,7 +39,7 @@
     children?: Snippet<[ToastItem<string>]>
   } = $props()
 
-  const msg = $derived(merge_labels(TOAST_LABELS, labels))
+  const msg = $derived(merge_defaults(TOAST_LABELS, labels))
 
   let stack: HTMLDivElement | null = $state(null)
   let [is_hovered, is_focused] = $state([false, false])

@@ -5,7 +5,7 @@
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
   import {
-    merge_labels,
+    merge_defaults,
     SETTINGS_SECTION_LABELS,
     type SettingsSectionLabels,
   } from './labels'
@@ -58,7 +58,7 @@
     descriptions_open?: boolean
   } = $props()
 
-  const msg = $derived(merge_labels(SETTINGS_SECTION_LABELS, labels))
+  const msg = $derived(merge_defaults(SETTINGS_SECTION_LABELS, labels))
 
   const validate_object_shape = (value: object): void => {
     if (value instanceof Set || value instanceof Map) {

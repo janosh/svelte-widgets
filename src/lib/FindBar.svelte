@@ -8,7 +8,7 @@
   import { tooltip } from './attachments/index'
   import { create_find_state, type FindOptions } from './find-in-page.svelte'
   import Icon from './Icon.svelte'
-  import { merge_labels, FIND_BAR_LABELS, type FindBarLabels } from './labels'
+  import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     FindOptions & {
@@ -37,7 +37,7 @@
     before_search,
     labels,
   }))
-  const msg = $derived(merge_labels(FIND_BAR_LABELS, labels))
+  const msg = $derived(merge_defaults(FIND_BAR_LABELS, labels))
   const find_label = $derived(msg.find_in(label))
   const step_buttons = $derived([
     { direction: -1, arrow: `↑`, shortcut: `Shift+Enter`, label: msg.prev_match },

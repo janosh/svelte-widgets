@@ -13,7 +13,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
   import {
-    merge_labels,
+    merge_defaults,
     NUMBER_RANGE_INPUT_LABELS,
     type NumberRangeInputLabels,
   } from './labels'
@@ -77,7 +77,7 @@
     }
   })
   let resolved_title = $derived(title ?? setting_config?.description)
-  const msg = $derived(merge_labels(NUMBER_RANGE_INPUT_LABELS, labels))
+  const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
   let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)
   // With children the wrapping <label> already names the number input and an aria-label would
   // override that visible text; without them the label is empty, so it needs the fallback too.

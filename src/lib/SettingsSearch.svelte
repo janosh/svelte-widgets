@@ -4,7 +4,7 @@
   import Icon from './Icon.svelte'
   import { Search } from './icons'
   import {
-    merge_labels,
+    merge_defaults,
     SETTINGS_SEARCH_LABELS,
     type SettingsSearchLabels,
   } from './labels'
@@ -29,7 +29,7 @@
     children: Snippet
   } = $props()
 
-  const msg = $derived(merge_labels(SETTINGS_SEARCH_LABELS, labels))
+  const msg = $derived(merge_defaults(SETTINGS_SEARCH_LABELS, labels))
 
   const search_id = $props.id()
   const input_id = `settings-search-input-${search_id}`

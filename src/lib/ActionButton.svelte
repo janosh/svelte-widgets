@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import type { IconData } from './icons'
-  import { merge_labels, ACTION_BUTTON_LABELS, type ActionButtonLabels } from './labels'
+  import { merge_defaults, ACTION_BUTTON_LABELS, type ActionButtonLabels } from './labels'
   import type { ActionButtonSnippetProps, ActionState } from './types'
 
   // drives the hidden width sizer, so every state reserves its own width up front
@@ -43,7 +43,7 @@
   let reset_timeout: ReturnType<typeof setTimeout> | null = null
   let destroyed = false
   const action_disabled = $derived(disabled || state === `pending`)
-  const msg = $derived(merge_labels(ACTION_BUTTON_LABELS, labels))
+  const msg = $derived(merge_defaults(ACTION_BUTTON_LABELS, labels))
   const current_text = $derived(msg[state])
   const current_icon = $derived(icons?.[state])
 
