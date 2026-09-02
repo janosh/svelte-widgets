@@ -751,21 +751,33 @@
   // (a string suffix could collide with a real key like 'a-dup-1') and stable
   // across re-derivations so keyed DOM nodes aren't recreated.
   const dup_key_cache = new Map<unknown, symbol[]>()
+  // One counter per pass, so a key repeated across groups is still disambiguated
+  const render_key_assigner = () => {
+    const occurrence_counts = new Map<unknown, number>()
+    return (option_item: Option): unknown => {
+      const base_key = key(option_item)
+      const occurrence = occurrence_counts.get(base_key) ?? 0
+      occurrence_counts.set(base_key, occurrence + 1)
+      if (occurrence === 0) return base_key
+      const cached = dup_key_cache.get(base_key) ?? []
+      cached[occurrence - 1] ??= Symbol(`sms-dup-${occurrence}`)
+      dup_key_cache.set(base_key, cached)
+      return cached[occurrence - 1]
+    }
+  }
   // nested arrays aligned with grouped_options: option_render_keys[group_idx][local_idx]
   let option_render_keys = $derived.by(() => {
-    const occurrence_counts = new Map<unknown, number>()
+    const next_render_key = render_key_assigner()
     return grouped_options.map(({ options: group_items }) =>
-      group_items.map((option_item) => {
-        const base_key = key(option_item)
-        const occurrence = occurrence_counts.get(base_key) ?? 0
-        occurrence_counts.set(base_key, occurrence + 1)
-        if (occurrence === 0) return base_key
-        const cached = dup_key_cache.get(base_key) ?? []
-        cached[occurrence - 1] ??= Symbol(`sms-dup-${occurrence}`)
-        dup_key_cache.set(base_key, cached)
-        return cached[occurrence - 1]
-      }),
+      group_items.map((option_item) => next_render_key(option_item)),
     )
+  })
+  // The chips need the same treatment: two selected entries can share a key (duplicate
+  // `preselected` options, or `selected={['a', 'a']}`) and Svelte throws each_key_duplicate.
+  // Symbols also beat keying by index, which would defeat move detection on reorder.
+  let chip_render_keys = $derived.by(() => {
+    const next_render_key = render_key_assigner()
+    return visible_chips.map((option_item) => next_render_key(option_item))
   })
 
   // Pre-computed group header state (avoids repeated calculations in template)
@@ -1035,7 +1047,9 @@
       title,
       selectedTitle,
       disabledTitle,
-      active: activeIndex === flat_idx,
+      // `active` deliberately lives outside this object: it is the only field that tracks
+      // `activeIndex`, and since a fresh object is never `===` the previous one, bundling
+      // it here re-rendered every option row on each arrow key rather than just two.
       selected: is_option_selected(option_item, label),
       style: merge_styles(option_item, `option`, liOptionStyle),
     }
@@ -1221,6 +1235,20 @@
   }
 
   let suppress_next_focus_open = false
+
+  // The remove button that ran the removal is unmounted by it, so focus would land on
+  // <body>. Hand it back to the input, but only when it was genuinely lost.
+  const with_focus_rescue = (handler: (event: Event) => void) => (event: Event) => {
+    const button = event.currentTarget
+    handler(event)
+    // The button survives until Svelte flushes the removal, so focus only drops after
+    // this tick. Rescue it then, and only if it was genuinely lost.
+    void tick().then(() => {
+      if (button instanceof HTMLElement && button.isConnected) return
+      const active = document.activeElement
+      if (!active || active === document.body) focus_input_without_open()
+    })
+  }
 
   function focus_input_without_open(only_if_internal = false) {
     const active_element = document.activeElement
@@ -1846,6 +1874,14 @@
     const rejected: Option[] = []
     const overflow: Option[] = []
     for (const [idx, parsed_option] of parsed.entries()) {
+      // A splitter as ordinary as `text.split(',')` yields an empty entry for a trailing
+      // separator. `add` throws on those, and the throw would reject this async function:
+      // the loop stops, every later entry is silently dropped and `onparsed_paste` never
+      // fires. Count them as rejected and carry on.
+      if (!is_non_empty_option(parsed_option)) {
+        rejected.push(parsed_option)
+        continue
+      }
       if (at_max_capacity() && maxSelect !== null) {
         overflow.push(parsed_option, ...parsed.slice(idx + 1))
         should_wiggle = true
@@ -2060,8 +2096,8 @@
   icon_props: { option: Option; isRemoveAll: false } | { isRemoveAll: true },
 )}
   <button
-    onclick={handler}
-    onkeydown={if_enter_or_space(handler)}
+    onclick={with_focus_rescue(handler)}
+    onkeydown={if_enter_or_space(with_focus_rescue(handler))}
     type="button"
     {title}
     class={[`remove`, { 'remove-all': icon_props.isRemoveAll }]}
@@ -2119,7 +2155,7 @@
   >
     {@render beforeInput?.(input_snippet_props)}
     {#if !input_display}
-      {#each visible_chips as option, idx (duplicates ? `${key(option)}-${idx}` : key(option))}
+      {#each visible_chips as option, idx (chip_render_keys[idx])}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- selected chips stay plain list items; nested buttons handle removal -->
         <li
           id="{base_id}-selected-{idx}"
@@ -2317,6 +2353,7 @@
         unique DOM ids / aria-posinset / hover indices -->
       {#snippet option_li(option_item: Option, flat_idx: number)}
         {@const view = get_option_view(option_item, flat_idx)}
+        {@const is_active = activeIndex === flat_idx}
         <li
           id="{base_id}-opt-{flat_idx}"
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
@@ -2324,14 +2361,20 @@
             ? view.disabledTitle
             : (view.selected && view.selectedTitle) || view.title}
           class:selected={view.selected}
-          class:active={view.active}
+          class:active={is_active}
           class:disabled={view.disabled}
-          class={[liOptionClass, view.active && liActiveOptionClass]}
+          class={[liOptionClass, is_active && liActiveOptionClass]}
           onmouseover={() => {
-            if (!view.disabled && !should_ignore_hover) activeIndex = flat_idx
+            if (view.disabled || should_ignore_hover) return
+            // without this the effect that pins the user-message row snaps activeIndex
+            // straight back, so hover highlighting is dead while that row is active
+            is_user_message_active = false
+            activeIndex = flat_idx
           }}
           onfocus={() => {
-            if (!view.disabled) activeIndex = flat_idx
+            if (view.disabled) return
+            is_user_message_active = false
+            activeIndex = flat_idx
           }}
           role="option"
           aria-selected={view.selected ? `true` : `false`}
@@ -2362,7 +2405,7 @@
               option: option_item,
               idx: flat_idx,
               selected: view.selected,
-              active: view.active,
+              active: is_active,
               disabled: view.disabled ?? false,
             })}
           {:else}

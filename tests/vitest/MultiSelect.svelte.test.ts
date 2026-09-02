@@ -2138,6 +2138,25 @@ test(`onclose fires once with KeyboardEvent, not again when already closed`, asy
   expect(close_spy).toHaveBeenCalledOnce()
 })
 
+// The dropdown {#each} was hardened against duplicate key() results; the chips loop was
+// not, so two selected entries sharing a key threw each_key_duplicate on mount.
+test.each([
+  [
+    `duplicate preselected options`,
+    {
+      options: [
+        { label: `x`, preselected: true },
+        { label: `x`, preselected: true },
+      ],
+    },
+  ],
+  [`a selected array with repeats`, { options: [`a`], selected: [`a`, `a`] }],
+])(`renders chips sharing one key without crashing (%s)`, async (_case, props) => {
+  mount_multiselect(props)
+  await tick()
+  expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(2)
+})
+
 describe(`keepSelectedInDropdown feature`, () => {
   const options = [`Apple`, `Banana`, `Cherry`]
   const options_with_date = [`Apple`, `Banana`, `Cherry`, `Date`]
@@ -4119,7 +4138,7 @@ describe(`labels`, () => {
     expect(live_region.textContent?.trim()).toBe(`a removed`)
   })
 
-  test(`bulk announcements are configurable and pluralize`, async () => {
+  test(`the bulk removal announcement is configurable`, async () => {
     mount_multiselect({
       options,
       selected: [...options],
@@ -4135,7 +4154,7 @@ describe(`labels`, () => {
   test.each([
     [1, null, `Bitte etwas wählen`],
     [2, null, `Bitte mindestens 2 wählen`],
-    [2, 3, `Bitte 2 bis 3 wählen`], // omitted select_between falls back to English
+    [2, 3, `Bitte 2 bis 3 wählen`],
   ])(
     `form validity message for required=%s maxSelect=%s`,
     async (required, maxSelect, expected) => {

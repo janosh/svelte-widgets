@@ -436,6 +436,26 @@ describe(`Nav`, () => {
     )
   })
 
+  // Only the default anchor was wired to close_menus, so navigating from the burger menu
+  // through a consumer's `link` snippet left the overlay on top of the new page.
+  test(`a link snippet's anchor closes the burger menu`, async () => {
+    mount(TestSnippetHarness, {
+      target: document.body,
+      props: {
+        component: `nav`,
+        routes: [`/`, `/about`],
+        page: { url: { pathname: `/` } },
+        breakpoint: 9999, // force the mobile layout
+      },
+    })
+    const burger = doc_query<HTMLButtonElement>(`button.burger`)
+    await click(burger)
+    expect(burger.getAttribute(`aria-expanded`)).toBe(`true`)
+
+    await click(doc_query(`[data-testid="nav-link"]`))
+    expect(burger.getAttribute(`aria-expanded`)).toBe(`false`)
+  })
+
   test(`item, link, and children snippets receive route and menu state`, async () => {
     const page = { url: { pathname: `/about` } }
     mount(TestSnippetHarness, {

@@ -281,3 +281,17 @@ test.skipIf(!process.env.RUN_LARGE_EDITOR_TESTS)(
     expect(replace_ms).toBeLessThan(250)
   },
 )
+
+// A lone CRLF in an otherwise-LF file used to flip the whole document to CRLF on save,
+// producing a diff that touched every line.
+test.each([
+  [`one CRLF among many LFs stays lf`, `a\nb\r\nc\nd\ne\n`, `lf`],
+  [`mostly CRLF stays crlf`, `a\r\nb\r\nc\nd\r\n`, `crlf`],
+  [`pure LF stays lf`, `a\nb\n`, `lf`],
+  [`pure CRLF stays crlf`, `a\r\nb\r\n`, `crlf`],
+])(`%s`, (_case, text, expected_eol) => {
+  const model = create_editor_model({ uri: `memory:eol`, text })
+  expect(model.eol).toBe(expected_eol)
+  // an untouched document round-trips without rewriting line endings
+  if (expected_eol === `lf`) expect(model.disk_text()).toBe(text.replaceAll(`\r\n`, `\n`))
+})

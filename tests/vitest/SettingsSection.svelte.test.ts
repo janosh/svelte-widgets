@@ -398,6 +398,26 @@ describe(`SettingsSection`, () => {
     )
   })
 
+  // Pressing the reset button removes it, which used to drop focus to <body>.
+  test(`keyboard reset moves focus to the row's control instead of losing it`, async () => {
+    const tracked = mount_tracked_section(
+      { radius: 2 },
+      `<label data-key="radius"><span>Radius</span><input value="2"></label>`,
+      { radius: 1 },
+    )
+    await tick()
+    const button = doc_query<HTMLButtonElement>(`.setting-reset-button`)
+    button.focus()
+    expect(document.activeElement).toBe(button)
+
+    button.click()
+    await tick()
+
+    expect(tracked.values.radius).toBe(1)
+    expect(document.querySelector(`.setting-reset-button`)).toBeNull()
+    expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
+  })
+
   test(`ignores unmapped and explicitly empty descriptions`, async () => {
     mount_section({
       title: `Atoms`,

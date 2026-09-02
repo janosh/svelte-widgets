@@ -82,6 +82,7 @@
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   let is_mobile = $derived(viewport_width <= breakpoint)
   let hide_timeout: ReturnType<typeof setTimeout> | null = null
+  let focus_timeout: ReturnType<typeof setTimeout> | undefined
   // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
@@ -106,6 +107,7 @@
 
   $effect(() => () => {
     if (hide_timeout) clearTimeout(hide_timeout)
+    clearTimeout(focus_timeout)
   })
 
   function close_menus() {
@@ -134,7 +136,8 @@
     pinned_dropdown = is_opening ? href : null
     hovered_dropdown = is_opening ? href : null
     if (is_opening && focus_first) {
-      setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
+      clearTimeout(focus_timeout)
+      focus_timeout = setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
     }
   }
 
@@ -308,6 +311,13 @@
   {...rest}
   data-nav={unique_id}
   class:mobile={is_mobile}
+  onclick={chain_handlers((event: MouseEvent) => {
+    // The `link` snippet renders the consumer's own markup, which carries none of the
+    // wiring `link_click_handler` adds to the default anchor. Without this, navigating
+    // from the burger menu left the overlay covering the page it had just moved to.
+    const target = event.target
+    if (target instanceof Element && target.closest(`a[href]`)) close_menus()
+  }, rest?.onclick)}
   {@attach click_outside({
     // skip the document listener (and its scrollbar layout read) when nothing is open
     enabled: is_open || Boolean(pinned_dropdown) || Boolean(hovered_dropdown),

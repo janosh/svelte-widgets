@@ -117,12 +117,17 @@
     }
   }
 
+  // Through a $derived so the effect tracks the *value*, not the `options` object. Reading
+  // `options.context_lines` in the effect made a host passing an inline object re-run a full
+  // backend diff, clear every expanded gap and jump to the top whenever any other field
+  // changed — a font-size tweak was enough.
+  const context_lines = $derived(options.context_lines)
   $effect(() => {
     void load_diff({
       oldText: old_text,
       newText: new_text,
       filename,
-      contextLines: options.context_lines,
+      contextLines: context_lines,
     })
     return () => void load_generation++
   })

@@ -58,6 +58,20 @@
     max: max ?? setting_config?.maximum,
     step: step ?? setting_config?.multipleOf ?? `any`,
   })
+  // `<input type="range">` with no min/max silently falls back to the spec default 0-100,
+  // while the paired number input stays unbounded. `bind:value` then lets one touch of the
+  // slider clamp and write back a value the caller never limited, destroying it. Fail loudly
+  // instead: a slider with no range is a misconfiguration, not a default.
+  $effect(() => {
+    if (input_bounds.min === undefined || input_bounds.max === undefined) {
+      throw new Error(
+        `NumberRangeInput needs both a min and a max to render its slider, got ` +
+          `min=${input_bounds.min}, max=${input_bounds.max}${
+            setting ? ` for setting "${setting}"` : ``
+          }. Pass min/max props or give the schema entry minimum/maximum.`,
+      )
+    }
+  })
   let resolved_title = $derived(title ?? setting_config?.description)
   const msg = $derived({ ...NUMBER_RANGE_INPUT_LABELS, ...labels })
   let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)

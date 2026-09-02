@@ -197,8 +197,16 @@
     const written_descriptions = new Map<HTMLElement, string | null>()
 
     const remove_reset_button = (row: HTMLElement): void => {
-      row.querySelector(RESET_SELECTOR)?.remove()
+      const button = row.querySelector(RESET_SELECTOR)
+      // Resetting a value is what removes this button, so a keyboard user who just pressed
+      // it would be left with focus on <body>. Hand focus to the row's own control instead.
+      const had_focus = button !== null && button === document.activeElement
+      button?.remove()
       row.classList.remove(`has-setting-reset`)
+      if (!had_focus) return
+      const control = row.querySelector<HTMLElement>(`input, select, textarea, button`)
+      if (control) control.focus()
+      else if (row.tabIndex >= 0) row.focus()
     }
 
     const cleanup_enhancement = (row: HTMLElement, original: string | null): void => {
