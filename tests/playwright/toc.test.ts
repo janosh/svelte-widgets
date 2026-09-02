@@ -69,10 +69,18 @@ test(`active ToC row keeps its accent under the pointer`, async ({ page }) => {
 
   const read_color = () => active.evaluate((li) => getComputedStyle(li).color)
   const idle = await read_color()
-  const box = await active.boundingBox()
-  await page.mouse.move((box?.x ?? 0) + 20, (box?.y ?? 0) + (box?.height ?? 0) / 2)
-  expect(await active.evaluate((li) => li.matches(`:hover`))).toBe(true)
-  expect(await read_color()).toBe(idle)
+  const list_color = await page
+    .locator(`aside.toc.mobile > nav > ol`)
+    .evaluate((ol) => getComputedStyle(ol).color)
+  expect(idle, `active row carries no accent to lose`).not.toBe(list_color)
+
+  // hover inside the poll: activeHeading can still move to another row just after the scroll,
+  // which leaves the pointer over the previous one and the locator pointing at a third
+  await expect(async () => {
+    await active.hover()
+    expect(await active.evaluate((li) => li.matches(`:hover`))).toBe(true)
+    expect(await read_color()).toBe(idle)
+  }).toPass()
 })
 
 // on_keydown listens on the window and preventDefaults to drive the ToC's own list, which
