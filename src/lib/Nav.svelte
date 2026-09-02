@@ -115,14 +115,18 @@
     pinned_dropdown = null
   }
 
-  // Query the submenu links / toggle button of the dropdown for a given route href
+  // Query the submenu links / toggle button of the dropdown for a given route href, scoped
+  // to this instance: `data-href` is the route href, so two Navs rendering the same route
+  // would otherwise match each other's dropdowns and steal each other's focus. The scope is
+  // an id string rather than a `bind:this` ref so it is already usable while children
+  // render, which is when `focus_trap`'s `restore` reads the toggle.
+  const dropdown_sel = (href: string) =>
+    `[data-nav="${unique_id}"] .dropdown[data-href="${CSS.escape(href)}"]`
   const dropdown_links = (href: string) =>
-    document.querySelectorAll<HTMLElement>(
-      `.dropdown[data-href="${CSS.escape(href)}"] [data-submenu] a`,
-    )
+    document.querySelectorAll<HTMLElement>(`${dropdown_sel(href)} [data-submenu] a`)
   const dropdown_toggle = (href: string) =>
     document.querySelector<HTMLButtonElement>(
-      `.dropdown[data-href="${CSS.escape(href)}"] [data-dropdown-toggle]`,
+      `${dropdown_sel(href)} [data-dropdown-toggle]`,
     )
 
   function toggle_dropdown(href: string, focus_first = false) {
@@ -302,6 +306,7 @@
 
 <nav
   {...rest}
+  data-nav={unique_id}
   class:mobile={is_mobile}
   {@attach click_outside({
     // skip the document listener (and its scrollbar layout read) when nothing is open

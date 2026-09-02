@@ -356,6 +356,48 @@ describe(`SettingsSection`, () => {
     )
   })
 
+  // The row's own description was snapshotted once at mount and written back on every
+  // refresh, so a caller updating a reactive `data-description` had their new text
+  // reverted, and a caller adding the attribute later had it deleted outright.
+  test(`follows a caller's later data-description instead of restoring the mount-time one`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      on_reset_key: () => undefined,
+      children: snippet(
+        `<label data-key="radius" data-description="Old text"><span>Radius</span><input></label>`,
+      ),
+    })
+    await tick()
+    await click_and_tick(`.description-toggle`)
+    expect(doc_query(`.settings-row-description`).textContent).toBe(`Old text`)
+
+    // the caller rewrites the attribute the way a reactive prop would
+    doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `New text`)
+    await tick()
+    expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
+      `New text`,
+    )
+    expect(doc_query(`.settings-row-description`).textContent).toBe(`New text`)
+  })
+
+  // a row that gains the attribute after mount had it removed again on the next refresh
+  test(`keeps a data-description added after mount`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      on_reset_key: () => undefined,
+      children: snippet(`<label data-key="radius"><span>Radius</span><input></label>`),
+    })
+    await tick()
+    doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `Added later`)
+    await tick()
+
+    expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
+      `Added later`,
+    )
+  })
+
   test(`ignores unmapped and explicitly empty descriptions`, async () => {
     mount_section({
       title: `Atoms`,

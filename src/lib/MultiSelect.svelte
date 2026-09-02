@@ -2344,12 +2344,17 @@
           )}
         >
           {#if keepSelectedInDropdown === `checkboxes`}
+            <!-- Suppressing the native toggle leaves the box driven only by `view.selected`.
+                 The click still bubbles to the <li>, which runs the real toggle, so a rejected
+                 one (maxSelect/minSelect reached, disabled option) can no longer leave the box
+                 flipped while the selection never changed. -->
             <input
               type="checkbox"
               class="option-checkbox"
               checked={view.selected}
               aria-label={msg.toggle_option(`${utils.get_label(option_item)}`)}
               tabindex="-1"
+              onclick={(event) => event.preventDefault()}
             />
           {/if}
           {#if option}

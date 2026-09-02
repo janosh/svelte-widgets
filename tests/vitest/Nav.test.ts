@@ -338,6 +338,35 @@ describe(`Nav`, () => {
     expect(menu.querySelector(`a`)?.getAttribute(`aria-current`)).toBe(`page`)
   })
 
+  // `data-href` is the route href, so two Navs rendering the same route used to match each
+  // other's dropdowns through a document-wide query and hand focus to the wrong instance.
+  test(`two Navs on one page keep dropdown focus inside the instance that owns it`, async () => {
+    mount_nav({ routes: two_child_route })
+    mount_nav({ routes: two_child_route })
+    const [first_nav, second_nav] = Array.from(document.querySelectorAll(`nav`))
+    const links_of = (nav: Element) =>
+      Array.from(nav.querySelectorAll<HTMLAnchorElement>(`.dropdown [data-submenu] a`))
+    const first_links = links_of(first_nav)
+    const second_links = links_of(second_nav)
+    const second_toggle = second_nav.querySelector<HTMLElement>(`[data-dropdown-toggle]`)
+    assert(second_toggle)
+
+    keydown(`Enter`, second_toggle)
+    await next_task()
+    // opening focuses the first submenu link of *this* nav, not the first one in the document
+    expect(document.activeElement).toBe(second_links[0])
+    expect(first_links).not.toContain(document.activeElement)
+
+    // arrows step within this nav's submenu only
+    keydown(`ArrowDown`, second_links[0])
+    expect(document.activeElement).toBe(second_links[1])
+
+    // and Escape hands focus back to this nav's toggle, not the first nav's
+    keydown(`Escape`, second_links[1])
+    await next_task()
+    expect(document.activeElement).toBe(second_toggle)
+  })
+
   test(`keyboard navigation: Enter/ArrowDown open, arrows navigate, Escape closes`, async () => {
     const link_props = { onkeydown: vi.fn() }
     const { dropdown_menu: menu, toggle: toggle_button } = mount_dropdown({

@@ -22,6 +22,10 @@ export type SourceLinks = {
   link_source_mentions: (root: HTMLElement) => () => void
 }
 
+// Marks the anchors this module owns, and records the code-span text each was built
+// from, so a later scan can tell a stale link from an up-to-date one.
+const OWN_LINK_ATTR = `data-source-link`
+
 export function create_source_links(
   { repo, ref, files, symbols }: SourceSymbols,
   labels?: Partial<SourceLinksLabels>,
@@ -57,14 +61,28 @@ export function create_source_links(
   const link_source_mentions = (root: HTMLElement): (() => void) => {
     const scan = (): void => {
       for (const code of root.querySelectorAll(`code`)) {
-        if (code.closest(`a, pre`) || code.querySelector(`a`)) continue
-        const location = source_location(code.textContent ?? ``)
+        if (code.closest(`a, pre`)) continue
+        const existing = code.querySelector(`a`)
+        const built_from = existing?.getAttribute(OWN_LINK_ATTR) ?? null
+        // An anchor without our marker is the author's own link, which stays untouched.
+        if (existing && built_from === null) continue
+        const name = (code.textContent ?? ``).trim()
+        if (existing) {
+          // Our anchor owns the code span's text nodes, so Svelte patches the text in
+          // place and the span stops matching the name the link was built from. Without
+          // this the link keeps pointing at whatever the span used to say, forever.
+          if (built_from === name) continue
+          code.append(...existing.childNodes)
+          existing.remove()
+        }
+        const location = source_location(name)
         if (!location) continue
         const link = document.createElement(`a`)
         link.href = href_of(location)
         link.target = `_blank`
         link.rel = `noopener`
         link.title = msg.link_title(location.slice(1))
+        link.setAttribute(OWN_LINK_ATTR, name)
         link.append(...code.childNodes)
         code.append(link)
       }
@@ -76,7 +94,10 @@ export function create_source_links(
     }
     schedule()
     const observer = new MutationObserver(schedule)
-    observer.observe(root, { childList: true, subtree: true })
+    // `characterData` because a reactive `<code>{name}</code>` rewrites its text node in
+    // place: no childList change, but the link built from the old text is now wrong. The
+    // rAF above coalesces the extra traffic down to one scan per frame.
+    observer.observe(root, { childList: true, subtree: true, characterData: true })
     return () => {
       observer.disconnect()
       cancelAnimationFrame(frame)

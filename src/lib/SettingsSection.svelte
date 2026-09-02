@@ -192,6 +192,9 @@
     // a plain Map, not a SvelteMap: `refresh` runs inside an effect and both reads and writes
     // this, which reactive entries turn into an endless loop.
     const original_descriptions = new Map<HTMLElement, string | null>()
+    // What this attachment last wrote to each row's `data-description`. Anything else on
+    // the attribute came from the caller, and re-snapshots rather than being overwritten.
+    const written_descriptions = new Map<HTMLElement, string | null>()
 
     const remove_reset_button = (row: HTMLElement): void => {
       row.querySelector(RESET_SELECTOR)?.remove()
@@ -246,8 +249,15 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      if (!original_descriptions.has(row)) {
-        original_descriptions.set(row, row.getAttribute(`data-description`))
+      // Re-snapshot whenever the attribute holds something we did not write: that is the
+      // caller updating a reactive `data-description`, and keeping the mount-time value
+      // would write their new text straight back out on the next refresh.
+      const current_description = row.getAttribute(`data-description`)
+      if (
+        !original_descriptions.has(row) ||
+        current_description !== written_descriptions.get(row)
+      ) {
+        original_descriptions.set(row, current_description)
       }
       sync_labeled_controls(row)
 
@@ -257,8 +267,14 @@
       const description =
         (typeof metadata === `string` ? metadata : metadata?.description) ??
         original_descriptions.get(row)
-      if (description) row.setAttribute(`data-description`, description)
-      else row.removeAttribute(`data-description`)
+      // Write only on a real change: `setAttribute` queues a mutation record even when the
+      // value is identical, and SettingsSearch observes this attribute.
+      const next_description = description || null
+      if (next_description !== current_description) {
+        if (next_description) row.setAttribute(`data-description`, next_description)
+        else row.removeAttribute(`data-description`)
+      }
+      written_descriptions.set(row, next_description)
 
       let description_element = row.querySelector(DESCRIPTION_SELECTOR)
       if (!descriptions_open || !description) description_element?.remove()
@@ -308,11 +324,16 @@
         if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
           cleanup_enhancement(row, original)
           original_descriptions.delete(row)
+          written_descriptions.delete(row)
         }
       }
     }
 
-    const stop_observing = observe_subtree(section, [`data-key`, `data-label`], refresh)
+    const stop_observing = observe_subtree(
+      section,
+      [`data-key`, `data-label`, `data-description`],
+      refresh,
+    )
     // `refresh` reads `changed_keys`, `descriptions_open` and `setting_metadata`, so this
     // re-enhances when they change. Calling it from the attachment body instead would re-run
     // the whole attachment, tearing every reset button and description back off first.

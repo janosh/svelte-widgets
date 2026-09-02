@@ -2189,6 +2189,43 @@ describe(`keepSelectedInDropdown feature`, () => {
     },
   )
 
+  // The box is one-way bound to `view.selected` with no change handler, so a native click
+  // flipped it before the <li> ran the real toggle. When that toggle was refused the
+  // selection never changed, Svelte saw no new value to write, and the box stayed wrong.
+  test.each([
+    // maxSelect 1 replaces rather than refuses, so a real refusal needs a full multi-select
+    [
+      `maxSelect reached`,
+      { maxSelect: 2, selected: [`Apple`, `Banana`] },
+      `Cherry`,
+      false,
+    ],
+    [`minSelect reached`, { minSelect: 1, selected: [`Apple`] }, `Apple`, true],
+    [
+      `disabled option`,
+      { options: [`Apple`, { label: `Banana`, disabled: true }] },
+      `Banana`,
+      false,
+    ],
+  ])(
+    `checkbox stays in sync when a toggle is refused (%s)`,
+    async (_case, props, label, expected_checked) => {
+      mount_multiselect({ options, keepSelectedInDropdown: `checkboxes`, ...props })
+      await focus_input()
+
+      const option = option_by_label(label)
+      const checkbox = option?.querySelector<HTMLInputElement>(`.option-checkbox`)
+      expect(checkbox?.checked).toBe(expected_checked)
+
+      click_keep_selected_option(option, `checkboxes`)
+      await tick()
+
+      // the refusal held, so the box must still show the unchanged selection
+      expect(checkbox?.checked).toBe(expected_checked)
+      expect(option?.classList.contains(`selected`)).toBe(expected_checked)
+    },
+  )
+
   test(`hides selected options from dropdown when disabled (default behavior)`, async () => {
     mount_multiselect({ options, selected: [`Apple`], keepSelectedInDropdown: false })
 

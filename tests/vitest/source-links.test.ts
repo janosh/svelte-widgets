@@ -137,6 +137,41 @@ describe(`create_source_links`, () => {
     detach()
   })
 
+  // The anchor adopts the code span's text nodes so Svelte keeps patching them, which means
+  // a reactive `<code>{name}</code>` rewrites the text *inside* our link. Skipping every
+  // span that already holds an anchor left that link pointing at the old name forever.
+  it(`re-resolves a link whose code span text changed, and unwraps it when it stops matching`, async () => {
+    const root = document.createElement(`main`)
+    const code = document.createElement(`code`)
+    // held across rescans: the anchor adopts this very node, which is how Svelte goes on
+    // patching a reactive `<code>{name}</code>` from inside our link
+    const text = document.createTextNode(`Footer`)
+    code.append(text)
+    root.append(code)
+    document.body.append(root)
+    const detach = link_source_mentions(root)
+    // one frame to scan, a second for the relink that scan's own mutations schedule
+    const rescan = async () => {
+      await new Promise(requestAnimationFrame)
+      await new Promise(requestAnimationFrame)
+    }
+
+    await rescan()
+    const href = () => code.querySelector(`a`)?.getAttribute(`href`)
+    expect(href()).toContain(`/src/lib/Footer.svelte`)
+
+    text.textContent = `utils.ts` // still resolves, so the link is rebuilt
+    await rescan()
+    expect(href()).toContain(`/src/lib/utils.ts`)
+    expect(code.querySelectorAll(`a`)).toHaveLength(1)
+
+    text.textContent = `label` // resolves to nothing, so the anchor is unwrapped
+    await rescan()
+    expect(code.querySelector(`a`)).toBeNull()
+    expect(code.textContent).toBe(`label`)
+    detach()
+  })
+
   it.each([
     [`Footer`, `/src/lib/Footer.svelte`], // component by bare name beats a same-named export
     [`Footer.svelte`, `/src/lib/Footer.svelte`],
