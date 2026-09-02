@@ -3081,6 +3081,30 @@ describe(`selectAllOption feature`, () => {
       true,
       `Matching select-all is only available with local options`,
     ],
+    // `selectAllDisabledTitle` used to be unreachable here: the scope message returned
+    // first, so neither `null` nor a replacement string could take effect.
+    [
+      `matching scope, title suppressed with null`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: null,
+      },
+      true,
+      ``,
+    ],
+    [
+      `matching scope, title replaced by the caller`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: `Not available while loading remotely`,
+      },
+      true,
+      `Not available while loading remotely`,
+    ],
     [
       `loaded visible options selected`,
       {
