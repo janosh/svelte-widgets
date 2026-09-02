@@ -9,7 +9,7 @@
   import type { TooltipOptions } from './attachments/index'
   import { click_outside, focus_trap, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
-  import { NAV_LABELS, type NavLabels } from './labels'
+  import { merge_labels, NAV_LABELS, type NavLabels } from './labels'
   import type { NavRoute, NavRouteObject } from './types'
   import { chain_handlers, step_focus } from './utils'
 
@@ -72,7 +72,7 @@
     onclose?: () => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
-  const msg = $derived({ ...NAV_LABELS, ...labels })
+  const msg = $derived(merge_labels(NAV_LABELS, labels))
 
   let is_open = $state(false)
   let hovered_dropdown = $state<string | null>(null)

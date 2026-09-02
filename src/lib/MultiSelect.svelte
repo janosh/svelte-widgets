@@ -10,7 +10,7 @@
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
-  import { MULTI_SELECT_LABELS } from './labels'
+  import { merge_labels, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
   import type {
     GroupedOptions,
@@ -184,7 +184,7 @@
   }: MultiSelectProps<Option> = $props()
 
   // every string this component renders on its own, overridable key by key for i18n
-  const msg = $derived({ ...MULTI_SELECT_LABELS, ...labels })
+  const msg = $derived(merge_labels(MULTI_SELECT_LABELS, labels))
   // `get_label` returns string | number; everything that compares, announces or renders a
   // label as text wants the string form, so coerce once here rather than at each call site
   const label_of = (option_item: Option): string => `${utils.get_label(option_item)}`
@@ -1623,12 +1623,13 @@
     max_reached: boolean,
     all_selectable_selected: boolean,
   ) {
-    if (matching_scope_unavailable) {
-      return msg.matching_scope_unavailable
-    }
+    // `selectAllDisabledTitle` is consulted first, including when the matching scope is
+    // unavailable: returning that message ahead of the prop meant `null` could not suppress
+    // the title and neither a string nor a function could replace it.
     if (selectAllDisabledTitle === null) return ``
-    const default_title =
-      max_reached && !all_selectable_selected
+    const default_title = matching_scope_unavailable
+      ? msg.matching_scope_unavailable
+      : max_reached && !all_selectable_selected
         ? `Maximum of ${maxSelect} options selected`
         : `All options already selected`
     return typeof selectAllDisabledTitle === `function`

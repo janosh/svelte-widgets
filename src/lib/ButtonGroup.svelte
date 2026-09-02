@@ -39,7 +39,7 @@
   import { tooltip, type TooltipOptions } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
-  import { BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
+  import { merge_labels, BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
 
   type CommonProps<Value extends string> = {
     options: ButtonGroupOptions<Value>
@@ -94,7 +94,7 @@
     CommonProps<Value> &
     SelectionProps<Value> = $props()
 
-  const msg = $derived({ ...BUTTON_GROUP_LABELS, ...labels })
+  const msg = $derived(merge_labels(BUTTON_GROUP_LABELS, labels))
 
   const option_list = $derived(
     (Array.isArray(options) ? options : Object.entries(options)).map(to_option<Value>),

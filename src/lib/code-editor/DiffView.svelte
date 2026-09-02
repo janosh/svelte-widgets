@@ -5,7 +5,7 @@
   import { SvelteSet } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from '../attachments/index'
-  import { DIFF_VIEW_LABELS, type DiffViewLabels } from '../labels'
+  import { merge_labels, DIFF_VIEW_LABELS, type DiffViewLabels } from '../labels'
   import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
   import { render_tokens } from './tokens'
   import { resolve_diff_backend, to_error } from './types'
@@ -54,7 +54,7 @@
     labels?: Partial<DiffViewLabels>
   } = $props()
 
-  const msg = $derived({ ...DIFF_VIEW_LABELS, ...labels })
+  const msg = $derived(merge_labels(DIFF_VIEW_LABELS, labels))
 
   type Side = `old` | `new`
   // Single-column mode: unified-shaped rows without old gutter, signs, or tones.

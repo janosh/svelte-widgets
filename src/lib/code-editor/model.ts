@@ -269,8 +269,8 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
   // conversion) used to flip the whole document to CRLF on save, producing a diff touching
   // every line.
   const crlf_count = (init.text.match(/\r\n/gu) ?? []).length
-  const newline_count = (init.text.match(/\n/gu) ?? []).length
-  const eol = crlf_count > newline_count - crlf_count ? `crlf` : `lf`
+  const lf_only_count = (init.text.match(/(?<!\r)\n/gu) ?? []).length
+  const eol = crlf_count > lf_only_count ? `crlf` : `lf`
   let root = rope_from(editor_text(init.text))
   const history_limit = init.history_limit_chars ?? DEFAULT_HISTORY_LIMIT
   if (!Number.isInteger(history_limit) || history_limit < 0)

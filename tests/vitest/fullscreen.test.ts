@@ -406,6 +406,14 @@ describe(`button rendering`, () => {
     })
     expect(exiting.button.title).toBe(`Exit fullscreen`)
     expect(icon_path(exiting.button)).toBe(icons.ExitFullscreen.d)
+
+    // `labels={{ enter: condition ? `X` : undefined }}` type-checks, so an explicitly
+    // undefined key has to fall back too — a plain spread would render nothing
+    const undefined_key = mount_button({
+      labels: { enter: undefined },
+      wrapper: undefined,
+    })
+    expect(undefined_key.button.title).toBe(`Enter fullscreen`)
   })
 
   // a raw snippet's render() runs once, so each flag value gets its own mount rather

@@ -4,7 +4,11 @@
   import { sync_fullscreen } from './fullscreen.svelte'
   import Icon from './Icon.svelte'
   import { ExitFullscreen, Fullscreen, type IconData } from './icons'
-  import { FULLSCREEN_BUTTON_LABELS, type FullscreenButtonLabels } from './labels'
+  import {
+    merge_labels,
+    FULLSCREEN_BUTTON_LABELS,
+    type FullscreenButtonLabels,
+  } from './labels'
   import { chain_handlers } from './utils'
 
   const DEFAULT_ICONS = { enter: Fullscreen, exit: ExitFullscreen }
@@ -34,7 +38,7 @@
     children?: Snippet<[{ fullscreen: boolean }]>
   } = $props()
 
-  const msg = $derived({ ...FULLSCREEN_BUTTON_LABELS, ...labels })
+  const msg = $derived(merge_labels(FULLSCREEN_BUTTON_LABELS, labels))
   const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
   const label = $derived(fullscreen ? msg.exit : msg.enter)
 

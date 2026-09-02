@@ -2,7 +2,7 @@
 // observe from separate effects so query updates do not restart observation.
 
 import { untrack } from 'svelte'
-import { FIND_BAR_LABELS, type FindBarLabels } from './labels'
+import { merge_labels, FIND_BAR_LABELS, type FindBarLabels } from './labels'
 import {
   create_search_jump,
   highlight_ranges,
@@ -136,7 +136,7 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
     // Empty while idle so aria-live stays quiet.
     get status(): string {
       if (!query.trim()) return ``
-      const msg = { ...FIND_BAR_LABELS, ...get_options().labels }
+      const msg = merge_labels(FIND_BAR_LABELS, get_options().labels)
       if (occurrences.length === 0) return msg.no_matches
       return msg.match_position(Math.max(0, current_idx) + 1, occurrences.length)
     },

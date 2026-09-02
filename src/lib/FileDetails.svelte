@@ -6,7 +6,7 @@
     HTMLDetailsAttributes,
   } from 'svelte/elements'
   import { language_label_html } from './internal/language-label'
-  import { FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
+  import { merge_labels, FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
   import { default_highlighter } from './live-examples/default-highlighter'
   import { chain_handlers } from './utils'
 
@@ -38,7 +38,7 @@
     labels?: Partial<FileDetailsLabels>
   } & HTMLAttributes<HTMLOListElement> = $props()
 
-  const msg = $derived({ ...FILE_DETAILS_LABELS, ...labels })
+  const msg = $derived(merge_labels(FILE_DETAILS_LABELS, labels))
 
   // Use reactive state for node refs to avoid binding_property_non_reactive warning
   let detail_elements = $state<(HTMLDetailsElement | null)[]>([])

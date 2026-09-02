@@ -8,7 +8,7 @@
   import { tooltip } from './attachments/index'
   import { create_find_state, type FindOptions } from './find-in-page.svelte'
   import Icon from './Icon.svelte'
-  import { FIND_BAR_LABELS, type FindBarLabels } from './labels'
+  import { merge_labels, FIND_BAR_LABELS, type FindBarLabels } from './labels'
 
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> &
     FindOptions & {
@@ -37,13 +37,12 @@
     before_search,
     labels,
   }))
-  const msg = $derived({ ...FIND_BAR_LABELS, ...labels })
+  const msg = $derived(merge_labels(FIND_BAR_LABELS, labels))
   const find_label = $derived(msg.find_in(label))
-  type StepButton = { direction: -1 | 1; arrow: string; shortcut: string; label: string }
-  const step_buttons: StepButton[] = $derived([
+  const step_buttons = $derived([
     { direction: -1, arrow: `↑`, shortcut: `Shift+Enter`, label: msg.prev_match },
     { direction: 1, arrow: `↓`, shortcut: `Enter`, label: msg.next_match },
-  ])
+  ] as const)
   let input_element = $state<HTMLInputElement>()
 
   export const focus_input = (): void => {
@@ -86,7 +85,7 @@
     bind:this={input_element}
     oninput={(event) => void update_query(event.currentTarget.value)}
     onkeydown={handle_keydown}
-    placeholder={`${find_label}…`}
+    placeholder="{find_label}…"
     type="search"
     value={find.query}
   />

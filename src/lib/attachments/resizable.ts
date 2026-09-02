@@ -1,5 +1,5 @@
 import type { Attachment } from 'svelte/attachments'
-import { RESIZABLE_LABELS, type ResizableLabels } from '../labels'
+import { merge_labels, RESIZABLE_LABELS, type ResizableLabels } from '../labels'
 import { clamp } from '../utils'
 import { css_px, follow_pointer, is_primary_press } from './shared'
 
@@ -49,7 +49,7 @@ export const resizable =
       on_resize_end,
       on_resize_reset,
     } = options
-    const msg = { ...RESIZABLE_LABELS, ...labels }
+    const msg = merge_labels(RESIZABLE_LABELS, labels)
 
     const invalid_width = typeof max_width === `number` && min_width > max_width
     const invalid_height = typeof max_height === `number` && min_height > max_height

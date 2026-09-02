@@ -4,7 +4,11 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
-  import { SETTINGS_SECTION_LABELS, type SettingsSectionLabels } from './labels'
+  import {
+    merge_labels,
+    SETTINGS_SECTION_LABELS,
+    type SettingsSectionLabels,
+  } from './labels'
   import { is_object, observe_subtree } from './utils'
 
   type SettingMetadata = Readonly<
@@ -54,7 +58,7 @@
     descriptions_open?: boolean
   } = $props()
 
-  const msg = $derived({ ...SETTINGS_SECTION_LABELS, ...labels })
+  const msg = $derived(merge_labels(SETTINGS_SECTION_LABELS, labels))
 
   const validate_object_shape = (value: object): void => {
     if (value instanceof Set || value instanceof Map) {

@@ -44,7 +44,6 @@ export const CODE_EXAMPLE_LABELS = {
 }
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
 
-// shared by every dialogs.svelte.ts helper, none of which is a component with a `labels` prop
 export const COPY_BUTTON_LABELS = {
   // CopyButton is icon-only by default, and an empty string suppresses ActionButton's text.
   // Its `pending` text is ActionButton's, reused for the in-flight copy, so there is no
@@ -55,6 +54,7 @@ export const COPY_BUTTON_LABELS = {
 }
 export type CopyButtonLabels = typeof COPY_BUTTON_LABELS
 
+// shared by every dialogs.svelte.ts helper, none of which is a component with a `labels` prop
 export const DIALOG_LABELS = {
   confirm: `OK`,
   cancel: `Cancel`,
@@ -216,3 +216,19 @@ export const TOAST_LABELS = {
   pending: (count: number) => `${count} more ${plural(count, `notification`)} pending`,
 }
 export type ToastLabels = typeof TOAST_LABELS
+
+// Merge a caller's partial over the defaults. Spreading would keep an explicitly-undefined
+// key as undefined rather than falling back, and `exactOptionalPropertyTypes` is off, so
+// `labels={{ close: condition ? `X` : undefined }}` — an ordinary Svelte idiom —
+// type-checks and then renders nothing at all instead of the default string.
+export const merge_labels = <Labels extends object>(
+  defaults: Labels,
+  overrides?: Partial<Labels>,
+): Labels => {
+  if (!overrides) return defaults
+  const merged = { ...defaults }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (value !== undefined) Reflect.set(merged, key, value)
+  }
+  return merged
+}

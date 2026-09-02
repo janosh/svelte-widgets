@@ -3,7 +3,11 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Search } from './icons'
-  import { SETTINGS_SEARCH_LABELS, type SettingsSearchLabels } from './labels'
+  import {
+    merge_labels,
+    SETTINGS_SEARCH_LABELS,
+    type SettingsSearchLabels,
+  } from './labels'
   import { observe_subtree } from './utils'
 
   let {
@@ -25,7 +29,7 @@
     children: Snippet
   } = $props()
 
-  const msg = $derived({ ...SETTINGS_SEARCH_LABELS, ...labels })
+  const msg = $derived(merge_labels(SETTINGS_SEARCH_LABELS, labels))
 
   const search_id = $props.id()
   const input_id = `settings-search-input-${search_id}`
@@ -68,6 +72,26 @@
         : container.previousElementSibling?.querySelector(`.section-title, h4`)
       )?.textContent ?? ``
 
+    // Ancestor-chain walks against a Set, rather than pairwise `contains`: the old shape cost
+    // rows x containers plus rows x hits node comparisons per keystroke.
+    function* ancestors_of(node: HTMLElement): Generator<HTMLElement> {
+      for (let cur = node.parentElement; cur; cur = cur.parentElement) {
+        yield cur
+        if (cur === root) return // walks stop at the search root itself
+      }
+    }
+    const has_ancestor_in = (node: HTMLElement, marked: Set<HTMLElement>): boolean => {
+      for (const ancestor of ancestors_of(node)) if (marked.has(ancestor)) return true
+      return false
+    }
+    // Stops at an already-marked node, whose own ancestors are therefore marked too.
+    const mark_ancestors = (node: HTMLElement, marked: Set<HTMLElement>): void => {
+      for (const ancestor of ancestors_of(node)) {
+        if (marked.has(ancestor)) break
+        marked.add(ancestor)
+      }
+    }
+
     const refresh = (): void => {
       const normalized_query = query.trim().toLocaleLowerCase()
       if (!normalized_query) {
@@ -85,32 +109,6 @@
         ),
       )
       const rows = [...root.querySelectorAll<HTMLElement>(ROW_SELECTOR)]
-
-      // Ancestor-chain walks against a Set, rather than pairwise `contains`: the old shape
-      // cost rows x containers plus rows x hits node comparisons per keystroke. Marking
-      // stops at an already-marked node, whose own ancestors are therefore marked too.
-      const above_root = root.parentElement // walks stop after root itself
-      const mark_ancestors = (node: HTMLElement, marked: Set<HTMLElement>): void => {
-        for (
-          let cur = node.parentElement;
-          cur && cur !== above_root;
-          cur = cur.parentElement
-        ) {
-          if (marked.has(cur)) break
-          marked.add(cur)
-        }
-      }
-      const has_ancestor_in = (node: HTMLElement, marked: Set<HTMLElement>): boolean => {
-        for (
-          let cur = node.parentElement;
-          cur && cur !== above_root;
-          cur = cur.parentElement
-        ) {
-          if (marked.has(cur)) return true
-        }
-        return false
-      }
-
       const hits = new Set(
         rows.filter(
           (row) =>

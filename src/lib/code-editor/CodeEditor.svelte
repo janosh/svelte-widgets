@@ -6,7 +6,7 @@
   import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { register_escape_layer } from '../attachments/index'
-  import { CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
+  import { merge_labels, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
   import {
     auto_close_pair,
@@ -66,7 +66,7 @@
     labels?: Partial<CodeEditorLabels>
   } = $props()
 
-  const msg = $derived({ ...CODE_EDITOR_LABELS, ...labels })
+  const msg = $derived(merge_labels(CODE_EDITOR_LABELS, labels))
   let textarea = $state<HTMLTextAreaElement>()
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
