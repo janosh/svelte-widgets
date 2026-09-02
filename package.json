@@ -187,7 +187,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "4.1.11",
     "@wooorm/starry-night": "^3.10.0",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "20.11.6",
     "katex": "^0.18.4",
     "mdsvex": "^0.12.8",
     "pagefind": "^1.5.2",
