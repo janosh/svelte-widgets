@@ -18,9 +18,8 @@ const render = (html: string): HTMLElement => {
 const ranges_of = (...args: Parameters<typeof search_text>): Range[] =>
   search_text(...args).map((match) => match.range)
 
-// Endpoints rather than range.toString(): a range spanning node boundaries can
-// stringify correctly while starting in the wrong node at a coincidentally equal
-// offset, so the containers are what pin down the offset mapping.
+// Endpoints, not range.toString(): a cross-node range can stringify correctly while
+// starting in the wrong node at a coincidentally equal offset.
 const range_bounds = (range: Range): [string, number, string, number] => [
   range.startContainer.textContent ?? ``,
   range.startOffset,
@@ -89,9 +88,8 @@ describe(`search_text`, () => {
   })
 
   it.each([
-    // offsets are computed on normalized text but must land on the original
-    // characters: canonical decomposition and lowercasing can expand one source
-    // character while 😀 already spans two UTF-16 units
+    // offsets computed on normalized text must land on the original characters:
+    // decomposition/lowercasing expand a char, and 😀 spans two UTF-16 units
     [`length-changing lowercase`, `<p>İİİab</p>`, `ab`, [`İİİab`, 3, `İİİab`, 5]],
     [`length-changing match`, `<p>İ</p>`, `i\u0307`, [`İ`, 0, `İ`, 1]],
     [`astral characters`, `<p>😀ab</p>`, `ab`, [`😀ab`, 2, `😀ab`, 4]],
@@ -179,9 +177,8 @@ describe(`search_text`, () => {
     ])
   })
 
-  // Pins the binary search against the linear scan it replaced: a match on every
-  // boundary of the offset table is where an off-by-one would show up.
-  // The quadratic scan it also fixes is a cost, not a behavior, so nothing asserts it.
+  // Pins the binary search that replaced a linear scan: a match on every offset-table
+  // boundary is where an off-by-one would show up.
   it(`maps every match onto its node in a segment split across many nodes`, () => {
     const texts = Array.from({ length: 30 }, (_unused, idx) => `a${idx}b`)
     const root = render(`<p>${texts.map((text) => `<b>${text}</b>`).join(``)}</p>`)
@@ -211,8 +208,7 @@ describe(`search_text`, () => {
   it(`honors a custom segment selector`, () => {
     const root = render(`<div class="cell">ab<b>c</b></div><div class="cell">d</div>`)
 
-    // extending the default selector is the intended way to teach the search about
-    // markup it does not know: each .cell becomes its own segment
+    // extending the default selector makes each .cell its own segment
     const segment_selector = `${DEFAULT_SEGMENT_SELECTOR}, .cell`
     expect(search_text(root, `abc`, { segment_selector })).toHaveLength(1)
     expect(search_text(root, `abcd`, { segment_selector })).toEqual([])
@@ -316,8 +312,8 @@ describe(`highlight_ranges`, () => {
     highlight_ranges(search(`<p>beta</p>`, `beta`))
     expect(registry.get(`text-search-match`)).toBe(foreign)
 
-    // a CSS.highlights.clear() elsewhere vacates it with no successor. Yielding to
-    // nobody would strand the highlight for the rest of the page's life.
+    // an external CSS.highlights.clear() leaves no successor; yielding to nobody
+    // would strand the highlight for the page's life
     registry.clear()
     highlight_ranges(search(`<p>gamma</p>`, `gamma`))
     expect(installed_ranges()).toHaveLength(3)
@@ -362,8 +358,8 @@ describe(`highlight_ranges`, () => {
     expect(set_spy).not.toHaveBeenCalled()
   })
 
-  // highlight_matches keeps separate owner bookkeeping in attachments/highlight-matches.ts.
-  // Sharing a CSS class must stay safe until both implementations are merged.
+  // highlight_matches keeps its own owner bookkeeping, so sharing a CSS class must
+  // stay safe until both implementations are merged
   it(`unions ranges with the highlight_matches attachment on a shared css class`, () => {
     const root = render(`<p>Hello <b>wo</b>rld</p>`)
     const attachment_cleanup = highlight_matches({
@@ -387,14 +383,14 @@ describe(`highlight_ranges`, () => {
   })
 })
 
-// observe_text_mutations is a MutationObserver wired straight to create_burst_debounce,
-// so the two share a clock and are exercised together
+// observe_text_mutations wires a MutationObserver into create_burst_debounce, so the
+// two share a clock and are exercised together
 describe(`observe_text_mutations and create_burst_debounce`, () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  // happy-dom delivers mutation records in a microtask, which fake timers leave
-  // alone, so awaiting the async advance runs both the observer and the debounce
+  // happy-dom delivers mutation records in a microtask that fake timers ignore, so the
+  // async advance is needed to run both observer and debounce
   const mutate = async (node: Element, advance_ms: number) => {
     node.append(document.createElement(`span`))
     await vi.advanceTimersByTimeAsync(advance_ms)
@@ -421,8 +417,7 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
       max_wait_ms: 120,
     })
 
-    // each mutation would reset a plain debounce, so without the ceiling these
-    // 6 x 20 ms steps would never let the callback run
+    // without the max_wait ceiling these 6 x 20 ms steps would keep resetting the debounce
     for (let idx = 0; idx < 6; idx++) await mutate(root, 20)
     expect(on_mutation).toHaveBeenCalledTimes(1)
     stop()
@@ -459,8 +454,8 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
     vi.advanceTimersByTime(200)
     expect(callback).not.toHaveBeenCalled()
 
-    // carrying the canceled burst's start forward would leave the ceiling already
-    // spent, collapsing the debounce to zero and firing on the first trigger
+    // carrying the canceled burst's start forward would leave the ceiling spent,
+    // collapsing the debounce to zero
     trigger()
     vi.advanceTimersByTime(49)
     expect(callback).not.toHaveBeenCalled()

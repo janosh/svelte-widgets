@@ -1,6 +1,5 @@
-// Lazy starry-night factory. Kept separate from highlighter.ts so consumers picking
-// their own grammars can import it without evaluating that module's top-level await
-// of the 34-grammar common bundle.
+// Lazy starry-night factory, separate from highlighter.ts so consumers picking their own
+// grammars skip that module's top-level await of the 34-grammar common bundle.
 import type { Grammar } from '@wooorm/starry-night'
 import { type HastNode, escape_html_text, hast_to_html } from './hast.ts'
 
@@ -25,8 +24,8 @@ export type Highlighter = {
 export const optional_peer_error = `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`
 
 const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNight> => {
-  // only the import is guarded: a grammar that fails to compile is a caller's bad input,
-  // not an absent peer dependency, and must not be reported as one
+  // only the import is guarded: a grammar failing to compile is bad caller input, not an
+  // absent peer dependency, and must not be reported as one
   const { createStarryNight } = await import(`@wooorm/starry-night`).catch(
     (cause: unknown) => {
       throw new Error(optional_peer_error, { cause })
@@ -38,9 +37,9 @@ const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNigh
 const escape_svelte = (html: string): string =>
   html.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
 
-// Falls back to plain escaped code when the language is missing or unsupported. Braces
-// are escaped on both paths: this HTML is written into mdsvex/Svelte markup, where a
-// stray `{` opens an expression, and highlight() hands it straight to the caller.
+// Falls back to plain escaped code for a missing or unsupported language. Braces are escaped
+// on both paths: this HTML lands in mdsvex/Svelte markup, where a stray `{` opens an
+// expression.
 const render_html = (
   instance: StarryNight,
   code: string,

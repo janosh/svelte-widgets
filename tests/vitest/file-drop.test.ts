@@ -5,14 +5,11 @@ import {
 } from '$lib/file-drop'
 import { expect, test, vi } from 'vite-plus/test'
 
-// happy-dom has DataTransfer but no webkitGetAsEntry and no FileSystemEntry types at
-// runtime, so drops are built from hand-rolled entries here. They implement the two
-// callback APIs the real thing exposes - entry.file(cb, err) and reader.readEntries(cb,
-// err) - including readEntries' batching, since draining it is the part most likely to
-// be got wrong.
+// happy-dom has DataTransfer but no webkitGetAsEntry, so drops use hand-rolled entries
+// implementing the callback APIs the real thing exposes - entry.file(cb, err) and
+// reader.readEntries(cb, err), batching included since draining it is the tricky part.
 
-// `file` hands back a File named after the entry; the error and timing tests pass their
-// own to drive the callback themselves.
+// `file` defaults to a File named after the entry; error and timing tests pass their own.
 const file_entry = (
   name: string,
   file: FileSystemFileEntry[`file`] = (on_file) => on_file(new File([name], name)),
@@ -25,8 +22,8 @@ const file_entry = (
     file,
   }) as unknown as FileSystemFileEntry
 
-// `batch_size` mirrors the browser's cap: readEntries returns at most 100 per call and
-// signals the end with an empty batch, so a single call is not enough.
+// `batch_size` mirrors the browser: readEntries returns at most 100 per call and ends
+// with an empty batch, so one call is not enough.
 const dir_entry = (
   name: string,
   children: FileSystemEntry[],
@@ -37,7 +34,7 @@ const dir_entry = (
     isDirectory: true,
     name,
     fullPath: `/${name}`,
-    // per-reader cursor, like the browser's: a second reader restarts the listing
+    // per-reader cursor like the browser's: a second reader restarts the listing
     createReader: () => {
       let read_idx = 0
       return {
@@ -111,8 +108,8 @@ test(`plain files come back in drop order`, async () => {
   expect(names(await files_from_data_transfer(dropped))).toEqual([`a.txt`, `b.txt`])
 })
 
-// The reason this helper exists: DataTransfer.files reports a dropped directory as one
-// zero-byte File named after the directory, so its contents would be lost.
+// why the helper exists: DataTransfer.files reports a dropped directory as one zero-byte
+// File named after it, losing the contents
 test(`directories are expanded depth-first, keeping their listed order`, async () => {
   const lib_dir = dir_entry(`lib`, [file_entry(`deep.ts`)])
   const src_dir = dir_entry(`src`, [file_entry(`index.ts`), lib_dir])
@@ -147,8 +144,7 @@ test(`a directory larger than one readEntries batch is drained fully`, async () 
   expect(await files_from_data_transfer(drop([big_dir]))).toHaveLength(250)
 })
 
-// Entries are unreadable outside the drop event and absent on synthetic drops, where
-// DataTransfer.files is all there is.
+// entries are absent on synthetic drops and outside the drop event, leaving only files
 test.each([
   [`items yield no entries`, [null, null]],
   [`there are no items at all`, []],
@@ -196,9 +192,8 @@ const nested_dirs = (depth: number): FileSystemEntry => {
   return entry
 }
 
-// A symlink to one of its own ancestors nests without end - the entry API resolves it -
-// so unbounded recursion would hang the tab. The cap has to stop that without tripping
-// on a real tree, so both sides of it are pinned here.
+// a symlink to an ancestor nests without end (the entry API resolves it), so uncapped
+// recursion hangs the tab. Both sides of the cap are pinned so it can't trip a real tree.
 test(`directory nesting is capped`, async () => {
   const deepest_allowed = drop([nested_dirs(32)])
   expect(names(await files_from_data_transfer(deepest_allowed))).toEqual([`bottom.txt`])
@@ -209,10 +204,10 @@ test(`directory nesting is capped`, async () => {
   )
 })
 
-// Two sibling links to a common ancestor branch as fast as they descend, so the depth cap
-// alone never trips - measured at 300k directory reads by depth 17. The entry budget is
-// what stops it, and the read counter here fails loudly if it ever stops doing so: an
-// uncapped run is a non-yielding microtask loop that vitest's timeout cannot interrupt.
+// two sibling links to a common ancestor branch as fast as they descend, so the depth cap
+// alone never trips (300k reads by depth 17) - only the entry budget stops it. The read
+// counter fails loudly if it stops: an uncapped run is a non-yielding microtask loop that
+// vitest's timeout cannot interrupt.
 test(`a branching cycle is stopped by the entry budget`, async () => {
   let reads = 0
   const fanout_dir = (): FileSystemEntry =>

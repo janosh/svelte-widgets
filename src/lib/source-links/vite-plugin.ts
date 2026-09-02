@@ -1,6 +1,6 @@
-// Vite plugin behind `virtual:source-symbols`: the repository URL, the commit the site is
-// built from, every source file under `dir` and the line of every exported definition, so
-// docs can turn inline code mentions into pinned GitHub links (see ./index.ts).
+// Vite plugin behind `virtual:source-symbols`: repo URL, built commit, every source file
+// under `dir` and each exported definition's line, so docs can turn inline code mentions
+// into pinned GitHub links (see ./index.ts).
 import { execSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
@@ -15,9 +15,10 @@ const is_source_file = (name: string): boolean =>
 const EXPORT_DEFINITION_RE =
   /^export (?:async function|function|abstract class|class|const|let|interface|type|enum) (?<name>[A-Za-z_$][\w$]*)/
 
-// `repository` as package.json allows it: a URL string, a `{ url }` record (often with a
-// `git+` prefix and `.git` suffix, or an SSH remote) or a GitHub shorthand like `user/repo`.
-// Always yields the browsable https URL.
+// Accepts every package.json `repository` form — URL string or `{ url }` record — and
+// normalizes the ones it knows: `user/repo` shorthand becomes a GitHub https URL, and a
+// `git+` prefix, SSH remote or `.git` suffix is rewritten. Any other URL passes through
+// as-is, `git://` and plain `http://` included.
 export const repository_url = (repository: unknown): string => {
   const raw =
     typeof repository === `string` ? repository : (repository as { url?: unknown })?.url

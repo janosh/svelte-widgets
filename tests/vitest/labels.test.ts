@@ -4,9 +4,8 @@ import { mount, tick } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 
-// Spreading a partial over the defaults keeps an explicitly-undefined key as undefined
-// instead of falling back. `exactOptionalPropertyTypes` is off, so a conditional override
-// — an ordinary Svelte idiom — type-checks and then renders nothing.
+// a plain spread keeps an explicitly-undefined key undefined instead of falling back, and
+// with `exactOptionalPropertyTypes` off a conditional override type-checks yet renders ``
 test.each([
   [`an explicitly undefined key falls back`, { show_less: undefined }, `show less`],
   [`a provided key wins`, { show_less: `weniger` }, `weniger`],

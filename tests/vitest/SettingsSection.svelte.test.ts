@@ -297,8 +297,8 @@ describe(`SettingsSection`, () => {
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
   })
 
-  // `explain` and `reset_section` overridden, `explain_toggle` and `reset` omitted, so
-  // both halves of the merge are exercised. The interpolating default lowercases the title.
+  // two keys overridden, two omitted, so both halves of the merge run; the interpolating
+  // default lowercases the title
   test(`labels reword the heading actions, key by key`, async () => {
     mount_section({
       title: `Atoms`,
@@ -356,9 +356,8 @@ describe(`SettingsSection`, () => {
     )
   })
 
-  // The row's own description was snapshotted once at mount and written back on every
-  // refresh, so a caller updating a reactive `data-description` had their new text
-  // reverted, and a caller adding the attribute later had it deleted outright.
+  // the description used to be snapshotted at mount and written back on every refresh, so
+  // caller's later `data-description` was reverted (or deleted, if added after mount)
   test(`follows a caller's later data-description instead of restoring the mount-time one`, async () => {
     mount_section({
       title: `Atoms`,
@@ -444,8 +443,8 @@ describe(`SettingsSection`, () => {
       expect(settings_row()?.querySelectorAll(`.setting-reset-button`)).toHaveLength(1)
     }
 
-    // An unrelated row's enhancements survive as the same nodes: a value edit re-enhances
-    // in place rather than tearing every description and reset button off and back on.
+    // same nodes, not replacements: a value edit re-enhances in place instead of tearing
+    // every description and reset button off and back on
     const palette_description = doc_query(
       `[data-key="palette"] .settings-row-description`,
     )

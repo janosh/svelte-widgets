@@ -72,9 +72,8 @@ describe(`code block detection`, () => {
       const value = get_example_value(tree)
       expect(value).toContain(`highlight-${lang}`)
       expect(value).not.toContain(EXAMPLE_COMPONENT_PREFIX)
-      // code-only output is raw HTML with no component scope, so the lang-label
-      // must be positioned out of flow inline or it indents the first code line
-      // (pre is white-space: pre)
+      // code-only output is raw HTML with no component scope, so the lang-label needs an
+      // inline out-of-flow position; pre is white-space: pre, so in-flow indents line 1
       expect(value).toMatch(/<span class="lang-label" style="[^"]*position:absolute/)
       expect(value).toContain(
         `<pre class="highlight highlight-${lang}" style="position:relative">`,
@@ -272,9 +271,8 @@ describe(`script block injection`, () => {
       create_code_node(`svelte`, `<div>Test</div>`, `example`),
     ])
     remark()(tree, create_file())
-    // imports must NOT be injected into the decoy node...
+    // imports go into a fresh script block, never the decoy node
     expect(tree.children[0].value).toBe(decoy)
-    // ...but into a freshly created script block
     const script = tree.children.find((node) => node.value?.startsWith(`<script>`))
     expect(script?.value).toContain(`import Example_0`)
   })

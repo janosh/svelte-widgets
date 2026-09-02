@@ -30,8 +30,7 @@ async function paste_into(extra_props: Partial<MultiSelectProps>, paste_text: st
   const input = get_input()
   const event = make_paste_event(paste_text)
   input.dispatchEvent(event)
-  // No macrotask wait: sync-oncreate paste must complete synchronously. handle_paste
-  // only awaits add() when an async oncreate suspends.
+  // no macrotask wait: handle_paste only awaits add() when an async oncreate suspends
   await tick()
   return { ...spies, props, event }
 }
@@ -48,9 +47,8 @@ describe(`parse_paste`, () => {
     expect(onadd).toHaveBeenCalledWith(expect.objectContaining({ option: `beta` }))
   })
 
-  // `text.split(',')` on a trailing comma yields an empty entry. `add` throws on those, and
-  // the throw used to reject handle_paste: the loop stopped, later entries vanished and
-  // onparsed_paste never fired, leaving an unhandled rejection behind.
+  // an empty parsed entry makes `add` throw; that throw used to reject handle_paste, so
+  // the loop stopped, later entries vanished and onparsed_paste never fired
   test.each([`alpha,beta,`, `alpha,,beta`])(
     `an empty parsed entry is rejected without aborting the paste (%j)`,
     async (paste_text) => {

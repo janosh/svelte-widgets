@@ -1,8 +1,7 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
-// Pointer events matter for touch: a touch drag never produces mousemove. happy-dom cannot
-// show that, so this lives in a real browser.
+// A touch drag never produces mousemove, which happy-dom cannot model — hence a real browser.
 
 type Point = { x: number; y: number }
 
@@ -45,9 +44,8 @@ test(`a mouse drag moves the pane`, async ({ page }) => {
   expect(Math.round(after.y - before.y)).toBe(40)
 })
 
-// The strips are absolute children, so they anchor to the padding box and only reach the
-// pane's 1px border because of their negative insets — press outside one and nothing
-// resizes. Layout is a browser fact.
+// The resize strips anchor to the padding box and reach the pane's 1px border only via their
+// negative insets — press outside one and nothing resizes.
 test(`the outermost pixel of the right edge still resizes`, async ({ page }) => {
   const { pane } = await open_pane(page)
   const before = await box_of(pane)
@@ -59,9 +57,8 @@ test(`the outermost pixel of the right edge still resizes`, async ({ page }) => 
   expect(Math.round(after.width - before.width)).toBe(-70)
 })
 
-// The pane's left/top resolve against the positioned ancestor's padding box, but it is
-// anchored from that ancestor's border-box rect, so a bordered host used to push the pane
-// off the toggle by the border width. Only a browser knows where the padding box starts.
+// The pane's insets resolve against the ancestor's padding box but were computed from its
+// border-box rect, so a bordered host used to push the pane off the toggle by the border width.
 test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, async ({
   page,
 }) => {
@@ -70,7 +67,7 @@ test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, asy
   const anchoring_error = async () => {
     const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
     return {
-      // the default offset={ x: 5, y: 5 } hangs the pane off the toggle's bottom right
+      // default offset={ x: 5, y: 5 } hangs the pane off the toggle's bottom right
       right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
       top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
     }
@@ -88,9 +85,8 @@ test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, asy
   expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
 })
 
-// toggle_props can position the toggle out of the pane's containing block, at which point
-// the toggle's offsetParent is null (viewport) while the pane's is still the host. Reading
-// the toggle's would take the document-coordinate branch and write those as host-local
+// A toggle outside the pane's containing block has offsetParent null (viewport) while the
+// pane's is still the host; reading the toggle's would write document coords as host-local
 // insets, dropping the pane by the host's offset down the page.
 test(`a fixed toggle still anchors the pane to its own offset parent`, async ({
   page,
@@ -120,9 +116,8 @@ test(`a fixed toggle still anchors the pane to its own offset parent`, async ({
   }).toEqual({ right: 0, top: 0 })
 })
 
-// Which handle a corner press lands on is a browser hit-test fact; happy-dom cannot decide
-// it. The corner has its own square handle painted over the two edge strips it overlaps, so
-// it drives BOTH axes — the edge strips still drive one axis each.
+// The corner has its own square handle painted over the two edge strips it overlaps, so it
+// drives BOTH axes; which handle a press lands on is a browser hit-test fact.
 test(`a corner drag resizes both axes`, async ({ page }) => {
   const { pane } = await open_pane(page)
   const before = await box_of(pane)
@@ -165,8 +160,8 @@ test.describe(`touch`, () => {
     expect(Math.round(after.y - before.y)).toBe(30)
   })
 
-  // A pen would pan too and is fixed by the same touch-action, but CDP's injected pen
-  // events skip the compositor gesture path, so only touch can show it here.
+  // A pen pans too and is fixed by the same touch-action, but CDP's injected pen events skip
+  // the compositor gesture path, so only touch can show it here.
   test(`a touch drag on the bottom edge resizes the pane`, async ({ page }) => {
     const { pane } = await open_pane(page)
     const before = await box_of(pane)
@@ -180,4 +175,25 @@ test.describe(`touch`, () => {
     expect(after.width).toBeCloseTo(before.width, 0)
     expect(await page.evaluate(() => globalThis.scrollY)).toBe(scroll_before)
   })
+})
+
+// The pane is anchored to its toggle's right edge, so its width decides how far left it
+// reaches. The 450px default outgrew a phone and hung 78px off the left edge, where nothing
+// scrolls to bring it back; the default cap now carries the same viewport bound a manual
+// resize does. Only absolute positioning clamps the anchor itself, so a few px of spill
+// remain when the toggle sits at the very edge — bounded by the viewport margin, not by the
+// pane's width.
+test(`the default pane is capped to the viewport at phone width`, async ({ page }) => {
+  const [viewport_width, viewport_margin] = [390, 8]
+  await page.setViewportSize({ width: viewport_width, height: 780 })
+  const { pane } = await open_pane(page)
+
+  const box = await box_of(pane)
+  expect(box.width, `default outgrew the viewport`).toBeLessThanOrEqual(
+    viewport_width - 2 * viewport_margin,
+  )
+  expect(box.x, `pane hangs off the left edge`).toBeGreaterThanOrEqual(-viewport_margin)
+  expect(box.x + box.width, `pane hangs off the right edge`).toBeLessThanOrEqual(
+    viewport_width,
+  )
 })

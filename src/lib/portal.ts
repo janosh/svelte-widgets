@@ -4,10 +4,10 @@ import { compute_position } from './utils'
 
 type PortalActionParams = PortalParams & { open: boolean }
 
-// MultiSelect keeps this as an action wrapped by `fromAction`, so updates can toggle
-// portalling without replacing the node. It also owns width matching and DOM restoration.
-// Reposition after a tick so rendered dropdown content contributes to offsetHeight.
-// No SSR guard: Svelte only invokes actions on the client.
+// MultiSelect keeps this an action wrapped by `fromAction`, so updates can toggle portalling
+// without replacing the node; it also owns width matching and DOM restoration. Repositions
+// after a tick so rendered dropdown content counts toward offsetHeight. No SSR guard needed:
+// Svelte only runs actions on the client.
 export function portal_action(node: HTMLElement, initial_params: PortalActionParams) {
   let params = initial_params
   let home_parent: ParentNode | null = null
@@ -25,9 +25,9 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
     node.style.width = `${rect.width}px`
     node.hidden = false
     const dropdown_height = node.offsetHeight
-    // Only ever above or below: a dropdown beside its input is not a dropdown. Height
-    // 0 means the list has not rendered yet, so there is nothing to fit — stay below.
-    // No shift: the list scrolls, and sliding it up would cover the input.
+    // Only above or below: a dropdown beside its input is not a dropdown. Height 0 means
+    // the list has not rendered, so nothing to fit — stay below. No shift either: the list
+    // scrolls, and sliding it up would cover the input.
     const can_flip = placement === `auto` && dropdown_height > 0
     const { placement: chosen } = compute_position(
       rect,

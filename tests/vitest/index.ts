@@ -19,11 +19,10 @@ export function doc_query<T extends Element = HTMLElement>(selector: string): T 
   return node
 }
 
-// Shadows a prototype getter (navigator.userAgent, documentElement.clientWidth) with
-// an own value property. Returns the undo, which callers must register for teardown so
-// a failed assertion cannot leak the stub into later tests.
-// Restores the original descriptor, not just deletes: `globalThis.innerWidth` and friends are
-// own properties of the window, so deleting them leaves every later test reading `undefined`.
+// Shadows a prototype getter with an own value property; returns the undo callers must
+// register for teardown so a failed assertion cannot leak the stub. Restores the original
+// descriptor rather than deleting, since `globalThis.innerWidth` and friends are own
+// properties that later tests would otherwise read as `undefined`.
 export const stub_prop = (target: object, prop: string, value: unknown) => {
   const original = Object.getOwnPropertyDescriptor(target, prop)
   Object.defineProperty(target, prop, { value, configurable: true })
@@ -33,8 +32,8 @@ export const stub_prop = (target: object, prop: string, value: unknown) => {
   }
 }
 
-// happy-dom skips layout, so every geometry an attachment reads has to be mocked:
-// getBoundingClientRect plus the read-only offset* properties (hence defineProperty).
+// happy-dom skips layout, so mock getBoundingClientRect plus the read-only offset*
+// properties (hence defineProperty).
 export const mock_rect = (
   element: HTMLElement,
   rect: { left: number; top: number; width?: number; height?: number },
@@ -132,12 +131,10 @@ export const stub_css_highlights = () => {
   return { registry, clear_spy, set_spy, delete_spy }
 }
 
-// Tracking settlement (rather than awaiting) is the only way to assert a promise is
-// still pending, which is what a queue is for.
+// tracking settlement rather than awaiting is the only way to assert a promise is pending
 export const track = <T>(promise: Promise<T>) => {
   const state: { settled: boolean; value?: T; reason?: unknown } = { settled: false }
-  // a rejection settles the promise too; without this arm it would read as forever
-  // pending and go unhandled, so a broken promise looks like a hung one
+  // rejections settle too; without this arm a broken promise reads as forever pending
   void promise.then(
     (value) => Object.assign(state, { settled: true, value }),
     (reason: unknown) => Object.assign(state, { settled: true, reason }),

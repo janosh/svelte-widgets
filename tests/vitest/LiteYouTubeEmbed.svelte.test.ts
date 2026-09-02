@@ -3,8 +3,8 @@ import { type ComponentProps, mount, tick } from 'svelte'
 import { afterAll, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
-// happy-dom navigates an iframe's src for real, which would put youtube.com requests in
-// the test run; serve every request locally instead and record what was asked for.
+// happy-dom navigates an iframe's src for real, so intercept every request locally
+// instead of hitting youtube.com, recording what was asked for
 const { settings } = (
   globalThis as unknown as {
     happyDOM: { settings: { fetch: Record<string, unknown> } }
@@ -72,8 +72,7 @@ describe(`LiteYouTubeEmbed`, () => {
 
     click(`button.play-btn`)
     await tick()
-    // a supplied title, not the default: asserting the default cannot tell a wired prop
-    // from a hardcoded attribute
+    // a supplied title: the default cannot tell a wired prop from a hardcoded attribute
     expect(doc_query(`iframe`).getAttribute(`title`)).toBe(`Talk player`)
 
     // the poster URLs get the same encoding the iframe src above is checked for
@@ -139,8 +138,8 @@ describe(`LiteYouTubeEmbed`, () => {
     await tick()
 
     expect(iframes()).toHaveLength(0)
-    // teardown has to be synchronous: leaving the iframe up for even one render lets the
-    // browser start loading the new video, the exact cost this component exists to avoid
+    // teardown must be synchronous: one render with the old iframe up already starts
+    // loading the new video, the exact cost this component exists to avoid
     expect(fetched).toEqual([])
   })
 

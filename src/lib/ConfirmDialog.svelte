@@ -112,9 +112,8 @@
     {:else}
       {@render request.body.snippet()}
     {/if}
-    <!-- Rebuilds the controls between questions. Keyed on choice id alone, Svelte reused
-    the same DOM nodes when consecutive requests offer the same ids, so the second half
-    of a double-click landed on the button that now answers the NEXT question. -->
+    <!-- Rebuilds the controls between questions: keyed on choice id alone, Svelte reused the
+    nodes, so a double-click's second half answered the NEXT question -->
     {#key request}
       {#if request.kind === `choice`}
         <div class="actions">

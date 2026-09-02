@@ -11,9 +11,8 @@ const mock_actions = [
 
 const menu_input = () => doc_query<HTMLInputElement>(`dialog input[autocomplete]`)
 
-// Fades are off unless a test is about them, so the dialog opens and closes synchronously.
-// Filled in on the caller's own object rather than a merged copy: several tests mount a
-// $state proxy and then mutate it, and spreading into a fresh object would sever that.
+// fades off unless a test is about them, so the dialog opens and closes synchronously.
+// Set on the caller's object: tests mutate the mounted $state proxy, which copying severs
 const mount_menu = (props: ComponentProps<typeof CommandMenu>) => {
   props.fade_duration_ms ??= 0
   return mount(CommandMenu, { target: document.body, props })
@@ -264,7 +263,6 @@ test(`handles action selection and execution`, async () => {
 
   const input_el = menu_input()
 
-  // Navigate to second action and select it
   input_el.dispatchEvent(
     new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
   )
@@ -300,8 +298,7 @@ test(`ignores user-created options without action handlers`, async () => {
   expect(props.open).toBe(true)
 })
 
-// open=false must call dialog.close() before `{#if open}` unmounts, including while
-// an outro keeps the closed element mounted.
+// open=false must call dialog.close() before `{#if open}` unmounts, outro included
 test.each([0, 50])(
   `controlled close fires native onclose once (fade_duration_ms=%i)`,
   async (fade_duration_ms) => {
@@ -452,7 +449,6 @@ test(`remains open when trigger keys are pressed while already open`, async () =
 
   expect(props.open).toBe(true)
 
-  // Trigger key should not change state when already open
   globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `k`, metaKey: true }))
   await tick()
 
@@ -1273,9 +1269,9 @@ test(`global shortcuts ignore events consumed by editable controls`, () => {
   expect(action).not.toHaveBeenCalled()
 })
 
-// Shift counts as typing, not as a chord, so neither may run nor steal the keystroke
-// inside an editable target. The plain div keeps the guard honest: without it,
-// suppressing these shortcuts everywhere would still pass.
+// Shift counts as typing, not a chord, so neither may run or steal a keystroke inside an
+// editable target. The plain div keeps the guard honest: suppressing them everywhere
+// would otherwise pass too.
 test.each([`n`, `shift+n`])(
   `global shortcut %s fires only outside editable targets`,
   (shortcut) => {
@@ -1354,7 +1350,7 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
   await tick()
 
   expect(actions[2].action).toHaveBeenCalledExactlyOnceWith(`gamma`)
-  expect(props.open).toBe(false) // menu closed after trigger
+  expect(props.open).toBe(false)
   expect(JSON.parse(localStorage.getItem(storage_key) ?? `[]`)).toEqual([`gamma`])
 
   // reopen: gamma now ranks first, rest keep original order
@@ -1403,8 +1399,8 @@ test.each([
     [`beta`, `alpha`, `gamma`],
     1,
   ],
-  // stale persisted ids (actions since removed/renamed) must not occupy low ranks,
-  // else a real recent (rank 4 here) sorts after non-recents (default rank 3)
+  // stale persisted ids must not occupy low ranks, else a real recent (rank 4 here)
+  // sorts after non-recents (default rank 3)
   [
     `stale ids are ignored so real recents still rank first`,
     JSON.stringify([`removed-1`, `removed-2`, `removed-3`, `removed-4`, `gamma`]),
@@ -1442,8 +1438,8 @@ test.each([
   },
 )
 
-// global shortcut presses (while closed) persist the triggered action to recents
-// (that the action also fires is covered by `global action shortcuts: fires when closed`)
+// a global shortcut press while closed must persist the action to recents (that it fires
+// is covered by `global action shortcuts: fires when closed`)
 test.each([
   {
     desc: `records the triggered action`,

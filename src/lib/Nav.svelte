@@ -15,14 +15,13 @@
 
   type NavLinkRouteObject = NavRouteObject & { href: string }
 
-  // Parameter passed to the item snippet
   interface ItemSnippetParams {
-    route: NavRouteObject // normalized route object
+    route: NavRouteObject
     href: string
     label: string
     is_active: boolean
     is_dropdown: boolean
-    render_default: Snippet // escape hatch to render default
+    render_default: Snippet
   }
 
   let {
@@ -39,7 +38,6 @@
     tooltips,
     tooltip_options,
     breakpoint = 767,
-    dropdown_cooldown_ms = 150,
     onnavigate,
     onopen,
     onclose,
@@ -50,8 +48,8 @@
     item?: Snippet<[ItemSnippetParams]>
     link?: Snippet<[{ href: string; label: string; isActive: boolean }]>
     menu_props?: Omit<HTMLAttributes<HTMLDivElement>, `id`>
-    // `href` and `aria-current` stay component-owned: one shared bag cannot carry a
-    // per-route destination, and overriding it would point every link at the same page
+    // `href`/`aria-current` stay component-owned: one shared bag would point every link
+    // at the same page
     link_props?: Omit<HTMLAnchorAttributes, `aria-current` | `href`>
     // mobile menu toggle; style/class land here rather than on the <nav> host
     burger_props?: Omit<HTMLButtonAttributes, `aria-controls` | `aria-expanded` | `type`>
@@ -62,7 +60,6 @@
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
     tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     breakpoint?: number
-    dropdown_cooldown_ms?: number // delay before hiding dropdown after mouse leaves; ignored when pinned
     onnavigate?: (data: {
       href: string
       event: MouseEvent
@@ -75,26 +72,19 @@
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
 
   let is_open = $state(false)
-  let hovered_dropdown = $state<string | null>(null)
-  let pinned_dropdown = $state<string | null>(null)
-  let is_touch_device = $state(false)
+  // click/tap only: hover-opening popped panels on every pointer pass and touch devices
+  // have no hover, so the two input modes diverged for no gain
+  let open_dropdown = $state<string | null>(null)
   // Start from the real width on the client so hydration doesn't flash the desktop nav on phones
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   let is_mobile = $derived(viewport_width <= breakpoint)
-  let hide_timeout: ReturnType<typeof setTimeout> | null = null
   let focus_timeout: ReturnType<typeof setTimeout> | undefined
   // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
 
-  // Track previous is_open state for callbacks. Deliberately not $state: it's
-  // written inside the $effect below, which would re-trigger the effect if reactive.
+  // deliberately not $state: written inside the $effect below, which would self-retrigger
   let prev_is_open = false
-
-  // Detect touch support after mounting so SSR never touches navigator.
-  $effect(() => {
-    is_touch_device = `ontouchstart` in globalThis || navigator.maxTouchPoints > 0
-  })
 
   $effect(() => {
     if (is_open && !prev_is_open) {
@@ -105,23 +95,16 @@
     prev_is_open = is_open
   })
 
-  $effect(() => () => {
-    if (hide_timeout) clearTimeout(hide_timeout)
-    clearTimeout(focus_timeout)
-  })
+  $effect(() => () => clearTimeout(focus_timeout))
 
   function close_menus() {
-    if (hide_timeout) clearTimeout(hide_timeout)
     is_open = false
-    hovered_dropdown = null
-    pinned_dropdown = null
+    open_dropdown = null
   }
 
-  // Query the submenu links / toggle button of the dropdown for a given route href, scoped
-  // to this instance: `data-href` is the route href, so two Navs rendering the same route
-  // would otherwise match each other's dropdowns and steal each other's focus. The scope is
-  // an id string rather than a `bind:this` ref so it is already usable while children
-  // render, which is when `focus_trap`'s `restore` reads the toggle.
+  // scoped per instance, else two Navs rendering the same route match each other's
+  // dropdowns and steal focus. An id string, not `bind:this`, so it's usable while
+  // children render — when `focus_trap`'s `restore` reads the toggle.
   const dropdown_sel = (href: string) =>
     `[data-nav="${unique_id}"] .dropdown[data-href="${CSS.escape(href)}"]`
   const dropdown_links = (href: string) =>
@@ -132,39 +115,19 @@
     )
 
   function toggle_dropdown(href: string, focus_first = false) {
-    const is_opening = pinned_dropdown !== href
-    pinned_dropdown = is_opening ? href : null
-    hovered_dropdown = is_opening ? href : null
+    const is_opening = open_dropdown !== href
+    open_dropdown = is_opening ? href : null
     if (is_opening && focus_first) {
       clearTimeout(focus_timeout)
       focus_timeout = setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
     }
   }
 
-  function open_dropdown(href: string, from_mouse = false) {
-    if (from_mouse && is_touch_device && is_mobile) return
-    if (hide_timeout) clearTimeout(hide_timeout)
-    if (pinned_dropdown && pinned_dropdown !== href) pinned_dropdown = null
-    hovered_dropdown = href
-  }
-
-  function schedule_hide(href: string, is_pinned: boolean) {
-    // Same gate as the hover-open above: a touchscreen laptop opens dropdowns on hover
-    // like any desktop, so suppressing the hide on touch support alone would strand them
-    // open. Only the mobile layout, where a tap is what opened the menu, keeps them.
-    if ((is_touch_device && is_mobile) || is_pinned) return
-    if (hide_timeout) clearTimeout(hide_timeout)
-    hide_timeout = setTimeout(() => {
-      if (hovered_dropdown === href) hovered_dropdown = null
-    }, dropdown_cooldown_ms)
-  }
-
   function onkeydown(event: KeyboardEvent) {
     if (event.key === `Escape`) close_menus()
   }
 
-  const is_dropdown_open = (href: string) =>
-    hovered_dropdown === href || pinned_dropdown === href
+  const is_dropdown_open = (href: string) => open_dropdown === href
 
   function handle_toggle_keydown(event: KeyboardEvent, href: string) {
     const { key } = event
@@ -175,8 +138,8 @@
     toggle_dropdown(href, true)
   }
 
-  // On the whole dropdown, so arrows keep working after focus has moved from the toggle
-  // onto a link and Escape hands focus back to the toggle from anywhere inside.
+  // on the whole dropdown so arrows keep working once focus leaves the toggle, and
+  // Escape returns focus to the toggle from anywhere inside
   function handle_dropdown_keydown(event: KeyboardEvent, href: string) {
     if (!is_dropdown_open(href)) return
     if (event.key === `Escape`) {
@@ -189,7 +152,7 @@
   function is_current(path: string | undefined) {
     if (!path) return
     if (path === `/`) return page?.url.pathname === `/` ? `page` : undefined
-    // Match exact path or path followed by / to avoid partial matches
+    // exact path or `path/` prefix, never a partial segment match
     const pathname = page?.url.pathname
     const exact_match = pathname === path
     const prefix_match = pathname?.startsWith(`${path}/`)
@@ -206,7 +169,7 @@
 
     if (remove_parent) text = text.split(`/`).findLast(Boolean) ?? text
     let label = text.replace(/^\//u, ``).replaceAll(`-`, ` `)
-    // Handle root path '/' which becomes empty after stripping
+    // '/' strips to the empty string
     if (!label && text === `/`) label = `Home`
     return { label, style: label ? `text-transform: capitalize` : `` }
   }
@@ -231,7 +194,6 @@
     }
     const content = route.tooltip ?? (route.href ? tooltips?.[route.href] : undefined)
     if (!content) return
-    // Support both string (content only) and object (full options) formats
     const tooltip_overrides = typeof content === `string` ? { content } : content
     return tooltip({ ...tooltip_options, ...tooltip_overrides })
   }
@@ -255,14 +217,6 @@
       (event: MouseEvent) => handle_link_click(event, route),
       link_props?.onclick,
     )
-  // Tabbing onto the toggle must not open the submenu: the toggle is also where focus
-  // lands when a dismissed submenu hands it back, which would reopen what the user
-  // just closed. Enter/Space/ArrowDown open it.
-  const dropdown_focusin_handler = (href: string) => (event: FocusEvent) => {
-    const { target } = event
-    if (target instanceof Element && target.closest(`[data-dropdown-toggle]`)) return
-    open_dropdown(href)
-  }
   function get_external_attrs(route: NavRouteObject) {
     if (!route.external) return {}
     return { target: `_blank`, rel: `noopener noreferrer` }
@@ -271,7 +225,6 @@
 
 <svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
-<!-- Default item rendering snippet for escape hatch -->
 {#snippet default_item_render(
   parsed_route: NavLinkRouteObject,
   formatted: { label: string; style: string },
@@ -312,15 +265,14 @@
   data-nav={unique_id}
   class:mobile={is_mobile}
   onclick={chain_handlers((event: MouseEvent) => {
-    // The `link` snippet renders the consumer's own markup, which carries none of the
-    // wiring `link_click_handler` adds to the default anchor. Without this, navigating
-    // from the burger menu left the overlay covering the page it had just moved to.
+    // the `link` snippet's markup misses `link_click_handler`'s wiring, so without this
+    // the burger overlay stayed up over the page it had just navigated to
     const target = event.target
     if (target instanceof Element && target.closest(`a[href]`)) close_menus()
   }, rest?.onclick)}
   {@attach click_outside({
     // skip the document listener (and its scrollbar layout read) when nothing is open
-    enabled: is_open || Boolean(pinned_dropdown) || Boolean(hovered_dropdown),
+    enabled: is_open || Boolean(open_dropdown),
     callback: close_menus,
   })}
 >
@@ -338,8 +290,7 @@
     <span aria-hidden="true"></span>
   </button>
 
-  <!-- Escape is also handled on window, but a consumer onkeydown that stops propagation
-  would prevent that, so close from the element too -->
+  <!-- also on window, but a consumer onkeydown that stops propagation would block that -->
   <div
     {...menu_props}
     id={panel_id}
@@ -355,36 +306,21 @@
       {@const is_right = parsed_route.align === `right`}
       {@const item_tooltip = get_tooltip(parsed_route)}
 
-      <!-- Separator-only item -->
       {#if parsed_route.separator && !parsed_route.href}
         <div class="separator" role="separator"></div>
       {:else if sub_routes}
-        <!-- Dropdown menu item -->
         {@const child_is_active = is_child_current(sub_routes)}
         {@const parent_page_exists = sub_routes.includes(parsed_route.href)}
         {@const filtered_sub_routes = sub_routes.filter(
           (route) => route !== parsed_route.href,
         )}
-        {@const is_pinned = pinned_dropdown === parsed_route.href}
         {@const dropdown_open = is_dropdown_open(parsed_route.href)}
-        <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; mouse handlers only control hover disclosure -->
+        <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; the keydown handler only routes arrows/Escape within the open submenu -->
         <div
           class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
           data-href={parsed_route.href}
-          onmouseenter={() => open_dropdown(parsed_route.href, true)}
-          onmouseleave={() => schedule_hide(parsed_route.href, is_pinned)}
           onkeydown={(event: KeyboardEvent) =>
             handle_dropdown_keydown(event, parsed_route.href)}
-          onfocusin={dropdown_focusin_handler(parsed_route.href)}
-          onfocusout={(event: FocusEvent) => {
-            if (
-              event.relatedTarget instanceof Node &&
-              event.currentTarget instanceof HTMLElement &&
-              event.currentTarget.contains(event.relatedTarget)
-            )
-              return
-            if (!is_pinned) hovered_dropdown = null
-          }}
         >
           <div>
             {#if parsed_route.disabled}
@@ -427,60 +363,48 @@
               <Icon icon={ChevronDown} style="width: 1em; height: 1em" />
             </button>
           </div>
-          <!-- svelte-ignore a11y_no_static_element_interactions -- hover keeps the native-link submenu open while traversing it -->
           <div
             class:visible={dropdown_open}
             data-submenu
             tabindex="-1"
-            onmouseenter={() => open_dropdown(parsed_route.href, true)}
-            onmouseleave={(event: MouseEvent) => {
-              // Don't schedule hide if mouse moved to sibling element within same dropdown
-              if (
-                event.relatedTarget instanceof Node &&
-                event.currentTarget instanceof Element &&
-                event.currentTarget.closest(`.dropdown`)?.contains(event.relatedTarget)
-              )
-                return
-              schedule_hide(parsed_route.href, is_pinned)
-            }}
             {@attach focus_trap({
-              enabled: is_pinned, // only a pinned submenu owns the keyboard
+              enabled: dropdown_open,
               initial: false, // toggle_dropdown already picks the entry point
               restore: dropdown_toggle(parsed_route.href) ?? false,
             })}
           >
-            {#each filtered_sub_routes as child_href (child_href)}
-              {@const child_formatted = format_label(child_href, true)}
-              {@const child_tooltip = get_tooltip({ href: child_href })}
-              {#if link}
-                {@render link({
-                  href: child_href,
-                  label: child_formatted.label,
-                  isActive: is_current(child_href) === `page`,
-                })}
-              {:else}
-                <a
-                  {...link_props}
-                  href={child_href}
-                  aria-current={is_current(child_href)}
-                  style={`${child_formatted.style}; ${link_props?.style ?? ``}`}
-                  onclick={link_click_handler({ href: child_href })}
-                  {@attach child_tooltip}
-                >
-                  {@html child_formatted.label}
-                </a>
-              {/if}
-            {/each}
+            <!-- `display: contents` except on mobile, where it's the grid row animating 0fr -> 1fr -->
+            <div class="submenu-inner">
+              {#each filtered_sub_routes as child_href (child_href)}
+                {@const child_formatted = format_label(child_href, true)}
+                {@const child_tooltip = get_tooltip({ href: child_href })}
+                {#if link}
+                  {@render link({
+                    href: child_href,
+                    label: child_formatted.label,
+                    isActive: is_current(child_href) === `page`,
+                  })}
+                {:else}
+                  <a
+                    {...link_props}
+                    href={child_href}
+                    aria-current={is_current(child_href)}
+                    style={`${child_formatted.style}; ${link_props?.style ?? ``}`}
+                    onclick={link_click_handler({ href: child_href })}
+                    {@attach child_tooltip}
+                  >
+                    {@html child_formatted.label}
+                  </a>
+                {/if}
+              {/each}
+            </div>
           </div>
         </div>
-        <!-- Separator after dropdown if specified -->
         {#if parsed_route.separator}
           <div class="separator" role="separator"></div>
         {/if}
       {:else}
-        <!-- Regular link item -->
         {#if item}
-          <!-- User-provided item snippet with render_default escape hatch -->
           {#snippet render_default_snippet()}
             {@render default_item_render(parsed_route, formatted, item_tooltip)}
           {/snippet}
@@ -501,7 +425,6 @@
             {@render default_item_render(parsed_route, formatted, item_tooltip)}
           </span>
         {/if}
-        <!-- Separator after item if specified -->
         {#if parsed_route.separator}
           <div class="separator" role="separator"></div>
         {/if}
@@ -525,6 +448,14 @@
     );
     --nav-link-bg-hover: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
     --nav-dropdown-border-color: color-mix(in srgb, currentColor 30%, transparent 70%);
+    /* The mobile panel hangs off the pinned burger, so both read their corner from here. The
+       panel used to restate the offsets as its own constants and drifted out of step with the
+       button's size: it sat 2px over the burger's bottom edge and 8px left of its left edge. */
+    --nav-burger-inset: 1rem;
+    /* content-box: the chip is the icon plus its padding and border */
+    --nav-burger-box: calc(
+      var(--nav-burger-size, 1.4rem) + 2 * var(--nav-burger-padding, 0.3rem) + 2px
+    );
   }
   .menu {
     display: flex;
@@ -553,13 +484,12 @@
   .menu > span > a[aria-current='page'] {
     color: var(--nav-link-active-color);
   }
-  /* Disabled items */
   .menu .disabled {
     opacity: var(--nav-disabled-opacity, 0.5);
     cursor: not-allowed;
     pointer-events: none;
   }
-  /* Right-aligned items - only first one gets margin-inline-start: auto */
+  /* only the first right-aligned item gets the auto margin */
   .menu > :is(.align-right, .dropdown.align-right) {
     margin-inline-start: auto;
   }
@@ -568,7 +498,6 @@
     + :is(.align-right, .dropdown.align-right) {
     margin-inline-start: 0;
   }
-  /* Separator */
   .menu > .separator {
     width: 1px;
     height: 1.2em;
@@ -576,20 +505,11 @@
     opacity: 0.3;
     margin: var(--nav-separator-margin, 0 0.25em);
   }
-  /* Dropdown styles */
   .dropdown {
     position: relative;
   }
   .dropdown.active > div:first-child :is(a, span) {
     color: var(--nav-link-active-color);
-  }
-  .dropdown::after {
-    content: '';
-    position: absolute;
-    top: 100%;
-    left: -5pt;
-    right: -5pt;
-    height: calc(var(--nav-dropdown-margin, 2pt) + 5pt);
   }
   .dropdown > div:first-child {
     display: flex;
@@ -627,13 +547,23 @@
     border-end-end-radius: var(--nav-border-radius);
     outline-offset: -1px;
     opacity: 0.6;
-    transition: opacity 0.15s;
+    transition:
+      opacity 0.15s,
+      color 0.15s;
   }
   .dropdown > div:first-child > button :global(svg) {
     transition: transform 0.2s ease;
   }
+  /* the row tints its background on hover, but the caret is a separate target within it, so
+     it recolors on its own to say the arrow itself is what opens the section. currentColor
+     last: --nav-link-active-color has no default, and an unset one would make `color`
+     invalid at computed-value time and inherit rather than drop out. */
   .dropdown > div:first-child > button:hover {
     opacity: 1;
+    color: var(
+      --nav-dropdown-toggle-hover-color,
+      var(--nav-link-active-color, currentColor)
+    );
   }
   .dropdown > div:first-child > button.open {
     opacity: 1;
@@ -652,9 +582,9 @@
     inset-inline-start: var(--nav-dropdown-left, 0);
     inset-inline-end: var(--nav-dropdown-right, auto);
     margin: var(--nav-dropdown-margin, 2pt) 0 0 0;
-    min-width: var(--nav-dropdown-min-width, 100%); /* at least as wide as parent */
+    min-width: var(--nav-dropdown-min-width, 100%);
     max-width: var(--nav-dropdown-max-width, none);
-    width: var(--nav-dropdown-width, max-content); /* grow wider if content needs it */
+    width: var(--nav-dropdown-width, max-content);
     background-color: var(--nav-dropdown-bg, var(--nav-surface-bg));
     border: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
     border-radius: var(--nav-border-radius, 6pt);
@@ -666,6 +596,11 @@
   }
   .dropdown > div:last-child.visible {
     display: flex;
+  }
+  /* on desktop the links are direct items of the popover; only mobile gives this
+     wrapper a box of its own */
+  .submenu-inner {
+    display: contents;
   }
   .dropdown > div:last-child a {
     padding: var(--nav-dropdown-link-padding, 2pt 6pt);
@@ -681,21 +616,26 @@
   .dropdown > div:last-child a[aria-current='page'] {
     color: var(--nav-link-active-color);
   }
-  /* Mobile burger button */
   .burger {
     display: none;
-    position: fixed;
-    top: 1rem;
-    inset-inline-start: 1rem;
+    /* set `absolute` (with --nav-mobile-menu-position) for embedded demos: two fixed Navs
+       pin two burgers to the same corner and the top one wins every tap */
+    position: var(--nav-burger-position, fixed);
+    top: var(--nav-burger-inset);
+    inset-inline-start: var(--nav-burger-inset);
     flex-direction: column;
     justify-content: space-around;
-    /* 1.4rem bars inside a ~2.4rem hit area: a finger-sized target without moving the bars */
+    /* sized to match Toc's mobile toggle — the only other pinned mobile chrome */
     width: var(--nav-burger-size, 1.4rem);
     height: var(--nav-burger-size, 1.4rem);
     box-sizing: content-box;
-    padding: 0.5rem;
-    margin: -0.5rem;
-    background: transparent;
+    padding: var(--nav-burger-padding, 0.3rem);
+    /* opaque chip like Toc's toggle: pinned over scrolling content, a transparent button
+       leaves the bars on whatever text passes beneath */
+    background: var(--nav-burger-bg, var(--nav-surface-bg));
+    border: 1px solid var(--nav-burger-border-color, var(--nav-surface-border));
+    border-radius: var(--nav-border-radius, 6pt);
+    box-shadow: var(--nav-burger-shadow, var(--nav-surface-shadow));
     z-index: var(--nav-toggle-btn-z-index, 10);
   }
   .burger span {
@@ -709,10 +649,8 @@
       transform 0.2s linear;
     transform-origin: center;
   }
-  /* Both strokes must land on the box's centre line or the X reads as lopsided. Under
-     `space-around` with three equal bars, adjacent bar centres are exactly height/3 apart —
-     the outer bars are one step from the middle one, which is already centred. A hardcoded
-     offset (0.4rem against a 1.4rem box) left them ~1px shy of meeting. */
+  /* height/3 is the exact gap between adjacent bar centres under `space-around`, so both
+     strokes land on the centre line; a hardcoded 0.4rem left them ~1px shy of meeting */
   .burger[aria-expanded='true'] span:first-child {
     transform: translateY(calc(var(--nav-burger-size, 1.4rem) / 3)) rotate(45deg);
   }
@@ -722,18 +660,22 @@
   .burger[aria-expanded='true'] span:nth-child(3) {
     transform: translateY(calc(var(--nav-burger-size, 1.4rem) / -3)) rotate(-45deg);
   }
-  /* Mobile styles - using .mobile class set via JS based on breakpoint prop */
+  /* .mobile is set in JS from the breakpoint prop, not a media query */
   nav.mobile .burger {
     display: flex;
   }
   nav.mobile .menu {
-    position: fixed;
-    top: 3rem;
-    /* Span the viewport rather than hugging its content: a content-width panel anchored to
-       one side leaves page text visible right beside the open menu, which reads as a stray
-       box instead of a menu. Hosts wanting the old floating panel can set --nav-mobile-inset
-       to `1rem auto` (or any inset-inline pair) and cap it with a max-width of their own. */
-    inset-inline: var(--nav-mobile-inset, 0.5rem);
+    position: var(--nav-mobile-menu-position, fixed);
+    /* clears the burger's own box rather than a constant guessed from it */
+    top: calc(
+      var(--nav-burger-inset) + var(--nav-burger-box) + var(--nav-mobile-menu-gap, 0.5rem)
+    );
+    /* hug the content beside the burger rather than spanning the viewport: a full-width bar
+       of empty space reads as broken layout. Set --nav-mobile-inset to a single value like
+       `0.5rem` for the full-width bar. */
+    inset-inline: var(--nav-mobile-inset, var(--nav-burger-inset) auto);
+    width: max-content;
+    max-width: calc(100dvw - 2 * var(--nav-burger-inset));
     background-color: var(--nav-surface-bg);
     border: 1px solid var(--nav-surface-border);
     box-shadow: var(--nav-surface-shadow);
@@ -744,8 +686,8 @@
       visibility 0.3s ease;
     z-index: var(--nav-mobile-z-index, 2);
     flex-direction: column;
-    /* one scrollable column: with several submenus expanded the menu outgrows a phone
-       screen, and wrapping would spill entries into a second column off the panel */
+    /* wrapping would spill entries into a second column off the panel once several
+       submenus are expanded */
     flex-wrap: nowrap;
     align-items: stretch;
     justify-content: start;
@@ -759,30 +701,30 @@
     opacity: 1;
     visibility: visible;
   }
-  /* `.menu > span` and `.dropdown > div:first-child` are the two elements that paint a row's
-     highlight. Padding must land on both or neither: padding `.dropdown` instead of its inner
-     wrapper grew the row around the pill rather than the pill itself, so plain links rendered
-     visibly wider and taller pills than dropdown rows. */
+  /* both selectors paint a row's highlight, so padding must land on both or neither —
+     padding `.dropdown` itself grew the row around the pill, not the pill */
   nav.mobile :is(.menu > span, .dropdown > div:first-child) {
     padding: 1pt 8pt;
   }
-  /* Fill the pill, matching the flex:1 that dropdown rows already give their link, so the
-     whole row is tappable rather than just the text. flex:1 only fills the content box, so
-     the negative margin pulls the link back out over the span's padding and its own padding
-     puts the text back where it was — otherwise the padding is a dead band inside the
-     painted pill. The padding stays on the span so a custom `item` snippet still gets it. */
+  /* make the whole pill tappable: flex:1 only fills the content box, so the negative margin
+     pulls the link out over the span's padding, which would otherwise be a dead band. The
+     padding stays on the span so a custom `item` snippet still gets it. */
   nav.mobile .menu > span > a {
     flex: 1;
     margin: -1pt -8pt;
     padding: 1pt 8pt;
   }
-  /* Mobile separator */
+  /* same pull-out, inline-start only (the chevron owns the other end): the link's own
+     --nav-item-padding stacked on the row's and indented every expandable entry */
+  nav.mobile .dropdown > div:first-child > :is(a, span) {
+    margin-inline-start: -8pt;
+    padding-inline-start: 8pt;
+  }
   nav.mobile .menu > .separator {
     width: 100%;
     height: 1px;
     margin: var(--nav-separator-margin, 0.25em 0);
   }
-  /* Mobile dropdown styles - show as expandable section */
   nav.mobile .dropdown {
     flex-direction: column;
     align-items: stretch;
@@ -797,35 +739,89 @@
     border-radius: var(--nav-border-radius);
   }
   nav.mobile .dropdown > div:first-child > button {
-    /* Sit against the row's trailing edge: the row's own padding is the only gap wanted,
-       so the caret's trailing padding would double it */
-    padding: 4pt 0 4pt 8pt;
+    /* the caret is the only way to open a section, so give it the largest tap target: full
+       row height, and negative margins running it out to the row's painted edge (the
+       padding puts back what they take, keeping the glyph in place) */
+    align-self: stretch;
+    margin: -1pt -8pt -1pt 0;
+    padding: 1pt 8pt 1pt 14pt;
     border-radius: var(--nav-border-radius);
     opacity: 0.6;
   }
-  nav.mobile .dropdown > div:first-child > button.open {
+  /* :hover here too, or this selector's extra `nav.mobile` outranks the shared hover rule
+     and pins the caret back to 0.6 */
+  nav.mobile .dropdown > div:first-child > button:is(.open, :hover) {
     opacity: 1;
   }
+  /* `display: none` can't transition, so collapse via a 0fr grid row + fade. `visibility`
+     keeps the still-mounted links out of the tab order. */
   nav.mobile .dropdown > div:last-child {
     position: static;
+    /* the desktop panel floats free of the page, so it hugs its content and may be given a
+       floor wider than its trigger. Inline in the mobile column both push the menu past the
+       phone's edge, so drop each to the column's own width. */
+    width: auto;
+    min-width: 0;
     border: none;
     box-shadow: none;
-    margin-top: 2pt;
     padding: 0;
     background-color: transparent;
+    display: grid;
+    grid-template-rows: 0fr;
+    opacity: 0;
+    visibility: hidden;
+    transition:
+      grid-template-rows var(--nav-submenu-duration, 0.25s) ease,
+      opacity var(--nav-submenu-duration, 0.25s) ease,
+      visibility var(--nav-submenu-duration, 0.25s);
+  }
+  nav.mobile .dropdown > div:last-child.visible {
+    grid-template-rows: 1fr;
+    opacity: 1;
+    visibility: visible;
+  }
+  /* the animated row. Its top gap is padding that opens with it: `min-height: 0` zeroes the
+     row's content but not its padding, so a static 2pt would leave a sliver when collapsed. */
+  nav.mobile .submenu-inner {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    padding-top: 0;
+    transition: padding-top var(--nav-submenu-duration, 0.25s) ease;
+    /* one rule down the whole section, not one per link: per-link borders leave a notch
+       under the section's opening padding instead of a single stroke. Its own colour, since
+       --nav-surface-border is tuned for a panel edge over the page, not a rule over the
+       panel's fill. */
+    margin-inline-start: 10pt;
+    border-inline-start: 1px solid
+      var(
+        --nav-submenu-line-color,
+        light-dark(rgba(128, 128, 128, 0.55), rgba(200, 200, 200, 0.4))
+      );
+  }
+  nav.mobile .dropdown > div:last-child.visible .submenu-inner {
+    padding-top: 2pt;
   }
   nav.mobile .dropdown > div:last-child a {
-    padding-block: 4pt;
+    /* the desktop rule's nowrap makes a long label set the panel's min-content width, so the
+       phone menu scrolled sideways to reach the tail. `anywhere` (not break-word) is what
+       lowers min-content, and top-level rows already wrap this way. */
+    white-space: normal;
+    overflow-wrap: anywhere;
+    padding-block: 2pt;
     padding-inline: 6pt 8pt;
-    /* 8pt of its own indent plus the 8pt the `.dropdown` padding used to contribute */
-    margin-inline-start: 16pt;
-    border-inline-start: 2px solid transparent;
+    /* matches the top-level rows; an inherited 1.6 made child rows taller than their parent */
+    line-height: 1.3;
+    /* pull the link's border onto the wrapper's guide line so the active row recolours a
+       segment of it rather than drawing a second line beside it (hence the equal width) */
+    margin-inline-start: -1px;
+    border-inline-start: 1px solid transparent;
     font-size: 0.9em;
   }
-  nav.mobile .dropdown > div:last-child a:is(:hover, [aria-current='page']) {
+  nav.mobile .dropdown > div:last-child a[aria-current='page'] {
     border-inline-start-color: var(--nav-link-active-color, currentColor);
   }
-  /* Mobile right-aligned items stack normally */
   nav.mobile .menu > :is(.align-right, .dropdown.align-right) {
     margin-inline-start: 0;
   }

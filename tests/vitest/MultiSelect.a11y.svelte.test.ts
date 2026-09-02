@@ -230,10 +230,10 @@ test(`clearing searchText while create-option message is active drops aria-activ
   expect(doc_query(`ul.options > li.user-msg`).classList.contains(`active`)).toBe(true)
   expect(input.getAttribute(`aria-activedescendant`)).toContain(`user-msg`)
 
-  // clearing the search removes the message li — active state must not go stale
+  // clearing the search removes the message li; aria-activedescendant used to keep
+  // pointing at it (dangling ARIA reference)
   await type_search_text(``, input)
   expect(document.querySelector(`ul.options > li.user-msg`)).toBeNull()
-  // previously kept pointing at the removed user-msg li (dangling ARIA reference)
   expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
 })
 
@@ -254,9 +254,8 @@ describe(`ARIA correctness`, () => {
       `true`,
     )
 
-    // at max capacity the row is disabled but must NOT be announced as selected:
-    // aria-selected tracks only whether all selectable options are selected
-    // (option 3 is not) — not the maxSelect capacity limit
+    // at max capacity the row is disabled but must NOT announce as selected: aria-selected
+    // tracks whether all selectable options are selected (option 3 is not), not maxSelect
     await unmount_component(first)
     mount_multiselect({
       options: [1, 2, 3],
@@ -281,7 +280,6 @@ describe(`ARIA correctness`, () => {
     expect(document.querySelector(`ul.options`)).toBeNull()
     expect(input.getAttribute(`aria-controls`)).toBeNull()
 
-    // once options exist, aria-controls references the actual listbox id
     props.options = [1, 2]
     await tick()
     const listbox = doc_query(`ul.options`)

@@ -16,7 +16,7 @@ export interface SortableOptions {
   disabled?: boolean
 }
 
-// Attachment making an HTML table sortable by clicking column headers (click again to flip direction)
+// sorts a table by clicking column headers; clicking again flips direction
 export const sortable =
   (options: SortableOptions = {}) =>
   (node: HTMLElement) => {
@@ -98,8 +98,8 @@ export const sortable =
         )
         rows.sort((row_1, row_2) => {
           const [cell_1, cell_2] = [row_1.cells[idx], row_2.cells[idx]]
-          // Rows can have fewer cells than the sort column (colspan placeholders,
-          // ragged rows) — treat missing cells as empty so they sort last
+          // rows can have fewer cells than the sort column (colspan, ragged rows), so
+          // missing cells count as empty and sort last
           const val_1 = cell_1 ? get_html_sort_value(cell_1) : ``
           const val_2 = cell_2 ? get_html_sort_value(cell_2) : ``
 

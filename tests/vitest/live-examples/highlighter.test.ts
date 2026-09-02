@@ -1,4 +1,3 @@
-// Tests for starry-night syntax highlighter
 import { create_highlighter } from '$lib/live-examples/create-highlighter'
 import { default_highlighter } from '$lib/live-examples/default-highlighter'
 import { starry_night, starry_night_highlighter } from '$lib/live-examples/highlighter'
@@ -25,9 +24,8 @@ describe(`starry_night_highlighter`, () => {
     vi.resetModules()
   })
 
-  // Which flags resolve is starry-night's own data, so one row per distinct path here:
-  // the separately shipped svelte grammar, one from the common bundle, and a flag whose
-  // punctuation has to survive into the CSS class
+  // one row per resolution path: the separately shipped svelte grammar, one from the
+  // common bundle, and a flag whose punctuation must survive into the CSS class
   test.each([
     [`svelte`, `<div>test</div>`],
     [`ts`, `const x: number = 1`],
@@ -41,7 +39,7 @@ describe(`starry_night_highlighter`, () => {
         `su`,
       ),
     )
-    // Verify syntax highlighting produces spans, not only a wrapper.
+    // token spans, not just the wrapper
     expect(result).toContain(`<span class="pl-`)
   })
 
@@ -51,7 +49,7 @@ describe(`starry_night_highlighter`, () => {
       (lang) => {
         const result = starry_night_highlighter(`const x = 1`, lang)
         expect(result).toMatch(/^<pre class="highlight highlight-[a-z]+"><code>/u)
-        expect(result).not.toContain(lang) // Should use lowercase version
+        expect(result).not.toContain(lang)
       },
     )
   })
@@ -66,8 +64,7 @@ describe(`starry_night_highlighter`, () => {
     )
   })
 
-  // the fallback path emits nothing but the wrapper, so pin the whole string: a
-  // substring check would pass while the tail of the input went unescaped
+  // pin the whole string: a substring check would pass with an unescaped tail
   test.each([
     [`HTML special characters`, `<div>&</div>`, `&lt;div&gt;&amp;&lt;/div&gt;`],
     [`braces`, `{#if x}{/if}`, `&#123;#if x&#125;&#123;/if&#125;`],
@@ -115,9 +112,8 @@ describe(`create_highlighter`, () => {
     expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
       `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
     )
-    // unknown language falls back to escaped plain text, wrapped and unwrapped. Braces
-    // are escaped either way: unwrapped output goes into the same mdsvex markup, where a
-    // literal `{` would be read as the start of a Svelte expression.
+    // unknown language falls back to escaped plain text either way — unwrapped output
+    // goes into the same mdsvex markup, where `{` would start a Svelte expression
     expect(await custom.highlight(`<a>{x}</a>`, `py`)).toBe(
       `&lt;a&gt;&#123;x&#125;&lt;/a&gt;`,
     )
@@ -126,16 +122,14 @@ describe(`create_highlighter`, () => {
     )
   })
 
-  // starry-night's index re-exports the 34-grammar `common` bundle with no subpath to
-  // reach it separately, so one mention here would pin ~1.3 MB into the chunk of every
-  // consumer that brings its own grammars. Defaulting belongs in highlighter.ts.
+  // starry-night's index re-exports the 34-grammar `common` bundle with no separate
+  // subpath, so one mention pins ~1.3 MB into every consumer bringing its own grammars
   test(`never references starry-night's common bundle`, async () => {
     const source = (await import(`$lib/live-examples/create-highlighter.ts?raw`)).default
     // comments stripped: this file explains the rule in prose, which would match too
     const code = source
       .replaceAll(/\/\*[\s\S]*?\*\//gu, ``)
-      // from the marker to the line end only: stripping the whole line would delete
-      // code sharing it with a comment, and let a real reference slip past the guard
+      // marker to line end only: dropping whole lines would hide trailing-comment code
       .replaceAll(/\/\/.*$/gmu, ``)
     expect(code).toContain(`createStarryNight`)
     expect(code).not.toContain(`common`)

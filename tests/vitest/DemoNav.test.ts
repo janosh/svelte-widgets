@@ -1,4 +1,3 @@
-// Test that DemoNav stays in sync with actual demo pages
 import { DemoNav } from '$site'
 import { mount } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
@@ -13,7 +12,7 @@ vi.mock(`$app/state`, () => ({ page: { url: { pathname: `/docs/` } } }))
 test(`DemoNav contains all base-prefixed demo pages`, () => {
   mount(DemoNav, { target: document.body })
 
-  // Extract all hrefs from the rendered nav (excluding group headers like #basics)
+  // group headers like #basics are anchors, not pages
   const hrefs = Array.from(document.querySelectorAll(`nav a`)).flatMap((link) => {
     const href = link.getAttribute(`href`)
     return href && !href.startsWith(`#`) ? [href] : []
@@ -26,9 +25,8 @@ test(`DemoNav contains all base-prefixed demo pages`, () => {
   )
   expect(new Set(hrefs)).toEqual(new Set(expected))
 
-  // Nav resolves custom labels from route.label for top-level items but from the href for
-  // dropdown children, so a group label taken from the wrong source silently regresses to
-  // slug casing (`Multiselect`, `Command Menu`)
+  // Nav takes labels from route.label for top-level items but from the href for dropdown
+  // children, so the wrong source silently regresses to slug casing (`Multiselect`)
   const link_text = new Set(
     Array.from(document.querySelectorAll(`nav a`), (link) => link.textContent?.trim()),
   )

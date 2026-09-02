@@ -16,7 +16,7 @@
   }: HTMLAttributes<HTMLSpanElement> & {
     // bind to this state and set it to true from parent
     wiggle?: boolean
-    // intended use case: set max value during wiggle for one of angle, scale, dx, dy through props
+    // max value reached during the wiggle; usually set just one of these
     angle?: number // try 20
     scale?: number // try 1.2
     dx?: number // try 10
@@ -39,8 +39,8 @@
   $effect.pre(() => {
     if (!wiggle) return
     const timer = setTimeout(() => (wiggle = false), duration_ms)
-    // cancel pending timer on re-trigger or unmount so an old timer can't cut
-    // a new wiggle short or write to state after destroy
+    // cancel on re-trigger or unmount, so an old timer can't cut a new wiggle short or
+    // write to state after destroy
     return () => clearTimeout(timer)
   })
 </script>

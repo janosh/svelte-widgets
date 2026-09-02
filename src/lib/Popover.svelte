@@ -58,8 +58,8 @@
     close_delay_ms?: number
     surface?: HTMLDivElement | null
     role?: PopupRole
-    // Snippets remain owned by the component that declares them. Popover invokes the
-    // trigger and body in that owner's scope; it does not retain either past teardown.
+    // Snippets stay owned by their declaring component; Popover invokes them in that scope
+    // and retains neither past teardown.
     trigger?: Snippet<[TriggerProps]>
     trigger_mode?: TriggerMode
     children: Snippet
@@ -69,8 +69,8 @@
   const surface_id = $derived(id ?? unique_id)
   const native_dismiss = $derived(escape && dismiss_on === `release`)
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
-  // The wrapper is `display: contents` and has no box of its own — measuring it would
-  // pin every popover to the viewport corner. Anchor to what the snippet rendered.
+  // The `display: contents` wrapper has no box; measuring it would pin every popover to the
+  // viewport corner, so anchor to what the snippet rendered.
   const anchor = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
   let open_timeout: ReturnType<typeof setTimeout> | undefined
   let close_timeout: ReturnType<typeof setTimeout> | undefined
@@ -101,8 +101,8 @@
     on_close?.({ via })
   }
 
-  // Native auto popovers own light dismissal and Escape. This listener only retains
-  // the non-default reason for on_close; it never performs the dismissal itself.
+  // Native auto popovers own light dismissal and Escape; this only records the close reason
+  // for on_close, never dismisses.
   const track_native_escape = (event: KeyboardEvent) => {
     if (native_dismiss && open && event.key === `Escape`) native_close_via = `escape`
   }

@@ -11,17 +11,16 @@ Provide a `loadOptions` function that fetches data:
   import { MultiSelect } from '$lib'
   import type { LoadOptionsParams, LoadOptionsResult } from '$lib/types'
 
-  // Simulated large dataset - in practice, this would be a database/API
+  // stands in for a database/API
   const all_items: string[] = Array.from({ length: 10000 }, (_, idx) => `Item ${idx + 1}`)
 
   async function load_options(
     params: LoadOptionsParams,
   ): Promise<LoadOptionsResult<string>> {
     const { search, offset, limit } = params
-    // Simulate network delay
+    // simulated network delay
     await new Promise((resolve) => setTimeout(resolve, 300))
 
-    // Filter and paginate
     const filtered = search
       ? all_items.filter((item) => item.toLowerCase().includes(search.toLowerCase()))
       : all_items

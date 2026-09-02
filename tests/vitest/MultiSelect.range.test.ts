@@ -65,8 +65,8 @@ test(`backward range selects upward from the anchor`, async () => {
   })
 })
 
-// the row hint indexes the dropdown while the lookup runs against a superset that also
-// holds already-selected rows, so a naive first match lands on the wrong duplicate
+// the row hint indexes the dropdown but the lookup runs against a superset including
+// already-selected rows, so a naive first match lands on the wrong duplicate
 test.each([
   // Sel leaves the dropdown once selected, so the second Dup moves up to index 1
   [`distinct labels between them`, dup_options, {}, 1],
@@ -216,8 +216,8 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
   })
 })
 
-// Two equal-sized ranges in a row yield the same text. With a plain string the live
-// region's DOM would be untouched and a screen reader would stay silent on the repeat.
+// two equal-sized ranges yield identical text; a plain string would leave the live
+// region's DOM untouched and screen readers silent on the repeat
 test(`an identical repeat announcement still replaces the live region node`, async () => {
   mount_range({ options: [`A`, `B`, `C`, `D`, `E`], open: true })
   const live = doc_query(`.sr-only[aria-live="polite"]`)

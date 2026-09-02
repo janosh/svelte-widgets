@@ -3,14 +3,14 @@ import { run_hotkeys } from '../utils'
 
 export interface HotkeyOptions {
   bindings: Hotkey[]
-  // Listen on the document rather than the node, for shortcuts that work anywhere.
-  // Node-scoped is the default so a shortcut dies with the surface that owns it.
+  // listen on the document, for shortcuts that work anywhere; node-scoped by default so a
+  // shortcut dies with the surface that owns it
   global?: boolean
   enabled?: boolean
 }
 
-// Declarative keybindings. Matching lives in run_hotkeys so components that already
-// own a window listener (CommandMenu) share the same semantics without an element.
+// Declarative keybindings. Matching lives in run_hotkeys so components with their own
+// window listener (CommandMenu) share the semantics without an element.
 export const hotkey =
   (options: HotkeyOptions) =>
   (node: Element): (() => void) | undefined => {
@@ -26,16 +26,16 @@ export const hotkey =
   }
 
 export interface ForwardWindowKeydownOptions {
-  // Report `true` for a key you took, and the browser default (page scroll, quick
-  // find) is suppressed here instead of at every call site.
+  // return `true` for a key you took and the browser default (scroll, quick find) is
+  // suppressed here rather than at every call site
   handle: (event: KeyboardEvent) => boolean
   enabled?: boolean
 }
 
-// Hand a component the page's keydowns while the pointer is over it and focus is on the
-// page or the component root. Several viewers can then share one set of shortcuts without
-// all answering at once, and none takes a key from a focused descendant control.
-// Complements `hotkey`, which binds to an element or the document and arbitrates by focus.
+// Hands a component the page's keydowns while the pointer is over it and focus is on the
+// page or its root, so several viewers share one set of shortcuts without all answering and
+// none steals a key from a focused descendant. Complements `hotkey`, which arbitrates by
+// focus instead.
 export const forward_window_keydown =
   (options: ForwardWindowKeydownOptions) =>
   (node: Element): (() => void) | undefined => {
@@ -47,10 +47,9 @@ export const forward_window_keydown =
     const on_leave = () => (is_hovered = false)
     const on_keydown = (event: Event) => {
       if (!is_hovered || !(event instanceof KeyboardEvent)) return
-      // The root itself may be focusable so keyboard users can aim shortcuts at it, and
-      // an unfocused page targets body or the html element. Anything else, including a
-      // target retargeted through a shadow root, keeps its own keys — composedPath()[0]
-      // exposes that original shadow-DOM target.
+      // The root may be focusable so keyboard users can aim shortcuts at it, and an
+      // unfocused page targets body or html. Anything else keeps its own keys, including a
+      // shadow-retargeted node, which composedPath()[0] exposes.
       const { activeElement, body, documentElement } = node.ownerDocument
       const event_target = event.composedPath()[0]
       const idle = [node, body, documentElement]

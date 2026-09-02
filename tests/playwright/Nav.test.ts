@@ -1,4 +1,3 @@
-import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
@@ -48,8 +47,8 @@ test(`generated Nav and MultiSelect ids survive hydration`, async ({ page }) => 
       hydration_warnings.push(text)
     }
   })
-  // This route renders MultiSelect directly during SSR; live-example routes mount
-  // their demo components client-side and cannot expose an SSR/client ID mismatch.
+  // This route renders MultiSelect during SSR; live-example routes mount client-side and so
+  // cannot expose an SSR/client ID mismatch.
   const response = await page.goto(`/range-select`, { waitUntil: `networkidle` })
   const server_html = await response?.text()
   if (!server_html) throw new Error(`Missing SSR response body for /range-select`)
@@ -79,34 +78,57 @@ test(`generated Nav and MultiSelect ids survive hydration`, async ({ page }) => 
 })
 
 test.describe(`Nav dropdown`, () => {
-  const hover_open = async (
-    page: Page,
-    dropdown: Locator,
-    menu: Locator,
-  ): Promise<void> => {
-    const trigger = dropdown.locator(`:scope > div`).first()
-    await expect(trigger).toBeVisible()
-    await expect(async () => {
-      await page.mouse.move(0, 0)
-      await trigger.hover()
-      await expect(menu).toHaveCSS(`display`, `flex`, { timeout: 500 })
-    }).toPass({ timeout: 10_000 })
-  }
-
-  test(`opens on hover and closes on mouse leave`, async ({ page }) => {
+  test(`hover leaves the dropdown shut; only a click opens it`, async ({ page }) => {
     await page.goto(`/nav`, { waitUntil: `networkidle` })
 
     const dropdown = page.locator(`.dropdown`).first()
     const menu = dropdown.locator(`[data-submenu]`)
 
     await expect(menu).toHaveCSS(`display`, `none`)
-    await hover_open(page, dropdown, menu)
-    await expect(menu.locator(`a`).first()).toBeVisible()
-    await page.mouse.move(0, 0)
+    await dropdown.locator(`:scope > div`).first().hover()
     await expect(menu).toHaveCSS(`display`, `none`)
+
+    await dropdown.locator(`[data-dropdown-toggle]`).click()
+    await expect(menu.locator(`a`).first()).toBeVisible()
   })
 
-  test(`click pins dropdown until outside, Escape, or toggle closes it`, async ({
+  // the caret only faded 0.6 -> 1 on hover, which reads as the whole row lighting up rather
+  // than the arrow being its own target
+  for (const mobile of [false, true]) {
+    test(`the ${mobile ? `mobile ` : ``}caret recolors under the pointer`, async ({
+      page,
+    }) => {
+      if (mobile) await page.setViewportSize({ width: 420, height: 800 })
+      await page.goto(`/nav`, { waitUntil: `networkidle` })
+      if (mobile) {
+        await page
+          .locator(`nav.mobile button.burger`)
+          .first()
+          .evaluate((element: HTMLElement) => element.click())
+      }
+
+      const caret = page
+        .locator(`${mobile ? `nav.mobile ` : ``}.dropdown [data-dropdown-toggle]`)
+        .first()
+      const read = () =>
+        caret.evaluate((node) => {
+          const style = getComputedStyle(node)
+          return { color: style.color, opacity: style.opacity }
+        })
+
+      const idle = await read()
+      await caret.hover()
+      // both halves matter: opacity is what the mobile rule's specificity used to eat, and
+      // colour is what tells the user this glyph is the control
+      await expect.poll(async () => (await read()).opacity).toBe(`1`)
+      expect(Number(idle.opacity)).toBeLessThan(1)
+      expect((await read()).color, `caret colour is unchanged on hover`).not.toBe(
+        idle.color,
+      )
+    })
+  }
+
+  test(`click opens the dropdown until outside, Escape, or the toggle closes it`, async ({
     page,
   }) => {
     await page.goto(`/nav`, { waitUntil: `networkidle` })
@@ -154,15 +176,14 @@ test.describe(`Nav dropdown`, () => {
   })
 })
 
-// The pill is painted on `.menu > span`, but the link inside it is `flex: 1`, which fills
-// only the content box. Without the link stretching back over the span's padding, that
-// padding is a dead band inside the visible row. Only a browser resolves these boxes.
+// The pill is painted on `.menu > span` but its `flex: 1` link fills only the content box, so
+// without the link stretching over the span's padding that padding is a dead band.
 test(`the whole painted mobile row is part of its link's hit area`, async ({ page }) => {
   await page.setViewportSize({ width: 420, height: 800 })
   await page.goto(`/nav`, { waitUntil: `networkidle` })
 
-  // .click() here races a decorative overlay for the press; the burger's own hit area is
-  // not what this test is about, so open the menu directly
+  // .click() races a decorative overlay for the press, and the burger's hit area is not what
+  // this test is about
   await page
     .locator(`nav.mobile button.burger`)
     .first()
@@ -188,4 +209,128 @@ test(`the whole painted mobile row is part of its link's hit area`, async ({ pag
       `${edge} of the pill is outside the link`,
     ).toBeLessThanOrEqual(0.5)
   }
+})
+
+// The submenu inherits line-height from the host page, which once made every child row taller
+// than its parent. Its guide line is one border on the wrapper, recoloured in part by the
+// active link sitting exactly on top.
+test(`expanded submenu rows are compact and share one continuous guide line`, async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 420, height: 800 })
+  await page.goto(`/nav`, { waitUntil: `networkidle` })
+  await page
+    .locator(`nav.mobile button.burger`)
+    .first()
+    .evaluate((element: HTMLElement) => element.click())
+
+  const dropdown = page.locator(`nav.mobile .dropdown`).first()
+  const parent_row = dropdown.locator(`> div:first-child`)
+  const caret = parent_row.locator(`> button`)
+  // the caret is the only way to open a section, so it claims the row's full height and runs
+  // out to the painted trailing edge
+  const [caret_box, row_box] = await Promise.all([
+    caret.boundingBox(),
+    parent_row.boundingBox(),
+  ])
+  if (!caret_box || !row_box) throw new Error(`Missing mobile dropdown caret geometry`)
+  expect(caret_box.height).toBeCloseTo(row_box.height, 0)
+  expect(row_box.x + row_box.width - (caret_box.x + caret_box.width)).toBeLessThanOrEqual(
+    0.5,
+  )
+  expect(caret_box.width).toBeGreaterThan(caret_box.height)
+
+  await caret.evaluate((el: HTMLElement) => el.click())
+  const links = dropdown.locator(`> div:last-child a`)
+  await expect(links.first()).toBeVisible()
+  // the section opens over 0.25s; mid-transition the wrapper is still shorter than its links
+  const wrapper_locator = dropdown.locator(`.submenu-inner`)
+  await expect
+    .poll(async () => (await wrapper_locator.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(0)
+  await dropdown
+    .locator(`> div:last-child`)
+    .evaluate((el) =>
+      Promise.all(el.getAnimations({ subtree: true }).map((anim) => anim.finished)),
+    )
+
+  const parent_box = await parent_row.boundingBox()
+  const link_boxes = await links.evaluateAll((els) =>
+    els.map((el) => el.getBoundingClientRect().toJSON()),
+  )
+  const wrapper = await dropdown
+    .locator(`.submenu-inner`)
+    .evaluate((el) => el.getBoundingClientRect().toJSON())
+  if (!parent_box) throw new Error(`Missing mobile dropdown row geometry`)
+
+  for (const box of link_boxes) {
+    expect(box.height, `child row is taller than its parent`).toBeLessThanOrEqual(
+      parent_box.height,
+    )
+    // each link's own (transparent, or accent when current) border sits on the wrapper's line
+    expect(Math.abs(box.x - wrapper.x)).toBeLessThanOrEqual(0.5)
+  }
+  // one unbroken line: the wrapper spans from above the first row to below the last
+  const last = link_boxes[link_boxes.length - 1]
+  expect(wrapper.y).toBeLessThanOrEqual(link_boxes[0].y)
+  expect(wrapper.bottom).toBeGreaterThanOrEqual(last.bottom - 0.5)
+
+  // The desktop panel hugs its content and its links never wrap, which suits a box floating
+  // free of the page. Inline in the phone column both leaked: a long label pushed the menu
+  // wider than the viewport, so its tail sat outside the panel and had to be scrolled to.
+  const long_label = await links.first().evaluate((link) => {
+    link.textContent = `Extremely Long Submenu Label That Cannot Possibly Fit`
+    const menu = link.closest(`.menu`)
+    if (!menu) throw new Error(`Missing mobile menu panel`)
+    const box = link.getBoundingClientRect()
+    return {
+      menu_overflow: menu.scrollWidth - menu.clientWidth,
+      // the far end of the label, and what is painted there
+      tail: document.elementFromPoint(box.right - 4, box.top + box.height / 2)?.tagName,
+      wrapped: box.height,
+      row_height: menu.querySelector(`.dropdown > div:first-child`)?.clientHeight ?? 0,
+    }
+  })
+  expect(long_label.menu_overflow, `phone menu scrolls sideways`).toBe(0)
+  expect(long_label.tail, `label tail is outside the panel`).toBe(`A`)
+  expect(long_label.wrapped, `label did not wrap onto more rows`).toBeGreaterThan(
+    long_label.row_height,
+  )
+
+  // the panel's other desktop sizing knob is a floor wide enough to clear the trigger, which
+  // on a narrow phone is wider than the whole column
+  await page.setViewportSize({ width: 320, height: 800 })
+  const floored = await links.first().evaluate((link) => {
+    document.documentElement.style.setProperty(`--nav-dropdown-min-width`, `20em`)
+    const menu = link.closest(`.menu`)
+    if (!menu) throw new Error(`Missing mobile menu panel`)
+    return menu.scrollWidth - menu.clientWidth
+  })
+  expect(floored, `--nav-dropdown-min-width leaks into the phone column`).toBe(0)
+})
+
+// The panel hangs off the pinned burger but used to restate its corner as its own constants,
+// which drifted as the button grew: it covered the burger's bottom 2px and started 8px to its
+// left. Both now derive from --nav-burger-inset and the button's own box.
+test(`the mobile menu clears the burger and shares its left edge`, async ({ page }) => {
+  await page.setViewportSize({ width: 614, height: 900 })
+  await page.goto(`/`, { waitUntil: `networkidle` })
+  const burger = page.locator(`nav.mobile button.burger`).first()
+  await burger.evaluate((el: HTMLElement) => el.click())
+  const menu = page.locator(`nav.mobile .menu`).first()
+  await expect(menu).toBeVisible()
+
+  const [burger_box, menu_box] = await Promise.all([
+    burger.boundingBox(),
+    menu.boundingBox(),
+  ])
+  if (!burger_box || !menu_box) throw new Error(`Missing burger or menu geometry`)
+
+  expect(menu_box.x, `menu is not flush with the burger's left edge`).toBeCloseTo(
+    burger_box.x,
+    0,
+  )
+  expect(menu_box.y, `menu overlaps the burger`).toBeGreaterThanOrEqual(
+    burger_box.y + burger_box.height,
+  )
 })

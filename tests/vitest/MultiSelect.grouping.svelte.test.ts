@@ -106,8 +106,7 @@ describe(`option grouping feature`, () => {
 
     const input = await focus_input()
 
-    // arrows land on real options only: the second press steps over the Genre header
-    // sitting between the ungrouped option and Rock
+    // the second press steps over the Genre header between the ungrouped option and Rock
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(
@@ -126,8 +125,7 @@ describe(`option grouping feature`, () => {
       (header: HTMLElement) => header.click(),
     ],
     [
-      // The collapse control is a real <button> now, so Enter and Space activate it
-      // natively instead of going through a hand-rolled keydown handler on the <li>.
+      // a real <button> now, so Enter/Space activate it natively (no keydown handler)
       `keyboard activation of the toggle button`,
       (header: HTMLElement) =>
         header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
@@ -359,11 +357,9 @@ describe(`option grouping feature`, () => {
     expect(onselectAll_spy.mock.calls[0][0].options).toEqual(genre_options)
   })
 
-  // A listbox may only own `option` and `group` elements. The header row is therefore
-  // presentational, which conflict resolution would undo if the <li> were focusable or
-  // carried any global ARIA attribute — so `aria-label`, `tabindex` and `role="button"`
-  // all had to come off it, and the group name reaches assistive tech through each
-  // option's `aria-describedby` instead.
+  // a listbox may only own `option`/`group` children, so the header row is presentational:
+  // focusability or a global ARIA attribute on the <li> would demote it to listitem, hence
+  // no aria-label/tabindex/role=button and the group name rides option aria-describedby
   test.each([true, false] as const)(
     `group headers stay presentational when collapsibleGroups=%s`,
     async (collapsibleGroups) => {
@@ -488,8 +484,8 @@ describe(`option grouping feature`, () => {
 
   test.each([
     [`expands the matching group`, `Rock`, { group: `Genre`, collapsed: false }],
-    // "C Major"/"D Minor" contain spaces, so a bare space fuzzy-matches them. The
-    // has_search_text guard must stop the Key group expanding on whitespace-only input.
+    // a bare space fuzzy-matches "C Major"/"D Minor", so the has_search_text guard must
+    // keep the Key group collapsed
     [`ignores whitespace-only input`, ` `, null],
   ])(`searchExpandsCollapsedGroups %s`, async (_name, search, expected_toggle) => {
     const ongroupToggle_spy = vi.fn()
@@ -683,7 +679,6 @@ test(`searchExpandsCollapsedGroups: manually collapsed group stays collapsed unt
     collapsedGroups: new Set([`Fruits`]),
   })
   const input = get_input()
-  // typing auto-expands the collapsed group with matches
   await type_search_text(`a`, input)
   expect(group_expanded(`Fruits`)).toBe(`true`)
 

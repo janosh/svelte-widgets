@@ -1,47 +1,42 @@
-// Print one element as a document of its own: the print dialog offers no handle on the
-// suggested PDF filename (it comes from document.title) or on pagination (a long element
-// is chopped across sheets), so both are set up here and undone on afterprint.
+// Print one element as its own document. The dialog exposes no handle on the suggested PDF
+// filename (it comes from document.title) or on pagination, so both are set up here and
+// undone on afterprint.
 
 export interface PrintOptions {
-  // Suggested PDF filename, applied by swapping document.title for the duration of the
-  // print and restoring it afterward. Omit to leave the title alone.
+  // suggested PDF filename, applied by swapping document.title for the print's duration
   filename?: string
-  // Size the page to the element instead of paginating it, so the output is a single
-  // continuous sheet however long the element is.
+  // size the page to the element rather than paginate it, however long the element is
   single_page?: boolean
-  // Printed page width in mm, only used with single_page. Defaults to A4 portrait.
+  // printed page width in mm, single_page only; defaults to A4 portrait
   page_width_mm?: number
-  // Converts the measured height into the mm @page takes. 96 is the CSS definition of an
-  // inch and what every engine prints at; override it where zoom scales absolute units,
-  // so a rect measured there converts at the ratio actually in force.
+  // Converts the measured height into @page's mm. 96 is the CSS inch every engine prints
+  // at; override where zoom scales absolute units, so the rect converts at the real ratio.
   px_per_inch?: number
 }
 
-// `prefix-YYYY-MM-DD`, the shape most people want out of a "save as PDF" button.
+// `prefix-YYYY-MM-DD`, the shape most "save as PDF" buttons want
 export const format_print_filename = (prefix: string, date = new Date()): string => {
   const month = String(date.getMonth() + 1).padStart(2, `0`)
   const day = String(date.getDate()).padStart(2, `0`)
   return `${prefix}-${date.getFullYear()}-${month}-${day}`
 }
 
-// Marks the element the injected rules apply to, so nothing about the caller's markup
-// (a class, an id, a tag name) has to be known here.
+// marks the element the injected rules apply to, so the caller's markup stays unknown here
 const print_attr = `data-print-target`
 
 // afterprint lands a turn of the event loop after print() returns, so back-to-back calls
-// overlap. Without this the second one reads the first one's filename as the title to put
-// back, and the page keeps that filename for good.
+// overlap: without this the second reads the first's filename as the title to restore, and
+// the page keeps that filename for good
 let title_swap_in_flight = false
 
-// Headless and embedded webviews return from print() without ever firing afterprint,
-// which leaves the swapped title and the injected rules standing for good and
-// title_swap_in_flight disabling every later swap. Long enough that a dialog a user
-// actually opened has closed first.
+// Headless and embedded webviews return from print() without firing afterprint, leaving the
+// swapped title and injected rules standing and title_swap_in_flight blocking later swaps.
+// Long enough that a dialog a user actually opened has closed first.
 const AFTERPRINT_TIMEOUT_MS = 60_000
 
-// Stamped into the marker attribute so a print only ever clears its own. The attribute is
-// shared state on the node, and disarming does not cover a watchdog that is still armed
-// because its own print never ended: it would strip a later print's marker off the node.
+// Stamped into the marker attribute so a print only clears its own: the attribute is shared
+// node state, and a watchdog still armed from a print that never ended would otherwise strip
+// a later print's marker.
 let print_seq = 0
 
 export const print_element = (node: HTMLElement, options: PrintOptions = {}): void => {
@@ -54,14 +49,13 @@ export const print_element = (node: HTMLElement, options: PrintOptions = {}): vo
   const token = `${++print_seq}`
 
   const cleanup = () => {
-    // afterprint and the watchdog both undo this print, so each disarms the other: a
-    // leftover one would fire mid-print later and strip that print's setup instead
+    // afterprint and the watchdog each disarm the other; a leftover one would fire during
+    // a later print and strip that print's setup
     clearTimeout(watchdog)
     globalThis.removeEventListener(`afterprint`, cleanup)
     if (restore_title !== null) {
       document.title = restore_title
-      // Prevent another cleanup from restoring this title again.
-      restore_title = null
+      restore_title = null // stops a second cleanup restoring it again
       title_swap_in_flight = false
     }
     // the selector matches on presence, so the token is invisible to the printed rules
@@ -77,13 +71,12 @@ export const print_element = (node: HTMLElement, options: PrintOptions = {}): vo
 
   if (single_page) {
     node.setAttribute(print_attr, token)
-    // Measured as the element stands on screen (getBoundingClientRect flushes layout): an
-    // @media print rule of the caller's own that changes it is not reflected here.
+    // measured as the element stands on screen, so a caller's own @media print rule that
+    // changes its height is not reflected here
     const height_px = node.getBoundingClientRect().height
     const height_mm = Math.ceil((height_px * 25.4) / px_per_inch)
 
-    // Ancestors are cleared as well, since a scrolling container clips the element to
-    // its own height and prints only what was in view.
+    // ancestors are cleared too: a scrolling container clips the element to its own height
     style = document.createElement(`style`)
     style.textContent = `@media print {
   @page { size: ${page_width_mm}mm ${height_mm}mm; margin: 0 }
@@ -93,14 +86,13 @@ export const print_element = (node: HTMLElement, options: PrintOptions = {}): vo
     document.head.append(style)
   }
 
-  // No setup means no listener/watchdog needs to retain `node`.
+  // no setup means no listener/watchdog needs to retain `node`
   if (restore_title !== null || style) {
-    // afterprint covers both saving and canceling the print dialog.
+    // afterprint covers both saving and canceling the dialog
     globalThis.addEventListener(`afterprint`, cleanup, { once: true })
     watchdog = setTimeout(cleanup, AFTERPRINT_TIMEOUT_MS)
   }
-  // A print() that throws never fires afterprint, so the swapped title and the injected
-  // rules would outlive the call and follow the page around.
+  // a print() that throws fires no afterprint, so title and rules would outlive the call
   try {
     globalThis.print()
   } catch (error) {

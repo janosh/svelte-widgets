@@ -113,7 +113,9 @@ A navigation bar with dropdowns, active-route styling and a mobile burger menu.
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} />
+<!-- breakpoint={0} keeps this inline on phones: the mobile burger is position: fixed, so an
+embedded demo would pin a second one over the site's own nav in the same corner -->
+<Nav {routes} {page} {link_props} breakpoint={0} />
 ```
 
 ### Toc

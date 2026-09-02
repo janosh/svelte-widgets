@@ -1,7 +1,6 @@
-// Svelte preprocessor that turns $…$ / $$…$$ into {@html katex…}.
-// Runs as a before/after pair around mdsvex: before stashes rendered KaTeX behind
-// placeholders (so markdown cannot mangle URLs/braces inside the HTML), after
-// expands them to {@html …}. This also avoids remark-math@3 (mdsvex's unified v9
+// Svelte preprocessor turning $…$ / $$…$$ into {@html katex…}. A before/after pair around
+// mdsvex: before stashes rendered KaTeX behind placeholders so markdown cannot mangle URLs
+// or braces in the HTML, after expands them. Also avoids remark-math@3 (mdsvex's unified v9
 // cannot load remark-math@4+).
 
 import { Buffer } from 'node:buffer'
@@ -50,8 +49,8 @@ const restore = (text: string, parts: string[], part_token: string): string => {
 }
 
 export function katex_preprocess(options: KatexOptions = {}) {
-  // Wire as `[katex.before, mdsvex(…), katex.after, …]` — if after runs before
-  // mdsvex, markdown linkifies xmlns URLs and smart-quotes the `{@html}` payload.
+  // Wire as `[katex.before, mdsvex(…), katex.after, …]`: `katex.after` has to follow mdsvex,
+  // or markdown linkifies the xmlns URLs and smart-quotes the `{@html}` payload it emits.
   const nonce = random_uuid()
   const part_token = `\0katex-${nonce}-`
   const slot_token = `${SLOT_OPEN}katex-${nonce}-`

@@ -11,13 +11,11 @@ export interface ContrastOptions {
 }
 
 // === CSS color parsing ===
-// A color authored in a wide-gamut or perceptual space keeps that space in its computed
-// value — `getComputedStyle` hands back `oklch(…)`, `lab(…)` or `color(display-p3 …)`
-// verbatim rather than an sRGB approximation — so reading only `rgb()`/`rgba()` would
-// take a painted ancestor for a transparent one. Everything below converts to sRGB.
-// Not covered: named colors and `color-mix()`, neither of which a computed value can
-// carry (`color-mix()` resolves to a color in its interpolation space at computed-value
-// time). Both are rejected, and callers passing a color by hand get the error.
+// `getComputedStyle` returns wide-gamut and perceptual colors verbatim (`oklch(…)`,
+// `color(display-p3 …)`), not as sRGB, so reading only `rgb()`/`rgba()` would mistake a
+// painted ancestor for a transparent one. Everything below converts to sRGB. Named colors
+// and `color-mix()` are rejected: a computed value never carries either, so only a
+// hand-passed color hits that error.
 const RGB_COLOR = /^rgba?\((?<channels>[^)]+)\)$/iu
 const HEX_COLOR = /^#(?<digits>[\da-f]+)$/iu
 const COLOR_FN = /^(?<name>oklch|oklab|lch|lab|hsla?|hwb|color)\((?<args>[^)]*)\)$/iu
@@ -43,8 +41,8 @@ const parse_percentage = (token: string): number =>
 // alpha is a 0..1 number or a percentage, and absent means opaque
 const parse_alpha = (token: string | undefined): number =>
   token === undefined ? 1 : clamp_unit(parse_component(token, 1))
-// Junk anywhere in a component reaches here as NaN, so one check at the end rejects
-// the whole color rather than every parse site having to guard
+// junk in any component arrives as NaN, so one check here rejects the whole color and no
+// parse site needs its own guard
 const finite_rgba = (rgb: Triple, alpha: number): Rgba | null => {
   const parsed: Rgba = [...rgb, alpha]
   return parsed.every(Number.isFinite) ? parsed : null
@@ -56,8 +54,8 @@ const HUE_PER_UNIT: Record<string, number> = {
   rad: 180 / Math.PI,
   turn: 360,
 }
-// Longest suffix first, so `grad` is never read as the `rad` it ends with. Matching in
-// declaration order would work too, but only until someone alphabetizes the object.
+// longest suffix first, so `grad` is never read as the `rad` it ends with (declaration
+// order would work too, until someone alphabetizes the object)
 const HUE_UNITS = Object.keys(HUE_PER_UNIT).toSorted(
   (one, two) => two.length - one.length,
 )
@@ -156,9 +154,8 @@ const LINEAR_SRGB_TO_XYZ_D65 = [
 const IDENTITY_MATRIX = [1, 0, 0, 0, 1, 0, 0, 0, 1]
 const identity = (channel: number) => channel
 
-// The predefined spaces `color()` accepts, each as its decoding transfer function and
-// the matrix taking its linear form to XYZ. `d50` marks the ones needing adaptation,
-// and the xyz spaces are the degenerate case: their components already are XYZ.
+// Spaces `color()` accepts, each as a decoding transfer function plus the matrix from its
+// linear form to XYZ. `d50` marks those needing adaptation; xyz spaces already are XYZ.
 const COLOR_SPACES: Record<
   string,
   { decode: (channel: number) => number; matrix: readonly number[]; d50?: boolean }
@@ -211,8 +208,8 @@ const components = (tokens: string[], refs: Triple): Triple => [
   parse_component(tokens[1], refs[1]),
   parse_component(tokens[2], refs[2]),
 ]
-// lch and oklch are lab and oklab in polar coordinates, so they convert and reuse the
-// rectangular transform rather than carrying one of their own
+// lch/oklch are lab/oklab in polar coordinates, so they convert and reuse the rectangular
+// transform instead of carrying their own
 const polar_components = (tokens: string[], refs: [number, number]): Triple => {
   const chroma = parse_component(tokens[1], refs[1])
   const hue = (parse_hue(tokens[2]) * Math.PI) / 180
@@ -226,7 +223,7 @@ const polar_components = (tokens: string[], refs: [number, number]): Triple => {
 // Component tokens to sRGB on 0..255; null when they do not fit the function's shape
 const function_to_rgb255 = (name: string, tokens: string[]): Triple | null => {
   if (name === `color`) {
-    // own properties only: a bare lookup would find Object.prototype keys, so
+    // own properties only: a bare lookup finds Object.prototype keys, so
     // `color(constructor 1 1 1)` came back truthy and then blew up on space.decode
     const space_name = tokens[0]?.toLowerCase() ?? ``
     const space = Object.hasOwn(COLOR_SPACES, space_name)
@@ -273,8 +270,8 @@ const parse_color = (color: string): Rgba | null => {
   const trimmed = color.trim()
   const channels = RGB_COLOR.exec(trimmed)?.groups?.channels
   if (channels) {
-    // percentages are legal here too, in the channels (`rgb(50% 0% 0%)`) as much as in
-    // the alpha (`rgb(0 0 0 / 50%)`), even though a computed value never uses them
+    // percentages are legal in channels and alpha (`rgb(50% 0% 0% / 50%)`), even though a
+    // computed value never uses them
     const parts = channels.split(/[\s,/]+/u).filter(Boolean)
     if (parts.length < 3) return null
     const rgb = parts.slice(0, 3).map((token) => parse_component(token, 255)) as Triple
@@ -329,9 +326,8 @@ const composite_color = (top: Rgba, bottom: Rgba): Rgba => {
 const rgb_string = ([red, green, blue]: Rgba): string =>
   `rgb(${Math.round(red)} ${Math.round(green)} ${Math.round(blue)})`
 
-// The effective background behind a node: a translucent ancestor tints whatever it sits
-// on rather than deciding readability alone, so keep walking and blend the layers. A
-// chain with nothing opaque in it shows through to the browser's white canvas.
+// Effective background behind a node: a translucent ancestor only tints what it sits on,
+// so keep walking and blend. A chain with nothing opaque shows the browser's white canvas.
 export const get_bg_color = (element: Element | null): string => {
   let composite: Rgba | undefined
   for (let node = element; node; node = node.parentElement) {
@@ -353,8 +349,8 @@ export const pick_contrast_color = (options: ContrastOptions = {}): string => {
   return luminance(background) > luminance_threshold ? choices[0] : choices[1]
 }
 
-// Set text color once at attachment setup to whichever of `choices` reads better on the
-// background behind the node. For dynamic fills, re-run with an explicit bg_color.
+// Sets text color once at setup to whichever of `choices` reads better on the background
+// behind the node. For dynamic fills, re-run with an explicit bg_color.
 export const contrast_color =
   (options: ContrastOptions = {}) =>
   (node: Element): (() => void) | undefined => {

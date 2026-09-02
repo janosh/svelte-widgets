@@ -8,7 +8,9 @@
   type ItemId = string | number
   type ItemRecord = { id: ItemId; idx: number; item: Item }
 
-  // On non-primitive types, we need a property to tell masonry items apart. The name of this attribute can be customized with idKey which defaults to 'id'. See https://svelte.dev/docs/svelte/each#Keyed-each-blocks.
+  // With the default getId, non-primitive items need an id property (name it via idKey) to
+  // key the each block; a custom getId can derive the key from anything.
+  // See https://svelte.dev/docs/svelte/each#Keyed-each-blocks.
   let {
     animate = true,
     order = `balanced-stable`,
@@ -68,12 +70,11 @@
   // Needed over a random uuid so the id survives hydration.
   const unique_id = $props.id()
 
-  // Height tracking for column balancing and virtualization
-  // Use plain Map (not reactive) to avoid triggering re-renders on every measurement
-  // Only measured_count is reactive to trigger column balancing when needed
+  // Plain (non-reactive) Map so measurements don't re-render; only the two counters below
+  // are reactive, to drive column balancing
   const item_heights_cache = new Map<ItemId, number>()
-  let measured_count = $state(0) // trigger reactivity for column balancing
-  let measured_sum = $state(0) // running sum for average calculation
+  let measured_count = $state(0)
+  let measured_sum = $state(0)
   let avg_measured_height = $derived(
     measured_count > 0 ? measured_sum / measured_count : null,
   )
@@ -83,7 +84,7 @@
   let prev_stable_num_cols = 0
   const item_records = new Map<ItemId, ItemRecord>()
 
-  // Clean up stale heights and stable assignments when items change (prevents memory leak)
+  // Drop heights/assignments of removed items (prevents memory leak)
   $effect(() => {
     const current_ids = new Set(items.map(getId))
     let removed_sum = 0
@@ -116,16 +117,13 @@
 
   // Reads from non-reactive cache, so won't trigger re-renders
   const get_height = (item: Item): number => {
-    // `||` (not `??`) is intentional: a 0 height is meaningless for balancing,
-    // so it falls through to the estimate/average/default chain.
+    // `||` not `??`: a 0 height is meaningless, so fall through to the estimate chain
     const cached = item_heights_cache.get(getId(item))
     return cached || getEstimatedHeight?.(item) || avg_measured_height || 150
   }
 
-  // Measure item heights via ResizeObserver.
-  // Always attach observers for non-virtualizing cases, even for modes that don't
-  // need measurement initially, because the user may switch modes at runtime.
-  // Skip entirely during virtualization - only estimated heights are used there.
+  // Attached even for modes that don't need measurement, since order can change at runtime.
+  // Skipped while virtualizing, which uses estimates only.
   const measure_height = (item_id: ItemId) => (node: HTMLElement) => {
     if (virtualize) return
     const observer = new ResizeObserver(() => {
@@ -134,7 +132,7 @@
       if (new_height > 0 && old_height !== new_height) {
         measured_sum += new_height - old_height
         item_heights_cache.set(item_id, new_height)
-        // Keep measured_count in sync with cache so measurement checks stay accurate
+        // in sync with the cache so `measured_count >= items.length` checks stay accurate
         measured_count = item_heights_cache.size
       }
     })
@@ -142,11 +140,10 @@
     return () => observer.disconnect()
   }
 
-  // Effective order: virtualization forces row-first
   let effective_order = $derived(virtualize ? `row-first` : order)
 
-  // Place each item in the column given by its index alone. Deliberately never calls
-  // get_height, so index-based modes take no dependency on height state.
+  // Index-only placement. Deliberately never calls get_height, so these modes take no
+  // dependency on height state.
   function distribute_by_idx(
     num_cols: number,
     pick_col: (idx: number) => number,
@@ -158,8 +155,7 @@
     return cols
   }
 
-  // Place every item into a column chosen by pick_col, which receives the running
-  // per-column heights (item height + gap) accumulated so far.
+  // pick_col receives the per-column heights (item height + gap) accumulated so far
   function distribute(
     num_cols: number,
     pick_col: (heights: number[], item: Item) => number,
@@ -178,10 +174,10 @@
   const shortest_col = (heights: number[]): number =>
     heights.indexOf(Math.min(...heights))
 
-  // Stable balancing: new items go to shortest column, existing items keep their column
-  // NOTE: This function intentionally mutates stable_assignments during $derived computation.
-  // This is safe because the Map is a non-reactive cache for persistence across renders,
-  // not a reactive dependency. The derived recomputes based on items/nCols/order changes.
+  // At a steady column count new items go to the shortest column and existing ones keep
+  // theirs; a change drops every assignment (more columns) or reseats the ones now out of
+  // range (fewer). Mutating stable_assignments inside a $derived is safe: it's a
+  // non-reactive cache, not a dependency.
   function balanced_stable_to_cols(num_cols: number): ItemRecord[][] {
     if (num_cols > prev_stable_num_cols) stable_assignments.clear()
     prev_stable_num_cols = num_cols
@@ -190,7 +186,6 @@
       const id = getId(item)
       const col_idx = stable_assignments.get(id)
       if (col_idx !== undefined && col_idx < num_cols) return col_idx
-      // New or out-of-range item - assign to shortest
       const new_col = shortest_col(heights)
       stable_assignments.set(id, new_col)
       return new_col
@@ -204,7 +199,6 @@
     let col_idx = 0
 
     return distribute(num_cols, (heights) => {
-      // Move to next column once the current one exceeded its target height
       if (heights[col_idx] >= target_per_col && col_idx < num_cols - 1) col_idx++
       return col_idx
     })
@@ -217,9 +211,8 @@
       )
     }
   })
-  // CSS container queries hide excess SSR columns before hydration
-  // When masonryWidth is 0 (SSR), prefer explicit initialCols before using the
-  // historical 1920px viewport fallback.
+  // masonryWidth is 0 during SSR: prefer initialCols over the historical 1920px fallback.
+  // CSS container queries hide the excess SSR columns before hydration.
   let n_cols = $derived.by(() => {
     if (
       initialCols !== undefined &&
@@ -229,11 +222,11 @@
         `Masonry: initialCols must be a positive integer when provided, received ${initialCols}.`,
       )
     }
-    // distribute() builds one array per column, so fewer than one leaves nowhere to put
-    // an item. Zero is fine with no items, which is what the default calcCols returns.
+    // distribute() builds one array per column, so <1 leaves nowhere to put an item (0 is
+    // fine when empty, which is what the default calcCols returns).
     const checked = (cols: number) => {
-      // a fractional count is just as broken: Array.from truncates the column array while
-      // `idx % n_cols` in row-first keeps producing the untruncated index
+      // fractional is equally broken: Array.from truncates the column array while row-first's
+      // `idx % n_cols` keeps producing the untruncated index
       if (items.length > 0 && (!Number.isInteger(cols) || cols < 1)) {
         throw new Error(
           `Masonry: calcCols must return a positive integer, received ${cols}.`,
@@ -261,14 +254,13 @@
     }).join(`\n`),
   )
 
-  // Distribute items based on order mode
   let items_to_cols = $derived.by(() => {
-    // balanced-stable should NEVER fall back - it uses stable assignments + estimates for new items
-    // This prevents existing items from jumping columns when new items are added
+    // balanced-stable never falls back: stable assignments + estimates for new items keep
+    // existing items from jumping columns as long as the column count holds
     if (effective_order === `balanced-stable`) return balanced_stable_to_cols(n_cols)
 
-    // The other height-aware modes need every item measured before they can balance.
-    // Check the mode first so only those modes take a dependency on measured_count.
+    // Other height-aware modes need every item measured; check the mode first so only they
+    // depend on measured_count.
     if (effective_order === `balanced` && measured_count >= items.length) {
       return distribute(n_cols, shortest_col)
     }
@@ -276,7 +268,7 @@
       return column_balanced_to_cols(n_cols)
     }
     if (effective_order === `column-sequential`) {
-      // Purely sequential column-first: first N items in col 1, next N in col 2, etc.
+      // sequential column-first: first N items in col 1, next N in col 2, etc.
       const items_per_col = Math.ceil(items.length / n_cols)
       return distribute_by_idx(n_cols, (idx) =>
         Math.min(Math.floor(idx / items_per_col), n_cols - 1),
@@ -286,8 +278,6 @@
     return distribute_by_idx(n_cols, (idx) => idx % n_cols)
   })
 
-  // Virtualization logic
-  // Warn if virtualize=true but no height provided (only once)
   let warned_missing_height = false
   $effect.pre(() => {
     if (virtualize && height === undefined && !warned_missing_height) {
@@ -309,8 +299,7 @@
     return low_idx
   }
 
-  // Scroll state with requestAnimationFrame throttling
-  // Declared early because prefix_heights depends on it for virtualization
+  // declared before prefix_heights, which depends on it
   let scroll_top = $state(0)
   let ticking = false
 
@@ -323,28 +312,25 @@
     })
   }
 
-  // Prefix height arrays per column: prefix_heights[col][i] = cumulative height of items 0..i
-  // When virtualizing: use ONLY estimates, never measured heights, so they can't drift
-  // When not virtualizing: use measured heights (accurate balancing)
+  // prefix_heights[col][idx] = cumulative height of items 0..idx. Virtualizing uses ONLY
+  // estimates, never measured heights, so the scroll window can't drift.
   let prefix_heights = $derived(
     items_to_cols.map((column_items) => {
       let sum = 0
       return column_items.map(({ item }) => {
-        // `||` for the same reason as get_height: a 0 estimate is meaningless, and `??`
-        // here would collapse the scroll window to gaps alone
+        // `||` as in get_height: `??` would collapse the scroll window to gaps alone
         sum += (virtualize ? getEstimatedHeight?.(item) || 150 : get_height(item)) + gap
         return sum
       })
     }),
   )
 
-  // Container height for virtualization viewport
-  // For numeric height, use directly; for string (CSS units like "80vh"), use measured clientHeight
+  // viewport height: numbers used directly, CSS strings like `80vh` need the measured value
   let container_height = $derived(
     typeof height === `number` ? height : masonryHeight || 400,
   )
 
-  // Same height as a CSS value for the scroll container; strings like `80vh` pass through
+  // same height as a CSS value; strings like `80vh` pass through
   let css_height = $derived(
     typeof height === `number` ? `${height}px` : (height ?? `400px`),
   )
@@ -353,21 +339,19 @@
     virtualize ? `overflow-y: auto; height: ${css_height};` : ``,
   )
 
-  // Only enable virtualization once we have a valid container height measurement
-  // This prevents flicker when using CSS units like "80vh" that need DOM measurement
+  // wait for a real container height, else CSS units like `80vh` flicker
   let can_virtualize = $derived(
     virtualize && (typeof height === `number` || masonryHeight > 0),
   )
 
-  // Per-column render window: the on-screen slice plus the padding standing in for the
-  // items culled above and below it. Recomputes on scroll, so it deliberately reads
-  // prefix_heights rather than recomputing those O(n) prefix sums.
+  // Per-column render window: on-screen slice plus padding for the culled items. Recomputes
+  // on scroll, so it reads prefix_heights rather than redoing those O(n) prefix sums.
   let col_windows = $derived(
     prefix_heights.map((ph) => {
       if (!can_virtualize) return { start: 0, end: ph.length, pad_top: 0, pad_bottom: 0 }
       const start = Math.max(0, binary_search_ge(ph, scroll_top) - 1 - overscan)
-      // The item found at the viewport's bottom edge straddles it, so it is on screen and
-      // the exclusive end has to clear it — mirroring the row of margin `start` takes.
+      // the item straddling the bottom edge is on screen, so the exclusive end must clear it
+      // (mirrors the row of margin `start` takes)
       const end = Math.min(
         ph.length,
         binary_search_ge(ph, scroll_top + container_height) + 1 + overscan,
@@ -381,11 +365,11 @@
     }),
   )
 
-  // Auto-disable animations when actively virtualizing (FLIP doesn't work well)
+  // FLIP animations don't work well with virtualization
   let effective_animate = $derived(animate && !can_virtualize)
 </script>
 
-<!-- Dynamic container query styles in <head> hide excess SSR columns -->
+<!-- container queries in <head> hide excess SSR columns -->
 <svelte:head>
   <svelte:element this={`style`}>{container_query_css}</svelte:element>
 </svelte:head>
@@ -444,8 +428,7 @@
 </div>
 
 <style>
-  /* layout properties live inline (see issue #48) so CSS resets can't override them.
-  Only what can't be expressed inline belongs here. */
+  /* layout properties live inline (see issue #48) so CSS resets can't override them */
   div.masonry {
     container-type: inline-size;
     container-name: masonry;

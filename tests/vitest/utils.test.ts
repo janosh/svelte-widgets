@@ -28,8 +28,8 @@ import {
 import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, stub_prop } from './index'
 
-// RFC 4122 v4 is xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx (y = 8/9/a/b); the timestamp+counter
-// fallback used when crypto is unavailable only guarantees the generic UUID shape
+// RFC 4122 v4 pins the version/variant nibbles; the timestamp+counter fallback used when
+// crypto is unavailable only guarantees the generic UUID shape
 const uuid_v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
 const uuid_any = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
 test.each([
@@ -98,10 +98,8 @@ describe(`get_style`, () => {
     selected: `color: blue`,
     option: `color: green`,
   }
-  // object styles get the same trailing-semicolon normalization as string styles;
-  // partial style objects (e.g. only `selected`) are fine, but any key other than
-  // `option`/`selected` is rejected, even when a valid key is also present.
-  // A null/undefined key selects no sub-style but still validates the style object.
+  // object styles normalize trailing semicolons like string styles, and may be partial;
+  // a null/undefined key selects no sub-style but still validates the style object
   test.each([
     [option_style, `selected`, `color: blue;`],
     [option_style, `option`, `color: green;`],
@@ -149,9 +147,8 @@ describe(`keyboard shortcut parsing`, () => {
     [`cmd+k`, { key: `k`, ctrl: false, shift: false, alt: false, meta: true }],
     [`Meta+Alt+X`, { key: `x`, ctrl: false, shift: false, alt: true, meta: true }],
     [`ctrl+shift+k`, { key: `k`, ctrl: true, shift: true, alt: false, meta: false }],
-    // spelled-out keys resolve to the `event.key` they stand for, so a combo that
-    // survives a split on `+` still matches. `space` never matched before: parts are
-    // trimmed, leaving ` ` unspellable any other way.
+    // spelled-out keys resolve to the `event.key` they stand for, so a combo survives the
+    // split on `+`. `space` never matched before: parts are trimmed, so ` ` was unspellable.
     [`ctrl+plus`, { key: `+`, ctrl: true, shift: false, alt: false, meta: false }],
     [`ctrl+space`, { key: ` `, ctrl: true, shift: false, alt: false, meta: false }],
     [`shift+comma`, { key: `,`, ctrl: false, shift: true, alt: false, meta: false }],
@@ -329,8 +326,7 @@ describe(`shortcut rebinding`, () => {
 })
 
 describe(`fuzzy_match`, () => {
-  // Index edges live in fuzzy_match_indices; pin the null guard and a thin boolean smoke
-  // so the wrapper cannot drift without a failing expected value.
+  // index edges live in fuzzy_match_indices; here just the null guard and a boolean smoke
   test.each([
     [null, `test`],
     [undefined, `test`],
@@ -603,8 +599,8 @@ describe(`compute_position`, () => {
     ).toEqual({ top: 10, left: -50, placement: `bottom` })
   })
 
-  // The portalled dropdown used to carry its own above/below rule. Its replacement
-  // has to agree everywhere, including with the anchor scrolled out of view.
+  // compute_position replaced the dropdown's own above/below rule, so it must agree
+  // everywhere, including with the anchor scrolled out of view
   test(`reproduces the dropdown's above/below rule across a grid`, () => {
     const view_height = 800
     viewport(1000, view_height)
@@ -662,7 +658,7 @@ describe(`chain_handlers`, () => {
     expect(seen).toEqual([event, event])
   })
 
-  // documents a real hazard: an internal handler that throws swallows the consumer's
+  // hazard: an internal handler that throws swallows the consumer's
   test(`a throwing handler stops the chain`, () => {
     const later = vi.fn()
     const boom = () => {

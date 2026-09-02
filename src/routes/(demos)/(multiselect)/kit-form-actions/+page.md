@@ -104,8 +104,8 @@ export const actions = {
     const data = await request.formData()
     let colors = data.get(`colors`)
 
-    // failure branches return an empty array so the client can always bind the
-    // result to MultiSelect's `selected` prop without type checks
+    // every failure returns an array — `boring` echoes the valid picks, the rest send none —
+    // so the client can always bind it to `selected`
     if (!colors || typeof colors !== `string`) {
       return fail(400, { colors: [], error: `missing` })
     }
@@ -119,8 +119,8 @@ export const actions = {
     if (!Array.isArray(colors)) {
       return fail(400, { colors: [], error: `array` })
     }
-    // only the offered colors may reach the response, so a hand-crafted POST can't
-    // echo arbitrary strings or objects back into the page
+    // only offered colors may reach the response, so a hand-crafted POST can't echo
+    // arbitrary values back into the page
     const valid_colors = colors.filter(
       (color: unknown): color is string =>
         typeof color === `string` && allowed_colors.includes(color),

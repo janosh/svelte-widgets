@@ -1,18 +1,16 @@
 import { SvelteSet } from 'svelte/reactivity'
 
-// Headless "recently copied" state for UIs that render their own copy affordances, where
-// CopyButton's markup would be in the way: a table of values each with its own checkmark,
-// a code block with a copy target per line.
+// Headless "recently copied" state for UIs rendering their own copy affordances, where
+// CopyButton's markup is in the way: a value table with a checkmark per row, a code block
+// with a copy target per line.
 
 export interface ClipboardFeedback {
-  // Keys flagged as copied within the last `duration_ms`. Reactive, so reading it in
-  // markup re-renders when a flag comes or goes.
+  // keys copied within the last `duration_ms`; reactive, so markup re-renders on change
   copied: SvelteSet<string>
-  // Writes `text` to the clipboard and flags `key` (the text itself by default). Returns
-  // whether the write succeeded; a failure only resolves to false if `on_error` is set to
-  // handle it, otherwise it throws.
+  // Writes `text` and flags `key` (the text itself by default), returning whether the write
+  // succeeded. A failure resolves false only when `on_error` handles it, else it throws.
   copy: (text: string, key?: string) => Promise<boolean>
-  // Drops the flag and its pending timer, for one key or all of them.
+  // drops the flag and its pending timer, for one key or all
   clear: (key?: string) => void
 }
 

@@ -27,8 +27,8 @@
     'parse-labels-as-html': `Render option labels as HTML.`,
     portal: `Portaled dropdown rendering and layering.`,
   }
-  // resolve's arg type distributes over the Pathname union, so a slug built at runtime
-  // can't match a single arm; every demo route is param-free
+  // resolve's arg type distributes over the Pathname union, so a runtime slug can't match a
+  // single arm; every demo route is param-free
   const resolve_path = resolve as (path: string) => string
   const subpages = Object.entries(descriptions).map(
     ([slug, description]): [string, string, string] => [

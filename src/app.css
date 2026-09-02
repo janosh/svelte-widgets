@@ -45,6 +45,10 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
+  /* prose here is full of bare identifiers (`duplicateOptionMsg/noMatchingOptionsMsg`) that
+     offer no break opportunity and used to spill off a phone. break-word only splits a word
+     that cannot fit a line on its own, so it leaves intrinsic sizing alone. */
+  overflow-wrap: break-word;
   min-height: 100vh;
   box-sizing: border-box;
   display: flex;
@@ -104,14 +108,17 @@ body > div {
     color: inherit; /* Toc uses :where(); else global `a` paints every item accent */
   }
   aside.toc.mobile {
-    width: 0;
-    height: 0;
-    min-width: 0;
+    /* the aside is position: fixed, so it is already out of flow and takes no grid track.
+       It used to be collapsed to 0x0 here, which also collapsed the panel it now lays out.
+       Toc floors its own mobile min-width now, so only the margin is still ours to reset. */
     margin: 0;
-    overflow: visible; /* fixed FAB must not occupy a grid track */
   }
   main {
     margin: 0;
+    /* grid items floor at min-content, so one wide code block or table stretched `main` past
+       the viewport and scrolled the whole page sideways on a phone. Code scrolls inside its
+       own `pre code` instead. */
+    min-width: 0;
   }
 }
 main {
@@ -141,6 +148,10 @@ code {
   border-radius: 3pt;
   background: var(--surface);
   font-size: 1.1em;
+  /* an identifier like `flash_clicked_headings_for_ms` has no break opportunity, so inline
+     code used to set the min-content width of its line and scroll a phone sideways.
+     `pre` is unaffected: white-space: pre offers no soft wrap opportunities either way. */
+  overflow-wrap: anywhere;
 }
 pre {
   position: relative;

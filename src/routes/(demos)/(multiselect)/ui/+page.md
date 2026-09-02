@@ -7,8 +7,7 @@
   import { MultiSelect } from '$lib'
   import { foods } from '$site/options'
 
-  // golden-angle hue rotation gives distinct colors that stay identical
-  // between prerender and hydration (Math.random() would not)
+  // golden-angle hues are distinct and stable across prerender/hydration (Math.random() isn't)
   let options = $derived(
     foods.map((label, idx) => ({
       label,
@@ -22,7 +21,7 @@
   placeholder="Pick your favorite foods"
   removeAllTitle="Remove all foods"
   closeDropdownOnSelect
-  style="width: 500px"
+  style="width: min(500px, 100%)"
   invalid
 />
 ```
@@ -45,8 +44,7 @@
 
 This page is the fixture for the Playwright UI tests in `tests/playwright/MultiSelect.test.ts`, which cover the remove-all button, focus and dropdown open/close behavior, filtering, and the ARIA attributes.
 
-<!-- Smooth scroll is required for arrow key navigation tests to work correctly.
-The Playwright test 'loops through the dropdown list with arrow keys' depends on this. -->
+<!-- the Playwright arrow-key navigation test depends on this smooth scroll -->
 <style>
   @media (prefers-reduced-motion: no-preference) {
     :global(html) {

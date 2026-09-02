@@ -43,15 +43,14 @@ export const draggable =
 
     function on_pointerdown(event: PointerEvent) {
       // `dragging` bars a second primary pointer mid-drag (mouse while a touch is down),
-      // which would strand the first follower's listeners past cleanup.
+      // which would strand the first follower's listeners past cleanup
       if (dragging || !is_primary_press(event)) return
       if (!(event.target instanceof Node) || !drag_handle.contains(event.target)) return
 
       dragging = true
-      // A fixed node is placed in viewport coordinates, which is what its rect reports;
-      // an absolute one against its offset parent. A relative (or static, promoted so
-      // left/top take effect) node is already in flow, so offsetLeft would double its
-      // position: continue from its current insets instead.
+      // A fixed node is placed in viewport coordinates (what its rect reports), an absolute
+      // one against its offset parent. A relative or promoted-static node is already in
+      // flow, where offsetLeft would double its position, so continue from its insets.
       const styles = getComputedStyle(node)
       const origin =
         styles.position === `fixed`
@@ -60,9 +59,9 @@ export const draggable =
             ? { left: node.offsetLeft, top: node.offsetTop }
             : { left: css_px(styles.left) || 0, top: css_px(styles.top) || 0 }
       if (styles.position === `static`) node.style.position = `relative`
-      // A rect and offsetLeft both report the border edge, but left/top place the margin
-      // edge, so an out-of-flow node with margins would jump by them on the first press.
-      // The in-flow branch read the insets themselves, so it is already in that space.
+      // Rect and offsetLeft report the border edge, but left/top place the margin edge, so
+      // an out-of-flow node with margins would jump by them on the first press. The in-flow
+      // branch read the insets themselves and is already in that space.
       const out_of_flow = [`fixed`, `absolute`].includes(styles.position)
       initial.left = origin.left - (out_of_flow ? css_px(styles.marginLeft) || 0 : 0)
       initial.top = origin.top - (out_of_flow ? css_px(styles.marginTop) || 0 : 0)
@@ -90,8 +89,8 @@ export const draggable =
           bounds_rect.left !== bounds_rect.right ||
           bounds_rect.top !== bounds_rect.bottom)
       ) {
-        // Measure after normalizing active inset styles, since that can move a node
-        // originally positioned from its right or bottom edge.
+        // after normalizing inset styles, which can move a node positioned from its right
+        // or bottom edge
         const node_rect = node.getBoundingClientRect()
         min_delta_x = bounds_rect.left - node_rect.left
         max_delta_x = Math.max(min_delta_x, bounds_rect.right - node_rect.right)

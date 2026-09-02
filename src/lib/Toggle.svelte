@@ -17,12 +17,12 @@
     input_props?: Omit<HTMLInputAttributes, `checked` | `onkeydown` | `type`>
   } = $props()
 
-  // normally input type=checkbox toggles on space bar, this handler also responds to enter
+  // a checkbox toggles on space only; this adds Enter
   function handle_keydown(event: KeyboardEvent) {
     onkeydown?.(event)
     if (event.key === `Enter`) {
       event.preventDefault()
-      if (event.target instanceof HTMLInputElement) event.target.click() // simulate real user toggle so 'change' is dispatched
+      if (event.target instanceof HTMLInputElement) event.target.click() // so 'change' fires
     }
   }
 </script>

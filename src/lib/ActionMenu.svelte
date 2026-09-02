@@ -45,8 +45,8 @@
   type Props = Omit<HTMLAttributes<HTMLMenuElement>, `children`> & {
     actions: (CmdAction | CmdSection)[]
     disabled?: boolean
-    // Native light-dismiss is the default. Supplying press dismissal, escape: false,
-    // enabled: false, or extra inside regions switches to the custom dismissal path.
+    // Native light-dismiss by default; press dismissal, escape/enabled false, or extra
+    // inside regions switch to the custom dismissal path.
     dismiss?: DismissConfig
     item?: Snippet<[{ action: CmdAction; section?: CmdSection; checked?: boolean }]>
     on_select?: (action: CmdAction, section?: CmdSection) => void
@@ -105,9 +105,8 @@
   // section; its required `action` callback is what one entry has and the other lacks.
   const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
     !(`action` in entry)
-  // Tag by source field so id `Copy`, label `Copy`, and section `Copy` stay distinct.
-  // Index is appended only when that tag repeats in the same each — unique ids stay
-  // stable across reorder.
+  // Tag by source field so id `Copy`, label `Copy` and section `Copy` stay distinct; the
+  // index is appended only on repeats, so unique ids stay stable across reorder.
   const tag = (entry: CmdAction | CmdSection): string =>
     is_section(entry)
       ? JSON.stringify([`section`, entry.title])
@@ -121,8 +120,8 @@
     )
   }
   const entry_keys = $derived(keys_of(actions))
-  // An empty section is a heading over nothing, so it is dropped once anything else has
-  // something to show. A menu of nothing but empty sections stays externally controllable.
+  // Empty sections are headings over nothing, dropped once anything else has content; a menu
+  // of only empty sections stays externally controllable.
   const all_empty = $derived(
     actions.every((entry) => is_section(entry) && !entry.actions.length),
   )
@@ -163,8 +162,8 @@
     event.preventDefault() // replace the browser's own menu
     const point = { x: event.clientX, y: event.clientY }
     clearTimeout(context_open_timeout)
-    // Chromium fires contextmenu before pointerup. Opening an auto popover immediately
-    // would let that pointerup light-dismiss the menu from the gesture that opened it.
+    // Chromium fires contextmenu before pointerup, which would light-dismiss an auto popover
+    // opened synchronously from the same gesture.
     context_open_timeout = setTimeout(() => {
       if (!disabled && !all_empty) at = point
     }, 0)
@@ -306,8 +305,8 @@
     z-index: var(--action-menu-z-index, 20);
     margin: 0;
     padding: var(--action-menu-padding, 3pt);
-    /* Rows inherit the page's line-height otherwise, which on a 16px/1.6 body makes every
-       item 33px tall before its own padding. Menu rows want to be tighter than prose. */
+    /* else rows inherit the page line-height: on a 16px/1.6 body each item is 33px tall
+       before its own padding */
     line-height: var(--action-menu-line-height, 1.35);
     list-style: none;
     min-width: var(--action-menu-min-width, 10rem);
@@ -350,9 +349,8 @@
       font-weight: 600;
     }
     kbd {
-      /* A bare `monospace` family makes browsers resolve `em` against their monospace
-         default (13px, not 16px), so a relative size renders a fifth smaller than asked for
-         and symbol keys like ⌘ ⇧ ⌥ shrink past legibility. Inherit the menu's font instead. */
+      /* a bare `monospace` family resolves `em` against the browser's monospace default
+         (13px, not 16px), shrinking symbol keys like ⌘ ⇧ ⌥ past legibility */
       font-family: inherit;
       font-size: 0.9em;
       opacity: 0.85;

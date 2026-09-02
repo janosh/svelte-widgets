@@ -13,8 +13,8 @@
   import { chain_handlers } from './utils'
 
   type CloseVia = `toggle` | `button` | `pointer` | `escape`
-  // Handed to both snippets so they can react to the pane's own chrome — a plot pausing
-  // its animation while the pane is being dragged over it, say.
+  // Handed to both snippets so they can react to pane chrome, e.g. a plot pausing its
+  // animation while the pane is dragged over it.
   type PaneState = {
     open: boolean
     show_controls: boolean
@@ -59,14 +59,13 @@
     // Gap between the toggle button's bottom-right corner and the pane's
     offset?: { x?: number; y?: number }
     max_width?: string
-    // `aria-label` is deliberately absent from the Omit: several panes on a page need
-    // distinct names. The rest describe the dialog itself and stay component-owned.
+    // `aria-label` deliberately not omitted: several panes on a page need distinct names
     pane_props?: Omit<HTMLAttributes<HTMLDivElement>, `aria-modal` | `role`>
     // Only Escape and the close button dismiss — ignore outside presses
     persistent?: boolean
     dismiss_on?: `press` | `release`
     // Outside controls that drive `open`; the pane's own toggle is always included. Elements
-    // only — click_outside's selector form needs its `scope` guard, which this does not expose
+    // only — click_outside's selector form needs a `scope` guard this doesn't expose
     inside?: (Element | null | undefined)[]
     resize?: `both` | `width` | `height` | `none`
     // `fixed` escapes overflow-clipping ancestors; height capped to space below top edge
@@ -82,21 +81,24 @@
 
   const msg = $derived(merge_defaults(DRAGGABLE_PANE_LABELS, labels))
   const viewport_margin_px = 8
-  // How much of the pane stays on screen when the toggle sits near the bottom edge.
-  // Without it a low toggle parks the pane in the last few pixels of the viewport.
+  // without it, a toggle near the bottom parks the pane in the last few px of the viewport
   const min_reachable_height_px = 180
-  // Doubles as `resizable`'s handle_size and as the padding reserved for it, so the
-  // grab zone never overlaps content or the content area's own scrollbar
+  // doubles as `resizable`'s handle_size and the padding reserving it, so the grab zone
+  // never overlaps content or its scrollbar
   const resize_gutter_px = 8
   const default_pane_width_px = 450
   const fallback_position = { left: 50, top: 50 }
   let resized_max_width = $state<string | null>(null)
   let resize_start_width = 0
-  // An explicit consumer cap stays authoritative. The bundled default cap only shapes the
-  // natural width; after a manual resize, the attachment's viewport bound takes over.
+  // An explicit consumer cap stays authoritative; the default only shapes the natural width,
+  // and after a manual resize the attachment's viewport bound takes over. The default carries
+  // that same viewport bound: the pane is anchored to the toggle's right edge, so a 450px
+  // default on a narrower screen hung off the left edge, where nothing scrolls to reach it.
   const viewport_max_width = `calc(100vw - ${2 * viewport_margin_px}px)`
   const pane_max_width = $derived(
-    max_width ?? resized_max_width ?? `${default_pane_width_px}px`,
+    max_width ??
+      resized_max_width ??
+      `min(${default_pane_width_px}px, ${viewport_max_width})`,
   )
 
   const pane_state = $derived({
@@ -128,15 +130,13 @@
   const clamp_to_viewport = (value: number, upper: number) =>
     Math.max(viewport_margin_px, Math.min(value, upper))
 
-  // Where the pane sits when it has not been dragged: under the toggle, right edges
-  // aligned. Fixed panes additionally stay inside the viewport.
+  // Undragged: under the toggle, right edges aligned; fixed panes also stay in the viewport
   const anchor_position = (): { left: number; top: number } => {
     if (!toggle_btn) return fallback_position
     const toggle_rect = toggle_btn.getBoundingClientRect()
     const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
     const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
-    // The anchor in viewport coordinates; each strategy below only restates it in the
-    // space its own left/top are read in.
+    // the anchor in viewport coordinates; each strategy below restates it in its own space
     const left = toggle_rect.right - pane_width + offset_x
     const top = toggle_rect.bottom + offset_y
 
@@ -153,18 +153,15 @@
       }
     }
 
-    // The pane's containing block, not the toggle's: they are siblings and normally share
-    // one, but toggle_props can position the toggle independently, and it is the pane's
-    // own left/top being computed here. Always laid out at this point — every caller
-    // either holds an open pane or is a control inside it.
+    // The pane's containing block, not the toggle's: the siblings usually share one, but
+    // toggle_props can position the toggle independently.
     const ancestor = pane?.offsetParent
     // No positioned ancestor means the pane is placed against the document
     if (!ancestor) {
       return { left: left + globalThis.scrollX, top: top + globalThis.scrollY }
     }
-    // An absolute child's insets resolve against the ancestor's padding box, whereas its
-    // rect is the border box, so the border comes off too. clientLeft/clientTop are that
-    // border, already in used-value terms.
+    // An absolute child's insets resolve against the ancestor's padding box while its rect is
+    // the border box, so subtract that border (clientLeft/clientTop).
     const ancestor_rect = ancestor.getBoundingClientRect()
     return {
       left: left - ancestor_rect.left - ancestor.clientLeft,
@@ -172,14 +169,12 @@
     }
   }
 
-  // Move the pane back under the toggle and drop manual size overrides. A fixed pane
-  // must not extend past the bottom viewport edge, so --pane-viewport-clamp (min()'d
-  // with --pane-max-height in CSS) is rewritten on every move, or a reset after a drag
-  // plus a window resize would keep a stale cap. No minimum needed: anchor_position
-  // already clamps the top so min_reachable_height_px of space remains below it.
+  // Move the pane back under the toggle and drop manual size overrides. --pane-viewport-clamp
+  // (min()'d with --pane-max-height in CSS) keeps a fixed pane above the bottom edge and is
+  // rewritten on every move, else a reset after a drag plus window resize keeps a stale cap.
   const position_pane = () => {
     if (!pane) return
-    // Clear the manual size first so anchor_position() measures the natural width
+    // clear the manual size first so anchor_position() measures the natural width
     pane.style.width = ``
     pane.style.height = ``
     const { left, top } = anchor_position()
@@ -207,22 +202,21 @@
 
   let resize_timeout: ReturnType<typeof setTimeout> | undefined
   onDestroy(() => clearTimeout(resize_timeout))
-  // Debounced, and reanchor re-checks on the trailing edge: the pane may have been
-  // dragged or closed during the wait, either of which cancels the reposition
+  // debounced; reanchor re-checks because the pane may be dragged or closed during the wait
   const handle_viewport_resize = () => {
     clearTimeout(resize_timeout)
     resize_timeout = setTimeout(reanchor, 50)
   }
 
-  // Resolve at gesture time: the pane may have been dragged or reanchored since attach.
-  // Bounding-client coordinates make the same calculation work for fixed and absolute panes.
+  // Resolved at gesture time: the pane may have moved since attach. Bounding-client
+  // coordinates work for both fixed and absolute panes.
   const resize_width_limit = (pane_node: HTMLElement) => {
     const { left, width } = pane_node.getBoundingClientRect()
     const room =
       globalThis.innerWidth - Math.max(viewport_margin_px, left) - viewport_margin_px
     const explicit_limit = Number(max_width?.trim().match(/^.*(?=px$)/u)?.[0])
-    // Keep the viewport cap at least as wide as the pane so starting a resize does not yank
-    // an overflowing pane narrower; an explicit pixel cap remains authoritative.
+    // cap at least the pane's width so starting a resize doesn't yank an overflowing pane
+    // narrower; an explicit pixel cap stays authoritative
     return Math.min(
       Math.max(room, width),
       explicit_limit >= 0 ? explicit_limit : Infinity,
@@ -250,8 +244,8 @@
   {/if}
 </button>
 
-<!-- toc-exclude keeps pane headings out of a page's Toc: this is floating chrome. The
-aria-label sits before the spread, so a page with several panes renames them via pane_props -->
+<!-- toc-exclude keeps pane headings out of a page's Toc. aria-label sits before the spread so
+several panes can be renamed via pane_props -->
 <div
   bind:this={pane}
   aria-label="Draggable pane"
@@ -282,9 +276,8 @@ aria-label sits before the spread, so a page with several panes renames them via
     edges: resize_edges,
     min_width: 200,
     min_height: 100,
-    // Width only. Height is already bounded by the CSS `max-height` (--pane-max-height
-    // min'd with --pane-viewport-clamp); adding a second JS cap on top of it only fought
-    // the user's drag.
+    // Width only: height is already bounded by CSS max-height (--pane-max-height min'd with
+    // --pane-viewport-clamp), and a second JS cap only fought the user's drag.
     max_width: resize_width_limit,
     handle_size: resize_gutter_px,
     labels: { handle: msg.resize_handle },
@@ -367,14 +360,12 @@ aria-label sits before the spread, so a page with several panes renames them via
   div.draggable-pane {
     /* position comes from style:position, default absolute so it scrolls with the page */
     box-sizing: border-box;
-    /* one in-flow child; minmax(0, 1fr) lets it scroll instead of overflowing once
-       the pane has a definite height from a resize or the viewport clamp */
+    /* one in-flow child; minmax(0, 1fr) lets it scroll once the pane has a definite height */
     grid-template-rows: minmax(0, 1fr);
     text-align: left;
     width: var(--pane-width, 28em);
     min-height: var(--pane-min-height, auto);
-    /* --pane-viewport-clamp (set for position="fixed") keeps a pane whose toggle sits
-       low on screen above the bottom viewport edge */
+    /* --pane-viewport-clamp (position="fixed") keeps a low pane above the bottom edge */
     max-height: min(var(--pane-max-height, 80vh), var(--pane-viewport-clamp, 200vh));
     overflow: visible; /* the control tab protrudes past the pane's right border */
     background: var(--pane-bg, var(--page-bg, light-dark(white, black)));
@@ -398,10 +389,8 @@ aria-label sits before the spread, so a page with several panes renames them via
       padding: var(--pane-padding, 1ex);
       display: grid;
       gap: var(--pane-gap, 4pt);
-      /* Rows size to their content and sit at the top. Without this, `normal` stretches the
-         auto rows to fill a pane taller than its content — which only shows up once content
-         gets short, e.g. a settings pane filtered down to one row, where it inflates that
-         row (and any input in it) to hundreds of pixels. */
+      /* rows size to content and sit at the top; `normal` stretches auto rows to fill a pane
+         taller than its content, inflating e.g. a lone filtered row to hundreds of pixels */
       align-content: var(--pane-align-content, start);
       box-sizing: border-box;
       min-height: 0; /* or the row refuses to shrink below its content */

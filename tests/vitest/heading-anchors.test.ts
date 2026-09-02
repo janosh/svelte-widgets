@@ -12,8 +12,7 @@ const preprocess = (content: string, filename?: string) =>
   heading_ids().markup({ content, filename })
 
 describe(`slugify_heading`, () => {
-  // Compatibility is intentionally Unicode-preserving and NFC-normalized: fragment IDs
-  // stay readable, and canonically equivalent spellings still collide as duplicates.
+  // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
   it.each([
     [`  Déjà vu / 東京  `, `déjà-vu-東京`],
     [`foo.bar`, `foo-bar`],
@@ -91,7 +90,7 @@ describe(`heading_ids preprocessor`, () => {
       `<h2>Result {fn({a: {b: {c: 1}}})}</h2>`,
       `<h2 id="result">Result {fn({a: {b: {c: 1}}})}</h2>`,
     ],
-    // unmatched } treated as literal (not dropped) to avoid losing content when depth would go negative
+    // unmatched } kept literal, else content is lost when the depth would go negative
     [`<h2>Price: $100}</h2>`, `<h2 id="price-100">Price: $100}</h2>`],
     // inline headings (mdsvex output)
     [`</p> <h2>Title</h2>`, `</p> <h2 id="title">Title</h2>`],
@@ -122,7 +121,7 @@ describe(`heading_ids preprocessor`, () => {
     `<h2 class="test" id="existing" data-foo="bar">Text</h2>`,
     `<h2>{dynamicOnly}</h2>`, // no static text → no id
     `<h2><span></span></h2>`,
-    // leading } preserved in text, but after stripping {test} only } remains which slugifies to empty
+    // after stripping {test} only the literal } remains, which slugifies to empty
     `<h2>}{test}</h2>`,
   ])(`leaves %s unchanged`, (input: string) => {
     expect(preprocess(input).code).toBe(input)
@@ -175,8 +174,8 @@ describe(`heading_ids preprocessor`, () => {
     const result = preprocess(
       `<h2>Foo</h2>\n<h2>Foo</h2>\n<h3>Foo 1</h3>\n<h2>Foo</h2>\n<h2>Bar</h2>\n<h2>Café</h2>\n<h2>Cafe\u0301</h2>`,
     )
-    // The already-suffixed Foo 1 cannot collide with the duplicate Foo's `foo-1`.
-    // NFC normalization also makes decomposed `Cafe\u0301` a duplicate of `Café`.
+    // the already-suffixed `Foo 1` must not collide with the duplicate Foo's `foo-1`; NFC
+    // also makes decomposed `Cafe\u0301` a duplicate of `Café`
     expect(result.code).toBe(
       `<h2 id="foo">Foo</h2>\n<h2 id="foo-1">Foo</h2>\n<h3 id="foo-1-1">Foo 1</h3>\n` +
         `<h2 id="foo-2">Foo</h2>\n<h2 id="bar">Bar</h2>\n<h2 id="café">Café</h2>\n` +
@@ -197,8 +196,8 @@ describe(`heading_ids preprocessor`, () => {
 })
 
 describe(`heading_anchors attachment`, () => {
-  // production attaches to <main>; the default selector uses :scope so headings are
-  // matched relative to the attached node (h1-h6 as direct or 2nd-level children)
+  // production attaches to <main>; the default :scope selector matches h1-h6 that are
+  // direct or 2nd-level children of the attached node
   const create_container = (html = ``) => {
     document.body.innerHTML = `<main>${html}</main>`
     return doc_query(`main`)
@@ -252,15 +251,14 @@ describe(`heading_anchors attachment`, () => {
       `<div id="same"></div><h2>Same</h2>`,
       [`same-1`],
     ],
-    // querySelector('#2024-roadmap') throws SyntaxError since CSS ID selectors
-    // can't start with an unescaped digit - uniqueness check must use getElementById
+    // a CSS ID selector can't start with a digit, so uniqueness must use getElementById
     [
       `digit-leading text (invalid as CSS ID selector)`,
       `<h2>2024 Roadmap</h2><h3>2024 Roadmap</h3>`,
       [`2024-roadmap`, `2024-roadmap-1`],
     ],
-    // guards get_default_headings ordering: a direct-child heading must be processed
-    // before a grandchild in a later sibling, so the duplicate suffix lands on the grandchild
+    // guards get_default_headings ordering: the direct child must be processed first, so
+    // the duplicate suffix lands on the later sibling's grandchild
     [
       `direct child before a later sibling's grandchild`,
       `<h2>Dup</h2><div><h3>Dup</h3></div>`,
@@ -301,8 +299,7 @@ describe(`heading_anchors attachment`, () => {
     const container = create_container()
     const cleanup = heading_anchors({ selector: `h2` })(container)
 
-    // prove the observer is live first, else the absence of anchors after cleanup
-    // is equally explained by the attachment never having worked
+    // prove the observer is live first, else no anchors after cleanup proves nothing
     const before_cleanup = document.createElement(`h2`)
     before_cleanup.id = `before`
     container.append(before_cleanup)

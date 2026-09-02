@@ -1,8 +1,7 @@
 <script lang="ts">
   import { Search } from './icons'
-  // Find-in-page bar over root: Enter/Shift+Enter step; Escape closes. Style matches
-  // with ::highlight(find-match), which cannot be component-scoped. For custom chrome,
-  // use create_find_state.
+  // Find-in-page bar over root: Enter/Shift+Enter step, Escape closes. Matches use
+  // ::highlight(find-match), which can't be scoped; for custom chrome use create_find_state.
   import { tick } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'

@@ -1,5 +1,5 @@
-// Computed CSS lengths resolve to `<number>px`; strip the unit so Number() can coerce.
-// Empty and non-px values (e.g. `none`, `0.5rem`) yield NaN so callers can apply fallbacks.
+// Computed CSS lengths resolve to `<number>px`; strip the unit so Number() coerces. Empty
+// and non-px values (`none`, `0.5rem`) give NaN, leaving fallbacks to the caller.
 export const css_px = (css_length: string): number => {
   const trimmed = css_length.trim()
   return trimmed ? Number(trimmed.replace(/px$/, ``)) : NaN
@@ -42,10 +42,10 @@ export const follow_pointer = (
   return stop
 }
 
-// Layered keys: only the innermost surface hears one, so Escape closes a dropdown
-// inside a modal and leaves the modal standing, and a dialog opened from a dialog
-// owns Tab. Layers register in attach order, which matches nesting in practice.
-// Capture phase so a handler calling stopPropagation cannot suppress them.
+// Layered keys: only the innermost surface hears one, so Escape closes a dropdown inside a
+// modal and leaves the modal standing, and a dialog opened from a dialog owns Tab. Layers
+// register in attach order (nesting order in practice), in the capture phase so a
+// stopPropagation elsewhere cannot suppress them.
 type KeyLayer = (event: KeyboardEvent) => boolean
 
 const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
@@ -67,8 +67,8 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
   }
 }
 
-// Register a handler on the shared LIFO Escape stack. Only the latest handler runs;
-// already-handled and IME-composition events are skipped. Returns an unregister function.
+// Registers on the shared LIFO Escape stack, returning an unregister. Only the latest
+// handler runs; already-handled and IME-composition events are skipped.
 export const register_escape_layer = key_layer_stack(
   (event) => event.key === `Escape` && !event.isComposing,
 )

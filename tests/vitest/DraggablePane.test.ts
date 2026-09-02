@@ -17,9 +17,12 @@ import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 const mock_pane_rect = (pane: HTMLElement, left = 0, top = 0) =>
   mock_rect(pane, { left, top, width: 450, height: 300 })
 
+// The untouched default cap: 450px, but never wider than the viewport less its margins.
+// happy-dom keeps the declaration verbatim, so these assert the string the component writes.
+const default_max_width = `min(450px, calc(100vw - 16px))`
+
 describe(`DraggablePane`, () => {
-  // click_outside registers document listeners that outlive innerHTML = '', and
-  // stubbed globals must not leak into the next case
+  // click_outside registers document listeners that outlive innerHTML = ''
   const mounted: Record<string, unknown>[] = []
   const cleanups: (() => void)[] = []
   afterEach(() => {
@@ -28,8 +31,8 @@ describe(`DraggablePane`, () => {
     vi.useRealTimers()
   })
 
-  // raw snippets render once, so this captures the payload rather than tracking it;
-  // the reactive half of the pane state is asserted through the DOM below
+  // raw snippets render once, so this captures the payload; the reactive half is
+  // asserted through the DOM below
   let last_pane_state: Record<string, unknown> = {}
   const children = createRawSnippet<[Record<string, unknown>]>((state) => ({
     render: () => {
@@ -45,13 +48,12 @@ describe(`DraggablePane`, () => {
     )
     await tick()
     const pane = doc_query<HTMLDivElement>(`.draggable-pane`)
-    // happy-dom does not apply the component stylesheet; mirror its border-box rule so
-    // resizable's box-model conversion matches the browser.
+    // happy-dom skips the component stylesheet; mirror border-box so resizable's
+    // box-model conversion matches the browser
     pane.style.boxSizing = `border-box`
     return {
       toggle: doc_query<HTMLButtonElement>(`button.pane-toggle`),
-      // by class, not [role="dialog"]: the role is itself under test, and finding the
-      // pane by it would make those assertions tautological
+      // by class, not [role="dialog"]: the role is itself under test
       pane,
     }
   }
@@ -82,12 +84,11 @@ describe(`DraggablePane`, () => {
   // pointer_event sets isPrimary; a bare PointerEvent reads as a second finger
   const press = (target: EventTarget) =>
     target.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-  // The pane dismisses on release, so a gesture meant to dismiss needs both halves.
-  // Kept apart from `press` because a lone pointerdown is what several tests assert on.
+  // dismissal happens on release, so a dismissing gesture needs both halves; kept apart
+  // from `press` because several tests assert on a lone pointerdown
   const press_release = (target: EventTarget) => {
     press(target)
-    // detail: 1 is a real pointer click; 0 is keyboard/programmatic and skips the
-    // press-started-inside exemption
+    // detail: 1 is a real pointer click; 0 skips the press-started-inside exemption
     return target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
   }
   const release_pointer = () =>
@@ -98,8 +99,7 @@ describe(`DraggablePane`, () => {
   const escape = () => document.dispatchEvent(escape_key())
   const is_open = (pane: HTMLElement) => pane.style.display === `grid`
 
-  // the press-move-release both attachments listen for, on the pane (resize) or on
-  // its handle (drag)
+  // the press-move-release both attachments listen for: the pane (resize) or handle (drag)
   const drag = (
     target: EventTarget,
     [start_x, start_y]: readonly number[],
@@ -111,8 +111,8 @@ describe(`DraggablePane`, () => {
   }
   const drag_by = (dx: number, dy: number) =>
     drag(doc_query(`.drag-handle`), [0, 0], [dx, dy])
-  // resizable hit-tests nothing itself: each edge gets a strip, and pressing one is the
-  // only way in. happy-dom paints nothing, so the corner's precedence lives in playwright.
+  // resizable hit-tests nothing: pressing an edge strip is the only way in. happy-dom
+  // paints nothing, so the corner's precedence is covered in playwright.
   const handle_of = (pane: HTMLElement, attribute: string, value: string) => {
     const handle = pane.querySelector<HTMLElement>(`[${attribute}="${value}"]`)
     if (!handle) throw new Error(`pane has no ${value} ${attribute}`)
@@ -173,10 +173,8 @@ describe(`DraggablePane`, () => {
     }
   }
 
-  // The main reason for the `release` default. Dismissing on the press lets Svelte's flush
-  // write checked=false to the DOM before the click, whose pre-click activation flips it back
-  // for the bind to commit — reopening the pane, leaving it uncloseable from that checkbox.
-  // On the click, dismissal lands after that activation instead.
+  // why `release` is the default: dismissing on the press writes checked=false before the
+  // click, whose activation flips it back and reopens the pane, uncloseable from that checkbox
   test.each([
     [`press`, true, `press`],
     [`release`, false, `release`],
@@ -224,7 +222,7 @@ describe(`DraggablePane`, () => {
     },
   )
 
-  // and the fix for it, when the trigger is one the consumer holds a reference to
+  // `inside` spares a consumer-held trigger from both its press and its click
   test.each([`press`, `release`] as const)(
     `inside spares an outside control's press and click, dismiss_on=%s`,
     async (dismiss_on) => {
@@ -304,9 +302,8 @@ describe(`DraggablePane`, () => {
     expect(pane.style.getPropertyValue(`--pane-viewport-clamp`)).toBe(clamp)
   })
 
-  // Stubbed on the pane, not the toggle: the pane's own containing block is what its
-  // left/top resolve against, and the two only coincide while nothing repositions the
-  // toggle out of it.
+  // stubbed on the pane, not the toggle: left/top resolve against the pane's own
+  // containing block, and the two only coincide while nothing repositions the toggle
   test(`absolute positioning measures against the pane's offsetParent`, async () => {
     const ancestor = document.createElement(`div`)
     document.body.append(ancestor)
@@ -491,7 +488,9 @@ describe(`DraggablePane`, () => {
       await tick()
 
       expect({ width: pane.style.width, height: pane.style.height }).toEqual(expected)
-      expect(pane.style.maxWidth).toBe(edge === `right` ? `calc(100vw - 16px)` : `450px`)
+      expect(pane.style.maxWidth).toBe(
+        edge === `right` ? `calc(100vw - 16px)` : default_max_width,
+      )
     },
   )
 
@@ -502,7 +501,7 @@ describe(`DraggablePane`, () => {
 
     strip_of(pane, `right`).dispatchEvent(pointer_event(`pointerdown`, 445, 150))
     await tick()
-    expect(pane.style.maxWidth).toBe(`450px`)
+    expect(pane.style.maxWidth).toBe(default_max_width)
 
     globalThis.dispatchEvent(pointer_event(`pointermove`, 600, 150))
     await tick()
@@ -519,14 +518,13 @@ describe(`DraggablePane`, () => {
     mock_viewport(700, 500)
     const { pane } = await open_pane({ resize: `both` })
     mock_pane_rect(pane, 100, 50)
-    expect(pane.style.maxWidth).toBe(`450px`)
+    expect(pane.style.maxWidth).toBe(default_max_width)
 
     drag(corner_of(pane), [550, 350], [900, 900])
     await tick()
 
-    // Width is capped so 8px on the far edge stays visible: 700 - left 100 - margin 8 = 592.
-    // Height takes the full drag: it is already bounded by the CSS `max-height`, and a second
-    // JS cap there only fought the gesture (it could even shrink a pane being dragged larger).
+    // width caps at 700 - left 100 - margin 8 = 592 so the far edge stays visible; height
+    // takes the full drag, since CSS `max-height` bounds it and a JS cap fought the gesture
     expect(pane.style.width).toBe(`592px`)
     expect(pane.style.height).toBe(`850px`)
     expect(pane.style.maxWidth).toBe(`calc(100vw - 16px)`)
@@ -535,7 +533,7 @@ describe(`DraggablePane`, () => {
     await tick()
     expect(pane.style.width).toBe(``)
     expect(pane.style.height).toBe(``)
-    expect(pane.style.maxWidth).toBe(`450px`)
+    expect(pane.style.maxWidth).toBe(default_max_width)
   })
 
   test(`an explicit max_width remains authoritative after resizing`, async () => {
@@ -566,7 +564,7 @@ describe(`DraggablePane`, () => {
 
     expect(pane.style.width).toBe(``)
     expect(pane.style.height).toBe(``)
-    expect(pane.style.maxWidth).toBe(`450px`)
+    expect(pane.style.maxWidth).toBe(default_max_width)
   })
 
   test(`a resize opts the pane out of repositioning and reveals the controls`, async () => {
@@ -581,9 +579,8 @@ describe(`DraggablePane`, () => {
     release_pointer()
   })
 
-  // The pane dismisses on the click, which browsers (and Playwright) synthesize even after
-  // a resize that ends outside it — click_outside exempts it because the pointerdown was
-  // inside, so matterviz's 200 ms post-resize guard is unnecessary here.
+  // browsers synthesize a click even after a resize ending outside the pane; click_outside
+  // exempts it because the pointerdown was inside, so no post-resize guard is needed
   test(`a resize released outside the pane does not dismiss it`, async () => {
     const on_close = vi.fn()
     const { pane } = await open_pane({ resize: `both`, on_close })
@@ -651,27 +648,23 @@ describe(`DraggablePane`, () => {
       'aria-label': `Structure controls`,
     }
     const toggle_props = { class: `consumer-toggle`, title: `Options`, onclick }
-    // Omit'd from the prop types; set reflectively to prove the runtime ordering holds
-    // for JS consumers too
+    // Omit'd from the prop types; set reflectively to cover untyped JS consumers
     Reflect.set(pane_props, `role`, `region`)
     Reflect.set(pane_props, `aria-modal`, `true`)
     Reflect.set(toggle_props, `type`, `submit`)
     const { toggle, pane } = await setup({ pane_props, toggle_props })
 
     expect(pane.id).toBe(`my-pane`)
-    // role, aria-modal, data-resize and type sit after the spread, so a consumer cannot
-    // clobber them: a `region` pane loses its dialog semantics, an `aria-modal` one traps
-    // screen readers inside non-modal chrome, a `submit` toggle posts the form
+    // role, aria-modal, data-resize and type sit after the spread so a consumer cannot
+    // clobber them into broken semantics (lost dialog role, trapped SRs, form-posting toggle)
     expect([pane.getAttribute(`role`), pane.dataset.resize]).toEqual([`dialog`, `none`])
     expect(pane.getAttribute(`aria-modal`)).toBe(`false`)
     expect(toggle.getAttribute(`type`)).toBe(`button`)
-    // the other side of the ordering: aria-label sits before the spread, so a page with
-    // several panes can rename them apart rather than reading three "Draggable pane"s
+    // aria-label sits before the spread, so a page with several panes can rename them apart
     expect(pane.getAttribute(`aria-label`)).toBe(`Structure controls`)
     expect(pane.classList.contains(`draggable-pane`)).toBe(true)
     expect(pane.classList.contains(`consumer-pane`)).toBe(true)
-    // Toc skips headings whose closest() match is excluded, so pane content (floating
-    // chrome, not page structure) stays out of a page's contents
+    // Toc skips excluded subtrees, so pane chrome stays out of a page's contents
     expect(pane.classList.contains(`toc-exclude`)).toBe(true)
     expect(toggle.classList.contains(`pane-toggle`)).toBe(true)
     expect(toggle.classList.contains(`consumer-toggle`)).toBe(true)
@@ -683,8 +676,8 @@ describe(`DraggablePane`, () => {
     expect(pane.style.display).toBe(`grid`) // our own handler still opened it
   })
 
-  // the demo page's Styling section is the only list of these, so a var added to the
-  // component without a mention there is a knob nobody can find
+  // the demo page's Styling section is the only list of these, so an unmentioned var is
+  // a knob nobody can find
   test(`every --pane-* custom property the styles read is documented`, () => {
     const declared = new Set(
       [...pane_source.matchAll(/var\(\s*(?<prop>--pane-[\w-]+)/gu)].map(

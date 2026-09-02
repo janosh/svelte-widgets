@@ -1,4 +1,4 @@
-// Remark plugin - transforms ```svelte example code blocks into rendered components
+// Remark plugin turning ```svelte example code blocks into rendered components
 import { Buffer } from 'node:buffer'
 import path from 'node:path'
 import { language_label_html } from '../internal/language-label.ts'
@@ -14,10 +14,9 @@ const RE_SCRIPT_START = /<script\b(?:[^<>"']|"[^"]*"|'[^']*')*>/u
 const RE_SCRIPT_BLOCK = /<script[\s\S]*?>[\s\S]*?<\/script>/gu
 const RE_STYLE_BLOCK = /<style[\s\S]*?>[\s\S]*?<\/style>/gu
 
-// Parses key=value pairs from a string. Supports strings (with escaped quotes),
-// numbers, booleans, and arrays. Note: nested structures in arrays are not supported.
-// Bare values (key=foo, key=true, key=-1.5) are captured greedily so invalid JSON
-// throws a parse error instead of silently splitting into two bare-word keys.
+// key=value pairs: strings (escaped quotes included), numbers, booleans and flat arrays.
+// Bare values (key=foo, key=-1.5) are captured greedily so invalid JSON throws instead of
+// silently splitting into two bare-word keys.
 const RE_PARSE_META = /(?:\w+="(?:[^"\\]|\\.)*"|\w+=\[[^\]]*\]|\w+=[^\s"[\]]+|\w+)/gu
 
 export const EXAMPLE_MODULE_PREFIX = `___live_example___`
@@ -78,8 +77,7 @@ function remark(options: RemarkOptions = {}): RemarkTransformer {
   return function transformer(tree: RemarkTree, file: RemarkFile): void {
     // csr flag per live example (index = component index); drives the import loop below
     const example_csr: (boolean | undefined)[] = []
-    // Deduped wrapper imports: JSON key identifies the wrapper (string path or
-    // [module, export] tuple), value holds the generated alias + import statement
+    // deduped wrapper imports, keyed by JSON wrapper id (path or [module, export])
     const wrapper_imports = new Map<string, { alias: string; statement: string }>()
 
     const filename = path.relative(file.cwd, file.filename)
@@ -146,9 +144,8 @@ function remark(options: RemarkOptions = {}): RemarkTransformer {
     // Nothing to inject when the file contains no live examples
     if (!scripts) return
 
-    // Try to inject imports into existing script block. Only consider nodes that
-    // *start* with <script> — raw HTML nodes merely containing a <script> tag
-    // mid-content (e.g. inside {@html `...`}) must not receive the imports.
+    // Inject into an existing script block, but only nodes that *start* with <script>:
+    // raw HTML merely containing one mid-content (inside {@html `...`}) must not get them.
     let injected = false
     visit(tree, `html`, (node) => {
       if (injected || !node.value) return
@@ -200,20 +197,19 @@ function create_example_component(
 ): string {
   const code = format_code(value, meta)
   const tree = starry_night.highlight(code, scope)
-  // Convert newlines to &#10; to prevent bundlers from stripping whitespace
+  // &#10; keeps bundlers from stripping the whitespace
   const highlighted = hast_to_html(tree).replaceAll(`\n`, `&#10;`)
 
   if (index === -1) {
-    // Close and reopen <p> to avoid block-in-inline HTML nesting issues
+    // close and reopen <p> to avoid block-in-inline nesting
     return `</p><pre class="highlight highlight-${lang}" style="position:relative">${language_label_html(lang)}<code>{@html ${JSON.stringify(
       highlighted,
     )}}</code></pre><p>`
   }
 
-  // Live examples (svelte, html) - render with CodeExample wrapper.
-  // JSON.stringify alone produces a valid double-quoted JS string literal for the
-  // src={...} expression — escaping backticks/`${` on top of it would double-escape
-  // and inject literal backslashes into the runtime src prop.
+  // Live examples (svelte, html) render with the CodeExample wrapper. JSON.stringify alone
+  // yields a valid literal for src={...}; escaping backticks/`${` on top would double-escape
+  // and inject literal backslashes into the runtime prop.
   const component = `${EXAMPLE_COMPONENT_PREFIX}${index}`
   // base64-encode to prevent preprocessors from modifying the content
   const base64_src = Buffer.from(value, `utf-8`).toString(`base64`)

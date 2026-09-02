@@ -6,11 +6,9 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 
-// happy-dom implements no part of the Fullscreen API, so the three pieces the module
-// touches are stubbed here: Element.requestFullscreen, Document.exitFullscreen and the
-// document.fullscreenElement getter. The stubs keep a single document-wide element, the
-// way a browser does - they do not know about wrappers, so the per-wrapper keying under
-// test lives entirely in the source, not in the fakes.
+// happy-dom implements no part of the Fullscreen API, so requestFullscreen,
+// exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
+// document-wide element like a browser does, so the per-wrapper keying lives in the source.
 let fullscreen_element: Element | null = null
 let request_calls: Element[] = []
 const mounted: Record<string, unknown>[] = []
@@ -231,8 +229,7 @@ describe(`flag <-> browser sync`, () => {
     expect(on_request_error).toHaveBeenCalledExactlyOnceWith(request_error)
     expect(console_error).toHaveBeenCalledOnce()
     expect(document.fullscreenElement).toBeNull()
-    // a flag left true would both misreport the browser and make the next attempt a
-    // no-op, since the effect would see no change to act on
+    // a flag left true would misreport the browser and make the next attempt a no-op
     expect(get(flag)).toBe(false)
 
     button.click()
@@ -345,8 +342,7 @@ describe(`fullscreen background`, () => {
   ])(
     `get_page_background falls back to prefers-color-scheme (dark=%s)`,
     (dark, expected) => {
-      // Once: vi.restoreAllMocks leaves vi.fn() mocks alone, so a lasting return value
-      // would follow setup.ts's matchMedia into every later test
+      // Once: restoreAllMocks spares vi.fn() mocks, so a lasting value would leak onward
       vi.mocked(globalThis.matchMedia).mockReturnValueOnce({
         matches: dark,
       } as MediaQueryList)
@@ -369,8 +365,7 @@ describe(`fullscreen background`, () => {
 
       expect(wrapper.style.getPropertyValue(css_var)).toBe(`rgb(7, 8, 9)`)
 
-      // and dropped on the way out: kept, it would still read the pre-switch color
-      // after a theme change, until the next entry happened to refresh it
+      // dropped on the way out, else it keeps a pre-switch color across a theme change
       button.click()
       await settle()
 
@@ -407,8 +402,7 @@ describe(`button rendering`, () => {
     expect(exiting.button.title).toBe(`Exit fullscreen`)
     expect(icon_path(exiting.button)).toBe(icons.ExitFullscreen.d)
 
-    // `labels={{ enter: condition ? `X` : undefined }}` type-checks, so an explicitly
-    // undefined key has to fall back too — a plain spread would render nothing
+    // an explicitly undefined key must fall back too - a plain spread would render nothing
     const undefined_key = mount_button({
       labels: { enter: undefined },
       wrapper: undefined,
@@ -416,9 +410,8 @@ describe(`button rendering`, () => {
     expect(undefined_key.button.title).toBe(`Enter fullscreen`)
   })
 
-  // a raw snippet's render() runs once, so each flag value gets its own mount rather
-  // than a click; the reactive path is covered by the icon swap in `click enters, click
-  // again exits`
+  // a raw snippet's render() runs once, so each flag value gets its own mount; the
+  // reactive path is covered by the icon swap in `click enters, click again exits`
   test.each([
     [false, `off`],
     [true, `on`],

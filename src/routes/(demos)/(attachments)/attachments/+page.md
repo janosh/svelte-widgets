@@ -3,8 +3,7 @@
   import { SubpageGrid } from '$lib'
   import { demo_labels } from '../..'
 
-  // Keyed by route slug; the card title comes from demo_labels so it stays the exact
-  // export name and can't drift from the nav.
+  // keyed by route slug; titles come from demo_labels so they can't drift from the nav
   const descriptions: Record<string, string> = {
     tooltip: `Top-layer tooltips with automatic placement, delegation and controlled state.`,
     draggable: `Pointer dragging with handles, axis locks and position callbacks.`,
@@ -21,8 +20,8 @@
     'forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
     'file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
   }
-  // resolve's arg type distributes over the Pathname union, so a slug built at runtime
-  // can't match a single arm; every demo route is param-free
+  // resolve's arg type distributes over the Pathname union, so a runtime slug can't match a
+  // single arm; every demo route is param-free
   const resolve_path = resolve as (path: string) => string
   const subpages = Object.entries(descriptions).map(
     ([slug, description]): [string, string, string] => [

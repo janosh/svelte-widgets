@@ -18,7 +18,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} />
+<Nav {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:** Simple string routes with auto-generated labels
@@ -42,6 +42,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
   }}
   {page}
   {link_props}
+  breakpoint={0}
 />
 ```
 
@@ -50,6 +51,8 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 ## Dropdown Menus
 
 Use tuple syntax `[parent, [children...]]` for nested routes. When the parent exists in the children array, it becomes a clickable link. Otherwise, it is a non-clickable label.
+
+Submenus open on the caret, never on hover: pointing at a nav entry should not pop a panel over the page, and hover does not exist on touch. A click, tap, `Enter`, `Space` or `ArrowDown` opens one; the caret again, `Escape` or a click outside closes it.
 
 ```svelte example collapsible
 <script lang="ts">
@@ -65,7 +68,7 @@ Use tuple syntax `[parent, [children...]]` for nested routes. When the parent ex
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} />
+<Nav {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:**
@@ -76,7 +79,7 @@ Use tuple syntax `[parent, [children...]]` for nested routes. When the parent ex
 
 ## Keyboard Navigation
 
-- **Tab**: Follow page order; once focus enters a pinned submenu, cycle its links
+- **Tab**: Follow page order; once focus enters an open submenu, cycle its links
 - **Enter/Space**: Open dropdown or follow link
 - **Arrow Down/Up**: Navigate dropdown items
 - **Escape**: Close menus
@@ -103,7 +106,7 @@ For full control, use objects with all available properties:
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} />
+<Nav {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:**
@@ -149,7 +152,7 @@ Use the `link` snippet to customize how all links render:
   const routes = ['/', '/about', '/contact']
 </script>
 
-<Nav {routes} {page}>
+<Nav {routes} {page} breakpoint={0}>
   {#snippet link({ href, label, isActive })}
     <a
       {href}
@@ -173,7 +176,12 @@ Add extra content to the nav menu via `children` snippet:
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props}>
+<Nav
+  {routes}
+  {page}
+  {link_props}
+  style="--nav-burger-position: absolute; --nav-mobile-menu-position: absolute"
+>
   {#snippet children({ is_open })}
     <button
       style="padding: 4pt 12pt; background: var(--sms-selected-bg, mediumseagreen); border: none; border-radius: 6px; color: white; cursor: pointer"
@@ -210,7 +218,7 @@ Use `item` snippet for per-item customization. The `render_default` escape hatch
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props}>
+<Nav {routes} {page} {link_props} breakpoint={0}>
   {#snippet item({ route, render_default })}
     <span style="display: flex; align-items: center; gap: 0.3em">
       {#if route.icon}
@@ -253,6 +261,7 @@ Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
   {routes}
   {page}
   {link_props}
+  style="--nav-burger-position: absolute; --nav-mobile-menu-position: absolute"
   onnavigate={({ href }) => {
     nav_message = `Navigated to ${href}`
     return false // returning false prevents navigation

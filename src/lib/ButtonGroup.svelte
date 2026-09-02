@@ -51,18 +51,16 @@
     // the sort arrow sits outside the radiogroup; style/attrs go here, not on the host
     sort_button_props?: Omit<HTMLButtonAttributes, `aria-label` | `disabled` | `type`>
     option?: Snippet<[{ option: ButtonGroupOption<Value>; selected: boolean }]>
-    // sibling of the button rather than content of it, so an option can carry a
-    // trailing link or badge without nesting interactive content inside a button.
-    // Caveat in single-select mode: the group is a radiogroup, which per ARIA owns only
-    // radios, so anything focusable here is both an extra tab stop between the radios
-    // and an aria-required-children violation. Prefer non-focusable content, or accept
-    // the tradeoff knowingly — the sort arrow sits outside the group for this reason.
+    // Sibling of the button, not content of it, so an option can carry a trailing link or
+    // badge without nesting interactive content in a button. Caveat in single-select mode:
+    // a radiogroup owns only radios per ARIA, so anything focusable here is an extra tab stop
+    // and an aria-required-children violation (hence the sort arrow sitting outside).
     option_suffix?: Snippet<[{ option: ButtonGroupOption<Value>; selected: boolean }]>
-    // Content comes from each option's own `tooltip`; the rest is yours, which is
-    // what lets a consumer opt into allow_html for rich tooltips
+    // Content comes from each option's own `tooltip`; the rest is yours, so a consumer can
+    // opt into allow_html for rich tooltips
     tooltip_options?: Omit<TooltipOptions, `content` | `render`>
-    // a div cannot legally sit inside phrasing content, so a group rendered in a
-    // heading or a paragraph needs to be a span
+    // a div can't sit inside phrasing content, so a group in a heading or paragraph needs
+    // to be a span
     as?: string
   }
   // Literal arms keep on_change narrow; `multiple: boolean` covers `multiple={flag}`
@@ -99,8 +97,7 @@
   const option_list = $derived(
     (Array.isArray(options) ? options : Object.entries(options)).map(to_option<Value>),
   )
-  // buttons the keyboard can reach, in render order: the roving stop below falls back
-  // to the first of them
+  // keyboard-reachable buttons in render order; the roving stop falls back to the first
   const enabled_options = $derived(
     disabled ? [] : option_list.filter((opt) => !opt.disabled),
   )
@@ -108,8 +105,8 @@
     Array.isArray(selected) ? selected : selected == null ? [] : [selected],
   )
 
-  // Roving tabindex: one stop for the whole radio group, on the checked option. A
-  // selection pointing at no rendered option would otherwise leave nothing tabbable.
+  // Roving tabindex: one stop on the checked option. Falls back so a selection pointing at
+  // no rendered option still leaves something tabbable.
   const roving_value = $derived.by(() => {
     if (multiple) return null
     const checked_option = enabled_options.find((opt) => opt.value === selected_values[0])
@@ -123,21 +120,20 @@
         ? selected_values.filter((val) => val !== value)
         : [...selected_values, value]
       : value
-    // The discriminated union is right for consumers, but TS cannot correlate it with
-    // the `multiple` local, so the call is widened back to what this branch just set
+    // TS can't correlate the consumer-facing discriminated union with the `multiple` local,
+    // so widen the call back to what this branch just set
     ;(on_change as ((selected: Value | Value[]) => void) | undefined)?.(selected)
   }
 
   function handle_keydown(event: KeyboardEvent) {
     if (!(event.currentTarget instanceof HTMLElement)) return
-    // `[data-value]` excludes anything an option_suffix renders: a bare `button` query
-    // also collects those, which desyncs focus from the option it is meant to select
+    // `[data-value]` excludes option_suffix buttons, which would desync focus from the
+    // option it is meant to select
     const selector = `button[data-value]:not(:disabled)`
     const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(selector)]
     const next_value = step_focus(event, buttons, { horizontal: true })?.dataset.value
-    // A radio group carries its selection with focus; independent toggles do not. Read
-    // the value off the button rather than indexing a parallel array, so DOM order and
-    // the option list cannot drift apart again.
+    // A radio group carries its selection with focus; independent toggles don't. Value is
+    // read off the button so DOM order and the option list can't drift apart.
     if (!multiple && next_value !== undefined) select(next_value as Value)
   }
 </script>
@@ -227,9 +223,9 @@
       justify-content: var(--btn-group-justify-content, flex-start);
       gap: inherit;
     }
-    /* the pill: the `option_suffix` wrapper where there is one, the button itself
-       everywhere else. Box and state colors live here so slotted content renders inside
-       the pill, while padding stays on the button so its edges still toggle. */
+    /* the pill: the `option_suffix` wrapper if present, else the button. Box and state colors
+       live here so slotted content sits inside the pill; padding stays on the button so its
+       edges still toggle. */
     .option,
     button:not(.option > button) {
       display: inline-flex;
@@ -240,9 +236,8 @@
       border-radius: var(--btn-group-btn-radius, 3pt);
       /* `all 0s` is the browser default, so the knob is inert until a consumer sets it */
       transition: var(--btn-group-btn-transition, all 0s);
-      /* checked is excluded here rather than relying on source order: :hover plus this
-         :not() outweighs the checked selector below, so hovering a selected option would
-         otherwise replace its darker shading with the lighter hover one */
+      /* checked excluded here, not by source order: :hover plus this :not() outranks the
+         checked rule below, so hovering a selected option would lighten it */
       &:hover:not(
           :disabled,
           [aria-checked='true'],
@@ -273,18 +268,16 @@
       align-items: center;
       gap: var(--btn-group-btn-gap, 0.4em);
       padding: var(--btn-group-btn-padding, 2pt 6pt);
-      /* longhands rather than the `font` shorthand, which would also set weight and
-         style: this selector outranks a consumer's own `button {}` rule, so the
-         shorthand silently overrode their global button typography */
+      /* longhands, not the `font` shorthand: this selector outranks a consumer's own
+         `button {}` rule, so the shorthand silently reset their weight and style */
       font-family: var(--btn-group-btn-font-family, inherit);
       font-size: var(--btn-group-btn-font-size, inherit);
       cursor: var(--btn-group-btn-cursor, pointer);
     }
-    /* after `button`'s padding shorthand so padding-right is not reset; inside a pill
-       the button drops its own box rather than nesting a second one in it. Dropping the
-       border rather than making it transparent keeps the pill the size of an unwrapped
-       one and lets the button fill it, so clicks on its edges still toggle. Right padding
-       shrinks by default so a trailing suffix (link, badge) sits in that former gap. */
+    /* after `button`'s padding shorthand so padding-right survives. Inside a pill the button
+       drops its box; dropping the border (rather than making it transparent) keeps the pill
+       the size of an unwrapped one and lets the button fill it, so edge clicks still toggle.
+       Right padding shrinks so a trailing suffix sits in that former gap. */
     .option > button {
       background: none;
       color: inherit;

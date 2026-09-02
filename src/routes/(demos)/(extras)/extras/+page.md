@@ -72,6 +72,8 @@ Pass the glyph value (`<Icon icon={Info} />`), not a name.
   import type { IconData } from '$lib/icons'
 
   const catalog = Object.entries<IconData>(icons)
+  // zero-width spaces let long CamelCase names wrap between words instead of mid-word
+  const wrappable = (name: string) => name.replace(/(?<=[a-z\d])(?=[A-Z])/g, `​`)
   let query = $state(``)
   let filtered_catalog = $derived(
     catalog.filter(([name]) => name.toLowerCase().includes(query.trim().toLowerCase())),
@@ -86,20 +88,20 @@ Pass the glyph value (`<Icon icon={Info} />`), not a name.
 <p aria-live="polite">{filtered_catalog.length} matching icons</p>
 
 <div
-  style="display: grid; grid-template-columns: repeat(auto-fill, minmax(10em, 1fr)); gap: 0.6em"
+  style="display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0.6em; --card-bg: var(--sms-options-bg, light-dark(white, #333))"
 >
   {#each filtered_catalog as [name, icon] (name)}
     <CopyButton
       content={`import { ${name} } from 'svelte-widgets/icons'`}
       title={`Copy ${name} import`}
       aria-label={`Copy ${name} import`}
-      style="display: flex; align-items: center; gap: 0.5em; padding: 0.65em; border: 1px solid var(--sms-border, light-dark(lightgray, #555)); border-radius: 5px; background: var(--sms-options-bg, light-dark(white, #333)); color: inherit; cursor: pointer; text-align: left"
+      style="position: relative; display: grid; padding: 0.65em; width: 100%; white-space: normal; border: 1px solid var(--sms-border, light-dark(lightgray, #555)); border-radius: 5px; background: var(--card-bg); color: inherit; cursor: pointer"
     >
       {#snippet children({ state })}
-        <Icon {icon} style="font-size: 1.5em" />
-        <code>{name}</code>
+        <Icon {icon} style="font-size: 1.5em; flex: none" />
+        <code style="line-height: 1.3">{wrappable(name)}</code>
         <small
-          style="margin-inline-start: auto"
+          style="position: absolute; inset: 0; display: grid; place-items: center; background: var(--card-bg)"
           style:visibility={state === `ready` ? `hidden` : `visible`}
           >{state === `error` ? `Failed` : `Copied`}</small
         >

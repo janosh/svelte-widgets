@@ -43,14 +43,14 @@
   // Use reactive state for node refs to avoid binding_property_non_reactive warning
   let detail_elements = $state<(HTMLDetailsElement | null)[]>([])
 
-  // DOM `open` isn't reactive, so track it in $state synced from the toggle event
-  // and toggle_all, plus the $effect below (toggle doesn't fire for pre-opened details)
+  // DOM `open` isn't reactive, so mirror it in $state from toggle events, toggle_all and the
+  // $effect below (toggle doesn't fire for pre-opened details)
   let has_open_details = $state(false)
   const sync_has_open_details = () => {
     has_open_details = detail_elements.some((node) => node?.open)
   }
 
-  // Trim stale refs when files shrink and sync detail_elements back to files.node for external access
+  // trim stale refs when files shrink, and sync detail_elements back to files.node
   $effect(() => {
     if (detail_elements.length > files.length) {
       detail_elements.splice(files.length)

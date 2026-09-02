@@ -166,9 +166,8 @@
       refresh,
       true,
     )
-    // `refresh` reads `query`, so this re-filters on each keystroke. Calling it from the
-    // attachment body instead would re-run the whole attachment, whose teardown unhides
-    // everything and snaps force-opened groups shut between keystrokes.
+    // `refresh` reads `query`, so this re-filters per keystroke; from the attachment body it
+    // would re-run teardown, unhiding everything and snapping force-opened groups shut.
     $effect(refresh)
 
     return () => {
@@ -219,9 +218,9 @@
           class="clear-search"
           aria-label={msg.clear_search}
           onclick={() => {
-            // this button unmounts the moment the query empties, so hand focus back to the
-            // field rather than dropping it on the body. A query the caller supplied leaves
-            // `opened` false, so the field needs pinning open before it can take focus.
+            // This button unmounts once the query empties, so hand focus back to the field
+            // instead of the body — pinned open first, since a caller-supplied query leaves
+            // `opened` false.
             opened = true
             query = ``
             search_input?.focus()
@@ -239,9 +238,8 @@
       >
     {/if}
   </div>
-  <!-- Observe the caller's rows only. Observing the whole component fed our own chrome back
-  into the filter — the clear button mounts and unmounts, the status text rewrites — costing
-  an extra pass per keystroke. `display: contents` keeps this wrapper out of the layout. -->
+  <!-- Observe the caller's rows only: observing the whole component fed our own chrome (clear
+  button, status text) back into the filter, an extra pass per keystroke -->
   <div class="settings-rows" {@attach filter_settings}>{@render children()}</div>
   <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
   <p id={status_id} class="no-matches" role="status">
@@ -250,9 +248,8 @@
 </div>
 
 <style>
-  /* Neither the wrapper nor the observed row group should exist as far as layout is
-     concerned — the pane lays our children out directly. Only the corner trigger needs a
-     positioning context, so only that mode opts into being a box. */
+  /* Wrapper and row group are layout-invisible so the pane lays our children out directly;
+     only the corner trigger needs a positioning context, so only it becomes a box. */
   .settings-search.inline,
   .settings-rows {
     display: contents;

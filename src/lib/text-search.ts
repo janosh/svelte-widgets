@@ -92,8 +92,8 @@ type NormalizedText = { text: string; offsets: MatchBounds[] }
 
 const WHITESPACE = /\s/u
 
-// Each normalized unit maps back to its source bounds despite case/decomposition
-// expansion, astral UTF-16 pairs, and collapsed whitespace.
+// maps each normalized unit back to source bounds despite case/decomposition expansion,
+// astral UTF-16 pairs and collapsed whitespace
 type NormalizedToken = MatchBounds & { char: string }
 
 const normalize_with_offsets = (source: string): NormalizedText => {
@@ -234,11 +234,9 @@ const source_bounds = (
   return { start: source_start, end: source_end }
 }
 
-// Find every occurrence of query under root, case- and whitespace-insensitively.
-// `search_text` re-normalizes every segment on every keystroke, though the result depends
-// only on the segment's own text — and normalization is character-by-character, allocating a
-// token per code point. Memoize it, bounded, so typing re-walks the query rather than every
-// word in the document. The returned value is only ever read, so sharing it is safe.
+// `search_text` re-normalizes every segment per keystroke, char by char with a token per
+// code point, though the result depends only on the segment's own text. Bounded memoization
+// keeps typing off every word in the document; the result is read-only, so sharing is safe.
 const NORMALIZE_CACHE_LIMIT = 512
 const normalize_cache = new Map<string, NormalizedText>()
 const normalize_cached = (source: string): NormalizedText => {
@@ -257,6 +255,7 @@ const normalize_cached = (source: string): NormalizedText => {
   return normalized
 }
 
+// every occurrence of query under root, case- and whitespace-insensitively
 export const search_text = (
   root: Element,
   query: string,
@@ -292,8 +291,8 @@ type OwnedHighlight = {
   installed?: Highlight
 }
 
-// Union package-owned ranges by registry and name. Releasing the last owner restores
-// the previous highlight; outside writers retain ownership.
+// Unions package-owned ranges by registry and name; releasing the last owner restores the
+// previous highlight, and outside writers keep ownership.
 const owned_highlights = new WeakMap<HighlightRegistry, Map<string, OwnedHighlight>>()
 
 // Callers handle feature detection; a missing Highlight constructor throws.
@@ -325,7 +324,7 @@ export const sync_owned_highlight = (
     else registry.delete(css_class)
     return
   }
-  // Yield to another writer, but reclaim a name merely cleared from the registry.
+  // yield to another writer, but reclaim a name merely cleared from the registry
   if (highlight_entry.installed && current && current !== highlight_entry.installed)
     return
   highlight_entry.installed = new Highlight(
@@ -334,8 +333,8 @@ export const sync_owned_highlight = (
   registry.set(css_class, highlight_entry.installed)
 }
 
-// Register ranges and return their release; same-name callers share the union.
-// Returns undefined where CSS Custom Highlights are unavailable.
+// Registers ranges and returns their release; same-name callers share the union. Returns
+// undefined where CSS Custom Highlights are unavailable.
 export const highlight_ranges = (
   ranges: readonly Range[],
   options: HighlightRangesOptions = {},
@@ -355,9 +354,8 @@ export type TextMutationOptions = {
   max_wait_ms?: number
 }
 
-// Run callback once a burst of triggers settles, without letting a stream that never
-// pauses (a streaming response, say) defer it indefinitely: it lands debounce_ms after
-// the last trigger but no later than max_wait_ms after the first one of the burst.
+// Fires debounce_ms after the last trigger but no later than max_wait_ms after the burst's
+// first, so a never-pausing stream cannot defer the callback indefinitely.
 export const create_burst_debounce = (
   callback: () => void,
   { debounce_ms = 75, max_wait_ms = debounce_ms * 4 }: TextMutationOptions = {},
@@ -365,7 +363,7 @@ export const create_burst_debounce = (
   let timeout: ReturnType<typeof setTimeout> | undefined
   let burst_started_at: number | undefined
 
-  // Reset the max-wait window for the next burst.
+  // also resets the max-wait window for the next burst
   const cancel = (): void => {
     clearTimeout(timeout)
     timeout = undefined

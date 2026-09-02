@@ -9,10 +9,9 @@ describe(`click_outside`, () => {
     kind = `pointerdown`,
     init: PointerEventInit = {},
   ) => {
-    // a real PointerEvent so the scrollbar guard (MouseEvent-only) actually runs here, and
-    // primary by default because the constructor's own default reads as a second finger.
-    // A click gets detail: 1, which is how the dismissal tells a pointer click from a
-    // keyboard or programmatic one — a bare Event would be judged as the latter.
+    // PointerEvent so the MouseEvent-only scrollbar guard runs; isPrimary because the
+    // constructor defaults to a second finger. detail: 1 marks a click as pointer-driven,
+    // which is how dismissal tells it from a keyboard or programmatic one.
     const event = kind.startsWith(`pointer`)
       ? new PointerEvent(kind, { bubbles: true, isPrimary: true, ...init })
       : new MouseEvent(kind, { bubbles: true, detail: 1, ...init })
@@ -34,12 +33,10 @@ describe(`click_outside`, () => {
     return event
   }
 
-  // document.body.innerHTML = '' leaves click_outside's document capture listeners
-  // and Escape layers behind, which would decide later tests' assertions
+  // innerHTML = '' would leave document capture listeners and Escape layers behind
   const cleanups: (() => void)[] = []
   afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
-  // attaches click_outside to a fresh element wired to a spy callback
   const attach_outside = (config: Parameters<typeof click_outside>[0] = {}) => {
     const element = create_element()
     const callback = vi.fn()
@@ -120,9 +117,8 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  // Same selector, another instance's trigger: it must not shield this surface. The
-  // function form is resolved per press, for a `bind:this` still null at setup — a
-  // plain `scope` prop would have been captured null forever.
+  // same selector, another instance's trigger: it must not shield this surface. The
+  // function form resolves per press, for a `bind:this` still null at setup.
   it.each([`element`, `function`] as const)(
     `scope as %s confines inside selectors to one subtree`,
     (kind) => {
@@ -204,7 +200,7 @@ describe(`click_outside`, () => {
   it(`ignores a press on the page scrollbar`, () => {
     const { callback } = attach_outside()
 
-    // no layout in the test DOM, so give the root a client box the gutter sits outside of
+    // no layout in the test DOM, so give the root a client box the gutter sits outside
     const root = document.documentElement
     cleanups.push(
       stub_prop(root, `clientWidth`, 800),
@@ -223,14 +219,13 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  // The rect is the border box but clientWidth/Height are the padding box, so the gutter
-  // starts a border in from where the rect alone suggests. Getting that wrong swallows
-  // presses on the last border-width of content in any bordered scroller.
+  // the rect is the border box but clientWidth/Height the padding box, so the gutter starts
+  // a border in; getting it wrong swallows presses on the last border-width of content
   it(`locates a scroller's gutter past its border, not at its rect edge`, () => {
     const { callback } = attach_outside()
     const scroller = create_element()
-    // Border box wide enough to hold border + scrollport + a 15px gutter on each axis, so
-    // every press below lands inside it the way a real hit test would deliver them.
+    // border box wide enough for border + scrollport + a 15px gutter on each axis, so
+    // every press below lands inside it as a real hit test would deliver it
     mock_rect(scroller, { left: 100, top: 50, width: 225, height: 125 })
     cleanups.push(
       stub_prop(scroller, `clientLeft`, 10), // a 10px border, then...
@@ -247,7 +242,7 @@ describe(`click_outside`, () => {
     press(150, 165) // horizontal gutter
     expect(callback).not.toHaveBeenCalled()
 
-    // Inside both gutters but outside the border-box-only reading of them
+    // inside both gutters but outside the border-box-only reading of them
     press(305, 155)
     expect(callback).toHaveBeenCalledTimes(1)
   })
@@ -264,8 +259,8 @@ describe(`click_outside`, () => {
   })
 
   it(`tolerates an empty inside selector instead of throwing on every press`, () => {
-    // a trailing empty entry makes the joined selector invalid, which would throw
-    // out of the capture listener for every press anywhere on the page
+    // a trailing empty entry makes the joined selector invalid, which would throw out of
+    // the capture listener on every press anywhere on the page
     const { callback, cleanup } = attach_outside({ inside: [`.modal`, ``] })
 
     expect(() => dispatch_press(create_element())).not.toThrow()
@@ -288,8 +283,8 @@ describe(`click_outside`, () => {
     cleanup?.()
   })
 
-  // A surface living inside a shadow tree: document.activeElement reports the host,
-  // which the surface does not contain, so only descending the chain finds the focus
+  // for a surface in a shadow tree, document.activeElement reports the host, which the
+  // surface does not contain, so only descending the chain finds the focus
   it(`escape sees focus on a node that shares the surface's shadow tree`, () => {
     const host = create_element()
     const [surface, inner] = [
@@ -312,9 +307,9 @@ describe(`click_outside`, () => {
     })
   })
 
-  // Dragging or resizing the surface can release past its edge, and the browser then
-  // reports the click on a common ancestor — outside. Only a gesture that both starts
-  // and ends outside is a dismissal, else a resize would close what it was resizing.
+  // a drag or resize can release past the surface's edge, where the browser reports the
+  // click on a common ancestor. Only a gesture starting and ending outside is a dismissal,
+  // else a resize would close what it was resizing.
   it(`dismiss_on: 'release' waits for clicks and ignores gestures started inside`, () => {
     const { element, callback } = attach_outside({ dismiss_on: `release` })
     const outside = create_element()
@@ -333,8 +328,7 @@ describe(`click_outside`, () => {
     dispatch_press(create_element(), [], `click`)
     expect(callback).toHaveBeenCalledTimes(1)
 
-    // the OS claiming a gesture ends it without a click, so that verdict must not linger
-    // for the next click either
+    // an OS-claimed gesture ends without a click, so that verdict must not linger either
     dispatch_press(element)
     dispatch_press(element, [], `pointercancel`)
     dispatch_press(create_element(), [], `click`)
@@ -346,9 +340,8 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(3)
   })
 
-  // A press inside can end without any click at all — released off-screen, or the OS taking
-  // over for a native drag. The verdict must not then be applied to a click that carries no
-  // pointer of its own: keyboard Enter and .click() both report detail 0.
+  // a press inside can end with no click at all (released off-screen, OS-owned drag), so
+  // its verdict must not hit a pointerless click: Enter and .click() report detail 0
   it(`dismiss_on: 'release' still dismisses on a keyboard-driven click`, () => {
     const { element, callback } = attach_outside({ dismiss_on: `release` })
     const outside = create_element()
@@ -359,10 +352,9 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  // Capture phase is what makes dismissal unsuppressable, and its price is running before
-  // the pressed control's own handler — so a control that toggles the surface from its click
-  // handler belongs in `inside`; `release` cannot reorder that one for it (a control bound to
-  // the state is the case `release` does fix, see DraggablePane's checkbox tests)
+  // capture makes dismissal unsuppressable at the price of running before the pressed
+  // control's handler, so a control toggling the surface from its click handler belongs in
+  // `inside`; `release` only fixes controls bound to the state (see DraggablePane tests)
   it(`dismisses from the capture phase, ahead of the pressed control's handler`, () => {
     const order: string[] = []
     const { callback } = attach_outside({ dismiss_on: `release` })

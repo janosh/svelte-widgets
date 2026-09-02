@@ -23,8 +23,8 @@ describe(`history / undo-redo`, () => {
   }
 
   test(`undo/redo bound by default, canUndo/canRedo initially false`, async () => {
-    // keys must exist on the $state props for the bindables to write back;
-    // canUndo/canRedo start true to verify the component resets them to false
+    // keys must exist on the $state props for the bindables to write back; canUndo/redo
+    // start true so the reset to false is observable
     const props = await mount_history({
       history: undefined,
       canUndo: true,
@@ -39,8 +39,7 @@ describe(`history / undo-redo`, () => {
     expect(props.redo?.()).toBe(false) // nothing to redo
   })
 
-  // an empty stack already returns false, so these build real history first - otherwise
-  // move_history bails on next_index < 0 and never reaches the guard under test
+  // build real history first, else move_history bails on next_index < 0 before the guard
   test.each([`undo`, `redo`] as const)(`%s is a no-op while disabled`, async (method) => {
     const props = await mount_history()
     props.selected = [1]
@@ -60,8 +59,7 @@ describe(`history / undo-redo`, () => {
     expect(props.canRedo).toBe(false)
   })
 
-  // false and 0 hit different branches of the max_history derivation; enabled values
-  // (true, positive integers) are covered by the undo/redo behavior tests below
+  // false and 0 hit different branches of the max_history derivation
   test.each([false, 0] as const)(
     `history=%s records nothing, leaving undo bound but inert`,
     async (history_val) => {
@@ -134,8 +132,7 @@ describe(`history / undo-redo`, () => {
   ])(`compatible with %s`, async (_desc, options, extra) => {
     const props = await mount_history({ options, ...extra })
 
-    // Select first selectable option (skip group headers)
-    // A missing row is a failure, not a reason to silently skip a compatibility case.
+    // a missing row is a failure, not a reason to silently skip a compatibility case
     doc_query(`ul.options > li:not(.group-header)`).click()
     await tick()
     expect(props.selected?.length).toBeGreaterThan(0)
@@ -203,10 +200,9 @@ describe(`history / undo-redo`, () => {
     expect(props.canUndo).toBe(false)
     expect(props.canRedo).toBe(true)
 
-    // Calling undo again when nothing to undo should return false and not change state
     expect(props.undo?.()).toBe(false)
     await tick()
-    expect(props.selected).toEqual([]) // state unchanged
+    expect(props.selected).toEqual([])
 
     expect(props.redo?.()).toBe(true)
     await tick()
@@ -252,11 +248,10 @@ describe(`history / undo-redo`, () => {
   })
 
   test(`preselected values are correctly tracked as initial state`, async () => {
-    // Regression: prev_selected must sync to initial selected on mount,
-    // otherwise undo after deselect restores [] instead of preselected state
+    // regression: prev_selected must sync to the initial selected on mount, else undo
+    // after a deselect restores [] instead of [1, 2]
     const props = await mount_history({ selected: [1, 2] })
 
-    // Remove one item, then undo - should restore [1, 2], not []
     doc_query(`ul.selected li button.remove`).click()
     await tick()
     expect(props.selected).toEqual([2])

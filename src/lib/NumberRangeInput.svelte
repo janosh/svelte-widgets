@@ -18,18 +18,14 @@
     type NumberRangeInputLabels,
   } from './labels'
 
-  // The same three bounds either way: optional when a schema entry can supply them, required
-  // when nothing else can.
+  // same three bounds either way: optional when a schema can supply them, else required
   type Bounds = { min?: number | string; max?: number | string; step?: number | string }
   type SchemaBounds = Bounds & { setting: string; schema: NumberRangeSchema }
   type ExplicitBounds = Required<Bounds> & { setting?: string; schema?: undefined }
 
-  // Paired number + range input bound to the same value, wrapped in a flex <label>.
-  // The label text/markup is passed as children (supports inline units like <small>Å</small>).
-  // Pass a `title` to show a tooltip; wrapping <label> only names the number input
-  // so the range slider uses that title when present and otherwise gets a fallback name.
-  // Children go in their own <span> so the label is exactly three elements (text, number,
-  // range), which lets a settings pane put every row on one shared column grid.
+  // Paired number + range input on one value in a flex <label>; children carry the label
+  // markup. A wrapping <label> names only the number input, so the slider falls back to
+  // `title`. Children get their own <span> so the row is exactly three grid columns.
   let {
     value = $bindable(),
     setting,
@@ -62,10 +58,8 @@
     max: max ?? setting_config?.maximum,
     step: step ?? setting_config?.multipleOf ?? `any`,
   })
-  // `<input type="range">` with no min/max silently falls back to the spec default 0-100,
-  // while the paired number input stays unbounded. `bind:value` then lets one touch of the
-  // slider clamp and write back a value the caller never limited, destroying it. Fail loudly
-  // instead: a slider with no range is a misconfiguration, not a default.
+  // A range input with no min/max silently defaults to 0-100 while the number input stays
+  // unbounded, so one slider touch clamps and writes back a value the caller never limited.
   $effect(() => {
     if (input_bounds.min === undefined || input_bounds.max === undefined) {
       throw new Error(
@@ -79,8 +73,8 @@
   let resolved_title = $derived(title ?? setting_config?.description)
   const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
   let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)
-  // With children the wrapping <label> already names the number input and an aria-label would
-  // override that visible text; without them the label is empty, so it needs the fallback too.
+  // With children the <label> already names the number input and an aria-label would override
+  // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
 </script>
 

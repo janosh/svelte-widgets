@@ -74,8 +74,8 @@
     dialog_props?: HTMLAttributes<HTMLDialogElement>
     // run action.shortcut hotkeys globally while the menu is closed (default: true)
     global_shortcuts?: boolean
-    // localStorage key to persist recently triggered actions. When set, recent
-    // actions rank first in the dropdown (most recent on top). null = disabled
+    // localStorage key persisting recently triggered actions, which then rank first
+    // (most recent on top); null disables
     recent_actions_key?: string | null
     max_recent?: number // cap on persisted recent actions (default: 20)
   } = $props()
@@ -138,8 +138,7 @@
   const sorted_actions = $derived.by(() => {
     if (!recent_actions || !action_ids_are_unique || recent_action_ids.length === 0)
       return actions
-    // drop stale persisted ids (actions removed/renamed since) so they don't
-    // occupy low ranks and push real recents below non-recent actions
+    // drop stale persisted ids, which would occupy low ranks and push real recents down
     const rank = new SvelteMap<string, number>()
     for (const action_id of recent_action_ids) {
       if (action_id_counts.has(action_id)) rank.set(action_id, rank.size)
@@ -202,8 +201,8 @@
   const custom_backdrop_dismiss = $derived(
     !escape_closes && dialog_props?.closedby === undefined,
   )
-  // Bare action shortcuts stay inert while the menu is up: there the keyboard
-  // belongs to the search input. An action without a shortcut has no keys to match.
+  // Bare action shortcuts stay inert while the menu is up: the keyboard belongs to the
+  // search input then.
   const key_bindings = $derived<Hotkey[]>([
     ...toggle_bindings,
     ...actions.map((action) => ({

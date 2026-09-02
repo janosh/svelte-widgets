@@ -1,21 +1,19 @@
 // Default user-facing strings for every widget, attachment and helper that renders text of
-// its own.
-//
-// Each one takes a `labels` prop (or option) accepting a partial of its record, merged over the
-// defaults below by `merge_defaults`, so a caller can translate or reword any string without
-// forking the component. Entries that interpolate a count or a name are functions rather than templates so
-// locales can control word order and their own plural rules (see https://github.com/janosh/svelte-widgets/issues/451).
+// its own. Each takes a `labels` prop (or option) whose partial `merge_defaults` merges over
+// the record below, so callers can translate without forking. Entries interpolating a count
+// or name are functions so locales control word order and plural rules
+// (https://github.com/janosh/svelte-widgets/issues/451).
 //
 // Strings a dedicated prop already supplies (MultiSelect's `removeBtnTitle`,
-// `noMatchingOptionsMsg`, `selectAllOption`, Toc's `title`, ...) are deliberately absent, and
-// so are non-string bits of chrome: icons keep their own `icons` prop. A prop that overrides
-// a string rather than supplying it does keep its default here — `selectAllDisabledTitle`
-// replaces the three select-all titles below, which is why those are still records.
+// `noMatchingOptionsMsg`, `selectAllOption`, Toc's `title`, ...) are deliberately absent, as
+// are non-string bits of chrome: icons keep their own `icons` prop. A prop that overrides
+// rather than supplies a string keeps its default here — `selectAllDisabledTitle` replaces
+// the three select-all titles below, which is why those stay records.
 //
 // Every record declares its defaults and derives its type from them, so the two cannot drift.
 
-// English plural of `noun`. Only the defaults below use it — an override brings its own
-// locale's rules, which is why every count-bearing entry is a function.
+// English plural of `noun`, used only by the defaults below — an override brings its own
+// locale's rules, hence every count-bearing entry being a function.
 const plural = (count: number, noun: string) => (count === 1 ? noun : `${noun}s`)
 
 // keyed by ActionState; per-state icons live in ActionButton's separate `icons` prop
@@ -47,16 +45,16 @@ export const CODE_EXAMPLE_LABELS = {
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
 
 export const COPY_BUTTON_LABELS = {
-  // CopyButton is icon-only by default, and an empty string suppresses ActionButton's text.
-  // Its `pending` text is ActionButton's, reused for the in-flight copy, so there is no
-  // `pending` key here. Set any of these to show a label beside the icon.
+  // Icon-only by default; an empty string suppresses ActionButton's text. Set any of these
+  // to show a label beside the icon. `pending` is absent: the in-flight copy reuses
+  // ActionButton's own.
   ready: ``,
   success: ``,
   error: ``,
 }
 export type CopyButtonLabels = typeof COPY_BUTTON_LABELS
 
-// shared by every dialogs.svelte.ts helper, none of which is a component with a `labels` prop
+// shared by the dialogs.svelte.ts helpers, none of which is a component with a `labels` prop
 export const DIALOG_LABELS = {
   confirm: `OK`,
   cancel: `Cancel`,
@@ -110,8 +108,8 @@ export const FILE_DETAILS_LABELS = {
 export type FileDetailsLabels = typeof FILE_DETAILS_LABELS
 
 export const FIND_BAR_LABELS = {
-  // `scope` is the FindBar `label` prop, e.g. 'page' or 'settings'. Names both the
-  // search region and, suffixed with an ellipsis, the input placeholder.
+  // `scope` is FindBar's `label` prop ('page', 'settings', ...). Names the search region
+  // and, with an ellipsis, the input placeholder.
   find_in: (scope: string) => `Find in ${scope}`,
   prev_match: `Previous match`,
   next_match: `Next match`,
@@ -142,9 +140,8 @@ export const MULTI_SELECT_LABELS = {
   // composed from the removeBtnTitle prop and the option's label
   remove_option: (remove_btn_title: string, option_label: string) =>
     `${remove_btn_title} ${option_label}`,
-  // the title the disabled select-all row gets for each of its three reasons, and what
-  // `selectAllDisabledTitle` falls back to. 'matching' scope needs local options,
-  // so loadOptions rules it out.
+  // one title per reason the select-all row is disabled, and `selectAllDisabledTitle`'s
+  // fallback; 'matching' scope needs local options, so loadOptions rules it out
   matching_scope_unavailable: `Matching select-all is only available with local options`,
   max_select_reached: (max_select: number) => `Maximum of ${max_select} options selected`,
   all_options_selected: `All options already selected`,
@@ -175,8 +172,7 @@ export const NAV_LABELS = {
 }
 export type NavLabels = typeof NAV_LABELS
 
-// last-resort accessible name for the range slider, used only when the row has no title,
-// no schema description and no `setting` key to fall back on
+// last-resort slider name, only when the row has no title, schema description or `setting` key
 export const NUMBER_RANGE_INPUT_LABELS = {
   value: `Value`,
 }
@@ -223,10 +219,10 @@ export const TOAST_LABELS = {
 }
 export type ToastLabels = typeof TOAST_LABELS
 
-// Merge a caller's partial over a defaults record — label records, but icon sets too.
-// Spreading would keep an explicitly-undefined key as undefined rather than falling back,
-// and `exactOptionalPropertyTypes` is off, so `labels={{ close: cond ? `X` : undefined }}`
-// — an ordinary Svelte idiom — type-checks and then renders nothing at all.
+// Merge a caller's partial over a defaults record (label records, but icon sets too).
+// Spreading would keep an explicitly-undefined key instead of falling back, and with
+// `exactOptionalPropertyTypes` off `labels={{ close: cond ? `X` : undefined }}` type-checks
+// and then renders nothing.
 export const merge_defaults = <Defaults extends object>(
   defaults: Defaults,
   overrides?: Partial<Defaults>,

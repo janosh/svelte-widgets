@@ -41,12 +41,10 @@ describe(`highlight_matches`, () => {
     // Early returns
     [`whitespace-only query`, ` \t\n `, `a b`, false, undefined, undefined],
 
-    // Substring highlighting (fuzzy=false)
     [`case insensitive`, `test`, `<p>Test with TEST and TeSt</p>`, false, 3, undefined],
     [`no cross-node match`, `bc`, `<ul><li>ab</li><li>cd</li></ul>`, false, 0, undefined],
     [`no matches`, `xyz`, `<p>Content without search term</p>`, false, 0, undefined],
 
-    // Fuzzy highlighting (fuzzy=true)
     [`fuzzy no matches`, `xyz`, `<p>Content without search term</p>`, true, 0, undefined],
     [
       `skip with node_filter`,
@@ -87,8 +85,7 @@ describe(`highlight_matches`, () => {
 
   it.each([
     [`CSS is missing`, () => vi.stubGlobal(`CSS`, undefined)],
-    // a registry without the constructor is what a partial polyfill or a stub in a
-    // consumer's test leaves behind; constructing a Highlight there throws
+    // a partial polyfill or consumer stub can leave a registry whose Highlight throws
     [`Highlight is missing`, () => vi.stubGlobal(`Highlight`, undefined)],
   ])(`runs range effects when %s`, (_desc, prepare) => {
     prepare()
@@ -142,10 +139,8 @@ describe(`highlight_matches`, () => {
     ])
   })
 
-  // 'İ' (U+0130) lowercases to 2 UTF-16 units, shifting offsets computed on the
-  // lowercased text. Ranges must map back to the ORIGINAL character positions
-  // (and never exceed the node length). 'İİİab': lowered is 'i̇i̇i̇ab' so naive
-  // offsets for 'a'/'b' would be 6/7 — the correct original offsets are 3/4.
+  // 'İ' (U+0130) lowercases to 2 UTF-16 units, so ranges must map back to the ORIGINAL
+  // offsets: in 'İİİab' the naive 'a'/'b' offsets are 6/7, the original ones 3/4
   it.each([
     [`substring`, false],
     [`fuzzy`, true],
@@ -335,8 +330,8 @@ describe(`highlight_matches`, () => {
     cleanup?.()
   })
 
-  // Flush MO (microtask) before advancing timers, or the burst never arms the debounce.
-  // afterEach restores real timers — create_burst_debounce keys max_wait off Date.now().
+  // flush the MutationObserver microtask before advancing timers, or the burst never arms
+  // the debounce; afterEach restores real timers since max_wait keys off Date.now()
   it(`debounced observation coalesces a burst into one re-run`, async () => {
     vi.useFakeTimers()
     mock_element.textContent = `nothing here`
@@ -398,8 +393,7 @@ describe(`highlight_matches`, () => {
     expect(vi.getTimerCount()).toBe(1)
 
     cleanup?.()
-    // disarmed, not merely ignored: a live timer holds the closure (and, in node,
-    // the event loop) until it fires
+    // disarmed, not merely ignored: a live timer pins the closure and node's event loop
     expect(vi.getTimerCount()).toBe(0)
     await vi.advanceTimersByTimeAsync(100)
 

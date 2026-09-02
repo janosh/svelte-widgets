@@ -12,7 +12,7 @@ export interface ResizableOptions {
   edges?: (`top` | `right` | `bottom` | `left`)[]
   min_width?: number
   min_height?: number
-  // A function is resolved at gesture time, for bounds that move with the node or viewport.
+  // a function is resolved at gesture time, for bounds moving with node or viewport
   max_width?: ResizeLimit
   max_height?: ResizeLimit
   handle_size?: number // px, default 8
@@ -25,10 +25,10 @@ export interface ResizableOptions {
   on_resize_reset?: ResizeCallback
 }
 
-// One `[data-resize-edge]` child per edge, plus a `[data-resize-corner]` child wherever two
-// enabled edges meet (touch-action has no per-region form). Every handle is focusable,
-// takes arrow keys, and resets on Enter. Promotes `position: static` → `relative`. Put
-// overflow on a child — a scrollable node scrolls the handles out of view.
+// One `[data-resize-edge]` child per edge plus a `[data-resize-corner]` wherever two enabled
+// edges meet (touch-action has no per-region form). Handles are focusable, take arrow keys
+// and reset on Enter. Promotes `position: static` to `relative`. Put overflow on a child: a
+// scrollable node scrolls the handles out of view.
 export const resizable =
   (options: ResizableOptions = {}): Attachment =>
   (element: Element): (() => void) | undefined => {
@@ -61,8 +61,7 @@ export const resizable =
     }
 
     type Edge = `top` | `right` | `bottom` | `left`
-    // A corner press drives both axes at once, so the live grab is a pair of edges rather
-    // than a single one. Edge strips fill in only their own axis.
+    // a corner drives both axes, so a grab is a pair; edge strips fill in one side only
     type Grab = { horizontal?: `left` | `right`; vertical?: `top` | `bottom` }
     let is_resizing = false
     let stop_pointer_follow: (() => void) | undefined
@@ -73,8 +72,7 @@ export const resizable =
       computed.position === `static` ? node.style.position : undefined
     if (previous_position !== undefined) node.style.position = `relative`
     // Absolute children anchor to the padding box, so a strip at `edge: 0` sits inside the
-    // border and leaves the visible edge ungrabbable. Negative insets put it back on the
-    // border box, the region the pointer used to be hit-tested against.
+    // border and leaves the visible edge ungrabbable; negative insets restore the border box.
     const inset = (edge: Edge) =>
       -(css_px(computed.getPropertyValue(`border-${edge}-width`)) || 0)
 
@@ -86,7 +84,7 @@ export const resizable =
       const current_style = getComputedStyle(node)
       const style_px = (property: string) =>
         css_px(current_style.getPropertyValue(property)) || 0
-      // What offsetWidth/Height carry beyond the CSS width/height on a content-box node.
+      // what offsetWidth/Height carry beyond CSS width/height on a content-box node
       const content_box_inset = (start: Edge, end: Edge) =>
         current_style.boxSizing === `border-box`
           ? 0
@@ -108,8 +106,8 @@ export const resizable =
         Math.max(0, typeof limit === `function` ? limit(node) : limit)
       return { width: resolve(max_width), height: resolve(max_height) }
     }
-    // Only this instance's own strips — `querySelectorAll` would also rewrite the values of
-    // a nested resizable's separators, which report a different element's size.
+    // this instance's strips only: `querySelectorAll` would also rewrite a nested
+    // resizable's separators, which report a different element's size
     const separators: { handle: HTMLElement; controls_width: boolean }[] = []
     const sync_separator_values = (
       current: Dimensions = { width: node.offsetWidth, height: node.offsetHeight },
@@ -145,7 +143,7 @@ export const resizable =
       let height =
         measured.height +
         (grab.vertical === `bottom` ? delta_y : grab.vertical ? -delta_y : 0)
-      // Content-box padding and borders cannot shrink, so they set the real floor.
+      // content-box padding and borders cannot shrink, so they set the real floor
       const minimum_width = Math.min(
         Math.max(min_width, measured.width_inset),
         maximum.width,
@@ -162,8 +160,8 @@ export const resizable =
         measured.width > 0 &&
         measured.height > 0
       ) {
-        // Both axes are clamped in width space — scaling the height bounds by the ratio makes
-        // the two directions the same computation — and the axis that moved further drives.
+        // clamp both axes in width space (scaling height bounds by the ratio makes the two
+        // directions one computation); the axis that moved further drives
         const aspect_ratio = measured.width / measured.height
         const width_change = Math.abs(width - measured.width) / measured.width
         const height_change = Math.abs(height - measured.height) / measured.height
@@ -188,9 +186,9 @@ export const resizable =
         node.style.top = `${measured.top - (height - measured.height)}px`
         repositioned.top = true
       }
-      // Callbacks and constraints use border-box dimensions; CSS width/height do not
-      // include padding and borders on content-box elements. Only the grabbed axis is
-      // written: pinning the other one would freeze a height-only node's natural width.
+      // Callbacks and constraints are border-box, unlike CSS width/height on content-box
+      // elements. Only the grabbed axis is written; pinning the other would freeze a
+      // height-only node's natural width.
       if (grab.horizontal)
         node.style.width = `${Math.max(0, width - measured.width_inset)}px`
       if (grab.vertical)
@@ -202,7 +200,7 @@ export const resizable =
     }
 
     function on_pointerdown(event: PointerEvent, grab: Grab) {
-      // Bars a second primary mid-resize (mouse while a touch is down).
+      // bars a second primary mid-resize (mouse while a touch is down)
       if (is_resizing || !is_primary_press(event)) return
       is_resizing = true
 
@@ -281,7 +279,7 @@ export const resizable =
       )
       on_resize_end?.(event, dimensions)
     }
-    // An edge grab names one side and drives one axis; a corner names both and drives both.
+    // an edge grab names one side and drives one axis; a corner names and drives both
     const add_handle = (grab: Grab, css: string) => {
       const handle = document.createElement(`div`)
       const edge =
@@ -334,8 +332,8 @@ export const resizable =
             ${[edge, ...cross].map((side) => `${side}: ${inset(side)}px`).join(`; `)}`,
           )
         }),
-      // Where two enabled edges meet, a square handle drives both axes. Appended after the
-      // strips so it paints over their overlap, which otherwise resizes one axis only.
+      // Square handle driving both axes where two enabled edges meet. Appended after the
+      // strips so it paints over their overlap, which would otherwise resize one axis.
       ...vertical_edges.flatMap((vertical) =>
         horizontal_edges.map((horizontal) =>
           add_handle(

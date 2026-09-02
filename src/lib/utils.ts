@@ -7,8 +7,7 @@ export const chain_handlers =
   (event: EventType): void =>
     handlers.forEach((handler) => handler?.(event))
 
-// Generates a UUID for component IDs. Uses native crypto.randomUUID when available.
-// Fallback uses timestamp+counter - sufficient for DOM IDs (uniqueness, not security).
+// UUID for DOM IDs. Fallback is timestamp+counter: unique enough, not secure.
 export function get_uuid(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   const hex = (Date.now().toString(16) + (uuid_counter++).toString(16)).padStart(32, `0`)
@@ -58,8 +57,7 @@ export const get_label = (opt: Option) => {
 export const get_option_key = (opt: Option): unknown =>
   is_object(opt) ? (opt.value ?? get_label(opt)) : opt
 
-// Extract a CSS string from an option's style (string or {option, selected} object).
-// A non-empty result is semicolon-terminated.
+// CSS from an option's style (string or {option, selected}); non-empty result ends in `;`
 export function get_style(
   option: Option,
   key: `selected` | `option` | null | undefined = null,
@@ -72,7 +70,7 @@ export function get_style(
   const { style } = option
   if (typeof style === `string`) css_str = style
   else {
-    // partial style objects (e.g. only `selected`) are fine; reject unknown keys
+    // partial style objects are fine; unknown keys are not
     if (
       Object.keys(style).some(
         (style_key) => style_key !== `option` && style_key !== `selected`,
@@ -90,21 +88,20 @@ export function get_style(
 }
 
 // === Floating geometry ===
-// "Pick a side that fits, then stay on screen", shared by every floating surface.
+// "pick a side that fits, then stay on screen", shared by every floating surface
 
 export type Placement = `top` | `right` | `bottom` | `left`
 
 export type PositionOptions = {
   placement?: Placement | `auto`
-  // `start` and `end` line up the corresponding physical anchor and floating edges.
-  align?: `center` | `start` | `end`
+  align?: `center` | `start` | `end` // start/end line up the matching anchor/floating edges
   offset?: number // gap between anchor and floating box
   cross_axis_offset?: number // nudge perpendicular to the chosen side
   padding?: number // closest the floating box may come to a viewport edge
   boundary?: { top: number; left: number; right: number; bottom: number }
   fallback_placements?: Placement[] // tried after a fixed placement; restricts `auto`
-  // `true` tries the opposite side then the perpendicular ones; pass an explicit
-  // list to keep a dropdown from ever landing beside its input
+  // true tries the opposite side then the perpendicular ones; an explicit list keeps e.g.
+  // a dropdown from ever landing beside its input
   flip?: boolean | Placement[]
   shift?: boolean // slide along the viewport edge rather than overflow it
 }
@@ -163,27 +160,26 @@ export function compute_position(
     left: anchor.left - boundary.left - padding - offset,
     right: boundary.right - padding - anchor.right - offset,
   }
-  // Only the main axis decides a flip: cross-axis overflow is what shifting is for, and
-  // letting it count would make an edge-aligned bottom tooltip jump to the left instead.
+  // Only main-axis overflow flips; counting the cross axis (shifting's job) would send an
+  // edge-aligned bottom tooltip to the left instead.
   const main_axis_overflow = (side: Placement): number => {
     const needed = side === `top` || side === `bottom` ? floating.height : floating.width
     return Math.max(0, needed - free_space[side])
   }
 
-  // `flip: false` pins the requested side; otherwise the first candidate with the least
-  // main-axis overflow wins.
+  // `flip: false` pins the requested side, else least main-axis overflow wins
   const explicit_order = fallback_placements ?? (Array.isArray(flip) ? flip : null)
   const candidate_placements = (): Placement[] => {
     if (flip === false) return [requested]
     if (!explicit_order) return FLIP_ORDER[requested]
-    // A named placement stays the first choice, its fallbacks only queue up behind it.
+    // a named placement stays first choice, its fallbacks queue up behind it
     if (fallback_placements && placement !== `auto`) {
       return [requested, ...explicit_order.filter((side) => side !== requested)]
     }
     return explicit_order
   }
 
-  // Plain `auto` has no preferred side, so it breaks overflow ties by picking the roomiest.
+  // plain `auto` has no preferred side, so it breaks overflow ties on free space
   const rank_by_space = flip !== false && placement === `auto` && !explicit_order
   let chosen = requested
   let least_overflow = Infinity
@@ -208,7 +204,7 @@ export function compute_position(
     const max_left = boundary.right - floating.width - padding
     const min_top = boundary.top + padding
     const max_top = boundary.bottom - floating.height - padding
-    // Oversize boxes have reversed limits; the interval between them has minimum overflow.
+    // oversize boxes reverse the limits; between them overflow is minimal
     left = clamp(left, Math.min(min_left, max_left), Math.max(min_left, max_left))
     top = clamp(top, Math.min(min_top, max_top), Math.max(min_top, max_top))
   }
@@ -224,8 +220,8 @@ const is_apple_platform = (): boolean =>
 const resolve_mod = (shortcut: string): string =>
   shortcut.replaceAll(/\bmod\b/giu, is_apple_platform() ? `meta` : `ctrl`)
 
-// `,`, `+` and space are spelled out in a combo string so it can always be split on
-// `+`; matching needs the literal `event.key` back.
+// `,`, `+` and space are spelled out so a combo can always be split on `+`;
+// matching needs the literal `event.key` back
 const KEY_TOKENS: Record<string, string> = { ',': `comma`, '+': `plus`, ' ': `space` }
 const TOKEN_KEYS: Record<string, string> = { comma: `,`, plus: `+`, space: ` ` }
 
@@ -262,8 +258,7 @@ export function matches_shortcut(
 ): boolean {
   if (!shortcut) return false
   const { key, ctrl, shift, alt, meta } = parse_shortcut(shortcut)
-  // Require non-empty key to prevent "ctrl+" from matching any key with ctrl pressed
-  if (!key) return false
+  if (!key) return false // else "ctrl+" would match any key held with ctrl
   return (
     event.key.toLowerCase() === key &&
     event.ctrlKey === ctrl &&
@@ -273,8 +268,7 @@ export function matches_shortcut(
   )
 }
 
-// Shortcut segments as display symbols.
-// Only `mod` reads the platform; every other segment renders the same everywhere.
+// Display symbols per segment. Only `mod` is platform-dependent, the rest render alike.
 const key_symbols: Record<string, string> = {
   meta: `⌘`,
   cmd: `⌘`,
@@ -309,17 +303,17 @@ export type Hotkey = {
   keys: string | string[] // e.g. `mod+k`, `ctrl+shift+p`, `Escape`
   handler: (event: KeyboardEvent) => void
   enabled?: boolean
-  // Bare keys are ignored while typing in a text field, where they are just
-  // characters. Chords always fire. Set true for keys that must work either way.
+  // bare keys are ignored while typing in a text field (chords always fire);
+  // set true for keys that must work either way
   allow_in_inputs?: boolean
   prevent_default?: boolean // default true
 }
 
-// Runs the first binding whose shortcut matches and reports whether one fired.
-// Shared by the `hotkey` attachment and components that own a window listener.
+// Runs the first matching binding and reports whether one fired. Shared by the `hotkey`
+// attachment and components that own a window listener.
 export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
   if (event.isComposing) return false // mid-IME the keystroke belongs to the editor
-  // Outside a chord a bare key in a text field is ordinary typing, not a shortcut
+  // outside a chord, a bare key in a text field is typing, not a shortcut
   const typing = !is_modifier_chord(event) && is_editable_event_target(event.target)
   for (const binding of bindings) {
     if (binding.enabled === false) continue
@@ -333,7 +327,7 @@ export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
   return false
 }
 
-// True when the event came from a text-entry control, where a bare key is typing
+// event came from a text-entry control, where a bare key is typing
 export const is_editable_event_target = (target: EventTarget | null): boolean =>
   target instanceof Element &&
   target.closest(
@@ -344,12 +338,10 @@ export const is_editable_event_target = (target: EventTarget | null): boolean =>
 export const is_modifier_chord = (event: KeyboardEvent): boolean =>
   event.altKey || event.ctrlKey || event.metaKey
 
-// Move focus within a list of items, wrapping at both ends, and hand back what took it
-// so a radio group can carry its selection along. Returns undefined when the key is not
-// a navigation key or the list is empty, in which case the event is left untouched.
-// Left/Right are opt-in: a vertical menu should leave them to the page.
-// Focus entering from outside gives idx -1, where each key still lands where it implies
-// — Home and a forward step on the first item, End and a backward step on the last.
+// Move focus within items, wrapping at both ends, returning the newly focused item so a
+// radio group can carry its selection along; undefined (event untouched) for a non-nav key
+// or empty list. Left/Right are opt-in so vertical menus leave them to the page. Focus from
+// outside gives idx -1: forward/Home land on the first item, backward/End on the last.
 export function step_focus<T extends HTMLElement>(
   event: KeyboardEvent,
   items: T[],
@@ -373,12 +365,11 @@ export function step_focus<T extends HTMLElement>(
 }
 
 // === Shortcut rebinding ===
-// The reverse of parse_shortcut, for UIs that let users record their own shortcuts.
-// Combos come back in one canonical spelling: modifiers in a fixed order, `mod` for
-// the platform's primary modifier, and no segment that would break a split on `+`.
+// Reverse of parse_shortcut, for UIs recording user shortcuts. Canonical spelling:
+// modifiers in fixed order, `mod` for the platform primary, nothing that breaks a `+` split.
 
 const MODIFIER_ORDER = [`mod`, `meta`, `ctrl`, `alt`, `shift`]
-// other spellings users and `event.key` produce for the modifiers named above
+// other spellings users and `event.key` produce for the modifiers above
 const MODIFIER_ALIASES: Record<string, string> = {
   cmd: `meta`,
   command: `meta`,
@@ -395,9 +386,8 @@ const MODIFIER_EVENT_KEYS = new Set(
 )
 
 // Canonical combo for a keydown, e.g. `mod+shift+t`; null for a pure-modifier press.
-// `mod` stands in for Cmd on Apple and Ctrl elsewhere, so one recorded combo works on
-// both and round-trips through matches_shortcut. Pass mod: false to record the
-// physical modifier instead, which a combo bound to one platform wants.
+// `mod` keeps one recording working on both platforms; mod: false records the physical
+// modifier instead, for a combo deliberately bound to one platform.
 export function event_to_combo(
   event: KeyboardEvent,
   { mod = true }: { mod?: boolean } = {},
@@ -419,10 +409,9 @@ export function event_to_combo(
   return [...mods, KEY_TOKENS[key] ?? key].join(`+`)
 }
 
-// Canonical form of a combo written by hand or read back from storage; null for junk
-// (no key, several keys, or a lone modifier). Bare keys like `escape` are valid here
-// because run_hotkeys accepts them; require_modifier rejects them for rebinding UIs,
-// where an unmodified key would swallow ordinary typing.
+// Canonical form of a hand-written or stored combo; null for junk (no key, several keys,
+// lone modifier). Bare keys like `escape` pass since run_hotkeys accepts them;
+// require_modifier rejects them for rebinding UIs, where they'd swallow ordinary typing.
 export function normalize_combo(
   combo: string,
   { require_modifier = false }: { require_modifier?: boolean } = {},
@@ -436,9 +425,8 @@ export function normalize_combo(
   return [...MODIFIER_ORDER.filter((name) => mods.has(name)), key].join(`+`)
 }
 
-// `mod` is Cmd on Apple and Ctrl everywhere else, so `mod+k` and the platform's own
-// spelling of the same chord are one shortcut and have to collide. Conflicts are judged
-// on this resolved form; what gets stored stays in the canonical `mod` spelling.
+// `mod+k` and the platform's own spelling of that chord are one shortcut and must collide,
+// so conflicts are judged on this resolved form; storage keeps the `mod` spelling.
 const resolve_combo = (combo: string): string => {
   const primary = is_apple_platform() ? `meta` : `ctrl`
   const parts = combo.split(`+`)
@@ -452,10 +440,8 @@ const resolve_combo = (combo: string): string => {
   return [...MODIFIER_ORDER.filter((name) => mods.has(name)), ...keys].join(`+`)
 }
 
-// Validates stored `action id -> combo` overrides against a map of defaults, dropping
-// unknown ids, junk combos and overrides that merely restate the default. Overrides
-// that would leave two actions on one combo are dropped too, so an override can never
-// shadow another action's shortcut.
+// Validate stored `action id -> combo` overrides against defaults, dropping unknown ids,
+// junk combos, ones restating the default, and ones that would shadow another action.
 export function sanitize_shortcut_overrides(
   value: unknown,
   defaults: Record<string, string>,
@@ -486,10 +472,8 @@ export function sanitize_shortcut_overrides(
   }
 }
 
-// Compare arrays/values for equality to avoid unnecessary updates.
-// Prevents infinite loops when value/selected are bound to reactive wrappers
-// that clone arrays on assignment (e.g. Superforms, Svelte stores). See issue #309.
-// Treats null/undefined/[] as equivalent empty states to prevent extra updates on init (#369).
+// Skips updates when nothing changed, so reactive wrappers that clone arrays on assignment
+// (Superforms, stores) can't loop forever (#309). null/undefined/[] all count as empty (#369).
 export function values_equal(val1: unknown, val2: unknown): boolean {
   if (val1 === val2) return true
   const is_empty = (val: unknown) =>
@@ -505,9 +489,8 @@ export function values_equal(val1: unknown, val2: unknown): boolean {
 const HAS_COLLAPSIBLE_WHITESPACE = /\s\s|[^\S ]/u
 const HAS_NON_PLAIN_WHITESPACE = /[^\S ]/u
 
-// Case-insensitive subsequence match: returns the indices in target_text where
-// the characters of search_text appear in order, or null if not all characters
-// can be matched. An empty search matches with no indices.
+// Case-insensitive subsequence match: indices in target_text where search_text's chars
+// appear in order, or null if any is missing. An empty search matches with no indices.
 export function fuzzy_match_indices(
   search_text: string,
   target_text: string,
@@ -525,8 +508,8 @@ export function fuzzy_match_indices(
       const normalized = character.toLowerCase()
       target += normalized
       for (let unit_idx = 0; unit_idx < normalized.length; unit_idx++) {
-        // Preserve UTF-16 code-unit indices for astral characters while mapping extra
-        // case-folded units (İ -> i + combining dot) back to their one source unit.
+        // keep UTF-16 indices for astral chars while folding extra case-folded units
+        // (İ -> i + combining dot) back onto their one source unit
         target_offsets.push(source_offset + Math.min(unit_idx, character.length - 1))
       }
       source_offset += character.length
@@ -534,7 +517,7 @@ export function fuzzy_match_indices(
   }
   if (HAS_NON_PLAIN_WHITESPACE.test(target)) target = target.replaceAll(/\s/gu, ` `)
 
-  // Greedy leftmost match; pos only moves forward, so scanning stays linear.
+  // greedy leftmost match; pos only moves forward, so scanning stays linear
   const indices: number[] = []
   let pos = -1
   // by code unit, not for...of: code points emit one index per astral char, two expected
@@ -549,16 +532,13 @@ export function fuzzy_match_indices(
 
 // True if search is a subsequence of target, e.g. "tageoo" matches "tasks/geo-opt"
 export function fuzzy_match(search_text: string, target_text: string): boolean {
-  // guard null/undefined inputs (fuzzy_match_indices would throw on .toLowerCase())
+  // fuzzy_match_indices would throw on .toLowerCase() of null/undefined
   if (search_text == null || target_text == null) return false
-  // empty search matches everything, empty target matches nothing - both already
-  // handled by fuzzy_match_indices (empty search -> [], else vs empty target -> null)
   return fuzzy_match_indices(search_text, target_text) !== null
 }
 
-// A titled run of actions for ActionMenu, optionally a radio group: `selected` matches
-// an action's `id ?? label`, null being a group with nothing chosen yet. Left off, the
-// section is a plain heading and its items stay ordinary menu items.
+// A titled run of ActionMenu actions. Setting `selected` (matched against an action's
+// `id ?? label`, null for nothing chosen) makes it a radio group instead of a plain heading.
 export type CmdSection = {
   title: string
   actions: CmdAction[]
@@ -591,11 +571,10 @@ export function cmd_action_matches(
   )
 }
 
-// Coalesces subtree mutations into one refresh per microtask, including mutations caused by
-// `refresh` itself. Callers perform their own initial refresh.
-// Svelte updates a reactive `{value}` by writing the text node's `nodeValue`, which is a
-// characterData mutation and fires no childList record — so text that changes in place is
-// invisible to an observer that does not opt in.
+// Coalesces subtree mutations (including ones `refresh` causes) into one refresh per
+// microtask; callers do their own initial refresh. watch_text is needed because Svelte
+// updates a reactive `{value}` via the text node's `nodeValue`, a characterData mutation
+// that fires no childList record.
 export function observe_subtree(
   root: Element,
   attribute_filter: string[],
@@ -627,12 +606,12 @@ export function observe_subtree(
 
 // === Masonry ===
 export const order_options = [
-  `balanced`, // Rebalances all items to shortest columns (items may jump)
-  // New items go to the shortest column and placed items stay put, except when the
-  // column count grows: assignments reset so the new columns get used
+  `balanced`, // rebalances all items to shortest columns (items may jump)
+  // new items go to the shortest column, placed items stay put; a growing column count
+  // resets assignments so the new columns get used
   `balanced-stable`,
-  `row-first`, // Round-robin: 1->2->3->1->2->3...
-  `column-sequential`, // Purely sequential: first N items in col 1, next N in col 2
-  `column-balanced`, // Height-aware: fill col 1 to target height, then col 2, etc.
+  `row-first`, // round-robin: 1->2->3->1->2->3...
+  `column-sequential`, // first N items in col 1, next N in col 2
+  `column-balanced`, // height-aware: fill col 1 to target height, then col 2, etc.
 ] as const
 export type MasonryOrder = (typeof order_options)[number]

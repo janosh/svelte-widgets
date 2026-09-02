@@ -6,8 +6,7 @@ import { create_element } from '../index'
 describe(`contrast_color`, () => {
   afterEach(() => vi.restoreAllMocks())
 
-  // brackets a color's luminance from both sides: a threshold just below it has to read
-  // as `over` and one just above as `under`, which pins the value without exposing it
+  // pins a luminance without exposing it: thresholds just below/above read `over`/`under`
   const luminance_brackets = (bg_color: string, expected: number, tolerance: number) => {
     const probe = (luminance_threshold: number) =>
       pick_contrast_color({ bg_color, luminance_threshold, choices: [`over`, `under`] })
@@ -23,8 +22,7 @@ describe(`contrast_color`, () => {
     [`six-digit hex`, `#ffffff`, `black`],
     [`three-digit hex`, `#111`, `white`],
     [`eight-digit hex`, `#ffffffcc`, `black`],
-    // computed styles keep a color in the space it was authored in, so these arrive
-    // at get_bg_color verbatim rather than pre-converted to rgb()
+    // computed styles keep the authored color space, so these reach get_bg_color verbatim
     [`white oklch`, `oklch(1 0 0)`, `black`],
     [`black oklab`, `oklab(0 0 0)`, `white`],
     [`red oklch`, `oklch(0.627955 0.257683 29.2338)`, `white`],
@@ -40,9 +38,7 @@ describe(`contrast_color`, () => {
     expect(pick_contrast_color({ bg_color })).toBe(expected)
   })
 
-  // the conversions are only worth anything if they land on the same luminance the
-  // equivalent sRGB spelling does, so each pair has to agree either side of a threshold
-  // set at the reference color's own luminance
+  // each must land on the same luminance as its equivalent sRGB spelling
   it.each([
     [`oklab(0.627955 0.224863 0.125846)`, 0.299],
     [`oklch(62.7955% 0.257683 29.2338deg)`, 0.299],
@@ -54,8 +50,7 @@ describe(`contrast_color`, () => {
     [`color(srgb-linear 1 1 1)`, 1],
     [`color(xyz-d50 0.9643 1 0.8251)`, 1],
     [`hwb(0.5turn 0% 0%)`, 0.701], // cyan
-    // same cyan a third way: 200grad is 180deg, and `grad` must not read as the `rad`
-    // it ends with, which would leave a trailing `g` and parse to NaN
+    // same cyan: 200grad is 180deg; `grad` must not parse as the `rad` it ends with (NaN)
     [`hwb(200grad 0% 0%)`, 0.701],
     [`oklch(0.627955 0.257683 0.51022606rad)`, 0.299], // red, the 29.2338deg above in radians
     // percentages are as legal in rgb() as anywhere else, in channels and alpha alike
@@ -68,13 +63,11 @@ describe(`contrast_color`, () => {
     expect(luminance_brackets(bg_color, expected, 1e-4)).toEqual(bracketed)
   })
 
-  // The cases above are all primaries or pure white, which every space maps to the same
-  // corner of sRGB — they pass whatever the conversion matrices hold. These are mid-gamut,
-  // where the coefficients actually decide the answer, and the expected channels are what
-  // Chrome 144 paints for the same string (canvas fillStyle, then getImageData).
-  // Chrome quantizes to 8-bit, so its answer is only good to half a channel: 0.5/255 is
-  // 1.96e-3 of luminance, and the tolerance is that bound. Every wrong-matrix result
-  // checked (skipping the D50 adaptation above all) misses by far more than this.
+  // the cases above are primaries or white, which every space maps to the same sRGB
+  // corner, so any matrix passes them. These are mid-gamut, where the matrices decide.
+  // Expected channels are what Chrome 144 paints (canvas fillStyle + getImageData), good
+  // to half a channel (0.5/255 = 1.96e-3 luminance) - hence the tolerance. Wrong-matrix
+  // results (skipping the D50 adaptation above all) miss by far more.
   it.each([
     [`oklch(0.7 0.15 30)`, [237, 118, 101]],
     [`oklab(0.35 0.08 -0.12)`, [75, 28, 118]],
@@ -94,9 +87,8 @@ describe(`contrast_color`, () => {
     expect(luminance_brackets(bg_color, luminance, 2e-3)).toEqual(bracketed)
   })
 
-  // Perceived brightness weights green ×0.587, red ×0.299 and blue ×0.114, so the
-  // same channel value reads very differently. A plain channel average would land
-  // all three of these on 0.333 and give one answer for the lot.
+  // perceived brightness weights green ×0.587, red ×0.299, blue ×0.114; a plain channel
+  // average would land all three on 0.333 and answer the same for the lot
   it.each([
     [`green`, `rgb(0, 255, 0)`, `black`],
     [`red`, `rgb(255, 0, 0)`, `white`],
@@ -115,8 +107,7 @@ describe(`contrast_color`, () => {
     expect(pick_contrast_color(options)).toBe(expected)
   })
 
-  // named colors and color-mix() stay out: a computed value can carry neither, since
-  // color-mix() resolves to a color in its interpolation space before it is read back
+  // named colors and color-mix() never reach a computed value (color-mix resolves first)
   it.each([
     `red`,
     `color-mix(in oklab, red, blue)`,
@@ -132,8 +123,7 @@ describe(`contrast_color`, () => {
     expect(() => pick_contrast_color({ bg_color })).toThrow(/cannot read color/u)
   })
 
-  // a chain with nothing painted in it reports no background at all, and a page with
-  // nothing behind the node is assumed white
+  // an all-transparent chain reports no background; a node with nothing behind it is white
   const tint = `rgba(0, 0, 0, 0.05)`
   it.each([
     [`the first painted ancestor`, `rgb(10, 10, 10)`, ``, `rgb(10, 10, 10)`, `white`],
@@ -154,8 +144,7 @@ describe(`contrast_color`, () => {
     cleanup?.()
   })
 
-  // the ancestor walk stops at the first painted background, and a wide-gamut one is
-  // painted: reading only rgb()/rgba() used to skip straight past it
+  // the walk stops at the first painted bg - rgb()-only reading skipped wide-gamut ones
   it.each([
     [`oklch(0.3 0.1 200)`, `white`, true],
     [`oklch(0.3 0.1 200 / 0)`, `black`, false],

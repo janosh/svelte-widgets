@@ -2,8 +2,8 @@
   import { SettingsGroup, SettingsSearch, SettingsSection } from '$lib'
   import { untrack } from 'svelte'
 
-  // Seeds the field the way a restored session or a deep link would, without the user
-  // ever touching the trigger. Owned here so the component's writes land somewhere live.
+  // seeds the field like a restored session or deep link would, and owns `query` so the
+  // component's writes land somewhere live
   let {
     trigger = `inline`,
     initial_query = ``,

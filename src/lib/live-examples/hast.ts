@@ -1,8 +1,7 @@
-// Minimal HAST-to-HTML serializer (only handles what starry-night outputs).
-// Kept dependency-free so FileDetails.svelte can import it without pulling in
-// the eagerly-initialized starry-night instance from highlighter.ts.
+// Minimal HAST-to-HTML serializer, handling only what starry-night outputs. Dependency-free
+// so FileDetails.svelte can import it without highlighter.ts's eager starry-night instance.
 
-// Structural type compatible with hast Root/Element/Text from starry-night
+// structural type compatible with hast Root/Element/Text
 export interface HastNode {
   type: string
   value?: string
@@ -14,7 +13,7 @@ export interface HastNode {
 // each replaceAll rebuilds the whole string, and most tokens have nothing to escape
 const HAS_ESCAPABLE = /[&<>]/u
 
-// Escape HTML special characters in text content (not for attribute values)
+// text content only, not attribute values
 export const escape_html_text = (str: string): string =>
   HAS_ESCAPABLE.test(str)
     ? str.replaceAll(`&`, `&amp;`).replaceAll(`<`, `&lt;`).replaceAll(`>`, `&gt;`)
@@ -30,8 +29,7 @@ const serialize_children = (children: HastNode[] | undefined): string => {
 export const hast_to_html = (node: HastNode): string => {
   if (node.type === `text`) return escape_html_text(node.value ?? ``)
   if (node.type === `root`) return serialize_children(node.children)
-  // Skip non-element nodes (comment, doctype, raw) - emitting them as elements
-  // would produce malformed `<undefined>` tags
+  // comment/doctype/raw nodes would emit malformed `<undefined>` tags
   if (node.type !== `element` || !node.tagName) return ``
   const { tagName, properties, children } = node
   const cls_val = properties?.className

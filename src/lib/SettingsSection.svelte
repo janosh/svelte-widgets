@@ -31,23 +31,21 @@
     title: string
     // the Explain/Reset strings; the interpolating ones receive `title` verbatim
     labels?: Partial<SettingsSectionLabels>
-    // Omit for a section that only holds actions (export buttons, say) and has nothing to diff.
-    // Values may be primitives, arrays, plain objects, Date, or RegExp. Map, Set, and typed
-    // arrays are unsupported because reset snapshots and comparisons only cover these shapes.
+    // Omit for action-only sections with nothing to diff. Values may be primitives, arrays,
+    // plain objects, Date or RegExp; Map, Set and typed arrays are unsupported.
     current_values?: Record<string, unknown>
-    // Optional reset baseline. Keys absent from this object are treated as additions and
-    // removed when reset; keys not present in current_values are ignored.
+    // Reset baseline: keys absent here count as additions and are removed on reset; keys not
+    // in current_values are ignored.
     reset_values?: Record<string, unknown>
     children: Snippet
-    // `grid` puts every direct label/.setting row on one shared [label][value][wide control]
-    // column rhythm, so controls line up down the whole section instead of starting wherever
-    // each row's label text happens to end. `flow` leaves layout to the caller.
+    // `grid` aligns every direct label/.setting row on one [label][value][wide control]
+    // rhythm instead of wherever each label's text ends; `flow` leaves layout to the caller.
     layout?: `flow` | `grid`
-    // Omit to reset every changed key through `on_reset_key`. Pass one only for sections whose
-    // reset has to do more than restore values (clearing validation state, for instance).
+    // Omit to reset every changed key through `on_reset_key`. Pass one only when reset has to
+    // do more than restore values (clearing validation state, say).
     on_reset?: () => void
-    // Rows opt in with `data-key`. The callback receives the mounted reference value and
-    // whether that key originally existed, so callers can restore or delete it exactly.
+    // Rows opt in with `data-key`. Receives the mounted reference value and whether that key
+    // originally existed, so callers can restore or delete it exactly.
     on_reset_key?: (
       key: string,
       reference_value: unknown,
@@ -103,7 +101,7 @@
     )
   })
 
-  // unique per-instance id so aria-labelledby stays valid with multiple sections on a page
+  // per-instance id so aria-labelledby stays valid with multiple sections on a page
   const section_id = $props.id()
   const title_id = `settings-section-title-${section_id}`
 
@@ -138,8 +136,7 @@
     )
   }
 
-  // Key presence is independent of value: additions/removals count even when the
-  // value is undefined. Only compare values when both sides own the key.
+  // Key presence counts on its own: additions/removals differ even when the value is undefined
   const changed_keys = $derived.by(() => {
     validate_value_shape(current_values)
     return Object.keys({ ...reference_values, ...current_values }).filter(
@@ -168,17 +165,16 @@
 
   const handle_reset = swallow_click(() => {
     if (on_reset) on_reset()
-    // Snapshot first: each reset_key shrinks changed_keys as the caller writes the value back
+    // snapshot: each reset_key shrinks changed_keys as the caller writes the value back
     else for (const key of changed_keys.slice()) reset_key(key)
   })
 
   const DESCRIPTION_SELECTOR = `:scope > .settings-row-description`
   const RESET_SELECTOR = `:scope > .setting-reset-button`
 
-  // A <label> only names its first control, so the slider paired with a number input would go
-  // unnamed. Mark every control we name with the exact text used: that is enough to rename or
-  // revoke it on a later pass without keeping a registry of elements, and it works on rows
-  // Svelte has already detached.
+  // A <label> only names its first control, so a slider paired with a number input goes
+  // unnamed. Recording the text we set lets a later pass rename or revoke it registry-free,
+  // even on rows Svelte already detached.
   const AUTO_LABEL_ATTR = `data-auto-label`
 
   const release_auto_label = (control: Element): void => {
@@ -188,22 +184,19 @@
     control.removeAttribute(AUTO_LABEL_ATTR)
   }
 
-  // Enhance only explicitly keyed rows. Callers that omit both opt-in props never attach this
-  // behavior, preserving the historical DOM and event handling.
+  // Only explicitly keyed rows are enhanced; without either opt-in prop the DOM is untouched.
   const enhance_rows = (section: HTMLElement): (() => void) => {
-    // The only thing worth remembering per row: everything else we add is findable in the row
-    // itself, and a cached node goes stale the moment Svelte re-renders around it. Deliberately
-    // a plain Map, not a SvelteMap: `refresh` runs inside an effect and both reads and writes
-    // this, which reactive entries turn into an endless loop.
+    // Plain Map, not SvelteMap: `refresh` reads and writes this inside an effect, which
+    // reactive entries would turn into an endless loop.
     const original_descriptions = new Map<HTMLElement, string | null>()
-    // What this attachment last wrote to each row's `data-description`. Anything else on
-    // the attribute came from the caller, and re-snapshots rather than being overwritten.
+    // What this attachment last wrote to each row's `data-description`; anything else on the
+    // attribute came from the caller and is re-snapshotted rather than overwritten.
     const written_descriptions = new Map<HTMLElement, string | null>()
 
     const remove_reset_button = (row: HTMLElement): void => {
       const button = row.querySelector(RESET_SELECTOR)
-      // Resetting a value is what removes this button, so a keyboard user who just pressed
-      // it would be left with focus on <body>. Hand focus to the row's own control instead.
+      // Resetting removes this button, so a keyboard user who just pressed it would land on
+      // <body>. Hand focus to the row's own control instead.
       const had_focus = button !== null && button === document.activeElement
       button?.remove()
       row.classList.remove(`has-setting-reset`)
@@ -223,8 +216,8 @@
       else row.setAttribute(`data-description`, original)
     }
 
-    // `data-label` short-circuits the clone, which only exists to strip the controls and our
-    // own appended description out of the row's text before reading it.
+    // `data-label` short-circuits the clone, which only strips controls and our own appended
+    // description out of the row's text.
     const label_text = (row: HTMLLabelElement): string => {
       let text = row.dataset.label
       if (text === undefined) {
@@ -243,8 +236,7 @@
       const label = row instanceof HTMLLabelElement ? label_text(row) : ``
       for (const control of row.querySelectorAll(`input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
-        // An author-set name always wins, whether it was there first or replaced ours: any
-        // name that is not the one we recorded is theirs, so drop our claim and leave it be.
+        // An author-set name always wins: any name other than the one we recorded is theirs
         if (control.getAttribute(`aria-label`) !== marker) {
           control.removeAttribute(AUTO_LABEL_ATTR)
           continue
@@ -261,25 +253,22 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      // Re-snapshot whenever the attribute holds something we did not write: that is the
-      // caller updating a reactive `data-description`, and keeping the mount-time value
-      // would write their new text straight back out on the next refresh.
-      // `getAttribute` returns string|null, never undefined, so an unseen row differs from
-      // its absent `written` entry and is snapshotted by the same comparison.
+      // Re-snapshot whenever the attribute holds something we did not write: the caller
+      // updated a reactive `data-description` and the mount-time value would clobber it.
+      // getAttribute returns null, never undefined, so an unseen row snapshots here too.
       const current_description = row.getAttribute(`data-description`)
       if (current_description !== written_descriptions.get(row)) {
         original_descriptions.set(row, current_description)
       }
       sync_labeled_controls(row)
 
-      // `setting_metadata` overrides the row's own `data-description`, which is restored
-      // whenever the mapping drops the key again.
+      // `setting_metadata` overrides the row's `data-description`, restored if the key drops
       const metadata = setting_metadata?.[key]
       const description =
         (typeof metadata === `string` ? metadata : metadata?.description) ??
         original_descriptions.get(row)
-      // Write only on a real change: `setAttribute` queues a mutation record even when the
-      // value is identical, and SettingsSearch observes this attribute.
+      // Write only on real change: setAttribute queues a mutation record even for an identical
+      // value, and SettingsSearch observes this attribute.
       const next_description = description || null
       if (next_description !== current_description) {
         if (next_description) row.setAttribute(`data-description`, next_description)
@@ -295,8 +284,8 @@
           description_element.className = `settings-row-description`
           row.append(description_element)
         }
-        // Avoid notifying our own subtree observer forever: assigning textContent replaces
-        // the text node even when the string is unchanged.
+        // assigning textContent replaces the node even when unchanged, which would notify
+        // our own subtree observer forever
         if (description_element.textContent !== description) {
           description_element.textContent = description
         }
@@ -346,8 +335,7 @@
       refresh,
     )
     // `refresh` reads `changed_keys`, `descriptions_open` and `setting_metadata`, so this
-    // re-enhances when they change. Calling it from the attachment body instead would re-run
-    // the whole attachment, tearing every reset button and description back off first.
+    // re-enhances on change; from the attachment body it would tear everything off first.
     $effect(refresh)
 
     return () => {
@@ -399,8 +387,7 @@
 </section>
 
 <style>
-  /* A flex row rather than absolutely positioned actions, so a long title is squeezed by the
-     buttons instead of running underneath them. */
+  /* flex row, not absolute actions, so a long title is squeezed instead of running under them */
   .settings-section-heading {
     display: flex;
     align-items: center;
@@ -489,8 +476,8 @@
     gap: var(--settings-row-gap, 4pt) 0;
     align-content: start;
   }
-  /* --ctrl-cols is published so a pane can give the same rhythm to rows it nests one level
-     deeper (grouped axis rows, say) without restating the track list. */
+  /* --ctrl-cols is published so panes can give nested rows the same rhythm without restating
+     the track list */
   section.grid > :global(:is(label, .setting)) {
     display: grid;
     grid-template-columns: var(
