@@ -68,11 +68,11 @@
     activeHeadingScrollOffset?: number
     activeTocLi?: HTMLLIElement | null
     aside?: HTMLElement | undefined
-    breakpoint?: number // in pixels (smaller window width is considered mobile, larger is desktop)
+    breakpoint?: number // px window width below which the ToC switches to mobile
     desktop?: boolean
     flash_clicked_headings_for_ms?: number
     getHeadingData?: (node: HTMLHeadingElement) => TocHeadingData | null
-    // the result of document.querySelectorAll(headingSelector). can be useful for binding
+    // the querySelectorAll(headingSelector) result, exposed for binding
     headings?: HTMLHeadingElement[]
     headingSelector?: string
     excludeSelector?: string
@@ -85,17 +85,15 @@
     nav?: HTMLElement | undefined
     open?: boolean
     openButtonLabel?: string
-    // the toggle stays put and becomes a close button while the panel is open, so it needs
-    // a second name — same shape as Nav's burger, which is the other pinned mobile toggle
+    // the toggle stays put and becomes the close button while open, so it needs a second name
     closeButtonLabel?: string
     reactToKeys?: false | string[]
     scrollBehavior?: `auto` | `smooth`
     title?: string
     tocItems?: HTMLLIElement[]
     warnOnEmpty?: boolean
-    // collapse subheadings under inactive parent headings
-    // true = full nested collapse (each level collapses independently)
-    // 'h3' = h3 is deepest collapsing level, h4+ expand together when h3 ancestor visible
+    // collapse subheadings under inactive parents. true = every level collapses
+    // independently; 'h3' = deepest collapsing level, h4+ expand with their h3 ancestor
     collapseSubheadings?: CollapseMode
     slugifyHeading?: SlugifyHeading
     blurParams?: BlurParams | null | undefined
@@ -112,14 +110,10 @@
     openButtonIconProps?: SVGAttributes<SVGSVGElement>
   } = $props()
 
-  // An indented bullet list, not a burger: the burger is Nav's, and two identical glyphs
-  // pinned to the same phone screen say nothing about which one opens what. Three rows at
-  // two indent levels is what a table of contents looks like.
-  // The list glyph's viewBox is cropped to its own path bounds so it renders at the button's
-  // full width, like the burger's bars do. The X keeps a roomier box: Nav folds its bars into
-  // an X spanning ~17.9px, and one drawn edge to edge across the same 22.4px button would be
-  // the larger of the two close buttons on a page showing both. Each stroke-width is the one
-  // that lands on Nav's 0.18rem bars once its own box is scaled to the button.
+  // a list glyph, not a burger: Nav owns the burger, and two identical pinned glyphs say
+  // nothing about which opens what. The list viewBox is cropped to its path bounds so it
+  // fills the button; the X keeps a roomier box so it stays smaller than Nav's ~17.9px X.
+  // Stroke widths are the ones landing on Nav's 0.18rem bars once scaled to the button.
   const TOGGLE_ICONS = {
     closed: {
       view_box: `1.9 3.9 16.2 12.2`,
@@ -138,32 +132,26 @@
     event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
 
   let window_width: number = $state(0)
-  // page_has_scrolled controls ignoring spurious scrollend events on page load before any actual
-  // scrolling in chrome. see https://github.com/janosh/svelte-toc/issues/57
+  // ignores spurious scrollend events chrome fires on page load before any real scrolling
+  // see https://github.com/janosh/svelte-toc/issues/57
   let page_has_scrolled: boolean = $state(false)
-  // tracks whether TOC overlaps with any hideOnIntersect elements (desktop only)
+  // desktop only
   let is_overlapping_hide_target: boolean = $state(false)
-  // tracks the target heading during programmatic scrolls (click/keyboard-initiated)
-  // prevents scroll events from incorrectly updating activeHeading during smooth scroll
+  // target of a programmatic scroll; keeps scroll events from moving activeHeading to
+  // intermediate headings while a smooth scroll is under way
   let scroll_target: HTMLHeadingElement | null = $state(null)
-  // fallback timeout to clear scroll_target if scrollend doesn't fire
-  // (e.g., no scroll needed, or browser doesn't support scrollend)
   let scroll_target_timeout: ReturnType<typeof setTimeout> | null = null
-  // tracks previous distance to scroll_target to detect manual scroll direction
-  // initialized to Infinity so first scroll event always passes the "distance increasing" check
+  // Infinity so the first scroll event always passes the "distance increasing" check
   let prev_scroll_target_distance: number = Infinity
   // cache selector validity (keyed by `name:selector`) to avoid re-querying every update
   let selector_validity: Record<string, boolean> = {}
-  // tracks which invalid collapseSubheadings values were already warned about
   let collapse_mode_warned: Record<string, boolean> = {}
   let last_reported_open: boolean | undefined = undefined
   let heading_data: TocHeadingData[] = $state([])
-  // whether update_toc_headings has completed a pass. without this, a page that genuinely
-  // has no headings can't tell its first run apart from "nothing changed", since both
-  // compare an empty query result against the empty initial headings array.
+  // without this a heading-less page can't tell its first update_toc_headings pass apart
+  // from "nothing changed": both compare an empty query result against an empty headings
   let headings_initialized = false
 
-  // helper to clear scroll_target state and cancel fallback timeout
   function clear_scroll_target() {
     if (scroll_target_timeout) {
       clearTimeout(scroll_target_timeout)
@@ -186,8 +174,8 @@
 
   function event_targets_custom_interactive(event: LiEvent) {
     if (!tocItem || !(event.target instanceof Element)) return false
-    // only bypass scroll-to-heading when the event lands on an interactive element
-    // nested *inside* the li; fallback li semantics must not count as custom content
+    // only bypass scroll-to-heading for an interactive element nested *inside* the li;
+    // the li's own fallback semantics must not count as custom content
     const interactive = event.target.closest(custom_interactive_selector)
     return interactive !== null && interactive !== event.currentTarget
   }
@@ -195,9 +183,8 @@
   let levels: number[] = $derived(heading_data.map(({ level }) => level))
   let min_level: number = $derived(levels.length ? Math.min(...levels) : 0)
 
-  // the CollapseMode type only permits h2-h6, so a bad level is reachable only from
-  // untyped callers. warn (once per value, like selector_is_valid) and fall back to no
-  // collapsing rather than quietly picking some threshold off a NaN.
+  // CollapseMode only permits h2-h6, so a bad level means an untyped caller. Warn once per
+  // value and disable collapsing rather than picking a threshold off a NaN.
   function normalize_collapse_mode(mode: CollapseMode): CollapseMode {
     if (typeof mode !== `string`) return mode
     const heading_level = Number(mode.slice(1))
@@ -212,8 +199,7 @@
     return false
   }
 
-  // every consumer reads this rather than the raw prop, so an invalid value disables
-  // collapsing everywhere instead of only zeroing out the threshold
+  // read this, never the raw prop, so an invalid value disables collapsing everywhere
   let collapse_mode: CollapseMode = $derived(normalize_collapse_mode(collapseSubheadings))
 
   function get_collapse_threshold(mode: CollapseMode): number {
@@ -222,10 +208,8 @@
     return Number(mode.slice(1))
   }
 
-  // Collapse threshold: true -> 6 (full nesting), 'h3' -> 3, false -> Infinity
   let collapse_threshold: number = $derived(get_collapse_threshold(collapse_mode))
 
-  // Memoized visibility array - computed once per render cycle
   let heading_visibility: boolean[] = $derived.by(() => {
     const active_idx =
       collapse_mode && activeHeading ? headings.indexOf(activeHeading) : null
@@ -244,10 +228,9 @@
     })
   })
 
-  // Re-check overlap when headings or hideOnIntersect change
   $effect(() => {
-    void headings // track headings as dependency
-    void hideOnIntersect // track prop changes
+    void headings // register as dependencies
+    void hideOnIntersect
     check_toc_overlap()
   })
 
@@ -305,9 +288,8 @@
     scroll_target_timeout = setTimeout(clear_scroll_target, scroll_target_fallback_ms)
     node.scrollIntoView?.({ behavior: scrollBehavior, block: `start` })
 
-    // use the raw id as the URL fragment so it matches the DOM id exactly. encodeURIComponent
-    // (used for the <a href> attribute) would emit e.g. #sec%3A1 for id="sec:1", which only
-    // resolves via the browser's percent-decode fallback rather than matching directly.
+    // raw id as the fragment so it matches the DOM id exactly: encodeURIComponent (used for
+    // the <a href>) emits #sec%3A1 for id="sec:1", which only resolves via percent-decoding
     const id = heading_data[idx]?.id
     if (id) history.replaceState({}, ``, `#${id}`)
 
@@ -359,11 +341,9 @@
     selector_is_valid(`headingSelector`, headingSelector) &&
     element.closest(headingSelector) !== null
 
-  // A childList record used to short-circuit to `true`, so every DOM insertion anywhere in
-  // the document — a toast, a tooltip, a dropdown, a virtualized editor row scrolling past —
-  // re-queried every heading in the document. Only nodes that are or contain a heading can
-  // change the result.
-  // NodeList is iterable, so this stays allocation-free on the mutation path
+  // only nodes that are or contain a heading can change the result: short-circuiting every
+  // childList record to `true` re-queried all headings on any DOM insertion (toast, tooltip,
+  // virtualized row). NodeList is iterable, so this stays allocation-free.
   const some_element = (nodes: NodeList, match: (node: Element) => boolean): boolean => {
     for (const node of nodes) if (node instanceof Element && match(node)) return true
     return false
@@ -371,8 +351,8 @@
   const childlist_touches_headings = (record: MutationRecord): boolean => {
     if (!selector_is_valid(`headingSelector`, headingSelector)) return false
     const { target } = record
-    // `heading.textContent = '…'` swaps a text node, so neither node list holds an Element,
-    // but the record targets the heading itself
+    // `heading.textContent = '…'` swaps a text node: no Element in either node list, but
+    // the record targets the heading itself
     if (target instanceof Element && element_matches_heading_selector(target)) return true
     return (
       some_element(
@@ -380,8 +360,8 @@
         (node) =>
           node.matches(headingSelector) || Boolean(node.querySelector(headingSelector)),
       ) ||
-      // a removed node is detached, so `main > h2` can no longer match it — compare
-      // against the headings currently held instead
+      // a removed node is detached, so `main > h2` can't match it — compare against the
+      // headings currently held instead
       some_element(record.removedNodes, (node) =>
         headings.some((heading) => node === heading || node.contains(heading)),
       )
@@ -440,11 +420,10 @@
       })
     }
 
-    // Use untrack to avoid creating dependencies on the state we're about to modify
+    // untrack: this writes the very state it would otherwise depend on
     untrack(() => {
-      // skip state churn when an unrelated DOM mutation left the heading set unchanged.
-      // this must also hold for the empty set, or every mutation on a heading-less page
-      // re-runs the whole rebuild and repeats the warnOnEmpty warning.
+      // skip state churn when an unrelated mutation left the heading set unchanged — the
+      // empty set included, else every mutation on a heading-less page repeats warnOnEmpty
       const unchanged =
         headings_initialized &&
         heading_entries.length === headings.length &&
@@ -499,35 +478,31 @@
     observer.observe(document.body, {
       attributes: true,
       childList: true,
-      characterData: true, // Watch text changes inside existing headings
-      subtree: true, // Watch all descendants, not just direct children
+      characterData: true,
+      subtree: true,
     })
 
     return () => observer.disconnect()
   })
 
-  // clear_scroll_target writes component state, so a pending fallback must not outlive
-  // the component. The flash timer only strips a class off a detached node, so it can run.
+  // clear_scroll_target writes component state, so its timer must not outlive the component.
+  // The flash timer only strips a class off a detached node, so it can run.
   $effect(() => () => {
     if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
   })
 
   function set_active_heading() {
-    // if we're in a programmatic scroll (click/keyboard initiated), keep the target active
-    // until scrollend fires to prevent highlighting intermediate headings during smooth scroll
+    // during a programmatic scroll keep the target active until scrollend, so intermediate
+    // headings aren't highlighted on the way
     if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
     if (scroll_target) {
-      // detect if user manually scrolled away from scroll_target by checking if distance
-      // is increasing (user scrolling away) rather than decreasing (smooth scroll in progress)
       const distance = Math.abs(
         scroll_target.getBoundingClientRect().top - activeHeadingScrollOffset,
       )
-      // a large enough increase detects manual scroll while tolerating scroll jitter
+      // growing distance means the user scrolled away; the threshold tolerates jitter
       if (distance > prev_scroll_target_distance + manual_scroll_threshold_px) {
-        // user manually scrolled away from target, clear and allow normal detection
         clear_scroll_target()
       } else {
-        // smooth scroll still in progress (distance decreasing or stable), keep target active
         prev_scroll_target_distance = distance
         return
       }
@@ -537,17 +512,15 @@
     while (idx--) {
       const { top } = headings[idx].getBoundingClientRect()
 
-      // loop through headings from last to first until we find one that the viewport already
-      // scrolled past. if none is found, set make first heading active
+      // last heading the viewport has scrolled past, else the first one
       if (top < activeHeadingScrollOffset || idx === 0) {
         activeHeading = headings[idx]
         activeTocLi = tocItems[idx]
-        return // exit while loop if updated active heading
+        return
       }
     }
   }
 
-  // check if TOC overlaps with any hideOnIntersect elements (desktop only)
   function check_toc_overlap() {
     if (!hideOnIntersect || !aside || !desktop) {
       is_overlapping_hide_target = false
@@ -574,7 +547,7 @@
       : []
   }
 
-  // click and key handler for ToC items that scrolls to the heading
+  // click/key handler on ToC items: scrolls to the heading
   const li_click_key_handler = (node: HTMLHeadingElement) => (event: LiEvent) => {
     if (event instanceof KeyboardEvent) liProps.onkeydown?.(event)
     else liProps.onclick?.(event)
@@ -593,17 +566,15 @@
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
     if (keepActiveTocItemInView && activeTocLi && nav) {
-      // scroll the active ToC item into the middle of the ToC container. offsetTop and
-      // scrollTop both count from the padding box, so the height to halve is the
-      // scrollport's (clientHeight), not the border box's.
+      // centre the active item: offsetTop and scrollTop both count from the padding box,
+      // so halve clientHeight (the scrollport), not the border box
       const top = activeTocLi.offsetTop - nav.clientHeight / 2
       nav.scrollTo?.({ top, behavior })
     }
   }
 
-  // ensure active ToC is in view when ToC opens on mobile. untracked because both calls
-  // read (and set_active_heading writes) activeTocLi: tracking it would re-run this on
-  // every arrow-key move and snap the selection straight back to the scroll position.
+  // show the active item when the mobile ToC opens. untracked because tracking activeTocLi
+  // (which set_active_heading writes) would re-run this on every arrow-key move.
   $effect(() => {
     if (!open || !nav) return
     untrack(() => {
@@ -612,7 +583,6 @@
     })
   })
 
-  // enable keyboard navigation
   function on_keydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return
     if (!reactToKeys || !reactToKeys.includes(event.key)) return
@@ -645,6 +615,17 @@
       set_open(false, `escape`)
       return
     }
+    // Everything below drives the toc's own list and preventDefaults to do it, which cancels
+    // the activation of whatever else has focus: with the panel open (or the desktop toc merely
+    // hovered) every button on the page went dead to Enter, arrows stopped moving the caret in
+    // a text field, and the toc's own toggle re-activated the current heading instead of
+    // closing. Only run while focus is idle or already inside the list. Escape and Tab are
+    // handled above, so the panel still closes from anywhere.
+    const focused = document.activeElement
+    const focus_is_idle =
+      !focused || focused === document.body || focused === document.documentElement
+    if (!focus_is_idle && !nav?.contains(focused)) return
+
     event.preventDefault()
     const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)
 
@@ -658,10 +639,9 @@
       activeTocLi = sibling_prop
         ? (visible_toc_sibling(current_toc_li, sibling_prop) ?? current_toc_li)
         : current_toc_li
-      // move DOM focus onto the navigated item so the focused link's own keydown handler
-      // can't override arrow-navigation on the next Enter/Space (tab->arrow->Enter)
+      // move DOM focus along, else the previously focused link's keydown handler hijacks
+      // the next Enter/Space (tab -> arrow -> Enter)
       if (sibling_prop) focus_toc_item(activeTocLi)
-      // update active heading
       activeHeading = headings[tocItems.indexOf(activeTocLi)]
     }
     if (activeTocLi && is_activation_key(event.key) && activeHeading) {
@@ -711,14 +691,13 @@
   hidden={hide}
   aria-hidden={hide || is_overlapping_hide_target}
   {@attach (node) => {
-    // while intersecting the aside is only opacity: 0, so without inert it stays in the
-    // tab order while aria-hidden tells assistive tech it is gone
+    // while intersecting the aside is only opacity: 0, so without inert it stays tabbable
+    // even though aria-hidden tells assistive tech it is gone
     node.toggleAttribute(`inert`, is_overlapping_hide_target)
   }}
 >
-  <!-- The toggle stays mounted while open and becomes the close button, matching Nav's
-  burger. Unmounting it left the panel with no visible way out — only an outside click,
-  Escape or a tab-out, none of which a touch user can see. -->
+  <!-- the toggle stays mounted and becomes the close button: unmounting it left touch users
+  no visible way out, only an outside click, Escape or a tab-out -->
   {#if !desktop && headings.length >= minItems}
     <button
       {...openButtonProps}
@@ -734,8 +713,7 @@
       aria-label={open ? closeButtonLabel : openButtonLabel}
     >
       {#if openTocIcon}{@render openTocIcon()}{:else}
-        <!-- Both glyphs stay mounted and cross-fade, so the toggle animates on open/close
-        the way Nav's burger morphs into its X instead of swapping in one frame. -->
+        <!-- both glyphs stay mounted and cross-fade instead of swapping in one frame -->
         {#each Object.entries(TOGGLE_ICONS) as [state, icon] (state)}
           <svg
             width="1em"
@@ -815,14 +793,11 @@
 
 <style>
   :where(aside.toc) {
-    /* A ToC row and a Nav row are the same thing to a reader — a link that lights up under
-       the pointer — so they share one hover language: Nav's --nav-link-bg-hover colour, its
-       --nav-border-radius and its 0.2s background fade. These are the fallbacks behind the
-       public --toc-li-* tokens, which still win. */
+    /* mirrors Nav's --nav-link-bg-hover / --nav-border-radius so ToC and Nav rows share one
+       hover language. Fallbacks only — the public --toc-li-* tokens still win. */
     --toc-item-hover-bg: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
     --toc-item-radius: 3pt;
-    /* shared by the mobile panel and its toggle so the two read as one surface. Values match
-       Nav's --nav-surface-* so a page showing both toggles gets one visual language. */
+    /* shared by the mobile panel and its toggle; values match Nav's --nav-surface-* */
     --toc-surface-border: 1px solid
       light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
     --toc-surface-shadow: light-dark(
@@ -905,22 +880,27 @@
     border-width: var(--toc-active-border-width);
     border-radius: var(--toc-active-border-radius, var(--toc-item-radius));
   }
-  /* After `.active`, not before: the two selectors have equal specificity, so source order
-     decides, and the active row is the one most likely to be hovered. Nav's active row keeps
-     its hover fill too (there, active is a text colour), and an unset --toc-active-bg made
-     `background` invalid on that row, which swallowed the hover fill entirely. */
+  /* must follow `.active`: equal specificity, so source order decides whether the active
+     row (the likeliest hover target) keeps its hover fill. An unset --toc-active-bg made
+     `background` invalid there and swallowed the fill entirely. */
   aside.toc > nav > ol > li:hover {
     color: var(--toc-li-hover-color);
     background: var(--toc-li-hover-bg, var(--toc-item-hover-bg));
   }
-  /* Cosmetics stay in `:where()` so a host can restyle the toggle without fighting
-     specificity. Its box does not: see the structural rule below. */
+  /* an unset --toc-li-hover-color is guaranteed-invalid, so the rule above computes `color`
+     to inherited text instead of dropping out, wiping the accent off the active row on
+     hover. Restating the active colour as the fallback fixes it; an explicit one still wins. */
+  aside.toc > nav > ol > li.active:hover {
+    color: var(--toc-li-hover-color, var(--toc-active-color));
+  }
+  /* cosmetics in `:where()` so a host can restyle without fighting specificity; the box
+     is not, see the structural rule below */
   :where(aside.toc > button) {
     cursor: pointer;
     font: var(--toc-mobile-btn-font, 1.4rem sans-serif);
     line-height: var(--toc-mobile-btn-line-height, 0);
-    /* relative, not absolute: the aside lays both children out now, but these two vars are
-       public and still have to be able to nudge the toggle off its flex slot */
+    /* relative, not absolute: the aside lays both children out, but the public bottom/right
+       vars must still nudge the toggle off its flex slot */
     position: relative;
     bottom: var(--toc-mobile-btn-bottom, 0);
     right: var(--toc-mobile-btn-right, 0);
@@ -931,22 +911,20 @@
     color: var(--toc-mobile-btn-color, var(--text, black));
     box-shadow: var(--toc-mobile-btn-shadow, var(--toc-surface-shadow));
   }
-  /* A 1.4rem glyph in a 0.3rem-padded box, matching Nav's burger: the two are the only pinned
-     mobile toggles a page has, and at different sizes they read as unrelated chrome. Not
-     `:where()`, for the same reason as the `ol` rule below — a host `button { padding }` reset
-     outweighs a zero-specificity selector and silently resized the hit target. Tune it with
-     --toc-mobile-btn-padding / --toc-mobile-btn-font, which still win. */
+  /* sized to match Nav's burger, the only other pinned mobile toggle. Not `:where()`: a host
+     `button { padding }` reset outweighs a zero-specificity selector and silently resized the
+     hit target. Tune with --toc-mobile-btn-padding / --toc-mobile-btn-font, which still win. */
   aside.toc > button {
     display: grid;
     place-items: center;
     box-sizing: content-box;
-    /* 1em so the box tracks --toc-mobile-btn-font, which the icon already sizes itself from */
+    /* 1em so the box tracks --toc-mobile-btn-font, which the icon already sizes from */
     width: 1em;
     height: 1em;
     padding: var(--toc-mobile-btn-padding, 0.3rem);
   }
-  /* Both glyphs share the single grid cell and swap by opacity + quarter turn, matching the
-     0.2s linear the burger's bars use to fold into their X. */
+  /* both glyphs share one grid cell and swap by opacity + quarter turn, on the 0.2s linear
+     Nav's burger bars use */
   aside.toc > button > svg {
     grid-area: 1 / 1;
     opacity: 0;
@@ -962,10 +940,22 @@
   :where(aside.toc > nav > .toc-title) {
     margin-top: var(--toc-title-margin-top, 0);
   }
-  /* column-reverse against the DOM order [button, nav] keeps the toggle pinned in the corner
-     and opens the panel upward above it. Both children used to be absolutely positioned off
-     this zero-size anchor, which stacked them on top of each other once the toggle stopped
-     unmounting on open. */
+  /* in the floating panel the title is a header, not a paragraph, so it drops the desktop
+     1em gap and cancels the panel's inline padding: a divider stopping short of the sides
+     reads as an underline on the words rather than a break above the list */
+  :where(aside.toc.mobile > nav > .toc-title) {
+    margin-block-end: var(--toc-mobile-title-margin-bottom, 0.35em);
+    padding-block-end: var(--toc-mobile-title-padding-bottom, 0.2em);
+    /* the inherited 1.6 is prose leading; on one header line it is just space above and
+       below the words, which reads as padding inside the rule */
+    line-height: var(--toc-mobile-title-line-height, 1.3);
+    margin-inline: calc(-1 * var(--toc-mobile-padding-inline));
+    padding-inline: var(--toc-mobile-padding-inline);
+    border-bottom: var(--toc-mobile-title-border, var(--toc-surface-border));
+  }
+  /* column-reverse against the DOM order [button, nav] pins the toggle in the corner and
+     opens the panel above it. Absolute positioning off this anchor stacked the two once the
+     toggle stopped unmounting on open. */
   aside.toc.mobile {
     position: fixed;
     bottom: var(--toc-mobile-bottom, 1em);
@@ -974,25 +964,33 @@
     flex-direction: column-reverse;
     align-items: end;
     gap: var(--toc-mobile-gap, 0.5em);
-    /* override the desktop --toc-width the base rule applies: on mobile the aside is just a
-       corner anchor and has to size to whichever of the panel or the toggle is wider */
+    /* overrides the base --toc-width/--toc-min-width: on mobile the aside is a corner anchor
+       sized to whichever of panel or toggle is wider. The 15em floor left a closed toggle
+       dragging a transparent 15em box that still ate taps aimed at the page beneath. */
     width: max-content;
-    /* a long page's toc outgrows a phone screen, and a fixed panel can't scroll with the
-       document, so cap the whole stack against the viewport and let the panel scroll inside */
+    min-width: 0;
+    /* a fixed panel can't scroll with the document, so cap the stack against the viewport
+       and let the panel scroll inside */
     max-height: calc(100dvh - 2 * var(--toc-mobile-bottom, 1em));
     max-width: calc(100dvw - 2 * var(--toc-mobile-right, 1em));
   }
   aside.toc.mobile > nav {
-    /* the desktop 3em inset makes room for the sticky column's left gutter; in a floating
-       panel it is just a blank band down the left of every entry */
-    padding: var(--toc-mobile-padding, 0.5em 1em 1em);
+    /* the desktop 3em inset is just a blank band in a floating panel. The inline half is its
+       own token because the title's rule cancels it to reach the panel edge — a host replacing
+       --toc-mobile-padding should set it to match. rem, not em: a custom property substitutes
+       its text, so `em` would resolve against the reading element (the title is larger). */
+    --toc-mobile-padding-inline: 1rem;
+    padding: var(--toc-mobile-padding, 0.5em var(--toc-mobile-padding-inline) 1em);
+    /* --toc-font-size shrinks the desktop column to fit beside the content; the floating
+       panel has no such constraint and is read at arm's length, so it matches Nav's menu */
+    font-size: var(--toc-mobile-font-size, 1rem);
     border-radius: var(--toc-mobile-border-radius, 6pt);
     box-sizing: border-box;
     background: var(--toc-mobile-bg, white);
     width: var(--toc-mobile-width, 18em);
     max-width: 100%;
-    /* flex items floor at their content height without this, so a tall toc would push the
-       toggle off the bottom of the screen instead of scrolling */
+    /* flex items floor at content height, so a tall toc would push the toggle off-screen
+       instead of scrolling */
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;

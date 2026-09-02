@@ -109,8 +109,8 @@ body > div {
   }
   aside.toc.mobile {
     /* the aside is position: fixed, so it is already out of flow and takes no grid track.
-       It used to be collapsed to 0x0 here, which also collapsed the panel it now lays out. */
-    min-width: 0;
+       It used to be collapsed to 0x0 here, which also collapsed the panel it now lays out.
+       Toc floors its own mobile min-width now, so only the margin is still ours to reset. */
     margin: 0;
   }
   main {
