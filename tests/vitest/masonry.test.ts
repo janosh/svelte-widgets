@@ -562,8 +562,8 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`scrolling moves the window, and a consumer's onscroll still fires`, async () => {
-    // `{...rest}` spreads after the component's own onscroll, so unless chained a consumer
-    // handler replaces it and the window silently stops tracking
+    // the explicit onscroll follows `{...rest}`, so unless chained it replaces the consumer's
+    // handler and their callback silently stops firing
     const consumer_scroll = vi.fn()
     mount_virtualized(200, {
       calcCols: () => 1,

@@ -104,7 +104,8 @@ export const actions = {
     const data = await request.formData()
     let colors = data.get(`colors`)
 
-    // failures return an empty array so the client can always bind it to `selected`
+    // every failure returns an array — `boring` echoes the valid picks, the rest send none —
+    // so the client can always bind it to `selected`
     if (!colors || typeof colors !== `string`) {
       return fail(400, { colors: [], error: `missing` })
     }

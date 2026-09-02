@@ -8,7 +8,8 @@
   type ItemId = string | number
   type ItemRecord = { id: ItemId; idx: number; item: Item }
 
-  // Non-primitive items need an id property (name it via idKey) to key the each block.
+  // With the default getId, non-primitive items need an id property (name it via idKey) to
+  // key the each block; a custom getId can derive the key from anything.
   // See https://svelte.dev/docs/svelte/each#Keyed-each-blocks.
   let {
     animate = true,
@@ -173,8 +174,10 @@
   const shortest_col = (heights: number[]): number =>
     heights.indexOf(Math.min(...heights))
 
-  // New items go to the shortest column, existing ones keep theirs. Mutating
-  // stable_assignments inside a $derived is safe: it's a non-reactive cache, not a dependency.
+  // At a steady column count new items go to the shortest column and existing ones keep
+  // theirs; a change drops every assignment (more columns) or reseats the ones now out of
+  // range (fewer). Mutating stable_assignments inside a $derived is safe: it's a
+  // non-reactive cache, not a dependency.
   function balanced_stable_to_cols(num_cols: number): ItemRecord[][] {
     if (num_cols > prev_stable_num_cols) stable_assignments.clear()
     prev_stable_num_cols = num_cols
@@ -253,7 +256,7 @@
 
   let items_to_cols = $derived.by(() => {
     // balanced-stable never falls back: stable assignments + estimates for new items keep
-    // existing items from jumping columns
+    // existing items from jumping columns as long as the column count holds
     if (effective_order === `balanced-stable`) return balanced_stable_to_cols(n_cols)
 
     // Other height-aware modes need every item measured; check the mode first so only they

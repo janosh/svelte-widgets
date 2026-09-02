@@ -439,6 +439,33 @@ describe(`Toc`, () => {
     },
   )
 
+  // the window handler preventDefaults arrows to drive its own list, and a custom tocItem's
+  // fields sit inside nav, so the focus guard let them through and stole the caret
+  test(`tocItem text fields keep their own arrow keys`, async () => {
+    set_body(`<h2 id="first">First</h2><h2 id="second">Second</h2>`)
+    mock_active_heading(`first`)
+
+    mount_toc({
+      tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+        render: () => `<input class="filter" value="${heading().id}">`,
+      })),
+    })
+    await tick()
+
+    const field = doc_query<HTMLInputElement>(`aside.toc li > input.filter`)
+    field.focus()
+    const event = new KeyboardEvent(`keydown`, {
+      key: `ArrowDown`,
+      bubbles: true,
+      cancelable: true,
+    })
+    field.dispatchEvent(event)
+    await tick()
+
+    expect(event.defaultPrevented).toBe(false)
+    expect(document.activeElement).toBe(field) // the ToC did not move focus off the field
+  })
+
   test(`modified clicks on ToC links keep native browser behavior`, async () => {
     set_body(`<h2 id="intro">Intro</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)

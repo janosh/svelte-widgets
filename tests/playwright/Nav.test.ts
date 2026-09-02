@@ -274,4 +274,37 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
   const last = link_boxes[link_boxes.length - 1]
   expect(wrapper.y).toBeLessThanOrEqual(link_boxes[0].y)
   expect(wrapper.bottom).toBeGreaterThanOrEqual(last.bottom - 0.5)
+
+  // The desktop panel hugs its content and its links never wrap, which suits a box floating
+  // free of the page. Inline in the phone column both leaked: a long label pushed the menu
+  // wider than the viewport, so its tail sat outside the panel and had to be scrolled to.
+  const long_label = await links.first().evaluate((link) => {
+    link.textContent = `Extremely Long Submenu Label That Cannot Possibly Fit`
+    const menu = link.closest(`.menu`)
+    if (!menu) throw new Error(`Missing mobile menu panel`)
+    const box = link.getBoundingClientRect()
+    return {
+      menu_overflow: menu.scrollWidth - menu.clientWidth,
+      // the far end of the label, and what is painted there
+      tail: document.elementFromPoint(box.right - 4, box.top + box.height / 2)?.tagName,
+      wrapped: box.height,
+      row_height: menu.querySelector(`.dropdown > div:first-child`)?.clientHeight ?? 0,
+    }
+  })
+  expect(long_label.menu_overflow, `phone menu scrolls sideways`).toBe(0)
+  expect(long_label.tail, `label tail is outside the panel`).toBe(`A`)
+  expect(long_label.wrapped, `label did not wrap onto more rows`).toBeGreaterThan(
+    long_label.row_height,
+  )
+
+  // the panel's other desktop sizing knob is a floor wide enough to clear the trigger, which
+  // on a narrow phone is wider than the whole column
+  await page.setViewportSize({ width: 320, height: 800 })
+  const floored = await links.first().evaluate((link) => {
+    document.documentElement.style.setProperty(`--nav-dropdown-min-width`, `20em`)
+    const menu = link.closest(`.menu`)
+    if (!menu) throw new Error(`Missing mobile menu panel`)
+    return menu.scrollWidth - menu.clientWidth
+  })
+  expect(floored, `--nav-dropdown-min-width leaks into the phone column`).toBe(0)
 })

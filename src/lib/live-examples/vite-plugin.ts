@@ -63,8 +63,8 @@ function collect_nodes(tree: unknown): { src_props: AstNode[]; imports: AstNode[
   return { src_props, imports }
 }
 
-// Absolute module ID for consistent lookups. Not path.posix.join: it treats /src/... as
-// already absolute.
+// Absolute module ID for consistent lookups. Not path.posix.join: it would double a cwd the
+// id already carries (`join('/repo', '/repo/src/x')` gives `/repo/repo/src/x`).
 function to_absolute(id: string, cwd: string): string {
   if (id.startsWith(`${cwd}/`) || id === cwd) return id
   return id.startsWith(`/`) ? `${cwd}${id}` : `${cwd}/${id}`

@@ -16,6 +16,7 @@
     unique_heading_id,
   } from './heading-anchors'
   import { get_heading_visibility } from './toc-utils'
+  import { is_editable_event_target } from './utils'
 
   let {
     activeHeading = $bindable(null),
@@ -622,7 +623,10 @@
     const focused = document.activeElement
     const focus_is_idle =
       !focused || focused === document.body || focused === document.documentElement
-    if (!focus_is_idle && !nav?.contains(focused)) return
+    // a text field owns its arrows even when a custom tocItem renders it inside nav
+    const key_belongs_elsewhere =
+      !nav?.contains(focused) || is_editable_event_target(focused)
+    if (!focus_is_idle && key_belongs_elsewhere) return
 
     event.preventDefault()
     const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)

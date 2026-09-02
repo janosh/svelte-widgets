@@ -746,6 +746,11 @@
      keeps the still-mounted links out of the tab order. */
   nav.mobile .dropdown > div:last-child {
     position: static;
+    /* the desktop panel floats free of the page, so it hugs its content and may be given a
+       floor wider than its trigger. Inline in the mobile column both push the menu past the
+       phone's edge, so drop each to the column's own width. */
+    width: auto;
+    min-width: 0;
     border: none;
     box-shadow: none;
     padding: 0;
@@ -788,6 +793,11 @@
     padding-top: 2pt;
   }
   nav.mobile .dropdown > div:last-child a {
+    /* the desktop rule's nowrap makes a long label set the panel's min-content width, so the
+       phone menu scrolled sideways to reach the tail. `anywhere` (not break-word) is what
+       lowers min-content, and top-level rows already wrap this way. */
+    white-space: normal;
+    overflow-wrap: anywhere;
     padding-block: 2pt;
     padding-inline: 6pt 8pt;
     /* matches the top-level rows; an inherited 1.6 made child rows taller than their parent */

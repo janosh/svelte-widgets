@@ -49,8 +49,8 @@ const restore = (text: string, parts: string[], part_token: string): string => {
 }
 
 export function katex_preprocess(options: KatexOptions = {}) {
-  // Wire as `[katex.before, mdsvex(…), katex.after, …]`: run after before mdsvex and
-  // markdown linkifies xmlns URLs and smart-quotes the `{@html}` payload.
+  // Wire as `[katex.before, mdsvex(…), katex.after, …]`: `katex.after` has to follow mdsvex,
+  // or markdown linkifies the xmlns URLs and smart-quotes the `{@html}` payload it emits.
   const nonce = random_uuid()
   const part_token = `\0katex-${nonce}-`
   const slot_token = `${SLOT_OPEN}katex-${nonce}-`

@@ -15,8 +15,10 @@ const is_source_file = (name: string): boolean =>
 const EXPORT_DEFINITION_RE =
   /^export (?:async function|function|abstract class|class|const|let|interface|type|enum) (?<name>[A-Za-z_$][\w$]*)/
 
-// Accepts every package.json `repository` form — URL string, `{ url }` record (`git+`
-// prefix, `.git` suffix or SSH remote), `user/repo` shorthand — and yields the https URL.
+// Accepts every package.json `repository` form — URL string or `{ url }` record — and
+// normalizes the ones it knows: `user/repo` shorthand becomes a GitHub https URL, and a
+// `git+` prefix, SSH remote or `.git` suffix is rewritten. Any other URL passes through
+// as-is, `git://` and plain `http://` included.
 export const repository_url = (repository: unknown): string => {
   const raw =
     typeof repository === `string` ? repository : (repository as { url?: unknown })?.url
