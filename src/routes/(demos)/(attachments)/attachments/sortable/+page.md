@@ -13,29 +13,32 @@
   ]
 </script>
 
-<table {@attach sortable()} class="demo-table">
-  <thead>
-    <tr>
-      <th>Planet</th>
-      <th>Moons</th>
-      <th>Discovery</th>
-      <th>Notes</th>
-    </tr>
-  </thead>
-  <tbody>
-    {#each planets as { planet, moons, discovery, notes }}
+<!-- four columns do not fit a phone; scroll the table in its own box rather than the page -->
+<div style="overflow-x: auto">
+  <table {@attach sortable()} class="demo-table">
+    <thead>
       <tr>
-        <td>{planet}</td>
-        <td>{moons}</td>
-        <td>{discovery}</td>
-        <td>{notes}</td>
+        <th>Planet</th>
+        <th>Moons</th>
+        <th>Discovery</th>
+        <th>Notes</th>
       </tr>
-    {/each}
-  </tbody>
-  <caption style="caption-side: bottom; padding-top: 0.5em">
-    Click headers to sort; click again to reverse
-  </caption>
-</table>
+    </thead>
+    <tbody>
+      {#each planets as { planet, moons, discovery, notes }}
+        <tr>
+          <td>{planet}</td>
+          <td>{moons}</td>
+          <td>{discovery}</td>
+          <td>{notes}</td>
+        </tr>
+      {/each}
+    </tbody>
+    <caption style="caption-side: bottom; padding-top: 0.5em">
+      Click headers to sort; click again to reverse
+    </caption>
+  </table>
+</div>
 
 <style>
   .demo-table {
