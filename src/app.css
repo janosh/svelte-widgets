@@ -104,14 +104,17 @@ body > div {
     color: inherit; /* Toc uses :where(); else global `a` paints every item accent */
   }
   aside.toc.mobile {
-    width: 0;
-    height: 0;
+    /* the aside is position: fixed, so it is already out of flow and takes no grid track.
+       It used to be collapsed to 0x0 here, which also collapsed the panel it now lays out. */
     min-width: 0;
     margin: 0;
-    overflow: visible; /* fixed FAB must not occupy a grid track */
   }
   main {
     margin: 0;
+    /* grid items floor at min-content, so one wide code block or table stretched `main` past
+       the viewport and scrolled the whole page sideways on a phone. Code scrolls inside its
+       own `pre code` instead. */
+    min-width: 0;
   }
 }
 main {

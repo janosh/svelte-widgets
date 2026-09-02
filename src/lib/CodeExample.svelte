@@ -126,6 +126,10 @@
     flex-direction: column;
     margin: var(--code-example-margin, 1em auto);
     position: relative;
+    /* Deliberately not `contain: layout`, tempting though it is for examples that render
+       viewport-fixed chrome: it also makes this a stacking context, which traps a
+       portalled/absolute dropdown inside the example box. Such demos pass breakpoint={0}
+       (or position: static) instead so they never render fixed chrome in the first place. */
     /* a wide example scrolls inside its own pre/preview instead of widening the page */
     min-width: 0;
   }
