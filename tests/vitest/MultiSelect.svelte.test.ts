@@ -2138,6 +2138,25 @@ test(`onclose fires once with KeyboardEvent, not again when already closed`, asy
   expect(close_spy).toHaveBeenCalledOnce()
 })
 
+// The dropdown {#each} was hardened against duplicate key() results; the chips loop was
+// not, so two selected entries sharing a key threw each_key_duplicate on mount.
+test.each([
+  [
+    `duplicate preselected options`,
+    {
+      options: [
+        { label: `x`, preselected: true },
+        { label: `x`, preselected: true },
+      ],
+    },
+  ],
+  [`a selected array with repeats`, { options: [`a`], selected: [`a`, `a`] }],
+])(`renders chips sharing one key without crashing (%s)`, async (_case, props) => {
+  mount_multiselect(props)
+  await tick()
+  expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(2)
+})
+
 describe(`keepSelectedInDropdown feature`, () => {
   const options = [`Apple`, `Banana`, `Cherry`]
   const options_with_date = [`Apple`, `Banana`, `Cherry`, `Date`]
@@ -2186,6 +2205,43 @@ describe(`keepSelectedInDropdown feature`, () => {
           expect(checkbox?.checked).toBe(false)
         }
       })
+    },
+  )
+
+  // The box is one-way bound to `view.selected` with no change handler, so a native click
+  // flipped it before the <li> ran the real toggle. When that toggle was refused the
+  // selection never changed, Svelte saw no new value to write, and the box stayed wrong.
+  test.each([
+    // maxSelect 1 replaces rather than refuses, so a real refusal needs a full multi-select
+    [
+      `maxSelect reached`,
+      { maxSelect: 2, selected: [`Apple`, `Banana`] },
+      `Cherry`,
+      false,
+    ],
+    [`minSelect reached`, { minSelect: 1, selected: [`Apple`] }, `Apple`, true],
+    [
+      `disabled option`,
+      { options: [`Apple`, { label: `Banana`, disabled: true }] },
+      `Banana`,
+      false,
+    ],
+  ])(
+    `checkbox stays in sync when a toggle is refused (%s)`,
+    async (_case, props, label, expected_checked) => {
+      mount_multiselect({ options, keepSelectedInDropdown: `checkboxes`, ...props })
+      await focus_input()
+
+      const option = option_by_label(label)
+      const checkbox = option?.querySelector<HTMLInputElement>(`.option-checkbox`)
+      expect(checkbox?.checked).toBe(expected_checked)
+
+      click_keep_selected_option(option, `checkboxes`)
+      await tick()
+
+      // the refusal held, so the box must still show the unchanged selection
+      expect(checkbox?.checked).toBe(expected_checked)
+      expect(option?.classList.contains(`selected`)).toBe(expected_checked)
     },
   )
 
@@ -3005,6 +3061,29 @@ describe(`selectAllOption feature`, () => {
       true,
       `All options already selected`,
     ],
+    // both default titles are `labels` keys, so a locale reaches them without having to
+    // reimplement the three-way choice through `selectAllDisabledTitle`
+    [
+      `maxSelect reached, count reworded through labels`,
+      {
+        options: [`a`, `b`, `c`, `d`],
+        selected: [`a`, `b`],
+        maxSelect: 2,
+        labels: { max_select_reached: (max) => `hochstens ${max}` },
+      },
+      true,
+      `hochstens 2`,
+    ],
+    [
+      `all selected, reworded through labels`,
+      {
+        options: [`a`, `b`],
+        selected: [`a`, `b`],
+        labels: { all_options_selected: `Alle bereits gewahlt` },
+      },
+      true,
+      `Alle bereits gewahlt`,
+    ],
     [
       `case-insensitive duplicates selected`,
       {
@@ -3024,6 +3103,44 @@ describe(`selectAllOption feature`, () => {
       },
       true,
       `Matching select-all is only available with local options`,
+    ],
+    // `selectAllDisabledTitle` used to be unreachable here: the scope message returned
+    // first, so neither `null` nor a replacement string could take effect.
+    [
+      `matching scope, title suppressed with null`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: null,
+      },
+      true,
+      ``,
+    ],
+    [
+      `matching scope, title replaced by the caller`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: `Not available while loading remotely`,
+      },
+      true,
+      `Not available while loading remotely`,
+    ],
+    // the callback used to receive only max_reached/maxSelect/selected_count, which could not
+    // distinguish this state from `all options selected` nor rebuild the string it replaces
+    [
+      `matching scope, callback wraps the default it replaces`,
+      {
+        open: true,
+        selectAllScope: `matching`,
+        loadOptions: async () => ({ options: [`a`], hasMore: false }),
+        selectAllDisabledTitle: ({ matching_scope_unavailable, default_title }) =>
+          `${matching_scope_unavailable}: ${default_title}`,
+      },
+      true,
+      `true: Matching select-all is only available with local options`,
     ],
     [
       `loaded visible options selected`,
@@ -3981,6 +4098,147 @@ describe(`maxVisibleChips`, () => {
       mount_multiselect({ options, selected: [...options], maxVisibleChips: -2 }),
     ).toThrow(`maxVisibleChips must be null or a non-negative integer`)
   })
+})
+
+// every string MultiSelect renders itself must be overridable for i18n (issue #451)
+describe(`labels`, () => {
+  const options = [`a`, `b`, `c`]
+
+  test(`chip overflow toggle is configurable, omitted keys keep English`, async () => {
+    mount_multiselect({
+      options,
+      selected: [...options],
+      maxVisibleChips: 1,
+      labels: { more_chips: (hidden) => `noch ${hidden}` },
+    })
+
+    const toggle = doc_query<HTMLButtonElement>(`li.more-chip button.more-chips`)
+    expect(toggle.textContent?.trim()).toBe(`noch 2`)
+
+    toggle.click()
+    await tick()
+    expect(toggle.textContent?.trim()).toBe(`show less`)
+  })
+
+  test.each([
+    [
+      `chip list aria-label`,
+      { selected_options: `ausgewählte Optionen` },
+      { options },
+      () => doc_query(`ul.selected`).getAttribute(`aria-label`),
+      `ausgewählte Optionen`,
+    ],
+    [
+      `remove-button title composed with removeBtnTitle`,
+      { remove_option: (btn: string, label: string) => `${label} ${btn}` },
+      { options, selected: [`a`], removeBtnTitle: `entfernen` },
+      () => doc_query(`ul.selected button.remove`).getAttribute(`title`),
+      `a entfernen`,
+    ],
+    [
+      // the group name is the option's description now, not a label on a presentational <li>
+      `group name described to each option`,
+      { group: (name: string) => `Gruppe: ${name}` },
+      { options: [{ label: `a`, group: `G` }], open: true },
+      () => doc_query(`li.group-header span.sr-only`).textContent?.trim(),
+      `Gruppe: G`,
+    ],
+    [
+      `group option count`,
+      { group_count: (sel: number, total: number) => `${sel} von ${total}` },
+      {
+        options: [
+          { label: `a`, group: `G` },
+          { label: `b`, group: `G` },
+        ],
+        open: true,
+      },
+      () => doc_query(`li.group-header .group-count`).textContent?.trim(),
+      `0 von 2`,
+    ],
+    [
+      `group select-all button`,
+      { group_select_all: `Alle` },
+      { options: [{ label: `a`, group: `G` }], open: true, groupSelectAll: true },
+      () => doc_query(`button.group-select-all`).textContent?.trim(),
+      `Alle`,
+    ],
+    [
+      `checkbox aria-label`,
+      { toggle_option: (label: string) => `${label} umschalten` },
+      { options, open: true, keepSelectedInDropdown: `checkboxes` as const },
+      () => doc_query(`ul.options input[type="checkbox"]`).getAttribute(`aria-label`),
+      `a umschalten`,
+    ],
+    [
+      `idle live-region option count`,
+      { options_available: (count: number) => `${count} Optionen` },
+      { options, open: true },
+      () => doc_query(`.sr-only[aria-live="polite"]`).textContent?.trim(),
+      `3 Optionen`,
+    ],
+  ])(`%s`, (_desc, labels, props, read_dom, expected) => {
+    mount_multiselect({ ...props, labels })
+    expect(read_dom()).toBe(expected)
+  })
+
+  test(`live-region announcements are configurable`, async () => {
+    // only option_selected is overridden, so the removal announcement must stay English
+    mount_multiselect({
+      options,
+      labels: { option_selected: (label) => `${label} gewählt` },
+    })
+    await focus_input()
+
+    doc_query<HTMLLIElement>(`ul.options > li[role="option"]`).click()
+    await tick()
+    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
+    expect(live_region.textContent?.trim()).toBe(`a gewählt`)
+
+    doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
+    await tick()
+    expect(live_region.textContent?.trim()).toBe(`a removed`)
+  })
+
+  test(`the bulk removal announcement is configurable`, async () => {
+    mount_multiselect({
+      options,
+      selected: [...options],
+      labels: { options_removed: (count) => `${count} entfernt` },
+    })
+
+    doc_query<HTMLButtonElement>(`button.remove-all`).click()
+    await tick()
+    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
+    expect(live_region.textContent?.trim()).toBe(`3 entfernt`)
+  })
+
+  test.each([
+    [1, null, `Bitte etwas wählen`],
+    [2, null, `Bitte mindestens 2 wählen`],
+    [2, 3, `Bitte 2 bis 3 wählen`],
+  ])(
+    `form validity message for required=%s maxSelect=%s`,
+    async (required, maxSelect, expected) => {
+      mount_multiselect({
+        options,
+        required,
+        maxSelect,
+        labels: {
+          select_an_option: `Bitte etwas wählen`,
+          select_at_least: (min) => `Bitte mindestens ${min} wählen`,
+          select_between: (min, max) => `Bitte ${min} bis ${max} wählen`,
+        },
+      })
+      await tick() // bind:this on the hidden form control lands in a post-mount effect
+
+      // happy-dom's validationMessage getter ignores setCustomValidity, so spy on the call
+      const form_control = doc_query<HTMLInputElement>(`input.form-control`)
+      const set_validity = vi.spyOn(form_control, `setCustomValidity`)
+      form_control.dispatchEvent(new Event(`invalid`))
+      expect(set_validity).toHaveBeenCalledWith(expected)
+    },
+  )
 })
 
 test(`whitespace-only search shows all options instead of a blank dropdown`, async () => {

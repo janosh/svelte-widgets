@@ -382,8 +382,9 @@ describe(`fullscreen background`, () => {
 describe(`button rendering`, () => {
   test(`custom icons, labels and class merge with the defaults`, () => {
     const { button } = mount_button({
-      icons: { enter: icons.Check, exit: icons.Cross },
-      labels: { enter: `Grow`, exit: `Shrink` },
+      // only the `enter` half of each record: `exit` must fall back to the default
+      icons: { enter: icons.Check },
+      labels: { enter: `Grow` },
       class: `my-btn`,
       'aria-pressed': true, // spread before the real one, so it loses
     })
@@ -395,6 +396,24 @@ describe(`button rendering`, () => {
     expect(button.getAttribute(`aria-label`)).toBe(`Grow`)
     expect(button.getAttribute(`aria-pressed`)).toBe(`false`) // not the consumer's true
     expect(icon_path(button)).toBe(icons.Check.d)
+
+    // the omitted `exit` half of both records keeps its default
+    const exiting = mount_button({
+      icons: { enter: icons.Check },
+      labels: { enter: `Grow` },
+      wrapper: undefined,
+      fullscreen: true,
+    })
+    expect(exiting.button.title).toBe(`Exit fullscreen`)
+    expect(icon_path(exiting.button)).toBe(icons.ExitFullscreen.d)
+
+    // `labels={{ enter: condition ? `X` : undefined }}` type-checks, so an explicitly
+    // undefined key has to fall back too — a plain spread would render nothing
+    const undefined_key = mount_button({
+      labels: { enter: undefined },
+      wrapper: undefined,
+    })
+    expect(undefined_key.button.title).toBe(`Enter fullscreen`)
   })
 
   // a raw snippet's render() runs once, so each flag value gets its own mount rather

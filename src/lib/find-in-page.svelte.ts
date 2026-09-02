@@ -2,6 +2,7 @@
 // observe from separate effects so query updates do not restart observation.
 
 import { untrack } from 'svelte'
+import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
 import {
   create_search_jump,
   highlight_ranges,
@@ -20,6 +21,9 @@ export type FindOptions = {
   also_ignore?: string
   // Runs before search; hide non-matches here because search_text skips [hidden].
   before_search?: (query: string) => void
+  // Only `no_matches` and `match_position` are read here — the rest name FindBar's chrome.
+  // Sharing one record lets FindBar hand its merged labels straight through.
+  labels?: Partial<FindBarLabels>
 }
 
 // Getter keeps caller props live rather than freezing a creation-time snapshot.
@@ -132,8 +136,9 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
     // Empty while idle so aria-live stays quiet.
     get status(): string {
       if (!query.trim()) return ``
-      if (occurrences.length === 0) return `No matches`
-      return `${Math.max(0, current_idx) + 1} of ${occurrences.length}`
+      const msg = merge_defaults(FIND_BAR_LABELS, get_options().labels)
+      if (occurrences.length === 0) return msg.no_matches
+      return msg.match_position(Math.max(0, current_idx) + 1, occurrences.length)
     },
     jump_to,
     step,

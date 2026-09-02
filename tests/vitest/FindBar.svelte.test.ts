@@ -138,6 +138,32 @@ describe(`FindBar`, () => {
     expect(doc_query(`.find-close`).getAttribute(`aria-label`)).toBe(`Close x search`)
   })
 
+  test(`labels prop overrides strings, omitted keys keep the English defaults`, () => {
+    mount_bar(`<p>alpha</p>`, {
+      label: `x`,
+      labels: {
+        find_in: (scope: string) => `Suchen in ${scope}`,
+        next_match: `Nächster Treffer`,
+        close: (scope: string) => `${scope}-Suche schließen`,
+      },
+    })
+
+    const step_titles = [
+      ...document.querySelectorAll(`.find-bar button:not(.find-close)`),
+    ].map((btn) => btn.getAttribute(`title`))
+
+    // one find_in override moves both the placeholder and the region label
+    expect(input().placeholder).toBe(`Suchen in x…`)
+    expect(input().getAttribute(`aria-label`)).toBe(`Suchen in x`)
+    expect(doc_query(`.find-close`).getAttribute(`aria-label`)).toBe(`x-Suche schließen`)
+    // omitted keys keep the defaults
+    expect(step_titles).toEqual([
+      `Previous match (Shift+Enter)`,
+      `Nächster Treffer (Enter)`,
+    ])
+    expect(doc_query(`.find-close`).getAttribute(`title`)).toBe(`Close (Escape)`)
+  })
+
   // Fixture: plain, aria-hidden, sr-only, and .skip; also_ignore extends defaults.
   test.each([
     [`nothing extra`, undefined, `1 of 2`],
@@ -192,6 +218,20 @@ describe(`create_find_state`, () => {
     expect(find.status).toBe(`2 of 2`)
     run_search(root, find, `two`)
     expect(find.status).toBe(`1 of 2`)
+  })
+
+  // The status is the only text create_find_state renders, and it reaches an aria-live
+  // region, so both branches have to be reachable without forking the state module.
+  test(`labels reword both status branches, falling back per key`, () => {
+    const { root, find } = setup(`<p>alpha</p><p>alpha</p>`, {
+      labels: { match_position: (position, total) => `${position} von ${total}` },
+    })
+
+    run_search(root, find, `alpha`)
+    expect(find.status).toBe(`1 von 2`)
+
+    run_search(root, find, `nothing`)
+    expect(find.status).toBe(`No matches`) // omitted key keeps the English default
   })
 
   // Public jump_to must handle values below -length; bare `% length` stays negative.

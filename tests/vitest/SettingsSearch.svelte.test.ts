@@ -1,4 +1,6 @@
-import { mount, tick } from 'svelte'
+import { SettingsSearch } from '$lib'
+import type { SettingsSearchLabels } from '$lib/labels'
+import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
@@ -252,5 +254,36 @@ describe(`SettingsSearch`, () => {
     expect(document.querySelector(`[role="status"]`)).toBe(status)
     expect(status.hidden).toBe(false)
     expect(status.textContent).toBe(``)
+  })
+
+  // mounted bare rather than through the harness, which forwards no `labels`
+  test.each<[string, Partial<SettingsSearchLabels>, string, string]>([
+    [
+      `an empty partial keeps them`,
+      {},
+      `Clear settings search`,
+      `No settings match “radius”.`,
+    ],
+    [
+      `custom entries reach the DOM, interpolating the query`,
+      {
+        clear_search: `Suche leeren`,
+        no_matches: (query) => `Nichts zu „${query}“ gefunden.`,
+      },
+      `Suche leeren`,
+      `Nichts zu „radius“ gefunden.`,
+    ],
+  ])(`labels: %s`, async (_desc, labels, clear_label, status_text) => {
+    mount(SettingsSearch, {
+      target: document.body,
+      props: {
+        query: `radius`,
+        labels,
+        children: createRawSnippet(() => ({ render: () => `<div></div>` })),
+      },
+    })
+    await tick()
+    expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(clear_label)
+    expect(doc_query(`.no-matches`).textContent?.trim()).toBe(status_text)
   })
 })

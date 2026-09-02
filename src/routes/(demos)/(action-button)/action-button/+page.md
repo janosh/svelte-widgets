@@ -6,7 +6,7 @@ The button reserves the width of its widest label up front, so swapping `Save` f
 
 ### States and labels
 
-`labels` maps each of the four states to `{ icon?, text? }`. **`text` renders as text**, so markup in it shows up literally — pass an `icon` for a glyph, or take over rendering entirely with the `children` snippet.
+`labels` maps each of the four states to its text and `icons` maps them to a glyph; both are partial, so an omitted state keeps the `ACTION_BUTTON_LABELS` default. **Label text renders as text**, so markup in it shows up literally — pass an `icon` for a glyph, or take over rendering entirely with the `children` snippet.
 
 `bind:state` exposes the current state, and `on_success` / `on_error` receive the resolved value or the thrown error. The demo below fails every second run so you can watch the error path and the `reset_ms` countdown back to `ready`.
 
@@ -28,11 +28,12 @@ The button reserves the width of its widest label up front, so swapping `Save` f
   }
 
   const labels = {
-    ready: { text: `Save`, icon: Refresh },
-    pending: { text: `Saving…` },
-    success: { text: `Saved`, icon: Check },
-    error: { text: `Retry`, icon: Close },
+    ready: `Save`,
+    pending: `Saving…`,
+    success: `Saved`,
+    error: `Retry`,
   } as const
+  const icons = { ready: Refresh, success: Check, error: Close } as const
 </script>
 
 <p style="display: flex; gap: 1em; align-items: center; flex-wrap: wrap">
@@ -40,6 +41,7 @@ The button reserves the width of its widest label up front, so swapping `Save` f
     action={save}
     bind:state={action_state}
     {labels}
+    {icons}
     reset_ms={1500}
     on_success={(result) => (last_outcome = `saved #${result}`)}
     on_error={(error) => (last_outcome = `failed: ${(error as Error).message}`)}

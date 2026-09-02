@@ -16,6 +16,7 @@ import type {
   SpanList,
   TokenClassName,
 } from '$lib/code-editor'
+import type { DiffViewLabels } from '$lib/labels'
 import { flushSync, mount, unmount } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -78,6 +79,7 @@ interface MountOptions {
   use_default_backend?: boolean
   rejects_with?: unknown
   no_backend?: boolean
+  labels?: Partial<DiffViewLabels>
 }
 
 const flush_async = async (
@@ -241,15 +243,20 @@ describe(`rows and layouts`, () => {
         oldEndsWithNewline: false,
         newEndsWithNewline: false,
       }),
-      { single_col: true, new_text: `first line\nsecond line` },
+      {
+        single_col: true,
+        new_text: `first line\nsecond line`,
+        labels: { no_newline: `\\ Keine neue Zeile am Dateiende` },
+      },
     )
     expect(code_texts()).toEqual([`first line`, `second line`])
     expect(document.querySelectorAll(`.diff-row.solo`)).toHaveLength(3)
     expect(document.querySelector(`.diff-row-delete, .diff-row-insert`)).toBeNull()
     expect(document.querySelector(`.panel-header`)).toBeNull()
     expect(document.querySelector(`[data-no-newline='old']`)).toBeNull()
+    // the default text is covered by `marks only the %s side ...` below
     expect(text_of(query_element(`[data-no-newline='new']`))).toBe(
-      String.raw`\ No newline at end of file`,
+      String.raw`\ Keine neue Zeile am Dateiende`,
     )
   })
 })
@@ -343,17 +350,44 @@ test.each([
 )
 
 describe(`states and backend wiring`, () => {
-  test(`renders an identical-input empty state`, async () => {
-    await mount_diff(diff_result({ oldLineCount: 9, newLineCount: 9 }))
-    expect(query_element(`[data-empty]`).textContent).toContain(`No changes`)
-    expect(query_element(`[data-empty]`).textContent).toContain(`9 lines`)
-    expect(
-      [`Previous`, `Next`].map(
-        (direction) =>
-          query_element<HTMLButtonElement>(`[aria-label='${direction} change']`).disabled,
-      ),
-    ).toEqual([true, true])
-  })
+  // second row overrides two keys and omits the rest, so both halves of the merge run
+  test.each<[string, Partial<DiffViewLabels> | undefined, string, string]>([
+    [
+      `defaults`,
+      undefined,
+      `No changes`,
+      `Original and Modified are identical (9 lines).`,
+    ],
+    [
+      `a labels override`,
+      {
+        no_changes: `Keine Änderungen`,
+        identical: (old_label, new_label, count) =>
+          `${old_label}/${new_label}: ${count} Zeilen`,
+      },
+      `Keine Änderungen`,
+      `Original/Modified: 9 Zeilen`,
+    ],
+  ])(
+    `renders an identical-input empty state with %s`,
+    async (_case, labels, heading, detail) => {
+      await mount_diff(diff_result({ oldLineCount: 9, newLineCount: 9 }), { labels })
+      const empty = query_element(`[data-empty]`)
+      expect(text_of(empty.querySelector(`strong`))).toBe(heading)
+      expect(text_of(empty.querySelector(`span`))).toBe(detail)
+      // the header actions keep their English names in both rows, steps stay disabled
+      const actions = [
+        ...document.querySelectorAll<HTMLButtonElement>(`.panel-actions button.icon-btn`),
+      ]
+      expect(actions.map((btn) => btn.getAttribute(`aria-label`))).toEqual([
+        `Previous change`,
+        `Next change`,
+        `Side by side`,
+        `Unified`,
+      ])
+      expect(actions.slice(0, 2).map((btn) => btn.disabled)).toEqual([true, true])
+    },
+  )
 
   test.each([
     [`an Error`, { rejects_with: new Error(`backend exploded`) }, `backend exploded`],

@@ -4,6 +4,7 @@
 // would leave the second answered by a click meant for the first.
 
 import type { Snippet } from 'svelte'
+import { DIALOG_LABELS } from './labels'
 
 export interface DialogChoice<Id extends string = string> {
   id: Id
@@ -132,13 +133,14 @@ export const dismiss_all_dialogs = (): void => {
 export const ask_confirm = async (
   body: DialogBodyInput,
   title: string,
-  confirm_label = `OK`,
+  confirm_label = DIALOG_LABELS.confirm,
+  cancel_label = DIALOG_LABELS.cancel,
 ): Promise<boolean> =>
   (await request_choice(
     body,
     title,
     [
-      { id: `cancel`, label: `Cancel` },
+      { id: `cancel`, label: cancel_label },
       { id: `ok`, label: confirm_label, tone: `accent` },
     ],
     `cancel`,
@@ -150,9 +152,9 @@ export const ask_prompt = (
   {
     initial_value = ``,
     placeholder = ``,
-    input_label = `Response`,
-    confirm_label = `OK`,
-    cancel_label = `Cancel`,
+    input_label = DIALOG_LABELS.prompt_input,
+    confirm_label = DIALOG_LABELS.confirm,
+    cancel_label = DIALOG_LABELS.cancel,
     validate,
   }: PromptOptions = {},
 ): Promise<string | null> =>

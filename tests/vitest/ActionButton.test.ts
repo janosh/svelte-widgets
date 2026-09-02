@@ -5,11 +5,11 @@ import { doc_query } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const labels = {
-  ready: { text: `Save` },
-  pending: { text: `Saving…` },
-  success: { text: `Saved` },
-  error: { text: `Failed` },
-} satisfies Record<ActionState, { text: string }>
+  ready: `Save`,
+  pending: `Saving…`,
+  success: `Saved`,
+  error: `Failed`,
+} satisfies Record<ActionState, string>
 
 afterEach(() => vi.useRealTimers())
 
@@ -32,7 +32,7 @@ const action_text = (button: HTMLElement): string =>
   button.querySelector(`[data-sms-action-content]`)?.textContent ?? ``
 
 test(`reserves width and renders every state label as text`, () => {
-  const text_labels = { ...labels, ready: { text: `<b>Save</b>` } }
+  const text_labels = { ...labels, ready: `<b>Save</b>` }
   const button = mount_action_button({ labels: text_labels })
   const content = doc_query(`[data-sms-action-content]`)
   const width_sizer = doc_query(`[data-sms-action-width]`)
@@ -40,7 +40,7 @@ test(`reserves width and renders every state label as text`, () => {
   expect(getComputedStyle(button).display).toBe(`inline-grid`)
   expect(getComputedStyle(content).justifyContent).toBe(`center`)
   expect(Array.from(width_sizer.children, (child) => child.textContent?.trim())).toEqual(
-    Object.values(text_labels).map(({ text }) => text),
+    Object.values(text_labels),
   )
   expect(action_text(button).trim()).toBe(`<b>Save</b>`)
   expect(button.querySelector(`b`)).toBeNull()

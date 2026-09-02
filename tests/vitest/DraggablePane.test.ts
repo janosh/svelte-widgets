@@ -3,7 +3,14 @@ import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(draggable-pane)/draggable-pane/+page.md?raw'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, escape_key, mock_rect, pointer_event, stub_prop } from './index'
+import {
+  doc_query,
+  escape_key,
+  hover,
+  mock_rect,
+  pointer_event,
+  stub_prop,
+} from './index'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 
 // Every drag/resize test works against the same 450x300 pane; only the origin varies.
@@ -47,6 +54,13 @@ describe(`DraggablePane`, () => {
       // pane by it would make those assertions tautological
       pane,
     }
+  }
+
+  // the tooltip attachment opens on a 100ms pointer delay, so poll rather than read once
+  const tooltip_text = async (target: Element): Promise<string | null> => {
+    hover(target)
+    await vi.waitFor(() => doc_query(`.tooltip-content`))
+    return doc_query(`.tooltip-content`).textContent
   }
 
   // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
@@ -356,6 +370,46 @@ describe(`DraggablePane`, () => {
     expect({ left: pane.style.left, top: pane.style.top }).toEqual(anchored)
     // the controls hide again, which is the pane reporting has_been_dragged = false
     expect(document.querySelector(`.reset-button`)).toBeNull()
+  })
+
+  test(`labels prop renames the control-tab buttons, omitted keys fall back`, async () => {
+    await open_pane({
+      has_been_dragged: true,
+      labels: { close_pane: `Bereich schließen` },
+    })
+
+    const attrs = (selector: string) => {
+      const btn = doc_query(selector)
+      return [btn.getAttribute(`title`), btn.getAttribute(`aria-label`)]
+    }
+    expect(attrs(`.close-button`)).toEqual([`Bereich schließen`, `Bereich schließen`])
+    expect(attrs(`.reset-button`)).toEqual([`Reset pane position`, `Reset pane position`])
+
+    // the toggle's tooltip resolves from the same keys: close_pane while open, open_pane while shut
+    expect(await tooltip_text(doc_query(`button.pane-toggle`))).toBe(`Bereich schließen`)
+  })
+
+  // The pane builds its own `resizable` attachment, so without this pass-through a fully
+  // translated pane still announced four English separators.
+  test(`labels reach the resize handles the pane creates itself`, async () => {
+    const { pane } = await open_pane({
+      resize: `both`,
+      labels: { resize_handle: (edge: string) => `Kante ${edge}` },
+    })
+
+    expect(
+      [...pane.querySelectorAll(`[data-resize-edge]`)].map((strip) =>
+        strip.getAttribute(`aria-label`),
+      ),
+    ).toEqual([`Kante bottom`, `Kante right`])
+  })
+
+  test.each([
+    [{ open_pane: `Bereich öffnen` }, `Bereich öffnen`],
+    [{}, `Open pane`], // omitted key keeps the English default
+  ])(`the shut toggle tooltip uses open_pane (%o)`, async (labels, expected) => {
+    const { toggle } = await setup({ labels })
+    expect(await tooltip_text(toggle)).toBe(expected)
   })
 
   test(`a drag reports through on_drag_start and data-dragging`, async () => {

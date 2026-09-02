@@ -2,6 +2,7 @@
   import { type Snippet, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { hotkey } from './attachments/index'
+  import { merge_defaults, TOAST_LABELS, type ToastLabels } from './labels'
   import { toast as default_store } from './toast-queue.svelte.ts'
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
   import { chain_handlers } from './utils'
@@ -18,6 +19,7 @@
     focus_hotkey = [`alt+t`, `alt+†`],
     assertive,
     dismiss_label = `Dismiss notification`,
+    labels,
     children,
     ...rest
   }: Omit<HTMLAttributes<HTMLDivElement>, `children`> & {
@@ -33,8 +35,11 @@
     // Defaults to the store's sticky priorities, so urgency tracks what stays on screen.
     assertive?: readonly string[]
     dismiss_label?: string
+    labels?: Partial<ToastLabels>
     children?: Snippet<[ToastItem<string>]>
   } = $props()
+
+  const msg = $derived(merge_defaults(TOAST_LABELS, labels))
 
   let stack: HTMLDivElement | null = $state(null)
   let [is_hovered, is_focused] = $state([false, false])
@@ -142,9 +147,7 @@
       <!-- aria-atomic makes the region read the whole card, so an aria-label here would
       splice the badge's wording into the message. The count is announced separately. -->
       <span class="toast-pending" aria-hidden="true">+{count}</span>
-      <span class="sr-only">
-        {count} more {count === 1 ? `notification` : `notifications`} pending
-      </span>
+      <span class="sr-only">{msg.pending(count)}</span>
     {/if}
     {#if item.action}
       <button class="toast-action" type="button" onclick={() => run_action(item.id)}>

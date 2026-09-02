@@ -5,6 +5,7 @@
   import { SvelteSet } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from '../attachments/index'
+  import { merge_defaults, DIFF_VIEW_LABELS, type DiffViewLabels } from '../labels'
   import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
   import { render_tokens } from './tokens'
   import { resolve_diff_backend, to_error } from './types'
@@ -29,6 +30,7 @@
     single_col = false,
     on_error,
     backend,
+    labels,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     // The two versions as written to disk; the backend normalizes CRLF itself.
@@ -48,7 +50,11 @@
     on_error?: (message: string) => void
     // Override set_diff_backend for tests or multi-engine hosts.
     backend?: DiffBackend
+    // Override any user-facing string; omitted keys keep the English default.
+    labels?: Partial<DiffViewLabels>
   } = $props()
+
+  const msg = $derived(merge_defaults(DIFF_VIEW_LABELS, labels))
 
   type Side = `old` | `new`
   // Single-column mode: unified-shaped rows without old gutter, signs, or tones.
@@ -66,7 +72,6 @@
     | ({ kind: `single`; row_kind: RowKind; side: Cell; line: DiffLine } & Gutters)
     | { kind: `no_newline`; sides: Side[] }
 
-  const NO_NEWLINE_TEXT = String.raw`\ No newline at end of file`
   // Rows kept above/below the viewport so a fast scroll shows content, not blank space.
   const OVERSCAN_ROWS = 8
 
@@ -112,12 +117,17 @@
     }
   }
 
+  // Through a $derived so the effect tracks the *value*, not the `options` object. Reading
+  // `options.context_lines` in the effect made a host passing an inline object re-run a full
+  // backend diff, clear every expanded gap and jump to the top whenever any other field
+  // changed — a font-size tweak was enough.
+  const context_lines = $derived(options.context_lines)
   $effect(() => {
     void load_diff({
       oldText: old_text,
       newText: new_text,
       filename,
-      contextLines: options.context_lines,
+      contextLines: context_lines,
     })
     return () => void load_generation++
   })
@@ -222,10 +232,6 @@
   const pad_top = $derived(row_window.start * row_height)
   const pad_bottom = $derived((display_rows.length - row_window.end) * row_height)
 
-  // Keep as helper: Svelte preserves newlines between adjacent markup expressions.
-  const line_noun = (count: number): `line` | `lines` => (count === 1 ? `line` : `lines`)
-  const line_count_label = (result: DiffResult): string =>
-    `${result.newLineCount} ${line_noun(result.newLineCount)}`
   const is_change_row = (entry: DisplayRow | undefined): boolean =>
     (entry?.kind === `pair` || entry?.kind === `single`) && entry.row_kind !== `equal`
 
@@ -320,7 +326,7 @@
 
 {#snippet no_newline_cell(sides: Side[], side: Side)}
   {#if sides.includes(side)}
-    <span class="code no-newline-note" data-no-newline={side}>{NO_NEWLINE_TEXT}</span>
+    <span class="code no-newline-note" data-no-newline={side}>{msg.no_newline}</span>
   {:else}
     <span class="code spacer" data-spacer={side}></span>
   {/if}
@@ -345,16 +351,16 @@
             <span class="added">+{diff.added}</span>
             <span class="removed">-{diff.removed}</span>
           {:else if is_loading}
-            Diffing {filename}...
+            {msg.diffing(filename)}
           {/if}
         </span>
       </div>
       <div class="panel-actions">
-        {@render nav_button(`Previous change`, -1, `↑`)}
-        {@render nav_button(`Next change`, 1, `↓`)}
+        {@render nav_button(msg.prev_change, -1, `↑`)}
+        {@render nav_button(msg.next_change, 1, `↓`)}
         <div class="segmented layout-toggle">
-          {@render layout_option(`side-by-side`, `Side by side`, `M8 3v10`)}
-          {@render layout_option(`unified`, `Unified`, `M2 8h12`)}
+          {@render layout_option(`side-by-side`, msg.side_by_side, `M8 3v10`)}
+          {@render layout_option(`unified`, msg.unified, `M2 8h12`)}
         </div>
       </div>
     </header>
@@ -364,23 +370,20 @@
     <div class="diff-note error" role="alert">{error_message}</div>
   {/if}
   {#if diff?.truncated}
-    <div class="diff-note" data-note="truncated">
-      Word-level highlighting is incomplete: the diff hit its refinement budget.
-      Line-level changes are still exact.
-    </div>
+    <div class="diff-note" data-note="truncated">{msg.truncated}</div>
   {/if}
 
   {#if diff && diff.hunks.length === 0}
     <div class="diff-empty" data-empty>
-      <strong>{single_col ? `Empty file` : `No changes`}</strong>
+      <strong>{single_col ? msg.empty_file : msg.no_changes}</strong>
       {#if !single_col}
-        <span>{old_label} and {new_label} are identical ({line_count_label(diff)}).</span>
+        <span>{msg.identical(old_label, new_label, diff.newLineCount)}</span>
       {/if}
     </div>
   {:else}
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -- enables keyboard scrolling -->
     <div
-      aria-label="{old_label} → {new_label} diff"
+      aria-label={msg.diff_region(old_label, new_label)}
       bind:this={scroll_container}
       bind:clientHeight={viewport_height}
       class="diff-scroll"
@@ -399,7 +402,7 @@
               onclick={() => expanded_gaps.add(entry.gap_idx)}
               type="button"
             >
-              ⋯ {entry.skipped} unchanged {line_noun(entry.skipped)}
+              {msg.unchanged_lines(entry.skipped)}
             </button>
           {:else if entry.kind === `pair`}
             <div class="diff-row pair">

@@ -88,6 +88,24 @@ describe(`resizable`, () => {
     },
   )
 
+  // Handles are focusable and arrow-key operable, so their names are announced. The edge
+  // itself is interpolated, which means a translation has to reach the noun too.
+  it(`labels rename every resize handle, edge included`, () => {
+    const element = create_box()
+    attach_resizable(element, {
+      edges: [`right`, `bottom`],
+      labels: {
+        handle: (edge) => `Größe ändern: ${edge === `right` ? `rechts` : `unten`}`,
+      },
+    })
+
+    expect(
+      [...element.querySelectorAll(`[data-resize-edge]`)].map((handle) =>
+        handle.getAttribute(`aria-label`),
+      ),
+    ).toEqual([`Größe ändern: unten`, `Größe ändern: rechts`])
+  })
+
   it(`reports a functional width cap below the minimum as both aria limits`, () => {
     const element = create_box()
     attach_resizable(element, { edges: [`right`], max_width: () => 30 })

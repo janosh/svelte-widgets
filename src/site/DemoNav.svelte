@@ -21,9 +21,9 @@
         },
   )
 
-  const nav_labels: Record<string, string> = { [resolve_path(`/`)]: `Home` }
+  const nav_route_labels: Record<string, string> = { [resolve_path(`/`)]: `Home` }
   for (const [route, label] of Object.entries(demo_labels)) {
-    nav_labels[resolve_path(route)] = label
+    nav_route_labels[resolve_path(route)] = label
   }
 </script>
 
@@ -31,7 +31,7 @@
   {...props}
   routes={prefixed_routes}
   {page}
-  labels={{ ...nav_labels, ...(props.labels ?? {}) }}
+  route_labels={{ ...nav_route_labels, ...(props.route_labels ?? {}) }}
 >
   <ThemeToggle />
 </Nav>

@@ -117,6 +117,19 @@ test.each([
   expect(link.getAttribute(`href`)).toBe(`${repo}/blob/-/${expected_path}`)
 })
 
+test(`labels prop overrides toggle text, omitted keys keep their default`, async () => {
+  mount(CodeExample, {
+    target: document.body,
+    props: { src, meta: { collapsible: true }, labels: { show_code: `Code zeigen` } },
+  })
+  const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
+  expect(toggle_button.textContent?.trim()).toBe(`Code zeigen`)
+
+  toggle_button.click()
+  await tick()
+  expect(toggle_button.textContent?.trim()).toBe(`Close`) // hide_code falls back
+})
+
 test.each([
   [`typescript`, `typescript`],
   [undefined, null],

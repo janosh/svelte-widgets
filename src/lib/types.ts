@@ -3,6 +3,7 @@ import type { FlipParams } from 'svelte/animate'
 import type { ClassValue, HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
 import type { DismissConfig } from './attachments/index'
 import type { IconData } from './icons/types'
+import type { MultiSelectLabels } from './labels'
 
 export type Option = string | number | ObjectOption
 
@@ -195,6 +196,18 @@ export interface PortalParams {
 
 export type SelectAllScope = `visible` | `matching`
 
+// why the select-all row is disabled, handed to a `selectAllDisabledTitle` callback. The
+// three booleans name the reason; `default_title` is the string the callback replaces, so
+// it can wrap or prefix the default rather than rebuilding the three-way choice.
+export interface SelectAllDisabledState {
+  max_reached: boolean
+  maxSelect: number | null
+  selected_count: number
+  all_selectable_selected: boolean
+  matching_scope_unavailable: boolean
+  default_title: string
+}
+
 type InputEventProp = Extract<keyof HTMLInputAttributes, `on${string}`>
 export type InputProps = Omit<HTMLInputAttributes, InputEventProp>
 
@@ -252,6 +265,9 @@ export interface MultiSelectProps<T extends Option = Option>
   inputStyle?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   invalid?: boolean
+  // Override any string MultiSelect renders itself, for i18n. Shallow-merged over
+  // MULTI_SELECT_LABELS; see labels.ts for the full set and their defaults.
+  labels?: Partial<MultiSelectLabels>
   liActiveOptionClass?: ClassValue
   liActiveUserMsgClass?: ClassValue
   liOptionClass?: ClassValue
@@ -312,14 +328,7 @@ export interface MultiSelectProps<T extends Option = Option>
   // Select all feature
   selectAllOption?: boolean | string // enable select all; if string, use as label
   selectAllScope?: SelectAllScope
-  selectAllDisabledTitle?:
-    | string
-    | ((state: {
-        max_reached: boolean
-        maxSelect: number | null
-        selected_count: number
-      }) => string)
-    | null
+  selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
   liSelectAllClass?: ClassValue // CSS class for the select all <li>
   loadOptions?: LoadOptions<T>
   // Animation parameters for selected options flip animation (https://github.com/janosh/svelte-widgets/issues/356)

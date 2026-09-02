@@ -1,17 +1,9 @@
-# dependencies
 node_modules
-
-# production build
 .svelte-kit
 build
 dist
 /src/lib/icons/generated.ts
-
-# test results
 test-results
-
-# test coverage reports
 coverage
-
 package-lock.json
 .vite-hooks/

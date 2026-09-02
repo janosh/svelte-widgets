@@ -105,6 +105,17 @@ test.each([
   expect([confirmed.settled, confirmed.value]).toEqual([true, expected])
 })
 
+// ask_prompt has always exposed cancel_label; ask_confirm baked it in, so a translated
+// confirm dialog was stuck with an English left button.
+test(`ask_confirm takes a cancel label too`, async () => {
+  track(ask_confirm(`Löschen?`, `Achtung`, `Löschen`, `Abbrechen`))
+  await flush()
+
+  const request = dialog_queue[0]
+  if (request?.kind !== `choice`) throw new Error(`Expected a choice request`)
+  expect(request.choices.map((choice) => choice.label)).toEqual([`Abbrechen`, `Löschen`])
+})
+
 test(`ask_prompt validates before resolving and keeps its typed options`, async () => {
   const prompted = track(
     ask_prompt(`Choose a project name`, `New project`, {

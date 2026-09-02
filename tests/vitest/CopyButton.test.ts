@@ -1,5 +1,6 @@
 import { CopyButton } from '$lib'
 import { Alert, Check, Copy } from '$lib/icons'
+import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
@@ -11,15 +12,18 @@ import TestSnippetHarness from './TestSnippetHarness.svelte'
 const mock_write_text = vi.fn()
 vi.stubGlobal(`navigator`, { clipboard: { writeText: mock_write_text } })
 
-const default_labels = {
-  ready: { icon: Copy, text: `ready` },
-  success: { icon: Check, text: `success` },
-  error: { icon: Alert, text: `error` },
-} as const
+const default_labels = { ready: `ready`, success: `success`, error: `error` } as const
+const default_icons = { ready: Copy, success: Check, error: Alert } as const
 const mount_copy_button = (props: Partial<ComponentProps<typeof CopyButton>> = {}) => {
   const copy_button_component = mount(CopyButton, {
     target: document.body,
-    props: { content: `test`, as: `div`, labels: default_labels, ...props },
+    props: {
+      content: `test`,
+      as: `div`,
+      labels: default_labels,
+      icons: default_icons,
+      ...props,
+    },
   })
   const copy_button = doc_query(`[data-sms-copy]`)
   return { copy_button_component, copy_button }
@@ -60,6 +64,13 @@ const mount_global = async (props: Partial<ComponentProps<typeof CopyButton>>) =
   const component = mount(CopyButton, { target: document.body, props })
   await tick()
   return component
+}
+
+// The initial scan is synchronous, but later ones ride the MutationObserver, which
+// coalesces them into one animation frame instead of rescanning on every render flush.
+const flush_rescan = async () => {
+  await tick()
+  await new Promise(requestAnimationFrame)
 }
 
 beforeEach(() => {
@@ -117,11 +128,7 @@ test.each([
   [`Copy me`, 1],
 ] as const)(`text label %j renders %d text span(s)`, (text, expected_spans) => {
   const { copy_button } = mount_copy_button({
-    labels: {
-      ready: { icon: Copy, text },
-      success: { icon: Check, text },
-      error: { icon: Alert, text },
-    },
+    labels: { ready: text, success: text, error: text },
   })
   const wrapper = doc_query(`[data-sms-action-content]`)
   expect(getComputedStyle(copy_button).whiteSpace).toBe(`nowrap`)
@@ -272,6 +279,7 @@ const mount_bound_copy_button = () => {
       content: `bound content`,
       as: `div`,
       labels: default_labels,
+      icons: default_icons,
       reset_ms: 0,
       get state() {
         return state_proxy.current
@@ -403,7 +411,7 @@ test(`global mode copies the code block's current text, not the text at mount`, 
   const { pre, code } = create_pre_with_code(`before`)
   const component = await mount_global({ global: true })
   code.textContent = `after`
-  await tick()
+  await flush_rescan()
 
   await click_copy_button(get_single_mounted_button(pre))
   expect(mock_write_text).toHaveBeenCalledWith(`after`)
@@ -458,7 +466,7 @@ test(`global mode skip_selector=null falls back to rendered tag`, async () => {
 test(`global mode mounts on pre > code added after the controller`, async () => {
   const component = await mount_global({ global: true })
   const { pre } = create_pre_with_code(`dynamically added code`)
-  await tick()
+  await flush_rescan()
 
   expect(get_single_mounted_button(pre)).toBeInstanceOf(HTMLButtonElement)
 
@@ -469,14 +477,24 @@ test(`global mode mounts on pre > code added after the controller`, async () => 
 test(`global mode as=a does not remount when the observer re-enters`, async () => {
   const component = await mount_global({ global: true, as: `a` })
   const { pre } = create_pre_with_code(`test code`)
-  await tick()
+  await flush_rescan()
 
   expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
 
   document.body.append(document.createElement(`div`))
-  await tick()
+  await flush_rescan()
 
   expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
 
   void unmount(component)
+})
+
+// CopyButton was the one wired component whose defaults lived in a local const, so callers
+// could not import its record or derive its type the way the others allow.
+test(`COPY_BUTTON_LABELS is the exported default record, and partials merge over it`, () => {
+  expect(COPY_BUTTON_LABELS).toEqual({ ready: ``, success: ``, error: `` })
+
+  // only `ready` is overridden, so the other two keep the icon-only default
+  const { copy_button } = mount_copy_button({ labels: { ready: `Kopieren` } })
+  expect(copy_text(copy_button).trim()).toBe(`Kopieren`)
 })

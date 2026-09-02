@@ -2,9 +2,14 @@
   import { onDestroy, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
+  import type { IconData } from './icons'
+  import { merge_defaults, ACTION_BUTTON_LABELS, type ActionButtonLabels } from './labels'
   import type { ActionButtonSnippetProps, ActionState } from './types'
 
-  type ActionLabel = Pick<ActionButtonSnippetProps, `icon` | `text`>
+  // drives the hidden width sizer, so every state reserves its own width up front
+  // Derived from the labels record so a new state cannot be added without the hidden
+  // width sizer below growing to match it
+  const ACTION_STATES = Object.keys(ACTION_BUTTON_LABELS) as ActionState[]
 
   let {
     action,
@@ -12,12 +17,8 @@
     disabled = false,
     reset_ms = 2000,
     as = `button`,
-    labels = {
-      ready: { text: `Run` },
-      pending: { text: `Working…` },
-      success: { text: `Done` },
-      error: { text: `Failed` },
-    },
+    labels,
+    icons,
     on_state_change,
     on_success,
     on_error,
@@ -29,7 +30,8 @@
     disabled?: boolean
     reset_ms?: number
     as?: string
-    labels?: Record<ActionState, ActionLabel>
+    labels?: Partial<ActionButtonLabels>
+    icons?: Partial<Record<ActionState, IconData>>
     on_state_change?: (state: ActionState) => void | Promise<void>
     on_success?: (result: Result) => void | Promise<void>
     on_error?: (error: unknown) => void | Promise<void>
@@ -41,7 +43,9 @@
   let reset_timeout: ReturnType<typeof setTimeout> | null = null
   let destroyed = false
   const action_disabled = $derived(disabled || state === `pending`)
-  const current_label = $derived(labels[state])
+  const msg = $derived(merge_defaults(ACTION_BUTTON_LABELS, labels))
+  const current_text = $derived(msg[state])
+  const current_icon = $derived(icons?.[state])
 
   const clear_reset_timeout = (): void => {
     if (reset_timeout !== null) clearTimeout(reset_timeout)
@@ -92,7 +96,12 @@
     if (destroyed || reset_ms <= 0) return
     reset_timeout = setTimeout(() => {
       reset_timeout = null
-      if (!destroyed) set_state(`ready`)
+      if (destroyed) return
+      // Snippets get `result`/`error` alongside `state`, so leaving them populated kept a
+      // `{#if error}` branch rendering a failure after the button had returned to idle.
+      result = undefined
+      error = undefined
+      set_state(`ready`)
     }, reset_ms)
   }
 
@@ -129,22 +138,23 @@
     {#if children}
       {@render children({
         state,
-        icon: current_label.icon,
-        text: current_label.text,
+        icon: current_icon,
+        text: current_text,
         disabled: action_disabled,
         result,
         error,
       })}
     {:else}
-      {#if current_label.icon}<Icon icon={current_label.icon} />{/if}
-      {#if current_label.text}<span>{current_label.text}</span>{/if}
+      {#if current_icon}<Icon icon={current_icon} />{/if}
+      {#if current_text}<span>{current_text}</span>{/if}
     {/if}
   </span>
   <span data-sms-action-width="" aria-hidden="true">
-    {#each Object.values(labels) as label}
+    {#each ACTION_STATES as ghost_state}
+      {@const ghost_icon = icons?.[ghost_state]}
       <span>
-        {#if label.icon}<Icon icon={label.icon} />{/if}
-        {#if label.text}<span>{label.text}</span>{/if}
+        {#if ghost_icon}<Icon icon={ghost_icon} />{/if}
+        {#if msg[ghost_state]}<span>{msg[ghost_state]}</span>{/if}
       </span>
     {/each}
   </span>

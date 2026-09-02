@@ -5,8 +5,8 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { SvelteMap } from 'svelte/reactivity'
   import { register_escape_layer } from '../attachments/index'
+  import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
   import {
     auto_close_pair,
@@ -30,6 +30,7 @@
     EditorDocumentInfo,
     EditorModel,
     EditorSelection,
+    EditorTransaction,
     EditorUpdate,
     SpanList,
     TextEdit,
@@ -49,6 +50,7 @@
     on_ready,
     on_save,
     on_error,
+    labels,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     model: EditorModel
@@ -60,11 +62,17 @@
     on_ready?: (document: EditorDocumentInfo) => void
     on_save?: (text: string, document: EditorDocumentInfo) => Promise<void> | void
     on_error?: (message: string) => void
+    // Override any user-facing string; omitted keys keep the English default.
+    labels?: Partial<CodeEditorLabels>
   } = $props()
+
+  const msg = $derived(merge_defaults(CODE_EDITOR_LABELS, labels))
   let textarea = $state<HTMLTextAreaElement>()
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
   let model_revision = $state(0)
+  // Bumped when highlight spans land, so the viewport LRU touch re-runs then
+  let token_revision = $state(0)
   let scroll_top = $state(0)
   let scroll_left = $state(0)
   let viewport_height = $state(0)
@@ -81,7 +89,11 @@
   type InputSnapshot = EditorSelection & { input_type: string; value_length: number }
   let before_snapshot: InputSnapshot | null = null
   let active_client: ReturnType<typeof create_highlight_client> | null = null
-  const token_cache = new SvelteMap<number, SpanList>()
+  // A plain Map, not a SvelteMap: `touch_tokens` reorders it for the LRU on every render
+  // pass, and reactive entries turned each touch into a second full rebuild of
+  // `visible_rows` plus a second DOM reconciliation, for no visual difference. Reads are
+  // sequenced by `token_revision` instead, bumped wherever the contents actually change.
+  const token_cache = new Map<number, SpanList>()
   const font_size = $derived(editor_font_size(Number(options.font_size)))
   const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
   const line_height = $derived(editor_line_height(font_size))
@@ -111,6 +123,37 @@
     }
     return complete
   }
+  // Drop only the cached spans an edit can actually have invalidated. Every line before
+  // the first edit's offset is untouched text, so its spans stay correct; clearing the
+  // whole cache on each transaction left the entire viewport unhighlighted until the
+  // debounced re-highlight returned, and evicted the full LRU on every keystroke.
+  const invalidate_tokens = (
+    active_model: EditorModel,
+    transaction: EditorTransaction,
+    previous_line_count: number,
+  ): void => {
+    const { edits } = transaction
+    if (edits.length === 0) return
+    token_revision += 1
+    // `validate_edits` rejects `from < previous_end`, so edits ascend and the first one
+    // starts earliest. Text before it is identical in both documents, so this line index
+    // means the same thing before and after the transaction.
+    const first_line = active_model.line_at(edits[0].from).line_idx
+    // A lone edit that inserts no newline and leaves the line count alone cannot have
+    // removed one either, so it is confined to its own line. That is ordinary typing.
+    const single_line_edit =
+      edits.length === 1 &&
+      !edits[0].insert.includes(`\n`) &&
+      active_model.line_count === previous_line_count
+    if (single_line_edit) {
+      token_cache.delete(first_line)
+      return
+    }
+    // safe to delete while iterating: a Map's key iterator skips entries dropped ahead of it
+    for (const line_idx of token_cache.keys()) {
+      if (line_idx >= first_line) token_cache.delete(line_idx)
+    }
+  }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
     if (revision !== model.revision) return
     for (const [offset, line_spans] of spans.entries()) {
@@ -123,6 +166,7 @@
       if (oldest === undefined) break
       token_cache.delete(oldest)
     }
+    token_revision += 1
   }
   const line_count = $derived.by(() => {
     void model_revision
@@ -139,6 +183,7 @@
   )
   const visible_rows = $derived.by(() => {
     void model_revision
+    void token_revision
     const { start, end } = window_lines
     return Array.from({ length: end - start }, (_unused, offset) => {
       const line_idx = start + offset
@@ -183,7 +228,10 @@
     })
     active_client = active
     const is_current = (): boolean => active_client === active && model === active_model
-    untrack(() => token_cache.clear())
+    untrack(() => {
+      token_cache.clear()
+      token_revision += 1
+    })
     doc_info = null
     error_message = null
     scroll_top = 0
@@ -191,14 +239,22 @@
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
     before_snapshot = null
+    // Line count as of the previous notification, so a transaction can be classified as
+    // moving a line boundary or not without re-deriving the old document.
+    let previous_line_count = active_model.line_count
     const unsubscribe = active_model.subscribe((update) => {
       if (!is_current()) return
-      model_revision += 1
       caret_line = active_model.line_at(update.selection.head).line_idx
       if (update.transaction) {
-        token_cache.clear()
+        // Only a transaction changes the text, and `line_count`/`visible_rows` read this
+        // to know when to re-read lines from the rope. The model also notifies on a bare
+        // selection change, and bumping it there re-read every visible line on each caret
+        // move — up to two rope descents per row, per keypress.
+        model_revision += 1
+        invalidate_tokens(active_model, update.transaction, previous_line_count)
         active.apply_transaction(update.transaction)
       }
+      previous_line_count = active_model.line_count
       sync_dom_from_model(update)
       on_update?.(update)
     })
@@ -240,6 +296,10 @@
   })
   $effect(() => {
     void model_revision
+    // Spans arriving is what makes a previously-uncached window cached, so the LRU touch
+    // below has to re-run then. This used to ride on `model_revision`, which every caret
+    // move bumped; now that only a transaction does, the arrival needs its own signal.
+    void token_revision
     const { start, end } = window_lines
     const cached = untrack(() => touch_tokens(start, end))
     if (doc_info?.highlightable && !cached) active_client?.request_highlight(start, end)
@@ -568,9 +628,7 @@
   style:--editor-line-height={`${line_height}px`}
   style:--editor-tab-size={tab_size}
 >
-  <span class="sr-only" id={keyboard_help_id}
-    >Press Escape, then Tab to move focus away</span
-  >
+  <span class="sr-only" id={keyboard_help_id}>{msg.keyboard_help}</span>
   {#if error_message}
     <div class="editor-error" role="alert">{error_message}</div>
   {/if}

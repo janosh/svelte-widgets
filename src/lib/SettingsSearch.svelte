@@ -3,12 +3,18 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Search } from './icons'
+  import {
+    merge_defaults,
+    SETTINGS_SEARCH_LABELS,
+    type SettingsSearchLabels,
+  } from './labels'
   import { observe_subtree } from './utils'
 
   let {
     query = $bindable(``),
     label = `Search settings`,
     placeholder = `Search settings`,
+    labels,
     // `inline` keeps the field permanently in flow. `icon` parks a magnifier in the top-right
     // corner and expands it in flow once opened, for panes with no room for a standing field.
     trigger = `inline`,
@@ -18,9 +24,12 @@
     query?: string
     label?: string
     placeholder?: string
+    labels?: Partial<SettingsSearchLabels>
     trigger?: `inline` | `icon`
     children: Snippet
   } = $props()
+
+  const msg = $derived(merge_defaults(SETTINGS_SEARCH_LABELS, labels))
 
   const search_id = $props.id()
   const input_id = `settings-search-input-${search_id}`
@@ -63,6 +72,26 @@
         : container.previousElementSibling?.querySelector(`.section-title, h4`)
       )?.textContent ?? ``
 
+    // Ancestor-chain walks against a Set, rather than pairwise `contains`: the old shape cost
+    // rows x containers plus rows x hits node comparisons per keystroke.
+    function* ancestors_of(node: HTMLElement): Generator<HTMLElement> {
+      for (let cur = node.parentElement; cur; cur = cur.parentElement) {
+        yield cur
+        if (cur === root) return // walks stop at the search root itself
+      }
+    }
+    const has_ancestor_in = (node: HTMLElement, marked: Set<HTMLElement>): boolean => {
+      for (const ancestor of ancestors_of(node)) if (marked.has(ancestor)) return true
+      return false
+    }
+    // Stops at an already-marked node, whose own ancestors are therefore marked too.
+    const mark_ancestors = (node: HTMLElement, marked: Set<HTMLElement>): void => {
+      for (const ancestor of ancestors_of(node)) {
+        if (marked.has(ancestor)) break
+        marked.add(ancestor)
+      }
+    }
+
     const refresh = (): void => {
       const normalized_query = query.trim().toLocaleLowerCase()
       if (!normalized_query) {
@@ -74,31 +103,41 @@
       const containers = [...root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR)]
       // A heading match reveals everything under it, so typing a section or group name works
       // even though no row repeats that name in its own text.
-      const titled = containers.filter((node) =>
-        title_of(node).toLocaleLowerCase().includes(normalized_query),
+      const titled = new Set(
+        containers.filter((node) =>
+          title_of(node).toLocaleLowerCase().includes(normalized_query),
+        ),
       )
       const rows = [...root.querySelectorAll<HTMLElement>(ROW_SELECTOR)]
-      const hits = rows.filter(
-        (row) =>
-          titled.some((node) => node.contains(row)) ||
-          [row.dataset.label, row.textContent, row.dataset.description]
-            .join(` `)
-            .toLocaleLowerCase()
-            .includes(normalized_query),
+      const hits = new Set(
+        rows.filter(
+          (row) =>
+            titled.has(row) ||
+            has_ancestor_in(row, titled) ||
+            [row.dataset.label, row.textContent, row.dataset.description]
+              .join(` `)
+              .toLocaleLowerCase()
+              .includes(normalized_query),
+        ),
       )
+      const hit_ancestors = new Set<HTMLElement>()
+      for (const hit of hits) mark_ancestors(hit, hit_ancestors)
 
       // A match keeps its ancestors and descendants visible, so a keyed wrapper matching on
       // its own label does not leave the rows nested inside it filtered out.
-      const visible: HTMLElement[] = []
+      const visible = new Set<HTMLElement>()
       for (const row of rows) {
-        const show = hits.some((hit) => row.contains(hit) || hit.contains(row))
+        // an ancestor of a hit, the hit itself, or nested inside one
+        const show = hits.has(row) || hit_ancestors.has(row) || has_ancestor_in(row, hits)
         row.toggleAttribute(HIDDEN_ATTR, !show)
         // A row the caller hid stays hidden, so it must not count as a match either
-        if (show && !row.closest(`[hidden]`)) visible.push(row)
+        if (show && !row.closest(`[hidden]`)) visible.add(row)
       }
+      const containers_with_visible = new Set<HTMLElement>()
+      for (const row of visible) mark_ancestors(row, containers_with_visible)
 
       for (const container of containers) {
-        const keep = visible.some((row) => container.contains(row))
+        const keep = visible.has(container) || containers_with_visible.has(container)
         container.toggleAttribute(HIDDEN_ATTR, !keep)
         if (container instanceof HTMLDetailsElement) {
           if (keep && !container.open) {
@@ -116,7 +155,7 @@
         }
       }
 
-      match_count = visible.length
+      match_count = visible.size
     }
 
     // `hidden` is watched so a row the caller hides mid-search drops out of the count, and
@@ -178,7 +217,7 @@
         <button
           type="button"
           class="clear-search"
-          aria-label="Clear settings search"
+          aria-label={msg.clear_search}
           onclick={() => {
             // this button unmounts the moment the query empties, so hand focus back to the
             // field rather than dropping it on the body. A query the caller supplied leaves
@@ -206,7 +245,7 @@
   <div class="settings-rows" {@attach filter_settings}>{@render children()}</div>
   <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
   <p id={status_id} class="no-matches" role="status">
-    {#if no_matches}No settings match “{query.trim()}”.{/if}
+    {#if no_matches}{msg.no_matches(query.trim())}{/if}
   </p>
 </div>
 

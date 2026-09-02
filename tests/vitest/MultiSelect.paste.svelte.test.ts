@@ -48,6 +48,24 @@ describe(`parse_paste`, () => {
     expect(onadd).toHaveBeenCalledWith(expect.objectContaining({ option: `beta` }))
   })
 
+  // `text.split(',')` on a trailing comma yields an empty entry. `add` throws on those, and
+  // the throw used to reject handle_paste: the loop stopped, later entries vanished and
+  // onparsed_paste never fired, leaving an unhandled rejection behind.
+  test.each([`alpha,beta,`, `alpha,,beta`])(
+    `an empty parsed entry is rejected without aborting the paste (%j)`,
+    async (paste_text) => {
+      const { onadd, onparsed_paste } = await paste_into(
+        { options: [`alpha`, `beta`] },
+        paste_text,
+      )
+      expect(onadd).toHaveBeenCalledTimes(2)
+      expect(onparsed_paste).toHaveBeenCalledTimes(1)
+      expect(onparsed_paste).toHaveBeenCalledWith(
+        expect.objectContaining({ added: [`alpha`, `beta`], rejected: [``] }),
+      )
+    },
+  )
+
   test(`fires oncreate for each created option with allowUserOptions`, async () => {
     const { oncreate, onadd } = await paste_into(
       {

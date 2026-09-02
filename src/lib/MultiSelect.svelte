@@ -10,6 +10,7 @@
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
+  import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
   import type {
     GroupedOptions,
@@ -41,7 +42,7 @@
     keepSelectedInDropdown = false,
     key = (opt) => utils.get_option_key(opt),
     filterFunc = (opt, searchText) =>
-      !searchText || text_matches(searchText, `${utils.get_label(opt)}`),
+      !searchText || text_matches(searchText, label_of(opt)),
     fuzzy = true,
     closeDropdownOnSelect = false,
     form_input = $bindable(null),
@@ -54,6 +55,7 @@
     inputStyle = null,
     inputmode = null,
     invalid = $bindable(false),
+    labels,
     liActiveOptionClass = ``,
     liActiveUserMsgClass = ``,
     liOptionClass = ``,
@@ -180,6 +182,12 @@
     rangeSelect = false,
     ...rest
   }: MultiSelectProps<Option> = $props()
+
+  // every string this component renders on its own, overridable key by key for i18n
+  const msg = $derived(merge_defaults(MULTI_SELECT_LABELS, labels))
+  // `get_label` returns string | number; everything that compares, announces or renders a
+  // label as text wants the string form, so coerce once here rather than at each call site
+  const label_of = (option_item: Option): string => `${utils.get_label(option_item)}`
 
   const invalid_config = (message: string): never => {
     throw new TypeError(`MultiSelect: ${message}`)
@@ -359,8 +367,6 @@
   const announce = (text: string) => {
     last_announcement = { text, id: ++announcement_count }
   }
-  const announce_bulk = (count: number, verb: `selected` | `removed`) =>
-    announce(`${count} option${count === 1 ? `` : `s`} ${verb}`)
 
   // Clear after announcement so option counts can be announced again.
   $effect(() => {
@@ -467,7 +473,7 @@
   // Cache selected labels to avoid repeated .map() calls (keys are mapped once into the Set below)
   let selected_labels = $derived(selected.map((opt) => utils.get_label(opt)))
   let input_committed_label = $derived(
-    input_display && selected[0] !== undefined ? `${utils.get_label(selected[0])}` : null,
+    input_display && selected[0] !== undefined ? label_of(selected[0]) : null,
   )
   let input_text_is_committed = $derived(
     input_display && searchText === input_committed_label,
@@ -670,7 +676,13 @@
   // Rows eligible for rendering: group headers interleaved with their options
   // (maxOptions hides options past the limit, collapsed groups keep only their header)
   type RenderRow =
-    | { kind: `option`; option: Option; flat_idx: number; render_key: unknown }
+    | {
+        kind: `option`
+        option: Option
+        flat_idx: number
+        render_key: unknown
+        group: string | null
+      }
     | { kind: `header`; group_idx: number; render_key: unknown }
   // stable symbols as header render keys: can't collide with user option keys.
   // Cache is bounded by distinct group names seen over the component's life, so
@@ -696,6 +708,7 @@
             option: option_item,
             flat_idx,
             render_key: option_render_keys[group_idx][local_idx],
+            group,
           })
         }
         flat_idx++
@@ -748,21 +761,33 @@
   // (a string suffix could collide with a real key like 'a-dup-1') and stable
   // across re-derivations so keyed DOM nodes aren't recreated.
   const dup_key_cache = new Map<unknown, symbol[]>()
+  // One counter per pass, so a key repeated across groups is still disambiguated
+  const render_key_assigner = () => {
+    const occurrence_counts = new Map<unknown, number>()
+    return (option_item: Option): unknown => {
+      const base_key = key(option_item)
+      const occurrence = occurrence_counts.get(base_key) ?? 0
+      occurrence_counts.set(base_key, occurrence + 1)
+      if (occurrence === 0) return base_key
+      const cached = dup_key_cache.get(base_key) ?? []
+      cached[occurrence - 1] ??= Symbol(`sms-dup-${occurrence}`)
+      dup_key_cache.set(base_key, cached)
+      return cached[occurrence - 1]
+    }
+  }
   // nested arrays aligned with grouped_options: option_render_keys[group_idx][local_idx]
   let option_render_keys = $derived.by(() => {
-    const occurrence_counts = new Map<unknown, number>()
+    const next_render_key = render_key_assigner()
     return grouped_options.map(({ options: group_items }) =>
-      group_items.map((option_item) => {
-        const base_key = key(option_item)
-        const occurrence = occurrence_counts.get(base_key) ?? 0
-        occurrence_counts.set(base_key, occurrence + 1)
-        if (occurrence === 0) return base_key
-        const cached = dup_key_cache.get(base_key) ?? []
-        cached[occurrence - 1] ??= Symbol(`sms-dup-${occurrence}`)
-        dup_key_cache.set(base_key, cached)
-        return cached[occurrence - 1]
-      }),
+      group_items.map(next_render_key),
     )
+  })
+  // The chips need the same treatment: two selected entries can share a key (duplicate
+  // `preselected` options, or `selected={['a', 'a']}`) and Svelte throws each_key_duplicate.
+  // Symbols also beat keying by index, which would defeat move detection on reorder.
+  let chip_render_keys = $derived.by(() => {
+    const next_render_key = render_key_assigner()
+    return visible_chips.map(next_render_key)
   })
 
   // Pre-computed group header state (avoids repeated calculations in template)
@@ -859,7 +884,7 @@
   function sort_selected(items: Option[]): Option[] {
     if (sortSelected === true) {
       return items.toSorted((opt_1, opt_2) =>
-        `${utils.get_label(opt_1)}`.localeCompare(`${utils.get_label(opt_2)}`),
+        label_of(opt_1).localeCompare(label_of(opt_2)),
       )
     }
     if (typeof sortSelected === `function`) return items.toSorted(sortSelected)
@@ -873,13 +898,13 @@
   const resolved_create_msg = $derived.by(() => {
     if (createOptionMsg === null || createOptionMsg === undefined) return null
     if (typeof createOptionMsg === `function`) {
-      const msg = createOptionMsg({
+      const create_msg = createOptionMsg({
         searchText,
         selected,
         options: effective_options,
         matchingOptions,
       })
-      return msg || null // coerce empty string to null so truthiness checks work
+      return create_msg || null // coerce empty string to null so truthiness checks work
     }
     return createOptionMsg
   })
@@ -997,6 +1022,10 @@
 
   // Selected chips are plain list items, so left/right chip highlighting stays visual.
   const user_message_id = $derived(`${base_id}-user-msg`)
+  // A group header is presentational, so its options reference it by id to pick the group
+  // name up as their description
+  const group_header_id = (group_name: string) =>
+    `${base_id}-group-${encodeURIComponent(group_name)}`
   const active_option_id = $derived(
     is_user_message_active
       ? user_message_id
@@ -1032,7 +1061,9 @@
       title,
       selectedTitle,
       disabledTitle,
-      active: activeIndex === flat_idx,
+      // `active` deliberately lives outside this object: it is the only field that tracks
+      // `activeIndex`, and since a fresh object is never `===` the previous one, bundling
+      // it here re-rendered every option row on each arrow key rather than just two.
       selected: is_option_selected(option_item, label),
       style: merge_styles(option_item, `option`, liOptionStyle),
     }
@@ -1088,7 +1119,7 @@
     // closure so the guard can be re-evaluated after an async oncreate resolves
     const is_dupe = () =>
       selected_keys_set.has(key(option_to_add)) ||
-      (check_label && is_label_selected(`${utils.get_label(option_to_add)}`))
+      (check_label && is_label_selected(label_of(option_to_add)))
     const is_duplicate = is_dupe()
     const max_reached = at_max_capacity()
     // Fire events for blocked add attempts (redundant null check narrows maxSelect for TS)
@@ -1102,7 +1133,7 @@
     // This also prevents adding the same custom option twice in append mode.
     if (is_user_option) {
       if (!(from_paste && typeof option_to_add === `object`)) {
-        const label_text = from_paste ? `${utils.get_label(option_to_add)}` : searchText
+        const label_text = from_paste ? label_of(option_to_add) : searchText
         if (typeof effective_options[0] === `object`) {
           option_to_add = { label: label_text } as Option
         } else if (
@@ -1155,14 +1186,14 @@
       if (load_options_config) loaded_options = [...loaded_options, option_to_add]
       else options = [...options, option_to_add]
     }
-    if (input_display) searchText = `${utils.get_label(option_to_add)}`
+    if (input_display) searchText = label_of(option_to_add)
     else if (resetFilterOnAdd) searchText = ``
     // for maxSelect = 1 we always replace current option with new one
     selected = next_selected
 
     clear_validity()
     handle_dropdown_after_select(event)
-    announce(`${utils.get_label(option_to_add)} selected`)
+    announce(msg.option_selected(label_of(option_to_add)))
     onadd?.({ option: option_to_add, selected })
     onchange?.({ option: option_to_add, type: `add` })
   }
@@ -1193,7 +1224,7 @@
 
     selected = selected.filter((_, remove_idx) => remove_idx !== idx)
     clear_validity()
-    announce(`${utils.get_label(option_removed)} removed`)
+    announce(msg.option_removed(label_of(option_removed)))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -1218,6 +1249,20 @@
   }
 
   let suppress_next_focus_open = false
+
+  // The remove button that ran the removal is unmounted by it, so focus would land on
+  // <body>. Hand it back to the input, but only when it was genuinely lost.
+  const with_focus_rescue = (handler: (event: Event) => void) => (event: Event) => {
+    const button = event.currentTarget
+    handler(event)
+    // The button survives until Svelte flushes the removal, so focus only drops after
+    // this tick. Rescue it then, and only if it was genuinely lost.
+    void tick().then(() => {
+      if (button instanceof HTMLElement && button.isConnected) return
+      const active = document.activeElement
+      if (!active || active === document.body) focus_input_without_open()
+    })
+  }
 
   function focus_input_without_open(only_if_internal = false) {
     const active_element = document.activeElement
@@ -1265,13 +1310,13 @@
   function handle_invalid() {
     invalid = true
     const min_required = Number(required)
-    const msg =
+    const validity_msg =
       maxSelect && maxSelect > 1 && min_required > 1
-        ? `Please select between ${required} and ${maxSelect} options`
+        ? msg.select_between(min_required, maxSelect)
         : min_required > 1
-          ? `Please select at least ${required} options`
-          : `Please select an option`
-    form_input?.setCustomValidity(msg)
+          ? msg.select_at_least(min_required)
+          : msg.select_an_option
+    form_input?.setCustomValidity(validity_msg)
   }
 
   function handle_dropdown_after_select(event: Event) {
@@ -1502,7 +1547,7 @@
 
     selected = selected.slice(0, keep_count)
     searchText = `` // always clear on remove all (resetFilterOnAdd only applies to add operations)
-    announce_bulk(removed_options.length, `removed`)
+    announce(msg.options_removed(removed_options.length))
     onremoveAll?.({ options: removed_options })
     onchange?.({ options: selected, type: `removeAll` })
   }
@@ -1516,7 +1561,7 @@
       if (resetFilterOnAdd) searchText = ``
       clear_validity()
       handle_dropdown_after_select(event)
-      announce_bulk(added.length, `selected`)
+      announce(msg.options_selected(added.length))
     }
     if (added.length < unselected.length && maxSelect !== null) {
       should_wiggle = true
@@ -1578,19 +1623,26 @@
     max_reached: boolean,
     all_selectable_selected: boolean,
   ) {
-    if (matching_scope_unavailable) {
-      return `Matching select-all is only available with local options`
-    }
+    // `selectAllDisabledTitle` is consulted first, including when the matching scope is
+    // unavailable: returning that message ahead of the prop meant `null` could not suppress
+    // the title and neither a string nor a function could replace it.
     if (selectAllDisabledTitle === null) return ``
-    const default_title =
-      max_reached && !all_selectable_selected
-        ? `Maximum of ${maxSelect} options selected`
-        : `All options already selected`
+    // `max_reached` already implies a non-null maxSelect; the check re-narrows it for the label
+    const default_title = matching_scope_unavailable
+      ? msg.matching_scope_unavailable
+      : max_reached && maxSelect !== null && !all_selectable_selected
+        ? msg.max_select_reached(maxSelect)
+        : msg.all_options_selected
+    // the callback gets the state behind `default_title` too, so it can tell the three
+    // disabled reasons apart or wrap the default instead of rebuilding it
     return typeof selectAllDisabledTitle === `function`
       ? selectAllDisabledTitle({
           max_reached,
           maxSelect,
           selected_count: selected.length,
+          all_selectable_selected,
+          matching_scope_unavailable,
+          default_title,
         })
       : (selectAllDisabledTitle ?? default_title)
   }
@@ -1766,7 +1818,7 @@
     if (option_removed === undefined) return
     selected = []
     clear_validity()
-    announce(`${utils.get_label(option_removed)} removed`)
+    announce(msg.option_removed(label_of(option_removed)))
     onremove?.({ option: option_removed, selected })
     onchange?.({ option: option_removed, type: `remove` })
   }
@@ -1843,6 +1895,14 @@
     const rejected: Option[] = []
     const overflow: Option[] = []
     for (const [idx, parsed_option] of parsed.entries()) {
+      // A splitter as ordinary as `text.split(',')` yields an empty entry for a trailing
+      // separator. `add` throws on those, and the throw would reject this async function:
+      // the loop stops, every later entry is silently dropped and `onparsed_paste` never
+      // fires. Count them as rejected and carry on.
+      if (!is_non_empty_option(parsed_option)) {
+        rejected.push(parsed_option)
+        continue
+      }
       if (at_max_capacity() && maxSelect !== null) {
         overflow.push(parsed_option, ...parsed.slice(idx + 1))
         should_wiggle = true
@@ -2056,9 +2116,10 @@
   title: string,
   icon_props: { option: Option; isRemoveAll: false } | { isRemoveAll: true },
 )}
+  {@const rescued = with_focus_rescue(handler)}
   <button
-    onclick={handler}
-    onkeydown={if_enter_or_space(handler)}
+    onclick={rescued}
+    onkeydown={if_enter_or_space(rescued)}
     type="button"
     {title}
     class={[`remove`, { 'remove-all': icon_props.isRemoveAll }]}
@@ -2111,12 +2172,12 @@
   {/if}
   <ul
     class={[`selected`, ulSelectedClass]}
-    aria-label="selected options"
+    aria-label={msg.selected_options}
     style={ulSelectedStyle}
   >
     {@render beforeInput?.(input_snippet_props)}
     {#if !input_display}
-      {#each visible_chips as option, idx (duplicates ? `${key(option)}-${idx}` : key(option))}
+      {#each visible_chips as option, idx (chip_render_keys[idx])}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- selected chips stay plain list items; nested buttons handle removal -->
         <li
           id="{base_id}-selected-{idx}"
@@ -2148,7 +2209,7 @@
           {#if !disabled && can_remove}
             {@render remove_btn(
               (event) => remove(option, event, idx),
-              `${removeBtnTitle} ${utils.get_label(option)}`,
+              msg.remove_option(removeBtnTitle, label_of(option)),
               { option, isRemoveAll: false },
             )}
           {/if}
@@ -2169,7 +2230,7 @@
             }}
             onmouseup={(event) => event.stopPropagation()}
           >
-            {is_chip_list_expanded ? `show less` : `+${hidden_chip_count} more`}
+            {is_chip_list_expanded ? msg.show_less : msg.more_chips(hidden_chip_count)}
           </button>
         </li>
       {/if}
@@ -2312,8 +2373,9 @@
       <!-- option <li> markup shared by the virtual and non-virtual render paths.
         flat_idx is passed positionally so duplicate option values still get
         unique DOM ids / aria-posinset / hover indices -->
-      {#snippet option_li(option_item: Option, flat_idx: number)}
+      {#snippet option_li(option_item: Option, flat_idx: number, group: string | null)}
         {@const view = get_option_view(option_item, flat_idx)}
+        {@const is_active = activeIndex === flat_idx}
         <li
           id="{base_id}-opt-{flat_idx}"
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
@@ -2321,18 +2383,25 @@
             ? view.disabledTitle
             : (view.selected && view.selectedTitle) || view.title}
           class:selected={view.selected}
-          class:active={view.active}
+          class:active={is_active}
           class:disabled={view.disabled}
-          class={[liOptionClass, view.active && liActiveOptionClass]}
+          class={[liOptionClass, is_active && liActiveOptionClass]}
           onmouseover={() => {
-            if (!view.disabled && !should_ignore_hover) activeIndex = flat_idx
+            if (view.disabled || should_ignore_hover) return
+            // without this the effect that pins the user-message row snaps activeIndex
+            // straight back, so hover highlighting is dead while that row is active
+            is_user_message_active = false
+            activeIndex = flat_idx
           }}
           onfocus={() => {
-            if (!view.disabled) activeIndex = flat_idx
+            if (view.disabled) return
+            is_user_message_active = false
+            activeIndex = flat_idx
           }}
           role="option"
           aria-selected={view.selected ? `true` : `false`}
           aria-disabled={view.disabled ? `true` : undefined}
+          aria-describedby={group === null ? undefined : group_header_id(group)}
           aria-posinset={flat_idx + 1}
           aria-setsize={visible_navigable_count}
           style={view.style}
@@ -2341,12 +2410,17 @@
           )}
         >
           {#if keepSelectedInDropdown === `checkboxes`}
+            <!-- Suppressing the native toggle leaves the box driven only by `view.selected`.
+                 The click still bubbles to the <li>, which runs the real toggle, so a rejected
+                 one (maxSelect/minSelect reached, disabled option) can no longer leave the box
+                 flipped while the selection never changed. -->
             <input
               type="checkbox"
               class="option-checkbox"
               checked={view.selected}
-              aria-label="Toggle {utils.get_label(option_item)}"
+              aria-label={msg.toggle_option(label_of(option_item))}
               tabindex="-1"
+              onclick={(event) => event.preventDefault()}
             />
           {/if}
           {#if option}
@@ -2354,7 +2428,7 @@
               option: option_item,
               idx: flat_idx,
               selected: view.selected,
-              active: view.active,
+              active: is_active,
               disabled: view.disabled ?? false,
             })}
           {:else}
@@ -2381,23 +2455,33 @@
           {@const { all_selected, selected_count, selectable } = group_header_state.get(
             group_name,
           ) ?? { all_selected: false, selected_count: 0, selectable: [] }}
-          {@const handle_toggle = () =>
-            collapsibleGroups && toggle_group_collapsed(group_name)}
+          {@const handle_toggle = (event: Event) => {
+            // the collapse button sits inside the header, whose own click also toggles
+            event.stopPropagation()
+            if (collapsibleGroups) toggle_group_collapsed(group_name)
+          }}
           {@const handle_group_select = (event: Event) =>
             toggle_group_selection(selectable, all_selected, event)}
-          <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+          <!-- A listbox may only own `option` (or `group`) elements, so the header row is
+            presentational and its options point back at it with `aria-describedby`, which
+            is what carries the group name to assistive tech now. `role="presentation"` is
+            dropped by conflict resolution if the element is focusable or carries a global
+            ARIA attribute, so this <li> must have neither: the collapse control is a real
+            nested <button> and the label lives in the text, not in `aria-label`. -->
           <li
             class={[`group-header`, liGroupHeaderClass]}
             class:collapsible={collapsibleGroups}
             class:sticky={stickyGroupHeaders}
-            role={collapsibleGroups ? `button` : `presentation`}
-            aria-expanded={collapsibleGroups ? !collapsed : undefined}
-            aria-label="Group: {group_name}"
+            role="presentation"
             style={liGroupHeaderStyle}
             onclick={handle_toggle}
-            onkeydown={if_enter_or_space(handle_toggle)}
-            tabindex={collapsibleGroups ? 0 : -1}
           >
+            <!-- The description each option points at. A hidden span rather than the
+              <li> itself, so screen readers get exactly the group name and not the count,
+              the select-all button and the chevron along with it. -->
+            <span id={group_header_id(group_name)} class="sr-only">
+              {msg.group(group_name)}
+            </span>
             {#if groupHeader}
               {@render groupHeader({
                 group: group_name,
@@ -2407,9 +2491,7 @@
             {:else}
               <span class="group-label">{group_name}</span>
               <span class="group-count">
-                ({selected_count > 0
-                  ? `${selected_count}/${group_opts.length}`
-                  : group_opts.length})
+                {msg.group_count(selected_count, group_opts.length)}
               </span>
               {#if groupSelectAll && multi_select}
                 {@const group_blocked =
@@ -2421,14 +2503,22 @@
                   onclick={handle_group_select}
                   onkeydown={if_enter_or_space(handle_group_select)}
                 >
-                  {all_selected ? `Deselect all` : `Select all`}
+                  {all_selected ? msg.group_deselect_all : msg.group_select_all}
                 </button>
               {/if}
               {#if collapsibleGroups}
-                <Icon
-                  icon={collapsed ? ChevronRight : ChevronDown}
-                  style="width: 12px; margin-inline-start: auto"
-                />
+                <button
+                  type="button"
+                  class="group-collapse-toggle"
+                  aria-expanded={!collapsed}
+                  aria-label={msg.group(group_name)}
+                  onclick={handle_toggle}
+                >
+                  <Icon
+                    icon={collapsed ? ChevronRight : ChevronDown}
+                    style="width: 12px"
+                  />
+                </button>
               {/if}
             {/if}
           </li>
@@ -2439,7 +2529,7 @@
       {/if}
       {#each visible_render_rows as row (row.render_key)}
         {#if row.kind === `option`}
-          {@render option_li(row.option, row.flat_idx)}
+          {@render option_li(row.option, row.flat_idx, row.group)}
         {:else}
           {@render group_header_li(row.group_idx)}
         {/if}
@@ -2450,15 +2540,15 @@
         )}
       {/if}
       {#if user_message && user_message.msg}
-        {@const { type: msgType, msg } = user_message}
-        {@const can_add_user_option = msgType === `create`}
+        {@const { type: msg_type, msg: user_msg_text } = user_message}
+        {@const can_add_user_option = msg_type === `create`}
         {@const handle_create = (event: Event) =>
           can_add_user_option && add(searchText as Option, event)}
         <li
           id={user_message_id}
           onclick={handle_create}
           onkeydown={can_add_user_option ? if_enter_or_space(handle_create) : undefined}
-          title={msgType !== `no-match` ? msg : ``}
+          title={msg_type !== `no-match` ? user_msg_text : ``}
           class:active={is_user_message_active}
           onmouseover={() => !should_ignore_hover && (is_user_message_active = true)}
           onfocus={() => (is_user_message_active = true)}
@@ -2475,17 +2565,17 @@
             dupe: `not-allowed`,
             create: `pointer`,
             'no-match': `default`,
-          }[msgType]}
+          }[msg_type]}
         >
           {#if userMsg}
-            {@render userMsg({ searchText, msgType, msg })}
+            {@render userMsg({ searchText, msgType: msg_type, msg: user_msg_text })}
           {:else}
-            {msg}
+            {user_msg_text}
           {/if}
         </li>
       {/if}
       {#if load_options_config && is_loading_options}
-        <li class="loading-more" role="status" aria-label="Loading more options">
+        <li class="loading-more" role="status" aria-label={msg.loading_more}>
           <CircleSpinner />
         </li>
       {/if}
@@ -2496,7 +2586,7 @@
     {#if last_announcement}
       {#key last_announcement.id}{last_announcement.text}{/key}
     {:else if open}
-      {matchingOptions.length} option{matchingOptions.length === 1 ? `` : `s`} available
+      {msg.options_available(matchingOptions.length)}
     {/if}
   </div>
 </div>
@@ -2829,6 +2919,17 @@
       --sms-group-header-hover-bg,
       light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05))
     );
+  }
+  /* the chevron is a real button now, so it needs the <li>'s own look, not a control's */
+  :is(ul.options > li.group-header button.group-collapse-toggle) {
+    display: flex;
+    align-items: center;
+    margin-inline-start: auto;
+    padding: 0;
+    border: none;
+    background: none;
+    color: inherit;
+    cursor: pointer;
   }
   :is(ul.options > li.group-header .group-label) {
     flex: 1;

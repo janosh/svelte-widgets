@@ -579,6 +579,23 @@ describe(`<Toast />`, () => {
     )
   })
 
+  test(`a labels.pending override replaces the waiting count wording`, async () => {
+    const store = render({
+      labels: { pending: (count: number) => `noch ${count} in der Warteschlange` },
+    })
+    store.show(`a`)
+    store.show(`b`)
+    await tick()
+
+    expect(doc_query(`.toast .sr-only`).textContent?.trim()).toBe(
+      `noch 1 in der Warteschlange`,
+    )
+    // a key the override omits keeps its own prop default
+    expect(doc_query(`.toast-dismiss`).getAttribute(`aria-label`)).toBe(
+      `Dismiss notification`,
+    )
+  })
+
   test(`the action button runs the action and closes the toast`, async () => {
     const store = render()
     const on_click = vi.fn()

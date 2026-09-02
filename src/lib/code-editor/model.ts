@@ -265,7 +265,12 @@ const merge_typed_records = (
 }
 export const create_editor_model = (init: EditorModelInit): EditorModel => {
   const had_bom = init.text.startsWith(BOM)
-  const eol = init.text.includes(`\r\n`) ? `crlf` : `lf`
+  // Majority wins: a single CRLF inside an otherwise-LF file (a string literal, a partial
+  // conversion) used to flip the whole document to CRLF on save, producing a diff touching
+  // every line.
+  const crlf_count = (init.text.match(/\r\n/gu) ?? []).length
+  const lf_only_count = (init.text.match(/(?<!\r)\n/gu) ?? []).length
+  const eol = crlf_count > lf_only_count ? `crlf` : `lf`
   let root = rope_from(editor_text(init.text))
   const history_limit = init.history_limit_chars ?? DEFAULT_HISTORY_LIMIT
   if (!Number.isInteger(history_limit) || history_limit < 0)

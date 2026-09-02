@@ -12,6 +12,11 @@
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
+  import {
+    merge_defaults,
+    NUMBER_RANGE_INPUT_LABELS,
+    type NumberRangeInputLabels,
+  } from './labels'
 
   // The same three bounds either way: optional when a schema entry can supply them, required
   // when nothing else can.
@@ -34,11 +39,13 @@
     step,
     title,
     children,
+    labels,
     ...rest
   }: {
     value: number | undefined
     title?: string
     children?: Snippet
+    labels?: Partial<NumberRangeInputLabels>
   } & (SchemaBounds | ExplicitBounds) &
     Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
 
@@ -55,8 +62,23 @@
     max: max ?? setting_config?.maximum,
     step: step ?? setting_config?.multipleOf ?? `any`,
   })
+  // `<input type="range">` with no min/max silently falls back to the spec default 0-100,
+  // while the paired number input stays unbounded. `bind:value` then lets one touch of the
+  // slider clamp and write back a value the caller never limited, destroying it. Fail loudly
+  // instead: a slider with no range is a misconfiguration, not a default.
+  $effect(() => {
+    if (input_bounds.min === undefined || input_bounds.max === undefined) {
+      throw new Error(
+        `NumberRangeInput needs both a min and a max to render its slider, got ` +
+          `min=${input_bounds.min}, max=${input_bounds.max}${
+            setting ? ` for setting "${setting}"` : ``
+          }. Pass min/max props or give the schema entry minimum/maximum.`,
+      )
+    }
+  })
   let resolved_title = $derived(title ?? setting_config?.description)
-  let range_label = $derived(resolved_title?.trim() || setting?.trim() || `Value`)
+  const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
+  let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)
   // With children the wrapping <label> already names the number input and an aria-label would
   // override that visible text; without them the label is empty, so it needs the fallback too.
   const number_label = $derived(children ? undefined : range_label)

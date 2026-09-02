@@ -5,8 +5,7 @@
 
 <h4 align="center">
 
-[![Tests](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml/badge.svg)](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml)
-[![GitHub Pages](https://github.com/janosh/svelte-widgets/actions/workflows/gh-pages.yml/badge.svg)](https://github.com/janosh/svelte-widgets/actions/workflows/gh-pages.yml)
+[![CI](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml/badge.svg)](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml)
 [![NPM version](https://img.shields.io/npm/v/svelte-widgets?logo=NPM&color=purple)](https://npmjs.com/package/svelte-widgets)
 [![Needs Svelte version](https://img.shields.io/npm/dependency-version/svelte-widgets/peer/svelte?color=teal&logo=Svelte&label=Svelte)](https://github.com/sveltejs/svelte/blob/-/packages/svelte/CHANGELOG.md)
 [![Playground](https://img.shields.io/badge/Svelte-Playground-blue?label=Try%20it!)](https://svelte.dev/playground/a5a14b8f15d64cb083b567292480db05)
@@ -154,6 +153,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment     |
 | `/icons`                            | Dynamic icon registry                                      |
 | `/katex`                            | KaTeX before/after preprocessor pair                       |
+| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers   |
 | `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter |
 | `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory             |
 | `/print`                            | Element printing                                           |

@@ -35,7 +35,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 
 <Nav
   routes={['/ui', '/css-classes', '/kit-form-actions']}
-  labels={{
+  route_labels={{
     '/ui': 'UI Components',
     '/css-classes': 'CSS Classes',
     '/kit-form-actions': 'Form Actions',
@@ -45,7 +45,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 />
 ```
 
-**Features shown:** Override auto-generated labels via `labels` prop
+**Features shown:** Override auto-generated labels via `route_labels` prop (`labels` carries Nav's own UI strings, like the submenu toggle)
 
 ## Dropdown Menus
 

@@ -6,6 +6,7 @@
     HTMLDetailsAttributes,
   } from 'svelte/elements'
   import { language_label_html } from './internal/language-label'
+  import { merge_defaults, FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
   import { default_highlighter } from './live-examples/default-highlighter'
   import { chain_handlers } from './utils'
 
@@ -24,6 +25,7 @@
     title_snippet,
     button_props,
     details_props,
+    labels,
     ...rest
   }: {
     files?: File[]
@@ -33,7 +35,10 @@
     title_snippet?: Snippet<[{ idx: number } & File]>
     button_props?: Omit<HTMLButtonAttributes, `type`>
     details_props?: HTMLDetailsAttributes
+    labels?: Partial<FileDetailsLabels>
   } & HTMLAttributes<HTMLOListElement> = $props()
+
+  const msg = $derived(merge_defaults(FILE_DETAILS_LABELS, labels))
 
   // Use reactive state for node refs to avoid binding_property_non_reactive warning
   let detail_elements = $state<(HTMLDetailsElement | null)[]>([])
@@ -95,9 +100,11 @@
   // no cancellation. The empty marker keeps a cache write from re-requesting every sibling.
   let highlighted_cache = $state<Record<string, string>>({})
   $effect(() => {
+    const live_keys = new Set<string>()
     for (const file of files) {
       const language = resolve_lang(file)
       const key = highlight_key(language, file.content)
+      live_keys.add(key)
       if (untrack(() => key in highlighted_cache)) continue
       highlighted_cache[key] = ``
       default_highlighter.highlight(file.content, language).then(
@@ -105,6 +112,15 @@
         () => {}, // silently skip unsupported languages
       )
     }
+    // Every key holds a full copy of the content it was built from, so a caller streaming
+    // edits through the bindable `files` would grow this without bound.
+    untrack(() => {
+      const entries = Object.entries(highlighted_cache)
+      const live_entries = entries.filter(([cached_key]) => live_keys.has(cached_key))
+      if (live_entries.length !== entries.length) {
+        highlighted_cache = Object.fromEntries(live_entries)
+      }
+    })
   })
 </script>
 
@@ -115,8 +131,8 @@
     type="button"
     onclick={chain_handlers(toggle_all, button_props?.onclick)}
   >
-    <span aria-hidden={has_open_details}>Open all</span>
-    <span aria-hidden={!has_open_details}>Close all</span>
+    <span aria-hidden={has_open_details}>{msg.open_all}</span>
+    <span aria-hidden={!has_open_details}>{msg.close_all}</span>
   </button>
 {/if}
 

@@ -39,10 +39,12 @@ New features should include corresponding tests. Bug fixes should include a test
 
 These CI checks have to pass for every PR before merging:
 
-- tests: run as [GitHub Action](https://github.com/janosh/svelte-widgets/actions/workflows/test.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/test.yml))
-- linting and type checks: `vp check` plus `svelte-check-rs`, run as [GitHub Action](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/lint.yml)
-- links: [lychee](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/link-check.yml) over every markdown, Svelte and TS file
-- docs: [continuous deployment](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/gh-pages.yml) through GitHub Pages
+All run as jobs of the single [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/ci.yml)):
+
+- tests: `unit` (vitest with coverage plus the package smoke test) and `e2e` (Playwright)
+- linting and type checks: `check` runs `vp check` plus `svelte-check-rs`
+- links: `link-check` runs lychee over every markdown, Svelte and TS file
+- docs: `build` and `deploy` handle continuous deployment through GitHub Pages
 
 ## 🆕 New release
 

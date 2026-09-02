@@ -5,6 +5,11 @@
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
   import { Cross, DragIndicator, Expand, Reset, type IconData } from './icons'
+  import {
+    merge_defaults,
+    DRAGGABLE_PANE_LABELS,
+    type DraggablePaneLabels,
+  } from './labels'
   import { chain_handlers } from './utils'
 
   type CloseVia = `toggle` | `button` | `pointer` | `escape`
@@ -40,6 +45,7 @@
     pane = $bindable(null),
     has_been_dragged = $bindable(false),
     dragging = $bindable(false),
+    labels,
   }: {
     open?: boolean
     children: Snippet<[PaneState]>
@@ -71,8 +77,10 @@
     pane?: HTMLDivElement | null
     has_been_dragged?: boolean
     dragging?: boolean
+    labels?: Partial<DraggablePaneLabels>
   } = $props()
 
+  const msg = $derived(merge_defaults(DRAGGABLE_PANE_LABELS, labels))
   const viewport_margin_px = 8
   // How much of the pane stays on screen when the toggle sits near the bottom edge.
   // Without it a low toggle parks the pane in the last few pixels of the viewport.
@@ -232,7 +240,7 @@
   onclick={chain_handlers(toggle_pane, toggle_props.onclick)}
   class={[`pane-toggle`, toggle_props.class]}
   {@attach tooltip({
-    content: toggle_props.title ?? (open ? `Close pane` : `Open pane`),
+    content: toggle_props.title ?? (open ? msg.close_pane : msg.open_pane),
   })}
 >
   {#if toggle}
@@ -279,6 +287,7 @@ aria-label sits before the spread, so a page with several panes renames them via
     // the user's drag.
     max_width: resize_width_limit,
     handle_size: resize_gutter_px,
+    labels: { handle: msg.resize_handle },
     on_resize_start: (_event, { width }) => {
       has_been_dragged = true
       resize_start_width = width
@@ -311,8 +320,8 @@ aria-label sits before the spread, so a page with several panes renames them via
       <button
         type="button"
         class="reset-button"
-        title="Reset pane position"
-        aria-label="Reset pane position"
+        title={msg.reset_position}
+        aria-label={msg.reset_position}
         onclick={reset_position}
       >
         <Icon icon={Reset} style="width: 100%; height: 100%" />
@@ -320,8 +329,8 @@ aria-label sits before the spread, so a page with several panes renames them via
       <button
         type="button"
         class="close-button"
-        title="Close pane"
-        aria-label="Close pane"
+        title={msg.close_pane}
+        aria-label={msg.close_pane}
         onclick={() => close_pane(`button`)}
       >
         <Icon icon={Cross} style="width: 100%; height: 100%" />

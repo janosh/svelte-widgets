@@ -297,6 +297,48 @@ describe(`SettingsSection`, () => {
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
   })
 
+  // `explain` and `reset_section` overridden, `explain_toggle` and `reset` omitted, so
+  // both halves of the merge are exercised. The interpolating default lowercases the title.
+  test(`labels reword the heading actions, key by key`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      reset_values: { radius: 2 }, // differs at mount, so the Reset button renders
+      on_reset_key: () => undefined,
+      labels: {
+        explain: `Erklären`,
+        reset_section: (section_title: string) => `${section_title} zurücksetzen`,
+        reset_key: (setting_key: string) => `${setting_key} zurücksetzen`,
+      },
+      children: snippet(
+        `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input value="2"></label>`,
+      ),
+    })
+    await tick()
+
+    const explain = doc_query<HTMLButtonElement>(`.description-toggle`)
+    expect([explain.textContent?.trim(), explain.getAttribute(`aria-label`)]).toEqual([
+      `Erklären`,
+      `Show descriptions for atoms`,
+    ])
+    await click_and_tick(`.description-toggle`)
+    expect(explain.getAttribute(`aria-label`)).toBe(`Hide descriptions for atoms`)
+
+    const reset = doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`)
+    expect([
+      reset.textContent?.trim(),
+      reset.getAttribute(`title`),
+      reset.getAttribute(`aria-label`),
+    ]).toEqual([`Reset`, `Atoms zurücksetzen`, `Atoms zurücksetzen`])
+
+    // the per-row reset button injected by on_reset_key reads from labels too
+    const row_reset = doc_query(`.setting-reset-button`)
+    expect([
+      row_reset.getAttribute(`title`),
+      row_reset.getAttribute(`aria-label`),
+    ]).toEqual([`radius zurücksetzen`, `radius zurücksetzen`])
+  })
+
   test(`offers the toggle for rows that only carry their own data-description`, async () => {
     mount_section({
       title: `Atoms`,
@@ -312,6 +354,68 @@ describe(`SettingsSection`, () => {
     expect(document.querySelector(`.settings-row-description`)?.textContent).toBe(
       `Rendered atom radius`,
     )
+  })
+
+  // The row's own description was snapshotted once at mount and written back on every
+  // refresh, so a caller updating a reactive `data-description` had their new text
+  // reverted, and a caller adding the attribute later had it deleted outright.
+  test(`follows a caller's later data-description instead of restoring the mount-time one`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      on_reset_key: () => undefined,
+      children: snippet(
+        `<label data-key="radius" data-description="Old text"><span>Radius</span><input></label>`,
+      ),
+    })
+    await tick()
+    await click_and_tick(`.description-toggle`)
+    expect(doc_query(`.settings-row-description`).textContent).toBe(`Old text`)
+
+    // the caller rewrites the attribute the way a reactive prop would
+    doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `New text`)
+    await tick()
+    expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
+      `New text`,
+    )
+    expect(doc_query(`.settings-row-description`).textContent).toBe(`New text`)
+  })
+
+  // a row that gains the attribute after mount had it removed again on the next refresh
+  test(`keeps a data-description added after mount`, async () => {
+    mount_section({
+      title: `Atoms`,
+      current_values: { radius: 1 },
+      on_reset_key: () => undefined,
+      children: snippet(`<label data-key="radius"><span>Radius</span><input></label>`),
+    })
+    await tick()
+    doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `Added later`)
+    await tick()
+
+    expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
+      `Added later`,
+    )
+  })
+
+  // Pressing the reset button removes it, which used to drop focus to <body>.
+  test(`keyboard reset moves focus to the row's control instead of losing it`, async () => {
+    const tracked = mount_tracked_section(
+      { radius: 2 },
+      `<label data-key="radius"><span>Radius</span><input value="2"></label>`,
+      { radius: 1 },
+    )
+    await tick()
+    const button = doc_query<HTMLButtonElement>(`.setting-reset-button`)
+    button.focus()
+    expect(document.activeElement).toBe(button)
+
+    button.click()
+    await tick()
+
+    expect(tracked.values.radius).toBe(1)
+    expect(document.querySelector(`.setting-reset-button`)).toBeNull()
+    expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
   test(`ignores unmapped and explicitly empty descriptions`, async () => {

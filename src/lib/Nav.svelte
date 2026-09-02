@@ -9,6 +9,7 @@
   import type { TooltipOptions } from './attachments/index'
   import { click_outside, focus_trap, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
+  import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavRoute, NavRouteObject } from './types'
   import { chain_handlers, step_focus } from './utils'
 
@@ -33,6 +34,7 @@
     link_props,
     burger_props,
     page,
+    route_labels,
     labels,
     tooltips,
     tooltip_options,
@@ -54,7 +56,9 @@
     // mobile menu toggle; style/class land here rather than on the <nav> host
     burger_props?: Omit<HTMLButtonAttributes, `aria-controls` | `aria-expanded` | `type`>
     page?: { url: { pathname: string } }
-    labels?: Record<string, string>
+    // renames individual routes, keyed by the auto-generated label
+    route_labels?: Record<string, string>
+    labels?: Partial<NavLabels>
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
     tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     breakpoint?: number
@@ -68,6 +72,8 @@
     onclose?: () => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
+  const msg = $derived(merge_defaults(NAV_LABELS, labels))
+
   let is_open = $state(false)
   let hovered_dropdown = $state<string | null>(null)
   let pinned_dropdown = $state<string | null>(null)
@@ -76,6 +82,7 @@
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   let is_mobile = $derived(viewport_width <= breakpoint)
   let hide_timeout: ReturnType<typeof setTimeout> | null = null
+  let focus_timeout: ReturnType<typeof setTimeout> | undefined
   // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
@@ -100,6 +107,7 @@
 
   $effect(() => () => {
     if (hide_timeout) clearTimeout(hide_timeout)
+    clearTimeout(focus_timeout)
   })
 
   function close_menus() {
@@ -109,14 +117,18 @@
     pinned_dropdown = null
   }
 
-  // Query the submenu links / toggle button of the dropdown for a given route href
+  // Query the submenu links / toggle button of the dropdown for a given route href, scoped
+  // to this instance: `data-href` is the route href, so two Navs rendering the same route
+  // would otherwise match each other's dropdowns and steal each other's focus. The scope is
+  // an id string rather than a `bind:this` ref so it is already usable while children
+  // render, which is when `focus_trap`'s `restore` reads the toggle.
+  const dropdown_sel = (href: string) =>
+    `[data-nav="${unique_id}"] .dropdown[data-href="${CSS.escape(href)}"]`
   const dropdown_links = (href: string) =>
-    document.querySelectorAll<HTMLElement>(
-      `.dropdown[data-href="${CSS.escape(href)}"] [data-submenu] a`,
-    )
+    document.querySelectorAll<HTMLElement>(`${dropdown_sel(href)} [data-submenu] a`)
   const dropdown_toggle = (href: string) =>
     document.querySelector<HTMLButtonElement>(
-      `.dropdown[data-href="${CSS.escape(href)}"] [data-dropdown-toggle]`,
+      `${dropdown_sel(href)} [data-dropdown-toggle]`,
     )
 
   function toggle_dropdown(href: string, focus_first = false) {
@@ -124,7 +136,8 @@
     pinned_dropdown = is_opening ? href : null
     hovered_dropdown = is_opening ? href : null
     if (is_opening && focus_first) {
-      setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
+      clearTimeout(focus_timeout)
+      focus_timeout = setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
     }
   }
 
@@ -188,7 +201,7 @@
 
   function format_label(text: string | undefined, remove_parent = false) {
     if (!text) return { label: ``, style: `` }
-    const custom_label = labels?.[text]
+    const custom_label = route_labels?.[text]
     if (custom_label) return { label: custom_label, style: `` }
 
     if (remove_parent) text = text.split(`/`).findLast(Boolean) ?? text
@@ -296,7 +309,15 @@
 
 <nav
   {...rest}
+  data-nav={unique_id}
   class:mobile={is_mobile}
+  onclick={chain_handlers((event: MouseEvent) => {
+    // The `link` snippet renders the consumer's own markup, which carries none of the
+    // wiring `link_click_handler` adds to the default anchor. Without this, navigating
+    // from the burger menu left the overlay covering the page it had just moved to.
+    const target = event.target
+    if (target instanceof Element && target.closest(`a[href]`)) close_menus()
+  }, rest?.onclick)}
   {@attach click_outside({
     // skip the document listener (and its scrollbar layout read) when nothing is open
     enabled: is_open || Boolean(pinned_dropdown) || Boolean(hovered_dropdown),
@@ -396,7 +417,7 @@
               type="button"
               class={[`dropdown-toggle`, { open: dropdown_open }]}
               data-dropdown-toggle
-              aria-label="Toggle {formatted.label} submenu"
+              aria-label={msg.toggle_submenu(formatted.label)}
               aria-expanded={dropdown_open}
               aria-haspopup="true"
               onclick={() => toggle_dropdown(parsed_route.href, false)}

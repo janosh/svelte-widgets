@@ -863,12 +863,24 @@ describe(`Toc`, () => {
 
     // arrange rects so any rebuild's set_active_heading() would switch active to Alpha
     mock_active_heading(`a`)
+    // Toc observes document.body with childList+subtree, and every childList record used to
+    // short-circuit to a full-document heading re-query. On a page with a Toc in the layout
+    // that meant any unrelated insertion — a toast, a virtualized editor row — paid for it.
+    // `doc_query` uses the singular `querySelector`, so the assertions below cannot trip it.
+    const query_spy = vi.spyOn(document, `querySelectorAll`)
 
-    // appending a non-heading is an unrelated mutation: the skip must avoid rebuilding
-    // (and re-running set_active_heading), so the active heading stays put
-    document.body.append(document.createElement(`p`))
+    // a subtree with no heading in it, the shape virtualized rows and toasts have. The skip
+    // must avoid rebuilding (and re-running set_active_heading), so active stays put too
+    const noise = document.createElement(`div`)
+    noise.innerHTML = `<span>row</span><span>row</span>`
+    document.body.append(noise)
     await tick()
+    expect(query_spy).not.toHaveBeenCalled()
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
+
+    noise.remove()
+    await tick()
+    expect(query_spy).not.toHaveBeenCalled()
 
     // appending a real heading changes the set, so the rebuild runs and active updates
     const new_heading = document.createElement(`h2`)
@@ -876,7 +888,9 @@ describe(`Toc`, () => {
     new_heading.textContent = `Gamma`
     document.body.append(new_heading)
     await tick()
+    expect(query_spy).toHaveBeenCalled()
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Gamma`)
+    query_spy.mockRestore()
   })
 
   test.each([

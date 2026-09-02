@@ -285,12 +285,14 @@ describe(`Nav`, () => {
         '/hook-up-to-api': `Hook up to external API`,
       },
     ],
-  ])(`format_label: %s -> "%s"`, (route, expected, labels) => {
-    mount_nav({ routes: [route], labels })
+  ])(`format_label: %s -> "%s"`, (route, expected, route_labels) => {
+    mount_nav({ routes: [route], route_labels })
     const link = doc_query(`a[href="${route}"]`)
     expect(link.textContent?.trim()).toBe(expected)
     // Test inline style since format_label intentionally sets text-transform
-    expect(link.getAttribute(`style`)).toBe(labels ? `` : `text-transform: capitalize;`)
+    expect(link.getAttribute(`style`)).toBe(
+      route_labels ? `` : `text-transform: capitalize;`,
+    )
   })
 
   test.each<[string, NavRoute[], string, string | null, string, string[]]>([
@@ -334,6 +336,35 @@ describe(`Nav`, () => {
       dropdown.querySelector(`div:first-child > a`)?.getAttribute(`aria-current`),
     ).toBe(`page`)
     expect(menu.querySelector(`a`)?.getAttribute(`aria-current`)).toBe(`page`)
+  })
+
+  // `data-href` is the route href, so two Navs rendering the same route used to match each
+  // other's dropdowns through a document-wide query and hand focus to the wrong instance.
+  test(`two Navs on one page keep dropdown focus inside the instance that owns it`, async () => {
+    mount_nav({ routes: two_child_route })
+    mount_nav({ routes: two_child_route })
+    const [first_nav, second_nav] = Array.from(document.querySelectorAll(`nav`))
+    const links_of = (nav: Element) =>
+      Array.from(nav.querySelectorAll<HTMLAnchorElement>(`.dropdown [data-submenu] a`))
+    const first_links = links_of(first_nav)
+    const second_links = links_of(second_nav)
+    const second_toggle = second_nav.querySelector<HTMLElement>(`[data-dropdown-toggle]`)
+    assert(second_toggle)
+
+    keydown(`Enter`, second_toggle)
+    await next_task()
+    // opening focuses the first submenu link of *this* nav, not the first one in the document
+    expect(document.activeElement).toBe(second_links[0])
+    expect(first_links).not.toContain(document.activeElement)
+
+    // arrows step within this nav's submenu only
+    keydown(`ArrowDown`, second_links[0])
+    expect(document.activeElement).toBe(second_links[1])
+
+    // and Escape hands focus back to this nav's toggle, not the first nav's
+    keydown(`Escape`, second_links[1])
+    await next_task()
+    expect(document.activeElement).toBe(second_toggle)
   })
 
   test(`keyboard navigation: Enter/ArrowDown open, arrows navigate, Escape closes`, async () => {
@@ -405,6 +436,26 @@ describe(`Nav`, () => {
     )
   })
 
+  // Only the default anchor was wired to close_menus, so navigating from the burger menu
+  // through a consumer's `link` snippet left the overlay on top of the new page.
+  test(`a link snippet's anchor closes the burger menu`, async () => {
+    mount(TestSnippetHarness, {
+      target: document.body,
+      props: {
+        component: `nav`,
+        routes: [`/`, `/about`],
+        page: { url: { pathname: `/` } },
+        breakpoint: 9999, // force the mobile layout
+      },
+    })
+    const burger = doc_query<HTMLButtonElement>(`button.burger`)
+    await click(burger)
+    expect(burger.getAttribute(`aria-expanded`)).toBe(`true`)
+
+    await click(doc_query(`[data-testid="nav-link"]`))
+    expect(burger.getAttribute(`aria-expanded`)).toBe(`false`)
+  })
+
   test(`item, link, and children snippets receive route and menu state`, async () => {
     const page = { url: { pathname: `/about` } }
     mount(TestSnippetHarness, {
@@ -443,23 +494,36 @@ describe(`Nav`, () => {
     expect(children.dataset.open).toBe(`true`)
   })
 
-  test(`dropdown accessibility uses native navigation links and labeled toggles`, () => {
-    const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-      routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
-    })
-    const links = [...dropdown_menu.querySelectorAll(`a`)]
-    // parent /docs is filtered out of the submenu
-    expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/docs/intro`])
-    // native <a>/<nav> semantics, no explicit ARIA roles anywhere
-    const roles = [dropdown, dropdown_menu, ...links].map((el) => el.getAttribute(`role`))
-    expect(roles).toEqual([null, null, null])
+  test.each<[string, ComponentProps<typeof Nav>[`labels`], string]>([
+    [`the default toggle name`, undefined, `Toggle docs submenu`],
+    [
+      `a labels override`,
+      { toggle_submenu: (route_label: string) => `${route_label} aufklappen` },
+      `docs aufklappen`,
+    ],
+  ])(
+    `dropdown accessibility uses native navigation links and labeled toggles, with %s`,
+    (_case, labels, toggle_label) => {
+      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
+        routes: [[`/docs`, [`/docs`, `/docs/intro`]]],
+        labels,
+      })
+      const links = [...dropdown_menu.querySelectorAll(`a`)]
+      // parent /docs is filtered out of the submenu
+      expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/docs/intro`])
+      // native <a>/<nav> semantics, no explicit ARIA roles anywhere
+      const roles = [dropdown, dropdown_menu, ...links].map((el) =>
+        el.getAttribute(`role`),
+      )
+      expect(roles).toEqual([null, null, null])
 
-    expect([
-      toggle.tagName,
-      toggle.getAttribute(`aria-label`),
-      toggle.getAttribute(`aria-haspopup`),
-    ]).toEqual([`BUTTON`, `Toggle docs submenu`, `true`])
-  })
+      expect([
+        toggle.tagName,
+        toggle.getAttribute(`aria-label`),
+        toggle.getAttribute(`aria-haspopup`),
+      ]).toEqual([`BUTTON`, toggle_label, `true`])
+    },
+  )
 
   test(`renders object routes with href, label, class, and style`, () => {
     const routes: NavRoute[] = [

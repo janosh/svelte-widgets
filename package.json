@@ -76,6 +76,10 @@
       "types": "./dist/katex.d.ts",
       "default": "./dist/katex.js"
     },
+    "./labels": {
+      "types": "./dist/labels.d.ts",
+      "default": "./dist/labels.js"
+    },
     "./live-examples": {
       "types": "./dist/live-examples/index.d.ts",
       "default": "./dist/live-examples/index.js"
@@ -152,7 +156,7 @@
     "test": "vp test --run && playwright test",
     "test:coverage": "vp test --run --coverage",
     "test:package": "npm pack --dry-run && tsc -p tests/package-smoke/tsconfig.json && vp build --config tests/package-smoke/vite.config.ts",
-    "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.svelte' -delete",
+    "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.md' -delete",
     "prepare": "vp config --no-agent && npm run package",
     "prepublishOnly": "npm run package",
     "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
@@ -183,7 +187,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "4.1.11",
     "@wooorm/starry-night": "^3.10.0",
-    "happy-dom": "^20.11.6",
+    "happy-dom": "20.11.6",
     "katex": "^0.18.4",
     "mdsvex": "^0.12.8",
     "pagefind": "^1.5.2",

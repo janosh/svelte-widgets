@@ -4,6 +4,11 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
+  import {
+    merge_defaults,
+    SETTINGS_SECTION_LABELS,
+    type SettingsSectionLabels,
+  } from './labels'
   import { is_object, observe_subtree } from './utils'
 
   type SettingMetadata = Readonly<
@@ -12,6 +17,7 @@
 
   let {
     title,
+    labels,
     current_values = {},
     reset_values,
     children,
@@ -23,6 +29,8 @@
     ...rest
   }: HTMLAttributes<HTMLElementTagNameMap[`section`]> & {
     title: string
+    // the Explain/Reset strings; the interpolating ones receive `title` verbatim
+    labels?: Partial<SettingsSectionLabels>
     // Omit for a section that only holds actions (export buttons, say) and has nothing to diff.
     // Values may be primitives, arrays, plain objects, Date, or RegExp. Map, Set, and typed
     // arrays are unsupported because reset snapshots and comparisons only cover these shapes.
@@ -49,6 +57,8 @@
     setting_metadata?: SettingMetadata
     descriptions_open?: boolean
   } = $props()
+
+  const msg = $derived(merge_defaults(SETTINGS_SECTION_LABELS, labels))
 
   const validate_object_shape = (value: object): void => {
     if (value instanceof Set || value instanceof Map) {
@@ -186,10 +196,21 @@
     // a plain Map, not a SvelteMap: `refresh` runs inside an effect and both reads and writes
     // this, which reactive entries turn into an endless loop.
     const original_descriptions = new Map<HTMLElement, string | null>()
+    // What this attachment last wrote to each row's `data-description`. Anything else on
+    // the attribute came from the caller, and re-snapshots rather than being overwritten.
+    const written_descriptions = new Map<HTMLElement, string | null>()
 
     const remove_reset_button = (row: HTMLElement): void => {
-      row.querySelector(RESET_SELECTOR)?.remove()
+      const button = row.querySelector(RESET_SELECTOR)
+      // Resetting a value is what removes this button, so a keyboard user who just pressed
+      // it would be left with focus on <body>. Hand focus to the row's own control instead.
+      const had_focus = button !== null && button === document.activeElement
+      button?.remove()
       row.classList.remove(`has-setting-reset`)
+      if (!had_focus) return
+      const control = row.querySelector<HTMLElement>(`input, select, textarea, button`)
+      if (control) control.focus()
+      else if (row.tabIndex >= 0) row.focus()
     }
 
     const cleanup_enhancement = (row: HTMLElement, original: string | null): void => {
@@ -240,8 +261,14 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      if (!original_descriptions.has(row)) {
-        original_descriptions.set(row, row.getAttribute(`data-description`))
+      // Re-snapshot whenever the attribute holds something we did not write: that is the
+      // caller updating a reactive `data-description`, and keeping the mount-time value
+      // would write their new text straight back out on the next refresh.
+      // `getAttribute` returns string|null, never undefined, so an unseen row differs from
+      // its absent `written` entry and is snapshotted by the same comparison.
+      const current_description = row.getAttribute(`data-description`)
+      if (current_description !== written_descriptions.get(row)) {
+        original_descriptions.set(row, current_description)
       }
       sync_labeled_controls(row)
 
@@ -251,8 +278,14 @@
       const description =
         (typeof metadata === `string` ? metadata : metadata?.description) ??
         original_descriptions.get(row)
-      if (description) row.setAttribute(`data-description`, description)
-      else row.removeAttribute(`data-description`)
+      // Write only on a real change: `setAttribute` queues a mutation record even when the
+      // value is identical, and SettingsSearch observes this attribute.
+      const next_description = description || null
+      if (next_description !== current_description) {
+        if (next_description) row.setAttribute(`data-description`, next_description)
+        else row.removeAttribute(`data-description`)
+      }
+      written_descriptions.set(row, next_description)
 
       let description_element = row.querySelector(DESCRIPTION_SELECTOR)
       if (!descriptions_open || !description) description_element?.remove()
@@ -288,7 +321,7 @@
           row.append(reset_button)
         }
         for (const attribute of [`aria-label`, `title`]) {
-          reset_button.setAttribute(attribute, `Reset ${key} to default`)
+          reset_button.setAttribute(attribute, msg.reset_key(key))
         }
       }
       return Boolean(description)
@@ -302,11 +335,16 @@
         if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
           cleanup_enhancement(row, original)
           original_descriptions.delete(row)
+          written_descriptions.delete(row)
         }
       }
     }
 
-    const stop_observing = observe_subtree(section, [`data-key`, `data-label`], refresh)
+    const stop_observing = observe_subtree(
+      section,
+      [`data-key`, `data-label`, `data-description`],
+      refresh,
+    )
     // `refresh` reads `changed_keys`, `descriptions_open` and `setting_metadata`, so this
     // re-enhances when they change. Calling it from the attachment body instead would re-run
     // the whole attachment, tearing every reset button and description back off first.
@@ -331,11 +369,9 @@
           class="description-toggle"
           onclick={swallow_click(() => (descriptions_open = !descriptions_open))}
           aria-expanded={descriptions_open}
-          aria-label="{descriptions_open
-            ? `Hide`
-            : `Show`} descriptions for {title.toLowerCase()}"
+          aria-label={msg.explain_toggle(descriptions_open, title)}
         >
-          Explain
+          {msg.explain}
         </button>
       {/if}
       {#if show_reset}
@@ -343,11 +379,11 @@
           type="button"
           class="reset-button"
           onclick={handle_reset}
-          title="Reset {title.toLowerCase()} to defaults"
-          aria-label="Reset {title.toLowerCase()} to defaults"
+          title={msg.reset_section(title)}
+          aria-label={msg.reset_section(title)}
         >
           <Icon icon={Reset} style="width: 0.9em; height: 0.9em" />
-          Reset
+          {msg.reset}
         </button>
       {/if}
     </span>
