@@ -234,6 +234,16 @@ export const slugify_heading = (text: string): string =>
 
 // Allocate and reserve an ID in one operation. All heading-ID producers share this
 // `-1`, `-2`, ... collision policy, including collisions with already suffixed slugs.
+// Every id already in the document, for `unique_heading_id` to avoid. Lazy and memoized:
+// the scan is the expensive part and is only needed when some heading actually lacks an id.
+export const document_used_ids = (): (() => Set<string>) => {
+  let used_ids: Set<string> | undefined
+  return () =>
+    (used_ids ??= new Set(
+      Array.from(document.querySelectorAll<HTMLElement>(`[id]`), ({ id }) => id),
+    ))
+}
+
 export function unique_heading_id(base_id: string, used_ids: Set<string>): string {
   const base = base_id || `section`
   let id = base
@@ -366,13 +376,7 @@ export const heading_anchors =
       ? () => Array.from(node.querySelectorAll(selector))
       : () => get_default_headings(node)
     const add_anchors = () => {
-      // Built at most once per pass and only when some heading actually lacks an ID,
-      // since scanning every [id] in the document is the expensive part.
-      let used_ids: Set<string> | undefined
-      const get_used_ids = () =>
-        (used_ids ??= new Set(
-          Array.from(document.querySelectorAll<HTMLElement>(`[id]`), ({ id }) => id),
-        ))
+      const get_used_ids = document_used_ids()
       for (const heading of get_headings()) {
         add_anchor_to_heading(heading, get_used_ids, icon_svg)
       }

@@ -10,7 +10,11 @@
     SlugifyHeading,
     TocHeadingData,
   } from './types'
-  import { slugify_heading, unique_heading_id } from './heading-anchors'
+  import {
+    document_used_ids,
+    slugify_heading,
+    unique_heading_id,
+  } from './heading-anchors'
   import { get_heading_visibility } from './toc-utils'
 
   let {
@@ -405,11 +409,7 @@
 
     const queried_headings = query_toc_headings()
     const invalid_selector = queried_headings === null
-    let used_ids: Set<string> | undefined
-    const get_used_ids = () =>
-      (used_ids ??= new Set(
-        Array.from(document.querySelectorAll<HTMLElement>(`[id]`), ({ id }) => id),
-      ))
+    const get_used_ids = document_used_ids()
     const heading_entries: { data: TocHeadingData; heading: HTMLHeadingElement }[] = []
     for (const [idx, heading] of (queried_headings ?? []).entries()) {
       const heading_meta = getHeadingData(heading)
