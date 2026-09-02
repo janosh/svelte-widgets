@@ -31,6 +31,7 @@
     EditorDocumentInfo,
     EditorModel,
     EditorSelection,
+    EditorTransaction,
     EditorUpdate,
     SpanList,
     TextEdit,
@@ -71,6 +72,8 @@
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
   let model_revision = $state(0)
+  // Bumped when highlight spans land, so the viewport LRU touch re-runs then
+  let token_revision = $state(0)
   let scroll_top = $state(0)
   let scroll_left = $state(0)
   let viewport_height = $state(0)
@@ -117,6 +120,35 @@
     }
     return complete
   }
+  // Drop only the cached spans an edit can actually have invalidated. Every line before
+  // the first edit's offset is untouched text, so its spans stay correct; clearing the
+  // whole cache on each transaction left the entire viewport unhighlighted until the
+  // debounced re-highlight returned, and evicted the full LRU on every keystroke.
+  const invalidate_tokens = (
+    active_model: EditorModel,
+    transaction: EditorTransaction,
+    previous_line_count: number,
+  ): void => {
+    const { edits } = transaction
+    if (edits.length === 0) return
+    // `validate_edits` rejects `from < previous_end`, so edits ascend and the first one
+    // starts earliest. Text before it is identical in both documents, so this line index
+    // means the same thing before and after the transaction.
+    const first_line = active_model.line_at(edits[0].from).line_idx
+    // A lone edit that inserts no newline and leaves the line count alone cannot have
+    // removed one either, so it is confined to its own line. That is ordinary typing.
+    const single_line_edit =
+      edits.length === 1 &&
+      !edits[0].insert.includes(`\n`) &&
+      active_model.line_count === previous_line_count
+    if (single_line_edit) {
+      token_cache.delete(first_line)
+      return
+    }
+    // snapshot first: deleting while iterating the live map's keys
+    const stale = [...token_cache.keys()].filter((line_idx) => line_idx >= first_line)
+    for (const line_idx of stale) token_cache.delete(line_idx)
+  }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
     if (revision !== model.revision) return
     for (const [offset, line_spans] of spans.entries()) {
@@ -129,6 +161,7 @@
       if (oldest === undefined) break
       token_cache.delete(oldest)
     }
+    token_revision += 1
   }
   const line_count = $derived.by(() => {
     void model_revision
@@ -197,14 +230,22 @@
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
     before_snapshot = null
+    // Line count as of the previous notification, so a transaction can be classified as
+    // moving a line boundary or not without re-deriving the old document.
+    let previous_line_count = active_model.line_count
     const unsubscribe = active_model.subscribe((update) => {
       if (!is_current()) return
-      model_revision += 1
       caret_line = active_model.line_at(update.selection.head).line_idx
       if (update.transaction) {
-        token_cache.clear()
+        // Only a transaction changes the text, and `line_count`/`visible_rows` read this
+        // to know when to re-read lines from the rope. The model also notifies on a bare
+        // selection change, and bumping it there re-read every visible line on each caret
+        // move — up to two rope descents per row, per keypress.
+        model_revision += 1
+        invalidate_tokens(active_model, update.transaction, previous_line_count)
         active.apply_transaction(update.transaction)
       }
+      previous_line_count = active_model.line_count
       sync_dom_from_model(update)
       on_update?.(update)
     })
@@ -246,6 +287,10 @@
   })
   $effect(() => {
     void model_revision
+    // Spans arriving is what makes a previously-uncached window cached, so the LRU touch
+    // below has to re-run then. This used to ride on `model_revision`, which every caret
+    // move bumped; now that only a transaction does, the arrival needs its own signal.
+    void token_revision
     const { start, end } = window_lines
     const cached = untrack(() => touch_tokens(start, end))
     if (doc_info?.highlightable && !cached) active_client?.request_highlight(start, end)

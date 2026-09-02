@@ -101,9 +101,17 @@
     }
 
     apply_copy_buttons()
-    const observer = new MutationObserver(apply_copy_buttons)
+    // Coalesce to one scan per frame: this walks every code block in the document and
+    // re-reads its `textContent`, while the observer fires on every render flush anywhere
+    // in the app, so an animating demo would otherwise rescan the document per flush.
+    let frame = 0
+    const observer = new MutationObserver(() => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(apply_copy_buttons)
+    })
     observer.observe(document.body, { childList: true, subtree: true })
     return () => {
+      cancelAnimationFrame(frame)
       observer.disconnect()
       for (const { component } of mounted_copy_buttons) void unmount(component)
     }

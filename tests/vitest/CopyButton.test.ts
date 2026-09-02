@@ -65,6 +65,13 @@ const mount_global = async (props: Partial<ComponentProps<typeof CopyButton>>) =
   return component
 }
 
+// The initial scan is synchronous, but later ones ride the MutationObserver, which
+// coalesces them into one animation frame instead of rescanning on every render flush.
+const flush_rescan = async () => {
+  await tick()
+  await new Promise(requestAnimationFrame)
+}
+
 beforeEach(() => {
   mock_write_text.mockReset()
   mock_write_text.mockResolvedValue(undefined)
@@ -403,7 +410,7 @@ test(`global mode copies the code block's current text, not the text at mount`, 
   const { pre, code } = create_pre_with_code(`before`)
   const component = await mount_global({ global: true })
   code.textContent = `after`
-  await tick()
+  await flush_rescan()
 
   await click_copy_button(get_single_mounted_button(pre))
   expect(mock_write_text).toHaveBeenCalledWith(`after`)
@@ -458,7 +465,7 @@ test(`global mode skip_selector=null falls back to rendered tag`, async () => {
 test(`global mode mounts on pre > code added after the controller`, async () => {
   const component = await mount_global({ global: true })
   const { pre } = create_pre_with_code(`dynamically added code`)
-  await tick()
+  await flush_rescan()
 
   expect(get_single_mounted_button(pre)).toBeInstanceOf(HTMLButtonElement)
 
@@ -469,12 +476,12 @@ test(`global mode mounts on pre > code added after the controller`, async () => 
 test(`global mode as=a does not remount when the observer re-enters`, async () => {
   const component = await mount_global({ global: true, as: `a` })
   const { pre } = create_pre_with_code(`test code`)
-  await tick()
+  await flush_rescan()
 
   expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
 
   document.body.append(document.createElement(`div`))
-  await tick()
+  await flush_rescan()
 
   expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
 

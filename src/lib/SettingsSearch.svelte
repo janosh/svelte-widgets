@@ -79,31 +79,67 @@
       const containers = [...root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR)]
       // A heading match reveals everything under it, so typing a section or group name works
       // even though no row repeats that name in its own text.
-      const titled = containers.filter((node) =>
-        title_of(node).toLocaleLowerCase().includes(normalized_query),
+      const titled = new Set(
+        containers.filter((node) =>
+          title_of(node).toLocaleLowerCase().includes(normalized_query),
+        ),
       )
       const rows = [...root.querySelectorAll<HTMLElement>(ROW_SELECTOR)]
-      const hits = rows.filter(
-        (row) =>
-          titled.some((node) => node.contains(row)) ||
-          [row.dataset.label, row.textContent, row.dataset.description]
-            .join(` `)
-            .toLocaleLowerCase()
-            .includes(normalized_query),
+
+      // Ancestor-chain walks against a Set, rather than pairwise `contains`: the old shape
+      // cost rows x containers plus rows x hits node comparisons per keystroke. Marking
+      // stops at an already-marked node, whose own ancestors are therefore marked too.
+      const above_root = root.parentElement // walks stop after root itself
+      const mark_ancestors = (node: HTMLElement, marked: Set<HTMLElement>): void => {
+        for (
+          let cur = node.parentElement;
+          cur && cur !== above_root;
+          cur = cur.parentElement
+        ) {
+          if (marked.has(cur)) break
+          marked.add(cur)
+        }
+      }
+      const has_ancestor_in = (node: HTMLElement, marked: Set<HTMLElement>): boolean => {
+        for (
+          let cur = node.parentElement;
+          cur && cur !== above_root;
+          cur = cur.parentElement
+        ) {
+          if (marked.has(cur)) return true
+        }
+        return false
+      }
+
+      const hits = new Set(
+        rows.filter(
+          (row) =>
+            titled.has(row) ||
+            has_ancestor_in(row, titled) ||
+            [row.dataset.label, row.textContent, row.dataset.description]
+              .join(` `)
+              .toLocaleLowerCase()
+              .includes(normalized_query),
+        ),
       )
+      const hit_ancestors = new Set<HTMLElement>()
+      for (const hit of hits) mark_ancestors(hit, hit_ancestors)
 
       // A match keeps its ancestors and descendants visible, so a keyed wrapper matching on
       // its own label does not leave the rows nested inside it filtered out.
-      const visible: HTMLElement[] = []
+      const visible = new Set<HTMLElement>()
       for (const row of rows) {
-        const show = hits.some((hit) => row.contains(hit) || hit.contains(row))
+        // an ancestor of a hit, the hit itself, or nested inside one
+        const show = hits.has(row) || hit_ancestors.has(row) || has_ancestor_in(row, hits)
         row.toggleAttribute(HIDDEN_ATTR, !show)
         // A row the caller hid stays hidden, so it must not count as a match either
-        if (show && !row.closest(`[hidden]`)) visible.push(row)
+        if (show && !row.closest(`[hidden]`)) visible.add(row)
       }
+      const containers_with_visible = new Set<HTMLElement>()
+      for (const row of visible) mark_ancestors(row, containers_with_visible)
 
       for (const container of containers) {
-        const keep = visible.some((row) => container.contains(row))
+        const keep = visible.has(container) || containers_with_visible.has(container)
         container.toggleAttribute(HIDDEN_ATTR, !keep)
         if (container instanceof HTMLDetailsElement) {
           if (keep && !container.open) {
@@ -121,7 +157,7 @@
         }
       }
 
-      match_count = visible.length
+      match_count = visible.size
     }
 
     // `hidden` is watched so a row the caller hides mid-search drops out of the count, and

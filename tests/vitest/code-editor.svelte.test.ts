@@ -269,6 +269,42 @@ test.each([
   expect(textarea.getAttribute(`aria-describedby`)).toBe(help.id)
 })
 
+// The cache used to be cleared wholesale on every transaction, so one keystroke dropped
+// the colors of every visible line until the debounced re-highlight came back.
+test(`an edit keeps cached tokens above it and drops only the line it touched`, async () => {
+  const recorder = create_backend()
+  const highlight_lines = vi
+    .fn()
+    .mockImplementation(({ startLine, endLine }) =>
+      Promise.resolve(Array.from({ length: endLine - startLine }, () => [0, 6])),
+    )
+  recorder.backend.highlight_lines = highlight_lines
+  const model = create_editor_model({
+    uri: `memory:invalidate`,
+    text: `alpha\nbeta\ngamma`,
+  })
+  await mount_editor(model, { backend: recorder.backend })
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalled())
+  await flush_async()
+  const highlighted_lines = () =>
+    Array.from(document.querySelectorAll(`.token-layer .line`)).map((line) =>
+      Boolean(line.querySelector(`.tok-keyword`)),
+    )
+  expect(highlighted_lines()).toEqual([true, true, true])
+
+  // one character, no newline and no line-count change, so only line 2 can have changed
+  const line_start = model.line(2).from
+  model.transact([{ from: line_start, to: line_start, insert: `x` }])
+  await tick()
+  expect(highlighted_lines()).toEqual([true, true, false])
+
+  // an edit that adds a line invalidates from that line down, but not above it
+  const split_at = model.line(1).from
+  model.transact([{ from: split_at, to: split_at, insert: `\n` }])
+  await tick()
+  expect(highlighted_lines()).toEqual([true, false, false, false])
+})
+
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {
   const recorder = create_backend()
   const model = create_editor_model({
