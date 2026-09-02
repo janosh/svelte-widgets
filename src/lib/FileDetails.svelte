@@ -100,9 +100,11 @@
   // no cancellation. The empty marker keeps a cache write from re-requesting every sibling.
   let highlighted_cache = $state<Record<string, string>>({})
   $effect(() => {
+    const live_keys = new Set<string>()
     for (const file of files) {
       const language = resolve_lang(file)
       const key = highlight_key(language, file.content)
+      live_keys.add(key)
       if (untrack(() => key in highlighted_cache)) continue
       highlighted_cache[key] = ``
       default_highlighter.highlight(file.content, language).then(
@@ -110,6 +112,16 @@
         () => {}, // silently skip unsupported languages
       )
     }
+    // Every key holds a full copy of the content it was built from, so a caller streaming
+    // edits through the bindable `files` would grow this without bound.
+    untrack(() => {
+      const live_entries = Object.entries(highlighted_cache).filter(([cached_key]) =>
+        live_keys.has(cached_key),
+      )
+      if (live_entries.length !== Object.keys(highlighted_cache).length) {
+        highlighted_cache = Object.fromEntries(live_entries)
+      }
+    })
   })
 </script>
 

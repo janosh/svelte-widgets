@@ -235,6 +235,28 @@ const source_bounds = (
 }
 
 // Find every occurrence of query under root, case- and whitespace-insensitively.
+// `search_text` re-normalizes every segment on every keystroke, though the result depends
+// only on the segment's own text — and normalization is character-by-character, allocating a
+// token per code point. Memoize it, bounded, so typing re-walks the query rather than every
+// word in the document. The returned value is only ever read, so sharing it is safe.
+const NORMALIZE_CACHE_LIMIT = 512
+const normalize_cache = new Map<string, NormalizedText>()
+const normalize_cached = (source: string): NormalizedText => {
+  const cached = normalize_cache.get(source)
+  if (cached) {
+    normalize_cache.delete(source) // reinsert to refresh its LRU position
+    normalize_cache.set(source, cached)
+    return cached
+  }
+  const normalized = normalize_with_offsets(source)
+  normalize_cache.set(source, normalized)
+  if (normalize_cache.size > NORMALIZE_CACHE_LIMIT) {
+    const oldest = normalize_cache.keys().next().value
+    if (oldest !== undefined) normalize_cache.delete(oldest)
+  }
+  return normalized
+}
+
 export const search_text = (
   root: Element,
   query: string,
@@ -250,7 +272,7 @@ export const search_text = (
 
   const matches: TextMatch[] = []
   for (const segment of text_segments(root, node_filter, segment_selector)) {
-    const { text, offsets } = normalize_with_offsets(segment.text)
+    const { text, offsets } = normalize_cached(segment.text)
     for (const { start, end } of match_bounds(text, normalized_query, fuzzy)) {
       const source = source_bounds(offsets, start, end)
       matches.push({

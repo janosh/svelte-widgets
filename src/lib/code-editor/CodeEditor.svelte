@@ -5,7 +5,6 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { SvelteMap } from 'svelte/reactivity'
   import { register_escape_layer } from '../attachments/index'
   import { CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
@@ -90,7 +89,11 @@
   type InputSnapshot = EditorSelection & { input_type: string; value_length: number }
   let before_snapshot: InputSnapshot | null = null
   let active_client: ReturnType<typeof create_highlight_client> | null = null
-  const token_cache = new SvelteMap<number, SpanList>()
+  // A plain Map, not a SvelteMap: `touch_tokens` reorders it for the LRU on every render
+  // pass, and reactive entries turned each touch into a second full rebuild of
+  // `visible_rows` plus a second DOM reconciliation, for no visual difference. Reads are
+  // sequenced by `token_revision` instead, bumped wherever the contents actually change.
+  const token_cache = new Map<number, SpanList>()
   const font_size = $derived(editor_font_size(Number(options.font_size)))
   const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
   const line_height = $derived(editor_line_height(font_size))
@@ -131,6 +134,7 @@
   ): void => {
     const { edits } = transaction
     if (edits.length === 0) return
+    token_revision += 1
     // `validate_edits` rejects `from < previous_end`, so edits ascend and the first one
     // starts earliest. Text before it is identical in both documents, so this line index
     // means the same thing before and after the transaction.
@@ -145,9 +149,10 @@
       token_cache.delete(first_line)
       return
     }
-    // snapshot first: deleting while iterating the live map's keys
-    const stale = [...token_cache.keys()].filter((line_idx) => line_idx >= first_line)
-    for (const line_idx of stale) token_cache.delete(line_idx)
+    // safe to delete while iterating: a Map's key iterator skips entries dropped ahead of it
+    for (const line_idx of token_cache.keys()) {
+      if (line_idx >= first_line) token_cache.delete(line_idx)
+    }
   }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
     if (revision !== model.revision) return
@@ -178,6 +183,7 @@
   )
   const visible_rows = $derived.by(() => {
     void model_revision
+    void token_revision
     const { start, end } = window_lines
     return Array.from({ length: end - start }, (_unused, offset) => {
       const line_idx = start + offset
@@ -222,7 +228,10 @@
     })
     active_client = active
     const is_current = (): boolean => active_client === active && model === active_model
-    untrack(() => token_cache.clear())
+    untrack(() => {
+      token_cache.clear()
+      token_revision += 1
+    })
     doc_info = null
     error_message = null
     scroll_top = 0

@@ -853,6 +853,36 @@ describe(`Toc`, () => {
     expect(scroll_into_view_mock).not.toHaveBeenCalled()
   })
 
+  // Toc observes document.body with childList+subtree, and every childList record used to
+  // short-circuit to a full-document heading re-query. On a page with a Toc in the layout
+  // that meant any unrelated insertion — a toast, a virtualized editor row — paid for it.
+  test(`unrelated DOM churn no longer re-queries headings`, async () => {
+    set_body(`<h2 id="a">Alpha</h2><h2 id="b">Beta</h2>`)
+    mount_toc()
+    await tick()
+    const query_spy = vi.spyOn(document, `querySelectorAll`)
+
+    // a subtree with no heading in it, the shape virtualized rows and toasts have
+    const noise = document.createElement(`div`)
+    noise.innerHTML = `<span>row</span><span>row</span>`
+    document.body.append(noise)
+    await tick()
+    expect(query_spy).not.toHaveBeenCalled()
+
+    noise.remove()
+    await tick()
+    expect(query_spy).not.toHaveBeenCalled()
+
+    // a real heading still gets through
+    const heading = document.createElement(`h2`)
+    heading.id = `c`
+    heading.textContent = `Gamma`
+    document.body.append(heading)
+    await tick()
+    expect(query_spy).toHaveBeenCalled()
+    query_spy.mockRestore()
+  })
+
   test(`unrelated DOM mutations skip the heading rebuild while real changes don't`, async () => {
     set_body(`<h2 id="a">Alpha</h2><h2 id="b">Beta</h2>`)
     mount_toc()

@@ -335,9 +335,39 @@
     selector_is_valid(`headingSelector`, headingSelector) &&
     element.closest(headingSelector) !== null
 
+  // A childList record used to short-circuit to `true`, so every DOM insertion anywhere in
+  // the document — a toast, a tooltip, a dropdown, a virtualized editor row scrolling past —
+  // re-queried every heading in the document. Only nodes that are or contain a heading can
+  // change the result.
+  const childlist_touches_headings = (record: MutationRecord): boolean => {
+    if (!selector_is_valid(`headingSelector`, headingSelector)) return false
+    // `heading.textContent = '…'` swaps a text node, so neither list holds an Element —
+    // but the record's target is the heading itself.
+    const target = record.target
+    if (
+      element_matches_heading_selector(
+        target instanceof Element ? target : target.parentElement,
+      )
+    )
+      return true
+    for (const node of record.addedNodes) {
+      if (!(node instanceof Element)) continue
+      if (node.matches(headingSelector) || node.querySelector(headingSelector))
+        return true
+    }
+    // A removed node is detached, so a selector like `main > h2` can no longer match it.
+    // Compare against the headings we currently hold instead.
+    for (const node of record.removedNodes) {
+      if (!(node instanceof Element)) continue
+      if (headings.some((heading) => node === heading || node.contains(heading)))
+        return true
+    }
+    return false
+  }
+
   const should_update_for_mutations = (records: MutationRecord[]) =>
     records.some((record) => {
-      if (record.type === `childList`) return true
+      if (record.type === `childList`) return childlist_touches_headings(record)
       if (record.type === `characterData`) {
         return element_matches_heading_selector(record.target.parentElement)
       }
