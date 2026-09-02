@@ -45,6 +45,16 @@ export const CODE_EXAMPLE_LABELS = {
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
 
 // shared by every dialogs.svelte.ts helper, none of which is a component with a `labels` prop
+export const COPY_BUTTON_LABELS = {
+  // CopyButton is icon-only by default, and an empty string suppresses ActionButton's text.
+  // Its `pending` text is ActionButton's, reused for the in-flight copy, so there is no
+  // `pending` key here. Set any of these to show a label beside the icon.
+  ready: ``,
+  success: ``,
+  error: ``,
+}
+export type CopyButtonLabels = typeof COPY_BUTTON_LABELS
+
 export const DIALOG_LABELS = {
   confirm: `OK`,
   cancel: `Cancel`,

@@ -1,5 +1,6 @@
 import { CopyButton } from '$lib'
 import { Alert, Check, Copy } from '$lib/icons'
+import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
@@ -486,4 +487,14 @@ test(`global mode as=a does not remount when the observer re-enters`, async () =
   expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
 
   void unmount(component)
+})
+
+// CopyButton was the one wired component whose defaults lived in a local const, so callers
+// could not import its record or derive its type the way the others allow.
+test(`COPY_BUTTON_LABELS is the exported default record, and partials merge over it`, () => {
+  expect(COPY_BUTTON_LABELS).toEqual({ ready: ``, success: ``, error: `` })
+
+  // only `ready` is overridden, so the other two keep the icon-only default
+  const { copy_button } = mount_copy_button({ labels: { ready: `Kopieren` } })
+  expect(copy_text(copy_button).trim()).toBe(`Kopieren`)
 })

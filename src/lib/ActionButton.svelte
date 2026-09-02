@@ -7,7 +7,9 @@
   import type { ActionButtonSnippetProps, ActionState } from './types'
 
   // drives the hidden width sizer, so every state reserves its own width up front
-  const ACTION_STATES: ActionState[] = [`ready`, `pending`, `success`, `error`]
+  // Derived from the labels record so a new state cannot be added without the hidden
+  // width sizer below growing to match it
+  const ACTION_STATES = Object.keys(ACTION_BUTTON_LABELS) as ActionState[]
 
   let {
     action,

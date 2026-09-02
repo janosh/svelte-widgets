@@ -6,12 +6,11 @@
   import Self from './CopyButton.svelte'
   import ActionButton from './ActionButton.svelte'
   import { Alert, Check, Copy, type IconData } from './icons'
+  import { COPY_BUTTON_LABELS, type CopyButtonLabels } from './labels'
   import type { ActionButtonContent, ActionState } from './types'
 
   type State = Exclude<ActionState, `pending`>
 
-  // CopyButton is icon-only by default; the empty strings suppress ActionButton's text
-  const NO_TEXT: Record<State, string> = { ready: ``, success: ``, error: `` }
   const DEFAULT_ICONS: Record<State, IconData> = {
     ready: Copy,
     success: Check,
@@ -44,13 +43,13 @@
     global?: boolean
     skip_selector?: string | null
     as?: string
-    labels?: Partial<Record<State, string>>
+    labels?: Partial<CopyButtonLabels>
     icons?: Partial<Record<State, IconData>>
     children?: Snippet<[ActionButtonContent<State> & { icon: IconData }]>
   } = $props()
 
   const copy_button_selector = `[data-sms-copy]`
-  const msg = $derived({ ...NO_TEXT, ...labels })
+  const msg = $derived({ ...COPY_BUTTON_LABELS, ...labels })
   const icon_set = $derived({ ...DEFAULT_ICONS, ...icons })
   // CopyButton has no pending visual of its own: it keeps showing the current copy state
   const action_labels = $derived({ ...msg, pending: msg[copy_state] })
