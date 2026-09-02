@@ -1,11 +1,11 @@
 import { expect, test } from '@playwright/test'
 
 test.use({ viewport: { width: 390, height: 780 } })
+test.beforeEach(({ page }) => page.goto(`/extras`, { waitUntil: `networkidle` }))
 
 // The title's rule cancels the panel's inline padding, a custom property that substitutes as
 // text: in `em` it resolved against the h2's larger font-size and overhung the panel.
 test(`mobile ToC title rule spans the panel without overflowing it`, async ({ page }) => {
-  await page.goto(`/extras`, { waitUntil: `networkidle` })
   await page.locator(`aside.toc.mobile > button`).first().click()
   const panel = page.locator(`aside.toc.mobile > nav`).first()
   await expect(panel.locator(`.toc-title`)).toBeVisible()
@@ -37,7 +37,6 @@ test(`mobile ToC title rule spans the panel without overflowing it`, async ({ pa
 // background still swallows the taps aimed at the page under it. The docs site zeroes the
 // token, so set it back to the library default here or the test proves nothing.
 test(`closed mobile toggle hugs its own box`, async ({ page }) => {
-  await page.goto(`/extras`, { waitUntil: `networkidle` })
   await page.evaluate(() =>
     document
       .querySelector<HTMLElement>(`.docs-body`)
@@ -62,7 +61,6 @@ test(`closed mobile toggle hugs its own box`, async ({ page }) => {
 // --toc-li-hover-color makes `color` invalid at computed-value time, which resolves to the
 // inherited text colour instead of dropping out and wipes the accent off that row.
 test(`active ToC row keeps its accent under the pointer`, async ({ page }) => {
-  await page.goto(`/extras`, { waitUntil: `networkidle` })
   await page.locator(`aside.toc.mobile > button`).first().click()
   // scroll rather than click an entry: clicking closes the panel
   await page.evaluate(() => globalThis.scrollTo({ top: 2500, behavior: `instant` }))
@@ -73,15 +71,14 @@ test(`active ToC row keeps its accent under the pointer`, async ({ page }) => {
   const idle = await read_color()
   const box = await active.boundingBox()
   await page.mouse.move((box?.x ?? 0) + 20, (box?.y ?? 0) + (box?.height ?? 0) / 2)
-  await expect(async () => expect(await read_color()).toBe(idle)).toPass()
   expect(await active.evaluate((li) => li.matches(`:hover`))).toBe(true)
+  expect(await read_color()).toBe(idle)
 })
 
 // on_keydown listens on the window and preventDefaults to drive the ToC's own list, which
 // cancelled the activation of whatever else had focus. The toggle is the visible case; every
 // button on the page went dead the same way while the panel was open.
 test(`Enter on the mobile toggle closes the panel`, async ({ page }) => {
-  await page.goto(`/extras`, { waitUntil: `networkidle` })
   const toggle = page.locator(`aside.toc.mobile > button`).first()
   await toggle.click()
   const panel = page.locator(`aside.toc.mobile > nav`)
@@ -99,13 +96,11 @@ test(`Enter on the mobile toggle closes the panel`, async ({ page }) => {
 })
 
 test(`the ToC leaves keys to whatever else has focus`, async ({ page }) => {
-  await page.goto(`/extras`, { waitUntil: `networkidle` })
   await page.locator(`aside.toc.mobile > button`).first().click()
   await expect(page.locator(`aside.toc.mobile > nav`)).toBeVisible()
 
   // a copy button on the page behind the open panel still activates on Enter
   const card = page.locator(`#icon-demo button`).first()
-  await card.scrollIntoViewIfNeeded()
   await card.focus()
   await page.keyboard.press(`Enter`)
   await expect(card.locator(`small`)).toBeVisible() // its copied/failed overlay
