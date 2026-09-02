@@ -3,7 +3,14 @@ import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(draggable-pane)/draggable-pane/+page.md?raw'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, escape_key, mock_rect, pointer_event, stub_prop } from './index'
+import {
+  doc_query,
+  escape_key,
+  hover,
+  mock_rect,
+  pointer_event,
+  stub_prop,
+} from './index'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 
 // Every drag/resize test works against the same 450x300 pane; only the origin varies.
@@ -47,6 +54,13 @@ describe(`DraggablePane`, () => {
       // pane by it would make those assertions tautological
       pane,
     }
+  }
+
+  // the tooltip attachment opens on a 100ms pointer delay, so poll rather than read once
+  const tooltip_text = async (target: Element): Promise<string | null> => {
+    hover(target)
+    await vi.waitFor(() => doc_query(`.tooltip-content`))
+    return doc_query(`.tooltip-content`).textContent
   }
 
   // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
@@ -370,6 +384,18 @@ describe(`DraggablePane`, () => {
     }
     expect(attrs(`.close-button`)).toEqual([`Bereich schließen`, `Bereich schließen`])
     expect(attrs(`.reset-button`)).toEqual([`Reset pane position`, `Reset pane position`])
+
+    // the toggle's tooltip resolves from the same keys: close_pane while open, open_pane while shut
+    expect(await tooltip_text(doc_query(`button.pane-toggle`))).toBe(`Bereich schließen`)
+  })
+
+  test(`the shut toggle tooltip uses open_pane, defaulting when omitted`, async () => {
+    const { toggle } = await setup({ labels: { open_pane: `Bereich öffnen` } })
+    expect(await tooltip_text(toggle)).toBe(`Bereich öffnen`)
+
+    document.body.replaceChildren()
+    const fallback = await setup()
+    expect(await tooltip_text(fallback.toggle)).toBe(`Open pane`)
   })
 
   test(`a drag reports through on_drag_start and data-dragging`, async () => {

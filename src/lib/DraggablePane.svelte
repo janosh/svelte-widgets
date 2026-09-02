@@ -236,7 +236,7 @@
   onclick={chain_handlers(toggle_pane, toggle_props.onclick)}
   class={[`pane-toggle`, toggle_props.class]}
   {@attach tooltip({
-    content: toggle_props.title ?? (open ? `Close pane` : `Open pane`),
+    content: toggle_props.title ?? (open ? msg.close_pane : msg.open_pane),
   })}
 >
   {#if toggle}

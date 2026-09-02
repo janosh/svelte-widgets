@@ -271,4 +271,19 @@ describe(`SettingsSearch`, () => {
     await tick()
     expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(expected)
   })
+
+  test(`labels reword the no-match status, interpolating the query`, async () => {
+    mount(SettingsSearch, {
+      target: document.body,
+      props: {
+        query: `radius`,
+        labels: { no_matches: (query: string) => `Nichts zu „${query}“ gefunden.` },
+        children: createRawSnippet(() => ({ render: () => `<div></div>` })),
+      },
+    })
+    await tick()
+    expect(doc_query(`.no-matches`).textContent?.trim()).toBe(
+      `Nichts zu „radius“ gefunden.`,
+    )
+  })
 })

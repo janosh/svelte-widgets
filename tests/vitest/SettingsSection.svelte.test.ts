@@ -308,6 +308,7 @@ describe(`SettingsSection`, () => {
       labels: {
         explain: `Erklären`,
         reset_section: (section_title: string) => `${section_title} zurücksetzen`,
+        reset_key: (setting_key: string) => `${setting_key} zurücksetzen`,
       },
       children: snippet(
         `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input value="2"></label>`,
@@ -329,6 +330,13 @@ describe(`SettingsSection`, () => {
       reset.getAttribute(`title`),
       reset.getAttribute(`aria-label`),
     ]).toEqual([`Reset`, `Atoms zurücksetzen`, `Atoms zurücksetzen`])
+
+    // the per-row reset button injected by on_reset_key reads from labels too
+    const row_reset = doc_query(`.setting-reset-button`)
+    expect([
+      row_reset.getAttribute(`title`),
+      row_reset.getAttribute(`aria-label`),
+    ]).toEqual([`radius zurücksetzen`, `radius zurücksetzen`])
   })
 
   test(`offers the toggle for rows that only carry their own data-description`, async () => {

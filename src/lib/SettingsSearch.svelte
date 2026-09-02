@@ -211,7 +211,7 @@
   <div class="settings-rows" {@attach filter_settings}>{@render children()}</div>
   <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
   <p id={status_id} class="no-matches" role="status">
-    {#if no_matches}No settings match “{query.trim()}”.{/if}
+    {#if no_matches}{msg.no_matches(query.trim())}{/if}
   </p>
 </div>
 

@@ -294,7 +294,7 @@
           row.append(reset_button)
         }
         for (const attribute of [`aria-label`, `title`]) {
-          reset_button.setAttribute(attribute, `Reset ${key} to default`)
+          reset_button.setAttribute(attribute, msg.reset_key(key))
         }
       }
       return Boolean(description)
