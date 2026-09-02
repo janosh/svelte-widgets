@@ -92,6 +92,42 @@ test.describe(`Nav dropdown`, () => {
     await expect(menu.locator(`a`).first()).toBeVisible()
   })
 
+  // the caret only faded 0.6 -> 1 on hover, which reads as the whole row lighting up rather
+  // than the arrow being its own target
+  for (const mobile of [false, true]) {
+    test(`the ${mobile ? `mobile ` : ``}caret recolors under the pointer`, async ({
+      page,
+    }) => {
+      if (mobile) await page.setViewportSize({ width: 420, height: 800 })
+      await page.goto(`/nav`, { waitUntil: `networkidle` })
+      if (mobile) {
+        await page
+          .locator(`nav.mobile button.burger`)
+          .first()
+          .evaluate((element: HTMLElement) => element.click())
+      }
+
+      const caret = page
+        .locator(`${mobile ? `nav.mobile ` : ``}.dropdown [data-dropdown-toggle]`)
+        .first()
+      const read = () =>
+        caret.evaluate((node) => {
+          const style = getComputedStyle(node)
+          return { color: style.color, opacity: style.opacity }
+        })
+
+      const idle = await read()
+      await caret.hover()
+      // both halves matter: opacity is what the mobile rule's specificity used to eat, and
+      // colour is what tells the user this glyph is the control
+      await expect.poll(async () => (await read()).opacity).toBe(`1`)
+      expect(Number(idle.opacity)).toBeLessThan(1)
+      expect((await read()).color, `caret colour is unchanged on hover`).not.toBe(
+        idle.color,
+      )
+    })
+  }
+
   test(`click opens the dropdown until outside, Escape, or the toggle closes it`, async ({
     page,
   }) => {

@@ -539,13 +539,23 @@
     border-end-end-radius: var(--nav-border-radius);
     outline-offset: -1px;
     opacity: 0.6;
-    transition: opacity 0.15s;
+    transition:
+      opacity 0.15s,
+      color 0.15s;
   }
   .dropdown > div:first-child > button :global(svg) {
     transition: transform 0.2s ease;
   }
+  /* the row tints its background on hover, but the caret is a separate target within it, so
+     it recolors on its own to say the arrow itself is what opens the section. currentColor
+     last: --nav-link-active-color has no default, and an unset one would make `color`
+     invalid at computed-value time and inherit rather than drop out. */
   .dropdown > div:first-child > button:hover {
     opacity: 1;
+    color: var(
+      --nav-dropdown-toggle-hover-color,
+      var(--nav-link-active-color, currentColor)
+    );
   }
   .dropdown > div:first-child > button.open {
     opacity: 1;
@@ -727,7 +737,9 @@
     border-radius: var(--nav-border-radius);
     opacity: 0.6;
   }
-  nav.mobile .dropdown > div:first-child > button.open {
+  /* :hover here too, or this selector's extra `nav.mobile` outranks the shared hover rule
+     and pins the caret back to 0.6 */
+  nav.mobile .dropdown > div:first-child > button:is(.open, :hover) {
     opacity: 1;
   }
   /* `display: none` can't transition, so collapse via a 0fr grid row + fade. `visibility`
