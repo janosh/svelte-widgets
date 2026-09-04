@@ -64,7 +64,7 @@ const emit_input = (
   replace_to = selection_end,
 ): void => {
   area.setSelectionRange(selection_start, selection_end)
-  before_input(area, input_type)
+  if (before_input(area, input_type).defaultPrevented) return
   area.value = area.value.slice(0, replace_from) + insert + area.value.slice(replace_to)
   const caret = replace_from + insert.length
   area.setSelectionRange(caret, caret)
@@ -214,6 +214,8 @@ test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
       read_only: mode === `read-only`,
       on_error,
     })
+    const input_events = vi.fn()
+    textarea.addEventListener(`input`, input_events)
     if (mode === `rejected command`) {
       vi.spyOn(model, `transact`).mockImplementationOnce(() => {
         throw new Error(`rejected command`)
@@ -227,6 +229,14 @@ test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
       DEMO_TEXT,
       [],
     ])
+    expect(input_events).toHaveBeenCalledTimes(mode === `unsupported input` ? 1 : 0)
+    // Also retain coverage for an input event dispatched without a cancelable beforeinput.
+    if (mode === `read-only`) {
+      textarea.value = `unexpected native update`
+      textarea.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+      expect(textarea.value).toBe(DEMO_TEXT)
+      expect(model.text()).toBe(DEMO_TEXT)
+    }
     expect(on_error).toHaveBeenCalledTimes(mode === `read-only` ? 0 : 1)
     if (mode === `unsupported input`)
       expect(on_error).toHaveBeenCalledWith(`Unsupported editor input type formatBold`)

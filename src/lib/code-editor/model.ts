@@ -271,7 +271,7 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
   // every line.
   // Normalization removes one code unit per CRLF and the optional BOM.
   const crlf_count = init.text.length - rope_length(root) - Number(had_bom)
-  const eol = crlf_count * 2 > text_breaks(init.text) ? `crlf` : `lf`
+  const eol = crlf_count * 2 > rope_breaks(root) ? `crlf` : `lf`
   const history_limit = init.history_limit_chars ?? DEFAULT_HISTORY_LIMIT
   if (!Number.isInteger(history_limit) || history_limit < 0)
     throw new Error(`Invalid history_limit_chars=${history_limit}`)

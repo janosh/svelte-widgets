@@ -222,8 +222,12 @@ const resolve_mod = (shortcut: string): string =>
 
 // `,`, `+` and space are spelled out so a combo can always be split on `+`;
 // matching needs the literal `event.key` back
-const KEY_TOKENS: Record<string, string> = { ',': `comma`, '+': `plus`, ' ': `space` }
-const TOKEN_KEYS: Record<string, string> = { comma: `,`, plus: `+`, space: ` ` }
+const KEY_TOKENS = new Map([
+  [`,`, `comma`],
+  [`+`, `plus`],
+  [` `, `space`],
+])
+const TOKEN_KEYS = new Map([...KEY_TOKENS].map(([key, token]) => [token, key]))
 
 function split_shortcut(shortcut: string): string[] {
   const parts = shortcut
@@ -244,7 +248,7 @@ export function parse_shortcut(shortcut: string): {
 } {
   const parts = split_shortcut(resolve_mod(shortcut))
   const last = parts.pop() ?? ``
-  const key = TOKEN_KEYS[last] ?? last
+  const key = TOKEN_KEYS.get(last) ?? last
   const ctrl = parts.includes(`ctrl`)
   const shift = parts.includes(`shift`)
   const alt = parts.includes(`alt`)
@@ -269,28 +273,29 @@ export function matches_shortcut(
 }
 
 // Display symbols per segment. Only `mod` is platform-dependent, the rest render alike.
-const key_symbols: Record<string, string> = {
-  meta: `⌘`,
-  cmd: `⌘`,
-  shift: `⇧`,
-  alt: `⌥`,
-  ctrl: `Ctrl`,
-  enter: `↵`,
-  backspace: `⌫`,
-  delete: `⌦`,
-  escape: `Esc`,
-  arrowup: `↑`,
-  arrowdown: `↓`,
-  arrowleft: `←`,
-  arrowright: `→`,
-  comma: `,`,
-  plus: `+`,
-  space: `␣`,
-}
+const key_symbols = new Map([
+  [`meta`, `⌘`],
+  [`cmd`, `⌘`],
+  [`shift`, `⇧`],
+  [`alt`, `⌥`],
+  [`ctrl`, `Ctrl`],
+  [`enter`, `↵`],
+  [`backspace`, `⌫`],
+  [`delete`, `⌦`],
+  [`escape`, `Esc`],
+  [`arrowup`, `↑`],
+  [`arrowdown`, `↓`],
+  [`arrowleft`, `←`],
+  [`arrowright`, `→`],
+  [`comma`, `,`],
+  [`plus`, `+`],
+  [`space`, `␣`],
+])
 
 export const format_shortcut = (shortcut: string): string[] =>
   split_shortcut(resolve_mod(shortcut)).map(
-    (part) => key_symbols[part] ?? part.charAt(0).toUpperCase() + part.slice(1),
+    (part) =>
+      key_symbols.get(part) ?? part.replace(/^./u, (first) => first.toUpperCase()),
   )
 
 export type Hotkey = {
@@ -371,13 +376,13 @@ export function step_focus<T extends HTMLElement>(
 
 const MODIFIER_ORDER = [`mod`, `meta`, `ctrl`, `alt`, `shift`]
 // other spellings users and `event.key` produce for the modifiers above
-const MODIFIER_ALIASES: Record<string, string> = {
-  cmd: `meta`,
-  command: `meta`,
-  control: `ctrl`,
-  option: `alt`,
-}
-const canonical_modifier = (part: string): string => MODIFIER_ALIASES[part] ?? part
+const MODIFIER_ALIASES = new Map([
+  [`cmd`, `meta`],
+  [`command`, `meta`],
+  [`control`, `ctrl`],
+  [`option`, `alt`],
+])
+const canonical_modifier = (part: string): string => MODIFIER_ALIASES.get(part) ?? part
 const is_modifier = (part: string): boolean =>
   MODIFIER_ORDER.includes(canonical_modifier(part))
 
@@ -407,7 +412,7 @@ export function event_to_combo(
     held.mod = true
   }
   const mods = MODIFIER_ORDER.filter((name) => held[name])
-  return [...mods, KEY_TOKENS[key] ?? key].join(`+`)
+  return [...mods, KEY_TOKENS.get(key) ?? key].join(`+`)
 }
 
 // Canonical form of a hand-written or stored combo; null for junk (no key, several keys,
@@ -421,7 +426,7 @@ export function normalize_combo(
   const mods = new Set(parts.filter(is_modifier).map(canonical_modifier))
   const keys = parts.filter((part) => !is_modifier(part))
   if (keys.length !== 1 || (require_modifier && mods.size === 0)) return null
-  const key = KEY_TOKENS[keys[0]] ?? keys[0]
+  const key = KEY_TOKENS.get(keys[0]) ?? keys[0]
   if (MODIFIER_EVENT_KEYS.has(key)) return null
   return [...MODIFIER_ORDER.filter((name) => mods.has(name)), key].join(`+`)
 }

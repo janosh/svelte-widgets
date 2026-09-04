@@ -175,7 +175,8 @@ describe(`keyboard shortcut parsing`, () => {
   test.each([
     [`ctrl+comma+plus+space`, [`Ctrl`, `,`, `+`, `␣`]],
     [` SHIFT + Escape + F12 + x `, [`⇧`, `Esc`, `F12`, `X`]],
-    [`ß+😀+`, [`SS`, `😀`, ``]],
+    [`ß+😀+𐐨rest+`, [`SS`, `😀`, `𐐀rest`, ``]],
+    [`constructor+__proto__`, [`Constructor`, `__proto__`]],
     [``, [``]],
   ])(`format_shortcut(%j) renders %j`, (shortcut, expected) => {
     expect(format_shortcut(shortcut)).toEqual(expected)
@@ -217,6 +218,8 @@ describe(`shortcut rebinding`, () => {
     [linux, { key: `+`, ctrlKey: true }, `mod+plus`],
     [linux, { key: ` `, altKey: true }, `alt+space`],
     [linux, { key: `ArrowRight`, altKey: true }, `alt+arrowright`],
+    [linux, { key: `constructor`, ctrlKey: true }, `mod+constructor`],
+    [linux, { key: `__proto__` }, `__proto__`],
     [linux, { key: `Escape` }, `escape`], // bare keys are combos too
   ])(`event_to_combo on %s`, (user_agent, init, expected) => {
     stub_prop(globalThis.navigator, `userAgent`, user_agent)
