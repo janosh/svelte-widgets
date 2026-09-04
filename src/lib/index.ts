@@ -52,3 +52,13 @@ export {
 export type * from './types'
 export type * from './utils'
 export { default as Wiggle } from './Wiggle.svelte'
+
+export { default as SplitPane } from './SplitPane.svelte'
+export { default as VirtualList } from './VirtualList.svelte'
+export { virtual_window } from './virtual'
+export { default as FileInput } from './FileInput.svelte'
+export { default as Progress } from './Progress.svelte'
+export { default as TaskStatus } from './TaskStatus.svelte'
+export { default as JsonTree } from './json-tree/JsonTree.svelte'
+export type { JsonTreeProps } from './json-tree/types'
+export { default as TreeView } from './TreeView.svelte'

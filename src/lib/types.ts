@@ -410,3 +410,13 @@ export interface Contributor {
   avatar_url: string
   html_url: string
 }
+
+export type FileRejection = { file: File; reason: `type` | `size` | `count` }
+
+export type TreeNode = {
+  id: string
+  label: string
+  children?: readonly TreeNode[]
+  load?: (signal: AbortSignal) => Promise<readonly TreeNode[]>
+  disabled?: boolean
+}

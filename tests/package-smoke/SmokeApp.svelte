@@ -9,6 +9,13 @@
     Dialog,
     DiffView,
     FindBar,
+    FileInput,
+    JsonTree,
+    SplitPane,
+    TreeView,
+    VirtualList,
+    TaskStatus,
+    Progress,
     MultiSelect,
     type Option,
     PageSearch,
@@ -20,6 +27,8 @@
   import DirectCommandMenu from 'svelte-widgets/CommandMenu.svelte'
   import DirectDialog from 'svelte-widgets/Dialog.svelte'
   import DirectDiffView from 'svelte-widgets/DiffView.svelte'
+  import DirectJsonTree from 'svelte-widgets/JsonTree.svelte'
+  import { virtual_window } from 'svelte-widgets/virtual'
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import DirectPageSearch from 'svelte-widgets/PageSearch.svelte'
@@ -52,6 +61,11 @@
     DirectDialog === Dialog &&
     DirectDiffView === DiffView &&
     DirectFindBar === FindBar &&
+    DirectJsonTree === JsonTree &&
+    [FileInput, SplitPane, TreeView, VirtualList, TaskStatus, Progress].every(
+      (component) => typeof component === `function`,
+    ) &&
+    virtual_window({ scroll: 0, viewport: 100, count: 1000, item_size: 20 }).end === 5 &&
     DirectMultiSelect === MultiSelect &&
     DirectPageSearch === PageSearch &&
     typeof Accordion === `function` &&

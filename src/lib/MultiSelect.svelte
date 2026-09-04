@@ -1,6 +1,7 @@
 <!-- eslint-disable-next-line @stylistic/quotes -- TS generics require string literals -->
 <script lang="ts" generics="Option extends import('./types').Option">
   // === Imports ===
+  import { virtual_window as get_virtual_window } from './virtual'
   import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
   import { fromAction } from 'svelte/attachments'
@@ -691,14 +692,13 @@
   const virtual_window = $derived.by(() => {
     if (!is_virtual_list_enabled || !virtual_config) return null
     const { item_height, overscan } = virtual_config
-    // clamp stale scroll offsets (e.g. after filtering shrinks the list) into valid range
-    const max_scroll = Math.max(0, render_rows.length * item_height - virtual_viewport)
-    const scroll_top = Math.min(options_scroll_top, max_scroll)
-    const start = Math.max(0, Math.floor(scroll_top / item_height) - overscan)
-    const end = Math.min(
-      render_rows.length,
-      Math.ceil((scroll_top + virtual_viewport) / item_height) + overscan,
-    )
+    const { start, end } = get_virtual_window({
+      scroll: options_scroll_top,
+      viewport: virtual_viewport,
+      item_size: item_height,
+      count: render_rows.length,
+      overscan,
+    })
     return { start, end, item_height }
   })
   const render_window = $derived(render_rows.length > 0 ? virtual_window : null)
