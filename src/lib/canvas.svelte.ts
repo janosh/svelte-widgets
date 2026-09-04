@@ -7,28 +7,6 @@ export interface CanvasFrame {
   height: number
 }
 
-// Backing store at `width`×`height` CSS px times `dpr`, with the context transformed so draw
-// code works in CSS px. Assigning width/height clears a canvas even when unchanged, so the
-// existing context is kept when the size matches.
-function size_canvas(
-  canvas: HTMLCanvasElement,
-  existing: CanvasRenderingContext2D | null,
-  width: number,
-  height: number,
-  dpr: number,
-): CanvasRenderingContext2D | null {
-  const [px_width, px_height] = [Math.round(width * dpr), Math.round(height * dpr)]
-  if (canvas.width !== px_width) canvas.width = px_width
-  if (canvas.height !== px_height) canvas.height = px_height
-  const ctx = existing?.canvas === canvas ? existing : canvas.getContext(`2d`)
-  if (ctx) {
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
-    ctx.imageSmoothingEnabled = true
-    ctx.imageSmoothingQuality = `high`
-  }
-  return ctx
-}
-
 export function create_canvas_surface(inputs: {
   canvas: () => HTMLCanvasElement | undefined
   overlay_canvas?: () => HTMLCanvasElement | undefined
@@ -94,20 +72,28 @@ export function create_canvas_surface(inputs: {
       0,
       (parent?.clientWidth ?? 0) - padding(`Left`) - padding(`Right`),
     )
-    const explicit_height = inputs.height?.()
     const height =
-      explicit_height ??
+      inputs.height?.() ??
       Math.max(0, (parent?.clientHeight ?? 0) - padding(`Top`) - padding(`Bottom`))
     if (!Number.isFinite(height) || height < 0)
       throw new RangeError(`Canvas height must be finite and non-negative: ${height}`)
-    const overlay = inputs.overlay_canvas?.()
-    for (const layer of [canvas, overlay]) {
-      if (!layer) continue
+    // Assigning even an unchanged backing dimension clears the canvas.
+    const [px_width, px_height] = [Math.round(width * dpr), Math.round(height * dpr)]
+    ;[ctx, overlay_ctx] = [canvas, inputs.overlay_canvas?.()].map((layer, idx) => {
+      if (!layer) return null
       layer.style.width = `${width}px`
       layer.style.height = `${height}px`
-    }
-    ctx = size_canvas(canvas, ctx, width, height, dpr)
-    overlay_ctx = overlay ? size_canvas(overlay, overlay_ctx, width, height, dpr) : null
+      if (layer.width !== px_width) layer.width = px_width
+      if (layer.height !== px_height) layer.height = px_height
+      const existing = idx === 0 ? ctx : overlay_ctx
+      const context = existing?.canvas === layer ? existing : layer.getContext(`2d`)
+      if (context) {
+        context.setTransform(dpr, 0, 0, dpr, 0, 0)
+        context.imageSmoothingEnabled = true
+        context.imageSmoothingQuality = `high`
+      }
+      return context
+    })
     if (dims.width !== width || dims.height !== height) dims = { width, height }
     schedule()
   }

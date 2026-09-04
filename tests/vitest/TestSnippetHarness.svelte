@@ -8,7 +8,6 @@
     | ({ component: `file-details` } & ComponentProps<typeof FileDetails>)
     | ({ component: `nav` } & ComponentProps<typeof Nav>)
     | ({ component: `prev-next-children` } & ComponentProps<typeof PrevNext>)
-    | ({ component: `prev-next-named` } & ComponentProps<typeof PrevNext>)
     | ({ component: `toggle` } & ComponentProps<typeof Toggle>)
 
   let props: SnippetHarnessProps = $props()
@@ -77,22 +76,8 @@
         >{item[0]}
       </span>
     {/snippet}
-  </PrevNext>
-{:else if props.component === `prev-next-named`}
-  {@const { component, ...rest } = props}
-  <PrevNext {...rest}>
-    {#snippet prev_snippet({ item, index, total })}
-      <a data-testid="prevnext-prev" href={item[0]} data-index={index} data-total={total}>
-        prev {item[0]}
-      </a>
-    {/snippet}
     {#snippet between()}
       <span data-testid="prevnext-between">between</span>
-    {/snippet}
-    {#snippet next_snippet({ item, index, total })}
-      <a data-testid="prevnext-next" href={item[0]} data-index={index} data-total={total}>
-        next {item[0]}
-      </a>
     {/snippet}
   </PrevNext>
 {:else}

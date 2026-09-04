@@ -45,36 +45,6 @@ export function create_roving_focus(opts: {
     const container = opts.container()
     if (!container) return undefined
     groups.add(container)
-    return () => {
-      groups.delete(container)
-    }
-  })
-
-  // Claim a provisional tab stop until the post-render DOM measurement settles.
-  const pass = $derived.by(() => {
-    opts.items()
-    return { fallback: null as string | null }
-  })
-
-  $effect(() => {
-    opts.items()
-    void dom_revision
-    const container = opts.container()
-    const marks = container ? marks_in(container) : []
-    // A key left behind by marks that no longer render would strand the group at -1
-    if (
-      focused_key != null &&
-      !marks.some(
-        (mark) =>
-          mark.getAttribute(ROVING_ATTR) === focused_key && is_focus_available(mark),
-      )
-    )
-      focused_key = null
-    fallback_key = marks.find(is_focus_available)?.getAttribute(ROVING_ATTR) ?? null
-  })
-  $effect(() => {
-    const container = opts.container()
-    if (!container) return undefined
     // Native eligibility can change without the item list changing (disabled controls,
     // hidden panels, or CSS classes). Batch DOM changes in one observer callback.
     const observer = new MutationObserver(() => {
@@ -101,7 +71,33 @@ export function create_roving_focus(opts: {
     ) {
       observer.observe(parent, attributes)
     }
-    return () => observer.disconnect()
+    return () => {
+      observer.disconnect()
+      groups.delete(container)
+    }
+  })
+
+  // Claim a provisional tab stop until the post-render DOM measurement settles.
+  const pass = $derived.by(() => {
+    opts.items()
+    return { fallback: null as string | null }
+  })
+
+  $effect(() => {
+    opts.items()
+    void dom_revision
+    const container = opts.container()
+    const marks = container ? marks_in(container) : []
+    // A key left behind by marks that no longer render would strand the group at -1
+    if (
+      focused_key != null &&
+      !marks.some(
+        (mark) =>
+          mark.getAttribute(ROVING_ATTR) === focused_key && is_focus_available(mark),
+      )
+    )
+      focused_key = null
+    fallback_key = marks.find(is_focus_available)?.getAttribute(ROVING_ATTR) ?? null
   })
 
   return {

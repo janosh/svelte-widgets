@@ -4,18 +4,6 @@ export interface MarkupStroke {
   points: { x: number; y: number }[]
 }
 
-export const MARKUP_COLORS = [
-  `#ff3b30`,
-  `#ff9500`,
-  `#ffcc00`,
-  `#34c759`,
-  `#007aff`,
-  `#ffffff`,
-  `#000000`,
-] as const
-
-export type MarkupColor = (typeof MARKUP_COLORS)[number]
-
 // Visible image rectangle inside an object-fit:contain <img> box.
 export const object_fit_contain_box = (
   natural_width: number,
@@ -46,9 +34,6 @@ export const object_fit_contain_box = (
     scale,
   }
 }
-
-export const stroke_width_for = (natural_width: number): number =>
-  Math.max(3, Math.round(natural_width / 220))
 
 export const draw_markup_strokes = (
   ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,

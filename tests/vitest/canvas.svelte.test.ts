@@ -81,19 +81,26 @@ const setup = (width = 400, height = 300, padding = ``) => {
   base.canvas.style.boxSizing = `border-box`
   base.canvas.style.width = `100%`
   overlay.canvas.style.height = `inherit`
-  let canvas = $state.raw<HTMLCanvasElement | undefined>(base.canvas)
-  let overlay_canvas = $state.raw<HTMLCanvasElement | undefined>(overlay.canvas)
-  let explicit_height = $state<number | undefined>()
-  let revision = $state(0)
+  const state = $state<{
+    canvas: HTMLCanvasElement | undefined
+    overlay_canvas: HTMLCanvasElement | undefined
+    height: number | undefined
+    revision: number
+  }>({
+    canvas: base.canvas,
+    overlay_canvas: overlay.canvas,
+    height: undefined,
+    revision: 0,
+  })
   const draw = vi.fn()
   const draw_overlay = vi.fn()
   let surface: ReturnType<typeof create_canvas_surface> | undefined
   const cleanup = $effect.root(() => {
     surface = create_canvas_surface({
-      canvas: () => canvas,
-      overlay_canvas: () => overlay_canvas,
-      height: () => explicit_height,
-      repaint_deps: () => revision,
+      canvas: () => state.canvas,
+      overlay_canvas: () => state.overlay_canvas,
+      height: () => state.height,
+      repaint_deps: () => state.revision,
       draw,
       draw_overlay,
     })
@@ -109,23 +116,12 @@ const setup = (width = 400, height = 300, padding = ``) => {
     draw,
     draw_overlay,
     cleanup,
-    set_canvas: (value: HTMLCanvasElement | undefined) => {
-      canvas = value
-    },
-    set_overlay: (value: HTMLCanvasElement | undefined) => {
-      overlay_canvas = value
-    },
-    set_height: (value: number | undefined) => {
-      explicit_height = value
-    },
-    invalidate: () => {
-      revision++
-    },
+    state,
   }
 }
 
 test(`sizes both layers in CSS pixels and retains unchanged contexts`, () => {
-  const { parent, base, overlay, surface, draw, draw_overlay, set_height } = setup()
+  const { parent, base, overlay, surface, draw, draw_overlay, state } = setup()
   expect(observers[0].observe).toHaveBeenCalledWith(parent)
   expect(surface.dims).toEqual({ width: 400, height: 300 })
   for (const { canvas, context, get_context } of [base, overlay]) {
@@ -138,24 +134,24 @@ test(`sizes both layers in CSS pixels and retains unchanged contexts`, () => {
   observers[0].resize()
   paint()
   expect(base.get_context).toHaveBeenCalledOnce()
-  expect(draw).toHaveBeenCalledExactlyOnceWith({
-    ctx: base.context,
-    width: 400,
-    height: 300,
-  })
-  expect(draw_overlay).toHaveBeenCalledExactlyOnceWith({
-    ctx: overlay.context,
-    width: 400,
-    height: 300,
-  })
+  for (const [layer, callback] of [
+    [base, draw],
+    [overlay, draw_overlay],
+  ] as const) {
+    expect(callback).toHaveBeenCalledExactlyOnceWith({
+      ctx: layer.context,
+      width: 400,
+      height: 300,
+    })
+  }
   expect(base.context.clearRect).toHaveBeenCalledExactlyOnceWith(0, 0, 400, 300)
   expect(overlay.context.clearRect).not.toHaveBeenCalled()
 
-  set_height(120)
+  state.height = 120
   flushSync()
   expect([base.canvas.height, overlay.canvas.height]).toEqual([120, 120])
   expect(base.canvas.style.height).toBe(`120px`)
-  set_height(undefined)
+  state.height = undefined
   flushSync()
   expect(base.canvas.height).toBe(300)
   expect(base.canvas.style.height).toBe(`300px`)
@@ -205,7 +201,7 @@ test.each([1, 400])(
 )
 
 test(`coalesces reactive and overlay redraws without losing pending base work`, () => {
-  const { surface, draw, draw_overlay, invalidate } = setup()
+  const { surface, draw, draw_overlay, state } = setup()
   paint()
   draw.mockClear()
   draw_overlay.mockClear()
@@ -217,7 +213,7 @@ test(`coalesces reactive and overlay redraws without losing pending base work`, 
   expect(draw_overlay).toHaveBeenCalledOnce()
 
   surface.schedule(false)
-  invalidate()
+  state.revision++
   flushSync()
   surface.schedule(false)
   expect(frames.size).toBe(1)
@@ -227,39 +223,38 @@ test(`coalesces reactive and overlay redraws without losing pending base work`, 
 })
 
 test(`replacement uses new contexts and removal stops drawing detached layers`, () => {
-  const { parent, base, overlay, draw, draw_overlay, surface, set_canvas, set_overlay } =
-    setup()
+  const { parent, base, overlay, draw, draw_overlay, surface, state } = setup()
   const replacement = make_canvas(parent)
   const replacement_overlay = make_canvas(parent)
-  set_canvas(replacement.canvas)
-  set_overlay(replacement_overlay.canvas)
+  state.canvas = replacement.canvas
+  state.overlay_canvas = replacement_overlay.canvas
   base.canvas.remove()
   overlay.canvas.remove()
   flushSync()
   paint()
   expect(observers[0].disconnect).toHaveBeenCalledOnce()
   expect(observers).toHaveLength(2)
-  expect(draw).toHaveBeenCalledExactlyOnceWith({
-    ctx: replacement.context,
-    width: 400,
-    height: 300,
-  })
-  expect(draw_overlay).toHaveBeenCalledExactlyOnceWith({
-    ctx: replacement_overlay.context,
-    width: 400,
-    height: 300,
-  })
+  for (const [layer, callback] of [
+    [replacement, draw],
+    [replacement_overlay, draw_overlay],
+  ] as const) {
+    expect(callback).toHaveBeenCalledExactlyOnceWith({
+      ctx: layer.context,
+      width: 400,
+      height: 300,
+    })
+  }
   expect(base.context.clearRect).not.toHaveBeenCalled()
 
   draw_overlay.mockClear()
-  set_overlay(undefined)
+  state.overlay_canvas = undefined
   replacement_overlay.canvas.remove()
   flushSync()
   paint()
   expect(draw_overlay).not.toHaveBeenCalled()
 
   draw.mockClear()
-  set_canvas(undefined)
+  state.canvas = undefined
   replacement.canvas.remove()
   flushSync()
   surface.schedule()
@@ -268,8 +263,12 @@ test(`replacement uses new contexts and removal stops drawing detached layers`, 
   expect(draw_overlay).not.toHaveBeenCalled()
 })
 
-test(`zero-size surfaces defer drawing until the parent has dimensions`, () => {
-  const { parent, draw, draw_overlay } = setup(0, 0)
+test.each([
+  [0, 0],
+  [0, 80],
+  [80, 0],
+])(`%s×%s surfaces defer drawing until both dimensions are positive`, (width, height) => {
+  const { parent, draw, draw_overlay } = setup(width, height)
   paint()
   expect(draw).not.toHaveBeenCalled()
   expect(draw_overlay).not.toHaveBeenCalled()
@@ -284,10 +283,10 @@ test(`zero-size surfaces defer drawing until the parent has dimensions`, () => {
 })
 
 test(`a replacement without a 2D context never draws using the old canvas`, () => {
-  const { parent, base, draw, set_canvas } = setup()
+  const { parent, base, draw, state } = setup()
   const replacement = make_canvas(parent)
   replacement.get_context.mockReturnValue(null)
-  set_canvas(replacement.canvas)
+  state.canvas = replacement.canvas
   flushSync()
   paint()
   expect(draw).not.toHaveBeenCalled()
@@ -295,10 +294,10 @@ test(`a replacement without a 2D context never draws using the old canvas`, () =
 })
 
 test(`parent padding does not enlarge the drawing surface`, () => {
-  const { surface, base, overlay, set_height } = setup(120, 120, `10px`)
+  const { surface, base, overlay, state } = setup(120, 120, `10px`)
   expect(surface.dims).toEqual({ width: 100, height: 100 })
   expect([base.canvas.width, overlay.canvas.height]).toEqual([100, 100])
-  set_height(75)
+  state.height = 75
   flushSync()
   expect([base.canvas.style.height, overlay.canvas.style.height]).toEqual([
     `75px`,
@@ -307,8 +306,8 @@ test(`parent padding does not enlarge the drawing surface`, () => {
 })
 
 test.each([-1, NaN, Infinity])(`rejects invalid explicit height %s`, (height) => {
-  const { set_height } = setup()
-  set_height(height)
+  const { state } = setup()
+  state.height = height
   expect(flushSync).toThrow(`Canvas height must be finite and non-negative`)
 })
 

@@ -1,8 +1,4 @@
-import {
-  draw_markup_strokes,
-  object_fit_contain_box,
-  stroke_width_for,
-} from '$lib/image-markup'
+import { draw_markup_strokes, object_fit_contain_box } from '$lib/image-markup'
 import { expect, test, vi } from 'vite-plus/test'
 
 test.each([
@@ -24,11 +20,14 @@ test.each([-1, NaN, Infinity])(`rejects invalid dimensions %s`, (invalid) => {
 })
 
 test(`draws multi-point strokes and lone taps, ignoring empty strokes`, () => {
+  const colors: string[] = []
   const context = {
     beginPath: vi.fn(),
     moveTo: vi.fn(),
     lineTo: vi.fn(),
-    stroke: vi.fn(),
+    stroke: vi.fn((): void => {
+      colors.push(context.strokeStyle)
+    }),
     lineCap: ``,
     lineJoin: ``,
     lineWidth: 0,
@@ -46,6 +45,7 @@ test(`draws multi-point strokes and lone taps, ignoring empty strokes`, () => {
     },
     { color: `blue`, points: [{ x: 10, y: 20 }] },
   ] as const
+  const original_strokes = structuredClone(strokes)
   draw_markup_strokes(context as unknown as CanvasRenderingContext2D, strokes, 4)
   expect([
     context.lineCap,
@@ -54,7 +54,7 @@ test(`draws multi-point strokes and lone taps, ignoring empty strokes`, () => {
     context.strokeStyle,
   ]).toEqual([`round`, `round`, 4, `blue`])
   expect(context.beginPath).toHaveBeenCalledTimes(2)
-  expect(context.stroke).toHaveBeenCalledTimes(2)
+  expect(colors).toEqual([`green`, `blue`])
   expect(context.moveTo.mock.calls).toEqual([
     [1, 2],
     [10, 20],
@@ -64,6 +64,5 @@ test(`draws multi-point strokes and lone taps, ignoring empty strokes`, () => {
     [5, 6],
     [10.01, 20],
   ])
-  expect(strokes[1].points).toHaveLength(3)
-  expect([0, 220, 1000, 2200].map(stroke_width_for)).toEqual([3, 3, 5, 10])
+  expect(strokes).toEqual(original_strokes)
 })

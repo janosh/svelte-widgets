@@ -1,11 +1,6 @@
 import { create_roving_focus, ROVING_ATTR } from '$lib/roving-focus.svelte'
 import { flushSync } from 'svelte'
-import { afterEach, expect, test, vi } from 'vite-plus/test'
-
-const cleanups: (() => void)[] = []
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup()
-})
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 const setup = (
   svg = false,
@@ -27,7 +22,7 @@ const setup = (
   configure?.(initial_marks)
   let marks = $state.raw(initial_marks)
   let handled = false
-  cleanups.push(
+  onTestFinished(
     $effect.root(() => {
       $effect(() => {
         container.replaceChildren(...marks)

@@ -155,9 +155,7 @@ them at once. Content is syntax-highlighted using `language` (or `default_lang`)
 
 ### `PrevNext`
 
-Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and
-the `current` href; arrow keys navigate too unless you pass `onkeyup={null}`. The links at
-the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
+Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and the `current` href. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. Navigation uses ordinary links; apps own keyboard shortcuts and router behavior. The links at the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
 
 ```svelte example id="prev-next-demo"
 <script lang="ts">
@@ -171,7 +169,7 @@ the bottom of every demo page on this site are a `PrevNext` fed by the demo rout
   ]
 </script>
 
-<PrevNext items={chapters} current="masonry" onkeyup={null} />
+<PrevNext items={chapters} current="masonry" />
 ```
 
 ### `SubpageGrid`

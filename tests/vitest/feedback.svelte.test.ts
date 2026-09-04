@@ -1,44 +1,41 @@
 import { ClickFeedback, DragOverlay, Spinner, StatusMessage } from '$lib'
-import { flushSync, mount } from 'svelte'
-import { describe, expect, test } from 'vite-plus/test'
+import { flushSync, mount, unmount, type Component } from 'svelte'
+import { describe, expect, onTestFinished, test } from 'vite-plus/test'
 import { doc_query } from './index'
 
-// Caller classes must preserve the component styling.
-describe(`caller class does not replace a component's own class`, () => {
-  test.each([
-    [`Spinner`, Spinner, {}, `spinner`],
-    [`StatusMessage`, StatusMessage, { message: `hi` }, `status-message`],
-  ])(`%s`, (_name, Component, props, own_class) => {
-    document.body.innerHTML = ``
-    mount(Component, {
-      target: document.body,
-      props: { ...props, class: `caller-class` },
-    })
-    const el = doc_query(`.${own_class}`)
-    expect([...el.classList]).toEqual(expect.arrayContaining([own_class, `caller-class`]))
-  })
-})
+const render = <Props extends Record<string, unknown>>(
+  component: Component<Props>,
+  props: Props,
+) => {
+  const instance = mount(component, { target: document.body, props })
+  onTestFinished(() => unmount(instance))
+  flushSync()
+}
 
 describe(`DragOverlay`, () => {
   test(`renders only when visible, with its default/custom messages and forwarded style`, () => {
-    mount(DragOverlay, { target: document.body, props: { visible: false } })
+    const props = $state({
+      visible: false,
+      message: undefined as string | undefined,
+      style: `z-index: 1`,
+      class: `caller-class`,
+    })
+    render(DragOverlay, props)
     expect(document.querySelector(`.drag-overlay`)).toBeNull()
 
-    document.body.innerHTML = ``
-    mount(DragOverlay, { target: document.body, props: { visible: true } })
-    expect(doc_query<HTMLDivElement>(`.drag-overlay`).textContent).toContain(
-      `Drop file to load`,
-    )
+    props.visible = true
+    flushSync()
+    const overlay = doc_query(`.drag-overlay.caller-class`)
+    expect(overlay.textContent).toContain(`Drop file to load`)
 
-    document.body.innerHTML = ``
-    mount(DragOverlay, {
-      target: document.body,
-      props: { visible: true, message: `Drop it`, style: `z-index: 1` },
-    })
-    const overlay = doc_query<HTMLDivElement>(`.drag-overlay`)
+    props.message = `Drop it`
+    flushSync()
     expect(overlay.style.zIndex).toBe(`1`)
     expect(overlay.textContent).toContain(`Drop it`)
     expect(overlay.querySelector(`svg`)?.getAttribute(`aria-hidden`)).toBe(`true`)
+    props.visible = false
+    flushSync()
+    expect(document.querySelector(`.drag-overlay`)).toBeNull()
   })
 })
 
@@ -49,15 +46,15 @@ describe(`Spinner`, () => {
   ])(
     `text=%j renders a live status region with text %j and forwarded props`,
     (text, expected) => {
-      mount(Spinner, {
-        target: document.body,
-        props: {
-          text,
-          id: `custom-id`,
-          style: `--spinner-size: 60px; --spinner-color: red`,
-        },
+      render(Spinner, {
+        text,
+        id: `custom-id`,
+        class: `caller-class`,
+        style: `--spinner-size: 60px; --spinner-color: red`,
       })
-      const container = doc_query(`.spinner[role="status"][aria-live="polite"]`)
+      const container = doc_query(
+        `.spinner.caller-class[role="status"][aria-live="polite"]`,
+      )
       expect(container.hasAttribute(`aria-busy`)).toBe(false)
       expect(container.getAttribute(`aria-label`)).toBe(text ? null : `Loading`)
       expect(container.id).toBe(`custom-id`)
@@ -72,7 +69,7 @@ describe(`Spinner`, () => {
 
 describe(`StatusMessage`, () => {
   test.each([``, undefined])(`renders nothing when message is %j`, (message) => {
-    mount(StatusMessage, { target: document.body, props: { message } })
+    render(StatusMessage, { message })
     expect(document.querySelector(`.status-message`)).toBeNull()
   })
 
@@ -84,16 +81,14 @@ describe(`StatusMessage`, () => {
   ] as const)(
     `renders $type message with role=$role aria-live=$aria_live and forwarded attributes`,
     ({ type, role, aria_live }) => {
-      mount(StatusMessage, {
-        target: document.body,
-        props: {
-          message: `Test message`,
-          type,
-          id: `custom-id`,
-          style: `margin-top: 20px`,
-        },
+      render(StatusMessage, {
+        message: `Test message`,
+        type,
+        id: `custom-id`,
+        class: `caller-class`,
+        style: `margin-top: 20px`,
       })
-      const message_div = doc_query(`.status-message.${type}`)
+      const message_div = doc_query(`.status-message.${type}.caller-class`)
       expect(message_div.textContent?.trim()).toBe(`Test message`)
       expect(message_div.getAttribute(`role`)).toBe(role)
       expect(message_div.getAttribute(`aria-live`)).toBe(aria_live)
@@ -105,18 +100,15 @@ describe(`StatusMessage`, () => {
 
   test(`dismissible button clears the bound message`, () => {
     let message = $state<string | undefined>(`Test message`)
-    mount(StatusMessage, {
-      target: document.body,
-      props: {
-        get message() {
-          return message
-        },
-        set message(new_message) {
-          message = new_message
-        },
-        dismissible: true,
-        dismiss_label: `Close status`,
+    render(StatusMessage, {
+      get message() {
+        return message
       },
+      set message(new_message) {
+        message = new_message
+      },
+      dismissible: true,
+      dismiss_label: `Close status`,
     })
     const button = doc_query(`.status-message button[aria-label="Close status"]`)
     expect(button.textContent?.trim()).toBe(`✕`)
@@ -130,21 +122,10 @@ describe(`StatusMessage`, () => {
 })
 
 test('ClickFeedback follows visibility and viewport position', () => {
-  let visible = $state(false)
-  let position = $state({ x: 12, y: 34 })
-  mount(ClickFeedback, {
-    target: document.body,
-    props: {
-      get visible() {
-        return visible
-      },
-      get position() {
-        return position
-      },
-    },
-  })
+  const props = $state({ visible: false, position: { x: 12, y: 34 } })
+  render(ClickFeedback, props)
   expect(document.querySelector('.click-feedback')).toBeNull()
-  visible = true
+  props.visible = true
   flushSync()
   const feedback = doc_query('.click-feedback')
   expect([
@@ -152,15 +133,15 @@ test('ClickFeedback follows visibility and viewport position', () => {
     feedback.style.top,
     feedback.getAttribute('aria-hidden'),
   ]).toEqual(['12px', '34px', 'true'])
-  position = { x: 56, y: 78 }
+  props.position = { x: 56, y: 78 }
   flushSync()
   const next = doc_query(`.click-feedback`)
   expect(next).not.toBe(feedback)
   expect([next.style.left, next.style.top]).toEqual(['56px', '78px'])
-  position = { x: 56, y: 78 }
+  props.position = { x: 56, y: 78 }
   flushSync()
   expect(doc_query(`.click-feedback`)).not.toBe(next)
-  visible = false
+  props.visible = false
   flushSync()
   expect(document.querySelector('.click-feedback')).toBeNull()
 })

@@ -59,6 +59,11 @@ test(`valid_query_param infers allowed set members and record keys`, () => {
   for (const valid of [new Set([``, `all`]), { '': true, all: true }]) {
     expect(valid_query_param(empty.searchParams, `filter`, `all`, valid)).toBe(``)
     expect(valid_query_param(new URLSearchParams(), `filter`, `all`, valid)).toBe(`all`)
+    for (const value of [`invalid`, `toString`, `__proto__`]) {
+      expect(
+        valid_query_param(new URLSearchParams({ filter: value }), `filter`, `all`, valid),
+      ).toBe(`all`)
+    }
   }
 })
 
