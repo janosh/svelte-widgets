@@ -329,7 +329,6 @@
   })
 
   let should_wiggle = $state(false) // wiggle when the user tries to exceed maxSelect
-  let should_ignore_hover = $state(false) // suppress scroll-triggered hover during key nav
   let highlighted_idx: number | null = $state(null) // chip index for arrow-key navigation
   // rangeSelect anchor. Plain (non-$state) since only event handlers read it. The anchor
   // can't be matched by reference — matchingOptions is $bindable, so its elements are
@@ -539,7 +538,7 @@
   const is_label_selected = (label: string): boolean =>
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option, label: string | number): boolean =>
-    selected_keys_set.has(key(opt)) || (lower_dupes && is_label_selected(`${label}`))
+    has_selected_option(opt) || (lower_dupes && is_label_selected(`${label}`))
 
   const is_disabled = (opt: Option): boolean =>
     Boolean(utils.is_object(opt) && opt.disabled)
@@ -550,6 +549,10 @@
     opt_a != null &&
     key(opt_a) === key(opt_b) &&
     utils.get_label(opt_a) === utils.get_label(opt_b)
+  const has_selected_option = (opt: Option): boolean =>
+    duplicates === true
+      ? selected.some((item) => is_same_option(item, opt))
+      : selected_keys_set.has(key(opt))
 
   // Group options by their `group` key in the same order used by the dropdown.
   const group_options = (options_to_group: Option[]): GroupedOptions<Option>[] => {
@@ -756,10 +759,6 @@
   }
   let group_header_state = $derived.by(() => {
     const state = new Map<string, GroupHeaderState>()
-    const is_selected = (opt: Option) =>
-      duplicates === true
-        ? selected.some((item) => is_same_option(item, opt))
-        : selected_keys_set.has(key(opt))
     let flat_idx = 0
     for (const { group, options: group_items, collapsed } of grouped_options) {
       const hidden = collapsed && collapsibleGroups
@@ -769,9 +768,9 @@
       if (!hidden) flat_idx += group_items.length
       if (group === null) continue
       const selectable = visible_items.filter((opt) => !is_disabled(opt))
-      const all_selected = selectable.length > 0 && selectable.every(is_selected)
+      const all_selected = selectable.length > 0 && selectable.every(has_selected_option)
       const selected_count = keepSelectedInDropdown
-        ? group_items.filter(is_selected).length
+        ? group_items.filter(has_selected_option).length
         : 0
       state.set(group, { all_selected, selected_count, selectable })
     }
@@ -1030,9 +1029,7 @@
   // === Selection mutations ===
   // keepSelectedInDropdown mode
   function toggle_option(option_to_toggle: Option, event: Event) {
-    const is_currently_selected = selected_keys_set.has(key(option_to_toggle))
-
-    if (is_currently_selected) {
+    if (has_selected_option(option_to_toggle)) {
       if (can_remove) remove(option_to_toggle, event)
     } else void add(option_to_toggle, event)
   }
@@ -1161,7 +1158,13 @@
     if (selected.length === 0) return
     highlighted_idx = null
 
-    const idx = at_idx ?? selected.findIndex((opt) => key(opt) === key(option_to_drop))
+    const idx =
+      at_idx ??
+      selected.findIndex((opt) =>
+        duplicates === true
+          ? is_same_option(opt, option_to_drop)
+          : key(opt) === key(option_to_drop),
+      )
     let option_removed = selected[idx]
 
     if (option_removed === undefined && allowUserOptions) {
@@ -1307,7 +1310,6 @@
   // === Keyboard and pointer handlers ===
   // navigable_options skips collapsed groups
   async function handle_arrow_navigation(direction: 1 | -1, event?: KeyboardEvent) {
-    should_ignore_hover = true
     if (rangeSelect) {
       // anchors on the pre-move position, so an unmodified navigation drops the anchor and
       // the next Shift+Arrow extends from the cursor, not a range navigated away from
@@ -2274,7 +2276,6 @@
       style={ulOptionsStyle}
       onscroll={handle_options_scroll}
       onmousedown={prevent_retain_focus_blur}
-      onmousemove={() => (should_ignore_hover = false)}
     >
       {#if selectAllOption && effective_options.length > 0 && multi_select}
         {@const max_reached = maxSelect !== null && selected.length >= maxSelect}
@@ -2315,8 +2316,8 @@
           class:active={is_active}
           class:disabled={view.disabled}
           class={[liOptionClass, is_active && liActiveOptionClass]}
-          onmouseover={() => {
-            if (view.disabled || should_ignore_hover) return
+          onmousemove={() => {
+            if (view.disabled) return
             // else the effect pinning the user-message row snaps activeIndex straight back
             // and hover highlighting is dead while that row is active
             is_user_message_active = false
@@ -2475,7 +2476,7 @@
           onkeydown={can_add_user_option ? if_enter_or_space(handle_create) : undefined}
           title={msg_type !== `no-match` ? user_msg_text : ``}
           class:active={is_user_message_active}
-          onmouseover={() => !should_ignore_hover && (is_user_message_active = true)}
+          onmousemove={() => (is_user_message_active = true)}
           onfocus={() => (is_user_message_active = true)}
           onmouseout={() => (is_user_message_active = false)}
           onblur={() => (is_user_message_active = false)}

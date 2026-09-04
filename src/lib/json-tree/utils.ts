@@ -5,13 +5,14 @@ type JsonChild = { key: string | number; value: unknown }
 
 // Circular-safe JSON.stringify
 function safe_stringify(val: unknown): string {
-  const seen = new WeakSet()
+  const ancestors: object[] = []
   return JSON.stringify(
     val,
-    (_key, inner) => {
+    function (this: object, _key: string, inner: unknown) {
       if (typeof inner === `object` && inner !== null) {
-        if (seen.has(inner)) return `[Circular]`
-        seen.add(inner)
+        while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop()
+        if (ancestors.includes(inner)) return `[Circular]`
+        ancestors.push(inner)
       }
       if (typeof inner === `bigint`) return `${inner}n`
       if (typeof inner === `symbol`) return inner.toString()
@@ -25,8 +26,6 @@ function safe_stringify(val: unknown): string {
 
 export function get_value_type(value: unknown): JsonValueType {
   if (value === null) return `null`
-  if (value === undefined) return `undefined`
-
   const type = typeof value
   // string/number/boolean/symbol/bigint/function map directly to JsonValueType
   if (type !== `object`) return type
@@ -60,12 +59,9 @@ export const is_expandable = (value: unknown): boolean =>
   is_expandable_type(get_value_type(value))
 
 export function get_child_count(value: unknown): number {
-  const type = get_value_type(value)
-  if (type === `array`) return (value as unknown[]).length
-  if (type === `object`) return Object.keys(value as object).length
-  if (type === `map`) return (value as Map<unknown, unknown>).size
-  if (type === `set`) return (value as Set<unknown>).size
-  return 0
+  if (Array.isArray(value)) return value.length
+  if (value instanceof Map || value instanceof Set) return value.size
+  return get_value_type(value) === `object` ? Object.keys(value as object).length : 0
 }
 
 // The single definition of what a node's children are, shared by rendering, path lookup,
@@ -202,8 +198,8 @@ export function matches_search(
   )
 }
 
-// Depth-first pre-order walk in render order, skipping already-visited objects so cycles
-// terminate. visit returns false to stop descending into a node.
+// Depth-first pre-order walk in render order. Skip ancestors to terminate cycles while
+// visiting shared objects at every path. visit returns false to stop descending.
 function walk_tree(
   value: unknown,
   current_path: string,
@@ -229,6 +225,7 @@ function walk_tree(
     for (const child of get_children(val, sort_keys)) {
       recurse(child.value, build_path(path, child.key), child.key, depth + 1)
     }
+    seen.delete(val as object)
   }
   recurse(value, current_path, null, 0)
 }
@@ -279,10 +276,7 @@ export function get_ancestor_paths(path: string, root_label = ``): string[] {
 // Equality for change detection: NaN equals NaN, containers compare by size only (deep
 // changes are detected at the child level)
 export function values_equal(val_a: unknown, val_b: unknown): boolean {
-  if (val_a === val_b) return true
-  if (typeof val_a === `number` && typeof val_b === `number`) {
-    return Number.isNaN(val_a) && Number.isNaN(val_b)
-  }
+  if (val_a === val_b || (Number.isNaN(val_a) && Number.isNaN(val_b))) return true
   if (val_a === null || val_b === null || typeof val_a !== typeof val_b) return false
 
   const type = get_value_type(val_a)
@@ -435,37 +429,32 @@ export function compute_diff(
   new_val: unknown,
   current_path: string = ``,
   result = new Map<string, DiffEntry>(),
-  seen = new WeakSet<object>(),
+  seen = new WeakMap<object, WeakSet<object>>(),
 ): Map<string, DiffEntry> {
   if (Object.is(old_val, new_val)) return result
   const old_type = get_value_type(old_val)
   const new_type = get_value_type(new_val)
-  const mark_changed = () =>
-    result.set(current_path, {
-      status: `changed`,
-      path: current_path,
-      old_value: old_val,
-      new_value: new_val,
-    })
-
-  if (old_type !== new_type) {
-    mark_changed()
+  if (old_type !== new_type || !is_expandable_type(old_type)) {
+    // Special leaves (dates, regexps, functions) compare their string forms.
+    const equal =
+      old_type === new_type &&
+      (is_primitive_type(old_type)
+        ? values_equal(old_val, new_val)
+        : String(old_val) === String(new_val))
+    if (!equal)
+      result.set(current_path, {
+        status: `changed`,
+        path: current_path,
+        old_value: old_val,
+        new_value: new_val,
+      })
     return result
   }
 
-  if (is_primitive_type(old_type)) {
-    if (!values_equal(old_val, new_val)) mark_changed()
-    return result
-  }
-
-  // Non-expandable special types (date, regexp, etc): compare string forms
-  if (!is_expandable_type(old_type)) {
-    if (String(old_val) !== String(new_val)) mark_changed()
-    return result
-  }
-
-  if (seen.has(old_val as object)) return result // cycle
-  seen.add(old_val as object)
+  const compared = seen.get(old_val as object) ?? new WeakSet<object>()
+  if (compared.has(new_val as object)) return result // cyclic pair
+  compared.add(new_val as object)
+  seen.set(old_val as object, compared)
 
   // Objects diff by key; arrays, Maps and Sets diff by index (Map entries wrapped as
   // { key, value }, matching how get_children renders them)
@@ -493,5 +482,6 @@ export function compute_diff(
       compute_diff(old_children.get(key), new_children.get(key), child_path, result, seen)
     }
   }
+  compared.delete(new_val as object)
   return result
 }

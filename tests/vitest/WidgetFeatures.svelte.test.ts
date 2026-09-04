@@ -1,7 +1,5 @@
 import {
   FileInput,
-  JsonTree,
-  Progress,
   SplitPane,
   TaskStatus,
   TreeView,
@@ -11,6 +9,7 @@ import {
 import { virtual_window } from '$lib/virtual'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vite-plus/test'
+import { doc_query } from './index'
 
 const target_for = () => {
   const target = document.createElement(`div`)
@@ -32,8 +31,7 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
   })
   onTestFinished(() => unmount(component))
   flushSync()
-  const separator = target.querySelector(`[role="separator"]`)
-  if (!separator) throw new Error(`Missing separator`)
+  const separator = doc_query(`[role="separator"]`)
   for (const [key, size] of [
     [`Enter`, `0px`],
     [`Enter`, `40%`],
@@ -52,32 +50,30 @@ test.each([
   [25, `25`],
   [150, `100`],
   [-10, `0`],
-])(`progress %s`, (value, expected) => {
-  const target = target_for()
-  mount(Progress, { target, props: { value, label: `Loading atoms` } })
-  expect(target.querySelector(`progress`)?.getAttribute(`value`)).toBe(expected)
-  expect(target.querySelector(`progress`)?.getAttribute(`aria-label`)).toBe(
-    `Loading atoms`,
-  )
-})
-
-test(`task cancellation and retry belong to the caller`, async () => {
-  const target = target_for()
-  const props = $state({
-    state: `running`,
-    label: `Parsing`,
-    oncancel: vi.fn(),
-    onretry: vi.fn(),
-  })
-  mount(TaskStatus, { target, props })
-  target.querySelector(`button`)?.click()
-  expect(props.oncancel).toHaveBeenCalledOnce()
-  props.state = `error`
-  await tick()
-  expect(target.querySelector(`progress`)).toBeNull()
-  target.querySelector(`button`)?.click()
-  expect(props.onretry).toHaveBeenCalledOnce()
-})
+])(
+  `task progress %s with caller-owned cancellation and retry`,
+  async (value, expected) => {
+    const target = target_for()
+    const props = $state({
+      state: `running`,
+      label: `Parsing`,
+      value,
+      oncancel: vi.fn(),
+      onretry: vi.fn(),
+    })
+    mount(TaskStatus, { target, props })
+    const progress = doc_query(`progress`)
+    expect(progress.getAttribute(`value`)).toBe(expected)
+    expect(progress.getAttribute(`aria-label`)).toBe(`Parsing`)
+    target.querySelector(`button`)?.click()
+    expect(props.oncancel).toHaveBeenCalledOnce()
+    props.state = `error`
+    await tick()
+    expect(target.querySelector(`progress`)).toBeNull()
+    target.querySelector(`button`)?.click()
+    expect(props.onretry).toHaveBeenCalledOnce()
+  },
+)
 
 test(`file picker validates, cancels superseded work, removes files and permits reselection`, async () => {
   const target = target_for()
@@ -101,8 +97,7 @@ test(`file picker validates, cancels superseded work, removes files and permits 
       onreject,
     },
   })
-  const input = target.querySelector(`input`)
-  if (!input) throw new Error(`Missing input`)
+  const input = doc_query<HTMLInputElement>(`input`)
   const good = new File([`{}`], `ok.json`)
   const select = async (files: File[]) => {
     Object.defineProperty(input, `files`, { configurable: true, value: files })
@@ -204,8 +199,7 @@ test.each([false, true])(
       props: { nodes, onselect, expanded: new Set(initial ? [`root`] : []) },
     })
     onTestFinished(() => unmount(component))
-    const root = target.querySelector<HTMLElement>(`[data-tree-id="root"]`)
-    if (!root) throw new Error(`Missing root`)
+    const root = doc_query(`[data-tree-id="root"]`)
     if (!initial) fire_key(root, `ArrowRight`)
     await tick()
     await tick()
@@ -243,6 +237,7 @@ test.each([false, true])(
     })
     const component = mount(TreeView, { target, props })
     flushSync()
+    const root = doc_query(`[data-tree-id="root"]`)
     props.nodes = [{ id: `root`, label: `New`, load }]
     await tick()
     expect(requests).toHaveLength(2)
@@ -250,36 +245,15 @@ test.each([false, true])(
     if (reject_old) requests[0].reject(new Error(`Old failed`))
     else requests[0].resolve([{ id: `stale`, label: `Stale` }])
     await tick()
-    expect(target.querySelector(`[data-tree-id="root"]`)?.getAttribute(`aria-busy`)).toBe(
-      `true`,
-    )
+    expect(root.getAttribute(`aria-busy`)).toBe(`true`)
     expect(target.textContent).not.toMatch(/Old failed|Stale/)
     requests[1].resolve([{ id: `child`, label: `Child` }])
     await tick()
     expect(target.querySelector(`[data-tree-id="child"]`)).not.toBeNull()
-    expect(target.querySelector(`[data-tree-id="root"]`)?.getAttribute(`aria-busy`)).toBe(
-      `false`,
-    )
+    expect(root.getAttribute(`aria-busy`)).toBe(`false`)
     props.nodes = [{ id: `root`, label: `Unmounting`, load }]
     await tick()
     await unmount(component)
     expect(requests[2].signal.aborted).toBe(true)
   },
 )
-
-test(`JSON tree preserves nested values and editing controls`, () => {
-  const target = target_for()
-  mount(JsonTree, {
-    target,
-    props: {
-      value: { name: `example`, nested: { value: 42 } },
-      default_fold_level: 5,
-      editable: true,
-    },
-  })
-  flushSync()
-  expect(target.textContent).toContain(`example`)
-  expect(target.textContent).toContain(`42`)
-  expect(target.querySelector(`input[type="search"]`)).not.toBeNull()
-  expect(target.querySelectorAll(`.json-node`).length).toBeGreaterThan(2)
-})

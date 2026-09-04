@@ -193,7 +193,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
   const { input, props, user_msg } = await setup_user_message()
 
   for (const [event_name, expected_active] of [
-    [`mouseover`, true],
+    [`mousemove`, true],
     [`mouseout`, false],
     [`focus`, true],
     [`blur`, false],

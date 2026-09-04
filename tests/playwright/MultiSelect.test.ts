@@ -140,12 +140,7 @@ test.describe(`multiselect`, () => {
     const active_after_synthetic_hover = await active_option.textContent()
     expect(active_after_synthetic_hover?.trim()).toBe(foods[2])
 
-    await page.evaluate(() => {
-      const options = document.querySelector(`#foods ul.options`)
-      const fifth_option = document.querySelectorAll(`#foods ul.options > li`)[4]
-      options?.dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
-      fifth_option?.dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
-    })
+    await page.locator(`#foods ul.options > li`).nth(4).hover()
 
     await expect(active_option).toHaveText(foods[4])
   })

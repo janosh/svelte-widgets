@@ -11,7 +11,7 @@ import TestMultiSelectSnippets from './TestMultiSelectSnippets.svelte'
 import {
   focus_input,
   fresh_key,
-  fresh_mouseover,
+  fresh_mousemove,
   get_input,
   mount_component as mount,
   mount_multiselect,
@@ -34,7 +34,7 @@ test(`2-way binding preserves a valid initial auto-active index`, async () => {
   // internal changes bind outward
   for (const idx of [1, 2]) {
     const li = doc_query(`ul.options li:nth-child(${idx})`)
-    li.dispatchEvent(fresh_mouseover())
+    li.dispatchEvent(fresh_mousemove())
 
     expect(props.activeIndex).toEqual(idx - 1)
   }
@@ -80,7 +80,7 @@ test(`1-way binding of activeOption and hovering an option makes it active`, asy
   })
 
   const firstOption = doc_query(`ul.options > li`)
-  firstOption.dispatchEvent(fresh_mouseover())
+  firstOption.dispatchEvent(fresh_mousemove())
   await tick()
 
   expect(activeOption).toBe(1)
@@ -181,7 +181,7 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
   mount_multiselect({ options: [1, 2, 3], ...css_classes, selected: [1], maxSelect: 2 })
 
   // hover to make an option active
-  document.querySelector(`ul.options > li`)?.dispatchEvent(fresh_mouseover())
+  document.querySelector(`ul.options > li`)?.dispatchEvent(fresh_mousemove())
   await tick()
 
   expect(doc_query(`.maxSelectMsg`).textContent?.trim()).toBe(`1/2`)
@@ -979,7 +979,7 @@ test(`option snippet receives selected, active, and disabled booleans`, async ()
   expect(option_spans[1].dataset.active).toBe(`false`)
 
   doc_query(`ul.options > li`).dispatchEvent(
-    new MouseEvent(`mouseover`, { bubbles: true }),
+    new MouseEvent(`mousemove`, { bubbles: true }),
   )
   await tick()
   const updated_spans = [
@@ -2175,11 +2175,21 @@ describe(`keepSelectedInDropdown feature`, () => {
     else option?.click()
   }
 
-  test.each(keep_selected_modes)(
-    `keeps selected options visible in dropdown when mode is %s`,
-    async (mode) => {
+  test.each(
+    keep_selected_modes.flatMap((mode) =>
+      [false, true].map((colliding_keys) => ({ mode, colliding_keys })),
+    ),
+  )(
+    `keeps selection accurate with $mode and colliding keys=$colliding_keys`,
+    async ({ mode, colliding_keys }) => {
       const selected = [`Apple`]
-      mount_multiselect({ options, selected, keepSelectedInDropdown: mode })
+      mount_multiselect({
+        options,
+        selected,
+        keepSelectedInDropdown: mode,
+        duplicates: colliding_keys,
+        key: colliding_keys ? () => `shared` : undefined,
+      })
 
       await focus_input()
 
@@ -2204,6 +2214,13 @@ describe(`keepSelectedInDropdown feature`, () => {
           expect(checkbox?.checked).toBe(false)
         }
       })
+      const banana_option = option_by_label(`Banana`)
+      for (const selected_after_click of [true, false]) {
+        click_keep_selected_option(banana_option, mode)
+        await tick()
+        expect(apple_option?.classList.contains(`selected`)).toBe(true)
+        expect(banana_option?.classList.contains(`selected`)).toBe(selected_after_click)
+      }
     },
   )
 
@@ -3688,9 +3705,16 @@ describe(`onactivate event`, () => {
 
     await focus_input()
 
-    doc_query(`ul.options`).dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
+    get_input().dispatchEvent(fresh_key(`ArrowDown`))
+    await tick()
+    onactivate_spy.mockClear()
+
     const option3 = doc_query(`ul.options li:nth-child(3)`)
-    option3.dispatchEvent(fresh_mouseover())
+    // Scrolling can emit mouseover; only actual movement should override the keyboard.
+    option3.dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
+    await tick()
+    expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(`1`)
+    option3.dispatchEvent(fresh_mousemove())
     await tick()
     expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(`3`)
 
@@ -3989,13 +4013,13 @@ describe(`duplicate entries in options array`, () => {
     ])
 
     // hovering the first duplicate activates only that row
-    option_lis[0].dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
+    option_lis[0].dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
     await tick()
     const active = [...document.querySelectorAll(`ul.options > li.active`)]
     expect(active).toHaveLength(1)
     expect(active[0].id.endsWith(`-opt-0`)).toBe(true)
 
-    option_lis[1].dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
+    option_lis[1].dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
     await tick()
     const second_active = [...document.querySelectorAll(`ul.options > li.active`)]
     expect(second_active).toHaveLength(1)

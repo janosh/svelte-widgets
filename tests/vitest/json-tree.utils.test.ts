@@ -63,116 +63,82 @@ it.each([
   },
 )
 
-describe(`serialize_for_copy`, () => {
-  it.each([
-    [undefined, `undefined`],
-    [null, `null`],
-    [`hello`, `hello`],
-    [42, `42`],
-    [true, `true`],
-    [false, `false`],
-    [BigInt(123), `123n`],
-    [Symbol(`test`), `Symbol(test)`],
-    [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
-    [/test/gi, `/test/gi`],
-    [new Error(`Something went wrong`), `Error: Something went wrong`],
-  ])(`serializes %p correctly`, (value, expected) => {
-    expect(serialize_for_copy(value)).toBe(expected)
-  })
-
-  it(`serializes function to its source`, () => {
-    const fn = function example() {
-      return 42
-    }
-    expect(serialize_for_copy(fn)).toContain(`function example()`)
-  })
-
-  it.each([
+it.each([
+  [undefined, `undefined`],
+  [null, `null`],
+  [`hello`, `hello`, `"hello"`],
+  [42, `42`],
+  [true, `true`],
+  [false, `false`],
+  [123n, `123n`],
+  [999n, `999n`],
+  [Symbol(`test`), `Symbol(test)`],
+  [Symbol(`desc`), `Symbol(desc)`],
+  [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
+  [/test/gi, `/test/gi`],
+  [new Error(`Something went wrong`), `Error: Something went wrong`],
+  [new Error(`fail`), `Error: fail`],
+  [[], [], `Array(0)`],
+  [[1, 2, 3], [1, 2, 3], `Array(3)`],
+  [{}, {}, `{0 keys}`],
+  [{ a: 1 }, { a: 1 }, `{1 key}`],
+  [{ a: 1, b: 2 }, { a: 1, b: 2 }, `{2 keys}`],
+  [
+    new Map([
+      [`a`, 1],
+      [`b`, 2],
+    ]),
     [
-      [1, 2, 3],
-      [1, 2, 3],
+      [`a`, 1],
+      [`b`, 2],
     ],
-    [
-      { a: 1, b: 2 },
-      { a: 1, b: 2 },
-    ],
-    [
-      new Map([
-        [`a`, 1],
-        [`b`, 2],
-      ]),
-      [
-        [`a`, 1],
-        [`b`, 2],
-      ],
-    ],
-    [new Set([1, 2, 3]), [1, 2, 3]],
-  ])(`serializes %p to JSON`, (value, expected) => {
-    expect(JSON.parse(serialize_for_copy(value))).toEqual(expected)
-  })
-
-  it(`handles circular references`, () => {
-    const obj: Record<string, unknown> = { a: 1 }
-    obj.self = obj
-    expect(serialize_for_copy(obj)).toContain(`[Circular]`)
-    // Also in Map/Set values
-    const map = new Map([[`circular`, obj]])
-    expect(serialize_for_copy(map)).toContain(`[Circular]`)
-    const set = new Set([obj])
-    expect(serialize_for_copy(set)).toContain(`[Circular]`)
-  })
-})
-
-describe(`format_preview`, () => {
-  it.each([
-    [[1, 2, 3], `Array(3)`],
-    [[], `Array(0)`],
-    [{ a: 1 }, `{1 key}`],
-    [{ a: 1, b: 2 }, `{2 keys}`],
-    [{}, `{0 keys}`],
-    [
-      new Map([
-        [`a`, 1],
-        [`b`, 2],
-      ]),
-      `Map(2)`,
-    ],
-    [new Set([1, 2, 3]), `Set(3)`],
-    [`hello`, `"hello"`],
-    [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
-    [/test/gi, `/test/gi`],
-    [new Error(`fail`), `Error: fail`],
-    [Symbol(`desc`), `Symbol(desc)`],
-    [BigInt(999), `999n`],
-  ])(`formats %p correctly`, (value, expected) => {
-    expect(format_preview(value)).toBe(expected)
-  })
-
-  it(`truncates long string`, () => {
-    expect(format_preview(`a`.repeat(100), 50)).toBe(`"${`a`.repeat(50)}..."`)
-  })
-
-  it(`formats functions with ƒ prefix`, () => {
-    function named_fn() {}
-    expect(format_preview(named_fn)).toBe(`ƒ named_fn()`)
-    expect(format_preview(() => {})).toBe(`ƒ anonymous()`)
-  })
-
-  it.each([
-    [6.022e23, `6.022e+23`],
-    [1e-10, `1e-10`],
-    [0.000000000001, `1e-12`],
-  ])(`formats scientific number %p as %p`, (value, expected) => {
-    expect(format_preview(value)).toBe(expected)
-  })
-
-  it.each([`日本語テキスト`, `🚀 🎨 🔧`, `∑∏∫∂∇`, `First\nSecond\tThird`, ``, `   `])(
-    `preserves unicode/special string: %p`,
-    (str) => {
-      expect(format_preview(str)).toBe(`"${str}"`)
-    },
+    `Map(2)`,
+  ],
+  [new Set([1, 2, 3]), [1, 2, 3], `Set(3)`],
+  [6.022e23, `6.022e+23`],
+  [1e-10, `1e-10`],
+  [0.000000000001, `1e-12`],
+])(`copies and previews %p`, (value, copied, preview?: string) => {
+  expect(serialize_for_copy(value)).toBe(
+    typeof copied === `string` ? copied : JSON.stringify(copied, null, 2),
   )
+  expect(format_preview(value)).toBe(preview ?? copied)
 })
+
+it(`copies function source and previews its name`, () => {
+  function named_fn() {
+    return 42
+  }
+  expect(serialize_for_copy(named_fn)).toContain(`function named_fn()`)
+  expect(format_preview(named_fn)).toBe(`ƒ named_fn()`)
+  expect(format_preview(() => {})).toBe(`ƒ anonymous()`)
+})
+
+it(`serializes shared and circular references in objects, Maps and Sets`, () => {
+  const obj: Record<string, unknown> = { a: 1 }
+  obj.self = obj
+  for (const value of [obj, new Map([[`circular`, obj]]), new Set([obj])])
+    expect(serialize_for_copy(value)).toContain(`[Circular]`)
+  for (const shared of [{ a: 1 }, obj]) {
+    const copied = JSON.parse(serialize_for_copy({ left: shared, right: shared }))
+    expect(copied).toEqual({
+      left: JSON.parse(serialize_for_copy(shared)),
+      right: JSON.parse(serialize_for_copy(shared)),
+    })
+  }
+})
+
+it(`truncates long previews`, () => {
+  expect(format_preview(`a`.repeat(100), 50)).toBe(`"${`a`.repeat(50)}..."`)
+})
+
+it.each([`日本語テキスト`, `🚀 🎨 🔧`, `∑∏∫∂∇`, `First\nSecond\tThird`, ``, `   `])(
+  `preserves unicode/special strings: %p`,
+  (str) => {
+    expect(format_preview(str)).toBe(`"${str}"`)
+    expect(serialize_for_copy(str)).toBe(str)
+  },
+)
 
 describe(`matches_search`, () => {
   it.each([
@@ -212,6 +178,7 @@ describe(`matches_search`, () => {
 describe(`collect_all_paths`, () => {
   const circular: Record<string, unknown> = { a: 1 }
   circular.self = circular
+  const shared = { nested: { value: 1 } }
   it.each([
     [`string`, `root`, Infinity, []],
     [42, ``, Infinity, []],
@@ -221,6 +188,12 @@ describe(`collect_all_paths`, () => {
     [{ a: { b: { c: { d: 1 } } } }, `root`, 2, [`root`, `root.a`]],
     // the self reference is listed once; its (already seen) children are not walked again
     [circular, `root`, Infinity, [`root`, `root.self`]],
+    [
+      { left: shared, right: shared },
+      ``,
+      Infinity,
+      [`left`, `left.nested`, `right`, `right.nested`],
+    ],
     [
       { map: new Map([[`key`, { nested: true }]]) },
       `root`,
@@ -265,9 +238,13 @@ describe(`find_matching_paths`, () => {
   })
 
   it(`follows sort_keys so match order tracks the rendered order`, () => {
-    const value = { zeta: `hit`, alpha: `hit` }
-    expect(find_matching_paths(value, `hit`)).toEqual([`zeta`, `alpha`])
-    expect(find_matching_paths(value, `hit`, ``, true)).toEqual([`alpha`, `zeta`])
+    const shared = { name: `hit` }
+    const value = { zeta: shared, alpha: shared }
+    expect(find_matching_paths(value, `hit`)).toEqual([`zeta.name`, `alpha.name`])
+    expect(find_matching_paths(value, `hit`, ``, true)).toEqual([
+      `alpha.name`,
+      `zeta.name`,
+    ])
   })
 })
 
@@ -678,19 +655,28 @@ describe(`compute_diff`, () => {
   })
 
   it(`handles multiple changes at different depths`, () => {
+    const shared = { value: 1 }
     const untouched = {
       get value(): never {
         throw new Error(`Unchanged branches should not be traversed`)
       },
     }
     const diff = compute_diff(
-      { a: 1, b: { c: 2, d: 3 }, untouched },
-      { a: 99, b: { c: 2, d: 100, e: 5 }, untouched },
+      { a: 1, b: { c: 2, d: 3 }, left: shared, right: shared, untouched },
+      {
+        a: 99,
+        b: { c: 2, d: 100, e: 5 },
+        left: { value: 2 },
+        right: { value: 3 },
+        untouched,
+      },
     )
     expect([...diff.values()].map(({ path, status }) => [path, status])).toEqual([
       [`a`, `changed`],
       [`b.d`, `changed`],
       [`b.e`, `added`],
+      [`left.value`, `changed`],
+      [`right.value`, `changed`],
     ])
   })
 
@@ -700,5 +686,12 @@ describe(`compute_diff`, () => {
     const diff = compute_diff(obj, { a: 2 })
     expect(diff.get(`a`)?.status).toBe(`changed`)
     expect(diff.get(`self`)?.status).toBe(`removed`)
+    expect([...compute_diff(obj, { a: 1, self: { a: 2 } }).keys()]).toEqual([
+      `self.a`,
+      `self.self`,
+    ])
+    const other: Record<string, unknown> = { a: 2 }
+    other.self = other
+    expect([...compute_diff(obj, other).keys()]).toEqual([`a`])
   })
 })

@@ -2,19 +2,10 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '$lib'
 import { serialize_for_copy } from '$lib/json-tree/utils'
+import { doc_query } from './index'
 import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, it, onTestFinished, test, vi } from 'vite-plus/test'
 
-const doc_query = <ElementType extends Element = HTMLElement>(
-  selector: string,
-  element_type?: new () => ElementType,
-): ElementType => {
-  const node = document.querySelector<ElementType>(selector)
-  if (element_type && !(node instanceof element_type))
-    throw new Error(`Wrong element type: ${selector}`)
-  if (!node) throw new Error(`Missing element ${selector}`)
-  return node
-}
 const keydown = (key: string, init: KeyboardEventInit = {}) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true, ...init })
 const mouse = (type: string, init: MouseEventInit = {}) =>
