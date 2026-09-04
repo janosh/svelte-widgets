@@ -1,11 +1,6 @@
 import * as lib from '$lib'
 import * as attachments from '$lib/attachments'
-import MultiSelect from '$lib/MultiSelect.svelte'
 import { expect, test } from 'vite-plus/test'
-
-test(`named MultiSelect export from index.ts is the component file`, () => {
-  expect(lib.MultiSelect).toBe(MultiSelect)
-})
 
 test(`src/lib/index.ts does not re-export attachments`, () => {
   const attachment_names = Object.keys(attachments)
@@ -15,12 +10,19 @@ test(`src/lib/index.ts does not re-export attachments`, () => {
 })
 
 test(`src/lib/index.ts re-exports all Svelte components`, () => {
-  const components = Object.keys(import.meta.glob(`$lib/*.svelte`)).map((path) =>
-    path.split(`/`).pop()?.split(`.`).shift(),
+  const components = Object.entries(
+    import.meta.glob(
+      [`$lib/*.svelte`, `$lib/code-editor/*.svelte`, `$lib/json-tree/JsonTree.svelte`],
+      { eager: true, import: `default` },
+    ),
+  ).map(
+    ([path, component]) =>
+      [path.slice(path.lastIndexOf(`/`) + 1, -7), component] as const,
   )
-  // an empty glob would make arrayContaining([]) trivially true
-  expect(components).toEqual(expect.arrayContaining([`MultiSelect`, `Toggle`, `Icon`]))
-  expect(components.filter((name) => !(name && name in lib))).toEqual([])
+  expect(components.map(([name]) => name)).toEqual(
+    expect.arrayContaining([`MultiSelect`, `CodeEditor`, `DiffView`, `JsonTree`]),
+  )
+  for (const [name, component] of components) expect(lib).toHaveProperty(name, component)
 })
 
 // Svelte types `class` as ClassValue, so consumers may pass arrays/objects; interpolating

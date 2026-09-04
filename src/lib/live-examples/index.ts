@@ -1,8 +1,5 @@
-// Live examples: ```svelte example blocks become rendered components with highlighting and
-// live preview. From `./create-highlighter` it re-exports types only: the barrel already
-// pulls in `starry_night`, whose top-level await compiles the 34-grammar common bundle, so
-// the factory stays at the `svelte-widgets/live-examples/create-highlighter` subpath rather
-// than costing importers the very thing it avoids.
+// Render ```svelte example blocks with highlighting and live previews.
+// Import create-highlighter from its subpath to avoid this barrel's eager grammar compilation.
 export type { Grammar, Highlighter, StarryNight } from './create-highlighter.ts'
 export { hast_to_html } from './hast.ts'
 export { starry_night, starry_night_highlighter } from './highlighter.ts'

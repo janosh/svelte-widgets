@@ -5,7 +5,6 @@ import remark, {
 import { Buffer } from 'node:buffer'
 import { describe, expect, test } from 'vite-plus/test'
 
-// only the mdast fields this plugin reads, so trees can be written out inline
 interface TestNode {
   type: string
   lang?: string
@@ -31,12 +30,9 @@ const create_file = (filename = `/project/src/test.md`, cwd = `/project`) => ({
   cwd,
 })
 
-const find_script_node = (tree: TestTree): string | undefined => {
-  const node = tree.children.find(
-    (n) => n.type === `html` && n.value?.includes(`<script>`),
-  )
-  return node?.value
-}
+const find_script_node = (tree: TestTree): string | undefined =>
+  tree.children.find((node) => node.type === `html` && node.value?.includes(`<script>`))
+    ?.value
 
 const get_example_value = (tree: TestTree): string => {
   const node = tree.children[0]
@@ -72,8 +68,7 @@ describe(`code block detection`, () => {
       const value = get_example_value(tree)
       expect(value).toContain(`highlight-${lang}`)
       expect(value).not.toContain(EXAMPLE_COMPONENT_PREFIX)
-      // code-only output is raw HTML with no component scope, so the lang-label needs an
-      // inline out-of-flow position; pre is white-space: pre, so in-flow indents line 1
+      // An in-flow label would indent the first line of preformatted code.
       expect(value).toMatch(/<span class="lang-label" style="[^"]*position:absolute/)
       expect(value).toContain(
         `<pre class="highlight highlight-${lang}" style="position:relative">`,
@@ -95,7 +90,7 @@ describe(`meta parsing`, () => {
     [`example count=-1.5`, `"count":-1.5`],
     [`example collapsible=true`, `"collapsible":true`],
     [`example tags=[1,2,3]`, `"tags":[1,2,3]`],
-    [`example title="say \\"hello\\""`, `say`],
+    [`example title="say \\"hello\\""`, `"title":"say \\"hello\\""`],
   ])(`parses meta %s containing %s`, (meta, expected) => {
     const tree = create_tree([create_code_node(`svelte`, `<div>Test</div>`, meta)])
     remark()(tree, create_file())
@@ -159,16 +154,21 @@ describe(`wrapper component handling`, () => {
   })
 })
 
-describe(`double-colon delimiter for named exports`, () => {
+describe(`wrapper import paths`, () => {
   test.each([
     [`C:/path/to/wrapper.svelte`, `import Example_0 from "C:/path/to/wrapper.svelte"`],
     [
       `https://example.com/wrapper.svelte`,
       `import Example_0 from "https://example.com/wrapper.svelte"`,
     ],
-  ])(`handles path with colon %s as default import`, (wrapper, expected) => {
+    [[`widgets`, `CodeExample`], `import { CodeExample as Example_0 } from "widgets"`],
+  ])(`imports wrapper %j`, (wrapper, expected) => {
     const tree = create_tree([
-      create_code_node(`svelte`, `<div>Test</div>`, `example Wrapper="${wrapper}"`),
+      create_code_node(
+        `svelte`,
+        `<div>Test</div>`,
+        `example Wrapper=${JSON.stringify(wrapper)}`,
+      ),
     ])
     remark()(tree, create_file())
     expect(find_script_node(tree)).toContain(expected)
@@ -188,55 +188,31 @@ describe(`CSR mode`, () => {
   })
 })
 
-const hide_option_cases = [
-  {
-    option: `hide_script`,
-    code: `<script>let x = 1</script><div>Test</div>`,
-    hidden: `let x = 1`,
-    visible: `Test`,
-  },
-  {
-    option: `hide_style`,
-    code: `<div>Test</div><style>div { color: red }</style>`,
-    hidden: `color: red`,
-    visible: `Test`,
-  },
-]
-
-describe(`hide_script and hide_style options`, () => {
-  test.each([
-    { ...hide_option_cases[0], source: `meta` },
-    { ...hide_option_cases[1], source: `defaults` },
-  ])(`$option via $source removes block`, ({ option, code, hidden, visible, source }) => {
-    const meta = source === `meta` ? `example ${option}` : `example`
-    const options = source === `defaults` ? { defaults: { [option]: true } } : undefined
-    const tree = create_tree([create_code_node(`svelte`, code, meta)])
-    remark(options)(tree, create_file())
-    const value = get_example_value(tree)
-    expect(value).not.toContain(hidden)
-    if (visible) expect(value).toContain(visible)
-  })
-
-  test(`hide_script and hide_style combined strips both blocks`, () => {
-    const code = `<script>let x = 1</script><div>Test</div><style>div { color: red }</style>`
-    const tree = create_tree([
-      create_code_node(`svelte`, code, `example hide_script hide_style`),
-    ])
-    remark()(tree, create_file())
-    const value = get_example_value(tree)
-    expect(value).not.toContain(`let x = 1`)
-    expect(value).not.toContain(`color: red`)
-    expect(value).toContain(`Test`)
-  })
-
-  test(`preserves script and style blocks when options are not set`, () => {
-    const code = `<script>let x = 1</script><div>Test</div><style>div { color: red }</style>`
-    const tree = create_tree([create_code_node(`svelte`, code, `example`)])
-    remark()(tree, create_file())
-    const value = get_example_value(tree)
-    expect(value).toContain(`let x`)
-    expect(value).toContain(`color`)
-  })
+test.each([
+  [
+    `script via meta`,
+    `hide_script`,
+    {},
+    `<div>Test</div><style>div { color: red }</style>`,
+  ],
+  [
+    `style via defaults`,
+    ``,
+    { hide_style: true },
+    `<script>let x = 1</script><div>Test</div>`,
+  ],
+  [`both blocks`, `hide_script hide_style`, {}, `<div>Test</div>`],
+  [
+    `neither block`,
+    ``,
+    {},
+    `<script>let x = 1</script><div>Test</div><style>div { color: red }</style>`,
+  ],
+] as const)(`hide options: %s`, (_label, meta, defaults, expected) => {
+  const code = `<script>let x = 1</script><div>Test</div><style>div { color: red }</style>`
+  const tree = create_tree([create_code_node(`svelte`, code, `example ${meta}`)])
+  remark({ defaults })(tree, create_file())
+  expect(get_example_value(tree)).toContain(`src={${JSON.stringify(expected)}}`)
 })
 
 describe(`script block injection`, () => {
@@ -271,7 +247,6 @@ describe(`script block injection`, () => {
       create_code_node(`svelte`, `<div>Test</div>`, `example`),
     ])
     remark()(tree, create_file())
-    // imports go into a fresh script block, never the decoy node
     expect(tree.children[0].value).toBe(decoy)
     const script = tree.children.find((node) => node.value?.startsWith(`<script>`))
     expect(script?.value).toContain(`import Example_0`)
@@ -280,7 +255,7 @@ describe(`script block injection`, () => {
   test(`leaves tree untouched when file contains no examples`, () => {
     const tree = create_tree([{ type: `html`, value: `<p>No examples here</p>` }])
     remark()(tree, create_file())
-    expect(tree.children).toHaveLength(1) // no empty <script> block appended
+    expect(tree.children).toEqual([{ type: `html`, value: `<p>No examples here</p>` }])
   })
 })
 
@@ -307,7 +282,6 @@ describe(`multiple examples`, () => {
     ])
     remark()(tree, create_file())
     const script = find_script_node(tree) ?? ``
-    // Only 2 live examples (svelte), ts doesn't count
     expect(script).toContain(`${EXAMPLE_COMPONENT_PREFIX}0`)
     expect(script).toContain(`${EXAMPLE_COMPONENT_PREFIX}1`)
     expect(script).not.toContain(`${EXAMPLE_COMPONENT_PREFIX}2`)
@@ -340,13 +314,6 @@ describe(`output handling`, () => {
     expect(get_example_value(tree)).toContain(expected)
   })
 
-  test(`includes base64 encoded source`, () => {
-    const code = `<div>Hello World</div>`
-    const tree = create_tree([create_code_node(`svelte`, code, `example`)])
-    remark()(tree, create_file())
-    expect(get_example_value(tree)).toContain(Buffer.from(code).toString(`base64`))
-  })
-
   test.each([
     `const fn = () => \`hello \${1 + 1}\``,
     `<div>plain</div>`,
@@ -356,9 +323,12 @@ describe(`output handling`, () => {
   ])(`src prop round-trips %s without double-escaping`, (code) => {
     const tree = create_tree([create_code_node(`svelte`, code, `example`)])
     remark()(tree, create_file())
-    // extract the src={...} JS string literal and parse it as Svelte's compiler would
+    // Parse the generated string literal to catch double escaping.
     const match = /\n\s+src=\{(?<src>".*?[^\\]")\}/su.exec(get_example_value(tree))
     expect(match).not.toBeNull()
     expect(JSON.parse(match?.groups?.src ?? ``)).toBe(code)
+    expect(get_example_value(tree)).toContain(
+      `__live_example_src={"${Buffer.from(code).toString(`base64`)}"}`,
+    )
   })
 })

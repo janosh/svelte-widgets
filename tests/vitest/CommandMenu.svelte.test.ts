@@ -552,7 +552,7 @@ test(`selects the first enabled action and preserves pointer selection across gr
   const beta_option = [...document.querySelectorAll(`li[role=option]`)].find((option) =>
     option.textContent?.includes(`Beta`),
   )
-  beta_option?.dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
+  beta_option?.dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
   await tick()
   expect(doc_query(`li.active`).textContent).toContain(`Beta`)
 

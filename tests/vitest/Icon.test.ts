@@ -4,7 +4,6 @@ import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
-import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
@@ -17,34 +16,27 @@ test.each([
   expect(escape_template_literal(input)).toBe(expected)
 })
 
-// the hand-edited manifest drifts across merges; the generator catches duplicate ids and
-// custom.ts clashes, but ordering has no other guard
+// The generator validates duplicate IDs; these checks cover manifest naming and order.
 describe(`icons-manifest`, () => {
   const source = readFileSync(
     `${import.meta.dirname}/../../scripts/icons-manifest.ts`,
     `utf8`,
   )
-  // a section header is a bare lowercase tag; wordier notes at the same indent continue
-  // the section — reading one as a header would restart the run and hide later entries
+  // Bare lowercase tags start sections; longer comments must not reset ordering.
   const sections: string[][] = []
   for (const line of source.split(`\n`)) {
     if (/^ {2}\/\/ [a-z][a-z\d &:]*$/u.test(line)) sections.push([])
     const name = /^ {2}(?<name>\w+): `/u.exec(line)?.groups?.name
     if (!name) continue
     const section = sections.at(-1)
-    // Dropping it instead would exempt the entry from both checks below
     if (!section) throw new Error(`icon \`${name}\` precedes the first section header`)
     section.push(name)
   }
   const names = sections.flat()
 
-  test(`finds icon names in the manifest`, () => {
-    // an empty parse satisfies both checks below, so a reformat breaking either regex
-    // would quietly retire them rather than fail
+  test(`parses nonempty manifest sections in alphabetical order`, () => {
     expect(names.length).toBeGreaterThan(0)
-  })
-
-  test(`lists every section alphabetically`, () => {
+    expect(sections.every((section) => section.length > 0)).toBe(true)
     const out_of_order = sections.flatMap((section) =>
       section.filter(
         (name, idx) => idx > 0 && section[idx - 1].toLowerCase() > name.toLowerCase(),
@@ -62,11 +54,9 @@ describe(`icons-manifest`, () => {
 })
 
 describe(`Icon`, () => {
-  // every entry, not a sample: the set is merged from another repo and multi-shape markup
-  // renders as nothing unless Icon spots it; offenders collected so a bad merge names all
+  // Check every glyph and report all malformed entries in one failure.
   test(`every icon renders its viewBox, fill, stroke and shape`, () => {
     const offenders: string[] = []
-    // annotated because the inferred literal types drop the optional keys entirely
     for (const [name, entry] of Object.entries<IconData>(icons)) {
       document.body.innerHTML = ``
       mount(Icon, { target: document.body, props: { icon: entry } })
@@ -104,7 +94,7 @@ describe(`Icon`, () => {
     const shapes = Object.values<IconData>(icons).flatMap(({ markup }) =>
       markup === undefined ? [] : [markup],
     )
-    expect(new SvelteSet(shapes).size).toBe(shapes.length)
+    expect(new Set(shapes).size).toBe(shapes.length)
   })
 
   test(`applies attributes via rest props`, () => {

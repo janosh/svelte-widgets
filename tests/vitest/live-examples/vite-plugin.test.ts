@@ -62,9 +62,14 @@ const create_mock_server = (hot_send = vi.fn()) => ({
 
 describe(`plugin initialization`, () => {
   test(`returns two plugins: resolve (pre) and main`, () => {
-    const plugin = get_plugin()
-    expect(plugin.name).toBe(`live-examples-plugin`)
-    expect(plugin.enforce).toBe(`pre`)
+    expect(vite_plugin()).toMatchObject([
+      { name: `live-examples-resolve`, enforce: `pre`, resolveId: expect.any(Function) },
+      {
+        name: `live-examples-plugin`,
+        load: expect.any(Function),
+        transform: expect.any(Function),
+      },
+    ])
   })
 })
 
@@ -175,16 +180,7 @@ describe(`transform`, () => {
 
   test(`ignores non-string __live_example_src properties`, () => {
     const code = `const props = { __live_example_src: 123, other: "value" }`
-    const result_code = transform_code(plugin, ctx, code, `/file.md`)
-    expect(result_code).toContain(`__live_example_src: 123`)
-    expect(result_code).toContain(`other`)
-  })
-
-  test(`extracts __live_example_src while preserving other properties`, () => {
-    const code = `const props = { __live_example_src: "${to_base64(`<div>Hello</div>`)}", other: "value" }`
-    const result_code = transform_code(plugin, ctx, code, `/file.md`)
-    expect(result_code).not.toContain(`__live_example_src`)
-    expect(result_code).toContain(`other`)
+    expect(transform_code(plugin, ctx, code, `/file.md`)).toBe(code)
   })
 
   test(`applies multiple edits in correct order`, () => {
@@ -194,10 +190,11 @@ describe(`transform`, () => {
       const c = { other: "value" };
     `
     const result_code = transform_code(plugin, ctx, code, `/file.md`)
-    expect(result_code).not.toContain(`__live_example_src`)
-    expect(result_code).toContain(`x: 1`)
-    expect(result_code).toContain(`y: 2`)
-    expect(result_code).toContain(`other`)
+    expect(result_code).toBe(`
+      const a = { x: 1 };
+      const b = { y: 2 };
+      const c = { other: "value" };
+    `)
   })
 
   test(`handles multiple static and dynamic imports`, () => {
@@ -213,8 +210,7 @@ describe(`transform`, () => {
     }
   })
 
-  // The two indices line up only because non-live examples generate neither a
-  // __live_example_src prop nor an import, so neither sequence ever gains a gap.
+  // Only live examples contribute source properties and imports.
   test(`props and imports have matching indices and virtual files are loadable`, () => {
     const index_plugin = get_plugin()
     const index_ctx = create_mock_context()
@@ -276,11 +272,9 @@ describe(`pending_hmr_file lifecycle`, () => {
     transform(plugin, ctx, make_code(`<div>V1</div>`), id)
     plugin.handleHotUpdate?.({ file: id, server, modules: [] })
 
-    // re-transform with identical examples — fix clears pending_hmr_file
     transform(plugin, ctx, make_code(`<div>V1</div>`), id)
 
-    // examples change without a preceding handleHotUpdate: a stale pending_hmr_file
-    // used to trigger a spurious full-reload here
+    // A later non-HMR transform must not reuse the previous update's reload flag.
     transform(plugin, ctx, make_code(`<div>V2</div>`), id)
     vi.advanceTimersByTime(500)
 

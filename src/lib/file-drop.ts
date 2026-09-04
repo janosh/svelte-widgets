@@ -49,11 +49,8 @@ const read_all_entries = async (
   }
 }
 
-// The entry API resolves symlinks, so a directory linked to an ancestor recurses forever.
-// Both caps are needed: depth stops a single chain, but two sibling links to a common
-// ancestor branch as fast as they descend (300k reads by depth 17), which only a
-// whole-expansion budget bounds. Reported, not silently truncated — losing half a drop's
-// files quietly is worse than failing.
+// Entry traversal can follow symlink cycles. Cap depth for chains and total reads for
+// branching cycles; report overflow rather than silently dropping files.
 const MAX_DEPTH = 32
 const MAX_DIRS = 20_000
 

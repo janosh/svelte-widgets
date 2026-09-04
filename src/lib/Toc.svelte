@@ -111,10 +111,7 @@
     openButtonIconProps?: SVGAttributes<SVGSVGElement>
   } = $props()
 
-  // a list glyph, not a burger: Nav owns the burger, and two identical pinned glyphs say
-  // nothing about which opens what. The list viewBox is cropped to its path bounds so it
-  // fills the button; the X keeps a roomier box so it stays smaller than Nav's ~17.9px X.
-  // Stroke widths are the ones landing on Nav's 0.18rem bars once scaled to the button.
+  // Distinguish the TOC from Nav's burger; cropped viewBoxes align their visual weight.
   const TOGGLE_ICONS = {
     closed: {
       view_box: `1.9 3.9 16.2 12.2`,
@@ -616,10 +613,7 @@
       set_open(false, `escape`)
       return
     }
-    // the list navigation below preventDefaults, which cancelled the activation of whatever
-    // else held focus: every page button went dead to Enter while the panel was open, and
-    // arrows stopped moving the caret in a text field. Escape and Tab are handled above, so
-    // the panel still closes from anywhere.
+    // Navigation must not consume keys owned by outside controls; Escape/Tab are handled above.
     const focused = document.activeElement
     const focus_is_idle =
       !focused || focused === document.body || focused === document.documentElement

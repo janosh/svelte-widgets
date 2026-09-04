@@ -24,8 +24,7 @@ describe(`starry_night_highlighter`, () => {
     vi.resetModules()
   })
 
-  // one row per resolution path: the separately shipped svelte grammar, one from the
-  // common bundle, and a flag whose punctuation must survive into the CSS class
+  // Cover custom grammar, common grammar, and punctuation in language flags.
   test.each([
     [`svelte`, `<div>test</div>`],
     [`ts`, `const x: number = 1`],
@@ -39,32 +38,27 @@ describe(`starry_night_highlighter`, () => {
         `su`,
       ),
     )
-    // token spans, not just the wrapper
     expect(result).toContain(`<span class="pl-`)
   })
 
-  describe(`case-insensitive language matching`, () => {
-    test.each([`TS`, `TypeScript`, `JAVASCRIPT`, `Svelte`])(
-      `normalizes %s to lowercase`,
-      (lang) => {
-        const result = starry_night_highlighter(`const x = 1`, lang)
-        expect(result).toMatch(/^<pre class="highlight highlight-[a-z]+"><code>/u)
-        expect(result).not.toContain(lang)
-      },
-    )
-  })
+  test.each([`TS`, `TypeScript`, `JAVASCRIPT`, `Svelte`])(
+    `normalizes %s to lowercase`,
+    (lang) => {
+      const result = starry_night_highlighter(`const x = 1`, lang)
+      expect(result).toContain(`<pre class="highlight highlight-${lang.toLowerCase()}">`)
+      expect(result).toBe(starry_night_highlighter(`const x = 1`, lang.toLowerCase()))
+    },
+  )
 
-  describe(`unsupported languages`, () => {
-    test.each([`unknown`, `cobol`, `fortran`, null, undefined])(
-      `returns escaped code for lang=%s`,
-      (lang) => {
-        const result = starry_night_highlighter(`test`, lang)
-        expect(result).toBe(`<pre class="highlight"><code>test</code></pre>`)
-      },
-    )
-  })
+  test.each([`unknown`, `cobol`, `fortran`, null, undefined])(
+    `returns escaped code for lang=%s`,
+    (lang) => {
+      expect(starry_night_highlighter(`<a>{x}&</a>`, lang)).toBe(
+        `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&amp;&lt;/a&gt;</code></pre>`,
+      )
+    },
+  )
 
-  // pin the whole string: a substring check would pass with an unescaped tail
   test.each([
     [`HTML special characters`, `<div>&</div>`, `&lt;div&gt;&amp;&lt;/div&gt;`],
     [`braces`, `{#if x}{/if}`, `&#123;#if x&#125;&#123;/if&#125;`],
@@ -74,13 +68,12 @@ describe(`starry_night_highlighter`, () => {
     )
   })
 
-  // highlighted output is broken up by token spans, so only the braces can be pinned
   test(`escapes braces in highlighted code`, () => {
     const result = starry_night_highlighter(`{#if x}{/if}`, `svelte`)
 
     expect(result).toContain(`&#123;`)
     expect(result).toContain(`&#125;`)
-    expect(result).not.toMatch(/[{}]/u) // no brace survives for mdsvex to read
+    expect(result).not.toMatch(/[{}]/u)
   })
 })
 
@@ -99,10 +92,8 @@ describe(`create_highlighter`, () => {
   test(`registers only the grammars it was given and caches the instance`, async () => {
     const instance = await custom.ready()
     expect(await custom.ready()).toBe(instance)
-    // a second factory builds its own instance rather than sharing a module-level one
     expect(await create_highlighter([grammar_typst]).ready()).not.toBe(instance)
     expect(instance.flagToScope(`typ`)).toBe(`source.typst`)
-    // would resolve if the factory silently fell back to the common bundle
     for (const flag of [`py`, `ts`, `svelte`]) {
       expect(instance.flagToScope(flag)).toBeUndefined()
     }
@@ -112,8 +103,7 @@ describe(`create_highlighter`, () => {
     expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
       `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
     )
-    // unknown language falls back to escaped plain text either way — unwrapped output
-    // goes into the same mdsvex markup, where `{` would start a Svelte expression
+    // Unknown-language output must still be safe to embed in Svelte markup.
     expect(await custom.highlight(`<a>{x}</a>`, `py`)).toBe(
       `&lt;a&gt;&#123;x&#125;&lt;/a&gt;`,
     )
@@ -122,15 +112,11 @@ describe(`create_highlighter`, () => {
     )
   })
 
-  // starry-night's index re-exports the 34-grammar `common` bundle with no separate
-  // subpath, so one mention pins ~1.3 MB into every consumer bringing its own grammars
+  // Importing `common` defeats the custom grammar factory's bundle savings.
   test(`never references starry-night's common bundle`, async () => {
     const source = (await import(`$lib/live-examples/create-highlighter.ts?raw`)).default
-    // comments stripped: this file explains the rule in prose, which would match too
-    const code = source
-      .replaceAll(/\/\*[\s\S]*?\*\//gu, ``)
-      // marker to line end only: dropping whole lines would hide trailing-comment code
-      .replaceAll(/\/\/.*$/gmu, ``)
+    // Ignore prose, but preserve code preceding trailing comments.
+    const code = source.replaceAll(/\/\*[\s\S]*?\*\//gu, ``).replaceAll(/\/\/.*$/gmu, ``)
     expect(code).toContain(`createStarryNight`)
     expect(code).not.toContain(`common`)
   })
@@ -143,12 +129,11 @@ describe(`create_highlighter`, () => {
       throw new Error(`Cannot find package '@wooorm/starry-night'`)
     })
 
-    // importing the module must not touch the peer dependency, unlike highlighter.ts
     const { create_highlighter: create } = await import(
       `$lib/live-examples/create-highlighter`
     )
     const highlighter = create([grammar_typst])
-    // a timer flushes every pending microtask, so an eagerly started load would show up
+    // Flush pending imports to detect eager peer loading.
     await new Promise((resolve) => void setTimeout(resolve, 0))
     expect(load_count).toBe(0)
 

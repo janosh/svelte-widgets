@@ -64,10 +64,8 @@ export function get_child_count(value: unknown): number {
   return get_value_type(value) === `object` ? Object.keys(value as object).length : 0
 }
 
-// The single definition of what a node's children are, shared by rendering, path lookup,
-// search, collapse bookkeeping and diffing so they can never disagree. Map entries are
-// wrapped as { key, value } objects under numeric indices so non-string keys stay
-// expandable; Set members get numeric indices.
+// Shared traversal: Map entries become indexed { key, value } objects so non-string keys
+// remain expandable; Set members use numeric indices.
 export function get_children(value: unknown, sort_keys = false): JsonChild[] {
   const type = get_value_type(value)
   if (type === `array`)
@@ -89,10 +87,8 @@ export function get_children(value: unknown, sort_keys = false): JsonChild[] {
   return []
 }
 
-// Segments of a tree path relative to the root value. The root node's path is the verbatim
-// root_label (JsonBrowser passes filenames like `data.json`), which parse_path would split
-// into several segments, so the label is stripped textually before parsing. A path that
-// merely starts with the label text (`data.json` vs `data.jsonl`) is left alone.
+// Strip the verbatim root label before parsing: labels such as `data.json` can contain dots.
+// Require a segment boundary so `data.json` does not strip a prefix from `data.jsonl`.
 export function relative_path_segments(
   path: string,
   root_label?: string,

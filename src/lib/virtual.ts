@@ -1,13 +1,8 @@
 import { clamp } from './utils'
 
-// Index window of uniformly sized items intersecting a scrolled viewport, padded by
-// `overscan` items on each side. Shared by HeatmapTable's row virtualisation and
-// HeatmapMatrix's track windowing. `scroll` is measured from the first item, so it may be
-// negative while a leading label track fills the viewport (nothing renders then), and it may
-// overshoot the content after data shrinks (the browser only clamps scrollTop after the next
-// layout), in which case the window settles on the last page instead of past the end.
-// `min_window` keeps at least that many items rendered, which is also the render count
-// while the viewport is unmeasured (SSR, first paint).
+// Visible [start, end) indices for uniform items, padded by `overscan` on each side.
+// Scroll is relative to the first item; negative offsets allow leading content, and stale
+// offsets after data shrinks clamp to the last page. `min_window` also covers unmeasured views.
 export function virtual_window({
   scroll,
   viewport,

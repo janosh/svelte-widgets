@@ -266,9 +266,7 @@ const merge_typed_records = (
 export const create_editor_model = (init: EditorModelInit): EditorModel => {
   const had_bom = init.text.startsWith(BOM)
   let root = rope_from(editor_text(init.text))
-  // Majority wins: a single CRLF inside an otherwise-LF file (a string literal, a partial
-  // conversion) used to flip the whole document to CRLF on save, producing a diff touching
-  // every line.
+  // Preserve the majority line ending so mixed files do not get a whole-file diff on save.
   // Normalization removes one code unit per CRLF and the optional BOM.
   const crlf_count = init.text.length - rope_length(root) - Number(had_bom)
   const eol = crlf_count * 2 > rope_breaks(root) ? `crlf` : `lf`

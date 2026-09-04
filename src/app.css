@@ -11,8 +11,7 @@
   --text: light-dark(#222, #ccc);
   --text-muted: light-dark(#666, #999);
   --surface: light-dark(#fff, rgba(255, 255, 255, 0.05));
-  /* a step darker than --bg so the footer reads as its own band, and neutral (equal
-     channels) so it does not fight the cornflower --accent sitting on top */
+  /* Neutral footer band, darker than --bg. */
   --footer-bg: light-dark(#ebebeb, #0b0b0b);
   --border: light-dark(#ddd, rgba(255, 255, 255, 0.15));
   --pre-bg: light-dark(rgba(0, 0, 20, 0.03), rgba(0, 0, 0, 0.3));
@@ -45,9 +44,7 @@ body {
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
-  /* prose here is full of bare identifiers (`duplicateOptionMsg/noMatchingOptionsMsg`) that
-     offer no break opportunity and used to spill off a phone. break-word only splits a word
-     that cannot fit a line on its own, so it leaves intrinsic sizing alone. */
+  /* Wrap oversized identifiers without changing intrinsic sizing. */
   overflow-wrap: break-word;
   min-height: 100vh;
   box-sizing: border-box;
@@ -108,16 +105,12 @@ body > div {
     color: inherit; /* Toc uses :where(); else global `a` paints every item accent */
   }
   aside.toc.mobile {
-    /* the aside is position: fixed, so it is already out of flow and takes no grid track.
-       It used to be collapsed to 0x0 here, which also collapsed the panel it now lays out.
-       Toc floors its own mobile min-width now, so only the margin is still ours to reset. */
+    /* The fixed mobile TOC owns its dimensions and occupies no grid track. */
     margin: 0;
   }
   main {
     margin: 0;
-    /* grid items floor at min-content, so one wide code block or table stretched `main` past
-       the viewport and scrolled the whole page sideways on a phone. Code scrolls inside its
-       own `pre code` instead. */
+    /* Keep wide tables/code from expanding the grid beyond the viewport. */
     min-width: 0;
   }
 }
@@ -148,9 +141,7 @@ code {
   border-radius: 3pt;
   background: var(--surface);
   font-size: 1.1em;
-  /* an identifier like `flash_clicked_headings_for_ms` has no break opportunity, so inline
-     code used to set the min-content width of its line and scroll a phone sideways.
-     `pre` is unaffected: white-space: pre offers no soft wrap opportunities either way. */
+  /* Break long inline identifiers; white-space: pre still prevents wrapping code blocks. */
   overflow-wrap: anywhere;
 }
 pre {

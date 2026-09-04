@@ -114,12 +114,9 @@ export const float =
     }
   }
 
-// Teleport an element into `target` and put it back on teardown, marking where it
-// belongs with a comment node so the original position survives siblings coming and
-// going. Lets a surface escape an ancestor that would clip it (`overflow: hidden`) or
-// trap its `position: fixed` (any `transform`), and lets a component offer its chrome
-// for placement in a host's toolbar without duplicating the markup.
-// Pairs with `float`: portal moves an element, float places it.
+// Move into `target`; a comment anchor preserves the original position for teardown.
+// Use to escape clipping/transformed ancestors or place controls in a host toolbar.
+// Pair with `float` for positioning.
 export const portal =
   (target: Element | null | undefined): Attachment =>
   (node: Element): (() => void) | undefined => {
@@ -131,8 +128,7 @@ export const portal =
       // Svelte removes a destroyed block's nodes before running teardown, so a node no
       // longer in the target must not be put back: its home is still live markup.
       if (node.parentNode !== target) anchor.remove()
-      // Original parent already gone: replaceWith would be a no-op and strand the
-      // node inside the target, outliving the markup that owns it.
+      // Restore at a surviving anchor, otherwise remove the orphaned node.
       else if (anchor.parentNode) anchor.replaceWith(node)
       else node.remove()
     }

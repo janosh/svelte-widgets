@@ -34,10 +34,8 @@
     // gets. The pixel clamps below re-apply against the measured container on every resize
     first_px?: number
     'aria-label'?: string
-    // Pixel clamps so a narrow container can't squeeze a pane below a usable size: min_px/max_px
-    // bound the first pane, second_min_px reserves room for the second. In ratio mode they
-    // tighten the [15%, 85%] clamps. They need the container's measured size, so they're skipped
-    // until layout (ratio mode) or only min_px/max_px apply (pixel mode)
+    // Pixel bounds tighten ratio bounds too; second_min_px reserves space for the second pane.
+    // Before measurement, only pixel mode's min_px/max_px apply.
     min_px?: number
     max_px?: number
     second_min_px?: number

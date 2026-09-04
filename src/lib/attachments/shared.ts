@@ -5,11 +5,10 @@ export const css_px = (css_length: string): number => {
   return trimmed ? Number(trimmed.replace(/px$/, ``)) : NaN
 }
 
-// Capture on `target` so a pointer over an iframe keeps reporting; window listeners still
-// get the bubbled moves. `lostpointercapture` is target-only — end there too. pointerId
-// filters a second finger; pointercancel ends like release.
 export const is_primary_press = (event: PointerEvent) =>
   event.button === 0 && event.isPrimary
+// Capture keeps moves reporting over iframes; lostpointercapture only fires on the target.
+// Filter other pointers and end on release, cancellation or capture loss.
 export const follow_pointer = (
   target: HTMLElement,
   pointer_id: number,
@@ -42,10 +41,7 @@ export const follow_pointer = (
   return stop
 }
 
-// Layered keys: only the innermost surface hears one, so Escape closes a dropdown inside a
-// modal and leaves the modal standing, and a dialog opened from a dialog owns Tab. Layers
-// register in attach order (nesting order in practice), in the capture phase so a
-// stopPropagation elsewhere cannot suppress them.
+// Offer keys newest-first until a layer handles them. Capture runs before descendant handlers.
 type KeyLayer = (event: KeyboardEvent) => boolean
 
 const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
@@ -67,8 +63,8 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
   }
 }
 
-// Registers on the shared LIFO Escape stack, returning an unregister. Only the latest
-// handler runs; already-handled and IME-composition events are skipped.
+// Register an Escape handler; return true to consume, false to try the next layer.
+// Returns an unregister function. Skip prevented events and IME composition.
 export const register_escape_layer = key_layer_stack(
   (event) => event.key === `Escape` && !event.isComposing,
 )

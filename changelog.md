@@ -1,5 +1,22 @@
 # Changelog
 
+## [v1.7.0](https://github.com/janosh/svelte-widgets/compare/v1.6.1...v1.7.0)
+
+> 4 September 2026
+
+- **Breaking:** `ActionButton` and `CopyButton` now take partial, text-only `labels` maps and separate `icons` maps; replace `labels={{ ready: { text, icon } }}` with `labels={{ ready: text }}` and `icons={{ ready: icon }}`. Rename `Nav.labels` to `route_labels` for route names; `labels` now customizes built-in interface text [`#452`](https://github.com/janosh/svelte-widgets/pull/452)
+- **Breaking:** `Nav` dropdowns open on click, tap or keyboard activation instead of hover; remove the retired `dropdown_cooldown_ms` prop. Rebuild mobile submenus and isolate keyboard focus between multiple navigation instances [`#453`](https://github.com/janosh/svelte-widgets/pull/453)
+- Add `SplitPane` with horizontal/vertical layouts, ratio or pixel sizing, size bounds, collapse controls, pointer and keyboard resizing, and RTL support [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Add `FileInput` with file selection and drop handling, type/size/count validation, abortable processing and remove/retry/cancel controls; add `Progress` and `TaskStatus` for determinate or indeterminate progress and task feedback [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Add `VirtualList` for fixed-height windowed rendering and the headless `virtual_window` helper at `svelte-widgets/virtual`; add `TreeView` with lazy loading, bindable expansion/selection and keyboard navigation [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Add `JsonTree` with search, folding, copying, export, inline editing and diffs, including cycle-safe objects, Maps and Sets; expose its types and helpers through `svelte-widgets/json-tree`, `/json-tree/utils` and `/json-tree/path` [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Extend `NumberRangeInput` with editable drafts, configurable empty-value and commit behavior, `oncommit`, and separate `number_props`/`range_props`; invalid drafts retain the committed value and missing schema bounds fail explicitly [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Add partial `labels` overrides for built-in widget text, including accessibility announcements, with typed defaults exported from `svelte-widgets/labels` [`#452`](https://github.com/janosh/svelte-widgets/pull/452)
+- Fix Unicode search offsets, reuse `MultiSelect` filtering and selection lookups, cache table sort values and batch global copy-button scans; harden grouped selection, duplicate option identities and keyboard-to-pointer navigation [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Fix tooltip arrow centering and delayed opening across child elements, bordered scrollbar detection, draggable margins and pane positioning, table-of-contents centering and queued toast deadlines [`#450`](https://github.com/janosh/svelte-widgets/pull/450)
+- Fix editor token invalidation, native history handling and line-ending scans; clear stale `ActionButton` results on reset and report the content actually copied when clipboard operations finish asynchronously [`#450`](https://github.com/janosh/svelte-widgets/pull/450) [`#454`](https://github.com/janosh/svelte-widgets/pull/454)
+- Refresh stale implementation comments, fold duplicate tests and strengthen checks for component exports, highlighting, disabled controls and live-example transformations
+
 ## [v1.6.1](https://github.com/janosh/svelte-widgets/compare/v1.6.0...v1.6.1)
 
 > 25 August 2026

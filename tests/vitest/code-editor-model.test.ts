@@ -270,8 +270,7 @@ test.skipIf(!process.env.RUN_LARGE_EDITOR_TESTS)(
     expect(replace_ms).toBeLessThan(250)
   },
 )
-// A lone CRLF in an otherwise-LF file used to flip the whole document to CRLF on save,
-// producing a diff that touched every line.
+// Mixed line endings use the majority style to avoid rewriting every line on save.
 test.each([
   [`one CRLF among many LFs stays lf`, `a\nb\r\nc\nd\ne\n`, `lf`],
   [`mostly CRLF stays crlf`, `a\r\nb\r\nc\nd\r\n`, `crlf`],
@@ -285,7 +284,6 @@ test.each([
 ])(`%s`, (_case, text, expected_eol) => {
   const model = create_editor_model({ uri: `memory:eol`, text })
   expect(model.eol).toBe(expected_eol)
-  // Save consistently uses the chosen newline style, including for mixed input.
   const normalized = text.replaceAll(/\r\n?/g, `\n`)
   expect(model.disk_text()).toBe(
     expected_eol === `lf` ? normalized : normalized.replaceAll(`\n`, `\r\n`),

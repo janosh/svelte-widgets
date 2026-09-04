@@ -2,15 +2,9 @@
 //
 //   export default { ...make_config({ fmt: { printWidth: 95 } }), plugins: [sveltekit()] }
 //
-// Sections merge over the defaults — lint's object-valued members a second level down,
-// so retuning one rule or staged glob restates nothing else, while its arrays replace.
-//
-// Shapes are spelled out rather than reused from vite-plus's UserConfig/OxlintConfig (a test
-// keeps that import out): those originate in `oxlint`, so a consumer on a different vite-plus
-// has a second copy, and comparing the two exhausts TS's stack depth when this config is
-// spread into their `defineConfig`. Hence also literal unions and no index signature —
-// oxlint's names are unions a widened `string` cannot satisfy, and an unlisted `unknown`
-// option satisfies nothing. Extra options belong in the consumer's own literal.
+// Merge sections and lint's object-valued members; replace arrays.
+// Structural types avoid TS stack overflow when consumers use another vite-plus/oxlint version.
+// Literal unions preserve compatibility; extra options belong in the consumer's config.
 type Severity = `error` | `warn` | `off`
 // a rule is a severity, or a severity plus its options
 type Rules = Record<string, Severity | [Severity, ...unknown[]]>

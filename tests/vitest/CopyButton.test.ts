@@ -487,11 +487,14 @@ test.each([`button`, `a`])(
   },
 )
 
-// these defaults used to live in a local const callers could neither import nor type off
-test(`COPY_BUTTON_LABELS is the exported default record, and partials merge over it`, () => {
+test(`partial labels retain the exported icon-only success default`, async () => {
   expect(COPY_BUTTON_LABELS).toEqual({ ready: ``, success: ``, error: `` })
 
-  // only `ready` is overridden, so the other two keep the icon-only default
   const { copy_button } = mount_copy_button({ labels: { ready: `Kopieren` } })
   expect(copy_text(copy_button).trim()).toBe(`Kopieren`)
+
+  await click_copy_button(copy_button)
+  expect(copy_button.dataset.state).toBe(`success`)
+  expect(copy_text(copy_button).trim()).toBe(``)
+  expect(icon_path(copy_button)).toBe(Check.d)
 })

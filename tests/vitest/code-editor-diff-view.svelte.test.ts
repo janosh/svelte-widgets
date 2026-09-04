@@ -231,7 +231,6 @@ describe(`rows and layouts`, () => {
     expect(document.querySelector(`.diff-row-delete, .diff-row-insert`)).toBeNull()
     expect(document.querySelector(`.panel-header`)).toBeNull()
     expect(document.querySelector(`[data-no-newline='old']`)).toBeNull()
-    // the default text is covered by `marks only the %s side ...` below
     expect(text_of(query_element(`[data-no-newline='new']`))).toBe(
       String.raw`\ Keine neue Zeile am Dateiende`,
     )
@@ -339,7 +338,6 @@ test.each([
 )
 
 describe(`states and backend wiring`, () => {
-  // second row overrides two keys and omits the rest, so both halves of the merge run
   test.each<[string, Partial<DiffViewLabels> | undefined, string, string]>([
     [
       `defaults`,
@@ -364,7 +362,7 @@ describe(`states and backend wiring`, () => {
       const empty = query_element(`[data-empty]`)
       expect(text_of(empty.querySelector(`strong`))).toBe(heading)
       expect(text_of(empty.querySelector(`span`))).toBe(detail)
-      // the header actions keep their English names in both rows, steps stay disabled
+      // Partial labels preserve defaults for the remaining controls.
       const actions = [
         ...document.querySelectorAll<HTMLButtonElement>(`.panel-actions button.icon-btn`),
       ]
@@ -397,7 +395,6 @@ describe(`states and backend wiring`, () => {
       (_args: DiffTextArgs) =>
         new Promise<DiffResult>((resolve) => void resolvers.push(resolve)),
     )
-    // Reactive props make reassignment rerun effects (hence `.svelte.test.ts`).
     const props = $state({
       old_text: `a`,
       new_text: `stale`,

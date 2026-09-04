@@ -230,7 +230,7 @@ test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
       [],
     ])
     expect(input_events).toHaveBeenCalledTimes(mode === `unsupported input` ? 1 : 0)
-    // Also retain coverage for an input event dispatched without a cancelable beforeinput.
+    // Native input can arrive without a cancelable beforeinput event.
     if (mode === `read-only`) {
       textarea.value = `unexpected native update`
       textarea.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
@@ -297,8 +297,6 @@ test.each([
   expect(textarea.getAttribute(`aria-describedby`)).toBe(help.id)
 })
 
-// The cache used to be cleared wholesale on every transaction, so one keystroke dropped
-// the colors of every visible line until the debounced re-highlight came back.
 test(`an edit keeps tokens above it and invalidates downstream syntax`, async () => {
   const recorder = create_backend()
   const highlight_lines = vi
@@ -326,7 +324,6 @@ test(`an edit keeps tokens above it and invalidates downstream syntax`, async ()
   await tick()
   expect(highlighted_lines()).toEqual([true, false, false])
 
-  // an edit that adds a line invalidates from that line down, but not above it
   const split_at = model.line(1).from
   model.transact([{ from: split_at, to: split_at, insert: `\n` }])
   await tick()

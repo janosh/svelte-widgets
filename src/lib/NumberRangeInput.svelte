@@ -23,9 +23,7 @@
   type SchemaBounds = Bounds & { setting: string; schema: NumberRangeSchema }
   type ExplicitBounds = Required<Bounds> & { setting?: string; schema?: undefined }
 
-  // Paired number + range input on one value in a flex <label>; children carry the label
-  // markup. A wrapping <label> names only the number input, so the slider falls back to
-  // `title`. Children get their own <span> so the row is exactly three grid columns.
+  // The wrapping label names the number input; the slider needs its own accessible label.
   let {
     value = $bindable(),
     setting,
@@ -109,8 +107,7 @@
   }
 </script>
 
-<!-- data-key defaults to `setting` so a settings pane's per-row reset and search find the row
-without every call site repeating the key; `rest` comes last so a caller can still override -->
+<!-- Settings reset/search use data-key; callers may override it through rest. -->
 <label {@attach tooltip()} title={resolved_title} data-key={setting} {...rest}>
   <span>{@render children?.()}</span>
   <input

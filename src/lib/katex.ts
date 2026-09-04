@@ -1,7 +1,4 @@
-// Svelte preprocessor turning $…$ / $$…$$ into {@html katex…}. A before/after pair around
-// mdsvex: before stashes rendered KaTeX behind placeholders so markdown cannot mangle URLs
-// or braces in the HTML, after expands them. Also avoids remark-math@3 (mdsvex's unified v9
-// cannot load remark-math@4+).
+// Render $…$ / $$…$$ before mdsvex, shielding KaTeX HTML with placeholders until afterward.
 
 import { Buffer } from 'node:buffer'
 import { randomUUID as random_uuid } from 'node:crypto'

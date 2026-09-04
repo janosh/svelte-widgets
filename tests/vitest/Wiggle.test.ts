@@ -1,11 +1,12 @@
 import { Wiggle } from '$lib'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
-import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
 describe(`Wiggle`, () => {
   beforeEach(vi.useFakeTimers)
+  afterEach(() => vi.useRealTimers())
 
   const get_span = () => doc_query<HTMLSpanElement>(`span`)
 
@@ -15,16 +16,18 @@ describe(`Wiggle`, () => {
     extra_props: Partial<ComponentProps<typeof Wiggle>> = {},
   ) => {
     const state = { wiggle: initial }
+    const on_reset = vi.fn()
     const props = {
       get wiggle() {
         return state.wiggle
       },
       set wiggle(value: boolean) {
         state.wiggle = value
+        on_reset(value)
       },
       ...extra_props,
     }
-    return { state, component: mount(Wiggle, { target: document.body, props }) }
+    return { state, on_reset, component: mount(Wiggle, { target: document.body, props }) }
   }
 
   test.each([0, 200, 500])(
@@ -33,8 +36,7 @@ describe(`Wiggle`, () => {
       const { state } = mount_bindable_wiggle(true, { duration_ms })
       expect(state.wiggle).toBe(true)
 
-      // stopping one tick short pins the delay to `duration_ms`; advancing exactly
-      // `duration_ms` alone would also pass for a reset hardcoded to fire immediately
+      // Check the deadline boundary to catch premature resets.
       vi.advanceTimersByTime(Math.max(duration_ms - 1, 0))
       expect(state.wiggle).toBe(duration_ms > 0)
 
@@ -54,10 +56,11 @@ describe(`Wiggle`, () => {
   })
 
   test(`does not reset wiggle when starting false`, () => {
-    const { state } = mount_bindable_wiggle(false)
+    const { state, on_reset } = mount_bindable_wiggle(false)
 
     vi.advanceTimersByTime(500)
     expect(state.wiggle).toBe(false)
+    expect(on_reset).not.toHaveBeenCalled()
   })
 
   test(`clears pending reset timer on unmount instead of writing to destroyed state`, () => {

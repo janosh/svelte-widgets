@@ -72,8 +72,6 @@
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
 
   let is_open = $state(false)
-  // click/tap only: hover-opening popped panels on every pointer pass and touch devices
-  // have no hover, so the two input modes diverged for no gain
   let open_dropdown = $state<string | null>(null)
   // Start from the real width on the client so hydration doesn't flash the desktop nav on phones
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
@@ -448,9 +446,7 @@
     );
     --nav-link-bg-hover: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
     --nav-dropdown-border-color: color-mix(in srgb, currentColor 30%, transparent 70%);
-    /* The mobile panel hangs off the pinned burger, so both read their corner from here. The
-       panel used to restate the offsets as its own constants and drifted out of step with the
-       button's size: it sat 2px over the burger's bottom edge and 8px left of its left edge. */
+    /* Shared geometry keeps the mobile panel aligned with its burger button. */
     --nav-burger-inset: 1rem;
     /* content-box: the chip is the icon plus its padding and border */
     --nav-burger-box: calc(

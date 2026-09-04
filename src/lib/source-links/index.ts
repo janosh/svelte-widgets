@@ -1,8 +1,5 @@
-// Turns inline code spans naming a project's source into GitHub links, so docs never
-// hand-maintain URLs: a file (`Footer.svelte`) links to the file, an exported definition
-// (`make_config`) to its line. Only exact, unambiguous names match — `index.ts` exists in
-// many folders, `label` is a prop. Links pin the built commit so line numbers stay right.
-// Data comes from `virtual:source-symbols`, emitted by ./vite-plugin.ts.
+// Link exact, unambiguous source names in code spans to files or exported definitions.
+// `virtual:source-symbols` supplies locations pinned to the build commit.
 
 import { merge_defaults, SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
 

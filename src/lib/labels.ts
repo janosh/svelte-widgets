@@ -1,16 +1,7 @@
-// Default user-facing strings for every widget, attachment and helper that renders text of
-// its own. Each takes a `labels` prop (or option) whose partial `merge_defaults` merges over
-// the record below, so callers can translate without forking. Entries interpolating a count
-// or name are functions so locales control word order and plural rules
-// (https://github.com/janosh/svelte-widgets/issues/451).
-//
-// Strings a dedicated prop already supplies (MultiSelect's `removeBtnTitle`,
-// `noMatchingOptionsMsg`, `selectAllOption`, Toc's `title`, ...) are deliberately absent, as
-// are non-string bits of chrome: icons keep their own `icons` prop. A prop that overrides
-// rather than supplies a string keeps its default here — `selectAllDisabledTitle` replaces
-// the three select-all titles below, which is why those stay records.
-//
-// Every record declares its defaults and derives its type from them, so the two cannot drift.
+// Defaults for `labels` overrides; interpolated messages are functions for locale-specific
+// word order and plural rules. Types derive from these records.
+// Dedicated text props (e.g. Toc.title) and icons stay separate. Defaults overridden by props
+// such as MultiSelect.selectAllDisabledTitle remain here for untranslated states.
 
 // English plural of `noun`, used only by the defaults below — an override brings its own
 // locale's rules, hence every count-bearing entry being a function.
@@ -219,10 +210,7 @@ export const TOAST_LABELS = {
 }
 export type ToastLabels = typeof TOAST_LABELS
 
-// Merge a caller's partial over a defaults record (label records, but icon sets too).
-// Spreading would keep an explicitly-undefined key instead of falling back, and with
-// `exactOptionalPropertyTypes` off `labels={{ close: cond ? `X` : undefined }}` type-checks
-// and then renders nothing.
+// Ignore explicit undefined overrides, which type-check without exactOptionalPropertyTypes.
 export const merge_defaults = <Defaults extends object>(
   defaults: Defaults,
   overrides?: Partial<Defaults>,

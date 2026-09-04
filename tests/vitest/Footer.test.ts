@@ -1,13 +1,13 @@
 import Footer from '$lib/Footer.svelte'
 import { GitHub } from '$lib/icons'
 import type { FooterLink } from '$lib/types'
-import { createRawSnippet, mount } from 'svelte'
+import { type ComponentProps, createRawSnippet, mount, unmount } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 
 describe(`Footer`, () => {
   const raw = (html: string) => createRawSnippet(() => ({ render: () => html }))
-  const mount_footer = (props: Record<string, unknown> = {}) =>
+  const mount_footer = (props: ComponentProps<typeof Footer> = {}) =>
     mount(Footer, { target: document.body, props })
   const anchors = () =>
     Array.from(document.querySelectorAll<HTMLAnchorElement>(`footer nav a`))
@@ -53,39 +53,28 @@ describe(`Footer`, () => {
     },
   )
 
-  test(`renders every link in order and drops the nav when there are none`, () => {
+  test(`renders links in order even with shared hrefs, and hides an empty nav`, async () => {
     const links: FooterLink[] = [
       { href: `/issues`, label: `Issues` },
-      { href: `/contact`, label: `Contact` },
+      { href: `/issues`, label: `Contact` },
       { href: `/changelog`, label: `Changelog` },
     ]
-    mount_footer({ links })
-    expect(anchors().map((anchor) => anchor.getAttribute(`href`))).toEqual([
-      `/issues`,
-      `/contact`,
-      `/changelog`,
+    const component = mount_footer({ links })
+    expect(
+      anchors().map((anchor) => [
+        anchor.getAttribute(`href`),
+        anchor.textContent?.trim(),
+      ]),
+    ).toEqual([
+      [`/issues`, `Issues`],
+      [`/issues`, `Contact`],
+      [`/changelog`, `Changelog`],
     ])
 
-    document.body.innerHTML = ``
+    await unmount(component)
     mount_footer()
     expect(document.querySelector(`footer`)).not.toBeNull()
     expect(document.querySelector(`footer nav`)).toBeNull()
-  })
-
-  // href is no identity: two links may point at one page under different labels, and a
-  // colliding each key would throw each_key_duplicate, taking down the whole nav
-  test(`renders links sharing an href`, () => {
-    mount_footer({
-      links: [
-        { href: `/repo`, label: `GitHub`, icon: GitHub },
-        { href: `/repo`, label: `Source` },
-      ],
-    })
-
-    expect(anchors().map((anchor) => anchor.textContent?.trim())).toEqual([
-      `GitHub`,
-      `Source`,
-    ])
   })
 
   test(`renders children after the nav in source order`, () => {

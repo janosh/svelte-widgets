@@ -90,10 +90,8 @@
   const fallback_position = { left: 50, top: 50 }
   let resized_max_width = $state<string | null>(null)
   let resize_start_width = 0
-  // An explicit consumer cap stays authoritative; the default only shapes the natural width,
-  // and after a manual resize the attachment's viewport bound takes over. The default carries
-  // that same viewport bound: the pane is anchored to the toggle's right edge, so a 450px
-  // default on a narrower screen hung off the left edge, where nothing scrolls to reach it.
+  // Explicit caps survive manual resize; otherwise the attachment's viewport bound takes over.
+  // Clamp the initial width too, since right-aligned panes can overflow the viewport's left edge.
   const viewport_max_width = `calc(100vw - ${2 * viewport_margin_px}px)`
   const pane_max_width = $derived(
     max_width ??

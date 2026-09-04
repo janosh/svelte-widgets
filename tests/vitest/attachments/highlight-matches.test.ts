@@ -38,37 +38,57 @@ describe(`highlight_matches`, () => {
   }
 
   it.each([
-    // Early returns
     [`whitespace-only query`, ` \t\n `, `a b`, false, undefined, undefined],
-
-    [`case insensitive`, `test`, `<p>Test with TEST and TeSt</p>`, false, 3, undefined],
-    [`no cross-node match`, `bc`, `<ul><li>ab</li><li>cd</li></ul>`, false, 0, undefined],
-    [`no matches`, `xyz`, `<p>Content without search term</p>`, false, 0, undefined],
-
-    [`fuzzy no matches`, `xyz`, `<p>Content without search term</p>`, true, 0, undefined],
+    [
+      `case insensitive`,
+      `test`,
+      `<p>Test with TEST and TeSt</p>`,
+      false,
+      [`Test`, `TEST`, `TeSt`],
+      undefined,
+    ],
+    [
+      `no cross-node match`,
+      `bc`,
+      `<ul><li>ab</li><li>cd</li></ul>`,
+      false,
+      [],
+      undefined,
+    ],
+    [`no matches`, `xyz`, `<p>Content without search term</p>`, false, [], undefined],
+    [
+      `fuzzy no matches`,
+      `xyz`,
+      `<p>Content without search term</p>`,
+      true,
+      [],
+      undefined,
+    ],
     [
       `skip with node_filter`,
       `test`,
       `<div>Test content</div><li class="user-msg">Test hidden</li>`,
       false,
-      1,
+      [`Test`],
       (node: Node) =>
         node?.parentElement?.closest(`li.user-msg`)
           ? NodeFilter.FILTER_REJECT
           : NodeFilter.FILTER_ACCEPT,
     ],
-  ])(`%s`, (_desc, query, html_content, fuzzy, expected_range_count, node_filter) => {
+  ])(`%s`, (_desc, query, html_content, fuzzy, expected_matches, node_filter) => {
     mock_element.innerHTML = html_content
     const cleanup = highlight_matches({ query, fuzzy, node_filter })(mock_element)
 
-    expect(mock_css_highlights.size).toBe(expected_range_count === undefined ? 0 : 1)
+    expect(mock_css_highlights.size).toBe(expected_matches === undefined ? 0 : 1)
     expect(clear_highlights_spy).not.toHaveBeenCalled()
-    if (expected_range_count !== undefined) {
+    if (expected_matches !== undefined) {
       expect(set_highlights_spy).toHaveBeenCalledWith(
         `highlight-match`,
         expect.any(Object),
       )
-      expect(get_highlight_ranges()).toHaveLength(expected_range_count)
+      expect(get_highlight_ranges().map((range) => range.toString())).toEqual(
+        expected_matches,
+      )
     }
     cleanup?.()
   })
@@ -85,7 +105,6 @@ describe(`highlight_matches`, () => {
 
   it.each([
     [`CSS is missing`, () => vi.stubGlobal(`CSS`, undefined)],
-    // a partial polyfill or consumer stub can leave a registry whose Highlight throws
     [`Highlight is missing`, () => vi.stubGlobal(`Highlight`, undefined)],
   ])(`runs range effects when %s`, (_desc, prepare) => {
     prepare()
