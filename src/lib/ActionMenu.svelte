@@ -230,7 +230,7 @@
     popover={native_dismiss ? `auto` : `manual`}
     aria-label={rest[`aria-label`] ?? (rest[`aria-labelledby`] ? undefined : `Actions`)}
     class={[`action-menu`, rest.class]}
-    ontoggle={handle_popover_toggle}
+    ontoggle={chain_handlers(handle_popover_toggle, rest.ontoggle)}
     onkeydown={chain_handlers(handle_menu_keys, rest.onkeydown)}
     {@attach show_menu}
     {@attach float({

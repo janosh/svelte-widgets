@@ -10,7 +10,7 @@
 
 <script lang="ts">
   import type { Snippet } from 'svelte'
-  import type { HTMLAttributes } from 'svelte/elements'
+  import type { HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
   import {
     merge_defaults,
@@ -36,9 +36,20 @@
     title,
     children,
     labels,
+    empty = `retain`,
+    commit = `input`,
+    oncommit,
+    number_props,
+    range_props,
     ...rest
   }: {
     value: number | undefined
+    // Invalid drafts never replace the committed value. Clearing retains it by default.
+    empty?: `retain` | `undefined`
+    commit?: `input` | `change`
+    oncommit?: (value: number | undefined) => void
+    number_props?: Omit<HTMLInputAttributes, `type` | `value` | `min` | `max` | `step`>
+    range_props?: Omit<HTMLInputAttributes, `type` | `value` | `min` | `max` | `step`>
     title?: string
     children?: Snippet
     labels?: Partial<NumberRangeInputLabels>
@@ -76,14 +87,72 @@
   // With children the <label> already names the number input and an aria-label would override
   // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
+  // A writable derived value follows external updates while allowing incomplete local drafts.
+  let draft = $derived(value === undefined ? `` : String(value))
+  const commit_input = (input: HTMLInputElement, final: boolean): void => {
+    if (input.disabled || input.readOnly) return
+    const next = input.valueAsNumber
+    const cleared = input.value === `` && !input.validity.badInput
+    // Step controls the increment; typed finite values may lie between steps.
+    const valid =
+      Number.isFinite(next) &&
+      !input.validity.rangeUnderflow &&
+      !input.validity.rangeOverflow
+    if ((final || commit === `input`) && (valid || (cleared && empty === `undefined`))) {
+      const next_value = valid ? next : undefined
+      if (next_value !== value) {
+        value = next_value
+        oncommit?.(value)
+      }
+    }
+    if (final) draft = value === undefined ? `` : String(value)
+  }
 </script>
 
 <!-- data-key defaults to `setting` so a settings pane's per-row reset and search find the row
 without every call site repeating the key; `rest` comes last so a caller can still override -->
 <label {@attach tooltip()} title={resolved_title} data-key={setting} {...rest}>
   <span>{@render children?.()}</span>
-  <input type="number" {...input_bounds} bind:value aria-label={number_label} />
-  <input type="range" {...input_bounds} bind:value aria-label={range_label} />
+  <input
+    {...number_props}
+    type="number"
+    {...input_bounds}
+    value={draft}
+    aria-label={number_props?.['aria-label'] ?? number_label}
+    oninput={(event) => {
+      draft = event.currentTarget.value
+      commit_input(event.currentTarget, false)
+      number_props?.oninput?.(event)
+    }}
+    onchange={(event) => {
+      commit_input(event.currentTarget, true)
+      number_props?.onchange?.(event)
+    }}
+    onblur={(event) => {
+      commit_input(event.currentTarget, true)
+      number_props?.onblur?.(event)
+    }}
+    onkeydown={(event) => {
+      if (event.key === `Enter`) commit_input(event.currentTarget, true)
+      if (event.key === `Escape`) draft = value === undefined ? `` : String(value)
+      number_props?.onkeydown?.(event)
+    }}
+  />
+  <input
+    {...range_props}
+    type="range"
+    {...input_bounds}
+    value={value ?? input_bounds.min}
+    aria-label={range_props?.['aria-label'] ?? range_label}
+    oninput={(event) => {
+      commit_input(event.currentTarget, false)
+      range_props?.oninput?.(event)
+    }}
+    onchange={(event) => {
+      commit_input(event.currentTarget, true)
+      range_props?.onchange?.(event)
+    }}
+  />
 </label>
 
 <style>

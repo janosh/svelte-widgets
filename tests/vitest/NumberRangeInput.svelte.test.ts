@@ -107,3 +107,35 @@ describe(`NumberRangeInput`, () => {
     ).toThrow(`NumberRangeInput schema has no entry for setting "raidus"`)
   })
 })
+
+test.each([
+  [`retain`, `input`, ``, 0.5],
+  [`undefined`, `input`, ``, undefined],
+  [`retain`, `change`, `0.8`, 0.5],
+  [`retain`, `input`, `2`, 0.5],
+  [`retain`, `input`, `0.85`, 0.85],
+] as const)(`draft policy %s / %s / %s`, async (empty, commit, draft, expected) => {
+  const updates: (number | undefined)[] = []
+  const props = $state({
+    ...named_props,
+    value: 0.5,
+    empty,
+    commit,
+    oncommit: (value: number | undefined) => updates.push(value),
+  })
+  const { number, range } = mount_range(props)
+  number.value = draft
+  number.dispatchEvent(new Event(`input`, { bubbles: true }))
+  await tick()
+  expect(props.value).toBe(expected)
+  expect(range.valueAsNumber).toBe(expected ?? named_props.min)
+  number.dispatchEvent(new Event(`change`, { bubbles: true }))
+  await tick()
+  const final = commit === `change` ? 0.8 : expected
+  expect(props.value).toBe(final)
+  expect(number.value).toBe(final === undefined ? `` : String(final))
+  expect(updates).toEqual(final === 0.5 ? [] : [final])
+  props.value = 0.2
+  await tick()
+  expect(number.value).toBe(`0.2`)
+})

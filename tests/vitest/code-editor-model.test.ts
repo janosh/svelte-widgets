@@ -277,9 +277,17 @@ test.each([
   [`mostly CRLF stays crlf`, `a\r\nb\r\nc\nd\r\n`, `crlf`],
   [`pure LF stays lf`, `a\nb\n`, `lf`],
   [`pure CRLF stays crlf`, `a\r\nb\r\n`, `crlf`],
+  [`BOM is excluded from CRLF counts`, `\uFEFFa\nb\r\n`, `lf`],
+  [`bare carriage returns do not count as CRLF`, `a\rb\nc\r\n`, `lf`],
+  [`bare CR contributes to a tied majority`, `a\r\nb\r\nc\nd\r`, `lf`],
+  [`bare CR can outweigh CRLF`, `a\rb\rc\rd\r\ne\r\n`, `lf`],
+  [`empty text stays lf`, ``, `lf`],
 ])(`%s`, (_case, text, expected_eol) => {
   const model = create_editor_model({ uri: `memory:eol`, text })
   expect(model.eol).toBe(expected_eol)
-  // an untouched document round-trips without rewriting line endings
-  if (expected_eol === `lf`) expect(model.disk_text()).toBe(text.replaceAll(`\r\n`, `\n`))
+  // Save consistently uses the chosen newline style, including for mixed input.
+  const normalized = text.replaceAll(/\r\n?/g, `\n`)
+  expect(model.disk_text()).toBe(
+    expected_eol === `lf` ? normalized : normalized.replaceAll(`\n`, `\r\n`),
+  )
 })

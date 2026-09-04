@@ -1,6 +1,7 @@
 <!-- eslint-disable-next-line @stylistic/quotes -- TS generics require string literals -->
 <script lang="ts" generics="Option extends import('./types').Option">
   // === Imports ===
+  import { virtual_window as get_virtual_window } from './virtual'
   import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
   import { fromAction } from 'svelte/attachments'
@@ -328,7 +329,6 @@
   })
 
   let should_wiggle = $state(false) // wiggle when the user tries to exceed maxSelect
-  let should_ignore_hover = $state(false) // suppress scroll-triggered hover during key nav
   let highlighted_idx: number | null = $state(null) // chip index for arrow-key navigation
   // rangeSelect anchor. Plain (non-$state) since only event handlers read it. The anchor
   // can't be matched by reference — matchingOptions is $bindable, so its elements are
@@ -538,7 +538,7 @@
   const is_label_selected = (label: string): boolean =>
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option, label: string | number): boolean =>
-    selected_keys_set.has(key(opt)) || (lower_dupes && is_label_selected(`${label}`))
+    has_selected_option(opt) || (lower_dupes && is_label_selected(`${label}`))
 
   const is_disabled = (opt: Option): boolean =>
     Boolean(utils.is_object(opt) && opt.disabled)
@@ -549,20 +549,10 @@
     opt_a != null &&
     key(opt_a) === key(opt_b) &&
     utils.get_label(opt_a) === utils.get_label(opt_b)
-
-  const is_option_visible = (idx: number) => idx >= 0 && idx < visible_navigable_count
-
-  // non-disabled options, limited to those rendered under maxOptions unless
-  // skip_visibility_check (collapsed groups select their full contents)
-  const get_selectable_options = (
-    opts: Option[],
-    skip_visibility_check = false,
-  ): Option[] =>
-    opts.filter(
-      (opt) =>
-        !is_disabled(opt) &&
-        (skip_visibility_check || is_option_visible(navigable_index_map.get(opt) ?? -1)),
-    )
+  const has_selected_option = (opt: Option): boolean =>
+    duplicates === true
+      ? selected.some((item) => is_same_option(item, opt))
+      : selected_keys_set.has(key(opt))
 
   // Group options by their `group` key in the same order used by the dropdown.
   const group_options = (options_to_group: Option[]): GroupedOptions<Option>[] => {
@@ -613,12 +603,6 @@
       collapsed && collapsibleGroups ? [] : group_opts,
     )
   let navigable_options = $derived(flatten_navigable(grouped_options))
-
-  // O(1) index lookups for get_selectable_options. Duplicate option values collapse to
-  // their last index, fine here since duplicates are value-interchangeable.
-  let navigable_index_map = $derived(
-    new Map(navigable_options.map((opt, idx) => [opt, idx])),
-  )
 
   // keyboard nav must stop at maxOptions: past it aria-activedescendant would point at a
   // non-existent DOM id and Enter could select an option the user can't see
@@ -711,14 +695,13 @@
   const virtual_window = $derived.by(() => {
     if (!is_virtual_list_enabled || !virtual_config) return null
     const { item_height, overscan } = virtual_config
-    // clamp stale scroll offsets (e.g. after filtering shrinks the list) into valid range
-    const max_scroll = Math.max(0, render_rows.length * item_height - virtual_viewport)
-    const scroll_top = Math.min(options_scroll_top, max_scroll)
-    const start = Math.max(0, Math.floor(scroll_top / item_height) - overscan)
-    const end = Math.min(
-      render_rows.length,
-      Math.ceil((scroll_top + virtual_viewport) / item_height) + overscan,
-    )
+    const { start, end } = get_virtual_window({
+      scroll: options_scroll_top,
+      viewport: virtual_viewport,
+      item_size: item_height,
+      count: render_rows.length,
+      overscan,
+    })
     return { start, end, item_height }
   })
   const render_window = $derived(render_rows.length > 0 ? virtual_window : null)
@@ -776,14 +759,18 @@
   }
   let group_header_state = $derived.by(() => {
     const state = new Map<string, GroupHeaderState>()
+    let flat_idx = 0
     for (const { group, options: group_items, collapsed } of grouped_options) {
+      const hidden = collapsed && collapsibleGroups
+      const visible_items = hidden
+        ? group_items
+        : group_items.slice(0, Math.max(0, visible_navigable_count - flat_idx))
+      if (!hidden) flat_idx += group_items.length
       if (group === null) continue
-      const selectable = get_selectable_options(group_items, collapsed)
-      const all_selected =
-        selectable.length > 0 &&
-        selectable.every((opt) => selected_keys_set.has(key(opt)))
+      const selectable = visible_items.filter((opt) => !is_disabled(opt))
+      const all_selected = selectable.length > 0 && selectable.every(has_selected_option)
       const selected_count = keepSelectedInDropdown
-        ? group_items.filter((opt) => selected_keys_set.has(key(opt))).length
+        ? group_items.filter(has_selected_option).length
         : 0
       state.set(group, { all_selected, selected_count, selectable })
     }
@@ -890,21 +877,20 @@
   // batches by the server), so only the static list needs filtering here
   const search_matches = (opt: Option): boolean =>
     Boolean(loadOptions) || matches_search(opt, effective_filter_text)
+  const searched_options = $derived(effective_options.filter(search_matches))
 
   $effect.pre(() => {
-    matchingOptions = effective_options.filter(
+    matchingOptions = searched_options.filter(
       (opt) =>
-        (!selected_keys_set.has(key(opt)) ||
-          Boolean(duplicates) ||
-          keepSelectedInDropdown ||
-          input_text_is_committed) &&
-        search_matches(opt),
+        !selected_keys_set.has(key(opt)) ||
+        Boolean(duplicates) ||
+        keepSelectedInDropdown ||
+        input_text_is_committed,
     )
   })
 
   // Range selection includes a selected anchor that has left matchingOptions, while
   // preserving the grouped/sorted order and collapsed-group visibility of the dropdown.
-  const searched_options = $derived(effective_options.filter(search_matches))
   const range_navigable_options = $derived(
     flatten_navigable(group_options(searched_options)),
   )
@@ -1043,9 +1029,7 @@
   // === Selection mutations ===
   // keepSelectedInDropdown mode
   function toggle_option(option_to_toggle: Option, event: Event) {
-    const is_currently_selected = selected_keys_set.has(key(option_to_toggle))
-
-    if (is_currently_selected) {
+    if (has_selected_option(option_to_toggle)) {
       if (can_remove) remove(option_to_toggle, event)
     } else void add(option_to_toggle, event)
   }
@@ -1144,8 +1128,8 @@
       }
       if (oncreate_result === false) return
       if (is_non_empty_option(oncreate_result)) option_to_add = oncreate_result
-      // re-check guards after awaiting: selected may have changed meanwhile
-      if (was_async && (at_max_capacity() || (is_dupe() && duplicates !== true))) {
+      // Transformations and consumer callbacks can change identity or selection synchronously too.
+      if (at_max_capacity() || (is_dupe() && duplicates !== true)) {
         return
       }
     }
@@ -1174,7 +1158,13 @@
     if (selected.length === 0) return
     highlighted_idx = null
 
-    const idx = at_idx ?? selected.findIndex((opt) => key(opt) === key(option_to_drop))
+    const idx =
+      at_idx ??
+      selected.findIndex((opt) =>
+        duplicates === true
+          ? is_same_option(opt, option_to_drop)
+          : key(opt) === key(option_to_drop),
+      )
     let option_removed = selected[idx]
 
     if (option_removed === undefined && allowUserOptions) {
@@ -1320,7 +1310,6 @@
   // === Keyboard and pointer handlers ===
   // navigable_options skips collapsed groups
   async function handle_arrow_navigation(direction: 1 | -1, event?: KeyboardEvent) {
-    should_ignore_hover = true
     if (rangeSelect) {
       // anchors on the pre-move position, so an unmodified navigation drops the anchor and
       // the next Shift+Arrow extends from the cursor, not a range navigated away from
@@ -1618,7 +1607,11 @@
       const removed: Option[] = []
       const kept: Option[] = []
       for (const opt of selected) {
-        if (keys_to_remove.has(key(opt)) && removed.length < max_removals) {
+        const matches =
+          duplicates === true
+            ? selectable.some((item) => is_same_option(item, opt))
+            : keys_to_remove.has(key(opt))
+        if (matches && removed.length < max_removals) {
           removed.push(opt)
         } else kept.push(opt)
       }
@@ -2283,7 +2276,6 @@
       style={ulOptionsStyle}
       onscroll={handle_options_scroll}
       onmousedown={prevent_retain_focus_blur}
-      onmousemove={() => (should_ignore_hover = false)}
     >
       {#if selectAllOption && effective_options.length > 0 && multi_select}
         {@const max_reached = maxSelect !== null && selected.length >= maxSelect}
@@ -2324,8 +2316,8 @@
           class:active={is_active}
           class:disabled={view.disabled}
           class={[liOptionClass, is_active && liActiveOptionClass]}
-          onmouseover={() => {
-            if (view.disabled || should_ignore_hover) return
+          onmousemove={() => {
+            if (view.disabled) return
             // else the effect pinning the user-message row snaps activeIndex straight back
             // and hover highlighting is dead while that row is active
             is_user_message_active = false
@@ -2484,7 +2476,7 @@
           onkeydown={can_add_user_option ? if_enter_or_space(handle_create) : undefined}
           title={msg_type !== `no-match` ? user_msg_text : ``}
           class:active={is_user_message_active}
-          onmouseover={() => !should_ignore_hover && (is_user_message_active = true)}
+          onmousemove={() => (is_user_message_active = true)}
           onfocus={() => (is_user_message_active = true)}
           onmouseout={() => (is_user_message_active = false)}
           onblur={() => (is_user_message_active = false)}

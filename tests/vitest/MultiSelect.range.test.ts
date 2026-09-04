@@ -97,7 +97,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
 
   option_row(`Alpha`).click()
   await tick()
-  option_row(`Gamma`).dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
+  option_row(`Gamma`).dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
   await tick()
   press(`Enter`, { shiftKey: true })
   await tick()

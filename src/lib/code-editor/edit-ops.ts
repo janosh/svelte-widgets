@@ -167,6 +167,12 @@ export const auto_close_pair = (state: EditorState, typed: string): RangeEdit | 
     sel_start < state.model.length ? state.model.slice(sel_start, sel_start + 1) : ``
   const prev_char = sel_start > 0 ? state.model.slice(sel_start - 1, sel_start) : ``
   const is_quote = QUOTE_CHARS.includes(typed)
+  if (is_quote) {
+    let escape_start = sel_start
+    while (escape_start > 0 && state.model.slice(escape_start - 1, escape_start) === `\\`)
+      escape_start--
+    if ((sel_start - escape_start) % 2 === 1) return null
+  }
   if (next_char === typed && (CLOSER_TO_OPENER[typed] !== undefined || is_quote))
     return range_edit(sel_start, sel_start, ``, sel_start + 1)
   const closer = OPENER_TO_CLOSER[typed] ?? (is_quote ? typed : undefined)

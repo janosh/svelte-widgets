@@ -126,7 +126,6 @@
   const invalidate_tokens = (
     active_model: EditorModel,
     transaction: EditorTransaction,
-    previous_line_count: number,
   ): void => {
     const { edits } = transaction
     if (edits.length === 0) return
@@ -134,16 +133,7 @@
     // `validate_edits` rejects `from < previous_end`, so edits ascend; text before the first
     // is identical in both documents, so this line index means the same either side of it.
     const first_line = active_model.line_at(edits[0].from).line_idx
-    // ordinary typing: a lone edit inserting no newline at an unchanged line count removed
-    // none either, so it is confined to its own line
-    const single_line_edit =
-      edits.length === 1 &&
-      !edits[0].insert.includes(`\n`) &&
-      active_model.line_count === previous_line_count
-    if (single_line_edit) {
-      token_cache.delete(first_line)
-      return
-    }
+    // Even one character can open a multiline comment/string and change later tokens.
     // safe to delete while iterating: a Map's key iterator skips entries dropped ahead of it
     for (const line_idx of token_cache.keys()) {
       if (line_idx >= first_line) token_cache.delete(line_idx)
@@ -234,9 +224,6 @@
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
     before_snapshot = null
-    // count as of the previous notification, so a transaction can be classified as moving a
-    // line boundary without re-deriving the old document
-    let previous_line_count = active_model.line_count
     const unsubscribe = active_model.subscribe((update) => {
       if (!is_current()) return
       caret_line = active_model.line_at(update.selection.head).line_idx
@@ -244,10 +231,9 @@
         // Bumped only for transactions, which `line_count`/`visible_rows` read to re-read
         // the rope; bumping on bare selection changes re-read every row on each caret move.
         model_revision += 1
-        invalidate_tokens(active_model, update.transaction, previous_line_count)
+        invalidate_tokens(active_model, update.transaction)
         active.apply_transaction(update.transaction)
       }
-      previous_line_count = active_model.line_count
       sync_dom_from_model(update)
       on_update?.(update)
     })
@@ -341,6 +327,11 @@
   const on_before_input = (event: InputEvent): void => {
     const area = textarea
     if (!area) return
+    if (editing_disabled) {
+      event.preventDefault()
+      before_snapshot = null
+      return
+    }
     if (event.inputType === `historyUndo` || event.inputType === `historyRedo`) {
       event.preventDefault()
       before_snapshot = null

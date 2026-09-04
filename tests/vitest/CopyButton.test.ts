@@ -79,30 +79,22 @@ beforeEach(() => {
 
 afterEach(() => vi.useRealTimers())
 
-test.each([`Enter`, ` `])(`%s key triggers copy and prevents default`, (key: string) => {
-  const onkeydown = vi.fn()
-  const { copy_button } = mount_copy_button({ content: `test content`, onkeydown })
-  const event = new KeyboardEvent(`keydown`, { key, bubbles: true })
-  const prevent_spy = vi.spyOn(event, `preventDefault`)
+test.each([`Enter`, ` `, `Escape`, `Tab`, `ArrowUp`, `a`, `1`])(
+  `handles %j key`,
+  (key) => {
+    const activates = key === `Enter` || key === ` `
+    const onkeydown = vi.fn()
+    const { copy_button } = mount_copy_button({ content: `test content`, onkeydown })
+    const event = new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
 
-  copy_button.dispatchEvent(event)
+    copy_button.dispatchEvent(event)
 
-  expect(mock_write_text).toHaveBeenCalledWith(`test content`)
-  expect(prevent_spy).toHaveBeenCalled()
-  expect(onkeydown).toHaveBeenCalledOnce()
-})
-
-test.each([`Escape`, `Tab`, `ArrowUp`, `a`, `1`])(`%s key is ignored`, (key: string) => {
-  const { copy_button } = mount_copy_button({ content: `ignored key content` })
-  const event = new KeyboardEvent(`keydown`, { key })
-  const prevent_spy = vi.spyOn(event, `preventDefault`)
-
-  copy_button.dispatchEvent(event)
-
-  expect(prevent_spy).not.toHaveBeenCalled()
-  expect(mock_write_text).not.toHaveBeenCalled()
-  expect(copy_text(copy_button)).toContain(`ready`)
-})
+    expect(mock_write_text.mock.calls).toEqual(activates ? [[`test content`]] : [])
+    expect(event.defaultPrevented).toBe(activates)
+    expect(onkeydown).toHaveBeenCalledOnce()
+    if (!activates) expect(copy_text(copy_button)).toContain(`ready`)
+  },
+)
 
 test.each([
   [`div`, false, `0`, null],
@@ -162,14 +154,45 @@ test.each([
   expect(copy_text(copy_button)).toContain(`ready`)
 })
 
-test(`calls on_copy_success with copied content`, async () => {
-  const content = `copied text`
-  const [onclick, on_copy_success] = [vi.fn(), vi.fn()]
-  const { copy_button } = mount_copy_button({ content, on_copy_success, onclick })
-  await click_copy_button(copy_button)
-  expect(on_copy_success).toHaveBeenCalledWith(content)
-  expect(onclick).toHaveBeenCalledOnce()
-})
+test.each([`success`, `error`] as const)(
+  `reports %s with the attempted content`,
+  async (state) => {
+    const content_proxy = fromStore(writable(`copied text`))
+    const [onclick, on_copy_success, on_copy_error] = [vi.fn(), vi.fn(), vi.fn()]
+    const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
+    const copy_error = new Error(`clipboard failed`)
+    const pending = Promise.withResolvers<undefined>()
+    mock_write_text.mockReturnValue(pending.promise)
+    mount(CopyButton, {
+      target: document.body,
+      props: {
+        get content() {
+          return content_proxy.current
+        },
+        on_copy_success,
+        on_copy_error,
+        onclick,
+      },
+    })
+    const copy_button = doc_query(`[data-sms-copy]`)
+    await click_copy_button(copy_button)
+    content_proxy.current = `changed while copying`
+    if (state === `success`) pending.resolve(undefined)
+    else pending.reject(copy_error)
+    await Promise.resolve()
+    await tick()
+    expect(mock_write_text).toHaveBeenCalledExactlyOnceWith(`copied text`)
+    expect(on_copy_success.mock.calls).toEqual(
+      state === `success` ? [[`copied text`]] : [],
+    )
+    expect(on_copy_error.mock.calls).toEqual(
+      state === `error` ? [[copy_error, `copied text`]] : [],
+    )
+    expect(copy_button.dataset.state).toBe(state)
+    expect(onclick).toHaveBeenCalledOnce()
+    console_error_spy.mockRestore()
+  },
+)
 
 test(`a throwing on_copy_success is not reported as a copy failure`, async () => {
   // the write already succeeded, so its catch must not flip this into the error state
@@ -187,20 +210,6 @@ test(`a throwing on_copy_success is not reported as a copy failure`, async () =>
   expect(on_copy_error).not.toHaveBeenCalled()
   expect(copy_text(copy_button)).toContain(`success`)
   expect(console_error_spy).toHaveBeenCalledOnce()
-  console_error_spy.mockRestore()
-})
-
-test(`calls on_copy_error with error and content`, async () => {
-  const copy_error = new Error(`clipboard failed`)
-  const on_copy_error = vi.fn()
-  const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
-  mock_write_text.mockRejectedValue(copy_error)
-
-  const { copy_button } = mount_copy_button({ content: `error text`, on_copy_error })
-  await click_copy_button(copy_button)
-  expect(on_copy_error).toHaveBeenCalledWith(copy_error, `error text`)
-  expect(copy_text(copy_button)).toContain(`error`)
-
   console_error_spy.mockRestore()
 })
 
@@ -405,16 +414,22 @@ test(`global mode leaves a pre that already has a copy button alone`, async () =
   void unmount(second)
 })
 
-test(`global mode copies the code block's current text, not the text at mount`, async () => {
-  const { pre, code } = create_pre_with_code(`before`)
-  const component = await mount_global({ global: true })
-  code.textContent = `after`
-  await flush_rescan()
+test.each([`replace`, `edit`] as const)(
+  `global mode copies current text after %s`,
+  async (change) => {
+    const { pre, code } = create_pre_with_code(`before`)
+    const component = await mount_global({ global: true })
+    // Drain mount mutations so they cannot incidentally rescan an unobserved text edit.
+    await flush_rescan()
+    if (change === `replace`) code.textContent = `after`
+    else if (code.firstChild) code.firstChild.nodeValue = `after`
+    await flush_rescan()
 
-  await click_copy_button(get_single_mounted_button(pre))
-  expect(mock_write_text).toHaveBeenCalledWith(`after`)
-  void unmount(component)
-})
+    await click_copy_button(get_single_mounted_button(pre))
+    expect(mock_write_text).toHaveBeenCalledWith(`after`)
+    void unmount(component)
+  },
+)
 
 test(`global mode unmounts buttons whose pre left the document`, async () => {
   const { pre } = create_pre_with_code(`transient`)
@@ -428,64 +443,49 @@ test(`global mode unmounts buttons whose pre left the document`, async () => {
   void unmount(component)
 })
 
-test(`global mode custom skip_selector mounts beside existing code buttons`, async () => {
-  const { pre } = create_pre_with_code(`copy even with button`)
-  const existing_button = document.createElement(`button`)
-  existing_button.textContent = `existing`
-  pre.append(existing_button)
+test.each([
+  [`button`, `.never-skip`, 2],
+  [`a`, null, 1],
+] as const)(
+  `global as=%s respects skip_selector=%j`,
+  async (as, skip_selector, count) => {
+    const { pre } = create_pre_with_code(`code with an existing control`)
+    const existing = document.createElement(as)
+    existing.textContent = `existing`
+    pre.append(existing)
+    const component = await mount_global({ global: true, as, skip_selector })
 
-  const component = await mount_global({ global: true, skip_selector: `.never-skip` })
-
-  expect(pre.querySelectorAll(`button`)).toHaveLength(2)
-  expect(existing_button.hasAttribute(`data-sms-copy`)).toBe(false)
-  // the mounted button must be wired to this pre's code text, not just be a <button>
-  await click_copy_button(get_single_mounted_button(pre))
-  expect(mock_write_text).toHaveBeenCalledWith(`copy even with button`)
-
-  void unmount(component)
-})
-
-test(`global mode skip_selector=null falls back to rendered tag`, async () => {
-  const { pre } = create_pre_with_code(`skip existing anchor`)
-  const existing_anchor = document.createElement(`a`)
-  existing_anchor.href = `#existing`
-  existing_anchor.textContent = `existing`
-  pre.append(existing_anchor)
-
-  const component = await mount_global({ as: `a`, global: true, skip_selector: null })
-
-  expect(pre.querySelectorAll(`a`)).toHaveLength(1)
-  expect(pre.querySelector(`[data-sms-copy]`)).toBeNull()
-
-  void unmount(component)
-})
+    expect(pre.querySelectorAll(as)).toHaveLength(count)
+    expect(existing.hasAttribute(`data-sms-copy`)).toBe(false)
+    if (count === 1) expect(pre.querySelector(`[data-sms-copy]`)).toBeNull()
+    else {
+      await click_copy_button(get_single_mounted_button(pre))
+      expect(mock_write_text).toHaveBeenCalledWith(`code with an existing control`)
+    }
+    void unmount(component)
+  },
+)
 
 // initial scan only sees nodes present at mount; later pre>code must ride the observer
-test(`global mode mounts on pre > code added after the controller`, async () => {
-  const component = await mount_global({ global: true })
-  const { pre } = create_pre_with_code(`dynamically added code`)
-  await flush_rescan()
-
-  expect(get_single_mounted_button(pre)).toBeInstanceOf(HTMLButtonElement)
-
-  void unmount(component)
-})
-
 // mounting into a pre is itself a childList mutation; as=a must not stack a second anchor
-test(`global mode as=a does not remount when the observer re-enters`, async () => {
-  const component = await mount_global({ global: true, as: `a` })
-  const { pre } = create_pre_with_code(`test code`)
-  await flush_rescan()
+test.each([`button`, `a`])(
+  `global mode mounts one %s on dynamically added code`,
+  async (as) => {
+    const component = await mount_global({ global: true, as })
+    const { pre } = create_pre_with_code(`test code`)
+    await flush_rescan()
 
-  expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
+    const button = get_single_mounted_button(pre)
+    expect(button.localName).toBe(as)
 
-  document.body.append(document.createElement(`div`))
-  await flush_rescan()
+    document.body.append(document.createElement(`div`))
+    await flush_rescan()
 
-  expect(pre.querySelectorAll(`a[data-sms-copy]`)).toHaveLength(1)
+    expect(get_single_mounted_button(pre)).toBe(button)
 
-  void unmount(component)
-})
+    void unmount(component)
+  },
+)
 
 // these defaults used to live in a local const callers could neither import nor type off
 test(`COPY_BUTTON_LABELS is the exported default record, and partials merge over it`, () => {

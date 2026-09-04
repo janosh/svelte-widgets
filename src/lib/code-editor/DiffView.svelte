@@ -181,7 +181,7 @@
     const push_gap = (gap_idx: number, skipped: number, starts: [number, number]) => {
       if (skipped <= 0) return
       if (expanded.has(gap_idx)) {
-        rows.push(...build_gap_rows(...starts, skipped).flatMap(rows_of))
+        for (const row of build_gap_rows(...starts, skipped)) rows.push(...rows_of(row))
       } else rows.push({ kind: `gap`, gap_idx, skipped })
     }
 

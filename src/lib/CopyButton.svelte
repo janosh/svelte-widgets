@@ -54,6 +54,7 @@
   // CopyButton has no pending visual of its own: it keeps showing the current copy state
   const action_labels = $derived({ ...msg, pending: msg[copy_state] })
   const action_icons = $derived({ ...icon_set, pending: icon_set[copy_state] })
+  let copied_content = ``
 
   $effect(() => {
     if (!global && !global_selector) return
@@ -107,7 +108,11 @@
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(apply_copy_buttons)
     })
-    observer.observe(document.body, { childList: true, subtree: true })
+    observer.observe(document.body, {
+      childList: true,
+      characterData: true,
+      subtree: true,
+    })
     return () => {
       cancelAnimationFrame(frame)
       observer.disconnect()
@@ -133,7 +138,7 @@
 {#if !(global || global_selector)}
   <ActionButton
     {...rest}
-    action={() => navigator.clipboard.writeText(content)}
+    action={() => navigator.clipboard.writeText((copied_content = content))}
     state={copy_state}
     disabled={disabled || !content}
     {reset_ms}
@@ -141,8 +146,8 @@
     labels={action_labels}
     icons={action_icons}
     on_state_change={handle_action_state}
-    on_success={() => on_copy_success(content)}
-    on_error={(error) => on_copy_error(error, content)}
+    on_success={() => on_copy_success(copied_content)}
+    on_error={(error) => on_copy_error(error, copied_content)}
     data-sms-copy=""
     children={copy_children ? copy_content : undefined}
   />

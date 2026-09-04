@@ -1,19 +1,8 @@
 import { hotkey } from '$lib/attachments'
 import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
-import { create_element, stub_prop } from '../index'
+import { create_element, press_key as keydown, stub_prop } from '../index'
 
 describe(`hotkey`, () => {
-  const keydown = (target: EventTarget, key: string, modifiers = {}) => {
-    const event = new KeyboardEvent(`keydown`, {
-      key,
-      bubbles: true,
-      cancelable: true,
-      ...modifiers,
-    })
-    target.dispatchEvent(event)
-    return event
-  }
-
   // a global binding outlives document.body.innerHTML = '', so dispose every one
   const cleanups: (() => void)[] = []
   afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))

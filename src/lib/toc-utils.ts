@@ -5,7 +5,7 @@ export function get_heading_visibility(
 ): boolean[] {
   if (active_idx === null) return levels.map(() => true)
 
-  const min_level = levels.length ? Math.min(...levels) : 0
+  const min_level = levels.reduce((minimum, level) => Math.min(minimum, level), Infinity)
   const expanded = levels.map(() => false)
 
   if (active_idx !== -1) {
@@ -20,26 +20,27 @@ export function get_heading_visibility(
   }
 
   const visible: boolean[] = []
+  const ancestors: number[] = []
+  let threshold_ancestor = -1
   for (let idx = 0; idx < levels.length; idx++) {
     const level = levels[idx]
+    while (ancestors.length && levels[ancestors[ancestors.length - 1]] >= level)
+      ancestors.pop()
+    const parent_idx = ancestors.at(-1)
 
     if (level === min_level) {
       visible.push(true)
     } else if (level <= collapse_threshold) {
-      let parent_idx = idx - 1
-      while (parent_idx >= 0 && levels[parent_idx] >= level) parent_idx--
-      visible.push(parent_idx < 0 || expanded[parent_idx])
+      visible.push(parent_idx === undefined || expanded[parent_idx])
     } else {
-      let ancestor_idx = idx - 1
-      while (ancestor_idx >= 0 && levels[ancestor_idx] > collapse_threshold) {
-        ancestor_idx--
-      }
       visible.push(
-        ancestor_idx < 0 ||
-          levels[ancestor_idx] < collapse_threshold ||
-          visible[ancestor_idx],
+        threshold_ancestor < 0 ||
+          levels[threshold_ancestor] < collapse_threshold ||
+          visible[threshold_ancestor],
       )
     }
+    ancestors.push(idx)
+    if (level <= collapse_threshold) threshold_ancestor = idx
   }
 
   return visible

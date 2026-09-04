@@ -506,9 +506,16 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [`groupSelectAll`, { groupSelectAll: true }, `button.group-select-all`],
-    [`selectAllOption`, { selectAllOption: true }, `li.select-all`],
-  ] as const)(`%s respects maxOptions limit`, async (_name, props, selector) => {
+    [`groupSelectAll`, { groupSelectAll: true }, `button.group-select-all`, false],
+    [`selectAllOption`, { selectAllOption: true }, `li.select-all`, false],
+    [`repeated reference`, { groupSelectAll: true }, `button.group-select-all`, true],
+    [
+      `collapse disabled`,
+      { groupSelectAll: true, collapsedGroups: new Set([`TestGroup`]) },
+      `button.group-select-all`,
+      false,
+    ],
+  ] as const)(`%s respects maxOptions limit`, async (_name, props, selector, repeat) => {
     const many_options = [
       { label: `Option 1`, group: `TestGroup` },
       { label: `Option 2`, group: `TestGroup` },
@@ -516,6 +523,8 @@ describe(`option grouping feature`, () => {
       { label: `Option 4`, group: `TestGroup` },
       { label: `Option 5`, group: `TestGroup` },
     ]
+    // Null-prototype records retain their shared identity through Svelte's proxy boundary.
+    if (repeat) many_options.push(Object.setPrototypeOf(many_options[0], null))
 
     const onselectAll_spy = vi.fn()
     await mount_grouped({
@@ -616,32 +625,44 @@ describe(`option grouping feature`, () => {
     expect(option_items()).toHaveLength(6)
   })
 
-  test(`groupSelectAll toggles to deselect when all group options are selected`, async () => {
-    const onremoveAll_spy = vi.fn()
-    await mount_grouped({
-      groupSelectAll: true,
-      keepSelectedInDropdown: `checkboxes`,
-      onremoveAll: onremoveAll_spy,
-    })
+  test.each([false, true])(
+    `group selection preserves other groups (colliding keys=%s)`,
+    async (colliding_keys) => {
+      const onremoveAll_spy = vi.fn()
+      const onchange = vi.fn()
+      await mount_grouped({
+        groupSelectAll: true,
+        keepSelectedInDropdown: `checkboxes`,
+        onremoveAll: onremoveAll_spy,
+        onchange,
+        selected: [grouped_options[3]],
+        duplicates: colliding_keys,
+        key: colliding_keys ? () => `shared` : undefined,
+      })
 
-    const select_btn = group_select_all_btn(`Genre`)
+      const select_btn = group_select_all_btn(`Genre`)
 
-    expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+      expect(select_btn?.textContent?.trim()).toBe(`Select all`)
 
-    select_btn?.click()
-    await tick()
+      select_btn?.click()
+      await tick()
 
-    expect(select_btn?.textContent?.trim()).toBe(`Deselect all`)
-    expect(select_btn?.classList.contains(`deselect`)).toBe(true)
+      expect(select_btn?.textContent?.trim()).toBe(`Deselect all`)
+      expect(select_btn?.classList.contains(`deselect`)).toBe(true)
 
-    select_btn?.click()
-    await tick()
+      select_btn?.click()
+      await tick()
 
-    expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
-    expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
+      expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
+      expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
+      expect(onchange).toHaveBeenLastCalledWith({
+        options: [grouped_options[3]],
+        type: `removeAll`,
+      })
 
-    expect(select_btn?.textContent?.trim()).toBe(`Select all`)
-  })
+      expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+    },
+  )
 })
 
 test(`group deselect-all keeps at least minSelect options selected`, async () => {

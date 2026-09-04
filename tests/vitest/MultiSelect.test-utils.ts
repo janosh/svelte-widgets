@@ -33,7 +33,7 @@ export const mount_multiselect = (
 
 // fresh event per dispatch: happy-dom never resets the stop-propagation flag,
 // so shared event instances go inert once a handler calls stopPropagation()
-export const fresh_mouseover = () => new MouseEvent(`mouseover`, { bubbles: true })
+export const fresh_mousemove = () => new MouseEvent(`mousemove`, { bubbles: true })
 export const fresh_key = (key: string) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true })
 

@@ -146,6 +146,27 @@
     "./theme": {
       "types": "./dist/theme.svelte.d.ts",
       "default": "./dist/theme.svelte.js"
+    },
+    "./JsonTree.svelte": {
+      "types": "./dist/json-tree/JsonTree.svelte.d.ts",
+      "svelte": "./dist/json-tree/JsonTree.svelte",
+      "default": "./dist/json-tree/JsonTree.svelte"
+    },
+    "./virtual": {
+      "types": "./dist/virtual.d.ts",
+      "default": "./dist/virtual.js"
+    },
+    "./json-tree": {
+      "types": "./dist/json-tree/index.d.ts",
+      "default": "./dist/json-tree/index.js"
+    },
+    "./json-tree/utils": {
+      "types": "./dist/json-tree/utils.d.ts",
+      "default": "./dist/json-tree/utils.js"
+    },
+    "./json-tree/path": {
+      "types": "./dist/json-tree/path.d.ts",
+      "default": "./dist/json-tree/path.js"
     }
   },
   "publishConfig": {

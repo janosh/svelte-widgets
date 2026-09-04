@@ -20,8 +20,7 @@
 
 ## 🧩 &thinsp; Components
 
-Every component is a named export from the package root, and every one also has a direct
-subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
+Every component is a named export from the package root and has a direct subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 
 | Component          | What it does                                                                             | Docs                                                                   |
 | ------------------ | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -34,6 +33,13 @@ subpath import (`svelte-widgets/Toc.svelte`) so bundlers can skip the rest.
 | `Dialog`           | Native modal with composable sections, close reasons and nested-dialog handling          | [docs](https://svelte-widgets.janosh.dev/patterns#dialog)              |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
 | `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
+| `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                          | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                             | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `FileInput`        | File picker and drop zone with validation, cancellation and retry                        | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `TreeView`         | Keyboard-navigable tree with lazy loading and custom node rendering                      | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `JsonTree`         | Searchable JSON inspector with editing, copying and diffs                                | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `Progress`         | Accessible determinate or indeterminate progress                                         | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `TaskStatus`       | Task progress and errors with caller-owned cancellation and retry                        | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `SettingsGroup`    | Collapsible group for organizing related settings sections                               | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
 | `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state          | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
 | `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
@@ -140,32 +146,36 @@ import { compute_position, fuzzy_match, get_label } from 'svelte-widgets/utils'
 import { heading_anchors } from 'svelte-widgets/heading-anchors'
 ```
 
-| Subpath                             | API                                                        |
-| ----------------------------------- | ---------------------------------------------------------- |
-| `/attachments`                      | Element attachments and dismissal primitives               |
-| `/clipboard`                        | Clipboard feedback state                                   |
-| `/code-editor`                      | Backend-agnostic editing, diff rendering and primitives    |
-| `/code-editor/editor.css`           | Shared syntax-token and diff-view styles                   |
-| `/dialogs`                          | Queued choice, confirmation and prompt requests            |
-| `/file-drop`                        | Directory expansion and accept filtering                   |
-| `/find-in-page`                     | Reactive find-in-page cursor behind `FindBar`              |
-| `/fullscreen`                       | Shared fullscreen state                                    |
-| `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment     |
-| `/icons`                            | Dynamic icon registry                                      |
-| `/katex`                            | KaTeX before/after preprocessor pair                       |
-| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers   |
-| `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter |
-| `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory             |
-| `/print`                            | Element printing                                           |
-| `/source-links`                     | Link inline code mentions of your source to GitHub         |
-| `/source-links/vite-plugin`         | Vite plugin emitting the file/export index those links use |
-| `/source-links/virtual`             | Types for the plugin's `virtual:source-symbols` module     |
-| `/storage`                          | Non-throwing localStorage, persisted choices and MRU lists |
-| `/text-search`                      | Text ranges, highlighting and search-jump helpers          |
-| `/theme`                            | Headless light/dark/system state                           |
-| `/toast-queue`                      | Toast reducer and reactive store                           |
-| `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers   |
-| `/vite-config`                      | This repository's Vite Plus configuration helper           |
+| Subpath                             | API                                                           |
+| ----------------------------------- | ------------------------------------------------------------- |
+| `/attachments`                      | Element attachments and dismissal primitives                  |
+| `/clipboard`                        | Clipboard feedback state                                      |
+| `/code-editor`                      | Backend-agnostic editing, diff rendering and primitives       |
+| `/code-editor/editor.css`           | Shared syntax-token and diff-view styles                      |
+| `/dialogs`                          | Queued choice, confirmation and prompt requests               |
+| `/file-drop`                        | Directory expansion and accept filtering                      |
+| `/find-in-page`                     | Reactive find-in-page cursor behind `FindBar`                 |
+| `/fullscreen`                       | Shared fullscreen state                                       |
+| `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment        |
+| `/icons`                            | Dynamic icon registry                                         |
+| `/json-tree`                        | JSON inspector component and types                            |
+| `/json-tree/path`                   | Dot/bracket path formatting and resolution                    |
+| `/json-tree/utils`                  | JSON traversal, immutable path edits, search and diff helpers |
+| `/katex`                            | KaTeX before/after preprocessor pair                          |
+| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers      |
+| `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter    |
+| `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory                |
+| `/print`                            | Element printing                                              |
+| `/source-links`                     | Link inline code mentions of your source to GitHub            |
+| `/source-links/vite-plugin`         | Vite plugin emitting the file/export index those links use    |
+| `/source-links/virtual`             | Types for the plugin's `virtual:source-symbols` module        |
+| `/storage`                          | Non-throwing localStorage, persisted choices and MRU lists    |
+| `/text-search`                      | Text ranges, highlighting and search-jump helpers             |
+| `/theme`                            | Headless light/dark/system state                              |
+| `/toast-queue`                      | Toast reducer and reactive store                              |
+| `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers      |
+| `/virtual`                          | Visible-window calculation for fixed-size items               |
+| `/vite-config`                      | This repository's Vite Plus configuration helper              |
 
 `CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM temporarily remains a full-document textarea and is therefore still subject to browser textarea and scroll-height limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
 

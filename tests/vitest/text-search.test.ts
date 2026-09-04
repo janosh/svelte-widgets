@@ -83,6 +83,15 @@ describe(`search_text`, () => {
     expect(search_text(root, `foo`)).toHaveLength(1)
   })
 
+  it.each([
+    `<div hidden><span>secret</span></div>`,
+    `<select><option>secret</option></select>`,
+  ])(`excludes a search root within %s`, (html) => {
+    const root = render(html).querySelector(`span, option`)
+    expect(root).not.toBeNull()
+    if (root) expect(search_text(root, `secret`)).toEqual([])
+  })
+
   it(`returns nothing for an empty query`, () => {
     expect(search_text(render(`<p>content</p>`), ``)).toEqual([])
   })
