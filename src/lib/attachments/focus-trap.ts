@@ -152,10 +152,14 @@ export const focus_trap =
     const focus_into = () => {
       const root_el = resolve_root()
       // Recapture prefers the last focused element over the initial entry point.
-      const preferred = is_inside(last_inside) ? last_inside : null
       const requested =
         typeof wanted === `string` ? root_el.querySelector(wanted) : wanted
-      const target = preferred ?? requested ?? tabbables()[0] ?? root_el
+      const target =
+        [is_inside(last_inside) ? last_inside : null, requested].find(
+          (element) => element?.isConnected && is_focus_available(element),
+        ) ??
+        tabbables()[0] ??
+        root_el
       if (target === root_el && !root_el.hasAttribute(`tabindex`)) {
         root_el.setAttribute(`tabindex`, `-1`)
         tabindex_added_to.push(root_el)

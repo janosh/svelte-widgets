@@ -74,17 +74,23 @@ describe(`focus_trap`, () => {
   })
 
   it.each([
-    [false, false],
-    [true, false],
-    [true, true],
-  ])(
-    `walks into an open shadow root (trap is host: %s, disabled fieldset: %s)`,
-    (is_host, disabled_fieldset) => {
+    [false, `plain`],
+    [true, `plain`],
+    [true, `fieldset`],
+    [true, `summary`],
+  ] as const)(
+    `walks into an open shadow root (trap is host: %s, ancestor: %s)`,
+    (is_host, ancestor) => {
       const { surface, buttons } = make_surface(1)
-      if (disabled_fieldset) {
+      if (ancestor === `fieldset`) {
         const fieldset = create_element(`fieldset`)
         fieldset.setAttribute(`disabled`, ``)
         fieldset.append(surface)
+      } else if (ancestor === `summary`) {
+        const details = create_element(`details`)
+        const summary = document.createElement(`summary`)
+        details.append(summary)
+        summary.append(surface)
       }
       const host = is_host ? surface : document.createElement(`div`)
       const shadow = host.attachShadow({ mode: `open` })
@@ -291,14 +297,25 @@ describe(`focus_trap`, () => {
     expect(on_inner).toHaveBeenCalledTimes(1)
   })
 
-  it(`recapture pulls focus back to the last element that held it inside`, async () => {
-    const { surface, buttons } = make_surface()
-    attach_trap(surface, { recapture: true })
-    expect(document.activeElement).toBe(buttons[0])
+  it.each([`disabled`, `hidden`, `removed`])(
+    `recapture skips remembered and initial targets made %s before it runs`,
+    async (kind) => {
+      const { surface, buttons } = make_surface()
+      attach_trap(surface, { recapture: true, initial: buttons[2] })
+      expect(document.activeElement).toBe(buttons[2])
 
-    buttons[2].focus()
-    expect(await focus_out_to(create_element(`button`))).toBe(buttons[2])
-  })
+      buttons[1].focus()
+      const outside = create_element(`button`)
+      expect(await focus_out_to(outside)).toBe(buttons[1])
+      outside.focus()
+      for (const button of buttons.slice(1)) {
+        if (kind === `removed`) button.remove()
+        else button.setAttribute(kind, ``)
+      }
+      await Promise.resolve()
+      expect(document.activeElement).toBe(buttons[0])
+    },
+  )
 
   // a recapture re-resolves `root`, so one trap can inject its fallback tabindex into
   // several elements over its life and owes each a cleanup

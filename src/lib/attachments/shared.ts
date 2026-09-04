@@ -4,11 +4,17 @@ export const composed_parent = (element: Element): Element | null => {
   return root instanceof ShadowRoot ? root.host : null
 }
 
+export const is_active_element = (element: Element): boolean => {
+  const root = element.getRootNode()
+  return `activeElement` in root && root.activeElement === element
+}
+
 export const is_focus_available = (element: Element): boolean => {
   if (element.matches(`:disabled,input[type="hidden" i]`)) return false
   // Descendants can override inherited visibility, so only the candidate's value matters.
   if ([`hidden`, `collapse`].includes(getComputedStyle(element).visibility)) return false
   let current: Element | null = element
+  let child = element
   while (current) {
     const style = getComputedStyle(current)
     if (
@@ -16,13 +22,14 @@ export const is_focus_available = (element: Element): boolean => {
       style.display === `none` ||
       (current.matches(`details:not([open])`) &&
         current !== element &&
-        !current.querySelector(`:scope > summary`)?.contains(element)) ||
+        current.querySelector(`:scope > summary`) !== child) ||
       (element.matches(`button,input,select,textarea`) &&
         current.matches(`fieldset[disabled]`) &&
         current.contains(element) &&
         !current.querySelector(`:scope > legend`)?.contains(element))
     )
       return false
+    child = current
     current = composed_parent(current)
   }
   return true

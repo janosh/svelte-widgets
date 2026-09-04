@@ -1,4 +1,5 @@
 import type { CmdAction, Option } from './types'
+import { is_active_element } from './attachments/shared'
 
 let uuid_counter = 0
 
@@ -360,7 +361,7 @@ export function step_focus<T extends HTMLElement>(
   const count = items.length
   if (count === 0) return undefined
   event.preventDefault()
-  const idx = items.findIndex((item) => item === document.activeElement)
+  const idx = items.findIndex(is_active_element)
   let next = count - 1 // End, and a backward step from outside the list
   if (key === `Home`) next = 0
   else if (forward) next = (idx + 1) % count

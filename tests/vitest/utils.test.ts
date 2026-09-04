@@ -856,11 +856,18 @@ describe(`step_focus`, () => {
     [1, `Home`, 0],
     [1, `End`, 2],
   ])(`from idx %s, %s focuses idx %s`, (from, key, expected) => {
-    if (from >= 0) items[from].focus()
-    const { target, event } = press(key)
-    expect(target).toBe(items[expected])
-    expect(document.activeElement).toBe(items[expected])
-    expect(event.defaultPrevented).toBe(true)
+    const host = document.createElement(`div`)
+    document.body.append(host)
+    const shadow = host.attachShadow({ mode: `open` })
+    for (const root of [document, shadow]) {
+      if (root === shadow) shadow.append(...items)
+      if (from >= 0) items[from].focus()
+      else for (const item of items) item.blur()
+      const { target, event } = press(key)
+      expect(target).toBe(items[expected])
+      expect(root.activeElement).toBe(items[expected])
+      expect(event.defaultPrevented).toBe(true)
+    }
   })
 
   // Left/Right are opt-in so a vertical menu leaves them to the page's own handling

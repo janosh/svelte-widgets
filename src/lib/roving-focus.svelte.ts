@@ -1,4 +1,8 @@
-import { composed_parent, is_focus_available } from './attachments/shared'
+import {
+  composed_parent,
+  is_active_element,
+  is_focus_available,
+} from './attachments/shared'
 import { is_editable_event_target, is_modifier_chord } from './utils'
 import { SvelteSet } from 'svelte/reactivity'
 // Roving tabindex over keyed HTML or SVG items in DOM order.
@@ -136,20 +140,16 @@ export function create_roving_focus(opts: {
       const current_idx = current
         ? marks.indexOf(current as HTMLElement | SVGElement)
         : -1
-      let next_idx = is_prev ? marks.length - 1 : 0
-      if (event.key === `End`) next_idx = marks.length - 1
-      else if (event.key !== `Home` && current_idx >= 0) {
-        // Wrap, so arrowing off either end lands back inside the group
-        next_idx = (current_idx + (is_next ? 1 : -1) + marks.length) % marks.length
-      }
       const step = is_prev || event.key === `End` ? -1 : 1
+      let next_idx = step === -1 ? marks.length - 1 : 0
+      if (current_idx >= 0 && (is_next || is_prev))
+        next_idx = (current_idx + step + marks.length) % marks.length
       let remaining = marks.length
       while (remaining-- > 0) {
         const target = marks[next_idx]
         if (is_focus_available(target)) {
           target.focus()
-          const root = target.getRootNode()
-          if (`activeElement` in root && root.activeElement === target) {
+          if (is_active_element(target)) {
             event.preventDefault()
             focused_key = target.getAttribute(ROVING_ATTR)
             return true
