@@ -2,7 +2,7 @@ import { EXAMPLE_MODULE_PREFIX } from '$lib/live-examples/mdsvex-transform'
 import vite_plugin from '$lib/live-examples/vite-plugin'
 import { Buffer } from 'node:buffer'
 import process from 'node:process'
-import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 
 const to_base64 = (src: string): string => Buffer.from(src, `utf-8`).toString(`base64`)
 const make_code = (src: string): string =>

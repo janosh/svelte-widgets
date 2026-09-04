@@ -7,8 +7,15 @@ import {
   type TreeNode,
 } from '$lib'
 import { virtual_window } from '$lib/virtual'
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
-import { expect, test, vi, onTestFinished } from 'vite-plus/test'
+import {
+  createRawSnippet,
+  flushSync,
+  mount,
+  tick,
+  unmount,
+  type ComponentProps,
+} from 'svelte'
+import { expect, test, vi, onTestFinished } from 'vitest'
 import { doc_query } from './index'
 
 const target_for = () => {
@@ -54,7 +61,7 @@ test.each([
   `task progress %s with caller-owned cancellation and retry`,
   async (value, expected) => {
     const target = target_for()
-    const props = $state({
+    const props = $state<ComponentProps<typeof TaskStatus>>({
       state: `running`,
       label: `Parsing`,
       value,
@@ -144,7 +151,7 @@ test.each([0, 5])(
   `virtual list scrolls to an unmounted row with overscan=%s`,
   async (overscan) => {
     const target = target_for()
-    const children = createRawSnippet<[number, number]>((item) => ({
+    const children = createRawSnippet<[unknown, number]>((item) => ({
       render: () => `<span>${item()}</span>`,
     }))
     const component = mount(VirtualList, {

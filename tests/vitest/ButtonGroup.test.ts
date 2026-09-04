@@ -3,7 +3,7 @@ import { Check } from '$lib/icons'
 import button_group_source from '$lib/ButtonGroup.svelte?raw'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, hover as dispatch_hover } from './index'
 
 describe(`ButtonGroup`, () => {

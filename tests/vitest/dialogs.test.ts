@@ -9,7 +9,7 @@ import {
   request_choice,
   submit_prompt,
 } from '$lib/dialogs.svelte'
-import { afterEach, expect, test } from 'vite-plus/test'
+import { afterEach, expect, test } from 'vitest'
 import { track } from './index'
 
 afterEach(dismiss_all_dialogs)

@@ -1,6 +1,6 @@
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
 import { create_element, doc_query, pointer_event } from './index'
 import TestPopover from './TestPopover.svelte'

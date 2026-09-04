@@ -1,5 +1,5 @@
 import { tick } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps, PortalParams } from '$lib/types'
 import { doc_query } from './index'
 import { mount_multiselect, unmount_component } from './MultiSelect.test-utils'

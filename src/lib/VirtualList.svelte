@@ -20,7 +20,7 @@
     children: Snippet<[Item, number]>
     key?: (item: Item, idx: number) => string | number
     element?: HTMLDivElement
-  } & HTMLAttributes<HTMLDivElement> = $props()
+  } & Omit<HTMLAttributes<HTMLDivElement>, `children`> = $props()
 
   let scroll_top = $state(0)
   let viewport = $state(0)

@@ -1,5 +1,5 @@
 import { hotkey } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element, press_key as keydown, stub_prop } from '../index'
 
 describe(`hotkey`, () => {

@@ -1,5 +1,5 @@
 import { tick } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import { mount_multiselect } from './MultiSelect.test-utils'

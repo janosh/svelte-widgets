@@ -1,6 +1,6 @@
 import { CommandMenu, PageSearch } from '$lib'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 const mock_actions = [

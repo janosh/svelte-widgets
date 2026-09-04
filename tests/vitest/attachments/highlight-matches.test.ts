@@ -1,13 +1,5 @@
 import { highlight_matches } from '$lib/attachments'
-import {
-  afterEach,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  onTestFinished,
-  vi,
-} from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { stub_css_highlights } from '../index'
 
 describe(`highlight_matches`, () => {

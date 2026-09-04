@@ -130,8 +130,7 @@ so any unit works.
 
 ### `FileDetails`
 
-A list of collapsible `<details>`, one per file, with a button that opens or closes all of
-them at once. Content is syntax-highlighted using `language` (or `default_lang`).
+A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. CodeBlock highlights content using `language` (or `default_lang`) and reports highlighter failures alongside the source. The `files` array is read-only input; DOM references stay internal.
 
 ```svelte example id="file-details-demo"
 <script lang="ts">
@@ -155,9 +154,7 @@ them at once. Content is syntax-highlighted using `language` (or `default_lang`)
 
 ### `PrevNext`
 
-Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and
-the `current` href; arrow keys navigate too unless you pass `onkeyup={null}`. The links at
-the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
+Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and the `current` href. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. Navigation uses ordinary links; apps own keyboard shortcuts and router behavior. The links at the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
 
 ```svelte example id="prev-next-demo"
 <script lang="ts">
@@ -171,7 +168,7 @@ the bottom of every demo page on this site are a `PrevNext` fed by the demo rout
   ]
 </script>
 
-<PrevNext items={chapters} current="masonry" onkeyup={null} />
+<PrevNext items={chapters} current="masonry" />
 ```
 
 ### `SubpageGrid`
@@ -204,19 +201,9 @@ Colors come from `--github-corner-bg` and `--github-corner-color`, or the `fill`
 
 ### `CodeExample`
 
-The wrapper the [live-examples plugin](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md)
-mounts around every runnable code fence in these docs. Every "View code" button on this
-site is one. Set it up once in your Svelte config (`svelte.config.ts`, or the config passed
-inline to `sveltekit()` in `vite.config.ts`) rather than using it directly:
+The wrapper the [live-examples plugin](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md) mounts around runnable code fences. Configure it through `mdsvex_transform` in mdsvex’s `remarkPlugins`: set `defaults.Wrapper` to `["svelte-widgets", "CodeExample"]`. Every "View code" button on this site uses this component.
 
-```ts
-import { CodeExample } from 'svelte-widgets'
-
-export default { Wrapper: CodeExample }
-```
-
-Fence metadata drives it: `collapsible` hides the source behind a button, `code_above`
-puts the source before the rendered example, and `repl`/`github` add external links.
+Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported.
 
 ## Build-time helpers
 

@@ -2,7 +2,7 @@ import DraggablePane from '$lib/DraggablePane.svelte'
 import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(draggable-pane)/draggable-pane/+page.md?raw'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
   doc_query,
   escape_key,

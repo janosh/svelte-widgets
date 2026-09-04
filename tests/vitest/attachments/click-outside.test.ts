@@ -1,5 +1,5 @@
 import { click_outside } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element, escape_key, mock_rect, stub_prop } from '../index'
 
 describe(`click_outside`, () => {

@@ -4,7 +4,7 @@ import * as icons from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
@@ -375,10 +375,13 @@ describe(`fullscreen background`, () => {
 })
 
 describe(`button rendering`, () => {
-  test(`custom icons, labels and class merge with the defaults`, () => {
+  test.each([
+    icons.Check,
+    { viewBox: icons.Check.viewBox, markup: `<path d="${icons.Check.d}"/>` },
+  ])(`custom icons, labels and class merge with the defaults`, (enter_icon) => {
     const { button } = mount_button({
       // only the `enter` half of each record: `exit` must fall back to the default
-      icons: { enter: icons.Check },
+      icons: { enter: enter_icon },
       labels: { enter: `Grow` },
       class: `my-btn`,
       'aria-pressed': true, // spread before the real one, so it loses
@@ -394,7 +397,7 @@ describe(`button rendering`, () => {
 
     // the omitted `exit` half of both records keeps its default
     const exiting = mount_button({
-      icons: { enter: icons.Check },
+      icons: { enter: enter_icon },
       labels: { enter: `Grow` },
       wrapper: undefined,
       fullscreen: true,

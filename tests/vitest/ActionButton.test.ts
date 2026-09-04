@@ -1,6 +1,6 @@
 import { ActionButton, type ActionState } from '$lib'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { afterEach, expect, test, vi } from 'vite-plus/test'
+import { afterEach, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 

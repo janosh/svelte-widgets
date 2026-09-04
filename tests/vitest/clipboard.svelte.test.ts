@@ -1,6 +1,6 @@
 import { create_clipboard_feedback } from '$lib/clipboard.svelte'
 import { flushSync } from 'svelte'
-import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
+import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 // happy-dom has no navigator.clipboard, so writeText is a spy. Timers are faked to keep
 // the feedback window assertions exact rather than sleeping through them.

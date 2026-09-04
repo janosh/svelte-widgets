@@ -1,6 +1,6 @@
 import { NumberRangeInput } from '$lib'
 import { createRawSnippet, mount, tick, type ComponentProps } from 'svelte'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 
 const label_snippet = createRawSnippet(() => ({
   render: () => `<span>Atom radius</span>`,

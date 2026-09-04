@@ -3,7 +3,7 @@ import * as lib from '$lib'
 import * as utils from '$lib/utils'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
-import { expect, test } from 'vite-plus/test'
+import { expect, test } from 'vitest'
 
 const pages: Record<string, string> = import.meta.glob(
   `../../src/routes/**/+page.{md,svelte}`,

@@ -1,7 +1,7 @@
 import { MULTI_SELECT_LABELS, merge_defaults } from '$lib/labels'
 import { MultiSelect } from '$lib'
 import { mount, tick } from 'svelte'
-import { expect, test } from 'vite-plus/test'
+import { expect, test } from 'vitest'
 import { doc_query } from './index'
 
 // a plain spread keeps an explicitly-undefined key undefined instead of falling back, and

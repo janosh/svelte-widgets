@@ -3,7 +3,7 @@ import {
   file_matches_accept,
   filter_accepted_files,
 } from '$lib/file-drop'
-import { expect, test, vi } from 'vite-plus/test'
+import { expect, test, vi } from 'vitest'
 
 // happy-dom has DataTransfer but no webkitGetAsEntry, so drops use hand-rolled entries
 // implementing the callback APIs the real thing exposes - entry.file(cb, err) and

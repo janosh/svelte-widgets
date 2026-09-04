@@ -1,5 +1,5 @@
 import { auto_update_position } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element, stub_prop } from '../index'
 
 describe(`auto_update_position`, () => {

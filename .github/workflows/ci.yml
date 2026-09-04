@@ -17,13 +17,13 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install
+      - run: npm install --legacy-peer-deps
 
       - name: Lint, format, and type check
         run: npx vp check
 
       - name: Svelte type check
-        run: npx svelte-kit sync && npx svelte-check-rs --threshold error
+        run: npx svelte-kit sync && npx svelte-check --threshold error
 
   unit:
     runs-on: ubuntu-latest
@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install
+      - run: npm install --legacy-peer-deps
 
       - name: Unit tests with coverage
         run: npm run test:coverage
@@ -51,7 +51,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install
+      - run: npm install --legacy-peer-deps
 
       - name: Install Playwright
         run: npx playwright install chromium
@@ -84,7 +84,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: npm install
+      - run: npm install --legacy-peer-deps
       - run: npm run build:site
         env:
           BASE_PATH: /${{ github.event.repository.name }}

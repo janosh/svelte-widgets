@@ -4,7 +4,7 @@ import type { IconData } from '$lib/icons'
 import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 test.each([

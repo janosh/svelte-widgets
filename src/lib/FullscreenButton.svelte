@@ -11,7 +11,10 @@
   } from './labels'
   import { chain_handlers } from './utils'
 
-  const DEFAULT_ICONS = { enter: Fullscreen, exit: ExitFullscreen }
+  const DEFAULT_ICONS: { enter: IconData; exit: IconData } = {
+    enter: Fullscreen,
+    exit: ExitFullscreen,
+  }
 
   let {
     fullscreen = $bindable(false),

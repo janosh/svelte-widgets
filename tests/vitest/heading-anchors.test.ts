@@ -5,7 +5,7 @@ import {
   unique_heading_id,
 } from '$lib/heading-anchors'
 import { SvelteSet } from 'svelte/reactivity'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it } from 'vitest'
 import { doc_query } from './index'
 
 const preprocess = (content: string, filename?: string) =>

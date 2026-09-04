@@ -1,6 +1,6 @@
 import type { TooltipOpenReason, TooltipOptions } from '$lib/attachments'
 import { register_escape_layer, tooltip } from '$lib/attachments'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   create_element,
   doc_query,

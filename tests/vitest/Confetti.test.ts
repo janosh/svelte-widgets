@@ -1,6 +1,6 @@
 import Confetti from '$site/Confetti.svelte'
 import { mount } from 'svelte'
-import { afterEach, expect, test, vi } from 'vite-plus/test'
+import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => vi.useRealTimers())
 

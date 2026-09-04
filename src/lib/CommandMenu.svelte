@@ -1,6 +1,6 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
   import type { ComponentProps } from 'svelte'
-  import type { HTMLAttributes } from 'svelte/elements'
+  import type { HTMLDialogAttributes } from 'svelte/elements'
   import { SvelteMap } from 'svelte/reactivity'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
@@ -22,9 +22,7 @@
     NonNullable<MultiSelectProps<Action>[`option`]>
   >[0]
   type AddParams = Parameters<NonNullable<MultiSelectProps<Action>[`onadd`]>>[0]
-  type DialogEvent = Parameters<
-    NonNullable<HTMLAttributes<HTMLDialogElement>[`oncancel`]>
-  >[0]
+  type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
 
   let {
     actions,
@@ -71,7 +69,7 @@
     input_aria_label?: string
     aria_label?: string
     placeholder?: string
-    dialog_props?: HTMLAttributes<HTMLDialogElement>
+    dialog_props?: HTMLDialogAttributes
     // run action.shortcut hotkeys globally while the menu is closed (default: true)
     global_shortcuts?: boolean
     // localStorage key persisting recently triggered actions, which then rank first

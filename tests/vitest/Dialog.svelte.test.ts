@@ -1,5 +1,5 @@
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { create_element, doc_query, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
 

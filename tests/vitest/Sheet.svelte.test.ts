@@ -1,10 +1,10 @@
-import { mount, tick, unmount } from 'svelte'
-import { expect, onTestFinished, test } from 'vite-plus/test'
+import { mount, tick, unmount, type ComponentProps } from 'svelte'
+import { expect, onTestFinished, test } from 'vitest'
 import { doc_query } from './index'
 import TestSheet from './TestSheet.svelte'
 
 test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {
-  const props = $state({
+  const props = $state<ComponentProps<typeof TestSheet>>({
     open: false,
     class: `consumer-class`,
     closedby: `none`,

@@ -3,7 +3,7 @@ import { default_highlighter } from '$lib/live-examples/default-highlighter'
 import { starry_night, starry_night_highlighter } from '$lib/live-examples/highlighter'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 
 describe(`starry_night_highlighter`, () => {
   test(`shares one default instance with lazy component consumers`, async () => {

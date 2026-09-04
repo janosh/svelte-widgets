@@ -1,5 +1,17 @@
 # Changelog
 
+## [v1.7.1](https://github.com/janosh/svelte-widgets/compare/v1.7.0...v1.7.1)
+
+> 5 September 2026
+
+- Add `ClickFeedback`, `DragOverlay`, `StatusMessage` and `Spinner` for pointer feedback, file-drop overlays and loading/error states
+- Add `CodeBlock` with injectable asynchronous syntax highlighting and `StatGrid` with typed statistics; reuse `CodeBlock` in `FileDetails`, which now accepts readonly file lists
+- Add headless helpers at `svelte-widgets/canvas`, `/csv`, `/format`, `/roving-focus`, `/stats`, `/url-params` and `/image-markup`
+- Fix focus eligibility and backward group navigation, including open shadow roots and stale focus recapture
+- **Breaking:** `CodeExample.meta.github` now takes a resolved URL; remove `meta.repo`, `meta.file` and `meta.filename`. `PrevNext` removes global arrow-key navigation, `nav_options`, `log` and separate `prev_snippet`/`next_snippet` props; use its `children` snippet with `kind` to customize both links
+- Correct `CommandMenu` dialog and `VirtualList` snippet types, and preserve editor autocorrect settings
+- Adopt Vitest 5 and official `svelte-check` for development and CI
+
 ## [v1.7.0](https://github.com/janosh/svelte-widgets/compare/v1.6.1...v1.7.0)
 
 > 4 September 2026

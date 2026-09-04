@@ -2,7 +2,7 @@ import { create_find_state, type FindOptions } from '$lib/find-in-page.svelte'
 import FindBar from '$lib/FindBar.svelte'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, press_key, stub_css_highlights } from './index'
 
 type Props = ComponentProps<typeof FindBar>

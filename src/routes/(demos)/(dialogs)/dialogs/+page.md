@@ -163,7 +163,7 @@ timer, and re-copying a key restarts that timer so the checkmark cannot blink ou
   )
   const commands = [
     [`install`, `npm install svelte-widgets`],
-    [`test`, `npx vp test --run`],
+    [`test`, `npx vitest run`],
     [`build`, `npx vp build`],
   ]
 </script>

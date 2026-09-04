@@ -1,7 +1,7 @@
 import { repository } from '$root/package.json'
 import Layout from '$root/src/routes/+layout.svelte'
 import { mount, tick, unmount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 // explicit type or the inferred `id: string` rejects the 404 case's null below

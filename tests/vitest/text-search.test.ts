@@ -8,7 +8,7 @@ import {
   observe_text_mutations,
   search_text,
 } from '$lib/text-search'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { doc_query, stub_css_highlights } from './index'
 
 const render = (html: string): HTMLElement => {

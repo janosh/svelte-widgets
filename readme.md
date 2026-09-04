@@ -47,6 +47,12 @@ Every component is a named export from the package root and has a direct subpath
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                        | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                      | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
 | `FindBar`          | In-DOM find-in-page bar that highlights, counts and steps through matches                | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
+| `CodeBlock`        | Read-only code with cancellable highlighting, escaped tokens or trusted HTML             | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `StatGrid`         | Responsive statistic tiles with units, hints and accessible changes                      | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `Spinner`          | Loading status with optional text                                                        | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `StatusMessage`    | Dismissible info, success, warning or error feedback                                     | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `DragOverlay`      | Drop-target overlay with an optional message                                             | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `ClickFeedback`    | Positioned transient confirmation icon                                                   | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `CodeEditor`       | Virtualized editable code surface with injectable highlighting and persistence           | [docs](https://svelte-widgets.janosh.dev/code-editor#codeeditor)       |
 | `DiffView`         | Virtualized side-by-side and unified diffs with an injectable backend                    | [docs](https://svelte-widgets.janosh.dev/code-editor)                  |
 | `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                            | [docs](https://svelte-widgets.janosh.dev/toast)                        |
@@ -146,40 +152,51 @@ import { compute_position, fuzzy_match, get_label } from 'svelte-widgets/utils'
 import { heading_anchors } from 'svelte-widgets/heading-anchors'
 ```
 
-| Subpath                             | API                                                           |
-| ----------------------------------- | ------------------------------------------------------------- |
-| `/attachments`                      | Element attachments and dismissal primitives                  |
-| `/clipboard`                        | Clipboard feedback state                                      |
-| `/code-editor`                      | Backend-agnostic editing, diff rendering and primitives       |
-| `/code-editor/editor.css`           | Shared syntax-token and diff-view styles                      |
-| `/dialogs`                          | Queued choice, confirmation and prompt requests               |
-| `/file-drop`                        | Directory expansion and accept filtering                      |
-| `/find-in-page`                     | Reactive find-in-page cursor behind `FindBar`                 |
-| `/fullscreen`                       | Shared fullscreen state                                       |
-| `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment        |
-| `/icons`                            | Dynamic icon registry                                         |
-| `/json-tree`                        | JSON inspector component and types                            |
-| `/json-tree/path`                   | Dot/bracket path formatting and resolution                    |
-| `/json-tree/utils`                  | JSON traversal, immutable path edits, search and diff helpers |
-| `/katex`                            | KaTeX before/after preprocessor pair                          |
-| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers      |
-| `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter    |
-| `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory                |
-| `/print`                            | Element printing                                              |
-| `/source-links`                     | Link inline code mentions of your source to GitHub            |
-| `/source-links/vite-plugin`         | Vite plugin emitting the file/export index those links use    |
-| `/source-links/virtual`             | Types for the plugin's `virtual:source-symbols` module        |
-| `/storage`                          | Non-throwing localStorage, persisted choices and MRU lists    |
-| `/text-search`                      | Text ranges, highlighting and search-jump helpers             |
-| `/theme`                            | Headless light/dark/system state                              |
-| `/toast-queue`                      | Toast reducer and reactive store                              |
-| `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers      |
-| `/virtual`                          | Visible-window calculation for fixed-size items               |
-| `/vite-config`                      | This repository's Vite Plus configuration helper              |
+| Subpath                             | API                                                                               |
+| ----------------------------------- | --------------------------------------------------------------------------------- |
+| `/attachments`                      | Element attachments and dismissal primitives                                      |
+| `/canvas`                           | Parent content-box sizing, DPR tracking and coalesced canvas redraws              |
+| `/csv`                              | CSV escaping and row serialization with optional explicit columns                 |
+| `/format`                           | Binary byte-size formatting                                                       |
+| `/roving-focus`                     | One keyboard tab stop across available HTML or SVG items, including nested groups |
+| `/stats`                            | Statistic value and change formatting                                             |
+| `/url-params`                       | Typed query validation and URL updates that omit defaults                         |
+| `/clipboard`                        | Clipboard feedback state                                                          |
+| `/code-editor`                      | Backend-agnostic editing, diff rendering and primitives                           |
+| `/code-editor/editor.css`           | Shared syntax-token and diff-view styles                                          |
+| `/dialogs`                          | Queued choice, confirmation and prompt requests                                   |
+| `/file-drop`                        | Directory expansion and accept filtering                                          |
+| `/find-in-page`                     | Reactive find-in-page cursor behind `FindBar`                                     |
+| `/fullscreen`                       | Shared fullscreen state                                                           |
+| `/heading-anchors`                  | Heading ID preprocessor, slugger and anchor attachment                            |
+| `/image-markup`                     | Image-fit geometry, freehand strokes and a default color palette                  |
+| `/icons`                            | Dynamic icon registry                                                             |
+| `/json-tree`                        | JSON inspector component and types                                                |
+| `/json-tree/path`                   | Dot/bracket path formatting and resolution                                        |
+| `/json-tree/utils`                  | JSON traversal, immutable path edits, search and diff helpers                     |
+| `/katex`                            | KaTeX before/after preprocessor pair                                              |
+| `/labels`                           | Default UI strings for i18n, incl. attachments & helpers                          |
+| `/live-examples`                    | mdsvex live-example transform, Vite plugin and highlighter                        |
+| `/live-examples/create-highlighter` | Lightweight custom grammar highlighter factory                                    |
+| `/print`                            | Element printing                                                                  |
+| `/source-links`                     | Link inline code mentions of your source to GitHub                                |
+| `/source-links/vite-plugin`         | Vite plugin emitting the file/export index those links use                        |
+| `/source-links/virtual`             | Types for the plugin's `virtual:source-symbols` module                            |
+| `/storage`                          | Non-throwing localStorage, persisted choices and MRU lists                        |
+| `/text-search`                      | Text ranges, highlighting and search-jump helpers                                 |
+| `/theme`                            | Headless light/dark/system state                                                  |
+| `/toast-queue`                      | Toast reducer and reactive store                                                  |
+| `/utils`                            | Positioning, fuzzy matching, hotkeys and general helpers                          |
+| `/virtual`                          | Visible-window calculation for fixed-size items                                   |
+| `/vite-config`                      | This repository's Vite Plus configuration helper                                  |
+
+`create_canvas_surface()` owns both layers' inline CSS dimensions and restores them on cleanup. Supply `height()` or give the parent a definite height; draw callbacks receive CSS-pixel coordinates and isolated context state. `create_roving_focus()` keeps nested groups independent and observes DOM eligibility changes, including hidden panels and disabled items.
+
+`StatGrid` changes are neutral by default; set an item's `delta_tone` to `positive` or `negative` when the change has that meaning. `ClickFeedback` restarts when given a fresh `position` object, even at identical coordinates. `rows_to_csv(rows, columns)` accepts explicit readonly columns for sparse rows or header-only exports. URL validators accept native Sets or record keys; present empty strings remain valid when allowed.
 
 `CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM temporarily remains a full-document textarea and is therefore still subject to browser textarea and scroll-height limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
 
-Run the opt-in, hardware-sensitive editor stress target locally with `RUN_LARGE_EDITOR_TESTS=1 npx vp test --run tests/vitest/code-editor-model.test.ts`; normal CI deliberately skips it.
+Run the opt-in, hardware-sensitive editor stress target locally with `RUN_LARGE_EDITOR_TESTS=1 npx vitest run tests/vitest/code-editor-model.test.ts`; normal CI deliberately skips it.
 
 For `$…$` and `$$…$$` math in mdsvex, wrap mdsvex with `katex_preprocess()` and run `heading_ids()` last:
 

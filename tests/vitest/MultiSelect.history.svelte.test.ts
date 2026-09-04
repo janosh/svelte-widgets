@@ -1,6 +1,6 @@
 // deno-lint-ignore-file no-await-in-loop
 import { tick } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import { focus_input, mount_multiselect } from './MultiSelect.test-utils'

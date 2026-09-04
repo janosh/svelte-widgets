@@ -2,7 +2,7 @@ import { SubpageGrid } from '$lib'
 import { Check, ChevronRight, Copy, type IconData } from '$lib/icons'
 import MultiSelectPage from '$root/src/routes/(demos)/(multiselect)/multiselect/+page.md'
 import { mount } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { expect, test, vi } from 'vitest'
 
 // stands in for a configured base path, which is what resolve() prefixes
 vi.mock(`$app/paths`, () => ({ resolve: (path: string) => `/docs${path}` }))

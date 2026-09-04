@@ -1,6 +1,6 @@
 import { portal_action } from '$lib/portal'
 import { tick } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { expect, test, vi } from 'vitest'
 
 function create_fixture(in_shadow_root = false) {
   const host = document.createElement(`div`)

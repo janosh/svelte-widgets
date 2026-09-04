@@ -1,5 +1,5 @@
 import { file_drop } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element, data_transfer, drag_event } from '../index'
 
 describe(`file_drop`, () => {

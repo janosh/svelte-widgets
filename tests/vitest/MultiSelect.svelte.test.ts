@@ -1,7 +1,7 @@
 // deno-lint-ignore-file no-await-in-loop
 import { readFileSync } from 'node:fs'
 import { tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Option, OptionStyle } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { get_label } from '$lib/utils'

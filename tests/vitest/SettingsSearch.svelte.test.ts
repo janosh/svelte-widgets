@@ -1,7 +1,7 @@
 import { SettingsSearch } from '$lib'
 import type { SettingsSearchLabels } from '$lib/labels'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 import { doc_query } from './index'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 

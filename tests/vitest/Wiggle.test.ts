@@ -1,7 +1,7 @@
 import { Wiggle } from '$lib'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 describe(`Wiggle`, () => {

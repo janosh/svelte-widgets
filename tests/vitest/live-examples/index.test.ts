@@ -3,7 +3,7 @@ import * as highlighter from '$lib/live-examples/highlighter'
 import * as live_examples from '$lib/live-examples/index'
 import mdsvex_transform, * as mdsvex from '$lib/live-examples/mdsvex-transform'
 import vite_plugin from '$lib/live-examples/vite-plugin'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 
 describe(`module exports`, () => {
   test(`re-exports live-example helpers from their owner modules`, () => {

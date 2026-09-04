@@ -1,7 +1,7 @@
 import { Toggle } from '$lib'
 import type { ComponentProps } from 'svelte'
 import { mount, tick } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 

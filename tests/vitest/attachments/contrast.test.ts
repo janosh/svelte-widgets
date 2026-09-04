@@ -1,6 +1,6 @@
 import type { ContrastOptions } from '$lib/attachments'
 import { contrast_color, get_bg_color, pick_contrast_color } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element } from '../index'
 
 describe(`contrast_color`, () => {

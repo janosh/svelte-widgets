@@ -8,7 +8,7 @@ import {
   storage_set,
   storage_set_json,
 } from '$lib/storage'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 
 describe(`storage_get/set/remove`, () => {
   test(`round-trips values through localStorage`, () => {

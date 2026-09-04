@@ -3,7 +3,7 @@ import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '$lib/code-editor/model'
 import type { ApplyEditsArgs, EditorBackend, OpenDocArgs } from '$lib/code-editor/types'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, press_key } from './index'
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
@@ -88,6 +88,7 @@ test(`native input, selection, history, commands, and backend deltas share the m
   const { instance, model, recorder, textarea } = await mount_editor(undefined, {
     on_update,
   })
+  expect(textarea.getAttribute(`autocorrect`)).toBe(`off`)
   expect(doc_query(`.gutter`).style.width).toBe(`2ch`)
   const text_spy = vi.spyOn(model, `text`)
   text_spy.mockClear()

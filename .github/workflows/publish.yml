@@ -24,7 +24,7 @@ jobs:
           node-version: 24
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       # prepublishOnly builds dist/ via `npm run package`; OIDC attaches provenance
       - name: Publish to npm

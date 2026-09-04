@@ -1,5 +1,5 @@
 import { load } from '$root/src/routes/changelog/+page.server'
-import { expect, test } from 'vite-plus/test'
+import { expect, test } from 'vitest'
 
 test(`changelog transform preserves code spans and wraps entity tags`, async () => {
   const { changelog } = await load()

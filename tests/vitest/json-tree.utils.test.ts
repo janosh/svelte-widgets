@@ -20,7 +20,7 @@ import {
   set_at_path,
   values_equal,
 } from '$lib/json-tree/utils'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it } from 'vitest'
 
 it.each([
   [null, `null`, 0, false],

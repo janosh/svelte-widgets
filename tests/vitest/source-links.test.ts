@@ -6,7 +6,7 @@ import source_links, {
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vite-plus/test'
+import { afterEach, describe, expect, it } from 'vitest'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
 const load_symbols = (root?: string): SourceSymbols => {

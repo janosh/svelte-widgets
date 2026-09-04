@@ -2,7 +2,7 @@ import Tabs from '$lib/Tabs.svelte'
 import type { TabItem } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 import { press_key } from './index'
 
 describe(`Tabs`, () => {

@@ -19,7 +19,7 @@
 
   {#if demo_paths.includes(page.url.pathname)}
     {@const style = `max-width: var(--main-max-width); margin: 2em auto`}
-    <PrevNext items={demo_paths} current={page.url.pathname} onkeyup={null} {style} />
+    <PrevNext items={demo_paths} current={page.url.pathname} {style} />
   {/if}
 </main>
 

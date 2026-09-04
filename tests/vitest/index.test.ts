@@ -1,6 +1,6 @@
 import * as lib from '$lib'
 import * as attachments from '$lib/attachments'
-import { expect, test } from 'vite-plus/test'
+import { expect, test } from 'vitest'
 
 test(`src/lib/index.ts does not re-export attachments`, () => {
   const attachment_names = Object.keys(attachments)

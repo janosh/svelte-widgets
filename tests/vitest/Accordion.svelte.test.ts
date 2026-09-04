@@ -2,7 +2,7 @@ import Accordion from '$lib/Accordion.svelte'
 import type { AccordionItem } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
+import { describe, expect, test, vi } from 'vitest'
 import TestNestedAccordion from './TestNestedAccordion.svelte'
 import { press_key } from './index'
 

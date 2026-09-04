@@ -1,6 +1,6 @@
 import LiteYouTubeEmbed from '$lib/LiteYouTubeEmbed.svelte'
 import { type ComponentProps, mount, tick } from 'svelte'
-import { afterAll, describe, expect, test, vi } from 'vite-plus/test'
+import { afterAll, describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 // happy-dom navigates an iframe's src for real, so intercept every request locally

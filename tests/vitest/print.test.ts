@@ -1,5 +1,5 @@
 import { format_print_filename, print_element } from '$lib/print'
-import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 
 // happy-dom has no window.print and never fires afterprint, so print is spied and the
 // event dispatched by hand. Heights are stubbed too: the DOM does no layout, so every

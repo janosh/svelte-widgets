@@ -1,5 +1,5 @@
 import type { MultiSelectProps } from '$lib'
-import { assert, onTestFinished, vi } from 'vite-plus/test'
+import { assert, onTestFinished, vi } from 'vitest'
 
 export const create_element = (
   tag = `div`,

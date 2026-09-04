@@ -1,7 +1,6 @@
 import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { mdsvex } from 'mdsvex'
-import pkg from './package.json' with { type: 'json' }
 import { generate_icons } from './scripts/generate-icons.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
 import { katex_preprocess } from './src/lib/katex.ts'
@@ -23,7 +22,6 @@ const remark_plugins = [
     {
       defaults: {
         Wrapper: `/src/lib/CodeExample.svelte`,
-        repo: pkg.repository,
         collapsible: true,
         hide_style: true,
       },
@@ -77,8 +75,6 @@ export default {
   // shared lint/fmt/build/staged, published as svelte-widgets/vite-config
   ...make_config({
     staged: {
-      // shared hook runs the JS svelte-check; CI here uses the Rust port
-      '*.{ts,svelte}': `sh -c 'npx svelte-kit sync && npx svelte-check-rs --threshold error'`,
       '*.test.ts': `sh -c '! grep -E "(test|describe)\\.only\\(" "$@"' --`,
       // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup;
       // `alle` is German for "all", used by the label-override tests

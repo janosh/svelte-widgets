@@ -4,7 +4,7 @@ import { JsonTree } from '$lib'
 import { serialize_for_copy } from '$lib/json-tree/utils'
 import { doc_query } from './index'
 import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, it, onTestFinished, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, it, onTestFinished, test, vi } from 'vitest'
 
 const keydown = (key: string, init: KeyboardEventInit = {}) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true, ...init })

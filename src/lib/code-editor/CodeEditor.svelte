@@ -655,7 +655,7 @@
         autocapitalize="off"
         autocomplete="off"
         bind:this={textarea}
-        autocorrect="off"
+        {...{ autocorrect: `off` }}
         onbeforeinput={on_before_input}
         onblur={on_blur}
         oncompositionend={on_composition_end}

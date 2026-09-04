@@ -18,7 +18,7 @@ import type {
   ToastRequest,
 } from '$lib/toast-queue.svelte.ts'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, escape_key } from './index'
 
 const undo = { label: `Undo` }

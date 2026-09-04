@@ -3,7 +3,7 @@ import type { DialogChoice } from '$lib/dialogs.svelte'
 import { ask_prompt, dialog_queue, request_choice } from '$lib/dialogs.svelte'
 import { type ComponentProps, createRawSnippet, mount, tick, unmount } from 'svelte'
 import { render } from 'svelte/server'
-import { afterEach, expect, test, vi } from 'vite-plus/test'
+import { afterEach, expect, test, vi } from 'vitest'
 import { create_element, doc_query, track } from './index'
 
 // happy-dom implements <dialog> (showModal, .open, close, close event) but not Escape

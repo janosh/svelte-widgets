@@ -3,7 +3,7 @@ import type { CmdAction } from '$lib/types'
 import type { CmdSection } from '$lib/utils'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, escape_key, mock_rect, stub_prop } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
 

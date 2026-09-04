@@ -18,7 +18,7 @@ import type {
 } from '$lib/code-editor'
 import type { DiffViewLabels } from '$lib/labels'
 import { flushSync, mount, unmount } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query as query_element } from './index'
 
 const DEFAULT_OPTIONS: DiffViewOptions = {

@@ -3,7 +3,7 @@ import { mdsvex } from 'mdsvex'
 import { compile, preprocess } from 'svelte/compiler'
 import { heading_ids } from '$lib/heading-anchors'
 import { katex_preprocess } from '$lib/katex'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it } from 'vitest'
 
 const run = (content: string, filename = `page.md`, options: KatexOptions = {}) => {
   const { before, after } = katex_preprocess(options)

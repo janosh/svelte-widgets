@@ -3,7 +3,7 @@ import remark, {
   EXAMPLE_MODULE_PREFIX,
 } from '$lib/live-examples/mdsvex-transform'
 import { Buffer } from 'node:buffer'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 
 interface TestNode {
   type: string

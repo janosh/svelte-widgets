@@ -1,6 +1,12 @@
 <script lang="ts">
   import {
     Accordion,
+    CodeBlock,
+    StatGrid,
+    Spinner,
+    StatusMessage,
+    DragOverlay,
+    ClickFeedback,
     ActionMenu,
     CodeEditor,
     CommandMenu,
@@ -99,3 +105,10 @@
   <DirectPageSearch fallback_actions={actions} />
   <p>{package_api_works ? `package ok` : `package failed`}</p>
 </main>
+
+<CodeBlock code="let value = 1" />
+<StatGrid items={[{ label: 'Count', value: 1 }]} />
+<Spinner text="Loading" />
+<StatusMessage message="Ready" type="success" />
+<DragOverlay visible={false} />
+<ClickFeedback position={{ x: 0, y: 0 }} />

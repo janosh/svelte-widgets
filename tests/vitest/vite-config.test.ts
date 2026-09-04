@@ -1,5 +1,5 @@
 import { make_config } from '$lib/vite-config'
-import { expect, test } from 'vite-plus/test'
+import { expect, test } from 'vitest'
 
 test(`overrides merge into their section without dropping the rest`, () => {
   const defaults = make_config()

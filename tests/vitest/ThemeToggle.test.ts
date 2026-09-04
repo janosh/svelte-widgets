@@ -8,7 +8,7 @@ import {
 import { Monitor, Moon, Sun } from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
-import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
+import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { doc_query } from './index.ts'
 
 const mounted: Record<string, unknown>[] = []

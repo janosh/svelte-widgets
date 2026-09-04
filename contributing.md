@@ -42,7 +42,7 @@ These CI checks have to pass for every PR before merging:
 All run as jobs of the single [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/ci.yml)):
 
 - tests: `unit` (vitest with coverage plus the package smoke test) and `e2e` (Playwright)
-- linting and type checks: `check` runs `vp check` plus `svelte-check-rs`
+- linting and type checks: `check` runs `vp check` plus `svelte-check`
 - links: `link-check` runs lychee over every markdown, Svelte and TS file
 - docs: `build` and `deploy` handle continuous deployment through GitHub Pages
 

@@ -2,7 +2,7 @@ import Footer from '$lib/Footer.svelte'
 import { GitHub } from '$lib/icons'
 import type { FooterLink } from '$lib/types'
 import { type ComponentProps, createRawSnippet, mount, unmount } from 'svelte'
-import { describe, expect, test } from 'vite-plus/test'
+import { describe, expect, test } from 'vitest'
 import { doc_query } from './index'
 
 describe(`Footer`, () => {

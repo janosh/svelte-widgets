@@ -1,5 +1,11 @@
 <script lang="ts">
   import {
+    CodeBlock,
+    StatGrid,
+    Spinner,
+    StatusMessage,
+    DragOverlay,
+    ClickFeedback,
     FileInput,
     JsonTree,
     NumberRangeInput,
@@ -10,6 +16,10 @@
     type TreeNode,
   } from '$lib'
 
+  let message = $state<string | undefined>(`Your changes were saved.`)
+  let dragging = $state(false)
+  let clicked = $state(false)
+  let feedback_position = $state({ x: 0, y: 0 })
   let value = $state<number | undefined>(0.5)
   let ratio = $state(0.4)
   let collapsed = $state(false)
@@ -108,6 +118,73 @@
     task_state = `running`
   }}
 />
+
+<h3>CodeBlock and StatGrid</h3>
+<p>
+  <code>CodeBlock</code> accepts plain code or an optional
+  <code>highlight(code, language, signal)</code>
+  callback. Return tokens with raw text and an optional CSS class (the component escapes the
+  text), or trusted highlighted HTML. Changes cancel pending work; failures leave the source
+  visible and show the error. Set
+  <code>wrap</code> for long lines.
+</p>
+<CodeBlock
+  code={'const total = values.reduce((sum, value) => sum + value, 0)'}
+  language="javascript"
+/>
+<p>
+  <code>StatGrid</code> accepts items with label, value, optional unit, delta and hint. A
+  custom <code>format</code> callback controls value formatting. Non-finite values and changes
+  display as unavailable.
+</p>
+<StatGrid
+  items={[
+    { label: 'Completed', value: 1234, delta: 28, hint: 'Since the previous run' },
+    { label: 'Latency', value: 12.5, unit: 'ms', delta: -2.1 },
+    { label: 'State', value: 'Ready' },
+  ]}
+/>
+<h3>Feedback</h3>
+<Spinner text="Loading preview" />
+<StatusMessage bind:message type="success" dismissible />
+<p>
+  <code>StatusMessage</code> supports info, success, warning and error announcements.
+  Dismissal clears its bindable message. <code>Spinner</code> adds an accessible status
+  around <code>CircleSpinner</code>.
+</p>
+<button onclick={() => (dragging = !dragging)}>Toggle drop overlay</button>
+<div
+  style="position: relative; min-height: 6rem; margin-block: 1rem; border: 1px dashed currentColor"
+>
+  <DragOverlay visible={dragging} message="Drop files here" />
+</div>
+<button
+  onclick={(event) => {
+    feedback_position = { x: event.clientX, y: event.clientY }
+    clicked = !clicked
+  }}>Toggle click feedback</button
+>
+<ClickFeedback visible={clicked} position={feedback_position} />
+<p>
+  <code>DragOverlay</code> fills a positioned parent; <code>ClickFeedback</code> uses viewport
+  coordinates. The caller owns visibility and timing.
+</p>
+<h3>Canvas and keyboard primitives</h3>
+<p>
+  <code>create_canvas_surface</code> from <code>svelte-widgets/canvas</code> takes
+  reactive canvas and optional overlay getters, an optional CSS height, draw callbacks and
+  <code>repaint_deps</code>. Create it during component initialization. Frames receive a
+  2D context and CSS width/height. The base is cleared before drawing; the overlay clears
+  itself. <code>schedule(false)</code> redraws only the overlay. Parent resizes and DPR changes
+  update both backing stores; cleanup stops observers and pending frames.
+</p>
+<p>
+  <code>create_roving_focus</code> from <code>svelte-widgets/roving-focus</code> takes
+  container and items getters. Give each item a unique <code>data-roving-key</code>, and
+  use <code>tabindex(key)</code>. Forward the container's keydown and focusin events.
+  Arrow keys wrap through DOM order; Home and End reach its ends. Modified keys and
+  editable children retain their normal behavior.
+</p>
 
 <style>
   .split-demo {
