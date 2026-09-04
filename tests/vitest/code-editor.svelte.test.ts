@@ -45,6 +45,15 @@ const flush_async = async (): Promise<void> => {
   await Promise.resolve()
   await tick()
 }
+const before_input = (area: HTMLTextAreaElement, input_type: string): InputEvent => {
+  const event = new InputEvent(`beforeinput`, {
+    inputType: input_type,
+    bubbles: true,
+    cancelable: true,
+  })
+  area.dispatchEvent(event)
+  return event
+}
 const emit_input = (
   area: HTMLTextAreaElement,
   input_type: string,
@@ -55,24 +64,19 @@ const emit_input = (
   replace_to = selection_end,
 ): void => {
   area.setSelectionRange(selection_start, selection_end)
-  area.dispatchEvent(
-    new InputEvent(`beforeinput`, {
-      inputType: input_type,
-      bubbles: true,
-      cancelable: true,
-    }),
-  )
+  before_input(area, input_type)
   area.value = area.value.slice(0, replace_from) + insert + area.value.slice(replace_to)
   const caret = replace_from + insert.length
   area.setSelectionRange(caret, caret)
   area.dispatchEvent(new InputEvent(`input`, { inputType: input_type, bubbles: true }))
 }
+type EditorProps = ComponentProps<typeof CodeEditor>
 const mount_editor = async (
   model = create_editor_model({ uri: `demo.ts`, text: DEMO_TEXT }),
-  overrides: Partial<ComponentProps<typeof CodeEditor>> = {},
+  overrides: Partial<EditorProps> = {},
 ) => {
   const recorder = create_backend()
-  const props = $state({ model, backend: recorder.backend, ...overrides })
+  const props = $state<EditorProps>({ model, backend: recorder.backend, ...overrides })
   const instance = mount(CodeEditor, { target: document.body, props })
   onTestFinished(() => unmount(instance))
   await flush_async()
@@ -113,13 +117,7 @@ test(`native input, selection, history, commands, and backend deltas share the m
   textarea.setSelectionRange(0, 5)
   textarea.dispatchEvent(new Event(`select`))
   expect(model.selection).toEqual({ anchor: 0, head: 5 })
-  textarea.dispatchEvent(
-    new InputEvent(`beforeinput`, {
-      inputType: `historyUndo`,
-      bubbles: true,
-      cancelable: true,
-    }),
-  )
+  before_input(textarea, `historyUndo`)
   expect(model.text()).toContain(`xylambdafirst`)
   expect(instance.undo()).toBe(true)
   expect(model.text()).toContain(`xyfirst`)
@@ -237,6 +235,26 @@ test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
   },
 )
 
+test.each([`historyUndo`, `historyRedo`])(
+  `read-only blocks native %s`,
+  async (input_type) => {
+    const { model, props, textarea } = await mount_editor()
+    emit_input(textarea, `insertText`, 0, 0, `!`)
+    if (input_type === `historyRedo`) model.undo()
+    props.read_only = true
+    await tick()
+    const text = model.text()
+    const revision = model.revision
+    const event = before_input(textarea, input_type)
+    expect([
+      event.defaultPrevented,
+      model.text(),
+      textarea.value,
+      model.revision,
+    ]).toEqual([true, text, text, revision])
+  },
+)
+
 test.each([
   [`deleteContentBackward`, 2, 2, ``, 1, 2, `ac`],
   [`deleteWordBackward`, 2, 2, ``, 0, 2, `c`],
@@ -271,7 +289,7 @@ test.each([
 
 // The cache used to be cleared wholesale on every transaction, so one keystroke dropped
 // the colors of every visible line until the debounced re-highlight came back.
-test(`an edit keeps cached tokens above it and drops only the line it touched`, async () => {
+test(`an edit keeps tokens above it and invalidates downstream syntax`, async () => {
   const recorder = create_backend()
   const highlight_lines = vi
     .fn()
@@ -292,11 +310,11 @@ test(`an edit keeps cached tokens above it and drops only the line it touched`, 
     )
   expect(highlighted_lines()).toEqual([true, true, true])
 
-  // one character, no newline and no line-count change, so only line 2 can have changed
-  const line_start = model.line(2).from
-  model.transact([{ from: line_start, to: line_start, insert: `x` }])
+  // Opening a block comment changes later lines without changing the line count.
+  const line_start = model.line(1).from
+  model.transact([{ from: line_start, to: line_start, insert: `/*` }])
   await tick()
-  expect(highlighted_lines()).toEqual([true, true, false])
+  expect(highlighted_lines()).toEqual([true, false, false])
 
   // an edit that adds a line invalidates from that line down, but not above it
   const split_at = model.line(1).from

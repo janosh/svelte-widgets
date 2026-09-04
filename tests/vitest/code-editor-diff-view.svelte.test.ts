@@ -18,8 +18,8 @@ import type {
 } from '$lib/code-editor'
 import type { DiffViewLabels } from '$lib/labels'
 import { flushSync, mount, unmount } from 'svelte'
-import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { doc_query as query_element } from './index'
 
 const DEFAULT_OPTIONS: DiffViewOptions = {
   font_size: 13,
@@ -91,23 +91,6 @@ const flush_async = async (
     expect(document.querySelector(ready_selector)).not.toBeNull()
   })
   flushSync()
-}
-
-// oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- callers name the DOM subtype
-const query_element = <ElementType extends Element = HTMLElement>(
-  selector: string,
-): ElementType => {
-  const element = document.querySelector<ElementType>(selector)
-  if (!element) throw new Error(`${selector} not found`)
-  return element
-}
-
-const query_by_text = (selector: string, text: string): Element => {
-  const element = [...document.querySelectorAll(selector)].find((candidate) =>
-    candidate.textContent?.includes(text),
-  )
-  if (!element) throw new Error(`${selector} with text ${JSON.stringify(text)} not found`)
-  return element
 }
 
 const mount_diff = async (
@@ -208,25 +191,19 @@ describe(`rows and layouts`, () => {
       diff_row(`delete`, diff_line(3, `dropped`), null),
       diff_row(`insert`, null, diff_line(3, `arrived`)),
     ]
-    const expected = new SvelteSet([
-      `keep me`,
-      `was here`,
-      `is here`,
-      `dropped`,
-      `arrived`,
-    ])
+    const expected = new Set([`keep me`, `was here`, `is here`, `dropped`, `arrived`])
     await mount_diff(rows_result(rows, { oldLineCount: 3, newLineCount: 3 }), {
       options: { ...DEFAULT_OPTIONS, layout: `unified` },
     })
 
     expect(document.querySelectorAll(`.diff-row.unified`)).toHaveLength(5)
-    expect(new SvelteSet(code_texts())).toEqual(expected)
+    expect(new Set(code_texts())).toEqual(expected)
     expect(text_of(query_element(`.diff-row-delete`))).toBe(`was here`)
     expect(text_of(query_element(`.diff-row-insert`))).toBe(`is here`)
 
     await click(query_element(`.segmented button[aria-pressed='false']`))
     expect(document.querySelectorAll(`.diff-row.pair`)).toHaveLength(4)
-    expect(new SvelteSet(code_texts())).toEqual(expected)
+    expect(new Set(code_texts())).toEqual(expected)
     await click(query_element(`.segmented button[aria-pressed='false']`))
     expect(document.querySelectorAll(`.diff-row.unified`)).toHaveLength(5)
   })
@@ -261,36 +238,48 @@ describe(`rows and layouts`, () => {
   })
 })
 
-test(`elided gaps expand using source lines and remain independent`, async () => {
-  const context = `one\ntwo\nthree\nfour\n`
-  const row = diff_row(`replace`, diff_line(5, `old five`), diff_line(5, `new five`))
-  const hunk = hunk_of([row], { oldStart: 5, newStart: 5, skippedBefore: 4 })
-  await mount_diff(
-    diff_result({
-      hunks: [hunk],
-      added: 1,
-      removed: 1,
-      oldLineCount: 6,
-      newLineCount: 6,
-      skippedAfter: 1,
-    }),
-    {
-      old_text: `${context}old five\ntail`,
-      new_text: `${context}new five\ntail`,
-    },
-  )
+test.each([4, 150_000])(
+  `%i elided lines expand and keep gaps independent`,
+  async (count) => {
+    const context = `one\ntwo\nthree\nfour\n`.repeat(count / 4)
+    const row = diff_row(
+      `replace`,
+      diff_line(count + 1, `old five`),
+      diff_line(count + 1, `new five`),
+    )
+    const hunk = hunk_of([row], { skippedBefore: count })
+    await mount_diff(
+      diff_result({
+        hunks: [hunk],
+        added: 1,
+        removed: 1,
+        oldLineCount: count + 2,
+        newLineCount: count + 2,
+        skippedAfter: 1,
+      }),
+      {
+        old_text: `${context}old five\ntail`,
+        new_text: `${context}new five\ntail`,
+      },
+    )
 
-  const gaps = [...document.querySelectorAll(`.diff-gap`)]
-  expect(gaps.map((gap) => text_of(gap).trim())).toEqual([
-    expect.stringMatching(/4 unchanged lines$/u),
-    expect.stringMatching(/1 unchanged line$/u),
-  ])
-  expect(gaps[0].getAttribute(`aria-expanded`)).toBe(`false`)
-  await click(gaps[0])
-  const expanded = query_by_text(`.diff-row.pair`, `three`)
-  expect([...expanded.querySelectorAll(`.gutter`)].map(text_of)).toEqual([`3`, `3`])
-  expect(document.querySelectorAll(`.diff-gap`)).toHaveLength(1)
-})
+    const gaps = [...document.querySelectorAll(`.diff-gap`)]
+    expect(gaps.map((gap) => text_of(gap).trim())).toEqual([
+      expect.stringContaining(`${count} unchanged lines`),
+      expect.stringMatching(/1 unchanged line$/u),
+    ])
+    expect(gaps[0].getAttribute(`aria-expanded`)).toBe(`false`)
+    await click(gaps[0])
+    const expanded = query_element(`.diff-row.pair:nth-child(3)`)
+    expect(side_text(expanded, `old`)).toBe(`three`)
+    expect([...expanded.querySelectorAll(`.gutter`)].map(text_of)).toEqual([`3`, `3`])
+    const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
+    scroller.scrollTop = count * ROW_HEIGHT
+    scroller.dispatchEvent(new Event(`scroll`))
+    await flush_async()
+    expect(document.querySelectorAll(`.diff-gap`)).toHaveLength(1)
+  },
+)
 
 test(`gap lines missing a side stay context instead of reading as edits`, async () => {
   // Four rows yield new-only `a`–`c`, then old `only one` paired with new `d`;
