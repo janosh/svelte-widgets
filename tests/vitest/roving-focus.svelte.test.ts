@@ -84,8 +84,21 @@ const setup = (
 test.each([false, true])(
   `HTML/SVG svg=%s follows DOM order, wraps and tracks focused keys`,
   (svg) => {
-    const { marks, press, tabstops } = setup(svg)
+    const { container, marks, press, tabstops } = setup(svg)
     expect(tabstops()).toEqual([`0`, `-1`, `-1`])
+    for (const key of [
+      `ArrowLeft`,
+      `ArrowUp`,
+      `End`,
+      `ArrowRight`,
+      `ArrowDown`,
+      `Home`,
+    ]) {
+      expect(press(container, key)).toEqual({ handled: true, prevented: true })
+      expect(document.activeElement).toBe(
+        marks[[`ArrowLeft`, `ArrowUp`, `End`].includes(key) ? 2 : 0],
+      )
+    }
     marks[0].focus()
     for (const [key, index] of [
       [`ArrowRight`, 1],
@@ -171,20 +184,34 @@ test(`nested focus selects its mark; activation keys and empty groups are untouc
   expect(press(container, `Home`)).toEqual({ handled: false, prevented: false })
 })
 
-test.each([`disabled`, `hidden`, `inert`, `display`, `visibility`])(
+test.each([`disabled`, `hidden`, `inert`, `display`, `visibility`, `type`])(
   `skips %s items for initial focus, navigation, and reactive removal`,
   async (kind) => {
     const hide = (mark: HTMLElement | SVGElement) => {
       if (kind === `display`) mark.style.display = `none`
       else if (kind === `visibility`) mark.style.visibility = `hidden`
+      else if (kind === `type`) mark.setAttribute(`type`, `hidden`)
       else mark.setAttribute(kind, ``)
     }
-    const { marks, press, tabstops } = setup(false, document.body, (initial_marks) =>
-      hide(initial_marks[0]),
+    const { container, marks, press, tabstops } = setup(
+      false,
+      document.body,
+      (initial_marks) => {
+        if (kind === `type`) {
+          initial_marks.forEach((mark, idx) => {
+            const input = document.createElement(`input`)
+            input.type = `button`
+            input.setAttribute(ROVING_ATTR, mark.getAttribute(ROVING_ATTR) ?? ``)
+            initial_marks[idx] = input
+          })
+        }
+        hide(initial_marks[0])
+      },
     )
     expect(tabstops()).toEqual([`-1`, `0`, `-1`])
     marks[1].focus()
-    expect(press(marks[1], `ArrowLeft`).handled).toBe(true)
+    // Inputs keep their own keys; the container can still initiate navigation.
+    expect(press(kind === `type` ? container : marks[1], `ArrowLeft`).handled).toBe(true)
     expect(document.activeElement).toBe(marks[2])
     hide(marks[2])
     await vi.waitFor(() => {

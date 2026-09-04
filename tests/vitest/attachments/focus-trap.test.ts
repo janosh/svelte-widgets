@@ -73,10 +73,19 @@ describe(`focus_trap`, () => {
     }
   })
 
-  it.each([false, true])(
-    `walks into an open shadow root (trap is host: %s)`,
-    (is_host) => {
+  it.each([
+    [false, false],
+    [true, false],
+    [true, true],
+  ])(
+    `walks into an open shadow root (trap is host: %s, disabled fieldset: %s)`,
+    (is_host, disabled_fieldset) => {
       const { surface, buttons } = make_surface(1)
+      if (disabled_fieldset) {
+        const fieldset = create_element(`fieldset`)
+        fieldset.setAttribute(`disabled`, ``)
+        fieldset.append(surface)
+      }
       const host = is_host ? surface : document.createElement(`div`)
       const shadow = host.attachShadow({ mode: `open` })
       shadow.append(document.createElement(`button`))

@@ -19,6 +19,7 @@ export const is_focus_available = (element: Element): boolean => {
         !current.querySelector(`:scope > summary`)?.contains(element)) ||
       (element.matches(`button,input,select,textarea`) &&
         current.matches(`fieldset[disabled]`) &&
+        current.contains(element) &&
         !current.querySelector(`:scope > legend`)?.contains(element))
     )
       return false

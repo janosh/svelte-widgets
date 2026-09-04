@@ -2,6 +2,8 @@ export type CsvCell = number | string | boolean | null | undefined
 
 // Quote a CSV field per RFC 4180. A lone CR counts: readers treat CR, LF and CRLF alike
 // as record separators, so an unquoted CR splits one record into two.
+// Preserves cell data, including formula prefixes. Sanitize untrusted spreadsheet exports
+// at the call site for the target application; RFC quoting does not prevent formula execution.
 export const escape_csv_field = (value: CsvCell): string => {
   const field = String(value ?? ``)
   if (!/[",\n\r]/.test(field)) return field

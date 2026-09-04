@@ -81,6 +81,7 @@ export function create_roving_focus(opts: {
       attributeFilter: [
         ROVING_ATTR,
         `disabled`,
+        `type`,
         `hidden`,
         `inert`,
         `open`,
@@ -135,7 +136,7 @@ export function create_roving_focus(opts: {
       const current_idx = current
         ? marks.indexOf(current as HTMLElement | SVGElement)
         : -1
-      let next_idx = 0
+      let next_idx = is_prev ? marks.length - 1 : 0
       if (event.key === `End`) next_idx = marks.length - 1
       else if (event.key !== `Home` && current_idx >= 0) {
         // Wrap, so arrowing off either end lands back inside the group

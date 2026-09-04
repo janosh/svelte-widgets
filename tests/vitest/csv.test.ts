@@ -34,6 +34,11 @@ describe(`rows_to_csv`, () => {
   test.each([
     [`plain`, `plain`],
     [42, `42`],
+    [-42, `-42`],
+    [`=1+2`, `=1+2`],
+    [`+123`, `+123`],
+    [`-123`, `-123`],
+    [`@name`, `@name`],
     [true, `true`],
     [false, `false`],
     [null, ``],
