@@ -167,6 +167,34 @@
     "./json-tree/path": {
       "types": "./dist/json-tree/path.d.ts",
       "default": "./dist/json-tree/path.js"
+    },
+    "./csv": {
+      "types": "./dist/csv.d.ts",
+      "default": "./dist/csv.js"
+    },
+    "./format": {
+      "types": "./dist/format.d.ts",
+      "default": "./dist/format.js"
+    },
+    "./roving-focus": {
+      "types": "./dist/roving-focus.svelte.d.ts",
+      "default": "./dist/roving-focus.svelte.js"
+    },
+    "./canvas": {
+      "types": "./dist/canvas.svelte.d.ts",
+      "default": "./dist/canvas.svelte.js"
+    },
+    "./stats": {
+      "types": "./dist/stats.d.ts",
+      "default": "./dist/stats.js"
+    },
+    "./url-params": {
+      "types": "./dist/url-params.d.ts",
+      "default": "./dist/url-params.js"
+    },
+    "./image-markup": {
+      "types": "./dist/image-markup.d.ts",
+      "default": "./dist/image-markup.js"
     }
   },
   "publishConfig": {

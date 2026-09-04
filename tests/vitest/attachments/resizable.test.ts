@@ -462,7 +462,13 @@ describe(`resizable`, () => {
   it(`fires on_resize_start, on_resize and on_resize_end callbacks`, () => {
     const element = create_box()
 
-    const [on_resize_start, on_resize, on_resize_end] = [vi.fn(), vi.fn(), vi.fn()]
+    const [on_resize_start, on_resize_end] = [vi.fn(), vi.fn()]
+    // Consumers can convert the reported pixels back to their own responsive units.
+    const on_resize = vi.fn(
+      (_event: MouseEvent | KeyboardEvent, { width }: { width: number }) => {
+        element.style.width = `${(width / 500) * 100}%`
+      },
+    )
 
     attach_resizable(element, { on_resize_start, on_resize, on_resize_end })
 
@@ -478,6 +484,7 @@ describe(`resizable`, () => {
       width: 255,
       height: 150,
     })
+    expect(element.style.width).toBe(`51%`)
 
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
     expect(document.body.style.userSelect).toBe(``)

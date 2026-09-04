@@ -1,4 +1,9 @@
-import { register_escape_layer, register_trap_layer } from './shared'
+import {
+  composed_parent,
+  is_focus_available,
+  register_escape_layer,
+  register_trap_layer,
+} from './shared'
 
 export interface FocusTrapOptions {
   enabled?: boolean
@@ -41,12 +46,6 @@ export const tabbable_selector = [
 const is_focusable = (element: unknown): element is HTMLElement | SVGElement =>
   element instanceof HTMLElement || element instanceof SVGElement
 
-const composed_parent = (element: Element): Element | null => {
-  if (element.parentElement) return element.parentElement
-  const root = element.getRootNode()
-  return root instanceof ShadowRoot ? root.host : null
-}
-
 const candidate_tab_index = (element: Element) =>
   Number(element.getAttribute(`tabindex`) ?? 0)
 const candidate_order = (element: Element) =>
@@ -54,25 +53,7 @@ const candidate_order = (element: Element) =>
 
 const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement => {
   if (!is_focusable(element) || candidate_tab_index(element) < 0) return false
-  if (element.matches(`:disabled,input[type="hidden" i]`)) return false
-  // Descendants can override inherited visibility, so only the candidate's value matters.
-  if ([`hidden`, `collapse`].includes(getComputedStyle(element).visibility)) return false
-  let current: Element | null = element
-  while (current) {
-    const style = getComputedStyle(current)
-    if (
-      current.matches(`[hidden],[inert]`) ||
-      style.display === `none` ||
-      (current.matches(`details:not([open])`) &&
-        !current.querySelector(`:scope > summary`)?.contains(element)) ||
-      (element.matches(`button,input,select,textarea`) &&
-        current.matches(`fieldset[disabled]`) &&
-        !current.querySelector(`:scope > legend`)?.contains(element))
-    )
-      return false
-    current = composed_parent(current)
-  }
-  return true
+  return is_focus_available(element)
 }
 
 const is_named_radio = (element: Element): element is HTMLInputElement =>
