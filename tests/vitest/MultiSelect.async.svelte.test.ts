@@ -941,7 +941,7 @@ describe(`async oncreate`, () => {
     expect(props.selected).toEqual([`only-once`])
   })
 
-  test.each<[string, MultiSelectProps[`oncreate`], Option[]]>([
+  test.each<[string, MultiSelectProps[`oncreate`], Option[], Option[]?]>([
     [`returning false blocks the option`, () => false, []],
     [
       `returning an option transforms it`,
@@ -950,17 +950,21 @@ describe(`async oncreate`, () => {
     ],
     [`returning undefined keeps the original option`, () => undefined, [`sync-opt`]],
     [`returning empty string keeps the original option`, () => ``, [`sync-opt`]],
-  ])(`sync oncreate regression: %s`, async (_label, oncreate, expected_selected) => {
-    const props = $state<MultiSelectProps>({
-      options: [`foo`],
-      selected: [],
-      allowUserOptions: true,
-      oncreate,
-    })
-    mount_multiselect(props)
+    [`transforming to a selected option is rejected`, () => `foo`, [`foo`], [`foo`]],
+  ])(
+    `sync oncreate regression: %s`,
+    async (_label, oncreate, expected_selected, selected = []) => {
+      const props = $state<MultiSelectProps>({
+        options: [`foo`],
+        selected,
+        allowUserOptions: true,
+        oncreate,
+      })
+      mount_multiselect(props)
 
-    await submit_create(`sync-opt`)
+      await submit_create(`sync-opt`)
 
-    expect(props.selected).toEqual(expected_selected)
-  })
+      expect(props.selected).toEqual(expected_selected)
+    },
+  )
 })

@@ -506,9 +506,16 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [`groupSelectAll`, { groupSelectAll: true }, `button.group-select-all`],
-    [`selectAllOption`, { selectAllOption: true }, `li.select-all`],
-  ] as const)(`%s respects maxOptions limit`, async (_name, props, selector) => {
+    [`groupSelectAll`, { groupSelectAll: true }, `button.group-select-all`, false],
+    [`selectAllOption`, { selectAllOption: true }, `li.select-all`, false],
+    [`repeated reference`, { groupSelectAll: true }, `button.group-select-all`, true],
+    [
+      `collapse disabled`,
+      { groupSelectAll: true, collapsedGroups: new Set([`TestGroup`]) },
+      `button.group-select-all`,
+      false,
+    ],
+  ] as const)(`%s respects maxOptions limit`, async (_name, props, selector, repeat) => {
     const many_options = [
       { label: `Option 1`, group: `TestGroup` },
       { label: `Option 2`, group: `TestGroup` },
@@ -516,6 +523,8 @@ describe(`option grouping feature`, () => {
       { label: `Option 4`, group: `TestGroup` },
       { label: `Option 5`, group: `TestGroup` },
     ]
+    // Null-prototype records retain their shared identity through Svelte's proxy boundary.
+    if (repeat) many_options.push(Object.setPrototypeOf(many_options[0], null))
 
     const onselectAll_spy = vi.fn()
     await mount_grouped({

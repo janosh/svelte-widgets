@@ -550,20 +550,6 @@
     key(opt_a) === key(opt_b) &&
     utils.get_label(opt_a) === utils.get_label(opt_b)
 
-  const is_option_visible = (idx: number) => idx >= 0 && idx < visible_navigable_count
-
-  // non-disabled options, limited to those rendered under maxOptions unless
-  // skip_visibility_check (collapsed groups select their full contents)
-  const get_selectable_options = (
-    opts: Option[],
-    skip_visibility_check = false,
-  ): Option[] =>
-    opts.filter(
-      (opt) =>
-        !is_disabled(opt) &&
-        (skip_visibility_check || is_option_visible(navigable_index_map.get(opt) ?? -1)),
-    )
-
   // Group options by their `group` key in the same order used by the dropdown.
   const group_options = (options_to_group: Option[]): GroupedOptions<Option>[] => {
     const groups_map = new Map<string, Option[]>()
@@ -613,12 +599,6 @@
       collapsed && collapsibleGroups ? [] : group_opts,
     )
   let navigable_options = $derived(flatten_navigable(grouped_options))
-
-  // O(1) index lookups for get_selectable_options. Duplicate option values collapse to
-  // their last index, fine here since duplicates are value-interchangeable.
-  let navigable_index_map = $derived(
-    new Map(navigable_options.map((opt, idx) => [opt, idx])),
-  )
 
   // keyboard nav must stop at maxOptions: past it aria-activedescendant would point at a
   // non-existent DOM id and Enter could select an option the user can't see
@@ -776,9 +756,15 @@
   }
   let group_header_state = $derived.by(() => {
     const state = new Map<string, GroupHeaderState>()
+    let flat_idx = 0
     for (const { group, options: group_items, collapsed } of grouped_options) {
+      const hidden = collapsed && collapsibleGroups
+      const visible_items = hidden
+        ? group_items
+        : group_items.slice(0, Math.max(0, visible_navigable_count - flat_idx))
+      if (!hidden) flat_idx += group_items.length
       if (group === null) continue
-      const selectable = get_selectable_options(group_items, collapsed)
+      const selectable = visible_items.filter((opt) => !is_disabled(opt))
       const all_selected =
         selectable.length > 0 &&
         selectable.every((opt) => selected_keys_set.has(key(opt)))
@@ -890,21 +876,20 @@
   // batches by the server), so only the static list needs filtering here
   const search_matches = (opt: Option): boolean =>
     Boolean(loadOptions) || matches_search(opt, effective_filter_text)
+  const searched_options = $derived(effective_options.filter(search_matches))
 
   $effect.pre(() => {
-    matchingOptions = effective_options.filter(
+    matchingOptions = searched_options.filter(
       (opt) =>
-        (!selected_keys_set.has(key(opt)) ||
-          Boolean(duplicates) ||
-          keepSelectedInDropdown ||
-          input_text_is_committed) &&
-        search_matches(opt),
+        !selected_keys_set.has(key(opt)) ||
+        Boolean(duplicates) ||
+        keepSelectedInDropdown ||
+        input_text_is_committed,
     )
   })
 
   // Range selection includes a selected anchor that has left matchingOptions, while
   // preserving the grouped/sorted order and collapsed-group visibility of the dropdown.
-  const searched_options = $derived(effective_options.filter(search_matches))
   const range_navigable_options = $derived(
     flatten_navigable(group_options(searched_options)),
   )
@@ -1144,8 +1129,8 @@
       }
       if (oncreate_result === false) return
       if (is_non_empty_option(oncreate_result)) option_to_add = oncreate_result
-      // re-check guards after awaiting: selected may have changed meanwhile
-      if (was_async && (at_max_capacity() || (is_dupe() && duplicates !== true))) {
+      // Transformations and consumer callbacks can change identity or selection synchronously too.
+      if (at_max_capacity() || (is_dupe() && duplicates !== true)) {
         return
       }
     }

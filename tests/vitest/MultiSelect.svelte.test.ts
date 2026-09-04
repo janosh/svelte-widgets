@@ -1149,9 +1149,12 @@ test(`filters dropdown to show only matching options when entering text`, async 
 
 test(`filterFunc controls rendered options and matchingOptions`, async () => {
   const options = [`Alpha`, `Beta`, `Algae`]
+  const filter_func = vi.fn((opt: Option, search_text: string) =>
+    `${get_label(opt)}`.toLowerCase().startsWith(search_text.toLowerCase()),
+  )
   const props = $state<MultiSelectProps>({
-    filterFunc: (opt: Option, search_text: string) =>
-      `${get_label(opt)}`.toLowerCase().startsWith(search_text.toLowerCase()),
+    filterFunc: filter_func,
+    selected: [],
     matchingOptions: [],
     open: true,
     options,
@@ -1163,6 +1166,12 @@ test(`filterFunc controls rendered options and matchingOptions`, async () => {
 
   expect(props.matchingOptions).toEqual([options[0], options[2]])
   expect(normalized_text(doc_query(`ul.options`))).toBe(`Alpha Algae`)
+  filter_func.mockClear()
+  props.selected = [options[0]]
+  await tick()
+  expect(props.matchingOptions).toEqual([options[2]])
+  expect(normalized_text(doc_query(`ul.options`))).toBe(`Algae`)
+  expect(filter_func).not.toHaveBeenCalled()
 })
 
 test(`autoScroll=false skips scrolling active options into view`, async () => {
