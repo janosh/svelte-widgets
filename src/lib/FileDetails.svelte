@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { type Snippet, untrack } from 'svelte'
+  import type { Snippet } from 'svelte'
+  import CodeBlock from './CodeBlock.svelte'
   import type {
     HTMLAttributes,
     HTMLButtonAttributes,
@@ -14,11 +15,10 @@
     title: string
     content: string
     language?: string
-    node?: HTMLDetailsElement | null
   }
 
   let {
-    files = $bindable([]),
+    files = [],
     toggle_all_btn_title = `Toggle all`,
     default_lang = `svelte`,
     as = `ol`,
@@ -28,7 +28,7 @@
     labels,
     ...rest
   }: {
-    files?: File[]
+    files?: readonly File[]
     toggle_all_btn_title?: string
     default_lang?: string
     as?: string
@@ -40,25 +40,19 @@
 
   const msg = $derived(merge_defaults(FILE_DETAILS_LABELS, labels))
 
-  // Use reactive state for node refs to avoid binding_property_non_reactive warning
   let detail_elements = $state<(HTMLDetailsElement | null)[]>([])
 
-  // DOM `open` isn't reactive, so mirror it in $state from toggle events, toggle_all and the
-  // $effect below (toggle doesn't fire for pre-opened details)
+  // Mirror native open state for the toggle-all label.
   let has_open_details = $state(false)
   const sync_has_open_details = () => {
     has_open_details = detail_elements.some((node) => node?.open)
   }
 
-  // trim stale refs when files shrink, and sync detail_elements back to files.node
   $effect(() => {
     if (detail_elements.length > files.length) {
       detail_elements.splice(files.length)
     }
-    for (const [idx, node] of detail_elements.entries()) {
-      if (files[idx]) files[idx].node = node
-    }
-    // initialize label for pre-opened <details> (their toggle event doesn't fire on mount)
+    // Include pre-opened details, which emit no initial toggle event.
     sync_has_open_details()
   })
 
@@ -90,38 +84,6 @@
       ?.groups?.ext?.toLowerCase()
     return ext ? (ext_to_lang[ext] ?? ext) : undefined
   }
-
-  const resolve_lang = (file: File): string =>
-    file.language ?? lang_from_title(file.title) ?? default_lang
-  const highlight_key = (language: string, content: string): string =>
-    JSON.stringify([language, content])
-
-  // Keyed by language+content, so a result can never go stale and in-flight requests need
-  // no cancellation. The empty marker keeps a cache write from re-requesting every sibling.
-  let highlighted_cache = $state<Record<string, string>>({})
-  $effect(() => {
-    const live_keys = new Set<string>()
-    for (const file of files) {
-      const language = resolve_lang(file)
-      const key = highlight_key(language, file.content)
-      live_keys.add(key)
-      if (untrack(() => key in highlighted_cache)) continue
-      highlighted_cache[key] = ``
-      default_highlighter.highlight(file.content, language).then(
-        (html) => (highlighted_cache[key] = html),
-        () => {}, // silently skip unsupported languages
-      )
-    }
-    // Every key holds a full copy of the content it was built from, so a caller streaming
-    // edits through the bindable `files` would grow this without bound.
-    untrack(() => {
-      const entries = Object.entries(highlighted_cache)
-      const live_entries = entries.filter(([cached_key]) => live_keys.has(cached_key))
-      if (live_entries.length !== entries.length) {
-        highlighted_cache = Object.fromEntries(live_entries)
-      }
-    })
-  })
 </script>
 
 {#if files?.length > 1}
@@ -140,8 +102,7 @@
   <!-- object identity supports duplicate titles and preserves open state across inserts -->
   {#each files as file, idx (file)}
     {@const { title, content } = file}
-    {@const language = resolve_lang(file)}
-    {@const cache_key = highlight_key(language, content)}
+    {@const language = file.language ?? lang_from_title(title) ?? default_lang}
     <li>
       <details
         bind:this={detail_elements[idx]}
@@ -161,11 +122,17 @@
           </summary>
         {/if}
 
-        <pre class="language-{language}">{@html language_label_html(language)}<code
-            >{#if highlighted_cache[cache_key]}{@html highlighted_cache[
-                cache_key
-              ]}{:else}{content}{/if}</code
-          ></pre>
+        <div style="position: relative">
+          <CodeBlock
+            code={content}
+            {language}
+            label={`Source (${language})`}
+            highlight={default_highlighter.highlight}
+            class="language-{language}"
+            --code-block-bg="var(--pre-bg, light-dark(#f3f5f8, rgba(0, 0, 0, 0.3)))"
+          />
+          {@html language_label_html(language)}
+        </div>
       </details>
     </li>
   {/each}
@@ -190,9 +157,5 @@
   }
   ol > li {
     margin: 1ex 0;
-  }
-  pre {
-    position: relative;
-    background: var(--pre-bg, light-dark(#f3f5f8, rgba(0, 0, 0, 0.3)));
   }
 </style>

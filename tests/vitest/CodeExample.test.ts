@@ -58,9 +58,9 @@ test(`forwards host attributes when metadata does not override the ID`, () => {
     `40rem`,
   ])
   expect(host.dataset.testid).toBe(`example`)
+  expect(document.querySelectorAll(`nav a`)).toHaveLength(0)
 })
 
-// both links always render and toggle via display, so a lost `cond` ships a dead link
 test.each([
   [
     `Svelte`,
@@ -71,14 +71,12 @@ test.each([
     `GitHub`,
     {
       collapsible: true,
-      github: true,
-      repo: `https://github.com/janosh/svelte-widgets`,
-      file: `src/lib/CodeExample.svelte`,
+      github: `https://github.com/janosh/svelte-widgets/blob/main/src/lib/CodeExample.svelte`,
     },
-    `https://github.com/janosh/svelte-widgets/blob/-/src/lib/CodeExample.svelte`,
+    `https://github.com/janosh/svelte-widgets/blob/main/src/lib/CodeExample.svelte`,
   ],
 ] as const)(
-  `renders the %s link in nav and hides the unconfigured one`,
+  `renders the resolved %s URL and omits the unconfigured link`,
   (shown_title, meta, expected_href) => {
     // one bag is shared by every external link, so an href on it could only point the
     // repl and github icons at the same URL. `title` stays overridable by design.
@@ -92,30 +90,9 @@ test.each([
     expect([...link(shown_title).classList]).toContain(`consumer-link`)
     expect(link(shown_title).getAttribute(`target`)).toBe(`_blank`)
     expect(link(shown_title).getAttribute(`rel`)).toBe(`noreferrer`)
-    expect(link(shown_title).style.display).toBe(`inline-block`)
-    expect(link(shown_title === `Svelte` ? `GitHub` : `Svelte`).style.display).toBe(
-      `none`,
-    )
+    expect(document.querySelectorAll(`nav a`)).toHaveLength(1)
   },
 )
-
-// github: true + meta.file is covered by the GitHub link case above; these cover the
-// mdsvex filename fallback and an explicit string blob path
-test.each([
-  [
-    `true + meta.filename (set by mdsvex transform)`,
-    { github: true, filename: `src/routes/(demos)/(attachments)/attachments/+page.md` },
-    `src/routes/(demos)/(attachments)/attachments/+page.md`,
-  ],
-  [`string`, { github: `docs/example.svelte` }, `docs/example.svelte`],
-])(`github: %s links to its blob path`, (_label, github_meta, expected_path) => {
-  const repo = `https://github.com/janosh/svelte-widgets`
-  const meta = { repo, ...github_meta }
-  mount(CodeExample, { target: document.body, props: { meta, src } })
-
-  const link = doc_query<HTMLAnchorElement>(`nav a[href*="github.com"]`)
-  expect(link.getAttribute(`href`)).toBe(`${repo}/blob/-/${expected_path}`)
-})
 
 test(`labels prop overrides toggle text, omitted keys keep their default`, async () => {
   mount(CodeExample, {

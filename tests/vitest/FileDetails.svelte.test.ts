@@ -1,15 +1,17 @@
 import { FileDetails } from '$lib'
 import type { ComponentProps } from 'svelte'
-import { flushSync, mount, tick } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { flushSync, mount, tick, unmount } from 'svelte'
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const all_text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
-const mount_files = (props: ComponentProps<typeof FileDetails> = {}) =>
-  mount(FileDetails, { target: document.body, props })
+const mount_files = (props: ComponentProps<typeof FileDetails> = {}) => {
+  const component = mount(FileDetails, { target: document.body, props })
+  onTestFinished(() => unmount(component))
+}
 
 test.each<[string, string, string, string?]>([
   // inferred from title extension
@@ -36,9 +38,12 @@ test.each<[string, string, string, string?]>([
 
 test(`lang-label is positioned out of flow so it can't indent code`, () => {
   mount_files({ files: [{ title: `util.ts`, content: `const x = 1` }] })
-  // pre is white-space: pre, so an in-flow label indents the first code line
-  // (regression guard, see FileDetails.svelte)
-  expect(getComputedStyle(doc_query(`.lang-label`)).position).toBe(`absolute`)
+  const label = doc_query(`.lang-label`)
+  expect(getComputedStyle(label).position).toBe(`absolute`)
+  // Paint after the positioned pre so its background cannot cover the badge.
+  expect(
+    doc_query(`pre`).compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 })
 
 test(`lang-label escapes HTML in the language name`, () => {
@@ -60,9 +65,10 @@ test(`unsupported language falls back to escaped raw content`, async () => {
   mount_files({
     files: [{ title: `file.xyz`, content, language: `nonexistent-lang-xyz` }],
   })
-  await vi.waitFor(() => expect(doc_query(`pre code`).innerHTML).toContain(`&lt;`), {
-    timeout: 5000,
-  })
+  flushSync()
+  await vi.waitFor(() => expect(doc_query(`pre`).getAttribute(`aria-busy`)).toBe(`false`))
+  expect(doc_query(`pre code`).innerHTML).toContain(`&lt;`)
+  expect(document.querySelector(`[role=alert]`)).toBeNull()
   expect(doc_query(`pre code`).textContent).toBe(content)
 })
 
@@ -78,7 +84,7 @@ test(`syntax highlighting produces starry-night spans`, async () => {
   expect(doc_query(`pre code`).textContent).toContain(`let count`)
 })
 
-test(`distinct language-content pairs cannot collide in the highlight cache`, async () => {
+test(`renders distinct language-content pairs independently`, async () => {
   const contents = [`bar`, `foo:bar`]
   mount_files({
     files: [
@@ -94,23 +100,44 @@ test(`distinct language-content pairs cannot collide in the highlight cache`, as
   expect(all_text(`pre code`)).toEqual(contents)
 })
 
-test(`each file is highlighted exactly once, even as siblings resolve`, async () => {
+test(`highlights siblings independently and ignores stale completions after edits`, async () => {
   const { default_highlighter } = await import(`$lib/live-examples/default-highlighter`)
-  // staggered, so one result lands while the others are still pending
+  const requests: { code: string; resolve: (html: string) => void }[] = []
   const highlight = vi.spyOn(default_highlighter, `highlight`).mockImplementation(
     (code) =>
       new Promise((resolve) => {
-        setTimeout(() => resolve(`<span class="pl-x">${code}</span>`), code.length)
+        requests.push({ code, resolve })
       }),
   )
-  const files = [`a`, `bb`, `ccc`].map((content) => ({ title: `${content}.ts`, content }))
-  mount_files({ files })
-
-  await vi.waitFor(() =>
-    expect(document.querySelectorAll(`pre code span[class^="pl-"]`)).toHaveLength(3),
+  const files = $state(
+    [`a`, `bb`, `ccc`].map((content) => ({ title: `${content}.ts`, content })),
   )
-  expect(highlight).toHaveBeenCalledTimes(3)
-  highlight.mockRestore()
+  mount_files({ files })
+  await vi.waitFor(() => expect(requests).toHaveLength(3))
+  files[0].content = `updated`
+  await vi.waitFor(() => expect(requests).toHaveLength(4))
+  for (const { code, resolve } of requests.slice(1))
+    resolve(`<span class="pl-x">${code}</span>`)
+  await vi.waitFor(() =>
+    expect(all_text(`pre code span`)).toEqual([`updated`, `bb`, `ccc`]),
+  )
+  requests[0].resolve(`<b>stale</b>`)
+  await tick()
+  expect(all_text(`pre code`)).toEqual([`updated`, `bb`, `ccc`])
+  expect(highlight).toHaveBeenCalledTimes(4)
+})
+
+test(`reports highlighting failures without hiding source`, async () => {
+  const { default_highlighter } = await import(`$lib/live-examples/default-highlighter`)
+  vi.spyOn(default_highlighter, `highlight`).mockRejectedValue(
+    new Error(`Grammar unavailable`),
+  )
+  mount_files({ files: [{ title: `file.ts`, content: `<source>` }] })
+  await vi.waitFor(() =>
+    expect(doc_query(`[role=alert]`).textContent).toBe(`Grammar unavailable`),
+  )
+  expect(doc_query(`pre code`).textContent).toBe(`<source>`)
+  expect(doc_query(`pre code`).querySelector(`source`)).toBeNull()
 })
 
 test(`toggle all button opens/closes all, tracks label, and handles partial/native toggles`, async () => {
@@ -189,47 +216,36 @@ test(`labels prop overrides toggle-all text, omitted keys keep their default`, a
   expect(button_label()).toBe(`Alle schließen`)
 })
 
-test(`detail element refs are trimmed when files are removed to prevent memory leaks`, async () => {
-  type FileWithNode = { title: string; content: string; node?: HTMLDetailsElement | null }
-  const reactive_files: FileWithNode[] = $state([
-    { title: `file1`, content: `content1` },
-    { title: `file2`, content: `content2` },
-    { title: `file3`, content: `content3` },
-  ])
-
+test(`keeps DOM refs internal and toggles surviving files after removal`, async () => {
+  const files = Object.freeze(
+    [1, 2, 3].map((idx) =>
+      Object.freeze({ title: `file${idx}`, content: `content${idx}` }),
+    ),
+  )
+  let visible_files = $state.raw(files)
   mount_files({
     get files() {
-      return reactive_files
-    },
-    set files(val) {
-      reactive_files.splice(0, reactive_files.length, ...val)
+      return visible_files
     },
   })
   await tick()
-
-  const details_nodes = () => [...document.querySelectorAll(`details`)]
-  // by identity: [0, 1, ...] means each file points at its own <details>, -1 means stale
-  const ref_positions = (nodes: (HTMLDetailsElement | null | undefined)[]) =>
-    nodes.map((node) => (node ? details_nodes().indexOf(node) : -1))
-  const file_nodes = () => reactive_files.map((file) => file.node)
-
-  expect(details_nodes()).toHaveLength(3)
-  expect(ref_positions(file_nodes())).toEqual([0, 1, 2])
-
-  const old_nodes = file_nodes()
-
-  flushSync(() => {
-    reactive_files.pop()
-  })
+  const original_nodes = [...document.querySelectorAll(`details`)]
+  original_nodes[2].open = true
+  visible_files = [files[2], files[0]]
   await tick()
-
-  // surviving refs must be the same nodes as before, still in their own slots
-  expect(reactive_files).toHaveLength(2)
-  expect(details_nodes()).toHaveLength(2)
-  expect(ref_positions(file_nodes())).toEqual([0, 1])
-  expect(ref_positions(old_nodes.slice(0, 2))).toEqual([0, 1])
-
-  expect(old_nodes[2]?.isConnected).toBe(false)
+  const remaining = [...document.querySelectorAll(`details`)]
+  expect(remaining).toHaveLength(2)
+  expect(remaining[0]).toBe(original_nodes[2])
+  expect(remaining[1]).toBe(original_nodes[0])
+  expect(original_nodes[1].isConnected).toBe(false)
+  const toggle = doc_query<HTMLButtonElement>(`button[title="Toggle all"]`)
+  toggle.click()
+  flushSync()
+  expect(original_nodes.map((node) => node.open)).toEqual([false, false, false])
+  toggle.click()
+  flushSync()
+  expect(original_nodes.map((node) => node.open)).toEqual([true, false, true])
+  for (const file of files) expect(Object.keys(file)).toEqual([`title`, `content`])
 })
 
 test(`renders empty default file list`, () => {
@@ -275,7 +291,7 @@ test(`single file omits toggle-all button and forwards details toggle event`, ()
 })
 
 test(`title snippet renders title content (incl. empty titles) and receives index`, () => {
-  mount(TestSnippetHarness, {
+  const component = mount(TestSnippetHarness, {
     target: document.body,
     props: {
       component: `file-details`,
@@ -287,6 +303,7 @@ test(`title snippet renders title content (incl. empty titles) and receives inde
     },
   })
 
+  onTestFinished(() => unmount(component))
   expect(all_text(`[data-testid="file-title"]`)).toEqual([`first.ts`, `second.py`, ``])
   expect(
     [...document.querySelectorAll<HTMLElement>(`[data-testid="file-title"]`)].map(

@@ -33,20 +33,16 @@
       code_above?: boolean // code above the example (default: `collapsible`)
       id?: string // id of the wrapping <div>, e.g. for precise test selectors
       repl?: string // Svelte REPL URL
-      github?: string | boolean // GitHub URL, or true to link the current page's file
-      repo?: string // GitHub repo URL
+      github?: string // Resolved source URL
       Wrapper?: string // Svelte component to wrap the example
       example?: boolean
-      file?: string
-      filename?: string // path of the file serving the current page (set by mdsvex transform)
       lang?: string
     }
     open?: boolean
     title?: Snippet<[]>
     example?: Snippet<[]>
     code?: Snippet<[]>
-    // one bag shared by every external link, so an `href` here would point all three icons
-    // at the same URL
+    // Shared attributes cannot override the distinct link URLs.
     link_props?: Omit<HTMLAnchorAttributes, `href`>
     button_props?: Omit<HTMLButtonAttributes, `type`>
     labels?: Partial<CodeExampleLabels>
@@ -54,45 +50,19 @@
 
   const msg = $derived(merge_defaults(CODE_EXAMPLE_LABELS, labels))
 
-  let {
-    id: meta_id,
-    collapsible,
-    repl,
-    github,
-    repo,
-    file,
-    filename,
-    lang,
-  } = $derived(meta)
-  let code_above = $derived(meta.code_above ?? collapsible) // if code is collapsed, render code above example by default
-  // mdsvex transform emits the current page's path as meta.filename, so fall back
-  // to it when meta.file is unset (github: true is documented to link there)
-  let github_file = $derived(file ?? filename)
-  let external_links = $derived([
-    { cond: repl, href: repl, icon: Svelte, title: `Svelte` },
-    {
-      cond: github && repo,
-      // string github is an explicit path and needs no file/filename fallback
-      href:
-        github && (github !== true || github_file)
-          ? `${repo}/blob/-/${github === true ? github_file : github}`
-          : repo,
-      icon: GitHub,
-      title: `GitHub`,
-    },
-  ])
-  const links = { target: `_blank`, rel: `noreferrer` }
+  let { id: meta_id, collapsible, repl, github, lang } = $derived(meta)
+  let code_above = $derived(meta.code_above ?? collapsible)
+  let external_links = $derived(
+    [
+      { href: repl, icon: Svelte, title: `Svelte` },
+      { href: github, icon: GitHub, title: `GitHub` },
+    ].filter(({ href }) => href),
+  )
 </script>
 
 <nav>
-  {#each external_links as { cond, href, icon, title } (title)}
-    <a
-      {...links}
-      {title}
-      {...link_props}
-      {href}
-      style:display={cond ? `inline-block` : `none`}
-    >
+  {#each external_links as { href, icon, title } (title)}
+    <a target="_blank" rel="noreferrer" {title} {...link_props} {href}>
       <Icon {icon} />
     </a>
   {/each}

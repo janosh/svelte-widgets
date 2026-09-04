@@ -1,7 +1,6 @@
 import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { mdsvex } from 'mdsvex'
-import pkg from './package.json' with { type: 'json' }
 import { generate_icons } from './scripts/generate-icons.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
 import { katex_preprocess } from './src/lib/katex.ts'
@@ -23,7 +22,6 @@ const remark_plugins = [
     {
       defaults: {
         Wrapper: `/src/lib/CodeExample.svelte`,
-        repo: pkg.repository,
         collapsible: true,
         hide_style: true,
       },
