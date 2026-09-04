@@ -879,9 +879,15 @@ describe(`Toc`, () => {
   })
 
   test(`unrelated DOM mutations skip the heading rebuild while real changes don't`, async () => {
-    set_body(`<h2 id="a">Alpha</h2><h2 id="b">Beta</h2>`)
-    mount_toc()
+    set_body(`<h2 id="a">Alpha</h2><h2 id="b">Beta</h2><p>Original</p>`)
+    const get_heading_data = vi.fn((node: HTMLHeadingElement) => ({
+      id: node.id,
+      level: Number(node.nodeName[1]),
+      title: node.textContent ?? ``,
+    }))
+    mount_toc({ getHeadingData: get_heading_data })
     await tick()
+    get_heading_data.mockClear()
 
     // happy-dom returns all-zero rects, so set_active_heading picks the last heading
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
@@ -905,6 +911,14 @@ describe(`Toc`, () => {
     await tick()
     expect(query_spy).not.toHaveBeenCalled()
 
+    // Text and attribute changes outside headings must also leave the active item alone.
+    ;(doc_query(`p`).firstChild as Text).data = `Changed`
+    document.body.setAttribute(`data-theme`, `dark`)
+    await tick()
+    expect(query_spy).not.toHaveBeenCalled()
+    expect(get_heading_data).not.toHaveBeenCalled()
+    expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
+
     // appending a real heading changes the set, so the rebuild runs and active updates
     const new_heading = document.createElement(`h2`)
     new_heading.id = `c`
@@ -916,53 +930,21 @@ describe(`Toc`, () => {
     query_spy.mockRestore()
   })
 
-  test.each([
-    {
-      desc: `text-node data edits (characterData) update the ToC`,
-      mutate: (heading: HTMLElement) => {
-        ;(heading.firstChild as Text).data = `Changed`
-      },
-      expected: `Changed`,
+  test.each([`characterData`, `childList`])(
+    `heading %s edits update the ToC`,
+    async (kind) => {
+      set_body(`<h2 id="a">Original</h2>`)
+      mount_toc()
+      await tick()
+      expect(doc_query(`aside.toc li`).textContent.trim()).toBe(`Original`)
+
+      const heading = doc_query(`#a`)
+      if (kind === `characterData`) (heading.firstChild as Text).data = `Changed`
+      else heading.textContent = `Changed`
+      await tick()
+      expect(doc_query(`aside.toc li`).textContent.trim()).toBe(`Changed`)
     },
-    {
-      desc: `in-place textContent edits (childList) update the ToC`,
-      mutate: (heading: HTMLElement) => {
-        heading.textContent = `Changed`
-      },
-      expected: `Changed`,
-    },
-  ])(`heading $desc`, async ({ mutate, expected }) => {
-    set_body(`<h2 id="a">Original</h2>`)
-    mount_toc()
-    await tick()
-    expect(doc_query(`aside.toc li`).textContent.trim()).toBe(`Original`)
-
-    mutate(doc_query(`#a`))
-    await tick()
-    expect(doc_query(`aside.toc li`).textContent.trim()).toBe(expected)
-  })
-
-  test(`unrelated text-node data edits do not rebuild active heading`, async () => {
-    set_body(`<h2 id="a">Alpha</h2><h2 id="b">Beta</h2><p>Original</p>`)
-    const get_heading_data = vi.fn((node: HTMLHeadingElement) => ({
-      id: node.id,
-      level: Number(node.nodeName[1]),
-      title: node.textContent ?? ``,
-    }))
-    mount_toc({ getHeadingData: get_heading_data })
-    await tick()
-    get_heading_data.mockClear()
-
-    expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
-    mock_active_heading(`a`)
-
-    ;(doc_query(`p`).firstChild as Text).data = `Changed`
-    document.body.setAttribute(`data-theme`, `dark`)
-    await tick()
-
-    expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
-    expect(get_heading_data).not.toHaveBeenCalled()
-  })
+  )
 
   test(`heading id attribute changes update link targets`, async () => {
     set_body(`<h2 id="old">Title</h2>`)

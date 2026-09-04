@@ -172,8 +172,13 @@ describe(`keyboard shortcut parsing`, () => {
   })
 
   // spelled-out tokens render as the literal `event.key` they stand for
-  test(`format_shortcut maps comma/plus/space tokens`, () => {
-    expect(format_shortcut(`ctrl+comma+plus+space`)).toEqual([`Ctrl`, `,`, `+`, `␣`])
+  test.each([
+    [`ctrl+comma+plus+space`, [`Ctrl`, `,`, `+`, `␣`]],
+    [` SHIFT + Escape + F12 + x `, [`⇧`, `Esc`, `F12`, `X`]],
+    [`ß+😀+`, [`SS`, `😀`, ``]],
+    [``, [``]],
+  ])(`format_shortcut(%j) renders %j`, (shortcut, expected) => {
+    expect(format_shortcut(shortcut)).toEqual(expected)
   })
 
   test.each([
@@ -279,6 +284,7 @@ describe(`shortcut rebinding`, () => {
       [`non-object input`, `mod+c`, {}],
       [`null`, null, {}],
       [`unknown action id`, { nope: `mod+q` }, {}],
+      [`inherited action ids`, { constructor: `mod+q`, toString: `mod+t` }, {}],
       [`non-string combo`, { copy: 42 }, {}],
       [`junk combo`, { copy: `mod+` }, {}],
       [`no-op override`, { copy: `mod+c` }, {}],
@@ -326,7 +332,7 @@ describe(`shortcut rebinding`, () => {
 })
 
 describe(`fuzzy_match`, () => {
-  // index edges live in fuzzy_match_indices; here just the null guard and a boolean smoke
+  // Valid inputs exercise both helpers together in fuzzy_match_indices below.
   test.each([
     [null, `test`],
     [undefined, `test`],
@@ -336,13 +342,6 @@ describe(`fuzzy_match`, () => {
   ])(`null/undefined inputs fuzzy_match(%s, %s) are false`, (search, target) => {
     // @ts-expect-error testing runtime behavior with null/undefined
     expect(fuzzy_match(search, target)).toBe(false)
-  })
-
-  test.each([
-    [`tageoo`, `tasks/geo-opt`, true],
-    [`test`, `best`, false],
-  ])(`fuzzy_match(%j, %j) is %s`, (search, target, expected) => {
-    expect(fuzzy_match(search, target)).toBe(expected)
   })
 })
 
@@ -373,6 +372,7 @@ describe(`has_group`, () => {
 })
 
 describe(`get_option_key`, () => {
+  const [first_value, second_value] = [{ id: 1 }, { id: 2 }]
   test.each<[Option, unknown]>([
     [{ label: `Apple`, value: 1 }, 1],
     [{ label: `Apple` }, `Apple`], // no value → label
@@ -384,18 +384,11 @@ describe(`get_option_key`, () => {
     [{ label: `Apple`, value: false }, false],
     [`Apple`, `Apple`], // primitive option is its own key
     [0, 0],
+    [{ label: `Item`, value: first_value }, first_value],
+    [{ label: `Item`, value: second_value }, second_value],
   ])(`get_option_key(%j) returns %j`, (input, expected) => {
-    expect(get_option_key(input)).toBe(expected)
-  })
-
-  test(`preserves object value identity`, () => {
-    const [obj1, obj2] = [{ id: 1 }, { id: 2 }]
-    const opt1 = { label: `Item`, value: obj1 }
-    const opt2 = { label: `Item`, value: obj2 }
     // Keys are the actual objects, not stringified
-    expect(get_option_key(opt1)).toBe(obj1)
-    expect(get_option_key(opt2)).toBe(obj2)
-    expect(get_option_key(opt1)).not.toBe(get_option_key(opt2))
+    expect(get_option_key(input)).toBe(expected)
   })
 })
 
@@ -643,19 +636,17 @@ describe(`chain_handlers`, () => {
     [[null, undefined], []],
   ])(`runs %s in order, skipping nullish`, (names, expected) => {
     const calls: string[] = []
-    const handlers = names.map((name) => (name == null ? name : () => calls.push(name)))
-    chain_handlers(...handlers)(new MouseEvent(`click`))
-    expect(calls).toEqual(expected)
-  })
-
-  test(`passes the same event to every handler`, () => {
     const event = new MouseEvent(`click`)
-    const seen: unknown[] = []
-    chain_handlers(
-      (evt: MouseEvent) => seen.push(evt),
-      (evt: MouseEvent) => seen.push(evt),
-    )(event)
-    expect(seen).toEqual([event, event])
+    const handlers = names.map((name) =>
+      name == null
+        ? name
+        : (received: MouseEvent) => {
+            expect(received).toBe(event)
+            calls.push(name)
+          },
+    )
+    chain_handlers(...handlers)(event)
+    expect(calls).toEqual(expected)
   })
 
   // hazard: an internal handler that throws swallows the consumer's
@@ -722,6 +713,10 @@ describe(`fuzzy_match_indices`, () => {
     [`123`, `abc123def`, [3, 4, 5]],
     [`ñ`, `niño`, [2]],
     [`x`, `İx`, [1]], // lowercasing İ grows to i + combining dot; x stays at source 1
+    [`ΟΣ`, `İΟΣ`, [1, 2]], // preserve context-sensitive final sigma after expansion
+    [`😀x`, `😁😀x`, [2, 3, 4]], // never borrow another emoji's leading surrogate
+    [`😀`, `\u{1F601}\u{1FA00}`, null], // matching halves exist, but no whole emoji does
+    [`😀`, `İ😀`, [1, 2]], // offsets remain UTF-16 units after a case expansion
     [`中文`, `中文测试`, [0, 1]],
     [`a  b`, `a b`, [0, 1, 2]], // a run in the search collapses to a single space
     [`a b`, `a\tb`, [0, 1, 2]], // any target whitespace reads as a plain space
@@ -732,6 +727,7 @@ describe(`fuzzy_match_indices`, () => {
     [`form submit`, `form\n submit`, [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11]],
   ])(`(%j, %j)`, (search, target, expected) => {
     expect(fuzzy_match_indices(search, target)).toEqual(expected)
+    expect(fuzzy_match(search, target)).toBe(expected !== null)
   })
 })
 
@@ -748,6 +744,15 @@ describe(`is_editable_event_target`, () => {
     // closest() walks up, so a span inside an editable region counts as typing
     [`<div contenteditable="true"><span></span></div>`, `span`, true],
     [`<div contenteditable="false"><span></span></div>`, `span`, false],
+    [`<div contenteditable><span contenteditable="false"></span></div>`, `span`, false],
+    [`<div contenteditable="FALSE"><span></span></div>`, `span`, false],
+    [`<div contenteditable="invalid"><span></span></div>`, `span`, false],
+    [`<div contenteditable><span contenteditable="invalid"></span></div>`, `span`, true],
+    [
+      `<div contenteditable="false"><span contenteditable="plaintext-only"></span></div>`,
+      `span`,
+      true,
+    ],
   ])(`%s -> %s`, (html, selector, expected) => {
     document.body.innerHTML = html
     expect(is_editable_event_target(doc_query(selector))).toBe(expected)
@@ -797,28 +802,18 @@ describe(`cmd_action_matches`, () => {
 
   // one term per field so dropping any field from the haystack fails this case
   test.each([
-    [`toggle`],
-    [`dark`],
-    [`new`],
-    [`appearance`],
-    [`color`],
-    [`chrome`],
-    [`mod+j`],
-  ])(`matches haystack term %j`, (search) => {
-    expect(cmd_action_matches(action, search)).toBe(true)
-  })
-
-  // every term must hit; blank search filters nothing out
-  test.each([
-    [`toggle appearance`, true],
-    [`toggle nonsense`, false],
-    [`   `, true],
-    [``, true],
-  ])(`multi-term search %j -> %s`, (search, expected) => {
-    expect(cmd_action_matches(action, search)).toBe(expected)
-  })
-
-  test.each([
+    [`toggle`, undefined, true],
+    [`dark`, undefined, true],
+    [`new`, undefined, true],
+    [`appearance`, undefined, true],
+    [`color`, undefined, true],
+    [`chrome`, undefined, true],
+    [`mod+j`, undefined, true],
+    // every term must hit; blank search filters nothing out
+    [`toggle appearance`, undefined, true],
+    [`toggle nonsense`, undefined, false],
+    [`   `, undefined, true],
+    [``, undefined, true],
     [`tgtm`, true, true], // subsequence of "toggle theme", fuzzy only
     [`tgtm`, false, false],
     [`toggle`, false, true], // substring still matches with fuzzy off

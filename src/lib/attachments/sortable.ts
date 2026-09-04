@@ -31,6 +31,7 @@ export const sortable =
     if (disabled) return undefined
 
     const headers = node.querySelectorAll<HTMLTableCellElement>(header_selector)
+    const collator = new Intl.Collator(undefined, { numeric: true })
     let sort_col_idx = -1
     let sort_dir = 1 // 1 = asc, -1 = desc
 
@@ -57,11 +58,12 @@ export const sortable =
       const { header, original_tabindex, original_aria_sort } = state
       if (original_tabindex === null) header.removeAttribute(`tabindex`)
       else header.setAttribute(`tabindex`, original_tabindex)
-      if (original_aria_sort === null) header.removeAttribute(`aria-sort`)
-      else header.setAttribute(`aria-sort`, original_aria_sort)
+      if (original_aria_sort !== null)
+        header.setAttribute(`aria-sort`, original_aria_sort)
     }
 
-    headers.forEach((header, idx) => {
+    headers.forEach((header) => {
+      const idx = header.cellIndex
       const state: HeaderState = {
         header,
         original_style: header.getAttribute(`style`) ?? ``,
@@ -95,23 +97,19 @@ export const sortable =
         // re-sort table (:scope > tr so rows of nested tables aren't re-parented)
         const rows = Array.from(
           table_body.querySelectorAll<HTMLTableRowElement>(`:scope > tr`),
+          (row) => {
+            // Missing cells (ragged/colspan rows) sort last. Read each cell once per click.
+            const cell = row.cells[idx]
+            return [row, cell ? get_html_sort_value(cell).trim() : ``] as const
+          },
         )
-        rows.sort((row_1, row_2) => {
-          const [cell_1, cell_2] = [row_1.cells[idx], row_2.cells[idx]]
-          // rows can have fewer cells than the sort column (colspan, ragged rows), so
-          // missing cells count as empty and sort last
-          const val_1 = cell_1 ? get_html_sort_value(cell_1) : ``
-          const val_2 = cell_2 ? get_html_sort_value(cell_2) : ``
-
-          const [trimmed_1, trimmed_2] = [val_1.trim(), val_2.trim()]
+        rows.sort(([, trimmed_1], [, trimmed_2]) => {
           if (trimmed_1 === trimmed_2) return 0
           if (trimmed_1 === ``) return 1 // treat empty/whitespace as lower than any value
           if (trimmed_2 === ``) return -1
           const [num_1, num_2] = [Number(trimmed_1), Number(trimmed_2)]
           if (Number.isNaN(num_1) && Number.isNaN(num_2)) {
-            return (
-              sort_dir * trimmed_1.localeCompare(trimmed_2, undefined, { numeric: true })
-            )
+            return sort_dir * collator.compare(trimmed_1, trimmed_2)
           }
           // sort non-numeric values after numeric ones
           if (Number.isNaN(num_1)) return sort_dir
@@ -119,7 +117,7 @@ export const sortable =
           return sort_dir * (num_1 - num_2)
         })
 
-        for (const row of rows) table_body.append(row)
+        for (const [row] of rows) table_body.append(row)
       }
 
       const on_keydown = (event: KeyboardEvent) => {

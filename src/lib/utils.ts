@@ -289,15 +289,9 @@ const key_symbols: Record<string, string> = {
 }
 
 export const format_shortcut = (shortcut: string): string[] =>
-  split_shortcut(resolve_mod(shortcut)).map((part) => {
-    const key_segment = part.trim().toLowerCase()
-    // title-case unknown multi-char segments, upper-case single chars (empty stays empty)
-    const title_case = key_segment.charAt(0).toUpperCase() + key_segment.slice(1)
-    return (
-      key_symbols[key_segment] ??
-      (key_segment.length > 1 ? title_case : key_segment.toUpperCase())
-    )
-  })
+  split_shortcut(resolve_mod(shortcut)).map(
+    (part) => key_symbols[part] ?? part.charAt(0).toUpperCase() + part.slice(1),
+  )
 
 export type Hotkey = {
   keys: string | string[] // e.g. `mod+k`, `ctrl+shift+p`, `Escape`
@@ -328,11 +322,18 @@ export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
 }
 
 // event came from a text-entry control, where a bare key is typing
-export const is_editable_event_target = (target: EventTarget | null): boolean =>
-  target instanceof Element &&
-  target.closest(
-    `input, textarea, select, [contenteditable]:not([contenteditable="false"])`,
-  ) !== null
+export const is_editable_event_target = (target: EventTarget | null): boolean => {
+  if (!(target instanceof Element)) return false
+  if (target.closest(`input, textarea, select`)) return true
+  // Only valid values override inheritance; a false island stops an editable ancestor.
+  const editable = target.closest(
+    `[contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [contenteditable="false" i]`,
+  )
+  return (
+    editable !== null &&
+    editable.getAttribute(`contenteditable`)?.toLowerCase() !== `false`
+  )
+}
 
 // Alt/Ctrl/Meta make a keystroke a chord. Shift is excluded: it types capitals.
 export const is_modifier_chord = (event: KeyboardEvent): boolean =>
@@ -452,7 +453,8 @@ export function sanitize_shortcut_overrides(
   )
   const overrides: Record<string, string> = {}
   for (const [action_id, combo] of Object.entries(value)) {
-    if (!(action_id in canonical_defaults) || typeof combo !== `string`) continue
+    if (!Object.hasOwn(canonical_defaults, action_id) || typeof combo !== `string`)
+      continue
     const normalized = normalize_combo(combo)
     if (normalized && normalized !== canonical_defaults[action_id]) {
       overrides[action_id] = normalized
@@ -501,12 +503,10 @@ export function fuzzy_match_indices(
   let target = target_text.toLowerCase()
   let target_offsets: number[] | undefined
   if (target.length !== target_text.length) {
-    target = ``
     target_offsets = []
     let source_offset = 0
     for (const character of target_text) {
       const normalized = character.toLowerCase()
-      target += normalized
       for (let unit_idx = 0; unit_idx < normalized.length; unit_idx++) {
         // keep UTF-16 indices for astral chars while folding extra case-folded units
         // (İ -> i + combining dot) back onto their one source unit
@@ -520,12 +520,14 @@ export function fuzzy_match_indices(
   // greedy leftmost match; pos only moves forward, so scanning stays linear
   const indices: number[] = []
   let pos = -1
-  // by code unit, not for...of: code points emit one index per astral char, two expected
-  // oxlint-disable-next-line typescript/prefer-for-of
-  for (let search_idx = 0; search_idx < search.length; search_idx++) {
-    pos = target.indexOf(search[search_idx], pos + 1)
+  // Match whole code points, but return one source index per UTF-16 unit for rendering.
+  for (const character of search) {
+    pos = target.indexOf(character, pos + 1)
     if (pos === -1) return null
-    indices.push(target_offsets?.[pos] ?? pos)
+    for (let unit_idx = 0; unit_idx < character.length; unit_idx++) {
+      indices.push(target_offsets?.[pos + unit_idx] ?? pos + unit_idx)
+    }
+    pos += character.length - 1
   }
   return indices
 }

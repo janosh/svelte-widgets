@@ -208,29 +208,28 @@ describe(`toast queue reducer`, () => {
         expect(queue.active_toast?.expires_at_ms).toBe(deadline)
       },
     )
-
-    test(`a repeat that arrives already expired times out rather than lingering`, () => {
-      const first = add(create_toast_queue(), `a`, { dedupe_key: `job` }).queue
-      const { queue, effects } = add(
-        first,
-        `a`,
-        { dedupe_key: `job`, expires_at_ms: 50 },
-        100,
-      )
-
-      expect(queue.active_toast).toBeNull()
-      expect(effects.map((effect) => effect.reason)).toEqual([`timeout`])
-    })
   })
 
-  test(`an already-expired request never reaches the queue`, () => {
-    const { queue, effects } = add(create_toast_queue(), `stale`, {
-      expires_at_ms: -1,
-    })
-
-    expect(queue.active_toast).toBeNull()
-    expect(effects.map((effect) => effect.reason)).toEqual([`timeout`])
-    expect(queue.next_id).toBe(2) // the id is still spent, so seq stays monotonic
+  test.each([
+    [`new deadline`, false, undefined, undefined],
+    [`repeated deadline`, true, undefined, undefined],
+    [`new budget`, false, undefined, 300],
+    [`repeated budget`, true, undefined, 300],
+    [`retained budget`, true, 300, undefined],
+  ] as const)(`expired deadline with %s`, (_desc, repeat, initial_budget, new_budget) => {
+    const first = repeat
+      ? add(create_toast_queue(), `a`, { visible_duration_ms: initial_budget }).queue
+      : create_toast_queue()
+    const { queue, effects } = add(
+      first,
+      `a`,
+      { expires_at_ms: -1, visible_duration_ms: new_budget },
+      100,
+    )
+    const budget = new_budget ?? initial_budget
+    expect(queue.active_toast?.expires_at_ms ?? null).toBe(budget ? 400 : null)
+    expect(effects.map((effect) => effect.reason)).toEqual(budget ? [] : [`timeout`])
+    expect(queue.next_id).toBe(2) // repeats reuse the id; expired new requests spend it
   })
 
   test(`dismissing an unknown id changes nothing`, () => {

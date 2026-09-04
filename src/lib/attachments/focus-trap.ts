@@ -54,9 +54,9 @@ const candidate_order = (element: Element) =>
 
 const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement => {
   if (!is_focusable(element) || candidate_tab_index(element) < 0) return false
-  if (element.matches(`:disabled`)) return false
+  if (element.matches(`:disabled,input[type="hidden" i]`)) return false
   // Descendants can override inherited visibility, so only the candidate's value matters.
-  if (getComputedStyle(element).visibility === `hidden`) return false
+  if ([`hidden`, `collapse`].includes(getComputedStyle(element).visibility)) return false
   let current: Element | null = element
   while (current) {
     const style = getComputedStyle(current)
@@ -82,9 +82,10 @@ const collect_tab_candidates = (
   root: Element | ShadowRoot,
   candidates: Set<Element>,
 ): void => {
+  if (root instanceof Element && root.shadowRoot)
+    collect_tab_candidates(root.shadowRoot, candidates)
   for (const child of root.children) {
     if (child.matches(tabbable_selector)) candidates.add(child)
-    if (child.shadowRoot) collect_tab_candidates(child.shadowRoot, candidates)
     collect_tab_candidates(child, candidates)
   }
 }

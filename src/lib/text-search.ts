@@ -39,6 +39,7 @@ const text_segments = (
   node_filter: TextSearchNodeFilter,
   segment_selector: string,
 ): TextSegment[] => {
+  if (root.closest(`${NON_RENDERED_SELECTOR}, ${FORM_CONTROL_SELECTOR}`)) return []
   const segments: TextSegment[] = []
   const break_selector = `${segment_selector}, ${BREAK_SELECTOR}`
   let segment: TextSegment | undefined

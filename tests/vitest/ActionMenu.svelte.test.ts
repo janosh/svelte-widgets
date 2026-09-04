@@ -64,7 +64,8 @@ describe(`ActionMenu`, () => {
     )
 
   test(`a right-click opens the menu at the pointer, replacing the native one`, async () => {
-    mount_menu(make_actions(), { class: `consumer-class`, id: `consumer-menu` })
+    const ontoggle = vi.fn()
+    mount_menu(make_actions(), { class: `consumer-class`, id: `consumer-menu`, ontoggle })
     expect(menu()).toBeNull()
 
     const event = right_click(document.body)
@@ -88,6 +89,11 @@ describe(`ActionMenu`, () => {
     // .action-menu comes after {...rest}, so a consumer class adds instead of replacing
     expect(surface.classList.contains(`action-menu`)).toBe(true)
     expect(surface.classList.contains(`consumer-class`)).toBe(true)
+    expect(ontoggle).toHaveBeenCalledWith(expect.objectContaining({ newState: `open` }))
+    surface.hidePopover()
+    await tick()
+    expect(menu()).toBeNull()
+    expect(ontoggle).toHaveBeenCalledWith(expect.objectContaining({ newState: `closed` }))
   })
 
   test(`preserves a consumer-provided menu tabindex`, async () => {

@@ -57,6 +57,11 @@ describe(`sortable`, () => {
 
     activate(planet_header)
     expect(get_column_values(table, 0)).toEqual([`Mars`, `Jupiter`, `Earth`])
+
+    // Sort keys must refresh after cell edits between clicks.
+    table.rows[1].cells[0].textContent = `Venus`
+    activate(planet_header)
+    expect(get_column_values(table, 0)).toEqual([`Earth`, `Jupiter`, `Venus`])
   })
 
   it(`exposes headers to the keyboard and restores their a11y attributes`, () => {
@@ -144,6 +149,7 @@ describe(`sortable`, () => {
 
   it.each([
     [`whitespace-only cells as empty`, [`   `, `5`, `1`], [`1`, `5`, ``]],
+    [`natural text ordering`, [`item10`, `item2`, `item1`], [`item1`, `item2`, `item10`]],
     [
       `mixed numeric and text cells`,
       [`foo`, `10`, `bar`, `2`],
@@ -161,24 +167,24 @@ describe(`sortable`, () => {
     expect(get_column_values(table, 0).map((val) => val?.trim())).toEqual(expected)
   })
 
-  it(`treats rows with missing cells (colspan placeholder) as empty and sorts them last`, () => {
-    const table = create_table_from(
-      `<thead><tr><th>Name</th><th>Score</th></tr></thead><tbody>` +
-        `<tr><td colspan="2">No data</td></tr>` +
-        `<tr><td>Alice</td><td>3</td></tr>` +
-        `<tr><td>Bob</td><td>1</td></tr>` +
-        `</tbody>`,
-    )
+  it.each([`thead th`, `thead th:last-child`])(
+    `sorts the actual column with %s and keeps missing cells last`,
+    (header_selector) => {
+      const table = create_table_from(
+        `<thead><tr><th>Name</th><th>Score</th></tr></thead><tbody>` +
+          `<tr><td colspan="2">No data</td></tr>` +
+          `<tr><td>Alice</td><td>3</td></tr>` +
+          `<tr><td>Bob</td><td>1</td></tr>` +
+          `</tbody>`,
+      )
 
-    attach_sortable(table)
-    // click 2nd column header; placeholder row has no cell at index 1
-    click_header(table.querySelectorAll(`thead th`)[1])
+      attach_sortable(table, { header_selector })
+      // click 2nd column header; placeholder row has no cell at index 1
+      click_header(table.querySelectorAll(`thead th`)[1])
 
-    const first_cells = Array.from(
-      table.querySelectorAll<HTMLTableRowElement>(`tbody tr`),
-    ).map((row) => row.cells[0]?.textContent)
-    expect(first_cells).toEqual([`Bob`, `Alice`, `No data`])
-  })
+      expect(get_column_values(table, 0)).toEqual([`Bob`, `Alice`, `No data`])
+    },
+  )
 
   it(`does not re-parent rows of nested tables when sorting`, () => {
     const table = create_table_from(

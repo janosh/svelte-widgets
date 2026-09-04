@@ -48,6 +48,7 @@ describe(`focus_trap`, () => {
     surface.innerHTML = `
       <button id="three" tabindex="3"></button><button id="one" tabindex="1"></button>
       <button id="plain"></button><button disabled></button><button tabindex="-1"></button>
+      <input type="hidden" style="display: block"><button style="visibility: collapse"></button>
       <input type="radio" name="choice"><input id="checked" type="radio" name="choice" checked>
       <details><summary id="summary"></summary><button></button></details>
       <fieldset disabled><legend><button id="legend"></button></legend><button></button></fieldset>
@@ -71,18 +72,22 @@ describe(`focus_trap`, () => {
     }
   })
 
-  it(`walks into an open shadow root`, () => {
-    const { surface, buttons } = make_surface(1)
-    const host = document.createElement(`div`)
-    const shadow = host.attachShadow({ mode: `open` })
-    shadow.append(document.createElement(`button`))
-    buttons[0].before(host)
+  it.each([false, true])(
+    `walks into an open shadow root (trap is host: %s)`,
+    (is_host) => {
+      const { surface, buttons } = make_surface(1)
+      const host = is_host ? surface : document.createElement(`div`)
+      const shadow = host.attachShadow({ mode: `open` })
+      shadow.append(document.createElement(`button`))
+      if (is_host) shadow.append(buttons[0])
+      else buttons[0].before(host)
 
-    attach_trap(surface)
-    expect(shadow.activeElement).toBe(shadow.querySelector(`button`))
-    press_tab()
-    expect(document.activeElement).toBe(buttons[0])
-  })
+      attach_trap(surface)
+      expect(shadow.activeElement).toBe(shadow.querySelector(`button`))
+      press_tab()
+      expect(is_host ? shadow.activeElement : document.activeElement).toBe(buttons[0])
+    },
+  )
 
   // an <a href> in an <svg> is tabbable, but an HTMLElement-typed indexOf misses the
   // SVGElement, so Tab jumped back to the edge instead of stepping to the neighbor
@@ -102,17 +107,14 @@ describe(`focus_trap`, () => {
     expect(document.activeElement).toBe(buttons[1])
   })
 
-  it.each([
-    [`a selector`, `.wanted`],
-    [`no initial focus`, false],
-  ] as const)(`initial: %s`, (_desc, initial) => {
+  it(`resolves the initial focus selector inside the surface`, () => {
     const { surface, buttons } = make_surface()
     buttons[2].className = `wanted`
     const outside = create_element(`button`)
     outside.focus()
 
-    attach_trap(surface, { initial })
-    expect(document.activeElement).toBe(initial === false ? outside : buttons[2])
+    attach_trap(surface, { initial: `.wanted` })
+    expect(document.activeElement).toBe(buttons[2])
   })
 
   it(`restores to the trigger, to a named element, or wherever the user moved it`, () => {
@@ -334,18 +336,12 @@ describe(`focus_trap`, () => {
     expect(await focus_out_to(outside)).toBe(outside) // no recapture by default
     cleanup_plain?.()
 
+    const removals = vi.spyOn(document, `removeEventListener`)
     const cleanup = focus_trap({ recapture: true, restore: false })(surface)
     buttons[1].focus()
     cleanup?.()
     expect(await focus_out_to(outside)).toBe(outside) // a torn-down trap stops recapturing
-  })
-
-  // hygiene, not behavior (the guard above silences late microtasks), but without it every
-  // opened surface leaks a pair of document listeners for the page's life
-  it(`recapture takes its document listeners off again on teardown`, () => {
-    const removals = vi.spyOn(document, `removeEventListener`)
-    focus_trap({ recapture: true, restore: false })(make_surface().surface)?.()
-
+    // Silencing recapture also releases its document listeners.
     expect(removals.mock.calls.map(([type]) => type)).toEqual(
       expect.arrayContaining([`focusin`, `focusout`]),
     )

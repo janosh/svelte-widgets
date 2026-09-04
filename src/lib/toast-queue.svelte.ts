@@ -301,7 +301,7 @@ export const enqueue_toast = <Priority extends string>(
           on_close: request.on_close ?? carried.on_close,
         }
     let transition: ToastQueueTransition<Priority>
-    if (is_expired(updated, now_ms)) {
+    if (is_expired(drop_unseen_deadline(updated), now_ms)) {
       const [without_existing] = remove_toast(queue, existing.id, now_ms)
       transition = {
         queue: without_existing,
@@ -339,7 +339,10 @@ export const enqueue_toast = <Priority extends string>(
     on_close: request.on_close,
   }
   const next_id = queue.next_id + 1
-  const transition: ToastQueueTransition<Priority> = is_expired(toast, now_ms)
+  const transition: ToastQueueTransition<Priority> = is_expired(
+    drop_unseen_deadline(toast),
+    now_ms,
+  )
     ? { queue: { ...queue, next_id }, effects: [{ reason: `timeout`, toast }] }
     : rebalance_queue({ ...queue, next_id, pending: [...queue.pending, toast] }, now_ms)
   return {
