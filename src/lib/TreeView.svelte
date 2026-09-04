@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { TreeNode } from './types'
   import { tick, type Snippet } from 'svelte'
-  import { SvelteSet } from 'svelte/reactivity'
+  import { SvelteMap } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
   import { is_editable_event_target, is_modifier_chord } from './utils'
 
@@ -23,13 +23,16 @@
   } = $props()
   let root = $state<HTMLDivElement>()
   let focused = $state<string>()
-  const loaded = new WeakMap<TreeNode, readonly TreeNode[]>()
-  const pending = new Map<TreeNode, AbortController>()
-  const loading = new SvelteSet<string>()
-  let load_epoch = $state(0)
+  const branches = new SvelteMap<TreeNode, AbortController | readonly TreeNode[]>()
   let error = $state(``)
-  $effect(() => () => {
-    for (const controller of pending.values()) controller.abort()
+  $effect(() => {
+    // A replacement tree owns fresh requests, even when it reuses node IDs.
+    void nodes
+    return () => {
+      for (const branch of branches.values())
+        if (branch instanceof AbortController) branch.abort()
+      branches.clear()
+    }
   })
   type Row = {
     node: TreeNode
@@ -40,7 +43,6 @@
     expandable: boolean
   }
   const rows = $derived.by(() => {
-    void load_epoch
     const result: Row[] = []
     const seen = new Set<string>()
     const visit = (siblings: readonly TreeNode[], depth: number, parent?: string) => {
@@ -48,7 +50,9 @@
         if (seen.has(node.id))
           throw new Error(`TreeView requires unique node ids, duplicate ${node.id}`)
         seen.add(node.id)
-        const descendants = node.children ?? loaded.get(node)
+        const branch = branches.get(node)
+        const descendants =
+          node.children ?? (branch instanceof AbortController ? undefined : branch)
         result.push({
           node,
           depth,
@@ -66,14 +70,7 @@
   // Bindable initial expansion can request children before the first interaction.
   $effect(() => {
     for (const { node } of rows) {
-      if (
-        expanded.has(node.id) &&
-        node.load &&
-        !node.children &&
-        !loaded.has(node) &&
-        !pending.has(node)
-      )
-        void expand(node)
+      if (expanded.has(node.id)) void expand(node)
     }
   })
   const active_id = $derived(
@@ -82,25 +79,19 @@
   async function expand(node: TreeNode): Promise<void> {
     if (node.disabled) return
     if (!expanded.has(node.id)) expanded = new Set(expanded).add(node.id)
-    if (!node.load || node.children || loaded.has(node) || pending.has(node)) return
+    if (!node.load || node.children || branches.has(node)) return
     const controller = new AbortController()
-    pending.set(node, controller)
-    loading.add(node.id)
+    branches.set(node, controller)
     error = ``
     try {
       const descendants = await node.load(controller.signal)
-      if (!controller.signal.aborted) {
-        loaded.set(node, descendants)
-        load_epoch++
-      }
+      if (!controller.signal.aborted) branches.set(node, descendants)
     } catch (cause) {
       if (!controller.signal.aborted) {
         error = `Could not load ${node.label}: ${String(cause)}`
-        expanded = new Set([...expanded].filter((id) => id !== node.id))
+        collapse(node.id)
+        branches.delete(node)
       }
-    } finally {
-      pending.delete(node)
-      loading.delete(node.id)
     }
   }
   const collapse = (id: string) => {
@@ -158,7 +149,7 @@
         aria-expanded={expandable ? expanded.has(node.id) : undefined}
         aria-selected={selected === node.id}
         aria-disabled={node.disabled}
-        aria-busy={loading.has(node.id)}
+        aria-busy={branches.get(node) instanceof AbortController}
         tabindex={active_id === node.id ? 0 : -1}
         style:padding-inline-start={`${(depth - 1) * 1.25}em`}
         onfocus={() => {

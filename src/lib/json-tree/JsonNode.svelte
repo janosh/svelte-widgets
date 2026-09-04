@@ -8,7 +8,6 @@
   import {
     estimate_byte_size,
     format_preview,
-    get_ancestor_paths,
     get_child_count,
     get_children,
     get_value_type,
@@ -75,10 +74,14 @@
     const match = ctx.current_match_path
     if (!match || children.length <= shown_count || !match.startsWith(path))
       return shown_count
-    const on_match_path = new Set([match, ...get_ancestor_paths(match)])
-    const idx = children.findIndex((child) =>
-      on_match_path.has(build_path(path, child.key)),
-    )
+    const idx = children.findIndex(({ key }) => {
+      const child_path = build_path(path, key)
+      return (
+        match === child_path ||
+        match.startsWith(`${child_path}.`) ||
+        match.startsWith(`${child_path}[`)
+      )
+    })
     return idx === -1 ? shown_count : Math.max(shown_count, idx + 1)
   })
   const visible_children = $derived(children.slice(0, revealed_count))

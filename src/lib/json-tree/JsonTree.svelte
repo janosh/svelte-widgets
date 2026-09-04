@@ -131,7 +131,7 @@
   async function reveal_current_match(): Promise<void> {
     const match_path = current_match_path
     if (!match_path || !content_element) return
-    set_collapsed(get_ancestor_paths(match_path), () => false)
+    set_collapsed(get_ancestor_paths(match_path, root_path), () => false)
     await tick()
     content_element
       .querySelector(`[data-path="${CSS.escape(match_path)}"]`)
@@ -144,7 +144,10 @@
       current_match_index = -1
       return
     }
-    set_collapsed(new Set(sorted_matches.flatMap(get_ancestor_paths)), () => false)
+    set_collapsed(
+      new Set(sorted_matches.flatMap((path) => get_ancestor_paths(path, root_path))),
+      () => false,
+    )
     if (current_match_index < 0 || current_match_index >= sorted_matches.length) {
       current_match_index = 0
     }
@@ -243,7 +246,7 @@
   const diff_map = $derived(
     compare_value === undefined ? null : compute_diff(compare_value, value, root_path),
   )
-  const ghost_map = $derived(diff_map ? build_ghost_map(diff_map) : new Map())
+  const ghost_map = $derived(diff_map ? build_ghost_map(diff_map, root_label) : new Map())
 
   function show_context_menu(
     event: MouseEvent,

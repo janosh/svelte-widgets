@@ -3,17 +3,8 @@ import { flushSync, mount, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 let notify_resize = () => {}
-const trigger_resize_observer = (_element: Element) => notify_resize()
-const query = (root: ParentNode, selector: string): HTMLElement => {
-  const node = root.querySelector<HTMLElement>(selector)
-  if (!node) throw new Error(`Missing element ${selector}`)
-  return node
-}
 
-const pointer_event = (
-  type: string,
-  init: { button?: number; clientX?: number; clientY?: number; pointerId?: number } = {},
-): PointerEvent =>
+const pointer_event = (type: string, init: PointerEventInit = {}): PointerEvent =>
   new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, ...init })
 
 type PixelClamps = {
@@ -59,25 +50,23 @@ const mount_divider = (
   const component = mount(PaneDivider, { target: parent, props })
   onTestFinished(() => unmount(component).finally(() => parent.remove()))
   flushSync()
-  const divider = query(parent, `[role="separator"]`)
+  const divider = parent.querySelector<HTMLElement>(`[role="separator"]`)
+  if (!divider) throw new Error(`Missing separator`)
   return { divider, parent }
 }
 // A bound first_px readable through a plain accessor (Svelte writes bindable props through the
 // prop descriptor's setter)
 const bound_first_px = (initial: number, clamps: Omit<PixelClamps, `first_px`>) => {
   let value = initial
-  const props = Object.assign(
-    {
-      get first_px() {
-        return value
-      },
-      set first_px(next: number) {
-        value = next
-      },
+  return {
+    ...clamps,
+    get first_px() {
+      return value
     },
-    clamps,
-  )
-  return { props, current: () => value }
+    set first_px(next: number) {
+      value = next
+    },
+  }
 }
 
 test.each([
@@ -200,7 +189,7 @@ test.each([
 
 test(`pixel-mode drags move the first pane in px and bind the clamped value back`, () => {
   const bound = bound_first_px(320, { min_px: 150, second_min_px: 200 })
-  const { divider, parent } = mount_divider(`horizontal`, `ltr`, undefined, bound.props, {
+  const { divider, parent } = mount_divider(`horizontal`, `ltr`, undefined, bound, {
     width: 1000,
     height: 200,
   })
@@ -209,12 +198,12 @@ test(`pixel-mode drags move the first pane in px and bind the clamped value back
   // container starts at x=100: pointer at 600 puts the divider 500 px in
   divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 600, pointerId: 2 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`500px`)
-  expect(bound.current()).toBe(500)
+  expect(bound.first_px).toBe(500)
   // past the second pane's floor clamps to 800 px; below the first pane's floor to 150 px
   divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 1500, pointerId: 2 }))
-  expect(bound.current()).toBe(800)
+  expect(bound.first_px).toBe(800)
   divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 120, pointerId: 2 }))
-  expect(bound.current()).toBe(150)
+  expect(bound.first_px).toBe(150)
   divider.dispatchEvent(pointer_event(`pointerup`, { pointerId: 2 }))
   // one layout read per move (the container is measured once, not once per clamp)
   expect(measure).toHaveBeenCalledTimes(3)
@@ -248,19 +237,19 @@ test(`pixel-mode keyboard resizing steps in px within the clamps`, () => {
 test(`pixel mode re-clamps on container resize without overwriting first_px`, () => {
   let width = 1000
   const bound = bound_first_px(320, { second_min_px: 200 })
-  const { parent } = mount_divider(`horizontal`, `ltr`, undefined, bound.props, () => ({
+  const { parent } = mount_divider(`horizontal`, `ltr`, undefined, bound, () => ({
     width,
     height: 200,
   }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`320px`)
 
   width = 400
-  trigger_resize_observer(parent)
+  notify_resize()
   flushSync()
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`200px`)
-  expect(bound.current()).toBe(320)
+  expect(bound.first_px).toBe(320)
   width = 1000
-  trigger_resize_observer(parent)
+  notify_resize()
   flushSync()
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`320px`)
 })

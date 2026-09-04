@@ -21,6 +21,14 @@
   } = $props()
 
   const ctx = get_json_tree_context()
+  const is_editable = $derived(
+    ctx.settings.editable &&
+      ctx.on_change &&
+      (value === null ||
+        typeof value === `string` ||
+        typeof value === `boolean` ||
+        (typeof value === `number` && Number.isFinite(value))),
+  )
 
   // Unmount-only teardown: an effect cleanup reruns per settings change (ctx.settings is a
   // fresh object each time), which cancelled the un-flash timer mid-flash.
@@ -53,7 +61,7 @@
 
   function handle_click(event: MouseEvent) {
     event.stopPropagation()
-    if (ctx.settings.editable && ctx.on_change) {
+    if (is_editable) {
       clearTimeout(click_timer)
       const copy_pos = { clientX: event.clientX, clientY: event.clientY }
       click_timer = setTimeout(() => ctx.copy_value(path, value, copy_pos), 250)
@@ -80,11 +88,11 @@
   let edit_input = $state<HTMLInputElement | null>(null)
 
   function start_edit(event: MouseEvent) {
-    if (!ctx.settings.editable || !ctx.on_change) return
+    if (!is_editable) return
     event.stopPropagation()
     clearTimeout(click_timer) // cancel pending click-to-copy
     // Pre-fill with raw value (strings without quotes)
-    edit_text = value_type === `string` ? (value as string) : String(value)
+    edit_text = String(value)
     editing = true
     tick().then(() => edit_input?.select())
   }
@@ -92,6 +100,7 @@
   function commit_edit() {
     if (!editing) return
     editing = false
+    if (edit_text === String(value)) return
     const new_value = parse_edited_value(edit_text)
     if (!values_equal(new_value, value)) ctx.on_change?.(path, new_value, value)
   }
@@ -123,7 +132,7 @@
   <span
     class="json-value {value_type}"
     class:changed={changed_flash.value}
-    class:editable={ctx.settings.editable}
+    class:editable={is_editable}
     onclick={handle_click}
     ondblclick={start_edit}
     oncontextmenu={(event) => {
@@ -137,7 +146,7 @@
     }}
     role="button"
     tabindex="-1"
-    title={ctx.settings.editable ? `Double-click to edit` : undefined}
+    title={is_editable ? `Double-click to edit` : undefined}
   >
     {#if color_detected}
       <span class="color-swatch" style:background={color_detected}></span>

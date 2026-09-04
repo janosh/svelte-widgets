@@ -1,4 +1,4 @@
-import { build_path, format_path, parse_path } from './path'
+import { build_path, parse_path } from './path'
 import type { DiffEntry, JsonValueType } from './types'
 
 type JsonChild = { key: string | number; value: unknown }
@@ -121,6 +121,7 @@ export function get_value_at_path(
     if (type === `map` || type === `set`) {
       current = get_children(current)[Number(segment)]?.value
     } else if (type === `object` || type === `array`) {
+      if (!Object.hasOwn(current as object, segment)) return undefined
       current = (current as Record<string | number, unknown>)[segment]
     } else return undefined
   }
@@ -264,10 +265,11 @@ export function find_matching_paths(
 }
 
 // Ancestor paths, outermost first: "users[0].name" -> ["users", "users[0]"]
-export function get_ancestor_paths(path: string): string[] {
-  const ancestors: string[] = []
-  let current = ``
-  for (const segment of parse_path(path).slice(0, -1)) {
+export function get_ancestor_paths(path: string, root_label = ``): string[] {
+  const segments = relative_path_segments(path, root_label)
+  const ancestors: string[] = root_label && segments.length ? [root_label] : []
+  let current = root_label
+  for (const segment of segments.slice(0, -1)) {
     current = build_path(current, segment)
     ancestors.push(current)
   }
@@ -307,7 +309,7 @@ export function parse_edited_value(text: string): unknown {
   return text
 }
 
-// Deep-cloned root with the value at a dot/bracket path (optionally root_label-prefixed) replaced
+// Replace an existing dot/bracket path, copying its ancestors and sharing untouched branches.
 export function set_at_path(
   root: unknown,
   path_str: string,
@@ -315,16 +317,40 @@ export function set_at_path(
   root_label?: string,
 ): unknown {
   const segments = relative_path_segments(path_str, root_label)
-  if (segments.length === 0) return new_value
-  const cloned = structuredClone(root)
-  let current = cloned as Record<string | number, unknown>
-  for (let idx = 0; idx < segments.length - 1; idx++) {
-    const next = current[segments[idx]]
-    if (next === undefined || next === null) return root // bail — path no longer valid
-    current = next as Record<string | number, unknown>
+  const replace = (current: unknown, depth: number): unknown => {
+    if (depth === segments.length) return new_value
+    const collection = current instanceof Map || current instanceof Set
+    const container = collection
+      ? get_children(current).map(({ value }) => value)
+      : current
+    const key = collection ? Number(segments[depth]) : segments[depth]
+    if (!container || typeof container !== `object` || !Object.hasOwn(container, key))
+      throw new Error(`Cannot edit missing path ${path_str} at segment ${String(key)}`)
+    const record = container as Record<string | number, unknown>
+    const copy = Array.isArray(container) ? container.slice() : { ...record }
+    // Define an own property so literal __proto__ keys remain data.
+    Object.defineProperty(copy, key, {
+      value: replace(record[key], depth + 1),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    })
+    if (current instanceof Map)
+      return new Map(
+        (copy as unknown[]).map((entry) => {
+          if (
+            !entry ||
+            typeof entry !== `object` ||
+            !(`key` in entry && `value` in entry)
+          )
+            throw new Error(`Map entry at ${path_str} must contain key and value`)
+          return [entry.key, entry.value]
+        }),
+      )
+    if (current instanceof Set) return new Set(copy as unknown[])
+    return copy
   }
-  current[segments[segments.length - 1]] = new_value
-  return cloned
+  return replace(root, 0)
 }
 
 const URL_RE = /^https?:\/\/\S+$/
@@ -387,13 +413,14 @@ export interface GhostEntry {
 // parent path -> removed children, so an expanded node reads its ghosts in O(1)
 export function build_ghost_map(
   diff_map: Map<string, DiffEntry>,
+  root_label = ``,
 ): Map<string, GhostEntry[]> {
   const ghost_map = new Map<string, GhostEntry[]>()
   for (const [diff_path, entry] of diff_map) {
     if (entry.status !== `removed`) continue
-    const segments = parse_path(diff_path)
+    const segments = relative_path_segments(diff_path, root_label)
     if (segments.length === 0) continue
-    const parent_path = segments.length === 1 ? `` : format_path(segments.slice(0, -1))
+    const parent_path = segments.slice(0, -1).reduce<string>(build_path, root_label)
     const key = segments[segments.length - 1]
     const ghosts = ghost_map.get(parent_path) ?? []
     ghosts.push({ key, value: entry.old_value, path: diff_path })
@@ -410,6 +437,7 @@ export function compute_diff(
   result = new Map<string, DiffEntry>(),
   seen = new WeakSet<object>(),
 ): Map<string, DiffEntry> {
+  if (Object.is(old_val, new_val)) return result
   const old_type = get_value_type(old_val)
   const new_type = get_value_type(new_val)
   const mark_changed = () =>

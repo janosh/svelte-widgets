@@ -82,9 +82,12 @@ test(`task cancellation and retry belong to the caller`, async () => {
 test(`file picker validates, cancels superseded work, removes files and permits reselection`, async () => {
   const target = target_for()
   const signals: AbortSignal[] = []
+  const reject_loads: ((reason: Error) => void)[] = []
   const onfiles = vi.fn((_files: File[], signal: AbortSignal) => {
     signals.push(signal)
-    return new Promise<void>(() => {})
+    return new Promise<void>((_resolve, reject) => {
+      reject_loads.push(reject)
+    })
   })
   const onreject = vi.fn()
   const component = mount(FileInput, {
@@ -119,6 +122,10 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   await select([good])
   expect(signals[0].aborted).toBe(true)
   expect(onfiles).toHaveBeenCalledTimes(2)
+  reject_loads[0](new Error(`Superseded failure`))
+  await tick()
+  expect(target.textContent).not.toContain(`Superseded failure`)
+  expect(target.textContent).toContain(`Processing files`)
   await select([new File([`x`], `bad.txt`)])
   expect(signals[1].aborted).toBe(false)
   target.querySelector<HTMLButtonElement>(`button[aria-label="Remove ok.json"]`)?.click()
@@ -126,32 +133,44 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   expect(signals[1].aborted).toBe(true)
   expect(target.querySelectorAll(`li`)).toHaveLength(0)
   await select([good])
+  reject_loads[2](new Error(`Retry this file`))
+  await tick()
+  expect(target.textContent).toContain(`Retry this file`)
+  Array.from(target.querySelectorAll(`button`))
+    .find((button) => button.textContent === `Retry`)
+    ?.click()
+  await tick()
+  expect(onfiles).toHaveBeenCalledTimes(4)
   await unmount(component)
-  expect(signals[2].aborted).toBe(true)
+  expect(signals[3].aborted).toBe(true)
 })
 
-test(`virtual list renders a bounded window and scrolls to an unmounted row`, async () => {
-  const target = target_for()
-  const children = createRawSnippet<[number, number]>((item) => ({
-    render: () => `<span>${item()}</span>`,
-  }))
-  const component = mount(VirtualList, {
-    target,
-    props: {
-      items: Array.from({ length: 10000 }, (_value, idx) => idx),
-      item_size: 20,
-      initial_count: 10,
-      children,
-    },
-  })
-  onTestFinished(() => unmount(component))
-  flushSync()
-  expect(target.querySelectorAll(`[data-index]`)).toHaveLength(10)
-  component.scroll_to_index(9000)
-  await tick()
-  expect(target.querySelector(`[data-index="9000"]`)?.textContent).toBe(`9000`)
-  expect(target.querySelectorAll(`[data-index]`).length).toBeLessThan(25)
-})
+test.each([0, 5])(
+  `virtual list scrolls to an unmounted row with overscan=%s`,
+  async (overscan) => {
+    const target = target_for()
+    const children = createRawSnippet<[number, number]>((item) => ({
+      render: () => `<span>${item()}</span>`,
+    }))
+    const component = mount(VirtualList, {
+      target,
+      props: {
+        items: Array.from({ length: 10000 }, (_value, idx) => idx),
+        item_size: 20,
+        initial_count: 10,
+        overscan,
+        children,
+      },
+    })
+    onTestFinished(() => unmount(component))
+    flushSync()
+    expect(target.querySelectorAll(`[data-index]`)).toHaveLength(10)
+    component.scroll_to_index(9000)
+    await tick()
+    expect(target.querySelector(`[data-index="9000"]`)?.textContent).toBe(`9000`)
+    expect(target.querySelectorAll(`[data-index]`).length).toBeLessThan(25)
+  },
+)
 
 test.each([
   [
@@ -202,6 +221,49 @@ test.each([false, true])(
     fire_key(root, `ArrowLeft`)
     await tick()
     expect(target.querySelectorAll(`[role="treeitem"]`)).toHaveLength(2)
+  },
+)
+
+test.each([false, true])(
+  `tree replacement ignores stale loads (reject=%s)`,
+  async (reject_old) => {
+    const target = target_for()
+    const requests: {
+      signal: AbortSignal
+      resolve: (nodes: TreeNode[]) => void
+      reject: (error: Error) => void
+    }[] = []
+    const load = (signal: AbortSignal) =>
+      new Promise<TreeNode[]>((resolve, reject) => {
+        requests.push({ signal, resolve, reject })
+      })
+    const props = $state({
+      nodes: [{ id: `root`, label: `Old`, load }],
+      expanded: new Set([`root`]),
+    })
+    const component = mount(TreeView, { target, props })
+    flushSync()
+    props.nodes = [{ id: `root`, label: `New`, load }]
+    await tick()
+    expect(requests).toHaveLength(2)
+    expect(requests[0].signal.aborted).toBe(true)
+    if (reject_old) requests[0].reject(new Error(`Old failed`))
+    else requests[0].resolve([{ id: `stale`, label: `Stale` }])
+    await tick()
+    expect(target.querySelector(`[data-tree-id="root"]`)?.getAttribute(`aria-busy`)).toBe(
+      `true`,
+    )
+    expect(target.textContent).not.toMatch(/Old failed|Stale/)
+    requests[1].resolve([{ id: `child`, label: `Child` }])
+    await tick()
+    expect(target.querySelector(`[data-tree-id="child"]`)).not.toBeNull()
+    expect(target.querySelector(`[data-tree-id="root"]`)?.getAttribute(`aria-busy`)).toBe(
+      `false`,
+    )
+    props.nodes = [{ id: `root`, label: `Unmounting`, load }]
+    await tick()
+    await unmount(component)
+    expect(requests[2].signal.aborted).toBe(true)
   },
 )
 

@@ -62,7 +62,7 @@
     if (!element || !items.length) return
     const top = Math.max(0, Math.min(items.length - 1, idx)) * item_size
     element.scrollTop = Math.max(
-      top + item_size - viewport,
+      top + (viewport > 0 ? item_size - viewport : 0),
       Math.min(element.scrollTop, top),
     )
     scroll_top = element.scrollTop

@@ -22,67 +22,46 @@ import {
 } from '$lib/json-tree/utils'
 import { describe, expect, it } from 'vite-plus/test'
 
-describe(`get_value_type`, () => {
-  it.each([
-    [null, `null`],
-    [undefined, `undefined`],
-    [`hello`, `string`],
-    [42, `number`],
-    [NaN, `number`],
-    [true, `boolean`],
-    [Symbol(`test`), `symbol`],
-    [BigInt(123), `bigint`],
-    [() => {}, `function`],
-    [[1, 2, 3], `array`],
-    [{ a: 1 }, `object`],
-    [new Date(), `date`],
-    [/test/g, `regexp`],
-    [new Map(), `map`],
-    [new Set(), `set`],
-    [new Error(`test`), `error`],
-  ])(`returns %p for %s`, (value, expected) => {
-    expect(get_value_type(value)).toBe(expected)
-  })
-})
-
-// only the four container types expand; is_expandable routes through get_value_type
-describe(`is_expandable_type / is_expandable`, () => {
-  it.each([
-    [{ a: 1 }, `object`, true],
-    [[1, 2], `array`, true],
-    [new Map(), `map`, true],
-    [new Set(), `set`, true],
-    [`string`, `string`, false],
-    [null, `null`, false],
-    [new Date(), `date`, false],
-    [() => {}, `function`, false],
-  ] as const)(`%j (%s) -> %s`, (value, type, expected) => {
-    expect(is_expandable_type(type)).toBe(expected)
-    expect(is_expandable(value)).toBe(expected)
-  })
-})
-
-describe(`get_child_count`, () => {
-  it.each([
-    [[], 0],
-    [[1, 2, 3], 3],
-    [{}, 0],
-    [{ a: 1, b: 2 }, 2],
-    [
-      new Map([
-        [`a`, 1],
-        [`b`, 2],
-      ]),
-      2,
-    ],
-    [new Set([1, 2, 3, 4]), 4],
-    [`string`, 0],
-    [42, 0],
-    [null, 0],
-  ])(`returns correct count for %j`, (value, expected) => {
-    expect(get_child_count(value)).toBe(expected)
-  })
-})
+it.each([
+  [null, `null`, 0, false],
+  [undefined, `undefined`, 0, false],
+  [`hello`, `string`, 0, false],
+  [42, `number`, 0, false],
+  [NaN, `number`, 0, false],
+  [true, `boolean`, 0, false],
+  [Symbol(`test`), `symbol`, 0, false],
+  [123n, `bigint`, 0, false],
+  [() => {}, `function`, 0, false],
+  [[], `array`, 0, true],
+  [[1, 2], `array`, 2, true],
+  [[1, 2, 3], `array`, 3, true],
+  [{}, `object`, 0, true],
+  [{ a: 1 }, `object`, 1, true],
+  [{ a: 1, b: 2 }, `object`, 2, true],
+  [new Date(), `date`, 0, false],
+  [/test/g, `regexp`, 0, false],
+  [new Map(), `map`, 0, true],
+  [
+    new Map([
+      [`a`, 1],
+      [`b`, 2],
+    ]),
+    `map`,
+    2,
+    true,
+  ],
+  [new Set(), `set`, 0, true],
+  [new Set([1, 2, 3, 4]), `set`, 4, true],
+  [new Error(`test`), `error`, 0, false],
+] as const)(
+  `classifies %p as %s with %s children (expandable=%s)`,
+  (value, type, count, expandable) => {
+    expect(get_value_type(value)).toBe(type)
+    expect(is_expandable_type(type)).toBe(expandable)
+    expect(is_expandable(value)).toBe(expandable)
+    expect(get_child_count(value)).toBe(count)
+  },
+)
 
 describe(`serialize_for_copy`, () => {
   it.each([
@@ -339,6 +318,8 @@ describe(`get_children / get_value_at_path`, () => {
     [`set[0]`, undefined, `s0`],
     [`arr[1].nope`, undefined, undefined],
     [`missing.deeper`, undefined, undefined],
+    [`__proto__`, undefined, undefined],
+    [`obj.constructor`, undefined, undefined],
     [`data.obj.b`, `data`, 1],
     [`data`, `data`, root],
     // Dotted root labels (filenames) are stripped textually, never split by parse_path
@@ -373,22 +354,71 @@ describe(`set_at_path`, () => {
     [`diagram.obj.a`, `diagram`, { obj: { b: 1, a: 9 }, arr: [10, 20] }],
     [`data.json.arr[0]`, `data.json`, { obj: { b: 1, a: 2 }, arr: [9, 20] }],
     [`data.json`, `data.json`, 9], // editing the root replaces it
-    [`obj.missing.deep`, undefined, root], // invalid path leaves root untouched
   ])(`set_at_path(%p, root_label=%p)`, (path, root_label, expected) => {
     const result = set_at_path(root, path, 9, root_label)
     expect(result).toEqual(expected)
     expect(root.obj.b).toBe(1) // never mutates the input
+    if (typeof result === `object` && result !== null) {
+      const edited = result as typeof root
+      expect(edited.obj === root.obj).toBe(path.includes(`arr[`))
+      expect(edited.arr === root.arr).toBe(!path.includes(`arr[`))
+    }
+  })
+
+  it.each([
+    `obj.missing.deep`,
+    `obj.missing`,
+    `__proto__.polluted`,
+    `obj.constructor.prototype`,
+    `obj.b.deep`,
+  ])(`rejects missing or inherited path %s`, (path) => {
+    expect(() => set_at_path(root, path, 9)).toThrow(`Cannot edit missing path ${path}`)
+  })
+
+  it(`edits literal prototype keys and proxy values without cloning unrelated data`, () => {
+    const original = JSON.parse(`{"__proto__":{"value":1},"constructor":2}`)
+    original.callback = () => 1
+    original.symbol = Symbol(`untouched`)
+    const result = set_at_path(new Proxy(original, {}), `["__proto__"].value`, 9)
+    expect(result).toEqual({ ...original, [`__proto__`]: { value: 9 } })
+    expect(original.__proto__.value).toBe(1)
+    expect(Object.getPrototypeOf(result)).toBe(Object.prototype)
+  })
+
+  it.each([
+    [new Map(Object.entries({ first: { n: 1 }, last: { n: 2 } })), `[0].value.n`, 9],
+    [new Map(Object.entries({ first: 1, last: 2 })), `[0].key`, `renamed`],
+    [new Map([[`first`, 1]]), `[0]`, { key: `renamed`, value: 9 }],
+    [new Set([{ n: 1 }, { n: 2 }]), `[0].n`, 9],
+    [new Set([1, 2]), `[0]`, 9],
+    [new Map([[`first`, new Set([1, 2])]]), `[0].value[1]`, 9],
+  ])(`edits collection path %s %s immutably`, (collection, path, next) => {
+    const before = get_value_at_path(collection, path)
+    const updated = set_at_path(collection, path, next)
+    expect(get_value_at_path(updated, path)).toEqual(next)
+    expect(get_value_at_path(collection, path)).toEqual(before)
+    expect(() => set_at_path(collection, `[9]`, next)).toThrow(`missing path`)
+    if (collection instanceof Map)
+      expect(() => set_at_path(collection, `[0]`, 9)).toThrow(
+        `must contain key and value`,
+      )
   })
 })
 
 describe(`get_ancestor_paths`, () => {
   it.each([
-    [``, []],
-    [`root`, []],
-    [`users[0].name`, [`users`, `users[0]`]],
-    [`a.b.c.d`, [`a`, `a.b`, `a.b.c`]],
-  ])(`get_ancestor_paths(%p) = %p`, (path, expected) => {
-    const result = get_ancestor_paths(path)
+    [``, ``, []],
+    [`root`, ``, []],
+    [`users[0].name`, ``, [`users`, `users[0]`]],
+    [`a.b.c.d`, ``, [`a`, `a.b`, `a.b.c`]],
+    [
+      `my-file[raw].nested.value`,
+      `my-file[raw]`,
+      [`my-file[raw]`, `my-file[raw].nested`],
+    ],
+    [`data.json`, `data.json`, []],
+  ])(`get_ancestor_paths(%p, %p) = %p`, (path, root_label, expected) => {
+    const result = get_ancestor_paths(path, root_label)
     expect(result).toEqual(expected)
   })
 })
@@ -648,9 +678,14 @@ describe(`compute_diff`, () => {
   })
 
   it(`handles multiple changes at different depths`, () => {
+    const untouched = {
+      get value(): never {
+        throw new Error(`Unchanged branches should not be traversed`)
+      },
+    }
     const diff = compute_diff(
-      { a: 1, b: { c: 2, d: 3 } },
-      { a: 99, b: { c: 2, d: 100, e: 5 } },
+      { a: 1, b: { c: 2, d: 3 }, untouched },
+      { a: 99, b: { c: 2, d: 100, e: 5 }, untouched },
     )
     expect([...diff.values()].map(({ path, status }) => [path, status])).toEqual([
       [`a`, `changed`],

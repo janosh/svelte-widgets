@@ -128,7 +128,7 @@ test.each([
   number.dispatchEvent(new Event(`input`, { bubbles: true }))
   await tick()
   expect(props.value).toBe(expected)
-  if (expected !== undefined) expect(range.valueAsNumber).toBe(expected)
+  expect(range.valueAsNumber).toBe(expected ?? named_props.min)
   number.dispatchEvent(new Event(`change`, { bubbles: true }))
   await tick()
   const final = commit === `change` ? 0.8 : expected

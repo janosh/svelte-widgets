@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { FileRejection } from './types'
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { Snippet } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
   import { file_drop } from './attachments/file-drop'
   import { file_matches_accept } from './file-drop'
   import TaskStatus from './TaskStatus.svelte'
@@ -35,18 +35,17 @@
     onremove?: (file: File) => void
     children?: Snippet<[File[]]>
   } = $props()
-  let controller: AbortController | undefined
-  let busy = $state(false)
+  let controller = $state.raw<AbortController>()
   let error = $state(``)
   let rejected = $state<FileRejection[]>([])
   const cancel = () => {
-    controller?.abort()
+    const previous = controller
     controller = undefined
-    busy = false
+    previous?.abort()
   }
   $effect(() => () => cancel())
   $effect(() => {
-    if (disabled) cancel()
+    if (disabled) untrack(cancel)
   })
   $effect(() => {
     if (
@@ -82,16 +81,12 @@
     files = accepted
     const current = new AbortController()
     controller = current
-    busy = true
     try {
       await onfiles?.(accepted, current.signal)
     } catch (cause) {
       if (!current.signal.aborted) error = String(cause)
     } finally {
-      if (controller === current) {
-        controller = undefined
-        busy = false
-      }
+      if (controller === current) controller = undefined
     }
   }
 </script>
@@ -153,7 +148,7 @@
       </div>
     {/each}
   </div>
-  {#if busy || error}<TaskStatus
+  {#if controller || error}<TaskStatus
       state={error ? `error` : `running`}
       label={error || `Processing files`}
       oncancel={cancel}

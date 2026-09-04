@@ -264,7 +264,8 @@ describe(`folding`, () => {
       Array.from({ length: 250 }, (_, idx) => [`key${idx}`, `${prefix}${idx}`]),
     )
   const rendered_children = () =>
-    document.querySelectorAll(`.json-node[data-path^="key"]`).length
+    document.querySelectorAll(`.json-tree-content > .json-node > .children > .json-node`)
+      .length
   const more_labels = () =>
     [...document.querySelectorAll(`.more-children button`)].map((btn) =>
       btn.textContent?.trim(),
@@ -287,14 +288,23 @@ describe(`folding`, () => {
     expect(node_at(`key249`)?.querySelector(`.comma`)).toBeNull()
   })
 
-  it(`a search match past the rendered page extends the page up to it`, async () => {
-    mount_tree({ value: wide(`val`), default_fold_level: 5, auto_fold_objects: Infinity })
-    expect(node_at(`key230`)).toBeNull()
-    await type_search(`val230`, `1 of 1`)
-    expect(node_at(`key230`)?.classList.contains(`current-match`)).toBe(true)
-    expect(rendered_children()).toBe(231)
-    expect(more_labels()).toEqual([`Show 19 more`])
-  })
+  it.each([``, `data.json`, `my-file[raw]`])(
+    `reveals paginated search matches in %s`,
+    async (root_label) => {
+      mount_tree({
+        value: { ...wide(`val`), key230: { target: `val230` } },
+        root_label,
+        default_fold_level: 1,
+        auto_fold_objects: Infinity,
+      })
+      const match_path = `${root_label ? `${root_label}.` : ``}key230.target`
+      expect(node_at(match_path)).toBeNull()
+      await type_search(`val230`, `1 of 1`)
+      expect(node_at(match_path)?.classList.contains(`current-match`)).toBe(true)
+      expect(rendered_children()).toBe(231)
+      expect(more_labels()).toEqual([`Show 19 more`])
+    },
+  )
 
   it(`clicking a collapsed key expands it, clicking an expanded key copies its value`, async () => {
     const write_text = mock_clipboard_write()
@@ -484,18 +494,38 @@ describe(`copy and download`, () => {
   })
 
   it.each([
-    [{ name: `test`, count: 42 }, undefined, /^data-\d{4}-\d{2}-\d{2}\.json$/],
-    [{ a: 1 }, `my-custom-data.json`, /^my-custom-data\.json$/],
-    [`string value`, undefined, /^data-/],
-  ])(`downloads %j as %s`, async (value, download_filename, filename_re) => {
+    [{ name: `test`, count: 42 }, undefined, /^data-\d{4}-\d{2}-\d{2}\.json$/, true],
+    [{ a: 1 }, `my-custom-data.json`, /^my-custom-data\.json$/, false],
+    [`string value`, undefined, /^data-/, false],
+  ])(`downloads %j as %s`, async (value, download_filename, filename_re, override) => {
+    vi.useFakeTimers()
+    onTestFinished(() => {
+      vi.useRealTimers()
+    })
     const mock_download = vi.fn()
-    vi.stubGlobal(`download`, mock_download)
+    if (override) vi.stubGlobal(`download`, mock_download)
+    const create_url = vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:download`)
+    const revoke_url = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, `click`)
+      .mockImplementation(() => {})
     mount_tree({ value, download_filename })
     await click_and_tick(control_group(2)[1])
-    const [data, filename, mime_type] = mock_download.mock.calls[0]
+    const blob = create_url.mock.calls[0]?.[0] as Blob | undefined
+    const [data, filename, mime_type] = override
+      ? mock_download.mock.calls[0]
+      : [
+          await blob?.text(),
+          (click.mock.instances[0] as HTMLAnchorElement).download,
+          blob?.type,
+        ]
     expect(data).toBe(serialize_for_copy(value))
     expect(filename).toMatch(filename_re)
     expect(mime_type).toBe(`application/json`)
+    expect(revoke_url).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(revoke_url).toHaveBeenCalledTimes(override ? 0 : 1)
+    if (!override) expect(revoke_url).toHaveBeenCalledWith(`blob:download`)
   })
 
   it(`clicking a value copies it with inline feedback and fires on_copy`, async () => {
@@ -819,49 +849,84 @@ describe(`diff mode`, () => {
     expect(node_at(path)?.classList.contains(`diff-${status}`)).toBe(true)
   })
 
-  it(`shows ghost rows for removed keys and nothing without compare_value`, () => {
-    mount_tree({
-      value: { a: 1 },
-      compare_value: { a: 1, removed_key: `gone` },
-      show_header: false,
-      default_fold_level: 5,
-    })
-    const ghost = doc_query(`.ghost`)
-    expect(ghost.textContent).toContain(`removed_key`)
-    expect(ghost.textContent).toContain(`"gone"`)
-    expect(ghost.dataset.path).toBe(`removed_key`)
+  it.each([``, `data.json`, `my-file`, `data[raw]`, `quote"\\file`])(
+    `shows removed children under verbatim root label %s`,
+    (root_label) => {
+      mount_tree({
+        value: { nested: { a: 1 } },
+        compare_value: { nested: { a: 1, removed_key: `gone` }, removed: 2 },
+        root_label,
+        show_header: false,
+        default_fold_level: 5,
+      })
+      const ghost = doc_query(`.json-node .json-node .ghost`)
+      expect(ghost.textContent).toContain(`removed_key`)
+      expect(ghost.textContent).toContain(`"gone"`)
+      expect(ghost.dataset.path).toBe(
+        `${root_label ? `${root_label}.` : ``}nested.removed_key`,
+      )
+      expect(document.querySelectorAll(`.ghost`)).toHaveLength(2)
 
-    document.body.innerHTML = ``
-    mount_tree({ value: { a: 1, b: 2 }, show_header: false, default_fold_level: 5 })
-    expect(
-      document.querySelector(`.diff-added, .diff-changed, .diff-removed, .ghost`),
-    ).toBeNull()
-  })
+      document.body.innerHTML = ``
+      mount_tree({ value: { a: 1, b: 2 }, show_header: false, default_fold_level: 5 })
+      expect(
+        document.querySelector(`.diff-added, .diff-changed, .diff-removed, .ghost`),
+      ).toBeNull()
+    },
+  )
 })
 
 describe(`inline editing`, () => {
-  test(`double-click edits a leaf, Enter commits a typed value, Escape cancels`, async () => {
-    const on_change = vi.fn()
-    mount_tree({
-      value: { n: 1, s: `x` },
-      show_header: false,
-      default_fold_level: 5,
-      editable: true,
-      on_change,
-    })
-    fire(node_at(`n`)?.querySelector(`.json-value`), mouse(`dblclick`))
-    await tick()
-    const input = doc_query<HTMLInputElement>(`.edit-input`)
-    input.value = `42`
-    fire(input, new Event(`input`, { bubbles: true }))
-    fire(input, keydown(`Enter`))
-    expect(on_change).toHaveBeenCalledWith(`n`, 42, 1)
+  test.each([1, `1`, `null`, `true`, ``, ` 123 `, null, true, -0])(
+    `leaves %j unchanged on blur, commits changed text, and cancels on Escape`,
+    async (original) => {
+      const on_change = vi.fn()
+      mount_tree({
+        value: { n: original, s: `x` },
+        show_header: false,
+        default_fold_level: 5,
+        editable: true,
+        on_change,
+      })
+      fire(node_at(`n`)?.querySelector(`.json-value`), mouse(`dblclick`))
+      await tick()
+      fire(doc_query(`.edit-input`), new FocusEvent(`blur`))
+      expect(on_change).not.toHaveBeenCalled()
+      fire(node_at(`n`)?.querySelector(`.json-value`), mouse(`dblclick`))
+      await tick()
+      const input = doc_query<HTMLInputElement>(`.edit-input`)
+      input.value = `42`
+      fire(input, new Event(`input`, { bubbles: true }))
+      fire(input, keydown(`Enter`))
+      expect(on_change).toHaveBeenCalledWith(`n`, 42, original)
 
-    fire(node_at(`s`)?.querySelector(`.json-value`), mouse(`dblclick`))
-    await tick()
-    fire(doc_query(`.edit-input`), keydown(`Escape`))
+      fire(node_at(`s`)?.querySelector(`.json-value`), mouse(`dblclick`))
+      await tick()
+      fire(doc_query(`.edit-input`), keydown(`Escape`))
+      expect(document.querySelector(`.edit-input`)).toBeNull()
+      expect(on_change).toHaveBeenCalledTimes(1)
+    },
+  )
+
+  test.each([
+    undefined,
+    123n,
+    new Date(),
+    /regex/,
+    Symbol(`value`),
+    new Error(`value`),
+    () => 1,
+    NaN,
+    Infinity,
+    -Infinity,
+  ])(`does not offer inline editing for %s`, (value) => {
+    const on_change = vi.fn()
+    mount_tree({ value, editable: true, on_change })
+    const leaf = doc_query(`.json-value`)
+    expect(leaf.title).toBe(``)
+    fire(leaf, mouse(`dblclick`))
     expect(document.querySelector(`.edit-input`)).toBeNull()
-    expect(on_change).toHaveBeenCalledTimes(1)
+    expect(on_change).not.toHaveBeenCalled()
   })
 
   test(`a value update inside the click-to-copy delay does not cancel the pending copy`, async () => {

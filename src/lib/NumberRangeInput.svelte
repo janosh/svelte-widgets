@@ -142,7 +142,7 @@ without every call site repeating the key; `rest` comes last so a caller can sti
     {...range_props}
     type="range"
     {...input_bounds}
-    {value}
+    value={value ?? input_bounds.min}
     aria-label={range_props?.['aria-label'] ?? range_label}
     oninput={(event) => {
       commit_input(event.currentTarget, false)

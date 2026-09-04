@@ -77,10 +77,6 @@
     }
     return [lo, hi]
   }
-  const clamp_ratio = (value: number): number => {
-    const [lo, hi] = ratio_bounds(container_size)
-    return clamp(Number.isFinite(value) ? value : 0.5, lo, hi)
-  }
   // Pixel mode has no ratio clamps; as above, an over-constrained container settles at the
   // first pane's floor
   const px_bounds = (size: number): [number, number] => {
@@ -89,25 +85,22 @@
     if (size > 0) hi = Math.min(hi, size - (second_min_px ?? 0))
     return [lo, Math.max(lo, hi)]
   }
-  const clamp_px = (value: number): number => {
-    const [lo, hi] = px_bounds(container_size)
-    return clamp(Number.isFinite(value) ? value : lo, lo, hi)
-  }
-
   let px_mode = $derived(first_px !== undefined)
-  let safe_ratio = $derived(clamp_ratio(ratio))
-  let safe_px = $derived(clamp_px(first_px ?? 0))
-  let pane_size = $derived(
-    collapsed ? `0px` : px_mode ? `${safe_px}px` : `${safe_ratio * 100}%`,
+  const size_bounds = $derived(
+    px_mode ? px_bounds(container_size) : ratio_bounds(container_size),
   )
+  const clamp_size = (value: number): number =>
+    clamp(Number.isFinite(value) ? value : px_mode ? size_bounds[0] : 0.5, ...size_bounds)
+  const safe_size = $derived(clamp_size(first_px ?? ratio))
+  const format_size = (value: number): string =>
+    px_mode ? `${value}px` : `${value * 100}%`
+  let pane_size = $derived(collapsed ? `0px` : format_size(safe_size))
   // aria values are in the mode's own unit: percent of the container, or px. Both follow the
   // effective clamps, so pixel floors tightening the ratio range show in the announced bounds
   let aria_bounds = $derived(
-    px_mode
-      ? px_bounds(container_size)
-      : ratio_bounds(container_size).map((bound) => bound * 100),
+    px_mode ? size_bounds : size_bounds.map((bound) => bound * 100),
   )
-  let aria_value = $derived(Math.round(px_mode ? safe_px : safe_ratio * 100))
+  let aria_value = $derived(Math.round(px_mode ? safe_size : safe_size * 100))
 
   const update_parent = (value: string): void => {
     divider?.parentElement?.style.setProperty(`--split-pane-size`, value)
@@ -119,16 +112,12 @@
 
   // Pointer/keyboard updates write the style directly: effects only flush after the handler
   // returns, and the pane should follow the pointer within the same event
-  const apply_ratio = (value: number): void => {
+  const apply_size = (value: number): void => {
     collapsed = false
-    ratio = clamp_ratio(value)
-    update_parent(`${ratio * 100}%`)
-    notify_resize()
-  }
-  const apply_px = (value: number): void => {
-    collapsed = false
-    first_px = clamp_px(value)
-    update_parent(`${first_px}px`)
+    const next = clamp_size(value)
+    if (px_mode) first_px = next
+    else ratio = next
+    update_parent(format_size(next))
     notify_resize()
   }
 
@@ -146,8 +135,7 @@
           ? bounds.right - event.clientX
           : event.clientX - bounds.left
         : event.clientY - bounds.top
-    if (px_mode) apply_px(position)
-    else apply_ratio(position / container_size)
+    apply_size(px_mode ? position : position / container_size)
   }
 
   const start_resize = (event: PointerEvent): void => {
@@ -168,15 +156,14 @@
     if (collapsible && event.key === `Enter`) {
       event.preventDefault()
       collapsed = !collapsed
-      update_parent(collapsed ? `0px` : px_mode ? `${safe_px}px` : `${safe_ratio * 100}%`)
+      update_parent(collapsed ? `0px` : format_size(safe_size))
       notify_resize()
       return
     }
     if (event.key === `Home` || event.key === `End`) {
       event.preventDefault()
       const idx = event.key === `Home` ? 0 : 1
-      if (px_mode) apply_px(px_bounds(container_size)[idx])
-      else apply_ratio(ratio_bounds(container_size)[idx])
+      apply_size(size_bounds[idx])
       return
     }
     const horizontal_keys = is_right_to_left()
@@ -185,13 +172,11 @@
     const [decrease_key, increase_key] =
       orientation === `horizontal` ? horizontal_keys : [`ArrowUp`, `ArrowDown`]
     if (event.key !== decrease_key && event.key !== increase_key) return
-    if (is_modifier_chord(event)) return // Cmd/Ctrl+Arrow scrolls the page
     event.preventDefault()
     const direction = event.key === decrease_key ? -1 : 1
-    if (px_mode) {
-      // 5% of the container per keypress, or a fixed stride before layout
-      apply_px(safe_px + direction * (container_size > 0 ? container_size * 0.05 : 16))
-    } else apply_ratio(safe_ratio + direction * 0.05)
+    // 5% of the container per keypress, or a fixed pixel stride before layout.
+    const step = px_mode ? (container_size > 0 ? container_size * 0.05 : 16) : 0.05
+    apply_size(safe_size + direction * step)
   }
 </script>
 

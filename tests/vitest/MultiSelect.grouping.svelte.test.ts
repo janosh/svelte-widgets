@@ -625,32 +625,44 @@ describe(`option grouping feature`, () => {
     expect(option_items()).toHaveLength(6)
   })
 
-  test(`groupSelectAll toggles to deselect when all group options are selected`, async () => {
-    const onremoveAll_spy = vi.fn()
-    await mount_grouped({
-      groupSelectAll: true,
-      keepSelectedInDropdown: `checkboxes`,
-      onremoveAll: onremoveAll_spy,
-    })
+  test.each([false, true])(
+    `group selection preserves other groups (colliding keys=%s)`,
+    async (colliding_keys) => {
+      const onremoveAll_spy = vi.fn()
+      const onchange = vi.fn()
+      await mount_grouped({
+        groupSelectAll: true,
+        keepSelectedInDropdown: `checkboxes`,
+        onremoveAll: onremoveAll_spy,
+        onchange,
+        selected: [grouped_options[3]],
+        duplicates: colliding_keys,
+        key: colliding_keys ? () => `shared` : undefined,
+      })
 
-    const select_btn = group_select_all_btn(`Genre`)
+      const select_btn = group_select_all_btn(`Genre`)
 
-    expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+      expect(select_btn?.textContent?.trim()).toBe(`Select all`)
 
-    select_btn?.click()
-    await tick()
+      select_btn?.click()
+      await tick()
 
-    expect(select_btn?.textContent?.trim()).toBe(`Deselect all`)
-    expect(select_btn?.classList.contains(`deselect`)).toBe(true)
+      expect(select_btn?.textContent?.trim()).toBe(`Deselect all`)
+      expect(select_btn?.classList.contains(`deselect`)).toBe(true)
 
-    select_btn?.click()
-    await tick()
+      select_btn?.click()
+      await tick()
 
-    expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
-    expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
+      expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
+      expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
+      expect(onchange).toHaveBeenLastCalledWith({
+        options: [grouped_options[3]],
+        type: `removeAll`,
+      })
 
-    expect(select_btn?.textContent?.trim()).toBe(`Select all`)
-  })
+      expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+    },
+  )
 })
 
 test(`group deselect-all keeps at least minSelect options selected`, async () => {

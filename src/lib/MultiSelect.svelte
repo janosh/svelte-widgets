@@ -756,6 +756,10 @@
   }
   let group_header_state = $derived.by(() => {
     const state = new Map<string, GroupHeaderState>()
+    const is_selected = (opt: Option) =>
+      duplicates === true
+        ? selected.some((item) => is_same_option(item, opt))
+        : selected_keys_set.has(key(opt))
     let flat_idx = 0
     for (const { group, options: group_items, collapsed } of grouped_options) {
       const hidden = collapsed && collapsibleGroups
@@ -765,11 +769,9 @@
       if (!hidden) flat_idx += group_items.length
       if (group === null) continue
       const selectable = visible_items.filter((opt) => !is_disabled(opt))
-      const all_selected =
-        selectable.length > 0 &&
-        selectable.every((opt) => selected_keys_set.has(key(opt)))
+      const all_selected = selectable.length > 0 && selectable.every(is_selected)
       const selected_count = keepSelectedInDropdown
-        ? group_items.filter((opt) => selected_keys_set.has(key(opt))).length
+        ? group_items.filter(is_selected).length
         : 0
       state.set(group, { all_selected, selected_count, selectable })
     }
@@ -1603,7 +1605,11 @@
       const removed: Option[] = []
       const kept: Option[] = []
       for (const opt of selected) {
-        if (keys_to_remove.has(key(opt)) && removed.length < max_removals) {
+        const matches =
+          duplicates === true
+            ? selectable.some((item) => is_same_option(item, opt))
+            : keys_to_remove.has(key(opt))
+        if (matches && removed.length < max_removals) {
           removed.push(opt)
         } else kept.push(opt)
       }
