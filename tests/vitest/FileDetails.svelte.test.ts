@@ -101,7 +101,7 @@ test(`renders distinct language-content pairs independently`, async () => {
 })
 
 test(`highlights siblings independently and ignores stale completions after edits`, async () => {
-  const { default_highlighter } = await import(`$lib/live-examples/default-highlighter`)
+  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
   const requests: { code: string; resolve: (html: string) => void }[] = []
   const highlight = vi.spyOn(default_highlighter, `highlight`).mockImplementation(
     (code) =>
@@ -128,7 +128,7 @@ test(`highlights siblings independently and ignores stale completions after edit
 })
 
 test(`reports highlighting failures without hiding source`, async () => {
-  const { default_highlighter } = await import(`$lib/live-examples/default-highlighter`)
+  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
   vi.spyOn(default_highlighter, `highlight`).mockRejectedValue(
     new Error(`Grammar unavailable`),
   )

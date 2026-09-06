@@ -76,13 +76,9 @@
       "types": "./dist/labels.d.ts",
       "default": "./dist/labels.js"
     },
-    "./live-examples": {
-      "types": "./dist/live-examples/index.d.ts",
-      "default": "./dist/live-examples/index.js"
-    },
-    "./live-examples/create-highlighter": {
-      "types": "./dist/live-examples/create-highlighter.d.ts",
-      "default": "./dist/live-examples/create-highlighter.js"
+    "./highlight": {
+      "types": "./dist/highlight/index.d.ts",
+      "default": "./dist/highlight/index.js"
     },
     "./source-links": {
       "types": "./dist/source-links/index.d.ts",

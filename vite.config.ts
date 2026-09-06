@@ -2,7 +2,7 @@ import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { generate_icons } from './scripts/generate-icons.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
-import { default_highlighter } from './src/lib/live-examples/default-highlighter.ts'
+import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
@@ -25,7 +25,7 @@ const docs = markdown_vite({
 // passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
 // kit options (adapter, alias, paths, prerender) sit at the top level rather than under `kit`.
 // svelte-package only reads svelte.config.*, so it packages src/lib with default config: nothing
-// in src/lib relies on these preprocessors or aliases and the `package` script drops the one .md.
+// in src/lib relies on these preprocessors or aliases and the `package` script drops Markdown guides.
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 

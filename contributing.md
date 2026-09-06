@@ -8,13 +8,13 @@ Pull requests to improve docs, test coverage, or examples are welcome. Before im
 
 To submit a pull request, clone the repo, install dependencies and start the dev server to see changes as you make them.
 
-Development requires Node.js 22.6 or newer because icon generation uses Node's native TypeScript stripping.
+Use Node.js 24.11 or newer, matching CI's Node 24 line and the tooling's minimum version.
 
 ```sh
 git clone https://github.com/janosh/svelte-widgets
 cd svelte-widgets
-npm install
-npm run dev
+npm install --legacy-peer-deps
+npx vp dev
 ```
 
 Before you start committing, create and check out a descriptively named branch:
@@ -39,7 +39,7 @@ New features should include corresponding tests. Bug fixes should include a test
 
 These CI checks have to pass for every PR before merging:
 
-All run as jobs of the single [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/ci.yml)):
+All run as jobs of the single [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/ci.yml)):
 
 - tests: `unit` (vitest with coverage plus the package smoke test) and `e2e` (Playwright)
 - linting and type checks: `check` runs `vp check` plus `svelte-check`
@@ -55,6 +55,8 @@ To make a release, increase the `"version"` field in `package.json`. This packag
 - `v[x.y.z] -> v[x.y.z+1]`: patch release with bug fixes
 
 Now run the `changelog` script from `package.json` to update `changelog.md`.
+
+Keep one H1 title, H2 release headings, and H3 subsections. Use sentence case for entries, plain characters inside code spans, and the existing `> D Month YYYY` date format. Preserve historical API names and release links.
 
 ```sh
 npm run changelog
@@ -74,7 +76,4 @@ Push the release commit and tag to `origin/main`:
 git push && git push --tags
 ```
 
-Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new).
-Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/-/.github/workflows/publish.yml),
-which pushes the package to npm through trusted publishing (OIDC), so no manual
-`npm publish` is needed.
+Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/publish.yml), which pushes the package to npm through trusted publishing (OIDC), so no manual `npm publish` is needed.

@@ -61,8 +61,8 @@ describe(`heading_ids preprocessor`, () => {
     // existing attributes are preserved, the id is inserted first
     [`<h2 data-id="foo">Hello</h2>`, `<h2 id="hello" data-id="foo">Hello</h2>`],
     [
-      `<h2 on:click={handler}>Clickable</h2>`,
-      `<h2 id="clickable" on:click={handler}>Clickable</h2>`,
+      `<h2 onclick={handler}>Clickable</h2>`,
+      `<h2 id="clickable" onclick={handler}>Clickable</h2>`,
     ],
     [
       `<h2 data-label="left > right">Quoted</h2>`,

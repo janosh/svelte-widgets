@@ -201,7 +201,7 @@ Colors come from `--github-corner-bg` and `--github-corner-color`, or the `fill`
 
 ### `CodeExample`
 
-The wrapper the [live-examples plugin](https://github.com/janosh/svelte-widgets/blob/-/src/lib/live-examples/readme.md) mounts around runnable code fences. Configure it through `markdown_vite({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })`. Every "View code" button on this site uses this component.
+The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `markdown_vite({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })`. Every "View code" button on this site uses this component.
 
 Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported.
 

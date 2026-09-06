@@ -6,7 +6,7 @@ One Markdown engine provides Svelte pages and ordinary HTML. Marked handles Comm
 
 ```ts
 import { markdown } from 'svelte-widgets/markdown'
-import { default_highlighter } from 'svelte-widgets/live-examples'
+import { default_highlighter } from 'svelte-widgets/highlight'
 import { heading_ids } from 'svelte-widgets/heading-anchors'
 
 export default {
@@ -40,13 +40,34 @@ const html = await render_markdown(`A value: $x^2$`, { math: true })
 - `highlight(code, language)` returns the HTML **inside** `<code>`, synchronously or asynchronously. Omit it for escaped plain code. Highlighting runs concurrently across fences while example IDs retain source order.
 - `typography: true` enables curly quotes, apostrophes, ellipses and em dashes in prose. It is off by default and leaves code and Svelte syntax alone.
 
+## Syntax highlighting
+
+`default_highlighter` loads starry-night's common grammars plus Svelte on first use. Importing this subpath does not compile grammars or load WASM. Starry-night is an optional peer dependency.
+
+```ts
+import { default_highlighter } from 'svelte-widgets/highlight'
+import { markdown } from 'svelte-widgets/markdown'
+
+const preprocess = markdown({ highlight: default_highlighter.highlight })
+```
+
+Use `create_highlighter(grammars)` for a smaller or different grammar set. The factory exposes `highlight(code, language)` for inner HTML, `highlight_block(code, language)` for a complete `<pre><code>` block, and `ready()` for the cached underlying instance. Unknown languages render as escaped text.
+
+```ts
+import grammar_typst from '@wooorm/starry-night/source.typst'
+import { create_highlighter } from 'svelte-widgets/highlight'
+
+const highlighter = create_highlighter([grammar_typst])
+const html = await highlighter.highlight_block(`#let value = 1`, `typ`)
+```
+
 ## Live examples
 
 Create one integration instance and share it between your Svelte config and Vite plugins:
 
 ```ts
 import { markdown_vite } from 'svelte-widgets/markdown/vite'
-import { default_highlighter } from 'svelte-widgets/live-examples'
+import { default_highlighter } from 'svelte-widgets/highlight'
 
 const docs = markdown_vite({
   highlight: default_highlighter.highlight,
@@ -63,4 +84,4 @@ Set `examples.wrapper` to a default-import module path or `[module, named_export
 
 ## Migration
 
-Replace mdsvex configuration with `markdown()` or `markdown_vite()`. Remove remark plugin registration and the old live-example Vite plugin. Move `defaults.Wrapper` to `examples.wrapper`; use `hide_style`, not `hideStyle`. Replace the KaTeX before/after pair with `math`. Highlighter callbacks now return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight`. The old eager highlighter exports and `/katex` subpath are removed. Plain HTML callers should use `render_markdown()` and remove Svelte-output unwrapping and brace-replacement workarounds.
+Replace mdsvex configuration with `markdown()` or `markdown_vite()`. Remove remark plugin registration and the old live-example Vite plugin. Move `defaults.Wrapper` to `examples.wrapper`; use `hide_style`, not `hideStyle`. Replace the KaTeX before/after pair with `math`. Highlighter callbacks now return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight`. Highlighting now lives at `/highlight`; the `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed. Plain HTML callers should use `render_markdown()` and remove Svelte-output unwrapping and brace-replacement workarounds.

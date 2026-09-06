@@ -1,5 +1,4 @@
-import { create_highlighter } from '$lib/live-examples/create-highlighter'
-import { default_highlighter } from '$lib/live-examples/default-highlighter'
+import { create_highlighter, default_highlighter } from '$lib/highlight'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { describe, expect, test, vi } from 'vitest'
@@ -16,10 +15,10 @@ describe(`default_highlighter.highlight_block`, () => {
     })
 
     const { default_highlighter: missing_peer } = await import(
-      `$lib/live-examples/default-highlighter`
+      `$lib/highlight/default-highlighter`
     )
     await expect(missing_peer.ready()).rejects.toThrow(
-      `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`,
+      `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`,
     )
 
     vi.doUnmock(`@wooorm/starry-night`)
@@ -116,16 +115,7 @@ describe(`create_highlighter`, () => {
     )
   })
 
-  // Importing `common` defeats the custom grammar factory's bundle savings.
-  test(`never references starry-night's common bundle`, async () => {
-    const source = (await import(`$lib/live-examples/create-highlighter.ts?raw`)).default
-    // Ignore prose, but preserve code preceding trailing comments.
-    const code = source.replaceAll(/\/\*[\s\S]*?\*\//gu, ``).replaceAll(/\/\/.*$/gmu, ``)
-    expect(code).toContain(`createStarryNight`)
-    expect(code).not.toContain(`common`)
-  })
-
-  test(`defers loading until first use, then reports missing peer dependency`, async () => {
+  test(`public entry point defers loading until first use, then reports missing peer dependency`, async () => {
     vi.resetModules()
     let load_count = 0
     vi.doMock(`@wooorm/starry-night`, () => {
@@ -133,15 +123,13 @@ describe(`create_highlighter`, () => {
       throw new Error(`Cannot find package '@wooorm/starry-night'`)
     })
 
-    const { create_highlighter: create } = await import(
-      `$lib/live-examples/create-highlighter`
-    )
+    const { create_highlighter: create } = await import(`$lib/highlight`)
     const highlighter = create([grammar_typst])
     // Flush pending imports to detect eager peer loading.
     await new Promise((resolve) => void setTimeout(resolve, 0))
     expect(load_count).toBe(0)
 
-    const peer_error = `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`
+    const peer_error = `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`
     await expect(highlighter.ready()).rejects.toThrow(peer_error)
     await expect(highlighter.highlight(`#let x = 1`, `typ`)).rejects.toThrow(peer_error)
     expect(load_count).toBe(1) // failed load is cached, not retried

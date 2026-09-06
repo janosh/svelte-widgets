@@ -9,7 +9,7 @@ import {
 import type { KatexOptions } from 'katex'
 
 import type { PreprocessorGroup } from 'svelte/compiler'
-import { escape_html_text } from '../live-examples/hast.ts'
+import { escape_html_text } from '../highlight/hast.ts'
 import { source_map, type SourceMap } from './source-map.ts'
 import type * as SvelteSyntax from './svelte.ts'
 

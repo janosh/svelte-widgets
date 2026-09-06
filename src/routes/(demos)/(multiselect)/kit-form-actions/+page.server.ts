@@ -3,7 +3,7 @@ import { colors as allowed_colors } from '$site/options'
 import type { Actions } from './$types'
 
 // Form actions need a server, so the underscore prefix disables this export during static
-// build. Rename `_actions` to `actions` to test locally with `npm run dev`.
+// build. Rename `_actions` to `actions` to test locally with `npx vp dev`.
 // eslint-disable-next-line no-underscore-dangle -- intentionally disabled for static builds
 export const _actions = {
   'validate-form': async ({ request }) => {

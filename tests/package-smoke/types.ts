@@ -23,6 +23,7 @@ import { format_bytes } from 'svelte-widgets/format'
 import { format_stat_delta } from 'svelte-widgets/stats'
 import { url_with_params, valid_query_param } from 'svelte-widgets/url-params'
 import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/image-markup'
+import { create_highlighter, default_highlighter } from 'svelte-widgets/highlight'
 
 export const label = get_label(`package smoke`)
 export const theme_mode: ThemeMode = theme.mode
@@ -52,6 +53,8 @@ export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) =>
 })
 
 export const highlighter: CodeHighlighter = (code) => [{ text: code }]
+export const markdown_highlighter = default_highlighter.highlight
+export const custom_highlighter = create_highlighter([])
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])
 export const bytes = format_bytes(1024)

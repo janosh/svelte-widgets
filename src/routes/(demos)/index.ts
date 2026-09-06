@@ -68,8 +68,8 @@ export const demo_nav_routes = groups.map((group) => {
   // only entry repeats its parent
   return {
     href: children[0],
-    // Nav keys its labels prop on route.label when set, so a group label must be right
-    // here; the labels prop only reaches the dropdown children.
+    // Nav keys route_labels on route.label when set, so group labels belong here;
+    // the path-keyed route_labels map only reaches the dropdown children.
     label: demo_labels[overview_route] ?? slug_to_title(group),
     ...(children.length > 1 && { children }),
   }

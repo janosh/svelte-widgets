@@ -20,7 +20,7 @@ export type Highlighter = {
 }
 
 // Shared with the default highlighter when its grammar import fails.
-export const optional_peer_error = `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`
+export const optional_peer_error = `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`
 
 const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNight> => {
   // only the import is guarded: a grammar failing to compile is bad caller input, not an
