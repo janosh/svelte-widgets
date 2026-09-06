@@ -6,12 +6,9 @@
 
   // The catalog is the one place a star import is right: every other call site should
   // import the single glyph it needs so the bundler can drop the rest.
-  const catalog: [string, IconData][] = Object.entries(icon_module)
-    .filter((entry): entry is [string, IconData] =>
-      Boolean(entry[1] && typeof entry[1] === `object` && `viewBox` in entry[1]),
-    )
-    // eslint-disable-next-line unicorn/no-array-sort -- fresh array; Firefox 114 lacks toSorted
-    .sort(([left], [right]) => left.localeCompare(right))
+  const catalog = Object.entries<IconData>(icon_module).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  )
 
   let query = $state(``)
   let size = $state(24)

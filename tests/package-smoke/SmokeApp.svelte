@@ -22,6 +22,7 @@
     VirtualList,
     TaskStatus,
     Progress,
+    RangeSlider,
     MultiSelect,
     type Option,
     PageSearch,
@@ -38,6 +39,7 @@
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import DirectPageSearch from 'svelte-widgets/PageSearch.svelte'
+  import DirectRangeSlider from 'svelte-widgets/RangeSlider.svelte'
   import {
     auto_update_position,
     click_outside,
@@ -68,6 +70,7 @@
     DirectDiffView === DiffView &&
     DirectFindBar === FindBar &&
     DirectJsonTree === JsonTree &&
+    DirectRangeSlider === RangeSlider &&
     [FileInput, SplitPane, TreeView, VirtualList, TaskStatus, Progress].every(
       (component) => typeof component === `function`,
     ) &&

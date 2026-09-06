@@ -106,6 +106,7 @@
   }
 
   function handle_edit_keydown(event: KeyboardEvent) {
+    if (event.defaultPrevented || event.isComposing) return
     if (event.key === `Enter`) {
       event.preventDefault()
       commit_edit()

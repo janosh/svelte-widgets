@@ -20,7 +20,7 @@
     color="var(--spinner-color, #007acc)"
     size="var(--spinner-size, 1em)"
     duration="var(--spinner-duration, 1s)"
-    style="margin: 0; border-width: var(--spinner-border-width, 4px); box-sizing: border-box"
+    style="margin: 0; border-width: var(--spinner-border-width, 2px); box-sizing: border-box"
   />
   {#if text}<span>{text}</span>{/if}
 </div>

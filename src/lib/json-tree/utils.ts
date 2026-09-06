@@ -127,7 +127,10 @@ function format_special_value(value: unknown, type: JsonValueType): string | nul
   if (type === `number` || type === `boolean`) return String(value)
   if (type === `bigint`) return `${value}n`
   if (type === `symbol`) return (value as symbol).toString()
-  if (type === `date`) return (value as Date).toISOString()
+  if (type === `date`) {
+    const date = value as Date
+    return Number.isNaN(date.getTime()) ? `Invalid Date` : date.toISOString()
+  }
   if (type === `regexp`) return (value as RegExp).toString()
   if (type === `error`) return `${(value as Error).name}: ${(value as Error).message}`
   return null // not a special type
@@ -431,12 +434,14 @@ export function compute_diff(
   const old_type = get_value_type(old_val)
   const new_type = get_value_type(new_val)
   if (old_type !== new_type || !is_expandable_type(old_type)) {
-    // Special leaves (dates, regexps, functions) compare their string forms.
+    // Date strings omit milliseconds; compare the full timestamp instead.
     const equal =
       old_type === new_type &&
-      (is_primitive_type(old_type)
-        ? values_equal(old_val, new_val)
-        : String(old_val) === String(new_val))
+      (old_type === `date`
+        ? Object.is((old_val as Date).getTime(), (new_val as Date).getTime())
+        : is_primitive_type(old_type)
+          ? values_equal(old_val, new_val)
+          : String(old_val) === String(new_val))
     if (!equal)
       result.set(current_path, {
         status: `changed`,
@@ -462,20 +467,17 @@ export function compute_diff(
   )
   for (const key of new Set([...old_children.keys(), ...new_children.keys()])) {
     const child_path = build_path(current_path, key)
-    if (!old_children.has(key)) {
-      result.set(child_path, {
-        status: `added`,
-        path: child_path,
-        new_value: new_children.get(key),
-      })
-    } else if (!new_children.has(key)) {
-      result.set(child_path, {
-        status: `removed`,
-        path: child_path,
-        old_value: old_children.get(key),
-      })
-    } else {
+    const existed = old_children.has(key)
+    if (existed && new_children.has(key)) {
       compute_diff(old_children.get(key), new_children.get(key), child_path, result, seen)
+    } else {
+      result.set(child_path, {
+        status: existed ? `removed` : `added`,
+        path: child_path,
+        ...(existed
+          ? { old_value: old_children.get(key) }
+          : { new_value: new_children.get(key) }),
+      })
     }
   }
   compared.delete(new_val as object)

@@ -19,7 +19,8 @@ export const hotkey =
 
     const target = global ? node.ownerDocument : node
     const on_keydown = (event: Event) => {
-      if (event instanceof KeyboardEvent) run_hotkeys(event, bindings)
+      if (event instanceof KeyboardEvent && !event.defaultPrevented)
+        run_hotkeys(event, bindings)
     }
     target.addEventListener(`keydown`, on_keydown)
     return () => target.removeEventListener(`keydown`, on_keydown)
@@ -46,7 +47,13 @@ export const forward_window_keydown =
     const on_enter = () => (is_hovered = true)
     const on_leave = () => (is_hovered = false)
     const on_keydown = (event: Event) => {
-      if (!is_hovered || !(event instanceof KeyboardEvent)) return
+      if (
+        !is_hovered ||
+        !(event instanceof KeyboardEvent) ||
+        event.defaultPrevented ||
+        event.isComposing
+      )
+        return
       // The root may be focusable so keyboard users can aim shortcuts at it, and an
       // unfocused page targets body or html. Anything else keeps its own keys, including a
       // shadow-retargeted node, which composedPath()[0] exposes.

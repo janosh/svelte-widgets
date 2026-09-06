@@ -20,6 +20,7 @@
   // a checkbox toggles on space only; this adds Enter
   function handle_keydown(event: KeyboardEvent) {
     onkeydown?.(event)
+    if (event.defaultPrevented || event.isComposing) return
     if (event.key === `Enter`) {
       event.preventDefault()
       if (event.target instanceof HTMLInputElement) event.target.click() // so 'change' fires

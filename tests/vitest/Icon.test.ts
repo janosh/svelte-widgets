@@ -36,6 +36,7 @@ describe(`icons-manifest`, () => {
 
   test(`parses nonempty manifest sections in alphabetical order`, () => {
     expect(names.length).toBeGreaterThan(0)
+    expect(names.filter((name) => !Object.hasOwn(icons, name))).toEqual([])
     expect(sections.every((section) => section.length > 0)).toBe(true)
     const out_of_order = sections.flatMap((section) =>
       section.filter(

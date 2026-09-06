@@ -1,12 +1,8 @@
-export function get_html_sort_value(element: HTMLElement): string {
-  if (element.dataset.sortValue !== undefined) return element.dataset.sortValue
-  for (const child of element.children) {
-    if (!(child instanceof HTMLElement)) continue
-    const child_val = get_html_sort_value(child)
-    if (child_val !== ``) return child_val
-  }
-  return element.textContent ?? ``
-}
+export const get_html_sort_value = (element: HTMLElement): string =>
+  element.getAttribute(`data-sort-value`) ??
+  element.querySelector(`[data-sort-value]`)?.getAttribute(`data-sort-value`) ??
+  element.textContent ??
+  ``
 
 export interface SortableOptions {
   header_selector?: string

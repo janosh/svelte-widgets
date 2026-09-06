@@ -33,6 +33,7 @@ Every component is a named export from the package root and has a direct subpath
 | `Dialog`           | Native modal with composable sections, close reasons and nested-dialog handling          | [docs](https://svelte-widgets.janosh.dev/patterns#dialog)              |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
 | `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults         | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
+| `RangeSlider` | Two-handle interval slider with numeric fields, step snapping, RTL, and keyboard controls | [docs](https://svelte-widgets.janosh.dev/range-slider) |
 | `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                          | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                             | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `FileInput`        | File picker and drop zone with validation, cancellation and retry                        | [docs](https://svelte-widgets.janosh.dev/workbench)                    |

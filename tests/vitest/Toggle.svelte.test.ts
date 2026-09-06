@@ -64,6 +64,18 @@ describe(`Toggle`, () => {
     expect(get_input().checked).toBe(false)
   })
 
+  test.each([`prevented`, `composing`])(`doesn't toggle on %s Enter`, (mode) => {
+    const onkeydown = vi.fn((event: KeyboardEvent) => {
+      if (mode === `prevented`) event.preventDefault()
+    })
+    const state = mount_bindable_toggle(false, { onkeydown })
+    get_input().dispatchEvent(
+      create_keydown(`Enter`, { cancelable: true, isComposing: mode === `composing` }),
+    )
+    expect(onkeydown).toHaveBeenCalledOnce()
+    expect(state()).toEqual([false, false])
+  })
+
   test(`applies custom class and styles, keeps input_props off owned attrs`, () => {
     const input_props = { style: `width: 20px;` }
     // `type` and `checked` are Omit'd from the prop type; a JS consumer bypassing that

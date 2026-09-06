@@ -5,6 +5,7 @@ import { slug_to_title } from '$lib/utils'
 // nav labels and the layout's page titles.
 export const demo_labels: Record<string, string> = {
   '/multiselect': `MultiSelect`,
+  '/range-slider': `RangeSlider`,
   '/command-menu': `CommandMenu`,
   '/action-button': `ActionButton`,
   '/code-editor': `CodeEditor / DiffView`,
