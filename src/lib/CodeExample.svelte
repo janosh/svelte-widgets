@@ -1,5 +1,5 @@
 <script lang="ts">
-  // see vite.config.ts where this component is set as the live-examples Wrapper
+  // see vite.config.ts where this component is set as the live-example wrapper
   import type { Snippet } from 'svelte'
   import type {
     HTMLAnchorAttributes,
@@ -25,8 +25,8 @@
     labels,
     ...rest
   }: {
-    // src+meta are passed in by live-examples remark plugin
-    src?: string // code fence content, dedented by the remark plugin
+    // src+meta are passed in by Markdown preprocessor
+    src?: string // code fence content, dedented by the Markdown parser
     meta?: {
       // code fence metadata
       collapsible?: boolean // show an expand/collapse button
@@ -34,7 +34,6 @@
       id?: string // id of the wrapping <div>, e.g. for precise test selectors
       repl?: string // Svelte REPL URL
       github?: string // Resolved source URL
-      Wrapper?: string // Svelte component to wrap the example
       example?: boolean
       lang?: string
     }

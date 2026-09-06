@@ -1,14 +1,9 @@
 import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { mdsvex } from 'mdsvex'
 import { generate_icons } from './scripts/generate-icons.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
-import { katex_preprocess } from './src/lib/katex.ts'
-import {
-  mdsvex_transform,
-  starry_night_highlighter,
-} from './src/lib/live-examples/index.ts'
-import live_examples from './src/lib/live-examples/vite-plugin.ts'
+import { default_highlighter } from './src/lib/live-examples/default-highlighter.ts'
+import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 
@@ -16,19 +11,16 @@ await generate_icons()
 
 const base_segment = (process.env.BASE_PATH ?? ``).replaceAll(/^\/+|\/+$/gu, ``)
 const base_path: `` | `/${string}` = base_segment ? `/${base_segment}` : ``
-const remark_plugins = [
-  [
-    mdsvex_transform,
-    {
-      defaults: {
-        Wrapper: `/src/lib/CodeExample.svelte`,
-        collapsible: true,
-        hide_style: true,
-      },
-    },
-  ],
-]
-const { before: katex_before, after: katex_after } = katex_preprocess()
+const docs = markdown_vite({
+  math: true,
+  typography: true,
+  highlight: default_highlighter.highlight,
+  examples: {
+    wrapper: '/src/lib/CodeExample.svelte',
+    collapsible: true,
+    hide_style: true,
+  },
+})
 
 // passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
 // kit options (adapter, alias, paths, prerender) sit at the top level rather than under `kit`.
@@ -37,17 +29,7 @@ const { before: katex_before, after: katex_after } = katex_preprocess()
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 
-  // KaTeX before/after mdsvex so markdown never sees rendered HTML; heading IDs last.
-  preprocess: [
-    katex_before,
-    mdsvex({
-      remarkPlugins: remark_plugins,
-      extensions: [`.md`],
-      highlight: { highlighter: starry_night_highlighter },
-    }),
-    katex_after,
-    heading_ids(),
-  ],
+  preprocess: [docs.preprocess, heading_ids()],
 
   adapter: adapter(),
   paths: { base: base_path },
@@ -82,7 +64,7 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), ...live_examples(), source_links()],
+  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],

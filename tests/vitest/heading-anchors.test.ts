@@ -92,7 +92,7 @@ describe(`heading_ids preprocessor`, () => {
     ],
     // unmatched } kept literal, else content is lost when the depth would go negative
     [`<h2>Price: $100}</h2>`, `<h2 id="price-100">Price: $100}</h2>`],
-    // inline headings (mdsvex output)
+    // inline headings (Markdown output)
     [`</p> <h2>Title</h2>`, `</p> <h2 id="title">Title</h2>`],
     [
       `</p><h2>First</h2></section><h3>Second</h3>`,
@@ -107,7 +107,7 @@ describe(`heading_ids preprocessor`, () => {
       `<h2>Using <code>someFunction</code></h2>`,
       `<h2 id="using-somefunction">Using <code>someFunction</code></h2>`,
     ],
-    // entities decode to what the browser renders (mdsvex escapes `&`, `<`, `{`)
+    // entities decode to what the browser renders (Markdown escapes `&`, `<`, `{`)
     [`<h2>Foo &amp; Bar</h2>`, `<h2 id="foo-bar">Foo &amp; Bar</h2>`],
     [`<h2>Using &#123;foo&#125;</h2>`, `<h2 id="using-foo">Using &#123;foo&#125;</h2>`],
     [`<h2>&lt;b&gt;x &#x1F600;</h2>`, `<h2 id="b-x">&lt;b&gt;x &#x1F600;</h2>`],

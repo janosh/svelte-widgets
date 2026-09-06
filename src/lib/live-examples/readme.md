@@ -1,36 +1,22 @@
-# Live Examples
+# Syntax highlighting
 
-The optional `svelte-widgets/live-examples` subpath provides the mdsvex
-remark transform, Vite plugin, and code highlighter used by the documentation's
-live code examples.
+`default_highlighter` loads starry-night's common grammars plus Svelte on first use. Importing this subpath does not compile grammars or load WASM. Starry-night is an optional peer dependency.
 
-Install its optional peer dependency in apps that import this subpath:
+```ts
+import { default_highlighter } from 'svelte-widgets/live-examples'
+import { markdown } from 'svelte-widgets/markdown'
 
-```sh
-npm install --dev @wooorm/starry-night
+const preprocess = markdown({ highlight: default_highlighter.highlight })
 ```
 
-The Vite plugin uses Vite's built-in `parseSync` AST parser, which requires
-`vite >= 8` (declared as optional peer dependency).
-
-## Custom grammars
-
-`starry_night` and `starry_night_highlighter` cover starry-night's common bundle plus
-Svelte, and are created eagerly when the module loads. For any other language, build an
-instance with `create_highlighter`, which loads and compiles nothing until first use.
-Import it from its own subpath, since the `live-examples` barrel pulls in the eager
-instance:
+Use `create_highlighter(grammars)` for a smaller or different grammar set. The factory exposes `highlight(code, language)` for inner HTML, `highlight_block(code, language)` for a complete `<pre><code>` block, and `ready()` for the cached underlying instance. Unknown languages render as escaped text.
 
 ```ts
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import { create_highlighter } from 'svelte-widgets/live-examples/create-highlighter'
 
 const highlighter = create_highlighter([grammar_typst])
-
-// highlighted HTML with no wrapper element
-const html = await highlighter.highlight(`#let x = 1`, `typ`)
-// same <pre class="highlight highlight-typ"> markup as starry_night_highlighter
-const block = await highlighter.highlight_block(`#let x = 1`, `typ`)
-// the starry-night instance itself, for flagToScope and repeated synchronous highlighting
-const instance = await highlighter.ready()
+const html = await highlighter.highlight_block(`#let value = 1`, `typ`)
 ```
+
+For runnable Svelte fences, use [the Markdown Vite integration](../markdown/readme.md).

@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test'
 const open_demo = async (page: Page) => {
   await page.goto(`/settings`, { waitUntil: `networkidle` })
   const demo = page.locator(`#settings-search`).first()
-  // `networkidle` lands before mdsvex compiles the live examples on a cold dev server
+  // `networkidle` lands before Markdown compiles the live examples on a cold dev server
   await expect(demo).toBeVisible()
   await demo.scrollIntoViewIfNeeded()
   return {

@@ -1,25 +1,9 @@
 import changelog from '$root/changelog.md?raw'
 import { heading_ids } from '$lib/heading-anchors'
-import { compile } from 'mdsvex'
-
-const brace_to_paren = (str: string) => str.replaceAll(`{`, `(`).replaceAll(`}`, `)`)
-
-// Wrap HTML-entity tags like &lt;input&gt; in code spans so they render as <input>.
-// Segments inside existing backticks (odd indices after splitting on `) are left
-// untouched - inserting backticks there would break the code span.
-const wrap_entity_tags = (str: string) =>
-  str
-    .split(`\``)
-    .map((segment, idx) =>
-      idx % 2 === 0
-        ? segment.replaceAll(/&lt;[^&\n]*&gt;/gu, (tag) => `\`${tag}\``)
-        : segment,
-    )
-    .join(`\``)
+import { render_markdown } from '$lib/markdown'
 
 export const load = async () => {
-  const compiled_changelog = await compile(wrap_entity_tags(brace_to_paren(changelog)))
-  if (!compiled_changelog) throw new Error(`mdsvex returned no compiled changelog`)
-  const { code } = heading_ids().markup({ content: compiled_changelog.code })
+  const html = await render_markdown(changelog)
+  const { code } = heading_ids().markup({ content: html })
   return { changelog: { code } }
 }

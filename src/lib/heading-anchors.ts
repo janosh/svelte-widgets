@@ -1,7 +1,7 @@
 // Svelte preprocessor adding heading IDs at build time, so fragment navigation
 // (#heading-id) works on the initial SSR page load
 
-// Headings appear at the start of a line (formatted .svelte HTML) or after `>` (mdsvex's
+// Headings appear at the start of a line (formatted .svelte HTML) or after `>` (Markdown's
 // single-line output, e.g. "</p> <h2>"). Quoted attributes may contain `>`, so only an
 // unquoted one ends the opening tag.
 const heading_attrs = String.raw`(?:[^>"']|"[^"]*"|'[^']*')*`
@@ -195,7 +195,7 @@ const NAMED_ENTITIES: Record<string, string> = {
   nbsp: ` `,
 }
 
-// mdsvex escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as
+// Markdown escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as
 // `Using &#123;foo&#125;`; slugging the raw source would bake `123` into the id.
 const decode_entities = (html: string): string =>
   html.replaceAll(

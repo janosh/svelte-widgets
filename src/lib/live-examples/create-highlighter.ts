@@ -1,5 +1,4 @@
-// Lazy starry-night factory, separate from highlighter.ts so consumers picking their own
-// grammars skip that module's top-level await of the 34-grammar common bundle.
+// Lazy starry-night factory; custom grammars do not load the default grammar bundle.
 import type { Grammar } from '@wooorm/starry-night'
 import { type HastNode, escape_html_text, hast_to_html } from './hast.ts'
 
@@ -20,7 +19,7 @@ export type Highlighter = {
   highlight_block: (code: string, lang?: string | null) => Promise<string>
 }
 
-// exported so highlighter.ts reports the same thing when its default grammars fail
+// Shared with the default highlighter when its grammar import fails.
 export const optional_peer_error = `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`
 
 const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNight> => {
@@ -38,7 +37,7 @@ const escape_svelte = (html: string): string =>
   html.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
 
 // Falls back to plain escaped code for a missing or unsupported language. Braces are escaped
-// on both paths: this HTML lands in mdsvex/Svelte markup, where a stray `{` opens an
+// on both paths: this HTML lands in Markdown/Svelte markup, where a stray `{` opens an
 // expression.
 const render_html = (
   instance: StarryNight,

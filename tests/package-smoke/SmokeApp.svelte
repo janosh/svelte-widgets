@@ -1,4 +1,5 @@
 <script lang="ts">
+  import MarkdownSmoke from './MarkdownSmoke.md'
   import {
     Accordion,
     CodeBlock,
@@ -53,7 +54,7 @@
   import { create_find_state } from 'svelte-widgets/find-in-page'
   import { Claude as direct_claude } from 'svelte-widgets/icons'
   import { heading_ids } from 'svelte-widgets/heading-anchors'
-  import type { KatexOptions } from 'svelte-widgets/katex'
+  import type { KatexOptions } from 'svelte-widgets/markdown'
   import { storage_get } from 'svelte-widgets/storage'
   import { apply_theme_mode as apply_theme_from_subpath } from 'svelte-widgets/theme'
   import { fuzzy_match, get_label } from 'svelte-widgets/utils'
@@ -107,6 +108,7 @@
   <DirectCommandMenu {actions} />
   <DirectPageSearch fallback_actions={actions} />
   <p>{package_api_works ? `package ok` : `package failed`}</p>
+  <MarkdownSmoke />
 </main>
 
 <CodeBlock code="let value = 1" />

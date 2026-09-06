@@ -72,10 +72,6 @@
       "types": "./dist/heading-anchors.d.ts",
       "default": "./dist/heading-anchors.js"
     },
-    "./katex": {
-      "types": "./dist/katex.d.ts",
-      "default": "./dist/katex.js"
-    },
     "./labels": {
       "types": "./dist/labels.d.ts",
       "default": "./dist/labels.js"
@@ -195,6 +191,14 @@
     "./image-markup": {
       "types": "./dist/image-markup.d.ts",
       "default": "./dist/image-markup.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown/index.d.ts",
+      "default": "./dist/markdown/index.js"
+    },
+    "./markdown/vite": {
+      "types": "./dist/markdown/vite.d.ts",
+      "default": "./dist/markdown/vite.js"
     }
   },
   "publishConfig": {
@@ -210,6 +214,10 @@
     "prepublishOnly": "npm run package",
     "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
+  },
+  "dependencies": {
+    "js-yaml": "^5.4.1",
+    "marked": "^18.0.11"
   },
   "devDependencies": {
     "@iconify-json/academicons": "^1.2.4",
@@ -238,7 +246,6 @@
     "@wooorm/starry-night": "^3.10.0",
     "happy-dom": "20.11.6",
     "katex": "^0.18.4",
-    "mdsvex": "^0.12.8",
     "pagefind": "^1.5.2",
     "svelte": "^5.56.10",
     "svelte-check": "^4.7.6",

@@ -1,13 +1,12 @@
 import { create_highlighter } from '$lib/live-examples/create-highlighter'
 import { default_highlighter } from '$lib/live-examples/default-highlighter'
-import { starry_night, starry_night_highlighter } from '$lib/live-examples/highlighter'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { describe, expect, test, vi } from 'vitest'
 
-describe(`starry_night_highlighter`, () => {
+describe(`default_highlighter.highlight_block`, () => {
   test(`shares one default instance with lazy component consumers`, async () => {
-    expect(await default_highlighter.ready()).toBe(starry_night)
+    expect(await default_highlighter.ready()).toBe(await default_highlighter.ready())
   })
 
   test(`reports missing optional starry-night peer dependency`, async () => {
@@ -16,7 +15,10 @@ describe(`starry_night_highlighter`, () => {
       throw new Error(`Cannot find package '@wooorm/starry-night'`)
     })
 
-    await expect(import(`$lib/live-examples/highlighter`)).rejects.toThrow(
+    const { default_highlighter: missing_peer } = await import(
+      `$lib/live-examples/default-highlighter`
+    )
+    await expect(missing_peer.ready()).rejects.toThrow(
       `svelte-widgets/live-examples requires optional peer dependency @wooorm/starry-night`,
     )
 
@@ -29,8 +31,8 @@ describe(`starry_night_highlighter`, () => {
     [`svelte`, `<div>test</div>`],
     [`ts`, `const x: number = 1`],
     [`c++`, `int main() {}`],
-  ])(`highlights %s code`, (lang, code) => {
-    const result = starry_night_highlighter(code, lang)
+  ])(`highlights %s code`, async (lang, code) => {
+    const result = await default_highlighter.highlight_block(code, lang)
     const escaped_lang = lang.replaceAll(/[+]/gu, `\\$&`)
     expect(result).toMatch(
       new RegExp(
@@ -43,17 +45,19 @@ describe(`starry_night_highlighter`, () => {
 
   test.each([`TS`, `TypeScript`, `JAVASCRIPT`, `Svelte`])(
     `normalizes %s to lowercase`,
-    (lang) => {
-      const result = starry_night_highlighter(`const x = 1`, lang)
+    async (lang) => {
+      const result = await default_highlighter.highlight_block(`const x = 1`, lang)
       expect(result).toContain(`<pre class="highlight highlight-${lang.toLowerCase()}">`)
-      expect(result).toBe(starry_night_highlighter(`const x = 1`, lang.toLowerCase()))
+      expect(result).toBe(
+        await default_highlighter.highlight_block(`const x = 1`, lang.toLowerCase()),
+      )
     },
   )
 
   test.each([`unknown`, `cobol`, `fortran`, null, undefined])(
     `returns escaped code for lang=%s`,
-    (lang) => {
-      expect(starry_night_highlighter(`<a>{x}&</a>`, lang)).toBe(
+    async (lang) => {
+      expect(await default_highlighter.highlight_block(`<a>{x}&</a>`, lang)).toBe(
         `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&amp;&lt;/a&gt;</code></pre>`,
       )
     },
@@ -62,14 +66,14 @@ describe(`starry_night_highlighter`, () => {
   test.each([
     [`HTML special characters`, `<div>&</div>`, `&lt;div&gt;&amp;&lt;/div&gt;`],
     [`braces`, `{#if x}{/if}`, `&#123;#if x&#125;&#123;/if&#125;`],
-  ])(`escapes %s in unhighlighted code`, (_desc, code, expected) => {
-    expect(starry_night_highlighter(code)).toBe(
+  ])(`escapes %s in unhighlighted code`, async (_desc, code, expected) => {
+    expect(await default_highlighter.highlight_block(code)).toBe(
       `<pre class="highlight"><code>${expected}</code></pre>`,
     )
   })
 
-  test(`escapes braces in highlighted code`, () => {
-    const result = starry_night_highlighter(`{#if x}{/if}`, `svelte`)
+  test(`escapes braces in highlighted code`, async () => {
+    const result = await default_highlighter.highlight_block(`{#if x}{/if}`, `svelte`)
 
     expect(result).toContain(`&#123;`)
     expect(result).toContain(`&#125;`)
@@ -83,7 +87,7 @@ describe(`create_highlighter`, () => {
   const typst_html = `<span class="pl-k">#let</span> <span class="pl-smi">x</span> <span class="pl-k">= </span><span class="pl-c1">1</span>`
 
   test(`highlights a language outside the common bundle`, async () => {
-    expect(starry_night.flagToScope(`typ`)).toBeUndefined()
+    expect((await default_highlighter.ready()).flagToScope(`typ`)).toBeUndefined()
     expect(await custom.highlight(`#let x = 1`, `typ`)).toBe(typst_html)
     expect(await custom.highlight(`#let x = 1`, `TYP`)).toBe(typst_html)
     expect(await custom.highlight(`\\emph{hi}`, `tex`)).toContain(`<span class="pl-`)
@@ -99,7 +103,7 @@ describe(`create_highlighter`, () => {
     }
   })
 
-  test(`highlight_block wraps in the same markup as starry_night_highlighter`, async () => {
+  test(`highlight_block wraps in the same markup as default_highlighter.highlight_block`, async () => {
     expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
       `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
     )
