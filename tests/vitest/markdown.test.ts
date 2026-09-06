@@ -29,6 +29,15 @@ describe(`Markdown output`, () => {
       [`<table>`, `<td>1</td>`, `checked=""`, `disabled=""`],
     ],
     [`A & B &amp; &#123; \\{literal\\}`, [`A &amp; B &amp; &#123; &#123;literal&#125;`]],
+    [
+      '`a > b` `<input>` `&gt;` `&lt;input&gt;`',
+      [
+        `<code>a &gt; b</code>`,
+        `<code>&lt;input&gt;</code>`,
+        `<code>&amp;gt;</code>`,
+        `<code>&amp;lt;input&amp;gt;</code>`,
+      ],
+    ],
     [`[link][target]\n\n[target]: /path "Title"`, [`href="/path" title="Title"`]],
     [
       `Visit <https://example.org> or <mailto:hi@example.org>`,

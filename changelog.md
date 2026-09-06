@@ -365,7 +365,7 @@ All notable changes to this project will be documented in this file. Dates are d
 
 > 15 May 2025
 
-- Prevent empty style attributes on `ul.selected &gt; li` and `ul.options &gt; li` [`#304`](https://github.com/janosh/svelte-widgets/pull/304)
+- Prevent empty style attributes on `ul.selected > li` and `ul.options > li` [`#304`](https://github.com/janosh/svelte-widgets/pull/304)
 - Breaking: Svelte 5 [`#295`](https://github.com/janosh/svelte-widgets/pull/295)
 - update and fix linting, fix 2 dead readme links [`91f22d0`](https://github.com/janosh/svelte-widgets/commit/91f22d0cafdf931607288d18c5268badd358d83b)
 
@@ -410,10 +410,10 @@ All notable changes to this project will be documented in this file. Dates are d
 
 - v10.0.0 [`#245`](https://github.com/janosh/svelte-widgets/pull/245)
 - Add Multiselect prop `maxOptions: number` [`#243`](https://github.com/janosh/svelte-widgets/pull/243)
-- Add `&lt;slot name="user-msg"&gt;` [`#240`](https://github.com/janosh/svelte-widgets/pull/240)
+- Add `<slot name="user-msg">` [`#240`](https://github.com/janosh/svelte-widgets/pull/240)
 - Rename prop `duplicateFunc()` to `key()` [`#238`](https://github.com/janosh/svelte-widgets/pull/238)
 - declare types [`#236`](https://github.com/janosh/svelte-widgets/pull/236)
-- add &lt;slot name="after-input"&gt; [`0fe8e8d`](https://github.com/janosh/svelte-widgets/commit/0fe8e8d59e7dbfe8a650079c052a1ed7902c69fa)
+- add `<slot name="after-input">` [`0fe8e8d`](https://github.com/janosh/svelte-widgets/commit/0fe8e8d59e7dbfe8a650079c052a1ed7902c69fa)
 - add sentence on inputmode='none' use case for hiding on-screen keyboards to readme [`466f0a1`](https://github.com/janosh/svelte-widgets/commit/466f0a12e866ba525194924902b67401397aa21f)
 
 # [v9.0.0](https://github.com/janosh/svelte-widgets/compare/v8.6.2...v9.0.0)
@@ -444,7 +444,7 @@ All notable changes to this project will be documented in this file. Dates are d
 - DRY workflows [`#218`](https://github.com/janosh/svelte-widgets/pull/218)
 - fix: allow object options to share the same label [`#217`](https://github.com/janosh/svelte-widgets/pull/217)
 - delete wait_for_animation_end() and fix tests to use playwright auto-waiting correctly [`2493029`](https://github.com/janosh/svelte-widgets/commit/249302938315a69dd6d16c9f35b0a1fb5471bbeb)
-- don't highlight noMatchingOptionsMsg &lt;span&gt; in sms-search-matches [`a1feca7`](https://github.com/janosh/svelte-widgets/commit/a1feca747ac5cf7de4e2de2408d14b9a033e8afa)
+- don't highlight noMatchingOptionsMsg `<span>` in sms-search-matches [`a1feca7`](https://github.com/janosh/svelte-widgets/commit/a1feca747ac5cf7de4e2de2408d14b9a033e8afa)
 
 ## [v8.6.0](https://github.com/janosh/svelte-widgets/compare/v8.5.0...v8.6.0)
 
@@ -452,7 +452,7 @@ All notable changes to this project will be documented in this file. Dates are d
 
 - Fix Svelte 3.57 a11y [`#215`](https://github.com/janosh/svelte-widgets/pull/215)
 - Add prop `highlightMatches` to `MultiSelect` [`#212`](https://github.com/janosh/svelte-widgets/pull/212)
-- fix: add missing role attr for &lt;li&gt; [`#211`](https://github.com/janosh/svelte-widgets/pull/211)
+- fix: add missing role attr for `<li>` [`#211`](https://github.com/janosh/svelte-widgets/pull/211)
 - update deps, set TS moduleResolution=bundler [`a12835e`](https://github.com/janosh/svelte-widgets/commit/a12835ee312174fa247a38742a8724ac540c8808)
 
 ## [v8.5.0](https://github.com/janosh/svelte-widgets/compare/v8.4.0...v8.5.0)
@@ -530,7 +530,7 @@ All notable changes to this project will be documented in this file. Dates are d
 
 - Add `changelog.md` [`#180`](https://github.com/janosh/svelte-widgets/pull/180)
 - Draggable selected options [`#178`](https://github.com/janosh/svelte-widgets/pull/178)
-- Set `&lt;base href="/svelte-multiselect" /&gt;` `if !dev && !prerendering` [`#172`](https://github.com/janosh/svelte-widgets/pull/172)
+- Set `<base href="/svelte-multiselect" />` `if !dev && !prerendering` [`#172`](https://github.com/janosh/svelte-widgets/pull/172)
 - Publish docs to GitHub pages [`#170`](https://github.com/janosh/svelte-widgets/pull/170)
 - Contributing docs plus issue and PR templates with StackBlitz repro starter [`#169`](https://github.com/janosh/svelte-widgets/pull/169)
 - add missing about field to bug-report issue template (closes [`#171`](https://github.com/janosh/svelte-widgets/issues/171)) [`#171`](https://github.com/janosh/svelte-widgets/issues/171)
@@ -813,7 +813,7 @@ All notable changes to this project will be documented in this file. Dates are d
 
 > 3 February 2022
 
-- apply id prop to &lt;input&gt; instead of outer div (closes [`#25`](https://github.com/janosh/svelte-widgets/issues/25)) [`#25`](https://github.com/janosh/svelte-widgets/issues/25)
+- apply id prop to `<input>` instead of outer div (closes [`#25`](https://github.com/janosh/svelte-widgets/issues/25)) [`#25`](https://github.com/janosh/svelte-widgets/issues/25)
 - add eslint commit hook + update deps [`6ad44b8`](https://github.com/janosh/svelte-widgets/commit/6ad44b85057aef71eae19293de80f9d42f91f87b)
 - v.3.2.0 [`71ff2d1`](https://github.com/janosh/svelte-widgets/commit/71ff2d192caccacbe41f83949c14d7d4ca87d590)
 - add readme badge to document minimum svelte version (for #24) [`7d9fe5a`](https://github.com/janosh/svelte-widgets/commit/7d9fe5a977b56dab95069b64321f0718e0d61f08)
@@ -864,7 +864,7 @@ All notable changes to this project will be documented in this file. Dates are d
 
 > 27 October 2021
 
-- set &lt;input&gt; width back to 1pt as it's only needed to tab into, focus and blur &lt;MultiSelect&gt; (closes [`#12`](https://github.com/janosh/svelte-widgets/issues/12)) [`#12`](https://github.com/janosh/svelte-widgets/issues/12)
+- set `<input>` width back to 1pt as it's only needed to tab into, focus and blur `<MultiSelect>` (closes [`#12`](https://github.com/janosh/svelte-widgets/issues/12)) [`#12`](https://github.com/janosh/svelte-widgets/issues/12)
 - update readme [`45c7993`](https://github.com/janosh/svelte-widgets/commit/45c7993398c986499d4c0729177620cbec719cb7)
 
 ## [v1.2.1](https://github.com/janosh/svelte-widgets/compare/v1.2.0...v1.2.1)
