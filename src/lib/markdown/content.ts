@@ -454,9 +454,9 @@ export function validate_content(
         report(`duplicate_anchor`, `Duplicate anchor #${anchor.id}`, anchor.range, [
           { message: `First definition`, range: previous_range },
         ])
-      ids.set(anchor.id, anchor.range)
+      else ids.set(anchor.id, anchor.range)
     }
-    documents.set(key, { filename: manifest.filename, anchors: ids })
+    if (!previous) documents.set(key, { filename: manifest.filename, anchors: ids })
   }
   for (const manifest of manifests) {
     const asset_links = new Set(manifest.assets)

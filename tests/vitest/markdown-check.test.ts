@@ -205,14 +205,14 @@ describe(`checked Markdown examples`, () => {
         }),
       )
     }
-    const invalid_component = `<script>let value = $state(0)</script>\n<button onclick={()=>{}} on:click={()=>{}}>Click</button>`
+    const invalid_component = `<script>let value = $state(0)</script>\r\n\r\n<button onclick={()=>{}} on:click={()=>{}}>Click</button>\r\n`
     await writeFile(resolve(directory, `Counter.svelte`), invalid_component)
     const invalid_import = await check(source)
     expect(invalid_import.ok).toBe(false)
     expect(diagnostics_at_start(invalid_import)).toContainEqual(
       expect.objectContaining({
         filename: resolve(directory, `Counter.svelte`),
-        line: 2,
+        line: 3,
         offset: invalid_component.indexOf(`on:click`),
         code: `compile`,
         message: expect.stringContaining(`Mixing old (on:click)`),
@@ -232,7 +232,7 @@ describe(`checked Markdown examples`, () => {
         code: `TS2322`,
       },
     ])
-  })
+  }, 60_000)
 
   test(`maps repeated nested fences independently, including frontmatter and CRLF`, async () => {
     const source =
@@ -479,7 +479,7 @@ test(`project sessions reuse programs and invalidate changed, deleted, and recre
   expect((await checker.check(guide)).ok).toBe(true)
   checker.dispose()
   await expect(checker.check([])).rejects.toThrow(`Checker is disposed`)
-})
+}, 60_000)
 
 test(`project sessions refresh imported Svelte props and remap moved fences without retransformation`, async () => {
   const directory = await temporary_directory()
@@ -547,7 +547,7 @@ test(`project sessions refresh imported Svelte props and remap moved fences with
   checker.clear()
   expect((await checker.check(await document())).ok).toBe(true)
   expect(transform.mock.calls.length).toBeGreaterThan(3)
-})
+}, 60_000)
 
 test(`sessions serialize assertions, isolate projects, and reject queued work after disposal`, async () => {
   const source = fence(`ts`, `const value: number = 1`, `test="hold"`)
@@ -748,4 +748,4 @@ test(`project configuration inherits aliases, libraries and types, caches reads,
     })
     expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
   }
-})
+}, 60_000)

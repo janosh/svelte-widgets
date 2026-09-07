@@ -175,19 +175,27 @@ describe(`Markdown content manifests`, () => {
     )
     const next = await document_manifest(`# Target`, `/next.md`)
     expect(validate_content([guide, next], { assets: [`/plot one.svg`] })).toEqual([])
+    const duplicates = await Promise.all(
+      [`/guide.html`, `/guide/index.svx`].map((filename) =>
+        document_manifest(`# Other`, filename),
+      ),
+    )
     const origin = { filename: `/guide.md`, line: 1, column: 1, offset: 0 }
-    expect(validate_content([guide, guide, next])).toMatchObject([
-      {
+    expect(validate_content([guide, ...duplicates, next])).toEqual(
+      duplicates.map(({ filename }) => ({
         code: `duplicate_document`,
-        range: { start: origin, end: origin },
-        related: [{ range: { start: origin, end: origin } }],
-      },
-    ])
+        message: `Duplicate document route /guide`,
+        severity: `error`,
+        range: { start: { ...origin, filename }, end: { ...origin, filename } },
+        related: [{ message: `First document`, range: { start: origin, end: origin } }],
+      })),
+    )
     const broken = await document_manifest(
-      `<div id="duplicate"></div>\n<div id="duplicate"></div>\n\n[Lost](#absent) [Missing](missing.md) [Invalid](./%zz)\n\n![Absent](missing.png)`,
+      `<div id="duplicate"></div>\n<div id="duplicate"></div>\n<div id="duplicate"></div>\n\n[Lost](#absent) [Missing](missing.md) [Invalid](./%zz)\n\n![Absent](missing.png)`,
     )
     const diagnostics = validate_content([broken], { assets: [] })
     expect(diagnostics.map(({ message }) => message)).toEqual([
+      `Duplicate anchor #duplicate`,
       `Duplicate anchor #duplicate`,
       `Missing fragment #absent in /guide.md`,
       `Missing document /missing.md`,
@@ -196,15 +204,18 @@ describe(`Markdown content manifests`, () => {
     ])
     expect(diagnostics.map(({ code }) => code)).toEqual([
       `duplicate_anchor`,
+      `duplicate_anchor`,
       `missing_fragment`,
       `missing_document`,
       `invalid_url`,
       `missing_asset`,
     ])
-    expect(diagnostics[0]).toMatchObject({
-      range: { start: { line: 2 } },
-      related: [{ range: { start: { line: 1 } } }],
-    })
+    expect(diagnostics.slice(0, 2)).toMatchObject(
+      broken.anchors.slice(1).map(({ range }) => ({
+        range,
+        related: [{ range: broken.anchors[0].range }],
+      })),
+    )
     expect(() => assert_valid_content([broken], { assets: [] })).toThrow(`/guide.md:2:`)
   })
 

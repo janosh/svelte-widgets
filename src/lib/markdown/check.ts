@@ -283,7 +283,10 @@ async function run_checks(
   const shims = new Set<string>()
   let compiler = state.compiler ?? options.typescript
   let svelte_checker = state.svelte_checker ?? options.svelte_typechecker
-  const get_svelte_checker = () => {
+  const transform_component = (
+    fence: CheckedSource,
+    component_filename: string,
+  ): void => {
     if (!svelte_checker) {
       try {
         const { svelte2tsx } = require_tool(`svelte2tsx`) as {
@@ -305,16 +308,9 @@ async function run_checks(
     }
     state.svelte_checker = svelte_checker
     for (const shim of svelte_checker.shims) shims.add(shim)
-    return svelte_checker
-  }
-  const transform_component = (
-    fence: CheckedSource,
-    component_filename: string,
-  ): void => {
-    const checker = get_svelte_checker()
     const component = component_syntax(fence.code, component_filename)
     if (!component.transformed) {
-      const { code, map } = checker.transform(fence.code, {
+      const { code, map } = svelte_checker.transform(fence.code, {
         filename: component_filename,
         isTsFile: true,
       })
@@ -423,15 +419,12 @@ async function run_checks(
       length = 0,
     ): void => {
       const entry = source && files.get(source.fileName)
-      if (entry) {
+      if (source && entry) {
         const authored = (position: number) => {
-          const point = source?.getLineAndCharacterOfPosition(position)
-          return (
-            point &&
-            (entry.mappings === undefined
-              ? { line: point.line, column: point.character }
-              : original_position(entry.mappings, point.line, point.character))
-          )
+          const { line, character } = source.getLineAndCharacterOfPosition(position)
+          return entry.mappings === undefined
+            ? { line, column: character }
+            : original_position(entry.mappings, line, character)
         }
         report(
           entry.fence,
@@ -522,50 +515,44 @@ async function run_checks(
             `import`,
             `Cannot resolve imported Svelte component: ${name}`,
           )
-        if (component_filename) {
-          const virtual_filename = `${component_filename}.ts`
-          if (!files.has(virtual_filename)) {
-            const source = host.readFile(component_filename)
-            if (source === undefined) {
-              diagnostics.push({
-                range: source_locator(``, component_filename)(0),
-                severity: `error`,
-                code: `import`,
-                message: `Cannot read imported Svelte component: ${component_filename}`,
-              })
-              return { resolvedModule: undefined }
-            }
-            let offset = 0
-            const line_positions = source.split(`\n`).map((line, idx) => {
-              const position = {
-                filename: component_filename,
-                line: idx + 1,
-                column: 1,
-                offset,
-              }
-              offset += line.length + 1
-              return position
+        if (!component_filename) return resolution
+        const virtual_filename = `${component_filename}.ts`
+        if (!files.has(virtual_filename)) {
+          const source = host.readFile(component_filename)
+          if (source === undefined) {
+            diagnostics.push({
+              range: source_locator(``, component_filename)(0),
+              severity: `error`,
+              code: `import`,
+              message: `Cannot read imported Svelte component: ${component_filename}`,
             })
-            const imported_fence: CheckedSource = {
-              code: source,
-              range: source_locator(source, component_filename)(0, source.length),
-              line_positions,
-            }
-            try {
-              transform_component(imported_fence, component_filename)
-            } catch (error) {
-              report_compile_error(imported_fence, error)
-              return { resolvedModule: undefined }
-            }
+            return { resolvedModule: undefined }
           }
-          return {
-            resolvedModule: {
-              resolvedFileName: virtual_filename,
-              extension: compiler_api.Extension.Ts,
-            },
+          const locate = source_locator(source, component_filename)
+          let offset = 0
+          const line_positions = source.split(`\n`).map((line) => {
+            const position = locate(offset).start
+            offset += line.length + 1
+            return position
+          })
+          const imported_fence: CheckedSource = {
+            code: source,
+            range: locate(0, source.length),
+            line_positions,
+          }
+          try {
+            transform_component(imported_fence, component_filename)
+          } catch (error) {
+            report_compile_error(imported_fence, error)
+            return { resolvedModule: undefined }
           }
         }
-        return resolution
+        return {
+          resolvedModule: {
+            resolvedFileName: virtual_filename,
+            extension: compiler_api.Extension.Ts,
+          },
+        }
       })
     const program = compiler.createProgram(
       [...files.keys(), ...shims],

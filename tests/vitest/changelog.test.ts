@@ -7,6 +7,8 @@ test(`changelog uses consistent release sections and literal code`, async () => 
     `ul.selected &gt; li`,
     `ul.options &gt; li`,
     `&lt;input&gt;`,
+    `&lt;span&gt;`,
+    `&lt;li&gt;`,
     `&lt;slot name="user-msg"&gt;`,
     `&lt;slot name="after-input"&gt;`,
     `&lt;base href="/svelte-multiselect" /&gt;`,
