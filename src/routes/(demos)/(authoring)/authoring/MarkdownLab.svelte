@@ -1,5 +1,8 @@
 <script lang="ts">
   import { JsonTree } from '$lib'
+  import SourceInput from '$site/SourceInput.svelte'
+  import { default_highlighter } from '$lib/highlight'
+  import syntax_styles from '@wooorm/starry-night/style/light?raw'
   import type { Diagnostic } from '$lib/markdown'
   import { onMount } from 'svelte'
   import {
@@ -43,10 +46,8 @@
   let integration:
     | ReturnType<typeof import('$lib/markdown/vite').markdown_vite>
     | undefined
-  const escape = (text: string) =>
-    text.replaceAll(`&`, `&amp;`).replaceAll(`<`, `&lt;`).replaceAll(`>`, `&gt;`)
   const frame_source = $derived(
-    `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>body{font:16px/1.6 system-ui;margin:1.25rem;color:#223047;background:white}a{color:#3659bd}figure{text-align:center;margin:1.5rem 0}figure img{width:5rem;height:5rem}figcaption{margin-top:.5rem}.equation{display:flex;align-items:center;justify-content:space-between}h2{font-size:1.2rem}</style></head><body>${output?.html ?? ``}</body></html>`,
+    `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>${syntax_styles}body{font:16px/1.6 system-ui;margin:1.25rem;color:#223047;background:white}a{color:#3659bd}figure{text-align:center;margin:1.5rem 0}figure img{width:5rem;height:5rem}figcaption{margin-top:.5rem}.equation{display:flex;align-items:center;justify-content:space-between}h2{font-size:1.2rem}</style></head><body>${output?.html ?? ``}</body></html>`,
   )
 
   async function run() {
@@ -97,9 +98,9 @@
         integration ??= markdown_vite(
           create_markdown({
             examples: {},
-            highlight: (code) => {
+            highlight: (code, language) => {
               highlight_calls++
-              return escape(code)
+              return default_highlighter.highlight(code, language)
             },
           }),
         )
@@ -129,6 +130,7 @@
       } else {
         const options = {
           math: { output: `mathml` as const },
+          highlight: default_highlighter.highlight,
           references: { bibliography },
         }
         const compiled = assert_ok(
@@ -172,8 +174,11 @@
     }}
   >
     <label
-      >{title} source<textarea bind:value={source} spellcheck="false" rows="13"
-      ></textarea></label
+      >{title} source<SourceInput
+        bind:value={source}
+        language="markdown"
+        label={`${title} source`}
+      /></label
     >
     <div class="actions">
       <button type="submit" disabled={working}
@@ -240,22 +245,6 @@
     gap: 0.5rem;
     font-weight: 600;
   }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    resize: vertical;
-    min-height: 10rem;
-    padding: 0.8rem;
-    border: 0;
-    border-bottom: 1px solid light-dark(#b7c1d1, #526078);
-    border-radius: 0;
-    background: light-dark(#f6f8fa, #151b24);
-    color: inherit;
-    font:
-      0.85rem/1.6 ui-monospace,
-      monospace;
-    tab-size: 2;
-  }
   .actions {
     display: flex;
     flex-wrap: wrap;
@@ -281,8 +270,7 @@
       cursor: wait;
     }
   }
-  button:focus-visible,
-  textarea:focus-visible {
+  button:focus-visible {
     outline: 2px solid #6987ef;
     outline-offset: 2px;
   }

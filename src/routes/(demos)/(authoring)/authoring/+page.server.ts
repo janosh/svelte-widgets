@@ -1,5 +1,6 @@
 import { assert_ok, create_markdown } from '$lib/markdown'
 import { create_checker } from '$lib/markdown/check'
+import { default_highlighter } from '$lib/highlight'
 import { runInNewContext } from 'node:vm'
 import { as_fence, checked_examples } from './examples'
 
@@ -20,6 +21,11 @@ export const load = async () => {
           return {
             ...example,
             source,
+            highlighted_source: as_fence(
+              example.language,
+              await default_highlighter.highlight(example.code, example.language),
+              example.info,
+            ),
             result: await checker.check(document, {
               assertions: {
                 increment: ({ code }) => {

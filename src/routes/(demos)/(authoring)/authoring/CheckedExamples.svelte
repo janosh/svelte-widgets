@@ -1,5 +1,8 @@
 <script lang="ts">
   import type { PageData } from './$types'
+  import SourceInput from '$site/SourceInput.svelte'
+  import { CodeBlock } from '$lib'
+  import { default_highlighter } from '$lib/highlight'
   import { checked_examples } from './examples'
   import { onMount } from 'svelte'
 
@@ -46,7 +49,7 @@
     These full type and assertion checks run through <code>checker.check()</code> when the static
     site builds. Choose a case to inspect its actual result.
   </p>
-  <pre><code>{current.source}</code></pre>
+  <pre aria-label="Scenario source"><code>{@html current.highlighted_source}</code></pre>
   <p class:failed={!current.result.ok} role="status">
     {current.result.ok ? `Passed` : `Failed`} · {current.result.value.checked} checked · {current
       .result.value.asserted} assertions passed
@@ -58,8 +61,12 @@
   {/each}
   <details>
     <summary>Run these checks in your project</summary>
-    <pre><code
-        >{`import { readFile } from 'node:fs/promises'
+    <CodeBlock
+      language="js"
+      label="Checker setup"
+      highlight={default_highlighter.highlight}
+      wrap
+      code={`import { readFile } from 'node:fs/promises'
 import { assert_ok, create_markdown } from 'svelte-widgets/markdown'
 import { create_checker } from 'svelte-widgets/markdown/check'
 
@@ -70,8 +77,8 @@ try {
   assert_ok(await checker.check(document))
 } finally {
   checker.dispose()
-}`}</code
-      ></pre>
+}`}
+    />
   </details>
   <h3>Try the Svelte syntax checker</h3>
   <p>
@@ -85,8 +92,12 @@ try {
     }}
   >
     <label
-      >Svelte source<textarea bind:value={source} rows="6" spellcheck="false"
-      ></textarea></label
+      >Svelte source<SourceInput
+        bind:value={source}
+        language="svelte"
+        label="Svelte source"
+        rows={6}
+      /></label
     >
     <button type="submit" disabled={!ready || working}
       >{working ? `Checking…` : `Check Svelte syntax`}</button
@@ -105,8 +116,7 @@ try {
     font-weight: 600;
   }
   select,
-  button,
-  textarea {
+  button {
     font: inherit;
     color: inherit;
     border: 0;
@@ -114,26 +124,16 @@ try {
     background: light-dark(#f6f8fa, #151b24);
     padding: 0.6rem;
   }
-  select,
-  textarea {
+  select {
     border-bottom: 1px solid light-dark(#b7c1d1, #526078);
   }
   select {
     max-width: 28rem;
   }
   select:focus-visible,
-  button:focus-visible,
-  textarea:focus-visible {
+  button:focus-visible {
     outline: 2px solid #6987ef;
     outline-offset: 2px;
-  }
-  textarea {
-    width: 100%;
-    box-sizing: border-box;
-    resize: vertical;
-    font:
-      0.85rem/1.6 ui-monospace,
-      monospace;
   }
   button {
     margin-top: 0.75rem;

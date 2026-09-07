@@ -12,4 +12,4 @@ Increment the counter below. When running `npx vp dev`, edit this paragraph in `
 
 The example has an explicit `id`, so its module identity survives edits around it. Ordinary headings, paragraphs, and code fences are isolated during development. Changes to frontmatter, page scripts, or the arrangement of live examples can replace the parent and reset state. Pages with scoped styles keep their original component tree.
 
-[Return to the interactive authoring labs](/authoring#incremental-compilation).
+[Return to the interactive authoring labs](../authoring#incremental-compilation).

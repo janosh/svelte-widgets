@@ -14,6 +14,7 @@ test(`editable content labs validate manifests, reuse highlights, and recover fr
   ])
 
   const manifest = page.getByRole(`region`, { name: `Content manifest lab`, exact: true })
+  await expect(manifest.locator(`.preview .pl-k`).first()).toHaveText(`const`)
   await expect(manifest.getByRole(`status`)).toHaveText(`2 headings · 1 links · 0 issues`)
   await manifest.getByRole(`button`, { name: `Break a link` }).click()
   await expect(manifest.getByRole(`status`)).toHaveText(`2 headings · 1 links · 1 issues`)
@@ -33,6 +34,7 @@ test(`editable content labs validate manifests, reuse highlights, and recover fr
     name: `Incremental compilation lab`,
     exact: true,
   })
+  await expect(incremental.locator(`.preview .pl-k`).first()).toHaveText(`let`)
   await expect(incremental.getByRole(`status`)).toHaveText(
     `1 examples · 1 new highlight calls`,
   )
@@ -76,6 +78,22 @@ test(`editable content labs validate manifests, reuse highlights, and recover fr
     name: `Scientific references lab`,
     exact: true,
   })
+  const science_source = science.getByRole(`textbox`, {
+    name: `Scientific references source`,
+  })
+  await science_source.fill(
+    `${await science_source.inputValue()}\n\n\`\`\`ts\nconst count: number = 1\n\`\`\``,
+  )
+  await science
+    .getByRole(`button`, { name: `Run scientific references`, exact: true })
+    .click()
+  const keyword = references.locator(`pre .pl-k`).first()
+  await expect(keyword).toHaveText(`const`)
+  expect(await keyword.evaluate((element) => getComputedStyle(element).color)).not.toBe(
+    await references
+      .locator(`pre code`)
+      .evaluate((element) => getComputedStyle(element).color),
+  )
   await science.getByRole(`button`, { name: `Try an unresolved reference` }).click()
   await expect(science.getByRole(`alert`)).toContainText(`Unresolved reference missing`)
   await science.getByRole(`button`, { name: `Reset source` }).click()
@@ -89,6 +107,10 @@ test(`checked-example scenarios and editable syntax checks expose actual failure
 }) => {
   await page.goto(`/authoring`)
   const lab = page.getByRole(`region`, { name: `Checked examples lab`, exact: true })
+  await expect(lab.locator(`.preview .pl-k`).first()).toHaveText(`let`)
+  const scenario = lab.locator(`pre[aria-label="Scenario source"]`)
+  await expect(scenario.locator(`.pl-k`).first()).toHaveText(`const`)
+  await expect(scenario).toContainText(`const count: number = 1`)
   await lab
     .getByRole(`combobox`, { name: `Check scenario` })
     .selectOption({ label: `Type mismatch` })
@@ -96,6 +118,12 @@ test(`checked-example scenarios and editable syntax checks expose actual failure
     `Failed · 1 checked · 0 assertions passed`,
   )
   await expect(lab).toContainText(`TS2322`)
+  await expect(scenario).toContainText(`const count: number = "one"`)
+  await expect(scenario.locator(`.pl-k`).first()).toHaveText(`const`)
+  await lab.getByText(`Run these checks in your project`, { exact: true }).click()
+  await expect(
+    lab.getByRole(`region`, { name: `Checker setup` }).locator(`.pl-k`).first(),
+  ).toHaveText(`import`)
   await lab.getByRole(`combobox`).selectOption({ label: `Passing assertion` })
   await expect(lab.getByRole(`status`)).toHaveText(
     `Passed · 1 checked · 1 assertions passed`,
@@ -107,6 +135,7 @@ test(`checked-example scenarios and editable syntax checks expose actual failure
   await lab.getByRole(`button`, { name: `Check Svelte syntax` }).click()
   await expect(lab.getByRole(`alert`)).toBeVisible()
   await source.fill(`<p>Fixed</p>`)
+  await expect(lab.locator(`.preview code`)).toHaveText(`<p>Fixed</p>`)
   await lab.getByRole(`button`, { name: `Check Svelte syntax` }).click()
   await expect(lab.getByRole(`alert`)).toHaveCount(0)
   await expect(lab).toContainText(`Svelte syntax passes`)
@@ -116,4 +145,8 @@ test(`checked-example scenarios and editable syntax checks expose actual failure
   await counter.click()
   await page.getByRole(`button`, { name: `Count: 1`, exact: true }).click()
   await expect(page.getByRole(`button`, { name: `Count: 2`, exact: true })).toBeVisible()
+  await page
+    .getByRole(`link`, { name: `Return to the interactive authoring labs` })
+    .click()
+  await expect(page).toHaveURL(/\/authoring#incremental-compilation$/)
 })

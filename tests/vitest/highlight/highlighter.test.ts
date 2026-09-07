@@ -8,6 +8,19 @@ describe(`default_highlighter.highlight_block`, () => {
     expect(await default_highlighter.ready()).toBe(await default_highlighter.ready())
   })
 
+  test.each([`\`\`\``, `~~~~`])(
+    `highlights Svelte inside Markdown %s fences`,
+    async (marker) => {
+      const source = `# Example\n\n${marker}svelte example\n<script>\nlet count = $state(0)\n</script>\n<button>{count}</button>\n${marker}\n\n## After`
+      const code = document.createElement(`code`)
+      code.innerHTML = await default_highlighter.highlight(source, `markdown`)
+      expect(code.textContent).toBe(source)
+      expect(code.querySelector(`.pl-k`)?.textContent).toBe(`let`)
+      expect(code.querySelector(`script, button`)).toBeNull()
+      expect(code.lastElementChild?.textContent).toContain(`After`)
+    },
+  )
+
   test(`reports missing optional starry-night peer dependency`, async () => {
     vi.resetModules()
     vi.doMock(`@wooorm/starry-night`, () => {

@@ -1,5 +1,6 @@
 import { load } from '../../src/routes/(demos)/(authoring)/authoring/+page.server'
 import { expect, test } from 'vitest'
+import { checked_examples } from '../../src/routes/(demos)/(authoring)/authoring/examples'
 
 test(`published checker scenarios contain real type and assertion diagnostics`, async () => {
   const { checks } = await load()
@@ -25,6 +26,14 @@ test(`published checker scenarios contain real type and assertion diagnostics`, 
     { id: `assertion`, ok: true, checked: 1, asserted: 1 },
     { id: `assertion-error`, ok: false, checked: 1, asserted: 0 },
   ])
+  for (const [idx, check] of checks.entries()) {
+    const code = document.createElement(`code`)
+    code.innerHTML = check.highlighted_source
+    expect(code.textContent).toBe(check.source)
+    expect(code.textContent).toContain(checked_examples[idx].code)
+    expect(code.querySelector(`.pl-k`)).not.toBeNull()
+    expect(code.querySelector(`script, button`)).toBeNull()
+  }
   expect(checks[1].result.diagnostics).toMatchObject([
     {
       code: `TS2322`,

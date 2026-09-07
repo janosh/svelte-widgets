@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { resolve } from '$app/paths'
   import favicon from '$site/favicon.svg?no-inline'
   import CheckedExamples from './CheckedExamples.svelte'
   import MarkdownLab from './MarkdownLab.svelte'
@@ -33,7 +34,7 @@
 </p>
 <MarkdownLab mode="incremental" />
 <p>
-  For actual development hot reload, open the <a href="/authoring/hot-reload"
+  For actual development hot reload, open the <a href={resolve(`/authoring/hot-reload`)}
     >live Markdown counter</a
   >, increment it, and edit that page's prose in your editor. Static prose edits preserve
   its state; script or example-structure changes can reset it.

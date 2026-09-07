@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { Icon } from '$lib'
+  import { CodeBlock, Icon } from '$lib'
+  import { default_highlighter } from '$lib/highlight'
   import { create_clipboard_feedback } from '$lib/clipboard.svelte'
   import * as icon_module from '$lib/icons'
   import type { IconData } from '$lib/icons/types'
@@ -30,8 +31,10 @@
     return catalog.filter(([name]) => name.toLowerCase().includes(lower))
   })
 
-  const usage = `import { Icon } from 'svelte-widgets'
-import { Download } from 'svelte-widgets/icons'
+  const usage = `<script>
+  import { Icon } from 'svelte-widgets'
+  import { Download } from 'svelte-widgets/icons'
+\u003C/script>
 
 <Icon icon={Download} />`
 </script>
@@ -43,7 +46,12 @@ import { Download } from 'svelte-widgets/icons'
   name so a bundle only carries what it renders:
 </p>
 
-<pre><code>{usage}</code></pre>
+<CodeBlock
+  code={usage}
+  language="svelte"
+  label="Icon usage"
+  highlight={default_highlighter.highlight}
+/>
 
 <p>
   Size comes from <code>--icon-size</code>, colour from <code>currentColor</code>, so an

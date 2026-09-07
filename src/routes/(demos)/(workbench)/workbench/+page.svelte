@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { default_highlighter } from '$lib/highlight'
   import {
     CodeBlock,
     StatGrid,
@@ -131,6 +132,7 @@
 <CodeBlock
   code={'const total = values.reduce((sum, value) => sum + value, 0)'}
   language="javascript"
+  highlight={default_highlighter.highlight}
 />
 <p>
   <code>StatGrid</code> accepts items with label, value, optional unit, delta and hint. A

@@ -92,7 +92,7 @@
 
 <GitHubCorner href={repository} />
 
-<CopyButton global global_selector="pre:not(li > pre) > code" />
+<CopyButton global global_selector="pre:not(li > pre, .source-input pre) > code" />
 
 <div class="docs-body">
   <div
