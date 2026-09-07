@@ -43,9 +43,9 @@
   // A range input with no min/max silently defaults to 0-100 while the number input stays
   // unbounded, so one slider touch clamps and writes back a value the caller never limited.
   $effect(() => {
-    if (min === undefined || max === undefined) {
+    if (min === undefined || max === undefined || step === undefined) {
       throw new Error(
-        `NumberRangeInput needs both min and max, got min=${min}, max=${max}`,
+        `NumberRangeInput needs min, max, and step, got min=${min}, max=${max}, step=${step}`,
       )
     }
   })

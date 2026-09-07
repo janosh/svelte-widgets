@@ -297,6 +297,4 @@ loaded batch:
 
 ### Error Handling
 
-If `loadOptions` throws or rejects, the error is logged to console and the component
-continues to function normally. The loading indicator is hidden and users can retry by
-typing or scrolling.
+If `loadOptions` throws or rejects, the component displays an error and a Retry button while keeping previously loaded options available. Retry repeats the failed request; changing the search starts a new request.

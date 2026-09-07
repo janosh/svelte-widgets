@@ -224,18 +224,21 @@ describe(`Masonry`, () => {
     },
   )
 
-  test.each([0, -1, 1.5, Number.NaN])(
-    `throws when calcCols returns %s and there are items to place`,
-    (cols) => {
-      expect(() =>
-        mount_masonry({ items: indices, calcCols: () => cols, masonryWidth: 500 }),
-      ).toThrow(`Masonry: calcCols must return a positive integer`)
-    },
-  )
-
-  test(`tolerates zero columns when there is nothing to place`, () => {
+  test.each(
+    [[], indices].flatMap((items) =>
+      [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, ...(items.length ? [0] : [])].map(
+        (cols) => ({ items, cols }),
+      ),
+    ),
+  )(`rejects invalid calcCols=$cols for $items`, ({ items, cols }) => {
     expect(() =>
-      mount_masonry({ items: [], calcCols: () => 0, masonryWidth: 500 }),
+      mount_masonry({ items, calcCols: () => cols, masonryWidth: 500 }),
+    ).toThrow(`Masonry: calcCols must return a positive integer`)
+  })
+
+  test.each([0, 2])(`accepts %s columns when there is nothing to place`, (cols) => {
+    expect(() =>
+      mount_masonry({ items: [], calcCols: () => cols, masonryWidth: 500 }),
     ).not.toThrow()
   })
 

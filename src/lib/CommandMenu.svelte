@@ -5,7 +5,7 @@
   import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
-  import type { CmdAction, MultiSelectProps } from './types'
+  import type { CmdAction, LoadOptionsParams, MultiSelectProps } from './types'
   import type { Hotkey } from './utils'
   import {
     cmd_action_matches,
@@ -109,19 +109,33 @@
         })
       : null,
   )
-  function validate_actions(entries: Action[]) {
-    const ids = new Set<string>()
+  function validate_actions(entries: Action[], ids = new Set<string>()) {
     for (const { id, label } of entries) {
       if ((typeof id !== `string` && typeof id !== `number`) || `${id}` === ``)
         throw new Error(`CommandMenu action "${label}" requires a non-empty id`)
       if (ids.has(`${id}`)) throw new Error(`Duplicate CommandMenu action id: ${id}`)
       ids.add(`${id}`)
     }
+    return ids
   }
   // Includes dynamically loaded options and appended pages.
   $effect(() => {
     validate_actions(actions)
     validate_actions(matching_actions)
+  })
+  // Validate remote batches before MultiSelect merges and proxies the static matches.
+  const load_options = $derived.by(() => {
+    const config = rest.loadOptions
+    if (!config) return undefined
+    const fetch = typeof config === `function` ? config : config.fetch
+    return {
+      ...(typeof config === `function` ? {} : config),
+      fetch: async (params: LoadOptionsParams) => {
+        const result = await fetch(params)
+        validate_actions(result.options, validate_actions(actions))
+        return result
+      },
+    }
   })
 
   // load persisted recents (client-only since $effect doesn't run during SSR)
@@ -296,6 +310,7 @@
       rangeSelect={false}
       parse_paste={undefined}
       options={sorted_actions}
+      loadOptions={load_options}
       bind:activeIndex={active_idx}
       bind:activeOption={active_option}
       autoActiveFirstOption

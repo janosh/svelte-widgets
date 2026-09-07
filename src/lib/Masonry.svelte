@@ -226,7 +226,7 @@
       return Math.min(items.length, initialCols)
     const cols = calcCols(masonryWidth > 0 ? masonryWidth : 1920, minColWidth, gap)
     // Indexing columns requires a positive integer; zero is valid for an empty list.
-    if (items.length > 0 && (!Number.isInteger(cols) || cols < 1)) {
+    if (!Number.isInteger(cols) || cols < (items.length > 0 ? 1 : 0)) {
       throw new Error(
         `Masonry: calcCols must return a positive integer, received ${cols}.`,
       )

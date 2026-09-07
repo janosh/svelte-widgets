@@ -15,7 +15,11 @@
     slugify_heading,
     unique_heading_id,
   } from './heading-anchors'
-  import { flash_toc_target, get_heading_visibility } from './toc-utils'
+  import {
+    flash_toc_target,
+    get_heading_visibility,
+    override_scroll_behavior,
+  } from './toc-utils'
   import { is_editable_event_target } from './utils'
 
   let {
@@ -294,14 +298,10 @@
 
     // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
     restore_scroll_behavior?.()
-    const { style } = document.documentElement
-    const previous_behavior = style.getPropertyValue(`scroll-behavior`)
-    const priority = style.getPropertyPriority(`scroll-behavior`)
-    style.setProperty(`scroll-behavior`, scrollBehavior, priority)
-    restore_scroll_behavior = () => {
-      style.setProperty(`scroll-behavior`, previous_behavior, priority)
-      restore_scroll_behavior = undefined
-    }
+    restore_scroll_behavior = override_scroll_behavior(
+      document.documentElement.style,
+      scrollBehavior,
+    )
 
     if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }

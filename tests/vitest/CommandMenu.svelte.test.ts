@@ -673,19 +673,44 @@ test.each([
   [`duplicate`, `existing`],
   [`numeric collision`, 1],
 ])(`rejects %s action IDs`, (_, id) => {
+  // Deliberately allow missing IDs to exercise JavaScript callers.
+  const invalid = { id: id as string | number, label: `Invalid`, action: vi.fn() }
   expect(() =>
     flushSync(() =>
       mount_menu({
         actions: [
           { id: `existing`, label: `First`, action: vi.fn() },
           { id: `1`, label: `Numeric`, action: vi.fn() },
-          // Deliberately allow missing IDs to exercise JavaScript callers.
-          { id: id as string | number, label: `Invalid`, action: vi.fn() },
+          invalid,
         ],
       }),
     ),
   ).toThrow(/CommandMenu action/)
 })
+
+test.each([1, `1`])(
+  `rejects remote ID %j colliding with a filtered-out static action`,
+  async (id) => {
+    const error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    mount_menu({
+      open: true,
+      actions: [{ id: `1`, label: `Static`, action: vi.fn() }],
+      searchText: `remote`,
+      loadOptions: async () => ({
+        options: [{ id, label: `Remote`, action: vi.fn() }],
+        hasMore: false,
+      }),
+    })
+    await vi.waitFor(() =>
+      expect(error).toHaveBeenCalledWith(
+        `MultiSelect: loadOptions error:`,
+        expect.objectContaining({ message: `Duplicate CommandMenu action id: 1` }),
+      ),
+    )
+    expect(doc_query(`[role='alert']`).textContent).toContain(`Could not load options`)
+    expect(document.querySelector(`li[role='option']`)).toBeNull()
+  },
+)
 
 // dropdown option labels in display order (used by shortcut/recents tests below)
 const option_labels = () =>

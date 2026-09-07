@@ -22,11 +22,12 @@ export const print_page = ({ filename }: PrintOptions = {}): void => {
   let restore_title: string | null = document.title
   title_swap_in_flight = true
   document.title = filename
+  const print_title = document.title
   const cleanup = () => {
     clearTimeout(watchdog)
     globalThis.removeEventListener(`afterprint`, cleanup)
     if (restore_title === null) return
-    document.title = restore_title
+    if (document.title === print_title) document.title = restore_title
     restore_title = null
     title_swap_in_flight = false
   }

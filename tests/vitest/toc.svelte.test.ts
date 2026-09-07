@@ -1564,8 +1564,8 @@ describe(`collapseSubheadings`, () => {
   })
 })
 
-test.each([`scrollend`, `timeout`])(
-  `rapid activations restore root styles on %s`,
+test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
+  `overlapping TOCs restore root styles on %s`,
   async (completion) => {
     vi.useFakeTimers()
     const { style } = document.documentElement
@@ -1573,14 +1573,24 @@ test.each([`scrollend`, `timeout`])(
     try {
       set_headings(2)
       mount_toc()
+      mount_toc({ scrollBehavior: `auto` })
       await tick()
-      for (const link of document.querySelectorAll<HTMLAnchorElement>(`aside.toc li > a`))
+      const panels = document.querySelectorAll(`aside.toc`)
+      for (const link of panels[0].querySelectorAll<HTMLAnchorElement>(`li > a`))
         link.click()
       expect(style.scrollBehavior).toBe(`smooth`)
+      for (const link of panels[1].querySelectorAll<HTMLAnchorElement>(`li > a`))
+        link.click()
       await vi.advanceTimersByTimeAsync(20)
-      expect(style.scrollBehavior).toBe(`smooth`)
+      expect(style.scrollBehavior).toBe(`auto`)
       if (completion === `scrollend`) window.dispatchEvent(new Event(`scrollend`))
-      else await vi.advanceTimersByTimeAsync(1000)
+      else if (completion === `timeout`) await vi.advanceTimersByTimeAsync(1000)
+      else {
+        const idx = completion === `older unmount` ? 0 : 1
+        await unmount(mounted_components.splice(idx, 1)[0])
+        expect(style.scrollBehavior).toBe(idx === 0 ? `auto` : `smooth`)
+        await unmount(mounted_components.splice(0, 1)[0])
+      }
       expect(style.scrollBehavior).toBe(`auto`)
       expect(style.getPropertyPriority(`scroll-behavior`)).toBe(`important`)
     } finally {

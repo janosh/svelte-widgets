@@ -107,14 +107,17 @@ describe(`NumberRangeInput`, () => {
     },
   )
 
-  test.each([`min`, `max`])(`rejects a missing %s for JavaScript callers`, (bound) => {
-    const props = { ...named_props }
-    Reflect.deleteProperty(props, bound)
-    expect(() => {
-      mount_range(props)
-      flushSync()
-    }).toThrow(`NumberRangeInput needs both min and max`)
-  })
+  test.each([`min`, `max`, `step`])(
+    `rejects a missing %s for JavaScript callers`,
+    (prop) => {
+      const props = { ...named_props }
+      Reflect.deleteProperty(props, prop)
+      expect(() => {
+        mount_range(props)
+        flushSync()
+      }).toThrow(`NumberRangeInput needs min, max, and step`)
+    },
+  )
 })
 
 test.each([
