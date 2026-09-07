@@ -168,9 +168,9 @@
             cache.actions.length > target_count ||
             cache.next_result_idx < page_results.length,
         }
-      } catch {
+      } catch (error) {
         pagefind_api_promise = undefined
-        return no_results()
+        throw error
       }
     }
   }

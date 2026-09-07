@@ -27,7 +27,6 @@
   let {
     activeIndex = $bindable(null),
     activeOption = $bindable(null),
-    activeOptionFallbackKey: active_option_fallback_key,
     autoActiveFirstOption = false,
     createOptionMsg = `Create this option...`,
     allowUserOptions = false,
@@ -845,19 +844,17 @@
               (candidate) =>
                 Object.is(candidate, previous_option) && !is_disabled(candidate),
             )
-      const find_unique_idx = (get_key: (option: Option) => unknown) => {
-        const active_key = get_key(previous_option)
-        let matching_idx = -1
+      if (preserved_idx === -1) {
+        const active_key = key(previous_option)
         for (const [candidate_idx, candidate] of rendered_options.entries()) {
-          if (get_key(candidate) !== active_key || is_disabled(candidate)) continue
-          if (matching_idx !== -1) return -1
-          matching_idx = candidate_idx
+          if (key(candidate) !== active_key || is_disabled(candidate)) continue
+          if (preserved_idx !== -1) {
+            preserved_idx = -1
+            break
+          }
+          preserved_idx = candidate_idx
         }
-        return matching_idx
       }
-      if (preserved_idx === -1) preserved_idx = find_unique_idx(key)
-      if (preserved_idx === -1 && active_option_fallback_key)
-        preserved_idx = find_unique_idx(active_option_fallback_key)
       activeIndex = preserved_idx === -1 ? null : preserved_idx
     }
     const current_option = rendered_options[activeIndex ?? -1]
@@ -1885,20 +1882,11 @@
     const fetch_changed = config.fetch !== previous_load_options_fetch
     previous_load_options_fetch = config.fetch
 
-    let debounce_timer: ReturnType<typeof setTimeout> | undefined
     const clear_loaded_batch = () => {
       loaded_options = []
       load_options_has_more = true
       loadError = null
     }
-    // debounce a fresh load so the UI doesn't refetch on every keystroke
-    const schedule_load = () => {
-      debounce_timer = setTimeout(
-        () => void load_dynamic_options(true),
-        config.debounce_ms,
-      )
-    }
-
     // Reset when closed or when the loader changes under the current query.
     if (!open || fetch_changed) {
       cancel_in_flight_load()
@@ -1913,15 +1901,20 @@
     // keystrokes during the first fetch fire immediate loads instead of debouncing.
     const is_first_load =
       load_options_last_search === null && !untrack(() => is_loading_options)
-    if (is_first_load) {
-      if (config.should_fetch_on_open) void load_dynamic_options(true)
-      else if (search) schedule_load()
-    } else if (search !== load_options_last_search) {
+    if (is_first_load && config.should_fetch_on_open) {
+      void load_dynamic_options(true)
+      return
+    }
+    if (is_first_load ? !search : search === load_options_last_search) return
+    if (!is_first_load) {
       // abort the superseded fetch and clear stale results now, then debounce the new search
       cancel_in_flight_load()
       clear_loaded_batch()
-      schedule_load()
     }
+    const debounce_timer = setTimeout(
+      () => void load_dynamic_options(true),
+      config.debounce_ms,
+    )
     return () => clearTimeout(debounce_timer)
   })
   // abort on unmount so callers forwarding `signal` can bail

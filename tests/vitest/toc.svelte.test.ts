@@ -777,36 +777,50 @@ describe(`Toc`, () => {
     expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(expected)
   })
 
-  test(`desktop (focused, no hover) arrow keys move focus + selection and Enter follows`, async () => {
-    set_headings(2)
-    set_window_width(1200)
-    mock_active_heading(`heading-1`)
-    spy_scroll_into_view()
-    const replace_mock = vi.spyOn(history, `replaceState`)
+  test.each([`Enter`, ` `])(
+    `desktop arrow keys move focus + selection and %j follows the real link`,
+    async (key) => {
+      set_headings(2)
+      set_window_width(1200)
+      mock_active_heading(`heading-1`)
+      spy_scroll_into_view()
+      const replace_mock = vi.spyOn(history, `replaceState`)
 
-    mount_toc()
-    await tick()
+      mount_toc()
+      await tick()
 
-    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
-    // dispatch on the focused li (bubbles) to mirror real keyboard usage
-    document.activeElement?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-    )
-    await tick()
+      doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+      // dispatch on the focused li (bubbles) to mirror real keyboard usage
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
+      )
+      await tick()
 
-    // selection AND DOM focus move together; otherwise the focused li's own keydown
-    // handler would override the arrow-navigation on the next Enter
-    const active = doc_query(`aside.toc > nav > ol > li.active`)
-    expect(active.textContent).toBe(`Heading 2`)
-    expect(document.activeElement).toBe(active.querySelector(`a`))
+      // selection AND DOM focus move together; otherwise the focused li's own keydown
+      // handler would override the arrow-navigation on the next Enter
+      const active = doc_query(`aside.toc > nav > ol > li.active`)
+      expect(active.textContent).toBe(`Heading 2`)
+      expect(document.activeElement).toBe(active.querySelector(`a`))
 
-    // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
-    document.activeElement?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-    )
-    expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
-    expect(replace_mock).not.toHaveBeenCalled()
-  })
+      // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
+      const link = doc_query<HTMLAnchorElement>(`aside.toc > nav > ol > li.active > a`)
+      const click = vi.spyOn(link, `click`)
+      const activation = new KeyboardEvent(`keydown`, {
+        key,
+        bubbles: true,
+        cancelable: true,
+      })
+      link.dispatchEvent(activation)
+      expect(activation.defaultPrevented).toBe(key === ` `)
+      if (key === `Enter`) {
+        expect(click).not.toHaveBeenCalled()
+        link.click() // happy-dom does not dispatch the browser's default Enter click
+      }
+      expect(click).toHaveBeenCalledOnce()
+      expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
+      expect(replace_mock).not.toHaveBeenCalled()
+    },
+  )
 
   test(`only the active ToC item carries aria-current="location"`, async () => {
     set_body(`<h2 id="a">Heading 1</h2><h2 id="b">Heading 2</h2>`)

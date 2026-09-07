@@ -2,6 +2,8 @@
 
 [`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
 
+CommandMenu supports search, grouping, async loading, and recent actions. It executes one command at a time; user-created options, bulk selection, and pasted option lists are unavailable.
+
 ```svelte example id="disabled-input-title"
 <script lang="ts">
   import { goto } from '$app/navigation'

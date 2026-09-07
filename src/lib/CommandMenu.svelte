@@ -54,7 +54,25 @@
     ...rest
   }: Omit<
     ComponentProps<typeof MultiSelect<Action>>,
-    `activeOptionFallbackKey` | `autoActiveFirstOption` | `key` | `options`
+    | `autoActiveFirstOption`
+    | `key`
+    | `options`
+    | `allowUserOptions`
+    | `allowEmpty`
+    | `createOptionMsg`
+    | `duplicateOptionMsg`
+    | `userMsg`
+    | `liUserMsgClass`
+    | `liActiveUserMsgClass`
+    | `selectAllOption`
+    | `selectAllScope`
+    | `selectAllDisabledTitle`
+    | `liSelectAllClass`
+    | `groupSelectAll`
+    | `onselectAll`
+    | `rangeSelect`
+    | `onrangeSelect`
+    | `parse_paste`
   > & {
     actions: Action[]
     triggers?: string[]
@@ -272,6 +290,11 @@
   >
     <MultiSelect
       {...rest}
+      allowUserOptions={false}
+      selectAllOption={false}
+      groupSelectAll={false}
+      rangeSelect={false}
+      parse_paste={undefined}
       options={sorted_actions}
       bind:activeIndex={active_idx}
       bind:activeOption={active_option}

@@ -1,6 +1,6 @@
 import { CommandMenu, PageSearch } from '$lib'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 const mock_actions = [
@@ -282,21 +282,36 @@ test(`handles action selection and execution`, async () => {
   expect(props.searchText).toBe(``)
 })
 
-test(`ignores user-created options without action handlers`, async () => {
+test(`keeps command groups but excludes option creation and bulk selection`, async () => {
+  expectTypeOf<keyof ComponentProps<typeof CommandMenu>>()
+    .extract<
+      | `allowUserOptions`
+      | `groupSelectAll`
+      | `selectAllOption`
+      | `rangeSelect`
+      | `parse_paste`
+    >()
+    .toEqualTypeOf<never>()
   const action = vi.fn()
+  // Untyped callers cannot re-enable these controls through the rest props either.
   const props = $state({
     open: true,
-    actions: [{ id: `existing action`, label: `existing action`, action }],
+    actions: [{ id: `existing`, label: `Existing`, group: `Commands`, action }],
     allowUserOptions: true,
+    groupSelectAll: true,
+    selectAllOption: true,
   })
   mount_menu(props)
   await tick()
-
+  expect(doc_query(`dialog li.group-header`).textContent).toContain(`Commands`)
+  expect(document.querySelector(`.group-select-all, .select-all`)).toBeNull()
   await type_search(`custom command`)
-
-  doc_query<HTMLLIElement>(`dialog li.user-msg`).click()
-  await tick()
-
+  expect(document.querySelector(`dialog li.user-msg`)?.textContent).toContain(
+    `No matching commands`,
+  )
+  menu_input().dispatchEvent(
+    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
+  )
   expect(action).not.toHaveBeenCalled()
   expect(props.open).toBe(true)
 })
@@ -672,31 +687,6 @@ test.each([
   ).toThrow(/CommandMenu action/)
 })
 
-test(`groupSelectAll selects a whole action group without executing actions or closing`, async () => {
-  const actions = [
-    { id: `New File`, label: `New File`, action: vi.fn(), group: `File` },
-    { id: `Save`, label: `Save`, action: vi.fn(), group: `File` },
-    { id: `Copy`, label: `Copy`, action: vi.fn(), group: `Edit` },
-  ]
-  const on_select_all = vi.fn()
-  const props = $state({
-    open: true,
-    actions,
-    groupSelectAll: true,
-    onselectAll: on_select_all,
-  })
-  mount_menu(props)
-  await tick()
-
-  doc_query<HTMLButtonElement>(`dialog li.group-header button.group-select-all`).click()
-  await tick()
-
-  // group selected (scoping is covered by MultiSelect tests) - no action executed
-  expect(on_select_all).toHaveBeenCalledTimes(1)
-  for (const { action } of actions) expect(action).not.toHaveBeenCalled()
-  expect(props.open).toBe(true)
-})
-
 // dropdown option labels in display order (used by shortcut/recents tests below)
 const option_labels = () =>
   Array.from(document.querySelectorAll(`li[role='option']`), (li) =>
@@ -865,28 +855,6 @@ describe(`PageSearch`, () => {
     },
   )
 
-  // typing a page slug must not wait on the index: fallback_actions reach CommandMenu as
-  // static options, so they filter client-side while Pagefind is still loading
-  test(`fallback actions match while the Pagefind load never settles`, async () => {
-    const load_pagefind = vi.fn(() => new Promise<never>(() => {}))
-    mount(PageSearch, {
-      target: document.body,
-      props: {
-        ...base_props,
-        fallback_actions: [
-          { id: `/styling`, label: `/styling`, action: vi.fn() },
-          { id: `/grouping`, label: `/grouping`, action: vi.fn() },
-        ],
-        load_pagefind,
-      },
-    })
-
-    await search_pagefind(`styling`)
-
-    expect(option_labels()).toEqual([`/styling`])
-    expect(load_pagefind).toHaveBeenCalledOnce()
-  })
-
   test(`isolates concurrent queries that normalize to the same text`, async () => {
     const stale_response = make_pagefind_response(`Stale`)
     const fresh_response = make_pagefind_response(`Fresh`)
@@ -921,28 +889,43 @@ describe(`PageSearch`, () => {
     expect(doc_query(`.cmd-label`).childNodes[0]?.textContent?.trim()).toBe(`Fresh`)
   })
 
-  test(`retries loading Pagefind after a transient failure`, async () => {
-    const search = vi.fn(async () => make_pagefind_response(`Fresh`))
-    const load_pagefind = vi
-      .fn()
-      .mockRejectedValueOnce(new Error(`Unavailable`))
-      .mockResolvedValue({ search })
-    mount(PageSearch, {
-      target: document.body,
-      props: {
-        ...base_props,
-        fallback_actions: [{ id: `Fallback`, label: `Fallback`, action: vi.fn() }],
-        load_pagefind,
-      },
-    })
+  test.each([`load`, `search`])(
+    `keeps local matches while Pagefind %s is pending, fails, and retries`,
+    async (failure) => {
+      const request = Promise.withResolvers<never>()
+      const search = vi.fn(async () => make_pagefind_response(`Fresh`))
+      const load_pagefind = vi.fn().mockResolvedValue({ search })
+      ;(failure === `load` ? load_pagefind : search).mockReturnValueOnce(request.promise)
+      mount(PageSearch, {
+        target: document.body,
+        props: {
+          ...base_props,
+          fallback_actions: [
+            { id: `Fallback`, label: `Fallback`, action: vi.fn() },
+            { id: `Other`, label: `Other`, action: vi.fn() },
+          ],
+          load_pagefind,
+        },
+      })
 
-    await search_pagefind(`fallback`)
-    expect(doc_query(`.cmd-label`).textContent).toContain(`Fallback`)
-
-    await search_pagefind(`fresh`)
-    expect(load_pagefind).toHaveBeenCalledTimes(2)
-    expect(doc_query(`.cmd-label`).textContent).toContain(`Fresh`)
-  })
+      await search_pagefind(`fallback`)
+      expect(option_labels()).toEqual([`Fallback`])
+      expect(load_pagefind).toHaveBeenCalledOnce()
+      expect(document.querySelector(`[role="alert"]`)).toBeNull()
+      request.reject(new Error(`Unavailable`))
+      await vi.runAllTimersAsync()
+      await tick()
+      expect(option_labels()).toEqual([`Fallback`])
+      expect(doc_query(`[role="alert"]`).textContent).toContain(`Could not load options`)
+      doc_query<HTMLButtonElement>(`dialog li button`).click()
+      await vi.runAllTimersAsync()
+      await tick()
+      expect(menu_input().value).toBe(`fallback`)
+      expect(document.querySelector(`[role="alert"]`)).toBeNull()
+      expect(load_pagefind).toHaveBeenCalledTimes(2)
+      expect(option_labels().join(` `)).toContain(`Fresh`)
+    },
+  )
 
   test(`keeps the loader stable while using current callback props`, async () => {
     const [first_navigate, second_navigate, onadd] = [vi.fn(), vi.fn(), vi.fn()]

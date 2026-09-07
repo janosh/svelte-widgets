@@ -568,14 +568,23 @@
     }
     const idx = headings.indexOf(node)
     if (idx === -1) return
-    activate_heading(node, idx)
-    const link = event.target instanceof Element ? event.target.closest(`a[href]`) : null
-    if (event instanceof KeyboardEvent || !link) {
+    const link =
+      event.target instanceof Element
+        ? event.target.closest<HTMLAnchorElement>(`a[href]`)
+        : null
+    if (event instanceof KeyboardEvent && link) {
+      if (event.key === `Enter`) return // the browser clicks the focused anchor
       event.preventDefault()
-      // Route keyboard and non-interactive snippets through the browser/framework too.
+      link.click() // Space activates that same anchor, preserving inherited options
+      return
+    }
+    activate_heading(node, idx)
+    if (!link) {
+      event.preventDefault()
+      // Plain custom snippets need a link; keep it inside the TOC for navigation options.
       const anchor = document.createElement(`a`)
       anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
-      document.body.append(anchor)
+      event.currentTarget.after(anchor)
       anchor.click()
       anchor.remove()
     }
@@ -628,7 +637,6 @@
     if (is_activation_key(event.key) && focus_is_in_custom_interactive_toc_item()) {
       return
     }
-
     if (event.key === `Escape`) {
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
@@ -644,6 +652,7 @@
     const key_belongs_elsewhere =
       !nav?.contains(focused) || is_editable_event_target(focused)
     if (!focus_is_idle && key_belongs_elsewhere) return
+    if (event.key === `Enter` && focused?.matches(`a[href]`)) return
 
     event.preventDefault()
     const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)
@@ -664,7 +673,10 @@
       activeHeading = headings[tocItems.indexOf(activeTocLi)]
     }
     if (activeTocLi && is_activation_key(event.key) && activeHeading) {
-      activeTocLi.click()
+      const link = tocItem
+        ? null
+        : activeTocLi.querySelector<HTMLAnchorElement>(`a[href]`)
+      ;(link ?? activeTocLi).click()
     }
   }
 
