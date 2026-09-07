@@ -7,7 +7,7 @@ export type SourceMap = {
 }
 
 const BASE64 = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`
-const vlq = (value: number): string => {
+export const encode_vlq = (value: number): string => {
   let encoded = ``
   let remaining = value < 0 ? -value * 2 + 1 : value * 2
   do {
@@ -89,14 +89,14 @@ export function source_map(
         else high = middle
       }
       const column = offset - lines[low]
-      mappings += `${has_segment ? `,` : ``}${vlq(generated_column - previous_generated)}A${vlq(low - previous_line)}${vlq(column - previous_column)}`
+      mappings += `${has_segment ? `,` : ``}${encode_vlq(generated_column - previous_generated)}A${encode_vlq(low - previous_line)}${encode_vlq(column - previous_column)}`
       previous_generated = generated_column
       previous_line = low
       previous_column = column
       has_segment = true
       mapped = true
     } else if (mapped) {
-      mappings += `${has_segment ? `,` : ``}${vlq(generated_column - previous_generated)}`
+      mappings += `${has_segment ? `,` : ``}${encode_vlq(generated_column - previous_generated)}`
       previous_generated = generated_column
       has_segment = true
       mapped = false
