@@ -1,4 +1,6 @@
-import { CORE_SCHEMA, load } from 'js-yaml'
+import { example_key, fence_info, type ExampleOptions } from './meta.ts'
+import { scientific_references, type ReferenceOptions } from './references.ts'
+import { CORE_SCHEMA, load, YAMLException } from 'js-yaml'
 import {
   Marked,
   Renderer,
@@ -10,34 +12,126 @@ import type { KatexOptions } from 'katex'
 
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_html_text } from '../highlight/hast.ts'
-import { source_map, type SourceMap } from './source-map.ts'
-import type * as SvelteSyntax from './svelte.ts'
+import {
+  source_map,
+  edit_source,
+  type SourceMap,
+  type SourceSpan,
+  type SourceEdit,
+  type MappedSource,
+} from './source-map.ts'
+import {
+  assert_ok,
+  DiagnosticError,
+  diagnostic_result,
+  error_diagnostics,
+  source_locator,
+  freeze_data,
+  type DeepReadonly,
+  type DiagnosticResult,
+} from './diagnostics.ts'
+import type * as Katex from 'katex'
+import {
+  content_manifest,
+  type ContentManifest,
+  type FrontmatterValidator,
+  type TokenSource,
+} from './content.ts'
+
+export { assert_ok, DiagnosticError } from './diagnostics.ts'
+export type { Diagnostic, DiagnosticResult, SourceRange } from './diagnostics.ts'
+export type { Citation, ContentReference, ReferenceOptions } from './references.ts'
+
+export {
+  assert_valid_content,
+  content_search_record,
+  content_toc,
+  validate_content,
+} from './content.ts'
+export type {
+  ContentFence,
+  ContentHeading,
+  ContentLink,
+  ContentManifest,
+  FrontmatterValidator,
+  SourcePosition,
+} from './content.ts'
 
 export type { KatexOptions } from 'katex'
 
-export type ExampleOptions = {
-  wrapper?: string | [string, string]
-  collapsible?: boolean
-  hide_script?: boolean
-  hide_style?: boolean
-  code_above?: boolean
-  csr?: boolean
-}
+export type { ExampleOptions, FenceSettings } from './meta.ts'
 export type MarkdownOptions = {
   extensions?: string[]
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | KatexOptions
+  references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
+  validate_frontmatter?: FrontmatterValidator
 }
 export type MarkdownFile = { filename?: string }
 export type LiveExample = { id: string; source: string }
-export type MarkdownResult = {
-  code: string
-  metadata: Record<string, unknown>
+export type MarkdownResult<
+  Metadata extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  readonly code: string
+  readonly metadata: DeepReadonly<Metadata>
+  readonly examples: DeepReadonly<LiveExample[]>
+  readonly map: DeepReadonly<SourceMap>
+  readonly manifest: ContentManifest<Metadata>
+}
+
+export type MarkdownDocument<
+  Metadata extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  readonly source: string
+  readonly filename: string
+  readonly dialect: 'markdown' | 'svelte'
+  readonly metadata: DeepReadonly<Metadata>
+  readonly manifest: ContentManifest<Metadata>
+}
+export type MarkdownInput = MarkdownFile & { dialect?: 'markdown' | 'svelte' }
+export type MarkdownEngine<
+  Metadata extends Record<string, unknown> = Record<string, unknown>,
+> = {
+  readonly options: MarkdownOptions
+  parse: (
+    source: string,
+    input?: MarkdownInput,
+  ) => Promise<DiagnosticResult<MarkdownDocument<Metadata>>>
+}
+type PreparedDocument = {
+  mapped: MappedSource
   examples: LiveExample[]
   map: SourceMap
+}
+const prepared_documents = new WeakMap<
+  MarkdownDocument,
+  () => Promise<PreparedDocument>
+>()
+
+// KaTeX options can contain callbacks and cyclic token/lexer graphs. Retain callbacks
+// and prototypes while copying data so later configuration edits cannot alter a document.
+const copy_options = <Value>(
+  value: Value,
+  copies = new WeakMap<object, object>(),
+): Value => {
+  if (value === null || typeof value !== `object`) return value
+  const existing = copies.get(value)
+  if (existing) return existing as Value
+  const copy: object = Array.isArray(value)
+    ? []
+    : Object.create(Object.getPrototypeOf(value))
+  copies.set(value, copy)
+  for (const [key, entry] of Object.entries(value))
+    Object.defineProperty(copy, key, {
+      value: copy_options(entry, copies),
+      enumerable: true,
+      writable: true,
+      configurable: true,
+    })
+  return copy as Value
 }
 
 const escape_braces = (text: string): string =>
@@ -53,6 +147,31 @@ const smart_quotes = (text: string): string =>
     .replaceAll(/(?<space>^|[\s([{])'/gu, `$1‘`)
     .replaceAll(`'`, `’`)
 
+function serialize_metadata(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== `object` || Array.isArray(value))
+    throw new Error(`Frontmatter must be a mapping`)
+  const serialized = JSON.stringify(
+    value,
+    function (this: Record<string, unknown>, key: string, item: unknown) {
+      const original: unknown = this[key]
+      if (
+        !Object.is(original, item) ||
+        (typeof item === `object` &&
+          item !== null &&
+          !Array.isArray(item) &&
+          Object.getPrototypeOf(item) !== Object.prototype &&
+          Object.getPrototypeOf(item) !== null) ||
+        ![`object`, `string`, `boolean`, `number`].includes(typeof item)
+      )
+        throw new Error(`Frontmatter value at ${JSON.stringify(key)} must be JSON data`)
+      if (typeof item === `number` && !Number.isFinite(item))
+        throw new Error(`Frontmatter numbers must be finite: ${item}`)
+      return item
+    },
+  )
+  return JSON.parse(serialized) as Record<string, unknown>
+}
+
 function frontmatter(source: string): {
   body: string
   metadata?: Record<string, unknown>
@@ -66,59 +185,64 @@ function frontmatter(source: string): {
       throw new Error(`Unclosed YAML frontmatter`)
     return { body: source }
   }
-  const value: unknown = load(`---\n${match[1]}`, { schema: CORE_SCHEMA })
-  if (
-    value !== undefined &&
-    value !== null &&
-    (typeof value !== `object` || Array.isArray(value))
-  )
-    throw new Error(`Frontmatter must be a mapping`)
-  // Serialization rejects cyclic aliases and normalizes the exported metadata contract.
-  const serialized = JSON.stringify(value ?? {}, (_key, item: unknown) => {
-    if (typeof item === `number` && !Number.isFinite(item))
-      throw new Error(`Frontmatter numbers must be finite: ${item}`)
-    return item
-  })
+  const header = source.slice(0, source.indexOf(`\n`) + 1)
+  const value: unknown = load(header + match[1], { schema: CORE_SCHEMA })
   return {
     body: source.slice(match[0].length),
-    metadata: JSON.parse(serialized) as Record<string, unknown>,
+    metadata: serialize_metadata(value ?? {}),
   }
 }
 
-function parse_meta(source: string): Record<string, unknown> {
-  const result: Record<string, unknown> = {}
-  let rest = source.trim()
-  while (rest) {
-    const key =
-      /^(?<key>[a-zA-Z_]\w*)(?:=(?<value>"(?:[^"\\]|\\.)*"|\[[^\]]*\]|[^\s]+))?(?:\s+|$)/u.exec(
-        rest,
-      )
-    if (!key) throw new Error(`Invalid code fence metadata: ${rest}`)
-    result[key[1]] = key[2] === undefined ? true : JSON.parse(key[2])
-    rest = rest.slice(key[0].length)
-  }
-  return result
-}
-
-async function process_markdown(
+async function prepare_document(
   source: string,
   options: MarkdownOptions,
   filename: string,
-  syntax?: typeof SvelteSyntax,
-): Promise<Omit<MarkdownResult, 'map'> & { spans: { text: string; offset: number }[] }> {
-  const { body, metadata } = frontmatter(source)
-  const math = options.math ? await import(`katex`) : undefined
+  dialect: 'markdown' | 'svelte',
+): Promise<MarkdownDocument> {
+  const syntax = dialect === `svelte` ? await import('./svelte.ts') : undefined
+  const locate = source_locator(source, filename)
+  let body = source
+  let metadata: Record<string, unknown> | undefined
+  try {
+    const parsed = frontmatter(source)
+    body = parsed.body
+    metadata = options.validate_frontmatter
+      ? serialize_metadata(
+          options.validate_frontmatter(
+            parsed.metadata ?? {},
+            locate(0, source.length - body.length),
+          ),
+        )
+      : parsed.metadata
+  } catch (error) {
+    const mark = error instanceof YAMLException ? error.mark : undefined
+    const offset = mark?.position ?? 0
+    throw new DiagnosticError(
+      error_diagnostics(
+        error,
+        `frontmatter`,
+        locate(offset, mark ? offset + 1 : source.length - (body ?? source).length),
+      ),
+    )
+  }
+  let math: typeof Katex | undefined
   const examples: LiveExample[] = []
   const imports: string[] = []
   const wrappers = new Map<string, string>()
-  const spans: { text: string; offset: number }[] = []
+  const example_keys = new Map<string, { identity: string; count: number }>()
+  const positions = new Map<Token, TokenSource>()
+  const heading_ids = new Map<Token, string>()
+  const html_edits = new Map<Token, SourceEdit[]>()
   const code_html = new Map<Token, string>()
-  const retained: string[] = []
+  const retained: MappedSource[] = []
   // Collision-free placeholders avoid re-parsing expressions as Markdown or typography.
   let sentinel = `\uE000widgets`
   while (source.includes(sentinel)) sentinel += `_`
-  const retain = (text: string): string => `${sentinel}${retained.push(text) - 1}\uE001`
-  const url_attribute = (url: string): string => {
+  const retain = (text: string, spans: SourceSpan[] = []): string =>
+    `${sentinel}${retained.push({ code: text, spans }) - 1}\uE001`
+  const url_attribute = (token: Tokens.Link | Tokens.Image): string => {
+    const url = token.href
+    let raw_cursor = token.raw.indexOf(`](`) + 2
     let result = ``
     let cursor = 0
     while (cursor < url.length) {
@@ -128,12 +252,37 @@ async function process_markdown(
       if (start === -1 || !syntax) break
       const expression = syntax.read_expression(url.slice(start))
       if (!expression) throw new Error(`Invalid URL expression: ${url}`)
-      result += retain(expression)
+      const raw_start = token.raw.indexOf(expression, raw_cursor)
+      const offsets = positions.get(token)?.offsets
+      const spans: SourceSpan[] = []
+      if (raw_start !== -1 && offsets) {
+        for (let idx = 0; idx < expression.length; idx++)
+          spans.push({ generated: idx, original: offsets[raw_start + idx], length: 1 })
+        raw_cursor = raw_start + expression.length
+      }
+      result += retain(expression, spans)
       cursor = start + expression.length
     }
     return result
   }
   const html = (text: string): string => (syntax ? `{@html ${script_json(text)}}` : text)
+  const render_math = options.math
+    ? (tex: string, displayMode: boolean) =>
+        html(
+          math
+            ? math.renderToString(tex.trim(), {
+                ...(typeof options.math === `object` ? options.math : {}),
+                displayMode,
+              })
+            : escape_html_text(tex.trim()),
+        )
+    : undefined
+  const references = options.references
+    ? scientific_references(
+        typeof options.references === `object` ? options.references : {},
+        render_math ? (tex) => render_math(tex, true) : undefined,
+      )
+    : undefined
   const extensions: TokenizerAndRendererExtension[] = []
   if (syntax) {
     const read = (text: string) => syntax.read_expression(text) ?? syntax.read_tag(text)
@@ -164,14 +313,7 @@ async function process_markdown(
       },
     )
   }
-  if (math) {
-    const render_math = (tex: string, displayMode: boolean) =>
-      html(
-        math.renderToString(tex.trim(), {
-          ...(typeof options.math === `object` ? options.math : {}),
-          displayMode,
-        }),
-      )
+  if (render_math) {
     extensions.push(
       {
         name: `math_block`,
@@ -184,11 +326,11 @@ async function process_markdown(
             return {
               type: `math_block`,
               raw: match[0],
-              text: render_math(match[1], true),
+              tex: match[1],
             }
           return undefined
         },
-        renderer: (token) => `${String(token.text)}\n`,
+        renderer: (token) => `${render_math(String(token.tex), true)}\n`,
       },
       {
         name: `math_inline`,
@@ -204,31 +346,38 @@ async function process_markdown(
             return {
               type: `math_inline`,
               raw: match[0],
-              text: render_math(match[1], Boolean(display)),
+              tex: match[1],
+              display: Boolean(display),
             }
           return undefined
         },
-        renderer: (token) => String(token.text),
+        renderer: (token) => render_math(String(token.tex), Boolean(token.display)),
       },
     )
   }
+  if (references) extensions.push(...references.extensions)
   const parser = new Marked({
     gfm: true,
     extensions,
     renderer: {
+      heading(token) {
+        const id = heading_ids.get(token)
+        return `<h${token.depth}${id ? ` id="${escape_html_text(id).replaceAll(`"`, `&quot;`)}"` : ``}>${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`
+      },
+      html(token) {
+        const mapped = mapped_token(token)
+        return retain(mapped.code, mapped.spans)
+      },
       link(token) {
         const result = Renderer.prototype.link.call(this, token)
         if (!syntax || !token.href.includes(`{`)) return result
         // Marked URI-encodes braces. Preserve authored Svelte URL expressions instead.
-        return result.replace(
-          /href="[^"]*"/u,
-          () => `href="${url_attribute(token.href)}"`,
-        )
+        return result.replace(/href="[^"]*"/u, () => `href="${url_attribute(token)}"`)
       },
       image(token) {
         const result = Renderer.prototype.image.call(this, token)
         if (!syntax || !token.href.includes(`{`)) return result
-        return result.replace(/src="[^"]*"/u, () => `src="${url_attribute(token.href)}"`)
+        return result.replace(/src="[^"]*"/u, () => `src="${url_attribute(token)}"`)
       },
       code(token) {
         return code_html.get(token) ?? ``
@@ -247,30 +396,65 @@ async function process_markdown(
       },
     },
   })
+  const mapped_token = (token: Token): MappedSource => {
+    const offsets = positions.get(token)?.offsets ?? []
+    const spans: SourceSpan[] = []
+    for (let idx = 0; idx < offsets.length; idx++) {
+      const previous = spans.at(-1)
+      if (previous && previous.original + previous.length === offsets[idx])
+        previous.length++
+      else spans.push({ generated: idx, original: offsets[idx], length: 1 })
+    }
+    return edit_source({ code: token.raw, spans }, html_edits.get(token) ?? [])
+  }
+  const restore_text = (text: string) =>
+    text.replaceAll(
+      new RegExp(`${sentinel}(\\d+)\uE001`, `gu`),
+      (_match, index: string) => retained[Number(index)].code,
+    )
   const tokens = parser.lexer(body)
+  references?.resolve(tokens, parser)
+  const manifest = content_manifest(
+    source,
+    body,
+    filename,
+    metadata ?? {},
+    tokens,
+    parser,
+    restore_text,
+    {
+      svelte: dialect === `svelte`,
+      positions,
+      heading_ids,
+      html_edits,
+      reserved_ids: references?.reserved_ids(),
+      examples: options.examples,
+    },
+  )
+  references?.update_manifest(manifest, positions)
   const code_tokens: Tokens.Code[] = []
-  void parser.walkTokens(tokens, (token) => {
+  for (const [token] of positions) {
     if (token.type === `code`) code_tokens.push(token as Tokens.Code)
+    if (token.type !== `svelte_block` && token.type !== `svelte_inline`) continue
+    const index = Number(String(token.text).slice(sentinel.length, -1))
+    retained[index] = mapped_token(token)
+  }
+  const document: MarkdownDocument = freeze_data({
+    source,
+    filename,
+    dialect,
+    metadata: manifest.metadata,
+    manifest,
   })
-  // Assign module IDs and imports in source order before asynchronous highlighting.
-  await Promise.all(
-    code_tokens.map(async (token, idx) => {
-      const [language = ``, ...info] = (token.lang ?? ``).split(/\s+/u)
-      const meta: Record<string, unknown> = options.examples
-        ? { ...options.examples, ...parse_meta(info.join(` `)) }
-        : {}
-      for (const key of [
-        `example`,
-        `csr`,
-        `hide_script`,
-        `hide_style`,
-        `collapsible`,
-        `code_above`,
-      ]) {
-        if (meta[key] !== undefined && typeof meta[key] !== `boolean`)
-          throw new Error(`Code fence option ${key} must be boolean`)
-      }
-      const live = Boolean(meta.example) && (language === `svelte` || language === `html`)
+  // Validate fence settings and assign identities during analysis, before rendering.
+  const render_fences = code_tokens.map((token) => {
+    try {
+      const fence = positions.get(token)?.fence
+      const { language } = fence ?? fence_info(token)
+      const meta = fence?.settings ?? {}
+      const live =
+        Boolean(options.examples && meta.example) &&
+        (language === `svelte` || language === `html`)
       let display_code = token.text
       let wrapper_alias = ``
       let component = ``
@@ -289,120 +473,218 @@ async function process_markdown(
           alias = `WidgetsExampleWrapper${wrappers.size}`
           if (typeof wrapper === `string`)
             imports.push(`import ${alias} from ${script_json(wrapper)};\n`)
-          else if (
-            Array.isArray(wrapper) &&
-            wrapper.length === 2 &&
-            wrapper.every((part) => typeof part === `string`) &&
-            /^[A-Za-z_$][\w$]*$/u.test(wrapper[1])
-          )
+          else
             imports.push(
               `import { ${wrapper[1]} as ${alias} } from ${script_json(wrapper[0])};\n`,
             )
-          else throw new Error(`Invalid example wrapper: ${key}`)
           wrappers.set(key, alias)
         }
         wrapper_alias = alias
-        component = `WidgetsLiveExample${idx}`
-        module_id = `${filename}.widgets-example-${idx}.svelte`
+        const identity =
+          meta.id === undefined ? `${language}\0${token.text}` : `id:${meta.id}`
+        const identity_key = example_key(identity)
+        const existing = example_keys.get(identity_key)
+        if (existing && existing.identity !== identity)
+          throw new Error(
+            `Example identity collision; assign distinct explicit id values`,
+          )
+        if (existing && meta.id !== undefined)
+          throw new Error(`Duplicate example id: ${meta.id}`)
+        const occurrence = existing?.count ?? 0
+        example_keys.set(identity_key, { identity, count: occurrence + 1 })
+        component = `WidgetsLiveExample_${identity_key.replaceAll(`-`, `_`)}_${occurrence}`
+        module_id = `${filename}.widgets-example-${identity_key}-${occurrence}.svelte`
         examples.push({ id: module_id, source: token.text })
         if (!meta.csr)
           imports.push(`import ${component} from ${script_json(module_id)};\n`)
       }
-      const highlighted = options.highlight
-        ? await options.highlight(display_code, language)
-        : escape_html_text(display_code)
-      if (!live) {
-        const language_class = escape_braces(
-          escape_html_text(language).replaceAll(`"`, `&quot;`),
-        )
+      return async () => {
+        const highlighted = options.highlight
+          ? await options.highlight(display_code, language)
+          : escape_html_text(display_code)
+        if (!live) {
+          const language_class = escape_braces(
+            escape_html_text(language).replaceAll(`"`, `&quot;`),
+          )
+          code_html.set(
+            token,
+            `<pre class="highlight${language ? ` highlight-${language_class}` : ``}"><code>${html(`${highlighted}\n`)}</code></pre>\n`,
+          )
+          return undefined
+        }
+        const example = meta.csr
+          ? `{#if typeof window !== 'undefined'}{#await import(${script_json(module_id)}) then module}{@const ${component} = module.default}<${component} />{/await}{/if}`
+          : `<${component} />`
         code_html.set(
           token,
-          `<pre class="highlight${language ? ` highlight-${language_class}` : ``}"><code>${html(`${highlighted}\n`)}</code></pre>\n`,
+          `<${wrapper_alias} src={${script_json(display_code)}} meta={${script_json({ ...meta, lang: language })}}>{#snippet example()}${example}{/snippet}{#snippet code()}${html(highlighted)}{/snippet}</${wrapper_alias}>\n`,
         )
         return undefined
       }
-      const example = meta.csr
-        ? `{#if typeof window !== 'undefined'}{#await import(${script_json(module_id)}) then module}{@const ${component} = module.default}<${component} />{/await}{/if}`
-        : `<${component} />`
-      code_html.set(
-        token,
-        `<${wrapper_alias} src={${script_json(display_code)}} meta={${script_json({ ...meta, lang: language })}}>{#snippet example()}${example}{/snippet}{#snippet code()}${html(highlighted)}{/snippet}</${wrapper_alias}>\n`,
+    } catch (error) {
+      throw new DiagnosticError(
+        error_diagnostics(error, `fence`, positions.get(token)?.range ?? locate(0)),
       )
-      return undefined
-    }),
-  )
-  let code = parser.parser(tokens)
-  let source_cursor = 0
-  code = code.replaceAll(
-    new RegExp(`${sentinel}(\\d+)\uE001`, `gu`),
-    (_match, index: string) => {
-      const text = retained[Number(index)]
-      const offset = source.indexOf(text, source_cursor)
-      // Marked does not expose token offsets. Repeated text is ambiguous (it may also
-      // occur inside a code fence), so omit its mapping instead of guessing a location.
-      if (
-        offset !== -1 &&
-        source.indexOf(text) === offset &&
-        !source.includes(text, offset + 1)
-      ) {
-        const opening = /^<script\b(?:[^>"']|"[^"]*"|'[^']*')*>/u.exec(text)?.[0]
-        if (opening) {
-          spans.push(
-            { text: opening, offset },
-            { text: text.slice(opening.length), offset: offset + opening.length },
+    }
+  })
+  let pending: Promise<PreparedDocument> | undefined
+  const emit = async () => {
+    math = options.math ? await import('katex') : undefined
+    const rendered_fences = await Promise.allSettled(
+      render_fences.map((render) => render()),
+    )
+    const diagnostics = rendered_fences.flatMap((result, idx) =>
+      result.status === `rejected`
+        ? error_diagnostics(
+            result.reason,
+            `highlight`,
+            positions.get(code_tokens[idx])?.range ?? locate(0),
           )
-        } else spans.push({ text, offset })
-        source_cursor = offset + text.length
-      }
-      return text
-    },
-  )
-  if (syntax) code = syntax.inject_scripts(code, imports.join(``), metadata)
-  return { code, metadata: metadata ?? {}, examples, spans }
+        : [],
+    )
+    if (diagnostics.length) throw new DiagnosticError(diagnostics)
+    const rendered = parser.parser(tokens) + (references?.bibliography() ?? ``)
+    let mapped: MappedSource = { code: ``, spans: [] }
+    let cursor = 0
+    for (const match of rendered.matchAll(new RegExp(`${sentinel}(\\d+)\uE001`, `gu`))) {
+      mapped.code += rendered.slice(cursor, match.index)
+      const retained_source = retained[Number(match[1])]
+      mapped.spans.push(
+        ...retained_source.spans.map((span) => ({
+          ...span,
+          generated: mapped.code.length + span.generated,
+        })),
+      )
+      mapped.code += retained_source.code
+      cursor = match.index + match[0].length
+    }
+    mapped.code += rendered.slice(cursor)
+    if (syntax)
+      mapped = edit_source(
+        mapped,
+        syntax.script_edits(mapped.code, imports.join(``), metadata),
+      )
+    return {
+      mapped,
+      examples,
+      map: source_map(source, mapped.code, filename, mapped.spans),
+    }
+  }
+  prepared_documents.set(document, () => (pending ??= emit()))
+  return document
 }
 
-export async function compile_markdown(
-  source: string,
-  options: MarkdownOptions & MarkdownFile = {},
-): Promise<MarkdownResult> {
-  const filename = options.filename ?? `document.md`
-  try {
-    const { spans, ...result } = await process_markdown(
-      source,
-      options,
-      filename,
-      await import('./svelte.ts'),
-    )
-    return { ...result, map: source_map(source, result.code, filename, spans) }
-  } catch (cause) {
-    throw new Error(
-      `${filename}: ${cause instanceof Error ? cause.message : String(cause)}`,
-      { cause },
-    )
+export function create_markdown<
+  Metadata extends Record<string, unknown> = Record<string, unknown>,
+>(
+  options: MarkdownOptions & {
+    validate_frontmatter: (...args: Parameters<FrontmatterValidator>) => Metadata
+  },
+): MarkdownEngine<Metadata>
+export function create_markdown(options?: MarkdownOptions): MarkdownEngine
+export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
+  return {
+    options,
+    async parse(source, { filename = `document.md`, dialect = `svelte` } = {}) {
+      try {
+        const document = await prepare_document(
+          source,
+          copy_options(options),
+          filename,
+          dialect,
+        )
+        return diagnostic_result(document, [])
+      } catch (error) {
+        return {
+          ok: false,
+          diagnostics: error_diagnostics(
+            error,
+            `markdown`,
+            source_locator(source, filename)(0, source.length),
+          ),
+        }
+      }
+    },
   }
 }
 
-// Trusted authored Markdown -> HTML, without loading the Svelte compiler or interpreting
-// braces. Raw HTML is retained; this function is not an HTML sanitizer.
+export const compile_markdown = <Metadata extends Record<string, unknown>>(
+  document: MarkdownDocument<Metadata>,
+): Promise<DiagnosticResult<MarkdownResult<Metadata>>> =>
+  compile_markdown_with_transform(document)
+
+export const compile_markdown_with_transform = <Metadata extends Record<string, unknown>>(
+  document: MarkdownDocument<Metadata>,
+  transform?: (source: MappedSource) => MappedSource,
+): Promise<DiagnosticResult<MarkdownResult<Metadata>>> =>
+  emit_document(document, `svelte`, transform)
+
+async function emit_document<Metadata extends Record<string, unknown>>(
+  document: MarkdownDocument<Metadata>,
+  dialect: MarkdownDocument['dialect'],
+  transform?: (source: MappedSource) => MappedSource,
+): Promise<DiagnosticResult<MarkdownResult<Metadata>>> {
+  if (document.dialect !== dialect)
+    return {
+      ok: false,
+      diagnostics: error_diagnostics(
+        new Error(
+          dialect === `svelte`
+            ? `Svelte compilation requires a Svelte document`
+            : `HTML rendering requires a Markdown document`,
+        ),
+        `dialect`,
+        source_locator(document.source, document.filename)(0),
+      ),
+    }
+  const emit = prepared_documents.get(document)
+  if (!emit) throw new Error(`Document was not created by create_markdown().parse()`)
+  try {
+    const prepared = await emit()
+    const mapped = transform ? transform(prepared.mapped) : prepared.mapped
+    return diagnostic_result(
+      freeze_data({
+        code: mapped.code,
+        metadata: document.metadata,
+        examples: prepared.examples,
+        manifest: document.manifest,
+        map: transform
+          ? source_map(document.source, mapped.code, document.filename, mapped.spans)
+          : prepared.map,
+      }),
+      [],
+    )
+  } catch (error) {
+    return {
+      ok: false,
+      diagnostics: error_diagnostics(
+        error,
+        `render`,
+        source_locator(document.source, document.filename)(0, document.source.length),
+      ),
+    }
+  }
+}
 export async function render_markdown(
-  source: string,
-  options: Omit<MarkdownOptions, 'examples' | 'extensions'> = {},
-): Promise<string> {
-  return (await process_markdown(source, options, `document.md`)).code
+  document: MarkdownDocument,
+): Promise<DiagnosticResult<string>> {
+  const result = await emit_document(document, `markdown`)
+  return result.ok ? { ...result, value: result.value.code } : result
 }
 
-export function markdown(options: MarkdownOptions = {}): PreprocessorGroup {
+export function markdown(engine: MarkdownEngine): PreprocessorGroup {
   return {
     name: `widgets-markdown`,
     async markup({ content, filename }) {
       if (
         !filename ||
-        !(options.extensions ?? [`.md`, `.svx`]).some((extension) =>
+        !(engine.options.extensions ?? [`.md`, `.svx`]).some((extension) =>
           filename.endsWith(extension),
         )
       )
         return undefined
-      const result = await compile_markdown(content, { ...options, filename })
+      const document = assert_ok(await engine.parse(content, { filename }))
+      const result = assert_ok(await compile_markdown(document))
       if (result.examples.length)
         throw new Error(`${filename}: use markdown_vite() for live examples`)
       return result

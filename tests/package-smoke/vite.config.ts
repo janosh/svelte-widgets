@@ -1,9 +1,10 @@
 import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { create_markdown } from 'svelte-widgets/markdown'
 import { markdown_vite } from 'svelte-widgets/markdown/vite'
 import source_links from 'svelte-widgets/source-links/vite-plugin'
 import { defineConfig } from 'vite'
 
-const docs = markdown_vite({ examples: {} })
+const docs = markdown_vite(create_markdown({ examples: {} }))
 
 export default defineConfig({
   plugins: [

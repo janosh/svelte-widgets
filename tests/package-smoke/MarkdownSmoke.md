@@ -2,7 +2,7 @@
 title: Packaged Markdown
 ---
 
-# {title}
+# {metadata.title}
 
 | Feature | Works |
 | ------- | ----- |

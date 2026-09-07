@@ -24,6 +24,12 @@ import { format_stat_delta } from 'svelte-widgets/stats'
 import { url_with_params, valid_query_param } from 'svelte-widgets/url-params'
 import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/image-markup'
 import { create_highlighter, default_highlighter } from 'svelte-widgets/highlight'
+import { assert_ok, create_markdown, compile_markdown } from 'svelte-widgets/markdown'
+import { content_toc } from 'svelte-widgets/markdown/content'
+import { encode_project } from 'svelte-widgets/code-playground'
+import { walkthrough_lines } from 'svelte-widgets/code-walkthrough'
+
+export { create_checker as markdown_checker } from 'svelte-widgets/markdown/check'
 
 export const label = get_label(`package smoke`)
 export const theme_mode: ThemeMode = theme.mode
@@ -55,6 +61,45 @@ export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) =>
 export const highlighter: CodeHighlighter = (code) => [{ text: code }]
 export const markdown_highlighter = default_highlighter.highlight
 export const custom_highlighter = create_highlighter([])
+export const shared_project = encode_project({
+  files: { 'App.svelte': `<p>Preview</p>` },
+  entry: `App.svelte`,
+})
+export const walkthrough_diff = walkthrough_lines({
+  id: `edit`,
+  title: `Edit`,
+  before: `one`,
+  code: `two`,
+})
+// @ts-expect-error Typed metadata requires a validator that produces that shape.
+create_markdown<{ title: string }>({})
+
+export const typed_content = async () => {
+  const engine = create_markdown({
+    validate_frontmatter(metadata) {
+      if (typeof metadata.title !== `string`) throw new Error(`Missing title`)
+      return { title: metadata.title, nested: { tags: [`docs`] } }
+    },
+  })
+  const document = assert_ok(await engine.parse(`---\ntitle: Guide\n---\n# Guide`))
+  const result = assert_ok(await compile_markdown(document))
+  const title: string = result.manifest.metadata.title
+  const enabled: boolean | undefined = result.manifest.fences[0]?.settings.check
+  // @ts-expect-error Analyzed settings cannot be mutated.
+  if (result.manifest.fences[0]) result.manifest.fences[0].settings.check = true
+  // @ts-expect-error Nested metadata is readonly.
+  result.metadata.nested.tags.push(`mutated`)
+  // @ts-expect-error Manifest heading records are readonly.
+  if (document.manifest.headings[0]) document.manifest.headings[0].text = `mutated`
+  // @ts-expect-error Manifest arrays are readonly.
+  document.manifest.headings.pop()
+  // @ts-expect-error Source positions are readonly.
+  if (document.manifest.headings[0]) document.manifest.headings[0].range.start.line = 0
+  // @ts-expect-error Published source maps are readonly.
+  result.map.sources.push(`mutated`)
+  void enabled
+  return { title, toc: content_toc(result.manifest) }
+}
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])
 export const bytes = format_bytes(1024)

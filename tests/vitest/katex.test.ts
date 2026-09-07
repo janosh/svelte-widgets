@@ -1,6 +1,10 @@
 /* oxlint-disable no-template-curly-in-string -- Literal JavaScript fixtures. */
 import { heading_ids } from '$lib/heading-anchors'
-import { compile_markdown, markdown, render_markdown } from '$lib/markdown'
+import {
+  compile_source as compile_markdown,
+  markdown_preprocessor as markdown,
+  render_source as render_markdown,
+} from './markdown-helpers'
 import { compile, preprocess } from 'svelte/compiler'
 import { describe, expect, it } from 'vitest'
 

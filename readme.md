@@ -68,6 +68,8 @@ Every component is a named export from the package root and has a direct subpath
 | `ThemeToggle`      | Light/dark/system theme cycler with persistence and cross-tab synchronization             | [docs](https://svelte-widgets.janosh.dev/extras#themetoggle)           |
 | `Toggle`           | Accessible switch with a bindable `checked`                                               | [docs](https://svelte-widgets.janosh.dev/extras#toggle)                |
 | `CodeExample`      | Collapsible source viewer used by the live examples                                       | [docs](https://svelte-widgets.janosh.dev/extras#codeexample)           |
+| `CodePlayground`   | Editable multi-file projects with local compilation, isolated previews and sharing        | [docs](https://svelte-widgets.janosh.dev/authoring)                    |
+| `CodeWalkthrough`  | Guided code steps with annotations, focused lines, diffs and keyboard navigation          | [docs](https://svelte-widgets.janosh.dev/authoring)                    |
 | `FileDetails`      | Collapsible `<details>` viewer for a set of files                                         | [docs](https://svelte-widgets.janosh.dev/extras#filedetails)           |
 | `PrevNext`         | Previous/next links for sequential pages                                                  | [docs](https://svelte-widgets.janosh.dev/extras#prevnext)              |
 | `SubpageGrid`      | Card grid linking to child pages                                                          | [docs](https://svelte-widgets.janosh.dev/extras#subpagegrid)           |
@@ -170,6 +172,12 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/highlight`                | Lazy default and custom grammar highlighters                                      |
 | `/markdown`                 | Markdown-to-Svelte preprocessor and direct HTML renderer                          |
 | `/markdown/vite`            | Live code examples with virtual modules and hot reload                            |
+| `/markdown/content`         | Content manifests, typed frontmatter, link validation, TOC and search records     |
+| `/markdown/check`           | Node-only syntax, type and assertion checks for documentation examples            |
+| `/code-playground`          | Local multi-file compilation, sandbox documents and project sharing               |
+| `/code-playground/vite`     | Bundle the installed Svelte runtime for local previews                            |
+| `/code-playground/virtual`  | Types for the generated playground runtime module                                 |
+| `/code-walkthrough`         | Walkthrough step types, validation and linear source comparisons                  |
 | `/print`                    | Element printing                                                                  |
 | `/source-links`             | Link inline code mentions of your source to GitHub                                |
 | `/source-links/vite-plugin` | Vite plugin emitting the file/export index those links use                        |
@@ -190,19 +198,19 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 
 Run the opt-in, hardware-sensitive editor stress target locally with `RUN_LARGE_EDITOR_TESTS=1 npx vitest run tests/vitest/code-editor-model.test.ts`; normal CI deliberately skips it.
 
-Use `markdown()` for Markdown pages with YAML frontmatter, embedded Svelte, GFM tables and task lists. Enable `math` for KaTeX and run `heading_ids()` last:
+Use `markdown()` for Markdown pages with YAML frontmatter, embedded Svelte, GFM tables and task lists. Enable `math` for KaTeX. Markdown assigns its own heading IDs; use `heading_ids()` for native Svelte pages:
 
 ```ts
-import { markdown } from 'svelte-widgets/markdown'
+import { create_markdown, markdown } from 'svelte-widgets/markdown'
 import { heading_ids } from 'svelte-widgets/heading-anchors'
 
 export default {
   extensions: [`.svelte`, `.md`],
-  preprocess: [markdown({ math: true }), heading_ids()],
+  preprocess: [markdown(create_markdown({ math: true })), heading_ids()],
 }
 ```
 
-Use `render_markdown(source, { math: true })` for HTML strings, and `markdown_vite()` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
+Parse once with `engine.parse(source, { dialect: "markdown" })`, then pass the document to `render_markdown()` for HTML strings. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Reuse `create_checker()` from `/markdown/check` for checked documentation builds. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
 
 `Popover` and `ActionMenu` use the browser Popover API for top-layer rendering, light dismissal and Escape handling, while `float` supplies placement. Explicit custom dismissal policies still use `click_outside`. Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
 

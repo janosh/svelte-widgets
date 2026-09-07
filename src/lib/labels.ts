@@ -222,3 +222,37 @@ export const merge_defaults = <Defaults extends object>(
   }
   return merged
 }
+
+export const CODE_WALKTHROUGH_LABELS = {
+  title: `Code walkthrough`,
+  steps: `Walkthrough steps`,
+  code: `Example source`,
+  previous: `Previous`,
+  next: `Next`,
+  added: `Added`,
+  removed: `Removed`,
+  progress: (current: number, total: number) => `Step ${current} of ${total}`,
+}
+export type CodeWalkthroughLabels = typeof CODE_WALKTHROUGH_LABELS
+
+export const CODE_PLAYGROUND_LABELS = {
+  title: `Code playground`,
+  run: `Run`,
+  reset: `Reset`,
+  share: `Share`,
+  files: `Project files`,
+  preview: `Preview`,
+  console: `Console`,
+  ready: `Ready to run`,
+  compiling: `Compiling…`,
+  starting: `Starting preview…`,
+  preview_ready: `Preview ready`,
+  compile_error: `Compilation failed`,
+  preview_error: `Preview error`,
+  invalid_share: `Invalid shared project`,
+  dirty: `Changes not run`,
+  preparing: `Preparing your preview…`,
+  empty: `Run your code to see the result.`,
+  share_url: `Shareable project link`,
+}
+export type CodePlaygroundLabels = typeof CODE_PLAYGROUND_LABELS

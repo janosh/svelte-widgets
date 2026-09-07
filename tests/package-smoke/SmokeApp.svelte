@@ -3,6 +3,8 @@
   import {
     Accordion,
     CodeBlock,
+    CodePlayground,
+    CodeWalkthrough,
     StatGrid,
     Spinner,
     StatusMessage,
@@ -112,6 +114,12 @@
 </main>
 
 <CodeBlock code="let value = 1" />
+<CodePlayground
+  files={{ 'App.svelte': `<h1>Packaged playground</h1>` }}
+  runtime_source=""
+  auto_run={false}
+/>
+<CodeWalkthrough steps={[{ id: `first`, title: `First step`, code: `let count = 0` }]} />
 <StatGrid items={[{ label: 'Count', value: 1 }]} />
 <Spinner text="Loading" />
 <StatusMessage message="Ready" type="success" />

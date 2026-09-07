@@ -3,7 +3,9 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { generate_icons } from './scripts/generate-icons.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
 import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
+import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
+import { playground_vite } from './src/lib/code-playground/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 
@@ -11,16 +13,18 @@ await generate_icons()
 
 const base_segment = (process.env.BASE_PATH ?? ``).replaceAll(/^\/+|\/+$/gu, ``)
 const base_path: `` | `/${string}` = base_segment ? `/${base_segment}` : ``
-const docs = markdown_vite({
-  math: true,
-  typography: true,
-  highlight: default_highlighter.highlight,
-  examples: {
-    wrapper: '/src/lib/CodeExample.svelte',
-    collapsible: true,
-    hide_style: true,
-  },
-})
+const docs = markdown_vite(
+  create_markdown({
+    math: true,
+    typography: true,
+    highlight: default_highlighter.highlight,
+    examples: {
+      wrapper: '/src/lib/CodeExample.svelte',
+      collapsible: true,
+      hide_style: true,
+    },
+  }),
+)
 
 // passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
 // kit options (adapter, alias, paths, prerender) sit at the top level rather than under `kit`.
@@ -64,7 +68,7 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
+  plugins: [sveltekit(svelte_config), docs.plugin, playground_vite(), source_links()],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],

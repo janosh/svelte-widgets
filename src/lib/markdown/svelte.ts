@@ -1,4 +1,5 @@
 import { parse } from 'svelte/compiler'
+import type { SourceEdit } from './source-map.ts'
 
 // Let Svelte parse JavaScript, including regexes, templates and TypeScript. Candidate
 // closing braces are cheap to find; only Svelte decides whether they close the tag.
@@ -66,28 +67,16 @@ export function read_tag(source: string): string | undefined {
   throw new Error(`Unclosed Svelte tag: ${source.slice(0, 100)}`)
 }
 
-export function inject_scripts(
+export function script_edits(
   code: string,
   imports: string,
   metadata?: Record<string, unknown>,
-): string {
-  if (!imports && metadata === undefined) return code
+): SourceEdit[] {
+  if (!imports && metadata === undefined) return []
   const tree = parse(code, { modern: true })
-  const keys = Object.keys(metadata ?? {}).filter((key) =>
-    /^[a-zA-Z_$][\w$]*$/u.test(key),
-  )
-  // Object properties remain accessible even when they cannot be JavaScript bindings.
-  const bindings = keys.filter((key) => {
-    try {
-      parse(`<script>const ${key} = 0</script>`, { modern: true })
-      return key !== `metadata`
-    } catch {
-      return false
-    }
-  })
   const declaration =
     metadata !== undefined
-      ? `export const metadata = JSON.parse(${JSON.stringify(JSON.stringify(metadata)).replaceAll(`<`, `\\u003c`)});\n${bindings.length ? `const { ${bindings.join(`, `)} } = metadata;` : ``}\n`
+      ? `export const metadata = JSON.parse(${JSON.stringify(JSON.stringify(metadata)).replaceAll(`<`, `\\u003c`)});\n`
       : ``
   const script_start = (start: number) =>
     start +
@@ -103,11 +92,9 @@ export function inject_scripts(
       offset: tree.module ? script_start(tree.module.start) : 0,
       text: tree.module ? declaration : `<script module>${declaration}</script>\n`,
     })
-  for (const { offset, text } of edits.toSorted(
-    (left, right) => right.offset - left.offset,
-  ))
-    code = code.slice(0, offset) + text + code.slice(offset)
-  return code
+  return edits
+    .map(({ offset, text }) => ({ start: offset, end: offset, text }))
+    .toReversed()
 }
 
 export function visible_code(

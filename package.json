@@ -195,6 +195,29 @@
     "./markdown/vite": {
       "types": "./dist/markdown/vite.d.ts",
       "default": "./dist/markdown/vite.js"
+    },
+    "./code-playground": {
+      "types": "./dist/code-playground/index.d.ts",
+      "default": "./dist/code-playground/index.js"
+    },
+    "./code-playground/vite": {
+      "types": "./dist/code-playground/vite.d.ts",
+      "default": "./dist/code-playground/vite.js"
+    },
+    "./code-walkthrough": {
+      "types": "./dist/code-walkthrough.d.ts",
+      "default": "./dist/code-walkthrough.js"
+    },
+    "./markdown/content": {
+      "types": "./dist/markdown/content.d.ts",
+      "default": "./dist/markdown/content.js"
+    },
+    "./markdown/check": {
+      "types": "./dist/markdown/check.d.ts",
+      "default": "./dist/markdown/check.js"
+    },
+    "./code-playground/virtual": {
+      "types": "./dist/code-playground/virtual.d.ts"
     }
   },
   "publishConfig": {

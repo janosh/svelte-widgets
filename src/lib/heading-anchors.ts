@@ -181,7 +181,7 @@ const get_static_id_attr = (attrs: string): string | undefined => {
   for (const match of without_attr_expressions(attrs).matchAll(heading_attr_regex)) {
     const { double, equals, name, single, unquoted } = match.groups ?? {}
     if (name?.toLowerCase() !== `id` || equals === undefined) continue
-    return double ?? single ?? unquoted ?? ``
+    return decode_entities(double ?? single ?? unquoted ?? ``)
   }
   return undefined
 }
@@ -197,7 +197,7 @@ const NAMED_ENTITIES: Record<string, string> = {
 
 // Markdown escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as
 // `Using &#123;foo&#125;`; slugging the raw source would bake `123` into the id.
-const decode_entities = (html: string): string =>
+export const decode_entities = (html: string): string =>
   html.replaceAll(
     /&(?:#x(?<hex>[0-9a-f]+)|#(?<dec>\d+)|(?<name>[a-z]+));/giu,
     (entity, hex?: string, dec?: string, name?: string) => {
@@ -219,6 +219,13 @@ const extract_math_sources = (inner: string): string =>
     const tex = katex_annotation_regex.exec(html)?.groups?.tex
     return tex ? decode_entities(tex).replaceAll(/[{}]/gu, ``) : expression
   })
+
+// Shared by heading IDs and the Markdown content manifest. Decode last so escaped tags
+// remain text, while rendered markup and dynamic expressions do not enter the slug.
+export const heading_text = (inner: string, svelte = true): string => {
+  const text = (svelte ? extract_math_sources(inner) : inner).replaceAll(/<[^>]+>/gu, ``)
+  return decode_entities(svelte ? strip_svelte_expressions(text) : text).trim()
+}
 
 // keeps Unicode letters and marks, normalizes to NFC, and separates on punctuation runs so
 // distinct headings don't collapse to one slug
@@ -260,11 +267,7 @@ export function heading_ids() {
 
       const get_heading_id = (inner: string): string | null => {
         // decode last so `&lt;b&gt;` stays text rather than becoming a stripped tag
-        const text = decode_entities(
-          strip_svelte_expressions(
-            extract_math_sources(inner).replaceAll(/<[^>]+>/gu, ``),
-          ),
-        ).trim()
+        const text = heading_text(inner)
         if (!text) return null
 
         const base_id = slugify_heading(text)
