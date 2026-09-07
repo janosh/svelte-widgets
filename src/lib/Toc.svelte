@@ -154,6 +154,7 @@
   let headings_initialized = false
 
   function clear_scroll_target() {
+    restore_scroll_behavior?.()
     if (scroll_target_timeout) {
       clearTimeout(scroll_target_timeout)
       scroll_target_timeout = null
@@ -279,6 +280,8 @@
   const href_for_id = (id: string | undefined) =>
     id ? `#${encodeURIComponent(id)}` : undefined
 
+  let restore_scroll_behavior: (() => void) | undefined
+
   function activate_heading(node: HTMLHeadingElement, idx = headings.indexOf(node)) {
     if (idx === -1) return
     activeHeading = node
@@ -289,10 +292,16 @@
     scroll_target_timeout = setTimeout(clear_scroll_target, scroll_target_fallback_ms)
     node.scrollIntoView?.({ behavior: scrollBehavior, block: `start` })
 
-    // raw id as the fragment so it matches the DOM id exactly: encodeURIComponent (used for
-    // the <a href>) emits #sec%3A1 for id="sec:1", which only resolves via percent-decoding
-    const id = heading_data[idx]?.id
-    if (id) history.replaceState({}, ``, `#${id}`)
+    // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
+    restore_scroll_behavior?.()
+    const { style } = document.documentElement
+    const previous_behavior = style.getPropertyValue(`scroll-behavior`)
+    const priority = style.getPropertyPriority(`scroll-behavior`)
+    style.setProperty(`scroll-behavior`, scrollBehavior, priority)
+    restore_scroll_behavior = () => {
+      style.setProperty(`scroll-behavior`, previous_behavior, priority)
+      restore_scroll_behavior = undefined
+    }
 
     if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }
@@ -487,6 +496,7 @@
   // clear_scroll_target writes component state, so its timer must not outlive the component.
   // The flash timer only strips a class off a detached node, so it can run.
   $effect(() => () => {
+    restore_scroll_behavior?.()
     if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
   })
 
@@ -558,9 +568,18 @@
     }
     const idx = headings.indexOf(node)
     if (idx === -1) return
-    event.preventDefault()
-    set_open(false, `toc-item`)
     activate_heading(node, idx)
+    const link = event.target instanceof Element ? event.target.closest(`a[href]`) : null
+    if (event instanceof KeyboardEvent || !link) {
+      event.preventDefault()
+      // Route keyboard and non-interactive snippets through the browser/framework too.
+      const anchor = document.createElement(`a`)
+      anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+    }
+    set_open(false, `toc-item`)
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
@@ -645,7 +664,7 @@
       activeHeading = headings[tocItems.indexOf(activeTocLi)]
     }
     if (activeTocLi && is_activation_key(event.key) && activeHeading) {
-      activate_heading(activeHeading)
+      activeTocLi.click()
     }
   }
 

@@ -290,10 +290,10 @@ describe(`Toc`, () => {
     expect(document.querySelector(`#custom`)).toBe(doc_query(`body > h2`))
 
     toc_item.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-    expect(replace_state_mock).toHaveBeenCalledWith({}, ``, `#custom`)
+    expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
-  test(`replaceState uses the raw id while the link href is URL-encoded`, async () => {
+  test(`encoded fragment links keep native navigation and existing history state`, async () => {
     set_body(`<h2 id="sec:1">Section</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
     spy_scroll_into_view()
@@ -304,11 +304,10 @@ describe(`Toc`, () => {
     // the <a href> is a valid percent-encoded URL string
     expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#sec%3A1`)
 
-    // the history fragment must match the DOM id exactly so getElementById resolves it
-    doc_query(`aside.toc li > a`).dispatchEvent(
-      new MouseEvent(`click`, { bubbles: true }),
-    )
-    expect(replace_state_mock).toHaveBeenCalledWith({}, ``, `#sec:1`)
+    const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
+    doc_query(`aside.toc li > a`).dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
   test(`existing heading ids stay the fragment target over getHeadingData ids`, async () => {
@@ -453,7 +452,7 @@ describe(`Toc`, () => {
       // nested interactive elements keep native behavior; plain content falls to the li
       expect(event.defaultPrevented).toBe(scrolls)
       expect(scroll_into_view_mock).toHaveBeenCalledTimes(scrolls ? 1 : 0)
-      expect(replace_state_mock.mock.calls).toEqual(scrolls ? [[{}, ``, `#first`]] : [])
+      expect(replace_state_mock).not.toHaveBeenCalled()
 
       if (checks_keyboard) {
         const buttons =
@@ -806,7 +805,7 @@ describe(`Toc`, () => {
       new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
     )
     expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
-    expect(replace_mock).toHaveBeenCalledWith({}, ``, `#heading-2`)
+    expect(replace_mock).not.toHaveBeenCalled()
   })
 
   test(`only the active ToC item carries aria-current="location"`, async () => {
@@ -841,6 +840,7 @@ describe(`Toc`, () => {
 
       const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
+      const anchor_click = vi.spyOn(HTMLAnchorElement.prototype, `click`)
 
       // a breakpoint above the window width forces mobile mode, where open=true suffices
       mount_toc({ open: true, breakpoint: 2000, scrollBehavior })
@@ -855,7 +855,9 @@ describe(`Toc`, () => {
         block: `start`,
       })
       const expected_hash = key === null ? `#heading-1` : `#heading-2`
-      expect(replace_state_mock).toHaveBeenCalledWith({}, ``, expected_hash)
+      expect(anchor_click).toHaveBeenCalledOnce()
+      expect(anchor_click.mock.contexts[0]).toHaveProperty(`hash`, expected_hash)
+      expect(replace_state_mock).not.toHaveBeenCalled()
     },
   )
 
@@ -1547,3 +1549,29 @@ describe(`collapseSubheadings`, () => {
     ])
   })
 })
+
+test.each([`scrollend`, `timeout`])(
+  `rapid activations restore root styles on %s`,
+  async (completion) => {
+    vi.useFakeTimers()
+    const { style } = document.documentElement
+    style.setProperty(`scroll-behavior`, `auto`, `important`)
+    try {
+      set_headings(2)
+      mount_toc()
+      await tick()
+      for (const link of document.querySelectorAll<HTMLAnchorElement>(`aside.toc li > a`))
+        link.click()
+      expect(style.scrollBehavior).toBe(`smooth`)
+      await vi.advanceTimersByTimeAsync(20)
+      expect(style.scrollBehavior).toBe(`smooth`)
+      if (completion === `scrollend`) window.dispatchEvent(new Event(`scrollend`))
+      else await vi.advanceTimersByTimeAsync(1000)
+      expect(style.scrollBehavior).toBe(`auto`)
+      expect(style.getPropertyPriority(`scroll-behavior`)).toBe(`important`)
+    } finally {
+      style.removeProperty(`scroll-behavior`)
+      vi.useRealTimers()
+    }
+  },
+)
