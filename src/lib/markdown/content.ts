@@ -416,6 +416,19 @@ export function validate_content(
   options: { assets?: Iterable<string> } = {},
 ): Diagnostic[] {
   const diagnostics: Diagnostic[] = []
+  const report = (
+    code: string,
+    message: string,
+    range: SourceRange,
+    related?: Diagnostic['related'],
+  ) =>
+    diagnostics.push({
+      code,
+      message,
+      severity: `error`,
+      range,
+      ...(related && { related }),
+    })
   const documents = new Map<
     string,
     { filename: string; anchors: Map<string, SourceRange> }
@@ -428,26 +441,19 @@ export function validate_content(
     const key = document_key(canonical_path(manifest.filename))
     const previous = documents.get(key)
     if (previous)
-      diagnostics.push({
-        message: `Duplicate document route ${key}`,
-        related: [
-          { message: `First document`, range: source_locator(``, previous.filename)(0) },
-        ],
-        code: `duplicate_document`,
-        severity: `error`,
-        range: source_locator(``, manifest.filename)(0),
-      })
+      report(
+        `duplicate_document`,
+        `Duplicate document route ${key}`,
+        source_locator(``, manifest.filename)(0),
+        [{ message: `First document`, range: source_locator(``, previous.filename)(0) }],
+      )
     const ids = new Map<string, SourceRange>()
     for (const anchor of manifest.anchors) {
       const previous_range = ids.get(anchor.id)
       if (previous_range)
-        diagnostics.push({
-          message: `Duplicate anchor #${anchor.id}`,
-          code: `duplicate_anchor`,
-          severity: `error`,
-          range: anchor.range,
-          related: [{ message: `First definition`, range: previous_range }],
-        })
+        report(`duplicate_anchor`, `Duplicate anchor #${anchor.id}`, anchor.range, [
+          { message: `First definition`, range: previous_range },
+        ])
       ids.set(anchor.id, anchor.range)
     }
     documents.set(key, { filename: manifest.filename, anchors: ids })
@@ -466,12 +472,7 @@ export function validate_content(
         path = decodeURIComponent(url.pathname)
         fragment = decodeURIComponent(url.hash.slice(1))
       } catch {
-        diagnostics.push({
-          message: `Invalid URL ${JSON.stringify(link.url)}`,
-          code: `invalid_url`,
-          severity: `error`,
-          range: link.range,
-        })
+        report(`invalid_url`, `Invalid URL ${JSON.stringify(link.url)}`, link.range)
         continue
       }
       const target = documents.get(document_key(path))
@@ -480,26 +481,15 @@ export function validate_content(
         (/\.[^/.]+$/u.test(path) && !/\.(?:md|svx|html)$/u.test(path))
       if (is_asset) {
         if (assets && !assets.has(path))
-          diagnostics.push({
-            message: `Missing asset ${path}`,
-            code: `missing_asset`,
-            severity: `error`,
-            range: link.range,
-          })
+          report(`missing_asset`, `Missing asset ${path}`, link.range)
       } else if (!target)
-        diagnostics.push({
-          message: `Missing document ${path}`,
-          code: `missing_document`,
-          severity: `error`,
-          range: link.range,
-        })
+        report(`missing_document`, `Missing document ${path}`, link.range)
       else if (url.hash && !target.anchors.has(fragment))
-        diagnostics.push({
-          message: `Missing fragment ${url.hash} in ${target.filename}`,
-          code: `missing_fragment`,
-          severity: `error`,
-          range: link.range,
-        })
+        report(
+          `missing_fragment`,
+          `Missing fragment ${url.hash} in ${target.filename}`,
+          link.range,
+        )
     }
   }
   return diagnostics

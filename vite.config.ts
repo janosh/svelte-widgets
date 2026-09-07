@@ -5,7 +5,6 @@ import { heading_ids } from './src/lib/heading-anchors.ts'
 import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
 import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
-import { playground_vite } from './src/lib/code-playground/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 
@@ -68,7 +67,7 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), docs.plugin, playground_vite(), source_links()],
+  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],

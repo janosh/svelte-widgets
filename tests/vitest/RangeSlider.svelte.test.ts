@@ -1,8 +1,9 @@
 import { RangeSlider, type RangeValue } from '$lib'
+import RangeSliderDemo from '../../src/routes/(demos)/(range-slider)/range-slider/+page.svelte'
 import { snap_range_value, step_range_value, validate_range } from '$lib/range-slider'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { mock_rect, pointer_event, press_key } from './index'
+import { doc_query, mock_rect, pointer_event, press_key } from './index'
 
 type Props = ComponentProps<typeof RangeSlider>
 const setup = (props: Props = {}) => {
@@ -11,8 +12,7 @@ const setup = (props: Props = {}) => {
   onTestFinished(() => unmount(component))
   const thumbs = [...document.querySelectorAll<HTMLButtonElement>(`[role=slider]`)]
   const inputs = [...document.querySelectorAll<HTMLInputElement>(`input[type=number]`)]
-  const rail = document.querySelector<HTMLElement>(`.rail`)
-  if (!rail) throw new Error(`Missing RangeSlider rail`)
+  const rail = doc_query(`.rail`)
   mock_rect(rail, { left: 0, top: 0, width: 100, height: 44 })
   rail.setPointerCapture = vi.fn()
   rail.hasPointerCapture = vi.fn(() => true)
@@ -37,6 +37,16 @@ const edit = async (input: HTMLInputElement, text: string, final = true) => {
   if (final) input.dispatchEvent(new Event(`change`, { bubbles: true }))
   await tick()
 }
+
+test(`demo Usage example highlights Svelte source`, async () => {
+  const component = mount(RangeSliderDemo, { target: document.body })
+  onTestFinished(() => unmount(component))
+  const usage = doc_query(`[aria-label="RangeSlider usage"]`)
+  await vi.waitFor(() => expect(usage.querySelector(`.pl-k`)?.textContent).toBe(`import`))
+  expect(usage.getAttribute(`aria-busy`)).toBe(`false`)
+  expect(usage.textContent).toContain(`bind:value`)
+  expect(usage.querySelector(`script`)).toBeNull()
+})
 
 describe(`range arithmetic`, () => {
   test(`snapping and stepping match an integer-built decimal grid`, () => {
@@ -143,14 +153,20 @@ describe(`RangeSlider`, () => {
     { metaKey: true },
     { altKey: true },
     { isComposing: true },
-  ])(`ignored numeric arrow preserves its draft %j`, async (modifiers) => {
-    const { inputs, thumbs } = setup({ value: [20, 80] })
-    await edit(inputs[0], `43`, false)
-    expect(press_key(inputs[0], `ArrowUp`, modifiers).defaultPrevented).toBe(false)
-    await tick()
-    expect(inputs[0].value).toBe(`43`)
-    expect(announced(thumbs)).toEqual([20, 80])
-  })
+  ])(
+    `modified or composing keys preserve thumb values and numeric drafts %j`,
+    async (modifiers) => {
+      const { inputs, thumbs } = setup({ value: [20, 80] })
+      expect(press_key(thumbs[0], `ArrowRight`, modifiers).defaultPrevented).toBe(false)
+      await tick()
+      expect(announced(thumbs)).toEqual([20, 80])
+      await edit(inputs[0], `43`, false)
+      expect(press_key(inputs[0], `ArrowUp`, modifiers).defaultPrevented).toBe(false)
+      await tick()
+      expect(inputs[0].value).toBe(`43`)
+      expect(announced(thumbs)).toEqual([20, 80])
+    },
+  )
   test.each([false, true])(
     `form reset discards drafts only unless prevented=%s`,
     async (prevented) => {
@@ -230,13 +246,13 @@ describe(`RangeSlider`, () => {
       oncommit: vi.fn(),
     })
     const { thumbs, inputs } = setup(props)
+    expect(inputs).toHaveLength(2)
+    expect(inputs.every((input) => input.closest(`.heading .summary`))).toBe(true)
+    expect(inputs.some((input) => input.closest(`[aria-hidden=true]`))).toBe(false)
     for (const [idx, thumb] of thumbs.entries()) {
-      const label = thumb
-        .getAttribute(`aria-labelledby`)
-        ?.split(` `)
-        .map((id) => document.querySelector(`[id="${id}"]`)?.textContent)
-        .join(` `)
+      const label = thumb.getAttribute(`aria-label`)
       expect(label).toBe(`Budget ${idx === 0 ? `Minimum` : `Maximum`}`)
+      expect(inputs[idx].getAttribute(`aria-label`)).toBe(label)
       expect(thumb.getAttribute(`aria-valuetext`)).toBe(idx === 0 ? `$20` : `$80`)
       expect(
         document.querySelector(`[id="${thumb.getAttribute(`aria-describedby`)}"]`)
@@ -258,6 +274,9 @@ describe(`RangeSlider`, () => {
     await tick()
     expect(announced(thumbs)).toEqual([-10, 40])
     expect(inputs.map((input) => input.valueAsNumber)).toEqual([-10, 40])
+    expect(
+      [...document.querySelectorAll(`.formatted`)].map((node) => node.textContent),
+    ).toEqual([`$-10`, `$40`])
     expect(props.oninput).not.toHaveBeenCalled()
     expect(props.oncommit).not.toHaveBeenCalled()
   })
@@ -265,14 +284,10 @@ describe(`RangeSlider`, () => {
     const { thumbs, inputs } = setup({ min: -1, max: 1, step: 0.1, show_inputs: false })
     expect(announced(thumbs)).toEqual([-1, 1])
     expect(inputs).toHaveLength(0)
-    for (const thumb of thumbs) {
-      expect(
-        thumb
-          .getAttribute(`aria-labelledby`)
-          ?.split(` `)
-          .every((id) => document.querySelector(`[id="${id}"]`)),
-      ).toBe(true)
-    }
+    expect(thumbs.map((thumb) => thumb.getAttribute(`aria-label`))).toEqual([
+      `Range Minimum`,
+      `Range Maximum`,
+    ])
   })
   test.each([
     [0, `ArrowRight`, {}, [21, 80]],
@@ -295,17 +310,6 @@ describe(`RangeSlider`, () => {
     expect(announced(thumbs)).toEqual(expected)
     expect(props.oninput).toHaveBeenCalledExactlyOnceWith(expected)
     expect(props.oncommit).toHaveBeenCalledExactlyOnceWith(expected)
-  })
-  test.each([
-    { ctrlKey: true },
-    { metaKey: true },
-    { altKey: true },
-    { isComposing: true },
-  ])(`ignores modified or composing events %j`, async (modifiers) => {
-    const { thumbs } = setup({ value: [20, 80] })
-    expect(press_key(thumbs[0], `ArrowRight`, modifiers).defaultPrevented).toBe(false)
-    await tick()
-    expect(announced(thumbs)).toEqual([20, 80])
   })
   test(`ignores claimed and unrelated keys, and emits nothing at a bound`, async () => {
     const oncommit = vi.fn()

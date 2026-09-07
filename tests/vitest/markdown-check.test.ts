@@ -5,7 +5,7 @@ import { runInNewContext } from 'node:vm'
 import * as typescript from 'typescript'
 import * as source_maps from '$lib/markdown/source-map'
 import {
-  create_checker,
+  create_checker as create_project_checker,
   check_document,
   type CheckResult,
   type CheckOptions,
@@ -17,11 +17,23 @@ import {
   DiagnosticError,
   type MarkdownOptions,
 } from '$lib/markdown'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 
 const filename = resolve(`tests/checked-examples.md`)
 const fence = (language: string, code: string, info = `check`) =>
   `\`\`\`${language} ${info}\n${code}\n\`\`\``
+const temporary_directory = async () => {
+  const directory = await mkdtemp(resolve(`tests/.checked-docs-`))
+  onTestFinished(() => rm(directory, { recursive: true }))
+  return directory
+}
+const create_checker = (options: Parameters<typeof create_project_checker>[0]) => {
+  const checker = create_project_checker(options)
+  onTestFinished(() => checker.dispose())
+  return checker
+}
+const write_json = (path: string, value: unknown) =>
+  writeFile(path, JSON.stringify(value))
 
 const check_source = async (
   source: string,
@@ -30,6 +42,7 @@ const check_source = async (
     ...options
   }: CheckOptions & { markdown_options?: MarkdownOptions } = {},
 ): Promise<CheckResult> => {
+  options = { filename, ...options }
   const parsed = await create_markdown(markdown_options).parse(source, {
     filename: options.filename,
   })
@@ -83,7 +96,7 @@ describe(`checked Markdown examples`, () => {
       ),
       fence(`html`, `<p>Static example</p>`),
     ].join(`\n\n`)
-    expect(await check_source(source, { filename, typescript })).toMatchObject({
+    expect(await check_source(source, { typescript })).toMatchObject({
       ok: true,
       value: { checked: 5, asserted: 0 },
       diagnostics: [],
@@ -94,140 +107,131 @@ describe(`checked Markdown examples`, () => {
     `checks real %s semantic errors`,
     async (language) => {
       const source = fence(language, `const value = 1;\nvalue.toUpperCase()`)
-      const result = await check_source(source, { filename })
+      const result = await check_source(source)
       expect(result.ok).toBe(false)
-      expect(diagnostics_at_start(result)).toEqual([
-        expect.objectContaining({
+      expect(diagnostics_at_start(result)).toMatchObject([
+        {
           filename,
           line: 3,
           column: 7,
           code: `TS2339`,
           severity: `error`,
           message: expect.stringContaining(`toUpperCase`),
-        }),
+        },
       ])
     },
   )
 
   test(`Svelte checks script assignments and template expressions with original locations`, async () => {
     const source = `---\ntitle: Checks\n---\n\n${fence(`svelte`, `<script lang="ts">\nlet count: number = "bad"\n</script>\n<p>{count.toUpperCase()}</p>`)}`
-    const result = await check_source(source, { filename })
-    expect(diagnostics_at_start(result)).toEqual([
-      expect.objectContaining({ filename, code: `TS2322`, line: 7, column: 5 }),
-      expect.objectContaining({ filename, code: `TS2339`, line: 9, column: 11 }),
+    const result = await check_source(source)
+    expect(diagnostics_at_start(result)).toMatchObject([
+      { filename, code: `TS2322`, line: 7, column: 5 },
+      { filename, code: `TS2339`, line: 9, column: 11 },
     ])
   })
 
   test(`checks prop types of imported local Svelte components`, async () => {
-    const directory = await mkdtemp(resolve(`tests/.checked-docs-`))
+    const directory = await temporary_directory()
     const page_filename = resolve(directory, `page.md`)
     const check = (source: string, options: CheckOptions = {}) =>
       check_source(source, { filename: page_filename, ...options })
-    try {
-      await writeFile(
-        resolve(directory, `Counter.svelte`),
-        `<script lang="ts">let { count }: { count: number } = $props()</script><p>{count}</p>`,
-      )
-      const source = fence(
-        `svelte`,
-        `<script lang="ts">import Counter from "./Counter.svelte"</script>\n<Counter count="wrong" />`,
-      )
-      const result = await check(source, {})
-      expect(diagnostics_at_start(result)).toEqual([
+
+    await writeFile(
+      resolve(directory, `Counter.svelte`),
+      `<script lang="ts">let { count }: { count: number } = $props()</script><p>{count}</p>`,
+    )
+    const source = fence(
+      `svelte`,
+      `<script lang="ts">import Counter from "./Counter.svelte"</script>\n<Counter count="wrong" />`,
+    )
+    const result = await check(source)
+    expect(diagnostics_at_start(result)).toMatchObject([
+      {
+        code: `TS2322`,
+        line: 3,
+        column: 10,
+        message: expect.stringContaining(`not assignable to type 'number'`),
+      },
+    ])
+    const valid = await check(source.replace(`count="wrong"`, `count={1}`))
+    expect(valid.ok).toBe(true)
+    const imported_by_ts = await check(
+      fence(`ts`, `import Counter from "./Counter.svelte"; console.log(Counter)`),
+    )
+    expect(imported_by_ts).toMatchObject({ ok: true, diagnostics: [] })
+    const alias = await check(
+      source.replace(`./Counter.svelte`, `$docs/Counter.svelte`),
+      {
+        compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
+      },
+    )
+    expect(diagnostics_at_start(alias)).toEqual([
+      {
+        ...diagnostics_at_start(result)[0],
+        offset: source
+          .replace(`./Counter.svelte`, `$docs/Counter.svelte`)
+          .indexOf(`count="wrong"`),
+      },
+    ])
+    await writeFile(resolve(directory, `Counter.svelte`), `<p>{#if true}`)
+    const broken_import = await check(source)
+    expect(diagnostics_at_start(broken_import)).toContainEqual(
+      expect.objectContaining({
+        code: `compile`,
+        filename: resolve(directory, `Counter.svelte`),
+      }),
+    )
+    const missing = await check(source.replace(`./Counter.svelte`, `./Missing.svelte`))
+    expect(diagnostics_at_start(missing)).toContainEqual(
+      expect.objectContaining({
+        code: `import`,
+        filename: resolve(directory, `Missing.svelte`),
+      }),
+    )
+    for (const specifier of [`$docs/Missing.svelte`, `absent-package/Missing.svelte`]) {
+      const missing_source = source.replace(`./Counter.svelte`, specifier)
+      const unresolved = await check(missing_source, {
+        compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
+      })
+      expect(unresolved.ok).toBe(false)
+      expect(diagnostics_at_start(unresolved)).toContainEqual(
         expect.objectContaining({
-          code: `TS2322`,
-          line: 3,
-          column: 10,
-          message: expect.stringContaining(`not assignable to type 'number'`),
-        }),
-      ])
-      const valid = await check(source.replace(`count="wrong"`, `count={1}`))
-      expect(valid.ok).toBe(true)
-      const imported_by_ts = await check(
-        fence(`ts`, `import Counter from "./Counter.svelte"; console.log(Counter)`),
-      )
-      expect(imported_by_ts).toMatchObject({ ok: true, diagnostics: [] })
-      const alias = await check(
-        source.replace(`./Counter.svelte`, `$docs/Counter.svelte`),
-        {
-          compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
-        },
-      )
-      expect(diagnostics_at_start(alias)).toEqual([
-        {
-          ...diagnostics_at_start(result)[0],
-          offset: source
-            .replace(`./Counter.svelte`, `$docs/Counter.svelte`)
-            .indexOf(`count="wrong"`),
-        },
-      ])
-      await writeFile(resolve(directory, `Counter.svelte`), `<p>{#if true}`)
-      const broken_import = await check(source, {})
-      expect(diagnostics_at_start(broken_import)).toContainEqual(
-        expect.objectContaining({
-          code: `compile`,
-          filename: resolve(directory, `Counter.svelte`),
-        }),
-      )
-      const missing = await check(
-        source.replace(`./Counter.svelte`, `./Missing.svelte`),
-        {},
-      )
-      expect(diagnostics_at_start(missing)).toContainEqual(
-        expect.objectContaining({
-          code: `import`,
-          filename: resolve(directory, `Missing.svelte`),
-        }),
-      )
-      for (const specifier of [`$docs/Missing.svelte`, `absent-package/Missing.svelte`]) {
-        const missing_source = source.replace(`./Counter.svelte`, specifier)
-        const unresolved = await check(missing_source, {
-          compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
-        })
-        expect(unresolved.ok).toBe(false)
-        expect(diagnostics_at_start(unresolved)).toContainEqual(
-          expect.objectContaining({
-            filename: page_filename,
-            line: 2,
-            offset: missing_source.indexOf(`"${specifier}"`),
-            code: `import`,
-            message: `Cannot resolve imported Svelte component: ${specifier}`,
-          }),
-        )
-      }
-      const invalid_component = `<script>let value = $state(0)</script>\n<button onclick={()=>{}} on:click={()=>{}}>Click</button>`
-      await writeFile(resolve(directory, `Counter.svelte`), invalid_component)
-      const invalid_import = await check(source, {})
-      expect(invalid_import.ok).toBe(false)
-      expect(diagnostics_at_start(invalid_import)).toContainEqual(
-        expect.objectContaining({
-          filename: resolve(directory, `Counter.svelte`),
+          filename: page_filename,
           line: 2,
-          offset: invalid_component.indexOf(`on:click`),
-          code: `compile`,
-          message: expect.stringContaining(`Mixing old (on:click)`),
+          offset: missing_source.indexOf(`"${specifier}"`),
+          code: `import`,
+          message: `Cannot resolve imported Svelte component: ${specifier}`,
         }),
       )
-      await writeFile(
-        resolve(directory, `broken.ts`),
-        `export const count: number = "bad"`,
-      )
-      const dependency_error = await check(
-        fence(`ts`, `import { count } from "./broken"; console.log(count)`),
-        {},
-      )
-      expect(diagnostics_at_start(dependency_error)).toEqual([
-        expect.objectContaining({
-          filename: resolve(directory, `broken.ts`),
-          line: 1,
-          column: 14,
-          offset: 13,
-          code: `TS2322`,
-        }),
-      ])
-    } finally {
-      await rm(directory, { recursive: true })
     }
+    const invalid_component = `<script>let value = $state(0)</script>\n<button onclick={()=>{}} on:click={()=>{}}>Click</button>`
+    await writeFile(resolve(directory, `Counter.svelte`), invalid_component)
+    const invalid_import = await check(source)
+    expect(invalid_import.ok).toBe(false)
+    expect(diagnostics_at_start(invalid_import)).toContainEqual(
+      expect.objectContaining({
+        filename: resolve(directory, `Counter.svelte`),
+        line: 2,
+        offset: invalid_component.indexOf(`on:click`),
+        code: `compile`,
+        message: expect.stringContaining(`Mixing old (on:click)`),
+      }),
+    )
+    await writeFile(resolve(directory, `broken.ts`), `export const count: number = "bad"`)
+    const dependency_error = await check(
+      fence(`ts`, `import { count } from "./broken"; console.log(count)`),
+      {},
+    )
+    expect(diagnostics_at_start(dependency_error)).toMatchObject([
+      {
+        filename: resolve(directory, `broken.ts`),
+        line: 1,
+        column: 14,
+        offset: 13,
+        code: `TS2322`,
+      },
+    ])
   })
 
   test(`maps repeated nested fences independently, including frontmatter and CRLF`, async () => {
@@ -236,7 +240,7 @@ describe(`checked Markdown examples`, () => {
         `\n`,
         `\r\n`,
       )
-    const result = await check_source(source, { filename })
+    const result = await check_source(source)
     expect(
       diagnostics_at_start(result).map(({ line, column, offset }) => ({
         line,
@@ -258,49 +262,40 @@ describe(`checked Markdown examples`, () => {
     const run = vi.fn()
     await expect(
       check_source(fence(`svelte`, `<div>{#if true}`, `test="render"`), {
-        filename,
         assertions: { render: run },
       }).then(assert_ok),
     ).rejects.toThrow(`${filename}:2:`)
     expect(run).not.toHaveBeenCalled()
-    const syntax = await check_source(fence(`js`, `const =`), {
-      filename,
-      typecheck: false,
-    })
-    expect(syntax.ok).toBe(false)
-    expect(diagnostics_at_start(syntax)[0]).toMatchObject({
-      filename,
-      line: 2,
-      code: `TS1134`,
-    })
-    const invalid_options = await check_source(fence(`ts`, `const value = 1`), {
-      filename,
-      compiler_options: { noLib: true, lib: [`lib.esnext.d.ts`] },
-    })
-    expect(diagnostics_at_start(invalid_options)).toContainEqual(
-      expect.objectContaining({
-        filename,
-        line: 1,
-        column: 1,
-        offset: 0,
-        code: `TS5053`,
-      }),
-    )
-    const malformed = await check_source(`---\ntitle: unclosed`, {
-      filename,
-    })
-    expect(diagnostics_at_start(malformed)[0]).toMatchObject({
-      filename,
-      code: `frontmatter`,
-      message: expect.stringContaining(`Unclosed YAML frontmatter`),
-    })
-    const result = await check_source(fence(`html`, `<img src="x.png">`), {
-      filename,
-      typecheck: false,
-    })
-    expect(result.ok).toBe(true)
+  })
+
+  test.each<[string, CheckOptions, boolean, Record<string, unknown>]>([
+    [fence(`js`, `const =`), { typecheck: false }, false, { line: 2, code: `TS1134` }],
+    [
+      fence(`ts`, `const value = 1`),
+      { compiler_options: { noLib: true, lib: [`lib.esnext.d.ts`] } },
+      false,
+      { line: 1, column: 1, offset: 0, code: `TS5053` },
+    ],
+    [
+      `---\ntitle: unclosed`,
+      {},
+      false,
+      {
+        code: `frontmatter`,
+        message: expect.stringContaining(`Unclosed YAML frontmatter`),
+      },
+    ],
+    [
+      fence(`html`, `<img src="x.png">`),
+      { typecheck: false },
+      true,
+      { severity: `warning`, code: `a11y_missing_attribute` },
+    ],
+  ])(`reports static diagnostics for %s`, async (source, options, ok, diagnostic) => {
+    const result = await check_source(source, options)
+    expect(result.ok).toBe(ok)
     expect(diagnostics_at_start(result)).toContainEqual(
-      expect.objectContaining({ severity: `warning`, code: `a11y_missing_attribute` }),
+      expect.objectContaining({ filename, ...diagnostic }),
     )
   })
 
@@ -318,12 +313,10 @@ describe(`checked Markdown examples`, () => {
     const source = fence(`js`, code, `test="increments"`)
     expect(
       await check_source(source, {
-        filename,
         assertions: { increments: assert_increment },
       }),
     ).toMatchObject({ ok: true, value: { checked: 1, asserted: 1 } })
     const failure = await check_source(source, {
-      filename,
       assertions: {
         increments: async () => {
           await Promise.resolve()
@@ -332,14 +325,14 @@ describe(`checked Markdown examples`, () => {
       },
     })
     expect(failure).toMatchObject({ ok: false, value: { asserted: 0 } })
-    expect(diagnostics_at_start(failure)).toEqual([
-      expect.objectContaining({
+    expect(diagnostics_at_start(failure)).toMatchObject([
+      {
         filename,
         line: 1,
         column: 1,
         code: `assertion`,
         message: `increments: Expected count 2, received 1`,
-      }),
+      },
     ])
   })
 
@@ -350,7 +343,7 @@ describe(`checked Markdown examples`, () => {
     [`js test="missing"`, `assertion`, `Missing assertion runner: missing`],
     [`js test="toString"`, `assertion`, `Missing assertion runner: toString`],
   ])(`fails clearly for %s`, async (info, code, message) => {
-    const error = await check_source(`\`\`\`${info}\n\`\`\``, { filename })
+    const error = await check_source(`\`\`\`${info}\n\`\`\``)
       .then(assert_ok)
       .catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(DiagnosticError)
@@ -365,18 +358,25 @@ describe(`checked Markdown examples`, () => {
     })
   })
 
-  test(`missing optional tools fail clearly at the selected fence`, async () => {
-    const result = await check_source(fence(`ts`, `const value = 1`), {
-      filename: `/no-docs-project/page.md`,
-    })
-    expect(diagnostics_at_start(result)).toEqual([
-      expect.objectContaining({
+  test.each([
+    [undefined, `pass options.typescript`],
+    [{ version: `7.0.2` }, `found TypeScript 7.0.2`],
+  ])(
+    `missing or incompatible compiler %j fails at the selected fence`,
+    async (compiler, message) => {
+      const result = await check_source(fence(`ts`, `const value = 1`), {
         filename: `/no-docs-project/page.md`,
-        line: 1,
-        message: expect.stringContaining(`pass options.typescript`),
-      }),
-    ])
-  })
+        typescript: compiler as typeof typescript | undefined,
+      })
+      expect(diagnostics_at_start(result)).toMatchObject([
+        {
+          filename: `/no-docs-project/page.md`,
+          line: 1,
+          message: expect.stringContaining(message),
+        },
+      ])
+    },
+  )
 })
 
 test(`type diagnostics underline the authored token inside an indented fence`, async () => {
@@ -392,7 +392,7 @@ test(`type diagnostics underline the authored token inside an indented fence`, a
 })
 
 test(`project sessions reuse programs and invalidate changed, deleted, and recreated imports`, async () => {
-  const directory = await mkdtemp(resolve(`tests/.checker-session-`))
+  const directory = await temporary_directory()
   const create_program = vi.fn(typescript.createProgram)
   const create_source = vi.fn(typescript.createSourceFile)
   const checker = create_checker({
@@ -414,80 +414,75 @@ test(`project sessions reuse programs and invalidate changed, deleted, and recre
       await engine.parse(fence(`ts`, code), { filename: resolve(directory, name) }),
     )
   const dependency = resolve(directory, `value.ts`)
-  try {
-    await writeFile(dependency, `export const value: number = 1`)
-    const guide = await document(
-      `import {value} from './value'; const count: number = value`,
-    )
-    const relative_filename = relative(process.cwd(), guide.filename)
-    const relative_guide = assert_ok(
-      await engine.parse(guide.source, {
-        filename: relative_filename,
-      }),
-    )
-    expect(
-      (await check_document(relative_guide, { tsconfig: false, typescript })).ok,
-    ).toBe(true)
-    const other = await document(
-      `import {value} from '@value'; value.toFixed()`,
-      `other.md`,
-    )
-    expect(await checker.check([guide, other])).toMatchObject({
-      ok: true,
-      value: { checked: 2 },
-    })
-    const cold_sources = create_source.mock.calls.length
-    expect(cold_sources).toBeGreaterThan(2)
-    expect(await checker.check([guide, other])).toMatchObject({
-      ok: true,
-      diagnostics: [],
-    })
-    expect(create_program.mock.calls[1]?.[3]).toBe(create_program.mock.results[0].value)
-    expect(create_source).toHaveBeenCalledTimes(cold_sources)
-    const rooted_guide = assert_ok(
-      await engine.parse(guide.source, { filename: `guide.md` }),
-    )
-    expect((await checker.check(rooted_guide)).ok).toBe(true)
-    await writeFile(dependency, `export const value: string = 'bad'`)
-    const changed = await checker.check([guide, other])
-    expect(changed.ok).toBe(false)
-    expect(changed.diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS2322` }),
-    )
-    await rm(dependency)
-    expect((await checker.check(guide)).diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS2307` }),
-    )
-    await writeFile(dependency, `export const value: number = 2`)
-    expect(await checker.check(guide)).toMatchObject({ ok: true, value: { checked: 1 } })
-    const invalid = await document(`const value: number = 'wrong'`, `other.md`)
-    expect((await checker.check([guide, invalid])).ok).toBe(false)
-    expect(await checker.check(guide)).toMatchObject({ ok: true, diagnostics: [] })
-    expect(await checker.check([])).toMatchObject({
-      ok: true,
-      value: { checked: 0, asserted: 0 },
-    })
-    const before_clear = create_source.mock.calls.length
-    checker.clear()
-    expect((await checker.check(guide)).ok).toBe(true)
-    expect(create_source.mock.calls.length).toBeGreaterThan(before_clear)
-    await expect(checker.check([guide, guide])).rejects.toThrow(
-      `Duplicate checked document`,
-    )
-    create_program.mockImplementationOnce(() => {
-      throw new Error(`Compiler failed`)
-    })
-    await expect(checker.check(guide)).rejects.toThrow(`Compiler failed`)
-    expect((await checker.check(guide)).ok).toBe(true)
-  } finally {
-    checker.dispose()
-    await rm(directory, { recursive: true })
-  }
+
+  await writeFile(dependency, `export const value: number = 1`)
+  const guide = await document(
+    `import {value} from './value'; const count: number = value`,
+  )
+  const relative_filename = relative(process.cwd(), guide.filename)
+  const relative_guide = assert_ok(
+    await engine.parse(guide.source, {
+      filename: relative_filename,
+    }),
+  )
+  expect((await check_document(relative_guide, { tsconfig: false, typescript })).ok).toBe(
+    true,
+  )
+  const other = await document(
+    `import {value} from '@value'; value.toFixed()`,
+    `other.md`,
+  )
+  expect(await checker.check([guide, other])).toMatchObject({
+    ok: true,
+    value: { checked: 2 },
+  })
+  const cold_sources = create_source.mock.calls.length
+  expect(cold_sources).toBeGreaterThan(2)
+  expect(await checker.check([guide, other])).toMatchObject({
+    ok: true,
+    diagnostics: [],
+  })
+  expect(create_program.mock.calls[1]?.[3]).toBe(create_program.mock.results[0].value)
+  expect(create_source).toHaveBeenCalledTimes(cold_sources)
+  const rooted_guide = assert_ok(
+    await engine.parse(guide.source, { filename: `guide.md` }),
+  )
+  expect((await checker.check(rooted_guide)).ok).toBe(true)
+  await writeFile(dependency, `export const value: string = 'bad'`)
+  const changed = await checker.check([guide, other])
+  expect(changed.ok).toBe(false)
+  expect(changed.diagnostics).toContainEqual(expect.objectContaining({ code: `TS2322` }))
+  await rm(dependency)
+  expect((await checker.check(guide)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2307` }),
+  )
+  await writeFile(dependency, `export const value: number = 2`)
+  expect(await checker.check(guide)).toMatchObject({ ok: true, value: { checked: 1 } })
+  const invalid = await document(`const value: number = 'wrong'`, `other.md`)
+  expect((await checker.check([guide, invalid])).ok).toBe(false)
+  expect(await checker.check(guide)).toMatchObject({ ok: true, diagnostics: [] })
+  expect(await checker.check([])).toMatchObject({
+    ok: true,
+    value: { checked: 0, asserted: 0 },
+  })
+  const before_clear = create_source.mock.calls.length
+  checker.clear()
+  expect((await checker.check(guide)).ok).toBe(true)
+  expect(create_source.mock.calls.length).toBeGreaterThan(before_clear)
+  await expect(checker.check([guide, guide])).rejects.toThrow(
+    `Duplicate checked document`,
+  )
+  create_program.mockImplementationOnce(() => {
+    throw new Error(`Compiler failed`)
+  })
+  await expect(checker.check(guide)).rejects.toThrow(`Compiler failed`)
+  expect((await checker.check(guide)).ok).toBe(true)
+  checker.dispose()
   await expect(checker.check([])).rejects.toThrow(`Checker is disposed`)
 })
 
 test(`project sessions refresh imported Svelte props and remap moved fences without retransformation`, async () => {
-  const directory = await mkdtemp(resolve(`tests/.checker-components-`))
+  const directory = await temporary_directory()
   const { createRequire } = await import('node:module')
   const require_tool = createRequire(filename)
   const { svelte2tsx } = require_tool(`svelte2tsx`) as {
@@ -517,45 +512,41 @@ test(`project sessions refresh imported Svelte props and remap moved fences with
     assert_ok(
       await engine.parse(prefix + source, { filename: resolve(directory, `guide.md`) }),
     )
-  try {
-    await writeFile(
-      component,
-      `<script lang="ts">let {count}: {count: number} = $props()</script><p>{count}</p>`,
-    )
-    const first = await checker.check(await document())
-    expect(first.diagnostics).toContainEqual(expect.objectContaining({ code: `TS2322` }))
-    expect(transform).toHaveBeenCalledTimes(2)
-    expect(decode).toHaveBeenCalledTimes(2)
-    const moved = await checker.check(await document(`# Heading\n\n`))
-    expect(transform).toHaveBeenCalledTimes(2)
-    expect(decode).toHaveBeenCalledTimes(2)
-    const first_error = first.diagnostics.find(({ code }) => code === `TS2322`)
-    const moved_error = moved.diagnostics.find(({ code }) => code === `TS2322`)
-    expect(moved_error?.range.start.line).toBe((first_error?.range.start.line ?? 0) + 2)
-    await writeFile(
-      component,
-      `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
-    )
-    expect(await checker.check(await document())).toMatchObject({
-      ok: true,
-      diagnostics: [],
-    })
-    expect(transform).toHaveBeenCalledTimes(3)
-    expect(decode).toHaveBeenCalledTimes(3)
-    await rm(component)
-    expect((await checker.check(await document())).ok).toBe(false)
-    await writeFile(
-      component,
-      `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
-    )
-    expect((await checker.check(await document())).ok).toBe(true)
-    checker.clear()
-    expect((await checker.check(await document())).ok).toBe(true)
-    expect(transform.mock.calls.length).toBeGreaterThan(3)
-  } finally {
-    checker.dispose()
-    await rm(directory, { recursive: true })
-  }
+
+  await writeFile(
+    component,
+    `<script lang="ts">let {count}: {count: number} = $props()</script><p>{count}</p>`,
+  )
+  const first = await checker.check(await document())
+  expect(first.diagnostics).toContainEqual(expect.objectContaining({ code: `TS2322` }))
+  expect(transform).toHaveBeenCalledTimes(2)
+  expect(decode).toHaveBeenCalledTimes(2)
+  const moved = await checker.check(await document(`# Heading\n\n`))
+  expect(transform).toHaveBeenCalledTimes(2)
+  expect(decode).toHaveBeenCalledTimes(2)
+  const first_error = first.diagnostics.find(({ code }) => code === `TS2322`)
+  const moved_error = moved.diagnostics.find(({ code }) => code === `TS2322`)
+  expect(moved_error?.range.start.line).toBe((first_error?.range.start.line ?? 0) + 2)
+  await writeFile(
+    component,
+    `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
+  )
+  expect(await checker.check(await document())).toMatchObject({
+    ok: true,
+    diagnostics: [],
+  })
+  expect(transform).toHaveBeenCalledTimes(3)
+  expect(decode).toHaveBeenCalledTimes(3)
+  await rm(component)
+  expect((await checker.check(await document())).ok).toBe(false)
+  await writeFile(
+    component,
+    `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
+  )
+  expect((await checker.check(await document())).ok).toBe(true)
+  checker.clear()
+  expect((await checker.check(await document())).ok).toBe(true)
+  expect(transform.mock.calls.length).toBeGreaterThan(3)
 })
 
 test(`sessions serialize assertions, isolate projects, and reject queued work after disposal`, async () => {
@@ -607,7 +598,7 @@ test(`sessions serialize assertions, isolate projects, and reject queued work af
 })
 
 test(`project configuration inherits aliases, libraries and types, caches reads, and follows edits`, async () => {
-  const root = await mkdtemp(resolve(`tests/.checker-config-`))
+  const root = await temporary_directory()
   const parse_config = vi.fn(typescript.getParsedCommandLineOfConfigFile)
   const compiler = new Proxy(typescript, {
     get: (target, key, receiver) =>
@@ -641,153 +632,120 @@ test(`project configuration inherits aliases, libraries and types, caches reads,
       tsBuildInfoFile: `../build.tsbuildinfo`,
     },
   }
-  try {
-    for (const directory of [
-      `settings`,
-      `src`,
-      `types/project`,
-      `docs`,
-      `node_modules/fixture-config`,
-    ])
-      await mkdir(resolve(root, directory), { recursive: true })
-    await writeFile(base_path, JSON.stringify(base))
-    const package_path = resolve(root, `node_modules/fixture-config/package.json`)
-    await writeFile(package_path, JSON.stringify({ tsconfig: `config.json` }))
-    await writeFile(
-      resolve(root, `node_modules/fixture-config/config.json`),
-      JSON.stringify({ extends: `../../settings/base.json` }),
-    )
-    await writeFile(
-      resolve(root, `tsconfig.json`),
-      JSON.stringify({
-        extends: `fixture-config`,
-        include: [`src/**/*`],
-      }),
-    )
-    // Included application files are not documentation roots.
-    await writeFile(resolve(root, `src/unrelated.ts`), `const invalid: number = 'wrong'`)
-    await writeFile(resolve(root, `src/value.ts`), `export const value = 1`)
-    await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
+
+  for (const directory of [
+    `settings`,
+    `src`,
+    `types/project`,
+    `docs`,
+    `node_modules/fixture-config`,
+  ])
+    await mkdir(resolve(root, directory), { recursive: true })
+  await write_json(base_path, base)
+  const package_path = resolve(root, `node_modules/fixture-config/package.json`)
+  await write_json(package_path, { tsconfig: `config.json` })
+  await write_json(resolve(root, `node_modules/fixture-config/config.json`), {
+    extends: `../../settings/base.json`,
+  })
+  await write_json(resolve(root, `tsconfig.json`), {
+    extends: `fixture-config`,
+    include: [`src/**/*`],
+  })
+  // Included application files are not documentation roots.
+  await writeFile(resolve(root, `src/unrelated.ts`), `const invalid: number = 'wrong'`)
+  await writeFile(resolve(root, `src/value.ts`), `export const value = 1`)
+  await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
+  expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
+  expect((await checker.check(document)).ok).toBe(true)
+  expect(parse_config).toHaveBeenCalledTimes(1)
+  const dom_document = assert_ok(
+    await engine.parse(
+      `${document.source}\n\n${fence(`ts`, `document.title = 'Docs'`)}`,
+      { filename: document.filename },
+    ),
+  )
+  expect((await checker.check(dom_document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2584` }),
+  )
+  base.compilerOptions.lib.push(`dom`)
+  await write_json(base_path, base)
+  expect((await checker.check(dom_document)).ok).toBe(true)
+  expect(parse_config).toHaveBeenCalledTimes(2)
+  await writeFile(ambient_path, `declare const PROJECT_LABEL: number`)
+  expect((await checker.check(document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2322` }),
+  )
+  expect(parse_config).toHaveBeenCalledTimes(2)
+  await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
+  await rm(base_path)
+  const missing = await checker.check(document)
+  expect(missing.diagnostics).toContainEqual(expect.objectContaining({ code: `TS5083` }))
+  await write_json(base_path, base)
+  expect((await checker.check(document)).ok).toBe(true)
+  await writeFile(base_path, `{ "compilerOptions": { "strict": } }`)
+  const invalid = await checker.check(document)
+  expect(invalid.ok).toBe(false)
+  expect(invalid.diagnostics[0].range.start.filename).toBe(base_path)
+  const original_diagnostics = structuredClone(invalid.diagnostics)
+  Object.assign(invalid.diagnostics[0], {
+    severity: `warning`,
+    code: `changed`,
+    message: `changed`,
+  })
+  Reflect.set(invalid.diagnostics[0].range.start, `filename`, `changed.md`)
+  expect((await checker.check(document)).diagnostics).toEqual(original_diagnostics)
+  await write_json(base_path, base)
+  expect(
+    (await check_document(document, { tsconfig: resolve(root, `tsconfig.json`) })).ok,
+  ).toBe(true)
+  const override = create_checker({ root, compiler_options: { types: [] } })
+  expect((await override.check(document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2304` }),
+  )
+
+  const nested = create_checker({ root: resolve(root, `docs`) })
+  expect((await nested.check(document)).ok).toBe(true)
+  await write_json(resolve(root, `docs/tsconfig.json`), {
+    extends: `../tsconfig.json`,
+    compilerOptions: { types: [] },
+  })
+  expect((await nested.check(document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2304` }),
+  )
+
+  const explicit = create_checker({ root, tsconfig: `missing.json` })
+  expect((await explicit.check(document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS5083` }),
+  )
+  await write_json(resolve(root, `missing.json`), { extends: `./tsconfig.json` })
+  expect((await explicit.check(document)).ok).toBe(true)
+
+  await write_json(resolve(root, `node_modules/fixture-config/alternate.json`), {
+    extends: `../../settings/base.json`,
+    compilerOptions: { types: [] },
+  })
+  await write_json(package_path, { tsconfig: `alternate.json` })
+  expect((await checker.check(document)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2304` }),
+  )
+  await write_json(package_path, { tsconfig: `config.json` })
+  expect((await checker.check(document)).ok).toBe(true)
+  const path_override = create_checker({
+    root,
+    compiler_options: { paths: { $value: [`./src/value.ts`] } },
+  })
+
+  expect(await path_override.check(document)).toMatchObject({
+    ok: true,
+    diagnostics: [],
+  })
+
+  for (const module of [`CommonJS`, `NodeNext`]) {
+    await write_json(resolve(root, `tsconfig.json`), {
+      extends: `fixture-config`,
+      compilerOptions: { module },
+      files: [],
+    })
     expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
-    expect((await checker.check(document)).ok).toBe(true)
-    expect(parse_config).toHaveBeenCalledTimes(1)
-    const dom_document = assert_ok(
-      await engine.parse(
-        `${document.source}\n\n${fence(`ts`, `document.title = 'Docs'`)}`,
-        { filename: document.filename },
-      ),
-    )
-    expect((await checker.check(dom_document)).diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS2584` }),
-    )
-    base.compilerOptions.lib.push(`dom`)
-    await writeFile(base_path, JSON.stringify(base))
-    expect((await checker.check(dom_document)).ok).toBe(true)
-    expect(parse_config).toHaveBeenCalledTimes(2)
-    await writeFile(ambient_path, `declare const PROJECT_LABEL: number`)
-    expect((await checker.check(document)).diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS2322` }),
-    )
-    expect(parse_config).toHaveBeenCalledTimes(2)
-    await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
-    await rm(base_path)
-    const missing = await checker.check(document)
-    expect(missing.diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS5083` }),
-    )
-    await writeFile(base_path, JSON.stringify(base))
-    expect((await checker.check(document)).ok).toBe(true)
-    await writeFile(base_path, `{ "compilerOptions": { "strict": } }`)
-    const invalid = await checker.check(document)
-    expect(invalid.ok).toBe(false)
-    expect(invalid.diagnostics[0].range.start.filename).toBe(base_path)
-    const original_diagnostics = structuredClone(invalid.diagnostics)
-    Object.assign(invalid.diagnostics[0], {
-      severity: `warning`,
-      code: `changed`,
-      message: `changed`,
-    })
-    Reflect.set(invalid.diagnostics[0].range.start, `filename`, `changed.md`)
-    expect((await checker.check(document)).diagnostics).toEqual(original_diagnostics)
-    await writeFile(base_path, JSON.stringify(base))
-    expect(
-      (await check_document(document, { tsconfig: resolve(root, `tsconfig.json`) })).ok,
-    ).toBe(true)
-    const override = create_checker({ root, compiler_options: { types: [] } })
-    try {
-      expect((await override.check(document)).diagnostics).toContainEqual(
-        expect.objectContaining({ code: `TS2304` }),
-      )
-    } finally {
-      override.dispose()
-    }
-    const nested = create_checker({ root: resolve(root, `docs`) })
-    try {
-      expect((await nested.check(document)).ok).toBe(true)
-      await writeFile(
-        resolve(root, `docs/tsconfig.json`),
-        JSON.stringify({
-          extends: `../tsconfig.json`,
-          compilerOptions: { types: [] },
-        }),
-      )
-      expect((await nested.check(document)).diagnostics).toContainEqual(
-        expect.objectContaining({ code: `TS2304` }),
-      )
-    } finally {
-      nested.dispose()
-    }
-    const explicit = create_checker({ root, tsconfig: `missing.json` })
-    try {
-      expect((await explicit.check(document)).diagnostics).toContainEqual(
-        expect.objectContaining({ code: `TS5083` }),
-      )
-      await writeFile(
-        resolve(root, `missing.json`),
-        JSON.stringify({ extends: `./tsconfig.json` }),
-      )
-      expect((await explicit.check(document)).ok).toBe(true)
-    } finally {
-      explicit.dispose()
-    }
-    await writeFile(
-      resolve(root, `node_modules/fixture-config/alternate.json`),
-      JSON.stringify({
-        extends: `../../settings/base.json`,
-        compilerOptions: { types: [] },
-      }),
-    )
-    await writeFile(package_path, JSON.stringify({ tsconfig: `alternate.json` }))
-    expect((await checker.check(document)).diagnostics).toContainEqual(
-      expect.objectContaining({ code: `TS2304` }),
-    )
-    await writeFile(package_path, JSON.stringify({ tsconfig: `config.json` }))
-    expect((await checker.check(document)).ok).toBe(true)
-    const path_override = create_checker({
-      root,
-      compiler_options: { paths: { $value: [`./src/value.ts`] } },
-    })
-    try {
-      expect(await path_override.check(document)).toMatchObject({
-        ok: true,
-        diagnostics: [],
-      })
-    } finally {
-      path_override.dispose()
-    }
-    for (const module of [`CommonJS`, `NodeNext`]) {
-      await writeFile(
-        resolve(root, `tsconfig.json`),
-        JSON.stringify({
-          extends: `fixture-config`,
-          compilerOptions: { module },
-          files: [],
-        }),
-      )
-      expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
-    }
-  } finally {
-    checker.dispose()
-    await rm(root, { recursive: true })
   }
 })

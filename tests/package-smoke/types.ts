@@ -26,8 +26,6 @@ import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/imag
 import { create_highlighter, default_highlighter } from 'svelte-widgets/highlight'
 import { assert_ok, create_markdown, compile_markdown } from 'svelte-widgets/markdown'
 import { content_toc } from 'svelte-widgets/markdown/content'
-import { encode_project } from 'svelte-widgets/code-playground'
-import { walkthrough_lines } from 'svelte-widgets/code-walkthrough'
 
 export { create_checker as markdown_checker } from 'svelte-widgets/markdown/check'
 
@@ -61,16 +59,6 @@ export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) =>
 export const highlighter: CodeHighlighter = (code) => [{ text: code }]
 export const markdown_highlighter = default_highlighter.highlight
 export const custom_highlighter = create_highlighter([])
-export const shared_project = encode_project({
-  files: { 'App.svelte': `<p>Preview</p>` },
-  entry: `App.svelte`,
-})
-export const walkthrough_diff = walkthrough_lines({
-  id: `edit`,
-  title: `Edit`,
-  before: `one`,
-  code: `two`,
-})
 // @ts-expect-error Typed metadata requires a validator that produces that shape.
 create_markdown<{ title: string }>({})
 

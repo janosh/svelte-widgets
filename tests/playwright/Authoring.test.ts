@@ -1,65 +1,18 @@
 import { expect, test } from '@playwright/test'
 
-test(`walkthrough supports keyboard steps and stays readable on narrow screens`, async ({
-  page,
-}) => {
-  await page.goto(`/authoring`)
-  await expect(page.locator(`.code-playground [role=status]`)).toHaveText(`Preview ready`)
-  const walkthrough = page.getByRole(`region`, { name: `Code walkthrough`, exact: true })
-  const first = walkthrough.getByRole(`tab`, { name: `Create state` })
-  await first.focus()
-  await page.keyboard.press(`ArrowDown`)
-  await expect(walkthrough.getByRole(`tab`, { name: `Handle a click` })).toBeFocused()
-  await expect(walkthrough.locator(`.added .text`)).toHaveText(
-    `const increment = () => count += 1`,
-  )
-  await expect(walkthrough.locator(`.focused .annotation`)).toHaveText(
-    `One action, one state update`,
-  )
-  await expect(walkthrough.locator(`.line`)).toHaveCount(2)
-  await page.keyboard.press(`End`)
-  await expect(walkthrough.getByRole(`button`, { name: `Next` })).toBeDisabled()
-  await expect(walkthrough.locator(`.removed .text`)).toHaveText(`<button>Count</button>`)
-  await page.setViewportSize({ width: 375, height: 850 })
-  await expect(walkthrough.getByRole(`tabpanel`)).toBeVisible()
-  const width = await page.evaluate(() => ({
-    page: document.documentElement.scrollWidth,
-    viewport: innerWidth,
-  }))
-  expect(width.page).toBeLessThanOrEqual(width.viewport)
-  await walkthrough.getByRole(`button`, { name: `Previous` }).click()
-  await expect(walkthrough.locator(`[aria-live]`)).toHaveText(`Step 2 of 3`)
-  const annotation_bounds = await walkthrough.locator(`.annotation`).boundingBox()
-  expect(annotation_bounds).not.toBeNull()
-  if (annotation_bounds)
-    expect(annotation_bounds.x + annotation_bounds.width).toBeLessThanOrEqual(
-      width.viewport,
-    )
-  const references = page
-    .frameLocator(`iframe[title="Scientific reference preview"]`)
-    .locator(`body`)
-  await expect(references.getByRole(`link`, { name: `Equation (1)` })).toHaveAttribute(
-    `href`,
-    `#eq:energy`,
-  )
-  await expect(references.locator(`figcaption`)).toHaveText(`Figure 1. Svelte Widgets`)
-  await expect
-    .poll(() =>
-      references
-        .locator(`img`)
-        .evaluate((element) =>
-          element instanceof HTMLImageElement ? element.naturalWidth : 0,
-        ),
-    )
-    .toBeGreaterThan(0)
-  await expect(references.locator(`math`)).toHaveCount(1)
-  await expect(references.getByRole(`heading`, { name: `References` })).toBeVisible()
-})
-
 test(`editable content labs validate manifests, reuse highlights, and recover from bad references`, async ({
   page,
 }) => {
   await page.goto(`/authoring`)
+  await expect(
+    page.getByRole(`navigation`, { name: `Authoring features` }).getByRole(`link`),
+  ).toHaveText([
+    `Checked examples`,
+    `Content manifests`,
+    `Incremental compilation`,
+    `Scientific references`,
+  ])
+
   const manifest = page.getByRole(`region`, { name: `Content manifest lab`, exact: true })
   await expect(manifest.getByRole(`status`)).toHaveText(`2 headings · 1 links · 0 issues`)
   await manifest.getByRole(`button`, { name: `Break a link` }).click()
@@ -98,6 +51,26 @@ test(`editable content labs validate manifests, reuse highlights, and recover fr
     `1 examples · 1 new highlight calls`,
   )
   await expect(incremental).toContainText(`ids_unchanged`)
+
+  const references = page
+    .frameLocator(`iframe[title="Scientific reference preview"]`)
+    .locator(`body`)
+  await expect(references.getByRole(`link`, { name: `Equation (1)` })).toHaveAttribute(
+    `href`,
+    `#eq:energy`,
+  )
+  await expect(references.locator(`figcaption`)).toHaveText(`Figure 1. Svelte Widgets`)
+  await expect
+    .poll(() =>
+      references
+        .locator(`img`)
+        .evaluate((element) =>
+          element instanceof HTMLImageElement ? element.naturalWidth : 0,
+        ),
+    )
+    .toBeGreaterThan(0)
+  await expect(references.locator(`math`)).toHaveCount(1)
+  await expect(references.getByRole(`heading`, { name: `References` })).toBeVisible()
 
   const science = page.getByRole(`region`, {
     name: `Scientific references lab`,

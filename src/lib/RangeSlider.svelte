@@ -257,9 +257,53 @@
 >
   <div class="heading">
     <span id={`${uid}-label`} class="label">{label}</span>
-    <span class="summary" aria-hidden="true"
-      >{format_value(values[0])}<span>–</span>{format_value(values[1])}</span
-    >
+    <div class="summary">
+      {#each ends as thumb}
+        {#if thumb === 1}<span aria-hidden="true">–</span>{/if}
+        <div class="endpoint">
+          <span class="formatted" aria-hidden="true">{format_value(values[thumb])}</span>
+          {#if show_inputs}
+            <input
+              type="number"
+              {disabled}
+              min={bounds(thumb)[0]}
+              max={bounds(thumb)[1]}
+              step="any"
+              aria-label={`${label} ${names[thumb]}`}
+              value={drafts[thumb]}
+              style:width={`${Math.max(3, drafts[thumb].length)}ch`}
+              title={names[thumb]}
+              oninput={(event) => {
+                const text = event.currentTarget.value
+                drafts = drafts.map((draft, idx) => (idx === thumb ? text : draft))
+              }}
+              onchange={(event) => commit_number(event.currentTarget, thumb)}
+              onblur={(event) => commit_number(event.currentTarget, thumb)}
+              onkeydown={(event) => {
+                if (event.defaultPrevented || event.isComposing) return
+                if (event.key === `Enter`) {
+                  event.preventDefault()
+                  commit_number(event.currentTarget, thumb)
+                } else if (event.key === `Escape`) {
+                  event.preventDefault()
+                  drafts = values.map(String)
+                } else if (
+                  [`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`].includes(event.key)
+                ) {
+                  const draft_value = event.currentTarget.valueAsNumber
+                  keydown(
+                    event,
+                    thumb,
+                    Number.isFinite(draft_value) ? draft_value : values[thumb],
+                  )
+                  if (event.defaultPrevented) drafts = values.map(String)
+                }
+              }}
+            />
+          {/if}
+        </div>
+      {/each}
+    </div>
   </div>
   {#if description}<p id={`${uid}-description`}>{description}</p>{/if}
   <div class="track-space">
@@ -288,7 +332,7 @@
           class:active={active === thumb}
           style:inset-inline-start={`${positions[thumb]}%`}
           {disabled}
-          aria-labelledby={`${uid}-label ${uid}-end-${thumb}`}
+          aria-label={`${label} ${names[thumb]}`}
           aria-describedby={description ? `${uid}-description` : undefined}
           aria-valuemin={bounds(thumb)[0]}
           aria-valuemax={bounds(thumb)[1]}
@@ -303,50 +347,6 @@
     <div class="limits" aria-hidden="true">
       <span>{format_value(min)}</span><span>{format_value(max)}</span>
     </div>
-  </div>
-  <div class="fields" class:visually-hidden={!show_inputs}>
-    {#each ends as thumb}
-      <label>
-        <span id={`${uid}-end-${thumb}`}>{names[thumb]}</span>
-        {#if show_inputs}
-          <input
-            type="number"
-            {disabled}
-            min={bounds(thumb)[0]}
-            max={bounds(thumb)[1]}
-            step="any"
-            aria-labelledby={`${uid}-label ${uid}-end-${thumb}`}
-            value={drafts[thumb]}
-            oninput={(event) => {
-              const text = event.currentTarget.value
-              drafts = drafts.map((draft, idx) => (idx === thumb ? text : draft))
-            }}
-            onchange={(event) => commit_number(event.currentTarget, thumb)}
-            onblur={(event) => commit_number(event.currentTarget, thumb)}
-            onkeydown={(event) => {
-              if (event.defaultPrevented || event.isComposing) return
-              if (event.key === `Enter`) {
-                event.preventDefault()
-                commit_number(event.currentTarget, thumb)
-              } else if (event.key === `Escape`) {
-                event.preventDefault()
-                drafts = values.map(String)
-              } else if (
-                [`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`].includes(event.key)
-              ) {
-                const draft_value = event.currentTarget.valueAsNumber
-                keydown(
-                  event,
-                  thumb,
-                  Number.isFinite(draft_value) ? draft_value : values[thumb],
-                )
-                if (event.defaultPrevented) drafts = values.map(String)
-              }
-            }}
-          />
-        {/if}
-      </label>
-    {/each}
   </div>
 </div>
 
@@ -372,7 +372,9 @@
     }
     .summary {
       display: inline-flex;
+      align-items: center;
       gap: 0.4em;
+      max-width: 100%;
       font-variant-numeric: tabular-nums;
       font-size: 0.9em;
       font-weight: 600;
@@ -465,34 +467,39 @@
       opacity: 0.65;
       font-variant-numeric: tabular-nums;
     }
-    .fields {
+    .endpoint {
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-      gap: 0.75em;
-      margin-top: 1em;
-    }
-    .fields label {
-      display: flex;
-      flex-direction: column;
-      gap: 0.35em;
       min-width: 0;
-      font-size: 0.8em;
+      &:has(input) {
+        border-bottom: 1px solid color-mix(in srgb, currentColor 30%, transparent);
+      }
+      > * {
+        grid-area: 1 / 1;
+      }
+      .formatted {
+        align-self: center;
+        text-align: center;
+        padding-inline: 0.25em;
+        pointer-events: none;
+      }
+      &:focus-within .formatted {
+        visibility: hidden;
+      }
+      &:not(:focus-within) input {
+        opacity: 0;
+      }
     }
     input {
-      box-sizing: border-box;
-      width: 100%;
-      min-width: 0;
-      padding: 0.6em 0.75em;
-      border: 1px solid color-mix(in srgb, currentColor 22%, transparent);
-      border-radius: 7px;
+      box-sizing: content-box;
+      min-width: calc(100% - 0.5em);
+      padding: 0.25em;
+      border: 0;
+      border-radius: 0;
       background: var(--range-slider-input-bg, transparent);
       color: inherit;
       font: inherit;
-      font-size: 1.15em;
       font-variant-numeric: tabular-nums;
       box-shadow: none;
-    }
-    input {
       appearance: textfield;
     }
     input::-webkit-inner-spin-button,
@@ -506,16 +513,6 @@
     }
     &:has(.thumb:disabled) :is(.rail, .thumb, input) {
       cursor: not-allowed;
-    }
-    .visually-hidden {
-      position: absolute;
-      width: 1px;
-      height: 1px;
-      padding: 0;
-      margin: -1px;
-      overflow: hidden;
-      clip-path: inset(50%);
-      white-space: nowrap;
     }
   }
   @media (prefers-reduced-motion: reduce) {

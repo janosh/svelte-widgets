@@ -196,59 +196,6 @@ During development, static prose between dynamic components lives in separate vi
 
 `markdown_vite(engine, { highlight_cache_size: 256 })` caches highlighted fences per integration, shares concurrent work, and evicts the least recently used entries. Set the size to zero to disable caching. Changed prose reuses existing highlights; rejected requests are removed so a corrected highlighter can retry. Plugin teardown clears both compilation and highlighting caches.
 
-## Editable playgrounds
-
-Add `playground_vite()` alongside your normal Svelte Vite plugin, then import the generated local runtime into a page:
-
-```ts
-import { playground_vite } from 'svelte-widgets/code-playground/vite'
-
-// Vite config: plugins: [sveltekit(), playground_vite()]
-```
-
-```svelte
-<script>
-  import { CodePlayground } from 'svelte-widgets'
-  import runtime_source from 'virtual:svelte-widgets/playground'
-
-  const files = {
-    'App.svelte': `<h1>Hello from the playground</h1>`,
-  }
-</script>
-
-<CodePlayground {files} {runtime_source} restore_hash />
-```
-
-Reference `svelte-widgets/code-playground/virtual` in your project's ambient types. The runtime bundles the installed Svelte locally; the compiler loads on demand. Projects support `.svelte`, `.js`, `.mjs`, `.html`, `.css`, and `.json` with explicit relative paths. JSON imports and reexports support `with { type: "json" }`, and literal dynamic imports support `{ with: { type: "json" } }`; these attributes are removed because JSON is compiled into JavaScript modules. Other import attributes fail during compilation. Supported Svelte modules are bundled; other packages fail clearly. A custom compiler or editor backend can be injected. The preview runs in an iframe without same-origin privileges and blocks network access. Run, Reset, file tabs, console output, and shareable project URLs are built in. Shared URL loading is opt-in with `restore_hash`; nothing is uploaded.
-
-See the [interactive authoring demo](https://svelte-widgets.janosh.dev/authoring).
-
-## Guided walkthroughs
-
-`CodeWalkthrough` combines ordered steps, annotations, focused source lines, and before/after comparisons. Its step list supports Up/Down, Home, and End; changes also announce progress to assistive technology.
-
-```svelte
-<script>
-  import { CodeWalkthrough } from 'svelte-widgets'
-
-  const steps = [
-    { id: `state`, title: `Create state`, code: `let count = $state(0)` },
-    {
-      id: `update`,
-      title: `Update state`,
-      before: `let count = $state(0)`,
-      code: `let count = $state(0)\ncount += 1`,
-      focus_lines: [2],
-      annotations: { 2: `Add one` },
-    },
-  ]
-</script>
-
-<CodeWalkthrough {steps} />
-```
-
-Bind `active_id` to control the selected step. Supply a `preview(step)` snippet for a running example and `onstep(step, index)` for application state. Focus lines and annotation keys are one-based; invalid references and duplicate step IDs fail explicitly. Comparisons use a linear prefix/suffix algorithm: the middle is one replacement hunk, so large examples avoid quadratic diff work. Labels are customizable through `labels`. The copy button copies the selected source without line numbers, diff markers, or annotations.
-
 ## Scientific references
 
 [Edit equations, figures, and citations in the live reference lab](https://svelte-widgets.janosh.dev/authoring#scientific-references).

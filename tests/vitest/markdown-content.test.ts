@@ -175,6 +175,14 @@ describe(`Markdown content manifests`, () => {
     )
     const next = await document_manifest(`# Target`, `/next.md`)
     expect(validate_content([guide, next], { assets: [`/plot one.svg`] })).toEqual([])
+    const origin = { filename: `/guide.md`, line: 1, column: 1, offset: 0 }
+    expect(validate_content([guide, guide, next])).toMatchObject([
+      {
+        code: `duplicate_document`,
+        range: { start: origin, end: origin },
+        related: [{ range: { start: origin, end: origin } }],
+      },
+    ])
     const broken = await document_manifest(
       `<div id="duplicate"></div>\n<div id="duplicate"></div>\n\n[Lost](#absent) [Missing](missing.md) [Invalid](./%zz)\n\n![Absent](missing.png)`,
     )

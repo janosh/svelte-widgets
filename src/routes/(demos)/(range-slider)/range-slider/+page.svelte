@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { CodeExample, RangeSlider, type RangeValue } from '$lib'
+  import { CodeBlock, RangeSlider, type RangeValue } from '$lib'
+  import { default_highlighter } from '$lib/highlight'
 
   let price = $state<RangeValue>([120, 360])
   let temperature = $state<RangeValue>([-5, 22])
@@ -8,7 +9,6 @@
   let rtl_range = $state<RangeValue>([20, 75])
   let batches = $state<RangeValue>([0, 10])
   let locked = $state(false)
-  let committed = $state<RangeValue>([120, 360])
   let commits = $state(0)
   const currency = new Intl.NumberFormat(`en-US`, {
     style: `currency`,
@@ -36,25 +36,22 @@
 <svelte:head><title>RangeSlider · Svelte Widgets</title></svelte:head>
 
 <section class="intro">
-  <span class="eyebrow">Two handles. One interval.</span>
-  <h1>Find your sweet spot.</h1>
+  <h1>RangeSlider</h1>
   <p>
-    Drag either end, tap the track, or type an exact value. A range control that feels
-    just as natural with a keyboard as it does under your fingertips.
+    Select an interval by dragging the handles, clicking the track, using the keyboard, or
+    entering values directly.
   </p>
 </section>
 
 <div class="showcase">
-  <section class="card featured">
-    <div class="card-heading">
-      <span>01 / A little room to explore</span><button
-        type="button"
-        onclick={() => (price = [120, 360])}>Reset</button
-      >
-    </div>
+  <section>
+    <header>
+      <h2>Currency range</h2>
+      <button type="button" onclick={() => (price = [120, 360])}>Reset</button>
+    </header>
     <RangeSlider
       label="Nightly budget"
-      description="Choose a comfortable range for your next stay."
+      description="Select a price range in $10 steps."
       lower_label="From"
       upper_label="To"
       min={0}
@@ -63,26 +60,17 @@
       bind:value={price}
       format_value={money}
       disabled={locked}
-      oncommit={(value) => {
-        committed = value
-        commits++
-      }}
+      oncommit={() => commits++}
       style="--range-slider-color: light-dark(#7c3aed, #c4b5fd)"
     />
-    <div class="feedback">
-      <span class="dot"></span><span
-        >Applied {money(committed[0])} – {money(committed[1])}</span
-      ><span class="commit-count">{commits} commits</span>
-    </div>
-    <label class="lock"
-      ><input type="checkbox" bind:checked={locked} /> Lock this range</label
-    >
+    <p class="commit-count">{commits} commits</p>
+    <label><input type="checkbox" bind:checked={locked} /> Lock this range</label>
   </section>
-  <section class="card">
-    <div class="card-heading"><span>02 / Below zero, above ordinary</span></div>
+  <section>
+    <header><h2>Decimal steps</h2></header>
     <RangeSlider
       label="Temperature window"
-      description="Fine-tune your comfort zone in half-degree steps."
+      description="Negative and positive values in 0.5 °C steps."
       min={-30}
       max={50}
       step={0.5}
@@ -91,11 +79,11 @@
       style="--range-slider-color: light-dark(#0e7490, #67e8f9)"
     />
   </section>
-  <section class="card">
-    <div class="card-heading"><span>03 / Small steps, clear signals</span></div>
+  <section>
+    <header><h2>Percentage formatting</h2></header>
     <RangeSlider
       label="Confidence interval"
-      description="A compact variant with formatted values."
+      description="Percentage values with numeric inputs hidden."
       min={0}
       max={1}
       step={0.01}
@@ -106,22 +94,20 @@
     />
     <p class="note">Arrow keys move 1%. Shift + arrow or Page Up / Down moves 10%.</p>
   </section>
-  <section class="card">
-    <div class="card-heading">
-      <span>04 / Never get stuck</span><button
-        type="button"
-        onclick={() => (overlap = [50, 50])}>Overlap handles</button
-      >
-    </div>
+  <section>
+    <header>
+      <h2>Overlapping handles</h2>
+      <button type="button" onclick={() => (overlap = [50, 50])}>Overlap handles</button>
+    </header>
     <RangeSlider
-      label="Meeting in the middle"
+      label="Shared endpoint"
       description="Drag left or right to separate the handles."
       bind:value={overlap}
       style="--range-slider-color: light-dark(#b45309, #fcd34d)"
     />
   </section>
-  <section class="card rtl-card">
-    <div class="card-heading"><span>05 / A change of direction</span></div>
+  <section>
+    <header><h2>Right-to-left layout</h2></header>
     <div dir="rtl">
       <RangeSlider
         label="النطاق"
@@ -134,17 +120,17 @@
     <p class="note">Right-to-left layouts mirror the track and horizontal arrow keys.</p>
   </section>
   <form
-    class="card"
     onreset={(event) => {
       if (!event.defaultPrevented) batches = [0, 10]
     }}
   >
-    <div class="card-heading">
-      <span>06 / Every endpoint counts</span><button type="reset">Reset interval</button>
-    </div>
+    <header>
+      <h2>Uneven steps and form reset</h2>
+      <button type="reset">Reset interval</button>
+    </header>
     <RangeSlider
       label="Batch size"
-      description="Steps of three, with ten still in reach."
+      description="Steps of 3 with a maximum of 10."
       min={0}
       max={10}
       step={3}
@@ -158,8 +144,13 @@
 </div>
 
 <section class="guide">
-  <h2>Make it yours</h2>
-  <CodeExample src={example} meta={{ lang: `svelte` }} />
+  <h2>Usage</h2>
+  <CodeBlock
+    code={example}
+    language="svelte"
+    label="RangeSlider usage"
+    highlight={default_highlighter.highlight}
+  />
   <h3>Interaction details</h3>
   <ul>
     <li>
@@ -206,18 +197,19 @@
           ><td><code>lower_label / upper_label</code></td><td
             ><code>Minimum / Maximum</code></td
           ><td
-            >Visible and accessible endpoint names; translate these along with the label.</td
+            >Accessible endpoint names and input tooltips; translate these along with the
+            label.</td
           ></tr
         >
         <tr
           ><td><code>format_value</code></td><td><code>String</code></td><td
-            >Formats the summary, limits, and announced slider values. Numeric fields stay
-            editable as numbers.</td
+            >Formats the selected values, limits, and announced slider values. Click a
+            selected value to edit its underlying number.</td
           ></tr
         >
         <tr
           ><td><code>show_inputs / disabled</code></td><td><code>true / false</code></td
-          ><td>Hide numeric fields or disable every interaction.</td></tr
+          ><td>Make selected values read-only or disable every interaction.</td></tr
         >
         <tr
           ><td><code>oninput / oncommit</code></td><td>—</td><td
@@ -246,94 +238,54 @@
   .intro {
     max-width: 660px;
     margin: 1.5rem 0 2rem;
-  }
-  .eyebrow {
-    color: light-dark(#6d28d9, #c4b5fd);
-    font-size: 0.75rem;
-    font-weight: 700;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-  }
-  h1 {
-    font-size: clamp(2rem, 5vw, 3.25rem);
-    line-height: 1.12;
-    letter-spacing: -0.045em;
-    margin: 0.5rem 0 1rem;
-  }
-  .intro p {
-    font-size: 1.05rem;
-    line-height: 1.65;
-    opacity: 0.7;
+    h1 {
+      font-size: 2rem;
+      text-align: start;
+    }
   }
   .showcase {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
+    gap: 2rem;
     align-items: start;
-  }
-  .card {
-    min-width: 0;
-    padding: 1.5rem;
-    border: 1px solid light-dark(#e5e4ed, #343340);
-    border-radius: 16px;
-    background: light-dark(#fff, #202029);
-    box-shadow: 0 3px 18px #00000006;
-  }
-  .featured {
-    background: linear-gradient(
-      135deg,
-      light-dark(#faf7ff, #282139),
-      light-dark(#fff, #202029)
-    );
-    border-color: light-dark(#ddd1f8, #54406f);
-  }
-  .card-heading {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 0.75rem;
-    min-height: 28px;
-    margin-bottom: 1.3rem;
-    color: light-dark(#656374, #b2aec3);
-    font-size: 0.7rem;
-    letter-spacing: 0.025em;
-  }
-  .card-heading button {
-    flex-shrink: 0;
-    font: inherit;
-    padding: 0.35em 0.65em;
-    border: 1px solid currentColor;
-    border-radius: 5px;
-    color: inherit;
-    background: transparent;
-    cursor: pointer;
-  }
-  .feedback {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-top: 1.2rem;
-    font-size: 0.75rem;
-  }
-  .dot {
-    width: 6px;
-    height: 6px;
-    background: #10b981;
-    border-radius: 50%;
+    > section,
+    > form {
+      min-width: 0;
+      border-top: 1px solid #8884;
+      padding-block: 1rem;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      min-height: 2rem;
+      margin-bottom: 1rem;
+      h2 {
+        margin: 0;
+        font-size: 1rem;
+      }
+      button {
+        font-size: 0.8rem;
+        padding: 0.25em 0.5em;
+        border-radius: 3px;
+        box-shadow: none;
+      }
+    }
+    > section > label {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      margin-top: 0.8rem;
+      font-size: 0.8rem;
+    }
   }
   .commit-count {
-    margin-inline-start: auto;
+    margin: 0.75rem 0 0;
+    font-size: 0.75rem;
     opacity: 0.6;
     font-variant-numeric: tabular-nums;
-  }
-  .lock {
-    display: flex;
-    align-items: center;
-    gap: 0.5em;
-    margin-top: 0.8rem;
-    font-size: 0.75rem;
-    opacity: 0.8;
   }
   .note {
     margin: 1.1rem 0 0;
@@ -343,13 +295,9 @@
   }
   .guide {
     margin-top: 3rem;
-  }
-  .guide li {
-    margin-bottom: 0.6em;
-  }
-  .guide p,
-  .guide li {
-    line-height: 1.65;
+    li {
+      margin-bottom: 0.6em;
+    }
   }
   .table-wrap {
     overflow-x: auto;
@@ -365,13 +313,5 @@
     padding: 0.7em;
     border-bottom: 1px solid #8883;
     vertical-align: top;
-  }
-  @media (max-width: 700px) {
-    .showcase {
-      grid-template-columns: 1fr;
-    }
-    .card {
-      padding: 1.15rem;
-    }
   }
 </style>

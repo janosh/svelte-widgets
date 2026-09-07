@@ -30,6 +30,17 @@ test.beforeEach(async ({ page, baseURL }) => {
 test(`mouse dragging captures outside the rail, commits once, and keeps handles ordered`, async ({
   page,
 }) => {
+  await expect(page.getByRole(`heading`, { level: 1 })).toHaveText(`RangeSlider`)
+  const usage = page.getByRole(`region`, { name: `RangeSlider usage` })
+  await expect(usage.locator(`.pl-k`).first()).toHaveText(`import`)
+  await expect(page.locator(`.showcase h2`)).toHaveText([
+    `Currency range`,
+    `Decimal steps`,
+    `Percentage formatting`,
+    `Overlapping handles`,
+    `Right-to-left layout`,
+    `Uneven steps and form reset`,
+  ])
   const group = page.getByRole(`group`, { name: `Nightly budget`, exact: true })
   const [lower, upper] = [
     group.getByRole(`slider`).nth(0),
@@ -89,7 +100,7 @@ test(`track clicks, keyboard bounds, focus order, and decimal numeric drafts wor
 test(`coincident handles separate both ways and remain separately keyboard reachable`, async ({
   page,
 }) => {
-  const group = page.getByRole(`group`, { name: `Meeting in the middle`, exact: true })
+  const group = page.getByRole(`group`, { name: `Shared endpoint`, exact: true })
   const thumbs = group.getByRole(`slider`)
   const rail = await box_of(group.locator(`.rail`))
   await drag_to(page, thumbs.nth(0), rail.x + rail.width * 0.25)
@@ -197,6 +208,17 @@ test(`focus, reduced motion and forced colors retain visible handles`, async ({
   await page.emulateMedia({ reducedMotion: `reduce`, forcedColors: `active` })
   const lower = page.getByRole(`slider`, { name: `Nightly budget From` })
   await page.getByRole(`button`, { name: `Reset`, exact: true }).focus()
+  const lower_input = page.getByRole(`spinbutton`, { name: `Nightly budget From` })
+  await page.keyboard.press(`Tab`)
+  await expect(lower_input).toBeFocused()
+  await expect(lower_input).toHaveCSS(`opacity`, `1`)
+  await expect(lower_input.locator(`..`).locator(`.formatted`)).toBeHidden()
+  await lower_input.fill(`135`)
+  await page.keyboard.press(`Tab`)
+  await expect(lower_input).toHaveValue(`140`)
+  await expect(lower_input).toHaveCSS(`opacity`, `0`)
+  await expect(lower_input.locator(`..`).locator(`.formatted`)).toHaveText(`$140`)
+  await expect(page.getByRole(`spinbutton`, { name: `Nightly budget To` })).toBeFocused()
   await page.keyboard.press(`Tab`)
   await expect(lower).toBeFocused()
   const styles = await lower.locator(`.knob`).evaluate((element) => {
@@ -220,7 +242,7 @@ test(`native forms accept off-grid endpoints and reset the complete interval`, a
   page,
 }) => {
   const group = page.getByRole(`group`, { name: `Batch size`, exact: true })
-  const form = page.locator(`form.card`)
+  const form = page.locator(`.showcase > form`)
   const upper = group.getByRole(`slider`).nth(1)
   const input = group.getByRole(`spinbutton`).nth(1)
   expect(

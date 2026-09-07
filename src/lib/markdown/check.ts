@@ -362,6 +362,10 @@ async function run_checks(
           )
         }
       }
+      if (typeof compiler.createProgram !== `function`)
+        throw new Error(
+          `Type checking requires the TypeScript 5/6 compiler API; found TypeScript ${compiler.version} in ${filename}. Install TypeScript 6 or pass options.typescript with a compatible compiler`,
+        )
       if (component) transform_component(fence, example_filename)
       else files.set(example_filename, { fence, code: fence.code })
     } catch (error) {
@@ -523,14 +527,8 @@ async function run_checks(
           if (!files.has(virtual_filename)) {
             const source = host.readFile(component_filename)
             if (source === undefined) {
-              const start = {
-                filename: component_filename,
-                line: 1,
-                column: 1,
-                offset: 0,
-              }
               diagnostics.push({
-                range: { start, end: start },
+                range: source_locator(``, component_filename)(0),
                 severity: `error`,
                 code: `import`,
                 message: `Cannot read imported Svelte component: ${component_filename}`,

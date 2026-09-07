@@ -68,8 +68,6 @@ Every component is a named export from the package root and has a direct subpath
 | `ThemeToggle`      | Light/dark/system theme cycler with persistence and cross-tab synchronization             | [docs](https://svelte-widgets.janosh.dev/extras#themetoggle)           |
 | `Toggle`           | Accessible switch with a bindable `checked`                                               | [docs](https://svelte-widgets.janosh.dev/extras#toggle)                |
 | `CodeExample`      | Collapsible source viewer used by the live examples                                       | [docs](https://svelte-widgets.janosh.dev/extras#codeexample)           |
-| `CodePlayground`   | Editable multi-file projects with local compilation, isolated previews and sharing        | [docs](https://svelte-widgets.janosh.dev/authoring)                    |
-| `CodeWalkthrough`  | Guided code steps with annotations, focused lines, diffs and keyboard navigation          | [docs](https://svelte-widgets.janosh.dev/authoring)                    |
 | `FileDetails`      | Collapsible `<details>` viewer for a set of files                                         | [docs](https://svelte-widgets.janosh.dev/extras#filedetails)           |
 | `PrevNext`         | Previous/next links for sequential pages                                                  | [docs](https://svelte-widgets.janosh.dev/extras#prevnext)              |
 | `SubpageGrid`      | Card grid linking to child pages                                                          | [docs](https://svelte-widgets.janosh.dev/extras#subpagegrid)           |
@@ -174,10 +172,6 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/markdown/vite`            | Live code examples with virtual modules and hot reload                            |
 | `/markdown/content`         | Content manifests, typed frontmatter, link validation, TOC and search records     |
 | `/markdown/check`           | Node-only syntax, type and assertion checks for documentation examples            |
-| `/code-playground`          | Local multi-file compilation, sandbox documents and project sharing               |
-| `/code-playground/vite`     | Bundle the installed Svelte runtime for local previews                            |
-| `/code-playground/virtual`  | Types for the generated playground runtime module                                 |
-| `/code-walkthrough`         | Walkthrough step types, validation and linear source comparisons                  |
 | `/print`                    | Element printing                                                                  |
 | `/source-links`             | Link inline code mentions of your source to GitHub                                |
 | `/source-links/vite-plugin` | Vite plugin emitting the file/export index those links use                        |
