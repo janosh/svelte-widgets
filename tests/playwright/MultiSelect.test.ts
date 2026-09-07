@@ -658,6 +658,15 @@ test(`failed option loads can be retried from the keyboard without selecting an 
   await input.press(`Tab`)
   const retry = multiselect.getByRole(`button`, { name: `Retry` })
   await expect(retry).toBeFocused()
+  await expect(
+    page.getByRole(`listbox`).getByRole(`button`, { name: `Retry` }),
+  ).toHaveCount(0)
+  const [input_box, retry_box] = await Promise.all([
+    input.boundingBox(),
+    retry.boundingBox(),
+  ])
+  if (!input_box || !retry_box) throw new Error(`Missing input or Retry button geometry`)
+  expect(retry_box.y).toBeGreaterThanOrEqual(input_box.y + input_box.height)
   await retry.press(`Enter`)
   await expect(input).toBeFocused()
   await expect(multiselect.getByRole(`alert`)).toHaveCount(0)

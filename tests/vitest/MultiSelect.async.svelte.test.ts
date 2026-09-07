@@ -338,12 +338,18 @@ describe(`loadOptions feature`, () => {
       expect(get_input().getAttribute(`aria-busy`)).toBeNull()
       expect(document.querySelector(`.user-msg`)).toBeNull()
       expect(doc_query(`[role="alert"]`).textContent).toBe(`Could not load options`)
+      expect(ul.querySelector(`button, [role="alert"]`)).toBeNull()
+      const retry = doc_query<HTMLButtonElement>(`[role="alert"] + button`)
+      retry.focus()
+      await tick()
+      expect(document.activeElement).toBe(retry)
+      expect(ul.classList.contains(`hidden`)).toBe(false)
       expect(ul.querySelectorAll(`li[role="option"]`)).toHaveLength(offset)
       mock_scroll_near_bottom(ul)
       await tick()
       expect(load_options).toHaveBeenCalledTimes(request_idx + 1)
 
-      doc_query<HTMLButtonElement>(`[role="alert"] + button`).click()
+      retry.click()
       await tick()
       expect(props.loadError).toBeNull()
       expect(load_options).toHaveBeenLastCalledWith(
@@ -519,37 +525,39 @@ describe(`loadOptions feature`, () => {
     expect(input.getAttribute(`aria-busy`)).toBeNull()
   })
 
-  test(`failed search retryable via input change`, async () => {
-    mock_console_error()
-    const { fn: load_options, resolvers, rejectors } = deferred_load()
-    vi.useFakeTimers()
-    mount_multiselect({
-      loadOptions: { fetch: load_options, debounceMs: 0 },
-      open: true,
-    })
-    await vi.runAllTimersAsync()
-    resolvers[0]({ options: [`Apple`], hasMore: false })
-    await vi.runAllTimersAsync()
-    expect(load_options).toHaveBeenCalledTimes(1)
+  test.each([`results`, `empty`, `error`])(
+    `returning to a cleared query with %s reloads after debounce`,
+    async (outcome) => {
+      mock_console_error()
+      const { fn: load_options, resolvers, rejectors } = deferred_load()
+      vi.useFakeTimers()
+      mount_multiselect({
+        loadOptions: { fetch: load_options, debounceMs: 100 },
+        open: true,
+        searchText: `a`,
+      })
+      await vi.runAllTimersAsync()
+      if (outcome === `error`) rejectors[0](new Error(`fail`))
+      else
+        resolvers[0]({ options: outcome === `results` ? [`Apple`] : [], hasMore: false })
+      await vi.runAllTimersAsync()
+      expect(load_options).toHaveBeenCalledTimes(1)
 
-    // this search fails
-    const input = get_input()
-    await type_search_text(`x`, input)
-    await vi.runAllTimersAsync()
-    expect(load_options).toHaveBeenCalledTimes(2)
-    rejectors[1](new Error(`fail`))
-    await vi.runAllTimersAsync()
-
-    // clearing and retyping the same search must refetch
-    await type_search_text(``, input)
-    await vi.runAllTimersAsync()
-    await type_search_text(`x`, input)
-    await vi.runAllTimersAsync()
-
-    expect(load_options).toHaveBeenLastCalledWith(
-      expect.objectContaining({ search: `x`, offset: 0, limit: 50 }),
-    )
-  })
+      const input = get_input()
+      await type_search_text(`b`, input)
+      await type_search_text(`a`, input)
+      await vi.advanceTimersByTimeAsync(99)
+      expect(load_options).toHaveBeenCalledOnce()
+      await vi.runAllTimersAsync()
+      expect(load_options).toHaveBeenCalledTimes(2)
+      expect(load_options).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: `a`, offset: 0, limit: 50 }),
+      )
+      resolvers[1]({ options: [`Apple`], hasMore: false })
+      await vi.runAllTimersAsync()
+      expect(doc_query(`ul.options`).textContent).toContain(`Apple`)
+    },
+  )
 })
 
 // https://github.com/janosh/svelte-widgets/discussions/401

@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
 import { merge_defaults, RESIZABLE_LABELS, type ResizableLabels } from '../labels'
 import { clamp } from '../utils'
-import { css_px, follow_pointer, is_primary_press } from './shared'
+import { css_px, follow_pointer, is_primary_press, override_style } from './shared'
 
 export type Dimensions = { width: number; height: number }
 export type ResizeEvent = MouseEvent | KeyboardEvent
@@ -65,7 +65,7 @@ export const resizable =
     type Grab = { horizontal?: `left` | `right`; vertical?: `top` | `bottom` }
     let is_resizing = false
     let stop_pointer_follow: (() => void) | undefined
-    let previous_user_select = ``
+    let restore_user_select: (() => void) | undefined
 
     const computed = getComputedStyle(node)
     const previous_position =
@@ -206,8 +206,11 @@ export const resizable =
 
       const origin = { x: event.clientX, y: event.clientY }
       const [measured, maximum] = [measure(), read_maximum()]
-      previous_user_select = node.ownerDocument.body.style.userSelect
-      node.ownerDocument.body.style.userSelect = `none`
+      restore_user_select = override_style(
+        node.ownerDocument.body.style,
+        `user-select`,
+        `none`,
+      )
       on_resize_start?.(event, { width: measured.width, height: measured.height })
       stop_pointer_follow = follow_pointer(
         node,
@@ -230,7 +233,7 @@ export const resizable =
 
     function on_pointerup(event: PointerEvent) {
       if (!is_resizing) return
-      node.ownerDocument.body.style.userSelect = previous_user_select
+      restore_user_select?.()
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })
       stop_pointer_follow?.()
       is_resizing = false
@@ -351,7 +354,7 @@ export const resizable =
 
     return () => {
       stop_pointer_follow?.()
-      if (is_resizing) node.ownerDocument.body.style.userSelect = previous_user_select
+      restore_user_select?.()
       abort_controller.abort() // removal alone leaves a retained strip ref able to fire on_pointerdown
       for (const handle of handles) handle.remove()
       if (previous_position !== undefined) node.style.position = previous_position

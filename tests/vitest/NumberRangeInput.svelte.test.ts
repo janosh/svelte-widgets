@@ -107,17 +107,23 @@ describe(`NumberRangeInput`, () => {
     },
   )
 
-  test.each([`min`, `max`, `step`])(
-    `rejects a missing %s for JavaScript callers`,
-    (prop) => {
-      const props = { ...named_props }
-      Reflect.deleteProperty(props, prop)
-      expect(() => {
-        mount_range(props)
-        flushSync()
-      }).toThrow(`NumberRangeInput needs min, max, and step`)
-    },
-  )
+  test.each([
+    ...[`min`, `max`, `step`].flatMap((prop) =>
+      [undefined, ``, `NaN`, Infinity, `100garbage`, `0x10`, ` 1 `, `+1`, `1.`].map(
+        (value) => [prop, value],
+      ),
+    ),
+    [`min`, 2],
+    [`max`, -1],
+    [`step`, 0],
+    [`step`, -0.1],
+  ])(`rejects invalid %s=%s`, (prop, value) => {
+    const props = { ...named_props, [String(prop)]: value }
+    expect(() => {
+      mount_range(props)
+      flushSync()
+    }).toThrow(`NumberRangeInput needs finite min <= max and positive step or "any"`)
+  })
 })
 
 test.each([

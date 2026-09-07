@@ -1905,7 +1905,18 @@
       void load_dynamic_options(true)
       return
     }
-    if (is_first_load ? !search : search === load_options_last_search) return
+    // Returning to a cleared query still needs a fetch; unchanged results/errors wait
+    // for explicit retry. Don't subscribe to completion and rerun the scheduling effect.
+    const unchanged_search =
+      search === load_options_last_search &&
+      untrack(
+        () =>
+          is_loading_options ||
+          loaded_options.length > 0 ||
+          !load_options_has_more ||
+          loadError,
+      )
+    if (is_first_load ? !search : unchanged_search) return
     if (!is_first_load) {
       // abort the superseded fetch and clear stale results now, then debounce the new search
       cancel_in_flight_load()
@@ -2410,24 +2421,24 @@
           {/if}
         </li>
       {/if}
-      {#if loadError}
-        <li role="presentation">
-          <span role="alert">{msg.loading_failed}</span>
-          <button
-            type="button"
-            {disabled}
-            onclick={with_focus_rescue(() => {
-              void load_dynamic_options(!loaded_options.length)
-            })}>{msg.retry}</button
-          >
-        </li>
-      {/if}
       {#if load_options_config && is_loading_options}
         <li class="loading-more" role="status" aria-label={msg.loading_more}>
           <CircleSpinner />
         </li>
       {/if}
     </ul>
+  {/if}
+  {#if open && loadError}
+    <div class="load-error" style="flex-basis: 100%">
+      <span role="alert">{msg.loading_failed}</span>
+      <button
+        type="button"
+        {disabled}
+        onclick={with_focus_rescue(() => {
+          void load_dynamic_options(!loaded_options.length)
+        })}>{msg.retry}</button
+      >
+    </div>
   {/if}
   <!-- live region: selection changes, else available option count while open -->
   <div class="sr-only" aria-live="polite" aria-atomic="true">
@@ -2476,6 +2487,9 @@
   :where(div.multiselect.open) {
     /* so an open dropdown covers the MultiSelect below it on the page */
     z-index: var(--sms-open-z-index, 4);
+  }
+  :where(div.multiselect:has(> .load-error)) {
+    flex-wrap: wrap;
   }
   :where(div.multiselect:focus-within) {
     border: var(--sms-focus-border, 1px solid var(--sms-active-color, cornflowerblue));

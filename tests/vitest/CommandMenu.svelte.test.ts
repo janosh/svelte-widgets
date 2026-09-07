@@ -676,31 +676,41 @@ test.each([
   // Deliberately allow missing IDs to exercise JavaScript callers.
   const invalid = { id: id as string | number, label: `Invalid`, action: vi.fn() }
   expect(() =>
-    flushSync(() =>
-      mount_menu({
-        actions: [
-          { id: `existing`, label: `First`, action: vi.fn() },
-          { id: `1`, label: `Numeric`, action: vi.fn() },
-          invalid,
-        ],
-      }),
-    ),
+    mount_menu({
+      actions: [
+        { id: `existing`, label: `First`, action: vi.fn() },
+        { id: `1`, label: `Numeric`, action: vi.fn() },
+        invalid,
+      ],
+    }),
   ).toThrow(/CommandMenu action/)
 })
 
-test.each([1, `1`])(
-  `rejects remote ID %j colliding with a filtered-out static action`,
-  async (id) => {
+test.each(
+  [1, `1`].flatMap((id) => [false, true].map((paginated) => ({ id, paginated }))),
+)(
+  `retries duplicate remote ID $id with paginated=$paginated`,
+  async ({ id, paginated }) => {
     const error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    mount_menu({
+    const fetch = vi.fn(async () => ({
+      options: [{ id, label: `Remote`, action: vi.fn() }],
+      hasMore: paginated,
+    }))
+    const props = $state({
       open: true,
-      actions: [{ id: `1`, label: `Static`, action: vi.fn() }],
+      actions: paginated ? [] : [{ id: `1`, label: `Static`, action: vi.fn() }],
       searchText: `remote`,
-      loadOptions: async () => ({
-        options: [{ id, label: `Remote`, action: vi.fn() }],
-        hasMore: false,
-      }),
+      loadOptions: { fetch, batchSize: 1, debounceMs: 0 },
     })
+    mount_menu(props)
+    if (paginated) {
+      await vi.waitFor(() => expect(option_labels()).toEqual([`Remote`]))
+      props.loadOptions.batchSize = 2
+      props.loadOptions.debounceMs = 10
+      await tick()
+      expect(fetch).toHaveBeenCalledOnce()
+      doc_query(`ul.options`).dispatchEvent(new Event(`scroll`))
+    }
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith(
         `MultiSelect: loadOptions error:`,
@@ -708,7 +718,17 @@ test.each([1, `1`])(
       ),
     )
     expect(doc_query(`[role='alert']`).textContent).toContain(`Could not load options`)
-    expect(document.querySelector(`li[role='option']`)).toBeNull()
+    expect(option_labels()).toEqual(paginated ? [`Remote`] : [])
+    fetch.mockResolvedValueOnce({
+      options: [{ id: `2`, label: `Retry result`, action: vi.fn() }],
+      hasMore: false,
+    })
+    doc_query<HTMLButtonElement>(`[role='alert'] + button`).click()
+    await vi.waitFor(() => expect(option_labels()).toContain(`Retry result`))
+    expect(fetch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: paginated ? 1 : 0 }),
+    )
+    expect(document.querySelector(`[role='alert']`)).toBeNull()
   },
 )
 
@@ -942,7 +962,7 @@ describe(`PageSearch`, () => {
       await tick()
       expect(option_labels()).toEqual([`Fallback`])
       expect(doc_query(`[role="alert"]`).textContent).toContain(`Could not load options`)
-      doc_query<HTMLButtonElement>(`dialog li button`).click()
+      doc_query<HTMLButtonElement>(`dialog [role="alert"] + button`).click()
       await vi.runAllTimersAsync()
       await tick()
       expect(menu_input().value).toBe(`fallback`)

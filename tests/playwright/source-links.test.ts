@@ -5,9 +5,10 @@ const SOURCE = `https://github.com/janosh/svelte-widgets/blob/`
 test(`inline code mentions of components link to their source, on load and after navigation`, async ({
   page,
 }) => {
-  const hydration_warnings: string[] = []
+  const errors: string[] = []
+  page.on(`pageerror`, (error) => errors.push(error.message))
   page.on(`console`, (message) => {
-    if (message.text().includes(`hydration_`)) hydration_warnings.push(message.text())
+    if (message.text().includes(`hydration_`)) errors.push(message.text())
   })
   await page.route(
     `https://api.github.com/repos/janosh/svelte-widgets/contributors*`,
@@ -35,7 +36,7 @@ test(`inline code mentions of components link to their source, on load and after
     page.getByRole(`link`, { name: `contributor`, exact: true }),
   ).toHaveAttribute(`href`, `https://github.com/contributor`)
   await expect(page.getByRole(`link`, { name: `automation[bot]` })).toHaveCount(0)
-  expect(hydration_warnings).toEqual([])
+  expect(errors).toEqual([])
   // the readme's component table names every component in inline code
   const multi_select = page.locator(`code > a`, { hasText: `MultiSelect` }).first()
   await expect(multi_select).toHaveAttribute(
@@ -58,4 +59,5 @@ test(`inline code mentions of components link to their source, on load and after
   await expect(
     page.locator(`code > a[href$="/src/lib/ConfirmDialog.svelte"]`).first(),
   ).toBeVisible()
+  expect(errors).toEqual([])
 })

@@ -1,4 +1,4 @@
-import { resizable, type ResizableOptions } from '$lib/attachments'
+import { draggable, resizable, type ResizableOptions } from '$lib/attachments'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   create_element,
@@ -571,21 +571,35 @@ describe(`resizable`, () => {
     expect(element.style.position).toBe(initial_position)
   })
 
-  it(`restores body userSelect when cleaned up mid-resize`, () => {
-    const element = create_box()
-    const on_resize = vi.fn()
+  it.each([`resize first`, `drag first`])(
+    `restores shared selection after %s cleanup`,
+    (order) => {
+      const element = create_box()
+      const on_resize = vi.fn()
 
-    const cleanup = resizable({ on_resize })(element)
-    document.body.style.userSelect = `text`
-    onTestFinished(() => void document.body.style.removeProperty(`user-select`))
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
-    expect(document.body.style.userSelect).toBe(`none`)
+      const cleanup = resizable({ on_resize })(element)
+      const drag_box = create_box()
+      const cleanup_drag = draggable()(drag_box)
+      document.body.style.setProperty(`user-select`, `text`, `important`)
+      onTestFinished(() => void document.body.style.removeProperty(`user-select`))
+      grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
+      drag_box.dispatchEvent(
+        pointer_event(`pointerdown`, 10, 10, { pointerId: 2, pointerType: `touch` }),
+      )
+      expect(document.body.style.userSelect).toBe(`none`)
 
-    cleanup?.() // unmount mid-resize, before any release
-    expect(document.body.style.userSelect).toBe(`text`)
-    expect(element.querySelectorAll(`[data-resize-edge]`)).toHaveLength(0)
+      const cleanups =
+        order === `resize first` ? [cleanup, cleanup_drag] : [cleanup_drag, cleanup]
+      cleanups[0]?.() // unmount one owner while the other gesture remains active
+      cleanups[0]?.() // releases are idempotent
+      expect(document.body.style.userSelect).toBe(`none`)
+      cleanups[1]?.()
+      expect(document.body.style.userSelect).toBe(`text`)
+      expect(document.body.style.getPropertyPriority(`user-select`)).toBe(`important`)
+      expect(element.querySelectorAll(`[data-resize-edge]`)).toHaveLength(0)
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75))
-    expect(on_resize).not.toHaveBeenCalled()
-  })
+      globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75))
+      expect(on_resize).not.toHaveBeenCalled()
+    },
+  )
 })

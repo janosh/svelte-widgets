@@ -1,5 +1,5 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
-  import type { ComponentProps } from 'svelte'
+  import { type ComponentProps, untrack } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
@@ -118,25 +118,38 @@
     }
     return ids
   }
+  // Reject invalid initial props during SSR, before client effects can run.
+  untrack(() => validate_actions(actions))
   // Includes dynamically loaded options and appended pages.
   $effect(() => {
     validate_actions(actions)
     validate_actions(matching_actions)
   })
   // Validate remote batches before MultiSelect merges and proxies the static matches.
-  const load_options = $derived.by(() => {
-    const config = rest.loadOptions
-    if (!config) return undefined
-    const fetch = typeof config === `function` ? config : config.fetch
-    return {
-      ...(typeof config === `function` ? {} : config),
-      fetch: async (params: LoadOptionsParams) => {
-        const result = await fetch(params)
-        validate_actions(result.options, validate_actions(actions))
-        return result
-      },
+  const remote_fetch = $derived(
+    typeof rest.loadOptions === `function` ? rest.loadOptions : rest.loadOptions?.fetch,
+  )
+  const checked_fetch = $derived.by(() => {
+    const fetch = remote_fetch
+    if (!fetch) return undefined
+    let loaded_ids = new Set<string>()
+    return async (params: LoadOptionsParams) => {
+      const result = await fetch(params)
+      if (params.signal?.aborted) return result
+      validate_actions(result.options, validate_actions(actions))
+      loaded_ids = validate_actions(
+        result.options,
+        params.offset ? new Set(loaded_ids) : new Set(),
+      )
+      return result
     }
   })
+  const load_options = $derived(
+    checked_fetch && {
+      ...(typeof rest.loadOptions === `object` ? rest.loadOptions : {}),
+      fetch: checked_fetch,
+    },
+  )
 
   // load persisted recents (client-only since $effect doesn't run during SSR)
   $effect(() => {

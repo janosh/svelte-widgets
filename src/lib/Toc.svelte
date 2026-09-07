@@ -15,12 +15,9 @@
     slugify_heading,
     unique_heading_id,
   } from './heading-anchors'
-  import {
-    flash_toc_target,
-    get_heading_visibility,
-    override_scroll_behavior,
-  } from './toc-utils'
+  import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
+  import { override_style } from './attachments/shared'
 
   let {
     activeHeading = $bindable(null),
@@ -298,8 +295,9 @@
 
     // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
     restore_scroll_behavior?.()
-    restore_scroll_behavior = override_scroll_behavior(
+    restore_scroll_behavior = override_style(
       document.documentElement.style,
+      `scroll-behavior`,
       scrollBehavior,
     )
 

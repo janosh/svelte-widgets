@@ -40,12 +40,20 @@
     children?: Snippet
     labels?: Partial<NumberRangeInputLabels>
   } & Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
-  // A range input with no min/max silently defaults to 0-100 while the number input stays
+  // A range input with invalid min/max silently defaults to 0-100 while the number input stays
   // unbounded, so one slider touch clamps and writes back a value the caller never limited.
+  const is_numeric = (bound: number | string) =>
+    Number.isFinite(Number(bound)) &&
+    /^-?(?:\d+|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(String(bound))
   $effect(() => {
-    if (min === undefined || max === undefined || step === undefined) {
+    if (
+      !is_numeric(min) ||
+      !is_numeric(max) ||
+      Number(max) < Number(min) ||
+      (step !== `any` && (!is_numeric(step) || Number(step) <= 0))
+    ) {
       throw new Error(
-        `NumberRangeInput needs min, max, and step, got min=${min}, max=${max}, step=${step}`,
+        `NumberRangeInput needs finite min <= max and positive step or "any", got min=${min}, max=${max}, step=${step}`,
       )
     }
   })
