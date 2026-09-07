@@ -735,7 +735,8 @@ describe(`tooltip manager`, () => {
     mock_rect(element, { left: 940, top: 100, width: 40, height: 20 })
     attach_tooltip(element, {
       placement: `bottom`,
-      style: `background: rgb(1, 2, 3); border: 2px solid rgb(4, 5, 6)`,
+      // happy-dom drops a repeated border shorthand after one containing var().
+      style: `--tooltip-bg: rgb(1, 2, 3); --tooltip-border: 2px solid rgb(4, 5, 6)`,
     })
     pointer_over(element)
     const tooltip_el = visible_tooltip()

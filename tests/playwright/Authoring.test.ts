@@ -1,4 +1,15 @@
 import { expect, test } from '@playwright/test'
+import { fileURLToPath } from 'node:url'
+
+test.beforeEach(async ({ page }) => {
+  // Exercise the real highlighter without depending on CDN latency or availability.
+  await page.route(`https://esm.sh/vscode-oniguruma@*/release/onig.wasm`, (route) =>
+    route.fulfill({
+      path: fileURLToPath(import.meta.resolve(`vscode-oniguruma/release/onig.wasm`)),
+      contentType: `application/wasm`,
+    }),
+  )
+})
 
 test(`editable content labs validate manifests, reuse highlights, and recover from bad references`, async ({
   page,

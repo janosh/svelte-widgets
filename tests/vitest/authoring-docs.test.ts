@@ -2,6 +2,7 @@ import { load } from '../../src/routes/(demos)/(authoring)/authoring/+page.serve
 import { expect, test } from 'vitest'
 import { checked_examples } from '../../src/routes/(demos)/(authoring)/authoring/examples'
 
+// Five real compiler runs need the same budget as the checker integration tests.
 test(`published checker scenarios contain real type and assertion diagnostics`, async () => {
   const { checks } = await load()
   expect(
@@ -46,4 +47,4 @@ test(`published checker scenarios contain real type and assertion diagnostics`, 
       message: `increment: Expected count 1 after increment(), got 2`,
     }),
   )
-})
+}, 60_000)
