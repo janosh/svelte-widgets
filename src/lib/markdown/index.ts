@@ -102,7 +102,7 @@ export type MarkdownEngine<
   ) => Promise<DiagnosticResult<MarkdownDocument<Metadata>>>
 }
 type PreparedDocument = {
-  mapped: MappedSource
+  code: string
   examples: LiveExample[]
   map: SourceMap
 }
@@ -565,7 +565,7 @@ async function prepare_document(
         syntax.script_edits(mapped.code, imports.join(``), metadata),
       )
     return {
-      mapped,
+      code: mapped.code,
       examples,
       map: source_map(source, mapped.code, filename, mapped.spans),
     }
@@ -611,18 +611,11 @@ export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
 export const compile_markdown = <Metadata extends Record<string, unknown>>(
   document: MarkdownDocument<Metadata>,
 ): Promise<DiagnosticResult<MarkdownResult<Metadata>>> =>
-  compile_markdown_with_transform(document)
-
-export const compile_markdown_with_transform = <Metadata extends Record<string, unknown>>(
-  document: MarkdownDocument<Metadata>,
-  transform?: (source: MappedSource) => MappedSource,
-): Promise<DiagnosticResult<MarkdownResult<Metadata>>> =>
-  emit_document(document, `svelte`, transform)
+  emit_document(document, `svelte`)
 
 async function emit_document<Metadata extends Record<string, unknown>>(
   document: MarkdownDocument<Metadata>,
   dialect: MarkdownDocument['dialect'],
-  transform?: (source: MappedSource) => MappedSource,
 ): Promise<DiagnosticResult<MarkdownResult<Metadata>>> {
   if (document.dialect !== dialect)
     return {
@@ -641,16 +634,13 @@ async function emit_document<Metadata extends Record<string, unknown>>(
   if (!emit) throw new Error(`Document was not created by create_markdown().parse()`)
   try {
     const prepared = await emit()
-    const mapped = transform ? transform(prepared.mapped) : prepared.mapped
     return diagnostic_result(
       freeze_data({
-        code: mapped.code,
+        code: prepared.code,
         metadata: document.metadata,
         examples: prepared.examples,
         manifest: document.manifest,
-        map: transform
-          ? source_map(document.source, mapped.code, document.filename, mapped.spans)
-          : prepared.map,
+        map: prepared.map,
       }),
       [],
     )

@@ -36,8 +36,8 @@
 <p>
   For actual development hot reload, open the <a href={resolve(`/authoring/hot-reload`)}
     >live Markdown counter</a
-  >, increment it, and edit that page's prose in your editor. Static prose edits preserve
-  its state; script or example-structure changes can reset it.
+  >, increment it, and edit that page's prose in your editor. Updates appear
+  automatically; page edits may reset example state.
 </p>
 <h2 id="scientific-references">Scientific references</h2>
 <p>

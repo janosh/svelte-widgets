@@ -131,20 +131,11 @@
     if (event.key === `Home`) next = floor
     else if (event.key === `End`) next = ceiling
     else {
-      const direction =
-        event.key === `ArrowUp` || event.key === `PageUp`
-          ? 1
-          : event.key === `ArrowDown` || event.key === `PageDown`
-            ? -1
-            : event.key === `ArrowRight`
-              ? is_rtl()
-                ? -1
-                : 1
-              : event.key === `ArrowLeft`
-                ? is_rtl()
-                  ? 1
-                  : -1
-                : 0
+      let direction = 0
+      if (event.key === `ArrowUp` || event.key === `PageUp`) direction = 1
+      else if (event.key === `ArrowDown` || event.key === `PageDown`) direction = -1
+      else if (event.key === `ArrowRight` || event.key === `ArrowLeft`)
+        direction = (event.key === `ArrowRight` ? 1 : -1) * (is_rtl() ? -1 : 1)
       if (!direction) return
       const stride = event.key.startsWith(`Page`) || event.shiftKey ? 10 : 1
       next = step_range_value(

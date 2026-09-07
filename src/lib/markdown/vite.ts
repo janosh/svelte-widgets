@@ -1,20 +1,21 @@
 import type { PreprocessorGroup } from 'svelte/compiler'
 import type { Plugin } from 'vite'
 import {
-  compile_markdown_with_transform,
+  compile_markdown,
   create_markdown,
   assert_ok,
   type MarkdownEngine,
   type MarkdownResult,
 } from './index.ts'
-import { isolate_prose } from './prose.ts'
 import { source_map } from './source-map.ts'
+import type { ContentManifest } from './content.ts'
 
-const MODULE_ID = /\.widgets-(?:example-[a-f\d]+-[a-f\d]+-\d+|prose-\d+)\.svelte(?:\?|$)/u
+const MODULE_ID = /\.widgets-example-[a-f\d]+-[a-f\d]+-\d+\.svelte(?:\?|$)/u
 
 export type MarkdownViteOptions = {
   // Bounded per-integration LRU cache; 0 disables it. In-flight requests are shared.
   highlight_cache_size?: number
+  on_manifest?: (manifest: ContentManifest) => void
 }
 
 // Share this instance between the Svelte preprocessor and Vite plugin. Examples are
@@ -82,35 +83,26 @@ export function markdown_vite(
     (options.extensions ?? [`.md`, `.svx`]).some((extension) =>
       filename.endsWith(extension),
     )
-  let development = false
   const compile_file = (content: string, filename: string): Promise<MarkdownResult> => {
     const cached = files.get(filename)
     if (cached?.content === content && cached.result) return cached.result
-    const prose = new Map<string, string>()
     const result = cached_engine
       .parse(content, { filename })
-      .then((document) =>
-        compile_markdown_with_transform(
-          assert_ok(document),
-          development ? (code) => isolate_prose(code, filename, prose) : undefined,
-        ),
-      )
+      .then((document) => compile_markdown(assert_ok(document)))
       .then(assert_ok)
-      .then(
-        (compiled) => {
-          // A slower obsolete compilation must not overwrite a newer edit's examples.
-          if (files.get(filename)?.result !== result) return compiled
-          for (const id of modules.keys())
-            if (id.startsWith(`${filename}.widgets-`)) modules.delete(id)
-          for (const example of compiled.examples) modules.set(example.id, example.source)
-          for (const [id, source] of prose) modules.set(id, source)
-          return compiled
-        },
-        (error: unknown) => {
-          if (files.get(filename)?.result === result) files.set(filename, { content })
-          throw error
-        },
-      )
+      .then((compiled) => {
+        // A slower obsolete compilation must not overwrite a newer edit's examples.
+        if (files.get(filename)?.result !== result) return compiled
+        settings.on_manifest?.(compiled.manifest)
+        for (const id of modules.keys())
+          if (id.startsWith(`${filename}.widgets-`)) modules.delete(id)
+        for (const example of compiled.examples) modules.set(example.id, example.source)
+        return compiled
+      })
+      .catch((error: unknown) => {
+        if (files.get(filename)?.result === result) files.set(filename, { content })
+        throw error
+      })
     files.set(filename, { content, result })
     return result
   }
@@ -126,9 +118,6 @@ export function markdown_vite(
     plugin: {
       name: `widgets-markdown-examples`,
       enforce: `pre`,
-      configResolved(config) {
-        development = config.command === `serve` && !config.isProduction
-      },
       resolveId(id) {
         return MODULE_ID.test(id) ? id : undefined
       },

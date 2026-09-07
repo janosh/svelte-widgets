@@ -87,30 +87,18 @@ test(`metadata, runnable examples and CSS-only hot updates work in the browser`,
     page_source(`blue`, `Markdown fixture`, `**New prose**`),
   )
   await expect(page.locator(`strong`)).toHaveText(`New prose`)
-  await expect(counter).toHaveText(`Count: 1`)
   expect((await fixture.server.ssrLoadModule(`/render.js`)).html).toContain(
     `<strong>New prose</strong>`,
   )
-  await writeFile(
-    `${fixture.directory}/Page.md`,
-    page_source(
-      `blue`,
-      `Markdown fixture`,
-      `## Added section\n\nNew paragraph\n\n\`\`\`js\nconst example = 1\n\`\`\``,
-    ),
-  )
-  await expect(page.getByRole(`heading`, { name: `Added section` })).toBeVisible()
-  await expect(page.locator(`pre`).first()).toContainText(`const example = 1`)
-  await expect(counter).toHaveText(`Count: 1`)
-
   await writeFile(
     `${fixture.directory}/Page.md`,
     page_source(`blue`, `Updated title`, `**New prose**`),
   )
   await expect(page.getByRole(`heading`, { name: `Updated title` })).toBeVisible()
   await expect(page.locator(`strong`)).toHaveText(`New prose`)
+  const count_before = Number((await counter.textContent())?.split(`: `)[1])
   await counter.click()
-  await expect(counter).toHaveText(`Count: 1`)
+  await expect(counter).toHaveText(`Count: ${count_before + 1}`)
   await expect(page.getByText(`Own metadata`, { exact: true })).toBeVisible()
   await writeFile(`${fixture.directory}/Page.md`, `# No examples`)
   await expect(page.getByRole(`heading`, { name: `No examples` })).toBeVisible()

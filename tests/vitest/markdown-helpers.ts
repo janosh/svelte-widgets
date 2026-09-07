@@ -32,6 +32,7 @@ export const markdown_preprocessor = (options: MarkdownOptions = {}) =>
   markdown(create_markdown(options))
 export const markdown_integration = ({
   highlight_cache_size,
+  on_manifest,
   ...options
 }: MarkdownOptions & MarkdownViteOptions = {}) =>
-  markdown_vite(create_markdown(options), { highlight_cache_size })
+  markdown_vite(create_markdown(options), { highlight_cache_size, on_manifest })

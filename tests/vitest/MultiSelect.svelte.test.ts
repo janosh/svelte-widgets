@@ -2272,32 +2272,35 @@ describe(`keepSelectedInDropdown feature`, () => {
     ).toBe(false)
   })
 
-  test.each(keep_selected_modes)(
-    `toggles option selection when clicked in %s mode`,
-    async (mode) => {
-      const onChange_spy = vi.fn()
+  test.each(
+    keep_selected_modes.flatMap((mode) =>
+      [`pointer`, `keyboard`].map((interaction) => ({ mode, interaction })),
+    ),
+  )(
+    `toggles option selection with $interaction in $mode mode`,
+    async ({ mode, interaction }) => {
+      const onchange = vi.fn()
       mount_multiselect({
         options,
         selected: [`Apple`],
         keepSelectedInDropdown: mode,
-        onchange: onChange_spy,
+        onchange,
       })
-
-      await focus_input()
-
-      const apple_option = option_by_label(`Apple`)
-      click_keep_selected_option(apple_option, mode)
-      await tick()
-
-      expect(onChange_spy).toHaveBeenCalledWith({ option: `Apple`, type: `remove` })
-      expect(apple_option?.classList.contains(`selected`)).toBe(false)
-
-      const banana_option = option_by_label(`Banana`)
-      click_keep_selected_option(banana_option, mode)
-      await tick()
-
-      expect(onChange_spy).toHaveBeenCalledWith({ option: `Banana`, type: `add` })
-      expect(banana_option?.classList.contains(`selected`)).toBe(true)
+      const input = await focus_input()
+      for (const [label, type] of [
+        [`Apple`, `remove`],
+        [`Banana`, `add`],
+      ]) {
+        const option = option_by_label(label)
+        if (interaction === `keyboard`) {
+          input.dispatchEvent(fresh_key(`ArrowDown`))
+          await tick()
+          input.dispatchEvent(fresh_key(`Enter`))
+        } else click_keep_selected_option(option, mode)
+        await tick()
+        expect(onchange).toHaveBeenLastCalledWith({ option: label, type })
+        expect(option?.classList.contains(`selected`)).toBe(type === `add`)
+      }
     },
   )
 
@@ -2346,34 +2349,6 @@ describe(`keepSelectedInDropdown feature`, () => {
       click_keep_selected_option(banana_option, mode)
       await tick()
       expect(banana_option?.classList.contains(`selected`)).toBe(true)
-    },
-  )
-
-  test.each(keep_selected_modes)(
-    `keyboard navigation works correctly in %s mode`,
-    async (mode) => {
-      const onChange_spy = vi.fn()
-      mount_multiselect({
-        options,
-        selected: [`Apple`],
-        keepSelectedInDropdown: mode,
-        onchange: onChange_spy,
-      })
-
-      await focus_input()
-
-      const input = get_input()
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
-      input.dispatchEvent(fresh_key(`Enter`))
-
-      expect(onChange_spy).toHaveBeenCalledWith({ option: `Apple`, type: `remove` })
-
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
-      input.dispatchEvent(fresh_key(`Enter`))
-
-      expect(onChange_spy).toHaveBeenCalledWith({ option: `Banana`, type: `add` })
     },
   )
 

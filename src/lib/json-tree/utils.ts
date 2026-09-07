@@ -67,24 +67,19 @@ export function get_child_count(value: unknown): number {
 // Shared traversal: Map entries become indexed { key, value } objects so non-string keys
 // remain expandable; Set members use numeric indices.
 export function get_children(value: unknown, sort_keys = false): JsonChild[] {
-  const type = get_value_type(value)
-  if (type === `array`)
-    return (value as unknown[]).map((val, idx) => ({ key: idx, value: val }))
-  if (type === `object`) {
-    const record = value as Record<string, unknown>
-    const keys = Object.keys(record)
-    if (sort_keys) keys.sort()
-    return keys.map((key) => ({ key, value: record[key] }))
-  }
-  if (type === `map`) {
-    return Array.from(value as Map<unknown, unknown>, ([key, val], idx) => ({
+  if (Array.isArray(value)) return value.map((val, idx) => ({ key: idx, value: val }))
+  if (value instanceof Map)
+    return Array.from(value, ([key, val], idx) => ({
       key: idx,
       value: { key, value: val },
     }))
-  }
-  if (type === `set`)
-    return Array.from(value as Set<unknown>, (val, idx) => ({ key: idx, value: val }))
-  return []
+  if (value instanceof Set)
+    return Array.from(value, (val, idx) => ({ key: idx, value: val }))
+  if (get_value_type(value) !== `object`) return []
+  const record = value as Record<string, unknown>
+  const keys = Object.keys(record)
+  if (sort_keys) keys.sort()
+  return keys.map((key) => ({ key, value: record[key] }))
 }
 
 // Strip the verbatim root label before parsing: labels such as `data.json` can contain dots.

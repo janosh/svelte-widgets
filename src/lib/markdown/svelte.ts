@@ -81,20 +81,20 @@ export function script_edits(
   const script_start = (start: number) =>
     start +
     (/^<script\b(?:[^>"']|"[^"]*"|'[^']*')*>/u.exec(code.slice(start))?.[0].length ?? 0)
-  const edits: { offset: number; text: string }[] = []
-  if (imports)
-    edits.push({
-      offset: tree.instance ? script_start(tree.instance.start) : 0,
-      text: tree.instance ? imports : `<script>${imports}</script>\n`,
+  const edits: SourceEdit[] = []
+  for (const [node, text, attributes] of [
+    [tree.instance, imports, ``],
+    [tree.module, declaration, ` module`],
+  ] as const) {
+    if (!text) continue
+    const offset = node ? script_start(node.start) : 0
+    edits.unshift({
+      start: offset,
+      end: offset,
+      text: node ? text : `<script${attributes}>${text}</script>\n`,
     })
-  if (declaration)
-    edits.push({
-      offset: tree.module ? script_start(tree.module.start) : 0,
-      text: tree.module ? declaration : `<script module>${declaration}</script>\n`,
-    })
+  }
   return edits
-    .map(({ offset, text }) => ({ start: offset, end: offset, text }))
-    .toReversed()
 }
 
 export function visible_code(

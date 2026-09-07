@@ -1,7 +1,6 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
   import type { ComponentProps } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
-  import { SvelteMap } from 'svelte/reactivity'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
@@ -94,7 +93,7 @@
       : null,
   )
   const action_id_counts = $derived.by(() => {
-    const counts = new SvelteMap<string, number>()
+    const counts = new Map<string, number>()
     for (const action of actions) {
       const action_id = get_action_id(action)
       counts.set(action_id, (counts.get(action_id) ?? 0) + 1)
@@ -137,7 +136,7 @@
     if (!recent_actions || !action_ids_are_unique || recent_action_ids.length === 0)
       return actions
     // drop stale persisted ids, which would occupy low ranks and push real recents down
-    const rank = new SvelteMap<string, number>()
+    const rank = new Map<string, number>()
     for (const action_id of recent_action_ids) {
       if (action_id_counts.has(action_id)) rank.set(action_id, rank.size)
     }

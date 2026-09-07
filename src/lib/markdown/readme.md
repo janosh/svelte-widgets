@@ -131,7 +131,7 @@ Mark complete JavaScript, TypeScript, HTML, or Svelte fences with `check`. Add `
 ```ts
 import { readFile } from 'node:fs/promises'
 import { assert_ok, create_markdown } from 'svelte-widgets/markdown'
-import { create_checker } from 'svelte-widgets/markdown/check'
+import { check_document } from 'svelte-widgets/markdown/check'
 
 const engine = create_markdown({ math: true, references: true })
 const document = assert_ok(
@@ -139,21 +139,16 @@ const document = assert_ok(
     filename: `docs/guide.md`,
   }),
 )
-const checker = create_checker({ root: process.cwd() })
-try {
-  assert_ok(await checker.check(document))
-} finally {
-  checker.dispose()
-}
+assert_ok(await check_document(document))
 ```
 
-The Node-only checker uses the project's installed TypeScript and `svelte2tsx` tools lazily. It checks Svelte templates and imported component props as well as scripts. Missing tools produce setup diagnostics; `typecheck: false` requests syntax checks only. `create_checker(options)` owns a project session. Its `check(document)` or `check(documents)` method consumes existing analysis without highlighting or emitting examples. Each call supplies the complete current document set; omitted documents are removed from the next program. It reuses the previous TypeScript program, unchanged source ASTs, and Svelte transforms while reading dependency contents and refreshing import resolution on every check. Each Svelte transform decodes its source map once; diagnostic endpoints use binary lookups in the cached map. Moving a fence updates diagnostic locations without retransformation. Toolchain adapters can be supplied explicitly. `check_document(document, options)` and `check_examples(fences, options)` are one-shot checks. Use a session for builds and watch loops; use `checker.clear()` to release cached programs and sources, or `checker.dispose()` to additionally reject future and queued checks. Already-running assertions settle normally.
+The Node-only checker lazily loads TypeScript and `svelte2tsx` from the document's directory. It checks scripts, Svelte templates, and imported component props, preserving source locations in diagnostics. Missing tools produce setup diagnostics; `typecheck: false` requests syntax checks only. Toolchain adapters can be supplied explicitly.
 
-The checker discovers the nearest `tsconfig.json` from its `root` by default. Set `tsconfig: "./tsconfig.docs.json"` for an explicit config relative to that root, or `tsconfig: false` for standalone snippets. Project configuration follows TypeScript's inheritance rules, including package-based `extends`, aliases, libraries, and ambient types. Configs are cached by content and reloaded when inherited files or package metadata change; invalid or explicitly missing configs produce diagnostics. With no discovered config, the checker uses standalone defaults.
+Use `check_document(document, options)` for one document or `check_examples(documents.flatMap(({ manifest }) => manifest.fences), options)` for a batch. Checks consume existing analysis without highlighting or emitting examples. Every call creates a fresh TypeScript program and reads its dependencies anew; there are no sessions, persistent caches, or disposal methods. Assertions run only after all selected fences pass static checks.
 
-Fences supply the program's entry files; a project's `include`, `files`, and project references do not add unrelated code. Imported dependencies are checked normally. Build-only constraints (`rootDir`, `composite`, and incremental output) are disabled and nothing is emitted. `compiler_options` overrides inherited settings; explicit relative paths resolve against the session’s `root` (or `baseUrl` for aliases).
+Configuration is explicit: omit `tsconfig` for standalone defaults, pass `compiler_options` directly, or set `tsconfig: "./tsconfig.docs.json"`. Relative config paths and explicit compiler aliases resolve from the document directory (the first fence's document for a batch). Relative document filenames resolve from the working directory. An explicit config follows TypeScript inheritance, including aliases, libraries, and ambient types; missing or invalid configs produce diagnostics. No config is discovered automatically. Each call reads the supplied config afresh.
 
-Session compiler options and toolchain adapters are fixed at creation; pass assertion callbacks per check. Jobs within a session are serialized, including asynchronous assertions, and independent sessions have separate caches. `root` controls toolchain and relative filename resolution. A batch runs assertions only if every document passes static validation.
+Fences supply the program's entry files; a config's `include`, `files`, and project references do not add unrelated code. Imported dependencies are checked normally. Build-only constraints are disabled, nothing is emitted, and `compiler_options` overrides the supplied config.
 
 For browser behavior, supply `assertions: { counter: async (example) => { ... } }` with your existing Playwright page or test harness. The callback receives the selected fence, including source and original positions. A rejected assertion becomes a diagnostic at that fence. The checker never launches browsers or executes arbitrary fence text implicitly.
 
@@ -186,13 +181,17 @@ assert_valid_content([document.manifest], { assets: [`/images/diagram.svg`] })
 
 Pass all page manifests together to validate local links, fragments, and duplicate anchors. `filename` and asset inventories are literal paths; link URLs are decoded once. `validate_content()` returns diagnostics for custom reporting. Frontmatter validator return types propagate to both metadata objects. Feed and sitemap generators can consume the same metadata without another Markdown pass. HTML rendering reuses this same document analysis.
 
+`markdown_vite(engine, { on_manifest })` reports each successfully compiled manifest. This site's static adapter collects them, uses SvelteKit's route patterns to associate source files with public URLs, and validates links and assets against the complete prerendered HTML inventory, including native Svelte anchors. Markdown diagnostics retain authored locations; runtime-generated markup points to the emitted HTML. Intentional fake links in demos use `data-content-ignore`; duplicate IDs are always checked.
+
+`npm run build:site` also builds Pagefind's HTML index. Frontmatter `title`, `description`, and `categories` populate Pagefind metadata. Rendered figures with captions and labeled equations get individual anchor records; their content is excluded from the page record to prevent duplicate hits. Ordinary headings retain Pagefind's section results. Routes and search results respect `BASE_PATH`.
+
 ## Incremental compilation
 
 [Explore real module IDs and highlight-cache reuse](https://svelte-widgets.janosh.dev/authoring#incremental-compilation), or [try the live counter with local HMR](https://svelte-widgets.janosh.dev/authoring/hot-reload).
 
 Example module identities come from an explicit fence `id`, or from its language and source. Adding prose or another fence before an unchanged example no longer renames its module. Explicit IDs remain stable when their code changes and must be unique within the document.
 
-During development, static prose between dynamic components lives in separate virtual components. Editing or inserting paragraphs, headings, and ordinary code fences updates that prose without resetting neighboring examples. Authored Svelte expressions keep their original scope. Changing frontmatter, scripts, dynamic markup, or the arrangement of live examples can replace the parent and reset state. Pages with their own scoped `<style>` or `<svelte:options>` keep the original component tree and do not isolate prose; production output always keeps the original tree.
+Markdown pages use ordinary Svelte hot reload. Page edits may reset live-example state, even when the example's module identity is unchanged. Prose, authored expressions, and scoped styles stay in the original component tree in both development and production.
 
 `markdown_vite(engine, { highlight_cache_size: 256 })` caches highlighted fences per integration, shares concurrent work, and evicts the least recently used entries. Set the size to zero to disable caching. Changed prose reuses existing highlights; rejected requests are removed so a corrected highlighter can retry. Plugin teardown clears both compilation and highlighting caches.
 
@@ -231,4 +230,4 @@ Forward references resolve after parsing; figures and equations have independent
 
 ## Migration
 
-Create an engine with `create_markdown(options)` and pass it to `markdown(engine)` or `markdown_vite(engine)`. Replace source-to-output calls with `engine.parse()` followed by `compile_markdown(document)` or `render_markdown(document)`, using `assert_ok()` at throwing boundaries. Replace implicit frontmatter references such as `{title}` with `{metadata.title}`. Replace custom or misspelled fence options with the supported typed settings. Replace `check_markdown()` with a reusable `create_checker()` session or `check_document(document)`; `throw_on_error` and checker `markdown_options` are removed. Replace manifest `.position` with `.range.start`, and `.code_position` with `.code_range.start`. Remove remark plugin registration and the old live-example Vite plugin. Move `defaults.Wrapper` to `examples.wrapper`; use `hide_style`, not `hideStyle`. Replace the KaTeX before/after pair with `math`. Highlighter callbacks now return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight`. Highlighting now lives at `/highlight`; the `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed. Plain HTML callers should use `render_markdown()` and remove Svelte-output unwrapping and brace-replacement workarounds.
+Create an engine with `create_markdown(options)` and pass it to `markdown(engine)` or `markdown_vite(engine)`. Replace source-to-output calls with `engine.parse()` followed by `compile_markdown(document)` or `render_markdown(document)`, using `assert_ok()` at throwing boundaries. Replace implicit frontmatter references such as `{title}` with `{metadata.title}`. Replace custom or misspelled fence options with the supported typed settings. Replace `check_markdown()` with `check_document(document)`; `throw_on_error` and checker `markdown_options` are removed. Replace manifest `.position` with `.range.start`, and `.code_position` with `.code_range.start`. Remove remark plugin registration and the old live-example Vite plugin. Move `defaults.Wrapper` to `examples.wrapper`; use `hide_style`, not `hideStyle`. Replace the KaTeX before/after pair with `math`. Highlighter callbacks now return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight`. Highlighting now lives at `/highlight`; the `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed. Plain HTML callers should use `render_markdown()` and remove Svelte-output unwrapping and brace-replacement workarounds.

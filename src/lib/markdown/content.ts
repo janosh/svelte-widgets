@@ -478,7 +478,7 @@ export function validate_content(
       const target = documents.get(document_key(path))
       const is_asset =
         asset_links.has(link) ||
-        (/\.[^/.]+$/u.test(path) && !/\.(?:md|svx|html)$/u.test(path))
+        (!target && /\.[^/.]+$/u.test(path) && !/\.(?:md|svx|html)$/u.test(path))
       if (is_asset) {
         if (assets && !assets.has(path))
           report(`missing_asset`, `Missing asset ${path}`, link.range)

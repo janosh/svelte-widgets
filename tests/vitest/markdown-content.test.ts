@@ -175,6 +175,13 @@ describe(`Markdown content manifests`, () => {
     )
     const next = await document_manifest(`# Target`, `/next.md`)
     expect(validate_content([guide, next], { assets: [`/plot one.svg`] })).toEqual([])
+    const versioned = await document_manifest(
+      `# API\n\n[Missing section](#missing)`,
+      `/v1.2`,
+    )
+    expect(validate_content([versioned], { assets: [] })).toMatchObject([
+      { code: `missing_fragment`, message: `Missing fragment #missing in /v1.2` },
+    ])
     const duplicates = await Promise.all(
       [`/guide.html`, `/guide/index.svx`].map((filename) =>
         document_manifest(`# Other`, filename),

@@ -65,7 +65,7 @@
 
 <svelte:head>
   <title>{page_title}</title>
-  <meta data-pagefind-meta="title[content]" content={page_title} />
+  <meta data-pagefind-default-meta="title[content]" content={page_title} />
   <link rel="icon" href={favicon} />
 </svelte:head>
 

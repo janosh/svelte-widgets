@@ -46,8 +46,8 @@
     </select>
   </label>
   <p>
-    These full type and assertion checks run through <code>checker.check()</code> when the static
-    site builds. Choose a case to inspect its actual result.
+    These full type and assertion checks run through <code>check_document()</code> when the
+    static site builds. Choose a case to inspect its actual result.
   </p>
   <pre aria-label="Scenario source"><code>{@html current.highlighted_source}</code></pre>
   <p class:failed={!current.result.ok} role="status">
@@ -68,16 +68,11 @@
       wrap
       code={`import { readFile } from 'node:fs/promises'
 import { assert_ok, create_markdown } from 'svelte-widgets/markdown'
-import { create_checker } from 'svelte-widgets/markdown/check'
+import { check_document } from 'svelte-widgets/markdown/check'
 
 const engine = create_markdown()
 const document = assert_ok(await engine.parse(await readFile('guide.md', 'utf8'), { filename: 'guide.md' }))
-const checker = create_checker()
-try {
-  assert_ok(await checker.check(document))
-} finally {
-  checker.dispose()
-}`}
+assert_ok(await check_document(document))`}
     />
   </details>
   <h3>Try the Svelte syntax checker</h3>

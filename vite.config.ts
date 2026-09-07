@@ -1,6 +1,7 @@
-import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
 import { generate_icons } from './scripts/generate-icons.ts'
+import { site_adapter } from './scripts/site-content.ts'
+import type { ContentManifest } from './src/lib/markdown/content.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
 import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
 import { create_markdown } from './src/lib/markdown/index.ts'
@@ -12,9 +13,11 @@ await generate_icons()
 
 const base_segment = (process.env.BASE_PATH ?? ``).replaceAll(/^\/+|\/+$/gu, ``)
 const base_path: `` | `/${string}` = base_segment ? `/${base_segment}` : ``
+const manifests = new Map<string, ContentManifest>()
 const docs = markdown_vite(
   create_markdown({
     math: true,
+    references: true,
     typography: true,
     highlight: default_highlighter.highlight,
     examples: {
@@ -23,6 +26,7 @@ const docs = markdown_vite(
       hide_style: true,
     },
   }),
+  { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
 )
 
 // passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
@@ -34,7 +38,7 @@ const svelte_config = {
 
   preprocess: [docs.preprocess, heading_ids()],
 
-  adapter: adapter(),
+  adapter: site_adapter(manifests),
   paths: { base: base_path },
 
   alias: {

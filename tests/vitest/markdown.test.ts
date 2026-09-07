@@ -207,13 +207,17 @@ describe(`code and math`, () => {
   })
 
   test(`live examples register source before imports resolve and hide only real script/style blocks`, async () => {
-    const instance = markdown_vite({ examples: { hide_style: true } })
+    const on_manifest = vi.fn()
+    const instance = markdown_vite({ examples: { hide_style: true }, on_manifest })
     const source =
       '<script module>export const value = 1</script>\n\n```svelte example id="test"\n<script>let count = 0</script>\n<button onclick={() => count++}>{count}</button>\n<style>button { color: red }</style>\n```'
     const result = await preprocess(source, instance.preprocess, {
       filename: `/project/page.md`,
     })
     compile(result.code, { generate: false })
+    expect(on_manifest).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ filename: `/project/page.md` }),
+    )
     expect(result.code).not.toContain(`__live_example_src`)
     expect(result.code).not.toContain(`button { color: red }`)
     expect(result.code).toContain(`<script>import`)
@@ -231,6 +235,15 @@ describe(`code and math`, () => {
     expect(await load.call({} as never, `${module_id}?svelte&type=style`)).toBeUndefined()
     await preprocess(`# Removed`, instance.preprocess, { filename: `/project/page.md` })
     expect(() => load.call({} as never, module_id)).toThrow(`not registered`)
+    on_manifest.mockImplementationOnce(() => {
+      throw new Error(`Manifest rejected`)
+    })
+    await expect(
+      preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
+    ).rejects.toThrow(`Manifest rejected`)
+    await expect(
+      preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
+    ).resolves.toHaveProperty(`code`)
   })
 
   test(`CSR examples use dynamic imports, ordinary code fences do not create components`, async () => {
@@ -341,48 +354,6 @@ describe(`incremental Markdown compilation`, () => {
     expect(read).not.toHaveBeenCalled()
   })
 
-  test(`development prose modules preserve parent code and keep authored scope and styles`, async () => {
-    const docs = markdown_vite({ examples: {} })
-    const configure = docs.plugin.configResolved
-    const load = docs.plugin.load
-    if (typeof configure !== `function` || typeof load !== `function`)
-      throw new Error(`Expected Vite hooks`)
-    await configure.call({} as never, { command: `serve`, isProduction: false } as never)
-    const render = (source: string) =>
-      preprocess(source, docs.preprocess, { filename: `/project/page.md` })
-    const example = fence(`<p>Example</p>`, `id="example"`)
-    const initial = await render(example)
-    const edited = await render(
-      `# Added heading\n\nNew paragraph\n\n\`\`\`js\nconst value = 1\n\`\`\`\n\n${example}`,
-    )
-    expect(edited.code).toBe(initial.code)
-    const ids = [
-      ...edited.code.matchAll(/"(?<id>[^"\n]+\.widgets-prose-\d+\.svelte)"/gu),
-    ].map((match) => match[1])
-    expect(ids.length).toBeGreaterThan(0)
-    const prose = await Promise.all(ids.map(async (id) => load.call({} as never, id)))
-    expect(prose).toContainEqual(
-      expect.objectContaining({
-        code: expect.stringContaining(`<h1 id="added-heading">Added heading</h1>`),
-      }),
-    )
-    for (const module of prose) {
-      if (!module || typeof module === `string`) throw new Error(`Expected source module`)
-      compile(module.code, { generate: false })
-    }
-    const dynamic = await render(
-      `<script>const title = "Scoped"</script>\n\n# {title}\n\n${example}`,
-    )
-    expect(dynamic.code).toContain(`<h1>{title}</h1>`)
-    const styled = await render(`<style>p { color: red }</style>\n\nText\n\n${example}`)
-    expect(styled.code).not.toContain(`widgets-prose-`)
-    expect(styled.code).toContain(`<p>Text</p>`)
-    const configured = await render(
-      `<svelte:options runes={true} />\n\nText\n\n${example}`,
-    )
-    expect(configured.code).not.toContain(`widgets-prose-`)
-  })
-
   test.each([`C:/project/page.md`, `C:\\project\\page.md`])(
     `deleting %s removes registered modules and cached compilations`,
     async (filename) => {
@@ -437,6 +408,8 @@ describe(`incremental Markdown compilation`, () => {
       { examples: {} },
     )
     expect(edited.examples[1].id).toBe(initial.examples[0].id)
+    expect(edited.code).toContain(`<h1 id="new-prose">New prose</h1>`)
+    compile(edited.code, { generate: false })
     const duplicates = await compile_page(`${source}\n\n${source}`, { examples: {} })
     expect(new Set(duplicates.examples.map(({ id }) => id)).size).toBe(2)
     const named = await compile_page(fence(`<p>First</p>`, `id="counter"`), {

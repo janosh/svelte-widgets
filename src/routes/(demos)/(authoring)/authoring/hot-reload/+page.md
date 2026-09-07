@@ -1,8 +1,14 @@
+---
+title: Live Markdown hot reload
+description: Runnable Svelte examples with ordinary hot reload.
+categories: [Markdown, Authoring]
+---
+
 # Live Markdown hot reload
 
-Increment the counter below. When running `npx vp dev`, edit this paragraph in `src/routes/(demos)/(authoring)/authoring/hot-reload/+page.md` and save. The prose updates while the counter keeps its value.
+Increment the counter below. When running `npx vp dev`, edit this paragraph in `src/routes/(demos)/(authoring)/authoring/hot-reload/+page.md` and save. The page updates automatically; edits may reset the counter.
 
-```svelte example id="persistent-counter"
+```svelte example id="counter"
 <script>
   let count = $state(0)
 </script>
@@ -10,6 +16,6 @@ Increment the counter below. When running `npx vp dev`, edit this paragraph in `
 <button onclick={() => count++}>Count: {count}</button>
 ```
 
-The example has an explicit `id`, so its module identity survives edits around it. Ordinary headings, paragraphs, and code fences are isolated during development. Changes to frontmatter, page scripts, or the arrangement of live examples can replace the parent and reset state. Pages with scoped styles keep their original component tree.
+The explicit `id` keeps the example's module identity stable across edits. The page still uses ordinary Svelte hot reload, which may recreate the example.
 
 [Return to the interactive authoring labs](../authoring#incremental-compilation).

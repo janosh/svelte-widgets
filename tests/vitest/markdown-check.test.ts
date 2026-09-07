@@ -3,13 +3,11 @@ import { relative, resolve } from 'node:path'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
 import * as typescript from 'typescript'
-import * as source_maps from '$lib/markdown/source-map'
 import {
-  create_checker as create_project_checker,
+  check_examples,
   check_document,
   type CheckResult,
   type CheckOptions,
-  type SvelteTypeChecker,
 } from '$lib/markdown/check'
 import {
   assert_ok,
@@ -27,11 +25,6 @@ const temporary_directory = async () => {
   onTestFinished(() => rm(directory, { recursive: true }))
   return directory
 }
-const create_checker = (options: Parameters<typeof create_project_checker>[0]) => {
-  const checker = create_project_checker(options)
-  onTestFinished(() => checker.dispose())
-  return checker
-}
 const write_json = (path: string, value: unknown) =>
   writeFile(path, JSON.stringify(value))
 
@@ -47,7 +40,7 @@ const check_source = async (
     filename: options.filename,
   })
   return parsed.ok
-    ? check_document(parsed.value, { tsconfig: false, ...options })
+    ? check_document(parsed.value, { ...options })
     : { ...parsed, value: { checked: 0, asserted: 0 } }
 }
 const diagnostics_at_start = (result: CheckResult) =>
@@ -71,7 +64,6 @@ describe(`checked Markdown examples`, () => {
       }).parse(source, { filename }),
     )
     const result = await check_document(document, {
-      tsconfig: false,
       typescript,
       typecheck: false,
     })
@@ -382,7 +374,7 @@ describe(`checked Markdown examples`, () => {
 test(`type diagnostics underline the authored token inside an indented fence`, async () => {
   const source = '> ```ts check\n> const value: number = "bad"\n> ```'
   const document = assert_ok(await create_markdown().parse(source, { filename }))
-  const result = await check_document(document, { tsconfig: false, typescript })
+  const result = await check_document(document, { typescript })
   const diagnostic = result.diagnostics.find(({ code }) => code === `TS2322`)
   expect(diagnostic).toBeDefined()
   expect(source.slice(diagnostic?.range.start.offset, diagnostic?.range.end.offset)).toBe(
@@ -391,361 +383,122 @@ test(`type diagnostics underline the authored token inside an indented fence`, a
   expect(result.value).toEqual({ checked: 1, asserted: 0 })
 })
 
-test(`project sessions reuse programs and invalidate changed, deleted, and recreated imports`, async () => {
+test(`one-shot batches resolve each document's imports and rebuild after dependency changes`, async () => {
   const directory = await temporary_directory()
+  const nested = resolve(directory, `nested`)
+  await mkdir(nested)
+  const dependency = resolve(directory, `value.ts`)
+  await writeFile(dependency, `export const value = 1`)
+  await writeFile(resolve(nested, `value.ts`), `export const value = 'text'`)
+  const documents = await Promise.all(
+    [
+      [directory, `number`],
+      [nested, `string`],
+    ].map(async ([folder, type]) => {
+      const document_filename = relative(process.cwd(), resolve(folder, `guide.md`))
+      return assert_ok(
+        await create_markdown().parse(
+          fence(
+            `ts`,
+            `import { value } from './value'; const count: ${type} = value`,
+            `test="validate"`,
+          ),
+          { filename: document_filename },
+        ),
+      )
+    }),
+  )
+  const fences = documents.flatMap(({ manifest }) => manifest.fences)
+  const assertion = vi.fn()
   const create_program = vi.fn(typescript.createProgram)
-  const create_source = vi.fn(typescript.createSourceFile)
-  const checker = create_checker({
-    tsconfig: false,
-    root: directory,
-    compiler_options: { paths: { '@value': [`./value.ts`] } },
+  const options: CheckOptions = {
     typescript: new Proxy(typescript, {
       get: (target, key, receiver) =>
-        key === `createProgram`
-          ? create_program
-          : key === `createSourceFile`
-            ? create_source
-            : Reflect.get(target, key, receiver),
+        key === `createProgram` ? create_program : Reflect.get(target, key, receiver),
     }),
-  })
-  const engine = create_markdown()
-  const document = async (code: string, name = `guide.md`) =>
-    assert_ok(
-      await engine.parse(fence(`ts`, code), { filename: resolve(directory, name) }),
-    )
-  const dependency = resolve(directory, `value.ts`)
-
-  await writeFile(dependency, `export const value: number = 1`)
-  const guide = await document(
-    `import {value} from './value'; const count: number = value`,
-  )
-  const relative_filename = relative(process.cwd(), guide.filename)
-  const relative_guide = assert_ok(
-    await engine.parse(guide.source, {
-      filename: relative_filename,
-    }),
-  )
-  expect((await check_document(relative_guide, { tsconfig: false, typescript })).ok).toBe(
-    true,
-  )
-  const other = await document(
-    `import {value} from '@value'; value.toFixed()`,
-    `other.md`,
-  )
-  expect(await checker.check([guide, other])).toMatchObject({
+    assertions: { validate: assertion },
+  }
+  expect(await check_examples(fences, options)).toMatchObject({
     ok: true,
-    value: { checked: 2 },
+    value: { checked: 2, asserted: 2 },
   })
-  const cold_sources = create_source.mock.calls.length
-  expect(cold_sources).toBeGreaterThan(2)
-  expect(await checker.check([guide, other])).toMatchObject({
-    ok: true,
-    diagnostics: [],
-  })
-  expect(create_program.mock.calls[1]?.[3]).toBe(create_program.mock.results[0].value)
-  expect(create_source).toHaveBeenCalledTimes(cold_sources)
-  const rooted_guide = assert_ok(
-    await engine.parse(guide.source, { filename: `guide.md` }),
+  expect((await check_document(documents[0], options)).ok).toBe(true)
+  expect(create_program).toHaveBeenCalledTimes(2)
+  expect(create_program.mock.calls.every((args) => args[3] === undefined)).toBe(true)
+  assertion.mockClear()
+  await writeFile(dependency, `export const value = 'wrong'`)
+  expect((await check_examples(fences, options)).diagnostics).toContainEqual(
+    expect.objectContaining({ code: `TS2322` }),
   )
-  expect((await checker.check(rooted_guide)).ok).toBe(true)
-  await writeFile(dependency, `export const value: string = 'bad'`)
-  const changed = await checker.check([guide, other])
-  expect(changed.ok).toBe(false)
-  expect(changed.diagnostics).toContainEqual(expect.objectContaining({ code: `TS2322` }))
+  expect(assertion).not.toHaveBeenCalled()
   await rm(dependency)
-  expect((await checker.check(guide)).diagnostics).toContainEqual(
+  expect((await check_document(documents[0], options)).diagnostics).toContainEqual(
     expect.objectContaining({ code: `TS2307` }),
   )
-  await writeFile(dependency, `export const value: number = 2`)
-  expect(await checker.check(guide)).toMatchObject({ ok: true, value: { checked: 1 } })
-  const invalid = await document(`const value: number = 'wrong'`, `other.md`)
-  expect((await checker.check([guide, invalid])).ok).toBe(false)
-  expect(await checker.check(guide)).toMatchObject({ ok: true, diagnostics: [] })
-  expect(await checker.check([])).toMatchObject({
-    ok: true,
-    value: { checked: 0, asserted: 0 },
-  })
-  const before_clear = create_source.mock.calls.length
-  checker.clear()
-  expect((await checker.check(guide)).ok).toBe(true)
-  expect(create_source.mock.calls.length).toBeGreaterThan(before_clear)
-  await expect(checker.check([guide, guide])).rejects.toThrow(
-    `Duplicate checked document`,
-  )
-  create_program.mockImplementationOnce(() => {
-    throw new Error(`Compiler failed`)
-  })
-  await expect(checker.check(guide)).rejects.toThrow(`Compiler failed`)
-  expect((await checker.check(guide)).ok).toBe(true)
-  checker.dispose()
-  await expect(checker.check([])).rejects.toThrow(`Checker is disposed`)
-}, 60_000)
-
-test(`project sessions refresh imported Svelte props and remap moved fences without retransformation`, async () => {
-  const directory = await temporary_directory()
-  const { createRequire } = await import('node:module')
-  const require_tool = createRequire(filename)
-  const { svelte2tsx } = require_tool(`svelte2tsx`) as {
-    svelte2tsx: SvelteTypeChecker['transform']
-  }
-  const transform = vi.fn(svelte2tsx)
-  const decode = vi.spyOn(source_maps, `decode_source_map`)
-  const checker = create_checker({
-    tsconfig: false,
-    root: directory,
-    typescript,
-    svelte_typechecker: {
-      transform,
-      shims: [
-        require_tool.resolve(`svelte2tsx/svelte-shims-v4.d.ts`),
-        require_tool.resolve(`svelte2tsx/svelte-jsx-v4.d.ts`),
-      ],
-    },
-  })
-  const engine = create_markdown()
-  const component = resolve(directory, `Counter.svelte`)
-  const source = fence(
-    `svelte`,
-    `<script lang="ts">import Counter from './Counter.svelte'</script>\n<Counter count="bad"/>`,
-  )
-  const document = async (prefix = ``) =>
-    assert_ok(
-      await engine.parse(prefix + source, { filename: resolve(directory, `guide.md`) }),
-    )
-
-  await writeFile(
-    component,
-    `<script lang="ts">let {count}: {count: number} = $props()</script><p>{count}</p>`,
-  )
-  const first = await checker.check(await document())
-  expect(first.diagnostics).toContainEqual(expect.objectContaining({ code: `TS2322` }))
-  expect(transform).toHaveBeenCalledTimes(2)
-  expect(decode).toHaveBeenCalledTimes(2)
-  const moved = await checker.check(await document(`# Heading\n\n`))
-  expect(transform).toHaveBeenCalledTimes(2)
-  expect(decode).toHaveBeenCalledTimes(2)
-  const first_error = first.diagnostics.find(({ code }) => code === `TS2322`)
-  const moved_error = moved.diagnostics.find(({ code }) => code === `TS2322`)
-  expect(moved_error?.range.start.line).toBe((first_error?.range.start.line ?? 0) + 2)
-  await writeFile(
-    component,
-    `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
-  )
-  expect(await checker.check(await document())).toMatchObject({
+  await writeFile(dependency, `export const value = 2`)
+  expect((await check_examples(fences, options)).ok).toBe(true)
+  expect(await check_examples([])).toEqual({
     ok: true,
     diagnostics: [],
+    value: { checked: 0, asserted: 0 },
   })
-  expect(transform).toHaveBeenCalledTimes(3)
-  expect(decode).toHaveBeenCalledTimes(3)
-  await rm(component)
-  expect((await checker.check(await document())).ok).toBe(false)
-  await writeFile(
-    component,
-    `<script lang="ts">let {count}: {count: string} = $props()</script><p>{count}</p>`,
-  )
-  expect((await checker.check(await document())).ok).toBe(true)
-  checker.clear()
-  expect((await checker.check(await document())).ok).toBe(true)
-  expect(transform.mock.calls.length).toBeGreaterThan(3)
 }, 60_000)
 
-test(`sessions serialize assertions, isolate projects, and reject queued work after disposal`, async () => {
-  const source = fence(`ts`, `const value: number = 1`, `test="hold"`)
-  const document = assert_ok(await create_markdown().parse(source, { filename }))
-  const checker = create_checker({ tsconfig: false, typescript })
-  const release = Promise.withResolvers<undefined>()
-  const started = Promise.withResolvers<undefined>()
-  const events: string[] = []
-  const first = checker.check(document, {
-    assertions: {
-      hold: async () => {
-        events.push(`start`)
-        started.resolve(undefined)
-        await release.promise
-        events.push(`end`)
-      },
-    },
+test(`explicit configuration inherits aliases and types without discovering a project config`, async () => {
+  const directory = await temporary_directory()
+  for (const folder of [`settings`, `types/project`, `node_modules/fixture-config`])
+    await mkdir(resolve(directory, folder), { recursive: true })
+  // An unrelated nearest config must never affect a standalone check.
+  await writeFile(resolve(directory, `tsconfig.json`), `{ broken`)
+  const page_filename = resolve(directory, `guide.md`)
+  const standalone = await check_source(fence(`ts`, `const value: number = 1`), {
+    filename: page_filename,
   })
-  await started.promise
-  const second = checker.check(document, {
-    assertions: {
-      hold: () => {
-        events.push(`second`)
-      },
-    },
-  })
-  const rejected = second.catch((error: unknown) => error)
-  const independent = create_checker({ tsconfig: false, typescript })
-  expect(
-    (
-      await independent.check(document, {
-        assertions: {
-          hold: () => {
-            events.push(`independent`)
-          },
-        },
-      })
-    ).ok,
-  ).toBe(true)
-  independent.dispose()
-  checker.dispose()
-  release.resolve(undefined)
-  expect((await first).ok).toBe(true)
-  expect(await rejected).toMatchObject({
-    message: expect.stringContaining(`Checker is disposed`),
-  })
-  expect(events).toEqual([`start`, `independent`, `end`])
-})
-
-test(`project configuration inherits aliases, libraries and types, caches reads, and follows edits`, async () => {
-  const root = await temporary_directory()
-  const parse_config = vi.fn(typescript.getParsedCommandLineOfConfigFile)
-  const compiler = new Proxy(typescript, {
-    get: (target, key, receiver) =>
-      key === `getParsedCommandLineOfConfigFile`
-        ? parse_config
-        : Reflect.get(target, key, receiver),
-  })
-  const checker = create_checker({ root, typescript: compiler })
-  const engine = create_markdown()
-  const document = assert_ok(
-    await engine.parse(
-      fence(
-        `ts`,
-        `import {value} from '$value'; const count: number = value; const label: string = PROJECT_LABEL; [count].toSorted()`,
-      ),
-      { filename: resolve(root, `guide.md`) },
-    ),
+  expect(standalone.ok).toBe(true)
+  await writeFile(resolve(directory, `value.ts`), `export const value = 1`)
+  await writeFile(
+    resolve(directory, `types/project/index.d.ts`),
+    `declare const PROJECT_LABEL: string`,
   )
-  const base_path = resolve(root, `settings/base.json`)
-  const ambient_path = resolve(root, `types/project/index.d.ts`)
-  const base = {
+  await write_json(resolve(directory, `settings/base.json`), {
     compilerOptions: {
       lib: [`es2023`],
       types: [`project`],
       typeRoots: [`../types`],
-      paths: { $value: [`../src/value.ts`] },
+      paths: { $value: [`../value.ts`] },
       strict: true,
       composite: true,
       incremental: true,
-      rootDir: `../src`,
-      tsBuildInfoFile: `../build.tsbuildinfo`,
+      rootDir: `../application`,
     },
-  }
-
-  for (const directory of [
-    `settings`,
-    `src`,
-    `types/project`,
-    `docs`,
-    `node_modules/fixture-config`,
-  ])
-    await mkdir(resolve(root, directory), { recursive: true })
-  await write_json(base_path, base)
-  const package_path = resolve(root, `node_modules/fixture-config/package.json`)
-  await write_json(package_path, { tsconfig: `config.json` })
-  await write_json(resolve(root, `node_modules/fixture-config/config.json`), {
+  })
+  await write_json(resolve(directory, `node_modules/fixture-config/package.json`), {
+    tsconfig: `config.json`,
+  })
+  await write_json(resolve(directory, `node_modules/fixture-config/config.json`), {
     extends: `../../settings/base.json`,
   })
-  await write_json(resolve(root, `tsconfig.json`), {
-    extends: `fixture-config`,
-    include: [`src/**/*`],
-  })
-  // Included application files are not documentation roots.
-  await writeFile(resolve(root, `src/unrelated.ts`), `const invalid: number = 'wrong'`)
-  await writeFile(resolve(root, `src/value.ts`), `export const value = 1`)
-  await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
-  expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
-  expect((await checker.check(document)).ok).toBe(true)
-  expect(parse_config).toHaveBeenCalledTimes(1)
-  const dom_document = assert_ok(
-    await engine.parse(
-      `${document.source}\n\n${fence(`ts`, `document.title = 'Docs'`)}`,
-      { filename: document.filename },
-    ),
+  const config_path = resolve(directory, `docs.json`)
+  await write_json(config_path, { extends: `fixture-config`, files: [] })
+  const source = fence(
+    `ts`,
+    `import { value } from '$value'; const count: number = value; const label: string = PROJECT_LABEL; [count].toSorted()`,
   )
-  expect((await checker.check(dom_document)).diagnostics).toContainEqual(
-    expect.objectContaining({ code: `TS2584` }),
-  )
-  base.compilerOptions.lib.push(`dom`)
-  await write_json(base_path, base)
-  expect((await checker.check(dom_document)).ok).toBe(true)
-  expect(parse_config).toHaveBeenCalledTimes(2)
-  await writeFile(ambient_path, `declare const PROJECT_LABEL: number`)
-  expect((await checker.check(document)).diagnostics).toContainEqual(
-    expect.objectContaining({ code: `TS2322` }),
-  )
-  expect(parse_config).toHaveBeenCalledTimes(2)
-  await writeFile(ambient_path, `declare const PROJECT_LABEL: string`)
-  await rm(base_path)
-  const missing = await checker.check(document)
-  expect(missing.diagnostics).toContainEqual(expect.objectContaining({ code: `TS5083` }))
-  await write_json(base_path, base)
-  expect((await checker.check(document)).ok).toBe(true)
-  await writeFile(base_path, `{ "compilerOptions": { "strict": } }`)
-  const invalid = await checker.check(document)
-  expect(invalid.ok).toBe(false)
-  expect(invalid.diagnostics[0].range.start.filename).toBe(base_path)
-  const original_diagnostics = structuredClone(invalid.diagnostics)
-  Object.assign(invalid.diagnostics[0], {
-    severity: `warning`,
-    code: `changed`,
-    message: `changed`,
-  })
-  Reflect.set(invalid.diagnostics[0].range.start, `filename`, `changed.md`)
-  expect((await checker.check(document)).diagnostics).toEqual(original_diagnostics)
-  await write_json(base_path, base)
+  const check = (options: CheckOptions = {}) =>
+    check_source(source, { filename: page_filename, tsconfig: `docs.json`, ...options })
+  expect(await check()).toMatchObject({ ok: true, diagnostics: [] })
   expect(
-    (await check_document(document, { tsconfig: resolve(root, `tsconfig.json`) })).ok,
+    (await check({ compiler_options: { paths: { $value: [`./value.ts`] } } })).ok,
   ).toBe(true)
-  const override = create_checker({ root, compiler_options: { types: [] } })
-  expect((await override.check(document)).diagnostics).toContainEqual(
+  expect((await check({ compiler_options: { types: [] } })).diagnostics).toContainEqual(
     expect.objectContaining({ code: `TS2304` }),
   )
-
-  const nested = create_checker({ root: resolve(root, `docs`) })
-  expect((await nested.check(document)).ok).toBe(true)
-  await write_json(resolve(root, `docs/tsconfig.json`), {
-    extends: `../tsconfig.json`,
-    compilerOptions: { types: [] },
-  })
-  expect((await nested.check(document)).diagnostics).toContainEqual(
-    expect.objectContaining({ code: `TS2304` }),
-  )
-
-  const explicit = create_checker({ root, tsconfig: `missing.json` })
-  expect((await explicit.check(document)).diagnostics).toContainEqual(
+  await writeFile(config_path, `{ "compilerOptions": { "strict": } }`)
+  const invalid = await check()
+  expect(invalid.ok).toBe(false)
+  expect(invalid.diagnostics[0].range.start.filename).toBe(config_path)
+  await rm(config_path)
+  expect((await check()).diagnostics).toContainEqual(
     expect.objectContaining({ code: `TS5083` }),
   )
-  await write_json(resolve(root, `missing.json`), { extends: `./tsconfig.json` })
-  expect((await explicit.check(document)).ok).toBe(true)
-
-  await write_json(resolve(root, `node_modules/fixture-config/alternate.json`), {
-    extends: `../../settings/base.json`,
-    compilerOptions: { types: [] },
-  })
-  await write_json(package_path, { tsconfig: `alternate.json` })
-  expect((await checker.check(document)).diagnostics).toContainEqual(
-    expect.objectContaining({ code: `TS2304` }),
-  )
-  await write_json(package_path, { tsconfig: `config.json` })
-  expect((await checker.check(document)).ok).toBe(true)
-  const path_override = create_checker({
-    root,
-    compiler_options: { paths: { $value: [`./src/value.ts`] } },
-  })
-
-  expect(await path_override.check(document)).toMatchObject({
-    ok: true,
-    diagnostics: [],
-  })
-
-  for (const module of [`CommonJS`, `NodeNext`]) {
-    await write_json(resolve(root, `tsconfig.json`), {
-      extends: `fixture-config`,
-      compilerOptions: { module },
-      files: [],
-    })
-    expect(await checker.check(document)).toMatchObject({ ok: true, diagnostics: [] })
-  }
 }, 60_000)

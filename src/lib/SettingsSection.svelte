@@ -84,11 +84,8 @@
     if (!is_object(value)) return
     validate_object_shape(value)
     if (value instanceof Date || value instanceof RegExp) return
-    if (Array.isArray(value)) {
-      for (const item of value) validate_value_shape(item)
-      return
-    }
-    for (const item of Object.values(value)) validate_value_shape(item)
+    for (const item of Array.isArray(value) ? value : Object.values(value))
+      validate_value_shape(item)
   }
 
   // Capture reset values once at mount - must NOT be $derived or it tracks changes.

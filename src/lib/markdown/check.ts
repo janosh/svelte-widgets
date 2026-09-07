@@ -26,8 +26,8 @@ export type SvelteTypeChecker = {
 }
 export type CheckOptions = {
   filename?: string
-  // Omit to discover the nearest tsconfig.json; false uses standalone snippet defaults.
-  tsconfig?: string | false
+  // Explicit config path, relative to the document directory. Omit for standalone defaults.
+  tsconfig?: string
   // Static checks never execute examples. Only explicitly named assertions can run code.
   assertions?: Record<string, (example: ContentFence) => void | Promise<void>>
   typescript?: typeof TypeScript
@@ -37,87 +37,6 @@ export type CheckOptions = {
 }
 export type CheckSummary = { checked: number; asserted: number }
 export type CheckResult = DiagnosticResult<CheckSummary> & { value: CheckSummary }
-
-export type CheckerOptions = Omit<CheckOptions, 'filename' | 'assertions'> & {
-  root?: string
-}
-export type Checker = {
-  check: (
-    documents: MarkdownDocument | readonly MarkdownDocument[],
-    options?: Pick<CheckOptions, 'assertions'>,
-  ) => Promise<CheckResult>
-  clear: () => void
-  dispose: () => void
-}
-type ComponentCheck = {
-  source: string
-  warnings: ReturnType<typeof compile>['warnings']
-  transformed?: { code: string; mappings: DecodedSourceMap }
-}
-type CheckState = {
-  root: string
-  compiler?: typeof TypeScript
-  svelte_checker?: SvelteTypeChecker
-  program?: TypeScript.Program
-  components: Map<string, ComponentCheck>
-  sources: Map<string, { language: string; node: TypeScript.SourceFile }>
-  config?: {
-    path: string
-    inputs: Map<string, string | undefined>
-    options: TypeScript.CompilerOptions
-    diagnostics: Diagnostic[]
-  }
-}
-const checker_state = (root: string): CheckState => ({
-  root,
-  components: new Map(),
-  sources: new Map(),
-})
-
-// Each call supplies the complete current document set. Jobs serialize through assertions;
-// cached ASTs and component transforms belong exclusively to this project and toolchain.
-export function create_checker(options: CheckerOptions = {}): Checker {
-  const { root = process.cwd(), ...configuration } = options
-  const settings = {
-    ...configuration,
-    compiler_options: structuredClone(configuration.compiler_options ?? {}),
-  }
-  const state = checker_state(resolve(root))
-  let pending: Promise<unknown> = Promise.resolve()
-  let disposed = false
-  const clear = () => {
-    state.program = undefined
-    state.sources.clear()
-    state.components.clear()
-    state.config = undefined
-  }
-  return {
-    check(documents, run_options = {}) {
-      const inputs = `manifest` in documents ? [documents] : documents
-      const seen = new Set<string>()
-      const fences: ContentFence[] = []
-      for (const document of inputs) {
-        const filename = resolve(state.root, document.filename)
-        if (seen.has(filename))
-          return Promise.reject(new Error(`Duplicate checked document: ${filename}`))
-        seen.add(filename)
-        fences.push(...document.manifest.fences)
-      }
-      const result = pending.then(() => {
-        if (disposed) throw new Error(`Checker is disposed: ${state.root}`)
-        return run_checks(fences, { ...settings, ...run_options }, state)
-      })
-      // A failed job must not poison the queue; its own promise still rejects.
-      pending = result.catch(() => undefined)
-      return result
-    },
-    clear,
-    dispose() {
-      disposed = true
-      clear()
-    },
-  }
-}
 
 const message = (error: unknown): string =>
   error instanceof Error ? error.message : String(error)
@@ -135,43 +54,16 @@ const error_location = (error: unknown, key: 'start' | 'end' = 'start') => {
     : undefined
 }
 
-function project_config(
-  compiler: typeof TypeScript,
-  state: CheckState,
-  tsconfig: CheckOptions['tsconfig'],
-): CheckState['config'] {
-  const path =
-    tsconfig === false
-      ? undefined
-      : typeof tsconfig === `string`
-        ? resolve(state.root, tsconfig)
-        : compiler.findConfigFile(state.root, (file) => compiler.sys.fileExists(file))
-  const cached = state.config
-  if (!path && !cached) return undefined
-  if (
-    path &&
-    cached?.path === path &&
-    [...cached.inputs].every(([file, content]) => compiler.sys.readFile(file) === content)
-  )
-    return cached
-  state.config = undefined
-  state.program = undefined
-  if (!path) return undefined
-  const inputs = new Map<string, string | undefined>()
+function project_config(compiler: typeof TypeScript, path: string) {
   const errors: TypeScript.Diagnostic[] = []
-  const read_file = (file: string) => {
-    const content = compiler.sys.readFile(file)
-    inputs.set(file, content)
-    return content
-  }
   const parsed = compiler.getParsedCommandLineOfConfigFile(
     path,
     {},
     {
       useCaseSensitiveFileNames: compiler.sys.useCaseSensitiveFileNames,
-      getCurrentDirectory: () => state.root,
-      readFile: read_file,
-      fileExists: (file) => read_file(file) !== undefined,
+      getCurrentDirectory: () => dirname(path),
+      readFile: (file) => compiler.sys.readFile(file),
+      fileExists: (file) => compiler.sys.fileExists(file),
       // Fences are the roots. Loading a project's include/files would check unrelated code.
       readDirectory: () => [],
       onUnRecoverableConfigFileDiagnostic: (diagnostic) => errors.push(diagnostic),
@@ -192,7 +84,7 @@ function project_config(
         )(offset, offset + (diagnostic.length ?? 0)),
       }
     })
-  return (state.config = { path, inputs, options: parsed?.options ?? {}, diagnostics })
+  return { options: parsed?.options ?? {}, diagnostics }
 }
 
 type CheckedSource = Pick<ContentFence, 'code' | 'range' | 'line_positions'>
@@ -212,10 +104,9 @@ const source_position = (
 }
 
 // Check explicitly opted-in fences. The caller supplies execution and assertion semantics.
-async function run_checks(
+export async function check_examples(
   fences: readonly ContentFence[],
-  options: CheckOptions,
-  state: CheckState,
+  options: CheckOptions = {},
 ): Promise<CheckResult> {
   const diagnostics: Diagnostic[] = []
   const selected = fences.filter(
@@ -253,25 +144,11 @@ async function run_checks(
       `error`,
       error_location(error, `end`),
     )
-  const filename = resolve(state.root, options.filename ?? `document.md`)
-  const require_tool = createRequire(`${state.root}/package.json`)
-  const used_components = new Set<string>()
-  const used_sources = new Set<string>()
-  const prune = () => {
-    for (const path of state.components.keys())
-      if (!used_components.has(path)) state.components.delete(path)
-    for (const path of state.sources.keys())
-      if (!used_sources.has(path)) state.sources.delete(path)
-  }
-  const component_syntax = (source: string, path: string): ComponentCheck => {
-    used_components.add(path)
-    const cached = state.components.get(path)
-    if (cached?.source === source) return cached
-    const { warnings } = compile(source, { filename: path, generate: false })
-    const result = { source, warnings }
-    state.components.set(path, result)
-    return result
-  }
+  const filename = resolve(
+    options.filename ?? fences[0]?.range.start.filename ?? `document.md`,
+  )
+  const root = dirname(filename)
+  const require_tool = createRequire(`${root}/package.json`)
   const files = new Map<
     string,
     {
@@ -281,8 +158,8 @@ async function run_checks(
     }
   >()
   const shims = new Set<string>()
-  let compiler = state.compiler ?? options.typescript
-  let svelte_checker = state.svelte_checker ?? options.svelte_typechecker
+  let compiler = options.typescript
+  let svelte_checker = options.svelte_typechecker
   const transform_component = (
     fence: CheckedSource,
     component_filename: string,
@@ -306,24 +183,20 @@ async function run_checks(
         )
       }
     }
-    state.svelte_checker = svelte_checker
     for (const shim of svelte_checker.shims) shims.add(shim)
-    const component = component_syntax(fence.code, component_filename)
-    if (!component.transformed) {
-      const { code, map } = svelte_checker.transform(fence.code, {
-        filename: component_filename,
-        isTsFile: true,
-      })
-      component.transformed = { code, mappings: decode_source_map(map.mappings) }
-    }
-    files.set(`${component_filename}.ts`, { fence, ...component.transformed })
+    const { code, map } = svelte_checker.transform(fence.code, {
+      filename: component_filename,
+      isTsFile: true,
+    })
+    files.set(`${component_filename}.ts`, {
+      fence,
+      code,
+      mappings: decode_source_map(map.mappings),
+    })
   }
   const example_counts = new Map<string, number>()
   for (const fence of selected) {
-    const document_filename = resolve(
-      state.root,
-      options.filename ?? fence.range.start.filename,
-    )
+    const document_filename = resolve(options.filename ?? fence.range.start.filename)
     const idx = example_counts.get(document_filename) ?? 0
     example_counts.set(document_filename, idx + 1)
     const language = fence.language.toLowerCase()
@@ -336,7 +209,10 @@ async function run_checks(
     const example_filename = `${document_filename}.example-${idx}.${component ? `svelte` : javascript ? `js` : `ts`}`
     try {
       if (component) {
-        const result = component_syntax(fence.code, example_filename)
+        const result = compile(fence.code, {
+          filename: example_filename,
+          generate: false,
+        })
         for (const warning of result.warnings)
           report(
             fence,
@@ -368,13 +244,14 @@ async function run_checks(
       report_compile_error(fence, error)
     }
   }
-  state.compiler = compiler
   if (compiler && files.size) {
     const compiler_api = compiler
-    const config = project_config(compiler, state, options.tsconfig)
+    const config =
+      options.tsconfig === undefined
+        ? undefined
+        : project_config(compiler, resolve(root, options.tsconfig))
     if (config?.diagnostics.length) {
-      diagnostics.push(...structuredClone(config.diagnostics))
-      prune()
+      diagnostics.push(...config.diagnostics)
       return { ok: false, diagnostics, value: { checked: selected.length, asserted: 0 } }
     }
     const settings: TypeScript.CompilerOptions = {
@@ -390,8 +267,8 @@ async function run_checks(
         types: [],
       }),
       ...options.compiler_options,
-      // Explicit aliases belong to the caller's root, not an inherited config directory.
-      ...(options.compiler_options?.paths ? { pathsBasePath: state.root } : {}),
+      // Explicit aliases belong to the document directory, not an inherited config directory.
+      ...(options.compiler_options?.paths ? { pathsBasePath: root } : {}),
       // Fences form a virtual checking program, not the project's output/build graph.
       rootDir: undefined,
       composite: false,
@@ -400,11 +277,8 @@ async function run_checks(
       noEmit: true,
     }
     const host = compiler.createCompilerHost(settings)
-    host.getCurrentDirectory = () => state.root
+    host.getCurrentDirectory = () => root
     const file_exists = host.fileExists.bind(host)
-    // Resolution must observe new/deleted imports and package metadata on every check.
-    // AST and transform reuse is content-based; filesystem metadata cannot hide edits.
-    host.hasInvalidatedResolutions = () => true
     // TypeScript probes this arbitrary-extension declaration name for .svelte imports.
     host.fileExists = (path) =>
       file_exists(path) ||
@@ -456,11 +330,6 @@ async function run_checks(
         return undefined
       }
       if (source_text === undefined) return undefined
-      used_sources.add(path)
-      const language = JSON.stringify(language_version)
-      const cached = state.sources.get(path)
-      if (cached?.node.text === source_text && cached.language === language)
-        return cached.node
       const source = compiler_api.createSourceFile(
         path,
         source_text,
@@ -473,7 +342,6 @@ async function run_checks(
           ...source.referencedFiles,
           ...[...shims].map((file_name) => ({ fileName: file_name, pos: 0, end: 0 })),
         ]
-      state.sources.set(path, { language, node: source })
       return source
     }
     // Resolve local components to their checked virtual modules, rather than the
@@ -541,6 +409,7 @@ async function run_checks(
             line_positions,
           }
           try {
+            compile(source, { filename: component_filename, generate: false })
             transform_component(imported_fence, component_filename)
           } catch (error) {
             report_compile_error(imported_fence, error)
@@ -554,13 +423,7 @@ async function run_checks(
           },
         }
       })
-    const program = compiler.createProgram(
-      [...files.keys(), ...shims],
-      settings,
-      host,
-      state.program,
-    )
-    state.program = program
+    const program = compiler.createProgram([...files.keys(), ...shims], settings, host)
     const type_diagnostics =
       options.typecheck === false
         ? [...program.getOptionsDiagnostics(), ...program.getSyntacticDiagnostics()]
@@ -576,10 +439,8 @@ async function run_checks(
       )
     }
   }
-  if (!files.size) state.program = undefined
-  prune()
   let asserted = 0
-  // Assertions only run after the entire document has passed static validation.
+  // Assertions only run after the entire batch has passed static validation.
   if (!diagnostics.some(({ severity }) => severity === `error`)) {
     for (const fence of selected) {
       const assertion = fence.settings.test
@@ -600,16 +461,6 @@ async function run_checks(
   }
   const value = { checked: selected.length, asserted }
   return { ...diagnostic_result(value, diagnostics), value }
-}
-
-export const check_examples = (
-  fences: readonly ContentFence[],
-  options: CheckOptions = {},
-): Promise<CheckResult> => {
-  const filename = resolve(
-    options.filename ?? fences[0]?.range.start.filename ?? `document.md`,
-  )
-  return run_checks(fences, { ...options, filename }, checker_state(dirname(filename)))
 }
 
 export const check_document = (

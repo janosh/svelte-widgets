@@ -204,7 +204,7 @@ export default {
 }
 ```
 
-Parse once with `engine.parse(source, { dialect: "markdown" })`, then pass the document to `render_markdown()` for HTML strings. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Reuse `create_checker()` from `/markdown/check` for checked documentation builds. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
+Parse once with `engine.parse(source, { dialect: "markdown" })`, then pass the document to `render_markdown()` for HTML strings. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Use `check_document(document, options)` from `/markdown/check` for one-shot documentation checks. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
 
 `Popover` and `ActionMenu` use the browser Popover API for top-layer rendering, light dismissal and Escape handling, while `float` supplies placement. Explicit custom dismissal policies still use `click_outside`. Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
 
