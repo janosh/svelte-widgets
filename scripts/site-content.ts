@@ -63,6 +63,7 @@ export function prepare_page(
     headings: [],
     fences: [],
     references: [],
+    reference_definitions: [],
     text: ``,
     anchors: [...document.querySelectorAll(`[id]`)].map(({ id }) => {
       const idx = authored_anchors.findIndex((anchor) => anchor.id === id)

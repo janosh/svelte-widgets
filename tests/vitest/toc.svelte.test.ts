@@ -150,6 +150,55 @@ afterEach(async () => {
 })
 
 describe(`Toc`, () => {
+  test.each([390, 1200])(
+    `supplemental navigation remains usable without headings at width %i`,
+    async (width) => {
+      const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
+      set_window_width(width)
+      setup_empty_page()
+      mount_toc({
+        minItems: 5,
+        warnOnEmpty: true,
+        footer: createRawSnippet(() => ({
+          render: () =>
+            `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
+        })),
+      })
+      await tick()
+      const aside = doc_query(`aside.toc`)
+      expect(aside.hidden).toBe(false)
+      expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
+        expect.stringContaining(`Showing table of contents.`),
+      )
+      if (width < 1000) {
+        doc_query(`aside.toc > button`).click()
+        await tick()
+      }
+      expect(toc_texts()).toEqual([])
+      for (const selector of [`summary`, `a`]) {
+        const control = doc_query(`[data-toc-footer] ${selector}`)
+        control.focus()
+        for (const key of [`Enter`, ` `, `Tab`, `ArrowDown`]) {
+          const event = new KeyboardEvent(`keydown`, {
+            key,
+            bubbles: true,
+            cancelable: true,
+          })
+          control.dispatchEvent(event)
+          expect(event.defaultPrevented).toBe(false)
+        }
+      }
+      if (width < 1000) {
+        expect(doc_query(`aside.toc > button`).getAttribute(`aria-expanded`)).toBe(`true`)
+        globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape` }))
+        await tick()
+        expect(doc_query(`aside.toc > button`).getAttribute(`aria-expanded`)).toBe(
+          `false`,
+        )
+      }
+    },
+  )
+
   test(`renders default title element`, () => {
     mount_toc({ title: `Custom title` })
 
@@ -489,9 +538,14 @@ describe(`Toc`, () => {
       const heading = doc_query(`#intro`)
       doc_query(`aside.toc li`).click()
       expect(heading.classList.contains(`toc-clicked`)).toBe(true)
-
-      vi.advanceTimersByTime(10)
+      expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(`10ms`)
+      vi.advanceTimersByTime(5)
+      doc_query(`aside.toc li`).click()
+      vi.advanceTimersByTime(5)
+      expect(heading.classList.contains(`toc-clicked`)).toBe(true)
+      vi.advanceTimersByTime(5)
       expect(heading.classList.contains(`toc-clicked`)).toBe(false)
+      expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(``)
     } finally {
       vi.useRealTimers()
     }

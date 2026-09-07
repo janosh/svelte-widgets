@@ -15,7 +15,7 @@
     slugify_heading,
     unique_heading_id,
   } from './heading-anchors'
-  import { get_heading_visibility } from './toc-utils'
+  import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
 
   let {
@@ -56,6 +56,7 @@
     openTocIcon,
     titleSnippet,
     tocItem,
+    footer,
     onOpenChange,
     asideProps = {},
     navProps = {},
@@ -101,6 +102,8 @@
     openTocIcon?: Snippet
     titleSnippet?: Snippet
     tocItem?: Snippet<[HTMLHeadingElement]>
+    // Supplemental navigation inside the same desktop/mobile panel.
+    footer?: Snippet
     onOpenChange?: OpenChangeHandler
     asideProps?: SvelteHTMLElements[`aside`]
     navProps?: SvelteHTMLElements[`nav`]
@@ -291,10 +294,7 @@
     const id = heading_data[idx]?.id
     if (id) history.replaceState({}, ``, `#${id}`)
 
-    if (flash_duration_ms) {
-      node.classList.add(`toc-clicked`)
-      setTimeout(() => node.classList.remove(`toc-clicked`), flash_duration_ms)
-    }
+    if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }
 
   type SelectorName = `headingSelector` | `excludeSelector` | `hideOnIntersect`
@@ -447,19 +447,20 @@
             : ``
           console.warn(
             `Toc found no headings for headingSelector='${headingSelector}'${exclude_msg}. ${
-              autoHide ? `Hiding` : `Showing empty`
+              autoHide && !footer ? `Hiding` : `Showing`
             } table of contents.`,
           )
         }
-        if (autoHide) hide = true
       } else {
         set_active_heading()
-        if (hide && autoHide) hide = false
       }
     })
   }
 
   $effect(update_toc_headings)
+  $effect(() => {
+    if (autoHide) hide = headings.length === 0 && !footer
+  })
 
   let toc_item_has_interactive = $derived(
     tocItem
@@ -598,6 +599,9 @@
     )
       return
 
+    // Supplemental links and disclosure controls keep native keyboard behavior.
+    if (event.key !== `Escape` && document.activeElement?.closest(`[data-toc-footer]`))
+      return
     if (event.key === `Tab`) {
       if (toc_has_focus) set_open(false, `tab`)
       return
@@ -694,7 +698,7 @@
 >
   <!-- the toggle stays mounted and becomes the close button: unmounting it left touch users
   no visible way out, only an outside click, Escape or a tab-out -->
-  {#if !desktop && headings.length >= minItems}
+  {#if !desktop && (headings.length >= minItems || footer)}
     <button
       {...openButtonProps}
       onclick={(event) => {
@@ -730,7 +734,7 @@
       {/if}
     </button>
   {/if}
-  {#if open || (desktop && headings.length >= minItems)}
+  {#if open || (desktop && (headings.length >= minItems || footer))}
     <nav
       {...navProps}
       transition:blur={blurParams === null ? { duration: 0 } : blurParams}
@@ -783,11 +787,26 @@
           </li>
         {/each}
       </ol>
+      {#if footer}
+        <div data-toc-footer>{@render footer()}</div>
+      {/if}
     </nav>
   {/if}
 </aside>
 
 <style>
+  :global(.toc-clicked) {
+    animation: toc-flash var(--toc-flash-duration, 1500ms) ease-out;
+  }
+  :global(.toc-clicked a) {
+    color: inherit;
+  }
+  @keyframes toc-flash {
+    0%,
+    30% {
+      color: var(--toc-flash-color, var(--accent, #6495ed));
+    }
+  }
   :where(aside.toc) {
     /* mirrors Nav's --nav-link-bg-hover / --nav-border-radius so ToC and Nav rows share one
        hover language. Fallbacks only — the public --toc-li-* tokens still win. */
@@ -954,6 +973,7 @@
      toggle stopped unmounting on open. */
   aside.toc.mobile {
     position: fixed;
+    z-index: var(--toc-z-index, 2);
     bottom: var(--toc-mobile-bottom, 1em);
     right: var(--toc-mobile-right, 1em);
     display: flex;

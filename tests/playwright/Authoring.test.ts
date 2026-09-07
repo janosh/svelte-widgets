@@ -11,6 +11,138 @@ test.beforeEach(async ({ page }) => {
   )
 })
 
+// eslint-disable-next-line vitest/prefer-each -- Playwright does not provide test.each.
+for (const width of [390, 1440]) {
+  test(`figure navigation uses definition order and native history at width ${width}`, async ({
+    page,
+  }) => {
+    const first_figure = page.locator(`[id="fig:particles"]`)
+    const second_equation = page.locator(`[id="eq:hooke"]`)
+    const history_index = () => page.evaluate(() => history.state?.[`sveltekit:history`])
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ colorScheme: `dark` })
+    await page.goto(`/authoring#fig%3Aparticles`)
+    await expect(first_figure).toBeInViewport()
+    for (const [idx, id] of [`eq:mass-energy`, `eq:hooke`].entries()) {
+      const equation = page.locator(`[id="${id}"]`)
+      await expect(equation.locator(`.katex-mathml`)).toHaveCSS(`clip-path`, `inset(50%)`)
+      await expect(
+        equation.getByRole(`link`, { name: `Equation ${idx + 1}` }),
+      ).toHaveText(`(${idx + 1})`)
+      await expect(equation.locator(`.equation-number`)).toBeVisible()
+    }
+    await expect(page.locator(`main > p .katex`)).toHaveCount(2)
+    await expect(page.locator(`main > figure figcaption`)).toHaveText([
+      `Figure 1. Two interacting particles`,
+      `Figure 2. Spring displacement`,
+    ])
+    await page.goto(`/authoring`)
+    const sidebar = page.locator(`aside.toc`)
+    const mobile = width < 1100
+    if (mobile) {
+      await sidebar.getByRole(`button`, { name: `Open table of contents` }).click()
+      await expect(sidebar.locator(`nav`)).toHaveCSS(
+        `background-color`,
+        `rgb(34, 34, 38)`,
+      )
+    }
+    const figures = sidebar.getByRole(`group`, { name: `Figures`, exact: true })
+    const equations = sidebar.getByRole(`group`, { name: `Equations`, exact: true })
+    await expect(figures.getByRole(`link`)).toHaveText([
+      `1 · Particle interaction`,
+      `2 · Spring model`,
+    ])
+    await expect(equations.getByRole(`link`)).toHaveText([
+      `1 · Mass–energy equivalence`,
+      `2 · Hooke's law`,
+    ])
+    // Re-rendering a definition must update the sidebar's target, even with the same ID.
+    await first_figure.evaluate((node) => node.replaceWith(node.cloneNode(true)))
+    await expect(sidebar.locator(`nav > ol`)).not.toContainText(
+      `Two interacting particles`,
+    )
+    const figure_toggle = figures.getByRole(`button`, { name: `Figures`, exact: true })
+    const figure_list = figures.locator(`ul`)
+    const list_height = await figure_list.evaluate(
+      (node) => node.getBoundingClientRect().height,
+    )
+    await figure_toggle.focus()
+    await page.keyboard.press(`Enter`)
+    await expect(figure_toggle).toHaveAttribute(`aria-expanded`, `false`)
+    const closing = await page
+      .waitForFunction(() => {
+        const node = document.querySelector(`[aria-label="Figures"] ul`)
+        const animation = node
+          ?.getAnimations()
+          .find((entry) => Number(entry.effect?.getTiming().duration) > 0)
+        if (!node || !animation) return false
+        animation.pause()
+        animation.currentTime = 90
+        return node.getBoundingClientRect().height
+      })
+      .then((result) => result.jsonValue())
+    expect(closing).toBeGreaterThan(0)
+    expect(closing).toBeLessThan(list_height)
+    await figure_list.evaluate((node) => node.getAnimations()[0].finish())
+    await expect(figures.getByRole(`link`).first()).toBeHidden()
+    await expect(equations.getByRole(`link`).first()).toBeVisible()
+    await page.keyboard.press(`Enter`)
+    await expect(figure_toggle).toHaveAttribute(`aria-expanded`, `true`)
+    await expect(figures.getByRole(`link`).first()).toBeVisible()
+    await expect
+      .poll(() =>
+        figure_list.evaluate((node) =>
+          node.getAnimations().every((animation) => animation.playState === `finished`),
+        ),
+      )
+      .toBe(true)
+    const initial_history = await history_index()
+    await page.keyboard.press(`Tab`)
+    await expect(figures.getByRole(`link`).first()).toBeFocused()
+    await page.keyboard.press(`Enter`)
+    await expect(page).toHaveURL(/\/authoring#fig%3Aparticles$/u)
+    await expect(first_figure).toBeInViewport()
+    // Wait for Kit to record each native hash navigation before the next action.
+    await expect.poll(history_index).toBeGreaterThan(initial_history)
+    const figure_history = await history_index()
+    const caption = page.locator(`[id="fig:particles"] figcaption`)
+    await expect(caption).toHaveClass(/toc-clicked/u)
+    const flash_animation = await caption.evaluate(
+      (node) => getComputedStyle(node).animationName,
+    )
+    expect(flash_animation).toContain(`toc-flash`)
+    if (mobile)
+      await sidebar.getByRole(`button`, { name: `Open table of contents` }).click()
+    await equations.getByRole(`link`, { name: `2 · Hooke's law`, exact: true }).click()
+    await expect(page).toHaveURL(/\/authoring#eq%3Ahooke$/u)
+    await expect(second_equation).toBeInViewport()
+    await expect(second_equation).toHaveClass(/toc-clicked/u)
+    await expect(second_equation).toHaveCSS(`animation-name`, flash_animation)
+    await expect.poll(history_index).toBeGreaterThan(figure_history)
+    await page.goBack()
+    await expect(page).toHaveURL(/\/authoring#fig%3Aparticles$/u)
+    await expect(first_figure).toBeInViewport()
+    await page.reload()
+    await expect(first_figure).toBeInViewport()
+    if (mobile)
+      await sidebar.getByRole(`button`, { name: `Open table of contents` }).click()
+    const heading = page.locator(`#checked-examples`)
+    const original_color = await heading.evaluate((node) => getComputedStyle(node).color)
+    await sidebar
+      .locator(`nav > ol`)
+      .getByRole(`link`, { name: `Checked examples`, exact: true })
+      .click()
+    await expect(heading).toHaveCSS(`animation-name`, flash_animation)
+    await expect(heading).not.toHaveCSS(`color`, original_color)
+    await expect(heading).not.toHaveClass(/toc-clicked/u)
+    await expect(heading).toHaveCSS(`color`, original_color)
+    if (mobile) await page.getByRole(`button`, { name: `Toggle navigation menu` }).click()
+    await page.getByRole(`link`, { name: `RangeSlider`, exact: true }).click()
+    await expect(page).toHaveURL(/\/range-slider$/u)
+    await expect(sidebar.locator(`.reference-navigation`)).toHaveCount(0)
+  })
+}
+
 test(`editable content labs validate manifests, reuse highlights, and recover from bad references`, async ({
   page,
 }) => {
@@ -18,6 +150,7 @@ test(`editable content labs validate manifests, reuse highlights, and recover fr
   await expect(
     page.getByRole(`navigation`, { name: `Authoring features` }).getByRole(`link`),
   ).toHaveText([
+    `Figure and equation navigation`,
     `Checked examples`,
     `Content manifests`,
     `Incremental compilation`,
@@ -120,6 +253,12 @@ test(`checked-example scenarios and editable syntax checks expose actual failure
   const lab = page.getByRole(`region`, { name: `Checked examples lab`, exact: true })
   await expect(lab.locator(`.preview .pl-k`).first()).toHaveText(`let`)
   const scenario = lab.locator(`pre[aria-label="Scenario source"]`)
+  const copy_button = scenario.locator(`[data-sms-copy]`)
+  await expect(copy_button).toBeVisible()
+  const { width, height } = await copy_button.evaluate((node) =>
+    node.getBoundingClientRect().toJSON(),
+  )
+  expect(width).toBe(height)
   await expect(scenario.locator(`.pl-k`).first()).toHaveText(`const`)
   await expect(scenario).toContainText(`const count: number = 1`)
   await lab

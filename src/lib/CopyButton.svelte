@@ -155,6 +155,7 @@
 
 <style>
   :global([data-sms-copy]) {
+    padding: 0.25em;
     white-space: nowrap;
   }
 </style>

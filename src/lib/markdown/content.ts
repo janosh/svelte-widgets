@@ -1,5 +1,5 @@
 import type { Marked, Token, Tokens } from 'marked'
-import type { ContentReference } from './references.ts'
+import type { ContentReference, ReferenceDefinition } from './references.ts'
 import {
   fence_info,
   fence_settings,
@@ -68,6 +68,7 @@ export type ContentManifestDraft<
   anchors: { id: string; range: SourceRange }[]
   text: string
   references: ContentReference[]
+  reference_definitions: ReferenceDefinition[]
 }
 export type ContentManifest<
   Metadata extends Record<string, unknown> = Record<string, unknown>,
@@ -189,6 +190,7 @@ export function content_manifest(
     anchors: [],
     text: ``,
     references: [],
+    reference_definitions: [],
   }
   const headings: (Omit<ContentHeading, 'id'> & {
     id?: string

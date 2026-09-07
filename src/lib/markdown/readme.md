@@ -197,6 +197,8 @@ Markdown pages use ordinary Svelte hot reload. Page edits may reset live-example
 
 ## Scientific references
 
+`manifest.reference_definitions` contains each figure and equation once, in document order, including definitions never referenced in prose. Entries contain `key`, `kind`, `number`, `target` (the anchor ID), optional figure `caption`, optional authored `label`, and the definition's source `range`. `manifest.references` continues to describe individual mentions, including citations. Rendered definitions carry a `data-reference-label` with the same numbering and decoded caption; the docs site uses these labels for separate, collapsible “Figures” and “Equations” lists beneath the heading TOC. Each list preserves document order and disappears when empty. Links use ordinary fragments, and both lists share the TOC's mobile panel. `Toc` accepts an optional `footer` snippet for supplemental navigation, even on pages with fewer than `minItems` headings.
+
 [Edit equations, figures, and citations in the live reference lab](https://svelte-widgets.janosh.dev/authoring#scientific-references).
 
 Enable `references: true` for numbered figures and equations, or pass a bibliography keyed by citation ID. Equations also require `math: true`.
@@ -217,14 +219,16 @@ const html = assert_ok(await render_markdown(document))
 ```md
 See [@eq:energy] and [@fig:result], following [@doe2020].
 
-$$ {#eq:energy}
+$$ {#eq:energy label="Mass–energy equivalence"}
 E = mc^2
 $$
 
-![The experimental result](result.svg){#fig:result}
+![The experimental result](result.svg){#fig:result label="Experimental result"}
 
 ::: bibliography
 ```
+
+Add optional `label="…"` metadata after a figure or equation ID to customize its navigation title, for example “1 · Mass–energy equivalence”. Labels are nonempty JSON strings (use `\"` for a literal quote), rendered as plain text. A figure without a label uses its caption; entries without a label or caption retain the “Figure” or “Equation” prefix before their number. Labels do not change captions, formula rendering, inline references, anchor IDs, or numbering. Unknown metadata keys and invalid labels fail with source locations.
 
 Forward references resolve after parsing; figures and equations have independent numbering. Group citations with `[@first; @second]`. Cited entries appear in first-use order at `::: bibliography`, or at the end if the directive is omitted. Bibliography records support `title`, `authors`, `year`, `url`, and `doi`; configure the heading with `bibliography_title`. Duplicate labels and unresolved references fail with original source locations. Code spans, fences, and authored scripts remain literal. Manifests include reference targets, generated anchors, figure assets, and citation links, so ordinary content validation covers them too.
 

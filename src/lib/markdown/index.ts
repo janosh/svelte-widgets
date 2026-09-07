@@ -40,7 +40,12 @@ import {
 
 export { assert_ok, DiagnosticError } from './diagnostics.ts'
 export type { Diagnostic, DiagnosticResult, SourceRange } from './diagnostics.ts'
-export type { Citation, ContentReference, ReferenceOptions } from './references.ts'
+export type {
+  Citation,
+  ContentReference,
+  ReferenceDefinition,
+  ReferenceOptions,
+} from './references.ts'
 
 export {
   assert_valid_content,

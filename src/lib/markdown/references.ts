@@ -9,6 +9,7 @@ import { escape_html_text } from '../highlight/hast.ts'
 import { decode_entities } from '../heading-anchors.ts'
 import type { ContentManifestDraft, TokenSource } from './content.ts'
 import { DiagnosticError, type SourceRange } from './diagnostics.ts'
+import { parse_meta } from './meta.ts'
 
 export type Citation = {
   title: string
@@ -28,19 +29,30 @@ export type ContentReference = {
   target: string
   range: SourceRange
 }
+// Definitions, including uncited figures/equations, in document order.
+export type ReferenceDefinition = Omit<ContentReference, 'kind'> & {
+  kind: 'equation' | 'figure'
+  caption?: string
+  label?: string
+}
 
 type ReferenceToken = Token & {
   key?: string
   keys?: string[]
   tex?: string
   image?: Tokens.Image
+  meta?: string
 }
-type Target = {
-  key: string
-  kind: ContentReference['kind']
-  number: number
-  id: string
+type Target = Omit<ContentReference, 'range'> & {
   token: Token
+  caption?: string
+  label?: string
+}
+const navigation_label = (resolved: Target): string => {
+  const label = resolved.label ?? resolved.caption
+  return label
+    ? `${resolved.number} · ${label}`
+    : `${resolved.kind === `figure` ? `Figure` : `Equation`} ${resolved.number}`
 }
 const escape = (text: string): string =>
   escape_html_text(text)
@@ -63,11 +75,11 @@ export function scientific_references(
   let bibliography_token: Token | undefined
   let bibliography_html = ``
   const figure_pattern = new RegExp(
-    `^ {0,3}(?<image>!\\[[^\\n]*\\]\\([^\\n]*\\))[ \\t]*\\{#(?<key>fig:${reference_key})\\}[ \\t]*(?:\\n|$)`,
+    `^ {0,3}(?<image>!\\[[^\\n]*\\]\\([^\\n]*\\))[ \\t]*\\{#(?<key>fig:${reference_key})(?<meta>[ \\t][^\\n]*?)?\\}[ \\t]*(?:\\n|$)`,
     `u`,
   )
   const equation_pattern = new RegExp(
-    `^ {0,3}\\$\\$[ \\t]+\\{#(?<key>eq:${reference_key})\\}[ \\t]*\\n(?<tex>[^]*?)\\n {0,3}\\$\\$[ \\t]*(?:\\n|$)`,
+    `^ {0,3}\\$\\$[ \\t]+\\{#(?<key>eq:${reference_key})(?<meta>[ \\t][^\\n]*?)?\\}[ \\t]*\\n(?<tex>[^]*?)\\n {0,3}\\$\\$[ \\t]*(?:\\n|$)`,
     `u`,
   )
   const citation_pattern = new RegExp(
@@ -75,15 +87,15 @@ export function scientific_references(
     `u`,
   )
   const link = (key: string): string => {
-    const target = targets.get(key)
-    if (!target) return escape(key)
+    const resolved = targets.get(key)
+    if (!resolved) return escape(key)
     const label =
-      target.kind === `equation`
-        ? `Equation (${target.number})`
-        : target.kind === `figure`
-          ? `Figure ${target.number}`
-          : `[${target.number}]`
-    return `<a class="reference reference-${target.kind}" href="#${escape(target.id)}">${label}</a>`
+      resolved.kind === `equation`
+        ? `Equation (${resolved.number})`
+        : resolved.kind === `figure`
+          ? `Figure ${resolved.number}`
+          : `[${resolved.number}]`
+    return `<a class="reference reference-${resolved.kind}" href="#${escape(resolved.target)}">${label}</a>`
   }
   const extensions: TokenizerAndRendererExtension[] = [
     {
@@ -92,14 +104,14 @@ export function scientific_references(
       start: (text) => text.search(/\n {0,3}\$\$[ \t]+\{#eq:/u),
       tokenizer(text) {
         const match = equation_pattern.exec(text)
-        if (!match) return undefined
-        return { type: `reference_equation`, raw: match[0], key: match[1], tex: match[2] }
+        if (!match?.groups) return undefined
+        return { type: `reference_equation`, raw: match[0], ...match.groups }
       },
       renderer(token) {
         const reference = token as ReferenceToken
-        const target = targets.get(reference.key ?? ``)
-        if (!target || !render_math) return ``
-        return `<div class="equation" id="${escape(target.id)}">${render_math(reference.tex ?? ``)}<a class="equation-number" href="#${escape(target.id)}" aria-label="Equation ${target.number}">(${target.number})</a></div>\n`
+        const resolved = targets.get(reference.key ?? ``)
+        if (!resolved || !render_math) return ``
+        return `<div class="equation" id="${escape(resolved.target)}" data-reference-label="${escape(navigation_label(resolved))}">${render_math(reference.tex ?? ``)}<a class="equation-number" href="#${escape(resolved.target)}" aria-label="Equation ${resolved.number}">(${resolved.number})</a></div>\n`
       },
     },
     {
@@ -108,17 +120,18 @@ export function scientific_references(
       start: (text) => text.search(/\n {0,3}!\[/u),
       tokenizer(text) {
         const match = figure_pattern.exec(text)
-        if (!match) return undefined
-        const images = this.lexer.inlineTokens(match[1])
+        if (!match?.groups) return undefined
+        const { image: source, key, meta } = match.groups
+        const images = this.lexer.inlineTokens(source)
         const image = images[0]
         if (images.length !== 1 || image?.type !== `image`)
-          throw new Error(`Labeled figures require one Markdown image: ${match[1]}`)
-        return { type: `reference_figure`, raw: match[0], key: match[2], image }
+          throw new Error(`Labeled figures require one Markdown image: ${source}`)
+        return { type: `reference_figure`, raw: match[0], key, meta, image }
       },
       renderer(token) {
         const reference = token as ReferenceToken
-        const target = targets.get(reference.key ?? ``)
-        if (!target || !reference.image) return ``
+        const resolved = targets.get(reference.key ?? ``)
+        if (!resolved || !reference.image) return ``
         const text: Tokens.Text = {
           type: `text`,
           raw: reference.image.text,
@@ -129,7 +142,7 @@ export function scientific_references(
           tokens: [text],
         })
         const caption = Renderer.prototype.text.call(this.parser.renderer, text)
-        return `<figure id="${escape(target.id)}">${image}<figcaption><a href="#${escape(target.id)}">Figure ${target.number}.</a> ${caption}</figcaption></figure>\n`
+        return `<figure id="${escape(resolved.target)}" data-reference-label="${escape(navigation_label(resolved))}">${image}<figcaption><a href="#${escape(resolved.target)}">Figure ${resolved.number}.</a> ${caption}</figcaption></figure>\n`
           .replaceAll(`{`, `&#123;`)
           .replaceAll(`}`, `&#125;`)
       },
@@ -171,6 +184,19 @@ export function scientific_references(
       if (token.type === `reference_equation` || token.type === `reference_figure`) {
         const key = reference.key ?? ``
         const kind = token.type === `reference_equation` ? `equation` : `figure`
+        let label: string | undefined
+        try {
+          const metadata = parse_meta(reference.meta ?? ``)
+          for (const name of Object.keys(metadata))
+            if (name !== `label`) throw new Error(`Unknown reference option: ${name}`)
+          if (metadata.label !== undefined) {
+            if (typeof metadata.label !== `string` || !metadata.label.trim())
+              throw new Error(`Reference label must be a nonempty string`)
+            label = metadata.label
+          }
+        } catch (error) {
+          issues.push({ token, message: `Invalid metadata for ${key}: ${String(error)}` })
+        }
         if (targets.has(key))
           issues.push({
             token,
@@ -182,8 +208,12 @@ export function scientific_references(
             key,
             kind,
             number: kind === `equation` ? ++equations : ++figures,
-            id: key,
+            target: key,
             token,
+            ...(label === undefined ? {} : { label }),
+            ...(reference.image
+              ? { caption: decode_entities(reference.image.text) }
+              : {}),
           })
         if (kind === `equation` && !render_math)
           issues.push({ token, message: `Labeled equation ${key} requires math: true` })
@@ -220,20 +250,20 @@ export function scientific_references(
           issues.push({ token, message: `Invalid bibliography record ${key}` })
           continue
         }
-        const target: Target = {
+        const resolved: Target = {
           key,
           kind: `citation`,
           number: cited.length + 1,
-          id: `cite:${key}`,
+          target: `cite:${key}`,
           token: bibliography_token ?? token,
         }
-        targets.set(key, target)
-        cited.push({ ...target, citation })
+        targets.set(key, resolved)
+        cited.push({ ...resolved, citation })
       }
     }
     const entries = cited
-      .map((target) => {
-        const { citation } = target
+      .map((resolved) => {
+        const { citation } = resolved
         let url = citation_url(citation)
         if (url !== undefined) {
           try {
@@ -242,8 +272,8 @@ export function scientific_references(
               throw new Error(`Unsupported protocol`)
           } catch {
             issues.push({
-              token: target.token,
-              message: `Invalid bibliography URL for ${target.key}: ${url}`,
+              token: resolved.token,
+              message: `Invalid bibliography URL for ${resolved.key}: ${url}`,
             })
             url = undefined
           }
@@ -256,7 +286,7 @@ export function scientific_references(
           : ``
         const year =
           citation.year === undefined ? `` : ` (${escape(String(citation.year))})`
-        return `<li id="${escape(target.id)}" value="${target.number}">${authors}${title}${year}.</li>`
+        return `<li id="${escape(resolved.target)}" value="${resolved.number}">${authors}${title}${year}.</li>`
       })
       .join(`\n`)
     if (entries)
@@ -273,26 +303,28 @@ export function scientific_references(
       return position
     }
     const ids = new Set(manifest.anchors.map(({ id }) => id))
-    for (const target of targets.values()) {
-      if (ids.has(target.id))
-        issues.push({ token: target.token, message: `Duplicate anchor #${target.id}` })
-      ids.add(target.id)
-      const range = at(target.token)
-      manifest.anchors.push({ id: target.id, range })
-      const reference = target.token as ReferenceToken
+    for (const { token, ...resolved } of targets.values()) {
+      if (ids.has(resolved.target))
+        issues.push({ token, message: `Duplicate anchor #${resolved.target}` })
+      ids.add(resolved.target)
+      const range = at(token)
+      manifest.anchors.push({ id: resolved.target, range })
+      if (resolved.kind !== `citation`)
+        manifest.reference_definitions.push({ ...resolved, kind: resolved.kind, range })
+      const reference = token as ReferenceToken
       if (reference.image)
         manifest.assets.push({
           url: decode_entities(reference.image.href),
           text: decode_entities(reference.image.text),
           range,
         })
-      if (target.kind === `citation`) {
-        const citation = options.bibliography?.[target.key]
+      if (resolved.kind === `citation`) {
+        const citation = options.bibliography?.[resolved.key]
         const url = citation && citation_url(citation)
         if (url)
           manifest.links.push({
             url,
-            text: citation?.title ?? target.key,
+            text: citation?.title ?? resolved.key,
             range,
           })
       }
@@ -319,17 +351,17 @@ export function scientific_references(
     }
     for (const token of uses)
       for (const key of token.keys ?? []) {
-        const target = targets.get(key)
-        if (!target) continue
+        const resolved = targets.get(key)
+        if (!resolved) continue
         const range = at(token)
         manifest.references.push({
           key,
-          kind: target.kind,
-          number: target.number,
-          target: target.id,
+          kind: resolved.kind,
+          number: resolved.number,
+          target: resolved.target,
           range,
         })
-        manifest.links.push({ url: `#${target.id}`, text: key, range })
+        manifest.links.push({ url: `#${resolved.target}`, text: key, range })
       }
     if (issues.length)
       throw new DiagnosticError(
@@ -351,7 +383,7 @@ export function scientific_references(
     bibliography: () => (bibliography_token ? `` : bibliography_html),
     reserved_ids: () =>
       [...targets.values()]
-        .map(({ id }) => id)
+        .map(({ target: resolved }) => resolved)
         .concat(bibliography_html ? [`bibliography`] : []),
   }
 }

@@ -3,6 +3,7 @@
   import favicon from '$site/favicon.svg?no-inline'
   import CheckedExamples from './CheckedExamples.svelte'
   import MarkdownLab from './MarkdownLab.svelte'
+  import ScientificFigures from './ScientificFigures.md'
   import type { PageData } from './$types'
 
   const { data }: { data: PageData } = $props()
@@ -11,11 +12,13 @@
 <h1>Interactive authoring</h1>
 <p>Check code examples, inspect content manifests, and edit scientific references.</p>
 <nav aria-label="Authoring features">
+  <a href="#figure-and-equation-navigation">Figure and equation navigation</a>
   <a href="#checked-examples">Checked examples</a>
   <a href="#content-manifests">Content manifests</a>
   <a href="#incremental-compilation">Incremental compilation</a>
   <a href="#scientific-references">Scientific references</a>
 </nav>
+<ScientificFigures />
 <h2 id="checked-examples">Checked examples</h2>
 <CheckedExamples checks={data.checks} />
 <h2 id="content-manifests">Content manifests</h2>

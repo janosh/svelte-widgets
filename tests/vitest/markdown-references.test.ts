@@ -23,7 +23,7 @@ const bibliography = {
 
 describe(`Scientific Markdown references`, () => {
   test(`numbers forward equations, figures and citations consistently in HTML and Svelte`, async () => {
-    const source = `---\ntitle: Paper\n---\nSee [@eq:energy], [@fig:plot] and [@doe2020; @roe2021].\n\n$$ {#eq:energy}\nE=mc^2\n$$\n\n![Energy &amp; mass](./plot.svg?x=1&amp;y=2){#fig:plot}\n\nAgain [@doe2020].`
+    const source = `---\ntitle: Paper\n---\nSee [@fig:plot], [@eq:energy] and [@doe2020; @roe2021].\n\n$$ {#eq:energy label="Mass & energy"}\nE=mc^2\n$$\n\n![Energy &amp; mass](./plot.svg?x=1&amp;y=2){#fig:plot}\n\nAgain [@doe2020], [@fig:plot].\n\n![Unreferenced "figure" {caption}](./plot.svg){#fig:extra label="Short <figure> {title}"}\n\n$$ {#eq:unused}\nx=1\n$$\n\n![](./plot.svg){#fig:unlabeled}`
     const options = { math: true, references: { bibliography }, filename: `/paper.md` }
     const result = await compile_markdown(source, options)
     compile(result.code, { generate: false })
@@ -32,17 +32,44 @@ describe(`Scientific Markdown references`, () => {
       expect(output).toContain(`href="#eq:energy">Equation (1)</a>`)
       expect(output).toContain(`id="fig:plot"`)
       expect(output).toContain(`Figure 1.</a> Energy &amp; mass`)
+      expect(output).toContain(`data-reference-label="1 · Energy &amp; mass"`)
+      expect(output).toContain(`data-reference-label="Equation 2"`)
+      expect(output).toContain(`data-reference-label="Figure 3"`)
+      expect(output).toContain(`data-reference-label="1 · Mass &amp; energy"`)
+      expect(output).toContain(
+        `data-reference-label="2 · Short &lt;figure&gt; &#123;title&#125;"`,
+      )
       expect(output).toContain(`id="cite:doe2020" value="1"`)
       expect(output).toContain(`id="cite:roe2021" value="2"`)
       expect(output).toContain(`A &lt;new&gt; theory &#123;with braces&#125;`)
       expect(output).toContain(`https://doi.org/10.1234/example`)
     }
     expect(result.manifest.references.map(({ key, number }) => [key, number])).toEqual([
-      [`eq:energy`, 1],
       [`fig:plot`, 1],
+      [`eq:energy`, 1],
       [`doe2020`, 1],
       [`roe2021`, 2],
       [`doe2020`, 1],
+      [`fig:plot`, 1],
+    ])
+    expect(result.manifest.reference_definitions).toMatchObject([
+      {
+        kind: `equation`,
+        number: 1,
+        target: `eq:energy`,
+        label: `Mass & energy`,
+        range: { start: { line: 6 } },
+      },
+      { kind: `figure`, number: 1, target: `fig:plot`, caption: `Energy & mass` },
+      {
+        kind: `figure`,
+        number: 2,
+        target: `fig:extra`,
+        caption: `Unreferenced "figure" {caption}`,
+        label: `Short <figure> {title}`,
+      },
+      { kind: `equation`, number: 2, target: `eq:unused` },
+      { kind: `figure`, number: 3, target: `fig:unlabeled` },
     ])
     expect(result.manifest.assets).toMatchObject([
       {
@@ -50,6 +77,8 @@ describe(`Scientific Markdown references`, () => {
         text: `Energy & mass`,
         range: { start: { line: 10 } },
       },
+      { url: `./plot.svg`, text: `Unreferenced "figure" {caption}` },
+      { url: `./plot.svg`, text: `` },
     ])
     expect(validate_content([result.manifest], { assets: [`/plot.svg`] })).toEqual([])
     expect(result.manifest.headings.at(-1)).toMatchObject({
@@ -70,6 +99,7 @@ describe(`Scientific Markdown references`, () => {
     )
     expect(result.code.match(/class="bibliography"/gu)).toHaveLength(1)
     expect(result.manifest.references).toHaveLength(1)
+    expect(result.manifest.reference_definitions).toEqual([])
     expect(result.manifest.references[0].range.start).toMatchObject({
       line: 1,
       column: 12,
@@ -77,6 +107,16 @@ describe(`Scientific Markdown references`, () => {
   })
 
   test.each([
+    [
+      `![Plot](plot.svg){#fig:plot label=42}`,
+      `Reference label must be a nonempty string`,
+    ],
+    [`$$ {#eq:energy label=""}\nE=mc^2\n$$`, `Reference label must be a nonempty string`],
+    [`![Plot](plot.svg){#fig:plot title="Wrong key"}`, `Unknown reference option: title`],
+    [
+      `![Plot](plot.svg){#fig:plot label="First" label="Second"}`,
+      `Duplicate code fence option: label`,
+    ],
     [
       `# Paper\n\n> See [@missing].`,
       `paper.md:3:7 [reference] Unresolved reference missing`,
