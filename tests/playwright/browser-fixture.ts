@@ -28,7 +28,13 @@ export async function browser_fixture(
       root: directory,
       cacheDir: `${directory}/.vite`,
       resolve: { dedupe: [`svelte`], ...config.resolve },
-      server: { port: 0, host: `127.0.0.1`, fs: { allow: [directory, process.cwd()] } },
+      server: {
+        port: 0,
+        host: `127.0.0.1`,
+        fs: { allow: [directory, process.cwd()] },
+        // Queue complete writes instead of dropping rapid saves in the watcher's 50ms throttle.
+        watch: { awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 10 } },
+      },
     })
     await server.listen()
     const address = server.httpServer?.address()
