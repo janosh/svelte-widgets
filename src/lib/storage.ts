@@ -92,10 +92,8 @@ export const create_recent_list = <T>(config: RecentListConfig<T>) => {
     // Re-insert a just-forgotten item at its original position (undo support)
     restore: (item: T, index: number, items: T[]): T[] => {
       const rest = without(items, key_of(item))
-      const clamped = clamp_integer(index, 0, rest.length)
-      return persist(
-        [...rest.slice(0, clamped), item, ...rest.slice(clamped)].slice(0, max_items),
-      )
+      rest.splice(clamp_integer(index, 0, rest.length), 0, item)
+      return persist(rest.slice(0, max_items))
     },
   }
 }
