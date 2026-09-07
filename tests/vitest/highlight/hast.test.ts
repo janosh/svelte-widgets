@@ -1,4 +1,4 @@
-import { escape_html_text, hast_to_html, type HastNode } from '$lib/live-examples/hast'
+import { escape_html_text, hast_to_html, type HastNode } from '$lib/highlight/hast'
 import { describe, expect, test } from 'vitest'
 
 describe(`escape_html_text`, () => {

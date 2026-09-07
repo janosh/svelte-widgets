@@ -5,7 +5,7 @@
   --accent: light-dark(#4a7abf, cornflowerblue);
   --accent-hover: orange;
   --main-max-width: 50em;
-  --toc-width: 13rem;
+  --toc-width: 18rem;
   --nav-link-active-color: var(--accent);
   --bg: light-dark(#fafafa, #141418);
   --text: light-dark(#222, #ccc);
@@ -88,7 +88,7 @@ body > div {
   --toc-li-font-size-base: 1em;
   --toc-li-font-size-min: 0.9em;
   --toc-min-width: 0;
-  --toc-mobile-bg: var(--surface);
+  --toc-mobile-bg: light-dark(#fff, #222226);
   --toc-active-color: var(--accent);
   display: grid;
   gap: 2rem;

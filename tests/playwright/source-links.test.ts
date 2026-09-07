@@ -5,7 +5,37 @@ const SOURCE = `https://github.com/janosh/svelte-widgets/blob/`
 test(`inline code mentions of components link to their source, on load and after navigation`, async ({
   page,
 }) => {
+  const hydration_warnings: string[] = []
+  page.on(`console`, (message) => {
+    if (message.text().includes(`hydration_`)) hydration_warnings.push(message.text())
+  })
+  await page.route(
+    `https://api.github.com/repos/janosh/svelte-widgets/contributors*`,
+    (route) =>
+      route.fulfill({
+        json: [
+          {
+            login: `contributor`,
+            html_url: `https://github.com/contributor`,
+            avatar_url: ``,
+          },
+          {
+            login: `automation[bot]`,
+            html_url: `https://github.com/bot`,
+            avatar_url: ``,
+          },
+        ],
+      }),
+  )
   await page.goto(`/`)
+  // Direct headings remain eligible for the site's table of contents.
+  await expect(page.locator(`main > h2`).filter({ hasText: `Demos` })).toBeVisible()
+  await expect(page.getByRole(`button`, { name: `View code` }).first()).toBeVisible()
+  await expect(
+    page.getByRole(`link`, { name: `contributor`, exact: true }),
+  ).toHaveAttribute(`href`, `https://github.com/contributor`)
+  await expect(page.getByRole(`link`, { name: `automation[bot]` })).toHaveCount(0)
+  expect(hydration_warnings).toEqual([])
   // the readme's component table names every component in inline code
   const multi_select = page.locator(`code > a`, { hasText: `MultiSelect` }).first()
   await expect(multi_select).toHaveAttribute(

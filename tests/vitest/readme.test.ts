@@ -25,9 +25,11 @@ const route_sources = Object.fromEntries(
 const bare = (text: string) => text.replaceAll(/[^a-z0-9]/giu, ``).toLowerCase()
 
 const headings_on = (route: string) =>
-  [...(route_sources[route] ?? ``).matchAll(/^#{2,4} (?<text>.+)$/gmu)].map((match) =>
-    bare(match.groups?.text ?? ``),
-  )
+  [
+    ...(route_sources[route] ?? ``).matchAll(
+      /^#{2,4} (?<text>.+)$|<h[2-4]\s+id="(?<id>[^"]+)"/gmu,
+    ),
+  ].map((match) => bare(match.groups?.id ?? match.groups?.text ?? ``))
 
 const unresolved = (route: string, anchor: string | undefined, label: string) => {
   if (!(route in route_sources)) return `${label}: no such page ${route}`
@@ -53,12 +55,16 @@ test(`demo pages link each other with base-relative paths`, () => {
   // /svelte-widgets base path the site deploys to
   const absolute = page_links.filter(({ target }) => target.startsWith(`/`))
   expect(absolute, `use e.g. attachments#tooltip, not /attachments#tooltip`).toEqual([])
+  for (const [route, source] of Object.entries(route_sources))
+    expect(source, `${route}: resolve absolute HTML links with $app/paths`).not.toMatch(
+      /<a\b[^>]*\bhref="\/(?!\/)/u,
+    )
 })
 
 test(`demo page links point at a page and heading that exist`, () => {
   const failures = page_links.flatMap(({ from, target }) => {
-    const [page, anchor] = target.split(`#`)
-    return unresolved(page ? `/${page}` : from, anchor, `${from} link ${target}`) ?? []
+    const { pathname, hash } = new URL(target, `https://docs.invalid${from}`)
+    return unresolved(pathname, hash.slice(1), `${from} link ${target}`) ?? []
   })
   expect(failures).toEqual([])
 })

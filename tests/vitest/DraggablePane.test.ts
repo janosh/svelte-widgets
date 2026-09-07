@@ -304,23 +304,29 @@ describe(`DraggablePane`, () => {
 
   // stubbed on the pane, not the toggle: left/top resolve against the pane's own
   // containing block, and the two only coincide while nothing repositions the toggle
-  test(`absolute positioning measures against the pane's offsetParent`, async () => {
-    const ancestor = document.createElement(`div`)
-    document.body.append(ancestor)
-    mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
-    const { toggle, pane } = await setup()
-    cleanups.push(stub_prop(pane, `offsetParent`, ancestor))
-    mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
-    mock_pane_rect(pane)
+  test.each([
+    [`start`, 605],
+    [`end`, 175],
+  ] as const)(
+    `absolute positioning aligns %s against the pane's offsetParent`,
+    async (align, left) => {
+      const ancestor = document.createElement(`div`)
+      document.body.append(ancestor)
+      mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
+      const { toggle, pane } = await setup({ align })
+      cleanups.push(stub_prop(pane, `offsetParent`, ancestor))
+      mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
+      mock_pane_rect(pane)
 
-    toggle.click()
-    await tick()
+      toggle.click()
+      await tick()
 
-    expect(pane.style.left).toBe(`175px`) // 720 - 100 - 450 + 5
-    expect(pane.style.top).toBe(`275px`) // 320 - 50 + 5
-    // absolute panes scroll with the page, so no viewport cap is written
-    expect(pane.style.getPropertyValue(`--pane-viewport-clamp`)).toBe(``)
-  })
+      expect(pane.style.left).toBe(`${left}px`)
+      expect(pane.style.top).toBe(`275px`) // 320 - 50 + 5
+      // absolute panes scroll with the page, so no viewport cap is written
+      expect(pane.style.getPropertyValue(`--pane-viewport-clamp`)).toBe(``)
+    },
+  )
 
   test(`falls back to document coordinates without a positioned ancestor`, async () => {
     cleanups.push(

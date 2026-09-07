@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test'
 const open_demo = async (page: Page) => {
   await page.goto(`/settings`, { waitUntil: `networkidle` })
   const demo = page.locator(`#settings-search`).first()
-  // `networkidle` lands before mdsvex compiles the live examples on a cold dev server
+  // `networkidle` lands before Markdown compiles the live examples on a cold dev server
   await expect(demo).toBeVisible()
   await demo.scrollIntoViewIfNeeded()
   return {
@@ -81,4 +81,23 @@ test(`Escape collapses the field and hands focus back to the trigger`, async ({
   await expect(field).toHaveCount(0)
   await expect(trigger).toBeFocused()
   await expect(color_row).toBeVisible()
+})
+
+test(`per-setting reset buttons preserve control width and restore keyboard focus`, async ({
+  page,
+}) => {
+  await page.goto(`/settings`)
+  const row = page.locator(`#settings-section [data-key="radius"]`)
+  const input = row.locator(`input`)
+  const reset = row.locator(`.setting-reset-button`)
+  await expect(row).toHaveClass(/setting-resettable/u)
+  const control_width = (await box_of(input)).width
+  await input.press(`ArrowUp`)
+  await expect(reset).toBeVisible()
+  expect((await box_of(input)).width).toBe(control_width)
+  await reset.focus()
+  await page.keyboard.press(`Enter`)
+  await expect(reset).toHaveCount(0)
+  await expect(input).toBeFocused()
+  expect((await box_of(input)).width).toBe(control_width)
 })

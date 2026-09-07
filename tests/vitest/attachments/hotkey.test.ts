@@ -23,12 +23,21 @@ describe(`hotkey`, () => {
     expect(handler).toHaveBeenCalledTimes(1)
     expect(event.defaultPrevented).toBe(true)
 
+    const global_handler = vi.fn()
+    attach_hotkey({
+      global: true,
+      bindings: [{ keys: `ctrl+k`, handler: global_handler }],
+    })
+    keydown(node, `k`, { ctrlKey: true })
+    expect(handler).toHaveBeenCalledTimes(2)
+    expect(global_handler).not.toHaveBeenCalled()
+
     keydown(create_element(), `k`, { ctrlKey: true })
-    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledTimes(2)
 
     cleanup?.()
     keydown(node, `k`, { ctrlKey: true })
-    expect(handler).toHaveBeenCalledTimes(1)
+    expect(handler).toHaveBeenCalledTimes(2)
 
     // `global` is the opt-out: that binding answers from anywhere on the page
     const foreign_doc = document.implementation.createHTMLDocument()

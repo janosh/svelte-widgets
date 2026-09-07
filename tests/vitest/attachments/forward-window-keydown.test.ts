@@ -98,6 +98,19 @@ describe(`forward_window_keydown`, () => {
     expect(press_key().defaultPrevented).toBe(false)
   })
 
+  it.each([`prevented`, `composing`])(`does not forward %s keys`, (mode) => {
+    const { node, handle } = attach()
+    hover(node)
+    const event = new KeyboardEvent(`keydown`, {
+      key: `f`,
+      cancelable: true,
+      isComposing: mode === `composing`,
+    })
+    if (mode === `prevented`) event.preventDefault()
+    globalThis.dispatchEvent(event)
+    expect(handle).not.toHaveBeenCalled()
+  })
+
   it(`disabled attaches nothing`, () => {
     const { node, handle, cleanup } = attach(true, { enabled: false })
 

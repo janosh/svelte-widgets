@@ -1,5 +1,4 @@
-// Minimal HAST-to-HTML serializer, handling only what starry-night outputs. Dependency-free
-// so FileDetails.svelte can import it without highlighter.ts's eager starry-night instance.
+// Dependency-free HAST-to-HTML serializer for starry-night output and Markdown escaping.
 
 // structural type compatible with hast Root/Element/Text
 export interface HastNode {

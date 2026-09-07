@@ -18,7 +18,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} breakpoint={0} />
+<Nav data-content-ignore {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:** Simple string routes with auto-generated labels
@@ -34,6 +34,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 </script>
 
 <Nav
+  data-content-ignore
   routes={['/ui', '/css-classes', '/kit-form-actions']}
   route_labels={{
     '/ui': 'UI Components',
@@ -68,7 +69,7 @@ Submenus open on the caret, never on hover: pointing at a nav entry should not p
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} breakpoint={0} />
+<Nav data-content-ignore {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:**
@@ -106,7 +107,7 @@ For full control, use objects with all available properties:
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} breakpoint={0} />
+<Nav data-content-ignore {routes} {page} {link_props} breakpoint={0} />
 ```
 
 **Features shown:**
@@ -152,7 +153,7 @@ Use the `link` snippet to customize how all links render:
   const routes = ['/', '/about', '/contact']
 </script>
 
-<Nav {routes} {page} breakpoint={0}>
+<Nav data-content-ignore {routes} {page} breakpoint={0}>
   {#snippet link({ href, label, isActive })}
     <a
       {href}
@@ -177,6 +178,7 @@ Add extra content to the nav menu via `children` snippet:
 </script>
 
 <Nav
+  data-content-ignore
   {routes}
   {page}
   {link_props}
@@ -218,7 +220,7 @@ Use `item` snippet for per-item customization. The `render_default` escape hatch
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 
-<Nav {routes} {page} {link_props} breakpoint={0}>
+<Nav data-content-ignore {routes} {page} {link_props} breakpoint={0}>
   {#snippet item({ route, render_default })}
     <span style="display: flex; align-items: center; gap: 0.3em">
       {#if route.icon}
@@ -258,6 +260,7 @@ Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
 </p>
 
 <Nav
+  data-content-ignore
   {routes}
   {page}
   {link_props}

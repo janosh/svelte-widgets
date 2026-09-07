@@ -75,6 +75,7 @@ it.each([
   [Symbol(`test`), `Symbol(test)`],
   [Symbol(`desc`), `Symbol(desc)`],
   [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
+  [new Date(NaN), `Invalid Date`],
   [/test/gi, `/test/gi`],
   [new Error(`Something went wrong`), `Error: Something went wrong`],
   [new Error(`fail`), `Error: fail`],
@@ -553,15 +554,15 @@ describe(`compute_diff`, () => {
       entry: { status: `changed`, path: `val`, old_value: `string`, new_value: 42 },
     },
     {
-      desc: `date change (compared via string form)`,
-      old_val: new Date(`2024-01-15`),
-      new_val: new Date(`2024-01-16`),
+      desc: `date change within the same second`,
+      old_val: new Date(0),
+      new_val: new Date(1),
       root: `d`,
       entry: {
         status: `changed`,
         path: `d`,
-        old_value: new Date(`2024-01-15`),
-        new_value: new Date(`2024-01-16`),
+        old_value: new Date(0),
+        new_value: new Date(1),
       },
     },
     {

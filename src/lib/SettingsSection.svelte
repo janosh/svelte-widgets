@@ -84,11 +84,8 @@
     if (!is_object(value)) return
     validate_object_shape(value)
     if (value instanceof Date || value instanceof RegExp) return
-    if (Array.isArray(value)) {
-      for (const item of value) validate_value_shape(item)
-      return
-    }
-    for (const item of Object.values(value)) validate_value_shape(item)
+    for (const item of Array.isArray(value) ? value : Object.values(value))
+      validate_value_shape(item)
   }
 
   // Capture reset values once at mount - must NOT be $derived or it tracks changes.
@@ -186,12 +183,12 @@
 
   // Only explicitly keyed rows are enhanced; without either opt-in prop the DOM is untouched.
   const enhance_rows = (section: HTMLElement): (() => void) => {
-    // Plain Map, not SvelteMap: `refresh` reads and writes this inside an effect, which
-    // reactive entries would turn into an endless loop.
-    const original_descriptions = new Map<HTMLElement, string | null>()
-    // What this attachment last wrote to each row's `data-description`; anything else on the
-    // attribute came from the caller and is re-snapshotted rather than overwritten.
-    const written_descriptions = new Map<HTMLElement, string | null>()
+    // Plain Map: reactive entries would make `refresh` loop. Keep caller text alongside
+    // our last write so external updates are re-snapshotted rather than overwritten.
+    const descriptions = new Map<
+      HTMLElement,
+      { original: string | null; written: string | null }
+    >()
 
     const remove_reset_button = (row: HTMLElement): void => {
       const button = row.querySelector(RESET_SELECTOR)
@@ -199,7 +196,6 @@
       // <body>. Hand focus to the row's own control instead.
       const had_focus = button !== null && button === document.activeElement
       button?.remove()
-      row.classList.remove(`has-setting-reset`)
       if (!had_focus) return
       const control = row.querySelector<HTMLElement>(`input, select, textarea, button`)
       if (control) control.focus()
@@ -209,6 +205,7 @@
     const cleanup_enhancement = (row: HTMLElement, original: string | null): void => {
       row.querySelector(DESCRIPTION_SELECTOR)?.remove()
       remove_reset_button(row)
+      row.classList.remove(`setting-resettable`)
       for (const control of row.querySelectorAll(`[${AUTO_LABEL_ATTR}]`)) {
         release_auto_label(control)
       }
@@ -218,7 +215,7 @@
 
     // `data-label` short-circuits the clone, which only strips controls and our own appended
     // description out of the row's text.
-    const label_text = (row: HTMLLabelElement): string => {
+    const label_text = (row: HTMLElement): string => {
       let text = row.dataset.label
       if (text === undefined) {
         const label_copy = row.cloneNode(true) as HTMLElement
@@ -232,8 +229,7 @@
       return text.replaceAll(/\s+/gu, ` `).trim()
     }
 
-    const sync_labeled_controls = (row: HTMLElement): void => {
-      const label = row instanceof HTMLLabelElement ? label_text(row) : ``
+    const sync_labeled_controls = (row: HTMLElement, label: string): void => {
       for (const control of row.querySelectorAll(`input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
         // An author-set name always wins: any name other than the one we recorded is theirs
@@ -253,20 +249,20 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      // Re-snapshot whenever the attribute holds something we did not write: the caller
-      // updated a reactive `data-description` and the mount-time value would clobber it.
-      // getAttribute returns null, never undefined, so an unseen row snapshots here too.
       const current_description = row.getAttribute(`data-description`)
-      if (current_description !== written_descriptions.get(row)) {
-        original_descriptions.set(row, current_description)
+      const saved = descriptions.get(row) ?? {
+        original: current_description,
+        written: current_description,
       }
-      sync_labeled_controls(row)
+      if (current_description !== saved.written) saved.original = current_description
+      const label = label_text(row)
+      sync_labeled_controls(row, row instanceof HTMLLabelElement ? label : ``)
 
       // `setting_metadata` overrides the row's `data-description`, restored if the key drops
       const metadata = setting_metadata?.[key]
       const description =
         (typeof metadata === `string` ? metadata : metadata?.description) ??
-        original_descriptions.get(row)
+        saved.original
       // Write only on real change: setAttribute queues a mutation record even for an identical
       // value, and SettingsSearch observes this attribute.
       const next_description = description || null
@@ -274,7 +270,8 @@
         if (next_description) row.setAttribute(`data-description`, next_description)
         else row.removeAttribute(`data-description`)
       }
-      written_descriptions.set(row, next_description)
+      saved.written = next_description
+      descriptions.set(row, saved)
 
       let description_element = row.querySelector(DESCRIPTION_SELECTOR)
       if (!descriptions_open || !description) description_element?.remove()
@@ -291,14 +288,17 @@
         }
       }
 
-      if (!on_reset_key || !changed_keys.includes(key)) remove_reset_button(row)
+      // Reserve the gutter before the value changes, including during keyboard edits.
+      const resettable = Boolean(on_reset_key) && Object.hasOwn(current_values, key)
+      row.classList.toggle(`setting-resettable`, resettable)
+      if (!resettable || !changed_keys.includes(key)) remove_reset_button(row)
       else {
         let reset_button = row.querySelector<HTMLButtonElement>(RESET_SELECTOR)
         if (!reset_button) {
           reset_button = document.createElement(`button`)
           reset_button.setAttribute(`type`, `button`)
           reset_button.className = `setting-reset-button`
-          reset_button.textContent = `↶`
+          reset_button.innerHTML = `<svg viewBox="${Reset.viewBox}" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="${Reset.d}" /></svg>`
           // Resolve the key at click time so a row that changes data-key needs no rewiring
           reset_button.addEventListener(
             `click`,
@@ -306,11 +306,11 @@
               if (row.dataset.key) reset_key(row.dataset.key)
             }),
           )
-          row.classList.add(`has-setting-reset`)
           row.append(reset_button)
         }
+        const reset_label = msg.reset_key(label || key.replaceAll(/[_-]+/gu, ` `))
         for (const attribute of [`aria-label`, `title`]) {
-          reset_button.setAttribute(attribute, msg.reset_key(key))
+          reset_button.setAttribute(attribute, reset_label)
         }
       }
       return Boolean(description)
@@ -320,11 +320,10 @@
       // `map`, not `some`: every row has to be enhanced, short-circuiting would skip the rest
       const rows = [...section.querySelectorAll<HTMLElement>(`[data-key]`)]
       has_descriptions = rows.map(enhance_row).includes(true)
-      for (const [row, original] of original_descriptions) {
+      for (const [row, { original }] of descriptions) {
         if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
           cleanup_enhancement(row, original)
-          original_descriptions.delete(row)
-          written_descriptions.delete(row)
+          descriptions.delete(row)
         }
       }
     }
@@ -333,6 +332,7 @@
       section,
       [`data-key`, `data-label`, `data-description`],
       refresh,
+      true,
     )
     // `refresh` reads `changed_keys`, `descriptions_open` and `setting_metadata`, so this
     // re-enhances on change; from the attachment body it would tear everything off first.
@@ -340,8 +340,7 @@
 
     return () => {
       stop_observing()
-      for (const [row, original] of original_descriptions)
-        cleanup_enhancement(row, original)
+      for (const [row, { original }] of descriptions) cleanup_enhancement(row, original)
       has_descriptions = false
     }
   }
@@ -433,8 +432,9 @@
     gap: 3pt;
     margin-inline-start: auto;
   }
-  section :global([data-key].has-setting-reset) {
+  section :global([data-key].setting-resettable) {
     position: relative;
+    box-sizing: border-box;
     padding-inline-end: 1.6em;
   }
   section :global(.setting-reset-button) {
@@ -507,11 +507,18 @@
     /* fixed-size controls keep their size instead of stretching across their track */
     > :global(:is(input[type='color'], input[type='checkbox'])) {
       justify-self: start;
+      grid-column: 2;
+    }
+    > :global(input[type='checkbox']) {
+      width: auto;
     }
     /* range inputs have an intrinsic width and will not stretch into their track on their own */
     > :global(input[type='range']) {
+      box-sizing: border-box;
       width: 100%;
-      min-width: 40px;
+      min-width: 0;
+      margin: 0;
+      padding: 0;
     }
   }
 </style>

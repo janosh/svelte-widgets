@@ -108,8 +108,8 @@
 </script>
 
 <!-- Settings reset/search use data-key; callers may override it through rest. -->
-<label {@attach tooltip()} title={resolved_title} data-key={setting} {...rest}>
-  <span>{@render children?.()}</span>
+<label data-key={setting} {...rest}>
+  <span {@attach tooltip()} title={resolved_title}>{@render children?.()}</span>
   <input
     {...number_props}
     type="number"
@@ -167,7 +167,10 @@
     font-family: inherit;
   }
   input[type='range'] {
+    box-sizing: border-box;
     flex: 1;
-    min-width: 40px;
+    min-width: 0;
+    margin: 0;
+    padding: 0;
   }
 </style>

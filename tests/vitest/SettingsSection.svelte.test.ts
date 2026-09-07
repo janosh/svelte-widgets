@@ -1,14 +1,24 @@
 import { SettingsSection } from '$lib'
-import { createRawSnippet, flushSync, mount, tick, type ComponentProps } from 'svelte'
+import {
+  createRawSnippet,
+  flushSync,
+  mount,
+  tick,
+  unmount,
+  type ComponentProps,
+} from 'svelte'
 import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, onTestFinished, test } from 'vitest'
 import { doc_query } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
 
 const snippet = (content: string) => createRawSnippet(() => ({ render: () => content }))
 type SettingValues = Record<string, unknown>
-const mount_section = (props: ComponentProps<typeof SettingsSection>) =>
-  mount(SettingsSection, { target: document.body, props })
+const mount_section = (props: ComponentProps<typeof SettingsSection>) => {
+  const component = mount(SettingsSection, { target: document.body, props })
+  onTestFinished(() => unmount(component))
+  return component
+}
 const click_and_tick = async (
   selector: string,
   root: ParentNode | null = document,
@@ -85,9 +95,17 @@ describe(`SettingsSection`, () => {
 
   test(`hides reset controls when no reset callback is available`, () => {
     const current_values = $state<SettingValues>({ radius: 1 })
-    mount_section({ title: `A`, current_values, children: snippet(`<span></span>`) })
+    mount_section({
+      title: `A`,
+      current_values,
+      setting_metadata: { radius: `Size` },
+      children: snippet(`<label data-key="radius"><input></label>`),
+    })
     flushSync(() => (current_values.radius = 2))
-    expect(document.querySelector(`.heading-actions`)).toBeNull()
+    expect(document.querySelector(`.setting-reset-button`)).toBeNull()
+    expect(
+      doc_query(`[data-key="radius"]`).classList.contains(`setting-resettable`),
+    ).toBe(false)
   })
 
   test.each<[string, SettingValues, SettingValues, boolean]>([
@@ -198,6 +216,7 @@ describe(`SettingsSection`, () => {
   test.each([
     {
       name: `existing key`,
+      label: `Radius`,
       initial: { radius: 1, palette: { colors: [`red`, `blue`] } },
       change: { radius: 2 },
       key: `radius`,
@@ -206,20 +225,31 @@ describe(`SettingsSection`, () => {
     },
     {
       name: `new key`,
+      label: `Temporary`,
       initial: { radius: 1 },
       change: { temporary: undefined },
       key: `temporary`,
       reference_value: undefined,
       reference_present: false,
     },
+    {
+      name: `underscored key`,
+      label: `Same size`,
+      initial: { same_size_atoms: false },
+      change: { same_size_atoms: true },
+      key: `same_size_atoms`,
+      reference_value: false,
+      reference_present: true,
+    },
   ])(`resets $name to its mounted state`, async (test_case) => {
-    const { initial, change, key, reference_value, reference_present } = test_case
+    const { initial, change, key, label, reference_value, reference_present } = test_case
     const tracked = mount_tracked_section(
       initial,
       `<div>
         <label data-key="radius"><span>Radius</span><input></label>
         <label data-key="palette"><span>Palette</span><select></select></label>
         <label data-key="temporary"><span>Temporary</span><input></label>
+        <label data-key="same_size_atoms"><span>Same size</span><input type="checkbox"></label>
       </div>`,
     )
 
@@ -230,7 +260,10 @@ describe(`SettingsSection`, () => {
       document
         .querySelector(`[data-key="${key}"] .setting-reset-button`)
         ?.getAttribute(`aria-label`),
-    ).toBe(`Reset ${key} to default`)
+    ).toBe(`Reset ${label} to default`)
+    expect(
+      document.querySelector(`.setting-reset-button svg`)?.getAttribute(`viewBox`),
+    ).toBe(`0 0 32 32`)
     await click_and_tick(`[data-key="${key}"] .setting-reset-button`)
 
     expect(tracked.reset_calls).toEqual([[key, reference_value, reference_present]])
@@ -336,7 +369,18 @@ describe(`SettingsSection`, () => {
     expect([
       row_reset.getAttribute(`title`),
       row_reset.getAttribute(`aria-label`),
-    ]).toEqual([`radius zurücksetzen`, `radius zurücksetzen`])
+    ]).toEqual([`Radius zurücksetzen`, `Radius zurücksetzen`])
+
+    // Svelte updates reactive label text in place, without replacing the element.
+    const label_text = doc_query(`[data-key="radius"] > span`).firstChild
+    if (!label_text) throw new Error(`Missing radius label text`)
+    label_text.nodeValue = `Atom radius`
+    await tick()
+    expect([
+      row_reset.getAttribute(`title`),
+      row_reset.getAttribute(`aria-label`),
+      doc_query(`[data-key="radius"] input`).getAttribute(`aria-label`),
+    ]).toEqual([`Atom radius zurücksetzen`, `Atom radius zurücksetzen`, `Atom radius`])
   })
 
   test(`offers the toggle for rows that only carry their own data-description`, async () => {
@@ -417,6 +461,27 @@ describe(`SettingsSection`, () => {
     expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
+  test(`reserves reset gutters only for eligible rows, before and after edits`, async () => {
+    const tracked = mount_tracked_section(
+      { radius: 1 },
+      `<div><label data-key="radius"><span>Radius</span><input type="range"></label><label data-key="unknown">Untracked<input></label></div>`,
+    )
+    await tick()
+    const row = doc_query(`[data-key="radius"]`)
+    for (const radius of [1, 2, 1]) {
+      tracked.values = { radius }
+      await tick()
+      expect(row.classList.contains(`setting-resettable`)).toBe(true)
+      expect(Boolean(row.querySelector(`.setting-reset-button`))).toBe(radius !== 1)
+      expect(
+        doc_query(`[data-key="unknown"]`).classList.contains(`setting-resettable`),
+      ).toBe(false)
+    }
+    tracked.values = {}
+    await tick()
+    expect(row.classList.contains(`setting-resettable`)).toBe(false)
+  })
+
   test(`ignores unmapped and explicitly empty descriptions`, async () => {
     mount_section({
       title: `Atoms`,
@@ -431,7 +496,8 @@ describe(`SettingsSection`, () => {
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {
-    mount(SettingsSectionRerenderHarness, { target: document.body })
+    const component = mount(SettingsSectionRerenderHarness, { target: document.body })
+    onTestFinished(() => unmount(component))
     await tick()
 
     const settings_row = (): HTMLElement | null =>
@@ -469,7 +535,7 @@ describe(`SettingsSection`, () => {
     expect(settings_row()?.dataset.key).toBe(`diameter`)
     expect(
       settings_row()?.querySelector(`.setting-reset-button`)?.getAttribute(`aria-label`),
-    ).toBe(`Reset diameter to default`)
+    ).toBe(`Reset Radius to default`)
     await click_and_tick(`.setting-reset-button`, settings_row())
     expect(settings_row()?.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).not.toBeNull()

@@ -883,13 +883,23 @@ describe(`step_focus`, () => {
     expect(event.defaultPrevented).toBe(expected !== undefined)
   })
 
-  // same early-return branch for every non-nav key; keep a menu key and a nav-like miss
-  test.each([`Tab`, `PageDown`])(`leaves %s untouched`, (key) => {
+  test.each([
+    [`Tab`, `Tab`, {}, false],
+    [`PageDown`, `PageDown`, {}, false],
+    [`prevented arrow`, `ArrowDown`, {}, true],
+    [`composing arrow`, `ArrowDown`, { isComposing: true }, false],
+    [`modified arrow`, `ArrowDown`, { ctrlKey: true }, false],
+  ] as const)(`leaves %s untouched`, (_desc, key, init, prevented) => {
     items[0].focus()
-    const { target, event } = press(key)
-    expect(target).toBeUndefined()
-    expect(event.defaultPrevented).toBe(false)
+    const event = new KeyboardEvent(`keydown`, {
+      key,
+      cancelable: true,
+      ...init,
+    })
+    if (prevented) event.preventDefault()
+    expect(step_focus(event, items)).toBeUndefined()
     expect(document.activeElement).toBe(items[0])
+    expect(event.defaultPrevented).toBe(prevented)
   })
 
   // an empty list must not preventDefault, or a menu with no items would swallow arrows

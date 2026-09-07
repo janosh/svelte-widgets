@@ -31,6 +31,7 @@
     closed_icon = Expand,
     icon_style,
     offset = { x: 5, y: 5 },
+    align = `end`,
     max_width,
     pane_props = {},
     persistent = false,
@@ -56,7 +57,9 @@
     closed_icon?: IconData
     // Sizing the bundled icon is the common case; reach for `toggle` only to replace it
     icon_style?: string
-    // Gap between the toggle button's bottom-right corner and the pane's
+    // Horizontal edge shared by the toggle and pane before dragging.
+    align?: `start` | `end`
+    // Gap between the aligned edges and below the toggle.
     offset?: { x?: number; y?: number }
     max_width?: string
     // `aria-label` deliberately not omitted: several panes on a page need distinct names
@@ -128,14 +131,15 @@
   const clamp_to_viewport = (value: number, upper: number) =>
     Math.max(viewport_margin_px, Math.min(value, upper))
 
-  // Undragged: under the toggle, right edges aligned; fixed panes also stay in the viewport
+  // Undragged: under the toggle; fixed panes also stay in the viewport
   const anchor_position = (): { left: number; top: number } => {
     if (!toggle_btn) return fallback_position
     const toggle_rect = toggle_btn.getBoundingClientRect()
     const pane_width = pane?.getBoundingClientRect().width || default_pane_width_px
     const [offset_x, offset_y] = [offset.x ?? 5, offset.y ?? 5]
     // the anchor in viewport coordinates; each strategy below restates it in its own space
-    const left = toggle_rect.right - pane_width + offset_x
+    const left =
+      (align === `start` ? toggle_rect.left : toggle_rect.right - pane_width) + offset_x
     const top = toggle_rect.bottom + offset_y
 
     if (position === `fixed`) {

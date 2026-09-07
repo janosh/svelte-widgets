@@ -8,7 +8,7 @@
   } from 'svelte/elements'
   import { language_label_html } from './internal/language-label'
   import { merge_defaults, FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
-  import { default_highlighter } from './live-examples/default-highlighter'
+  import { default_highlighter } from './highlight/default-highlighter'
   import { chain_handlers } from './utils'
 
   type File = {

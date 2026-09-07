@@ -1,6 +1,7 @@
 import { NumberRangeInput } from '$lib'
-import { createRawSnippet, mount, tick, type ComponentProps } from 'svelte'
-import { describe, expect, test } from 'vitest'
+import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte'
+import { describe, expect, test, vi } from 'vitest'
+import { doc_query, hover } from './index'
 
 const label_snippet = createRawSnippet(() => ({
   render: () => `<span>Atom radius</span>`,
@@ -17,6 +18,28 @@ const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
 }
 
 describe(`NumberRangeInput`, () => {
+  test(`shows the description only while hovering the label text`, async () => {
+    vi.useFakeTimers()
+    const component = mount(NumberRangeInput, {
+      target: document.body,
+      props: { ...named_props, children: label_snippet },
+    })
+    await tick()
+    try {
+      for (const input of document.querySelectorAll(`input`)) {
+        hover(input)
+        await vi.advanceTimersByTimeAsync(150)
+        expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+      }
+      hover(doc_query(`label > span`))
+      await vi.advanceTimersByTimeAsync(150)
+      expect(document.querySelector(`.custom-tooltip`)?.textContent).toBe(`Atom radius`)
+    } finally {
+      await unmount(component)
+      vi.useRealTimers()
+    }
+  })
+
   test(`renders number before range and two-way binds both to one value`, async () => {
     const props = $state({ min: 0, max: 1, step: 0.1, title: `vol`, value: 0.5 })
     const { number, range } = mount_range(props)

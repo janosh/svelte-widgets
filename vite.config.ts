@@ -1,14 +1,11 @@
-import adapter from '@sveltejs/adapter-static'
 import { sveltekit } from '@sveltejs/kit/vite'
-import { mdsvex } from 'mdsvex'
 import { generate_icons } from './scripts/generate-icons.ts'
+import { site_adapter } from './scripts/site-content.ts'
+import type { ContentManifest } from './src/lib/markdown/content.ts'
 import { heading_ids } from './src/lib/heading-anchors.ts'
-import { katex_preprocess } from './src/lib/katex.ts'
-import {
-  mdsvex_transform,
-  starry_night_highlighter,
-} from './src/lib/live-examples/index.ts'
-import live_examples from './src/lib/live-examples/vite-plugin.ts'
+import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
+import { create_markdown } from './src/lib/markdown/index.ts'
+import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 
@@ -16,40 +13,32 @@ await generate_icons()
 
 const base_segment = (process.env.BASE_PATH ?? ``).replaceAll(/^\/+|\/+$/gu, ``)
 const base_path: `` | `/${string}` = base_segment ? `/${base_segment}` : ``
-const remark_plugins = [
-  [
-    mdsvex_transform,
-    {
-      defaults: {
-        Wrapper: `/src/lib/CodeExample.svelte`,
-        collapsible: true,
-        hide_style: true,
-      },
+const manifests = new Map<string, ContentManifest>()
+const docs = markdown_vite(
+  create_markdown({
+    math: true,
+    references: true,
+    typography: true,
+    highlight: default_highlighter.highlight,
+    examples: {
+      wrapper: '/src/lib/CodeExample.svelte',
+      collapsible: true,
+      hide_style: true,
     },
-  ],
-]
-const { before: katex_before, after: katex_after } = katex_preprocess()
+  }),
+  { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
+)
 
 // passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
 // kit options (adapter, alias, paths, prerender) sit at the top level rather than under `kit`.
 // svelte-package only reads svelte.config.*, so it packages src/lib with default config: nothing
-// in src/lib relies on these preprocessors or aliases and the `package` script drops the one .md.
+// in src/lib relies on these preprocessors or aliases and the `package` script drops Markdown guides.
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 
-  // KaTeX before/after mdsvex so markdown never sees rendered HTML; heading IDs last.
-  preprocess: [
-    katex_before,
-    mdsvex({
-      remarkPlugins: remark_plugins,
-      extensions: [`.md`],
-      highlight: { highlighter: starry_night_highlighter },
-    }),
-    katex_after,
-    heading_ids(),
-  ],
+  preprocess: [docs.preprocess, heading_ids()],
 
-  adapter: adapter(),
+  adapter: site_adapter(manifests),
   paths: { base: base_path },
 
   alias: {
@@ -82,7 +71,7 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), ...live_examples(), source_links()],
+  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],

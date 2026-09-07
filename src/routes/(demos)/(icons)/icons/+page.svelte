@@ -1,17 +1,15 @@
 <script lang="ts">
-  import { Icon } from '$lib'
+  import { CodeBlock, Icon } from '$lib'
+  import { default_highlighter } from '$lib/highlight'
   import { create_clipboard_feedback } from '$lib/clipboard.svelte'
   import * as icon_module from '$lib/icons'
   import type { IconData } from '$lib/icons/types'
 
   // The catalog is the one place a star import is right: every other call site should
   // import the single glyph it needs so the bundler can drop the rest.
-  const catalog: [string, IconData][] = Object.entries(icon_module)
-    .filter((entry): entry is [string, IconData] =>
-      Boolean(entry[1] && typeof entry[1] === `object` && `viewBox` in entry[1]),
-    )
-    // eslint-disable-next-line unicorn/no-array-sort -- fresh array; Firefox 114 lacks toSorted
-    .sort(([left], [right]) => left.localeCompare(right))
+  const catalog = Object.entries<IconData>(icon_module).toSorted(([left], [right]) =>
+    left.localeCompare(right),
+  )
 
   let query = $state(``)
   let size = $state(24)
@@ -33,8 +31,10 @@
     return catalog.filter(([name]) => name.toLowerCase().includes(lower))
   })
 
-  const usage = `import { Icon } from 'svelte-widgets'
-import { Download } from 'svelte-widgets/icons'
+  const usage = `<script>
+  import { Icon } from 'svelte-widgets'
+  import { Download } from 'svelte-widgets/icons'
+\u003C/script>
 
 <Icon icon={Download} />`
 </script>
@@ -46,7 +46,12 @@ import { Download } from 'svelte-widgets/icons'
   name so a bundle only carries what it renders:
 </p>
 
-<pre><code>{usage}</code></pre>
+<CodeBlock
+  code={usage}
+  language="svelte"
+  label="Icon usage"
+  highlight={default_highlighter.highlight}
+/>
 
 <p>
   Size comes from <code>--icon-size</code>, colour from <code>currentColor</code>, so an

@@ -888,6 +888,11 @@ describe(`inline editing`, () => {
       const input = doc_query<HTMLInputElement>(`.edit-input`)
       input.value = `42`
       fire(input, new Event(`input`, { bubbles: true }))
+      for (const key of [`Enter`, `Escape`]) {
+        fire(input, keydown(key, { isComposing: true }))
+        expect(document.querySelector(`.edit-input`)).toBe(input)
+        expect(on_change).not.toHaveBeenCalled()
+      }
       fire(input, keydown(`Enter`))
       expect(on_change).toHaveBeenCalledWith(`n`, 42, original)
 

@@ -1,6 +1,6 @@
 import { ClickFeedback, DragOverlay, Spinner, StatusMessage } from '$lib'
 import { flushSync, mount, unmount, type Component } from 'svelte'
-import { describe, expect, onTestFinished, test } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 const render = <Props extends Record<string, unknown>>(
@@ -46,6 +46,8 @@ describe(`Spinner`, () => {
   ])(
     `text=%j renders a live status region with text %j and forwarded props`,
     (text, expected) => {
+      // happy-dom drops border-width values containing var(), so inspect the DOM assignment.
+      const styles = vi.spyOn(CSSStyleDeclaration.prototype, `cssText`, `set`)
       render(Spinner, {
         text,
         id: `custom-id`,
@@ -62,6 +64,9 @@ describe(`Spinner`, () => {
       expect(container.style.getPropertyValue(`--spinner-color`)).toBe(`red`)
       // The decorative spinner is separate from the accessible status text.
       expect(container.children).toHaveLength(expected === null ? 1 : 2)
+      expect(styles).toHaveBeenCalledWith(
+        expect.stringContaining(`border-width: var(--spinner-border-width, 2px)`),
+      )
       expect(container.querySelector(`span`)?.textContent ?? null).toBe(expected)
     },
   )

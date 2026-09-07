@@ -354,6 +354,8 @@ export function step_focus<T extends HTMLElement>(
   items: T[],
   { horizontal = false }: { horizontal?: boolean } = {},
 ): T | undefined {
+  if (event.defaultPrevented || event.isComposing || is_modifier_chord(event))
+    return undefined
   const { key } = event
   const back = key === `ArrowUp` || (horizontal && key === `ArrowLeft`)
   const forward = key === `ArrowDown` || (horizontal && key === `ArrowRight`)

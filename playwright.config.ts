@@ -14,6 +14,7 @@ export default {
     reuseExistingServer: true,
     timeout: on_ci ? 180_000 : 15_000,
   },
-  workers: 16,
+  // CI runners share a small CPU budget across browsers and Vite fixture servers.
+  workers: on_ci ? 2 : 16,
   testDir: `tests/playwright`,
 } satisfies PlaywrightTestConfig

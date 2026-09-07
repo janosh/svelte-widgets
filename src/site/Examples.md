@@ -108,8 +108,13 @@ A navigation bar with dropdowns, active-route styling and a mobile burger menu.
   import { Nav } from 'svelte-widgets'
 
   const resolve_path = resolve as (path: string) => string
-  // real routes so the prerender crawl doesn't trip over dead links
-  const routes = [`/`, `/multiselect`, `/popover`, `/toc`].map(resolve_path)
+  // Explicit labels stay identical when resolve() returns relative paths during SSR.
+  const routes = [
+    [`/`, `Home`],
+    [`/multiselect`, `MultiSelect`],
+    [`/popover`, `Popover`],
+    [`/toc`, `Toc`],
+  ].map(([path, label]) => ({ href: resolve_path(path), label }))
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
 </script>
 

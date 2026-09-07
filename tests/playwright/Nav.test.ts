@@ -47,8 +47,7 @@ test(`generated Nav and MultiSelect ids survive hydration`, async ({ page }) => 
       hydration_warnings.push(text)
     }
   })
-  // This route renders MultiSelect during SSR; live-example routes mount client-side and so
-  // cannot expose an SSR/client ID mismatch.
+  // Compare the authored SSR IDs with the hydrated controls before interacting.
   const response = await page.goto(`/range-select`, { waitUntil: `networkidle` })
   const server_html = await response?.text()
   if (!server_html) throw new Error(`Missing SSR response body for /range-select`)

@@ -72,21 +72,13 @@
       "types": "./dist/heading-anchors.d.ts",
       "default": "./dist/heading-anchors.js"
     },
-    "./katex": {
-      "types": "./dist/katex.d.ts",
-      "default": "./dist/katex.js"
-    },
     "./labels": {
       "types": "./dist/labels.d.ts",
       "default": "./dist/labels.js"
     },
-    "./live-examples": {
-      "types": "./dist/live-examples/index.d.ts",
-      "default": "./dist/live-examples/index.js"
-    },
-    "./live-examples/create-highlighter": {
-      "types": "./dist/live-examples/create-highlighter.d.ts",
-      "default": "./dist/live-examples/create-highlighter.js"
+    "./highlight": {
+      "types": "./dist/highlight/index.d.ts",
+      "default": "./dist/highlight/index.js"
     },
     "./source-links": {
       "types": "./dist/source-links/index.d.ts",
@@ -195,13 +187,29 @@
     "./image-markup": {
       "types": "./dist/image-markup.d.ts",
       "default": "./dist/image-markup.js"
+    },
+    "./markdown": {
+      "types": "./dist/markdown/index.d.ts",
+      "default": "./dist/markdown/index.js"
+    },
+    "./markdown/vite": {
+      "types": "./dist/markdown/vite.d.ts",
+      "default": "./dist/markdown/vite.js"
+    },
+    "./markdown/content": {
+      "types": "./dist/markdown/content.d.ts",
+      "default": "./dist/markdown/content.js"
+    },
+    "./markdown/check": {
+      "types": "./dist/markdown/check.d.ts",
+      "default": "./dist/markdown/check.js"
     }
   },
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build:site": "vp build && pagefind --site build --exclude-selectors \"pre, details\"",
+    "build:site": "vp build",
     "test": "vitest run && playwright test",
     "test:coverage": "vitest run --coverage",
     "test:package": "npm pack --dry-run && tsc -p tests/package-smoke/tsconfig.json && vp build --config tests/package-smoke/vite.config.ts",
@@ -211,36 +219,39 @@
     "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
   },
+  "dependencies": {
+    "js-yaml": "^5.4.1",
+    "marked": "^18.0.11"
+  },
   "devDependencies": {
     "@iconify-json/academicons": "^1.2.4",
-    "@iconify-json/carbon": "^1.2.25",
+    "@iconify-json/carbon": "^1.2.26",
     "@iconify-json/fa-brands": "^1.2.2",
     "@iconify-json/file-icons": "^1.2.2",
     "@iconify-json/gis": "^1.2.5",
     "@iconify-json/iconoir": "^1.2.11",
-    "@iconify-json/lucide": "^1.2.126",
-    "@iconify-json/material-symbols": "^1.2.89",
+    "@iconify-json/lucide": "^1.2.129",
+    "@iconify-json/material-symbols": "^1.2.90",
     "@iconify-json/mdi": "^1.2.3",
     "@iconify-json/octicon": "^1.2.32",
     "@iconify-json/ri": "^1.2.10",
-    "@iconify-json/simple-icons": "^1.2.93",
+    "@iconify-json/simple-icons": "^1.2.94",
     "@iconify-json/zondicons": "^1.2.2",
     "@iconify/types": "^2.0.0",
-    "@iconify/utils": "^3.1.4",
-    "@playwright/test": "^1.62.1",
+    "@iconify/utils": "^3.1.7",
+    "@playwright/test": "^1.63.0",
     "@sveltejs/adapter-static": "^3.0.10",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/package": "2.5.8",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
     "@vitest/coverage-v8": "5.0.0",
-    "@wooorm/starry-night": "^3.10.0",
-    "happy-dom": "20.11.6",
-    "katex": "^0.18.4",
-    "mdsvex": "^0.12.8",
+    "@wooorm/starry-night": "^3.11.0",
+    "happy-dom": "20.14.0",
+    "katex": "^0.18.7",
     "pagefind": "^1.5.2",
-    "svelte": "^5.56.10",
+    "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",

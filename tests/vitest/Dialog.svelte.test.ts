@@ -200,7 +200,7 @@ describe(`Dialog`, () => {
     [`any`, `pointer`, false, false, true],
     [`any`, `escape`, false, false, true],
   ] as const)(
-    `closedby=%s overrides legacy flags for %s dismissal`,
+    `closedby=%s overrides boolean options for %s dismissal`,
     async (closedby, via, close_on_backdrop, close_on_escape, should_close) => {
       const on_close = vi.fn()
       mount_dialog({

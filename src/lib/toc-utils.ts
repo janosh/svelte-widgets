@@ -1,3 +1,22 @@
+const flash_timeouts = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>()
+
+export function flash_toc_target(node: HTMLElement, duration = 1500): void {
+  clearTimeout(flash_timeouts.get(node))
+  node.classList.remove(`toc-clicked`)
+  node.style.setProperty(`--toc-flash-duration`, `${duration}ms`)
+  // Restart the same animation when a reader clicks the target again before it finishes.
+  void node.offsetWidth
+  node.classList.add(`toc-clicked`)
+  flash_timeouts.set(
+    node,
+    setTimeout(() => {
+      node.classList.remove(`toc-clicked`)
+      node.style.removeProperty(`--toc-flash-duration`)
+      flash_timeouts.delete(node)
+    }, duration),
+  )
+}
+
 export function get_heading_visibility(
   levels: readonly number[],
   active_idx: number | null,

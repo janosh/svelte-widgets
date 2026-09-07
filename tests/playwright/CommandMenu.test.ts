@@ -27,12 +27,18 @@ test(`closing the native dialog restores focus to the opener`, async ({ page }) 
 test(`PageSearch navigates through the generated Pagefind index`, async ({ page }) => {
   test.skip(!process.env.CI, `Pagefind index requires the CI build:site server`)
 
-  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  const base = process.env.BASE_PATH ?? ``
+  await page.goto(`${base}/command-menu`, { waitUntil: `networkidle` })
   await page.keyboard.press(`Control+k`)
   const search = page.getByRole(`dialog`, { name: `Site search` })
   await search.getByRole(`combobox`).fill(`whitespace collapsing`)
   await search.getByRole(`option`, { name: /^Patterns › FindBar\b/u }).click()
-  await expect(page).toHaveURL(/\/patterns#findbar$/u)
+  await expect(page).toHaveURL(new RegExp(`${base}/patterns#findbar$`, `u`))
+
+  await page.keyboard.press(`Control+k`)
+  await search.getByRole(`combobox`).fill(`ordinary hot reload`)
+  await search.getByRole(`option`, { name: /^Live Markdown hot reload\b/u }).click()
+  await expect(page).toHaveURL(new RegExp(`${base}/authoring/hot-reload(?:#.*)?$`, `u`))
 })
 
 test(`backdrop still dismisses when CommandMenu disables Escape`, async ({ page }) => {
