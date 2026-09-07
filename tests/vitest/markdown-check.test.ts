@@ -226,29 +226,36 @@ describe(`checked Markdown examples`, () => {
     ])
   }, 60_000)
 
-  test(`maps repeated nested fences independently, including frontmatter and CRLF`, async () => {
-    const source =
+  test.each([
+    [`blockquote`, '> ```ts check\n> const value: number = "bad"\n> ```', [[2, 9]]],
+    [
+      `repeated nested fences with frontmatter and CRLF`,
       `---\ntitle: Repeated\n---\n\n${fence(`ts`, `const value: number = "bad"`)}\n\n> ${fence(`ts`, `const value: number = "bad"`).replaceAll(`\n`, `\n> `)}\n\n- Nested\n\n  ${fence(`ts`, `const value: number = "bad"`).replaceAll(`\n`, `\n  `)}`.replaceAll(
         `\n`,
         `\r\n`,
+      ),
+      [
+        [6, 7],
+        [10, 9],
+        [16, 9],
+      ],
+    ],
+  ] as const)(
+    `maps diagnostic locations and token spans in %s`,
+    async (_, source, positions) => {
+      const result = await check_source(source)
+      const offsets = [...source.matchAll(/value/gu)].map(({ index }) => index)
+      expect(result.diagnostics).toMatchObject(
+        positions.map(([line, column], idx) => ({
+          code: `TS2322`,
+          range: { start: { filename, line, column, offset: offsets[idx] } },
+        })),
       )
-    const result = await check_source(source)
-    expect(
-      diagnostics_at_start(result).map(({ line, column, offset }) => ({
-        line,
-        column,
-        offset,
-      })),
-    ).toEqual([
-      { line: 6, column: 7, offset: source.indexOf(`value`) },
-      {
-        line: 10,
-        column: 9,
-        offset: source.indexOf(`value`, source.indexOf(`value`) + 1),
-      },
-      { line: 16, column: 9, offset: source.lastIndexOf(`value`) },
-    ])
-  })
+      for (const { range } of result.diagnostics)
+        expect(source.slice(range.start.offset, range.end.offset)).toBe(`value`)
+      expect(result.value).toEqual({ checked: positions.length, asserted: 0 })
+    },
+  )
 
   test(`reports compiler failures and never runs assertions after a static failure`, async () => {
     const run = vi.fn()
@@ -369,18 +376,6 @@ describe(`checked Markdown examples`, () => {
       ])
     },
   )
-})
-
-test(`type diagnostics underline the authored token inside an indented fence`, async () => {
-  const source = '> ```ts check\n> const value: number = "bad"\n> ```'
-  const document = assert_ok(await create_markdown().parse(source, { filename }))
-  const result = await check_document(document, { typescript })
-  const diagnostic = result.diagnostics.find(({ code }) => code === `TS2322`)
-  expect(diagnostic).toBeDefined()
-  expect(source.slice(diagnostic?.range.start.offset, diagnostic?.range.end.offset)).toBe(
-    `value`,
-  )
-  expect(result.value).toEqual({ checked: 1, asserted: 0 })
 })
 
 test(`one-shot batches resolve each document's imports and rebuild after dependency changes`, async () => {

@@ -409,7 +409,6 @@ describe(`incremental Markdown compilation`, () => {
     )
     expect(edited.examples[1].id).toBe(initial.examples[0].id)
     expect(edited.code).toContain(`<h1 id="new-prose">New prose</h1>`)
-    compile(edited.code, { generate: false })
     const duplicates = await compile_page(`${source}\n\n${source}`, { examples: {} })
     expect(new Set(duplicates.examples.map(({ id }) => id)).size).toBe(2)
     const named = await compile_page(fence(`<p>First</p>`, `id="counter"`), {

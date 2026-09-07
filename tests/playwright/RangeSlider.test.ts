@@ -159,47 +159,36 @@ test(`disabled controls cannot change values and are skipped by Tab`, async ({
   await expect(group.getByRole(`slider`).nth(0)).toHaveAttribute(`aria-valuenow`, `130`)
 })
 
-test(`mobile touch dragging works with 44px targets and no horizontal overflow`, async ({
-  browser,
-  browserName,
-  baseURL,
-}) => {
-  test.skip(
-    browserName !== `chromium`,
-    `Real touch dragging uses Chromium's CDP input API`,
-  )
-  const context = await browser.newContext({
-    viewport: { width: 390, height: 844 },
-    isMobile: true,
-    hasTouch: true,
+test.describe(`mobile`, () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true })
+  test.skip(({ browserName }) => browserName !== `chromium`, `Touch dragging uses CDP`)
+
+  test(`touch dragging works with 44px targets and no horizontal overflow`, async ({
+    page,
+  }) => {
+    const group = page.getByRole(`group`, { name: `Nightly budget`, exact: true })
+    const lower = group.getByRole(`slider`).nth(0)
+    await group.scrollIntoViewIfNeeded()
+    const rail = await box_of(group.locator(`.rail`))
+    const handle = await box_of(lower)
+    expect(handle.width).toBeGreaterThanOrEqual(44)
+    expect(handle.height).toBeGreaterThanOrEqual(44)
+    const session = await page.context().newCDPSession(page)
+    const start = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }
+    await session.send(`Input.dispatchTouchEvent`, {
+      type: `touchStart`,
+      touchPoints: [start],
+    })
+    await session.send(`Input.dispatchTouchEvent`, {
+      type: `touchMove`,
+      touchPoints: [{ x: rail.x + rail.width * 0.4, y: start.y }],
+    })
+    await session.send(`Input.dispatchTouchEvent`, { type: `touchEnd`, touchPoints: [] })
+    await expect(lower).toHaveAttribute(`aria-valuenow`, `200`)
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    ).toBe(true)
   })
-  const page = await context.newPage()
-  await page.goto(new URL(`/range-slider`, baseURL ?? `http://localhost:3005`).href, {
-    waitUntil: `networkidle`,
-  })
-  const group = page.getByRole(`group`, { name: `Nightly budget`, exact: true })
-  const lower = group.getByRole(`slider`).nth(0)
-  await group.scrollIntoViewIfNeeded()
-  const rail = await box_of(group.locator(`.rail`))
-  const handle = await box_of(lower)
-  expect(handle.width).toBeGreaterThanOrEqual(44)
-  expect(handle.height).toBeGreaterThanOrEqual(44)
-  const session = await context.newCDPSession(page)
-  const start = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }
-  await session.send(`Input.dispatchTouchEvent`, {
-    type: `touchStart`,
-    touchPoints: [start],
-  })
-  await session.send(`Input.dispatchTouchEvent`, {
-    type: `touchMove`,
-    touchPoints: [{ x: rail.x + rail.width * 0.4, y: start.y }],
-  })
-  await session.send(`Input.dispatchTouchEvent`, { type: `touchEnd`, touchPoints: [] })
-  await expect(lower).toHaveAttribute(`aria-valuenow`, `200`)
-  expect(
-    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-  ).toBe(true)
-  await context.close()
 })
 
 test(`focus, reduced motion and forced colors retain visible handles`, async ({
