@@ -137,7 +137,6 @@
         }
         const cache = search_cache
         const page_results = await cache.results
-        if (page_results.length === 0) return no_results()
         const target_count = offset + limit
 
         while (
@@ -163,17 +162,15 @@
             if (result.status === `fulfilled`) cache.actions.push(...result.value)
           }
         }
-        if (cache.actions.length === 0) return no_results()
-
         return {
           options: cache.actions.slice(offset, target_count),
           hasMore:
             cache.actions.length > target_count ||
             cache.next_result_idx < page_results.length,
         }
-      } catch {
+      } catch (error) {
         pagefind_api_promise = undefined
-        return no_results()
+        throw error
       }
     }
   }

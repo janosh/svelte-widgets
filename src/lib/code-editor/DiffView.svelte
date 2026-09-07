@@ -140,56 +140,55 @@
     return text === undefined ? null : { lineNo: line_no, text, spans: [] }
   }
 
-  // Discard gap rows beyond both source texts when backend line counts disagree.
-  const build_gap_rows = (old_from: number, new_from: number, count: number): DiffRow[] =>
-    Array.from({ length: count }, (_unused, offset) => ({
-      kind: `equal` as const,
-      old: plain_line(old_lines, old_from + offset),
-      new: plain_line(new_lines, new_from + offset),
-    })).filter((row) => row.old !== null || row.new !== null)
-
-  const pair_rows_of = (row: DiffRow): DisplayRow[] => [
-    { kind: `pair`, row_kind: row.kind, old: row.old, new: row.new },
-  ]
-
-  const single_rows_of = (row: DiffRow): DisplayRow[] => {
-    const base = { kind: `single`, row_kind: row.kind } as const
-    // Emit equal text once; one-sided reconstructed gaps remain unsigned context.
-    if (row.kind === `equal`) {
-      const line = row.old ?? row.new
-      if (!line) return []
-      const [old_no, new_no] = [row.old?.lineNo ?? null, row.new?.lineNo ?? null]
-      return [{ ...base, side: `equal`, line, old_no, new_no }]
-    }
-    // Unified order is delete then insert; only the source side gets a line number.
-    return ([`old`, `new`] as const).flatMap((side) => {
-      const line = row[side]
-      if (!line) return []
-      const [old_no, new_no] = side === `old` ? [line.lineNo, null] : [null, line.lineNo]
-      return [{ ...base, side, line, old_no, new_no }]
-    })
-  }
-
   const display_rows_of = (
     result: DiffResult,
     current_layout: RowLayout,
     expanded: ReadonlySet<number>,
   ): DisplayRow[] => {
-    const rows_of = current_layout === `side-by-side` ? pair_rows_of : single_rows_of
     const rows: DisplayRow[] = []
-
+    const push_row = ({ kind: row_kind, old, new: next }: DiffRow) => {
+      if (current_layout === `side-by-side`) {
+        rows.push({ kind: `pair`, row_kind, old, new: next })
+        return
+      }
+      // Context appears once; changes appear delete then insert with one gutter each.
+      const cells: [Cell, DiffLine | null][] =
+        row_kind === `equal`
+          ? [[`equal`, old ?? next]]
+          : [
+              [`old`, old],
+              [`new`, next],
+            ]
+      for (const [side, line] of cells) {
+        if (line)
+          rows.push({
+            kind: `single`,
+            row_kind,
+            side,
+            line,
+            old_no: side === `new` ? null : (old?.lineNo ?? null),
+            new_no: side === `old` ? null : (next?.lineNo ?? null),
+          })
+      }
+    }
     const push_gap = (gap_idx: number, skipped: number, starts: [number, number]) => {
       if (skipped <= 0) return
-      if (expanded.has(gap_idx)) {
-        for (const row of build_gap_rows(...starts, skipped)) rows.push(...rows_of(row))
-      } else rows.push({ kind: `gap`, gap_idx, skipped })
+      if (!expanded.has(gap_idx)) rows.push({ kind: `gap`, gap_idx, skipped })
+      else {
+        for (let offset = 0; offset < skipped; offset++) {
+          const old = plain_line(old_lines, starts[0] + offset)
+          const next = plain_line(new_lines, starts[1] + offset)
+          // Discard gaps beyond both source texts when backend counts disagree.
+          if (old || next) push_row({ kind: `equal`, old, new: next })
+        }
+      }
     }
 
     result.hunks.forEach((hunk, hunk_idx) => {
       // 1-based starts: the elided run is [start - skippedBefore, start).
       const skipped = hunk.skippedBefore
       push_gap(hunk_idx, skipped, [hunk.oldStart - skipped, hunk.newStart - skipped])
-      for (const row of hunk.rows) rows.push(...rows_of(row))
+      for (const row of hunk.rows) push_row(row)
     })
 
     if (result.hunks.length === 0) return rows

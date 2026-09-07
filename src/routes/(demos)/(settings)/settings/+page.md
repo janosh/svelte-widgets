@@ -174,10 +174,7 @@ screen. `open` is bindable and `subtitle` shows a short hint — a count, or the
 
 ### `NumberRangeInput`
 
-A number input and a slider bound to one value, wrapped in a flex `<label>`. Pass `min`,
-`max` and `step` directly, or hand it a JSON-schema-shaped object and the `setting` key to
-read them from — `minimum`, `maximum`, `multipleOf` and `description` all come across, and
-a missing entry throws rather than silently rendering an unbounded slider.
+A number input and a slider bound to one value, wrapped in a flex `<label>`. Pass `min`, `max` and `step` explicitly, and use `title` for the description.
 
 `data-key` defaults to `setting`, so a row drops into a searchable, resettable section
 without repeating the key at the call site.
@@ -186,19 +183,18 @@ without repeating the key at the call site.
 <script lang="ts">
   import { NumberRangeInput } from '$lib'
 
-  const schema = {
-    atom_radius: {
-      minimum: 0,
-      maximum: 2,
-      multipleOf: 0.05,
-      description: `Radius multiplier applied to every rendered atom`,
-    },
-  }
   let [radius, opacity] = $state([1, 0.5])
 </script>
 
 <div class="demo-box" style="display: grid; gap: 4pt; max-width: 26em; padding: 1ex">
-  <NumberRangeInput setting="atom_radius" {schema} bind:value={radius}>
+  <NumberRangeInput
+    setting="atom_radius"
+    min={0}
+    max={2}
+    step={0.05}
+    title="Radius multiplier applied to every rendered atom"
+    bind:value={radius}
+  >
     Radius <small>&times;</small>
   </NumberRangeInput>
   <NumberRangeInput min={0} max={1} step={0.05} title="Fill opacity" bind:value={opacity}>
@@ -209,6 +205,4 @@ without repeating the key at the call site.
 <p>radius {radius}, opacity {opacity}</p>
 ```
 
-Hover either row for the tooltip: it uses the schema `description` when there is one, and
-the `title` prop otherwise. The slider takes that same text as its accessible name, since
-the wrapping `<label>` only names the number input.
+Hover either row's label for its `title` tooltip. The slider takes that same text as its accessible name, since the wrapping `<label>` only names the number input.

@@ -17,6 +17,7 @@
   } from './heading-anchors'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
+  import { override_style } from './attachments/shared'
 
   let {
     activeHeading = $bindable(null),
@@ -154,6 +155,7 @@
   let headings_initialized = false
 
   function clear_scroll_target() {
+    restore_scroll_behavior?.()
     if (scroll_target_timeout) {
       clearTimeout(scroll_target_timeout)
       scroll_target_timeout = null
@@ -279,6 +281,8 @@
   const href_for_id = (id: string | undefined) =>
     id ? `#${encodeURIComponent(id)}` : undefined
 
+  let restore_scroll_behavior: (() => void) | undefined
+
   function activate_heading(node: HTMLHeadingElement, idx = headings.indexOf(node)) {
     if (idx === -1) return
     activeHeading = node
@@ -289,10 +293,13 @@
     scroll_target_timeout = setTimeout(clear_scroll_target, scroll_target_fallback_ms)
     node.scrollIntoView?.({ behavior: scrollBehavior, block: `start` })
 
-    // raw id as the fragment so it matches the DOM id exactly: encodeURIComponent (used for
-    // the <a href>) emits #sec%3A1 for id="sec:1", which only resolves via percent-decoding
-    const id = heading_data[idx]?.id
-    if (id) history.replaceState({}, ``, `#${id}`)
+    // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
+    restore_scroll_behavior?.()
+    restore_scroll_behavior = override_style(
+      document.documentElement.style,
+      `scroll-behavior`,
+      scrollBehavior,
+    )
 
     if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }
@@ -487,6 +494,7 @@
   // clear_scroll_target writes component state, so its timer must not outlive the component.
   // The flash timer only strips a class off a detached node, so it can run.
   $effect(() => () => {
+    restore_scroll_behavior?.()
     if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
   })
 
@@ -558,9 +566,27 @@
     }
     const idx = headings.indexOf(node)
     if (idx === -1) return
-    event.preventDefault()
-    set_open(false, `toc-item`)
+    const link =
+      event.target instanceof Element
+        ? event.target.closest<HTMLAnchorElement>(`a[href]`)
+        : null
+    if (event instanceof KeyboardEvent && link) {
+      if (event.key === `Enter`) return // the browser clicks the focused anchor
+      event.preventDefault()
+      link.click() // Space activates that same anchor, preserving inherited options
+      return
+    }
     activate_heading(node, idx)
+    if (!link) {
+      event.preventDefault()
+      // Plain custom snippets need a link; keep it inside the TOC for navigation options.
+      const anchor = document.createElement(`a`)
+      anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
+      event.currentTarget.after(anchor)
+      anchor.click()
+      anchor.remove()
+    }
+    set_open(false, `toc-item`)
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
@@ -609,7 +635,6 @@
     if (is_activation_key(event.key) && focus_is_in_custom_interactive_toc_item()) {
       return
     }
-
     if (event.key === `Escape`) {
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
@@ -625,6 +650,7 @@
     const key_belongs_elsewhere =
       !nav?.contains(focused) || is_editable_event_target(focused)
     if (!focus_is_idle && key_belongs_elsewhere) return
+    if (event.key === `Enter` && focused?.matches(`a[href]`)) return
 
     event.preventDefault()
     const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)
@@ -645,7 +671,10 @@
       activeHeading = headings[tocItems.indexOf(activeTocLi)]
     }
     if (activeTocLi && is_activation_key(event.key) && activeHeading) {
-      activate_heading(activeHeading)
+      const link = tocItem
+        ? null
+        : activeTocLi.querySelector<HTMLAnchorElement>(`a[href]`)
+      ;(link ?? activeTocLi).click()
     }
   }
 

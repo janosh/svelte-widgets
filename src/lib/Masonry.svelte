@@ -222,21 +222,16 @@
         `Masonry: initialCols must be a positive integer when provided, received ${initialCols}.`,
       )
     }
-    // distribute() builds one array per column, so <1 leaves nowhere to put an item (0 is
-    // fine when empty, which is what the default calcCols returns).
-    const checked = (cols: number) => {
-      // fractional is equally broken: Array.from truncates the column array while row-first's
-      // `idx % n_cols` keeps producing the untruncated index
-      if (items.length > 0 && (!Number.isInteger(cols) || cols < 1)) {
-        throw new Error(
-          `Masonry: calcCols must return a positive integer, received ${cols}.`,
-        )
-      }
-      return cols
+    if (!(masonryWidth > 0) && initialCols !== undefined)
+      return Math.min(items.length, initialCols)
+    const cols = calcCols(masonryWidth > 0 ? masonryWidth : 1920, minColWidth, gap)
+    // Indexing columns requires a positive integer; zero is valid for an empty list.
+    if (!Number.isInteger(cols) || cols < (items.length > 0 ? 1 : 0)) {
+      throw new Error(
+        `Masonry: calcCols must return a positive integer, received ${cols}.`,
+      )
     }
-    if (masonryWidth > 0) return checked(calcCols(masonryWidth, minColWidth, gap))
-    if (initialCols === undefined) return checked(calcCols(1920, minColWidth, gap))
-    return Math.min(items.length, initialCols)
+    return cols
   })
 
   // Container query rules: breakpoint(n) = (minColWidth + gap) * n - gap

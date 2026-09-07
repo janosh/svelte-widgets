@@ -74,9 +74,11 @@ export const float =
       position: node.style.position,
       left: node.style.left,
       top: node.style.top,
-      boxSizing: node.style.boxSizing,
-      minWidth: node.style.minWidth,
-      width: node.style.width,
+      ...(match_width && {
+        boxSizing: node.style.boxSizing,
+        minWidth: node.style.minWidth,
+        width: node.style.width,
+      }),
     }
     const original_placement = node.dataset.placement
     const scroll_view = strategy === `absolute` ? node.ownerDocument.defaultView : null

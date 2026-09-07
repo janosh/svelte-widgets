@@ -111,3 +111,35 @@ export const register_escape_layer = key_layer_stack(
 export const register_trap_layer = key_layer_stack(
   (event) => event.key === `Tab` && !event.isComposing,
 )
+const style_overrides = new WeakMap<
+  CSSStyleDeclaration,
+  Map<string, { value: string; priority: string; requests: Map<symbol, string> }>
+>()
+
+// Latest active owner wins; the last release restores the original inline declaration.
+export function override_style(
+  style: CSSStyleDeclaration,
+  property: string,
+  value: string,
+) {
+  let properties = style_overrides.get(style)
+  if (!properties) style_overrides.set(style, (properties = new Map()))
+  let state = properties.get(property)
+  if (!state) {
+    state = {
+      value: style.getPropertyValue(property),
+      priority: style.getPropertyPriority(property),
+      requests: new Map(),
+    }
+    properties.set(property, state)
+  }
+  const owner = Symbol(property)
+  const { requests, priority, value: original } = state
+  requests.set(owner, value)
+  style.setProperty(property, value, priority)
+  return () => {
+    if (!requests.delete(owner)) return
+    style.setProperty(property, [...requests.values()].at(-1) ?? original, priority)
+    if (!requests.size) properties.delete(property)
+  }
+}

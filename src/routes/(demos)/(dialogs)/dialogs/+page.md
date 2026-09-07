@@ -103,49 +103,21 @@ Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')
 {/if}
 ```
 
-### `print_element`
+### `print_page`
 
-Printing a single element well takes two things the print dialog gives no other handle
-on. `filename` swaps `document.title` for the duration, since that is where browsers get
-the suggested PDF name from, and `single_page` measures the element and injects an
-`@page` rule sized to it so a long element prints as one continuous sheet instead of
-being chopped across pages. Both are undone on `afterprint`.
+Print the current page with an optional suggested PDF filename. The helper temporarily sets `document.title` and restores it after printing, cancellation, or an error. Use your own `@media print` CSS to control visible content and pagination.
 
-`page_width_mm` defaults to A4 portrait, and `px_per_inch` to the CSS definition of 96.
-
-```svelte example id="print-element-demo"
+```svelte example id="print-page-demo"
 <script lang="ts">
-  import { format_print_filename, print_element } from '$lib/print'
-
-  let receipt = $state<HTMLElement | null>(null)
-  let single_page = $state(true)
-  const filename = $derived(format_print_filename(`widgets-demo`))
+  import { format_print_filename, print_page } from '$lib/print'
 </script>
 
-<div style="display: flex; gap: 12pt; align-items: center; flex-wrap: wrap">
-  <button
-    type="button"
-    onclick={() => receipt && print_element(receipt, { filename, single_page })}
-  >
-    Print the box below
-  </button>
-  <label>
-    <input type="checkbox" bind:checked={single_page} />
-    single_page
-  </label>
-  <code>{filename}.pdf</code>
-</div>
-
-<section
-  bind:this={receipt}
-  style="margin-block-start: 8pt; padding: 8pt; border: 1px solid gray; border-radius: 4pt"
+<button
+  type="button"
+  onclick={() => print_page({ filename: format_print_filename(`widgets-demo`) })}
 >
-  <h3 style="margin: 0">Printable region</h3>
-  <p style="margin: 4pt 0 0">
-    Only this box is measured. With <code>single_page</code> on, the page is sized to its height
-    so nothing spills onto a second sheet.
-  </p>
-</section>
+  Print this page
+</button>
 ```
 
 ### `create_clipboard_feedback`

@@ -45,7 +45,8 @@ export type ObjectOption = {
 }
 
 export type CmdAction = {
-  id?: string | number
+  // Stable identity, unique within each command menu. Labels may repeat.
+  id: string | number
   label: string
   action: (label: string) => void
   badge?: string
@@ -102,8 +103,6 @@ export interface MultiSelectEvents<T extends Option = Option> {
     raw_text: string
   }) => unknown
   onactivate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
-  onundo?: (data: { previous: T[]; current: T[] }) => unknown
-  onredo?: (data: { previous: T[]; current: T[] }) => unknown
 }
 
 // Dynamic options loading (https://github.com/janosh/svelte-widgets/discussions/342)
@@ -214,7 +213,6 @@ export interface MultiSelectProps<T extends Option = Option>
     > {
   activeIndex?: number | null
   activeOption?: T | null
-  activeOptionFallbackKey?: (option: T) => unknown
   autoActiveFirstOption?: boolean
   createOptionMsg?:
     | string
@@ -288,7 +286,6 @@ export interface MultiSelectProps<T extends Option = Option>
   options?: T[] // static options, or omit when using loadOptions
   outerDiv?: HTMLDivElement | null
   outerDivClass?: ClassValue
-  parseLabelsAsHtml?: boolean // combining with allowUserOptions throws (XSS risk)
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
   removeAllTitle?: string
@@ -317,6 +314,7 @@ export interface MultiSelectProps<T extends Option = Option>
   selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
   liSelectAllClass?: ClassValue // CSS class for the select all <li>
   loadOptions?: LoadOptions<T>
+  loadError?: Error | null // bindable, cleared on retry or a new search
   // flip animation for selected options; { duration: 0 } disables
   // (https://github.com/janosh/svelte-widgets/issues/356)
   selectedFlipParams?: FlipParams
@@ -338,13 +336,6 @@ export interface MultiSelectProps<T extends Option = Option>
   expandAllGroups?: () => void
   // Keyboard shortcuts for common actions
   shortcuts?: Partial<KeyboardShortcuts>
-  // Undo/redo history size: true (default) = 50 states, a number sets the max, false/0 is
-  // off. Undo needs 2 states, so history=1 disables it in effect.
-  history?: boolean | number
-  undo?: () => boolean // bindable
-  redo?: () => boolean // bindable
-  canUndo?: boolean // bindable, read-only
-  canRedo?: boolean // bindable, read-only
 }
 
 // "modifier+...+key" with modifiers ctrl, shift, alt, meta, cmd (e.g. 'ctrl+shift+a');
@@ -355,8 +346,6 @@ export interface KeyboardShortcuts {
   clear_all?: string | null // default: 'ctrl+backspace' (meta+backspace on Mac)
   open?: string | null // default: null (use existing behavior)
   close?: string | null // default: null (Escape already works)
-  undo?: string | null // default: platform-aware (meta+z on Mac, ctrl+z elsewhere)
-  redo?: string | null // default: platform-aware (meta+shift+z on Mac, ctrl+shift+z elsewhere)
 }
 
 // Nav component types

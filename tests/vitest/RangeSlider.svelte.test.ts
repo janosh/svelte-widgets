@@ -434,6 +434,7 @@ describe(`RangeSlider`, () => {
       pointer(`pointermove`, 40)
       await tick()
       expect(props.value).toEqual([40, 80])
+      expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(true)
       expect(props.oncommit).not.toHaveBeenCalled()
       pointer(`pointermove`, 120)
       pointer(ending, 120)
@@ -442,6 +443,7 @@ describe(`RangeSlider`, () => {
       expect(props.value).toEqual([80, 80])
       expect(props.oncommit).toHaveBeenCalledExactlyOnceWith([80, 80])
       expect(rail.releasePointerCapture).toHaveBeenCalledWith(1)
+      expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(false)
     },
   )
   test.each([
@@ -509,6 +511,7 @@ describe(`RangeSlider`, () => {
     pointer(`pointerup`, 40)
     await tick()
     expect(announced(thumbs)).toEqual([30, 80])
+    expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(false)
     expect(rail.releasePointerCapture).toHaveBeenCalledWith(1)
     expect(props.oncommit).not.toHaveBeenCalled()
   })

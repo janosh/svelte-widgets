@@ -87,10 +87,10 @@ the same shape `CommandMenu` takes, so a command can appear in both.
   let log = $state<string[]>([])
   const record = (label: string) => (log = [label, ...log].slice(0, 4))
   const actions: CmdAction[] = [
-    { label: `Cut`, shortcut: `mod+x`, action: record },
-    { label: `Copy`, shortcut: `mod+c`, action: record },
-    { label: `Paste`, shortcut: `mod+v`, action: record },
-    { label: `Delete`, action: record, disabled: true },
+    { id: `Cut`, label: `Cut`, shortcut: `mod+x`, action: record },
+    { id: `Copy`, label: `Copy`, shortcut: `mod+c`, action: record },
+    { id: `Paste`, label: `Paste`, shortcut: `mod+v`, action: record },
+    { id: `Delete`, label: `Delete`, action: record, disabled: true },
   ]
 </script>
 

@@ -38,25 +38,41 @@ describe(`float`, () => {
     },
   )
 
-  it(`match_width sets the exact border-box width and restores inline sizing`, () => {
-    const matched = attach_float({ match_width: true })
-    expect([
-      matched.style.width,
-      matched.style.minWidth,
-      matched.style.boxSizing,
-    ]).toEqual([`140px`, `140px`, `border-box`])
-    expect(attach_float().style.width).toBe(``)
+  it.each([false, true])(
+    `restores only owned sizing with match_width=%s`,
+    (match_width) => {
+      const matched = attach_float({ match_width: true })
+      expect([
+        matched.style.width,
+        matched.style.minWidth,
+        matched.style.boxSizing,
+      ]).toEqual([`140px`, `140px`, `border-box`])
+      expect(attach_float().style.width).toBe(``)
 
-    const node = create_element()
-    node.style.cssText = `position: sticky; left: 1px; top: 2px; box-sizing: content-box; min-width: 10rem; width: 20px`
-    node.dataset.placement = `original`
-    const original_style = node.style.cssText
-    mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
-    const cleanup = float({ anchor: anchor_rect, match_width: true })(node)
-    cleanup?.()
-    expect(node.style.cssText).toBe(original_style)
-    expect(node.dataset.placement).toBe(`original`)
-  })
+      const node = create_element()
+      node.style.cssText = `position: sticky; left: 1px; top: 2px; box-sizing: content-box; min-width: 10rem; width: 20px`
+      node.dataset.placement = `original`
+      mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
+      const cleanup = float({ anchor: anchor_rect, match_width })(node)
+      // A consumer remains free to change sizing when the attachment only positions.
+      if (!match_width)
+        Object.assign(node.style, {
+          width: `40px`,
+          minWidth: `5px`,
+          boxSizing: `border-box`,
+        })
+      cleanup?.()
+      expect([node.style.position, node.style.left, node.style.top]).toEqual([
+        `sticky`,
+        `1px`,
+        `2px`,
+      ])
+      expect([node.style.width, node.style.minWidth, node.style.boxSizing]).toEqual(
+        match_width ? [`20px`, `10rem`, `content-box`] : [`40px`, `5px`, `border-box`],
+      )
+      expect(node.dataset.placement).toBe(`original`)
+    },
+  )
 
   it(`uses the floating window's scroll and stops updating after cleanup`, () => {
     const animation_host = Object.assign(new EventTarget(), {

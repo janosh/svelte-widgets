@@ -32,7 +32,7 @@ Every component is a named export from the package root and has a direct subpath
 | `ConfirmDialog`    | Promise-based dialog queue, so two racing prompts can't share one answer                  | [docs](https://svelte-widgets.janosh.dev/dialogs)                      |
 | `Dialog`           | Native modal with composable sections, close reasons and nested-dialog handling           | [docs](https://svelte-widgets.janosh.dev/patterns#dialog)              |
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                 | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
-| `NumberRangeInput` | Paired number and range inputs bound to one value, with optional schema defaults          | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
+| `NumberRangeInput` | Paired number and range inputs with explicit min, max, and step                           | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
 | `RangeSlider`      | Two-handle interval slider with numeric fields, step snapping, RTL, and keyboard controls | [docs](https://svelte-widgets.janosh.dev/range-slider)                 |
 | `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                           | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                              | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
@@ -161,7 +161,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/find-in-page`             | Reactive find-in-page cursor behind `FindBar`                                     |
 | `/fullscreen`               | Shared fullscreen state                                                           |
 | `/heading-anchors`          | Heading ID preprocessor, slugger and anchor attachment                            |
-| `/image-markup`             | Image-fit geometry, freehand strokes and a default color palette                  |
+| `/image-markup`             | Image-fit geometry and canvas rendering of freehand annotation strokes            |
 | `/icons`                    | Dynamic icon registry                                                             |
 | `/json-tree`                | JSON inspector component and types                                                |
 | `/json-tree/path`           | Dot/bracket path formatting and resolution                                        |
@@ -172,7 +172,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/markdown/vite`            | Live code examples with virtual modules and hot reload                            |
 | `/markdown/content`         | Content manifests, typed frontmatter, link validation, TOC and search records     |
 | `/markdown/check`           | Node-only syntax, type and assertion checks for documentation examples            |
-| `/print`                    | Element printing                                                                  |
+| `/print`                    | Page printing with a suggested PDF filename                                       |
 | `/source-links`             | Link inline code mentions of your source to GitHub                                |
 | `/source-links/vite-plugin` | Vite plugin emitting the file/export index those links use                        |
 | `/source-links/virtual`     | Types for the plugin's `virtual:source-symbols` module                            |

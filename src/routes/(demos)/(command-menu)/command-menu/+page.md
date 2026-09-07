@@ -2,6 +2,8 @@
 
 [`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
 
+CommandMenu supports search, grouping, async loading, and recent actions. It executes one command at a time; user-created options, bulk selection, and pasted option lists are unavailable.
+
 ```svelte example id="disabled-input-title"
 <script lang="ts">
   import { goto } from '$app/navigation'
@@ -12,6 +14,7 @@
 
   const resolve_path = resolve as (path: Pathname) => string
   const actions = routes.map(({ route }) => ({
+    id: route,
     label: route,
     action: () => goto(resolve_path(route)),
   }))
@@ -46,6 +49,7 @@ build. Run this script before previewing or deploying:
 
   const resolve_path = resolve as (path: Pathname) => string
   const fallback_actions = routes.map(({ route }) => ({
+    id: route,
     label: route,
     action: () => goto(resolve_path(route)),
   }))
@@ -123,6 +127,7 @@ when the menu reopens.
 
   const actions = [
     {
+      id: `Toggle theme`,
       label: `Toggle theme`,
       description: `Cycle light, system and dark modes`,
       metadata: [`Appearance`],
@@ -136,12 +141,17 @@ when the menu reopens.
       },
     },
     {
+      id: `Copy page URL`,
       label: `Copy page URL`,
       description: `Copy the current address to the clipboard`,
       shortcut: `ctrl+shift+u`,
       action: (label: string) => (last_triggered = label),
     },
-    { label: `Open settings`, action: (label: string) => (last_triggered = label) },
+    {
+      id: `Open settings`,
+      label: `Open settings`,
+      action: (label: string) => (last_triggered = label),
+    },
   ]
 </script>
 
@@ -157,3 +167,5 @@ when the menu reopens.
   <strong>{last_triggered || `none`}</strong>
 </p>
 ```
+
+Actions require a stable, unique `id` (string or number). Labels may repeat or change; IDs identify selection and persisted recent actions.

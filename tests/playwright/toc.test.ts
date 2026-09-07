@@ -120,3 +120,70 @@ test(`the ToC leaves keys to whatever else has focus`, async ({ page }) => {
   const caret = await search.evaluate((node: HTMLInputElement) => node.selectionStart)
   expect(caret).toBe(0) // ArrowUp in a single-line input jumps to the start
 })
+
+test(`heading links retain history, smooth scrolling and root styles`, async ({
+  page,
+}) => {
+  const toggle = page.locator(`aside.toc.mobile > button`).first()
+  const panel = page.locator(`aside.toc.mobile > nav`).first()
+  await page.evaluate(() =>
+    document.documentElement.style.setProperty(`scroll-behavior`, `auto`, `important`),
+  )
+  const original_state = await page.evaluate(() => history.state)
+  const hashes: string[] = []
+  for (const idx of [1, 2]) {
+    await toggle.click()
+    const link = panel.locator(`ol > li > a`).nth(idx)
+    const href = await link.getAttribute(`href`)
+    if (!href) throw new Error(`Missing heading href`)
+    hashes.push(href)
+    const scrolling = await page.evaluateHandle(() => {
+      const positions = new Set<number>()
+      const record_scroll = () => positions.add(window.scrollY)
+      window.addEventListener(`scroll`, record_scroll)
+      return {
+        positions,
+        stop: () => window.removeEventListener(`scroll`, record_scroll),
+      }
+    })
+    if (idx === 1) await link.click()
+    else await link.press(`Enter`)
+    await expect
+      .poll(() => scrolling.evaluate(({ positions }) => positions.size))
+      .toBeGreaterThan(2)
+    await scrolling.evaluate(({ stop }) => stop())
+    await scrolling.dispose()
+    await expect(page).toHaveURL(new RegExp(`${href}$`))
+    await expect(panel).toHaveCount(0)
+    const heading = page.locator(`[id="${decodeURIComponent(href.slice(1))}"]`)
+    await expect(heading).toHaveClass(/toc-clicked/)
+    await expect(heading).toBeInViewport()
+  }
+  await page.goBack()
+  await expect(page).toHaveURL(new RegExp(`${hashes[0]}$`))
+  await page.goBack()
+  await expect(page).toHaveURL(/\/extras$/)
+  expect(await page.evaluate(() => history.state)).toEqual(original_state)
+  await expect
+    .poll(() =>
+      page.evaluate(() => [
+        document.documentElement.style.scrollBehavior,
+        document.documentElement.style.getPropertyPriority(`scroll-behavior`),
+      ]),
+    )
+    .toEqual([`auto`, `important`])
+  await page.goForward()
+  await expect(page).toHaveURL(new RegExp(`${hashes[0]}$`))
+  for (const [idx, activation] of [`click`, `Enter`, `Space`].entries()) {
+    await toggle.click()
+    await panel.evaluate((nav) => nav.setAttribute(`data-sveltekit-replacestate`, ``))
+    const link = panel.locator(`ol > li > a`).nth(idx + 2)
+    const href = await link.getAttribute(`href`)
+    const history_length = await page.evaluate(() => history.length)
+    if (activation === `click`) await link.click()
+    else await link.press(activation)
+    await expect(page).toHaveURL(new RegExp(`${href}$`))
+    await expect(panel).toHaveCount(0)
+    expect(await page.evaluate(() => history.length)).toBe(history_length)
+  }
+})

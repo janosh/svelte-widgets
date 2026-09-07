@@ -95,7 +95,7 @@ jobs:
 
   deploy:
     if: github.ref == 'refs/heads/main'
-    needs: build
+    needs: [build, check, unit, e2e]
     runs-on: ubuntu-latest
     permissions:
       pages: write

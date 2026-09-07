@@ -60,7 +60,7 @@
   import { fuzzy_match, get_label } from 'svelte-widgets/utils'
 
   const options: Option[] = [`One`, { label: `Two`, value: 2 }]
-  const actions: CmdAction[] = [{ label: `Open`, action: () => undefined }]
+  const actions: CmdAction[] = [{ id: `Open`, label: `Open`, action: () => undefined }]
   const katex_options: KatexOptions = { throwOnError: true }
   const editor_model = create_editor_model({ uri: `memory:smoke`, text: `a\r\nb` })
   const package_api_works =

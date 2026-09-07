@@ -645,3 +645,33 @@ test(`form demo previews every submitted FormData field`, async ({ page }) => {
     page.locator(`pre code`).filter({ hasText: /^\["Red","Green"\]$/u }),
   ).toHaveCount(1)
 })
+
+test(`failed option loads can be retried from the keyboard without selecting an option`, async ({
+  page,
+}) => {
+  await page.goto(`/infinite-scroll`)
+  await page.getByRole(`checkbox`, { name: `Fail the next request` }).check()
+  const input = page.getByPlaceholder(`Search 10,000 items...`)
+  const multiselect = page.locator(`div.multiselect`).filter({ has: input })
+  await input.click()
+  await expect(multiselect.getByRole(`alert`)).toHaveText(`Could not load options`)
+  await input.press(`Tab`)
+  const retry = multiselect.getByRole(`button`, { name: `Retry` })
+  await expect(retry).toBeFocused()
+  await expect(
+    page.getByRole(`listbox`).getByRole(`button`, { name: `Retry` }),
+  ).toHaveCount(0)
+  const [input_box, retry_box] = await Promise.all([
+    input.boundingBox(),
+    retry.boundingBox(),
+  ])
+  if (!input_box || !retry_box) throw new Error(`Missing input or Retry button geometry`)
+  expect(retry_box.y).toBeGreaterThanOrEqual(input_box.y + input_box.height)
+  await retry.press(`Enter`)
+  await expect(input).toBeFocused()
+  await expect(multiselect.getByRole(`alert`)).toHaveCount(0)
+  await expect(
+    multiselect.getByRole(`option`, { name: `Item 1`, exact: true }),
+  ).toBeVisible()
+  await expect(multiselect.locator(`ul.selected > li`)).toHaveCount(0)
+})

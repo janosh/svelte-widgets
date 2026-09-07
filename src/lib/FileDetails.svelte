@@ -76,12 +76,9 @@
     yml: `yaml`,
   }
 
-  // Infer language from title (may contain HTML like <code>foo.ts</code>)
+  // Infer language from the filename extension.
   function lang_from_title(title: string): string | undefined {
-    const ext = title
-      .replaceAll(/<[^>]*>/gu, ``)
-      .match(/\.(?<ext>\w+)$/u)
-      ?.groups?.ext?.toLowerCase()
+    const ext = title.match(/\.(?<ext>\w+)$/u)?.groups?.ext?.toLowerCase()
     return ext ? (ext_to_lang[ext] ?? ext) : undefined
   }
 </script>
@@ -117,7 +114,7 @@
             {#if title_snippet}
               {@render title_snippet({ idx, ...file })}
             {:else}
-              {@html title}
+              {title}
             {/if}
           </summary>
         {/if}

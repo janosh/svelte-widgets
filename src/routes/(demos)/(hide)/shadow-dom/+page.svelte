@@ -4,7 +4,11 @@
   import { CommandMenu } from '$lib'
   import { mount, unmount } from 'svelte'
 
-  const actions = [`alpha`, `beta`, `gamma`].map((label) => ({ label, action: () => {} }))
+  const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
+    id: label,
+    label,
+    action: () => {},
+  }))
 
   const in_shadow_root = (node: HTMLElement) => {
     const app = mount(CommandMenu, {

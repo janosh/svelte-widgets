@@ -1,12 +1,12 @@
 import { CommandMenu, PageSearch } from '$lib'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 const mock_actions = [
-  { label: `action 1`, action: vi.fn() },
-  { label: `action 2`, action: vi.fn() },
-  { label: `action 3`, action: vi.fn() },
+  { id: `action 1`, label: `action 1`, action: vi.fn() },
+  { id: `action 2`, label: `action 2`, action: vi.fn() },
+  { id: `action 3`, label: `action 3`, action: vi.fn() },
 ]
 
 const menu_input = () => doc_query<HTMLInputElement>(`dialog input[autocomplete]`)
@@ -158,7 +158,9 @@ test.each([`Escape`, `x`])(
     const props = $state({
       open: true,
       close_keys: [close_key],
-      actions: [{ label: `Close action`, shortcut: close_key, action }],
+      actions: [
+        { id: `Close action`, label: `Close action`, shortcut: close_key, action },
+      ],
       onkeydown,
     })
     mount_menu(props)
@@ -247,6 +249,7 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
 
 test(`handles action selection and execution`, async () => {
   const actions_with_spies = mock_actions.map(({ label }) => ({
+    id: label,
     label,
     action: vi.fn(),
   }))
@@ -279,21 +282,36 @@ test(`handles action selection and execution`, async () => {
   expect(props.searchText).toBe(``)
 })
 
-test(`ignores user-created options without action handlers`, async () => {
+test(`keeps command groups but excludes option creation and bulk selection`, async () => {
+  expectTypeOf<keyof ComponentProps<typeof CommandMenu>>()
+    .extract<
+      | `allowUserOptions`
+      | `groupSelectAll`
+      | `selectAllOption`
+      | `rangeSelect`
+      | `parse_paste`
+    >()
+    .toEqualTypeOf<never>()
   const action = vi.fn()
+  // Untyped callers cannot re-enable these controls through the rest props either.
   const props = $state({
     open: true,
-    actions: [{ label: `existing action`, action }],
+    actions: [{ id: `existing`, label: `Existing`, group: `Commands`, action }],
     allowUserOptions: true,
+    groupSelectAll: true,
+    selectAllOption: true,
   })
   mount_menu(props)
   await tick()
-
+  expect(doc_query(`dialog li.group-header`).textContent).toContain(`Commands`)
+  expect(document.querySelector(`.group-select-all, .select-all`)).toBeNull()
   await type_search(`custom command`)
-
-  doc_query<HTMLLIElement>(`dialog li.user-msg`).click()
-  await tick()
-
+  expect(document.querySelector(`dialog li.user-msg`)?.textContent).toContain(
+    `No matching commands`,
+  )
+  menu_input().dispatchEvent(
+    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
+  )
   expect(action).not.toHaveBeenCalled()
   expect(props.open).toBe(true)
 })
@@ -495,9 +513,9 @@ test.each([
   },
 ])(`filtering with fuzzy=$fuzzy: $description`, async ({ fuzzy, search, expected }) => {
   const actions = [
-    { label: `create user`, action: vi.fn() },
-    { label: `delete file`, action: vi.fn() },
-    { label: `update config`, action: vi.fn() },
+    { id: `create user`, label: `create user`, action: vi.fn() },
+    { id: `delete file`, label: `delete file`, action: vi.fn() },
+    { id: `update config`, label: `update config`, action: vi.fn() },
   ]
   mount_menu({ open: true, actions, fuzzy })
 
@@ -577,8 +595,8 @@ test(`auto-active considers only visible enabled actions`, async () => {
   const props = $state({
     open: true,
     actions: [
-      { label: `Disabled`, disabled: true, action: vi.fn() },
-      { label: `Enabled`, action: vi.fn() },
+      { id: `Disabled`, label: `Disabled`, disabled: true, action: vi.fn() },
+      { id: `Enabled`, label: `Enabled`, action: vi.fn() },
     ],
     activeIndex: 0,
     maxOptions: 1,
@@ -602,14 +620,14 @@ test(`auto-active considers only visible enabled actions`, async () => {
   expect(props.activeIndex).toBe(0)
 })
 
-test(`preserves duplicate action identity across independent key changes`, async () => {
+test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`, async () => {
   const first_action = {
     id: `duplicate`,
     label: `Duplicate`,
     description: `Same action`,
     action: vi.fn(),
   }
-  const second_action = { ...first_action, action: vi.fn() }
+  const second_action = { ...first_action, id: `second`, action: vi.fn() }
   const third_action = { id: `third`, label: `Third`, action: vi.fn() }
   const props = $state({
     open: true,
@@ -649,81 +667,70 @@ test(`preserves duplicate action identity across independent key changes`, async
   expect(first_action.action).not.toHaveBeenCalled()
 })
 
-test(`does not retain an ambiguous index when duplicate actions are rebuilt`, async () => {
-  const make_actions = () => [
-    { id: `duplicate`, label: `Duplicate`, action: vi.fn() },
-    { id: `duplicate`, label: `Duplicate`, action: vi.fn() },
-  ]
-  const props = $state({
-    open: true,
-    actions: make_actions(),
-    activeIndex: 1,
-  })
-  mount_menu(props)
-  await tick()
-
-  props.actions = make_actions()
-  await tick()
-
-  expect(props.activeIndex).toBe(0)
+test.each([
+  [`missing`, undefined],
+  [`empty`, ``],
+  [`duplicate`, `existing`],
+  [`numeric collision`, 1],
+])(`rejects %s action IDs`, (_, id) => {
+  // Deliberately allow missing IDs to exercise JavaScript callers.
+  const invalid = { id: id as string | number, label: `Invalid`, action: vi.fn() }
+  expect(() =>
+    mount_menu({
+      actions: [
+        { id: `existing`, label: `First`, action: vi.fn() },
+        { id: `1`, label: `Numeric`, action: vi.fn() },
+        invalid,
+      ],
+    }),
+  ).toThrow(/CommandMenu action/)
 })
 
-test(`preserves the active action by its unique ID amid rebuilt duplicates`, async () => {
-  const props = $state({
-    open: true,
-    actions: [
-      { id: `alpha`, label: `Alpha`, action: vi.fn() },
-      { id: `beta`, label: `Beta`, action: vi.fn() },
-      { id: `duplicate`, label: `First duplicate`, action: vi.fn() },
-      { id: `duplicate`, label: `Second duplicate`, action: vi.fn() },
-    ],
-    activeIndex: 1,
-  })
-  mount_menu(props)
-  await tick()
-  const active_option = doc_query<HTMLLIElement>(`li.active`)
-
-  const beta_action = vi.fn()
-  props.actions = [
-    { id: `duplicate`, label: `Rebuilt duplicate`, action: vi.fn() },
-    { id: `duplicate`, label: `Rebuilt duplicate`, action: vi.fn() },
-    { id: `beta`, label: `Rebuilt Beta`, action: beta_action },
-    { id: `alpha`, label: `Rebuilt Alpha`, action: vi.fn() },
-  ]
-  await tick()
-
-  expect(props.activeIndex).toBe(2)
-  expect(doc_query(`li.active`)).toBe(active_option)
-  menu_input().dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-  )
-  expect(beta_action).toHaveBeenCalledExactlyOnceWith(`Rebuilt Beta`)
-})
-
-test(`groupSelectAll selects a whole action group without executing actions or closing`, async () => {
-  const actions = [
-    { label: `New File`, action: vi.fn(), group: `File` },
-    { label: `Save`, action: vi.fn(), group: `File` },
-    { label: `Copy`, action: vi.fn(), group: `Edit` },
-  ]
-  const on_select_all = vi.fn()
-  const props = $state({
-    open: true,
-    actions,
-    groupSelectAll: true,
-    onselectAll: on_select_all,
-  })
-  mount_menu(props)
-  await tick()
-
-  doc_query<HTMLButtonElement>(`dialog li.group-header button.group-select-all`).click()
-  await tick()
-
-  // group selected (scoping is covered by MultiSelect tests) - no action executed
-  expect(on_select_all).toHaveBeenCalledTimes(1)
-  for (const { action } of actions) expect(action).not.toHaveBeenCalled()
-  expect(props.open).toBe(true)
-})
+test.each(
+  [1, `1`].flatMap((id) => [false, true].map((paginated) => ({ id, paginated }))),
+)(
+  `retries duplicate remote ID $id with paginated=$paginated`,
+  async ({ id, paginated }) => {
+    const error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    const fetch = vi.fn(async () => ({
+      options: [{ id, label: `Remote`, action: vi.fn() }],
+      hasMore: paginated,
+    }))
+    const props = $state({
+      open: true,
+      actions: paginated ? [] : [{ id: `1`, label: `Static`, action: vi.fn() }],
+      searchText: `remote`,
+      loadOptions: { fetch, batchSize: 1, debounceMs: 0 },
+    })
+    mount_menu(props)
+    if (paginated) {
+      await vi.waitFor(() => expect(option_labels()).toEqual([`Remote`]))
+      props.loadOptions.batchSize = 2
+      props.loadOptions.debounceMs = 10
+      await tick()
+      expect(fetch).toHaveBeenCalledOnce()
+      doc_query(`ul.options`).dispatchEvent(new Event(`scroll`))
+    }
+    await vi.waitFor(() =>
+      expect(error).toHaveBeenCalledWith(
+        `MultiSelect: loadOptions error:`,
+        expect.objectContaining({ message: `Duplicate CommandMenu action id: 1` }),
+      ),
+    )
+    expect(doc_query(`[role='alert']`).textContent).toContain(`Could not load options`)
+    expect(option_labels()).toEqual(paginated ? [`Remote`] : [])
+    fetch.mockResolvedValueOnce({
+      options: [{ id: `2`, label: `Retry result`, action: vi.fn() }],
+      hasMore: false,
+    })
+    doc_query<HTMLButtonElement>(`[role='alert'] + button`).click()
+    await vi.waitFor(() => expect(option_labels()).toContain(`Retry result`))
+    expect(fetch).toHaveBeenLastCalledWith(
+      expect.objectContaining({ offset: paginated ? 1 : 0 }),
+    )
+    expect(document.querySelector(`[role='alert']`)).toBeNull()
+  },
+)
 
 // dropdown option labels in display order (used by shortcut/recents tests below)
 const option_labels = () =>
@@ -745,6 +752,7 @@ const press_ctrl_shift = (key: string) =>
 test(`renders and searches action descriptions, metadata, badges, and keywords`, async () => {
   const actions = [
     {
+      id: `save file`,
       label: `save file`,
       action: vi.fn(),
       shortcut: `ctrl+shift+s`,
@@ -753,7 +761,7 @@ test(`renders and searches action descriptions, metadata, badges, and keywords`,
       badge: `File`,
       keywords: [`persist`],
     },
-    { label: `quit`, action: vi.fn() },
+    { id: `quit`, label: `quit`, action: vi.fn() },
   ]
   mount_menu({ open: true, actions })
   await tick()
@@ -892,28 +900,6 @@ describe(`PageSearch`, () => {
     },
   )
 
-  // typing a page slug must not wait on the index: fallback_actions reach CommandMenu as
-  // static options, so they filter client-side while Pagefind is still loading
-  test(`fallback actions match while the Pagefind load never settles`, async () => {
-    const load_pagefind = vi.fn(() => new Promise<never>(() => {}))
-    mount(PageSearch, {
-      target: document.body,
-      props: {
-        ...base_props,
-        fallback_actions: [
-          { label: `/styling`, action: vi.fn() },
-          { label: `/grouping`, action: vi.fn() },
-        ],
-        load_pagefind,
-      },
-    })
-
-    await search_pagefind(`styling`)
-
-    expect(option_labels()).toEqual([`/styling`])
-    expect(load_pagefind).toHaveBeenCalledOnce()
-  })
-
   test(`isolates concurrent queries that normalize to the same text`, async () => {
     const stale_response = make_pagefind_response(`Stale`)
     const fresh_response = make_pagefind_response(`Fresh`)
@@ -948,28 +934,43 @@ describe(`PageSearch`, () => {
     expect(doc_query(`.cmd-label`).childNodes[0]?.textContent?.trim()).toBe(`Fresh`)
   })
 
-  test(`retries loading Pagefind after a transient failure`, async () => {
-    const search = vi.fn(async () => make_pagefind_response(`Fresh`))
-    const load_pagefind = vi
-      .fn()
-      .mockRejectedValueOnce(new Error(`Unavailable`))
-      .mockResolvedValue({ search })
-    mount(PageSearch, {
-      target: document.body,
-      props: {
-        ...base_props,
-        fallback_actions: [{ label: `Fallback`, action: vi.fn() }],
-        load_pagefind,
-      },
-    })
+  test.each([`load`, `search`])(
+    `keeps local matches while Pagefind %s is pending, fails, and retries`,
+    async (failure) => {
+      const request = Promise.withResolvers<never>()
+      const search = vi.fn(async () => make_pagefind_response(`Fresh`))
+      const load_pagefind = vi.fn().mockResolvedValue({ search })
+      ;(failure === `load` ? load_pagefind : search).mockReturnValueOnce(request.promise)
+      mount(PageSearch, {
+        target: document.body,
+        props: {
+          ...base_props,
+          fallback_actions: [
+            { id: `Fallback`, label: `Fallback`, action: vi.fn() },
+            { id: `Other`, label: `Other`, action: vi.fn() },
+          ],
+          load_pagefind,
+        },
+      })
 
-    await search_pagefind(`fallback`)
-    expect(doc_query(`.cmd-label`).textContent).toContain(`Fallback`)
-
-    await search_pagefind(`fresh`)
-    expect(load_pagefind).toHaveBeenCalledTimes(2)
-    expect(doc_query(`.cmd-label`).textContent).toContain(`Fresh`)
-  })
+      await search_pagefind(`fallback`)
+      expect(option_labels()).toEqual([`Fallback`])
+      expect(load_pagefind).toHaveBeenCalledOnce()
+      expect(document.querySelector(`[role="alert"]`)).toBeNull()
+      request.reject(new Error(`Unavailable`))
+      await vi.runAllTimersAsync()
+      await tick()
+      expect(option_labels()).toEqual([`Fallback`])
+      expect(doc_query(`[role="alert"]`).textContent).toContain(`Could not load options`)
+      doc_query<HTMLButtonElement>(`dialog [role="alert"] + button`).click()
+      await vi.runAllTimersAsync()
+      await tick()
+      expect(menu_input().value).toBe(`fallback`)
+      expect(document.querySelector(`[role="alert"]`)).toBeNull()
+      expect(load_pagefind).toHaveBeenCalledTimes(2)
+      expect(option_labels().join(` `)).toContain(`Fresh`)
+    },
+  )
 
   test(`keeps the loader stable while using current callback props`, async () => {
     const [first_navigate, second_navigate, onadd] = [vi.fn(), vi.fn(), vi.fn()]
@@ -1085,6 +1086,7 @@ describe(`PageSearch`, () => {
     async (_scenario, make_load_pagefind) => {
       const fallback_actions = [
         {
+          id: `API reference`,
           label: `API reference`,
           description: `All exported props`,
           badge: `Docs`,
@@ -1093,6 +1095,7 @@ describe(`PageSearch`, () => {
           action: vi.fn(),
         },
         {
+          id: `Styling guide`,
           label: `Styling guide`,
           description: `CSS custom properties`,
           badge: `Guide`,
@@ -1179,7 +1182,7 @@ test.each([
 ])(`renders shortcut %s as %j`, async (shortcut, expected_parts) => {
   mount_menu({
     open: true,
-    actions: [{ label: `zoom in`, action: vi.fn(), shortcut }],
+    actions: [{ id: `zoom in`, label: `zoom in`, action: vi.fn(), shortcut }],
   })
   await tick()
 
@@ -1224,6 +1227,7 @@ test.each([
     const spy = vi.fn()
     const actions = [
       {
+        id: `save`,
         label: `save`,
         action: spy,
         shortcut: `ctrl+shift+s`,
@@ -1250,7 +1254,7 @@ test.each([
 test(`global shortcuts ignore events consumed by editable controls`, () => {
   const action = vi.fn()
   mount_menu({
-    actions: [{ label: `save`, action, shortcut: `ctrl+shift+s` }],
+    actions: [{ id: `save`, label: `save`, action, shortcut: `ctrl+shift+s` }],
   })
   const textarea = document.createElement(`textarea`)
   textarea.addEventListener(`keydown`, (event) => event.preventDefault())
@@ -1277,7 +1281,7 @@ test.each([`n`, `shift+n`])(
   (shortcut) => {
     const action = vi.fn()
     mount_menu({
-      actions: [{ label: `new note`, action, shortcut }],
+      actions: [{ id: `new note`, label: `new note`, action, shortcut }],
     })
     const press = (tag: string) => {
       const target = document.createElement(tag)
@@ -1305,12 +1309,13 @@ test(`global shortcuts skip disabled duplicate bindings`, async () => {
   mount_menu({
     actions: [
       {
+        id: `disabled save`,
         label: `disabled save`,
         action: disabled_action,
         shortcut: `ctrl+shift+s`,
         disabled: true,
       },
-      { label: `save`, action: enabled_action, shortcut: `ctrl+shift+s` },
+      { id: `save`, label: `save`, action: enabled_action, shortcut: `ctrl+shift+s` },
     ],
   })
 
@@ -1325,6 +1330,7 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
   const [storage_key, next_storage_key] = [`test-cmd-recents`, `test-cmd-recents-next`]
   localStorage.setItem(next_storage_key, JSON.stringify([`beta`]))
   const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
+    id: label,
     label,
     action: vi.fn(),
   }))
@@ -1368,7 +1374,7 @@ test(`recent_actions_key uses action ids for duplicate labels`, async () => {
   localStorage.setItem(storage_key, JSON.stringify([`mixed`]))
   const actions = [
     { id: `mixed`, label: `save`, description: `Mixed`, action: vi.fn() },
-    { label: `save`, description: `No id`, action: vi.fn() },
+    { id: `save`, label: `save`, description: `Other save`, action: vi.fn() },
   ]
   const props = $state({ open: true, actions, recent_actions_key: storage_key })
   mount_menu(props)
@@ -1420,6 +1426,7 @@ test.each([
     const storage_key = `test-cmd-stored-recents`
     localStorage.setItem(storage_key, stored)
     const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
+      id: label,
       label,
       action: vi.fn(),
     }))
@@ -1444,8 +1451,8 @@ test.each([
   {
     desc: `records the triggered action`,
     actions: [
-      { label: `alpha`, action: vi.fn() },
-      { label: `hotkeyed`, action: vi.fn(), shortcut: `ctrl+shift+h` },
+      { id: `alpha`, label: `alpha`, action: vi.fn() },
+      { id: `hotkeyed`, label: `hotkeyed`, action: vi.fn(), shortcut: `ctrl+shift+h` },
     ],
     max_recent: undefined,
     keys: [`h`],
@@ -1454,8 +1461,8 @@ test.each([
   {
     desc: `max_recent caps recents at the most-recently triggered`,
     actions: [
-      { label: `first`, action: vi.fn(), shortcut: `ctrl+shift+1` },
-      { label: `second`, action: vi.fn(), shortcut: `ctrl+shift+2` },
+      { id: `first`, label: `first`, action: vi.fn(), shortcut: `ctrl+shift+1` },
+      { id: `second`, label: `second`, action: vi.fn(), shortcut: `ctrl+shift+2` },
     ],
     max_recent: 1,
     keys: [`1`, `2`],

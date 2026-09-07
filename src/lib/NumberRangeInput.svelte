@@ -1,13 +1,3 @@
-<script module lang="ts">
-  export type NumberRangeSchemaEntry = Readonly<{
-    minimum?: number | string
-    maximum?: number | string
-    multipleOf?: number | string
-    description?: string
-  }>
-  export type NumberRangeSchema = Readonly<Record<string, NumberRangeSchemaEntry>>
-</script>
-
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
@@ -18,16 +8,10 @@
     type NumberRangeInputLabels,
   } from './labels'
 
-  // same three bounds either way: optional when a schema can supply them, else required
-  type Bounds = { min?: number | string; max?: number | string; step?: number | string }
-  type SchemaBounds = Bounds & { setting: string; schema: NumberRangeSchema }
-  type ExplicitBounds = Required<Bounds> & { setting?: string; schema?: undefined }
-
   // The wrapping label names the number input; the slider needs its own accessible label.
   let {
     value = $bindable(),
     setting,
-    schema,
     min,
     max,
     step,
@@ -42,6 +26,10 @@
     ...rest
   }: {
     value: number | undefined
+    min: number | string
+    max: number | string
+    step: number | string
+    setting?: string
     // Invalid drafts never replace the committed value. Clearing retains it by default.
     empty?: `retain` | `undefined`
     commit?: `input` | `change`
@@ -51,37 +39,26 @@
     title?: string
     children?: Snippet
     labels?: Partial<NumberRangeInputLabels>
-  } & (SchemaBounds | ExplicitBounds) &
-    Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
-
-  let setting_config = $derived.by(() => {
-    if (!setting || !schema) return undefined
-    const config = schema[setting]
-    if (!config) {
-      throw new Error(`NumberRangeInput schema has no entry for setting "${setting}"`)
-    }
-    return config
-  })
-  let input_bounds = $derived({
-    min: min ?? setting_config?.minimum,
-    max: max ?? setting_config?.maximum,
-    step: step ?? setting_config?.multipleOf ?? `any`,
-  })
-  // A range input with no min/max silently defaults to 0-100 while the number input stays
+  } & Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
+  // A range input with invalid min/max silently defaults to 0-100 while the number input stays
   // unbounded, so one slider touch clamps and writes back a value the caller never limited.
+  const is_numeric = (bound: number | string) =>
+    Number.isFinite(Number(bound)) &&
+    /^-?(?:\d+|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(String(bound))
   $effect(() => {
-    if (input_bounds.min === undefined || input_bounds.max === undefined) {
+    if (
+      !is_numeric(min) ||
+      !is_numeric(max) ||
+      Number(max) < Number(min) ||
+      (step !== `any` && (!is_numeric(step) || Number(step) <= 0))
+    ) {
       throw new Error(
-        `NumberRangeInput needs both a min and a max to render its slider, got ` +
-          `min=${input_bounds.min}, max=${input_bounds.max}${
-            setting ? ` for setting "${setting}"` : ``
-          }. Pass min/max props or give the schema entry minimum/maximum.`,
+        `NumberRangeInput needs finite min <= max and positive step or "any", got min=${min}, max=${max}, step=${step}`,
       )
     }
   })
-  let resolved_title = $derived(title ?? setting_config?.description)
   const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
-  let range_label = $derived(resolved_title?.trim() || setting?.trim() || msg.value)
+  let range_label = $derived(title?.trim() || setting?.trim() || msg.value)
   // With children the <label> already names the number input and an aria-label would override
   // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
@@ -109,11 +86,13 @@
 
 <!-- Settings reset/search use data-key; callers may override it through rest. -->
 <label data-key={setting} {...rest}>
-  <span {@attach tooltip()} title={resolved_title}>{@render children?.()}</span>
+  <span {@attach tooltip()} {title}>{@render children?.()}</span>
   <input
     {...number_props}
     type="number"
-    {...input_bounds}
+    {min}
+    {max}
+    {step}
     value={draft}
     aria-label={number_props?.['aria-label'] ?? number_label}
     oninput={(event) => {
@@ -138,8 +117,10 @@
   <input
     {...range_props}
     type="range"
-    {...input_bounds}
-    value={value ?? input_bounds.min}
+    {min}
+    {max}
+    {step}
+    value={value ?? min}
     aria-label={range_props?.['aria-label'] ?? range_label}
     oninput={(event) => {
       commit_input(event.currentTarget, false)

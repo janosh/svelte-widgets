@@ -14,7 +14,6 @@ export const demo_labels: Record<string, string> = {
   '/kit-form-actions': `Form Actions`,
   '/min-max-select': `Min/Max`,
   '/allow-user-options': `User Options`,
-  '/parse-labels-as-html': `HTML Labels`,
   // attachments are named after their exports, so the nav shows the snake_case symbol
   // rather than slug_to_title's "Click Outside"
   ...Object.fromEntries(

@@ -290,10 +290,10 @@ describe(`Toc`, () => {
     expect(document.querySelector(`#custom`)).toBe(doc_query(`body > h2`))
 
     toc_item.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-    expect(replace_state_mock).toHaveBeenCalledWith({}, ``, `#custom`)
+    expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
-  test(`replaceState uses the raw id while the link href is URL-encoded`, async () => {
+  test(`encoded fragment links keep native navigation and existing history state`, async () => {
     set_body(`<h2 id="sec:1">Section</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
     spy_scroll_into_view()
@@ -304,11 +304,10 @@ describe(`Toc`, () => {
     // the <a href> is a valid percent-encoded URL string
     expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#sec%3A1`)
 
-    // the history fragment must match the DOM id exactly so getElementById resolves it
-    doc_query(`aside.toc li > a`).dispatchEvent(
-      new MouseEvent(`click`, { bubbles: true }),
-    )
-    expect(replace_state_mock).toHaveBeenCalledWith({}, ``, `#sec:1`)
+    const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
+    doc_query(`aside.toc li > a`).dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(false)
+    expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
   test(`existing heading ids stay the fragment target over getHeadingData ids`, async () => {
@@ -453,7 +452,7 @@ describe(`Toc`, () => {
       // nested interactive elements keep native behavior; plain content falls to the li
       expect(event.defaultPrevented).toBe(scrolls)
       expect(scroll_into_view_mock).toHaveBeenCalledTimes(scrolls ? 1 : 0)
-      expect(replace_state_mock.mock.calls).toEqual(scrolls ? [[{}, ``, `#first`]] : [])
+      expect(replace_state_mock).not.toHaveBeenCalled()
 
       if (checks_keyboard) {
         const buttons =
@@ -778,36 +777,50 @@ describe(`Toc`, () => {
     expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(expected)
   })
 
-  test(`desktop (focused, no hover) arrow keys move focus + selection and Enter follows`, async () => {
-    set_headings(2)
-    set_window_width(1200)
-    mock_active_heading(`heading-1`)
-    spy_scroll_into_view()
-    const replace_mock = vi.spyOn(history, `replaceState`)
+  test.each([`Enter`, ` `])(
+    `desktop arrow keys move focus + selection and %j follows the real link`,
+    async (key) => {
+      set_headings(2)
+      set_window_width(1200)
+      mock_active_heading(`heading-1`)
+      spy_scroll_into_view()
+      const replace_mock = vi.spyOn(history, `replaceState`)
 
-    mount_toc()
-    await tick()
+      mount_toc()
+      await tick()
 
-    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
-    // dispatch on the focused li (bubbles) to mirror real keyboard usage
-    document.activeElement?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-    )
-    await tick()
+      doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+      // dispatch on the focused li (bubbles) to mirror real keyboard usage
+      document.activeElement?.dispatchEvent(
+        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
+      )
+      await tick()
 
-    // selection AND DOM focus move together; otherwise the focused li's own keydown
-    // handler would override the arrow-navigation on the next Enter
-    const active = doc_query(`aside.toc > nav > ol > li.active`)
-    expect(active.textContent).toBe(`Heading 2`)
-    expect(document.activeElement).toBe(active.querySelector(`a`))
+      // selection AND DOM focus move together; otherwise the focused li's own keydown
+      // handler would override the arrow-navigation on the next Enter
+      const active = doc_query(`aside.toc > nav > ol > li.active`)
+      expect(active.textContent).toBe(`Heading 2`)
+      expect(document.activeElement).toBe(active.querySelector(`a`))
 
-    // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
-    document.activeElement?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-    )
-    expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
-    expect(replace_mock).toHaveBeenCalledWith({}, ``, `#heading-2`)
-  })
+      // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
+      const link = doc_query<HTMLAnchorElement>(`aside.toc > nav > ol > li.active > a`)
+      const click = vi.spyOn(link, `click`)
+      const activation = new KeyboardEvent(`keydown`, {
+        key,
+        bubbles: true,
+        cancelable: true,
+      })
+      link.dispatchEvent(activation)
+      expect(activation.defaultPrevented).toBe(key === ` `)
+      if (key === `Enter`) {
+        expect(click).not.toHaveBeenCalled()
+        link.click() // happy-dom does not dispatch the browser's default Enter click
+      }
+      expect(click).toHaveBeenCalledOnce()
+      expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
+      expect(replace_mock).not.toHaveBeenCalled()
+    },
+  )
 
   test(`only the active ToC item carries aria-current="location"`, async () => {
     set_body(`<h2 id="a">Heading 1</h2><h2 id="b">Heading 2</h2>`)
@@ -841,6 +854,7 @@ describe(`Toc`, () => {
 
       const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
+      const anchor_click = vi.spyOn(HTMLAnchorElement.prototype, `click`)
 
       // a breakpoint above the window width forces mobile mode, where open=true suffices
       mount_toc({ open: true, breakpoint: 2000, scrollBehavior })
@@ -855,7 +869,9 @@ describe(`Toc`, () => {
         block: `start`,
       })
       const expected_hash = key === null ? `#heading-1` : `#heading-2`
-      expect(replace_state_mock).toHaveBeenCalledWith({}, ``, expected_hash)
+      expect(anchor_click).toHaveBeenCalledOnce()
+      expect(anchor_click.mock.contexts[0]).toHaveProperty(`hash`, expected_hash)
+      expect(replace_state_mock).not.toHaveBeenCalled()
     },
   )
 
@@ -1547,3 +1563,39 @@ describe(`collapseSubheadings`, () => {
     ])
   })
 })
+
+test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
+  `overlapping TOCs restore root styles on %s`,
+  async (completion) => {
+    vi.useFakeTimers()
+    const { style } = document.documentElement
+    style.setProperty(`scroll-behavior`, `auto`, `important`)
+    try {
+      set_headings(2)
+      mount_toc()
+      mount_toc({ scrollBehavior: `auto` })
+      await tick()
+      const panels = document.querySelectorAll(`aside.toc`)
+      for (const link of panels[0].querySelectorAll<HTMLAnchorElement>(`li > a`))
+        link.click()
+      expect(style.scrollBehavior).toBe(`smooth`)
+      for (const link of panels[1].querySelectorAll<HTMLAnchorElement>(`li > a`))
+        link.click()
+      await vi.advanceTimersByTimeAsync(20)
+      expect(style.scrollBehavior).toBe(`auto`)
+      if (completion === `scrollend`) window.dispatchEvent(new Event(`scrollend`))
+      else if (completion === `timeout`) await vi.advanceTimersByTimeAsync(1000)
+      else {
+        const idx = completion === `older unmount` ? 0 : 1
+        await unmount(mounted_components.splice(idx, 1)[0])
+        expect(style.scrollBehavior).toBe(idx === 0 ? `auto` : `smooth`)
+        await unmount(mounted_components.splice(0, 1)[0])
+      }
+      expect(style.scrollBehavior).toBe(`auto`)
+      expect(style.getPropertyPriority(`scroll-behavior`)).toBe(`important`)
+    } finally {
+      style.removeProperty(`scroll-behavior`)
+      vi.useRealTimers()
+    }
+  },
+)

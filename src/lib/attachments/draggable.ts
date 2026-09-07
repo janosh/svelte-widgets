@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
 import { clamp } from '../utils'
 import type { AnchorRect } from './float'
-import { css_px, follow_pointer, is_primary_press } from './shared'
+import { css_px, follow_pointer, is_primary_press, override_style } from './shared'
 
 export interface DraggableOptions {
   handle_selector?: string
@@ -23,7 +23,7 @@ export const draggable =
 
     let dragging = false
     let stop_pointer_follow: (() => void) | undefined
-    let previous_user_select = ``
+    let restore_user_select: (() => void) | undefined
     let start = { x: 0, y: 0 }
     let min_delta_x = -Infinity
     let max_delta_x = Infinity
@@ -98,8 +98,11 @@ export const draggable =
         max_delta_y = Math.max(min_delta_y, bounds_rect.bottom - node_rect.bottom)
       }
       start = { x: event.clientX, y: event.clientY }
-      previous_user_select = node.ownerDocument.body.style.userSelect
-      node.ownerDocument.body.style.userSelect = `none` // Prevent text selection during drag
+      restore_user_select = override_style(
+        node.ownerDocument.body.style,
+        `user-select`,
+        `none`,
+      ) // Prevent text selection during drag
       drag_handle.style.cursor = `grabbing`
 
       options.on_drag_start?.(event)
@@ -128,7 +131,7 @@ export const draggable =
       if (!dragging) return
       dragging = false
       event.stopPropagation()
-      node.ownerDocument.body.style.userSelect = previous_user_select
+      restore_user_select?.()
       drag_handle.style.cursor = `grab`
       stop_pointer_follow?.()
       options.on_drag_end?.(event)
@@ -145,7 +148,7 @@ export const draggable =
 
     return () => {
       stop_pointer_follow?.()
-      if (dragging) node.ownerDocument.body.style.userSelect = previous_user_select
+      restore_user_select?.()
       drag_handle.removeEventListener(`pointerdown`, on_pointerdown)
       drag_handle.style.cursor = previous_styles.cursor
       drag_handle.style.touchAction = previous_styles.touch_action

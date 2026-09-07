@@ -1,5 +1,6 @@
 // Svelte preprocessor adding heading IDs at build time, so fragment navigation
 // (#heading-id) works on the initial SSR page load
+import { encode_vlq } from './markdown/source-map.ts'
 
 // Headings appear at the start of a line (formatted .svelte HTML) or after `>` (Markdown's
 // single-line output, e.g. "</p> <h2>"). Quoted attributes may contain `>`, so only an
@@ -25,20 +26,6 @@ const katex_annotation_regex =
 const has_heading = /<h[1-6]/iu
 
 type TextInsertion = { index: number; text: string }
-
-const BASE64 = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`
-
-const encode_vlq = (value: number): string => {
-  let encoded = ``
-  let remaining = value < 0 ? (-value << 1) | 1 : value << 1
-  do {
-    let digit = remaining & 31
-    remaining >>>= 5
-    if (remaining) digit |= 32
-    encoded += BASE64[digit]
-  } while (remaining)
-  return encoded
-}
 
 // Applies newline-free insertions, mapping unchanged spans to their original position and
 // inserted text to the insertion point.

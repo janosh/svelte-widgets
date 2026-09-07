@@ -27,7 +27,6 @@
   let {
     activeIndex = $bindable(null),
     activeOption = $bindable(null),
-    activeOptionFallbackKey: active_option_fallback_key,
     autoActiveFirstOption = false,
     createOptionMsg = `Create this option...`,
     allowUserOptions = false,
@@ -79,7 +78,6 @@
     options = $bindable([]),
     outerDiv = $bindable(null),
     outerDivClass = ``,
-    parseLabelsAsHtml = false,
     pattern = null,
     placeholder = null,
     removeAllTitle = `Remove all`,
@@ -147,6 +145,7 @@
     selectAllDisabledTitle,
     liSelectAllClass = ``,
     loadOptions,
+    loadError = $bindable(null),
     selectedFlipParams = { duration: 100 },
     // === Grouping ===
     collapsibleGroups = false,
@@ -172,14 +171,6 @@
     collapseAllGroups = $bindable(),
     expandAllGroups = $bindable(),
     shortcuts = {},
-    // undo/redo history; false or 0 disables it
-    history = true,
-    undo = $bindable(),
-    redo = $bindable(),
-    canUndo = $bindable(false),
-    canRedo = $bindable(false),
-    onundo,
-    onredo,
     rangeSelect = false,
     ...rest
   }: MultiSelectProps<Option> = $props()
@@ -212,11 +203,6 @@
     if (maxSelect && typeof required === `number` && required > maxSelect) {
       invalid_config(
         `maxSelect=${maxSelect} < required=${required}, which makes valid form submission impossible`,
-      )
-    }
-    if (parseLabelsAsHtml && allowUserOptions) {
-      invalid_config(
-        `parseLabelsAsHtml cannot be combined with allowUserOptions because user-provided HTML would enable XSS`,
       )
     }
     if (sortSelected && selectedOptionsDraggable) {
@@ -292,8 +278,6 @@
     clear_all: `${mod_key}+backspace`,
     open: null,
     close: null,
-    undo: `${mod_key}+z`,
-    redo: `${mod_key}+shift+z`,
   }
   const effective_shortcuts = $derived({ ...default_shortcuts, ...shortcuts })
 
@@ -348,7 +332,7 @@
   $effect(() => {
     if (highlighted_idx === null) return
     if (chip_limit !== null && highlighted_idx >= chip_limit) is_chip_list_expanded = true
-    // Clamp when selected changes externally (undo/redo, parent prop, select_all)
+    // Clamp when selected changes externally (parent prop, select_all)
     if (highlighted_idx >= selected.length) {
       highlighted_idx = selected.length > 0 ? selected.length - 1 : null
     }
@@ -368,68 +352,6 @@
     const timer = setTimeout(() => (last_announcement = null), 1000)
     return () => clearTimeout(timer)
   })
-
-  const max_history = $derived(
-    history === true
-      ? 50
-      : typeof history === `number`
-        ? utils.clamp_integer(history, 0)
-        : 0,
-  )
-  let history_stack = $state<Option[][]>([])
-  let history_index = $state(-1) // -1 = no history yet
-  let prev_selected: Option[] | null = null // null = uninitialized, sync on first run
-
-  // catches internal and external changes to `selected`
-  $effect(() => {
-    // `!(x > 0)` also covers false, negative and non-finite history props
-    if (!(max_history > 0)) {
-      // clear so re-enabling starts fresh
-      history_stack = []
-      history_index = -1
-      // don't read `selected` here, it would add a needless dependency
-      prev_selected = null
-      return
-    }
-    // first run syncs the tracker, else [] → initial selection reads as an undoable step
-    if (prev_selected === null) {
-      prev_selected = [...selected]
-      return
-    }
-    if (utils.values_equal(selected, prev_selected)) return
-
-    const next_stack = history_stack.slice(0, history_index + 1)
-    if (next_stack.length === 0) next_stack.push([...prev_selected])
-    next_stack.push([...selected])
-    history_stack = next_stack.slice(-max_history)
-    history_index = history_stack.length - 1
-    prev_selected = [...selected]
-  })
-
-  $effect(() => {
-    canUndo = max_history > 0 && !disabled && history_index > 0
-    canRedo = max_history > 0 && !disabled && history_index < history_stack.length - 1
-  })
-
-  function move_history(offset: -1 | 1, callback: typeof onundo) {
-    const next_index = history_index + offset
-    if (
-      max_history <= 0 ||
-      disabled ||
-      next_index < 0 ||
-      next_index >= history_stack.length
-    )
-      return false
-    const previous = [...selected]
-    history_index = next_index
-    selected = [...history_stack[history_index]]
-    prev_selected = [...selected] // sync tracker to prevent $effect re-recording
-    callback?.({ previous, current: selected })
-    return true
-  }
-
-  undo = () => move_history(-1, onundo)
-  redo = () => move_history(1, onredo)
 
   // onsearch fires 150ms after the search text stops changing
   let search_initialized = false
@@ -518,7 +440,6 @@
     }
     prev_input_committed_label = input_committed_label
   })
-  // has_more check: errors (has_more=false) clear pending state
   let load_options_pending = $derived(
     Boolean(load_options_config) &&
       (is_loading_options ||
@@ -778,23 +699,12 @@
   })
 
   // === Grouping ===
-  // 'set' replaces the whole set; 'add'/'delete' are the SvelteSet methods of that name
-  function update_collapsed_groups(
-    action: `add` | `delete` | `set`,
-    groups: string | Iterable<string>,
-  ) {
-    const items = typeof groups === `string` ? [groups] : [...groups]
-    if (action === `set`) collapsedGroups = new SvelteSet(items)
-    else {
-      const updated = new SvelteSet(collapsedGroups)
-      for (const group of items) updated[action](group)
-      collapsedGroups = updated
-    }
-  }
-
   function toggle_group_collapsed(group_name: string) {
     const was_collapsed = collapsedGroups.has(group_name)
-    update_collapsed_groups(was_collapsed ? `delete` : `add`, group_name)
+    const updated = new SvelteSet(collapsedGroups)
+    if (was_collapsed) updated.delete(group_name)
+    else updated.add(group_name)
+    collapsedGroups = updated
     ongroupToggle?.({ group: group_name, collapsed: !was_collapsed })
   }
 
@@ -802,19 +712,21 @@
   collapseAllGroups = () => {
     const groups = grouped_options.flatMap(({ group }) => (group === null ? [] : [group]))
     if (groups.length === 0) return
-    update_collapsed_groups(`set`, groups)
+    collapsedGroups = new SvelteSet(groups)
     oncollapseAll?.({ groups })
   }
   expandAllGroups = () => {
     const groups = [...collapsedGroups]
     if (groups.length === 0) return
-    update_collapsed_groups(`set`, [])
+    collapsedGroups = new SvelteSet()
     onexpandAll?.({ groups })
   }
 
   function expand_groups(groups_to_expand: string[]) {
     if (groups_to_expand.length === 0) return
-    update_collapsed_groups(`delete`, groups_to_expand)
+    const updated = new SvelteSet(collapsedGroups)
+    for (const group of groups_to_expand) updated.delete(group)
+    collapsedGroups = updated
     for (const group of groups_to_expand) {
       ongroupToggle?.({ group, collapsed: false })
     }
@@ -932,19 +844,17 @@
               (candidate) =>
                 Object.is(candidate, previous_option) && !is_disabled(candidate),
             )
-      const find_unique_idx = (get_key: (option: Option) => unknown) => {
-        const active_key = get_key(previous_option)
-        let matching_idx = -1
+      if (preserved_idx === -1) {
+        const active_key = key(previous_option)
         for (const [candidate_idx, candidate] of rendered_options.entries()) {
-          if (get_key(candidate) !== active_key || is_disabled(candidate)) continue
-          if (matching_idx !== -1) return -1
-          matching_idx = candidate_idx
+          if (key(candidate) !== active_key || is_disabled(candidate)) continue
+          if (preserved_idx !== -1) {
+            preserved_idx = -1
+            break
+          }
+          preserved_idx = candidate_idx
         }
-        return matching_idx
       }
-      if (preserved_idx === -1) preserved_idx = find_unique_idx(key)
-      if (preserved_idx === -1 && active_option_fallback_key)
-        preserved_idx = find_unique_idx(active_option_fallback_key)
       activeIndex = preserved_idx === -1 ? null : preserved_idx
     }
     const current_option = rendered_options[activeIndex ?? -1]
@@ -1300,7 +1210,7 @@
       if (allowUserOptions && resolved_create_msg) {
         return { type: `create`, msg: resolved_create_msg }
       }
-      return navigable_options.length === 0 && noMatchingOptionsMsg
+      return !loadError && navigable_options.length === 0 && noMatchingOptionsMsg
         ? { type: `no-match`, msg: noMatchingOptionsMsg }
         : null
     },
@@ -1419,9 +1329,7 @@
         remove_all(event),
       ) ||
       run_shortcut(event, `open`, !open, () => open_dropdown(event)) ||
-      run_shortcut(event, `close`, open, () => close_and_clear(event)) ||
-      run_shortcut(event, `undo`, canUndo, () => undo?.()) ||
-      run_shortcut(event, `redo`, canRedo, () => redo?.())
+      run_shortcut(event, `close`, open, () => close_and_clear(event))
     )
       return
 
@@ -1431,6 +1339,8 @@
     )
       highlighted_idx = null
 
+    // Keep the dropdown available when tabbing forward to its Retry button.
+    if (event.key === `Tab` && loadError && !event.shiftKey) return
     if (event.key === `Escape` || event.key === `Tab`) {
       // a closed dropdown has nothing to dismiss, so the key belongs to the enclosing pane
       if (open) event.stopPropagation()
@@ -1904,6 +1814,7 @@
     load_abort_controller = abort_controller
     load_options_last_search = search
     is_loading_options = true
+    loadError = null
     let batch_length = 0
     try {
       const result = await load_options_config.fetch({
@@ -1924,7 +1835,9 @@
       }
       console.error(`MultiSelect: loadOptions error:`, error)
       // a superseded request must not clobber the live request's state
-      if (request_id === load_request_id) load_options_has_more = false
+      if (request_id === load_request_id) {
+        loadError = error instanceof Error ? error : new Error(String(error))
+      }
     } finally {
       // only the active request may clear loading; a newer reset may have started meanwhile
       if (request_id === load_request_id) {
@@ -1961,6 +1874,7 @@
   $effect(() => {
     const config = load_options_config
     if (!config) {
+      loadError = null
       cancel_in_flight_load()
       previous_load_options_fetch = null
       return
@@ -1968,19 +1882,11 @@
     const fetch_changed = config.fetch !== previous_load_options_fetch
     previous_load_options_fetch = config.fetch
 
-    let debounce_timer: ReturnType<typeof setTimeout> | undefined
     const clear_loaded_batch = () => {
       loaded_options = []
       load_options_has_more = true
+      loadError = null
     }
-    // debounce a fresh load so the UI doesn't refetch on every keystroke
-    const schedule_load = () => {
-      debounce_timer = setTimeout(
-        () => void load_dynamic_options(true),
-        config.debounce_ms,
-      )
-    }
-
     // Reset when closed or when the loader changes under the current query.
     if (!open || fetch_changed) {
       cancel_in_flight_load()
@@ -1995,15 +1901,31 @@
     // keystrokes during the first fetch fire immediate loads instead of debouncing.
     const is_first_load =
       load_options_last_search === null && !untrack(() => is_loading_options)
-    if (is_first_load) {
-      if (config.should_fetch_on_open) void load_dynamic_options(true)
-      else if (search) schedule_load()
-    } else if (search !== load_options_last_search) {
+    if (is_first_load && config.should_fetch_on_open) {
+      void load_dynamic_options(true)
+      return
+    }
+    // Returning to a cleared query still needs a fetch; unchanged results/errors wait
+    // for explicit retry. Don't subscribe to completion and rerun the scheduling effect.
+    const unchanged_search =
+      search === load_options_last_search &&
+      untrack(
+        () =>
+          is_loading_options ||
+          loaded_options.length > 0 ||
+          !load_options_has_more ||
+          loadError,
+      )
+    if (is_first_load ? !search : unchanged_search) return
+    if (!is_first_load) {
       // abort the superseded fetch and clear stale results now, then debounce the new search
       cancel_in_flight_load()
       clear_loaded_batch()
-      schedule_load()
     }
+    const debounce_timer = setTimeout(
+      () => void load_dynamic_options(true),
+      config.debounce_ms,
+    )
     return () => clearTimeout(debounce_timer)
   })
   // abort on unmount so callers forwarding `signal` can bail
@@ -2013,7 +1935,8 @@
     if (!(event.target instanceof HTMLElement)) return
     const { scrollTop, scrollHeight, clientHeight } = event.target
     options_scroll_top = scrollTop // drives virtual window re-derivation
-    if (!load_options_config || is_loading_options || !load_options_has_more) return
+    if (!load_options_config || is_loading_options || loadError || !load_options_has_more)
+      return
     auto_fill_count = 0
     if (scrollHeight - scrollTop - clientHeight <= 100) load_dynamic_options(false)
   }
@@ -2022,8 +1945,6 @@
 {#snippet render_label(opt: Option, idx: number, type: `selected` | `option`)}
   {#if children}
     {@render children({ option: opt, idx, type })}
-  {:else if parseLabelsAsHtml}
-    {@html utils.get_label(opt)}
   {:else}
     {utils.get_label(opt)}
   {/if}
@@ -2507,6 +2428,18 @@
       {/if}
     </ul>
   {/if}
+  {#if open && loadError}
+    <div class="load-error" style="flex-basis: 100%">
+      <span role="alert">{msg.loading_failed}</span>
+      <button
+        type="button"
+        {disabled}
+        onclick={with_focus_rescue(() => {
+          void load_dynamic_options(!loaded_options.length)
+        })}>{msg.retry}</button
+      >
+    </div>
+  {/if}
   <!-- live region: selection changes, else available option count while open -->
   <div class="sr-only" aria-live="polite" aria-atomic="true">
     {#if last_announcement}
@@ -2554,6 +2487,9 @@
   :where(div.multiselect.open) {
     /* so an open dropdown covers the MultiSelect below it on the page */
     z-index: var(--sms-open-z-index, 4);
+  }
+  :where(div.multiselect:has(> .load-error)) {
+    flex-wrap: wrap;
   }
   :where(div.multiselect:focus-within) {
     border: var(--sms-focus-border, 1px solid var(--sms-active-color, cornflowerblue));

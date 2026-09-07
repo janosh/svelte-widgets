@@ -32,7 +32,7 @@ chord, or drive `open` yourself. [CommandMenu docs &rarr;](command-menu)
   let open = $state(false)
   let last_run = $state(``)
   const actions = [`Toggle theme`, `Copy link`, `Open settings`, `Sign out`].map(
-    (label) => ({ label, action: () => (last_run = label) }),
+    (label) => ({ id: label, label, action: () => (last_run = label) }),
   )
 </script>
 
@@ -73,9 +73,9 @@ actions as `CommandMenu`. [ActionMenu docs &rarr;](popover#actionmenu)
   let last_run = $state(``)
   const record = (label: string) => (last_run = label)
   const actions = [
-    { label: `Cut`, shortcut: `mod+x`, action: record },
-    { label: `Copy`, shortcut: `mod+c`, action: record },
-    { label: `Paste`, shortcut: `mod+v`, action: record },
+    { id: `Cut`, label: `Cut`, shortcut: `mod+x`, action: record },
+    { id: `Copy`, label: `Copy`, shortcut: `mod+c`, action: record },
+    { id: `Paste`, label: `Paste`, shortcut: `mod+v`, action: record },
   ]
 </script>
 

@@ -35,9 +35,13 @@
 ```
 
 <FileDetails files={[
-{ title: `<code>LanguageSnippet.svelte</code>`, content: language_snippet_src },
-{ title: `<code>MinusIcon.svelte</code>`, content: minus_icon_src },
-]} />
+{ title: `LanguageSnippet.svelte`, content: language_snippet_src },
+{ title: `MinusIcon.svelte`, content: minus_icon_src },
+]}>
+{#snippet title_snippet({ title })}
+<code>{title}</code>
+{/snippet}
+</FileDetails>
 
 ### Simple HTML tag as `"removeIcon"` snippet
 
@@ -102,6 +106,23 @@ This example also moves the expand icon to the right side of the input via `expa
 >
   {#snippet userMsg({ msg })}
     <span>{msg} {selected?.includes(searchText) ? '🤦' : '👷'}</span>
+  {/snippet}
+</MultiSelect>
+```
+
+### Rich option labels
+
+Labels are plain text for filtering and accessibility. Use a `children` snippet for links, images, or other markup in both dropdown options and selected chips.
+
+```svelte example id="rich-labels"
+<script lang="ts">
+  import { MultiSelect } from '$lib'
+</script>
+
+<MultiSelect options={['Red Pill', 'Blue Pill']} maxSelect={1}>
+  {#snippet children({ option })}
+    <strong>{option}</strong>
+    <a href="https://wikipedia.org/wiki/Red_pill_and_blue_pill">Explanation</a>
   {/snippet}
 </MultiSelect>
 ```

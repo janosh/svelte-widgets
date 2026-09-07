@@ -1,5 +1,12 @@
 import { NumberRangeInput } from '$lib'
-import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte'
+import {
+  createRawSnippet,
+  flushSync,
+  mount,
+  tick,
+  unmount,
+  type ComponentProps,
+} from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import { doc_query, hover } from './index'
 
@@ -81,53 +88,41 @@ describe(`NumberRangeInput`, () => {
     expect(inputs.map((input) => input.getAttribute(`aria-label`))).toEqual(expected)
   })
 
-  const schema = {
-    radius: {
-      minimum: 0,
-      maximum: 2,
-      multipleOf: 0.1,
-      description: `Radius from schema`,
+  test.each([0.25, `any`])(
+    `forwards explicit bounds and setting metadata with step=%s`,
+    (step_size) => {
+      const { target, inputs, range } = mount_range({
+        value: 0.5,
+        min: 0.25,
+        max: 1.25,
+        step: step_size,
+        setting: `radius`,
+      })
+      expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
+      expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
+        { min: `0.25`, max: `1.25`, step: String(step_size) },
+        { min: `0.25`, max: `1.25`, step: String(step_size) },
+      ])
+      expect(range.getAttribute(`aria-label`)).toBe(`radius`)
     },
-  }
-  test.each([
-    [
-      `explicit props override the schema`,
-      { min: 0.25, max: 1.25, step: 0.25, title: `Custom radius` },
-      { min: `0.25`, max: `1.25`, step: `0.25` },
-      `Custom radius`,
-    ],
-    [
-      `the schema supplies absent bounds and description`,
-      {},
-      { min: `0`, max: `2`, step: `0.1` },
-      `Radius from schema`,
-    ],
-    [
-      `a schema without an increment allows any step`,
-      { schema: { radius: { minimum: 0, maximum: 1 } } },
-      { min: `0`, max: `1`, step: `any` },
-      `radius`,
-    ],
-  ] as const)(`%s`, (_name, overrides, expected_bounds, expected_label) => {
-    const { target, inputs, range } = mount_range({
-      setting: `radius`,
-      schema,
-      value: 0.5,
-      ...overrides,
-    })
-    expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
-    expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
-      expected_bounds,
-      expected_bounds,
-    ])
-    expect(range.getAttribute(`aria-label`)).toBe(expected_label)
-  })
+  )
 
-  // Silently rendering an unbounded slider would hide the typo that caused it
-  test(`throws when the schema has no entry for the setting`, () => {
-    expect(() =>
-      mount_range({ setting: `raidus`, schema: { radius: { minimum: 0 } }, value: 1 }),
-    ).toThrow(`NumberRangeInput schema has no entry for setting "raidus"`)
+  test.each([
+    ...[`min`, `max`, `step`].flatMap((prop) =>
+      [undefined, ``, `NaN`, Infinity, `100garbage`, `0x10`, ` 1 `, `+1`, `1.`].map(
+        (value) => [prop, value],
+      ),
+    ),
+    [`min`, 2],
+    [`max`, -1],
+    [`step`, 0],
+    [`step`, -0.1],
+  ])(`rejects invalid %s=%s`, (prop, value) => {
+    const props = { ...named_props, [String(prop)]: value }
+    expect(() => {
+      mount_range(props)
+      flushSync()
+    }).toThrow(`NumberRangeInput needs finite min <= max and positive step or "any"`)
   })
 })
 

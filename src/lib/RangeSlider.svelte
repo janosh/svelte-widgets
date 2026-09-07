@@ -67,9 +67,8 @@
   let drafts = $derived(values.map(String))
   let rail = $state<HTMLDivElement>()
   let active = $state<0 | 1>(0)
-  let dragging = $state(false)
-  // Pointer bookkeeping does not drive rendering; only `dragging` and `active` do.
-  let drag:
+  // Only starting/ending a gesture drives rendering; in-flight bookkeeping stays unproxied.
+  let drag = $state.raw<
     | {
         pointer_id: number
         start: RangeValue
@@ -79,6 +78,7 @@
         latest?: RangeValue
       }
     | undefined
+  >()
 
   const bounds = (thumb: 0 | 1): RangeValue =>
     thumb === 0 ? [min, values[1]] : [values[0], max]
@@ -215,7 +215,6 @@
       origin: next,
       offset: on_handle ? next - values[thumb] : 0,
     }
-    dragging = true
     focus_thumb(thumb)
     rail.setPointerCapture(event.pointerId)
     if (!on_handle) move_pointer(event)
@@ -224,7 +223,6 @@
     if (!drag || drag.pointer_id !== event.pointerId) return
     const { start, latest, pointer_id } = drag
     drag = undefined
-    dragging = false
     if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
     if (latest && (start[0] !== values[0] || start[1] !== values[1])) commit_value(latest)
   }
@@ -232,7 +230,6 @@
     if (disabled && drag) {
       const { pointer_id } = drag
       drag = undefined
-      dragging = false
       if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
     }
   })
@@ -256,7 +253,7 @@
     return () => form?.removeEventListener(`reset`, reset_drafts)
   }}
   class={[`range-slider`, class_name]}
-  class:dragging
+  class:dragging={Boolean(drag)}
   role="group"
   aria-labelledby={`${uid}-label`}
   aria-describedby={description ? `${uid}-description` : undefined}

@@ -144,6 +144,8 @@ export const MULTI_SELECT_LABELS = {
   // aria-label on the per-option checkbox in keepSelectedInDropdown='checkboxes' mode
   toggle_option: (option_label: string) => `Toggle ${option_label}`,
   loading_more: `Loading more options`,
+  loading_failed: `Could not load options`,
+  retry: `Retry`,
   // live-region announcements
   option_selected: (option_label: string) => `${option_label} selected`,
   option_removed: (option_label: string) => `${option_label} removed`,
