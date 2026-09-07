@@ -548,7 +548,7 @@ export function fuzzy_match(search_text: string, target_text: string): boolean {
 }
 
 // A titled run of ActionMenu actions. Setting `selected` (matched against an action's
-// `id ?? label`, null for nothing chosen) makes it a radio group instead of a plain heading.
+// `id`, null for nothing chosen) makes it a radio group instead of a plain heading.
 export type CmdSection = {
   title: string
   actions: CmdAction[]

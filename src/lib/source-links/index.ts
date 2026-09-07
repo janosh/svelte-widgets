@@ -44,10 +44,9 @@ export function create_source_links(
 
   const source_location = (name: string): string | undefined =>
     location_by_name.get(name.trim()) ?? undefined
-  const href_of = (location: string): string => `${repo}/blob/${ref}${location}`
   const source_href = (name: string): string | undefined => {
     const location = source_location(name)
-    return location && href_of(location)
+    return location && `${repo}/blob/${ref}${location}`
   }
 
   // Client-side navigation swaps the page inside the same root, hence the MutationObserver.
@@ -73,7 +72,7 @@ export function create_source_links(
         const location = source_location(name)
         if (!location) continue
         const link = document.createElement(`a`)
-        link.href = href_of(location)
+        link.href = `${repo}/blob/${ref}${location}`
         link.target = `_blank`
         link.rel = `noopener`
         link.title = msg.link_title(location.slice(1))

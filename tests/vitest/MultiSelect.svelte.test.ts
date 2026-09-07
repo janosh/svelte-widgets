@@ -902,24 +902,11 @@ test(`invalid=true gives top-level div class 'invalid' and input attribute of 'a
   expect(multiselect.classList.contains(`invalid`)).toBe(false)
 })
 
-test(`parseLabelsAsHtml renders anchor tags as links`, () => {
-  mount_multiselect({
-    options: [`<a href="https://example.com">example.com</a>`],
-    parseLabelsAsHtml: true,
-  })
-
-  const anchor = doc_query(`a[href='https://example.com']`)
-  expect(anchor).toBeInstanceOf(HTMLAnchorElement)
-})
-
-test(`parseLabelsAsHtml rejects user-created options`, () => {
-  expect(() =>
-    mount_multiselect({
-      options: [`safe`],
-      parseLabelsAsHtml: true,
-      allowUserOptions: true,
-    }),
-  ).toThrow(`parseLabelsAsHtml cannot be combined with allowUserOptions`)
+test(`option labels render markup as text`, () => {
+  const label = `<a href="https://example.com">example.com</a>`
+  mount_multiselect({ options: [label], allowUserOptions: true })
+  expect(doc_query(`ul.options`).textContent).toContain(label)
+  expect(document.querySelector(`a[href='https://example.com']`)).toBeNull()
 })
 
 test(`children snippet receives type='selected' for pills and type='option' for dropdown items`, () => {

@@ -178,8 +178,6 @@ export function content_manifest(
   }: ContentAnalysis,
 ): ContentManifestDraft {
   const range = source_locator(source, filename)
-  const position = (offset: number) => range(offset).start
-  const text_content = (text: string) => heading_text(text, svelte)
   const manifest: ContentManifestDraft = {
     filename,
     metadata,
@@ -256,7 +254,7 @@ export function content_manifest(
           headings.push({
             id,
             depth: Number(tag[1]),
-            text: text_content(visible.slice(start, end)),
+            text: heading_text(visible.slice(start, end), svelte),
             range: range(
               mapped.offsets[match.index] ?? body_offset,
               (mapped.offsets[end + tag.length + 2] ?? body_offset) + 1,
@@ -268,7 +266,7 @@ export function content_manifest(
     }
   }
   const inline_text = (children: Token[]): string =>
-    text_content(restore(parser.Parser.parseInline(children, parser.defaults)))
+    heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
   const visit = (children: Token[], parent: MappedText) => {
     let cursor = 0
     for (const token of children) {
@@ -287,11 +285,11 @@ export function content_manifest(
           const code_map = locate(code.text, mapped, first_newline + 1)
           let offset = 0
           const line_positions = code.text.split(`\n`).map((line) => {
-            const result = position(
+            const result = range(
               code_map.offsets[offset] ??
                 mapped.offsets[first_newline + 1] ??
                 at.start.offset,
-            )
+            ).start
             offset += line.length + 1
             return result
           })
@@ -317,9 +315,8 @@ export function content_manifest(
             range: at,
             code_range: {
               start: line_positions[0],
-              end: position(
-                (code_map.offsets.at(-1) ?? line_positions[0].offset - 1) + 1,
-              ),
+              end: range((code_map.offsets.at(-1) ?? line_positions[0].offset - 1) + 1)
+                .start,
             },
             line_positions,
           }
@@ -339,7 +336,7 @@ export function content_manifest(
         const target = token.type === `link` ? manifest.links : manifest.assets
         target.push({
           url: decode_entities(link.href),
-          text: text_content(link.text),
+          text: heading_text(link.text, svelte),
           range: at,
           ...(svelte && link.href.includes(`{`) ? { dynamic: true as const } : {}),
         })
@@ -357,7 +354,7 @@ export function content_manifest(
         prose.push(
           `tokens` in token && Array.isArray(token.tokens)
             ? inline_text(token.tokens)
-            : text_content(restore(token.text)),
+            : heading_text(restore(token.text), svelte),
         )
       }
       if (token.type === `list`) visit((token as Tokens.List).items, mapped)

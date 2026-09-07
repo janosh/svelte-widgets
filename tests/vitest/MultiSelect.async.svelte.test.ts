@@ -308,37 +308,56 @@ describe(`loadOptions feature`, () => {
     expect(ul.textContent).toContain(`Fresh Result`)
   })
 
-  test(`pagination error is logged, clears busy state, and stops further loading`, async () => {
-    const console_error = mock_console_error()
-    const { fn: load_options, resolvers, rejectors } = deferred_load()
-    mount_multiselect({ loadOptions: load_options, open: true })
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(1)
+  test.each([0, 50])(
+    `failed load at offset %s exposes the error and retries without losing options`,
+    async (offset) => {
+      const console_error = mock_console_error()
+      const { fn: load_options, resolvers, rejectors } = deferred_load()
+      const props = $state<MultiSelectProps>({
+        loadOptions: load_options,
+        open: true,
+        searchText: `query`,
+        loadError: null,
+      })
+      mount_multiselect(props)
+      await tick()
+      const ul = doc_query(`ul.options`)
+      const request_idx = offset ? 1 : 0
+      if (offset) {
+        resolvers[0]({ options: mock_data.slice(0, offset), hasMore: true })
+        await tick()
+        mock_scroll_near_bottom(ul)
+        await tick()
+      }
+      expect(get_input().getAttribute(`aria-busy`)).toBe(`true`)
+      const error = new Error(`Server error`)
+      rejectors[request_idx](error)
+      await tick()
+      expect(props.loadError).toBe(error)
+      expect(console_error).toHaveBeenCalledWith(`MultiSelect: loadOptions error:`, error)
+      expect(get_input().getAttribute(`aria-busy`)).toBeNull()
+      expect(document.querySelector(`.user-msg`)).toBeNull()
+      expect(doc_query(`[role="alert"]`).textContent).toBe(`Could not load options`)
+      expect(ul.querySelectorAll(`li[role="option"]`)).toHaveLength(offset)
+      mock_scroll_near_bottom(ul)
+      await tick()
+      expect(load_options).toHaveBeenCalledTimes(request_idx + 1)
 
-    resolvers[0]({ options: mock_data.slice(0, 50), hasMore: true })
-    await tick()
-    const input = get_input()
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-
-    const ul = doc_query(`ul.options`)
-    mock_scroll_near_bottom(ul)
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(2)
-    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-
-    rejectors[1](new Error(`Server error`))
-    await tick()
-    expect(console_error).toHaveBeenCalledWith(
-      `MultiSelect: loadOptions error:`,
-      expect.any(Error),
-    )
-
-    // the error sets has_more=false, which both clears pending and blocks pagination
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-    mock_scroll_near_bottom(ul)
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(2)
-  })
+      doc_query<HTMLButtonElement>(`[role="alert"] + button`).click()
+      await tick()
+      expect(props.loadError).toBeNull()
+      expect(load_options).toHaveBeenLastCalledWith(
+        expect.objectContaining({ search: `query`, offset, limit: 50 }),
+      )
+      expect(get_input().getAttribute(`aria-busy`)).toBe(`true`)
+      resolvers[request_idx + 1]({ options: [`Recovered`], hasMore: false })
+      await tick()
+      expect(ul.querySelectorAll(`li[role="option"]`)).toHaveLength(offset + 1)
+      expect(ul.textContent).toContain(`Recovered`)
+      expect(document.querySelector(`[role="alert"]`)).toBeNull()
+      expect(get_input().getAttribute(`aria-busy`)).toBeNull()
+    },
+  )
 
   test(`close during fetch clears loading state`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
@@ -455,6 +474,7 @@ describe(`loadOptions feature`, () => {
     rejectors[0](new Error(`Stale network error`))
     await vi.runAllTimersAsync()
 
+    expect(document.querySelector(`[role="alert"]`)).toBeNull()
     // pagination still fires, so hasMore survived the stale error
     mock_scroll_near_bottom(ul)
     await vi.runAllTimersAsync()

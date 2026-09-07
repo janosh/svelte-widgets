@@ -11,6 +11,8 @@ Provide a `loadOptions` function that fetches data:
   import { MultiSelect } from '$lib'
   import type { LoadOptionsParams, LoadOptionsResult } from '$lib/types'
 
+  let fail_next = $state(false)
+
   // stands in for a database/API
   const all_items: string[] = Array.from({ length: 10000 }, (_, idx) => `Item ${idx + 1}`)
 
@@ -21,6 +23,10 @@ Provide a `loadOptions` function that fetches data:
     // simulated network delay
     await new Promise((resolve) => setTimeout(resolve, 300))
 
+    if (fail_next) {
+      fail_next = false
+      throw new Error(`Simulated network failure`)
+    }
     const filtered = search
       ? all_items.filter((item) => item.toLowerCase().includes(search.toLowerCase()))
       : all_items
@@ -31,6 +37,7 @@ Provide a `loadOptions` function that fetches data:
   }
 </script>
 
+<label><input type="checkbox" bind:checked={fail_next} /> Fail the next request</label>
 <MultiSelect loadOptions={load_options} placeholder="Search 10,000 items..." />
 ```
 
@@ -40,7 +47,7 @@ The component handles the required state management:
 - Loading more as user scrolls
 - Debounced search with automatic reset
 - Canceling superseded requests through `signal`
-- Loading indicators
+- Loading indicators and a Retry button after failures; previously loaded options remain available
 
 ### REST API Example
 

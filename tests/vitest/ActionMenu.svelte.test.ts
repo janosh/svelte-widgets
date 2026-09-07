@@ -13,8 +13,8 @@ describe(`ActionMenu`, () => {
   type MenuProps = Partial<Omit<ContextProps, `actions`>>
   type MenuEntries = ActionMenuProps[`actions`]
   const make_actions = (): CmdAction[] => [
-    { label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
-    { label: `Delete`, action: vi.fn(), disabled: true },
+    { id: `Copy`, label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
+    { id: `Delete`, label: `Delete`, action: vi.fn(), disabled: true },
   ]
   // svelte:body listeners outlive innerHTML = '', so unmount or old menus keep answering
   const mounted: Record<string, unknown>[] = []
@@ -194,7 +194,7 @@ describe(`ActionMenu`, () => {
     `%s enters the list at the right end when focus sits outside it`,
     async (key, expected_idx) => {
       await open_menu(
-        [`One`, `Two`, `Three`].map((label) => ({ label, action: vi.fn() })),
+        [`One`, `Two`, `Three`].map((label) => ({ id: label, label, action: vi.fn() })),
       )
       const menu_el = doc_query(`menu[role="menu"]`)
       ;(document.activeElement as HTMLElement | null)?.blur()
@@ -278,7 +278,7 @@ describe(`ActionMenu`, () => {
         ],
       },
       // no `selected`: a plain heading, whose items stay ordinary menu items
-      { title: `Other`, actions: [{ label: `Reset`, action: vi.fn() }] },
+      { title: `Other`, actions: [{ id: `Reset`, label: `Reset`, action: vi.fn() }] },
     ]
 
     // unique ids stay stable across reorder; duplicates append position to avoid
@@ -288,13 +288,13 @@ describe(`ActionMenu`, () => {
         { id: 1, label: `Numeric id`, action: vi.fn() },
         { id: 1, label: `Duplicate numeric id`, action: vi.fn() },
         { id: `1`, label: `String id`, action: vi.fn() },
-        { label: `1`, action: vi.fn() },
-        { label: `1`, action: vi.fn() },
+        { id: `1`, label: `1`, action: vi.fn() },
+        { id: `1`, label: `1`, action: vi.fn() },
         {
           title: `1`,
           actions: [
-            { label: `In section`, action: vi.fn() },
-            { label: `In section`, action: vi.fn() },
+            { id: `In section`, label: `In section`, action: vi.fn() },
+            { id: `In section`, label: `In section`, action: vi.fn() },
           ],
         },
       ])
@@ -327,8 +327,8 @@ describe(`ActionMenu`, () => {
     // and each_key_duplicate took down the whole menu
     test(`two sections may share a title`, async () => {
       await open_menu([
-        { title: `Tools`, actions: [{ label: `First`, action: vi.fn() }] },
-        { title: `Tools`, actions: [{ label: `Second`, action: vi.fn() }] },
+        { title: `Tools`, actions: [{ id: `First`, label: `First`, action: vi.fn() }] },
+        { title: `Tools`, actions: [{ id: `Second`, label: `Second`, action: vi.fn() }] },
       ])
 
       expect(
@@ -342,7 +342,7 @@ describe(`ActionMenu`, () => {
     test(`render as labeled groups of radios, flat actions keep menuitem`, async () => {
       // `Other` is both a flat action and a section title; the empty section drops out
       await open_menu([
-        { label: `Other`, action: vi.fn() },
+        { id: `Other`, label: `Other`, action: vi.fn() },
         ...make_sections(),
         { title: `Empty`, actions: [] },
       ])
@@ -390,7 +390,7 @@ describe(`ActionMenu`, () => {
     test(`arrow keys cross section boundaries, skipping disabled items`, async () => {
       const [bond_order, other] = make_sections()
       bond_order.actions[1].disabled = true
-      await open_menu([{ label: `Copy`, action: vi.fn() }, bond_order, other])
+      await open_menu([{ id: `Copy`, label: `Copy`, action: vi.fn() }, bond_order, other])
       const [copy, single, , reset] = items()
       expect(document.activeElement).toBe(copy)
 
@@ -445,7 +445,13 @@ describe(`ActionMenu`, () => {
     // CmdAction allows extra keys, so `actions`/`title` must not make one read as a section
     test(`a flat action with section-shaped extras stays flat`, async () => {
       await open_menu([
-        { label: `Copy`, action: vi.fn(), actions: [`audit`], title: `tooltip` },
+        {
+          id: `Copy`,
+          label: `Copy`,
+          action: vi.fn(),
+          actions: [`audit`],
+          title: `tooltip`,
+        },
       ])
       const [copy] = items()
       expect(copy.getAttribute(`role`)).toBe(`menuitem`)

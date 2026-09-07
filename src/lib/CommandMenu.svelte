@@ -81,7 +81,6 @@
   let recent_action_ids = $state<string[]>([])
   let backdrop_press_started = false
 
-  const get_action_id = (action: CmdAction): string => `${action.id ?? action.label}`
   const recent_actions = $derived(
     recent_actions_key
       ? create_recent_list<string>({
@@ -92,58 +91,40 @@
         })
       : null,
   )
-  const action_id_counts = $derived.by(() => {
-    const counts = new Map<string, number>()
-    for (const action of actions) {
-      const action_id = get_action_id(action)
-      counts.set(action_id, (counts.get(action_id) ?? 0) + 1)
+  function validate_actions(entries: Action[]) {
+    const ids = new Set<string>()
+    for (const { id, label } of entries) {
+      if ((typeof id !== `string` && typeof id !== `number`) || `${id}` === ``)
+        throw new Error(`CommandMenu action "${label}" requires a non-empty id`)
+      if (ids.has(`${id}`)) throw new Error(`Duplicate CommandMenu action id: ${id}`)
+      ids.add(`${id}`)
     }
-    return counts
+  }
+  // Includes dynamically loaded options and appended pages.
+  $effect(() => {
+    validate_actions(actions)
+    validate_actions(matching_actions)
   })
-  const action_ids_are_unique = $derived(action_id_counts.size === actions.length)
-  const get_action_signature = (action: CmdAction): string =>
-    JSON.stringify([
-      action.id,
-      action.label,
-      action.description,
-      action.badge,
-      action.disabled,
-      action.group,
-      action.metadata,
-      action.keywords,
-      action.shortcut,
-    ])
-  const action_id_is_unique = (action: Action) =>
-    action_id_counts.get(get_action_id(action)) === 1
-  const get_action_key = (action: Action) =>
-    action_id_is_unique(action) ? get_action_id(action) : action.action
-  const get_action_fallback_key = (action: Action) =>
-    action_id_is_unique(action) ? get_action_id(action) : get_action_signature(action)
 
   // load persisted recents (client-only since $effect doesn't run during SSR)
   $effect(() => {
-    if (!recent_actions || !action_ids_are_unique) return
+    if (!recent_actions) return
     recent_action_ids = recent_actions.load()
   })
 
   function record_recent(action: Action) {
-    if (!recent_actions || !action_ids_are_unique) return
-    recent_action_ids = recent_actions.remember(get_action_id(action), recent_action_ids)
+    if (!recent_actions) return
+    recent_action_ids = recent_actions.remember(`${action.id}`, recent_action_ids)
   }
 
   // recently triggered actions first (most recent on top), rest keep original order
   const sorted_actions = $derived.by(() => {
-    if (!recent_actions || !action_ids_are_unique || recent_action_ids.length === 0)
-      return actions
-    // drop stale persisted ids, which would occupy low ranks and push real recents down
-    const rank = new Map<string, number>()
-    for (const action_id of recent_action_ids) {
-      if (action_id_counts.has(action_id)) rank.set(action_id, rank.size)
-    }
+    if (!recent_actions || recent_action_ids.length === 0) return actions
+    const rank = new Map(recent_action_ids.map((id, idx) => [id, idx]))
     return actions.toSorted(
       (left_action, right_action) =>
-        (rank.get(get_action_id(left_action)) ?? actions.length) -
-        (rank.get(get_action_id(right_action)) ?? actions.length),
+        (rank.get(`${left_action.id}`) ?? recent_action_ids.length) -
+        (rank.get(`${right_action.id}`) ?? recent_action_ids.length),
     )
   })
 
@@ -228,8 +209,6 @@
     backdrop_press_started = false
   }
 
-  const run_toggle_hotkeys = (event: KeyboardEvent) => run_hotkeys(event, toggle_bindings)
-
   function handle_window_keydown(event: KeyboardEvent) {
     // a close key still lands after another handler already called preventDefault
     if (event.defaultPrevented && !(open && close_keys.includes(event.key))) return
@@ -296,7 +275,6 @@
       options={sorted_actions}
       bind:activeIndex={active_idx}
       bind:activeOption={active_option}
-      activeOptionFallbackKey={get_action_fallback_key}
       autoActiveFirstOption
       bind:input
       bind:matchingOptions={matching_actions}
@@ -307,9 +285,12 @@
       inputProps={{ 'aria-label': input_aria_label, ...input_props }}
       noMatchingOptionsMsg={no_matching_options_msg}
       {placeholder}
-      key={get_action_key}
+      key={({ id }) => `${id}`}
       onadd={trigger_action_and_close}
-      onkeydown={chain_handlers(run_toggle_hotkeys, onkeydown)}
+      onkeydown={chain_handlers(
+        (event) => run_hotkeys(event, toggle_bindings),
+        onkeydown,
+      )}
       option={option_snippet ?? (has_action_meta ? action_item : undefined)}
       --sms-bg="var(--sms-options-bg)"
       --sms-width="var(--cmd-width, min(38rem, 90vw))"

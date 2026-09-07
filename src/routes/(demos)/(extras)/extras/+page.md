@@ -130,7 +130,7 @@ so any unit works.
 
 ### `FileDetails`
 
-A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. CodeBlock highlights content using `language` (or `default_lang`) and reports highlighter failures alongside the source. The `files` array is read-only input; DOM references stay internal.
+A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. CodeBlock highlights content using `language` (or `default_lang`) and reports highlighter failures alongside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
 
 ```svelte example id="file-details-demo"
 <script lang="ts">

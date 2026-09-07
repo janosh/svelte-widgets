@@ -125,12 +125,10 @@
     if (event.key === `Escape`) close_menus()
   }
 
-  const is_dropdown_open = (href: string) => open_dropdown === href
-
   function handle_toggle_keydown(event: KeyboardEvent, href: string) {
     const { key } = event
     const opens =
-      key === `Enter` || key === ` ` || (key === `ArrowDown` && !is_dropdown_open(href))
+      key === `Enter` || key === ` ` || (key === `ArrowDown` && open_dropdown !== href)
     if (!opens) return
     event.preventDefault()
     toggle_dropdown(href, true)
@@ -139,7 +137,7 @@
   // on the whole dropdown so arrows keep working once focus leaves the toggle, and
   // Escape returns focus to the toggle from anywhere inside
   function handle_dropdown_keydown(event: KeyboardEvent, href: string) {
-    if (!is_dropdown_open(href)) return
+    if (open_dropdown !== href) return
     if (event.key === `Escape`) {
       event.preventDefault()
       close_menus()
@@ -312,7 +310,7 @@
         {@const filtered_sub_routes = sub_routes.filter(
           (route) => route !== parsed_route.href,
         )}
-        {@const dropdown_open = is_dropdown_open(parsed_route.href)}
+        {@const dropdown_open = open_dropdown === parsed_route.href}
         <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; the keydown handler only routes arrows/Escape within the open submenu -->
         <div
           class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
@@ -322,12 +320,7 @@
         >
           <div>
             {#if parsed_route.disabled}
-              <span
-                class={[`disabled`, parsed_route.class]}
-                style={`${formatted.style}; ${parsed_route.style ?? ``}`}
-                aria-disabled="true"
-                {@attach item_tooltip}>{@html formatted.label}</span
-              >
+              {@render default_item_render(parsed_route, formatted, item_tooltip)}
             {:else if parent_page_exists}
               <a
                 href={parsed_route.href}

@@ -111,7 +111,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
   expect(selected_rows()).toHaveLength(2)
 })
 
-test(`Shift-click adds one visible range and one history entry`, async () => {
+test(`Shift-click adds one visible range without intercepting native undo`, async () => {
   const onrange_select = mount_range({
     options: alpha_options,
     selected: [],
@@ -128,9 +128,7 @@ test(`Shift-click adds one visible range and one history entry`, async () => {
   })
   press(`z`, { ctrlKey: true })
   await tick()
-  const rows_after_undo = selected_rows()
-  expect(rows_after_undo).toHaveLength(1)
-  expect(rows_after_undo[0]?.textContent).toContain(`Alpha`)
+  expect(selected_rows()).toHaveLength(alpha_options.length)
 })
 
 test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async () => {

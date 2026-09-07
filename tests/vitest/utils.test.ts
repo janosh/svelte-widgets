@@ -793,6 +793,7 @@ describe(`format_cmd_metadata`, () => {
 
 describe(`cmd_action_matches`, () => {
   const action: CmdAction = {
+    id: `Toggle theme`,
     label: `Toggle theme`,
     action: () => {},
     description: `Switch between light and dark`,
@@ -825,7 +826,7 @@ describe(`cmd_action_matches`, () => {
   })
 
   test(`an action with only a label does not throw on absent fields`, () => {
-    const bare: CmdAction = { label: `Bare`, action: () => {} }
+    const bare: CmdAction = { id: `Bare`, label: `Bare`, action: () => {} }
     expect(cmd_action_matches(bare, `bare`)).toBe(true)
     expect(cmd_action_matches(bare, `missing`)).toBe(false)
   })

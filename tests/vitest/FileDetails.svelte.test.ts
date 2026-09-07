@@ -21,8 +21,8 @@ test.each<[string, string, string, string?]>([
   [`styles.css`, `.a{}`, `css`],
   [`script.py`, `x = 1`, `python`],
   [`config.yml`, `key: val`, `yaml`],
-  // extension extracted after stripping tags
-  [`<code>options.ts</code>`, `export const x = 1`, `typescript`],
+  // filenames are plain text, including characters that resemble markup
+  [`<options>.ts`, `export const x = 1`, `typescript`],
   // explicit language overrides title inference
   [`data.json`, `{}`, `javascript`, `javascript`],
   // unknown extension used as the language flag
@@ -46,8 +46,10 @@ test(`lang-label is positioned out of flow so it can't indent code`, () => {
   ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
 })
 
-test(`lang-label escapes HTML in the language name`, () => {
-  mount_files({ files: [{ title: `x`, content: `a`, language: `<b>ts</b>` }] })
+test(`file titles and language names escape HTML`, () => {
+  mount_files({ files: [{ title: `<b>x.ts</b>`, content: `a`, language: `<b>ts</b>` }] })
+  expect(doc_query(`summary`).textContent).toBe(`<b>x.ts</b>`)
+  expect(doc_query(`summary`).querySelector(`b`)).toBeNull()
   expect(doc_query(`.lang-label`).textContent).toBe(`<b>ts</b>`)
   expect(doc_query(`.lang-label`).querySelector(`b`)).toBeNull()
 })
@@ -261,7 +263,7 @@ test(`renders custom container with summary titles and custom default_lang`, () 
     class: `files-list`,
     default_lang: `txt`,
     files: [
-      { title: `<code>component.svelte</code>`, content: `<h1>Hello</h1>` },
+      { title: `component.svelte`, content: `<h1>Hello</h1>` },
       { title: `script.ts`, content: `const answer = 42` },
       { title: `README`, content: `plain text` },
     ],

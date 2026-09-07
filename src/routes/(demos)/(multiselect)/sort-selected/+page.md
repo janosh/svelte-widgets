@@ -46,7 +46,11 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
 />
 ```
 
-<FileDetails files={[{ title: `<code>options.ts</code>`, content: options_src }]} />
+<FileDetails files={[{ title: `options.ts`, content: options_src }]}>
+{#snippet title_snippet({ title })}
+<code>{title}</code>
+{/snippet}
+</FileDetails>
 
 MultiSelect by default renders selected items in the order they were chosen. Enabling `sortSelected` implicitly disables drag reordering because `selectedOptionsDraggable` defaults to `!sortSelected`. Explicitly combining sorting with `selectedOptionsDraggable={true}` throws because the two ordering contracts conflict. The prop
 

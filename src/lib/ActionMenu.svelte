@@ -105,18 +105,16 @@
   // section; its required `action` callback is what one entry has and the other lacks.
   const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
     !(`action` in entry)
-  // Tag by source field so id `Copy`, label `Copy` and section `Copy` stay distinct; the
+  // Tag by source field so action id `Copy` and section `Copy` stay distinct; the
   // index is appended only on repeats, so unique ids stay stable across reorder.
-  const tag = (entry: CmdAction | CmdSection): string =>
-    is_section(entry)
-      ? JSON.stringify([`section`, entry.title])
-      : JSON.stringify(entry.id === undefined ? [`label`, entry.label] : [`id`, entry.id])
   const keys_of = (entries: readonly (CmdAction | CmdSection)[]): string[] => {
-    const tags = entries.map(tag)
+    const tags = entries.map((entry) =>
+      JSON.stringify(is_section(entry) ? [`section`, entry.title] : [`id`, entry.id]),
+    )
+    const counts = new Map<string, number>()
+    for (const key of tags) counts.set(key, (counts.get(key) ?? 0) + 1)
     return tags.map((serialized, idx) =>
-      tags.indexOf(serialized) === tags.lastIndexOf(serialized)
-        ? serialized
-        : `${serialized}:${idx}`,
+      counts.get(serialized) === 1 ? serialized : `${serialized}:${idx}`,
     )
   }
   const entry_keys = $derived(keys_of(actions))
@@ -125,12 +123,6 @@
   const all_empty = $derived(
     actions.every((entry) => is_section(entry) && !entry.actions.length),
   )
-  // Undefined leaves the item a plain menuitem; a boolean makes it a radio.
-  const is_checked = (action: CmdAction, section?: CmdSection): boolean | undefined =>
-    section?.selected === undefined
-      ? undefined
-      : section.selected === (action.id ?? action.label)
-
   const remember_focus_origin = (target: unknown = document.activeElement) => {
     if (focus_origin) return
     if (target instanceof HTMLElement || target instanceof SVGElement)
@@ -274,7 +266,9 @@
 {/if}
 
 {#snippet menu_item(action: CmdAction, section?: CmdSection)}
-  {@const checked = is_checked(action, section)}
+  <!-- Undefined leaves the item a plain menuitem; a boolean makes it a radio. -->
+  {@const checked =
+    section?.selected === undefined ? undefined : section.selected === action.id}
   <button
     type="button"
     role={checked === undefined ? `menuitem` : `menuitemradio`}

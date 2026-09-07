@@ -20,11 +20,9 @@
     'range-select': `Select visible ranges with Shift-click and Shift+Arrow.`,
     'keep-selected': `Keep selected items visible in dropdown.`,
     'allow-user-options': `Create options from user input.`,
-    history: `Undo/redo and selection history behavior.`,
     ui: `Core UI controls and visual states.`,
     'css-classes': `Class-based styling hooks.`,
     snippets: `Custom rendering with snippets.`,
-    'parse-labels-as-html': `Render option labels as HTML.`,
     portal: `Portaled dropdown rendering and layering.`,
   }
   // resolve's arg type distributes over the Pathname union, so a runtime slug can't match a
@@ -248,6 +246,8 @@ Props ordered by how often you'll reach for them.
    <!-- With config -->
    <MultiSelect loadOptions={{ fetch: myFetchFn, debounceMs: 500, batchSize: 20 }} />
    ```
+
+   Failed requests show an error and a Retry button. Retry preserves previously loaded options and requests the same page again. Bind `loadError` (`Error | null`) to inspect the failure; it clears on retry or a new search. Customize the messages through `labels.loading_failed` and `labels.retry`.
 
    The function receives `{ search, offset, limit, signal }` and must return `{ options, hasMore }`. `signal` is an `AbortSignal` that fires when the request is superseded by a newer search or when the component closes or unmounts. Forward it to `fetch` to cancel work in flight:
 
@@ -587,19 +587,13 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    rangeSelect: boolean = false
    ```
 
-   Whether Shift-click and Shift+Arrow select an inclusive range of options. The first plain click (or the option active before Shift+Arrow) sets the anchor, then the range spans from the anchor to the shift-targeted option. Disabled options are skipped, `maxSelect` is respected, and the whole range counts as a single undo step. Off by default since enabling it changes what Shift-click does for existing consumers.
+   Whether Shift-click and Shift+Arrow select an inclusive range of options. The first plain click (or the option active before Shift+Arrow) sets the anchor, then the range spans from the anchor to the shift-targeted option. Disabled options are skipped, `maxSelect` is respected. Off by default since enabling it changes what Shift-click does for existing consumers.
 
 1. ```ts
    liSelectAllClass: string = ''
    ```
 
    CSS class applied to the "Select All" `<li>` element.
-
-1. ```ts
-   parseLabelsAsHtml: boolean = false
-   ```
-
-   Whether to render option labels as HTML. Combining this with `allowUserOptions` throws because user-provided HTML would enable XSS.
 
 1. ```ts
    selectedOptionsDraggable: boolean = !sortSelected
@@ -629,40 +623,6 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    | `clear_all`  | `'meta+backspace'` / `'ctrl+backspace'` | Deselect all options (only while chips are present and the search box is empty)                                                      |
    | `open`       | `null`                                  | Open dropdown                                                                                                                        |
    | `close`      | `null`                                  | Close dropdown (Escape works by default)                                                                                             |
-   | `undo`       | `'meta+z'` / `'ctrl+z'`                 | Undo last selection change (platform-aware)                                                                                          |
-   | `redo`       | `'meta+shift+z'` / `'ctrl+shift+z'`     | Redo last undone change (platform-aware)                                                                                             |
-
-### Selection History (Undo/Redo)
-
-1. ```ts
-   history: boolean | number = true
-   ```
-
-   Enable selection history for undo/redo support. `true` (default) stores up to 50 states. Pass a number to set a custom maximum. `false` or `0` disables history. Note: you need at least `history=2` for a single undo (history=1 effectively disables it).
-
-1. ```ts
-   undo: () => boolean // bindable
-   ```
-
-   Undo the last selection change. Returns `true` if undo was performed. Use with `bind:undo` to get a callable function.
-
-1. ```ts
-   redo: () => boolean // bindable
-   ```
-
-   Redo the last undone selection change. Returns `true` if redo was performed. Use with `bind:redo` to get a callable function.
-
-1. ```ts
-   canUndo: boolean // bindable
-   ```
-
-   Whether an undo operation is available. Use with `bind:canUndo` for UI indicators (e.g. disabling an undo button).
-
-1. ```ts
-   canRedo: boolean // bindable
-   ```
-
-   Whether a redo operation is available. Use with `bind:canRedo` for UI indicators (e.g. disabling a redo button).
 
 ### Message Props
 
@@ -849,7 +809,7 @@ These reflect internal component state:
 
 ### Bindable Props
 
-`selected`, `value`, `searchText`, `open`, `maxSelect`, `activeIndex`, `activeOption`, `invalid`, `input`, `outerDiv`, `form_input`, `options`, `matchingOptions`, `collapsedGroups`, `collapseAllGroups`, `expandAllGroups`, `undo`, `redo`, `canUndo`, `canRedo`
+`selected`, `value`, `searchText`, `open`, `maxSelect`, `activeIndex`, `activeOption`, `invalid`, `input`, `outerDiv`, `form_input`, `options`, `matchingOptions`, `collapsedGroups`, `collapseAllGroups`, `expandAllGroups`, `loadError`
 
 ## Snippets
 
@@ -991,18 +951,6 @@ Example using several snippets:
    ```
 
    Triggers when all groups are expanded (e.g. via `expandAllGroups()`). `groups` lists the group names that were expanded.
-
-1. ```ts
-   onundo={({ previous, current }) => console.log(`Undo:`, previous, `→`, current)}
-   ```
-
-   Triggers when an undo operation restores a previous selection state. `previous` is the selection before undo, `current` is the restored selection.
-
-1. ```ts
-   onredo={({ previous, current }) => console.log(`Redo:`, previous, `→`, current)}
-   ```
-
-   Triggers when a redo operation re-applies a previously undone selection change. `previous` is the selection before redo, `current` is the new selection.
 
 The following example shows an alert whenever one or more options are added or removed:
 
