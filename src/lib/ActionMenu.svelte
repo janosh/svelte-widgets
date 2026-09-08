@@ -42,7 +42,7 @@
     at?: never
     children?: never
   }
-  type Props = Omit<HTMLAttributes<HTMLMenuElement>, `children`> & {
+  type Props = HTMLAttributes<HTMLMenuElement> & {
     actions: (CmdAction | CmdSection)[]
     disabled?: boolean
     // Native light-dismiss by default; press dismissal, escape/enabled false, or extra

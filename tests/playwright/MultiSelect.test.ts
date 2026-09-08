@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-await-in-loop
 import { foods, languages, octicons } from '$site/options'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 

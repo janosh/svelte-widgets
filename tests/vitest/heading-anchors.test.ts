@@ -5,8 +5,8 @@ import {
   unique_heading_id,
 } from '$lib/heading-anchors'
 import { SvelteSet } from 'svelte/reactivity'
-import { describe, expect, it } from 'vitest'
-import { doc_query } from './index'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { doc_query, stub_prop } from './index'
 
 const preprocess = (content: string, filename?: string) =>
   heading_ids().markup({ content, filename })
@@ -109,6 +109,10 @@ describe(`heading_ids preprocessor`, () => {
     ],
     // entities decode to what the browser renders (Markdown escapes `&`, `<`, `{`)
     [`<h2>Foo &amp; Bar</h2>`, `<h2 id="foo-bar">Foo &amp; Bar</h2>`],
+    [
+      `<h2>🔗 &thinsp; Links&ensp;to&emsp;WBM Files</h2>`,
+      `<h2 id="links-to-wbm-files">🔗 &thinsp; Links&ensp;to&emsp;WBM Files</h2>`,
+    ],
     [`<h2>Using &#123;foo&#125;</h2>`, `<h2 id="using-foo">Using &#123;foo&#125;</h2>`],
     [`<h2>&lt;b&gt;x &#x1F600;</h2>`, `<h2 id="b-x">&lt;b&gt;x &#x1F600;</h2>`],
   ])(`%s → %s`, (input: string, expected: string) => {
@@ -345,19 +349,8 @@ describe(`heading_anchors attachment`, () => {
 
   it(`returns undefined in SSR (no document)`, () => {
     const dummy = document.createElement(`div`)
-    const original = globalThis.document
-    Object.defineProperty(globalThis, `document`, {
-      value: undefined,
-      configurable: true,
-    })
-    try {
-      expect(heading_anchors()(dummy)).toBeUndefined()
-    } finally {
-      Object.defineProperty(globalThis, `document`, {
-        value: original,
-        configurable: true,
-      })
-    }
+    onTestFinished(stub_prop(globalThis, `document`, undefined))
+    expect(heading_anchors()(dummy)).toBeUndefined()
   })
 
   const deeply_nested = `<div><section><h2 id="deep">X</h2></section></div>`

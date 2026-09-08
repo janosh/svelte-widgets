@@ -174,13 +174,17 @@ test(`heading links retain history, smooth scrolling and root styles`, async ({
     .toEqual([`auto`, `important`])
   await page.goForward()
   await expect(page).toHaveURL(new RegExp(`${hashes[0]}$`))
-  for (const [idx, activation] of [`click`, `Enter`, `Space`].entries()) {
+  for (const [idx, activation] of [`click`, `Enter`, `Space`, `row`].entries()) {
     await toggle.click()
-    await panel.evaluate((nav) => nav.setAttribute(`data-sveltekit-replacestate`, ``))
     const link = panel.locator(`ol > li > a`).nth(idx + 2)
+    await link.evaluate((anchor) =>
+      anchor.closest(`li`)?.setAttribute(`data-sveltekit-replacestate`, ``),
+    )
     const href = await link.getAttribute(`href`)
     const history_length = await page.evaluate(() => history.length)
     if (activation === `click`) await link.click()
+    else if (activation === `row`)
+      await link.evaluate((anchor) => anchor.parentElement?.click())
     else await link.press(activation)
     await expect(page).toHaveURL(new RegExp(`${href}$`))
     await expect(panel).toHaveCount(0)

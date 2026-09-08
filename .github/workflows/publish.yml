@@ -1,7 +1,5 @@
 name: Publish to npm
 
-# releases are cut from main, which requires lint + tests to pass via branch
-# protection, so the released commit is already validated - no need to re-check here
 on:
   release:
     types: [published]

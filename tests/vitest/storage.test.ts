@@ -127,24 +127,15 @@ describe(`create_recent_list`, () => {
   })
 
   test.each([
-    [`corrupt JSON`, `{not json`],
-    [`non-array JSON`, `{"id":"a"}`],
-  ])(`load returns [] for %s`, (_case, stored) => {
-    localStorage.setItem(`test.recent`, stored)
-    expect(list.load()).toEqual([])
-  })
-
-  test(`load drops entries failing is_valid but keeps the rest`, () => {
-    localStorage.setItem(
-      `test.recent`,
+    [`corrupt JSON`, `{not json`, []],
+    [`non-array JSON`, `{"id":"a"}`, []],
+    [
+      `drops invalid entries`,
       JSON.stringify([{ id: `a` }, { id: 42 }, null, `nope`, { id: `b` }]),
-    )
-    expect(list.load()).toEqual([{ id: `a` }, { id: `b` }])
-  })
-
-  test(`load keeps the newest item per key and caps oversized stored lists`, () => {
-    localStorage.setItem(
-      `test.recent`,
+      [{ id: `a` }, { id: `b` }],
+    ],
+    [
+      `deduplicates and caps oversized lists`,
       JSON.stringify([
         { id: `a`, label: `newest` },
         { id: `b` },
@@ -152,8 +143,11 @@ describe(`create_recent_list`, () => {
         { id: `c` },
         { id: `d` },
       ]),
-    )
-    expect(list.load()).toEqual([{ id: `a`, label: `newest` }, { id: `b` }, { id: `c` }])
+      [{ id: `a`, label: `newest` }, { id: `b` }, { id: `c` }],
+    ],
+  ])(`load handles %s`, (_case, stored, expected) => {
+    localStorage.setItem(`test.recent`, stored)
+    expect(list.load()).toEqual(expected)
   })
 
   test.each([-1, 1.5])(`rejects invalid max_items=%s`, (max_items) => {

@@ -1,9 +1,9 @@
 import type { PlaywrightTestConfig } from '@playwright/test'
+import process from 'node:process'
 
 // CI previews a production build to avoid cold dev-server hydration flakes. Pagefind
 // writes after the build, so copy it into preview's client root. Local dev retains HMR.
-// Reflect avoids requiring Node globals in this config's type scope.
-const on_ci = Boolean(Reflect.get(globalThis, `process`)?.env?.CI)
+const on_ci = Boolean(process.env.CI)
 
 export default {
   webServer: {
@@ -14,7 +14,7 @@ export default {
     reuseExistingServer: true,
     timeout: on_ci ? 180_000 : 15_000,
   },
-  // CI runners share a small CPU budget across browsers and Vite fixture servers.
+  // CI runners share a small CPU budget across test workers and Vite fixture servers.
   workers: on_ci ? 2 : 16,
   testDir: `tests/playwright`,
 } satisfies PlaywrightTestConfig

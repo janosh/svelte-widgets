@@ -58,7 +58,6 @@ const error_rules = [
   eslint-plugin-vitest/prefer-strict-boolean-matchers eslint-plugin-vitest/prefer-each
   eslint-plugin-vitest/prefer-called-exactly-once-with
   eslint-plugin-vitest/require-awaited-expect-poll`,
-  // tier 1: zero-violation guard rails
   `no-var no-self-compare prefer-arrow-callback no-array-constructor no-new-wrappers
   prefer-numeric-literals default-case-last no-object-constructor no-unreachable-loop
   @typescript-eslint/prefer-enum-initializers
@@ -88,7 +87,6 @@ const error_rules = [
   eslint-plugin-vitest/prefer-equality-matcher eslint-plugin-vitest/prefer-to-contain
   eslint-plugin-vitest/prefer-hooks-on-top eslint-plugin-vitest/prefer-hooks-in-order
   eslint-plugin-vitest/no-test-return-statement`,
-  // tier 2: small cleanups (mostly autofixable)
   `no-else-return object-shorthand prefer-template operator-assignment no-multi-assign
   no-lonely-if symbol-description no-useless-return @typescript-eslint/array-type
   @typescript-eslint/consistent-generic-constructors
@@ -111,7 +109,6 @@ const error_rules = [
   @typescript-eslint/no-unnecessary-type-arguments @typescript-eslint/no-unnecessary-type-parameters
   @typescript-eslint/no-useless-default-assignment
   @typescript-eslint/use-unknown-in-catch-callback-variable`,
-  // tier 3: larger but worthwhile
   `@typescript-eslint/prefer-nullish-coalescing
   eslint-plugin-unicorn/prefer-string-replace-all @typescript-eslint/dot-notation radix
   prefer-exponentiation-operator no-implicit-coercion

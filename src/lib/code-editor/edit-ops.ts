@@ -205,8 +205,14 @@ export const visible_line_window = (
   const count = clamp_integer(line_count, 0)
   if (count === 0) return { start: 0, end: 0 }
   const rows = clamp_integer(overscan, 0)
-  const first_visible = Math.floor(non_negative(scroll_top) / line_height)
-  const visible_rows = Math.ceil(non_negative(viewport_height) / line_height) + 1
+  const height = non_negative(viewport_height)
+  // A document or diff layout can shrink before the browser dispatches its clamped
+  // scroll offset. Keep the last page rendered during that update.
+  const max_scroll = Math.max(0, count * line_height - Math.max(height, line_height))
+  const first_visible = Math.floor(
+    Math.min(non_negative(scroll_top), max_scroll) / line_height,
+  )
+  const visible_rows = Math.ceil(height / line_height) + 1
   const start = clamp(first_visible - rows, 0, count)
   return { start, end: clamp(first_visible + visible_rows + rows, start, count) }
 }

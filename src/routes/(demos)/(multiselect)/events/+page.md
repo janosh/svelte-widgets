@@ -240,4 +240,4 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
 
 1. **Custom Options**: The `oncreate` event only fires when `allowUserOptions` is enabled and users type text that doesn't match existing options.
 
-1. **New Events**: The `onsearch` event is debounced (150ms) to avoid excessive callbacks while typing. `onactivate` only fires during keyboard navigation (arrow keys), not on mouse hover. `onduplicate` only fires when `duplicates={false}` (the default).
+1. **Search and Navigation**: The `onsearch` event is debounced (150ms) to avoid excessive callbacks while typing. `onactivate` only fires during keyboard navigation (arrow keys), not on mouse hover. `onduplicate` fires when a duplicate is rejected with `duplicates={false}` (the default) or `duplicates="case-insensitive"`.

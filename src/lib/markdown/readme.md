@@ -18,7 +18,7 @@ export default {
 }
 ```
 
-`create_markdown(options)` creates a reusable engine. `markdown(engine)` adapts it to a Svelte markup preprocessor. Markdown headings receive stable IDs during analysis; use `heading_ids()` only when native Svelte pages also need anchors. It processes `.md` and `.svx` by default; set `extensions` to change that list. Scripts, styles, components, expressions, snippets and control blocks use ordinary Svelte syntax. Escape literal braces in prose as `\{` and `\}`; code spans and fences are always literal. Markdown outside code supports GFM tables, task lists, strikethrough and autolinks.
+`create_markdown(options)` creates a reusable engine. `markdown(engine)` adapts it to a Svelte markup preprocessor, processing `.md` and `.svx` by default; set the engine's `extensions` option to change that list. Markdown headings receive stable IDs during analysis; use `heading_ids()` only when native Svelte pages also need anchors. Scripts, styles, components, expressions, snippets and control blocks use ordinary Svelte syntax. Escape literal braces in prose as `\{` and `\}`; code spans and fences are always literal. Markdown outside code supports GFM tables, task lists, strikethrough and autolinks.
 
 YAML frontmatter exports a `metadata` object from the module script. Access values explicitly as `{metadata.title}` or `{metadata["custom-key"]}`. Frontmatter keys never create local bindings, so a component can declare its own `title` and frontmatter can contain reserved JavaScript words. YAML uses the core schema: dates stay strings and `yes`/`no` stay strings. Frontmatter and validator output must be mappings of JSON data. Nonfinite numbers, cycles, functions, undefined values, and objects such as dates are rejected during parsing rather than silently changed during emission. The module name `metadata` is reserved for the frontmatter export.
 
@@ -33,19 +33,17 @@ Source maps track numeric spans through edits and script injection. Separate occ
 ## HTML strings
 
 ```ts
-import { assert_ok, create_markdown, render_markdown } from 'svelte-widgets/markdown'
+import { assert_ok, create_markdown } from 'svelte-widgets/markdown'
 
-const engine = create_markdown({ math: true })
-const document = assert_ok(
-  await engine.parse(`A value: $x^2$`, {
-    filename: `description.md`,
-    dialect: `markdown`,
-  }),
+const engine = create_markdown({ math: true, frontmatter: false })
+const html = assert_ok(
+  await engine.render(`A value: $x^2$`, { filename: `description.md` }),
 )
-const html = assert_ok(await render_markdown(document))
 ```
 
-The `markdown` dialect treats braces literally and does not load the Svelte compiler. `render_markdown(document)` emits HTML from that document. Both dialects retain trusted authored HTML; neither sanitizes untrusted input.
+The `markdown` dialect treats braces literally and does not load the Svelte compiler. `render_markdown(document)` emits HTML from that document. Both dialects retain trusted authored HTML by default. Set `create_markdown({ raw_html: 'omit' })` for Markdown data fields that should discard HTML tags and entire raw HTML blocks; Markdown links, images, and code remain supported. This option requires the `markdown` dialect and also excludes omitted HTML from the content manifest. Neither mode sanitizes untrusted input.
+
+`engine.render(source, { filename })` parses and renders in the `markdown` dialect, returning the same diagnostic result shape. Use `engine.parse()` and `render_markdown(document)` when you also need the content manifest. Set `frontmatter: false` for embedded Markdown fields so leading `---` separators remain content instead of being interpreted as a YAML header. Frontmatter extraction stays enabled by default. Markdown rendering supports GFM tables, strikethrough and bare URL autolinks.
 
 ## Diagnostics
 
@@ -212,8 +210,7 @@ const engine = create_markdown({
     },
   },
 })
-const document = assert_ok(await engine.parse(source, { dialect: `markdown` }))
-const html = assert_ok(await render_markdown(document))
+const html = assert_ok(await engine.render(source))
 ```
 
 ```md
@@ -234,4 +231,8 @@ Forward references resolve after parsing; figures and equations have independent
 
 ## Migration
 
-Create an engine with `create_markdown(options)` and pass it to `markdown(engine)` or `markdown_vite(engine)`. Replace source-to-output calls with `engine.parse()` followed by `compile_markdown(document)` or `render_markdown(document)`, using `assert_ok()` at throwing boundaries. Replace implicit frontmatter references such as `{title}` with `{metadata.title}`. Replace custom or misspelled fence options with the supported typed settings. Replace `check_markdown()` with `check_document(document)`; `throw_on_error` and checker `markdown_options` are removed. Replace manifest `.position` with `.range.start`, and `.code_position` with `.code_range.start`. Remove remark plugin registration and the old live-example Vite plugin. Move `defaults.Wrapper` to `examples.wrapper`; use `hide_style`, not `hideStyle`. Replace the KaTeX before/after pair with `math`. Highlighter callbacks now return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight`. Highlighting now lives at `/highlight`; the `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed. Plain HTML callers should use `render_markdown()` and remove Svelte-output unwrapping and brace-replacement workarounds.
+Create an engine with `create_markdown(options)` and pass it to `markdown(engine)` or `markdown_vite(engine)`. For HTML strings, use `engine.render(source)` and remove Svelte-output unwrapping and brace-replacement workarounds. Parse once with `engine.parse()` when you also need the document for checking or content manifests, then call `compile_markdown(document)` for Svelte or `render_markdown(document)` for HTML. Use `assert_ok()` at throwing boundaries.
+
+Replace implicit frontmatter references such as `{title}` with `{metadata.title}`. Fence settings are now validated: move `defaults.Wrapper` to `examples.wrapper` and use `hide_style`, not `hideStyle`. Replace `check_markdown()` with `check_document(document)`; checker options `throw_on_error` and `markdown_options` are removed. Manifest `.position` and `.code_position` are now `.range.start` and `.code_range.start`.
+
+Remove remark plugin registration and the old live-example Vite plugin. Replace the KaTeX before/after pair with `math`. Highlighter callbacks return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight` from `/highlight`. The `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed.

@@ -60,6 +60,14 @@
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
+    "./assets": {
+      "types": "./dist/assets.d.ts",
+      "default": "./dist/assets.js"
+    },
+    "./yaml": {
+      "types": "./dist/yaml.d.ts",
+      "default": "./dist/yaml.js"
+    },
     "./vite-config": {
       "types": "./dist/vite-config.d.ts",
       "default": "./dist/vite-config.js"
@@ -212,8 +220,8 @@
     "build:site": "vp build",
     "test": "vitest run && playwright test",
     "test:coverage": "vitest run --coverage",
-    "test:package": "npm pack --dry-run && tsc -p tests/package-smoke/tsconfig.json && vp build --config tests/package-smoke/vite.config.ts",
-    "package": "npm run gen:icons && svelte-package && find dist \\( -name '*.js' -o -name '*.d.ts' -o -name '*.svelte' \\) -type f -exec perl -pi -e \"s/(\\.\\.?\\/[^'\\\"]*)\\.ts(['\\\"])/\\1.js\\2/g; s{((?:from|import)\\s*(?:\\(\\s*)?['\\\"])(\\.\\.?\\/(?:[^\\/'\\\"]+\\/)*[^\\/.'\\\"]+)(['\\\"])}{\\1\\2.js\\3}g\" {} + && find dist -name 'readme.md' -delete",
+    "test:package": "npm run package && node scripts/test-package.ts",
+    "package": "npm run gen:icons && svelte-package && node scripts/finalize-package.ts",
     "prepare": "vp config --no-agent && npm run package",
     "prepublishOnly": "npm run package",
     "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",

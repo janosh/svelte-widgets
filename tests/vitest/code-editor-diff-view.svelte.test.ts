@@ -522,4 +522,26 @@ describe(`virtualization`, () => {
     expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 200])
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 10)
   })
+
+  test(`keeps rows rendered when switching to a shorter layout while scrolled`, async () => {
+    const rows = Array.from({ length: 100 }, (_unused, idx) =>
+      diff_row(
+        `replace`,
+        diff_line(idx + 1, `old ${idx}`),
+        diff_line(idx + 1, `new ${idx}`),
+      ),
+    )
+    await mount_diff(rows_result(rows, { oldLineCount: 100, newLineCount: 100 }), {
+      options: { ...DEFAULT_OPTIONS, layout: `unified` },
+    })
+    const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
+    scroller.scrollTop = ROW_HEIGHT * 150
+    scroller.dispatchEvent(new Event(`scroll`))
+    await flush_async()
+    expect(code_texts()).toContain(`new 75`)
+
+    await click(query_element(`.segmented button[aria-pressed='false']`))
+    expect(code_texts()).toContain(`new 99`)
+    expect(document.querySelectorAll(`.diff-row.pair`).length).toBeGreaterThan(0)
+  })
 })

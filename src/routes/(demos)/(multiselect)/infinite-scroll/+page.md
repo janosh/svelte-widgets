@@ -258,6 +258,8 @@ interface LoadOptionsParams {
 interface LoadOptionsResult<T> {
   options: T[] // Array of options to add
   hasMore: boolean // Whether more options are available
+  replace?: boolean // Replace loaded options with this ordered snapshot
+  error?: Error // Show partial results alongside Retry
 }
 ```
 
@@ -298,3 +300,5 @@ loaded batch:
 ### Error Handling
 
 If `loadOptions` throws or rejects, the component displays an error and a Retry button while keeping previously loaded options available. Retry repeats the failed request; changing the search starts a new request.
+
+For partial failures, return successful `options` with `error`. Retry passes the number of loaded options as `offset`, so retain failed items in the loader and retry those downloads. Return `replace: true` with the full ordered result snapshot to restore their original positions without appending duplicates. Retry remains available even when `hasMore` is `false`.

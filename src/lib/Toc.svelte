@@ -554,8 +554,10 @@
       : []
   }
 
+  let forwarding_navigation = false
   // click/key handler on ToC items: scrolls to the heading
   const li_click_key_handler = (node: HTMLHeadingElement) => (event: LiEvent) => {
+    if (forwarding_navigation) return
     if (event instanceof KeyboardEvent) liProps.onkeydown?.(event)
     else liProps.onclick?.(event)
     if (event.defaultPrevented) return
@@ -579,12 +581,24 @@
     activate_heading(node, idx)
     if (!link) {
       event.preventDefault()
-      // Plain custom snippets need a link; keep it inside the TOC for navigation options.
-      const anchor = document.createElement(`a`)
-      anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
-      event.currentTarget.after(anchor)
-      anchor.click()
-      anchor.remove()
+      // Reuse the real link; plain snippets need a temporary child to inherit liProps.
+      const anchor =
+        (tocItem
+          ? null
+          : event.currentTarget.querySelector<HTMLAnchorElement>(`a[href]`)) ??
+        document.createElement(`a`)
+      const temporary = !anchor.parentElement
+      if (temporary) {
+        anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
+        event.currentTarget.append(anchor)
+      }
+      forwarding_navigation = true
+      try {
+        anchor.click()
+      } finally {
+        forwarding_navigation = false
+        if (temporary) anchor.remove()
+      }
     }
     set_open(false, `toc-item`)
   }

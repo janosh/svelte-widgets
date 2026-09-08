@@ -1,4 +1,3 @@
-/* oxlint-disable no-template-curly-in-string -- Source fixtures contain Svelte expressions. */
 import { relative, resolve } from 'node:path'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { runInNewContext } from 'node:vm'
@@ -9,12 +8,7 @@ import {
   type CheckResult,
   type CheckOptions,
 } from '$lib/markdown/check'
-import {
-  assert_ok,
-  create_markdown,
-  DiagnosticError,
-  type MarkdownOptions,
-} from '$lib/markdown'
+import { assert_ok, create_markdown, DiagnosticError } from '$lib/markdown'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 
 const filename = resolve(`tests/checked-examples.md`)
@@ -30,17 +24,14 @@ const write_json = (path: string, value: unknown) =>
 
 const check_source = async (
   source: string,
-  {
-    markdown_options,
-    ...options
-  }: CheckOptions & { markdown_options?: MarkdownOptions } = {},
+  options: CheckOptions = {},
 ): Promise<CheckResult> => {
   options = { filename, ...options }
-  const parsed = await create_markdown(markdown_options).parse(source, {
+  const parsed = await create_markdown().parse(source, {
     filename: options.filename,
   })
   return parsed.ok
-    ? check_document(parsed.value, { ...options })
+    ? check_document(parsed.value, options)
     : { ...parsed, value: { checked: 0, asserted: 0 } }
 }
 const diagnostics_at_start = (result: CheckResult) =>
@@ -298,42 +289,43 @@ describe(`checked Markdown examples`, () => {
     )
   })
 
-  test(`explicit async assertions execute interaction checks and preserve failure context`, async () => {
-    const code = `const button = document.createElement("button");\nbutton.textContent = "0";\nbutton.onclick = () => { button.textContent = "1" };\ndocument.body.append(button);`
-    const assert_increment = async ({ code: source }: { code: string }) => {
-      // Execution belongs to this caller, never to the static checker.
-      runInNewContext(source, { document })
-      const button = document.querySelector(`button`)
-      expect(button).not.toBeNull()
-      button?.click()
-      await Promise.resolve()
-      expect(button?.textContent).toBe(`1`)
-    }
-    const source = fence(`js`, code, `test="increments"`)
-    expect(
-      await check_source(source, {
+  test.each([false, true])(
+    `explicit async assertions preserve interaction results (fail=%s)`,
+    async (fail) => {
+      const code = `const button = document.createElement("button");\nbutton.textContent = "0";\nbutton.onclick = () => { button.textContent = "1" };\ndocument.body.append(button);`
+      const assert_increment = async ({ code: source }: { code: string }) => {
+        // Execution belongs to this caller, never to the static checker.
+        runInNewContext(source, { document })
+        const button = document.querySelector(`button`)
+        expect(button).not.toBeNull()
+        button?.click()
+        await Promise.resolve()
+        expect(button?.textContent).toBe(`1`)
+        if (fail) throw new Error(`Expected count 2, received 1`)
+      }
+      const source = fence(`js`, code, `test="increments"`)
+      const result = await check_source(source, {
         assertions: { increments: assert_increment },
-      }),
-    ).toMatchObject({ ok: true, value: { checked: 1, asserted: 1 } })
-    const failure = await check_source(source, {
-      assertions: {
-        increments: async () => {
-          await Promise.resolve()
-          throw new Error(`Expected count 2, received 1`)
-        },
-      },
-    })
-    expect(failure).toMatchObject({ ok: false, value: { asserted: 0 } })
-    expect(diagnostics_at_start(failure)).toMatchObject([
-      {
-        filename,
-        line: 1,
-        column: 1,
-        code: `assertion`,
-        message: `increments: Expected count 2, received 1`,
-      },
-    ])
-  })
+      })
+      expect(result).toMatchObject({
+        ok: !fail,
+        value: { checked: 1, asserted: fail ? 0 : 1 },
+      })
+      expect(diagnostics_at_start(result)).toMatchObject(
+        fail
+          ? [
+              {
+                filename,
+                line: 1,
+                column: 1,
+                code: `assertion`,
+                message: `increments: Expected count 2, received 1`,
+              },
+            ]
+          : [],
+      )
+    },
+  )
 
   test.each([
     [`python check`, `language`, `Unsupported checked fence language: python`],

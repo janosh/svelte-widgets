@@ -1,15 +1,12 @@
-Closes #issue.
+## Changes
 
-## Summary of major changes
+Describe the problem and resulting behavior. Link a related issue if applicable.
 
-1. adds feature/prop xyz
-2. fixes error so-and-so
+## Validation
 
-## Todos
-
-1. Anything still missing from this PR?
+List the checks run and any remaining work.
 
 ## Checklist
 
-[ ] has tests (only needed if any new functionality was added or bugs fixed)
-[ ] has examples/docs (only needed if any new functionality was added)
+- [ ] Tests cover new or changed behavior.
+- [ ] Examples and docs reflect API changes.

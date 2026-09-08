@@ -8,6 +8,7 @@ import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
+import { asset_imports } from './src/lib/assets.ts'
 
 await generate_icons()
 
@@ -29,14 +30,12 @@ const docs = markdown_vite(
   { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
 )
 
-// passed inline to sveltekit() (Kit >= 2.62) so no separate svelte.config.ts is needed;
-// kit options (adapter, alias, paths, prerender) sit at the top level rather than under `kit`.
-// svelte-package only reads svelte.config.*, so it packages src/lib with default config: nothing
-// in src/lib relies on these preprocessors or aliases and the `package` script drops Markdown guides.
+// Inline Kit options configure the docs site. svelte-package uses its defaults;
+// src/lib needs no preprocessing, and the package script removes Markdown guides.
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 
-  preprocess: [docs.preprocess, heading_ids()],
+  preprocess: [docs.preprocess, asset_imports(), heading_ids()],
 
   adapter: site_adapter(manifests),
   paths: { base: base_path },
@@ -64,7 +63,6 @@ export default {
   // shared lint/fmt/build/staged, published as svelte-widgets/vite-config
   ...make_config({
     staged: {
-      '*.test.ts': `sh -c '! grep -E "(test|describe)\\.only\\(" "$@"' --`,
       // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup;
       // `alle` is German for "all", used by the label-override tests
       '*': `codespell --ignore-words-list afterall,falsy,fo,alle --check-filenames`,
@@ -95,7 +93,7 @@ export default {
   },
 
   server: {
-    fs: { allow: [`..`] }, // needed to import from $root
+    fs: { allow: [`.`] }, // $root imports include the repository's Markdown guides
     port: 3000,
   },
 

@@ -3,7 +3,6 @@ import {
   assert_ok,
   create_markdown,
   compile_markdown,
-  render_markdown,
   markdown,
   type MarkdownOptions,
   type MarkdownFile,
@@ -21,13 +20,7 @@ export const compile_source = async (
 export const render_source = async (
   source: string,
   options: MarkdownOptions & MarkdownFile = {},
-) => {
-  const engine = create_markdown(options)
-  const document = assert_ok(
-    await engine.parse(source, { filename: options.filename, dialect: `markdown` }),
-  )
-  return assert_ok(await render_markdown(document))
-}
+) => assert_ok(await create_markdown(options).render(source, options))
 export const markdown_preprocessor = (options: MarkdownOptions = {}) =>
   markdown(create_markdown(options))
 export const markdown_integration = ({

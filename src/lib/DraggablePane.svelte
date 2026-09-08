@@ -201,6 +201,15 @@
     if (open && toggle_btn && !has_been_dragged) position_pane()
   }
   $effect(reanchor)
+  // Async content, fonts and CSS size changes can move the anchored edges without a
+  // viewport resize. Stop observing once a drag or manual resize owns the position.
+  $effect(() => {
+    if (!open || !pane || !toggle_btn || has_been_dragged) return
+    const observer = new ResizeObserver(reanchor)
+    observer.observe(pane, { box: `border-box` })
+    observer.observe(toggle_btn, { box: `border-box` })
+    return () => observer.disconnect()
+  })
 
   let resize_timeout: ReturnType<typeof setTimeout> | undefined
   onDestroy(() => clearTimeout(resize_timeout))

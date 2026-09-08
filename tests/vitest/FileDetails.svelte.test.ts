@@ -54,14 +54,6 @@ test(`file titles and language names escape HTML`, () => {
   expect(doc_query(`.lang-label`).querySelector(`b`)).toBeNull()
 })
 
-test(`content with HTML characters is escaped before highlighting loads`, () => {
-  const html_content = `<div class="foo">&amp; bar</div>`
-  mount_files({ files: [{ title: `test.svelte`, content: html_content }] })
-  const code_el = doc_query(`pre code`)
-  expect(code_el.textContent).toBe(html_content)
-  expect(code_el.innerHTML).not.toContain(`<div class="foo">`)
-})
-
 test(`unsupported language falls back to escaped raw content`, async () => {
   const content = `some <weird> content`
   mount_files({
@@ -74,16 +66,20 @@ test(`unsupported language falls back to escaped raw content`, async () => {
   expect(doc_query(`pre code`).textContent).toBe(content)
 })
 
-test(`syntax highlighting produces starry-night spans`, async () => {
-  const svelte_code = `<script lang="ts">\n  let count = $state(0)\n</script>`
-  mount_files({ files: [{ title: `App.svelte`, content: svelte_code }] })
+test.each([
+  [`Svelte script`, `<script lang="ts">\n  let count = $state(0)\n</script>`],
+  [`HTML content`, `<div class="foo">&amp; bar</div>`],
+])(`escapes %s before loading syntax highlighting`, async (_case, content) => {
+  mount_files({ files: [{ title: `App.svelte`, content }] })
+  const code = doc_query(`pre code`)
+  expect(code.textContent).toBe(content)
+  expect(code.querySelector(`div, script`)).toBeNull()
 
   await vi.waitFor(
-    () =>
-      expect(doc_query(`pre code`).querySelector(`span[class^="pl-"]`)).not.toBeNull(),
+    () => expect(code.querySelector(`span[class^="pl-"]`)).not.toBeNull(),
     { timeout: 5000 },
   )
-  expect(doc_query(`pre code`).textContent).toContain(`let count`)
+  expect(code.textContent).toBe(content)
 })
 
 test(`renders distinct language-content pairs independently`, async () => {

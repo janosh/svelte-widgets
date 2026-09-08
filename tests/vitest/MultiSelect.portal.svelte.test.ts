@@ -124,6 +124,7 @@ describe(`portal placement`, () => {
       const dropdown = stub_layout({ trigger_rect, dropdown_height, viewport_height })
 
       globalThis.dispatchEvent(new Event(`resize`)) // force update_position with stubs
+      await new Promise(requestAnimationFrame)
 
       expect(dropdown.dataset.placement).toBe(expected_placement)
       expect(dropdown.style.top).toBe(
@@ -148,6 +149,7 @@ describe(`portal placement`, () => {
       })
 
       globalThis.dispatchEvent(new Event(`resize`))
+      await new Promise(requestAnimationFrame)
 
       expect(dropdown.dataset.placement).toBe(`top`)
       expect(dropdown.style.top).toBe(`0px`)
@@ -169,6 +171,7 @@ describe(`portal placement`, () => {
       viewport_height: 800,
     })
     globalThis.dispatchEvent(new Event(`scroll`)) // scroll listener also repositions
+    await new Promise(requestAnimationFrame)
     expect(dropdown.dataset.placement).toBe(`bottom`)
     expect(dropdown.style.top).toBe(`130px`)
 
@@ -179,12 +182,14 @@ describe(`portal placement`, () => {
       viewport_height: 700,
     })
     globalThis.dispatchEvent(new Event(`scroll`))
+    await new Promise(requestAnimationFrame)
     expect(dropdown.dataset.placement).toBe(`top`)
 
     // changing placement via props flows through the action's update() method
     props.portal = { active: true, placement: `bottom` }
     await tick()
     globalThis.dispatchEvent(new Event(`resize`))
+    await new Promise(requestAnimationFrame)
     expect(dropdown.dataset.placement).toBe(`bottom`)
     expect(dropdown.style.top).toBe(`630px`)
   })

@@ -1,7 +1,7 @@
 import { Masonry } from '$lib'
 import { order_options as ALL_ORDER_MODES } from '$lib/utils'
 import { type ComponentProps, mount, tick } from 'svelte'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
@@ -74,7 +74,6 @@ globalThis.ResizeObserver = class ResizeObserver implements ResizeObserver {
 
 function create_mock_animation(): Animation {
   const mock_animation = { cancel: () => {}, finished: Promise.resolve() }
-  // oxlint-disable-next-line no-unsafe-type-assertion -- tests only need cancel() and finished.
   return mock_animation as unknown as Animation
 }
 
@@ -118,7 +117,7 @@ describe(`Masonry`, () => {
     },
   )
 
-  test(`merges container style with layout and spreads columnProps onto columns`, async () => {
+  test(`merges container attributes and style with layout and spreads columnProps`, async () => {
     const style = `background-color: darkblue;`
     const column_style = `border: 1px solid red;`
     mount_masonry({
@@ -127,9 +126,13 @@ describe(`Masonry`, () => {
       columnProps: { style: column_style, 'data-testid': `col`, role: `list` },
       maxColWidth: 150,
       gap: 5,
+      'data-testid': `my-masonry`,
+      'aria-label': `Image gallery`,
     })
     // container: user style merges with (not clobbers) the layout styles
     const masonry = masonry_el()
+    expect(masonry?.getAttribute(`data-testid`)).toBe(`my-masonry`)
+    expect(masonry?.getAttribute(`aria-label`)).toBe(`Image gallery`)
     expect(masonry?.getAttribute(`style`)).toContain(style)
     expect(masonry?.style.display).toBe(`flex`)
     expect(masonry?.style.boxSizing).toBe(`border-box`)
@@ -294,6 +297,46 @@ describe(`Masonry append render stability`, () => {
 })
 
 describe(`Masonry order modes`, () => {
+  test.each([
+    // Rounded card heights from diagrams.janosh.dev at a six-column viewport.
+    [
+      `gallery`,
+      [
+        272, 387, 474, 478, 352, 318, 270, 431, 439, 417, 376, 218, 379, 262, 470, 241,
+        287, 321, 420, 410, 342, 313, 397, 255,
+      ],
+      6,
+      16,
+    ],
+    [`uniform`, Array.from({ length: 25 }, () => 100), 6, 16],
+    [`tall last item`, [100, 100, 100, 100, 100, 1000], 3, 0],
+    [`one item per column`, [10, 10, 10, 1000], 4, 0],
+  ] as const)(
+    `column-balanced keeps later columns populated: %s`,
+    async (_label, heights, cols, gap) => {
+      mock_height = (el) => heights[Number(el.textContent)]
+      mount_masonry({
+        items: make_items(heights.length),
+        order: `column-balanced`,
+        animate: false,
+        calcCols: () => cols,
+        gap,
+      })
+      await tick()
+
+      const columns = get_col_dist().map((column) => column.map(Number))
+      expect(columns.flat()).toEqual(make_items(heights.length))
+      expect(columns.every((column) => column.length > 0)).toBe(true)
+      const column_heights = columns.map((column) =>
+        column.reduce((sum, idx) => sum + heights[idx] + gap, -gap),
+      )
+      // A whole-card-sized deficit is avoidable for these fixtures, even with a tall outlier.
+      expect(
+        Math.max(...column_heights) - Math.min(...column_heights),
+      ).toBeLessThanOrEqual(Math.max(...heights) + gap)
+    },
+  )
+
   // distinct heights make every mode yield a different distribution, pinning exact output
   const dist_heights = [300, 80, 120, 400, 60, 220, 90]
   const dist_height = (item: number) => dist_heights[item]
@@ -302,8 +345,8 @@ describe(`Masonry order modes`, () => {
     [`balanced`, `0,6 | 1,3 | 2,4,5`],
     [`balanced-stable`, `0,6 | 1,3 | 2,4,5`],
     [`row-first`, `0,3,6 | 1,4 | 2,5`],
-    [`column-sequential`, `0,1,2 | 3,4,5 | 6`],
-    [`column-balanced`, `0,1,2 | 3,4 | 5,6`],
+    [`column-sequential`, `0,1,2 | 3,4 | 5,6`],
+    [`column-balanced`, `0,1 | 2,3 | 4,5,6`],
   ] as const)(`order=%s puts 7 items into 3 columns as %s`, async (order, expected) => {
     mock_height = (el) => dist_height(Number(el.textContent))
     mount_masonry({
@@ -335,17 +378,69 @@ describe(`Masonry order modes`, () => {
     expect(as_columns()).toBe(expected)
   })
 
-  test(`order=column-sequential fills columns in reading order`, async () => {
-    mount_masonry({
-      items: [1, 2, 3, 4, 5, 6],
-      order: `column-sequential`,
-      calcCols: () => 2,
-      masonryWidth: 500,
-    })
-    const columns = col_els()
-    expect(columns[0].textContent).toMatch(/1.*2.*3/u)
-    expect(columns[1].textContent).toMatch(/4.*5.*6/u)
-  })
+  test.each([
+    [6, 2],
+    [25, 6],
+    [7, 3],
+    [2, 5],
+  ])(
+    `column-sequential spreads %s items over %s columns in reading order`,
+    async (count, cols) => {
+      mount_masonry({
+        items: make_items(count),
+        order: `column-sequential`,
+        calcCols: () => cols,
+        masonryWidth: 500,
+      })
+      const columns = get_col_dist()
+      expect(columns.flat().map(Number)).toEqual(make_items(count))
+      expect(columns.filter((column) => column.length > 0)).toHaveLength(
+        Math.min(count, cols),
+      )
+      const sizes = columns.map((column) => column.length)
+      expect(Math.max(...sizes) - Math.min(...sizes)).toBeLessThanOrEqual(1)
+    },
+  )
+
+  test.each([
+    [`balanced`, `0,3 | 1,4 | 2,5`, `0 | 1,3,5 | 2,4`, `0,3,5 | 1 | 2,4`],
+    [`column-balanced`, `0,1 | 2,3 | 4,5`, `0 | 1,2 | 3,4,5`, `0 | 1 | 2,3,4,5`],
+  ] as const)(
+    `%s rebalances when already-measured cards resize`,
+    async (order, before, after, swapped) => {
+      mount_masonry({
+        items: make_items(6),
+        order,
+        animate: false,
+        gap: 0,
+        calcCols: () => 3,
+      })
+      await tick()
+      expect(as_columns()).toBe(before)
+
+      const first = item_els()[0]
+      const callback = resize_observers.get(first)
+      if (!callback) throw new Error(`Missing resize observer for first card`)
+      Object.defineProperty(first, `offsetHeight`, { value: 500, configurable: true })
+      callback([mock_resize_entry(first)], {} as ResizeObserver)
+      await tick()
+      expect(as_columns()).toBe(after)
+
+      // Swapping heights keeps both count and sum unchanged, but must still rebalance.
+      for (const [id, height] of [
+        [0, 100],
+        [1, 500],
+      ]) {
+        const node = [...item_els()].find((item) => item.textContent === String(id))
+        const notify = node && resize_observers.get(node)
+        if (!node || !notify) throw new Error(`Missing resize observer for card ${id}`)
+        Object.defineProperty(node, `offsetHeight`, { value: height, configurable: true })
+        notify([mock_resize_entry(node)], {} as ResizeObserver)
+      }
+      await tick()
+      expect(as_columns()).toBe(swapped)
+    },
+  )
 
   test(`order=balanced-stable repopulates columns after count increases`, async () => {
     const harness = mount_harness()
@@ -426,36 +521,22 @@ describe(`Masonry bindable props`, () => {
 
   test(`exposes masonryHeight bindable`, async () => {
     let bound_height = 0
-    const original_desc = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      `clientHeight`,
-    )
-    Object.defineProperty(HTMLElement.prototype, `clientHeight`, {
-      get() {
-        return this.classList?.contains(`masonry`) ? 250 : 0
-      },
-      configurable: true,
-    })
-
-    try {
-      mount_masonry({
-        items: [1, 2],
-        get masonryHeight() {
-          return bound_height
-        },
-        set masonryHeight(val: number) {
-          bound_height = val
-        },
+    const height_spy = vi
+      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains(`masonry`) ? 250 : 0
       })
-      expect(bound_height).toBe(250)
-    } finally {
-      if (original_desc) {
-        Object.defineProperty(HTMLElement.prototype, `clientHeight`, original_desc)
-      } else {
-        // nothing to restore means we added the property, so take it back off
-        Reflect.deleteProperty(HTMLElement.prototype, `clientHeight`)
-      }
-    }
+    onTestFinished(() => height_spy.mockRestore())
+    mount_masonry({
+      items: [1, 2],
+      get masonryHeight() {
+        return bound_height
+      },
+      set masonryHeight(val: number) {
+        bound_height = val
+      },
+    })
+    expect(bound_height).toBe(250)
   })
 })
 
@@ -474,17 +555,6 @@ describe(`Masonry default rendering`, () => {
       `date`,
       `fig`,
     ])
-  })
-
-  test(`passes rest props to container div`, () => {
-    mount_masonry({
-      items: [1, 2],
-      'data-testid': `my-masonry`,
-      'aria-label': `Image gallery`,
-    })
-    const masonry = masonry_el()
-    expect(masonry?.getAttribute(`data-testid`)).toBe(`my-masonry`)
-    expect(masonry?.getAttribute(`aria-label`)).toBe(`Image gallery`)
   })
 })
 
@@ -591,33 +661,19 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`defers virtualization until masonryHeight is measured for string heights`, async () => {
-    const original = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      `clientHeight`,
-    )
-    Object.defineProperty(HTMLElement.prototype, `clientHeight`, {
-      get: () => 0,
-      configurable: true,
+    const height_spy = vi
+      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
+      .mockReturnValue(0)
+    onTestFinished(() => height_spy.mockRestore())
+    mount_masonry({
+      items: make_items(100),
+      virtualize: true,
+      height: `500px`,
+      calcCols: () => 2,
     })
 
-    try {
-      mount_masonry({
-        items: make_items(100),
-        virtualize: true,
-        height: `500px`,
-        calcCols: () => 2,
-      })
-
-      // clientHeight=0 means unmeasured, so virtualization is deferred
-      expect(item_els()).toHaveLength(100)
-    } finally {
-      if (original) {
-        Object.defineProperty(HTMLElement.prototype, `clientHeight`, original)
-      } else {
-        // nothing to restore means we added the property, so take it back off
-        Reflect.deleteProperty(HTMLElement.prototype, `clientHeight`)
-      }
-    }
+    // clientHeight=0 means unmeasured, so virtualization is deferred
+    expect(item_els()).toHaveLength(100)
   })
 
   test(`virtualize=false skips padding and overflow styles`, async () => {
@@ -672,6 +728,22 @@ describe(`Masonry CSS reset compatibility`, () => {
 
 describe(`Masonry virtual scroll stability`, () => {
   // Regression: https://github.com/janosh/svelte-bricks/issues/50
+
+  test(`filtering a scrolled grid fills the last viewport before another scroll event`, async () => {
+    const harness = mount_harness({ events: [], virtualize: true })
+    harness.append(...Array.from({ length: 96 }, (_, idx) => idx + 5))
+    await tick()
+    const masonry = masonry_el()
+    if (!masonry) throw new Error(`Missing masonry container`)
+    masonry.scrollTop = 6000
+    masonry.dispatchEvent(new Event(`scroll`))
+    await new Promise(requestAnimationFrame)
+    await tick()
+
+    harness.remove(...Array.from({ length: 80 }, (_, idx) => idx + 21))
+    await tick()
+    expect(as_columns()).toBe(`15,17,19 | 16,18,20`)
+  })
 
   test(`uses round-robin distribution when virtualizing regardless of order prop`, async () => {
     mount_virtualized(12, {

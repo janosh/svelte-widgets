@@ -6,7 +6,8 @@ import source_links, {
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vitest'
+import { create_element } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
 const load_symbols = (root?: string): SourceSymbols => {
@@ -118,36 +119,31 @@ describe(`create_source_links`, () => {
   }
   const { source_location, source_href, link_source_mentions } = create_source_links(data)
 
-  afterEach(() => {
-    document.body.innerHTML = ``
-  })
-
   it(`labels reword the generated link title`, async () => {
-    const root = document.createElement(`main`)
+    const root = create_element(`main`)
     root.innerHTML = `<p><code>Footer</code></p>`
-    document.body.append(root)
     const detach = create_source_links(data, {
       link_title: (path) => `Quelle: ${path}`,
     }).link_source_mentions(root)
+    onTestFinished(detach)
     await new Promise(requestAnimationFrame)
 
     expect(root.querySelector(`code > a`)?.getAttribute(`title`)).toBe(
       `Quelle: src/lib/Footer.svelte`,
     )
-    detach()
   })
 
   // the anchor adopts the span's text nodes, so a reactive `<code>{name}</code>` rewrites
   // text inside our link; skipping spans that already hold one froze the old name
   it(`re-resolves a link whose code span text changed, and unwraps it when it stops matching`, async () => {
-    const root = document.createElement(`main`)
+    const root = create_element(`main`)
     const code = document.createElement(`code`)
     // held across rescans: the anchor adopts this very node
     const text = document.createTextNode(`Footer`)
     code.append(text)
     root.append(code)
-    document.body.append(root)
     const detach = link_source_mentions(root)
+    onTestFinished(detach)
     // one frame to scan, a second for the relink that scan's own mutations schedule
     const rescan = async () => {
       await new Promise(requestAnimationFrame)
@@ -167,7 +163,6 @@ describe(`create_source_links`, () => {
     await rescan()
     expect(code.querySelector(`a`)).toBeNull()
     expect(code.textContent).toBe(`label`)
-    detach()
   })
 
   it.each([
@@ -186,12 +181,12 @@ describe(`create_source_links`, () => {
   })
 
   it(`links matching code spans in place, skipping pre blocks and existing links`, async () => {
-    const root = document.createElement(`main`)
+    const root = create_element(`main`)
     root.innerHTML =
       `<p><code>Footer</code> and <code>label</code></p>` +
       `<pre><code>Footer</code></pre><a href="/x"><code>Footer</code></a>`
-    document.body.append(root)
     const detach = link_source_mentions(root)
+    onTestFinished(detach)
     await new Promise(requestAnimationFrame)
     const links = root.querySelectorAll(`code > a`)
     expect(links).toHaveLength(1)
@@ -200,6 +195,11 @@ describe(`create_source_links`, () => {
     )
     expect(links[0].getAttribute(`title`)).toBe(`Source: src/lib/Footer.svelte`)
     expect(links[0].textContent).toBe(`Footer`)
+    root.append(document.createElement(`span`))
+    await new Promise(requestAnimationFrame)
+    await new Promise(requestAnimationFrame)
+    expect(root.querySelectorAll(`code > a`)).toHaveLength(1)
+    expect(root.querySelector(`code > a`)).toBe(links[0])
     // late-arriving content is picked up too, and a detached root is left alone
     root.insertAdjacentHTML(`beforeend`, `<p><code>make_config</code></p>`)
     await new Promise(requestAnimationFrame)
@@ -212,18 +212,5 @@ describe(`create_source_links`, () => {
     await new Promise(requestAnimationFrame)
     await new Promise(requestAnimationFrame)
     expect(root.querySelectorAll(`code > a`)).toHaveLength(2)
-  })
-
-  it(`does not re-link a span once its anchor exists, even after a rescan`, async () => {
-    const root = document.createElement(`main`)
-    root.innerHTML = `<p><code>Footer</code></p>`
-    document.body.append(root)
-    const detach = link_source_mentions(root)
-    await new Promise(requestAnimationFrame)
-    root.append(document.createElement(`span`))
-    await new Promise(requestAnimationFrame)
-    await new Promise(requestAnimationFrame)
-    expect(root.querySelectorAll(`a`)).toHaveLength(1)
-    detach()
   })
 })

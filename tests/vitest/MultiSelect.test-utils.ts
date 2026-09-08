@@ -1,13 +1,12 @@
 import { mount, tick, unmount, type Component, type MountOptions } from 'svelte'
 import { afterEach } from 'vitest'
-import { SvelteSet } from 'svelte/reactivity'
 
 import { MultiSelect } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 
 type MountedComponent = Parameters<typeof unmount>[0]
-const mounted_components = new SvelteSet<MountedComponent>()
+const mounted_components = new Set<MountedComponent>()
 
 export const mount_component = <Props extends object, Exports extends MountedComponent>(
   component: Component<Props, Exports>,

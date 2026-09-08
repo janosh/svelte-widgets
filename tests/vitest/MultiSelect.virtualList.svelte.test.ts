@@ -1,6 +1,5 @@
-// deno-lint-ignore-file no-await-in-loop
 import { tick } from 'svelte'
-import { describe, expect, test } from 'vitest'
+import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import {
@@ -9,6 +8,29 @@ import {
   mount_multiselect,
   type_search_text,
 } from './MultiSelect.test-utils'
+
+// Install before the first mount: Svelte shares its dimension observer across bindings.
+const resize_callbacks = new Map<Element, () => void>()
+beforeAll(() => {
+  vi.stubGlobal(
+    `ResizeObserver`,
+    class implements ResizeObserver {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        resize_callbacks.set(target, () =>
+          this.callback([{ target } as ResizeObserverEntry], this),
+        )
+      }
+      unobserve(target: Element) {
+        resize_callbacks.delete(target)
+      }
+      disconnect() {}
+    },
+  )
+})
+afterAll(() => {
+  vi.unstubAllGlobals()
+})
 
 describe(`virtualList`, () => {
   const item_height = 30
@@ -79,6 +101,23 @@ describe(`virtualList`, () => {
     expect(rendered[0]?.textContent?.trim()).toBe(`option ${expected_start}`)
     expect(rendered).toHaveLength(window_end(scroll_top, overscan) - expected_start)
     expect(get_spacers()[0].style.height).toBe(`${expected_start * item_height}px`)
+  })
+
+  test(`resizing an open dropdown fills its viewport without scrolling`, async () => {
+    mount_multiselect({ ...virtual_props, virtualList: { itemHeight: 30, overscan: 0 } })
+    await tick()
+    const list = doc_query<HTMLUListElement>(`ul.options`)
+    const height = vi.spyOn(list, `clientHeight`, `get`)
+    const resize = resize_callbacks.get(list)
+    expect(resize).toBeTypeOf(`function`)
+
+    for (const viewport_height of [150, 900, 300]) {
+      height.mockReturnValue(viewport_height)
+      resize?.()
+      await tick()
+      expect(get_rendered_options()).toHaveLength(viewport_height / item_height)
+      expect(list.scrollTop).toBe(0)
+    }
   })
 
   test(`clicking a rendered option selects it`, async () => {

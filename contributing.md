@@ -17,6 +17,8 @@ npm install --legacy-peer-deps
 npx vp dev
 ```
 
+`--legacy-peer-deps` is needed because vite-plus and standalone Vitest require different versions of optional browser adapters.
+
 Before you start committing, create and check out a descriptively named branch:
 
 ```sh
@@ -27,24 +29,25 @@ git checkout -b docs-on-something
 git checkout -b test-some-feature
 ```
 
-To ensure your changes didn't break anything, run the full test suite (which also runs in CI):
+Run the tests covering your changes, for example:
 
 ```sh
-npm test
+npx vitest run tests/vitest/toc.svelte.test.ts
+npx playwright test tests/playwright/Toc.test.ts
 ```
+
+Install Chromium once with `npx playwright install chromium` before running browser tests. `npm test` runs both complete suites; CI also checks coverage, package imports, types, formatting, and the docs build.
 
 New features should include corresponding tests. Bug fixes should include a test that fails under the old code and passes with the change. PRs without tests are accepted when assistance is needed, but may take longer to merge.
 
 ## ✅ CI checks
 
-These CI checks have to pass for every PR before merging:
-
-All run as jobs of the single [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/ci.yml)):
+The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/ci.yml)) runs these jobs:
 
 - tests: `unit` (vitest with coverage plus the package smoke test) and `e2e` (Playwright)
 - linting and type checks: `check` runs `vp check` plus `svelte-check`
 - links: `link-check` runs lychee over every markdown, Svelte and TS file
-- docs: `build` and `deploy` handle continuous deployment through GitHub Pages
+- docs: `build` prerenders pages, validates local links and builds the Pagefind index; `deploy` publishes to GitHub Pages only on `main`
 
 ## 🆕 New release
 
@@ -62,18 +65,19 @@ Keep one H1 title, H2 release headings, and H3 subsections. Use sentence case fo
 npm run changelog
 ```
 
-Then commit `package.json`, `changelog.md` and `readme.md` files to the `main` branch using the new version number prefixed by `'v'` as commit message and tag:
+On `main`, commit the release changes using the new version number prefixed by `v` as the commit message and tag:
 
 ```sh
-git add package.json changelog.md readme.md
+git add package.json changelog.md
 git commit -m vx.y.z
-git tag $(git log -1 --pretty=%B)
+git tag vx.y.z
 ```
 
 Push the release commit and tag to `origin/main`:
 
 ```sh
-git push && git push --tags
+git push origin main
+git push origin vx.y.z
 ```
 
 Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/publish.yml), which pushes the package to npm through trusted publishing (OIDC), so no manual `npm publish` is needed.

@@ -248,18 +248,19 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
 })
 
 test(`handles action selection and execution`, async () => {
+  const pending = Promise.withResolvers<undefined>()
   const actions_with_spies = mock_actions.map(({ label }) => ({
     id: label,
     label,
-    action: vi.fn(),
+    action: vi.fn(() => pending.promise),
   }))
-  const onadd = vi.fn()
+  const onexecute = vi.fn()
   const props = $state({
     open: true,
     actions: actions_with_spies,
     activeIndex: null as number | null,
     searchText: `action`,
-    onadd,
+    onexecute,
   })
   mount_menu(props)
   await tick()
@@ -274,15 +275,17 @@ test(`handles action selection and execution`, async () => {
   expect(actions_with_spies[1].action).toHaveBeenCalledExactlyOnceWith(`action 2`)
   expect(actions_with_spies[0].action).not.toHaveBeenCalled()
   expect(actions_with_spies[2].action).not.toHaveBeenCalled()
-  expect(onadd).toHaveBeenCalledWith(
-    expect.objectContaining({ option: actions_with_spies[1] }),
+  expect(onexecute).toHaveBeenCalledExactlyOnceWith({ action: actions_with_spies[1] })
+  expect(actions_with_spies[1].action.mock.invocationCallOrder[0]).toBeLessThan(
+    onexecute.mock.invocationCallOrder[0],
   )
   expect(props.open).toBe(false)
   expect(props.activeIndex).toBeNull()
   expect(props.searchText).toBe(``)
+  pending.resolve(undefined)
 })
 
-test(`keeps command groups but excludes option creation and bulk selection`, async () => {
+test(`keeps command groups but excludes selection state, chips and bulk controls`, async () => {
   expectTypeOf<keyof ComponentProps<typeof CommandMenu>>()
     .extract<
       | `allowUserOptions`
@@ -290,21 +293,53 @@ test(`keeps command groups but excludes option creation and bulk selection`, asy
       | `selectAllOption`
       | `rangeSelect`
       | `parse_paste`
+      | `selected`
+      | `value`
+      | `maxSelect`
+      | `minSelect`
+      | `selectedDisplay`
+      | `selectedItem`
+      | `keepSelectedInDropdown`
+      | `maxVisibleChips`
+      | `selectedOptionsDraggable`
+      | `onadd`
+      | `onchange`
+      | `onremove`
     >()
     .toEqualTypeOf<never>()
   const action = vi.fn()
+  const selection_callback = vi.fn()
+  const onexecute = vi.fn()
+  const actions = [
+    { id: `existing`, label: `Existing`, group: `Commands`, preselected: true, action },
+    { id: `other`, label: `Other`, group: `Commands`, action },
+  ]
   // Untyped callers cannot re-enable these controls through the rest props either.
   const props = $state({
     open: true,
-    actions: [{ id: `existing`, label: `Existing`, group: `Commands`, action }],
+    actions,
+    selected: actions,
+    value: actions,
+    maxSelect: 0,
+    minSelect: 2,
+    selectedDisplay: `input`,
+    keepSelectedInDropdown: `checkboxes`,
+    selectedOptionsDraggable: true,
+    maxVisibleChips: -1,
     allowUserOptions: true,
     groupSelectAll: true,
     selectAllOption: true,
+    onadd: selection_callback,
+    onchange: selection_callback,
+    onremove: selection_callback,
+    onexecute,
   })
   mount_menu(props)
   await tick()
   expect(doc_query(`dialog li.group-header`).textContent).toContain(`Commands`)
   expect(document.querySelector(`.group-select-all, .select-all`)).toBeNull()
+  expect(document.querySelector(`ul.selected > li, input[type='checkbox']`)).toBeNull()
+  expect(option_labels()).toEqual([`Existing`, `Other`])
   await type_search(`custom command`)
   expect(document.querySelector(`dialog li.user-msg`)?.textContent).toContain(
     `No matching commands`,
@@ -314,6 +349,22 @@ test(`keeps command groups but excludes option creation and bulk selection`, asy
   )
   expect(action).not.toHaveBeenCalled()
   expect(props.open).toBe(true)
+  for (const execution_count of [1, 2]) {
+    await type_search(`existing`)
+    menu_input().dispatchEvent(
+      new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
+    )
+    await tick()
+    expect(action).toHaveBeenCalledTimes(execution_count)
+    expect(props.open).toBe(false)
+    expect(onexecute).toHaveBeenLastCalledWith({ action: actions[0] })
+    props.open = true
+    await tick()
+    expect(option_labels()).toEqual([`Existing`, `Other`])
+    expect(document.querySelector(`ul.selected > li`)).toBeNull()
+  }
+  expect(selection_callback).not.toHaveBeenCalled()
+  expect(props.selected).toEqual(actions)
 })
 
 // open=false must call dialog.close() before `{#if open}` unmounts, outro included
@@ -805,100 +856,70 @@ describe(`PageSearch`, () => {
   beforeEach(() => vi.useFakeTimers())
   afterEach(() => vi.useRealTimers())
 
-  test.each([
-    {
-      strip_html_suffix: true,
-      transform_url: (url: string) => `/docs${url}`,
-      section_url: `/phase-diagram.html#temperature-composition`,
-      expected_url: `/docs/phase-diagram#temperature-composition`,
-    },
-    {
-      strip_html_suffix: false,
-      transform_url: undefined,
-      section_url: `/phase-diagram.html#temperature-composition`,
-      expected_url: `/phase-diagram.html#temperature-composition`,
-    },
-    {
-      strip_html_suffix: true,
-      transform_url: undefined,
-      section_url: `/download?file=guide.html`,
-      expected_url: `/download?file=guide.html`,
-    },
-    {
-      strip_html_suffix: true,
-      transform_url: undefined,
-      section_url: `/docs/index.html?next=/legacy.html`,
-      expected_url: `/docs/?next=/legacy.html`,
-    },
-    {
-      strip_html_suffix: true,
-      transform_url: undefined,
-      section_url: `/docs/#config.html`,
-      expected_url: `/docs/#config.html`,
-    },
-  ])(
-    `PageSearch paginates and navigates $section_url`,
-    async ({ strip_html_suffix, transform_url, section_url, expected_url }) => {
-      const navigate = vi.fn()
-      const search = vi.fn(async () => ({
-        results: [
-          {
-            id: `phase-diagram`,
-            data: async () => ({
-              url: `/phase-diagram.html`,
-              plain_excerpt: `Binary phase diagram`,
-              meta: { title: `Phase diagrams` },
-              sub_results: [
-                {
-                  title: `Overview`,
-                  url: `/phase-diagram.html#overview`,
-                  plain_excerpt: `General phase diagram`,
-                },
-                {
-                  title: `Temperature composition`,
-                  url: section_url,
-                  plain_excerpt: `Interactive &lt;temperature&gt; composition diagram`,
-                },
-              ],
-            }),
-          },
-        ],
-      }))
-      const props = $state({
-        ...base_props,
-        batch_size: 0.5,
-        navigate,
-        strip_html_suffix,
-        transform_url,
-        load_pagefind: async () => ({ search }),
-      })
-      mount(PageSearch, { target: document.body, props })
+  test(`paginates section results and navigates with current URL settings`, async () => {
+    const strip_html_suffix = true
+    const transform_url = (url: string) => `/docs${url}`
+    const section_url = `/phase-diagram.html#temperature-composition`
+    const expected_url = `/docs/phase-diagram#temperature-composition`
+    const navigate = vi.fn()
+    const search = vi.fn(async () => ({
+      results: [
+        {
+          id: `phase-diagram`,
+          data: async () => ({
+            url: `/phase-diagram.html`,
+            plain_excerpt: `Binary phase diagram`,
+            meta: { title: `Phase diagrams` },
+            sub_results: [
+              {
+                title: `Overview`,
+                url: `/phase-diagram.html#overview`,
+                plain_excerpt: `General phase diagram`,
+              },
+              {
+                title: `Temperature composition`,
+                url: section_url,
+                plain_excerpt: `Interactive &lt;temperature&gt; composition diagram`,
+              },
+            ],
+          }),
+        },
+      ],
+    }))
+    const props = $state({
+      ...base_props,
+      batch_size: 0.5,
+      navigate,
+      strip_html_suffix,
+      transform_url,
+      load_pagefind: async () => ({ search }),
+    })
+    mount(PageSearch, { target: document.body, props })
 
-      await search_pagefind(`binary`)
+    await search_pagefind(`binary`)
 
-      expect(search).toHaveBeenCalledExactlyOnceWith(`binary`)
-      expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(1)
-      doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
-      await vi.runAllTimersAsync()
-      await tick()
-      expect(search).toHaveBeenCalledOnce()
-      const options = document.querySelectorAll<HTMLLIElement>(`li[role='option']`)
-      expect(Array.from(options, (option) => option.textContent?.trim())).toEqual([
-        `Phase diagrams › Overview General phase diagram`,
-        `Phase diagrams › Temperature composition Interactive <temperature> composition diagram`,
-      ])
+    expect(search).toHaveBeenCalledExactlyOnceWith(`binary`)
+    expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(1)
+    doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
+    await vi.runAllTimersAsync()
+    await tick()
+    expect(search).toHaveBeenCalledOnce()
+    const options = document.querySelectorAll<HTMLLIElement>(`li[role='option']`)
+    expect(Array.from(options, (option) => option.textContent?.trim())).toEqual([
+      `Phase diagrams › Overview General phase diagram`,
+      `Phase diagrams › Temperature composition Interactive <temperature> composition diagram`,
+    ])
 
-      options[1].click()
-      await tick()
+    options[1].click()
+    await tick()
 
-      expect(navigate).toHaveBeenCalledExactlyOnceWith(expected_url, {
-        query: `binary`,
-        label: `Phase diagrams › Temperature composition`,
-        description: `Interactive <temperature> composition diagram`,
-      })
-      expect(props.open).toBe(false)
-    },
-  )
+    expect(navigate).toHaveBeenCalledExactlyOnceWith(expected_url, {
+      query: `binary`,
+      label: `Phase diagrams › Temperature composition`,
+      description: `Interactive <temperature> composition diagram`,
+    })
+    expect(props.open).toBe(false)
+  })
 
   test(`isolates concurrent queries that normalize to the same text`, async () => {
     const stale_response = make_pagefind_response(`Stale`)
@@ -934,13 +955,17 @@ describe(`PageSearch`, () => {
     expect(doc_query(`.cmd-label`).childNodes[0]?.textContent?.trim()).toBe(`Fresh`)
   })
 
-  test.each([`load`, `search`])(
+  test.each([`load`, `search`, `result`] as const)(
     `keeps local matches while Pagefind %s is pending, fails, and retries`,
     async (failure) => {
       const request = Promise.withResolvers<never>()
-      const search = vi.fn(async () => make_pagefind_response(`Fresh`))
+      const response = make_pagefind_response(`Fresh`)
+      const result_data = vi.fn(response.results[0].data)
+      response.results[0].data = result_data
+      const search = vi.fn(async () => response)
       const load_pagefind = vi.fn().mockResolvedValue({ search })
-      ;(failure === `load` ? load_pagefind : search).mockReturnValueOnce(request.promise)
+      const failing_call = { load: load_pagefind, search, result: result_data }[failure]
+      failing_call.mockReturnValueOnce(request.promise)
       mount(PageSearch, {
         target: document.body,
         props: {
@@ -967,19 +992,19 @@ describe(`PageSearch`, () => {
       await tick()
       expect(menu_input().value).toBe(`fallback`)
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
-      expect(load_pagefind).toHaveBeenCalledTimes(2)
+      expect(load_pagefind).toHaveBeenCalledTimes(failure === `result` ? 1 : 2)
       expect(option_labels().join(` `)).toContain(`Fresh`)
     },
   )
 
   test(`keeps the loader stable while using current callback props`, async () => {
-    const [first_navigate, second_navigate, onadd] = [vi.fn(), vi.fn(), vi.fn()]
+    const [first_navigate, second_navigate, onexecute] = [vi.fn(), vi.fn(), vi.fn()]
     const search = vi.fn(async () => make_pagefind_response(`Fresh`))
     const props = $state({
       ...base_props,
       load_pagefind: async () => ({ search }),
       navigate: first_navigate,
-      onadd,
+      onexecute,
       strip_html_suffix: false,
       transform_url: (url: string) => `/old${url}`,
     })
@@ -993,7 +1018,7 @@ describe(`PageSearch`, () => {
 
     expect(search).toHaveBeenCalledOnce()
     doc_query<HTMLLIElement>(`li[role='option']`).click()
-    expect(onadd.mock.calls[0][0].option.id).toBe(`pagefind:Fresh:0:/fresh.html`)
+    expect(onexecute.mock.calls[0][0].action.id).toBe(`pagefind:Fresh:0:/fresh.html`)
     expect(first_navigate).not.toHaveBeenCalled()
     expect(second_navigate).toHaveBeenCalledExactlyOnceWith(`/new/fresh`, {
       query: `fresh`,
@@ -1060,117 +1085,104 @@ describe(`PageSearch`, () => {
     },
   )
 
-  test.each([
-    [
-      `index has no matches`,
-      () => vi.fn(async () => ({ search: async () => ({ results: [] }) })),
-    ],
-    [
-      `result fragments all fail`,
-      () =>
-        vi.fn(async () => ({
-          search: async () => ({
-            results: [
-              {
-                id: `broken`,
-                data: async () => {
-                  throw new Error(`Fragment unavailable`)
-                },
-              },
-            ],
-          }),
-        })),
-    ],
-  ])(
-    `keeps matching fallback actions locally when the %s`,
-    async (_scenario, make_load_pagefind) => {
-      const fallback_actions = [
-        {
-          id: `API reference`,
-          label: `API reference`,
-          description: `All exported props`,
-          badge: `Docs`,
-          metadata: `Library`,
-          keywords: [`schema`],
-          action: vi.fn(),
-        },
-        {
-          id: `Styling guide`,
-          label: `Styling guide`,
-          description: `CSS custom properties`,
-          badge: `Guide`,
-          metadata: `Visual`,
-          keywords: [`theme`],
-          action: vi.fn(),
-        },
-      ]
-      const load_pagefind = make_load_pagefind()
-      mount(PageSearch, {
-        target: document.body,
-        props: { ...base_props, fallback_actions, load_pagefind },
-      })
-
-      await vi.runAllTimersAsync()
-      expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(2)
-      expect(load_pagefind).not.toHaveBeenCalled()
-
-      await search_pagefind(`css theme visual guide`)
-
-      const options = document.querySelectorAll(`li[role='option']`)
-      expect(options).toHaveLength(1)
-      expect(options[0].textContent).toContain(`Styling guide`)
-      expect(load_pagefind).toHaveBeenCalledTimes(1)
-
-      await search_pagefind(`api schema library docs`)
-
-      expect(load_pagefind).toHaveBeenCalledTimes(1)
-      doc_query<HTMLLIElement>(`li[role='option']`).click()
-      expect(fallback_actions[0].action).toHaveBeenCalledExactlyOnceWith(`API reference`)
-      expect(fallback_actions[1].action).not.toHaveBeenCalled()
-    },
-  )
-
-  test(`PageSearch handles a failed fragment and URL-derived title`, async () => {
-    const make_result = (
-      url: string,
-      title: string,
-      meta: Record<string, string> = { title },
-    ) => ({
-      id: url,
-      data: async () => ({
-        url,
-        plain_excerpt: `${title} content`,
-        meta,
-        sub_results: [],
-      }),
-    })
-    const search = vi.fn(async () => ({
-      results: [
-        {
-          id: `broken`,
-          data: async () => {
-            throw new Error(`Fragment unavailable`)
-          },
-        },
-        make_result(`/reference-guide.html?tab=api`, `Reference content`, {}),
-        make_result(`/docs/`, `Docs content`, {}),
-      ],
-    }))
+  test(`keeps matching fallback actions locally when the index has no matches`, async () => {
+    const fallback_actions = [
+      {
+        id: `API reference`,
+        label: `API reference`,
+        description: `All exported props`,
+        badge: `Docs`,
+        metadata: `Library`,
+        keywords: [`schema`],
+        action: vi.fn(),
+      },
+      {
+        id: `Styling guide`,
+        label: `Styling guide`,
+        description: `CSS custom properties`,
+        badge: `Guide`,
+        metadata: `Visual`,
+        keywords: [`theme`],
+        action: vi.fn(),
+      },
+    ]
+    const load_pagefind = vi.fn(async () => ({ search: async () => ({ results: [] }) }))
     mount(PageSearch, {
       target: document.body,
-      props: {
-        ...base_props,
-        batch_size: 2,
-        load_pagefind: async () => ({ search }),
-      },
+      props: { ...base_props, fallback_actions, load_pagefind },
     })
 
-    await search_pagefind(`content`)
+    await vi.runAllTimersAsync()
+    expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(2)
+    expect(load_pagefind).not.toHaveBeenCalled()
 
-    const labels = Array.from(document.querySelectorAll(`.cmd-label`), (label) =>
-      label.childNodes[0]?.textContent?.trim(),
-    )
-    expect(labels).toEqual([`Reference Guide`, `Docs`])
+    await search_pagefind(`css theme visual guide`)
+
+    const options = document.querySelectorAll(`li[role='option']`)
+    expect(options).toHaveLength(1)
+    expect(options[0].textContent).toContain(`Styling guide`)
+    expect(load_pagefind).toHaveBeenCalledTimes(1)
+
+    await search_pagefind(`api schema library docs`)
+
+    expect(load_pagefind).toHaveBeenCalledTimes(1)
+    doc_query<HTMLLIElement>(`li[role='option']`).click()
+    expect(fallback_actions[0].action).toHaveBeenCalledExactlyOnceWith(`API reference`)
+    expect(fallback_actions[1].action).not.toHaveBeenCalled()
+  })
+
+  test(`keeps partial results visible while retrying failed downloads`, async () => {
+    const results = [
+      `/first-0/`,
+      `/first-1/`,
+      `/reference-guide.html?tab=api`,
+      `/docs/`,
+    ].map((url) => ({
+      id: url,
+      data: vi.fn(async () => ({
+        url,
+        plain_excerpt: `Content`,
+        meta: {},
+        sub_results: url.includes(`reference-guide`)
+          ? Array.from({ length: 4 }, (_, idx) => ({
+              title: `Section ${idx}`,
+              url: `${url}#section-${idx}`,
+              plain_excerpt: `Content`,
+            }))
+          : [],
+      })),
+    }))
+    results[2].data
+      .mockRejectedValueOnce(new Error(`Fragment unavailable`))
+      .mockRejectedValueOnce(new Error(`Fragment unavailable`))
+    const search = vi.fn(async () => ({ results }))
+    mount(PageSearch, {
+      target: document.body,
+      props: { ...base_props, batch_size: 2, load_pagefind: async () => ({ search }) },
+    })
+    const labels = () =>
+      Array.from(document.querySelectorAll(`.cmd-label`), (label) =>
+        label.childNodes[0]?.textContent?.trim(),
+      )
+    const previous = [`First 0`, `First 1`]
+    await search_pagefind(`content`)
+    expect(labels()).toEqual(previous)
+    doc_query(`dialog ul.options`).dispatchEvent(new Event(`scroll`))
+    await vi.runAllTimersAsync()
+    for (let attempt = 0; attempt < 2; attempt++) {
+      expect(labels()).toEqual([...previous, `Docs`])
+      expect(doc_query(`[role="alert"]`).textContent).toContain(`Could not load options`)
+      doc_query<HTMLButtonElement>(`dialog [role="alert"] + button`).click()
+      expect(labels()).toEqual([...previous, `Docs`])
+      await vi.runAllTimersAsync()
+    }
+    expect(labels()).toEqual([
+      ...previous,
+      ...Array.from({ length: 4 }, (_, idx) => `Reference Guide › Section ${idx}`),
+      `Docs`,
+    ])
+    expect(document.querySelector(`[role="alert"]`)).toBeNull()
+    expect(search).toHaveBeenCalledExactlyOnceWith(`content`)
   })
 })
 
@@ -1196,60 +1208,50 @@ test(`plain actions without shortcut/description use default option rendering`, 
 })
 
 test.each([
-  {
-    desc: `fires when closed`,
+  [`fires when closed`, {}, 1],
+  [`disabled via prop`, { global_shortcuts: false }, 0],
+  [`inactive while open`, { open: true }, 0],
+  [`ignores disabled actions`, { disabled: true }, 0],
+  [`ignores wrong modifiers`, { shift: false }, 0],
+] as const)(`global action shortcuts: %s`, async (_desc, overrides, calls) => {
+  const { open, global_shortcuts, shift, disabled } = {
     open: false,
     global_shortcuts: true,
-    calls: 1,
-  },
-  {
-    desc: `disabled via prop`,
-    open: false,
-    global_shortcuts: false,
-    calls: 0,
-  },
-  {
-    desc: `inactive while open`,
-    open: true,
-    global_shortcuts: true,
-    calls: 0,
-  },
-  {
-    desc: `ignores wrong modifiers`,
-    open: false,
-    global_shortcuts: true,
-    calls: 0,
-    shift: false,
-  },
-])(
-  `global action shortcuts: $desc`,
-  async ({ open, global_shortcuts, calls, shift = true }) => {
-    const spy = vi.fn()
-    const actions = [
-      {
-        id: `save`,
-        label: `save`,
-        action: spy,
-        shortcut: `ctrl+shift+s`,
-      },
-    ]
-    mount_menu({ actions, open, global_shortcuts })
-    await tick()
+    shift: true,
+    disabled: false,
+    ...overrides,
+  }
+  const spy = vi.fn()
+  const actions = [
+    {
+      id: `save`,
+      label: `save`,
+      action: spy,
+      shortcut: `ctrl+shift+s`,
+      disabled,
+    },
+  ]
+  const onexecute = vi.fn()
+  mount_menu({ actions, open, global_shortcuts, onexecute })
+  await tick()
 
-    globalThis.dispatchEvent(
-      new KeyboardEvent(`keydown`, {
-        key: `s`,
-        ctrlKey: true,
-        shiftKey: shift,
-        cancelable: true,
-      }),
-    )
-    await tick()
+  globalThis.dispatchEvent(
+    new KeyboardEvent(`keydown`, {
+      key: `s`,
+      ctrlKey: true,
+      shiftKey: shift,
+      cancelable: true,
+    }),
+  )
+  await tick()
 
-    expect(spy).toHaveBeenCalledTimes(calls)
-    if (calls > 0) expect(spy).toHaveBeenCalledWith(`save`)
-  },
-)
+  expect(spy).toHaveBeenCalledTimes(calls)
+  expect(onexecute).toHaveBeenCalledTimes(calls)
+  if (calls > 0) {
+    expect(spy).toHaveBeenCalledWith(`save`)
+    expect(onexecute).toHaveBeenCalledWith({ action: actions[0] })
+  }
+})
 
 test(`global shortcuts ignore events consumed by editable controls`, () => {
   const action = vi.fn()

@@ -1,5 +1,8 @@
 import {
+  type ActionMenu,
+  type CommandMenu,
   listen_theme_storage,
+  type CmdAction,
   type CodeHighlighter,
   type StatItem,
   type DialogCloseDetail,
@@ -9,6 +12,7 @@ import {
   type PositionResult,
   type ThemeMode,
 } from 'svelte-widgets'
+import type { ComponentProps } from 'svelte'
 import type { FileDropOptions } from 'svelte-widgets/attachments'
 import type {
   CodeEditorOptions,
@@ -27,7 +31,32 @@ import { create_highlighter, default_highlighter } from 'svelte-widgets/highligh
 import { assert_ok, create_markdown, compile_markdown } from 'svelte-widgets/markdown'
 import { content_toc } from 'svelte-widgets/markdown/content'
 
+export { asset_imports } from 'svelte-widgets/assets'
+export { yaml_plugin } from 'svelte-widgets/yaml'
+
 export { check_document as check_markdown_document } from 'svelte-widgets/markdown/check'
+
+// The published callback must preserve the consumer's custom action fields.
+export const onexecute: NonNullable<
+  ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`onexecute`]
+> = ({ action }) => action.route.toUpperCase()
+
+type MenuProps = ComponentProps<typeof ActionMenu>
+declare const dropdown_trigger: Exclude<MenuProps[`trigger`], string | undefined>
+export const context_menu: MenuProps = {
+  actions: [],
+  trigger: `none`,
+  at: { x: 1, y: 2 },
+}
+export const dropdown_menu: MenuProps = {
+  actions: [],
+  trigger: dropdown_trigger,
+  open: true,
+}
+// @ts-expect-error Context menus use coordinates, not dropdown open state.
+export const mixed_menu: MenuProps = { ...context_menu, open: true }
+// @ts-expect-error Dropdown menus use open state, not context coordinates.
+export const positioned_dropdown: MenuProps = { ...dropdown_menu, at: context_menu.at }
 
 export const label = get_label(`package smoke`)
 export const theme_mode: ThemeMode = theme.mode
@@ -70,6 +99,9 @@ export const typed_content = async () => {
     },
   })
   const document = assert_ok(await engine.parse(`---\ntitle: Guide\n---\n# Guide`))
+  const html: string = assert_ok(
+    await engine.render(`---\ntitle: Guide\n---\n# Guide`, { filename: `guide.md` }),
+  )
   const result = assert_ok(await compile_markdown(document))
   const title: string = result.manifest.metadata.title
   const enabled: boolean | undefined = result.manifest.fences[0]?.settings.check
@@ -86,7 +118,7 @@ export const typed_content = async () => {
   // @ts-expect-error Published source maps are readonly.
   result.map.sources.push(`mutated`)
   void enabled
-  return { title, toc: content_toc(result.manifest) }
+  return { title, html, toc: content_toc(result.manifest) }
 }
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])

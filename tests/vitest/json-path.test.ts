@@ -23,22 +23,11 @@ describe(`format_path`, () => {
     [[`key.with.dot`], `["key.with.dot"]`],
     [[`key.with.dot`, `child`], `["key.with.dot"].child`],
     [[`key-with-dash`], `["key-with-dash"]`],
+    [[`users`, 0, `data`, `key.with.dot`], `users[0].data["key.with.dot"]`],
   ] as [(string | number)[], string][])(`format_path(%j) = %p`, (segments, expected) => {
-    expect(format_path(segments)).toBe(expected)
-  })
-
-  it(`round-trips correctly with parse_path`, () => {
-    // Root numeric index
-    expect(parse_path(format_path([0, `name`]))).toEqual([0, `name`])
-    // Root special key with dots
-    expect(parse_path(format_path([`key.with.dot`]))).toEqual([`key.with.dot`])
-    // Mixed path
-    expect(parse_path(format_path([`users`, 0, `data`, `key.with.dot`]))).toEqual([
-      `users`,
-      0,
-      `data`,
-      `key.with.dot`,
-    ])
+    const path = format_path(segments)
+    expect(path).toBe(expected)
+    expect(parse_path(path)).toEqual(segments)
   })
 
   it.each([

@@ -1,5 +1,6 @@
 <script lang="ts" generics="Item">
-  import type { Snippet } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
+  import { SvelteMap } from 'svelte/reactivity'
   import { flip } from 'svelte/animate'
   import type { HTMLAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
@@ -70,39 +71,28 @@
   // Needed over a random uuid so the id survives hydration.
   const unique_id = $props.id()
 
-  // Plain (non-reactive) Map so measurements don't re-render; only the two counters below
-  // are reactive, to drive column balancing
-  const item_heights_cache = new Map<ItemId, number>()
-  let measured_count = $state(0)
-  let measured_sum = $state(0)
-  let avg_measured_height = $derived(
-    measured_count > 0 ? measured_sum / measured_count : null,
+  // Measurements are the source of truth; the average is only needed for unseen items.
+  const item_heights = new SvelteMap<ItemId, number>()
+  const avg_measured_height = $derived(
+    item_heights.size
+      ? [...item_heights.values()].reduce((sum, item_height) => sum + item_height, 0) /
+          item_heights.size
+      : 150,
   )
-
-  // Tracks each item's assigned column (for balanced-stable mode)
+  // Assignments and render records are non-reactive caches, preserving existing children.
   const stable_assignments = new Map<ItemId, number>()
   let prev_stable_num_cols = 0
   const item_records = new Map<ItemId, ItemRecord>()
 
-  // Drop heights/assignments of removed items (prevents memory leak)
   $effect(() => {
     const current_ids = new Set(items.map(getId))
-    let removed_sum = 0
-    for (const [id, item_height] of item_heights_cache.entries()) {
-      if (!current_ids.has(id)) {
-        removed_sum += item_height
-        item_heights_cache.delete(id)
+    untrack(() => {
+      for (const cache of [item_heights, stable_assignments, item_records]) {
+        for (const id of cache.keys()) {
+          if (!current_ids.has(id)) cache.delete(id)
+        }
       }
-    }
-    if (removed_sum > 0) {
-      measured_sum -= removed_sum
-      measured_count = item_heights_cache.size
-    }
-    for (const stale_map of [stable_assignments, item_records]) {
-      for (const id of stale_map.keys()) {
-        if (!current_ids.has(id)) stale_map.delete(id)
-      }
-    }
+    })
   })
 
   function get_item_record(item: Item, idx: number): ItemRecord {
@@ -115,94 +105,22 @@
     return record
   }
 
-  // Reads from non-reactive cache, so won't trigger re-renders
-  const get_height = (item: Item): number => {
-    // `||` not `??`: a 0 height is meaningless, so fall through to the estimate chain
-    const cached = item_heights_cache.get(getId(item))
-    return cached || getEstimatedHeight?.(item) || avg_measured_height || 150
-  }
+  // Zero heights/estimates are unmeasured, so continue to the next estimate.
+  const get_height = (item: Item): number =>
+    item_heights.get(getId(item)) || getEstimatedHeight?.(item) || avg_measured_height
 
-  // Attached even for modes that don't need measurement, since order can change at runtime.
-  // Skipped while virtualizing, which uses estimates only.
+  // Keep measuring when order changes; virtualized grids use estimates only.
   const measure_height = (item_id: ItemId) => (node: HTMLElement) => {
     if (virtualize) return
     const observer = new ResizeObserver(() => {
-      const new_height = node.offsetHeight
-      const old_height = item_heights_cache.get(item_id) ?? 0
-      if (new_height > 0 && old_height !== new_height) {
-        measured_sum += new_height - old_height
-        item_heights_cache.set(item_id, new_height)
-        // in sync with the cache so `measured_count >= items.length` checks stay accurate
-        measured_count = item_heights_cache.size
-      }
+      const item_height = node.offsetHeight
+      if (item_height > 0) item_heights.set(item_id, item_height)
     })
     observer.observe(node)
     return () => observer.disconnect()
   }
 
   let effective_order = $derived(virtualize ? `row-first` : order)
-
-  // Index-only placement. Deliberately never calls get_height, so these modes take no
-  // dependency on height state.
-  function distribute_by_idx(
-    num_cols: number,
-    pick_col: (idx: number) => number,
-  ): ItemRecord[][] {
-    const cols: ItemRecord[][] = Array.from({ length: num_cols }, () => [])
-    for (const [idx, item] of items.entries()) {
-      cols[pick_col(idx)].push(get_item_record(item, idx))
-    }
-    return cols
-  }
-
-  // pick_col receives the per-column heights (item height + gap) accumulated so far
-  function distribute(
-    num_cols: number,
-    pick_col: (heights: number[], item: Item) => number,
-  ): ItemRecord[][] {
-    const cols: ItemRecord[][] = Array.from({ length: num_cols }, () => [])
-    const heights: number[] = Array.from({ length: num_cols }, () => 0)
-
-    for (const [idx, item] of items.entries()) {
-      const col_idx = pick_col(heights, item)
-      cols[col_idx].push(get_item_record(item, idx))
-      heights[col_idx] += get_height(item) + gap
-    }
-    return cols
-  }
-
-  const shortest_col = (heights: number[]): number =>
-    heights.indexOf(Math.min(...heights))
-
-  // At a steady column count new items go to the shortest column and existing ones keep
-  // theirs; a change drops every assignment (more columns) or reseats the ones now out of
-  // range (fewer). Mutating stable_assignments inside a $derived is safe: it's a
-  // non-reactive cache, not a dependency.
-  function balanced_stable_to_cols(num_cols: number): ItemRecord[][] {
-    if (num_cols > prev_stable_num_cols) stable_assignments.clear()
-    prev_stable_num_cols = num_cols
-
-    return distribute(num_cols, (heights, item) => {
-      const id = getId(item)
-      const col_idx = stable_assignments.get(id)
-      if (col_idx !== undefined && col_idx < num_cols) return col_idx
-      const new_col = shortest_col(heights)
-      stable_assignments.set(id, new_col)
-      return new_col
-    })
-  }
-
-  // Height-aware column-first: fill col 1 to target height, then col 2, etc.
-  function column_balanced_to_cols(num_cols: number): ItemRecord[][] {
-    const total_height = items.reduce((sum, item) => sum + get_height(item) + gap, 0)
-    const target_per_col = total_height / num_cols
-    let col_idx = 0
-
-    return distribute(num_cols, (heights) => {
-      if (heights[col_idx] >= target_per_col && col_idx < num_cols - 1) col_idx++
-      return col_idx
-    })
-  }
 
   $effect.pre(() => {
     if (maxColWidth < minColWidth) {
@@ -250,27 +168,56 @@
   )
 
   let items_to_cols = $derived.by(() => {
-    // balanced-stable never falls back: stable assignments + estimates for new items keep
-    // existing items from jumping columns as long as the column count holds
-    if (effective_order === `balanced-stable`) return balanced_stable_to_cols(n_cols)
-
-    // Other height-aware modes need every item measured; check the mode first so only they
-    // depend on measured_count.
-    if (effective_order === `balanced` && measured_count >= items.length) {
-      return distribute(n_cols, shortest_col)
+    const cols: ItemRecord[][] = Array.from({ length: n_cols }, () => [])
+    const heights = cols.map(() => 0)
+    const stable = effective_order === `balanced-stable`
+    const use_heights =
+      stable ||
+      ((effective_order === `balanced` || effective_order === `column-balanced`) &&
+        item_heights.size >= items.length)
+    if (stable) {
+      // Growing resets placement; shrinking only reseats out-of-range assignments.
+      if (n_cols > prev_stable_num_cols) stable_assignments.clear()
+      prev_stable_num_cols = n_cols
     }
-    if (effective_order === `column-balanced` && measured_count >= items.length) {
-      return column_balanced_to_cols(n_cols)
+    let remaining_height =
+      use_heights && effective_order === `column-balanced`
+        ? items.reduce((sum, item) => sum + get_height(item) + gap, 0)
+        : 0
+    let col_idx = 0
+    for (const [idx, item] of items.entries()) {
+      const record = get_item_record(item, idx)
+      const item_height = use_heights ? get_height(item) + gap : 0
+      if (effective_order === `column-sequential`) {
+        col_idx = Math.floor((idx * Math.min(n_cols, items.length)) / items.length)
+      } else if (!use_heights) {
+        col_idx = idx % n_cols
+      } else if (effective_order === `column-balanced`) {
+        // Split near the remaining average and reserve one item for each later column.
+        const col_height = heights[col_idx]
+        const remaining_cols = n_cols - col_idx - 1
+        const target = remaining_height / (remaining_cols + 1)
+        if (
+          col_height > 0 &&
+          remaining_cols > 0 &&
+          (items.length - idx <= remaining_cols ||
+            Math.abs(col_height - target) <= Math.abs(col_height + item_height - target))
+        ) {
+          remaining_height -= col_height
+          col_idx++
+        }
+      } else {
+        const assigned = stable ? stable_assignments.get(record.id) : undefined
+        col_idx =
+          assigned !== undefined && assigned < n_cols
+            ? assigned
+            : heights.indexOf(Math.min(...heights))
+        if (stable) stable_assignments.set(record.id, col_idx)
+      }
+      cols[col_idx].push(record)
+      heights[col_idx] += item_height
     }
-    if (effective_order === `column-sequential`) {
-      // sequential column-first: first N items in col 1, next N in col 2, etc.
-      const items_per_col = Math.ceil(items.length / n_cols)
-      return distribute_by_idx(n_cols, (idx) =>
-        Math.min(Math.floor(idx / items_per_col), n_cols - 1),
-      )
-    }
-    // row-first, and the round-robin fallback for height-aware modes pre-measurement
-    return distribute_by_idx(n_cols, (idx) => idx % n_cols)
+    return cols
   })
 
   let warned_missing_height = false
@@ -338,18 +285,27 @@
   let can_virtualize = $derived(
     virtualize && (typeof height === `number` || masonryHeight > 0),
   )
+  // Filtering can shrink the grid before the browser reports its clamped scroll offset.
+  // Clamp against the tallest column so shorter columns stay aligned with the shared view.
+  let window_scroll_top = $derived.by(() => {
+    const max_scroll_top = Math.max(
+      0,
+      ...prefix_heights.map((heights) => (heights.at(-1) ?? 0) - gap - container_height),
+    )
+    return Math.min(scroll_top, max_scroll_top)
+  })
 
   // Per-column render window: on-screen slice plus padding for the culled items. Recomputes
   // on scroll, so it reads prefix_heights rather than redoing those O(n) prefix sums.
   let col_windows = $derived(
     prefix_heights.map((ph) => {
       if (!can_virtualize) return { start: 0, end: ph.length, pad_top: 0, pad_bottom: 0 }
-      const start = Math.max(0, binary_search_ge(ph, scroll_top) - 1 - overscan)
+      const start = Math.max(0, binary_search_ge(ph, window_scroll_top) - 1 - overscan)
       // the item straddling the bottom edge is on screen, so the exclusive end must clear it
       // (mirrors the row of margin `start` takes)
       const end = Math.min(
         ph.length,
-        binary_search_ge(ph, scroll_top + container_height) + 1 + overscan,
+        binary_search_ge(ph, window_scroll_top + container_height) + 1 + overscan,
       )
       return {
         start,

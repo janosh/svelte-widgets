@@ -618,32 +618,64 @@ describe(`DraggablePane`, () => {
     expect(on_close).toHaveBeenCalledWith({ via: `toggle` })
   })
 
-  test(`a window resize repositions an unmoved pane but not a dragged one`, async () => {
-    vi.useFakeTimers()
-    mock_viewport()
-    const { toggle, pane } = await setup({ position: `fixed` })
-    mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
-    mock_pane_rect(pane)
+  test.each([
+    [`absolute`, `175px`],
+    [`fixed`, `142px`],
+  ] as const)(
+    `%s panes follow viewport, content and toggle size changes until dragged`,
+    async (position, viewport_left) => {
+      vi.useFakeTimers()
+      let notify_resize = () => {}
+      const observe = vi.fn()
+      const disconnect = vi.fn()
+      class MockResizeObserver implements ResizeObserver {
+        observe = observe
+        disconnect = disconnect
+        unobserve = vi.fn()
+        constructor(callback: ResizeObserverCallback) {
+          notify_resize = () => callback([], this)
+        }
+      }
+      cleanups.push(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
+      mock_viewport()
+      const { toggle, pane } = await setup({ position })
+      mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
+      mock_pane_rect(pane)
+      toggle.click()
+      await tick()
+      expect(pane.style.left).toBe(`175px`)
+      expect(observe.mock.calls).toEqual([
+        [pane, { box: `border-box` }],
+        [toggle, { box: `border-box` }],
+      ])
 
-    toggle.click()
-    await tick()
-    expect(pane.style.left).toBe(`175px`)
+      cleanups.push(stub_prop(globalThis, `innerWidth`, 600))
+      globalThis.dispatchEvent(new Event(`resize`))
+      vi.advanceTimersByTime(60)
+      await tick()
+      expect(pane.style.left).toBe(viewport_left) // Only fixed panes clamp to 600 - 450 - 8.
+      cleanups.push(stub_prop(globalThis, `innerWidth`, 1000))
 
-    cleanups.push(stub_prop(globalThis, `innerWidth`, 600))
-    globalThis.dispatchEvent(new Event(`resize`))
-    vi.advanceTimersByTime(60)
-    await tick()
-    expect(pane.style.left).toBe(`142px`) // 600 - 450 - 8
+      // A delayed stylesheet or async content can change width without a window event.
+      mock_rect(pane, { left: 0, top: 0, width: 300, height: 300 })
+      notify_resize()
+      expect(pane.style.left).toBe(`325px`)
 
-    // draggable starts from the pane's mocked offsetLeft of 0, so a 20px drag lands
-    // at 20px — and stays there, where repositioning would give 900 - 450 - 8 = 442
-    drag_by(20, 0)
-    cleanups.push(stub_prop(globalThis, `innerWidth`, 900))
-    globalThis.dispatchEvent(new Event(`resize`))
-    vi.advanceTimersByTime(60)
-    await tick()
-    expect(pane.style.left).toBe(`20px`)
-  })
+      mock_rect(toggle, { left: 600, top: 20, width: 40, height: 40 })
+      notify_resize()
+      expect([pane.style.left, pane.style.top]).toEqual([`345px`, `65px`])
+
+      drag_by(20, 0)
+      await tick()
+      expect(disconnect).toHaveBeenCalledOnce()
+      notify_resize() // A queued notification must not undo a user's drag.
+      cleanups.push(stub_prop(globalThis, `innerWidth`, 900))
+      globalThis.dispatchEvent(new Event(`resize`))
+      vi.advanceTimersByTime(60)
+      await tick()
+      expect(pane.style.left).toBe(`20px`)
+    },
+  )
 
   test(`spreads consumer props without losing its own class, role or click`, async () => {
     const onclick = vi.fn()

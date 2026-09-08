@@ -16,7 +16,6 @@ function safe_stringify(val: unknown): string {
       }
       if (typeof inner === `bigint`) return `${inner}n`
       if (typeof inner === `symbol`) return inner.toString()
-      // oxlint-disable-next-line @typescript-eslint/prefer-nullish-coalescing -- anonymous fns have name ``
       if (typeof inner === `function`) return `[Function: ${inner.name || `anonymous`}]`
       return inner
     },

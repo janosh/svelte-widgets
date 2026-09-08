@@ -5,15 +5,18 @@ import {
 } from './create-highlighter.ts'
 
 const load_highlighter = async (): Promise<Highlighter> => {
-  const [{ common }, { default: svelte_grammar }] = await Promise.all([
-    import(`@wooorm/starry-night`),
+  const [common_grammars, { default: svelte_grammar }] = await Promise.all([
+    // Passing the module namespace through Promise.all also retains the `all` bundle.
+    import(`@wooorm/starry-night`).then(({ common }) => common),
     import(`@wooorm/starry-night/source.svelte`),
+    // Fetch the factory alongside its grammars rather than adding a network waterfall.
+    import('./starry-night.ts'),
   ]).catch((cause: unknown) => {
     throw new Error(optional_peer_error, { cause })
   })
   // Markdown's common grammar does not recognize Svelte fences, even when the
   // Svelte grammar is loaded. Add it ahead of the generic fenced-code rules.
-  const grammars = common.map((grammar) => {
+  const grammars = common_grammars.map((grammar) => {
     if (grammar.scopeName !== `text.md`) return grammar
     const { repository } = grammar
     if (!repository?.[`commonmark-code-fenced`])

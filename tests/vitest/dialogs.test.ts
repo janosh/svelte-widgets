@@ -86,35 +86,30 @@ test(`dismiss_all_dialogs settles every request with its own dismiss id`, async 
 })
 
 test.each([
-  [`ok`, true],
-  [`cancel`, false],
-] as const)(`ask_confirm maps %s to %s`, async (answer_id, expected) => {
-  const confirmed = track(ask_confirm(`Delete it?`, `Careful`, `Delete`))
-  await flush()
+  [`ok`, true, [`Delete it?`, `Careful`, `Delete`]],
+  [`cancel`, false, [`Delete it?`, `Careful`, `Delete`]],
+  // A translated confirm dialog must not keep an English cancel button.
+  [`cancel`, false, [`Löschen?`, `Achtung`, `Löschen`, `Abbrechen`]],
+] as const)(
+  `ask_confirm maps %s to %s with labels %j`,
+  async (answer_id, expected, args) => {
+    const [body, title, confirm_label, cancel_label] = args
+    const confirmed = track(ask_confirm(body, title, confirm_label, cancel_label))
+    await flush()
 
-  const request = dialog_queue[0]
-  if (request?.kind !== `choice`) throw new Error(`Expected a choice request`)
-  expect(request.dismiss_id).toBe(`cancel`) // Escape must never mean yes
-  expect(request.choices).toEqual([
-    { id: `cancel`, label: `Cancel` },
-    { id: `ok`, label: `Delete`, tone: `accent` },
-  ])
+    const request = dialog_queue[0]
+    if (request?.kind !== `choice`) throw new Error(`Expected a choice request`)
+    expect(request.dismiss_id).toBe(`cancel`) // Escape must never mean yes
+    expect(request.choices).toEqual([
+      { id: `cancel`, label: cancel_label ?? `Cancel` },
+      { id: `ok`, label: confirm_label, tone: `accent` },
+    ])
 
-  answer_dialog(answer_id)
-  await flush()
-  expect([confirmed.settled, confirmed.value]).toEqual([true, expected])
-})
-
-// ask_prompt has always exposed cancel_label; ask_confirm baked it in, so a translated
-// confirm dialog was stuck with an English left button.
-test(`ask_confirm takes a cancel label too`, async () => {
-  track(ask_confirm(`Löschen?`, `Achtung`, `Löschen`, `Abbrechen`))
-  await flush()
-
-  const request = dialog_queue[0]
-  if (request?.kind !== `choice`) throw new Error(`Expected a choice request`)
-  expect(request.choices.map((choice) => choice.label)).toEqual([`Abbrechen`, `Löschen`])
-})
+    answer_dialog(answer_id)
+    await flush()
+    expect([confirmed.settled, confirmed.value]).toEqual([true, expected])
+  },
+)
 
 test(`ask_prompt validates before resolving and keeps its typed options`, async () => {
   const prompted = track(

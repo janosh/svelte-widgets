@@ -234,6 +234,10 @@ describe(`Toc`, () => {
       const toc_list = doc_query(`aside.toc > nav > ol`)
       expect(toc_list.children).toHaveLength(expected_text.length)
       expect(toc_list.textContent.trim()).toBe(expected_text.join(``))
+      // Read Svelte's writes: happy-dom drops calc() declarations containing var().
+      expect(written_style_values(`margin-left`)).toEqual(
+        expected_text.map((_, idx) => expect.stringContaining(`calc(${idx} *`)),
+      )
     },
   )
 
@@ -433,8 +437,10 @@ describe(`Toc`, () => {
       mock_active_heading(`first`)
       const replace_state_mock = vi.spyOn(history, `replaceState`)
       const scroll_into_view_mock = spy_scroll_into_view()
+      const onclick = vi.fn()
 
       mount_toc({
+        liProps: { onclick, 'data-sveltekit-replacestate': `` },
         tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
           render: () => html(heading()),
         })),
@@ -445,9 +451,17 @@ describe(`Toc`, () => {
       expect(item.querySelectorAll(`a`)).toHaveLength(n_anchors)
       expect(item.getAttribute(`role`)).toBe(scrolls ? `link` : null)
       expect(item.getAttribute(`tabindex`)).toBe(scrolls ? `0` : null)
+      const native_click = HTMLAnchorElement.prototype.click
+      vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(
+        function (this: HTMLAnchorElement) {
+          expect(this.closest(`[data-sveltekit-replacestate]`)).toBe(item)
+          native_click.call(this)
+        },
+      )
 
       const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
       doc_query(selector).dispatchEvent(event)
+      expect(onclick).toHaveBeenCalledExactlyOnceWith(event)
 
       // nested interactive elements keep native behavior; plain content falls to the li
       expect(event.defaultPrevented).toBe(scrolls)
@@ -587,51 +601,26 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`warnOnEmpty=true warns exactly once, even across later mutations`, async () => {
-    const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    mount_toc({ warnOnEmpty: true })
-    await tick()
-    const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
-    expect(warn_mock).toHaveBeenCalledExactlyOnceWith(msg)
+  test.each([true, false])(
+    `warnOnEmpty=%s stays consistent across later mutations`,
+    async (warnOnEmpty) => {
+      const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
+      mount_toc({ warnOnEmpty })
+      await tick()
+      const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
+      const expected_calls = warnOnEmpty ? [[msg]] : []
+      expect(warn_mock.mock.calls).toEqual(expected_calls)
 
-    // both the ToC render and this unrelated mutation notify the observer, but the empty
-    // heading set is unchanged, so neither may rebuild and re-warn
-    document.body.append(document.createElement(`p`))
-    await tick()
-    document.body.append(document.createElement(`p`))
-    await tick()
+      // both the ToC render and this unrelated mutation notify the observer, but the empty
+      // heading set is unchanged, so neither may rebuild and re-warn
+      document.body.append(document.createElement(`p`))
+      await tick()
+      document.body.append(document.createElement(`p`))
+      await tick()
 
-    expect(warn_mock).toHaveBeenCalledExactlyOnceWith(msg)
-  })
-
-  test(`no console.warn when warnOnEmpty=false`, () => {
-    const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    mount_toc({ warnOnEmpty: false })
-    expect(warn_mock).not.toHaveBeenCalled()
-  })
-
-  test(`subheadings are indented`, async () => {
-    set_body(`
-      <h1>Heading 1</h1>
-      <h2>Heading 2</h2>
-      <h3>Heading 3</h3>
-      <h4>Heading 4</h4>
-    `)
-
-    mount_toc()
-    await tick()
-
-    const toc_list = doc_query(`aside.toc > nav > ol`)
-    expect(toc_list.children).toHaveLength(3)
-
-    // happy-dom's parser rejects calc() wrapping var(), so the indent never lands on the
-    // element and has to be read off what Toc wrote
-    expect(written_style_values(`margin-left`)).toEqual([
-      expect.stringContaining(`calc(0 *`),
-      expect.stringContaining(`calc(1 *`),
-      expect.stringContaining(`calc(2 *`),
-    ])
-  })
+      expect(warn_mock.mock.calls).toEqual(expected_calls)
+    },
+  )
 
   // :is(h2, h3, h4) matches 3 of levels [1, 2, 3, 4] and none of [1, 5, 6]
   test.each([
@@ -855,10 +844,14 @@ describe(`Toc`, () => {
       const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
       const anchor_click = vi.spyOn(HTMLAnchorElement.prototype, `click`)
+      const onclick = vi.fn()
 
       // a breakpoint above the window width forces mobile mode, where open=true suffices
-      mount_toc({ open: true, breakpoint: 2000, scrollBehavior })
+      mount_toc({ open: true, breakpoint: 2000, scrollBehavior, liProps: { onclick } })
       await tick()
+      const expected_link = doc_query(
+        `aside.toc ol li:nth-child(${key === null ? 1 : 2}) > a`,
+      )
 
       // keys act on the active item, the last heading in happy-dom; a click picks the first
       if (key === null) doc_query(`aside.toc ol li`).click()
@@ -870,7 +863,9 @@ describe(`Toc`, () => {
       })
       const expected_hash = key === null ? `#heading-1` : `#heading-2`
       expect(anchor_click).toHaveBeenCalledOnce()
+      expect(anchor_click.mock.contexts[0]).toBe(expected_link)
       expect(anchor_click.mock.contexts[0]).toHaveProperty(`hash`, expected_hash)
+      expect(onclick).toHaveBeenCalledOnce()
       expect(replace_state_mock).not.toHaveBeenCalled()
     },
   )
@@ -1503,22 +1498,13 @@ describe(`collapseSubheadings`, () => {
     await tick()
 
     expect(get_collapsed_states()).toEqual(expected)
-  })
-
-  test(`collapsed items have aria-hidden=true and unfocusable links`, async () => {
-    setup_nested_headings()
-    mock_active_heading(`section-1`)
-    mount_toc({ collapseSubheadings: true })
-    await tick()
-
-    const items = document.querySelectorAll<HTMLLIElement>(`aside.toc > nav > ol > li`)
-    const collapsed = items[2]
-    const visible = items[0]
-
-    expect(collapsed.getAttribute(`aria-hidden`)).toBe(`true`)
-    expect(collapsed.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(`-1`)
-    expect(visible.getAttribute(`aria-hidden`)).toBeNull()
-    expect(visible.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(`0`)
+    const items = document.querySelectorAll(`aside.toc > nav > ol > li`)
+    items.forEach((item, idx) => {
+      expect(item.getAttribute(`aria-hidden`)).toBe(expected[idx] ? `true` : null)
+      expect(item.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(
+        expected[idx] ? `-1` : `0`,
+      )
+    })
   })
 
   test.each([`h9`, `hx`, `3`])(

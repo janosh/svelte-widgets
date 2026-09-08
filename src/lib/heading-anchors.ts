@@ -180,6 +180,9 @@ const NAMED_ENTITIES: Record<string, string> = {
   quot: `"`,
   apos: `'`,
   nbsp: ` `,
+  ensp: `\u2002`,
+  emsp: `\u2003`,
+  thinsp: `\u2009`,
 }
 
 // Markdown escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as

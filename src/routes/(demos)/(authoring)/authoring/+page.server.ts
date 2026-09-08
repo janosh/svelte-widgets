@@ -26,7 +26,7 @@ export const load = async () => ({
         result: await check_document(document, {
           assertions: {
             increment: ({ code }) => {
-              // Only the fixed, authored samples above reach this build-time runner.
+              // Only the fixed checked_examples inputs reach this build-time runner.
               const count: unknown = runInNewContext(
                 `${code}\ncount`,
                 {},

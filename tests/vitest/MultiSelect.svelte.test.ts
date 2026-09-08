@@ -1,4 +1,3 @@
-// deno-lint-ignore-file no-await-in-loop
 import { readFileSync } from 'node:fs'
 import { tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
@@ -2089,9 +2088,15 @@ test(`onadd selected reflects replacement when maxSelect=1`, async () => {
   expect(onadd_spy).toHaveBeenCalledWith({ option: 2, selected: [2] })
 })
 
-test(`onopen fires once with FocusEvent, not again when already open`, async () => {
+test(`onopen and onclose fire once per transition with the triggering event`, async () => {
   const open_spy = vi.fn()
-  mount_multiselect({ options: [1, 2, 3], onopen: open_spy })
+  const close_spy = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], onopen: open_spy, onclose: close_spy })
+
+  // still closed, so an outside click must not fire
+  document.body.click()
+  await tick()
+  expect(close_spy).not.toHaveBeenCalled()
 
   const input = await focus_input()
   expect(open_spy).toHaveBeenCalledOnce()
@@ -2101,18 +2106,6 @@ test(`onopen fires once with FocusEvent, not again when already open`, async () 
   input.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
   await tick()
   expect(open_spy).toHaveBeenCalledOnce()
-})
-
-test(`onclose fires once with KeyboardEvent, not again when already closed`, async () => {
-  const close_spy = vi.fn()
-  mount_multiselect({ options: [1, 2, 3], onclose: close_spy })
-
-  // still closed, so an outside click must not fire
-  document.body.click()
-  await tick()
-  expect(close_spy).not.toHaveBeenCalled()
-
-  const input = await focus_input()
   input.dispatchEvent(fresh_key(`Escape`))
   await tick()
   expect(close_spy).toHaveBeenCalledOnce()
@@ -2486,7 +2479,6 @@ test.each<[OptionStyle, `selected` | `option`, string]>([
   [{ option: `color: blue;` }, `selected`, ``],
   [{}, `selected`, ``],
   // Invalid object style cases
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- intentionally testing invalid style object
   [{ invalid: `color: green;` } as unknown as OptionStyle, `selected`, ``],
 ])(
   `MultiSelect applies correct styles to <li> elements for different option and key combinations`,

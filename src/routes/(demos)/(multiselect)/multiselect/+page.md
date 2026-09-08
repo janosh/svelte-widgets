@@ -249,7 +249,7 @@ Props ordered by how often you'll reach for them.
 
    Failed requests show an error and a Retry button. Retry preserves previously loaded options and requests the same page again. Bind `loadError` (`Error | null`) to inspect the failure; it clears on retry or a new search. Customize the messages through `labels.loading_failed` and `labels.retry`.
 
-   The function receives `{ search, offset, limit, signal }` and must return `{ options, hasMore }`. `signal` is an `AbortSignal` that fires when the request is superseded by a newer search or when the component closes or unmounts. Forward it to `fetch` to cancel work in flight:
+   The function receives `{ search, offset, limit, signal }` and returns `{ options, hasMore, replace?, error? }`. Return `error` to display a partial batch alongside Retry; `replace: true` replaces previously loaded options with an ordered snapshot, useful when retrying missing results. `signal` is an `AbortSignal` that fires when the request is superseded by a newer search or when the component closes or unmounts. Forward it to `fetch` to cancel work in flight:
 
    ```ts
    async function load_options(params) {
@@ -305,15 +305,11 @@ Props ordered by how often you'll reach for them.
 
    Which side of the input to render the expand icon on, or `'none'` to hide it entirely (applies to both the default chevron and a custom `expandIcon` snippet). Clicking the icon toggles the dropdown.
 
-<!-- deno-fmt-ignore -->
-
 1. ```ts
    filterFunc: (opt: Option, searchText: string) => boolean
    ```
 
    Custom function to filter options based on search text. Default filters by label.
-
-<!-- deno-fmt-ignore -->
 
 1. ```ts
    key: (opt: Option) => unknown
@@ -661,8 +657,6 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    ```
 
    Tooltip for individual remove buttons.
-
-<!-- deno-fmt-ignore -->
 
 1. ```ts
    maxSelectMsg: ((current: number, max: number) => string) | null = (current, max) =>

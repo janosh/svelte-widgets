@@ -1,4 +1,3 @@
-<!-- eslint-disable-next-line @stylistic/quotes -- TS generics require string literals -->
 <script lang="ts" generics="Option extends import('./types').Option">
   // === Imports ===
   import { virtual_window as get_virtual_window } from './virtual'
@@ -229,6 +228,22 @@
       invalid_config(
         `maxVisibleChips must be null or a non-negative integer, got ${maxVisibleChips}`,
       )
+    }
+    if (loadOptions && typeof loadOptions === `object`) {
+      const { batchSize: batch_size, debounceMs: debounce_ms } = loadOptions
+      if (batch_size !== undefined && !is_integer_at_least(batch_size, 1)) {
+        invalid_config(
+          `loadOptions.batchSize must be a positive integer, got ${batch_size}`,
+        )
+      }
+      if (
+        debounce_ms !== undefined &&
+        (!Number.isFinite(debounce_ms) || debounce_ms < 0)
+      ) {
+        invalid_config(
+          `loadOptions.debounceMs must be finite and non-negative, got ${debounce_ms}`,
+        )
+      }
     }
     if (typeof virtualList === `object`) {
       const { itemHeight: item_height, overscan } = virtualList
@@ -631,14 +646,6 @@
       ? render_rows.slice(render_window.start, render_window.end)
       : render_rows,
   )
-  // measure on open so the window matches the real scroll area (clientHeight is 0 before
-  // open and in happy-dom/SSR)
-  $effect(() => {
-    if (!is_virtual_list_enabled || !open || !options_list_el) return
-    const list_el = options_list_el
-    tick().then(() => (options_client_height = list_el.clientHeight))
-  })
-
   // keys for the dropdown's keyed {#each}: key(opt) for unique options, so filtering keeps
   // DOM nodes stable, but repeats (options=['a', 'a']) would crash Svelte with
   // each_key_duplicate. Repeats get cached symbols — outside the user key namespace (a
@@ -1800,7 +1807,10 @@
       !load_options_config ||
       // paginating from nothing repeats the first page and hands out offset 0, which the
       // documented cursor pattern reads as "reset"
-      (!reset && (is_loading_options || !load_options_has_more || !loaded_options.length))
+      (!reset &&
+        (is_loading_options ||
+          (!load_options_has_more && !loadError) ||
+          !loaded_options.length))
     )
       return
     if (reset) {
@@ -1824,9 +1834,11 @@
         signal: abort_controller.signal,
       })
       if (request_id !== load_request_id) return // stale request, discard
-      batch_length = result.options.length
-      loaded_options = reset ? result.options : [...loaded_options, ...result.options]
+      batch_length = result.options.length - (result.replace ? offset : 0)
+      loaded_options =
+        reset || result.replace ? result.options : [...loaded_options, ...result.options]
       load_options_has_more = result.hasMore
+      loadError = result.error ?? null
     } catch (error) {
       // a consumer forwarding `signal` rejects with a self-inflicted AbortError on cancel,
       // but one ignoring `signal` still reports real failures — so swallow aborts only
@@ -1850,7 +1862,8 @@
     // the next request would be identical (and it keeps offset=0 meaning "reset").
     if (
       request_id !== load_request_id ||
-      batch_length === 0 ||
+      batch_length <= 0 ||
+      loadError ||
       !load_options_has_more ||
       !open ||
       !options_list_el ||
@@ -2194,6 +2207,7 @@
       aria-multiselectable={multi_select}
       aria-disabled={disabled ? `true` : null}
       bind:this={options_list_el}
+      bind:clientHeight={options_client_height}
       style={ulOptionsStyle}
       onscroll={handle_options_scroll}
       onmousedown={prevent_retain_focus_blur}

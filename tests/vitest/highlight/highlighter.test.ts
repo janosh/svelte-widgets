@@ -1,7 +1,45 @@
 import { create_highlighter, default_highlighter } from '$lib/highlight'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
-import { describe, expect, test, vi } from 'vitest'
+import { resolve as resolve_path } from 'node:path'
+import { gzipSync } from 'node:zlib'
+import { build } from 'vite'
+import { assert, describe, expect, onTestFinished, test, vi } from 'vitest'
+
+test.each([
+  [`default_highlighter`, 350_000],
+  [`create_highlighter`, 60_000],
+])(`keeps the %s browser bundle within its gzip budget`, async (entry, budget) => {
+  const consumer_id = `virtual:highlight-consumer`
+  const result = await build({
+    configFile: false,
+    logLevel: `silent`,
+    plugins: [
+      {
+        name: `highlight-consumer`,
+        resolveId: (id) => (id === consumer_id ? id : undefined),
+        load: (id) =>
+          id === consumer_id
+            ? `export { ${entry} } from ${JSON.stringify(resolve_path(`src/lib/highlight/index.ts`))}`
+            : undefined,
+      },
+    ],
+    build: {
+      write: false,
+      rolldownOptions: {
+        input: consumer_id,
+        preserveEntrySignatures: `strict`,
+      },
+    },
+  })
+  assert(!Array.isArray(result) && `output` in result)
+  const chunks = result.output.filter((chunk) => chunk.type === `chunk`)
+  // Common + Svelte measures ~271 KB; the factory alone ~27 KB. Leave room for
+  // upstream growth, but catch retaining all grammars (~1.9 MB) or common (~267 KB).
+  expect(
+    chunks.reduce((total, chunk) => total + gzipSync(chunk.code).length, 0),
+  ).toBeLessThan(budget)
+})
 
 describe(`default_highlighter.highlight_block`, () => {
   test(`shares one default instance with lazy component consumers`, async () => {
@@ -20,23 +58,6 @@ describe(`default_highlighter.highlight_block`, () => {
       expect(code.lastElementChild?.textContent).toContain(`After`)
     },
   )
-
-  test(`reports missing optional starry-night peer dependency`, async () => {
-    vi.resetModules()
-    vi.doMock(`@wooorm/starry-night`, () => {
-      throw new Error(`Cannot find package '@wooorm/starry-night'`)
-    })
-
-    const { default_highlighter: missing_peer } = await import(
-      `$lib/highlight/default-highlighter`
-    )
-    await expect(missing_peer.ready()).rejects.toThrow(
-      `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`,
-    )
-
-    vi.doUnmock(`@wooorm/starry-night`)
-    vi.resetModules()
-  })
 
   // Cover custom grammar, common grammar, and punctuation in language flags.
   test.each([
@@ -127,27 +148,39 @@ describe(`create_highlighter`, () => {
       `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
     )
   })
+})
 
-  test(`public entry point defers loading until first use, then reports missing peer dependency`, async () => {
+test.each([
+  [
+    `default`,
+    async () => (await import(`$lib/highlight/default-highlighter`)).default_highlighter,
+  ],
+  [
+    `custom`,
+    async () => (await import(`$lib/highlight`)).create_highlighter([grammar_typst]),
+  ],
+] as const)(
+  `%s highlighter loads lazily and caches a missing peer error`,
+  async (_name, create) => {
     vi.resetModules()
     let load_count = 0
     vi.doMock(`@wooorm/starry-night`, () => {
       load_count += 1
       throw new Error(`Cannot find package '@wooorm/starry-night'`)
     })
-
-    const { create_highlighter: create } = await import(`$lib/highlight`)
-    const highlighter = create([grammar_typst])
+    onTestFinished(() => {
+      vi.doUnmock(`@wooorm/starry-night`)
+      vi.resetModules()
+    })
+    const highlighter = await create()
     // Flush pending imports to detect eager peer loading.
     await new Promise((resolve) => void setTimeout(resolve, 0))
     expect(load_count).toBe(0)
-
     const peer_error = `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`
     await expect(highlighter.ready()).rejects.toThrow(peer_error)
+    const failed_load_count = load_count
+    expect(failed_load_count).toBeGreaterThan(0)
     await expect(highlighter.highlight(`#let x = 1`, `typ`)).rejects.toThrow(peer_error)
-    expect(load_count).toBe(1) // failed load is cached, not retried
-
-    vi.doUnmock(`@wooorm/starry-night`)
-    vi.resetModules()
-  })
-})
+    expect(load_count).toBe(failed_load_count) // failed load is cached, not retried
+  },
+)

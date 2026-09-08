@@ -1,11 +1,16 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
-  import { type ComponentProps, untrack } from 'svelte'
+  import { untrack } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
-  import type { CmdAction, LoadOptionsParams, MultiSelectProps } from './types'
+  import type {
+    CmdAction,
+    LoadOptionsParams,
+    MultiSelectProps,
+    OptionListProps,
+  } from './types'
   import type { Hotkey } from './utils'
   import {
     cmd_action_matches,
@@ -20,8 +25,39 @@
   type OptionSnippetParams = Parameters<
     NonNullable<MultiSelectProps<Action>[`option`]>
   >[0]
-  type AddParams = Parameters<NonNullable<MultiSelectProps<Action>[`onadd`]>>[0]
   type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
+
+  // A command runs immediately; selection state and chip controls belong to MultiSelect.
+  // Enforce that contract for untyped callers too.
+  const command_selection = {
+    selected: [] as Action[],
+    value: null,
+    maxSelect: 1,
+    minSelect: null,
+    selectedDisplay: `chips`,
+    selectedOptionsDraggable: false,
+    maxVisibleChips: null,
+    keepSelectedInDropdown: false,
+    sortSelected: false,
+    duplicates: false,
+    allowUserOptions: false,
+    selectAllOption: false,
+    groupSelectAll: false,
+    rangeSelect: false,
+    parse_paste: undefined,
+    oncreate: undefined,
+    onchange: undefined,
+    onremove: undefined,
+    onremoveAll: undefined,
+    onselectAll: undefined,
+    onrangeSelect: undefined,
+    onreorder: undefined,
+    onduplicate: undefined,
+    onmaxreached: undefined,
+    onparsed_paste: undefined,
+    selectedItem: undefined,
+    removeIcon: undefined,
+  } satisfies Partial<MultiSelectProps<Action>>
 
   let {
     actions,
@@ -42,7 +78,7 @@
     input_aria_label = aria_label === `Command menu` ? `Search commands` : aria_label,
     matchingOptions: matching_actions = $bindable([]),
     noMatchingOptionsMsg: no_matching_options_msg = `No matching commands`,
-    onadd,
+    onexecute,
     onkeydown,
     option: option_snippet,
     placeholder = `Type a command…`,
@@ -52,29 +88,10 @@
     recent_actions_key = null,
     max_recent = 20,
     ...rest
-  }: Omit<
-    ComponentProps<typeof MultiSelect<Action>>,
-    | `autoActiveFirstOption`
-    | `key`
-    | `options`
-    | `allowUserOptions`
-    | `allowEmpty`
-    | `createOptionMsg`
-    | `duplicateOptionMsg`
-    | `userMsg`
-    | `liUserMsgClass`
-    | `liActiveUserMsgClass`
-    | `selectAllOption`
-    | `selectAllScope`
-    | `selectAllDisabledTitle`
-    | `liSelectAllClass`
-    | `groupSelectAll`
-    | `onselectAll`
-    | `rangeSelect`
-    | `onrangeSelect`
-    | `parse_paste`
-  > & {
+  }: Omit<OptionListProps<Action>, `autoActiveFirstOption` | `key` | `options`> & {
     actions: Action[]
+    // Called after a menu selection or global shortcut invokes its action.
+    onexecute?: (detail: { action: Action }) => unknown
     triggers?: string[]
     close_keys?: string[]
     backdrop_dim?: boolean
@@ -139,7 +156,7 @@
       validate_actions(result.options, validate_actions(actions))
       loaded_ids = validate_actions(
         result.options,
-        params.offset ? new Set(loaded_ids) : new Set(),
+        params.offset && !result.replace ? new Set(loaded_ids) : new Set(),
       )
       return result
     }
@@ -231,10 +248,7 @@
     ...actions.map((action) => ({
       keys: action.shortcut ?? ``,
       enabled: global_shortcuts && !open && !action.disabled,
-      handler: () => {
-        record_recent(action)
-        action.action(action.label)
-      },
+      handler: () => execute_action(action),
     })),
   ])
 
@@ -260,13 +274,12 @@
     run_hotkeys(event, key_bindings)
   }
 
-  function trigger_action_and_close(params: AddParams) {
-    const { option } = params
-    if (!option?.action || option.disabled) return
-    record_recent(option)
-    close_menu()
-    option.action(option.label)
-    onadd?.(params)
+  function execute_action(action: Action) {
+    if (action.disabled) return
+    record_recent(action)
+    if (open) close_menu()
+    action.action(action.label)
+    onexecute?.({ action })
   }
 </script>
 
@@ -317,11 +330,7 @@
   >
     <MultiSelect
       {...rest}
-      allowUserOptions={false}
-      selectAllOption={false}
-      groupSelectAll={false}
-      rangeSelect={false}
-      parse_paste={undefined}
+      {...command_selection}
       options={sorted_actions}
       loadOptions={load_options}
       bind:activeIndex={active_idx}
@@ -337,7 +346,7 @@
       noMatchingOptionsMsg={no_matching_options_msg}
       {placeholder}
       key={({ id }) => `${id}`}
-      onadd={trigger_action_and_close}
+      onadd={({ option }) => execute_action(option)}
       onkeydown={chain_handlers(
         (event) => run_hotkeys(event, toggle_bindings),
         onkeydown,

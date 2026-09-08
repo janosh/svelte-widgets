@@ -92,7 +92,7 @@ Fifteen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any
 - **Keyboard friendly:** every interactive component is fully operable without a mouse
 - **Bindable:** component state is exposed through `$bindable` props, so you can both read it and drive it from the outside
 - **Themeable:** CSS variables with sensible defaults on every element, plus prop bags to spread arbitrary attributes onto internals
-- **SSR-safe:** nothing touches `window` or `localStorage` before mount
+- **SSR-safe:** components support server rendering; browser-only helpers run on the client
 - **Typed:** props, snippets and events are inferred from the data you pass
 
 ## 🧪 &thinsp; Coverage
@@ -183,6 +183,8 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/utils`                    | Positioning, fuzzy matching, hotkeys and general helpers                          |
 | `/virtual`                  | Visible-window calculation for fixed-size items                                   |
 | `/vite-config`              | This repository's Vite Plus configuration helper                                  |
+| `/assets`                   | Svelte preprocessor for relative media, responsive images and downloads           |
+| `/yaml`                     | Vite YAML loader with build-time data transformation                              |
 
 `create_canvas_surface()` owns both layers' inline CSS dimensions and restores them on cleanup. Supply `height()` or give the parent a definite height; draw callbacks receive CSS-pixel coordinates and isolated context state. `create_roving_focus()` keeps nested groups independent and observes DOM eligibility changes, including hidden panels and disabled items.
 
@@ -197,14 +199,19 @@ Use `markdown()` for Markdown pages with YAML frontmatter, embedded Svelte, GFM 
 ```ts
 import { create_markdown, markdown } from 'svelte-widgets/markdown'
 import { heading_ids } from 'svelte-widgets/heading-anchors'
+import { asset_imports } from 'svelte-widgets/assets'
 
 export default {
   extensions: [`.svelte`, `.md`],
-  preprocess: [markdown(create_markdown({ math: true })), heading_ids()],
+  preprocess: [markdown(create_markdown({ math: true })), asset_imports(), heading_ids()],
 }
 ```
 
-Parse once with `engine.parse(source, { dialect: "markdown" })`, then pass the document to `render_markdown()` for HTML strings. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Use `check_document(document, options)` from `/markdown/check` for one-shot documentation checks. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
+Use `engine.render(source, { filename })` for HTML strings, or parse once with `engine.parse(source, { dialect: "markdown" })` and pass the document to `render_markdown()` when you also need its manifest. Set `frontmatter: false` in `create_markdown()` for embedded data fields whose leading `---` should remain Markdown. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Use `check_document(document, options)` from `/markdown/check` for one-shot documentation checks. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
+
+`asset_imports()` resolves relative media URLs, `srcset` candidates, PDF links and download links through Vite, preserving query strings and fragments. Place it after Markdown preprocessing so authored Markdown images are included. Dynamic URLs, component props, public-root paths and external URLs remain unchanged. Filenames containing `#` or `?` must be renamed because Vite interprets those characters as URL delimiters, even when encoded in the authored URL.
+
+Add `yaml_plugin()` from `svelte-widgets/yaml` to Vite's `plugins` to import `.yaml`, `.yml` and YAML citation files (`.cff`) as default-exported data. Its YAML 1.2 core schema keeps dates as strings. Destructure the default export instead of using named imports. An optional `transform(data, filename)` callback can validate or asynchronously enrich data at build time, including rendering Markdown fields; return the data to export. Invalid YAML, cycles and non-JSON values fail with filename context. Vite handles explicit `?raw` and `?url` imports.
 
 `Popover` and `ActionMenu` use the browser Popover API for top-layer rendering, light dismissal and Escape handling, while `float` supplies placement. Explicit custom dismissal policies still use `click_outside`. Dialog-like popovers can add `focus_trap`; action menus use Arrow/Home/End navigation and close on Tab so browser focus continues in page order.
 

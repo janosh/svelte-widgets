@@ -371,9 +371,9 @@ describe(`Nav`, () => {
     // Enter/Space share a branch; ArrowDown opens when closed — both focus the first item
     for (const open_key of [`Enter`, `ArrowDown`]) {
       keydown(open_key, toggle_button)
-      // deno-lint-ignore no-await-in-loop
       await next_task() // wait for DOM focus
       expect(is_visible(menu)).toBe(true)
+      expect(toggle_button.getAttribute(`aria-expanded`)).toBe(`true`)
       expect(document.activeElement).toBe(menu.querySelector(`a`))
       keydown(`Escape`)
     }
@@ -417,10 +417,12 @@ describe(`Nav`, () => {
     await click(toggle)
     const external = document.createElement(`button`)
     document.body.append(external)
-    focus_out(dropdown, external)
-    await tick()
-    // what a click opened, only a click (on the toggle or outside) or Escape closes
-    expect(is_visible(menu)).toBe(true)
+    // Focus moving within the submenu or onto the page must leave it open.
+    for (const related of [menu.querySelector(`a`), external]) {
+      focus_out(dropdown, related)
+      await tick()
+      expect(is_visible(menu)).toBe(true)
+    }
     external.remove()
   })
 
@@ -899,16 +901,6 @@ describe(`Nav`, () => {
       expect(is_visible(menu2)).toBe(true)
     })
 
-    // Enter/Space share one branch; ArrowDown opens when closed via another
-    test.each([`Enter`, `ArrowDown`])(`keyboard %s opens the dropdown`, async (key) => {
-      const { dropdown_menu, toggle } = mount_dropdown()
-
-      keydown(key, toggle)
-      await next_task()
-      expect(is_visible(dropdown_menu)).toBe(true)
-      expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
-    })
-
     test(`ArrowDown on the toggle of an open dropdown navigates into it`, async () => {
       const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
 
@@ -947,24 +939,6 @@ describe(`Nav`, () => {
       expect(document.activeElement).toBe(links[1])
       keydown(`Tab`, links[1])
       expect(document.activeElement).toBe(links[0])
-    })
-
-    test(`an open dropdown stays open on focus out`, async () => {
-      const { dropdown, dropdown_menu } = mount_dropdown({ routes: two_child_route })
-
-      await click(doc_query(`[data-dropdown-toggle]`))
-      expect(is_visible(dropdown_menu)).toBe(true)
-
-      // focus moving inside or fully out: dropdowns close on click-outside/Escape only
-      for (const related of [
-        dropdown_menu.querySelector(`a`),
-        document.createElement(`button`),
-      ]) {
-        focus_out(dropdown, related)
-        // deno-lint-ignore no-await-in-loop
-        await tick()
-        expect(is_visible(dropdown_menu)).toBe(true)
-      }
     })
 
     test(`open dropdown clears when burger menu closes`, async () => {

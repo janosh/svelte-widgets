@@ -1,6 +1,7 @@
 import { tick } from 'svelte'
 import type { PortalParams } from './types'
 import { compute_position } from './utils'
+import { auto_update_position } from './attachments/float'
 
 type PortalActionParams = PortalParams & { open: boolean }
 
@@ -12,6 +13,7 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
   let params = initial_params
   let home_parent: ParentNode | null = null
   let home_anchor: Node | null = null
+  let stop_tracking: (() => void) | undefined
 
   const update_position = (): void => {
     if (!home_parent) return
@@ -43,13 +45,13 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
   }
 
   const reposition = () => {
-    if (params.open && params.target_node) void tick().then(update_position)
-    else node.hidden = true
-  }
-
-  const stop_tracking_viewport = () => {
-    globalThis.removeEventListener(`scroll`, update_position, true)
-    globalThis.removeEventListener(`resize`, update_position)
+    stop_tracking?.()
+    stop_tracking = undefined
+    if (params.open && params.target_node) {
+      // Content and anchor sizes can change without a scroll or window resize.
+      stop_tracking = auto_update_position(params.target_node, node, update_position)
+      void tick().then(update_position)
+    } else node.hidden = true
   }
 
   const activate = () => {
@@ -58,13 +60,12 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
     home_anchor = node.nextSibling
     document.body.append(node)
     node.style.position = `fixed`
-    globalThis.addEventListener(`scroll`, update_position, true)
-    globalThis.addEventListener(`resize`, update_position)
   }
 
   const deactivate = () => {
     if (!home_parent) return
-    stop_tracking_viewport()
+    stop_tracking?.()
+    stop_tracking = undefined
     // insertBefore handles missing/stale anchors; Node.before is absent from native previews.
     // oxlint-disable-next-line unicorn/prefer-modern-dom-apis
     home_parent.insertBefore(
@@ -95,7 +96,7 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
     },
     destroy() {
       if (!home_parent) return
-      stop_tracking_viewport()
+      stop_tracking?.()
       home_parent = null
       home_anchor = null
       node.remove()
