@@ -73,6 +73,9 @@ export const typed_content = async () => {
     },
   })
   const document = assert_ok(await engine.parse(`---\ntitle: Guide\n---\n# Guide`))
+  const html: string = assert_ok(
+    await engine.render(`---\ntitle: Guide\n---\n# Guide`, { filename: `guide.md` }),
+  )
   const result = assert_ok(await compile_markdown(document))
   const title: string = result.manifest.metadata.title
   const enabled: boolean | undefined = result.manifest.fences[0]?.settings.check
@@ -89,7 +92,7 @@ export const typed_content = async () => {
   // @ts-expect-error Published source maps are readonly.
   result.map.sources.push(`mutated`)
   void enabled
-  return { title, toc: content_toc(result.manifest) }
+  return { title, html, toc: content_toc(result.manifest) }
 }
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])

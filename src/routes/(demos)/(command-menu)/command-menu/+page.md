@@ -2,7 +2,7 @@
 
 [`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
 
-CommandMenu supports search, grouping, async loading, and recent actions. It executes one command at a time; user-created options, bulk selection, and pasted option lists are unavailable.
+CommandMenu supports search, grouping, async loading, and recent actions. It executes one command at a time and closes, without retaining a selection. Selection bindings (`selected`, `value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to MultiSelect. Remove `maxSelect={1}` from existing command menus; single-command execution is built in. Use `onadd` to observe executed commands and `onactivate` to track keyboard or pointer navigation.
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">
@@ -26,10 +26,7 @@ CommandMenu supports search, grouping, async loading, and recent actions. It exe
 ## `PageSearch`
 
 [`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages.
-`fallback_actions` are matched locally on every keystroke, so known routes show up without
-waiting on the index (and remain the only results when the index is absent). Install
-`pagefind` as a development dependency, then index the rendered site after the application
-build. Run this script before previewing or deploying:
+`fallback_actions` are matched locally on every keystroke, so known routes show up without waiting on the index. Failed index, search, or result downloads show a Retry button. Successful results remain visible, including those from a partially failed batch; Retry downloads only failed results and restores their search order. Install `pagefind` as a development dependency, then index the rendered site after the application build. Run this script before previewing or deploying:
 
 ```json
 {

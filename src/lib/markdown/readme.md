@@ -33,19 +33,17 @@ Source maps track numeric spans through edits and script injection. Separate occ
 ## HTML strings
 
 ```ts
-import { assert_ok, create_markdown, render_markdown } from 'svelte-widgets/markdown'
+import { assert_ok, create_markdown } from 'svelte-widgets/markdown'
 
-const engine = create_markdown({ math: true })
-const document = assert_ok(
-  await engine.parse(`A value: $x^2$`, {
-    filename: `description.md`,
-    dialect: `markdown`,
-  }),
+const engine = create_markdown({ math: true, frontmatter: false })
+const html = assert_ok(
+  await engine.render(`A value: $x^2$`, { filename: `description.md` }),
 )
-const html = assert_ok(await render_markdown(document))
 ```
 
 The `markdown` dialect treats braces literally and does not load the Svelte compiler. `render_markdown(document)` emits HTML from that document. Both dialects retain trusted authored HTML by default. Set `create_markdown({ raw_html: 'omit' })` for Markdown data fields that should discard HTML tags and entire raw HTML blocks; Markdown links, images, and code remain supported. This option requires the `markdown` dialect and also excludes omitted HTML from the content manifest. Neither mode sanitizes untrusted input.
+
+`engine.render(source, { filename })` parses and renders in the `markdown` dialect, returning the same diagnostic result shape. Use `engine.parse()` and `render_markdown(document)` when you also need the content manifest. Set `frontmatter: false` for embedded Markdown fields so leading `---` separators remain content instead of being interpreted as a YAML header. Frontmatter extraction stays enabled by default. Markdown rendering supports GFM tables, strikethrough and bare URL autolinks.
 
 ## Diagnostics
 

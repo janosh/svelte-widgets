@@ -437,8 +437,10 @@ describe(`Toc`, () => {
       mock_active_heading(`first`)
       const replace_state_mock = vi.spyOn(history, `replaceState`)
       const scroll_into_view_mock = spy_scroll_into_view()
+      const onclick = vi.fn()
 
       mount_toc({
+        liProps: { onclick, 'data-sveltekit-replacestate': `` },
         tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
           render: () => html(heading()),
         })),
@@ -449,9 +451,17 @@ describe(`Toc`, () => {
       expect(item.querySelectorAll(`a`)).toHaveLength(n_anchors)
       expect(item.getAttribute(`role`)).toBe(scrolls ? `link` : null)
       expect(item.getAttribute(`tabindex`)).toBe(scrolls ? `0` : null)
+      const native_click = HTMLAnchorElement.prototype.click
+      vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(
+        function (this: HTMLAnchorElement) {
+          expect(this.closest(`[data-sveltekit-replacestate]`)).toBe(item)
+          native_click.call(this)
+        },
+      )
 
       const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
       doc_query(selector).dispatchEvent(event)
+      expect(onclick).toHaveBeenCalledExactlyOnceWith(event)
 
       // nested interactive elements keep native behavior; plain content falls to the li
       expect(event.defaultPrevented).toBe(scrolls)
@@ -834,10 +844,14 @@ describe(`Toc`, () => {
       const scroll_into_view_mock = spy_scroll_into_view()
       const replace_state_mock = vi.spyOn(history, `replaceState`)
       const anchor_click = vi.spyOn(HTMLAnchorElement.prototype, `click`)
+      const onclick = vi.fn()
 
       // a breakpoint above the window width forces mobile mode, where open=true suffices
-      mount_toc({ open: true, breakpoint: 2000, scrollBehavior })
+      mount_toc({ open: true, breakpoint: 2000, scrollBehavior, liProps: { onclick } })
       await tick()
+      const expected_link = doc_query(
+        `aside.toc ol li:nth-child(${key === null ? 1 : 2}) > a`,
+      )
 
       // keys act on the active item, the last heading in happy-dom; a click picks the first
       if (key === null) doc_query(`aside.toc ol li`).click()
@@ -849,7 +863,9 @@ describe(`Toc`, () => {
       })
       const expected_hash = key === null ? `#heading-1` : `#heading-2`
       expect(anchor_click).toHaveBeenCalledOnce()
+      expect(anchor_click.mock.contexts[0]).toBe(expected_link)
       expect(anchor_click.mock.contexts[0]).toHaveProperty(`hash`, expected_hash)
+      expect(onclick).toHaveBeenCalledOnce()
       expect(replace_state_mock).not.toHaveBeenCalled()
     },
   )

@@ -69,13 +69,34 @@ describe(`Markdown output`, () => {
   })
 
   test(`HTML mode retains literal braces without loading Svelte semantics`, async () => {
-    expect(await render_markdown(`Hello {name} and <b>HTML</b>`)).toBe(
+    const { render } = create_markdown()
+    expect(assert_ok(await render(`Hello {name} and <b>HTML</b>`))).toBe(
       `<p>Hello &#123;name&#125; and <b>HTML</b></p>\n`,
     )
     expect(await render_markdown(`\`{code}\` &amp;`)).toBe(
       `<p><code>&#123;code&#125;</code> &amp;</p>\n`,
     )
   })
+
+  test.each([
+    [`---\n\n**Visible**`, `<hr>\n<p><strong>Visible</strong></p>\n`],
+    [
+      `---\ntitle: Keep me\n---\nAfter`,
+      `<hr>\n<h2 id="title-keep-me">title: Keep me</h2>\n<p>After</p>\n`,
+    ],
+  ])(
+    `preserves leading separators when frontmatter is disabled: %s`,
+    async (source, expected) => {
+      const engine = create_markdown({ frontmatter: false })
+      const document = assert_ok(await engine.parse(source, { dialect: `markdown` }))
+      expect(document.metadata).toEqual({})
+      expect(document.manifest.headings[0]?.range.start.line).toBe(
+        source.includes(`title:`) ? 2 : undefined,
+      )
+      expect(assert_ok(await engine.render(source))).toBe(expected)
+      expect(assert_ok(await render_document(document))).toBe(expected)
+    },
+  )
 
   test.each([
     [`Before <b>bold</b> after`, `<p>Before bold after</p>\n`],
@@ -645,6 +666,10 @@ describe(`document pipeline`, () => {
     })
     expect(highlight).toHaveBeenCalledTimes(1)
     expect(() => assert_ok(bad)).toThrow(DiagnosticError)
+    expect(await engine.render(`---\n`, { filename: `bad.md` })).toMatchObject({
+      ok: false,
+      diagnostics: [{ code: `frontmatter`, range: { start: { filename: `bad.md` } } }],
+    })
   })
 
   test(`dialects fail explicitly and highlighter failures retain every fence range`, async () => {
@@ -657,6 +682,7 @@ describe(`document pipeline`, () => {
     const document = assert_ok(await engine.parse(source, { filename: `broken.md` }))
     const output = await compile_document(document)
     expect(output.ok).toBe(false)
+    expect(await engine.render(source, { filename: `broken.md` })).toEqual(output)
     expect(
       output.diagnostics.map(({ code, range }) => [
         code,

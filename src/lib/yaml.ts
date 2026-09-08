@@ -1,5 +1,6 @@
 import { CORE_SCHEMA, load } from 'js-yaml'
 import type { Plugin } from 'vite'
+import { assert_json_node } from './serialization.ts'
 
 export type YamlOptions = {
   // Enrich or validate parsed data at build time; return the data to export.
@@ -12,15 +13,10 @@ function serialize_data(
   path: string,
   ancestors = new Set<object>(),
 ): string {
-  if (data === null || typeof data === `string` || typeof data === `boolean`)
-    return JSON.stringify(data)
-  if (typeof data === `number` && Number.isFinite(data))
+  assert_json_node(data, path)
+  if (data === null || typeof data !== `object`)
     return Object.is(data, -0) ? `-0` : JSON.stringify(data)
-  if (typeof data !== `object`)
-    throw new TypeError(`Unsupported YAML value at ${path} (type ${typeof data})`)
   if (ancestors.has(data)) throw new TypeError(`Cyclic YAML alias at ${path}`)
-  if (!Array.isArray(data) && Object.getPrototypeOf(data) !== Object.prototype)
-    throw new TypeError(`Expected plain YAML data at ${path}`)
   ancestors.add(data)
   // Computed keys preserve own __proto__ properties in the emitted JavaScript.
   const code = Array.isArray(data)

@@ -69,8 +69,20 @@ export type PlaceholderConfig = {
   persistent?: boolean // keep placeholder visible even when options are selected
 }
 
-export interface MultiSelectEvents<T extends Option = Option> {
+export interface OptionListEvents<T extends Option = Option> {
   onadd?: (data: { option: T; selected: T[] }) => unknown
+  onopen?: (data: { event: Event }) => unknown
+  onclose?: (data: { event: Event }) => unknown
+  ongroupToggle?: (data: { group: string; collapsed: boolean }) => unknown
+  oncollapseAll?: (data: { groups: string[] }) => unknown
+  onexpandAll?: (data: { groups: string[] }) => unknown
+  onsearch?: (data: { searchText: string; matchingOptions: T[] }) => unknown // debounced
+  onactivate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
+}
+
+export interface MultiSelectEvents<
+  T extends Option = Option,
+> extends OptionListEvents<T> {
   oncreate?: (data: {
     option: T
   }) => false | T | undefined | Promise<false | T | undefined> // false rejects, T transforms, undefined accepts as-is
@@ -84,12 +96,6 @@ export interface MultiSelectEvents<T extends Option = Option> {
     options?: T[]
     type: `add` | `remove` | `removeAll` | `selectAll` | `rangeSelect` | `reorder`
   }) => unknown
-  onopen?: (data: { event: Event }) => unknown
-  onclose?: (data: { event: Event }) => unknown
-  ongroupToggle?: (data: { group: string; collapsed: boolean }) => unknown
-  oncollapseAll?: (data: { groups: string[] }) => unknown
-  onexpandAll?: (data: { groups: string[] }) => unknown
-  onsearch?: (data: { searchText: string; matchingOptions: T[] }) => unknown // debounced
   onmaxreached?: (data: {
     selected: T[]
     maxSelect: number
@@ -102,7 +108,6 @@ export interface MultiSelectEvents<T extends Option = Option> {
     overflow: T[]
     raw_text: string
   }) => unknown
-  onactivate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
 }
 
 // Dynamic options loading (https://github.com/janosh/svelte-widgets/discussions/342)
@@ -116,6 +121,8 @@ export interface LoadOptionsParams {
 export interface LoadOptionsResult<T extends Option = Option> {
   options: T[]
   hasMore: boolean
+  replace?: boolean // Replace loaded options with an ordered snapshot instead of appending.
+  error?: Error // Display partial results alongside Retry.
 }
 
 export type LoadOptionsFn<T extends Option = Option> = (
@@ -158,14 +165,10 @@ export type GroupedOptions<T extends Option = Option> = {
   collapsed: boolean
 }
 
-export interface MultiSelectSnippets<T extends Option = Option> {
+export interface OptionListSnippets<T extends Option = Option> {
   // icon marking the input as expandable into a dropdown; placed by expandIconPosition
   expandIcon?: Snippet<[{ open: boolean; disabled: boolean }]>
-  selectedItem?: Snippet<[{ option: T; idx: number }]>
   children?: Snippet<[{ option: T; idx: number; type: `option` | `selected` }]>
-  removeIcon?: Snippet<
-    [{ option: T; isRemoveAll: false } | { option?: undefined; isRemoveAll: true }]
-  >
   beforeInput?: Snippet<[InputSnippetProps<T>]>
   afterInput?: Snippet<[InputSnippetProps<T>]>
   spinner?: Snippet
@@ -173,8 +176,17 @@ export interface MultiSelectSnippets<T extends Option = Option> {
   option?: Snippet<
     [{ option: T; idx: number; selected: boolean; active: boolean; disabled: boolean }]
   >
-  userMsg?: Snippet<[UserMsgProps]>
   groupHeader?: Snippet<[GroupHeaderProps<T>]>
+}
+
+export interface MultiSelectSnippets<
+  T extends Option = Option,
+> extends OptionListSnippets<T> {
+  selectedItem?: Snippet<[{ option: T; idx: number }]>
+  removeIcon?: Snippet<
+    [{ option: T; isRemoveAll: false } | { option?: undefined; isRemoveAll: true }]
+  >
+  userMsg?: Snippet<[UserMsgProps]>
 }
 
 export interface PortalParams {
@@ -203,10 +215,10 @@ export interface SelectAllDisabledState {
 type InputEventProp = Extract<keyof HTMLInputAttributes, `on${string}`>
 export type InputProps = Omit<HTMLInputAttributes, InputEventProp>
 
-export interface MultiSelectProps<T extends Option = Option>
+export interface OptionListProps<T extends Option = Option>
   extends
-    MultiSelectEvents<T>,
-    MultiSelectSnippets<T>,
+    OptionListEvents<T>,
+    OptionListSnippets<T>,
     Omit<
       HTMLAttributes<HTMLDivElement>,
       `children` | `onchange` | `onclose` | `placeholder`
@@ -214,31 +226,13 @@ export interface MultiSelectProps<T extends Option = Option>
   activeIndex?: number | null
   activeOption?: T | null
   autoActiveFirstOption?: boolean
-  createOptionMsg?:
-    | string
-    | ((state: {
-        searchText: string
-        selected: T[]
-        options: T[]
-        matchingOptions: T[]
-      }) => string)
-    | null
-  allowUserOptions?: boolean | `append`
-  allowEmpty?: boolean // added for https://github.com/janosh/svelte-widgets/issues/192
   autocomplete?: HTMLInputAttributes[`autocomplete`]
   autoScroll?: boolean
   breakpoint?: number // wider screens count as desktop, narrower as mobile
   defaultDisabledTitle?: string
   disabled?: boolean
   disabledInputTitle?: string
-  duplicateOptionMsg?: string
-  // false (default) blocks dupes case-sensitively, true allows all, 'case-insensitive'
-  // also blocks case variants
-  duplicates?: boolean | `case-insensitive`
   expandIconPosition?: `left` | `right` | `none`
-  // keep selected options in the dropdown, marked either by a left border and background
-  // ('plain') or a checkbox prefix ('checkboxes')
-  keepSelectedInDropdown?: false | `plain` | `checkboxes`
   // Unique option key, default value ?? label for objects and the primitive otherwise.
   // Dupe detection also checks labels, so a second "Apple" is blocked unless duplicates=true.
   key?: (opt: T) => unknown
@@ -258,12 +252,8 @@ export interface MultiSelectProps<T extends Option = Option>
   // i18n overrides, shallow-merged over MULTI_SELECT_LABELS (see labels.ts)
   labels?: Partial<MultiSelectLabels>
   liActiveOptionClass?: ClassValue
-  liActiveUserMsgClass?: ClassValue
   liOptionClass?: ClassValue
   liOptionStyle?: string | null
-  liSelectedClass?: ClassValue
-  liSelectedStyle?: string | null
-  liUserMsgClass?: ClassValue
   loading?: boolean
   matchingOptions?: T[]
   maxOptions?: number | undefined
@@ -271,12 +261,6 @@ export interface MultiSelectProps<T extends Option = Option>
   // included) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
   // not with stickyGroupHeaders: a header outside the render window cannot stay pinned.
   virtualList?: boolean | { itemHeight?: number; overscan?: number }
-  maxSelect?: number | null // null means there is no upper limit for selected.length
-  maxSelectMsg?: ((current: number, max: number) => string) | null
-  maxSelectMsgClass?: ClassValue
-  // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
-  // all. Ignored for selectedDisplay="input"; keyboard chip navigation auto-expands.
-  maxVisibleChips?: number | null
   name?: string | null
   noMatchingOptionsMsg?: string
   open?: boolean
@@ -288,40 +272,18 @@ export interface MultiSelectProps<T extends Option = Option>
   outerDivClass?: ClassValue
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
-  removeAllTitle?: string
-  removeBtnTitle?: string
-  minSelect?: number | null // null means there is no lower limit for selected.length
   required?: boolean | number
   resetFilterOnAdd?: boolean
-  parse_paste?: (text: string) => T[]
   searchText?: string
-  selected?: T[] // don't allow more than maxSelect preselected options
-  // 'chips' (default) renders selected options as tags; 'input' requires maxSelect === 1
-  selectedDisplay?: `chips` | `input`
-  sortSelected?: boolean | ((op1: T, op2: T) => number)
-  selectedOptionsDraggable?: boolean
-  rangeSelect?: boolean
   style?: string | null
   ulOptionsClass?: ClassValue
-  ulSelectedClass?: ClassValue
-  ulSelectedStyle?: string | null
   ulOptionsStyle?: string | null
-  value?: T | T[] | null
   portal?: PortalParams
-  // Select all feature
-  selectAllOption?: boolean | string // enable select all; if string, use as label
-  selectAllScope?: SelectAllScope
-  selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
-  liSelectAllClass?: ClassValue // CSS class for the select all <li>
   loadOptions?: LoadOptions<T>
   loadError?: Error | null // bindable, cleared on retry or a new search
-  // flip animation for selected options; { duration: 0 } disables
-  // (https://github.com/janosh/svelte-widgets/issues/356)
-  selectedFlipParams?: FlipParams
   // Option grouping feature (https://github.com/janosh/svelte-widgets/issues/135)
   collapsibleGroups?: boolean // enable click-to-collapse groups
   collapsedGroups?: Set<string> // externally controlled collapsed state (bindable)
-  groupSelectAll?: boolean // per-group header select/deselect-all toggle
   ungroupedPosition?: `first` | `last` // where to render options without a group
   // group order: 'none' (default, source order), alphabetical 'asc'/'desc', or a comparator
   groupSortOrder?: `none` | `asc` | `desc` | ((a: string, b: string) => number)
@@ -336,6 +298,60 @@ export interface MultiSelectProps<T extends Option = Option>
   expandAllGroups?: () => void
   // Keyboard shortcuts for common actions
   shortcuts?: Partial<KeyboardShortcuts>
+}
+
+export interface MultiSelectProps<T extends Option = Option>
+  extends OptionListProps<T>, MultiSelectEvents<T>, MultiSelectSnippets<T> {
+  createOptionMsg?:
+    | string
+    | ((state: {
+        searchText: string
+        selected: T[]
+        options: T[]
+        matchingOptions: T[]
+      }) => string)
+    | null
+  allowUserOptions?: boolean | `append`
+  allowEmpty?: boolean // added for https://github.com/janosh/svelte-widgets/issues/192
+  duplicateOptionMsg?: string
+  // false (default) blocks dupes case-sensitively, true allows all, 'case-insensitive'
+  // also blocks case variants
+  duplicates?: boolean | `case-insensitive`
+  // keep selected options in the dropdown, marked either by a left border and background
+  // ('plain') or a checkbox prefix ('checkboxes')
+  keepSelectedInDropdown?: false | `plain` | `checkboxes`
+  liActiveUserMsgClass?: ClassValue
+  liSelectedClass?: ClassValue
+  liSelectedStyle?: string | null
+  liUserMsgClass?: ClassValue
+  maxSelect?: number | null // null means there is no upper limit for selected.length
+  maxSelectMsg?: ((current: number, max: number) => string) | null
+  maxSelectMsgClass?: ClassValue
+  // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
+  // all. Ignored for selectedDisplay="input"; keyboard chip navigation auto-expands.
+  maxVisibleChips?: number | null
+  removeAllTitle?: string
+  removeBtnTitle?: string
+  minSelect?: number | null // null means there is no lower limit for selected.length
+  parse_paste?: (text: string) => T[]
+  selected?: T[] // don't allow more than maxSelect preselected options
+  // 'chips' (default) renders selected options as tags; 'input' requires maxSelect === 1
+  selectedDisplay?: `chips` | `input`
+  sortSelected?: boolean | ((op1: T, op2: T) => number)
+  selectedOptionsDraggable?: boolean
+  rangeSelect?: boolean
+  ulSelectedClass?: ClassValue
+  ulSelectedStyle?: string | null
+  value?: T | T[] | null
+  // Select all feature
+  selectAllOption?: boolean | string // enable select all; if string, use as label
+  selectAllScope?: SelectAllScope
+  selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
+  liSelectAllClass?: ClassValue // CSS class for the select all <li>
+  // flip animation for selected options; { duration: 0 } disables
+  // (https://github.com/janosh/svelte-widgets/issues/356)
+  selectedFlipParams?: FlipParams
+  groupSelectAll?: boolean // per-group header select/deselect-all toggle
 }
 
 // "modifier+...+key" with modifiers ctrl, shift, alt, meta, cmd (e.g. 'ctrl+shift+a');

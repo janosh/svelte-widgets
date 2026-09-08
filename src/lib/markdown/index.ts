@@ -12,6 +12,7 @@ import type { KatexOptions } from 'katex'
 
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_html_text } from '../highlight/hast.ts'
+import { assert_json_node, script_json } from '../serialization.ts'
 import {
   source_map,
   edit_source,
@@ -67,6 +68,8 @@ export type { KatexOptions } from 'katex'
 export type { ExampleOptions, FenceSettings } from './meta.ts'
 export type MarkdownOptions = {
   extensions?: string[]
+  // Disable YAML frontmatter extraction for embedded Markdown data fields.
+  frontmatter?: boolean
   // Omit authored HTML tokens in the Markdown dialect; this is not sanitization.
   raw_html?: 'preserve' | 'omit'
   // Return the HTML inside <code>. Omit for plain, escaped code.
@@ -107,6 +110,7 @@ export type MarkdownEngine<
     source: string,
     input?: MarkdownInput,
   ) => Promise<DiagnosticResult<MarkdownDocument<Metadata>>>
+  render: (source: string, input?: MarkdownFile) => Promise<DiagnosticResult<string>>
 }
 type PreparedDocument = {
   code: string
@@ -143,8 +147,6 @@ const copy_options = <Value>(
 
 const escape_braces = (text: string): string =>
   text.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
-const script_json = (value: unknown): string =>
-  JSON.stringify(value).replaceAll(`<`, `\\u003c`)
 const smart_quotes = (text: string): string =>
   text
     .replaceAll(`...`, `…`)
@@ -161,18 +163,9 @@ function serialize_metadata(value: unknown): Record<string, unknown> {
     value,
     function (this: Record<string, unknown>, key: string, item: unknown) {
       const original: unknown = this[key]
-      if (
-        !Object.is(original, item) ||
-        (typeof item === `object` &&
-          item !== null &&
-          !Array.isArray(item) &&
-          Object.getPrototypeOf(item) !== Object.prototype &&
-          Object.getPrototypeOf(item) !== null) ||
-        ![`object`, `string`, `boolean`, `number`].includes(typeof item)
-      )
+      if (!Object.is(original, item))
         throw new Error(`Frontmatter value at ${JSON.stringify(key)} must be JSON data`)
-      if (typeof item === `number` && !Number.isFinite(item))
-        throw new Error(`Frontmatter numbers must be finite: ${item}`)
+      assert_json_node(item, `frontmatter[${JSON.stringify(key)}]`, true)
       return item
     },
   )
@@ -213,7 +206,10 @@ async function prepare_document(
   let body = source
   let metadata: Record<string, unknown> | undefined
   try {
-    const parsed = frontmatter(source)
+    const parsed =
+      options.frontmatter === false
+        ? { body: source, metadata: undefined }
+        : frontmatter(source)
     body = parsed.body
     metadata = options.validate_frontmatter
       ? serialize_metadata(
@@ -594,7 +590,7 @@ export function create_markdown<
 ): MarkdownEngine<Metadata>
 export function create_markdown(options?: MarkdownOptions): MarkdownEngine
 export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
-  return {
+  const engine: MarkdownEngine = {
     options,
     async parse(source, { filename = `document.md`, dialect = `svelte` } = {}) {
       try {
@@ -616,7 +612,12 @@ export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
         }
       }
     },
+    async render(source, input) {
+      const result = await engine.parse(source, { ...input, dialect: `markdown` })
+      return result.ok ? render_markdown(result.value) : result
+    },
   }
+  return engine
 }
 
 export const compile_markdown = <Metadata extends Record<string, unknown>>(

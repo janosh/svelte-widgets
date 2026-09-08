@@ -1800,7 +1800,10 @@
       !load_options_config ||
       // paginating from nothing repeats the first page and hands out offset 0, which the
       // documented cursor pattern reads as "reset"
-      (!reset && (is_loading_options || !load_options_has_more || !loaded_options.length))
+      (!reset &&
+        (is_loading_options ||
+          (!load_options_has_more && !loadError) ||
+          !loaded_options.length))
     )
       return
     if (reset) {
@@ -1824,9 +1827,11 @@
         signal: abort_controller.signal,
       })
       if (request_id !== load_request_id) return // stale request, discard
-      batch_length = result.options.length
-      loaded_options = reset ? result.options : [...loaded_options, ...result.options]
+      batch_length = result.options.length - (result.replace ? offset : 0)
+      loaded_options =
+        reset || result.replace ? result.options : [...loaded_options, ...result.options]
       load_options_has_more = result.hasMore
+      loadError = result.error ?? null
     } catch (error) {
       // a consumer forwarding `signal` rejects with a self-inflicted AbortError on cancel,
       // but one ignoring `signal` still reports real failures — so swallow aborts only
@@ -1850,7 +1855,8 @@
     // the next request would be identical (and it keeps offset=0 meaning "reset").
     if (
       request_id !== load_request_id ||
-      batch_length === 0 ||
+      batch_length <= 0 ||
+      loadError ||
       !load_options_has_more ||
       !open ||
       !options_list_el ||

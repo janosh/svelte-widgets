@@ -82,6 +82,11 @@ test.each([
 
 test.each([
   undefined,
+  Infinity,
+  NaN,
+  () => `unsupported`,
+  new Map(),
+  Object.setPrototypeOf({ value: 1 }, null),
   new Date(`2026-09-07`),
   { value: undefined },
   { value: 1n },

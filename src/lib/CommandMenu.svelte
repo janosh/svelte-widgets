@@ -1,11 +1,16 @@
 <script lang="ts" generics="Action extends CmdAction = CmdAction">
-  import { type ComponentProps, untrack } from 'svelte'
+  import { untrack } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
-  import type { CmdAction, LoadOptionsParams, MultiSelectProps } from './types'
+  import type {
+    CmdAction,
+    LoadOptionsParams,
+    MultiSelectProps,
+    OptionListProps,
+  } from './types'
   import type { Hotkey } from './utils'
   import {
     cmd_action_matches,
@@ -22,6 +27,38 @@
   >[0]
   type AddParams = Parameters<NonNullable<MultiSelectProps<Action>[`onadd`]>>[0]
   type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
+
+  // A command runs immediately; selection state and chip controls belong to MultiSelect.
+  // Enforce that contract for untyped callers too.
+  const command_selection = {
+    selected: [] as Action[],
+    value: null,
+    maxSelect: 1,
+    minSelect: null,
+    selectedDisplay: `chips`,
+    selectedOptionsDraggable: false,
+    maxVisibleChips: null,
+    keepSelectedInDropdown: false,
+    sortSelected: false,
+    duplicates: false,
+    allowUserOptions: false,
+    selectAllOption: false,
+    groupSelectAll: false,
+    rangeSelect: false,
+    parse_paste: undefined,
+    oncreate: undefined,
+    onchange: undefined,
+    onremove: undefined,
+    onremoveAll: undefined,
+    onselectAll: undefined,
+    onrangeSelect: undefined,
+    onreorder: undefined,
+    onduplicate: undefined,
+    onmaxreached: undefined,
+    onparsed_paste: undefined,
+    selectedItem: undefined,
+    removeIcon: undefined,
+  } satisfies Partial<MultiSelectProps<Action>>
 
   let {
     actions,
@@ -52,28 +89,7 @@
     recent_actions_key = null,
     max_recent = 20,
     ...rest
-  }: Omit<
-    ComponentProps<typeof MultiSelect<Action>>,
-    | `autoActiveFirstOption`
-    | `key`
-    | `options`
-    | `allowUserOptions`
-    | `allowEmpty`
-    | `createOptionMsg`
-    | `duplicateOptionMsg`
-    | `userMsg`
-    | `liUserMsgClass`
-    | `liActiveUserMsgClass`
-    | `selectAllOption`
-    | `selectAllScope`
-    | `selectAllDisabledTitle`
-    | `liSelectAllClass`
-    | `groupSelectAll`
-    | `onselectAll`
-    | `rangeSelect`
-    | `onrangeSelect`
-    | `parse_paste`
-  > & {
+  }: Omit<OptionListProps<Action>, `autoActiveFirstOption` | `key` | `options`> & {
     actions: Action[]
     triggers?: string[]
     close_keys?: string[]
@@ -139,7 +155,7 @@
       validate_actions(result.options, validate_actions(actions))
       loaded_ids = validate_actions(
         result.options,
-        params.offset ? new Set(loaded_ids) : new Set(),
+        params.offset && !result.replace ? new Set(loaded_ids) : new Set(),
       )
       return result
     }
@@ -317,11 +333,7 @@
   >
     <MultiSelect
       {...rest}
-      allowUserOptions={false}
-      selectAllOption={false}
-      groupSelectAll={false}
-      rangeSelect={false}
-      parse_paste={undefined}
+      {...command_selection}
       options={sorted_actions}
       loadOptions={load_options}
       bind:activeIndex={active_idx}

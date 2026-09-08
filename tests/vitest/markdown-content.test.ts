@@ -75,12 +75,26 @@ describe(`Markdown content manifests`, () => {
   test(`validates normalized metadata and reports callback failures with a filename`, async () => {
     const validate_frontmatter = (metadata: Record<string, unknown>) => {
       if (typeof metadata.title !== `string`) throw new Error(`title must be a string`)
-      return { ...metadata, title: metadata.title.trim() }
+      return Object.setPrototypeOf(
+        {
+          ...metadata,
+          title: metadata.title.trim(),
+          negative_zero: -0,
+          nested: Object.setPrototypeOf({ label: `value` }, null),
+        },
+        null,
+      )
     }
     const result = await compile_markdown(`---\ntitle: '  Guide  '\n---\n# Title`, {
       validate_frontmatter,
     })
-    expect(result.metadata.title).toBe(`Guide`)
+    expect(result.metadata).toEqual({
+      title: `Guide`,
+      negative_zero: 0,
+      nested: { label: `value` },
+    })
+    expect(Object.getPrototypeOf(result.metadata)).toBe(Object.prototype)
+    expect(Object.getPrototypeOf(result.metadata.nested)).toBe(Object.prototype)
     expect(result.manifest.metadata).toBe(result.metadata)
     await expect(
       compile_markdown(`# Title`, { filename: `bad.md`, validate_frontmatter }),
@@ -142,11 +156,14 @@ describe(`Markdown content manifests`, () => {
     { value: Infinity },
     { value: NaN },
     { value: undefined },
+    { value: 1n },
+    { value: Symbol(`unsupported`) },
+    { value: Array(1) },
     { value: () => `lost` },
     { value: new Date(0) },
     { value: new Map() },
     { value: { toJSON: () => `changed` } },
-  ])(`rejects validator output that JSON cannot preserve: %j`, async (metadata) => {
+  ])(`rejects validator output that JSON cannot preserve: %s`, async (metadata) => {
     const result = await create_markdown({ validate_frontmatter: () => metadata }).parse(
       `# Title`,
     )

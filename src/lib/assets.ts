@@ -1,6 +1,7 @@
 import { parse, type AST, type PreprocessorGroup } from 'svelte/compiler'
 import { edit_source, source_map, type SourceEdit } from './markdown/source-map.ts'
 import { script_edits } from './markdown/svelte.ts'
+import { script_json } from './serialization.ts'
 
 const media_attributes: Record<string, string[]> = {
   audio: [`src`],
@@ -43,10 +44,6 @@ const static_text = (attribute?: AST.Attribute): string | undefined => {
     : undefined
 }
 
-// Escape tag delimiters too: a URL must never be able to close an injected script.
-const literal = (value: string): string =>
-  JSON.stringify(value).replaceAll(`<`, `\\u003c`)
-
 // URL tokens extend to whitespace, so commas inside data URLs are not separators.
 // Keep descriptors and whitespace verbatim; only candidate URLs become expressions.
 function srcset_expression(value: string, resolve: (url: string) => string | undefined) {
@@ -61,7 +58,7 @@ function srcset_expression(value: string, resolve: (url: string) => string | und
     while (value[end - 1] === `,`) end--
     const expression = resolve(value.slice(start, end))
     if (expression) {
-      if (start > copied) parts.push(literal(value.slice(copied, start)))
+      if (start > copied) parts.push(script_json(value.slice(copied, start)))
       parts.push(expression)
       copied = end
     }
@@ -76,7 +73,7 @@ function srcset_expression(value: string, resolve: (url: string) => string | und
     }
   }
   if (!parts.length) return undefined
-  if (copied < value.length) parts.push(literal(value.slice(copied)))
+  if (copied < value.length) parts.push(script_json(value.slice(copied)))
   return parts.join(` + `)
 }
 
@@ -121,7 +118,7 @@ export function asset_imports(): PreprocessorGroup {
           name = `${prefix}${imports.size}`
           imports.set(specifier, name)
         }
-        return suffix ? `${name} + ${literal(suffix)}` : name
+        return suffix ? `${name} + ${script_json(suffix)}` : name
       }
       const visit = (value: unknown): void => {
         if (!value || typeof value !== `object`) return
@@ -182,7 +179,7 @@ export function asset_imports(): PreprocessorGroup {
       visit(tree.fragment)
       if (!edits.length) return { code: content }
       const declarations = [...imports]
-        .map(([path, name]) => `import ${name} from ${literal(path)};\n`)
+        .map(([path, name]) => `import ${name} from ${script_json(path)};\n`)
         .join(``)
       edits.push(...script_edits(content, declarations, undefined, tree))
       const { code, spans } = edit_source(

@@ -258,6 +258,8 @@ interface LoadOptionsParams {
 interface LoadOptionsResult<T> {
   options: T[] // Array of options to add
   hasMore: boolean // Whether more options are available
+  replace?: boolean // Replace loaded options with this ordered snapshot
+  error?: Error // Show partial results alongside Retry
 }
 ```
 
