@@ -60,6 +60,14 @@
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
+    "./assets": {
+      "types": "./dist/assets.d.ts",
+      "default": "./dist/assets.js"
+    },
+    "./yaml": {
+      "types": "./dist/yaml.d.ts",
+      "default": "./dist/yaml.js"
+    },
     "./vite-config": {
       "types": "./dist/vite-config.d.ts",
       "default": "./dist/vite-config.js"

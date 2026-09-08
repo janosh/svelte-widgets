@@ -77,6 +77,28 @@ describe(`Markdown output`, () => {
     )
   })
 
+  test.each([
+    [`Before <b>bold</b> after`, `<p>Before bold after</p>\n`],
+    [`<div>Hidden **block**</div>\n\nVisible`, `<p>Visible</p>\n`],
+    [`Before <!-- comment --> after`, `<p>Before  after</p>\n`],
+    [
+      '`<b>code</b>` and [reference][target]\n\n[target]: https://example.org',
+      `<p><code>&lt;b&gt;code&lt;/b&gt;</code> and <a href="https://example.org">reference</a></p>\n`,
+    ],
+  ])(`omits raw HTML in %s`, async (source, expected) => {
+    expect(await render_markdown(source, { raw_html: `omit` })).toBe(expected)
+  })
+
+  test(`omitted HTML does not populate the manifest and requires Markdown mode`, async () => {
+    const engine = create_markdown({ raw_html: `omit` })
+    const source = `<div id="gone"><a href="/hidden">Hidden</a></div>\n\n# Visible\n\n[Kept](/visible)`
+    const document = assert_ok(await engine.parse(source, { dialect: `markdown` }))
+    expect(document.manifest.anchors.map(({ id }) => id)).toEqual([`visible`])
+    expect(document.manifest.links.map(({ url }) => url)).toEqual([`/visible`])
+    expect(document.manifest.text).not.toContain(`Hidden`)
+    expect((await engine.parse(source)).ok).toBe(false)
+  })
+
   test(`typography affects prose, preserving code and attributes`, async () => {
     const { code } = await compile_page(
       `"Hello" -- it's... <span title='plain'>\`"code"\`</span>`,

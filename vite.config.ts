@@ -8,6 +8,7 @@ import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
+import { asset_imports } from './src/lib/assets.ts'
 
 await generate_icons()
 
@@ -36,7 +37,7 @@ const docs = markdown_vite(
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 
-  preprocess: [docs.preprocess, heading_ids()],
+  preprocess: [docs.preprocess, asset_imports(), heading_ids()],
 
   adapter: site_adapter(manifests),
   paths: { base: base_path },

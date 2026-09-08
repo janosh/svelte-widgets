@@ -27,6 +27,9 @@ import { create_highlighter, default_highlighter } from 'svelte-widgets/highligh
 import { assert_ok, create_markdown, compile_markdown } from 'svelte-widgets/markdown'
 import { content_toc } from 'svelte-widgets/markdown/content'
 
+export { asset_imports } from 'svelte-widgets/assets'
+export { yaml_plugin } from 'svelte-widgets/yaml'
+
 export { check_document as check_markdown_document } from 'svelte-widgets/markdown/check'
 
 export const label = get_label(`package smoke`)

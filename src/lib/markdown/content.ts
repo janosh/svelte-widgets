@@ -27,6 +27,7 @@ export type { SourcePosition, SourceRange } from './diagnostics.ts'
 export type TokenSource = { range: SourceRange; offsets: number[]; fence?: ContentFence }
 export type ContentAnalysis = {
   svelte: boolean
+  omit_html?: boolean
   positions: Map<Token, TokenSource>
   heading_ids: Map<Token, string>
   html_edits: Map<Token, SourceEdit[]>
@@ -152,9 +153,15 @@ function locate(
     }
     if (newline) {
       const end = parent.text.indexOf(`\n`, offset)
-      if (end === -1) throw new Error(`Cannot locate Markdown token newline`)
-      offsets.push(parent.offsets[end])
-      offset = end + 1
+      // Marked replaces trailing whitespace in quoted lists with a synthetic newline.
+      if (end === -1 && /^[ \t]+$/u.test(parent.text.slice(offset))) {
+        offsets.push(parent.offsets[offset])
+        offset = parent.text.length
+      } else {
+        if (end === -1) throw new Error(`Cannot locate Markdown token newline`)
+        offsets.push(parent.offsets[end])
+        offset = end + 1
+      }
     }
   }
   return { text: raw, offsets, end: offset }
@@ -170,6 +177,7 @@ export function content_manifest(
   restore: (text: string) => string,
   {
     svelte,
+    omit_html,
     positions,
     heading_ids,
     html_edits,
@@ -341,7 +349,7 @@ export function content_manifest(
           ...(svelte && link.href.includes(`{`) ? { dynamic: true as const } : {}),
         })
       }
-      if (token.type === `html`) scan_html(mapped, token)
+      if (token.type === `html` && !omit_html) scan_html(mapped, token)
       if (token.type === `svelte_block` || token.type === `svelte_inline`) {
         scan_html(mapped, token)
         continue

@@ -1,4 +1,4 @@
-import { parse } from 'svelte/compiler'
+import { parse, type AST } from 'svelte/compiler'
 import type { SourceEdit } from './source-map.ts'
 
 // Let Svelte parse JavaScript, including regexes, templates and TypeScript. Candidate
@@ -71,9 +71,10 @@ export function script_edits(
   code: string,
   imports: string,
   metadata?: Record<string, unknown>,
+  tree?: AST.Root,
 ): SourceEdit[] {
   if (!imports && metadata === undefined) return []
-  const tree = parse(code, { modern: true })
+  tree ??= parse(code, { modern: true })
   const declaration =
     metadata !== undefined
       ? `export const metadata = JSON.parse(${JSON.stringify(JSON.stringify(metadata)).replaceAll(`<`, `\\u003c`)});\n`

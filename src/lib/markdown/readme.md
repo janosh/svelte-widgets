@@ -45,7 +45,7 @@ const document = assert_ok(
 const html = assert_ok(await render_markdown(document))
 ```
 
-The `markdown` dialect treats braces literally and does not load the Svelte compiler. `render_markdown(document)` emits HTML from that document. Both dialects retain trusted authored HTML; neither sanitizes untrusted input.
+The `markdown` dialect treats braces literally and does not load the Svelte compiler. `render_markdown(document)` emits HTML from that document. Both dialects retain trusted authored HTML by default. Set `create_markdown({ raw_html: 'omit' })` for Markdown data fields that should discard HTML tags and entire raw HTML blocks; Markdown links, images, and code remain supported. This option requires the `markdown` dialect and also excludes omitted HTML from the content manifest. Neither mode sanitizes untrusted input.
 
 ## Diagnostics
 

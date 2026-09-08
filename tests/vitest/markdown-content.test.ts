@@ -15,6 +15,19 @@ const document_manifest = async (source: string, filename = `/guide.md`) =>
   (await compile_markdown(source, { filename })).manifest
 
 describe(`Markdown content manifests`, () => {
+  test.each([
+    `> - [Next](/next) `,
+    `> - [Next](/next) \n\n`,
+    `> > - [Next](/next)  \n\n`,
+    `> - [Next](/next)\t\n\n`,
+  ])(`maps quoted lists with trailing whitespace: %j`, async (source) => {
+    const { code, manifest } = await compile_markdown(source)
+    expect(code).toContain(`<li><a href="/next">Next</a></li>`)
+    expect(manifest.links).toMatchObject([
+      { url: `/next`, range: { start: { line: 1, column: source.indexOf(`[`) + 1 } } },
+    ])
+  })
+
   test(`extracts nested content once with original positions and rendered heading IDs`, async () => {
     const source = `---\r\ntitle: Guide\r\n---\r\n# Hello **world**\r\n\r\n> ## Hello world\r\n>\r\n> \`\`\`ts\r\n> const value = 1\r\n> \`\`\`\r\n\r\n- [Next][next]\r\n\r\n  \`\`\`ts\r\n  const value = 1\r\n  \`\`\`\r\n\r\n![Plot](./plot%20one.svg)\r\n\r\n[next]: ./next.md#target\r\n\r\n<div id="hello-world"></div>\r\n<h2>Raw &amp; title</h2>\r\n<pre><h2 id="ignored">Not a heading</h2></pre>`
     const result = await compile_markdown(source, { filename: `/guide.md` })

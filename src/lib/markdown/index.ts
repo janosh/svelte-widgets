@@ -67,6 +67,8 @@ export type { KatexOptions } from 'katex'
 export type { ExampleOptions, FenceSettings } from './meta.ts'
 export type MarkdownOptions = {
   extensions?: string[]
+  // Omit authored HTML tokens in the Markdown dialect; this is not sanitization.
+  raw_html?: 'preserve' | 'omit'
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | KatexOptions
@@ -204,6 +206,8 @@ async function prepare_document(
   filename: string,
   dialect: 'markdown' | 'svelte',
 ): Promise<MarkdownDocument> {
+  if (dialect === `svelte` && options.raw_html === `omit`)
+    throw new Error(`raw_html: 'omit' requires the markdown dialect (${filename})`)
   const syntax = dialect === `svelte` ? await import('./svelte.ts') : undefined
   const locate = source_locator(source, filename)
   let body = source
@@ -370,6 +374,7 @@ async function prepare_document(
         return `<h${token.depth}${id ? ` id="${escape_html_text(id).replaceAll(`"`, `&quot;`)}"` : ``}>${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`
       },
       html(token) {
+        if (options.raw_html === `omit`) return ``
         const mapped = mapped_token(token)
         return retain(mapped.code, mapped.spans)
       },
@@ -429,6 +434,7 @@ async function prepare_document(
     restore_text,
     {
       svelte: dialect === `svelte`,
+      omit_html: options.raw_html === `omit`,
       positions,
       heading_ids,
       html_edits,

@@ -1,5 +1,6 @@
 <script lang="ts">
   import MarkdownSmoke from './MarkdownSmoke.md'
+  import yaml_data from './data.yaml'
   import {
     Accordion,
     CodeBlock,
@@ -64,6 +65,12 @@
   const katex_options: KatexOptions = { throwOnError: true }
   const editor_model = create_editor_model({ uri: `memory:smoke`, text: `a\r\nb` })
   const package_api_works =
+    yaml_data !== null &&
+    typeof yaml_data === `object` &&
+    `title` in yaml_data &&
+    `date` in yaml_data &&
+    yaml_data.title === `YAML package smoke` &&
+    yaml_data.date === `2026-09-07` &&
     DirectActionMenu === ActionMenu &&
     DirectCodeEditor === CodeEditor &&
     DirectCommandMenu === CommandMenu &&
@@ -109,6 +116,7 @@
   <DirectPageSearch fallback_actions={actions} />
   <p>{package_api_works ? `package ok` : `package failed`}</p>
   <MarkdownSmoke />
+  <a href="./data.yaml?download=1#file" download>Download YAML fixture</a>
 </main>
 
 <CodeBlock code="let value = 1" />
