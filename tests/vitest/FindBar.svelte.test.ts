@@ -257,26 +257,19 @@ describe(`create_find_state`, () => {
     expect(find.status).toBe(`No matches`)
   })
 
-  test(`keeps the cursor on the same element when a re-search preserves it`, () => {
+  test.each([
+    [`preserves the surviving cursor`, 0, 2],
+    [`clamps the removed cursor`, 2, 1],
+  ] as const)(`refresh %s`, (_case, removed_idx, expected_idx) => {
     const { root, find } = setup(`<p>alpha one</p><p>alpha two</p><p>alpha three</p>`)
     run_search(root, find, `alpha`)
     find.jump_to(2)
-    const current = find.matches[2]
+    const expected = find.matches[expected_idx]
 
-    doc_query(`main p`).remove()
+    root.querySelectorAll(`p`)[removed_idx].remove()
     find.refresh(root)
     expect(find.status).toBe(`2 of 2`)
-    expect(find.matches[1]).toBe(current)
-  })
-
-  test(`clamps the cursor when its element is gone`, () => {
-    const { root, find } = setup(`<p>alpha one</p><p>alpha two</p><p>alpha three</p>`)
-    run_search(root, find, `alpha`)
-    find.jump_to(2)
-
-    root.querySelectorAll(`p`)[2].remove()
-    find.refresh(root)
-    expect(find.status).toBe(`2 of 2`)
+    expect(find.matches[1]).toBe(expected)
   })
 
   test(`before_search runs ahead of the search, so its [hidden] writes take effect`, () => {

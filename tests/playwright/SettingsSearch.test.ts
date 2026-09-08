@@ -47,7 +47,9 @@ test(`the corner trigger expands into the content flow`, async ({ page }) => {
   expect((await box_of(group)).y).toBeGreaterThan(group_before.y)
 })
 
-test(`filtering paints rows away and matches on group titles`, async ({ page }) => {
+test(`filtering matches rows and group titles, then Escape restores focus and rows`, async ({
+  page,
+}) => {
   const { trigger, field, color_row, radius_row, zoom_row, camera } =
     await open_demo(page)
   await trigger.click()
@@ -66,18 +68,10 @@ test(`filtering paints rows away and matches on group titles`, async ({ page }) 
   await expect(camera).toBeVisible()
   await expect(color_row).toBeHidden()
   await expect(zoom_row).toBeVisible()
-})
 
-test(`Escape collapses the field and hands focus back to the trigger`, async ({
-  page,
-}) => {
-  const { trigger, field, color_row } = await open_demo(page)
-  await trigger.click()
   await field.fill(`radius`)
   await expect(color_row).toBeHidden()
-
   await page.keyboard.press(`Escape`)
-
   await expect(field).toHaveCount(0)
   await expect(trigger).toBeFocused()
   await expect(color_row).toBeVisible()

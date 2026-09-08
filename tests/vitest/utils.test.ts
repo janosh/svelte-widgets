@@ -295,6 +295,7 @@ describe(`shortcut rebinding`, () => {
       [`no-op in another spelling`, { copy: `C+MOD` }, {}],
       [`valid override`, { copy: `mod+shift+c` }, { copy: `mod+shift+c` }],
       [`normalizes what it keeps`, { copy: `Shift+MOD+C` }, { copy: `mod+shift+c` }],
+      [`round-trips canonical output`, { copy: `MOD+Shift+C` }, { copy: `mod+shift+c` }],
       // an override landing on another action's default loses, and so does a pair of
       // overrides landing on each other
       [`collides with a default`, { copy: `mod+v` }, {}],
@@ -305,7 +306,9 @@ describe(`shortcut rebinding`, () => {
       // override had been holding uncontested until copy's default came back
       [`cascading collision`, { copy: `mod+q`, cut: `mod+q`, paste: `mod+c` }, {}],
     ])(`%s`, (_desc, value, expected) => {
-      expect(sanitize_shortcut_overrides(value, defaults)).toEqual(expected)
+      const overrides = sanitize_shortcut_overrides(value, defaults)
+      expect(overrides).toEqual(expected)
+      expect(sanitize_shortcut_overrides(overrides, defaults)).toEqual(overrides)
     })
 
     test(`defaults that already collide do not void unrelated overrides`, () => {
@@ -325,11 +328,6 @@ describe(`shortcut rebinding`, () => {
     ])(`on %s an override of %j resolves against mod defaults`, (ua, combo, expected) => {
       stub_prop(globalThis.navigator, `userAgent`, ua)
       expect(sanitize_shortcut_overrides({ copy: combo }, defaults)).toEqual(expected)
-    })
-
-    test(`survives round-tripping its own output`, () => {
-      const once = sanitize_shortcut_overrides({ copy: `MOD+Shift+C` }, defaults)
-      expect(sanitize_shortcut_overrides(once, defaults)).toEqual(once)
     })
   })
 })

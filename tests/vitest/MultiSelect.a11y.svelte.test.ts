@@ -59,6 +59,10 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const ids = [...options].map((opt) => opt.id)
     expect(ids.every(Boolean)).toBe(true)
     expect(new Set(ids).size).toBe(3) // one id per option, none shared
+    options.forEach((option, idx) => {
+      expect(option.getAttribute(`aria-posinset`)).toBe(`${idx + 1}`)
+      expect(option.getAttribute(`aria-setsize`)).toBe(`3`)
+    })
 
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull() // nothing active yet
 
@@ -91,26 +95,22 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     expect(live_region.textContent).toContain(expected)
   })
 
-  test(`custom id prop is used for ARIA associations`, async () => {
-    mount_multiselect({ options: [`foo`, `bar`], id: `my-select` })
-
+  test.each([
+    [undefined, /^sms-.+-listbox$/u],
+    [`my-select`, /^my-select-listbox$/u],
+  ])(`id=%s keeps stable ARIA associations across ticks`, async (id, expected_id) => {
+    mount_multiselect({ options: [`foo`, `bar`], id, open: true })
     const input = await focus_input()
-
-    expect(input.getAttribute(`aria-controls`)).toBe(`my-select-listbox`)
-    expect(doc_query(`ul.options`).id).toBe(`my-select-listbox`)
+    const listbox_id = doc_query(`ul.options`).id
+    expect(listbox_id).toMatch(expected_id)
 
     input.dispatchEvent(fresh_key(`ArrowDown`))
     await tick()
-    expect(input.getAttribute(`aria-activedescendant`)).toMatch(/^my-select-opt-/u)
-  })
-
-  test(`unique id stays stable across ticks when id prop is omitted`, async () => {
-    mount_multiselect({ options: [`foo`, `bar`], open: true })
-    const listbox_id = doc_query(`ul.options`).id
-    expect(listbox_id).toMatch(/^sms-.+-listbox$/u)
-    await tick()
     expect(doc_query(`ul.options`).id).toBe(listbox_id)
-    expect(get_input().getAttribute(`aria-controls`)).toBe(listbox_id)
+    expect(input.getAttribute(`aria-controls`)).toBe(listbox_id)
+    expect(input.getAttribute(`aria-activedescendant`)).toContain(
+      listbox_id.replace(/-listbox$/u, `-opt-`),
+    )
   })
 
   test(`aria-label can be passed via rest props for accessible name`, () => {
@@ -134,22 +134,6 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     props.loading = false
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
-  })
-
-  test(`options have aria-posinset and aria-setsize for position announcements`, async () => {
-    mount_a11y()
-
-    await focus_input()
-
-    const options = document.querySelectorAll<HTMLLIElement>(
-      `ul.options > li[role="option"]`,
-    )
-    expect(options).toHaveLength(3)
-
-    options.forEach((option, idx) => {
-      expect(option.getAttribute(`aria-posinset`)).toBe(`${idx + 1}`)
-      expect(option.getAttribute(`aria-setsize`)).toBe(`3`)
-    })
   })
 
   test(`aria-live announces selection changes`, async () => {

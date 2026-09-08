@@ -234,6 +234,10 @@ describe(`Toc`, () => {
       const toc_list = doc_query(`aside.toc > nav > ol`)
       expect(toc_list.children).toHaveLength(expected_text.length)
       expect(toc_list.textContent.trim()).toBe(expected_text.join(``))
+      // Read Svelte's writes: happy-dom drops calc() declarations containing var().
+      expect(written_style_values(`margin-left`)).toEqual(
+        expected_text.map((_, idx) => expect.stringContaining(`calc(${idx} *`)),
+      )
     },
   )
 
@@ -587,51 +591,26 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`warnOnEmpty=true warns exactly once, even across later mutations`, async () => {
-    const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    mount_toc({ warnOnEmpty: true })
-    await tick()
-    const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
-    expect(warn_mock).toHaveBeenCalledExactlyOnceWith(msg)
+  test.each([true, false])(
+    `warnOnEmpty=%s stays consistent across later mutations`,
+    async (warnOnEmpty) => {
+      const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
+      mount_toc({ warnOnEmpty })
+      await tick()
+      const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
+      const expected_calls = warnOnEmpty ? [[msg]] : []
+      expect(warn_mock.mock.calls).toEqual(expected_calls)
 
-    // both the ToC render and this unrelated mutation notify the observer, but the empty
-    // heading set is unchanged, so neither may rebuild and re-warn
-    document.body.append(document.createElement(`p`))
-    await tick()
-    document.body.append(document.createElement(`p`))
-    await tick()
+      // both the ToC render and this unrelated mutation notify the observer, but the empty
+      // heading set is unchanged, so neither may rebuild and re-warn
+      document.body.append(document.createElement(`p`))
+      await tick()
+      document.body.append(document.createElement(`p`))
+      await tick()
 
-    expect(warn_mock).toHaveBeenCalledExactlyOnceWith(msg)
-  })
-
-  test(`no console.warn when warnOnEmpty=false`, () => {
-    const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    mount_toc({ warnOnEmpty: false })
-    expect(warn_mock).not.toHaveBeenCalled()
-  })
-
-  test(`subheadings are indented`, async () => {
-    set_body(`
-      <h1>Heading 1</h1>
-      <h2>Heading 2</h2>
-      <h3>Heading 3</h3>
-      <h4>Heading 4</h4>
-    `)
-
-    mount_toc()
-    await tick()
-
-    const toc_list = doc_query(`aside.toc > nav > ol`)
-    expect(toc_list.children).toHaveLength(3)
-
-    // happy-dom's parser rejects calc() wrapping var(), so the indent never lands on the
-    // element and has to be read off what Toc wrote
-    expect(written_style_values(`margin-left`)).toEqual([
-      expect.stringContaining(`calc(0 *`),
-      expect.stringContaining(`calc(1 *`),
-      expect.stringContaining(`calc(2 *`),
-    ])
-  })
+      expect(warn_mock.mock.calls).toEqual(expected_calls)
+    },
+  )
 
   // :is(h2, h3, h4) matches 3 of levels [1, 2, 3, 4] and none of [1, 5, 6]
   test.each([
@@ -1503,22 +1482,13 @@ describe(`collapseSubheadings`, () => {
     await tick()
 
     expect(get_collapsed_states()).toEqual(expected)
-  })
-
-  test(`collapsed items have aria-hidden=true and unfocusable links`, async () => {
-    setup_nested_headings()
-    mock_active_heading(`section-1`)
-    mount_toc({ collapseSubheadings: true })
-    await tick()
-
-    const items = document.querySelectorAll<HTMLLIElement>(`aside.toc > nav > ol > li`)
-    const collapsed = items[2]
-    const visible = items[0]
-
-    expect(collapsed.getAttribute(`aria-hidden`)).toBe(`true`)
-    expect(collapsed.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(`-1`)
-    expect(visible.getAttribute(`aria-hidden`)).toBeNull()
-    expect(visible.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(`0`)
+    const items = document.querySelectorAll(`aside.toc > nav > ol > li`)
+    items.forEach((item, idx) => {
+      expect(item.getAttribute(`aria-hidden`)).toBe(expected[idx] ? `true` : null)
+      expect(item.querySelector(`a`)?.getAttribute(`tabindex`)).toBe(
+        expected[idx] ? `-1` : `0`,
+      )
+    })
   })
 
   test.each([`h9`, `hx`, `3`])(

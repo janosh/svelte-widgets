@@ -116,11 +116,13 @@ describe(`per-wrapper isolation`, () => {
 })
 
 describe(`flag <-> browser sync`, () => {
-  test(`click enters, click again exits`, async () => {
-    const { button, flag, wrapper } = mount_button()
+  test(`click enters, click again exits, and both call the caller's onclick`, async () => {
+    const onclick = vi.fn()
+    const { button, flag, wrapper } = mount_button({ onclick })
 
     button.click()
     await settle()
+    expect(onclick).toHaveBeenCalledOnce()
     expect(get(flag)).toBe(true)
     expect(document.fullscreenElement).toBe(wrapper)
     expect(button.getAttribute(`aria-pressed`)).toBe(`true`)
@@ -129,6 +131,7 @@ describe(`flag <-> browser sync`, () => {
 
     button.click()
     await settle()
+    expect(onclick).toHaveBeenCalledTimes(2)
     expect(get(flag)).toBe(false)
     expect(document.exitFullscreen).toHaveBeenCalledTimes(1)
     expect(document.fullscreenElement).toBeNull()
@@ -430,15 +433,4 @@ describe(`button rendering`, () => {
       expect(button.textContent?.trim()).toBe(expected)
     },
   )
-
-  test(`a caller's onclick runs alongside the toggle`, async () => {
-    const onclick = vi.fn()
-    const { button, flag } = mount_button({ onclick })
-
-    button.click()
-    await settle()
-
-    expect(onclick).toHaveBeenCalledOnce()
-    expect(get(flag)).toBe(true)
-  })
 })

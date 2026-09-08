@@ -1,7 +1,7 @@
 import { Masonry } from '$lib'
 import { order_options as ALL_ORDER_MODES } from '$lib/utils'
 import { type ComponentProps, mount, tick } from 'svelte'
-import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
@@ -118,7 +118,7 @@ describe(`Masonry`, () => {
     },
   )
 
-  test(`merges container style with layout and spreads columnProps onto columns`, async () => {
+  test(`merges container attributes and style with layout and spreads columnProps`, async () => {
     const style = `background-color: darkblue;`
     const column_style = `border: 1px solid red;`
     mount_masonry({
@@ -127,9 +127,13 @@ describe(`Masonry`, () => {
       columnProps: { style: column_style, 'data-testid': `col`, role: `list` },
       maxColWidth: 150,
       gap: 5,
+      'data-testid': `my-masonry`,
+      'aria-label': `Image gallery`,
     })
     // container: user style merges with (not clobbers) the layout styles
     const masonry = masonry_el()
+    expect(masonry?.getAttribute(`data-testid`)).toBe(`my-masonry`)
+    expect(masonry?.getAttribute(`aria-label`)).toBe(`Image gallery`)
     expect(masonry?.getAttribute(`style`)).toContain(style)
     expect(masonry?.style.display).toBe(`flex`)
     expect(masonry?.style.boxSizing).toBe(`border-box`)
@@ -426,36 +430,22 @@ describe(`Masonry bindable props`, () => {
 
   test(`exposes masonryHeight bindable`, async () => {
     let bound_height = 0
-    const original_desc = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      `clientHeight`,
-    )
-    Object.defineProperty(HTMLElement.prototype, `clientHeight`, {
-      get() {
-        return this.classList?.contains(`masonry`) ? 250 : 0
-      },
-      configurable: true,
-    })
-
-    try {
-      mount_masonry({
-        items: [1, 2],
-        get masonryHeight() {
-          return bound_height
-        },
-        set masonryHeight(val: number) {
-          bound_height = val
-        },
+    const height_spy = vi
+      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
+      .mockImplementation(function (this: HTMLElement) {
+        return this.classList.contains(`masonry`) ? 250 : 0
       })
-      expect(bound_height).toBe(250)
-    } finally {
-      if (original_desc) {
-        Object.defineProperty(HTMLElement.prototype, `clientHeight`, original_desc)
-      } else {
-        // nothing to restore means we added the property, so take it back off
-        Reflect.deleteProperty(HTMLElement.prototype, `clientHeight`)
-      }
-    }
+    onTestFinished(() => height_spy.mockRestore())
+    mount_masonry({
+      items: [1, 2],
+      get masonryHeight() {
+        return bound_height
+      },
+      set masonryHeight(val: number) {
+        bound_height = val
+      },
+    })
+    expect(bound_height).toBe(250)
   })
 })
 
@@ -474,17 +464,6 @@ describe(`Masonry default rendering`, () => {
       `date`,
       `fig`,
     ])
-  })
-
-  test(`passes rest props to container div`, () => {
-    mount_masonry({
-      items: [1, 2],
-      'data-testid': `my-masonry`,
-      'aria-label': `Image gallery`,
-    })
-    const masonry = masonry_el()
-    expect(masonry?.getAttribute(`data-testid`)).toBe(`my-masonry`)
-    expect(masonry?.getAttribute(`aria-label`)).toBe(`Image gallery`)
   })
 })
 
@@ -591,33 +570,19 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`defers virtualization until masonryHeight is measured for string heights`, async () => {
-    const original = Object.getOwnPropertyDescriptor(
-      HTMLElement.prototype,
-      `clientHeight`,
-    )
-    Object.defineProperty(HTMLElement.prototype, `clientHeight`, {
-      get: () => 0,
-      configurable: true,
+    const height_spy = vi
+      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
+      .mockReturnValue(0)
+    onTestFinished(() => height_spy.mockRestore())
+    mount_masonry({
+      items: make_items(100),
+      virtualize: true,
+      height: `500px`,
+      calcCols: () => 2,
     })
 
-    try {
-      mount_masonry({
-        items: make_items(100),
-        virtualize: true,
-        height: `500px`,
-        calcCols: () => 2,
-      })
-
-      // clientHeight=0 means unmeasured, so virtualization is deferred
-      expect(item_els()).toHaveLength(100)
-    } finally {
-      if (original) {
-        Object.defineProperty(HTMLElement.prototype, `clientHeight`, original)
-      } else {
-        // nothing to restore means we added the property, so take it back off
-        Reflect.deleteProperty(HTMLElement.prototype, `clientHeight`)
-      }
-    }
+    // clientHeight=0 means unmeasured, so virtualization is deferred
+    expect(item_els()).toHaveLength(100)
   })
 
   test(`virtualize=false skips padding and overflow styles`, async () => {

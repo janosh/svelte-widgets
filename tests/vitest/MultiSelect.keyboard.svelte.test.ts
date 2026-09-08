@@ -476,10 +476,16 @@ describe(`keyboard shortcuts`, () => {
     return { props, input, event }
   }
 
-  test(`ctrl+a selects all when shortcut is explicitly set`, async () => {
+  test.each([
+    [`ctrl+a`, `a`, { ctrlKey: true }],
+    [`meta+a`, `a`, { metaKey: true }],
+    [`cmd+a`, `a`, { metaKey: true }],
+    [`alt+a`, `a`, { altKey: true }],
+    [`ctrl+shift+alt+s`, `s`, { ctrlKey: true, shiftKey: true, altKey: true }],
+  ] as const)(`%s selects all and prevents default`, async (shortcut, key, modifiers) => {
     const { props, event } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: `ctrl+a` } },
-      { key: `a`, ctrlKey: true },
+      { selectAllOption: true, shortcuts: { select_all: shortcut } },
+      { key, ...modifiers },
     )
     expect(props.selected).toEqual([`a`, `b`, `c`])
     expect(event.defaultPrevented).toBe(true)
@@ -564,14 +570,6 @@ describe(`keyboard shortcuts`, () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  test.each([`meta+a`, `cmd+a`])(`%s shortcut works for Mac users`, async (shortcut) => {
-    const { props } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: shortcut } },
-      { key: `a`, metaKey: true },
-    )
-    expect(props.selected).toEqual([`a`, `b`, `c`])
-  })
-
   test(`select_all does nothing when selectAllOption is false`, async () => {
     const { props } = await test_shortcut(
       { selectAllOption: false, shortcuts: { select_all: `ctrl+a` } },
@@ -601,17 +599,6 @@ describe(`keyboard shortcuts`, () => {
     )
     await tick()
     expect(props.open).toBe(true)
-  })
-
-  test.each([
-    [`alt+a`, `a`, { altKey: true }],
-    [`ctrl+shift+alt+s`, `s`, { ctrlKey: true, shiftKey: true, altKey: true }],
-  ] as const)(`modifier combo %s works`, async (shortcut, key, modifiers) => {
-    const { props } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: shortcut } },
-      { key, ...modifiers },
-    )
-    expect(props.selected).toEqual([`a`, `b`, `c`])
   })
 
   test(`shortcuts are blocked when disabled=true`, async () => {

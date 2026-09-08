@@ -774,16 +774,6 @@ describe(`load_options_pending`, () => {
 describe(`async oncreate`, () => {
   type OncreateResult = false | Option | undefined
 
-  // manually-controlled promise so tests decide exactly when oncreate settles
-  function make_deferred<T>() {
-    let resolve_fn: (value: T) => void = () => {}
-    let reject_fn: (reason: unknown) => void = () => {}
-    const promise = new Promise<T>((resolve, reject) => {
-      resolve_fn = resolve
-      reject_fn = reject
-    })
-    return { promise, resolve_fn, reject_fn }
-  }
   const submit_create = async (text: string) => {
     const input = await type_search_text(text)
     input.dispatchEvent(fresh_key(`Enter`))
@@ -792,7 +782,7 @@ describe(`async oncreate`, () => {
   }
 
   test(`resolving undefined adds typed option after resolve, spinner shown only while pending`, async () => {
-    const { promise, resolve_fn } = make_deferred<OncreateResult>()
+    const { promise, resolve } = Promise.withResolvers<OncreateResult>()
     const oncreate = vi.fn(() => promise)
     const onadd = vi.fn()
     const spinner = createRawSnippet(() => ({
@@ -823,7 +813,7 @@ describe(`async oncreate`, () => {
     expect(props.selected).toEqual([])
     expect(onadd).not.toHaveBeenCalled()
 
-    resolve_fn(undefined)
+    resolve(undefined)
     await promise
     await tick()
 
@@ -844,7 +834,7 @@ describe(`async oncreate`, () => {
     `resolving %s`,
     async (_label, resolved_value, expected_selected, expected_onadd_calls) => {
       const console_error = mock_console_error()
-      const { promise, resolve_fn } = make_deferred<OncreateResult>()
+      const { promise, resolve } = Promise.withResolvers<OncreateResult>()
       const onadd = vi.fn()
       const props = $state<MultiSelectProps>({
         options: [`foo`, `bar`],
@@ -857,7 +847,7 @@ describe(`async oncreate`, () => {
 
       await submit_create(`fresh-opt`)
 
-      resolve_fn(resolved_value)
+      resolve(resolved_value)
       await promise
       await tick()
 
@@ -915,7 +905,7 @@ describe(`async oncreate`, () => {
 
   test(`rejecting adds nothing and logs console.error`, async () => {
     const console_error = mock_console_error()
-    const { promise, reject_fn } = make_deferred<OncreateResult>()
+    const { promise, reject } = Promise.withResolvers<OncreateResult>()
     const onadd = vi.fn()
     const props = $state<MultiSelectProps>({
       options: [`foo`],
@@ -930,7 +920,7 @@ describe(`async oncreate`, () => {
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
     const rejection = new Error(`backend validation failed`)
-    reject_fn(rejection)
+    reject(rejection)
     await promise.catch(() => {})
     await tick()
 
@@ -946,7 +936,7 @@ describe(`async oncreate`, () => {
   })
 
   test(`double Enter while async create is pending adds only one option`, async () => {
-    const { promise, resolve_fn } = make_deferred<OncreateResult>()
+    const { promise, resolve } = Promise.withResolvers<OncreateResult>()
     const oncreate = vi.fn(() => promise)
     const props = $state<MultiSelectProps>({
       options: [`foo`],
@@ -962,7 +952,7 @@ describe(`async oncreate`, () => {
 
     expect(oncreate).toHaveBeenCalledTimes(1)
 
-    resolve_fn(undefined)
+    resolve(undefined)
     await promise
     await tick()
 

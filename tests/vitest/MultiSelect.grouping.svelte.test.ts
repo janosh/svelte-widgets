@@ -119,50 +119,41 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [
-      `click`,
-      (header: HTMLElement) => header.click(),
-      (header: HTMLElement) => header.click(),
-    ],
+    [`click`, (header: HTMLElement) => header.click()],
     [
       // a real <button> now, so Enter/Space activate it natively (no keydown handler)
       `keyboard activation of the toggle button`,
       (header: HTMLElement) =>
         header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
-      (header: HTMLElement) =>
-        header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
     ],
-  ])(
-    `collapsibleGroups toggles group visibility via %s`,
-    async (_via, collapse, expand) => {
-      const ongroupToggle = vi.fn()
-      await mount_grouped({ collapsibleGroups: true, ongroupToggle })
+  ])(`collapsibleGroups toggles group visibility via %s`, async (_via, toggle) => {
+    const ongroupToggle = vi.fn()
+    await mount_grouped({ collapsibleGroups: true, ongroupToggle })
 
-      const genre_header = find_group_header(`Genre`)
-      expect(genre_header.classList.contains(`collapsible`)).toBe(true)
+    const genre_header = find_group_header(`Genre`)
+    expect(genre_header.classList.contains(`collapsible`)).toBe(true)
 
-      const count_options = () => option_items().length
-      const initial_count = count_options()
+    const count_options = () => option_items().length
+    const initial_count = count_options()
 
-      collapse(genre_header)
-      await tick()
-      expect(count_options()).toBeLessThan(initial_count)
-      expect(group_expanded(genre_header)).toBe(`false`)
-      expect(ongroupToggle).toHaveBeenNthCalledWith(1, {
-        group: `Genre`,
-        collapsed: true,
-      })
+    toggle(genre_header)
+    await tick()
+    expect(count_options()).toBeLessThan(initial_count)
+    expect(group_expanded(genre_header)).toBe(`false`)
+    expect(ongroupToggle).toHaveBeenNthCalledWith(1, {
+      group: `Genre`,
+      collapsed: true,
+    })
 
-      expand(genre_header)
-      await tick()
-      expect(count_options()).toBe(initial_count)
-      expect(group_expanded(genre_header)).toBe(`true`)
-      expect(ongroupToggle).toHaveBeenNthCalledWith(2, {
-        group: `Genre`,
-        collapsed: false,
-      })
-    },
-  )
+    toggle(genre_header)
+    await tick()
+    expect(count_options()).toBe(initial_count)
+    expect(group_expanded(genre_header)).toBe(`true`)
+    expect(ongroupToggle).toHaveBeenNthCalledWith(2, {
+      group: `Genre`,
+      collapsed: false,
+    })
+  })
 
   test(`groupSelectAll buttons select groups by click and keyboard`, async () => {
     const onselectAll_spy = vi.fn()

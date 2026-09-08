@@ -9,12 +9,7 @@ import {
   type CheckResult,
   type CheckOptions,
 } from '$lib/markdown/check'
-import {
-  assert_ok,
-  create_markdown,
-  DiagnosticError,
-  type MarkdownOptions,
-} from '$lib/markdown'
+import { assert_ok, create_markdown, DiagnosticError } from '$lib/markdown'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 
 const filename = resolve(`tests/checked-examples.md`)
@@ -30,17 +25,14 @@ const write_json = (path: string, value: unknown) =>
 
 const check_source = async (
   source: string,
-  {
-    markdown_options,
-    ...options
-  }: CheckOptions & { markdown_options?: MarkdownOptions } = {},
+  options: CheckOptions = {},
 ): Promise<CheckResult> => {
   options = { filename, ...options }
-  const parsed = await create_markdown(markdown_options).parse(source, {
+  const parsed = await create_markdown().parse(source, {
     filename: options.filename,
   })
   return parsed.ok
-    ? check_document(parsed.value, { ...options })
+    ? check_document(parsed.value, options)
     : { ...parsed, value: { checked: 0, asserted: 0 } }
 }
 const diagnostics_at_start = (result: CheckResult) =>
