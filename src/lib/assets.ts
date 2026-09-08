@@ -98,8 +98,21 @@ export function asset_imports(): PreprocessorGroup {
         // Imports use filesystem names; decode URL escapes but keep literal percent signs.
         const path = (suffix_start < 0 ? url : url.slice(0, suffix_start)).replaceAll(
           /(?:%[\da-f]{2})+/giu,
-          decodeURIComponent,
+          (encoded) => {
+            try {
+              return decodeURIComponent(encoded)
+            } catch (cause) {
+              throw new Error(
+                `Invalid UTF-8 escape in asset URL ${JSON.stringify(value)} in ${filename}: encode a literal "%" as "%25".`,
+                { cause },
+              )
+            }
+          },
         )
+        if (/[?#]/u.test(path))
+          throw new Error(
+            `Cannot import asset ${JSON.stringify(value)} in ${filename}: Vite treats "#" and "?" in filenames as URL delimiters. Rename the file.`,
+          )
         const suffix = suffix_start < 0 ? `` : url.slice(suffix_start)
         // Appending a query or fragment to an inlined data URL corrupts its payload.
         const specifier = `${/^\.{1,2}\//u.test(path) ? path : `./${path}`}?url${suffix ? `&no-inline` : ``}`

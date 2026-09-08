@@ -16,6 +16,18 @@ const transform = async (content: string) => {
 }
 
 describe(`asset imports`, () => {
+  test.each([`%FF`, `%C3`, `%E2%82`])(
+    `rejects malformed UTF-8 with asset and source context: %s`,
+    async (encoded) => {
+      await expect(transform(`<img src="./image-${encoded}.png">`)).rejects.toMatchObject(
+        {
+          message: `Invalid UTF-8 escape in asset URL "./image-${encoded}.png" in /src/page.svelte: encode a literal "%" as "%25".`,
+          cause: expect.any(URIError),
+        },
+      )
+    },
+  )
+
   test.each([
     [`img`, `src`],
     [`audio`, `src`],
@@ -166,7 +178,11 @@ describe(`asset imports`, () => {
     expect(result.code).toContain(`href={__widget_asset_1 + "#page=2"}`)
   })
 
-  test(`Vite resolves encoded Markdown paths, dotfiles and literal percent signs`, async () => {
+  test(`resolves supported filenames and rejects encoded URL delimiters`, async () => {
+    for (const url of [`./part%231.svg`, `./part%3F1.svg`])
+      await expect(transform(`<img src="${url}">`)).rejects.toThrow(
+        `Cannot import asset "${url}" in /src/page.svelte: Vite treats "#" and "?" in filenames as URL delimiters. Rename the file.`,
+      )
     const directory = await mkdtemp(`${tmpdir()}/widgets-assets-`)
     onTestFinished(() => rm(directory, { recursive: true }))
     const filenames = [`image one.svg`, `東京.svg`, `100%.svg`, `.hidden.svg`]
@@ -175,7 +191,9 @@ describe(`asset imports`, () => {
     const source = [
       ...filenames.map((name) => `![Image](<${name}>)`),
       `<img src="./100%.svg">`,
+      `<img src="./image-%25FF.svg">`,
     ].join(`\n`)
+    await writeFile(`${directory}/image-%FF.svg`, svg)
     const { code } = await preprocess(
       source,
       [markdown(create_markdown()), asset_imports()],
@@ -189,7 +207,7 @@ describe(`asset imports`, () => {
     const entry = `${directory}/entry.js`
     await writeFile(
       entry,
-      `${declarations}\nexport default [__widget_asset_0, __widget_asset_1, __widget_asset_2, __widget_asset_3];`,
+      `${declarations}\nexport default [__widget_asset_0, __widget_asset_1, __widget_asset_2, __widget_asset_3, __widget_asset_4];`,
     )
     const bundle = await build({
       configFile: false,
@@ -206,7 +224,9 @@ describe(`asset imports`, () => {
       )
     ).default as unknown
     expect(urls).toEqual(
-      filenames.map(() => expect.stringMatching(/^data:image\/svg\+xml[;,]/u)),
+      [...filenames, `image-%FF.svg`].map(() =>
+        expect.stringMatching(/^data:image\/svg\+xml[;,]/u),
+      ),
     )
   })
 })
