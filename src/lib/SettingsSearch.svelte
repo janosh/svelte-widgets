@@ -54,6 +54,8 @@
 
   const filter_settings = (root: HTMLElement): (() => void) => {
     const opened_by_search = new Set<HTMLDetailsElement>()
+    type SearchEntry = { node: HTMLElement; text: string }
+    let index: { containers: SearchEntry[]; rows: SearchEntry[] } | undefined
 
     const restore_visibility = (): void => {
       for (const element of root.querySelectorAll(`[${HIDDEN_ATTR}]`)) {
@@ -100,33 +102,44 @@
         return
       }
 
-      const containers = [...root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR)]
+      // Queries change much more often than the settings DOM. Rebuild only when the
+      // observer reports changed text, metadata, visibility, or selector membership.
+      const { containers, rows } = (index ??= {
+        containers: Array.from(
+          root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR),
+          (node) => ({
+            node,
+            text: title_of(node).toLocaleLowerCase(),
+          }),
+        ),
+        rows: Array.from(root.querySelectorAll<HTMLElement>(ROW_SELECTOR), (node) => ({
+          node,
+          text: [node.dataset.label, node.textContent, node.dataset.description]
+            .join(` `)
+            .toLocaleLowerCase(),
+        })),
+      })
       // A heading match reveals everything under it, so typing a section or group name works
       // even though no row repeats that name in its own text.
-      const titled = new Set(
-        containers.filter((node) =>
-          title_of(node).toLocaleLowerCase().includes(normalized_query),
-        ),
-      )
-      const rows = [...root.querySelectorAll<HTMLElement>(ROW_SELECTOR)]
-      const hits = new Set(
-        rows.filter(
-          (row) =>
-            titled.has(row) ||
-            has_ancestor_in(row, titled) ||
-            [row.dataset.label, row.textContent, row.dataset.description]
-              .join(` `)
-              .toLocaleLowerCase()
-              .includes(normalized_query),
-        ),
-      )
+      const titled = new Set<HTMLElement>()
+      for (const { node, text } of containers)
+        if (text.includes(normalized_query)) titled.add(node)
+      const hits = new Set<HTMLElement>()
+      for (const { node, text } of rows) {
+        if (
+          titled.has(node) ||
+          has_ancestor_in(node, titled) ||
+          text.includes(normalized_query)
+        )
+          hits.add(node)
+      }
       const hit_ancestors = new Set<HTMLElement>()
       for (const hit of hits) mark_ancestors(hit, hit_ancestors)
 
       // A match keeps its ancestors and descendants visible, so a keyed wrapper matching on
       // its own label does not leave the rows nested inside it filtered out.
       const visible = new Set<HTMLElement>()
-      for (const row of rows) {
+      for (const { node: row } of rows) {
         // an ancestor of a hit, the hit itself, or nested inside one
         const show = hits.has(row) || hit_ancestors.has(row) || has_ancestor_in(row, hits)
         row.toggleAttribute(HIDDEN_ATTR, !show)
@@ -136,7 +149,7 @@
       const containers_with_visible = new Set<HTMLElement>()
       for (const row of visible) mark_ancestors(row, containers_with_visible)
 
-      for (const container of containers) {
+      for (const { node: container } of containers) {
         const keep = visible.has(container) || containers_with_visible.has(container)
         container.toggleAttribute(HIDDEN_ATTR, !keep)
         if (container instanceof HTMLDetailsElement) {
@@ -162,8 +175,11 @@
     // text is watched because a reactive label rewrites its text node in place.
     const stop_observing = observe_subtree(
       root,
-      [`data-description`, `data-label`, `data-key`, `hidden`],
-      refresh,
+      [`data-description`, `data-label`, `data-key`, `hidden`, `class`],
+      () => {
+        index = undefined
+        refresh()
+      },
       true,
     )
     // `refresh` reads `query`, so this re-filters per keystroke; from the attachment body it

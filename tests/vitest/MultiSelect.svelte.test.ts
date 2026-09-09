@@ -3969,6 +3969,22 @@ test.each([
 })
 
 describe(`duplicate entries in options array`, () => {
+  test(`indexes colliding selection keys without pairwise row scans`, async () => {
+    const options = Array.from({ length: 100 }, (_, idx) => ({ label: `Option ${idx}` }))
+    const key = vi.fn(() => `shared`)
+    mount_multiselect({
+      options,
+      selected: options.slice(50),
+      duplicates: true,
+      keep_selected_in_dropdown: `plain`,
+      max_visible_chips: 0,
+      key,
+    })
+    await tick()
+    expect(document.querySelectorAll(`ul.options > li.selected`)).toHaveLength(50)
+    expect(key.mock.calls.length).toBeLessThan(options.length * 25)
+  })
+
   test.each([
     [`duplicate strings`, [`a`, `a`, `b`]],
     [

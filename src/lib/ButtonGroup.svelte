@@ -104,6 +104,7 @@
   const selected_values = $derived(
     Array.isArray(selected) ? selected : selected == null ? [] : [selected],
   )
+  const selected_set = $derived(new Set(selected_values))
 
   // Roving tabindex: one stop on the checked option. Falls back so a selection pointing at
   // no rendered option still leaves something tabbable.
@@ -116,7 +117,7 @@
   function select(value: Value) {
     if (!multiple && selected === value) return // re-picking the checked radio changes nothing
     selected = multiple
-      ? selected_values.includes(value)
+      ? selected_set.has(value)
         ? selected_values.filter((val) => val !== value)
         : [...selected_values, value]
       : value
@@ -177,7 +178,7 @@
     onkeydown={handle_keydown}
   >
     {#each option_list as opt (opt.value)}
-      {@const is_selected = selected_values.includes(opt.value)}
+      {@const is_selected = selected_set.has(opt.value)}
       {#if option_suffix}
         <!-- opt-in: the extra level breaks consumers' `.options > button` selectors -->
         <span class="option">

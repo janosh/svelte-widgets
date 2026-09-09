@@ -100,8 +100,11 @@ const mount_virtualized = (count: number, overrides = {}) => {
 
 describe(`Masonry`, () => {
   test.each([true, false])(`renders items with animate=%s`, (animate) => {
-    mount_masonry({ items: indices, animate })
+    mock_height = 0
+    const get_estimated_height = vi.fn(() => 150)
+    mount_masonry({ items: indices, animate, order: `row-first`, get_estimated_height })
     expect(child_els()).toHaveLength(n_items)
+    expect(get_estimated_height).not.toHaveBeenCalled()
   })
 
   test.each([

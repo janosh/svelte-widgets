@@ -176,7 +176,7 @@ test.describe(`Nav dropdown`, () => {
     await expect(menu).toHaveCSS(`display`, `none`)
     await dropdown.locator(`[data-dropdown-toggle]`).hover()
     await dropdown.locator(`[data-dropdown-toggle]`).focus()
-    await page.keyboard.press(`ArrowDown`)
+    await page.keyboard.press(`Tab`)
     await expect(menu.locator(`a`).first()).toBeFocused()
     await page.mouse.move(0, 0)
     await expect(menu).toBeVisible()

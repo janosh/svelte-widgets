@@ -74,7 +74,7 @@
   or <code>first_px</code>; <code>min_px</code>, <code>max_px</code>, and
   <code>second_min_px</code>
   constrain it. Arrow keys resize, Home/End reach the limits, and Enter collapses or restores
-  when <code>collapsible</code> is set. Save bindings or <code>onresize</code> values in your
+  when <code>collapsible</code> is set. Save bindings or <code>on_resize</code> values in your
   own store for persistence.
 </p>
 <div class="split-demo">

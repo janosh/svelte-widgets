@@ -623,6 +623,7 @@ describe(`option grouping feature`, () => {
       const on_change = vi.fn()
       await mount_grouped({
         group_select_all: true,
+        collapsible_groups: true,
         keep_selected_in_dropdown: `checkboxes`,
         on_remove_all: onremoveAll_spy,
         on_change,
@@ -652,6 +653,19 @@ describe(`option grouping feature`, () => {
       })
 
       expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+
+      const key_option = [...option_items()].find(
+        (item) => item.textContent?.trim() === `C Major`,
+      )
+      expect(key_option).toBeDefined()
+      for (const expanded of [false, true]) {
+        find_group_header(`Genre`).click()
+        await tick()
+        expect(group_expanded(`Genre`)).toBe(String(expanded))
+        expect(
+          [...option_items()].find((item) => item.textContent?.trim() === `C Major`),
+        ).toBe(key_option)
+      }
     },
   )
 })

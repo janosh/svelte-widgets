@@ -1000,19 +1000,28 @@ describe(`Nav`, () => {
       expect(is_visible(dropdown_menu)).toBe(false)
     })
 
-    test(`Tab cycles within an open submenu instead of leaving it`, async () => {
-      const { dropdown_menu } = mount_dropdown(two_child_props)
+    test.each([`click`, `hover`])(
+      `Tab keeps control of a submenu opened by %s`,
+      async (interaction) => {
+        const { dropdown, dropdown_menu } = mount_dropdown(two_child_props)
 
-      await click(doc_query(`[data-dropdown-toggle]`))
-      const links = [...dropdown_menu.querySelectorAll(`a`)]
-      expect(links).toHaveLength(2)
+        await tick()
+        await open_dropdown(dropdown, interaction)
+        const links = [...dropdown_menu.querySelectorAll(`a`)]
+        expect(links).toHaveLength(2)
 
-      links[0].focus()
-      keydown(`Tab`, links[0])
-      expect(document.activeElement).toBe(links[1])
-      keydown(`Tab`, links[1])
-      expect(document.activeElement).toBe(links[0])
-    })
+        links[0].focus()
+        keydown(`Tab`, links[0])
+        expect(document.activeElement).toBe(links[1])
+        keydown(`Tab`, links[1])
+        expect(document.activeElement).toBe(links[0])
+        await tick()
+        pointer_event(dropdown, `pointerleave`)
+        await tick()
+        expect(is_visible(dropdown_menu)).toBe(true)
+        expect(document.activeElement).toBe(links[0])
+      },
+    )
 
     test(`open dropdown clears when burger menu closes`, async () => {
       set_window_width(500)

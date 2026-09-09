@@ -162,6 +162,9 @@ describe(`virtual_list`, () => {
     expect(rendered).toHaveLength(1)
     expect(rendered[0].textContent?.trim()).toBe(`option 999`)
     for (const spacer of get_spacers()) expect(spacer.style.height).toBe(`0px`)
+    await type_search_text(`no such option`, input)
+    expect(get_spacers()).toHaveLength(0)
+    expect(doc_query(`li.user-msg`).textContent?.trim()).toBe(`No matching options`)
   })
 
   // options spread over 5 groups (group 0 first with count/5 options, etc.)

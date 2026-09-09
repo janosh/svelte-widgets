@@ -718,6 +718,8 @@ describe(`fuzzy_match_indices`, () => {
     [`😀x`, `😁😀x`, [2, 3, 4]], // never borrow another emoji's leading surrogate
     [`😀`, `\u{1F601}\u{1FA00}`, null], // matching halves exist, but no whole emoji does
     [`😀`, `İ😀`, [1, 2]], // offsets remain UTF-16 units after a case expansion
+    [`i\u0307`, `İ`, [0, 0]], // a boolean match must preserve case-fold expansion too
+    [`😀😀`, `😀`, null], // each whole code point must consume a distinct occurrence
     [`中文`, `中文测试`, [0, 1]],
     [`a  b`, `a b`, [0, 1, 2]], // a run in the search collapses to a single space
     [`a b`, `a\tb`, [0, 1, 2]], // any target whitespace reads as a plain space

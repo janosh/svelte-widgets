@@ -38,8 +38,9 @@
     if (Array.isArray(value)) return multiple ? value : []
     return multiple || value == null ? [] : [value]
   })
+  const open_set = $derived(new Set(open_values))
   function toggle(item: AccordionItem<Value>) {
-    const is_open = open_values.includes(item.value)
+    const is_open = open_set.has(item.value)
     if (!multiple && is_open && !collapsible) return
     const next_value: AccordionValue<Value> = multiple
       ? is_open
@@ -80,7 +81,7 @@
     {@const encoded_value = encodeURIComponent(item.value)}
     {@const trigger_id = `${base_id}-trigger-${encoded_value}`}
     {@const panel_id = `${base_id}-panel-${encoded_value}`}
-    {@const open = open_values.includes(item.value)}
+    {@const open = open_set.has(item.value)}
     <div class="accordion-item" data-state={open ? `open` : `closed`}>
       <svelte:element this={`h${heading_level}`} class="accordion-heading">
         <button

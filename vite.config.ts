@@ -30,6 +30,14 @@ const docs = markdown_vite(
   { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
 )
 
+const stateful_aliases: Record<string, string> = {}
+for (const [path, target] of Object.entries(package_json.exports)) {
+  if (`default` in target && target.default.endsWith(`.svelte.js`))
+    stateful_aliases[path.replace(`.`, `svelte-widgets`)] = target.default
+      .replace(`./dist/`, `./src/lib/`)
+      .replace(/\.js$/u, `.ts`)
+}
+
 // Inline Kit options configure the docs site. svelte-package uses its defaults;
 // src/lib needs no preprocessing, and the package script removes Markdown guides.
 const svelte_config = {
@@ -43,18 +51,7 @@ const svelte_config = {
   alias: {
     $root: `.`,
     $site: `./src/site`,
-    ...Object.fromEntries(
-      Object.entries(package_json.exports).flatMap(([path, target]) =>
-        `default` in target && target.default.endsWith(`.svelte.js`)
-          ? [
-              [
-                path.replace(`.`, `svelte-widgets`),
-                target.default.replace(`./dist/`, `./src/lib/`).replace(/\.js$/u, `.ts`),
-              ],
-            ]
-          : [],
-      ),
-    ),
+    ...stateful_aliases,
     'svelte-widgets': `./src/lib`,
   },
 

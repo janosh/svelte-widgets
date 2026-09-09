@@ -165,7 +165,11 @@
       event.preventDefault()
       close_menus()
       dropdown_toggle(href)?.focus()
-    } else if (step_focus(event, [...dropdown_links(href)])) hover_open = false
+    } else if (
+      (event.key === `Tab` && !event.isComposing) ||
+      step_focus(event, [...dropdown_links(href)])
+    )
+      hover_open = false
   }
 
   function is_current(path: string | undefined) {
@@ -212,16 +216,9 @@
   }
 
   function handle_link_click(event: MouseEvent, route: NavLinkRouteObject) {
-    if (route.disabled) {
+    if (route.disabled || on_navigate?.({ href: route.href, event, route }) === false) {
       event.preventDefault()
       return
-    }
-    if (on_navigate) {
-      const result = on_navigate({ href: route.href, event, route })
-      if (result === false) {
-        event.preventDefault()
-        return
-      }
     }
     close_menus()
   }
@@ -243,8 +240,7 @@
   formatted: { label: string; style: string },
   item_tooltip: ReturnType<typeof tooltip> | undefined,
 )}
-  {@const is_disabled = Boolean(parsed_route.disabled)}
-  {#if is_disabled}
+  {#if parsed_route.disabled}
     <span
       class={[`disabled`, parsed_route.class]}
       style={`${formatted.style}; ${parsed_route.style ?? ``}`}
@@ -321,7 +317,8 @@
         <div class="separator" role="separator"></div>
       {:else if sub_routes}
         {@const child_is_active = is_child_current(sub_routes)}
-        {@const parent_page_exists = sub_routes.includes(parsed_route.href)}
+        {@const parent_link =
+          !parsed_route.disabled && sub_routes.includes(parsed_route.href)}
         {@const filtered_sub_routes = sub_routes.filter(
           (route) => route !== parsed_route.href,
         )}
@@ -336,27 +333,21 @@
             handle_dropdown_keydown(event, parsed_route.href)}
         >
           <div>
-            {#if parsed_route.disabled}
-              {@render default_item_render(parsed_route, formatted, item_tooltip)}
-            {:else if parent_page_exists}
-              <a
-                href={parsed_route.href}
-                aria-current={is_current(parsed_route.href)}
-                onclick={(event: MouseEvent) => handle_link_click(event, parsed_route)}
-                class={parsed_route.class}
-                style={`${formatted.style}; ${parsed_route.style ?? ``}`}
-                {...get_external_attrs(parsed_route)}
-                {@attach item_tooltip}
-              >
-                {@html formatted.label}
-              </a>
-            {:else}
-              <span
-                class={parsed_route.class}
-                style={`${formatted.style}; ${parsed_route.style ?? ``}`}
-                {@attach item_tooltip}>{@html formatted.label}</span
-              >
-            {/if}
+            <svelte:element
+              this={parent_link ? `a` : `span`}
+              href={parent_link ? parsed_route.href : undefined}
+              aria-current={parent_link ? is_current(parsed_route.href) : undefined}
+              aria-disabled={parsed_route.disabled ? `true` : undefined}
+              onclick={parent_link
+                ? (event: MouseEvent) => handle_link_click(event, parsed_route)
+                : undefined}
+              class={[{ disabled: parsed_route.disabled }, parsed_route.class]}
+              style={`${formatted.style}; ${parsed_route.style ?? ``}`}
+              {...parent_link ? get_external_attrs(parsed_route) : {}}
+              {@attach item_tooltip}
+            >
+              {@html formatted.label}
+            </svelte:element>
             <button
               type="button"
               class={[`dropdown-toggle`, { open: dropdown_open }]}
@@ -415,9 +406,6 @@
             </div>
           </div>
         </div>
-        {#if parsed_route.separator}
-          <div class="separator" role="separator"></div>
-        {/if}
       {:else}
         <span class:align-right={is_right}>
           {#if item}
@@ -438,9 +426,9 @@
             {@render default_item_render(parsed_route, formatted, item_tooltip)}
           {/if}
         </span>
-        {#if parsed_route.separator}
-          <div class="separator" role="separator"></div>
-        {/if}
+      {/if}
+      {#if parsed_route.separator && parsed_route.href}
+        <div class="separator" role="separator"></div>
       {/if}
     {/each}
 

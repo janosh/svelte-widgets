@@ -264,7 +264,7 @@
       let sum = 0
       return column_items.map(({ item }) => {
         // `||` as in get_height: `??` would collapse the scroll window to gaps alone
-        sum += (virtualize ? get_estimated_height?.(item) || 150 : get_height(item)) + gap
+        sum += (get_estimated_height?.(item) || 150) + gap
         return sum
       })
     }),
@@ -301,8 +301,11 @@
   // Per-column render window: on-screen slice plus padding for the culled items. Recomputes
   // on scroll, so it reads prefix_heights rather than redoing those O(n) prefix sums.
   let col_windows = $derived(
-    prefix_heights.map((ph) => {
-      if (!can_virtualize) return { start: 0, end: ph.length, pad_top: 0, pad_bottom: 0 }
+    items_to_cols.map((column_items, col_idx) => {
+      if (!can_virtualize) {
+        return { start: 0, end: column_items.length, pad_top: 0, pad_bottom: 0 }
+      }
+      const ph = prefix_heights[col_idx]
       const start = Math.max(0, binary_search_ge(ph, window_scroll_top) - 1 - overscan)
       // the item straddling the bottom edge is on screen, so the exclusive end must clear it
       // (mirrors the row of margin `start` takes)

@@ -339,17 +339,17 @@
 
   // max_visible_chips: chips beyond the limit collapse into a "+N more" toggle.
   let is_chip_list_expanded = $state(false)
-  const chip_limit = $derived(max_visible_chips)
   const visible_chips = $derived(
-    chip_limit !== null && !is_chip_list_expanded
-      ? selected.slice(0, chip_limit)
+    max_visible_chips !== null && !is_chip_list_expanded
+      ? selected.slice(0, max_visible_chips)
       : selected,
   )
   const hidden_chip_count = $derived(selected.length - visible_chips.length)
   // keyboard chip navigation must never highlight an unrendered chip — auto-expand
   $effect(() => {
     if (highlighted_idx === null) return
-    if (chip_limit !== null && highlighted_idx >= chip_limit) is_chip_list_expanded = true
+    if (max_visible_chips !== null && highlighted_idx >= max_visible_chips)
+      is_chip_list_expanded = true
     // Clamp when selected changes externally (parent prop, select_all)
     if (highlighted_idx >= selected.length) {
       highlighted_idx = selected.length > 0 ? selected.length - 1 : null
@@ -488,9 +488,25 @@
     opt_a != null &&
     key(opt_a) === key(opt_b) &&
     utils.get_label(opt_a) === utils.get_label(opt_b)
+  // Key + label is the identity when duplicates are allowed. Count each occurrence once
+  // instead of scanning every selected option for every dropdown row or bulk candidate.
+  const count_options = (items: Option[]) => {
+    const counts = new Map<unknown, Map<string | number, number>>()
+    for (const item of items) {
+      const item_key = key(item)
+      const label = utils.get_label(item)
+      // is_same_option uses strict equality, which never matches NaN.
+      if (Number.isNaN(item_key) || Number.isNaN(label)) continue
+      let label_counts = counts.get(item_key)
+      if (!label_counts) counts.set(item_key, (label_counts = new Map()))
+      label_counts.set(label, (label_counts.get(label) ?? 0) + 1)
+    }
+    return counts
+  }
+  const selected_option_counts = $derived(count_options(selected))
   const has_selected_option = (opt: Option): boolean =>
     duplicates === true
-      ? selected.some((item) => is_same_option(item, opt))
+      ? (selected_option_counts.get(key(opt))?.has(utils.get_label(opt)) ?? false)
       : selected_keys_set.has(key(opt))
 
   // Group options by their `group` key in the same order used by the dropdown.
@@ -508,14 +524,14 @@
       }
     }
 
-    let grouped = [...groups_map.entries()].map(([group, options_in_group]) => ({
+    const grouped = [...groups_map.entries()].map(([group, options_in_group]) => ({
       group,
       options: options_in_group,
       collapsed: collapsed_groups.has(group),
     }))
 
     if (group_sort_order && group_sort_order !== `none`) {
-      grouped = grouped.toSorted((group_a, group_b) => {
+      grouped.sort((group_a, group_b) => {
         if (typeof group_sort_order === `function`) {
           return group_sort_order(group_a.group, group_b.group)
         }
@@ -572,7 +588,6 @@
   )
   // flat and grouped lists both virtualize (headers are rows of the same item_height), but
   // validation rejects sticky grouped headers: one scrolled out of the window can't stay pinned
-  const is_virtual_list_enabled = $derived(Boolean(virtual_config))
   let options_scroll_top = $state(0)
   let options_client_height = $state(0)
   // happy-dom and SSR report clientHeight 0 — fall back to a 400px viewport estimate
@@ -581,6 +596,12 @@
   )
   // renderable rows: headers interleaved with their options (max_options truncates,
   // collapsed groups keep only their header)
+  type HeaderRow = GroupedOptions<Option> & {
+    kind: `header`
+    group: string
+    render_key: symbol
+    selectable: Option[]
+  }
   type RenderRow =
     | {
         kind: `option`
@@ -589,7 +610,7 @@
         render_key: unknown
         group: string | null
       }
-    | { kind: `header`; group_idx: number; render_key: unknown }
+    | HeaderRow
   // symbols as header render keys: they can't collide with user option keys, and caching
   // them per group name keeps them stable when filtering temporarily drops a group
   const header_key_cache = new Map<string, symbol>()
@@ -600,19 +621,35 @@
   }
   const render_rows = $derived.by((): RenderRow[] => {
     const rows: RenderRow[] = []
+    const next_render_key = render_key_assigner()
     let flat_idx = 0
-    grouped_options.forEach(({ group, options: group_items, collapsed }, group_idx) => {
+    grouped_options.forEach(({ group, options: group_items, collapsed }) => {
+      const hidden = collapsed && collapsible_groups
+      const selectable: Option[] = []
       if (group !== null) {
-        rows.push({ kind: `header`, group_idx, render_key: header_key(group) })
+        rows.push({
+          kind: `header`,
+          group,
+          options: group_items,
+          collapsed,
+          selectable,
+          render_key: header_key(group),
+        })
       }
-      if (collapsed && collapsible_groups) return
-      group_items.forEach((option_item, local_idx) => {
-        if (flat_idx < visible_navigable_count) {
+      group_items.forEach((option_item) => {
+        // Count hidden occurrences too, so collapsing a group cannot rekey later duplicates.
+        const render_key = next_render_key(option_item)
+        const visible = !hidden && flat_idx < visible_navigable_count
+        if (group !== null && (hidden || visible) && !is_disabled(option_item)) {
+          selectable.push(option_item)
+        }
+        if (hidden) return
+        if (visible) {
           rows.push({
             kind: `option`,
             option: option_item,
             flat_idx,
-            render_key: option_render_keys[group_idx][local_idx],
+            render_key,
             group,
           })
         }
@@ -623,16 +660,12 @@
   })
   // row index per navigable option: keyboard auto-scroll needs row offsets, which diverge
   // from flat option indices once header rows are interleaved
-  const option_row_indices = $derived.by(() => {
-    const indices: number[] = []
-    render_rows.forEach((row, row_idx) => {
-      if (row.kind === `option`) indices[row.flat_idx] = row_idx
-    })
-    return indices
-  })
+  const option_row_indices = $derived(
+    render_rows.flatMap((row, row_idx) => (row.kind === `option` ? [row_idx] : [])),
+  )
   // Window of row indices [start, end) to render as DOM nodes
   const virtual_window = $derived.by(() => {
-    if (!is_virtual_list_enabled || !virtual_config) return null
+    if (!virtual_config || render_rows.length === 0) return null
     const { item_height, overscan } = virtual_config
     const { start, end } = get_virtual_window({
       scroll: options_scroll_top,
@@ -643,10 +676,9 @@
     })
     return { start, end, item_height }
   })
-  const render_window = $derived(render_rows.length > 0 ? virtual_window : null)
   const visible_render_rows = $derived(
-    render_window
-      ? render_rows.slice(render_window.start, render_window.end)
+    virtual_window
+      ? render_rows.slice(virtual_window.start, virtual_window.end)
       : render_rows,
   )
   // keys for the dropdown's keyed {#each}: key(opt) for unique options, so filtering keeps
@@ -668,44 +700,11 @@
       return cached[occurrence - 1]
     }
   }
-  // nested arrays aligned with grouped_options: option_render_keys[group_idx][local_idx]
-  let option_render_keys = $derived.by(() => {
-    const next_render_key = render_key_assigner()
-    return grouped_options.map(({ options: group_items }) =>
-      group_items.map(next_render_key),
-    )
-  })
   // chips need the same: two selected entries can share a key (`selected={['a', 'a']}`).
   // Symbols beat keying by index, which would defeat move detection on reorder.
   let chip_render_keys = $derived.by(() => {
     const next_render_key = render_key_assigner()
     return visible_chips.map(next_render_key)
-  })
-
-  // precomputed to keep the template from recalculating per header
-  type GroupHeaderState = {
-    all_selected: boolean
-    selected_count: number
-    selectable: Option[]
-  }
-  let group_header_state = $derived.by(() => {
-    const state = new Map<string, GroupHeaderState>()
-    let flat_idx = 0
-    for (const { group, options: group_items, collapsed } of grouped_options) {
-      const hidden = collapsed && collapsible_groups
-      const visible_items = hidden
-        ? group_items
-        : group_items.slice(0, Math.max(0, visible_navigable_count - flat_idx))
-      if (!hidden) flat_idx += group_items.length
-      if (group === null) continue
-      const selectable = visible_items.filter((opt) => !is_disabled(opt))
-      const all_selected = selectable.length > 0 && selectable.every(has_selected_option)
-      const selected_count = keep_selected_in_dropdown
-        ? group_items.filter(has_selected_option).length
-        : 0
-      state.set(group, { all_selected, selected_count, selectable })
-    }
-    return state
   })
 
   // === Grouping ===
@@ -769,42 +768,38 @@
     typeof placeholder === `object` && placeholder?.persistent === true,
   )
 
-  // used by add() and apply_bulk_add()
+  // Both callers pass a fresh array, so sorting cannot mutate the current selection.
   function sort_selection(items: Option[]): Option[] {
     if (sort_selected === true) {
-      return items.toSorted((opt_1, opt_2) =>
-        label_of(opt_1).localeCompare(label_of(opt_2)),
-      )
-    }
-    if (typeof sort_selected === `function`) return items.toSorted(sort_selected)
+      items.sort((opt_1, opt_2) => label_of(opt_1).localeCompare(label_of(opt_2)))
+    } else if (typeof sort_selected === `function`) items.sort(sort_selected)
     return items
   }
 
   // Revalidate reactive props and remote option groups after mount.
   $effect(() => validate_config(has_grouped_options))
 
-  const resolved_create_msg = $derived.by(() => {
-    if (create_option_msg === null || create_option_msg === undefined) return null
-    if (typeof create_option_msg === `function`) {
-      const create_msg = create_option_msg({
-        search_text,
-        selected,
-        options: effective_options,
-        matching_options,
-      })
-      return create_msg || null // coerce empty string to null so truthiness checks work
-    }
-    return create_option_msg
-  })
+  const resolved_create_msg = $derived(
+    typeof create_option_msg === `function`
+      ? create_option_msg({
+          search_text,
+          selected,
+          options: effective_options,
+          matching_options,
+        }) || null
+      : (create_option_msg ?? null),
+  )
 
   // active state of the user-message <li> (dupe / create / no-match)
   let is_user_message_active = $state(false)
 
   // when loading remotely effective_options is already filtered (locals by matches_search,
   // batches by the server), so only the static list needs filtering here
-  const search_matches = (opt: Option): boolean =>
-    Boolean(load_options) || matches_search(opt, effective_filter_text)
-  const searched_options = $derived(effective_options.filter(search_matches))
+  const searched_options = $derived(
+    load_options
+      ? effective_options
+      : effective_options.filter((opt) => matches_search(opt, effective_filter_text)),
+  )
 
   $effect.pre(() => {
     matching_options = searched_options.filter(
@@ -931,7 +926,7 @@
     extra_style: string | null,
   ) => [utils.get_style(opt, style_key), extra_style].filter(Boolean).join(` `) || null
 
-  function get_option_view(option_item: Option, flat_idx: number) {
+  function get_option_view(option_item: Option) {
     const {
       label,
       disabled: option_disabled = null,
@@ -1467,14 +1462,19 @@
 
   function get_unique_bulk_options(options_to_filter: Option[]): Option[] {
     if (duplicates === true) {
-      const remaining_selected = [...selected]
+      const remaining_selected = new Map(
+        [...selected_option_counts].map(([option_key, label_counts]) => [
+          option_key,
+          new Map(label_counts),
+        ]),
+      )
       return options_to_filter.filter((option_item) => {
         if (is_disabled(option_item)) return false
-        const selected_idx = remaining_selected.findIndex((selected_option) =>
-          is_same_option(selected_option, option_item),
-        )
-        if (selected_idx === -1) return true
-        remaining_selected.splice(selected_idx, 1)
+        const label_counts = remaining_selected.get(key(option_item))
+        const label = utils.get_label(option_item)
+        const count = label_counts?.get(label) ?? 0
+        if (count === 0) return true
+        label_counts?.set(label, count - 1)
         return false
       })
     }
@@ -1537,6 +1537,7 @@
     if (all_selected) {
       // never drop below min_select, matching remove_all and per-chip removal
       const keys_to_remove = new Set(selectable.map((opt) => key(opt)))
+      const identities_to_remove = duplicates === true ? count_options(selectable) : null
       const max_removals =
         min_select === null ? Infinity : Math.max(0, selected.length - min_select)
       const removed: Option[] = []
@@ -1544,7 +1545,7 @@
       for (const opt of selected) {
         const matches =
           duplicates === true
-            ? selectable.some((item) => is_same_option(item, opt))
+            ? (identities_to_remove?.get(key(opt))?.has(utils.get_label(opt)) ?? false)
             : keys_to_remove.has(key(opt))
         if (matches && removed.length < max_removals) {
           removed.push(opt)
@@ -2108,7 +2109,7 @@
           {/if}
         </li>
       {/each}
-      {#if chip_limit !== null && selected.length > chip_limit}
+      {#if max_visible_chips !== null && selected.length > max_visible_chips}
         <li class="more-chip">
           <button
             type="button"
@@ -2266,8 +2267,14 @@
       <!-- option <li> shared by the virtual and non-virtual render paths. flat_idx comes in
         positionally so duplicate option values still get unique ids/posinset/hover indices -->
       {#snippet option_li(option_item: Option, flat_idx: number, group: string | null)}
-        {@const view = get_option_view(option_item, flat_idx)}
+        {@const view = get_option_view(option_item)}
         {@const is_active = active_index === flat_idx}
+        {@const activate = () => {
+          if (view.disabled) return
+          // Release the user-message row so it cannot pin active_index during option focus.
+          is_user_message_active = false
+          active_index = flat_idx
+        }}
         <li
           id="{base_id}-opt-{flat_idx}"
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
@@ -2278,18 +2285,8 @@
           class:active={is_active}
           class:disabled={view.disabled}
           class={[li_option_class, is_active && li_active_option_class]}
-          onmousemove={() => {
-            if (view.disabled) return
-            // else the effect pinning the user-message row snaps active_index straight back
-            // and hover highlighting is dead while that row is active
-            is_user_message_active = false
-            active_index = flat_idx
-          }}
-          onfocus={() => {
-            if (view.disabled) return
-            is_user_message_active = false
-            active_index = flat_idx
-          }}
+          onmousemove={activate}
+          onfocus={activate}
           role="option"
           aria-selected={view.selected ? `true` : `false`}
           aria-disabled={view.disabled ? `true` : undefined}
@@ -2336,95 +2333,88 @@
         ></li>
       {/snippet}
       <!-- group header <li> shared by the virtual and non-virtual render paths -->
-      {#snippet group_header_li(group_idx: number)}
-        {@const {
-          group: group_name,
-          options: group_opts,
-          collapsed,
-        } = grouped_options[group_idx]}
-        {#if group_name !== null}
-          {@const { all_selected, selected_count, selectable } = group_header_state.get(
-            group_name,
-          ) ?? { all_selected: false, selected_count: 0, selectable: [] }}
-          {@const handle_toggle = (event: Event) => {
-            // the collapse button sits inside the header, whose own click also toggles
-            event.stopPropagation()
-            if (collapsible_groups) toggle_group_collapsed(group_name)
-          }}
-          {@const handle_group_select = (event: Event) =>
-            toggle_group_selection(selectable, all_selected, event)}
-          <!-- a listbox may only own `option`/`group` children, so this row is presentational
+      {#snippet group_header_li(row: HeaderRow)}
+        {@const { group: group_name, options: group_opts, collapsed, selectable } = row}
+        {@const all_selected =
+          selectable.length > 0 && selectable.every(has_selected_option)}
+        {@const selected_count = keep_selected_in_dropdown
+          ? group_opts.filter(has_selected_option).length
+          : 0}
+        {@const handle_toggle = (event: Event) => {
+          // the collapse button sits inside the header, whose own click also toggles
+          event.stopPropagation()
+          if (collapsible_groups) toggle_group_collapsed(group_name)
+        }}
+        {@const handle_group_select = (event: Event) =>
+          toggle_group_selection(selectable, all_selected, event)}
+        <!-- a listbox may only own `option`/`group` children, so this row is presentational
             and its options carry the group name via `aria-describedby`. `role="presentation"`
             is dropped if the element is focusable or has a global ARIA attribute, so this
             <li> must have neither — hence the nested <button> and no `aria-label`. -->
-          <li
-            class={[`group-header`, li_group_header_class]}
-            class:collapsible={collapsible_groups}
-            class:sticky={sticky_group_headers}
-            role="presentation"
-            style={li_group_header_style}
-            onclick={handle_toggle}
-          >
-            <!-- a hidden span rather than the <li> itself, so screen readers get the group
+        <li
+          class={[`group-header`, li_group_header_class]}
+          class:collapsible={collapsible_groups}
+          class:sticky={sticky_group_headers}
+          role="presentation"
+          style={li_group_header_style}
+          onclick={handle_toggle}
+        >
+          <!-- a hidden span rather than the <li> itself, so screen readers get the group
               name alone, not the count, select-all button and chevron with it -->
-            <span id={group_header_id(group_name)} class="sr-only">
-              {msg.group(group_name)}
+          <span id={group_header_id(group_name)} class="sr-only">
+            {msg.group(group_name)}
+          </span>
+          {#if group_header}
+            {@render group_header({
+              group: group_name,
+              options: group_opts,
+              collapsed,
+            })}
+          {:else}
+            <span class="group-label">{group_name}</span>
+            <span class="group-count">
+              {msg.group_count(selected_count, group_opts.length)}
             </span>
-            {#if group_header}
-              {@render group_header({
-                group: group_name,
-                options: group_opts,
-                collapsed,
-              })}
-            {:else}
-              <span class="group-label">{group_name}</span>
-              <span class="group-count">
-                {msg.group_count(selected_count, group_opts.length)}
-              </span>
-              {#if group_select_all && multi_select}
-                {@const group_blocked =
-                  !all_selected && (at_max_capacity() || selectable.length === 0)}
-                <button
-                  type="button"
-                  class={[`group-select-all`, { deselect: all_selected }]}
-                  disabled={group_blocked}
-                  onclick={handle_group_select}
-                  onkeydown={if_enter_or_space(handle_group_select)}
-                >
-                  {all_selected ? msg.group_deselect_all : msg.group_select_all}
-                </button>
-              {/if}
-              {#if collapsible_groups}
-                <button
-                  type="button"
-                  class="group-collapse-toggle"
-                  aria-expanded={!collapsed}
-                  aria-label={msg.group(group_name)}
-                  onclick={handle_toggle}
-                >
-                  <Icon
-                    icon={collapsed ? ChevronRight : ChevronDown}
-                    style="width: 12px"
-                  />
-                </button>
-              {/if}
+            {#if group_select_all && multi_select}
+              {@const group_blocked =
+                !all_selected && (at_max_capacity() || selectable.length === 0)}
+              <button
+                type="button"
+                class={[`group-select-all`, { deselect: all_selected }]}
+                disabled={group_blocked}
+                onclick={handle_group_select}
+                onkeydown={if_enter_or_space(handle_group_select)}
+              >
+                {all_selected ? msg.group_deselect_all : msg.group_select_all}
+              </button>
             {/if}
-          </li>
-        {/if}
+            {#if collapsible_groups}
+              <button
+                type="button"
+                class="group-collapse-toggle"
+                aria-expanded={!collapsed}
+                aria-label={msg.group(group_name)}
+                onclick={handle_toggle}
+              >
+                <Icon icon={collapsed ? ChevronRight : ChevronDown} style="width: 12px" />
+              </button>
+            {/if}
+          {/if}
+        </li>
       {/snippet}
-      {#if render_window}
-        {@render virtual_spacer(render_window.start * render_window.item_height)}
+      {#if virtual_window}
+        {@render virtual_spacer(virtual_window.start * virtual_window.item_height)}
       {/if}
       {#each visible_render_rows as row (row.render_key)}
         {#if row.kind === `option`}
           {@render option_li(row.option, row.flat_idx, row.group)}
         {:else}
-          {@render group_header_li(row.group_idx)}
+          {@render group_header_li(row)}
         {/if}
       {/each}
-      {#if render_window}
+      {#if virtual_window}
         {@render virtual_spacer(
-          (render_rows.length - render_window.end) * render_window.item_height,
+          (render_rows.length - virtual_window.end) * virtual_window.item_height,
         )}
       {/if}
       {#if user_message && user_message.msg}

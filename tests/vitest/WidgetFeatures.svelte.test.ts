@@ -222,6 +222,16 @@ test.each([false, true])(
     fire_key(root, `ArrowLeft`)
     await tick()
     expect(target.querySelectorAll(`[role="treeitem"]`)).toHaveLength(2)
+    for (const [key, id] of [
+      [`l`, `last`],
+      [`r`, `root`],
+      [`End`, `last`],
+      [`Home`, `root`],
+    ]) {
+      fire_key(document.activeElement as Element, key)
+      await tick()
+      expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(id)
+    }
   },
 )
 

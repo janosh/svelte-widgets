@@ -21,8 +21,8 @@
     children?: Snippet<[TreeNode]>
     label?: string
   } = $props()
-  let root = $state<HTMLDivElement>()
   let focused = $state<string>()
+  const node_elements = new Map<string, HTMLElement>()
   const branches = new SvelteMap<TreeNode, AbortController | readonly TreeNode[]>()
   let error = $state(``)
   $effect(() => {
@@ -42,14 +42,14 @@
     size: number
     expandable: boolean
   }
-  const rows = $derived.by(() => {
+  const tree = $derived.by(() => {
     const result: Row[] = []
-    const seen = new Set<string>()
+    const indices = new Map<string, number>()
     const visit = (siblings: readonly TreeNode[], depth: number, parent?: string) => {
       siblings.forEach((node, idx) => {
-        if (seen.has(node.id))
+        if (indices.has(node.id))
           throw new Error(`TreeView requires unique node ids, duplicate ${node.id}`)
-        seen.add(node.id)
+        indices.set(node.id, result.length)
         const branch = branches.get(node)
         const descendants =
           node.children ?? (branch instanceof AbortController ? undefined : branch)
@@ -65,8 +65,9 @@
       })
     }
     visit(nodes, 1)
-    return result
+    return { rows: result, indices }
   })
+  const rows = $derived(tree.rows)
   // Bindable initial expansion can request children before the first interaction.
   $effect(() => {
     for (const { node } of rows) {
@@ -74,7 +75,7 @@
     }
   })
   const active_id = $derived(
-    rows.some(({ node }) => node.id === focused) ? focused : rows[0]?.node.id,
+    focused !== undefined && tree.indices.has(focused) ? focused : rows[0]?.node.id,
   )
   async function expand(node: TreeNode): Promise<void> {
     if (node.disabled) return
@@ -101,7 +102,7 @@
     if (id === undefined) return
     focused = id
     await tick()
-    root?.querySelector<HTMLElement>(`[data-tree-id="${CSS.escape(id)}"]`)?.focus()
+    node_elements.get(id)?.focus()
   }
   const select = (node: TreeNode) => {
     if (node.disabled) return
@@ -110,7 +111,7 @@
   }
   function keydown(event: KeyboardEvent): void {
     if (is_editable_event_target(event.target) || is_modifier_chord(event)) return
-    const idx = rows.findIndex(({ node }) => node.id === active_id)
+    const idx = active_id === undefined ? -1 : (tree.indices.get(active_id) ?? -1)
     const row = rows[idx]
     if (!row) return
     const { node, expandable, parent } = row
@@ -127,10 +128,14 @@
       else next = parent
     } else if (event.key === `Enter` || event.key === ` `) select(node)
     else if (event.key.length === 1) {
-      const ordered = [...rows.slice(idx + 1), ...rows.slice(0, idx + 1)]
-      next = ordered.find(({ node: entry }) =>
-        entry.label.toLocaleLowerCase().startsWith(event.key.toLocaleLowerCase()),
-      )?.node.id
+      const prefix = event.key.toLocaleLowerCase()
+      for (let offset = 1; offset <= rows.length; offset++) {
+        const entry = rows[(idx + offset) % rows.length].node
+        if (entry.label.toLocaleLowerCase().startsWith(prefix)) {
+          next = entry.id
+          break
+        }
+      }
     } else return
     event.preventDefault()
     void focus_node(next)
@@ -138,11 +143,16 @@
 </script>
 
 <div {...rest} class={[`tree-view`, rest.class]}>
-  <div bind:this={root} role="tree" tabindex="-1" aria-label={label} onkeydown={keydown}>
+  <div role="tree" tabindex="-1" aria-label={label} onkeydown={keydown}>
     {#each rows as { node, depth, pos, size, expandable } (node.id)}
       <div
         role="treeitem"
         data-tree-id={node.id}
+        {@attach (element) => {
+          const { id } = node
+          node_elements.set(id, element)
+          return () => node_elements.delete(id)
+        }}
         aria-level={depth}
         aria-posinset={pos}
         aria-setsize={size}

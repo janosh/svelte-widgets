@@ -114,7 +114,7 @@ This example also moves the expand icon to the right side of the input via `expa
 
 ```svelte example id="languages-3"
 <script lang="ts">
-  import { MultiSelect, Icon } from 'svelte-widgets'
+  import { MultiSelect } from 'svelte-widgets'
   const languages =
     `JavaScript TypeScript CoffeeScript Python Ruby C C# C++ Go Swift Java Rust Kotlin Haskell Scala Clojure Erlang Elixir F# Dart Elm Julia Lua R OCaml Perl PHP`
       .split(` `)
@@ -123,20 +123,6 @@ This example also moves the expand icon to the right side of the input via `expa
   let selected: string[] = $state([`Python`, `TypeScript`, `Julia`])
   let search_text = $state(`Julia`)
 </script>
-
-{#snippet language_option(option: string, idx?: number, style?: string)}
-  {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
-    <img
-      src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
-      alt={option}
-      style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
-      onerror={(event) => (event.currentTarget.hidden = true)}
-    />
-    {option}
-  </span>
-{/snippet}
 
 <MultiSelect
   options={languages}

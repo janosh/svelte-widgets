@@ -11,22 +11,13 @@
 
   type Props = Omit<
     ComponentProps<typeof CommandMenu>,
-    | `actions`
-    | `dialog`
-    | `input`
-    | `load_options`
-    | `max_recent`
-    | `open`
-    | `recent_actions_key`
+    `actions` | `load_options` | `max_recent` | `recent_actions_key`
   > &
     PagefindLoaderOptions & {
       batch_size?: number
       debounce_ms?: number
-      dialog?: HTMLDialogElement | null
       // matched locally, so these stay searchable while the Pagefind index loads
       fallback_actions?: CmdAction[]
-      input?: HTMLInputElement | null
-      open?: boolean
       strip_html_suffix?: boolean
     }
 
@@ -51,7 +42,7 @@
     load_pagefind ? `custom-loader:${pagefind_key ?? ``}` : pagefind_path,
   )
   // MultiSelect reloads when fetch identity changes, so key it only to the index.
-  const load_options = $derived.by(() =>
+  const load_options = $derived(
     create_pagefind_loader(pagefind_source, () => ({
       load_pagefind,
       navigate,
