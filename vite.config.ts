@@ -9,6 +9,7 @@ import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 import { asset_imports } from './src/lib/assets.ts'
+import package_json from './package.json' with { type: 'json' }
 
 await generate_icons()
 
@@ -42,10 +43,18 @@ const svelte_config = {
   alias: {
     $root: `.`,
     $site: `./src/site`,
-    'svelte-widgets/clipboard': `./src/lib/clipboard.svelte.ts`,
-    'svelte-widgets/dialogs': `./src/lib/dialogs.svelte.ts`,
-    'svelte-widgets/theme': `./src/lib/theme.svelte.ts`,
-    'svelte-widgets/toast-queue': `./src/lib/toast-queue.svelte.ts`,
+    ...Object.fromEntries(
+      Object.entries(package_json.exports).flatMap(([path, target]) =>
+        `default` in target && target.default.endsWith(`.svelte.js`)
+          ? [
+              [
+                path.replace(`.`, `svelte-widgets`),
+                target.default.replace(`./dist/`, `./src/lib/`).replace(/\.js$/u, `.ts`),
+              ],
+            ]
+          : [],
+      ),
+    ),
     'svelte-widgets': `./src/lib`,
   },
 

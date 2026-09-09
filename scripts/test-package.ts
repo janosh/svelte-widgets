@@ -29,11 +29,13 @@ const demo_ids = new Set([
 const demo_components: string[] = []
 const { create_markdown } = await import(`../dist/markdown/index.js`)
 const engine = create_markdown({ math: true, references: true, examples: {} })
-for (const filename of await readdir(resolve(root, `src/routes/(demos)`), {
+for (const entry of await readdir(resolve(root, `src/routes/(demos)`), {
   recursive: true,
+  withFileTypes: true,
 })) {
-  if (!filename.endsWith(`/+page.md`)) continue
-  const source = await readFile(resolve(root, `src/routes/(demos)`, filename), `utf8`)
+  if (!entry.isFile() || entry.name !== `+page.md`) continue
+  const filename = resolve(entry.parentPath, entry.name)
+  const source = await readFile(filename, `utf8`)
   const parsed = await engine.parse(source, { filename })
   if (!parsed.ok)
     throw new Error(

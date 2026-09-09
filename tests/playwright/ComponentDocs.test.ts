@@ -11,8 +11,8 @@ test(`TreeView examples select by keyboard and retry failed lazy branches`, asyn
 
   const lazy = page.locator(`#tree-view-loading`)
   await lazy.getByRole(`button`, { name: `Expand Remote files` }).click()
-  await expect(lazy.getByRole(`treeitem`)).toHaveAttribute(`aria-busy`, `true`)
   await expect(lazy.getByRole(`status`)).toContainText(`Example source is unavailable`)
+  await expect(lazy.getByRole(`treeitem`)).toHaveAttribute(`aria-busy`, `false`)
   await lazy.getByRole(`checkbox`).uncheck()
   await lazy.getByRole(`button`, { name: `Expand Remote files` }).click()
   await expect(

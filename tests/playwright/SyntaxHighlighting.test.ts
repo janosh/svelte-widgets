@@ -61,16 +61,27 @@ test(`distinguishes unclassified code from missing syntax markup and colors`, as
   }
 })
 
+const page_route = (path: string) =>
+  `/${path
+    .split(/[\\/]/u)
+    .slice(0, -1)
+    .filter((part) => !part.startsWith(`(`))
+    .join(`/`)}`
+
+test(`discovers the same routes from POSIX and Windows paths`, () => {
+  for (const [path, route] of [
+    [`+page.svelte`, `/`],
+    [`(demos)/(inputs)/(multiselect)/events/+page.md`, `/events`],
+    [`(demos)/(authoring)/authoring/hot-reload/+page.md`, `/authoring/hot-reload`],
+  ]) {
+    expect(page_route(path)).toBe(route)
+    expect(page_route(path.replaceAll(`/`, `\\`))).toBe(route)
+  }
+})
+
 const routes = readdirSync(`src/routes`, { recursive: true, encoding: `utf8` })
   .filter((path) => /\+page\.(?:md|svelte)$/u.test(path))
-  .map(
-    (path) =>
-      `/${path
-        .split(`/`)
-        .slice(0, -1)
-        .filter((part) => !part.startsWith(`(`))
-        .join(`/`)}`,
-  )
+  .map(page_route)
 
 // eslint-disable-next-line vitest/prefer-each -- Playwright does not provide test.each.
 for (const route of routes) {

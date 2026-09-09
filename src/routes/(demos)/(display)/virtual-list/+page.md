@@ -90,7 +90,7 @@ Use stable keys when filtering or reordering items. `scroll_to_index` reveals a 
 | `bind:element`           | Access the scrolling div for DOM integration.                                      |
 | `scroll_to_index(idx)`   | Component method exposed through `bind:this`.                                      |
 
-The container defaults to a maximum height of `20rem`; override its style for other sizes. `virtual_window` from `svelte-widgets/virtual` exposes the same window calculation for custom table/grid markup. Fetching, request errors and loading indicators belong outside the list; use [MultiSelect loading recipes](infinite-scroll) for paged option loading.
+The container defaults to a maximum height of `20rem`. For a taller viewport, override both `height` and `max-height`, for example with `style="height: 40rem; max-height: none"`. `virtual_window` from `svelte-widgets/virtual` exposes the same window calculation for custom table/grid markup. Fetching, request errors and loading indicators belong outside the list; use [MultiSelect loading recipes](infinite-scroll) for paged option loading.
 
 ### Keyboard and accessibility
 
