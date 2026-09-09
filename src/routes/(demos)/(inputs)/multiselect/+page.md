@@ -254,9 +254,12 @@ Props ordered by how often you'll reach for them.
    ```ts
    async function load_options(params) {
      const { search, offset, limit, signal } = params
-     const response = await fetch(`/api/items?q=${search}&skip=${offset}&take=${limit}`, {
-       signal,
-     })
+     const response = await fetch(
+       `/api/items?q=${encodeURIComponent(search)}&skip=${offset}&take=${limit}`,
+       {
+         signal,
+       },
+     )
      const { items, total } = await response.json()
      return { options: items, hasMore: offset + limit < total }
    }

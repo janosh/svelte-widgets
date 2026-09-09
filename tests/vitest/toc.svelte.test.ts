@@ -1426,7 +1426,7 @@ describe(`Element Prop Bags`, () => {
       // under `:where()` a host `button { padding }` reset outweighed this and resized the
       // hit target, leaving the toggle a different size from Nav's burger
       rule_name: `open button box rule`,
-      declaration_pattern: /padding: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
+      declaration_pattern: /padding-block: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
       expects_where: false,
       selector_pattern: /aside\.toc.*> button/,
     },

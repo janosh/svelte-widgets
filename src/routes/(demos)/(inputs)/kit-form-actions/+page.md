@@ -32,6 +32,7 @@ This example shows the SvelteKit form action way of handling MultiSelect fields 
     <strong>Which colors would you pick for the Martian flag?</strong>
   </label>
   <MultiSelect
+    id="colors"
     options={colors}
     placeholder="Pick some colors..."
     name="colors"

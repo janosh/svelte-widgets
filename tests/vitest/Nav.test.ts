@@ -361,7 +361,11 @@ describe(`Nav`, () => {
 
   test(`keyboard navigation: Enter/ArrowDown open, arrows navigate, Escape closes`, async () => {
     const link_props = { onkeydown: vi.fn() }
-    const { dropdown_menu: menu, toggle: toggle_button } = mount_dropdown({
+    const {
+      dropdown,
+      dropdown_menu: menu,
+      toggle: toggle_button,
+    } = mount_dropdown({
       routes: two_child_route,
       link_props,
     })
@@ -372,6 +376,12 @@ describe(`Nav`, () => {
       await next_task() // wait for DOM focus
       expect(is_visible(menu)).toBe(true)
       expect(toggle_button.getAttribute(`aria-expanded`)).toBe(`true`)
+      expect(document.activeElement).toBe(menu.querySelector(`a`))
+      // Moving the mouse across a keyboard-opened pane must not dismiss it or move focus.
+      pointer_event(dropdown, `pointerenter`)
+      pointer_event(dropdown, `pointerleave`)
+      await tick()
+      expect(is_visible(menu)).toBe(true)
       expect(document.activeElement).toBe(menu.querySelector(`a`))
       keydown(`Escape`)
     }
@@ -909,9 +919,10 @@ describe(`Nav`, () => {
       expect(document.activeElement).toBe(initial_focus)
 
       await click(toggle)
+      pointer_event(dropdown, `pointerenter`, pointer_type)
       pointer_event(dropdown, `pointerleave`, pointer_type)
       await tick()
-      expect(is_visible(dropdown_menu)).toBe(!opens)
+      expect(is_visible(dropdown_menu)).toBe(true)
     })
 
     test.each([

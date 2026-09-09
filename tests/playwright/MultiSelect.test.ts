@@ -144,10 +144,28 @@ test.describe(`multiselect`, () => {
     await expect(active_option).toHaveText(foods[4])
   })
 
-  test(`retains its selected state on page reload when bound to localStorage`, async ({
+  test(`validates and retains its selected state in sessionStorage across reloads`, async ({
     page,
   }) => {
     await goto_persistent(page)
+    const defaults = [`Python`, `TypeScript`, `C`, `Haskell`]
+    for (const [stored, expected] of [
+      [`invalid JSON`, defaults],
+      [`42`, defaults],
+      [`["Python", 42]`, defaults],
+      [`["Unknown language"]`, defaults],
+      [`[]`, []],
+      [`["Ruby"]`, [`Ruby`]],
+    ] as const) {
+      await page.evaluate((value) => sessionStorage.setItem(`languages`, value), stored)
+      await page.reload()
+      await expect
+        .poll(() => page.evaluate(() => sessionStorage.getItem(`languages`)))
+        .toBe(JSON.stringify(expected))
+      await expect(page.locator(`#languages ul.selected > li`)).toHaveCount(
+        expected.length,
+      )
+    }
     await page.evaluate(() => sessionStorage.clear())
     await page.reload()
     await expect(page.locator(`#languages input[autocomplete]`)).toBeVisible()
@@ -629,7 +647,8 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
 test(`form demo previews every submitted FormData field`, async ({ page }) => {
   await page.goto(`/form`, { waitUntil: `networkidle` })
 
-  await page.locator(`form input[autocomplete]`).click()
+  const label = `Which colors would you pick for the Martian flag?`
+  await page.getByLabel(label).click()
   for (const color of [`Red`, `Green`]) await page.click(`ul.options >> text=${color}`)
   await page.keyboard.press(`Escape`) // dropdown would otherwise cover the submit button
   await page.getByRole(`button`, { name: `Submit` }).click()
@@ -643,6 +662,9 @@ test(`form demo previews every submitted FormData field`, async ({ page }) => {
   await expect(
     page.locator(`pre code`).filter({ hasText: /^\["Red","Green"\]$/u }),
   ).toHaveCount(1)
+  await page.goto(`/kit-form-actions`, { waitUntil: `networkidle` })
+  await page.getByText(label, { exact: true }).click()
+  await expect(page.getByLabel(label)).toBeFocused()
 })
 
 test(`failed option loads can be retried from the keyboard without selecting an option`, async ({

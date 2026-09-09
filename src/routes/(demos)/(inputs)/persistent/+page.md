@@ -11,13 +11,14 @@ This example shows how to combine MultiSelect with `sessionStorage` to persist t
 
   let selected: string[] = $state([])
   const default_languages = `Python TypeScript C Haskell`.split(` `)
-  const is_string_array = (value: unknown): value is string[] =>
-    Array.isArray(value) && value.every((item) => typeof item === `string`)
+  const is_language_array = (value: unknown): value is string[] =>
+    Array.isArray(value) &&
+    value.every((item) => typeof item === `string` && languages.includes(item))
 
   onMount(() => {
     try {
       const parsed: unknown = JSON.parse(sessionStorage.getItem(`languages`) ?? `null`)
-      selected = is_string_array(parsed) ? parsed : default_languages
+      selected = is_language_array(parsed) ? parsed : default_languages
     } catch {
       selected = default_languages
     }

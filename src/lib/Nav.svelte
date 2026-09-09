@@ -138,7 +138,8 @@
     if (event.type === `pointerenter` && open_dropdown !== href) {
       hover_open = true
       open_dropdown = href
-    } else if (event.type === `pointerleave` && open_dropdown === href) {
+    } else if (event.type === `pointerleave` && open_dropdown === href && hover_open) {
+      hover_open = false
       open_dropdown = null
     }
   }
