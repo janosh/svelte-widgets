@@ -1,5 +1,5 @@
 import CodeExample from '$lib/CodeExample.svelte'
-import { mount, tick } from 'svelte'
+import { createRawSnippet, mount, tick } from 'svelte'
 import { assert, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
@@ -15,11 +15,15 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
     meta: { collapsible: true, id },
     src,
     button_props,
+    example: createRawSnippet(() => ({ render: () => `<button>Demo action</button>` })),
   }
   mount(CodeExample, { target: document.body, props })
 
   // collapsible defaults code_above to true, which orders the <pre> above the example
   expect(doc_query(`div.code-example#${id}`).classList.contains(`code-above`)).toBe(true)
+  expect(getComputedStyle(doc_query(`.code-example > button`)).alignSelf).toBe(
+    `flex-start`,
+  )
 
   const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
   const toggle_label = () => toggle_button.textContent?.trim()

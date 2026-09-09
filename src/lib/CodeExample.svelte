@@ -104,6 +104,10 @@
   div.code-example.code-above > pre {
     order: -1;
   }
+  /* Standalone actions hug their labels; preview surfaces and code still stretch. */
+  :where(div.code-example) > :global(button) {
+    align-self: flex-start;
+  }
   nav {
     display: flex;
     justify-content: end;
