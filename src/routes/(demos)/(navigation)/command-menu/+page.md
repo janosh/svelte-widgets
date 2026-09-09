@@ -165,4 +165,4 @@ when the menu reopens.
 </p>
 ```
 
-Actions require a stable, unique `id` (string or number). Labels may repeat or change; IDs identify selection and persisted recent actions.
+Actions require a stable, unique, nonempty string `id`, including across static actions and loaded pages. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels may repeat or change; exact string IDs identify actions and persisted recents. `ActionMenu` uses the same identity rules.

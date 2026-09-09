@@ -3,6 +3,7 @@ import * as lib from '$lib'
 import * as utils from '$lib/utils'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
+import markdown_guide from '$lib/markdown/readme.md?raw'
 import { expect, test } from 'vitest'
 
 const pages: Record<string, string> = import.meta.glob(
@@ -24,9 +25,10 @@ const route_sources = Object.fromEntries(
 // Avoid duplicating heading_ids' full slug rules.
 const bare = (text: string) => text.replaceAll(/[^a-z0-9]/giu, ``).toLowerCase()
 
+// The Markdown route renders an imported guide rather than authoring its headings locally.
 const headings_on = (route: string) =>
   [
-    ...(route_sources[route] ?? ``).matchAll(
+    ...(route === `/markdown` ? markdown_guide : (route_sources[route] ?? ``)).matchAll(
       /^#{2,4} (?<text>.+)$|<h[2-4]\s+id="(?<id>[^"]+)"/gmu,
     ),
   ].map((match) => bare(match.groups?.id ?? match.groups?.text ?? ``))

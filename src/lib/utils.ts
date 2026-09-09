@@ -563,7 +563,7 @@ export function fuzzy_match(search_text: string, target_text: string): boolean {
 export type CmdSection = {
   title: string
   actions: CmdAction[]
-  selected?: string | number | null
+  selected?: string | null
 }
 
 export const format_cmd_metadata = (metadata: CmdAction[`metadata`]): string =>

@@ -1,8 +1,9 @@
 <script lang="ts">
-  import { onDestroy, type Snippet } from 'svelte'
+  import { onDestroy, untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction } from './types'
+  import { validate_cmd_actions } from './internal/command'
   import {
     chain_handlers,
     type CmdSection,
@@ -105,24 +106,17 @@
   // section; its required `action` callback is what one entry has and the other lacks.
   const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
     !(`action` in entry)
-  // Tag by source field so action id `Copy` and section `Copy` stay distinct; the
-  // index is appended only on repeats, so unique ids stay stable across reorder.
-  const keys_of = (entries: readonly (CmdAction | CmdSection)[]): string[] => {
-    const tags = entries.map((entry) =>
-      JSON.stringify(is_section(entry) ? [`section`, entry.title] : [`id`, entry.id]),
-    )
-    const counts = new Map<string, number>()
-    for (const key of tags) counts.set(key, (counts.get(key) ?? 0) + 1)
-    return tags.map((serialized, idx) =>
-      counts.get(serialized) === 1 ? serialized : `${serialized}:${idx}`,
-    )
-  }
-  const entry_keys = $derived(keys_of(actions))
+  const flat_actions = $derived(
+    actions.flatMap((entry) => (is_section(entry) ? entry.actions : [entry])),
+  )
+  // Validate during SSR and on updates, including while the menu is closed.
+  untrack(() => validate_cmd_actions(flat_actions))
+  $effect(() => {
+    validate_cmd_actions(flat_actions)
+  })
   // Empty sections are headings over nothing, dropped once anything else has content; a menu
   // of only empty sections stays externally controllable.
-  const all_empty = $derived(
-    actions.every((entry) => is_section(entry) && !entry.actions.length),
-  )
+  const all_empty = $derived(flat_actions.length === 0)
   const remember_focus_origin = (target: unknown = document.activeElement) => {
     if (focus_origin) return
     if (target instanceof HTMLElement || target instanceof SVGElement)
@@ -245,15 +239,14 @@
           callback: close,
         })}
   >
-    {#each actions as entry, idx (entry_keys[idx])}
+    {#each actions as entry (is_section(entry) ? entry : entry.id)}
       {#if is_section(entry)}
         {#if entry.actions.length || all_empty}
-          {@const action_keys = keys_of(entry.actions)}
           <!-- role="group" names the run of items without taking them out of the menu;
           the title is hidden from AT because aria-label already announces it -->
           <li role="group" aria-label={entry.title}>
             <span class="section-title" aria-hidden="true">{entry.title}</span>
-            {#each entry.actions as action, action_idx (action_keys[action_idx])}
+            {#each entry.actions as action (action.id)}
               {@render menu_item(action, entry)}
             {/each}
           </li>

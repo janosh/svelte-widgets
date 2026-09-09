@@ -451,7 +451,7 @@ describe(`DraggablePane`, () => {
     expect(last_pane_state).toEqual(pane_state)
     expect(toggle_state).toEqual(pane_state)
     expect(toggle_btn.querySelector(`[data-testid="custom-toggle"]`)).not.toBeNull()
-    // the bundled icon is gone, but the button (and its aria wiring) is still ours
+    // The snippet replaces the bundled icon; the component still owns the button and ARIA state.
     expect(toggle_btn.querySelector(`svg`)).toBeNull()
     expect(toggle_btn.getAttribute(`aria-expanded`)).toBe(`true`)
   })
@@ -707,11 +707,11 @@ describe(`DraggablePane`, () => {
     expect(toggle.classList.contains(`pane-toggle`)).toBe(true)
     expect(toggle.classList.contains(`consumer-toggle`)).toBe(true)
 
-    // the spread lands before our own onclick, so without chaining theirs is dropped
+    // The spread precedes the component's onclick, so chaining must preserve the caller's handler.
     toggle.click()
     await tick()
     expect(onclick).toHaveBeenCalledOnce()
-    expect(pane.style.display).toBe(`grid`) // our own handler still opened it
+    expect(pane.style.display).toBe(`grid`) // The component's handler still opened it.
   })
 
   // the demo page's Styling section is the only list of these, so an unmentioned var is

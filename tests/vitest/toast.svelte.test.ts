@@ -672,8 +672,8 @@ describe(`<Toast />`, () => {
     const classes = [...stack.classList].filter((name) => !name.startsWith(`svelte-`))
     expect(classes.toSorted()).toEqual([`flagged`, `mine`, `toast-stack`])
 
-    // the spread lands before our own pointer handlers, so without chaining theirs is
-    // dropped — and ours must still pause the countdown
+    // The spread precedes the component's pointer handlers, so chaining must preserve
+    // the caller's handlers while the component's handlers still pause the countdown.
     store.show(`a`, { duration_ms: 1000 })
     await tick()
     stack.dispatchEvent(new PointerEvent(`pointerenter`))

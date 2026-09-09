@@ -1,4 +1,5 @@
 import { load } from '$root/src/routes/changelog/+page.server'
+import { version } from '$root/package.json'
 import { expect, test } from 'vitest'
 
 test(`changelog uses consistent release sections and literal code`, async () => {
@@ -21,6 +22,11 @@ test(`changelog uses consistent release sections and literal code`, async () => 
   ).toEqual([`Changelog`])
   const releases = [...page_document.querySelectorAll(`h2`)]
   expect(releases.length).toBeGreaterThan(50)
+  const release_tag = `v${version}`
+  expect(releases[0].textContent).toBe(release_tag)
+  expect(releases[0].querySelector(`a`)?.getAttribute(`href`)).toMatch(
+    new RegExp(`/compare/v[\\d.]+\\.\\.\\.${release_tag.replaceAll(`.`, `\\.`)}$`, `u`),
+  )
   for (const release of releases) {
     expect(release.textContent).toMatch(/^v\d+\.\d+\.\d+(?:-rc\.\d+)?$/u)
     const date = release.nextElementSibling

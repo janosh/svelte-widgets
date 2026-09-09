@@ -1,6 +1,6 @@
 {
   "name": "svelte-widgets",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "Accessible, keyboard-friendly Svelte components and attachments",
   "keywords": [
     "accessibility",
@@ -224,7 +224,6 @@
     "package": "npm run gen:icons && svelte-package && node scripts/finalize-package.ts",
     "prepare": "vp config --no-agent && npm run package",
     "prepublishOnly": "npm run package",
-    "changelog": "npx tsx https://raw.githubusercontent.com/janosh/workflows/HEAD/scripts/make-release-notes.ts",
     "gen:icons": "node --experimental-strip-types scripts/generate-icons.ts"
   },
   "dependencies": {

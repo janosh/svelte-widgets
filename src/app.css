@@ -77,7 +77,7 @@ body > div {
   align-self: center;
   gap: 0.5em;
   margin: 1.5rem 0;
-  font-size: 2.5rem;
+  font-size: clamp(1.5rem, 6vw, 2.5rem);
   font-weight: 700;
   color: inherit;
   text-decoration: none;

@@ -1,6 +1,20 @@
 # Changelog
 
-**Breaking in the next release:** Public custom props, callbacks, snippet fields and backend payloads now use snake_case (for example, `search_text`, `max_select`, `on_change` and `on_select`); old names are removed. Native DOM event handlers retain their standard names.
+## [v1.8.0](https://github.com/janosh/svelte-widgets/compare/v1.7.1...v1.8.0)
+
+> 9 September 2026
+
+- **Breaking:** Standardize custom props, callbacks, snippet fields and editor backend payloads on snake_case, including `search_text`, `max_select`, `on_change` and `on_select`; remove old names. Native DOM handlers keep their standard names
+- **Breaking:** Replace `/live-examples`, `/live-examples/create-highlighter` and `/katex` with `/markdown`, `/markdown/vite` and `/highlight`. The Markdown engine supports Svelte, math, scientific references, live examples, content validation and code checks; see the [migration guide](https://svelte-widgets.janosh.dev/markdown#migration)
+- **Breaking:** Require unique, nonempty string action IDs in `CommandMenu` and `ActionMenu`, including sections and loaded pages; `CmdSection.selected` also uses string IDs. Replace `CommandMenu.onadd` with `on_execute({ action })` and remove command selection/creation controls
+- **Breaking:** Remove MultiSelect history, `parseLabelsAsHtml` and `activeOptionFallbackKey`; use caller-owned history, rendering snippets and stable option keys. Require explicit `min`, `max` and `step` on `NumberRangeInput` instead of `schema`
+- **Breaking:** Replace `print_element(node, options)` with whole-page `print_page({ filename })`; remove `single_page`, `page_width_mm` and `px_per_inch`. Use print CSS to control visibility and pagination
+- Add `RangeSlider` with two handles, numeric fields, ticks, keyboard controls, RTL support and form reset behavior
+- Add `/assets` for relative media imports and `/yaml` for YAML imports with build-time validation and transformation
+- Restore desktop hover navigation while preserving menus opened by click or keyboard; improve mobile submenu layout and focus handling
+- Fix async loading retries and partial Pagefind results, TOC history and scrolling, masonry balancing, and virtualized views after content shrinks; reduce repeated selection, search and editor work
+- Repair published component declarations and validate package imports and copied examples in an isolated tarball consumer
+- Reorganize demos into six categories, add focused component guides, and replace the README-based homepage with a compact overview and live example
 
 ## [v1.7.1](https://github.com/janosh/svelte-widgets/compare/v1.7.0...v1.7.1)
 

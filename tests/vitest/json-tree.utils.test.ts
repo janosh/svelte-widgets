@@ -426,7 +426,7 @@ describe(`values_equal`, () => {
     [/a/, {}, false], // regexp vs object
     [new Date(`2024-01-15`), new Date(`2024-01-15`), true], // dates compare by timestamp
     [new Date(`2024-01-15`), new Date(`2024-01-16`), false],
-    // NaN === NaN is false in JS, but for change detection we want NaN to equal NaN
+    // NaN === NaN is false in JS, but change detection should treat NaN values as equal.
     [NaN, NaN, true],
     [NaN, 0, false],
     [0, NaN, false],

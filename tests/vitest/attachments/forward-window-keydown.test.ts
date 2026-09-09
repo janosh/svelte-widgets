@@ -27,7 +27,7 @@ describe(`forward_window_keydown`, () => {
     const { node, handle, cleanup } = attach()
 
     press_key()
-    expect(handle).not.toHaveBeenCalled() // never hovered, so this key is not ours
+    expect(handle).not.toHaveBeenCalled() // No hover, so the attachment must not forward the key.
 
     hover(node)
     press_key()

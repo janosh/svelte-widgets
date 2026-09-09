@@ -75,12 +75,11 @@
         file.replace(/^\.\//u, `src/routes/`),
       ]),
     ),
-    // these three render markdown from the repo root, so link the prose, not the wrapper
-    '/': `readme.md`,
+    // These pages render markdown from the repo root, so link the prose, not the wrapper.
     '/changelog': `changelog.md`,
     '/contributing': `contributing.md`,
   }
-  // a 404 has no route id, so don't look one up — `/` would send it to the readme
+  // A 404 has no route id, so don't look one up.
   const edit_href = $derived.by(() => {
     const source = page.route.id ? page_sources[page.route.id] : undefined
     return `${repository}/blob/-/${source ?? `src/routes`}`
@@ -108,15 +107,13 @@
   <link rel="icon" href={favicon} />
 </svelte:head>
 
-{#if !is_home}
-  <header class="site-header">
-    <a class="brand" href={resolve_path(`/`)}>
-      <img src={favicon} alt="Logo" style="width: 1.2em; height: 1.2em;" />
-      Svelte Widgets
-    </a>
-    <DemoNav />
-  </header>
-{/if}
+<header class="site-header">
+  <a class="brand" href={resolve_path(`/`)}>
+    <img src={favicon} alt="Logo" style="width: 1.2em; height: 1.2em;" />
+    Svelte Widgets
+  </a>
+  <DemoNav />
+</header>
 
 <PageSearch
   fallback_actions={actions}

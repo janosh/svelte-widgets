@@ -74,10 +74,7 @@ Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions.
 
 ### `ActionMenu`
 
-Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children
-to replace its browser right-click menu. Actions are
-[`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts)s,
-the same shape `CommandMenu` takes, so a command can appear in both.
+Render a `trigger` snippet for a button-anchored dropdown, or pass a region as children to replace its browser right-click menu. Actions use the same [`CmdAction`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/types.ts) shape as `CommandMenu`. Every action needs a nonempty string `id`, unique across the entire menu, including sections. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels and section titles may repeat; preserve section objects when reordering them to retain their rendered nodes. A radio section's `selected` value is an action ID or `null`.
 
 ```svelte example id="action-menu-basic"
 <script lang="ts">

@@ -3,6 +3,66 @@ import { expect, test } from '@playwright/test'
 test.use({ baseURL: `http://localhost:3005` })
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
+for (const [width, color_scheme] of [
+  [320, `dark`],
+  [1280, `light`],
+] as const) {
+  test(`home overview links and live example work at width ${width}`, async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.emulateMedia({ colorScheme: color_scheme })
+    await page.route(
+      `https://api.github.com/repos/janosh/svelte-widgets/contributors*`,
+      (route) => route.fulfill({ json: [] }),
+    )
+    await page.goto(`/`, { waitUntil: `networkidle` })
+    await expect(page.locator(`.site-header a[href="/"]`).last()).toHaveAttribute(
+      `aria-current`,
+      `page`,
+    )
+    await expect(page.locator(`main h1`)).toHaveCount(1)
+    await expect(page.getByRole(`link`, { name: `Edit this page` })).toHaveAttribute(
+      `href`,
+      /\/src\/routes\/\+page\.svelte$/u,
+    )
+    expect(
+      await page
+        .locator(`.brand`)
+        .evaluate((element) => element.getBoundingClientRect().height),
+    ).toBeLessThan(65)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+    const cards = await page
+      .locator(`.catalog > section`)
+      .evaluateAll((sections) =>
+        sections.map((section) => section.getBoundingClientRect().toJSON()),
+      )
+    expect(cards).toHaveLength(6)
+    if (width < 600) expect(cards[1].top).toBeGreaterThanOrEqual(cards[0].bottom)
+    else expect(cards[1].top).toBe(cards[0].top)
+
+    await page.getByRole(`link`, { name: `View example`, exact: true }).click()
+    await expect(page).toHaveURL(/#try-it$/u)
+    const input = page.getByRole(`combobox`, { name: `Your toolkit` })
+    await input.fill(`TypeScript`)
+    await input.press(`ArrowDown`)
+    await input.press(`Enter`)
+    await expect(page.locator(`main p[aria-live="polite"]`)).toHaveText(
+      `Selected: Svelte, TypeScript`,
+    )
+    await page.getByRole(`button`, { name: `View code`, exact: true }).click()
+    await expect(page.locator(`.code-example pre`)).toBeVisible()
+    await expect(page.locator(`.code-example pre`)).toContainText(`bind:selected`)
+    await page
+      .getByRole(`region`, { name: `Inputs`, exact: true })
+      .getByRole(`link`, { name: `RangeSlider`, exact: true })
+      .click()
+    await expect(page).toHaveURL(/\/range-slider$/u)
+    await expect(page.locator(`.site-header`)).toBeVisible()
+  })
+}
+
+// oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
 for (const [stored_theme, color_scheme] of [
   [`dark`, `light`],
   [`system`, `dark`],

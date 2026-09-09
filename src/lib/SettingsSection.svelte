@@ -153,7 +153,7 @@
     on_reset_key(key, deep_copy(reference_values[key]), reference_present)
   }
 
-  // Our buttons may sit inside a <summary> or <label>, neither of which should react to them
+  // Reset buttons may sit inside a <summary> or <label>, neither of which should react to them.
   const swallow_click = (action: () => void) => (event: MouseEvent) => {
     event.stopPropagation()
     event.preventDefault()
@@ -170,7 +170,7 @@
   const RESET_SELECTOR = `:scope > .setting-reset-button`
 
   // A <label> only names its first control, so a slider paired with a number input goes
-  // unnamed. Recording the text we set lets a later pass rename or revoke it registry-free,
+  // unnamed. Recording the generated label lets a later pass rename or revoke it registry-free,
   // even on rows Svelte already detached.
   const AUTO_LABEL_ATTR = `data-auto-label`
 
@@ -184,7 +184,7 @@
   // Only explicitly keyed rows are enhanced; without either opt-in prop the DOM is untouched.
   const enhance_rows = (section: HTMLElement): (() => void) => {
     // Plain Map: reactive entries would make `refresh` loop. Keep caller text alongside
-    // our last write so external updates are re-snapshotted rather than overwritten.
+    // the component's last write so external updates are re-snapshotted rather than overwritten.
     const descriptions = new Map<
       HTMLElement,
       { original: string | null; written: string | null }
@@ -213,7 +213,7 @@
       else row.setAttribute(`data-description`, original)
     }
 
-    // `data-label` short-circuits the clone, which only strips controls and our own appended
+    // `data-label` short-circuits the clone, which only strips controls and the appended
     // description out of the row's text.
     const label_text = (row: HTMLElement): string => {
       let text = row.dataset.label
@@ -232,7 +232,7 @@
     const sync_labeled_controls = (row: HTMLElement, label: string): void => {
       for (const control of row.querySelectorAll(`input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
-        // An author-set name always wins: any name other than the one we recorded is theirs
+        // Preserve author-set names that differ from the recorded generated label.
         if (control.getAttribute(`aria-label`) !== marker) {
           control.removeAttribute(AUTO_LABEL_ATTR)
           continue
@@ -282,7 +282,7 @@
           row.append(description_element)
         }
         // assigning textContent replaces the node even when unchanged, which would notify
-        // our own subtree observer forever
+        // the component's subtree observer forever
         if (description_element.textContent !== description) {
           description_element.textContent = description
         }

@@ -63,10 +63,7 @@ The pane carries `toc-exclude`, so headings in its content stay out of a page's
 
 ### Custom toggle content
 
-`open_icon` and `closed_icon` pick from the icons this library bundles. For anything else
-— your own SVG, a label, an icon set we don't ship — the `toggle` snippet replaces the
-button's _content_ while the button, and with it the anchor geometry, `aria-expanded` and
-click handling, stays with the component. It receives the same state as `children`.
+`open_icon` and `closed_icon` select bundled icons. The `toggle` snippet accepts custom content, such as an SVG, a label, or an external icon set. It replaces the button's _content_; the component still manages the button, anchor geometry, `aria-expanded`, and click handling. The snippet receives the same state as `children`.
 
 ```svelte example id="draggable-pane-toggle"
 <script lang="ts">

@@ -5,6 +5,7 @@
   import { is_dialog_backdrop_event } from './dialog'
   import MultiSelect from './MultiSelect.svelte'
   import { create_recent_list } from './storage'
+  import { validate_cmd_actions } from './internal/command'
   import type {
     CmdAction,
     LoadOptionsParams,
@@ -21,10 +22,6 @@
     run_hotkeys,
   } from './utils'
 
-  // MultiSelect's option snippet param (option + idx/selected/active/disabled)
-  type OptionSnippetParams = Parameters<
-    NonNullable<MultiSelectProps<Action>[`option`]>
-  >[0]
   type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
 
   // A command runs immediately; selection state and chip controls belong to MultiSelect.
@@ -126,21 +123,12 @@
         })
       : null,
   )
-  function validate_actions(entries: Action[], ids = new Set<string>()) {
-    for (const { id, label } of entries) {
-      if ((typeof id !== `string` && typeof id !== `number`) || `${id}` === ``)
-        throw new Error(`CommandMenu action "${label}" requires a non-empty id`)
-      if (ids.has(`${id}`)) throw new Error(`Duplicate CommandMenu action id: ${id}`)
-      ids.add(`${id}`)
-    }
-    return ids
-  }
   // Reject invalid initial props during SSR, before client effects can run.
-  untrack(() => validate_actions(actions))
+  untrack(() => validate_cmd_actions(actions))
   // Includes dynamically loaded options and appended pages.
   $effect(() => {
-    validate_actions(actions)
-    validate_actions(matching_actions)
+    validate_cmd_actions(actions)
+    validate_cmd_actions(matching_actions)
   })
   // Validate remote batches before MultiSelect merges and proxies the static matches.
   const remote_fetch = $derived(
@@ -155,10 +143,10 @@
     return async (params: LoadOptionsParams) => {
       const result = await fetch(params)
       if (params.signal?.aborted) return result
-      validate_actions(result.options, validate_actions(actions))
-      loaded_ids = validate_actions(
+      loaded_ids = validate_cmd_actions(
         result.options,
         params.offset && !result.replace ? new Set(loaded_ids) : new Set(),
+        validate_cmd_actions(actions),
       )
       return result
     }
@@ -176,19 +164,14 @@
     recent_action_ids = recent_actions.load()
   })
 
-  function record_recent(action: Action) {
-    if (!recent_actions) return
-    recent_action_ids = recent_actions.remember(`${action.id}`, recent_action_ids)
-  }
-
   // recently triggered actions first (most recent on top), rest keep original order
   const sorted_actions = $derived.by(() => {
     if (!recent_actions || recent_action_ids.length === 0) return actions
     const rank = new Map(recent_action_ids.map((id, idx) => [id, idx]))
     return actions.toSorted(
       (left_action, right_action) =>
-        (rank.get(`${left_action.id}`) ?? recent_action_ids.length) -
-        (rank.get(`${right_action.id}`) ?? recent_action_ids.length),
+        (rank.get(left_action.id) ?? recent_action_ids.length) -
+        (rank.get(right_action.id) ?? recent_action_ids.length),
     )
   })
 
@@ -278,7 +261,8 @@
 
   function execute_action(action: Action) {
     if (action.disabled) return
-    record_recent(action)
+    if (recent_actions)
+      recent_action_ids = recent_actions.remember(action.id, recent_action_ids)
     if (open) close_menu()
     action.action(action.label)
     on_execute?.({ action })
@@ -287,7 +271,7 @@
 
 <svelte:window onkeydown={handle_window_keydown} />
 
-{#snippet action_item({ option }: OptionSnippetParams)}
+{#snippet action_item({ option }: { option: Action })}
   {@const metadata = format_cmd_metadata(option.metadata)}
   <span class="cmd-action">
     <span class="cmd-label">
@@ -347,7 +331,7 @@
       input_props={{ 'aria-label': input_aria_label, ...input_props }}
       {no_matching_options_msg}
       {placeholder}
-      key={({ id }) => `${id}`}
+      key={({ id }) => id}
       on_add={({ option }) => execute_action(option)}
       onkeydown={chain_handlers(
         (event) => run_hotkeys(event, toggle_bindings),

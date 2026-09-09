@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test'
 
+test.use({ baseURL: `http://localhost:3005` })
+
 const SOURCE = `https://github.com/janosh/svelte-widgets/blob/`
 
 test(`inline code mentions of components link to their source, on load and after navigation`, async ({
@@ -30,14 +32,16 @@ test(`inline code mentions of components link to their source, on load and after
   )
   await page.goto(`/`)
   // Direct headings remain eligible for the site's table of contents.
-  await expect(page.locator(`main > h2`).filter({ hasText: `Demos` })).toBeVisible()
+  await expect(
+    page.locator(`main > h2`).filter({ hasText: `Demo categories` }),
+  ).toBeVisible()
   await expect(page.getByRole(`button`, { name: `View code` }).first()).toBeVisible()
   await expect(
     page.getByRole(`link`, { name: `contributor`, exact: true }),
   ).toHaveAttribute(`href`, `https://github.com/contributor`)
   await expect(page.getByRole(`link`, { name: `automation[bot]` })).toHaveCount(0)
   expect(errors).toEqual([])
-  // the readme's component table names every component in inline code
+  // The live example's introduction links its component name to the source.
   const multi_select = page.locator(`code > a`, { hasText: `MultiSelect` }).first()
   await expect(multi_select).toHaveAttribute(
     `href`,

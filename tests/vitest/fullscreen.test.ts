@@ -301,7 +301,7 @@ describe(`flag <-> browser sync`, () => {
     expect(get(flag)).toBe(true)
     expect(request_calls).toEqual([])
 
-    // an unowned fullscreen session must not clobber a flag nobody asked us to sync
+    // An unowned fullscreen session must not overwrite a flag without an explicit sync request.
     const outsider = document.createElement(`div`)
     document.body.append(outsider)
     await set_fullscreen_element(outsider)

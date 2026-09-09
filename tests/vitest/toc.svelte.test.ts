@@ -35,7 +35,7 @@ const set_window_width = (width: number) => {
   globalThis.dispatchEvent(new Event(`resize`))
 }
 
-// happy-dom has no layout, so the component's own scrollIntoView call is all we can observe
+// happy-dom has no layout, so only the component's scrollIntoView call is observable.
 const spy_scroll_into_view = () =>
   vi.spyOn(Element.prototype, `scrollIntoView`).mockImplementation(() => {})
 

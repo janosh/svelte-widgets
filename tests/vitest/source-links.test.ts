@@ -134,7 +134,7 @@ describe(`create_source_links`, () => {
   })
 
   // the anchor adopts the span's text nodes, so a reactive `<code>{name}</code>` rewrites
-  // text inside our link; skipping spans that already hold one froze the old name
+  // text inside the generated link; skipping spans that already hold one froze the old name
   it(`re-resolves a link whose code span text changed, and unwraps it when it stops matching`, async () => {
     const root = create_element(`main`)
     const code = document.createElement(`code`)

@@ -1,6 +1,6 @@
 <script lang="ts">
   // Side-by-side/unified DiffBackend renderer. The backend already pairs replacements;
-  // we only flatten hunks, elisions, and no-newline markers for virtualization.
+  // This component only flattens hunks, elisions, and no-newline markers for virtualization.
   import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'

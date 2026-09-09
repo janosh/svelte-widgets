@@ -2,7 +2,7 @@ import { ActionMenu } from '$lib'
 import type { CmdAction } from '$lib/types'
 import type { CmdSection } from '$lib/utils'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, escape_key, mock_rect, stub_prop } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
@@ -281,33 +281,32 @@ describe(`ActionMenu`, () => {
       { title: `Other`, actions: [{ id: `Reset`, label: `Reset`, action: vi.fn() }] },
     ]
 
-    // unique ids stay stable across reorder; duplicates append position to avoid
-    // each_key_duplicate
-    test(`ids, labels, and duplicates stay distinct keys`, async () => {
-      await open_menu([
-        { id: 1, label: `Numeric id`, action: vi.fn() },
-        { id: 1, label: `Duplicate numeric id`, action: vi.fn() },
-        { id: `1`, label: `String id`, action: vi.fn() },
-        { id: `1`, label: `1`, action: vi.fn() },
-        { id: `1`, label: `1`, action: vi.fn() },
-        {
-          title: `1`,
-          actions: [
-            { id: `In section`, label: `In section`, action: vi.fn() },
-            { id: `In section`, label: `In section`, action: vi.fn() },
-          ],
-        },
-      ])
+    test.each(
+      [undefined, ``, ` \t`, 1, NaN, `Copy`].flatMap((id) =>
+        [false, true].map((grouped) => ({ id, grouped })),
+      ),
+    )(`rejects invalid ID $id with grouped=$grouped`, ({ id, grouped }) => {
+      // Cast only to exercise invalid input from JavaScript callers.
+      const invalid = { id: id as string, label: `Invalid`, action: vi.fn() }
+      expect(() =>
+        mount_menu([
+          ...make_actions(),
+          ...(grouped ? [{ title: `Tools`, actions: [invalid] }] : [invalid]),
+        ]),
+      ).toThrow(/[Cc]ommand action/u)
+    })
 
-      expect(items().map((btn) => btn.textContent?.trim())).toEqual([
-        `Numeric id`,
-        `Duplicate numeric id`,
-        `String id`,
-        `1`,
-        `1`,
-        `In section`,
-        `In section`,
-      ])
+    test(`rejects duplicate IDs added across sections while closed`, () => {
+      const props = mount_menu(make_sections())
+      flushSync()
+      expect(() =>
+        flushSync(() => {
+          props.actions.push({
+            title: `More tools`,
+            actions: [{ id: `single`, label: `Duplicate`, action: vi.fn() }],
+          })
+        }),
+      ).toThrow(`Duplicate command action id: single`)
     })
 
     test(`reordering unique-id actions keeps the same button nodes`, async () => {
@@ -325,18 +324,24 @@ describe(`ActionMenu`, () => {
 
     // a section title is a heading, not an identity: keyed on title alone these collided
     // and each_key_duplicate took down the whole menu
-    test(`two sections may share a title`, async () => {
-      await open_menu([
-        { title: `Tools`, actions: [{ id: `First`, label: `First`, action: vi.fn() }] },
-        { title: `Tools`, actions: [{ id: `Second`, label: `Second`, action: vi.fn() }] },
+    test(`duplicate section titles and action labels preserve nodes across reorders`, async () => {
+      const props = mount_menu([
+        { title: `Tools`, actions: [{ id: `First`, label: `Run`, action: vi.fn() }] },
+        { title: `Tools`, actions: [{ id: `Second`, label: `Run`, action: vi.fn() }] },
       ])
+      right_click(document.body)
+      await flush_context_open()
 
       expect(
         [...document.querySelectorAll(`li[role="group"]`)].map((group) =>
           group.getAttribute(`aria-label`),
         ),
       ).toEqual([`Tools`, `Tools`])
-      expect(items().map((btn) => btn.textContent?.trim())).toEqual([`First`, `Second`])
+      expect(items().map((btn) => btn.textContent?.trim())).toEqual([`Run`, `Run`])
+      const [first, second] = items()
+      props.actions = [props.actions[1], props.actions[0]]
+      await tick()
+      expect(items()).toEqual([second, first])
     })
 
     test(`render as labeled groups of radios, flat actions keep menuitem`, async () => {

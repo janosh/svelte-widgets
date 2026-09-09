@@ -107,6 +107,8 @@ Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')
 
 Print the current page with an optional suggested PDF filename. The helper temporarily sets `document.title` and restores it after printing, cancellation, or an error. Use your own `@media print` CSS to control visible content and pagination.
 
+This replaces `print_element(node, options)`. The `node` argument and `single_page`, `page_width_mm`, and `px_per_inch` options are removed; `print_page` prints the current document.
+
 ```svelte example id="print-page-demo"
 <script lang="ts">
   import { format_print_filename, print_page } from 'svelte-widgets/print'

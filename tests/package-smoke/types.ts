@@ -17,6 +17,7 @@ import {
   type ThemeMode,
 } from 'svelte-widgets'
 import type { ComponentProps } from 'svelte'
+import type { CmdSection } from 'svelte-widgets/utils'
 import type { FileDropOptions } from 'svelte-widgets/attachments'
 import type {
   CodeEditorOptions,
@@ -58,6 +59,10 @@ export const loaded_options: LoadOptionsResult<string> = {
 export const removed_search_prop: MultiSelectProps<string> = { searchText: `Al` }
 // @ts-expect-error Custom callback names need the on_ prefix.
 export const removed_add_callback: MultiSelectProps<string> = { onadd: () => {} }
+// @ts-expect-error Action IDs must be strings in both menu components.
+export const numeric_action_id: CmdAction[`id`] = 1
+// @ts-expect-error Radio sections select the same string action IDs.
+export const numeric_section_selection: CmdSection[`selected`] = 1
 export const nav_callback: ComponentProps<typeof Nav>[`on_navigate`] = ({ href }) =>
   href ? undefined : false
 export const slider_callbacks: ComponentProps<typeof RangeSlider> = {

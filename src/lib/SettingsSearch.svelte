@@ -48,8 +48,8 @@
   // just because nothing resets it individually, so plain section rows count too.
   const ROW_SELECTOR = `section.settings-section [data-key], section.settings-section > :is(label, .setting)`
   const CONTAINER_SELECTOR = `section.settings-section, details.settings-group`
-  // Our own marker rather than `hidden`, so a row the caller hides stays the caller's business
-  // and clearing the query needs no record of who hid what.
+  // A component-specific marker preserves rows the caller hides with `hidden`.
+  // Clearing the query needs no record of who hid what.
   const HIDDEN_ATTR = `data-search-hidden`
 
   const filter_settings = (root: HTMLElement): (() => void) => {
@@ -255,7 +255,7 @@
       >
     {/if}
   </div>
-  <!-- Observe the caller's rows only: observing the whole component fed our own chrome (clear
+  <!-- Observe the caller's rows only: observing the whole component fed its controls (clear
   button, status text) back into the filter, an extra pass per keystroke -->
   <div class="settings-rows" {@attach filter_settings}>{@render children()}</div>
   <!-- Stay mounted so screen readers observe text updates; :empty collapses it. -->
@@ -265,7 +265,7 @@
 </div>
 
 <style>
-  /* Wrapper and row group are layout-invisible so the pane lays our children out directly;
+  /* Wrapper and row group are layout-invisible so the pane lays the children out directly;
      only the corner trigger needs a positioning context, so only it becomes a box. */
   .settings-search.inline,
   .settings-rows {

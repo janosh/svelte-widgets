@@ -77,7 +77,7 @@ export const resizable =
       -(css_px(computed.getPropertyValue(`border-${edge}-width`)) || 0)
 
     const has_edge = (...sides: Edge[]) => sides.some((side) => edges.includes(side))
-    // whether a left/top shrink moved the node, so dblclick knows those are ours to clear
+    // Whether a left/top shrink moved the node, so dblclick can clear the resize offsets.
     const repositioned = { left: false, top: false }
 
     const measure = () => {
@@ -239,7 +239,7 @@ export const resizable =
       is_resizing = false
     }
 
-    // Only clear styles we wrote — leave consumer height and `draggable`'s left/top alone
+    // Only clear styles written by resizable; preserve consumer height and draggable offsets.
     const reset_size = (event: ResizeEvent) => {
       if (event instanceof KeyboardEvent) event.preventDefault()
       if (has_edge(`left`, `right`)) node.style.width = ``

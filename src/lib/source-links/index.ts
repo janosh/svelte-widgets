@@ -18,7 +18,7 @@ export type SourceLinks = {
   link_source_mentions: (root: HTMLElement) => () => void
 }
 
-// marks our own anchors and records the code-span text each was built from, so a later
+// Marks generated anchors and records the code-span text each was built from, so a later
 // scan can tell a stale link from a current one
 const OWN_LINK_ATTR = `data-source-link`
 
@@ -58,11 +58,11 @@ export function create_source_links(
         if (code.closest(`a, pre`)) continue
         const existing = code.querySelector(`a`)
         const built_from = existing?.getAttribute(OWN_LINK_ATTR) ?? null
-        // An anchor without our marker is the author's own link, which stays untouched.
+        // An anchor without the generated-link marker is authored and stays untouched.
         if (existing && built_from === null) continue
         const name = (code.textContent ?? ``).trim()
         if (existing) {
-          // Our anchor owns the span's text nodes, so Svelte patches text in place and the
+          // The generated anchor owns the span's text nodes, so Svelte patches text in place and the
           // span stops matching the name the link was built from — without this the link
           // points at what the span used to say, forever.
           if (built_from === name) continue

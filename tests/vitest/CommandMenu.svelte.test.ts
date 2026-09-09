@@ -1,4 +1,5 @@
 import { CommandMenu, PageSearch } from '$lib'
+import type { LoadOptionsParams } from '$lib/types'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 import { doc_query } from './index'
@@ -721,30 +722,40 @@ test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`
 test.each([
   [`missing`, undefined],
   [`empty`, ``],
+  [`whitespace`, ` \t`],
   [`duplicate`, `existing`],
-  [`numeric collision`, 1],
+  [`numeric`, 1],
+  [`NaN`, NaN],
 ])(`rejects %s action IDs`, (_, id) => {
   // Deliberately allow missing IDs to exercise JavaScript callers.
-  const invalid = { id: id as string | number, label: `Invalid`, action: vi.fn() }
+  const invalid = { id: id as string, label: `Invalid`, action: vi.fn() }
   expect(() =>
     mount_menu({
-      actions: [
-        { id: `existing`, label: `First`, action: vi.fn() },
-        { id: `1`, label: `Numeric`, action: vi.fn() },
-        invalid,
-      ],
+      actions: [{ id: `existing`, label: `First`, action: vi.fn() }, invalid],
     }),
-  ).toThrow(/CommandMenu action/)
+  ).toThrow(/[Cc]ommand action/u)
 })
 
 test.each(
-  [1, `1`].flatMap((id) => [false, true].map((paginated) => ({ id, paginated }))),
+  [1, `1`, `2`, ` \t`].flatMap((id) =>
+    [false, true].map((paginated) => ({ id, paginated })),
+  ),
 )(
-  `retries duplicate remote ID $id with paginated=$paginated`,
+  `retries invalid remote ID $id with paginated=$paginated`,
   async ({ id, paginated }) => {
     const error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    const fetch = vi.fn(async () => ({
-      options: [{ id, label: `Remote`, action: vi.fn() }],
+    const fetch = vi.fn(async ({ offset }: LoadOptionsParams) => ({
+      options: [
+        // A failed batch must not reserve this ID and prevent the retry below.
+        ...(paginated && offset === 0
+          ? []
+          : [{ id: `2`, label: `Partial batch`, action: vi.fn() }]),
+        {
+          id: (paginated && offset === 0 ? `1` : id) as string,
+          label: `Remote`,
+          action: vi.fn(),
+        },
+      ],
       has_more: paginated,
     }))
     const props = $state({
@@ -765,7 +776,13 @@ test.each(
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith(
         `MultiSelect: load_options error:`,
-        expect.objectContaining({ message: `Duplicate CommandMenu action id: 1` }),
+        expect.objectContaining({
+          message: expect.stringMatching(
+            id === `1` || id === `2`
+              ? /Duplicate command action id: [12]/u
+              : /requires a non-empty string id/u,
+          ),
+        }),
       ),
     )
     expect(doc_query(`[role='alert']`).textContent).toContain(`Could not load options`)

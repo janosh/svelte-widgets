@@ -21,7 +21,7 @@ export type SharedConfig = {
   fmt: { semi: boolean; singleQuote: boolean; printWidth: number; svelte: boolean }
   build: { cssTarget: string }
   // lint-staged allows a function here, but vite-plus JSON.stringifies this to reach its
-  // Rust side, which drops functions, so ours is always a glob map
+  // Rust side, which drops functions, so this config always uses a glob map.
   staged: Record<string, string>
 }
 

@@ -55,17 +55,15 @@ The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.
 
 To make a release, increase the `"version"` field in `package.json`. This package follows semantic versioning, meaning
 
-- `v[x.y.z] -> v[x+1.y.z]`: major release with breaking changes
-- `v[x.y.z] -> v[x.y+1.z]`: minor release with new features
+- `v[x.y.z] -> v[x+1.0.0]`: major release with breaking changes
+- `v[x.y.z] -> v[x.y+1.0]`: minor release with new features
 - `v[x.y.z] -> v[x.y.z+1]`: patch release with bug fixes
 
-Now run the `changelog` script from `package.json` to update `changelog.md`.
+The 1.8.0 release is an explicit exception: it includes the breaking API cleanups documented in the changelog and migration guide.
+
+Update `changelog.md` with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.8.0, compare `v1.7.1...v1.8.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
 
 Keep one H1 title, H2 release headings, and H3 subsections. Use sentence case for entries, plain characters inside code spans, and the existing `> D Month YYYY` date format. Preserve historical API names and release links.
-
-```sh
-npm run changelog
-```
 
 On `main`, commit the release changes using the new version number prefixed by `v` as the commit message and tag:
 

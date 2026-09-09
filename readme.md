@@ -105,6 +105,26 @@ The [unit CI job](https://github.com/janosh/svelte-widgets/actions/workflows/ci.
 npm install -D svelte-widgets
 ```
 
+## Migrating to 1.8
+
+Custom library APIs use snake_case. Native DOM handlers such as `onclick`, `oninput`, and `onchange` keep their browser names and receive DOM events. In particular, replace MultiSelect's former custom `onchange` with `on_change` to keep receiving selection details.
+
+| Previous API                                                                    | Replacement                                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Custom props and snippets such as `searchText`, `maxSelect`, `selectedItem`     | `search_text`, `max_select`, `selected_item`; apply snake_case throughout custom props and snippet fields                                                                                                     |
+| MultiSelect `onchange`, `onadd`, `onremove`                                     | `on_change`, `on_add`, `on_remove`; native `onchange` receives a DOM event                                                                                                                                    |
+| `loadOptions`, `debounceMs`, `batchSize`, result `hasMore`                      | `load_options`, `debounce_ms`, `batch_size`, result `has_more`                                                                                                                                                |
+| Editor backend fields such as `docId`, `requestId`, `startLine`, `oldText`      | `doc_id`, `request_id`, `start_line`, `old_text`; update both request and response payloads                                                                                                                   |
+| Optional, numeric, or repeated command action IDs                               | Required, unique, nonempty string IDs across each menu, including sections and loaded pages; convert numeric IDs explicitly and resolve collisions. `CmdSection.selected` is a string or `null` when supplied |
+| `CommandMenu.onadd` and selection/creation controls                             | `on_execute({ action })`; command menus execute one action without retaining selection                                                                                                                        |
+| MultiSelect `history`, `undo`, `redo`, `canUndo`, `canRedo`, `onundo`, `onredo` | Manage selection history in the caller using `bind:selected`                                                                                                                                                  |
+| MultiSelect `parseLabelsAsHtml`, `activeOptionFallbackKey`                      | Use `option` / `selected_item` snippets for custom rendering and a stable `key` function for option identity                                                                                                  |
+| `NumberRangeInput.schema`                                                       | Pass explicit `min`, `max`, and `step` values from the schema                                                                                                                                                 |
+| `print_element(node, { single_page, page_width_mm, px_per_inch, filename })`    | `print_page({ filename })` prints the whole page; use `@media print` CSS for visibility and pagination                                                                                                        |
+| `/live-examples`, `/live-examples/create-highlighter`, `/katex`                 | `/markdown`, `/markdown/vite`, `/highlight`; see the [Markdown migration guide](https://svelte-widgets.janosh.dev/markdown#migration)                                                                         |
+
+Command IDs are compared exactly, without coercion or trimming. Empty and whitespace-only strings are rejected; action labels and section titles may repeat. Preserve a section object when reordering it to retain its rendered nodes.
+
 ## 🚚 &thinsp; Migrating from `svelte-multiselect`
 
 This package was called `svelte-multiselect` up to v11 ([#432](https://github.com/janosh/svelte-widgets/pull/432)). Swap it out:

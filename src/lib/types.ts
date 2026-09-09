@@ -45,8 +45,9 @@ export type ObjectOption = {
 }
 
 export type CmdAction = {
-  // Stable identity, unique within each command menu. Labels may repeat.
-  id: string | number
+  // Non-empty string, unique across the menu, including sections and loaded pages.
+  // Whitespace-only IDs are invalid. Labels may repeat.
+  id: string
   label: string
   action: (label: string) => void
   badge?: string

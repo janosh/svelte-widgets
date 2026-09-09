@@ -1,6 +1,7 @@
 import { page } from '$app/state'
 import { DemoNav } from '$site'
 import CategoryOverview from '$site/CategoryOverview.svelte'
+import Home from '../../src/routes/+page.svelte'
 import { mount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
 import {
@@ -25,6 +26,41 @@ const route_of = (filename: string) =>
     .replace(`../../src/routes`, ``)
     .replaceAll(/\/\([^)]+\)/gu, ``)
     .replace(/\/\+page\.(?:svelte|md)$/u, ``)
+
+test(`home catalog exposes every main demo and resolves guide links under the base path`, () => {
+  vi.spyOn(globalThis, `fetch`).mockResolvedValue(new Response(`[]`))
+  mount(Home, { target: document.body })
+  const sections = [...document.querySelectorAll(`.catalog > section`)]
+  expect(sections).toHaveLength(demo_nav_routes.length)
+  for (const [idx, { label, href, children }] of demo_nav_routes.entries()) {
+    const section = sections[idx]
+    expect(section.querySelector(`h3 a`)?.textContent).toContain(label)
+    expect(section.querySelector(`h3 a`)?.getAttribute(`href`)).toBe(`${base}${href}`)
+    expect(
+      [...section.querySelectorAll(`li a`)].map((link) => link.getAttribute(`href`)),
+    ).toEqual(
+      children.filter((route) => route !== href).map((route) => `${base}${route}`),
+    )
+  }
+  expect(
+    sections.map((section) => section.querySelector(`.detail`)?.textContent?.trim()),
+  ).toEqual([
+    `Includes MultiSelect recipes for async loading, forms, grouping, and custom rendering.`,
+    `Command palettes, site search, heading navigation, and page layout essentials.`,
+    `Confirmations, prompts, action menus, and queued notifications with dismissal and focus handling.`,
+    undefined,
+    `Live code examples, checked snippets, content manifests, and scientific references.`,
+    undefined,
+  ])
+  expect(document.querySelector(`.catalog section > a`)?.textContent).toContain(
+    `Markdown API`,
+  )
+  expect(document.querySelector(`a[href="/docs/markdown"]`)).not.toBeNull()
+  expect(document.querySelector(`a[href="/docs/workbench"]`)).not.toBeNull()
+  expect(document.querySelector(`a[href="/docs/contributing"]`)).not.toBeNull()
+  expect(document.querySelector(`#home-languages`)).not.toBeNull()
+  expect(document.querySelectorAll(`h1`)).toHaveLength(1)
+})
 
 test(`DemoNav lists components while recipes remain in the complete searchable catalog`, () => {
   mount(DemoNav, { target: document.body })
