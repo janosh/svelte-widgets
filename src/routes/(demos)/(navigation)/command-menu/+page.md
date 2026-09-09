@@ -10,10 +10,10 @@ CommandMenu supports search, grouping, async loading, and recent actions. It exe
   import { resolve } from '$app/paths'
   import type { Pathname } from '$app/types'
   import { CommandMenu } from '$lib'
-  import { routes } from '../../index'
+  import { demo_pages } from '../../index'
 
   const resolve_path = resolve as (path: Pathname) => string
-  const actions = routes.map(({ route }) => ({
+  const actions = demo_pages.map((route) => ({
     id: route,
     label: route,
     action: () => goto(resolve_path(route)),
@@ -42,10 +42,10 @@ CommandMenu supports search, grouping, async loading, and recent actions. It exe
   import { asset, resolve } from '$app/paths'
   import type { Pathname } from '$app/types'
   import { PageSearch } from '$lib'
-  import { routes } from '../../index'
+  import { demo_pages } from '../../index'
 
   const resolve_path = resolve as (path: Pathname) => string
-  const fallback_actions = routes.map(({ route }) => ({
+  const fallback_actions = demo_pages.map((route) => ({
     id: route,
     label: route,
     action: () => goto(resolve_path(route)),

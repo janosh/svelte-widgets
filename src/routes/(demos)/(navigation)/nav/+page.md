@@ -53,7 +53,9 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 
 Use tuple syntax `[parent, [children...]]` for nested routes. When the parent exists in the children array, it becomes a clickable link. Otherwise, it is a non-clickable label.
 
-Submenus open on the caret, never on hover: pointing at a nav entry should not pop a panel over the page, and hover does not exist on touch. A click, tap, `Enter`, `Space` or `ArrowDown` opens one; the caret again, `Escape` or a click outside closes it.
+On desktop, hovering a navigation entry opens its submenu; moving outside the entry and its pane closes it. On mobile, tap the caret to toggle the submenu. The caret also supports clicks and keyboard navigation with `Enter`, `Space` and `ArrowDown`; `Escape` or a click outside closes the pane.
+
+Desktop submenus with more than 10 child links use two columns, reading down the first column before the second. Set `dropdown_column_threshold` to change that cutoff. Mobile submenus always use one column.
 
 ```svelte example collapsible
 <script lang="ts">
@@ -64,6 +66,7 @@ Submenus open on the caret, never on hover: pointing at a nav entry should not p
     '/',
     ['/docs', ['/docs', '/docs/api', '/docs/guides']], // /docs is clickable (in children)
     ['/help', ['/help/faq', '/help/support']], // /help is a label (not in children)
+    ['/examples', Array.from({ length: 11 }, (_, idx) => `/examples/demo-${idx + 1}`)],
     '/about',
   ]
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }

@@ -1,8 +1,45 @@
 import type { Pathname } from '$app/types'
-import { slug_to_title } from '$lib/utils'
 
-// Labels slug_to_title cannot derive, keyed by unresolved route path. Shared by DemoNav's
-// nav labels and the layout's page titles.
+// Folder names determine membership; this list only sets the top-level order.
+const categories = new Map<string, { label: string; children: Pathname[] }>(
+  [`Inputs`, `Navigation`, `Overlays`, `Display`, `Authoring`, `Attachments`].map(
+    (label) => [label.toLowerCase(), { label, children: [] }],
+  ),
+)
+
+for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) {
+  if (filename.includes(`/(hide)/`)) continue
+  const parts = /^\.\/\((?<category>[^)]+)\)\/(?<route>.+)\/\+page\.(?:svelte|md)$/u.exec(
+    filename,
+  )?.groups
+  const category = parts && categories.get(parts.category)
+  if (!parts || !category)
+    throw new Error(`Demo page needs a navigation category: ${filename}`)
+  category.children.push(`/${parts.route}` as Pathname)
+}
+
+export const demo_nav_routes = Array.from(
+  categories,
+  ([category, { label, children }]) => {
+    if (!children.length) throw new Error(`Empty demo category: ${category}`)
+    const overview_route = `/${category}` as Pathname
+    children.sort((left_route, right_route) => {
+      if (left_route === overview_route) return -1
+      if (right_route === overview_route) return 1
+      return left_route.localeCompare(right_route)
+    })
+    return {
+      // A hash identifies a menu-only category without inventing a page URL.
+      href: children.includes(overview_route) ? overview_route : `#${category}`,
+      label,
+      children,
+    }
+  },
+)
+
+export const demo_pages = demo_nav_routes.flatMap(({ children }) => children)
+
+// Labels slug_to_title cannot derive, shared by navigation, page titles and search.
 export const demo_labels: Record<string, string> = {
   '/multiselect': `MultiSelect`,
   '/range-slider': `RangeSlider`,
@@ -14,66 +51,10 @@ export const demo_labels: Record<string, string> = {
   '/kit-form-actions': `Form Actions`,
   '/min-max-select': `Min/Max`,
   '/allow-user-options': `User Options`,
-  // attachments are named after their exports, so the nav shows the snake_case symbol
-  // rather than slug_to_title's "Click Outside"
+  // Attachment slugs encode their exported snake_case names.
   ...Object.fromEntries(
-    [
-      `tooltip`,
-      `draggable`,
-      `resizable`,
-      `sortable`,
-      `highlight_matches`,
-      `click_outside`,
-      `dismiss_on_outside_press`,
-      `focus_trap`,
-      `hotkey`,
-      `float`,
-      `portal`,
-      `contrast_color`,
-      `forward_window_keydown`,
-      `file_drop`,
-    ].map((name) => [`/attachments/${name.replaceAll(`_`, `-`)}`, name]),
+    demo_pages
+      .filter((route) => route.startsWith(`/attachments/`))
+      .map((route) => [route, route.slice(`/attachments/`.length).replaceAll(`-`, `_`)]),
   ),
 }
-
-export const routes = Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))
-  .filter((filename) => !filename.includes(`/(hide)/`))
-  .map((filename) => {
-    const segments = filename.split(`/`)
-    const group =
-      segments.find((segment) => segment.startsWith(`(`))?.slice(1, -1) ?? `other`
-    const parts = segments.filter((part) => !part.startsWith(`(`)) // remove hidden route segments
-    const route = `/${parts.slice(1, -1).join(`/`)}` as Pathname
-    return { group, route }
-  })
-
-if (routes.length < 3) {
-  console.error(`Too few demo routes found: ${routes.length}`)
-}
-
-const groups = [...new Set(routes.map(({ group }) => group))].toSorted()
-
-export const demo_nav_routes = groups.map((group) => {
-  const overview_route = `/${group}` as Pathname
-  const children = routes
-    .filter((route) => route.group === group)
-    .map(({ route }) => route)
-    .toSorted((left_route, right_route) => {
-      if (left_route === overview_route) return -1
-      if (right_route === overview_route) return 1
-      return left_route.localeCompare(right_route)
-    })
-  // a single-page group is that page, so link straight to it instead of a dropdown whose
-  // only entry repeats its parent
-  return {
-    href: children[0],
-    // Nav keys route_labels on route.label when set, so group labels belong here;
-    // the path-keyed route_labels map only reaches the dropdown children.
-    label: demo_labels[overview_route] ?? slug_to_title(group),
-    ...(children.length > 1 && { children }),
-  }
-})
-
-export const demo_pages = demo_nav_routes.flatMap(
-  ({ href, children }) => children ?? [href],
-)

@@ -1,5 +1,5 @@
 import { RangeSlider, type RangeValue } from '$lib'
-import RangeSliderDemo from '../../src/routes/(demos)/(range-slider)/range-slider/+page.md'
+import RangeSliderDemo from '../../src/routes/(demos)/(inputs)/range-slider/+page.md'
 import { snap_range_value, step_range_value, validate_range } from '$lib/range-slider'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'

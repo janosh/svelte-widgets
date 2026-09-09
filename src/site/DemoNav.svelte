@@ -15,15 +15,16 @@
       ? resolve_path(route)
       : {
           ...route,
-          href: resolve_path(route.href),
-          // single-page groups carry no children, see routes/(demos)/index.ts
-          ...(route.children && { children: route.children.map(resolve_path) }),
+          href: route.href.startsWith(`#`) ? route.href : resolve_path(route.href),
+          children: route.children.map(resolve_path),
         },
   )
 
   const nav_route_labels: Record<string, string> = { [resolve_path(`/`)]: `Home` }
   for (const [route, label] of Object.entries(demo_labels)) {
-    nav_route_labels[resolve_path(route)] = label
+    nav_route_labels[resolve_path(route)] = route.startsWith(`/attachments/`)
+      ? `<code>${label}</code>`
+      : label
   }
 </script>
 

@@ -17,7 +17,7 @@
   import { slide } from 'svelte/transition'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
   import '../app.css'
-  import { demo_labels, routes } from './(demos)'
+  import { demo_labels, demo_pages } from './(demos)'
 
   let { children }: { children?: Snippet<[]> } = $props()
   let page_search_query = $state(``)
@@ -53,7 +53,7 @@
   // resolve's arg type distributes over the Pathname union, so a dynamic route can't
   // match a single arm. Same widening as DemoNav; every demo route is param-free.
   const resolve_path = resolve as (path: Pathname) => string
-  const actions = routes.map(({ route }) => ({
+  const actions = demo_pages.map((route) => ({
     id: route,
     label: demo_labels[route] ?? route,
     keywords: [route],

@@ -120,7 +120,7 @@
     closed: {
       view_box: `1.9 3.9 16.2 12.2`,
       stroke_width: 2.1,
-      path: `M3 5h.01M7 5h10M6 10h.01M10 10h7M6 15h.01M10 15h7`,
+      path: `M3 5.5h.01M7 5.5h10M6 10h.01M10 10h7M6 14.5h.01M10 14.5h7`,
     },
     open: { view_box: `2.5 2.5 15 15`, stroke_width: 1.95, path: `M5 5l10 10M15 5L5 15` },
   }
@@ -760,7 +760,7 @@
         {#each Object.entries(TOGGLE_ICONS) as [state, icon] (state)}
           <svg
             width="1em"
-            height="1em"
+            height="0.9em"
             {...openButtonIconProps}
             viewBox={icon.view_box}
             fill="none"
@@ -964,7 +964,7 @@
     right: var(--toc-mobile-btn-right, 0);
     z-index: var(--toc-mobile-btn-z-index, 2);
     border: var(--toc-mobile-btn-border, var(--toc-surface-border));
-    border-radius: var(--toc-mobile-btn-border-radius, 6pt);
+    border-radius: var(--toc-mobile-btn-border-radius, 3pt);
     background: var(--toc-mobile-btn-bg, var(--toc-mobile-bg, rgba(255, 255, 255, 0.2)));
     color: var(--toc-mobile-btn-color, var(--text, black));
     box-shadow: var(--toc-mobile-btn-shadow, var(--toc-surface-shadow));
@@ -978,8 +978,9 @@
     box-sizing: content-box;
     /* 1em so the box tracks --toc-mobile-btn-font, which the icon already sizes from */
     width: 1em;
-    height: 1em;
-    padding: var(--toc-mobile-btn-padding, 0.3rem);
+    height: 0.9em;
+    padding-block: var(--toc-mobile-btn-padding, 0.25rem);
+    padding-inline: var(--toc-mobile-btn-padding, 0.3rem);
   }
   /* both glyphs share one grid cell and swap by opacity + quarter turn, on the 0.2s linear
      Nav's burger bars use */

@@ -1,6 +1,6 @@
 import { SubpageGrid } from '$lib'
 import { Check, ChevronRight, Copy, type IconData } from '$lib/icons'
-import MultiSelectPage from '$root/src/routes/(demos)/(multiselect)/multiselect/+page.md'
+import MultiSelectPage from '$root/src/routes/(demos)/(inputs)/multiselect/+page.md'
 import { mount } from 'svelte'
 import { expect, test, vi } from 'vitest'
 

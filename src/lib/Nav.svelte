@@ -7,7 +7,12 @@
     HTMLButtonAttributes,
   } from 'svelte/elements'
   import type { TooltipOptions } from './attachments/index'
-  import { click_outside, focus_trap, tooltip } from './attachments/index'
+  import {
+    auto_update_position,
+    click_outside,
+    focus_trap,
+    tooltip,
+  } from './attachments/index'
   import Icon from './Icon.svelte'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavRoute, NavRouteObject } from './types'
@@ -38,6 +43,7 @@
     tooltips,
     tooltip_options,
     breakpoint = 767,
+    dropdown_column_threshold = 10,
     onnavigate,
     onopen,
     onclose,
@@ -60,6 +66,8 @@
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
     tooltip_options?: Omit<TooltipOptions, `content` | `render`>
     breakpoint?: number
+    // Desktop panes use two columns above this number of visible child links.
+    dropdown_column_threshold?: number
     onnavigate?: (data: {
       href: string
       event: MouseEvent
@@ -73,6 +81,7 @@
 
   let is_open = $state(false)
   let open_dropdown = $state<string | null>(null)
+  let hover_open = $state(false)
   // Start from the real width on the client so hydration doesn't flash the desktop nav on phones
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   let is_mobile = $derived(viewport_width <= breakpoint)
@@ -113,11 +122,24 @@
     )
 
   function toggle_dropdown(href: string, focus_first = false) {
+    hover_open = false
     const is_opening = open_dropdown !== href
     open_dropdown = is_opening ? href : null
     if (is_opening && focus_first) {
       clearTimeout(focus_timeout)
-      focus_timeout = setTimeout(() => dropdown_links(href)[0]?.focus(), 0)
+      focus_timeout = setTimeout(() => {
+        if (open_dropdown === href) dropdown_links(href)[0]?.focus()
+      }, 0)
+    }
+  }
+
+  function handle_dropdown_pointer(event: PointerEvent, href: string) {
+    if (is_mobile || event.pointerType !== `mouse`) return
+    if (event.type === `pointerenter` && open_dropdown !== href) {
+      hover_open = true
+      open_dropdown = href
+    } else if (event.type === `pointerleave` && open_dropdown === href) {
+      open_dropdown = null
     }
   }
 
@@ -298,7 +320,6 @@
       {@const formatted = format_label(parsed_route.label ?? parsed_route.href)}
       {@const sub_routes = parsed_route.children}
       {@const is_active = is_current(parsed_route.href) === `page`}
-      {@const is_dropdown = Boolean(sub_routes)}
       {@const is_right = parsed_route.align === `right`}
       {@const item_tooltip = get_tooltip(parsed_route)}
 
@@ -315,6 +336,8 @@
         <div
           class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
           data-href={parsed_route.href}
+          onpointerenter={(event) => handle_dropdown_pointer(event, parsed_route.href)}
+          onpointerleave={(event) => handle_dropdown_pointer(event, parsed_route.href)}
           onkeydown={(event: KeyboardEvent) =>
             handle_dropdown_keydown(event, parsed_route.href)}
         >
@@ -351,42 +374,49 @@
               onkeydown={(event: KeyboardEvent) =>
                 handle_toggle_keydown(event, parsed_route.href)}
             >
-              <Icon icon={ChevronDown} style="width: 1em; height: 1em" />
+              <Icon icon={ChevronDown} style="width: 1.3em; height: 1.3em" />
             </button>
           </div>
           <div
             class:visible={dropdown_open}
+            class:two-columns={!is_mobile &&
+              filtered_sub_routes.length > dropdown_column_threshold}
+            style:--submenu-rows={Math.ceil(filtered_sub_routes.length / 2)}
             data-submenu
             tabindex="-1"
+            {@attach (node) => {
+              if (is_mobile || !dropdown_open) return
+              let shift = 0
+              const update = () => {
+                const { left, right } = node.getBoundingClientRect()
+                // Undo the previous translation when measuring the CSS-anchored position.
+                shift = Math.max(
+                  8 - left + shift,
+                  Math.min(0, innerWidth - 8 - right + shift),
+                )
+                node.style.translate = `${shift}px`
+              }
+              update()
+              const stop = auto_update_position(node.parentElement, node, update)
+              return () => {
+                stop()
+                node.style.removeProperty(`translate`)
+              }
+            }}
             {@attach focus_trap({
               enabled: dropdown_open,
               initial: false, // toggle_dropdown already picks the entry point
-              restore: dropdown_toggle(parsed_route.href) ?? false,
+              restore: hover_open ? false : (dropdown_toggle(parsed_route.href) ?? false),
             })}
           >
             <!-- `display: contents` except on mobile, where it's the grid row animating 0fr -> 1fr -->
             <div class="submenu-inner">
               {#each filtered_sub_routes as child_href (child_href)}
-                {@const child_formatted = format_label(child_href, true)}
-                {@const child_tooltip = get_tooltip({ href: child_href })}
-                {#if link}
-                  {@render link({
-                    href: child_href,
-                    label: child_formatted.label,
-                    isActive: is_current(child_href) === `page`,
-                  })}
-                {:else}
-                  <a
-                    {...link_props}
-                    href={child_href}
-                    aria-current={is_current(child_href)}
-                    style={`${child_formatted.style}; ${link_props?.style ?? ``}`}
-                    onclick={link_click_handler({ href: child_href })}
-                    {@attach child_tooltip}
-                  >
-                    {@html child_formatted.label}
-                  </a>
-                {/if}
+                {@render default_item_render(
+                  { href: child_href },
+                  format_label(child_href, true),
+                  get_tooltip({ href: child_href }),
+                )}
               {/each}
             </div>
           </div>
@@ -395,27 +425,25 @@
           <div class="separator" role="separator"></div>
         {/if}
       {:else}
-        {#if item}
-          {#snippet render_default_snippet()}
-            {@render default_item_render(parsed_route, formatted, item_tooltip)}
-          {/snippet}
-          <span class:align-right={is_right}>
+        <span class:align-right={is_right}>
+          {#if item}
+            {#snippet render_default_snippet()}
+              {@render default_item_render(parsed_route, formatted, item_tooltip)}
+            {/snippet}
             {@render item({
               route: parsed_route,
               href: parsed_route.href,
               label: formatted.label,
               is_active,
-              is_dropdown,
+              is_dropdown: false,
               // svelte2tsx types inline snippets as `() => ReturnType<Snippet>`, whose
               // brand doesn't unify with Snippet (svelte#13670); plain assertion suffices
               render_default: render_default_snippet as Snippet,
             })}
-          </span>
-        {:else}
-          <span class:align-right={is_right}>
+          {:else}
             {@render default_item_render(parsed_route, formatted, item_tooltip)}
-          </span>
-        {/if}
+          {/if}
+        </span>
         {#if parsed_route.separator}
           <div class="separator" role="separator"></div>
         {/if}
@@ -441,9 +469,10 @@
     --nav-dropdown-border-color: color-mix(in srgb, currentColor 30%, transparent 70%);
     /* Shared geometry keeps the mobile panel aligned with its burger button. */
     --nav-burger-inset: 1rem;
+    --nav-burger-height: calc(var(--nav-burger-size, 1.4rem) * 0.9);
     /* content-box: the chip is the icon plus its padding and border */
     --nav-burger-box: calc(
-      var(--nav-burger-size, 1.4rem) + 2 * var(--nav-burger-padding, 0.3rem) + 2px
+      var(--nav-burger-height) + 2 * var(--nav-burger-padding, 0.25rem) + 2px
     );
   }
   .menu {
@@ -454,23 +483,27 @@
     flex-wrap: wrap;
     padding: 0.5em;
   }
-  .menu > span {
+  .menu > span,
+  .dropdown > div:first-child {
     display: flex;
     align-items: center;
     border-radius: var(--nav-border-radius);
     background-color: var(--nav-link-bg);
     transition: background-color 0.2s;
   }
-  .menu > span:hover {
+  .menu > span:hover,
+  .dropdown > div:first-child:hover {
     background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));
   }
-  .menu > span > a {
+  .menu > span > a,
+  .dropdown > div:first-child > :is(a, span) {
     line-height: 1.3;
     padding: var(--nav-item-padding, 1pt 4pt);
     text-decoration: none;
     color: inherit;
   }
-  .menu > span > a[aria-current='page'] {
+  .menu > span > a[aria-current='page'],
+  .dropdown > div:first-child > a[aria-current='page'] {
     color: var(--nav-link-active-color);
   }
   .menu .disabled {
@@ -500,31 +533,14 @@
   .dropdown.active > div:first-child :is(a, span) {
     color: var(--nav-link-active-color);
   }
-  .dropdown > div:first-child {
-    display: flex;
-    align-items: center;
-    border-radius: var(--nav-border-radius);
-    background-color: var(--nav-link-bg);
-    transition: background-color 0.2s;
-  }
-  .dropdown > div:first-child:hover {
-    background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));
-  }
   .dropdown > div:first-child > :is(a, span) {
-    line-height: 1.3;
-    padding: var(--nav-item-padding, 1pt 4pt);
     padding-inline-end: 2pt;
-    text-decoration: none;
-    color: inherit;
     border-start-start-radius: var(--nav-border-radius);
     border-end-start-radius: var(--nav-border-radius);
   }
-  .dropdown > div:first-child > a[aria-current='page'] {
-    color: var(--nav-link-active-color);
-  }
   .dropdown > div:first-child > button {
-    padding-block: 2pt;
-    padding-inline: 0;
+    padding-block: 1pt;
+    padding-inline: 0 4pt;
     border: none;
     background: transparent;
     color: inherit;
@@ -534,7 +550,7 @@
     justify-content: center;
     border-start-end-radius: var(--nav-border-radius);
     border-end-end-radius: var(--nav-border-radius);
-    outline-offset: -1px;
+    outline: none;
     opacity: 0.6;
     transition:
       opacity 0.15s,
@@ -543,27 +559,16 @@
   .dropdown > div:first-child > button :global(svg) {
     transition: transform 0.2s ease;
   }
-  /* the row tints its background on hover, but the caret is a separate target within it, so
-     it recolors on its own to say the arrow itself is what opens the section. currentColor
-     last: --nav-link-active-color has no default, and an unset one would make `color`
-     invalid at computed-value time and inherit rather than drop out. */
-  .dropdown > div:first-child > button:hover {
+  /* A distinct accent identifies the caret on hover and keyboard focus without a box. */
+  .dropdown > div:first-child > button:is(:hover, :focus-visible) {
     opacity: 1;
-    color: var(
-      --nav-dropdown-toggle-hover-color,
-      var(--nav-link-active-color, currentColor)
-    );
+    color: var(--nav-dropdown-toggle-hover-color, light-dark(#2563eb, #7db4ff));
   }
   .dropdown > div:first-child > button.open {
     opacity: 1;
   }
   .dropdown > div:first-child > button.open :global(svg) {
     transform: rotate(180deg);
-  }
-  .dropdown > div:first-child > button:focus-visible {
-    outline: 2px solid currentColor;
-    outline-offset: -2px;
-    opacity: 1;
   }
   .dropdown > div:last-child {
     position: absolute;
@@ -585,6 +590,21 @@
   }
   .dropdown > div:last-child.visible {
     display: flex;
+  }
+  .dropdown > div:last-child.visible.two-columns {
+    display: grid;
+    grid-template-columns: repeat(2, max-content);
+    grid-template-rows: repeat(var(--submenu-rows), auto);
+    grid-auto-flow: column;
+    column-gap: 0.25em;
+  }
+  /* Bridge the floating panel's margin so the pointer can reach its links. */
+  nav:not(.mobile) .dropdown > div:last-child::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    bottom: 100%;
+    height: calc(var(--nav-dropdown-margin, 2pt) + 1px);
   }
   /* on desktop the links are direct items of the popover; only mobile gives this
      wrapper a box of its own */
@@ -616,9 +636,10 @@
     justify-content: space-around;
     /* sized to match Toc's mobile toggle — the only other pinned mobile chrome */
     width: var(--nav-burger-size, 1.4rem);
-    height: var(--nav-burger-size, 1.4rem);
+    height: var(--nav-burger-height);
     box-sizing: content-box;
-    padding: var(--nav-burger-padding, 0.3rem);
+    padding-block: var(--nav-burger-padding, 0.25rem);
+    padding-inline: var(--nav-burger-padding, 0.3rem);
     /* opaque chip like Toc's toggle: pinned over scrolling content, a transparent button
        leaves the bars on whatever text passes beneath */
     background: var(--nav-burger-bg, var(--nav-surface-bg));
@@ -641,13 +662,13 @@
   /* height/3 is the exact gap between adjacent bar centres under `space-around`, so both
      strokes land on the centre line; a hardcoded 0.4rem left them ~1px shy of meeting */
   .burger[aria-expanded='true'] span:first-child {
-    transform: translateY(calc(var(--nav-burger-size, 1.4rem) / 3)) rotate(45deg);
+    transform: translateY(calc(var(--nav-burger-height) / 3)) rotate(45deg);
   }
   .burger[aria-expanded='true'] span:nth-child(2) {
     opacity: 0;
   }
   .burger[aria-expanded='true'] span:nth-child(3) {
-    transform: translateY(calc(var(--nav-burger-size, 1.4rem) / -3)) rotate(-45deg);
+    transform: translateY(calc(var(--nav-burger-height) / -3)) rotate(-45deg);
   }
   /* .mobile is set in JS from the breakpoint prop, not a media query */
   nav.mobile .burger {
@@ -680,7 +701,7 @@
     flex-wrap: nowrap;
     align-items: stretch;
     justify-content: start;
-    gap: 0.2em;
+    gap: 0.4em;
     max-height: calc(100dvh - 4rem);
     overflow-y: auto;
     overscroll-behavior: contain;
@@ -693,59 +714,47 @@
   /* both selectors paint a row's highlight, so padding must land on both or neither —
      padding `.dropdown` itself grew the row around the pill, not the pill */
   nav.mobile :is(.menu > span, .dropdown > div:first-child) {
-    padding: 1pt 8pt;
+    padding: 1pt 4pt;
   }
   /* make the whole pill tappable: flex:1 only fills the content box, so the negative margin
      pulls the link out over the span's padding, which would otherwise be a dead band. The
      padding stays on the span so a custom `item` snippet still gets it. */
   nav.mobile .menu > span > a {
     flex: 1;
-    margin: -1pt -8pt;
-    padding: 1pt 8pt;
+    margin: -1pt -4pt;
+    padding: 1pt 4pt;
   }
   /* same pull-out, inline-start only (the chevron owns the other end): the link's own
      --nav-item-padding stacked on the row's and indented every expandable entry */
   nav.mobile .dropdown > div:first-child > :is(a, span) {
-    margin-inline-start: -8pt;
-    padding-inline-start: 8pt;
+    flex: 1;
+    border-radius: var(--nav-border-radius);
+    margin-inline-start: -4pt;
+    padding-inline-start: 4pt;
+    padding-block: 0;
   }
   nav.mobile .menu > .separator {
     width: 100%;
     height: 1px;
     margin: var(--nav-separator-margin, 0.25em 0);
   }
-  nav.mobile .dropdown {
-    flex-direction: column;
-    align-items: stretch;
-  }
   nav.mobile .dropdown > div:first-child {
-    display: flex;
-    align-items: center;
     justify-content: space-between;
-  }
-  nav.mobile .dropdown > div:first-child > :is(a, span) {
-    flex: 1;
-    border-radius: var(--nav-border-radius);
   }
   nav.mobile .dropdown > div:first-child > button {
     /* the caret is the only way to open a section, so give it the largest tap target: full
        row height, and negative margins running it out to the row's painted edge (the
        padding puts back what they take, keeping the glyph in place) */
     align-self: stretch;
-    margin: -1pt -8pt -1pt 0;
-    padding: 1pt 8pt 1pt 14pt;
+    margin: -1pt -4pt -1pt 0;
+    padding: 1pt 4pt 1pt 14pt;
     border-radius: var(--nav-border-radius);
-    opacity: 0.6;
-  }
-  /* :hover here too, or this selector's extra `nav.mobile` outranks the shared hover rule
-     and pins the caret back to 0.6 */
-  nav.mobile .dropdown > div:first-child > button:is(.open, :hover) {
-    opacity: 1;
   }
   /* `display: none` can't transition, so collapse via a 0fr grid row + fade. `visibility`
      keeps the still-mounted links out of the tab order. */
   nav.mobile .dropdown > div:last-child {
     position: static;
+    margin: 0;
     /* the desktop panel floats free of the page, so it hugs its content and may be given a
        floor wider than its trigger. Inline in the mobile column both push the menu past the
        phone's edge, so drop each to the column's own width. */
@@ -782,7 +791,7 @@
        under the section's opening padding instead of a single stroke. Its own colour, since
        --nav-surface-border is tuned for a panel edge over the page, not a rule over the
        panel's fill. */
-    margin-inline-start: 10pt;
+    margin-inline-start: 6pt;
     border-inline-start: 1px solid
       var(
         --nav-submenu-line-color,
@@ -798,8 +807,10 @@
        lowers min-content, and top-level rows already wrap this way. */
     white-space: normal;
     overflow-wrap: anywhere;
-    padding-block: 2pt;
-    padding-inline: 6pt 8pt;
+    padding-block: 1pt;
+    padding-inline: 4pt 8pt;
+    border-start-end-radius: var(--nav-border-radius);
+    border-end-end-radius: var(--nav-border-radius);
     /* matches the top-level rows; an inherited 1.6 made child rows taller than their parent */
     line-height: 1.3;
     /* pull the link's border onto the wrapper's guide line so the active row recolours a

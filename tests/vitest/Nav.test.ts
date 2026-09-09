@@ -31,10 +31,8 @@ describe(`Nav`, () => {
     keydown(`Escape`)
     await tick()
   }
-  const mouse_enter = (el?: Element | null) =>
-    el?.dispatchEvent(new MouseEvent(`mouseenter`, { bubbles: true }))
-  const mouse_leave = (el?: Element | null) =>
-    el?.dispatchEvent(new MouseEvent(`mouseleave`, { bubbles: true }))
+  const pointer_event = (element: Element, type: string, pointer_type = `mouse`) =>
+    element.dispatchEvent(new PointerEvent(type, { pointerType: pointer_type }))
   const focus_in = (el: Element) =>
     el.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
   const focus_out = (el: Element, relatedTarget: EventTarget | null) =>
@@ -399,6 +397,13 @@ describe(`Nav`, () => {
     expect(document.activeElement).toBe(toggle_button)
     // consumer handler still sees every key that landed on a link
     expect(link_props.onkeydown).toHaveBeenCalledTimes(5)
+
+    // Closing before the scheduled focus runs must not focus a now-hidden child.
+    keydown(`Enter`, toggle_button)
+    keydown(`Escape`, toggle_button)
+    await next_task()
+    expect(is_visible(menu)).toBe(false)
+    expect(document.activeElement).toBe(toggle_button)
   })
 
   test(`focus alone neither opens nor closes a dropdown`, async () => {
@@ -837,7 +842,35 @@ describe(`Nav`, () => {
     expect(document.querySelectorAll(`.dropdown`)).toHaveLength(1)
   })
 
-  describe(`dropdowns open on click, never on hover`, () => {
+  describe(`dropdown pointer and keyboard interactions`, () => {
+    test.each([
+      [10, 10, 1024, false],
+      [11, 10, 1024, true],
+      [12, 10, 1024, true],
+      [11, 10, 500, false],
+      [3, 2, 1024, true],
+    ])(
+      `%d children, threshold %d, width %d: two columns=%s`,
+      async (count, threshold, width, two_columns) => {
+        set_window_width(width)
+        const children = Array.from({ length: count }, (_, idx) => `/docs/page-${idx}`)
+        const { dropdown_menu } = mount_dropdown({
+          routes: [[`/docs`, [`/docs`, ...children]]],
+          dropdown_column_threshold: threshold,
+        })
+        await tick()
+        expect(dropdown_menu.classList.contains(`two-columns`)).toBe(two_columns)
+        expect(dropdown_menu.style.getPropertyValue(`--submenu-rows`)).toBe(
+          String(Math.ceil(count / 2)),
+        )
+        expect(
+          [...dropdown_menu.querySelectorAll(`a`)].map((link) =>
+            link.getAttribute(`href`),
+          ),
+        ).toEqual(children)
+      },
+    )
+
     test(`click toggles the dropdown and aria-expanded`, async () => {
       const { dropdown_menu, toggle } = mount_dropdown()
 
@@ -853,21 +886,32 @@ describe(`Nav`, () => {
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
     })
 
-    test(`hover neither opens nor closes a dropdown`, async () => {
-      vi.useFakeTimers()
+    test.each([
+      [1024, `mouse`, true],
+      [500, `mouse`, false],
+      [1024, `touch`, false],
+      [500, `touch`, false],
+    ])(`hover at width %d with %s opens=%s`, async (width, pointer_type, opens) => {
+      set_window_width(width)
       const { dropdown, dropdown_menu, toggle } = mount_dropdown()
+      await tick()
+      const initial_focus = document.activeElement
 
-      // pointing at a nav entry used to pop its panel open over the page
-      mouse_enter(dropdown)
-      await vi.advanceTimersByTimeAsync(500)
+      pointer_event(dropdown, `pointerenter`, pointer_type)
+      await tick()
+      expect(is_visible(dropdown_menu)).toBe(opens)
+      expect(toggle.getAttribute(`aria-expanded`)).toBe(String(opens))
+      expect(document.activeElement).toBe(initial_focus)
+
+      pointer_event(dropdown, `pointerleave`, pointer_type)
+      await tick()
       expect(is_visible(dropdown_menu)).toBe(false)
+      expect(document.activeElement).toBe(initial_focus)
 
       await click(toggle)
-      // ...and moving off used to close it, so a tap's synthetic mouseleave undid the tap
-      mouse_leave(dropdown)
-      await vi.advanceTimersByTimeAsync(500)
-      expect(is_visible(dropdown_menu)).toBe(true)
-      vi.useRealTimers()
+      pointer_event(dropdown, `pointerleave`, pointer_type)
+      await tick()
+      expect(is_visible(dropdown_menu)).toBe(!opens)
     })
 
     test.each([
@@ -888,18 +932,32 @@ describe(`Nav`, () => {
     })
 
     // one dropdown at a time: opening the second has to close the first
-    test(`opening a second dropdown closes the first`, async () => {
-      mount_nav({ routes: two_dropdown_routes })
-      const [{ dropdown: dropdown1, menu: menu1 }, { dropdown: dropdown2, menu: menu2 }] =
-        query_all_dropdowns()
+    test.each([`click`, `hover`])(
+      `opening a second dropdown by %s closes the first`,
+      async (interaction) => {
+        mount_nav({ routes: two_dropdown_routes })
+        await tick()
+        const [
+          { dropdown: dropdown1, menu: menu1 },
+          { dropdown: dropdown2, menu: menu2 },
+        ] = query_all_dropdowns()
 
-      await click(dropdown1.querySelector(`[data-dropdown-toggle]`))
-      expect(is_visible(menu1)).toBe(true)
+        const open = async (dropdown: Element) => {
+          if (interaction === `click`)
+            await click(dropdown.querySelector(`[data-dropdown-toggle]`))
+          else {
+            pointer_event(dropdown, `pointerenter`)
+            await tick()
+          }
+        }
+        await open(dropdown1)
+        expect(is_visible(menu1)).toBe(true)
 
-      await click(dropdown2.querySelector(`[data-dropdown-toggle]`))
-      expect(is_visible(menu1)).toBe(false)
-      expect(is_visible(menu2)).toBe(true)
-    })
+        await open(dropdown2)
+        expect(is_visible(menu1)).toBe(false)
+        expect(is_visible(menu2)).toBe(true)
+      },
+    )
 
     test(`ArrowDown on the toggle of an open dropdown navigates into it`, async () => {
       const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
