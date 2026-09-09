@@ -104,7 +104,7 @@
 
       // Queries change much more often than the settings DOM. Rebuild only when the
       // observer reports changed text, metadata, visibility, or selector membership.
-      const { containers, rows } = (index ??= {
+      index ??= {
         containers: Array.from(
           root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR),
           (node) => ({
@@ -118,7 +118,8 @@
             .join(` `)
             .toLocaleLowerCase(),
         })),
-      })
+      }
+      const { containers, rows } = index
       // A heading match reveals everything under it, so typing a section or group name works
       // even though no row repeats that name in its own text.
       const titled = new Set<HTMLElement>()
