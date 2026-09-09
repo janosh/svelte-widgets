@@ -27,9 +27,9 @@ const option_row = (label: string): HTMLLIElement => {
 }
 
 const mount_range = (props: MultiSelectProps) => {
-  const onrangeSelect = vi.fn()
-  mount_multiselect({ rangeSelect: true, ...props, onrangeSelect })
-  return onrangeSelect
+  const on_range_select = vi.fn()
+  mount_multiselect({ range_select: true, ...props, on_range_select })
+  return on_range_select
 }
 
 // takes a row directly when duplicate labels make a lookup by label ambiguous
@@ -88,11 +88,11 @@ test.each([
 )
 
 test(`Shift+Enter adds one option instead of extending a range`, async () => {
-  const onadd = vi.fn()
+  const on_add = vi.fn()
   const onrange_select = mount_range({
     options: [`Alpha`, `Beta`, `Gamma`],
     open: true,
-    onadd,
+    on_add,
   })
 
   option_row(`Alpha`).click()
@@ -104,7 +104,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
 
   expect(onrange_select).not.toHaveBeenCalled()
   // the active option specifically: a count of 2 would also pass if Beta were added
-  expect(onadd).toHaveBeenLastCalledWith({
+  expect(on_add).toHaveBeenLastCalledWith({
     option: `Gamma`,
     selected: [`Alpha`, `Gamma`],
   })
@@ -115,7 +115,7 @@ test(`Shift-click adds one visible range without intercepting native undo`, asyn
   const onrange_select = mount_range({
     options: alpha_options,
     selected: [],
-    maxOptions: 3,
+    max_options: 3,
   })
 
   await select_range(`Alpha`, `Delta`)
@@ -135,7 +135,7 @@ test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async
   const onrange_select = mount_range({
     options: alpha_options,
     open: true,
-    autoScroll: false,
+    auto_scroll: false,
   })
   const arrow_down = async (shiftKey = false) => {
     press(`ArrowDown`, { shiftKey })
@@ -158,11 +158,11 @@ test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async
   })
 })
 
-test(`Shift-click is an ordinary click while rangeSelect is off`, async () => {
+test(`Shift-click is an ordinary click while range_select is off`, async () => {
   const onrange_select = mount_range({
     options: alpha_options,
     selected: [],
-    rangeSelect: false,
+    range_select: false,
   })
 
   await select_range(`Alpha`, `Delta`)
@@ -171,8 +171,8 @@ test(`Shift-click is an ordinary click while rangeSelect is off`, async () => {
   expect(selected_rows()).toHaveLength(2)
 })
 
-test(`range selection skips disabled rows and obeys maxSelect`, async () => {
-  const onmaxreached = vi.fn()
+test(`range selection skips disabled rows and obeys max_select`, async () => {
+  const on_max_reached = vi.fn()
   const options = [
     { label: `Alpha` },
     { label: `Beta`, disabled: true },
@@ -182,24 +182,24 @@ test(`range selection skips disabled rows and obeys maxSelect`, async () => {
   const onrange_select = mount_range({
     options,
     selected: [],
-    maxSelect: 2,
-    onmaxreached,
+    max_select: 2,
+    on_max_reached,
   })
 
   await select_range(`Alpha`, `Delta`)
 
   expect(onrange_select.mock.calls[0][0].selected).toEqual([options[0], options[2]])
-  expect(onmaxreached).toHaveBeenCalledOnce()
-  expect(onmaxreached.mock.calls[0][0].attemptedOption).toBe(options[3])
+  expect(on_max_reached).toHaveBeenCalledOnce()
+  expect(on_max_reached.mock.calls[0][0].attempted_option).toBe(options[3])
 })
 
 test(`an invalidated anchor falls back to one ordinary add`, async () => {
-  const onadd = vi.fn()
-  const onrange_select = mount_range({ options: [`Anchor`, `Target`], onadd })
+  const on_add = vi.fn()
+  const onrange_select = mount_range({ options: [`Anchor`, `Target`], on_add })
 
   option_row(`Anchor`).click()
   await tick()
-  onadd.mockClear()
+  on_add.mockClear()
   const input = combobox()
   input.value = `Target`
   input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
@@ -208,7 +208,7 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
   await tick()
 
   expect(onrange_select).not.toHaveBeenCalled()
-  expect(onadd).toHaveBeenCalledExactlyOnceWith({
+  expect(on_add).toHaveBeenCalledExactlyOnceWith({
     option: `Target`,
     selected: [`Anchor`, `Target`],
   })

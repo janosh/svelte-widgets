@@ -157,10 +157,10 @@ Use the `link` snippet to customize how all links render:
 </script>
 
 <Nav data-content-ignore {routes} {page} breakpoint={0}>
-  {#snippet link({ href, label, isActive })}
+  {#snippet link({ href, label, is_active })}
     <a
       {href}
-      style:font-weight={isActive ? `bold` : `normal`}
+      style:font-weight={is_active ? `bold` : `normal`}
       onclick={(event: MouseEvent) => event.preventDefault()}>🔗 {label}</a
     >
   {/snippet}
@@ -243,7 +243,7 @@ Use `item` snippet for per-item customization. The `render_default` escape hatch
 
 ## Callbacks
 
-Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
+Handle navigation events with `on_navigate`, `on_open`, and `on_close`:
 
 ```svelte example collapsible
 <script lang="ts">
@@ -268,19 +268,19 @@ Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
   {page}
   {link_props}
   style="--nav-burger-position: absolute; --nav-mobile-menu-position: absolute"
-  onnavigate={({ href }) => {
+  on_navigate={({ href }) => {
     nav_message = `Navigated to ${href}`
     return false // returning false prevents navigation
   }}
-  onopen={() => (menu_status = 'open')}
-  onclose={() => (menu_status = 'closed')}
+  on_open={() => (menu_status = 'open')}
+  on_close={() => (menu_status = 'closed')}
 />
 ```
 
 **Features shown:**
 
-- `onnavigate` callback with `{ href, event, route }` - return `false` to prevent navigation
-- `onopen`/`onclose` callbacks fire when burger menu toggles (resize window to test)
+- `on_navigate` callback with `{ href, event, route }` - return `false` to prevent navigation
+- `on_open`/`on_close` callbacks fire when burger menu toggles (resize window to test)
 
 ## Custom Breakpoint
 

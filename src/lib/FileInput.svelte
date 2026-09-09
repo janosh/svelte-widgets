@@ -14,9 +14,9 @@
     max_files = Infinity,
     disabled = false,
     label = `Choose files or drop them here`,
-    onfiles,
-    onreject,
-    onremove,
+    on_files,
+    on_reject,
+    on_remove,
     children,
     remove_label = `Remove`,
     ...rest
@@ -30,9 +30,9 @@
     label?: string
     remove_label?: string
     // Parsing/upload is caller-owned. Replacement, cancel and unmount abort this signal.
-    onfiles?: (files: File[], signal: AbortSignal) => void | Promise<void>
-    onreject?: (rejections: FileRejection[]) => void
-    onremove?: (file: File) => void
+    on_files?: (files: File[], signal: AbortSignal) => void | Promise<void>
+    on_reject?: (rejections: FileRejection[]) => void
+    on_remove?: (file: File) => void
     children?: Snippet<[File[]]>
   } = $props()
   let controller = $state.raw<AbortController>()
@@ -74,7 +74,7 @@
       else accepted.push(file)
     }
     rejected = rejections
-    onreject?.(rejections)
+    on_reject?.(rejections)
     error = ``
     if (!accepted.length) return
     cancel()
@@ -82,7 +82,7 @@
     const current = new AbortController()
     controller = current
     try {
-      await onfiles?.(accepted, current.signal)
+      await on_files?.(accepted, current.signal)
     } catch (cause) {
       if (!current.signal.aborted) error = String(cause)
     } finally {
@@ -130,7 +130,7 @@
             onclick={() => {
               cancel()
               files = files.filter((_file, file_idx) => file_idx !== idx)
-              onremove?.(file)
+              on_remove?.(file)
             }}>{remove_label}</button
           >
         </li>
@@ -151,8 +151,8 @@
   {#if controller || error}<TaskStatus
       state={error ? `error` : `running`}
       label={error || `Processing files`}
-      oncancel={cancel}
-      onretry={() => receive(files)}
+      on_cancel={cancel}
+      on_retry={() => receive(files)}
     />{/if}
 </div>
 

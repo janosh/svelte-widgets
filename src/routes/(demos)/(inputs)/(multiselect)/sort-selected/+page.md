@@ -43,7 +43,7 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
 <MultiSelect
   options={frontend_libs}
   placeholder="Pick your favorite frontend libs"
-  sortSelected
+  sort_selected
   bind:selected
 />
 ```
@@ -82,7 +82,7 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
     repo: `https://github.com/${github_slug}`,
   }))
 
-  const sortSelected = (op1: FrontendLib, op2: FrontendLib): number => {
+  const sort_selected = (op1: FrontendLib, op2: FrontendLib): number => {
     if (op1.lang !== op2.lang) return op1.lang.localeCompare(op2.lang)
     return String(op1.label).localeCompare(String(op2.label))
   }
@@ -91,14 +91,14 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
 <MultiSelect
   options={frontend_libs}
   placeholder="Pick your favorite frontend libs"
-  {sortSelected}
+  {sort_selected}
 />
 ```
 
-MultiSelect by default renders selected items in the order they were chosen. Enabling `sortSelected` implicitly disables drag reordering because `selectedOptionsDraggable` defaults to `!sortSelected`. Explicitly combining sorting with `selectedOptionsDraggable={true}` throws because the two ordering contracts conflict. The prop
+MultiSelect by default renders selected items in the order they were chosen. Enabling `sort_selected` implicitly disables drag reordering because `selected_options_draggable` defaults to `!sort_selected`. Explicitly combining sorting with `selected_options_draggable={true}` throws because the two ordering contracts conflict. The prop
 
 ```ts
-sortSelected: boolean | ((op1: Option, op2: Option) => number) = false
+sort_selected: boolean | ((op1: Option, op2: Option) => number) = false
 ```
 
 can be set to `true` to sort selected options by label with `localeCompare`. Provide

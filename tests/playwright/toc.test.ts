@@ -97,7 +97,7 @@ test(`active ToC row keeps its accent under the pointer`, async ({ page }) => {
     .evaluate((ol) => getComputedStyle(ol).color)
   expect(idle, `active row carries no accent to lose`).not.toBe(list_color)
 
-  // hover inside the poll: activeHeading can still move to another row just after the scroll,
+  // hover inside the poll: active_heading can still move to another row just after the scroll,
   // which leaves the pointer over the previous one and the locator pointing at a third
   await expect(async () => {
     await active.hover()

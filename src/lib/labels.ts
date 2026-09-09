@@ -1,7 +1,7 @@
 // Defaults for `labels` overrides; interpolated messages are functions for locale-specific
 // word order and plural rules. Types derive from these records.
 // Dedicated text props (e.g. Toc.title) and icons stay separate. Defaults overridden by props
-// such as MultiSelect.selectAllDisabledTitle remain here for untranslated states.
+// such as MultiSelect.select_all_disabled_title remain here for untranslated states.
 
 // English plural of `noun`, used only by the defaults below — an override brings its own
 // locale's rules, hence every count-bearing entry being a function.
@@ -123,16 +123,16 @@ export const FULLSCREEN_BUTTON_LABELS = {
 export type FullscreenButtonLabels = typeof FULLSCREEN_BUTTON_LABELS
 
 export const MULTI_SELECT_LABELS = {
-  // chip overflow toggle rendered when maxVisibleChips collapses selected chips
+  // chip overflow toggle rendered when max_visible_chips collapses selected chips
   more_chips: (hidden_count: number) => `+${hidden_count} more`,
   show_less: `show less`,
   // aria-label on the <ul> holding selected chips
   selected_options: `selected options`,
-  // composed from the removeBtnTitle prop and the option's label
+  // composed from the remove_btn_title prop and the option's label
   remove_option: (remove_btn_title: string, option_label: string) =>
     `${remove_btn_title} ${option_label}`,
-  // one title per reason the select-all row is disabled, and `selectAllDisabledTitle`'s
-  // fallback; 'matching' scope needs local options, so loadOptions rules it out
+  // one title per reason the select-all row is disabled, and `select_all_disabled_title`'s
+  // fallback; 'matching' scope needs local options, so load_options rules it out
   matching_scope_unavailable: `Matching select-all is only available with local options`,
   max_select_reached: (max_select: number) => `Maximum of ${max_select} options selected`,
   all_options_selected: `All options already selected`,
@@ -141,7 +141,7 @@ export const MULTI_SELECT_LABELS = {
     selected_count > 0 ? `(${selected_count}/${total_count})` : `(${total_count})`,
   group_select_all: `Select all`,
   group_deselect_all: `Deselect all`,
-  // aria-label on the per-option checkbox in keepSelectedInDropdown='checkboxes' mode
+  // aria-label on the per-option checkbox in keep_selected_in_dropdown='checkboxes' mode
   toggle_option: (option_label: string) => `Toggle ${option_label}`,
   loading_more: `Loading more options`,
   loading_failed: `Could not load options`,

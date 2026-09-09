@@ -1,6 +1,6 @@
 ## Snippets
 
-### Inline SVG as `"removeIcon"` snippet
+### Inline SVG as `"remove_icon"` snippet
 
 ```svelte example id="languages-1"
 <script lang="ts">
@@ -28,18 +28,18 @@
 
 <MultiSelect
   options={languages}
-  maxSelect={5}
+  max_select={5}
   placeholder="What languages do you know?"
   selected={['Python', 'TypeScript', 'Julia']}
 >
   {#snippet children({ option })}
     {@render language_option(option)}
   {/snippet}
-  {#snippet expandIcon({ open, disabled })}
+  {#snippet expand_icon({ open, disabled })}
     <Icon icon={open ? Collapse : Expand} style={disabled ? `opacity: 0.5` : null} />
   {/snippet}
-  {#snippet removeIcon({ isRemoveAll })}
-    {#if isRemoveAll}Clear all{:else}<svg
+  {#snippet remove_icon({ is_remove_all })}
+    {#if is_remove_all}Clear all{:else}<svg
         aria-hidden="true"
         fill="currentColor"
         viewBox="0 0 24 24"
@@ -52,9 +52,9 @@
 </MultiSelect>
 ```
 
-### Simple HTML tag as `"removeIcon"` snippet
+### Simple HTML tag as `"remove_icon"` snippet
 
-This example also moves the expand icon to the right side of the input via `expandIconPosition="right"`.
+This example also moves the expand icon to the right side of the input via `expand_icon_position="right"`.
 
 ```svelte example id="languages-2"
 <script lang="ts">
@@ -85,25 +85,27 @@ This example also moves the expand icon to the right side of the input via `expa
 
 <MultiSelect
   options={languages}
-  maxSelect={5}
+  max_select={5}
   placeholder="What languages do you know?"
   selected={[`Python`, `TypeScript`, `Julia`]}
-  expandIconPosition="right"
+  expand_icon_position="right"
   bind:open
 >
-  {#snippet selectedItem({ option })}
+  {#snippet selected_item({ option })}
     {@render language_option(option)}
   {/snippet}
   {#snippet option({ option, selected })}
     {@render language_option(option, undefined, selected ? `opacity: 0.6` : ``)}
   {/snippet}
-  {#snippet expandIcon({ open: expandOpen, disabled })}
+  {#snippet expand_icon({ open: expandOpen, disabled })}
     <button type="button" {disabled}>
       <Icon icon={expandOpen ? Collapse : Expand} />
     </button>
   {/snippet}
-  {#snippet removeIcon({ option: opt, isRemoveAll })}
-    <span style="width: 2ex" title={isRemoveAll ? `Remove all` : `Remove ${opt}`}>✕</span>
+  {#snippet remove_icon({ option: opt, is_remove_all })}
+    <span style="width: 2ex" title={is_remove_all ? `Remove all` : `Remove ${opt}`}
+      >✕</span
+    >
   {/snippet}
 </MultiSelect>
 ```
@@ -119,7 +121,7 @@ This example also moves the expand icon to the right side of the input via `expa
       .toSorted()
 
   let selected: string[] = $state([`Python`, `TypeScript`, `Julia`])
-  let searchText = $state(`Julia`)
+  let search_text = $state(`Julia`)
 </script>
 
 {#snippet language_option(option: string, idx?: number, style?: string)}
@@ -138,15 +140,15 @@ This example also moves the expand icon to the right side of the input via `expa
 
 <MultiSelect
   options={languages}
-  bind:searchText
+  bind:search_text
   bind:selected
-  maxSelect={5}
+  max_select={5}
   placeholder="What languages do you know?"
   open
-  allowUserOptions
+  allow_user_options
 >
-  {#snippet userMsg({ msg })}
-    <span>{msg} {selected?.includes(searchText) ? '🤦' : '👷'}</span>
+  {#snippet user_msg({ msg })}
+    <span>{msg} {selected?.includes(search_text) ? '🤦' : '👷'}</span>
   {/snippet}
 </MultiSelect>
 ```
@@ -160,7 +162,7 @@ Labels are plain text for filtering and accessibility. Use a `children` snippet 
   import { MultiSelect } from 'svelte-widgets'
 </script>
 
-<MultiSelect options={['Red Pill', 'Blue Pill']} maxSelect={1}>
+<MultiSelect options={['Red Pill', 'Blue Pill']} max_select={1}>
   {#snippet children({ option })}
     <strong>{option}</strong>
     <a href="https://wikipedia.org/wiki/Red_pill_and_blue_pill">Explanation</a>

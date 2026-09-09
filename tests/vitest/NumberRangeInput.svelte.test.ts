@@ -139,7 +139,7 @@ test.each([
     value: 0.5,
     empty,
     commit,
-    oncommit: (value: number | undefined) => updates.push(value),
+    on_commit: (value: number | undefined) => updates.push(value),
   })
   const { number, range } = mount_range(props)
   number.value = draft

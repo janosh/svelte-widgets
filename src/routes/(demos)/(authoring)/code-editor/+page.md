@@ -52,23 +52,25 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
         editable: true,
       })
     },
-    highlight_lines: ({ startLine, endLine }) =>
-      Promise.resolve(backend_text.split(`\n`).slice(startLine, endLine).map(spans_for)),
+    highlight_lines: ({ start_line, end_line }) =>
+      Promise.resolve(
+        backend_text.split(`\n`).slice(start_line, end_line).map(spans_for),
+      ),
     apply_edits: ({
-      baseRevision,
+      base_revision,
       revision,
       edits,
-      expectedLineCount,
-      expectedLength,
+      expected_line_count,
+      expected_length,
     }) => {
-      if (baseRevision !== backend_revision)
+      if (base_revision !== backend_revision)
         return Promise.reject(
-          new Error(`Expected revision ${backend_revision}, received ${baseRevision}`),
+          new Error(`Expected revision ${backend_revision}, received ${base_revision}`),
         )
       const next_text = apply_text_edits(backend_text, edits)
       if (
-        next_text.split(`\n`).length !== expectedLineCount ||
-        next_text.length !== expectedLength
+        next_text.split(`\n`).length !== expected_line_count ||
+        next_text.length !== expected_length
       )
         return Promise.reject(new Error(`Editor buffers diverged`))
       backend_text = next_text
@@ -197,9 +199,9 @@ app startup.
       token(`plain`),
     ]
   }
-  const line = (lines: string[], lineNo: number) => {
-    const text = lines[lineNo - 1] ?? ``
-    return { lineNo, text, spans: spans_for(text) }
+  const line = (lines: string[], line_no: number) => {
+    const text = lines[line_no - 1] ?? ``
+    return { line_no, text, spans: spans_for(text) }
   }
   const row = (kind: RowKind, old_no: number | null, new_no: number | null): DiffRow => ({
     kind,
@@ -210,9 +212,9 @@ app startup.
   const result = {
     hunks: [
       {
-        oldStart: 7,
-        newStart: 7,
-        skippedBefore: 6,
+        old_start: 7,
+        new_start: 7,
+        skipped_before: 6,
         rows: [
           row(`equal`, 7, 7),
           row(`equal`, 8, 8),
@@ -230,11 +232,11 @@ app startup.
     added: 5,
     removed: 4,
     language: `typescript`,
-    oldLineCount: old_lines.length,
-    newLineCount: new_lines.length,
-    skippedAfter: 0,
-    oldEndsWithNewline: true,
-    newEndsWithNewline: true,
+    old_line_count: old_lines.length,
+    new_line_count: new_lines.length,
+    skipped_after: 0,
+    old_ends_with_newline: true,
+    new_ends_with_newline: true,
     truncated: false,
   } satisfies DiffResult
 
@@ -257,5 +259,5 @@ app startup.
 ```
 
 The demo backend returns a fixed `DiffResult` to keep the browser bundle dependency-free.
-A production backend receives `oldText`, `newText`, `filename` and `contextLines` through
+A production backend receives `old_text`, `new_text`, `filename` and `context_lines` through
 `diff_text()` and can return syntax spans for token coloring and intra-line emphasis.

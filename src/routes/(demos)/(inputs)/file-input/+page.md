@@ -1,6 +1,6 @@
 ## FileInput
 
-A native file picker and drop zone sharing type, size and count validation. File parsing and uploading remain caller-owned; the component provides processing, cancellation, rejection messages and retry around your `onfiles` callback.
+A native file picker and drop zone sharing type, size and count validation. File parsing and uploading remain caller-owned; the component provides processing, cancellation, rejection messages and retry around your `on_files` callback.
 
 ### Minimal example
 
@@ -26,7 +26,7 @@ Choose or drop up to three text files. A new accepted selection replaces the pre
 
 ### Parse JSON with cancellation and retry
 
-Select a valid JSON file to preview it, or a malformed one to exercise the error state. Throwing from `onfiles` displays the error with a Retry button. The supplied signal is aborted when accepted files replace the selection, the operation is cancelled, a file is removed, the input becomes disabled or the component unmounts. `File.text()` itself cannot be cancelled, so check the signal before publishing its result.
+Select a valid JSON file to preview it, or a malformed one to exercise the error state. Throwing from `on_files` displays the error with a Retry button. The supplied signal is aborted when accepted files replace the selection, the operation is cancelled, a file is removed, the input becomes disabled or the component unmounts. `File.text()` itself cannot be cancelled, so check the signal before publishing its result.
 
 ```svelte example id="file-input-json"
 <script lang="ts">
@@ -46,8 +46,8 @@ Select a valid JSON file to preview it, or a malformed one to exercise the error
   accept=".json,application/json"
   max_size={1000000}
   label="Choose a JSON file"
-  onfiles={read_json}
-  onremove={() => (preview = undefined)}
+  on_files={read_json}
+  on_remove={() => (preview = undefined)}
 />
 {#if preview}
   <JsonTree value={preview.value} />
@@ -56,7 +56,7 @@ Select a valid JSON file to preview it, or a malformed one to exercise the error
 {/if}
 ```
 
-For uploads, build a `FormData` and pass the signal to `fetch`; throw when `response.ok` is false. Retry calls `onfiles` again with the current accepted files. Cancellation stops the component's processing state, but your callback must respect the signal to prevent stale results.
+For uploads, build a `FormData` and pass the signal to `fetch`; throw when `response.ok` is false. Retry calls `on_files` again with the current accepted files. Cancellation stops the component's processing state, but your callback must respect the signal to prevent stale results.
 
 ### Main API
 
@@ -65,9 +65,9 @@ For uploads, build a `FormData` and pass the signal to `fetch`; throw when `resp
 | `bind:files`                                | Current accepted `File[]`, initially empty.                                                  |
 | `accept`                                    | Comma-separated extensions, MIME types or MIME wildcards. Checked for both picker and drops. |
 | `multiple={false}`, `max_files`, `max_size` | Per-selection count and per-file byte limits. Limits otherwise default to infinity.          |
-| `onfiles(files, signal)`                    | Parse or upload accepted files, synchronously or asynchronously.                             |
-| `onreject(rejections)`                      | Receive `{ file, reason }` entries with reason `type`, `size` or `count`.                    |
-| `onremove(file)`                            | Observe removal from the default file list.                                                  |
+| `on_files(files, signal)`                   | Parse or upload accepted files, synchronously or asynchronously.                             |
+| `on_reject(rejections)`                     | Receive `{ file, reason }` entries with reason `type`, `size` or `count`.                    |
+| `on_remove(file)`                           | Observe removal from the default file list.                                                  |
 | `children(files)`                           | Replace the default list with a custom preview; provide your own removal controls if needed. |
 | `label`, `remove_label`, `disabled`         | Picker label, removal button text and disabled state.                                        |
 

@@ -32,7 +32,7 @@ afterAll(() => {
   vi.unstubAllGlobals()
 })
 
-describe(`virtualList`, () => {
+describe(`virtual_list`, () => {
   const item_height = 30
   const overscan = 5
   const viewport_estimate = 400 // component falls back to 400px since happy-dom reports clientHeight 0
@@ -41,7 +41,7 @@ describe(`virtualList`, () => {
   const virtual_props = {
     options: virtual_options,
     open: true,
-    virtualList: { itemHeight: item_height, overscan },
+    virtual_list: { item_height, overscan },
   } satisfies MultiSelectProps
 
   // window math mirrored from the component (start = 0 before any scrolling)
@@ -60,16 +60,16 @@ describe(`virtualList`, () => {
   ]
 
   test.each([
-    [{ itemHeight: item_height, overscan }, initial_end],
-    [true, window_end(0, 10)], // boolean form uses defaults itemHeight=30, overscan=10
+    [{ item_height, overscan }, initial_end],
+    [true, window_end(0, 10)], // boolean form uses defaults item_height=30, overscan=10
     [false, n_options], // non-virtual sanity check: every option gets a DOM node
   ])(
-    `virtualList=%j renders %i of ${n_options} options`,
-    (virtualList, expected_count) => {
-      mount_multiselect({ options: virtual_options, open: true, virtualList })
+    `virtual_list=%j renders %i of ${n_options} options`,
+    (virtual_list, expected_count) => {
+      mount_multiselect({ options: virtual_options, open: true, virtual_list })
 
       expect(get_rendered_options()).toHaveLength(expected_count)
-      expect(get_spacers()).toHaveLength(virtualList ? 2 : 0)
+      expect(get_spacers()).toHaveLength(virtual_list ? 2 : 0)
     },
   )
 
@@ -104,7 +104,10 @@ describe(`virtualList`, () => {
   })
 
   test(`resizing an open dropdown fills its viewport without scrolling`, async () => {
-    mount_multiselect({ ...virtual_props, virtualList: { itemHeight: 30, overscan: 0 } })
+    mount_multiselect({
+      ...virtual_props,
+      virtual_list: { item_height: 30, overscan: 0 },
+    })
     await tick()
     const list = doc_query<HTMLUListElement>(`ul.options`)
     const height = vi.spyOn(list, `clientHeight`, `get`)
@@ -135,7 +138,7 @@ describe(`virtualList`, () => {
     mount_multiselect(virtual_props)
 
     const input = get_input()
-    const n_presses = 25 // activeIndex 24 lies past the initial window end of 19
+    const n_presses = 25 // active_index 24 lies past the initial window end of 19
     for (let press_idx = 0; press_idx < n_presses; press_idx++) {
       input.dispatchEvent(fresh_key(`ArrowDown`))
       await tick()
@@ -173,7 +176,7 @@ describe(`virtualList`, () => {
     mount_multiselect({
       options: make_grouped(50),
       open: true,
-      virtualList: { itemHeight: item_height, overscan },
+      virtual_list: { item_height, overscan },
     })
     await tick()
     const ul_options = doc_query<HTMLUListElement>(`ul.options`)
@@ -216,18 +219,18 @@ describe(`virtualList`, () => {
       mount_multiselect({
         options: make_grouped(50),
         open: true,
-        virtualList: true,
-        stickyGroupHeaders: true,
+        virtual_list: true,
+        sticky_group_headers: true,
       }),
-    ).toThrow(`virtualList cannot be combined with stickyGroupHeaders`)
+    ).toThrow(`virtual_list cannot be combined with sticky_group_headers`)
   })
 
   test.each([
-    [{ itemHeight: 0 }, `virtualList.itemHeight must be positive`],
-    [{ overscan: -1 }, `virtualList.overscan must be a non-negative integer`],
-    [{ overscan: 1.5 }, `virtualList.overscan must be a non-negative integer`],
-  ] as const)(`rejects invalid virtual config %j`, (virtualList, message) => {
-    expect(() => mount_multiselect({ options: virtual_options, virtualList })).toThrow(
+    [{ item_height: 0 }, `virtual_list.item_height must be positive`],
+    [{ overscan: -1 }, `virtual_list.overscan must be a non-negative integer`],
+    [{ overscan: 1.5 }, `virtual_list.overscan must be a non-negative integer`],
+  ] as const)(`rejects invalid virtual config %j`, (virtual_list, message) => {
+    expect(() => mount_multiselect({ options: virtual_options, virtual_list })).toThrow(
       message,
     )
   })

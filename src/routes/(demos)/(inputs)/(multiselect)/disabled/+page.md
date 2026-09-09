@@ -20,10 +20,10 @@ Toggle the checkbox to enable/disable the component. When disabled, it shows a c
   options={[`Svelte`, `React`, `Vue`, `Angular`]}
   bind:selected
   {disabled}
-  disabledInputTitle="Super special disabled message (shows on hover)"
+  disabled_input_title="Super special disabled message (shows on hover)"
   --sms-disabled-bg="darkred"
 >
-  {#snippet disabledIcon()}
+  {#snippet disabled_icon()}
     <span>This component is disabled. It won't even open.</span>
   {/snippet}
 </MultiSelect>
@@ -31,4 +31,4 @@ Toggle the checkbox to enable/disable the component. When disabled, it shows a c
 <p style="margin-top: 0.5em">Selected: {selected.join(', ')}</p>
 ```
 
-The mouse tooltip will show `disabledInputTitle` when hovering the disabled component.
+The mouse tooltip will show `disabled_input_title` when hovering the disabled component.

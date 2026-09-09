@@ -21,7 +21,8 @@
   <h1>Range and select-all scopes</h1>
   <p>
     Select an anchor, then Shift-click or use Shift+Arrow to add an inclusive range. The
-    scope selector controls whether select-all includes rows beyond <code>maxOptions</code
+    scope selector controls whether select-all includes rows beyond <code
+      >max_options</code
     >.
   </p>
 
@@ -36,12 +37,12 @@
   <MultiSelect
     {options}
     bind:selected
-    inputProps={{ [`aria-label`]: `Filter roadmap tasks` }}
-    keepSelectedInDropdown="checkboxes"
-    maxOptions={4}
-    rangeSelect
-    selectAllOption="Select scope"
-    selectAllScope={select_all_scope}
+    input_props={{ [`aria-label`]: `Filter roadmap tasks` }}
+    keep_selected_in_dropdown="checkboxes"
+    max_options={4}
+    range_select
+    select_all_option="Select scope"
+    {select_all_scope}
   />
 
   <p>Selected: {selected.join(`, `) || `none`}</p>

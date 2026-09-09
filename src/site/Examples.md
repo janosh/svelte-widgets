@@ -136,15 +136,15 @@ one on the right of this page is a `Toc`. [Toc docs &rarr;](toc)
 <div class="toc-demo" style="display: flex; gap: 2em">
   <article style="flex: 1">
     <h3 id="toc-demo-getting-started">Getting started</h3>
-    <p>Scoped with <code>headingSelector</code> so it ignores the rest of the page.</p>
+    <p>Scoped with <code>heading_selector</code> so it ignores the rest of the page.</p>
     <h3>Configuration</h3>
-    <p>Pass <code>collapseSubheadings</code> to fold levels under their parent.</p>
+    <p>Pass <code>collapse_subheadings</code> to fold levels under their parent.</p>
     <h3>Troubleshooting</h3>
-    <p>Set <code>warnOnEmpty</code> to hear about a selector that matches nothing.</p>
+    <p>Set <code>warn_on_empty</code> to hear about a selector that matches nothing.</p>
   </article>
 
   <Toc
-    headingSelector=".toc-demo h3"
+    heading_selector=".toc-demo h3"
     breakpoint={0}
     title="On this page"
     style="position: static; width: 12em"
@@ -168,7 +168,7 @@ heights pack tightly. [Masonry docs &rarr;](masonry)
   }))
 </script>
 
-<Masonry {items} minColWidth={120} gap={10}>
+<Masonry {items} min_col_width={120} gap={10}>
   {#snippet children({ item })}
     <div
       style="height: {item.height}px; display: grid; place-items: center; border-radius: 4pt; background: var(--surface)"

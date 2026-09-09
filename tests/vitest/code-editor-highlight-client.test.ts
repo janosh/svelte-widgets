@@ -18,8 +18,8 @@ const setup = () => {
       resyncs.push(args)
       return Promise.resolve(args.revision)
     },
-    highlight_lines: ({ startLine, endLine }) =>
-      Promise.resolve(Array.from({ length: endLine - startLine }, () => [])),
+    highlight_lines: ({ start_line, end_line }) =>
+      Promise.resolve(Array.from({ length: end_line - start_line }, () => [])),
     cancel_highlight: (args) => void cancellations.push(args),
     close_doc: () => Promise.resolve(),
   }
@@ -58,11 +58,11 @@ test(`opens once and sends ordered revisioned edits without resync`, async () =>
   await current.client.settled()
 
   expect(
-    current.edits.map(({ baseRevision, revision, edits, expectedLength }) => [
-      baseRevision,
+    current.edits.map(({ base_revision, revision, edits, expected_length }) => [
+      base_revision,
       revision,
       edits,
-      expectedLength,
+      expected_length,
     ]),
   ).toEqual([
     [0, 1, [{ from: 0, to: 0, insert: `a` }], 8],
@@ -96,11 +96,11 @@ test.each([`reject`, `wrong revision`] as const)(
     resync_result.resolve(2)
     await current.client.settled()
 
-    expect(current.resyncs).toEqual([{ docId: `doc`, revision: 2, text: `abone\ntwo` }])
+    expect(current.resyncs).toEqual([{ doc_id: `doc`, revision: 2, text: `abone\ntwo` }])
     expect(current.backend.apply_edits).toHaveBeenCalledTimes(2)
     expect(current.backend.apply_edits).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        baseRevision: 2,
+        base_revision: 2,
         edits: [{ from: 2, to: 2, insert: `c` }],
       }),
     )
@@ -130,11 +130,11 @@ test(`a highlight request retries a failed resync despite a throwing error callb
   await vi.runOnlyPendingTimersAsync()
   await current.client.settled()
   expect(current.backend.highlight_lines).toHaveBeenCalledExactlyOnceWith({
-    docId: `doc`,
-    requestId: 1,
+    doc_id: `doc`,
+    request_id: 1,
     revision: 1,
-    startLine: 0,
-    endLine: 1,
+    start_line: 0,
+    end_line: 1,
   })
   expect(current.errors).toHaveBeenCalledWith(`resync failed`)
   await expect(current.client.close()).resolves.toBeUndefined()
@@ -171,7 +171,7 @@ test(`viewport and edit cancellation suppress stale spans and highlighting waits
   third.resolve([[0, 3]])
   await vi.waitFor(() => expect(current.spans).toHaveBeenCalledOnce())
 
-  expect(current.cancellations.map(({ requestId }) => requestId)).toEqual([1, 2])
+  expect(current.cancellations.map(({ request_id }) => request_id)).toEqual([1, 2])
   expect(current.spans).toHaveBeenCalledWith({
     start_line: 0,
     revision: 1,

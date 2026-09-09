@@ -10,24 +10,24 @@
 
 <MultiSelect
   {options}
-  outerDivClass="wrapper"
-  ulSelectedClass="user-choices"
-  ulOptionsClass="dropdown"
-  liOptionClass="selectable-li"
-  inputClass="search-text-input"
-  liSelectedClass="selected-li"
-  liActiveOptionClass="hovered-or-arrow-keyed-li"
-  liUserMsgClass="selectable-msg-li"
-  liActiveUserMsgClass="hovered-or-arrow-keyed-msg-li"
-  maxSelectMsgClass="user-hint-max-selected-reached"
+  outer_div_class="wrapper"
+  ul_selected_class="user-choices"
+  ul_options_class="dropdown"
+  li_option_class="selectable-li"
+  input_class="search-text-input"
+  li_selected_class="selected-li"
+  li_active_option_class="hovered-or-arrow-keyed-li"
+  li_user_msg_class="selectable-msg-li"
+  li_active_user_msg_class="hovered-or-arrow-keyed-msg-li"
+  max_select_msg_class="user-hint-max-selected-reached"
   placeholder="Which foods do you like?"
   bind:selected
-  allowUserOptions
-  maxSelect={2}
+  allow_user_options
+  max_select={2}
   --sms-bg="color-mix(in srgb, cornflowerblue 15%, light-dark(white, #1a1a2e))"
   --sms-options-bg="color-mix(in srgb, cornflowerblue 10%, light-dark(white, #1a1a2e))"
 />
-<!-- maxSelect={2} needed for maxSelectMsg to show up -->
+<!-- max_select={2} needed for max_select_msg to show up -->
 
 <p style="margin-top: 0.5em">
   Selected ({selected.length}/2): {selected.join(', ') || 'none'}
@@ -39,21 +39,23 @@ When using CSS frameworks like Tailwind, you can customize the appearance of `<M
 This simplified DOM structure of the component shows where these classes are inserted:
 
 ```svelte
-<div class="multiselect {outerDivClass}">
-  <ul class="selected {ulSelectedClass}">
-    <li class={liSelectedClass}>Selected 1</li>
-    <li class={liSelectedClass}>Selected 2</li>
+<div class="multiselect {outer_div_class}">
+  <ul class="selected {ul_selected_class}">
+    <li class={li_selected_class}>Selected 1</li>
+    <li class={li_selected_class}>Selected 2</li>
   </ul>
 
-  <input class={inputClass} />
+  <input class={input_class} />
 
-  <span class="max-select-msg {maxSelectMsgClass}"></span>
+  <span class="max-select-msg {max_select_msg_class}"></span>
 
-  <ul class="options {ulOptionsClass}">
-    <li class={liOptionClass}>Option 1</li>
-    <li class="{liOptionClass} {liActiveOptionClass}">Option 2 (currently active)</li>
+  <ul class="options {ul_options_class}">
+    <li class={li_option_class}>Option 1</li>
+    <li class="{li_option_class} {li_active_option_class}">
+      Option 2 (currently active)
+    </li>
     ...
-    <li class="{liUserMsgClass} {liActiveUserMsgClass}">Create this option...</li>
+    <li class="{li_user_msg_class} {li_active_user_msg_class}">Create this option...</li>
   </ul>
 </div>
 ```

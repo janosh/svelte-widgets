@@ -157,8 +157,8 @@ describe(`Toc`, () => {
       set_window_width(width)
       setup_empty_page()
       mount_toc({
-        minItems: 5,
-        warnOnEmpty: true,
+        min_items: 5,
+        warn_on_empty: true,
         footer: createRawSnippet(() => ({
           render: () =>
             `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
@@ -208,7 +208,7 @@ describe(`Toc`, () => {
     expect(title_node.classList.contains(`toc-exclude`)).toBe(true)
   })
 
-  // undefined headingSelector exercises the component default of `:is(h2, h3, h4)`
+  // undefined heading_selector exercises the component default of `:is(h2, h3, h4)`
   test.each([
     [undefined, [0, 1, 2].map((lvl) => `Heading ${lvl + 2}`)],
     [
@@ -217,8 +217,8 @@ describe(`Toc`, () => {
     ],
     [`h1`, []],
   ])(
-    `ToC lists expected headings for headingSelector='%s'`,
-    async (headingSelector, expected_text) => {
+    `ToC lists expected headings for heading_selector='%s'`,
+    async (heading_selector, expected_text) => {
       set_body(`
       <h1 class="toc-exclude">Heading 1</h1>
       <h2>Heading 2</h2>
@@ -228,7 +228,7 @@ describe(`Toc`, () => {
       <h6>Heading 6</h6>
     `)
 
-      mount_toc({ headingSelector })
+      mount_toc({ heading_selector })
       await tick()
 
       const toc_list = doc_query(`aside.toc > nav > ol`)
@@ -246,17 +246,17 @@ describe(`Toc`, () => {
     [
       `custom exclusion`,
       `skip-toc`,
-      { excludeSelector: `.skip-toc` },
+      { exclude_selector: `.skip-toc` },
       [`Included heading`],
     ],
     [
       `disabled exclusion`,
       `toc-exclude`,
-      { excludeSelector: `` },
+      { exclude_selector: `` },
       [`Excluded child heading`, `Excluded nested heading`, `Included heading`],
     ],
   ])(
-    `%s with custom headingSelector`,
+    `%s with custom heading_selector`,
     async (_test_case, class_name, props, expected_headings) => {
       set_body(`
       <section class="${class_name}">
@@ -266,7 +266,7 @@ describe(`Toc`, () => {
       <h2>Included heading</h2>
     `)
 
-      mount_toc({ headingSelector: `:is(h2, h3)`, ...props })
+      mount_toc({ heading_selector: `:is(h2, h3)`, ...props })
       await tick()
 
       const toc_list = doc_query(`aside.toc > nav > ol`)
@@ -275,13 +275,13 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`getHeadingData customizes listed headings`, async () => {
+  test(`get_heading_data customizes listed headings`, async () => {
     set_body(`<h2>Keep</h2><h3>Skip</h3>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
     mount_toc({
-      getHeadingData: (node: HTMLHeadingElement) =>
+      get_heading_data: (node: HTMLHeadingElement) =>
         node.textContent === `Skip` ? null : { id: `custom`, level: 2, title: `Custom` },
-      headingSelector: `:is(h2, h3)`,
+      heading_selector: `:is(h2, h3)`,
     })
     await tick()
 
@@ -314,11 +314,11 @@ describe(`Toc`, () => {
     expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
-  test(`existing heading ids stay the fragment target over getHeadingData ids`, async () => {
+  test(`existing heading ids stay the fragment target over get_heading_data ids`, async () => {
     set_body(`<h2 id="real">Keep</h2>`)
 
     mount_toc({
-      getHeadingData: (node: HTMLHeadingElement) => ({
+      get_heading_data: (node: HTMLHeadingElement) => ({
         id: `custom`,
         level: 2,
         title: node.textContent ?? ``,
@@ -343,7 +343,7 @@ describe(`Toc`, () => {
       expected_ids: [`foo`, `foo-1`, `foo-1-1`],
       expected_hrefs: [`#foo`, `#foo-1`, `#foo-1-1`],
     },
-  ])(`autoIds $description`, async ({ html, expected_ids, expected_hrefs }) => {
+  ])(`auto_ids $description`, async ({ html, expected_ids, expected_hrefs }) => {
     set_body(html)
     mount_toc()
     await tick()
@@ -360,21 +360,21 @@ describe(`Toc`, () => {
     ).toEqual(expected_hrefs)
   })
 
-  test(`autoIds=false leaves headings without ids or hrefs`, async () => {
+  test(`auto_ids=false leaves headings without ids or hrefs`, async () => {
     set_body(`<h2>No id</h2>`)
 
-    mount_toc({ autoIds: false })
+    mount_toc({ auto_ids: false })
     await tick()
 
     expect(doc_query(`body > h2`).id).toBe(``)
     expect(doc_query(`aside.toc li > a`).hasAttribute(`href`)).toBe(false)
   })
 
-  test(`slugifyHeading customizes generated ids`, async () => {
+  test(`slugify_heading customizes generated ids`, async () => {
     set_body(`<h2>First</h2><h2>Second</h2>`)
 
     mount_toc({
-      slugifyHeading: (_heading: HTMLHeadingElement, idx: number) => `section-${idx}`,
+      slugify_heading: (_heading: HTMLHeadingElement, idx: number) => `section-${idx}`,
     })
     await tick()
 
@@ -385,11 +385,11 @@ describe(`Toc`, () => {
     ).toEqual([`section-0`, `section-1`])
   })
 
-  test(`tocItem snippet replaces default link content`, async () => {
+  test(`toc_item snippet replaces default link content`, async () => {
     set_body(`<h2 id="intro">Intro</h2>`)
 
     mount_toc({
-      tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+      toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
         render: () =>
           `<span class="custom-toc-item">${heading().id}:${heading().textContent}</span>`,
       })),
@@ -431,7 +431,7 @@ describe(`Toc`, () => {
       scrolls: true,
     },
   ])(
-    `tocItem $desc`,
+    `toc_item $desc`,
     async ({ html, n_anchors, selector, scrolls, checks_keyboard = false }) => {
       set_body(`<h2 id="first">First</h2><h2 id="second">Second</h2>`)
       mock_active_heading(`first`)
@@ -440,8 +440,8 @@ describe(`Toc`, () => {
       const onclick = vi.fn()
 
       mount_toc({
-        liProps: { onclick, 'data-sveltekit-replacestate': `` },
-        tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+        li_props: { onclick, 'data-sveltekit-replacestate': `` },
+        toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
           render: () => html(heading()),
         })),
       })
@@ -493,14 +493,14 @@ describe(`Toc`, () => {
     },
   )
 
-  // the window handler preventDefaults arrows to drive its own list, and a custom tocItem's
+  // the window handler preventDefaults arrows to drive its own list, and a custom toc_item's
   // fields sit inside nav, so the focus guard let them through and stole the caret
-  test(`tocItem text fields keep their own arrow keys`, async () => {
+  test(`toc_item text fields keep their own arrow keys`, async () => {
     set_body(`<h2 id="first">First</h2><h2 id="second">Second</h2>`)
     mock_active_heading(`first`)
 
     mount_toc({
-      tocItem: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+      toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
         render: () => `<input class="filter" value="${heading().id}">`,
       })),
     })
@@ -567,13 +567,13 @@ describe(`Toc`, () => {
   // each case needs its own invalid selector: happy-dom throws only on the first parse, then
   // caches the failure and returns null, hiding the invalidity from Toc's validation
   test.each([
-    [`headingSelector`, `[`, { headingSelector: `[` }],
-    [`excludeSelector`, `((`, { excludeSelector: `((` }],
+    [`heading_selector`, `[`, { heading_selector: `[` }],
+    [`exclude_selector`, `((`, { exclude_selector: `((` }],
   ])(`warns once and hides for invalid %s`, async (selector_name, selector, props) => {
     set_body(`<h2>Visible heading</h2>`)
     const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
 
-    mount_toc({ warnOnEmpty: true, ...props })
+    mount_toc({ warn_on_empty: true, ...props })
     await tick()
 
     expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
@@ -584,31 +584,31 @@ describe(`Toc`, () => {
 
   // no selector below matches anything on setup_empty_page ('h2' only hits the excluded one)
   test.each(
-    [undefined, `foobar`, `h2`, `h4`].flatMap((headingSelector) =>
-      [true, false].map((autoHide) => ({ headingSelector, autoHide })),
+    [undefined, `foobar`, `h2`, `h4`].flatMap((heading_selector) =>
+      [true, false].map((auto_hide) => ({ heading_selector, auto_hide })),
     ),
   )(
-    `autoHide=$autoHide with headingSelector='$headingSelector' on an empty page`,
-    async ({ headingSelector, autoHide }) => {
+    `auto_hide=$auto_hide with heading_selector='$heading_selector' on an empty page`,
+    async ({ heading_selector, auto_hide }) => {
       setup_empty_page()
-      mount_toc({ headingSelector, autoHide })
+      mount_toc({ heading_selector, auto_hide })
       await tick()
 
       const node = doc_query(`aside.toc`)
-      expect(node.getAttribute(`aria-hidden`)).toBe(String(autoHide))
-      expect(node.classList.contains(`hidden`)).toBe(autoHide)
-      expect(node.getAttribute(`hidden`)).toBe(autoHide ? `` : null)
+      expect(node.getAttribute(`aria-hidden`)).toBe(String(auto_hide))
+      expect(node.classList.contains(`hidden`)).toBe(auto_hide)
+      expect(node.getAttribute(`hidden`)).toBe(auto_hide ? `` : null)
     },
   )
 
   test.each([true, false])(
-    `warnOnEmpty=%s stays consistent across later mutations`,
-    async (warnOnEmpty) => {
+    `warn_on_empty=%s stays consistent across later mutations`,
+    async (warn_on_empty) => {
       const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-      mount_toc({ warnOnEmpty })
+      mount_toc({ warn_on_empty })
       await tick()
-      const msg = `Toc found no headings for headingSelector=':is(h2, h3, h4)' after applying excludeSelector='.toc-exclude'. Hiding table of contents.`
-      const expected_calls = warnOnEmpty ? [[msg]] : []
+      const msg = `Toc found no headings for heading_selector=':is(h2, h3, h4)' after applying exclude_selector='.toc-exclude'. Hiding table of contents.`
+      const expected_calls = warn_on_empty ? [[msg]] : []
       expect(warn_mock.mock.calls).toEqual(expected_calls)
 
       // both the ToC render and this unrelated mutation notify the observer, but the empty
@@ -629,14 +629,14 @@ describe(`Toc`, () => {
     [[1, 2, 3, 4], 4, 0],
     [[1, 5, 6], 1, 0],
   ])(
-    `levels=%j with minItems=%s renders %s items`,
-    async (levels, minItems, expected) => {
+    `levels=%j with min_items=%s renders %s items`,
+    async (levels, min_items, expected) => {
       set_body(levels.map((lvl) => `<h${lvl}>Heading ${lvl}</h${lvl}>`).join(``))
 
-      mount_toc({ headingSelector: `:is(h2, h3, h4)`, minItems })
+      mount_toc({ heading_selector: `:is(h2, h3, h4)`, min_items })
       await tick()
 
-      // below minItems the whole nav is dropped rather than rendered empty
+      // below min_items the whole nav is dropped rather than rendered empty
       expect(document.querySelectorAll(`aside.toc > nav > ol > li`)).toHaveLength(
         expected,
       )
@@ -667,12 +667,12 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`onOpenChange handler receives open state, desktop state, and trigger`, async () => {
+  test(`on_open_change handler receives open state, desktop state, and trigger`, async () => {
     set_window_width(1200)
     ensure_content_for_toc_elements()
     const on_open_change = vi.fn<OpenChangeHandler>()
 
-    mount_toc({ onOpenChange: on_open_change, open: false })
+    mount_toc({ on_open_change, open: false })
     await tick()
 
     expect(on_open_change).toHaveBeenCalledExactlyOnceWith(
@@ -833,12 +833,12 @@ describe(`Toc`, () => {
     [`enter`, `Enter`, `smooth`, `smooth`],
     [`space`, ` `, `auto`, `auto`],
     [`enter`, `Enter`, `auto`, `auto`],
-    [`enter`, `Enter`, undefined, `smooth`], // default scrollBehavior when prop omitted
+    [`enter`, `Enter`, undefined, `smooth`], // default scroll_behavior when prop omitted
     [`click`, null, `auto`, `auto`],
     [`click`, null, `smooth`, `smooth`],
   ] as const)(
-    `%s with scrollBehavior=%s scrolls with behavior %s`,
-    async (_, key, scrollBehavior, expected_behavior) => {
+    `%s with scroll_behavior=%s scrolls with behavior %s`,
+    async (_, key, scroll_behavior, expected_behavior) => {
       set_headings(2)
 
       const scroll_into_view_mock = spy_scroll_into_view()
@@ -847,7 +847,7 @@ describe(`Toc`, () => {
       const onclick = vi.fn()
 
       // a breakpoint above the window width forces mobile mode, where open=true suffices
-      mount_toc({ open: true, breakpoint: 2000, scrollBehavior, liProps: { onclick } })
+      mount_toc({ open: true, breakpoint: 2000, scroll_behavior, li_props: { onclick } })
       await tick()
       const expected_link = doc_query(
         `aside.toc ol li:nth-child(${key === null ? 1 : 2}) > a`,
@@ -870,18 +870,18 @@ describe(`Toc`, () => {
     },
   )
 
-  // a null trigger means the key is absent from reactToKeys, so nothing should happen
+  // a null trigger means the key is absent from react_to_keys, so nothing should happen
   test.each([
     { desc: `Escape closes the mobile ToC`, key: `Escape`, trigger: `escape` },
     { desc: `Tab out of a focused ToC closes it`, key: `Tab`, trigger: `tab` },
-    { desc: `an empty reactToKeys ignores Escape`, key: `Escape`, trigger: null },
+    { desc: `an empty react_to_keys ignores Escape`, key: `Escape`, trigger: null },
   ] as const)(`$desc`, async ({ key, trigger }) => {
     set_headings(2)
     set_window_width(600)
     const on_open_change = vi.fn<OpenChangeHandler>()
 
-    const reactToKeys = trigger === null ? [] : [key]
-    mount_toc({ open: true, reactToKeys, onOpenChange: on_open_change })
+    const react_to_keys = trigger === null ? [] : [key]
+    mount_toc({ open: true, react_to_keys, on_open_change })
     await tick()
     on_open_change.mockClear()
 
@@ -942,7 +942,7 @@ describe(`Toc`, () => {
       level: Number(node.nodeName[1]),
       title: node.textContent ?? ``,
     }))
-    mount_toc({ getHeadingData: get_heading_data })
+    mount_toc({ get_heading_data })
     await tick()
     get_heading_data.mockClear()
 
@@ -1018,7 +1018,7 @@ describe(`Toc`, () => {
 
   test(`selector-driven attribute changes update heading membership`, async () => {
     set_body(`<h2 class="toc-exclude">Alpha</h2><h2>Beta</h2><h5 id="gamma">Gamma</h5>`)
-    mount_toc({ headingSelector: `:is(h2, h5[data-toc-heading])` })
+    mount_toc({ heading_selector: `:is(h2, h5[data-toc-heading])` })
     await tick()
     expect(doc_query(`aside.toc ol`).textContent).toBe(`Beta`)
 
@@ -1143,7 +1143,7 @@ describe(`Toc`, () => {
   })
 })
 
-describe(`hideOnIntersect`, () => {
+describe(`hide_on_intersect`, () => {
   const mock_bounding_rect = (element: Element, rect: Partial<DOMRect>) =>
     vi.spyOn(element, `getBoundingClientRect`).mockReturnValue(dom_rect(rect))
 
@@ -1152,7 +1152,7 @@ describe(`hideOnIntersect`, () => {
 
   // parks the ToC top-right so only a banner's vertical extent decides overlap
   const setup_banners = async (
-    target: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hideOnIntersect`],
+    target: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hide_on_intersect`],
     {
       window_width = 1200,
       b2_rect = over_toc,
@@ -1164,7 +1164,7 @@ describe(`hideOnIntersect`, () => {
     globalThis.innerWidth = window_width
     const [b1, b2] = [doc_query(`#b1`), doc_query(`#b2`)]
 
-    mount_toc({ hideOnIntersect: target(b1, b2), open: true })
+    mount_toc({ hide_on_intersect: target(b1, b2), open: true })
     await tick()
 
     const aside = doc_query(`aside.toc`)
@@ -1178,7 +1178,7 @@ describe(`hideOnIntersect`, () => {
 
   type IntersectCase = {
     desc: string
-    target?: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hideOnIntersect`]
+    target?: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hide_on_intersect`]
     window_width?: number
     b2_rect?: Partial<DOMRect>
     expected: boolean
@@ -1215,7 +1215,7 @@ describe(`hideOnIntersect`, () => {
       expect(is_intersecting(aside)).toBe(expected)
       if (warns) {
         expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
-          expect.stringContaining(`invalid hideOnIntersect='['`),
+          expect.stringContaining(`invalid hide_on_intersect='['`),
         )
       } else expect(warn_mock).not.toHaveBeenCalled()
     },
@@ -1243,23 +1243,23 @@ describe(`Element Prop Bags`, () => {
   const prop_bag_cases = [
     {
       element_name: `aside`,
-      prop_name: `asideProps`,
+      prop_name: `aside_props`,
       bag: { class: [`custom-class`, { 'custom-object-class': true }] },
-      extra_props: { hide: true, autoHide: false },
+      extra_props: { hide: true, auto_hide: false },
       selector: `aside.toc`,
       expected_classes: [`toc`, `custom-class`, `custom-object-class`],
       expected_attributes: { hidden: ``, 'aria-hidden': `true` },
     },
     {
       element_name: `nav`,
-      prop_name: `navProps`,
+      prop_name: `nav_props`,
       bag: { class: `custom-class` },
       selector: `aside.toc nav`,
       expected_classes: [`custom-class`],
     },
     {
       element_name: `title`,
-      prop_name: `titleProps`,
+      prop_name: `title_props`,
       bag: { class: { 'custom-class': true } },
       extra_props: { title: `Test Custom Title` },
       selector: `aside.toc nav .toc-title`,
@@ -1267,7 +1267,7 @@ describe(`Element Prop Bags`, () => {
     },
     {
       element_name: `ol`,
-      prop_name: `olProps`,
+      prop_name: `ol_props`,
       bag: { class: `custom-class`, start: 3, reversed: true },
       selector: `aside.toc nav ol`,
       expected_classes: [`custom-class`],
@@ -1275,7 +1275,7 @@ describe(`Element Prop Bags`, () => {
     },
     {
       element_name: `li`,
-      prop_name: `liProps`,
+      prop_name: `li_props`,
       bag: { class: `custom-class`, onclick: vi.fn<() => void>(), value: 7 },
       selector: `aside.toc nav ol li`,
       expected_classes: [`active`, `custom-class`],
@@ -1285,7 +1285,7 @@ describe(`Element Prop Bags`, () => {
     },
     {
       element_name: `open button`,
-      prop_name: `openButtonProps`,
+      prop_name: `open_button_props`,
       bag: {
         class: `custom-class`,
         disabled: true,
@@ -1330,7 +1330,7 @@ describe(`Element Prop Bags`, () => {
 
       mount_toc({
         ...extra_props,
-        ...(has_user_click ? { onOpenChange: on_open_change } : {}),
+        ...(has_user_click ? { on_open_change } : {}),
         [prop_name]: full_bag,
       })
       await tick()
@@ -1358,13 +1358,13 @@ describe(`Element Prop Bags`, () => {
     },
   )
 
-  test(`liProps.style preserves generated styles without multiline whitespace`, async () => {
+  test(`li_props.style preserves generated styles without multiline whitespace`, async () => {
     ensure_content_for_toc_elements([
       `<h2>Parent Heading</h2>`,
       `<h3>Nested Heading</h3>`,
     ])
 
-    mount_toc({ liProps: { style: `padding-left: 10px;` } })
+    mount_toc({ li_props: { style: `padding-left: 10px;` } })
     await tick()
 
     const style_attribute = doc_query(`aside.toc nav ol li:nth-child(2)`).getAttribute(
@@ -1448,8 +1448,8 @@ describe(`Element Prop Bags`, () => {
   )
 })
 
-describe(`collapseSubheadings`, () => {
-  test(`all items visible when collapseSubheadings=false`, async () => {
+describe(`collapse_subheadings`, () => {
+  test(`all items visible when collapse_subheadings=false`, async () => {
     setup_nested_headings()
     mount_toc()
     await tick()
@@ -1494,7 +1494,7 @@ describe(`collapseSubheadings`, () => {
   ] as const)(`%s`, async (_, mode, active_id, expected) => {
     setup_nested_headings()
     mock_active_heading(active_id)
-    mount_toc({ collapseSubheadings: mode })
+    mount_toc({ collapse_subheadings: mode })
     await tick()
 
     expect(get_collapsed_states()).toEqual(expected)
@@ -1508,18 +1508,18 @@ describe(`collapseSubheadings`, () => {
   })
 
   test.each([`h9`, `hx`, `3`])(
-    `invalid collapseSubheadings='%s' warns once and collapses nothing`,
+    `invalid collapse_subheadings='%s' warns once and collapses nothing`,
     async (mode) => {
       setup_nested_headings()
       mock_active_heading(`section-1`)
       const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
 
       // CollapseMode forbids these, so the cast stands in for an untyped JS caller
-      mount_toc({ collapseSubheadings: mode as CollapseMode })
+      mount_toc({ collapse_subheadings: mode as CollapseMode })
       await tick()
 
       expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
-        `Toc received invalid collapseSubheadings='${mode}'. Not collapsing subheadings.`,
+        `Toc received invalid collapse_subheadings='${mode}'. Not collapsing subheadings.`,
       )
       // falling back to Infinity alone would still collapse, since the template and the
       // active-index lookup only test the mode for truthiness
@@ -1532,7 +1532,7 @@ describe(`collapseSubheadings`, () => {
     setup_nested_headings()
     // no rect mock: happy-dom reports top=0 for every heading, so set_active_heading walks
     // last-to-first and stops immediately, making the trailing h3 (Sub 2.1) active
-    mount_toc({ collapseSubheadings: true })
+    mount_toc({ collapse_subheadings: true })
     await tick()
 
     // both h2s stay open (top level never collapses) plus Sub 2.1 as the active item;
@@ -1559,7 +1559,7 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
     try {
       set_headings(2)
       mount_toc()
-      mount_toc({ scrollBehavior: `auto` })
+      mount_toc({ scroll_behavior: `auto` })
       await tick()
       const panels = document.querySelectorAll(`aside.toc`)
       for (const link of panels[0].querySelectorAll<HTMLAnchorElement>(`li > a`))

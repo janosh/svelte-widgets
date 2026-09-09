@@ -16,7 +16,7 @@ test(`retries a failed index download after its caller aborts`, async () => {
   controller.abort()
   pending.reject(new Error(`Index unavailable`))
   await expect(aborted).resolves.toMatchObject({ name: `AbortError` })
-  await expect(load(params)).resolves.toMatchObject({ options: [], hasMore: false })
+  await expect(load(params)).resolves.toMatchObject({ options: [], has_more: false })
   expect(load_pagefind).toHaveBeenCalledTimes(2)
   expect(search).toHaveBeenCalledExactlyOnceWith(`guide`)
 })
@@ -76,7 +76,7 @@ test.each([
     expect((await current).options.map(({ label }) => label)).toEqual([`Current 0`])
     const next = await load({ search: `current`, offset: 1, limit: 1 })
     expect(next.options.map(({ label }) => label)).toEqual([`Current 0`, `Current 1`])
-    expect(next.hasMore).toBe(false)
+    expect(next.has_more).toBe(false)
     expect(load_pagefind).toHaveBeenCalledOnce()
     expect(search.mock.calls.filter(([query]) => query === `current`)).toHaveLength(1)
     expect(results.obsolete[0].data).toHaveBeenCalledTimes(stage === `shard` ? 1 : 0)
@@ -138,7 +138,7 @@ test.each([
     if (offset) {
       const first = await load(params)
       expect(first.options.map(({ label }) => label)).toEqual(previous)
-      expect(first.hasMore).toBe(true)
+      expect(first.has_more).toBe(true)
     }
     for (let attempt = 0; attempt < attempts; attempt++) {
       const partial = await load({ ...params, offset })
@@ -148,7 +148,7 @@ test.each([
       ])
       expect(partial.replace).toBe(true)
       expect(partial.error?.message).toBe(`Fragment unavailable`)
-      expect(partial.hasMore).toBe(true)
+      expect(partial.has_more).toBe(true)
     }
     // Retry restarts the UI offset but must keep already-visible results and their order.
     const recovered = await load({ ...params, limit: retry_limit })
@@ -161,7 +161,7 @@ test.each([
     ])
     expect(recovered).toMatchObject({
       replace: true,
-      hasMore: retry_limit === 1,
+      has_more: retry_limit === 1,
       error: undefined,
     })
     expect(search).toHaveBeenCalledExactlyOnceWith(`content`)
@@ -204,12 +204,12 @@ test.each([0, 10_000])(
     const load = create_pagefind_loader(`unused`, () => options)
     expect(await load({ search: ` `, offset: 0, limit: 1 })).toEqual({
       options: [],
-      hasMore: false,
+      has_more: false,
     })
     expect(search).not.toHaveBeenCalled()
     const collect = vi.spyOn(Array.prototype, `flat`)
     const first = await load({ search: `guide`, offset: 0, limit: 1 })
-    expect(first.hasMore).toBe(true)
+    expect(first.has_more).toBe(true)
     expect(first.options).toMatchObject([{ label: `Guide`, description: `A < B & C` }])
     const second = await load({ search: `guide`, offset: 1, limit: 1 })
     // Cached arrays grow in place, so inspect their extent rather than summing live references.
@@ -219,7 +219,7 @@ test.each([0, 10_000])(
     ).toBe(true)
     collect.mockRestore()
     expect(unloaded_data).not.toHaveBeenCalled()
-    expect(second.hasMore).toBe(unloaded_count > 0)
+    expect(second.has_more).toBe(unloaded_count > 0)
     expect(second.options).toHaveLength(2)
     expect(second.options[1]).toMatchObject({
       id: `pagefind:guide:1:/guide.html#details`,

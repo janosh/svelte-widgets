@@ -44,8 +44,8 @@
 {:else if props.component === `nav`}
   {@const { component, ...rest } = props}
   <Nav {...rest}>
-    {#snippet link({ href, label, isActive })}
-      <a data-testid="nav-link" {href} data-is-active={isActive}>{label}</a>
+    {#snippet link({ href, label, is_active })}
+      <a data-testid="nav-link" {href} data-is-active={is_active}>{label}</a>
     {/snippet}
     {#snippet item({ href, label, is_active, is_dropdown, render_default })}
       <div

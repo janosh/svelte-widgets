@@ -19,13 +19,13 @@ Configure how selected options behave in the dropdown. Try different modes:
     ['checkboxes', 'Selected options stay visible and each is prefixed by a checkbox'],
   ] as const
   let selected: string[] = $state(['C', 'Go', 'TypeScript', 'Python'])
-  let keepSelectedInDropdown: false | 'plain' | 'checkboxes' = $state('checkboxes')
+  let keep_selected_in_dropdown: false | 'plain' | 'checkboxes' = $state('checkboxes')
 </script>
 
 {#each keep_selected_options as [mode, label] (mode)}
   <label>
-    <input type="radio" bind:group={keepSelectedInDropdown} value={mode} /><code
-      >keepSelectedInDropdown = {mode}</code
+    <input type="radio" bind:group={keep_selected_in_dropdown} value={mode} /><code
+      >keep_selected_in_dropdown = {mode}</code
     >
     &nbsp; <span>{label}</span>
   </label>
@@ -35,9 +35,9 @@ Configure how selected options behave in the dropdown. Try different modes:
   id="tech-interactive"
   options={languages}
   bind:selected
-  {keepSelectedInDropdown}
+  {keep_selected_in_dropdown}
   placeholder="Choose languages..."
-  closeDropdownOnSelect={false}
+  close_dropdown_on_select={false}
 />
 
 <style>

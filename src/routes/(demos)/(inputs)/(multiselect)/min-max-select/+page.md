@@ -1,6 +1,6 @@
 ## Min/max number of selected options
 
-`maxSelect={5}` prevents users from selecting more than 5 options.
+`max_select={5}` prevents users from selecting more than 5 options.
 
 ```svelte example id="languages"
 <script lang="ts">
@@ -30,11 +30,11 @@
 
 <MultiSelect
   options={languages}
-  maxSelect={5}
+  max_select={5}
   placeholder="What languages do you know?"
-  minSelect={1}
+  min_select={1}
   bind:selected
-  onmaxreached={() => (max_msg = `Maximum of 5 reached!`)}
+  on_max_reached={() => (max_msg = `Maximum of 5 reached!`)}
 >
   {#snippet children({ option })}
     {@render language_option(option)}
@@ -47,10 +47,10 @@
 </p>
 ```
 
-When setting an integer value for `maxSelect` Multiselect will
+When setting an integer value for `max_select` Multiselect will
 
-- close options dropdown when reaching `maxSelect` items
-- prevent users from selecting more options after reaching `maxSelect` items
+- close options dropdown when reaching `max_select` items
+- prevent users from selecting more options after reaching `max_select` items
 
 `required={3}` means users have to pick at least 3 options before they can submit a form.
 
@@ -69,14 +69,14 @@ When setting an integer value for `maxSelect` Multiselect will
     options={[1, 2, 3, 4, 5, 6]}
     required={3}
     name="numbers"
-    sortSelected
+    sort_selected
     placeholder="Pick at least 3..."
   />
   <button>submit</button>
 </form>
 ```
 
-`maxSelect={n}` and `required={m}` can be combined when `n >= m`.
+`max_select={n}` and `required={m}` can be combined when `n >= m`.
 
 ```svelte example id="max-select-with-required"
 <script lang="ts">
@@ -92,9 +92,9 @@ When setting an integer value for `maxSelect` Multiselect will
   <MultiSelect
     options={[1, 2, 3, 4, 5, 6]}
     required={2}
-    maxSelect={3}
+    max_select={3}
     name="numbers"
-    sortSelected
+    sort_selected
   />
   <button>submit</button>
 </form>
@@ -102,7 +102,7 @@ When setting an integer value for `maxSelect` Multiselect will
 
 ## Select All Option
 
-Use `selectAllOption` to add a "Select all" button at the top of the dropdown. It respects `maxSelect` (only selects up to the limit) and skips disabled options. Optionally set `shortcuts={{ select_all: 'ctrl+a' }}` to enable the keyboard shortcut (disabled by default to avoid hijacking the browser's native Ctrl+A).
+Use `select_all_option` to add a "Select all" button at the top of the dropdown. It respects `max_select` (only selects up to the limit) and skips disabled options. Optionally set `shortcuts={{ select_all: 'ctrl+a' }}` to enable the keyboard shortcut (disabled by default to avoid hijacking the browser's native Ctrl+A).
 
 ```svelte example id="select-all-option-demo"
 <script lang="ts">
@@ -123,9 +123,9 @@ Use `selectAllOption` to add a "Select all" button at the top of the dropdown. I
 <MultiSelect
   options={fruits}
   bind:selected
-  selectAllOption
+  select_all_option
   shortcuts={{ select_all: `ctrl+a` }}
-  maxSelect={5}
+  max_select={5}
   placeholder="Pick your favorite fruits"
 />
 
@@ -157,7 +157,7 @@ Pass a string to customize the label:
 <MultiSelect
   options={colors}
   bind:selected
-  selectAllOption="Add all colors"
+  select_all_option="Add all colors"
   placeholder="Select colors..."
 />
 
@@ -172,7 +172,7 @@ Pass a string to customize the label:
 
 ## Initialize with `value` prop
 
-For single select (`maxSelect={1}`), you can use `bind:value` to initialize the selected option. Simpler than `selected={[option]}`. Works with any option type (strings, numbers, objects).
+For single select (`max_select={1}`), you can use `bind:value` to initialize the selected option. Simpler than `selected={[option]}`. Works with any option type (strings, numbers, objects).
 
 ```svelte example id="single-select-bind-value"
 <script lang="ts">
@@ -191,7 +191,7 @@ For single select (`maxSelect={1}`), you can use `bind:value` to initialize the 
   let selected_color: ColorOption | null = $state(options[2]) // Preselect Blue
 </script>
 
-<MultiSelect {options} bind:value={selected_color} maxSelect={1} />
+<MultiSelect {options} bind:value={selected_color} max_select={1} />
 
 <p style="color: {selected_color?.value}">
   Selected: <strong>{selected_color?.label ?? `none`}</strong>
@@ -221,5 +221,5 @@ For single select (`maxSelect={1}`), you can use `bind:value` to initialize the 
   let value: ObjectOption | null = $state(null)
 </script>
 
-<MultiSelect {options} maxSelect={1} bind:value />
+<MultiSelect {options} max_select={1} bind:value />
 ```

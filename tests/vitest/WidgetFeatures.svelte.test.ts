@@ -31,10 +31,10 @@ const fire_key = (target: Element, key: string) =>
 
 test(`split collapse restores size and Home/End respect bounds`, async () => {
   const target = target_for()
-  const onresize = vi.fn()
+  const on_resize = vi.fn()
   const component = mount(SplitPane, {
     target,
-    props: { collapsible: true, ratio: 0.4, onresize },
+    props: { collapsible: true, ratio: 0.4, on_resize },
   })
   onTestFinished(() => unmount(component))
   flushSync()
@@ -49,7 +49,7 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
     await tick()
     expect(target.style.getPropertyValue(`--split-pane-size`)).toBe(size)
   }
-  expect(onresize).toHaveBeenCalledTimes(4)
+  expect(on_resize).toHaveBeenCalledTimes(4)
 })
 
 test.each([
@@ -65,20 +65,20 @@ test.each([
       state: `running`,
       label: `Parsing`,
       value,
-      oncancel: vi.fn(),
-      onretry: vi.fn(),
+      on_cancel: vi.fn(),
+      on_retry: vi.fn(),
     })
     mount(TaskStatus, { target, props })
     const progress = doc_query(`progress`)
     expect(progress.getAttribute(`value`)).toBe(expected)
     expect(progress.getAttribute(`aria-label`)).toBe(`Parsing`)
     target.querySelector(`button`)?.click()
-    expect(props.oncancel).toHaveBeenCalledOnce()
+    expect(props.on_cancel).toHaveBeenCalledOnce()
     props.state = `error`
     await tick()
     expect(target.querySelector(`progress`)).toBeNull()
     target.querySelector(`button`)?.click()
-    expect(props.onretry).toHaveBeenCalledOnce()
+    expect(props.on_retry).toHaveBeenCalledOnce()
   },
 )
 
@@ -86,13 +86,13 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   const target = target_for()
   const signals: AbortSignal[] = []
   const reject_loads: ((reason: Error) => void)[] = []
-  const onfiles = vi.fn((_files: File[], signal: AbortSignal) => {
+  const on_files = vi.fn((_files: File[], signal: AbortSignal) => {
     signals.push(signal)
     return new Promise<void>((_resolve, reject) => {
       reject_loads.push(reject)
     })
   })
-  const onreject = vi.fn()
+  const on_reject = vi.fn()
   const component = mount(FileInput, {
     target,
     props: {
@@ -100,8 +100,8 @@ test(`file picker validates, cancels superseded work, removes files and permits 
       max_size: 10,
       multiple: true,
       max_files: 1,
-      onfiles,
-      onreject,
+      on_files,
+      on_reject,
     },
   })
   const input = doc_query<HTMLInputElement>(`input`)
@@ -118,12 +118,12 @@ test(`file picker validates, cancels superseded work, removes files and permits 
     good,
   ])
   expect(
-    onreject.mock.calls[0][0].map(({ reason }: { reason: string }) => reason),
+    on_reject.mock.calls[0][0].map(({ reason }: { reason: string }) => reason),
   ).toEqual([`type`, `size`, `count`])
-  expect(onfiles.mock.calls[0][0]).toEqual([good])
+  expect(on_files.mock.calls[0][0]).toEqual([good])
   await select([good])
   expect(signals[0].aborted).toBe(true)
-  expect(onfiles).toHaveBeenCalledTimes(2)
+  expect(on_files).toHaveBeenCalledTimes(2)
   reject_loads[0](new Error(`Superseded failure`))
   await tick()
   expect(target.textContent).not.toContain(`Superseded failure`)
@@ -142,7 +142,7 @@ test(`file picker validates, cancels superseded work, removes files and permits 
     .find((button) => button.textContent === `Retry`)
     ?.click()
   await tick()
-  expect(onfiles).toHaveBeenCalledTimes(4)
+  expect(on_files).toHaveBeenCalledTimes(4)
   await unmount(component)
   expect(signals[3].aborted).toBe(true)
 })
@@ -200,10 +200,10 @@ test.each([false, true])(
       { id: `root`, label: `Root`, load },
       { id: `last`, label: `Last` },
     ]
-    const onselect = vi.fn()
+    const on_select = vi.fn()
     const component = mount(TreeView, {
       target,
-      props: { nodes, onselect, expanded: new Set(initial ? [`root`] : []) },
+      props: { nodes, on_select, expanded: new Set(initial ? [`root`] : []) },
     })
     onTestFinished(() => unmount(component))
     const root = doc_query(`[data-tree-id="root"]`)
@@ -216,7 +216,7 @@ test.each([false, true])(
     await tick()
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(`child`)
     fire_key(document.activeElement as Element, `Enter`)
-    expect(onselect).toHaveBeenCalledWith({ id: `child`, label: `Child` })
+    expect(on_select).toHaveBeenCalledWith({ id: `child`, label: `Child` })
     fire_key(document.activeElement as Element, `ArrowLeft`)
     await tick()
     fire_key(root, `ArrowLeft`)

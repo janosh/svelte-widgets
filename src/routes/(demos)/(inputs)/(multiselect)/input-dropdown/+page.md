@@ -1,13 +1,13 @@
 ## Editable Input Dropdown
 
-Use `selectedDisplay="input"` with `maxSelect={1}` for a `<datalist>`-like
+Use `selected_display="input"` with `max_select={1}` for a `<datalist>`-like
 autocomplete field backed by the existing dropdown
 ([discussion #221](https://github.com/janosh/svelte-widgets/discussions/221)).
-The visible input is editable: `searchText` mirrors what the user sees and, when
+The visible input is editable: `search_text` mirrors what the user sees and, when
 the component has a `name`, is what the form submits. `value`/`selected` only
 update once an option is committed (clicked or activated via `Enter`). Editing
-the text after a commit clears `value` but keeps the draft in `searchText`.
-Forward extra `<input>` attributes via `inputProps` (e.g. `maxlength`,
+the text after a commit clears `value` but keeps the draft in `search_text`.
+Forward extra `<input>` attributes via `input_props` (e.g. `maxlength`,
 `autocapitalize`, `aria-describedby`).
 Click the caret after selecting an option or typing custom text to show the full
 list, then click it again to close the dropdown. Committed options are marked
@@ -33,12 +33,12 @@ with `aria-selected="true"`.
 
 <MultiSelect
   options={color_options}
-  maxSelect={1}
-  selectedDisplay="input"
-  bind:searchText={color_text}
+  max_select={1}
+  selected_display="input"
+  bind:search_text={color_text}
   bind:value={selected_color}
   placeholder="Type or pick a color"
-  inputProps={{ maxlength: 20, [`aria-label`]: `Color input dropdown` }}
+  input_props={{ maxlength: 20, [`aria-label`]: `Color input dropdown` }}
 >
   {#snippet option({ option })}
     <span style="color: {option.value}">{option.label}</span>
@@ -53,8 +53,8 @@ with `aria-selected="true"`.
 
 ## Quiet Datalist Mode
 
-Combine with `allowUserOptions`, `createOptionMsg={null}` and an empty
-`noMatchingOptionsMsg` for a "quiet" mode where typed text becomes the value
+Combine with `allow_user_options`, `create_option_msg={null}` and an empty
+`no_matching_options_msg` for a "quiet" mode where typed text becomes the value
 without any dropdown messaging — a near drop-in replacement for a plain
 `<input>` that still benefits from option suggestions when `options` are
 provided.
@@ -67,12 +67,12 @@ provided.
 </script>
 
 <MultiSelect
-  maxSelect={1}
-  selectedDisplay="input"
-  allowUserOptions
-  createOptionMsg={null}
-  noMatchingOptionsMsg=""
-  bind:searchText={tag_text}
+  max_select={1}
+  selected_display="input"
+  allow_user_options
+  create_option_msg={null}
+  no_matching_options_msg=""
+  bind:search_text={tag_text}
   name="tag"
   placeholder="Type any tag"
 />

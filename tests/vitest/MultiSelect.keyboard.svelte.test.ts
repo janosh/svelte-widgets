@@ -42,7 +42,7 @@ test(`arrow keys traverse matching options and the create-option row in both dir
   const create_msg = `Create this option...` // component default
   mount_multiselect({
     options: [`foo`, `bar`, `baz`],
-    allowUserOptions: true,
+    allow_user_options: true,
     open: true,
   })
 
@@ -106,30 +106,30 @@ test(`option row Enter key selects option`, async () => {
 test(`Enter on a closed dropdown reopens it instead of selecting the auto-active option`, async () => {
   const props = $state<MultiSelectProps>({
     options: [`Alpha`, `Beta`],
-    autoActiveFirstOption: true,
+    auto_active_first_option: true,
     selected: [],
-    activeIndex: null,
+    active_index: null,
     open: false,
   })
   mount_multiselect(props)
   const input = await focus_input()
-  expect(props.activeIndex).toBe(0)
+  expect(props.active_index).toBe(0)
 
   input.dispatchEvent(fresh_key(`Escape`))
   await tick()
   expect(props.open).toBe(false)
-  expect(props.activeIndex).toBeNull() // nothing active while collapsed
+  expect(props.active_index).toBeNull() // nothing active while collapsed
 
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
   expect(props.selected).toEqual([])
   expect(props.open).toBe(true)
-  expect(props.activeIndex).toBe(0)
+  expect(props.active_index).toBe(0)
 })
 
 test(`closes dropdown on tab out and blur to external element`, async () => {
-  const onclose = vi.fn()
-  mount_multiselect({ options: [1, 2, 3], onclose })
+  const on_close = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], on_close })
   expect(doc_query(`ul.options.hidden`)).toBeInstanceOf(HTMLUListElement)
 
   const input = await focus_input()
@@ -138,7 +138,7 @@ test(`closes dropdown on tab out and blur to external element`, async () => {
   input.dispatchEvent(fresh_key(`Tab`))
   await tick()
   expect(doc_query(`ul.options.hidden`)).toBeInstanceOf(HTMLUListElement)
-  expect(onclose).toHaveBeenCalledTimes(1)
+  expect(on_close).toHaveBeenCalledTimes(1)
 
   // reopen, then blur to an element outside the component
   input.focus()
@@ -147,17 +147,17 @@ test(`closes dropdown on tab out and blur to external element`, async () => {
   document.body.append(external)
   input.dispatchEvent(new FocusEvent(`blur`, { bubbles: true, relatedTarget: external }))
   await tick()
-  expect(onclose).toHaveBeenCalledTimes(2)
+  expect(on_close).toHaveBeenCalledTimes(2)
 })
 
-test(`Enter key deselection preserves searchText (matching mouse behavior)`, async () => {
+test(`Enter key deselection preserves search_text (matching mouse behavior)`, async () => {
   // fixes #362, where only the mouse path preserved the filter
   mount_multiselect({
     options: [1, 2, 3],
     selected: [1, 2],
-    resetFilterOnAdd: false,
-    closeDropdownOnSelect: false,
-    keepSelectedInDropdown: `plain`, // Allow clicking on selected options to toggle them
+    reset_filter_on_add: false,
+    close_dropdown_on_select: false,
+    keep_selected_in_dropdown: `plain`, // Allow clicking on selected options to toggle them
   })
 
   const input = get_input()
@@ -176,13 +176,13 @@ test(`Enter key deselection preserves searchText (matching mouse behavior)`, asy
 })
 
 test.each([null, `custom add option message`])(
-  `arrow keys on empty multiselect toggle createOptionMsg as active with createOptionMsg=%s`,
-  async (createOptionMsg) => {
+  `arrow keys on empty multiselect toggle create_option_msg as active with create_option_msg=%s`,
+  async (create_option_msg) => {
     mount_multiselect({
       options: [],
-      allowUserOptions: true,
-      searchText: `foo`,
-      createOptionMsg,
+      allow_user_options: true,
+      search_text: `foo`,
+      create_option_msg,
     })
 
     const input = get_input()
@@ -193,20 +193,20 @@ test.each([null, `custom add option message`])(
     const user_msg_li = document.querySelector<HTMLLIElement>(`ul.options li.user-msg`)
     if (!user_msg_li) throw new Error(`li.user-msg should exist`)
 
-    expect(user_msg_li.classList.contains(`active`)).toBe(createOptionMsg !== null)
-    if (createOptionMsg === null) {
+    expect(user_msg_li.classList.contains(`active`)).toBe(create_option_msg !== null)
+    if (create_option_msg === null) {
       expect(user_msg_li.textContent?.trim()).toBe(`No matching options`)
-    } else expect(user_msg_li.textContent?.trim()).toBe(createOptionMsg)
+    } else expect(user_msg_li.textContent?.trim()).toBe(create_option_msg)
   },
 )
 
-test(`backspace does not remove items when minSelect would be violated`, async () => {
+test(`backspace does not remove items when min_select would be violated`, async () => {
   // https://github.com/janosh/svelte-widgets/issues/327
   const options = [`Red`, `Green`, `Yellow`]
   const selected = [`Red`]
-  const minSelect = 1
+  const min_select = 1
 
-  mount_multiselect({ options, selected, minSelect })
+  mount_multiselect({ options, selected, min_select })
 
   const backspace = fresh_key(`Backspace`)
   const input = get_input()
@@ -326,8 +326,8 @@ describe(`arrow key navigation between selected items`, () => {
   })
 
   test(`remove-all button clears highlight`, async () => {
-    // minSelect=1 so one item survives remove-all, exposing stale highlighted_idx
-    const input = setup([`Red`, `Green`, `Blue`], { minSelect: 1 })
+    // min_select=1 so one item survives remove-all, exposing stale highlighted_idx
+    const input = setup([`Red`, `Green`, `Blue`], { min_select: 1 })
     // highlight idx 0 (Red), the item that survives remove-all
     for (let step = 0; step < 3; step++) input.dispatchEvent(press(`ArrowLeft`))
     await tick()
@@ -377,7 +377,7 @@ describe(`arrow key navigation between selected items`, () => {
       options: [first, second],
       selected: [first, second],
       duplicates: true,
-      onremove: ({ option }: { option: unknown }) => (removed = option),
+      on_remove: ({ option }: { option: unknown }) => (removed = option),
     })
     document.querySelectorAll<HTMLElement>(`ul.selected li button.remove`)[1]?.click()
     await tick()
@@ -483,7 +483,7 @@ describe(`keyboard shortcuts`, () => {
     [`ctrl+shift+alt+s`, `s`, { ctrlKey: true, shiftKey: true, altKey: true }],
   ] as const)(`%s selects all and prevents default`, async (shortcut, key, modifiers) => {
     const { props, event } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: shortcut } },
+      { select_all_option: true, shortcuts: { select_all: shortcut } },
       { key, ...modifiers },
     )
     expect(props.selected).toEqual([`a`, `b`, `c`])
@@ -513,7 +513,7 @@ describe(`keyboard shortcuts`, () => {
   test(`custom shortcuts override defaults`, async () => {
     // the default ctrl+a must stop working once select_all is rebound
     const { props, input } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: `ctrl+e` } },
+      { select_all_option: true, shortcuts: { select_all: `ctrl+e` } },
       { key: `a`, ctrlKey: true },
     )
     expect(props.selected).toEqual([])
@@ -530,7 +530,7 @@ describe(`keyboard shortcuts`, () => {
     [`explicitly null`, { shortcuts: { select_all: null } }],
   ])(`select_all %s: ctrl+a not swallowed`, async (_label, extra_props) => {
     const { props, event } = await test_shortcut(
-      { selectAllOption: true, ...extra_props },
+      { select_all_option: true, ...extra_props },
       { key: `a`, ctrlKey: true },
     )
     expect(props.selected).toEqual([])
@@ -539,19 +539,19 @@ describe(`keyboard shortcuts`, () => {
 
   test.each([
     [
-      `select_all respects maxSelect`,
+      `select_all respects max_select`,
       {
         selected: [],
-        selectAllOption: true,
+        select_all_option: true,
         shortcuts: { select_all: `ctrl+a` },
-        maxSelect: 2,
+        max_select: 2,
       },
       { key: `a`, ctrlKey: true },
       2,
     ],
     [
-      `clear_all respects minSelect`,
-      { selected: [`a`, `b`, `c`], minSelect: 1 },
+      `clear_all respects min_select`,
+      { selected: [`a`, `b`, `c`], min_select: 1 },
       { key: `Backspace`, ctrlKey: true },
       1,
     ],
@@ -560,18 +560,18 @@ describe(`keyboard shortcuts`, () => {
     expect(props.selected).toHaveLength(expected_length)
   })
 
-  test(`clear_all skipped when searchText is non-empty`, async () => {
+  test(`clear_all skipped when search_text is non-empty`, async () => {
     const { props, event } = await test_shortcut(
-      { selected: [`a`, `b`], searchText: `xyz` },
+      { selected: [`a`, `b`], search_text: `xyz` },
       { key: `Backspace`, ctrlKey: true },
     )
     expect(props.selected).toEqual([`a`, `b`])
     expect(event.defaultPrevented).toBe(false)
   })
 
-  test(`select_all does nothing when selectAllOption is false`, async () => {
+  test(`select_all does nothing when select_all_option is false`, async () => {
     const { props } = await test_shortcut(
-      { selectAllOption: false, shortcuts: { select_all: `ctrl+a` } },
+      { select_all_option: false, shortcuts: { select_all: `ctrl+a` } },
       { key: `a`, ctrlKey: true },
     )
     expect(props.selected).toEqual([])
@@ -602,7 +602,7 @@ describe(`keyboard shortcuts`, () => {
 
   test(`shortcuts are blocked when disabled=true`, async () => {
     const { props } = await test_shortcut(
-      { selectAllOption: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
+      { select_all_option: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
       { key: `a`, ctrlKey: true },
     )
     expect(props.selected).toEqual([])
@@ -615,7 +615,7 @@ describe(`keyboard shortcuts`, () => {
     `invalid shortcut format "%s" does not trigger action`,
     async (shortcut, modifiers) => {
       const { props } = await test_shortcut(
-        { selectAllOption: true, shortcuts: { select_all: shortcut } },
+        { select_all_option: true, shortcuts: { select_all: shortcut } },
         { key: `a`, ...modifiers },
       )
       expect(props.selected).toEqual([])
@@ -625,7 +625,7 @@ describe(`keyboard shortcuts`, () => {
   test.each([
     [
       `select_all`,
-      { selectAllOption: true, selected: [], shortcuts: { select_all: `ctrl+a` } },
+      { select_all_option: true, selected: [], shortcuts: { select_all: `ctrl+a` } },
       `a`,
       { ctrlKey: true },
       [`a`, `b`, `c`],
@@ -685,7 +685,7 @@ describe(`keyboard shortcuts`, () => {
     [
       `select_all=arrowdown overrides navigation`,
       { select_all: `arrowdown` },
-      { open: true, selectAllOption: true },
+      { open: true, select_all_option: true },
       `ArrowDown`,
       true,
       [`a`, `b`, `c`],
@@ -729,7 +729,7 @@ test(`falsy option values (0, '') are navigable and selectable via keyboard`, as
   await tick()
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
 
-  // Enter selects option 0 (previously fell through the `if (activeOption)` check)
+  // Enter selects option 0 (previously fell through the `if (active_option)` check)
   input.dispatchEvent(fresh_key(`ArrowUp`))
   await tick()
   input.dispatchEvent(fresh_key(`Enter`))
@@ -737,8 +737,8 @@ test(`falsy option values (0, '') are navigable and selectable via keyboard`, as
   expect(props.selected).toEqual([0])
 })
 
-test(`keyboard navigation respects maxOptions: arrow keys wrap within rendered options`, async () => {
-  mount_multiselect({ options: [`a`, `b`, `c`, `d`, `e`], maxOptions: 2 })
+test(`keyboard navigation respects max_options: arrow keys wrap within rendered options`, async () => {
+  mount_multiselect({ options: [`a`, `b`, `c`, `d`, `e`], max_options: 2 })
   const input = get_input()
 
   // 3 ArrowDowns: a -> b -> wrap back to a (previously walked into hidden options c/d/e)

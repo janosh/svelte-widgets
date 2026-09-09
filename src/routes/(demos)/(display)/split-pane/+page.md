@@ -65,16 +65,16 @@ Set `first_px` to use pixels instead of a ratio. Its width remains stable when t
 
 ### Main API
 
-| Prop                                       | Purpose                                                                                                                                                   |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `bind:ratio={0.5}`                         | First pane's share of its container in ratio mode.                                                                                                        |
-| `min_ratio={0.15}`, `max_ratio={0.85}`     | Bounds for ratio mode. Pixel limits can tighten them.                                                                                                     |
-| `bind:first_px`                            | Supplying a number enables pixel mode.                                                                                                                    |
-| `min_px`, `max_px`, `second_min_px`        | First-pane bounds and space reserved for the second pane. If both minimums cannot fit, the first pane's minimum wins.                                     |
-| `collapsible`, `bind:collapsed`            | Enable Enter to collapse/restore; collapse retains the previous size.                                                                                     |
-| `orientation="horizontal"`                 | Side-by-side panes by default. For `vertical`, use a column flex layout, a definite parent height and `height: var(--split-pane-size)` on the first pane. |
-| `onresize({ ratio, first_px, collapsed })` | Receive pointer/keyboard changes; save bindings in your own store for persistence.                                                                        |
-| `aria-label`                               | Accessible name of the focusable separator.                                                                                                               |
+| Prop                                        | Purpose                                                                                                                                                   |
+| ------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bind:ratio={0.5}`                          | First pane's share of its container in ratio mode.                                                                                                        |
+| `min_ratio={0.15}`, `max_ratio={0.85}`      | Bounds for ratio mode. Pixel limits can tighten them.                                                                                                     |
+| `bind:first_px`                             | Supplying a number enables pixel mode.                                                                                                                    |
+| `min_px`, `max_px`, `second_min_px`         | First-pane bounds and space reserved for the second pane. If both minimums cannot fit, the first pane's minimum wins.                                     |
+| `collapsible`, `bind:collapsed`             | Enable Enter to collapse/restore; collapse retains the previous size.                                                                                     |
+| `orientation="horizontal"`                  | Side-by-side panes by default. For `vertical`, use a column flex layout, a definite parent height and `height: var(--split-pane-size)` on the first pane. |
+| `on_resize({ ratio, first_px, collapsed })` | Receive pointer/keyboard changes; save bindings in your own store for persistence.                                                                        |
+| `aria-label`                                | Accessible name of the focusable separator.                                                                                                               |
 
 ### Keyboard behavior
 

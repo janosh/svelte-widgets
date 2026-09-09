@@ -9,7 +9,7 @@
     nodes,
     expanded = $bindable(new Set<string>()),
     selected = $bindable(),
-    onselect,
+    on_select,
     children,
     label = `Tree`,
     ...rest
@@ -17,7 +17,7 @@
     nodes: readonly TreeNode[]
     expanded?: Set<string>
     selected?: string
-    onselect?: (node: TreeNode) => void
+    on_select?: (node: TreeNode) => void
     children?: Snippet<[TreeNode]>
     label?: string
   } = $props()
@@ -106,7 +106,7 @@
   const select = (node: TreeNode) => {
     if (node.disabled) return
     selected = node.id
-    onselect?.(node)
+    on_select?.(node)
   }
   function keydown(event: KeyboardEvent): void {
     if (is_editable_event_target(event.target) || is_modifier_chord(event)) return

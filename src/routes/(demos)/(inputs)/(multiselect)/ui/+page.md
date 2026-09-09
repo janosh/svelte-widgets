@@ -22,8 +22,8 @@
 <MultiSelect
   {options}
   placeholder="Pick your favorite foods"
-  removeAllTitle="Remove all foods"
-  closeDropdownOnSelect
+  remove_all_title="Remove all foods"
+  close_dropdown_on_select
   style="width: min(500px, 100%)"
   invalid
 />
@@ -40,7 +40,7 @@
 
 <MultiSelect
   {options}
-  closeDropdownOnSelect="retain-focus"
+  close_dropdown_on_select="retain-focus"
   placeholder="Pick a framework"
 />
 ```

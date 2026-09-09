@@ -44,15 +44,15 @@
     tooltip_options,
     breakpoint = 767,
     dropdown_column_threshold = 10,
-    onnavigate,
-    onopen,
-    onclose,
+    on_navigate,
+    on_open,
+    on_close,
     ...rest
   }: {
     routes: NavRoute[]
     children?: Snippet<[{ is_open: boolean; panel_id: string; routes: NavRoute[] }]>
     item?: Snippet<[ItemSnippetParams]>
-    link?: Snippet<[{ href: string; label: string; isActive: boolean }]>
+    link?: Snippet<[{ href: string; label: string; is_active: boolean }]>
     menu_props?: Omit<HTMLAttributes<HTMLDivElement>, `id`>
     // `href`/`aria-current` stay component-owned: one shared bag would point every link
     // at the same page
@@ -68,13 +68,13 @@
     breakpoint?: number
     // Desktop panes use two columns above this number of visible child links.
     dropdown_column_threshold?: number
-    onnavigate?: (data: {
+    on_navigate?: (data: {
       href: string
       event: MouseEvent
       route: NavRouteObject
     }) => false | undefined
-    onopen?: () => void
-    onclose?: () => void
+    on_open?: () => void
+    on_close?: () => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
@@ -95,9 +95,9 @@
 
   $effect(() => {
     if (is_open && !prev_is_open) {
-      onopen?.()
+      on_open?.()
     } else if (!is_open && prev_is_open) {
-      onclose?.()
+      on_close?.()
     }
     prev_is_open = is_open
   })
@@ -216,8 +216,8 @@
       event.preventDefault()
       return
     }
-    if (onnavigate) {
-      const result = onnavigate({ href: route.href, event, route })
+    if (on_navigate) {
+      const result = on_navigate({ href: route.href, event, route })
       if (result === false) {
         event.preventDefault()
         return
@@ -255,7 +255,7 @@
     {@render link({
       href: parsed_route.href,
       label: formatted.label,
-      isActive: is_current(parsed_route.href) === `page`,
+      is_active: is_current(parsed_route.href) === `page`,
     })}
   {:else}
     <a

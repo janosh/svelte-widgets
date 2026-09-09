@@ -378,8 +378,8 @@ test.describe(`portal feature`, () => {
 })
 
 // Windowing needs real layout (happy-dom reports zero heights). The internal /multiselect-virtual-list
-// page mounts 2000 options with rows pinned to the default 30px itemHeight.
-test.describe(`virtualList`, () => {
+// page mounts 2000 options with rows pinned to the default 30px item_height.
+test.describe(`virtual_list`, () => {
   const item_height = 30
   const total_options = 2000
   const rendered_options = (page: Page): Locator =>
@@ -670,7 +670,8 @@ test(`form demo previews every submitted FormData field`, async ({ page }) => {
 test(`failed option loads can be retried from the keyboard without selecting an option`, async ({
   page,
 }) => {
-  await page.goto(`/infinite-scroll`)
+  // Wait for the live Markdown example to hydrate before toggling its state.
+  await page.goto(`/infinite-scroll`, { waitUntil: `networkidle` })
   await page.getByRole(`checkbox`, { name: `Fail the next request` }).check()
   const input = page.getByPlaceholder(`Search 10,000 items...`)
   const multiselect = page.locator(`div.multiselect`).filter({ has: input })

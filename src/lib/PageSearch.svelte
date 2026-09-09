@@ -14,7 +14,7 @@
     | `actions`
     | `dialog`
     | `input`
-    | `loadOptions`
+    | `load_options`
     | `max_recent`
     | `open`
     | `recent_actions_key`
@@ -70,12 +70,12 @@
   bind:input
   {fuzzy}
   aria_label="Site search"
-  loadOptions={{
+  load_options={{
     fetch: load_options,
-    debounceMs: debounce_ms,
-    batchSize: clamp_integer(batch_size, 1, Infinity, 12),
+    debounce_ms,
+    batch_size: clamp_integer(batch_size, 1, Infinity, 12),
   }}
   placeholder="Search every page..."
-  noMatchingOptionsMsg="No matching pages"
+  no_matching_options_msg="No matching pages"
   {...rest}
 />

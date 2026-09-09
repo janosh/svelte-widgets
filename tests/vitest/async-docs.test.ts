@@ -81,12 +81,12 @@ describe(`documented async loaders`, () => {
       fetch_mock.mockResolvedValueOnce(Response.json({ items: [`first`], total: 2 }))
       await expect(load_options(params)).resolves.toEqual({
         options: [`first`],
-        hasMore: true,
+        has_more: true,
       })
       fetch_mock.mockResolvedValueOnce(Response.json({ items: [], total: 0 }))
       await expect(load_options({ ...params, search: `no match` })).resolves.toEqual({
         options: [],
-        hasMore: false,
+        has_more: false,
       })
     },
   )
@@ -109,7 +109,7 @@ describe(`documented async loaders`, () => {
     )
     await expect(load_options({ ...params, search: `new` })).resolves.toEqual({
       options: [`new`],
-      hasMore: true,
+      has_more: true,
     })
     stale_json.resolve({ items: [`old`], next_cursor: `wrong` })
     await expect(stale_request).rejects.toMatchObject({ name: `AbortError` })
@@ -123,14 +123,14 @@ describe(`documented async loaders`, () => {
     )
     await expect(load_options({ ...params, offset: 1, search: `new` })).resolves.toEqual({
       options: [`last`],
-      hasMore: false,
+      has_more: false,
     })
     for (const [request_url] of fetch_mock.mock.calls.slice(2)) {
       expect(query_params(request_url).get(`cursor`)).toBe(`next & #`)
     }
 
     fetch_mock.mockResolvedValueOnce(Response.json({ items: [], next_cursor: null }))
-    await expect(load_options(params)).resolves.toEqual({ options: [], hasMore: false })
+    await expect(load_options(params)).resolves.toEqual({ options: [], has_more: false })
     const last_request = fetch_mock.mock.calls.at(-1)?.[0]
     expect(query_params(last_request).has(`cursor`)).toBe(false)
   })

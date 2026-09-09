@@ -9,61 +9,64 @@
   type ItemId = string | number
   type ItemRecord = { id: ItemId; idx: number; item: Item }
 
-  // With the default getId, non-primitive items need an id property (name it via idKey) to
-  // key the each block; a custom getId can derive the key from anything.
+  // With the default get_id, non-primitive items need an id property (name it via id_key) to
+  // key the each block; a custom get_id can derive the key from anything.
   // See https://svelte.dev/docs/svelte/each#Keyed-each-blocks.
   let {
     animate = true,
     order = `balanced-stable`,
-    calcCols = (masonryWidth: number, minColWidth: number, gap: number): number =>
-      Math.min(items.length, Math.floor((masonryWidth + gap) / (minColWidth + gap)) || 1),
+    calc_cols = (masonry_width: number, min_col_width: number, gap: number): number =>
+      Math.min(
+        items.length,
+        Math.floor((masonry_width + gap) / (min_col_width + gap)) || 1,
+      ),
     duration_ms = 200,
     gap = 20,
-    getId = (item: Item): ItemId => {
+    get_id = (item: Item): ItemId => {
       if (typeof item === `number`) return item
       if (typeof item === `string`) return item
-      const resolved = (item as Record<string, unknown>)[idKey]
+      const resolved = (item as Record<string, unknown>)[id_key]
       if (typeof resolved === `string` || typeof resolved === `number`) return resolved
       throw new Error(
-        `Masonry: item[${JSON.stringify(idKey)}] is ${typeof resolved}, expected string | number. Item: ${JSON.stringify(item)}`,
+        `Masonry: item[${JSON.stringify(id_key)}] is ${typeof resolved}, expected string | number. Item: ${JSON.stringify(item)}`,
       )
     },
-    idKey = `id`,
-    initialCols,
+    id_key = `id`,
+    initial_cols,
     items,
-    masonryHeight = $bindable(0),
-    masonryWidth = $bindable(0),
-    maxColWidth = 500,
-    minColWidth = 330,
-    columnProps = {},
+    masonry_height = $bindable(0),
+    masonry_width = $bindable(0),
+    max_col_width = 500,
+    min_col_width = 330,
+    column_props = {},
     children,
     div = $bindable(),
     // Virtualization props
     virtualize = false,
-    getEstimatedHeight,
+    get_estimated_height,
     overscan = 5,
     height,
     ...rest
   }: Omit<HTMLAttributes<HTMLDivElement>, `children`> & {
     animate?: boolean
     order?: MasonryOrder
-    calcCols?: (masonryWidth: number, minColWidth: number, gap: number) => number
+    calc_cols?: (masonry_width: number, min_col_width: number, gap: number) => number
     duration_ms?: number
     gap?: number
-    getId?: (item: Item) => ItemId
-    idKey?: string
-    initialCols?: number
+    get_id?: (item: Item) => ItemId
+    id_key?: string
+    initial_cols?: number
     items: Item[]
-    masonryHeight?: number
-    masonryWidth?: number
-    maxColWidth?: number
-    minColWidth?: number
-    columnProps?: Omit<HTMLAttributes<HTMLDivElement>, `children`>
+    masonry_height?: number
+    masonry_width?: number
+    max_col_width?: number
+    min_col_width?: number
+    column_props?: Omit<HTMLAttributes<HTMLDivElement>, `children`>
     children?: Snippet<[{ idx: number; item: Item }]>
     div?: HTMLDivElement
     // Virtualization props
     virtualize?: boolean
-    getEstimatedHeight?: (item: Item) => number
+    get_estimated_height?: (item: Item) => number
     overscan?: number
     height?: number | string
   } = $props()
@@ -85,7 +88,7 @@
   const item_records = new Map<ItemId, ItemRecord>()
 
   $effect(() => {
-    const current_ids = new Set(items.map(getId))
+    const current_ids = new Set(items.map(get_id))
     untrack(() => {
       for (const cache of [item_heights, stable_assignments, item_records]) {
         for (const id of cache.keys()) {
@@ -96,7 +99,7 @@
   })
 
   function get_item_record(item: Item, idx: number): ItemRecord {
-    const id = getId(item)
+    const id = get_id(item)
     const existing = item_records.get(id)
     if (existing?.item === item && existing.idx === idx) return existing
 
@@ -107,7 +110,7 @@
 
   // Zero heights/estimates are unmeasured, so continue to the next estimate.
   const get_height = (item: Item): number =>
-    item_heights.get(getId(item)) || getEstimatedHeight?.(item) || avg_measured_height
+    item_heights.get(get_id(item)) || get_estimated_height?.(item) || avg_measured_height
 
   // Keep measuring when order changes; virtualized grids use estimates only.
   const measure_height = (item_id: ItemId) => (node: HTMLElement) => {
@@ -123,44 +126,44 @@
   let effective_order = $derived(virtualize ? `row-first` : order)
 
   $effect.pre(() => {
-    if (maxColWidth < minColWidth) {
+    if (max_col_width < min_col_width) {
       console.warn(
-        `Masonry: maxColWidth (${maxColWidth}) < minColWidth (${minColWidth}).`,
+        `Masonry: max_col_width (${max_col_width}) < min_col_width (${min_col_width}).`,
       )
     }
   })
-  // masonryWidth is 0 during SSR: prefer initialCols over the historical 1920px fallback.
+  // masonry_width is 0 during SSR: prefer initial_cols over the historical 1920px fallback.
   // CSS container queries hide the excess SSR columns before hydration.
   let n_cols = $derived.by(() => {
     if (
-      initialCols !== undefined &&
-      (!Number.isInteger(initialCols) || initialCols < 1)
+      initial_cols !== undefined &&
+      (!Number.isInteger(initial_cols) || initial_cols < 1)
     ) {
       throw new Error(
-        `Masonry: initialCols must be a positive integer when provided, received ${initialCols}.`,
+        `Masonry: initial_cols must be a positive integer when provided, received ${initial_cols}.`,
       )
     }
-    if (!(masonryWidth > 0) && initialCols !== undefined)
-      return Math.min(items.length, initialCols)
-    const cols = calcCols(masonryWidth > 0 ? masonryWidth : 1920, minColWidth, gap)
+    if (!(masonry_width > 0) && initial_cols !== undefined)
+      return Math.min(items.length, initial_cols)
+    const cols = calc_cols(masonry_width > 0 ? masonry_width : 1920, min_col_width, gap)
     // Indexing columns requires a positive integer; zero is valid for an empty list.
     if (!Number.isInteger(cols) || cols < (items.length > 0 ? 1 : 0)) {
       throw new Error(
-        `Masonry: calcCols must return a positive integer, received ${cols}.`,
+        `Masonry: calc_cols must return a positive integer, received ${cols}.`,
       )
     }
     return cols
   })
 
-  // Container query rules: breakpoint(n) = (minColWidth + gap) * n - gap
+  // Container query rules: breakpoint(n) = (min_col_width + gap) * n - gap
   let container_query_css = $derived(
     Array.from({ length: n_cols - 1 }, (_, idx) => {
       const col_count = idx + 1
-      const max_width = (minColWidth + gap) * (col_count + 1) - gap - 1
+      const max_width = (min_col_width + gap) * (col_count + 1) - gap - 1
       const min_width =
         col_count === 1
           ? ``
-          : `(min-width: ${(minColWidth + gap) * col_count - gap}px) and `
+          : `(min-width: ${(min_col_width + gap) * col_count - gap}px) and `
       return `@container masonry ${min_width}(max-width: ${max_width}px) { [data-masonry-id="${unique_id}"] > .col:nth-child(n+${
         col_count + 1
       }) { display: none !important; } }`
@@ -261,7 +264,7 @@
       let sum = 0
       return column_items.map(({ item }) => {
         // `||` as in get_height: `??` would collapse the scroll window to gaps alone
-        sum += (virtualize ? getEstimatedHeight?.(item) || 150 : get_height(item)) + gap
+        sum += (virtualize ? get_estimated_height?.(item) || 150 : get_height(item)) + gap
         return sum
       })
     }),
@@ -269,7 +272,7 @@
 
   // viewport height: numbers used directly, CSS strings like `80vh` need the measured value
   let container_height = $derived(
-    typeof height === `number` ? height : masonryHeight || 400,
+    typeof height === `number` ? height : masonry_height || 400,
   )
 
   // same height as a CSS value; strings like `80vh` pass through
@@ -283,7 +286,7 @@
 
   // wait for a real container height, else CSS units like `80vh` flicker
   let can_virtualize = $derived(
-    virtualize && (typeof height === `number` || masonryHeight > 0),
+    virtualize && (typeof height === `number` || masonry_height > 0),
   )
   // Filtering can shrink the grid before the browser reports its clamped scroll offset.
   // Clamp against the tallest column so shorter columns stay aligned with the shared view.
@@ -332,8 +335,8 @@
 {/snippet}
 
 <div
-  bind:clientWidth={masonryWidth}
-  bind:clientHeight={masonryHeight}
+  bind:clientWidth={masonry_width}
+  bind:clientHeight={masonry_height}
   bind:this={div}
   style:gap="{gap}px"
   {...rest}
@@ -346,13 +349,13 @@
     {@const { start, end, pad_top, pad_bottom } = col_windows[col_idx]}
     {@const visible_items = can_virtualize ? col.slice(start, end) : col}
     <div
-      {...columnProps}
-      class={[`col`, `col-${col_idx}`, columnProps.class]}
+      {...column_props}
+      class={[`col`, `col-${col_idx}`, column_props.class]}
       style:display="grid"
       style:flex="1 1 0"
       style:min-width="0"
       style:gap="{gap}px"
-      style:max-width="{maxColWidth}px"
+      style:max-width="{max_col_width}px"
       style:padding-top={can_virtualize ? `${pad_top}px` : undefined}
       style:padding-bottom={can_virtualize ? `${pad_bottom}px` : undefined}
     >

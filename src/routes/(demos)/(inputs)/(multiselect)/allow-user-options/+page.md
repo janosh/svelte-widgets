@@ -1,6 +1,6 @@
 ## Allow Custom User Input
 
-`allowUserOptions={true}` means users can enter custom options by entering text and hitting enter.
+`allow_user_options={true}` means users can enter custom options by entering text and hitting enter.
 
 ```svelte example id="foods"
 <script lang="ts">
@@ -19,11 +19,11 @@
 
 <MultiSelect
   options={foods}
-  allowUserOptions
+  allow_user_options
   {duplicates}
   bind:selected
-  createOptionMsg={({ searchText }) => `Add '${searchText}' as custom food`}
-  oncreate={({ option }) => (last_created = String(option))}
+  create_option_msg={({ search_text }) => `Add '${search_text}' as custom food`}
+  on_create={({ option }) => (last_created = String(option))}
 />
 
 {#if last_created}
@@ -44,7 +44,7 @@
 
 ## Append User Input
 
-`allowUserOptions="append"` is similar to `true` but also adds user-entered custom options to the dropdown list. They'll remain there for re-selection if users remove their custom options from selected items.
+`allow_user_options="append"` is similar to `true` but also adds user-entered custom options to the dropdown list. They'll remain there for re-selection if users remove their custom options from selected items.
 
 ```svelte example id="languages"
 <script lang="ts">
@@ -73,10 +73,10 @@
 
 <MultiSelect
   options={languages}
-  allowUserOptions="append"
+  allow_user_options="append"
   bind:selected={selected_append}
-  createOptionMsg={({ searchText, options }) =>
-    `Add '${searchText}' (${options.length} languages available)`}
+  create_option_msg={({ search_text, options }) =>
+    `Add '${search_text}' (${options.length} languages available)`}
 >
   {#snippet children({ option })}
     {@render language_option(option)}
@@ -102,10 +102,10 @@ You can start with no options and let users populate MultiSelect from scratch. I
 {/if}
 
 <MultiSelect
-  allowUserOptions="append"
+  allow_user_options="append"
   bind:selected
-  noMatchingOptionsMsg=""
-  createOptionMsg={null}
+  no_matching_options_msg=""
+  create_option_msg={null}
 />
 ```
 
@@ -145,23 +145,23 @@ You can start with no options and let users populate MultiSelect from scratch. I
 </div>
 
 <MultiSelect
-  allowUserOptions="append"
+  allow_user_options="append"
   bind:selected
-  noMatchingOptionsMsg=""
-  createOptionMsg={null}
+  no_matching_options_msg=""
+  create_option_msg={null}
   parse_paste={(text) =>
     text
       .split(/[,\n]+/)
       .map((s) => s.trim())
       .filter(Boolean)}
-  oncreate={({ option }) => {
+  on_create={({ option }) => {
     if (String(option).length < 3) {
       log = [...log, `✗ rejected "${option}" (too short)`]
       return false
     }
     log = [...log, `+ ${option}`]
   }}
-  onremove={({ option }) => (log = [...log, `- ${option}`])}
+  on_remove={({ option }) => (log = [...log, `- ${option}`])}
 />
 
 <p style="margin-top: 0.5em">

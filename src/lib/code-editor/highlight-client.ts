@@ -80,7 +80,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     if (!active) return
     try {
       const pending = Promise.resolve(
-        backend.cancel_highlight({ docId: doc_id, requestId: active.request_id }),
+        backend.cancel_highlight({ doc_id, request_id: active.request_id }),
       )
       cancellation = Promise.allSettled([cancellation, pending]).then(() => undefined)
     } catch {
@@ -94,7 +94,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
       .splice(queue_head)
       .filter((task) => task.kind !== `resync` && task.kind !== `edit`)
     // Snapshot now: edits queued behind this task expect the backend at this revision.
-    const args = { docId: doc_id, revision: model.revision, text: model.text() }
+    const args = { doc_id, revision: model.revision, text: model.text() }
     const task: QueuedTask = {
       kind: `resync`,
       run: async () => {
@@ -117,12 +117,12 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   const apply_transaction = (transaction: EditorTransaction): void => {
     cancel_highlight()
     const args = {
-      docId: doc_id,
-      baseRevision: transaction.base_revision,
+      doc_id,
+      base_revision: transaction.base_revision,
       revision: transaction.revision,
       edits: transaction.edits,
-      expectedLineCount: model.line_count,
-      expectedLength: model.length,
+      expected_line_count: model.line_count,
+      expected_length: model.length,
     }
     enqueue({
       kind: `edit`,
@@ -152,11 +152,11 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     active_highlight = { request_id, revision }
     try {
       const spans = await backend.highlight_lines({
-        docId: doc_id,
-        requestId: request_id,
+        doc_id,
+        request_id,
         revision,
-        startLine: window.start_line,
-        endLine: window.end_line,
+        start_line: window.start_line,
+        end_line: window.end_line,
       })
       const active = active_highlight
       if (
@@ -189,7 +189,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
           try {
             resolve(
               await backend.open_doc({
-                docId: doc_id,
+                doc_id,
                 uri: model.uri,
                 revision: model.revision,
                 text: model.text(),
@@ -211,7 +211,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
       for (const task of queue.splice(queue_head)) task.abort?.(closed_error())
       await settled()
       await cancellation
-      await backend.close_doc({ docId: doc_id })
+      await backend.close_doc({ doc_id })
     })())
   return {
     open,

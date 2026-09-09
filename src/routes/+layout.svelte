@@ -192,9 +192,9 @@
     {/each}
   {/snippet}
   <Toc
-    headingSelector="main > :where(h2, h3)"
+    heading_selector="main > :where(h2, h3)"
     breakpoint={1100}
-    minItems={5}
+    min_items={5}
     bind:open={toc_open}
     footer={reference_links.length ? reference_navigation : undefined}
   />

@@ -17,18 +17,18 @@ Group related options together with visual headers. Add a `group` key to option 
   }).flatMap(([group, options]) => options.map((option) => ({ label: option, group })))
 
   let selected: ObjectOption[] = $state([])
-  let searchMatchesGroups = $state(false)
+  let search_matches_groups = $state(false)
 </script>
 
 <label>
-  <input type="checkbox" bind:checked={searchMatchesGroups} />
-  <code>searchMatchesGroups</code> — Type "Backend" to match all backend options
+  <input type="checkbox" bind:checked={search_matches_groups} />
+  <code>search_matches_groups</code> — Type "Backend" to match all backend options
 </label>
 
 <MultiSelect
   {options}
   bind:selected
-  {searchMatchesGroups}
+  {search_matches_groups}
   placeholder="Select technologies..."
 />
 
@@ -39,7 +39,7 @@ Group related options together with visual headers. Add a `group` key to option 
 
 ### Collapsible Groups
 
-Enable `collapsibleGroups` to let users collapse/expand groups. Use `searchExpandsCollapsedGroups` or `keyboardExpandsCollapsedGroups` for auto-expansion:
+Enable `collapsible_groups` to let users collapse/expand groups. Use `search_expands_collapsed_groups` or `keyboard_expands_collapsed_groups` for auto-expansion:
 
 ```svelte example id="collapsible-groups-demo"
 <script lang="ts">
@@ -58,47 +58,47 @@ Enable `collapsibleGroups` to let users collapse/expand groups. Use `searchExpan
   }).flatMap(([group, options]) => options.map((option) => ({ label: option, group })))
 
   let selected: ObjectOption[] = $state([])
-  let collapsedGroups: Set<string> = $state(new Set([`Dairy`])) // Dairy starts collapsed
-  let searchExpandsCollapsedGroups = $state(true)
-  let keyboardExpandsCollapsedGroups = $state(true)
-  let collapseAllGroups: (() => void) | undefined = $state()
-  let expandAllGroups: (() => void) | undefined = $state()
+  let collapsed_groups: Set<string> = $state(new Set([`Dairy`])) // Dairy starts collapsed
+  let search_expands_collapsed_groups = $state(true)
+  let keyboard_expands_collapsed_groups = $state(true)
+  let collapse_all_groups: (() => void) | undefined = $state()
+  let expand_all_groups: (() => void) | undefined = $state()
 </script>
 
 <div style="display: flex; flex-wrap: wrap; gap: 1em; margin-bottom: 0.5em">
   <label>
-    <input type="checkbox" bind:checked={searchExpandsCollapsedGroups} />
-    <code>searchExpandsCollapsedGroups</code>
+    <input type="checkbox" bind:checked={search_expands_collapsed_groups} />
+    <code>search_expands_collapsed_groups</code>
   </label>
   <label>
-    <input type="checkbox" bind:checked={keyboardExpandsCollapsedGroups} />
-    <code>keyboardExpandsCollapsedGroups</code>
+    <input type="checkbox" bind:checked={keyboard_expands_collapsed_groups} />
+    <code>keyboard_expands_collapsed_groups</code>
   </label>
 </div>
 
 <div style="display: flex; gap: 1em; margin-bottom: 1em">
-  <button onclick={() => collapseAllGroups?.()}>Collapse All</button>
-  <button onclick={() => expandAllGroups?.()}>Expand All</button>
+  <button onclick={() => collapse_all_groups?.()}>Collapse All</button>
+  <button onclick={() => expand_all_groups?.()}>Expand All</button>
 </div>
 
 <MultiSelect
   {options}
   bind:selected
-  collapsibleGroups
-  bind:collapsedGroups
-  {searchExpandsCollapsedGroups}
-  {keyboardExpandsCollapsedGroups}
-  bind:collapseAllGroups
-  bind:expandAllGroups
+  collapsible_groups
+  bind:collapsed_groups
+  {search_expands_collapsed_groups}
+  {keyboard_expands_collapsed_groups}
+  bind:collapse_all_groups
+  bind:expand_all_groups
   placeholder="Click headers or use arrow keys..."
 />
 
-<p>Collapsed: {[...collapsedGroups].join(`, `) || `none`}</p>
+<p>Collapsed: {[...collapsed_groups].join(`, `) || `none`}</p>
 ```
 
 ### Per-Group Select All
 
-Enable `groupSelectAll` to add a toggle button to each group header:
+Enable `group_select_all` to add a toggle button to each group header:
 
 ```svelte example id="group-select-all"
 <script lang="ts">
@@ -118,8 +118,8 @@ Enable `groupSelectAll` to add a toggle button to each group header:
 <MultiSelect
   {options}
   bind:selected
-  groupSelectAll
-  keepSelectedInDropdown="checkboxes"
+  group_select_all
+  keep_selected_in_dropdown="checkboxes"
   placeholder="Select colors..."
 />
 
@@ -128,7 +128,7 @@ Enable `groupSelectAll` to add a toggle button to each group header:
 
 ### Ungrouped Options & Sorting
 
-Use `ungroupedPosition` for options without a `group` key, and `groupSortOrder` to sort groups:
+Use `ungrouped_position` for options without a `group` key, and `group_sort_order` to sort groups:
 
 ```svelte example id="ungrouped-sorting"
 <script lang="ts">
@@ -150,21 +150,21 @@ Use `ungroupedPosition` for options without a `group` key, and `groupSortOrder` 
   const options: ObjectOption[] = [...ungrouped, ...grouped]
 
   let selected: ObjectOption[] = $state([])
-  let ungroupedPosition: 'first' | 'last' = $state(`first`)
-  let groupSortOrder: 'none' | 'asc' | 'desc' = $state(`asc`)
+  let ungrouped_position: 'first' | 'last' = $state(`first`)
+  let group_sort_order: 'none' | 'asc' | 'desc' = $state(`asc`)
 </script>
 
 <div style="display: flex; gap: 2em; margin-bottom: 1em">
   <label>
-    ungroupedPosition:
-    <select bind:value={ungroupedPosition}>
+    ungrouped_position:
+    <select bind:value={ungrouped_position}>
       <option value="first">first</option>
       <option value="last">last</option>
     </select>
   </label>
   <label>
-    groupSortOrder:
-    <select bind:value={groupSortOrder}>
+    group_sort_order:
+    <select bind:value={group_sort_order}>
       <option value="none">none</option>
       <option value="asc">asc</option>
       <option value="desc">desc</option>
@@ -175,15 +175,15 @@ Use `ungroupedPosition` for options without a `group` key, and `groupSortOrder` 
 <MultiSelect
   {options}
   bind:selected
-  {ungroupedPosition}
-  {groupSortOrder}
+  {ungrouped_position}
+  {group_sort_order}
   placeholder="Select items..."
 />
 ```
 
 ### Sticky Headers & Dynamic Loading
 
-Use `stickyGroupHeaders` for long lists. Grouping also works with `loadOptions`:
+Use `sticky_group_headers` for long lists. Grouping also works with `load_options`:
 
 ```svelte example id="sticky-dynamic"
 <script lang="ts">
@@ -218,32 +218,32 @@ Use `stickyGroupHeaders` for long lists. Grouping also works with `loadOptions`:
       : server_data
     return {
       options: filtered.slice(offset, offset + limit),
-      hasMore: offset + limit < filtered.length,
+      has_more: offset + limit < filtered.length,
     }
   }
 
   let selected: TeamMember[] = $state([])
-  let stickyGroupHeaders = $state(true)
+  let sticky_group_headers = $state(true)
 </script>
 
 <label style="margin-bottom: 1em; display: block">
-  <input type="checkbox" bind:checked={stickyGroupHeaders} />
-  <code>stickyGroupHeaders</code>
+  <input type="checkbox" bind:checked={sticky_group_headers} />
+  <code>sticky_group_headers</code>
 </label>
 
 <MultiSelect
-  loadOptions={load_options}
+  {load_options}
   bind:selected
-  {stickyGroupHeaders}
-  collapsibleGroups
-  groupSelectAll
+  {sticky_group_headers}
+  collapsible_groups
+  group_select_all
   placeholder="Scroll to see sticky headers..."
 />
 ```
 
 ### Custom Group Header
 
-Use the `groupHeader` snippet for complete control over header rendering:
+Use the `group_header` snippet for complete control over header rendering:
 
 ```svelte example id="custom-group-header-demo"
 <script lang="ts">
@@ -271,12 +271,12 @@ Use the `groupHeader` snippet for complete control over header rendering:
 <MultiSelect
   {options}
   bind:selected
-  collapsibleGroups
-  groupSelectAll
+  collapsible_groups
+  group_select_all
   placeholder="Select cities..."
-  liGroupHeaderStyle="gap: 8px"
+  li_group_header_style="gap: 8px"
 >
-  {#snippet groupHeader({ group, options, collapsed })}
+  {#snippet group_header({ group, options, collapsed })}
     <span style="font-size: 1.2em">{emojis[group]}</span>
     <strong>{group}</strong>
     <span style="opacity: 0.6; font-size: 0.85em">({options.length})</span>
@@ -287,23 +287,23 @@ Use the `groupHeader` snippet for complete control over header rendering:
 
 ## Props Reference
 
-| Prop                             | Type                              | Default   | Description                              |
-| -------------------------------- | --------------------------------- | --------- | ---------------------------------------- |
-| `collapsibleGroups`              | `boolean`                         | `false`   | Enable click-to-collapse groups          |
-| `collapsedGroups`                | `Set<string>`                     | `new Set` | Bindable set of collapsed group names    |
-| `groupSelectAll`                 | `boolean`                         | `false`   | Add select/deselect all button per group |
-| `ungroupedPosition`              | `'first' \| 'last'`               | `'first'` | Where to render ungrouped options        |
-| `groupSortOrder`                 | `'none' \| 'asc' \| 'desc' \| fn` | `'none'`  | Sort groups alphabetically or custom     |
-| `searchExpandsCollapsedGroups`   | `boolean`                         | `false`   | Auto-expand when search matches          |
-| `searchMatchesGroups`            | `boolean`                         | `false`   | Include group name in search matching    |
-| `keyboardExpandsCollapsedGroups` | `boolean`                         | `false`   | Auto-expand on arrow key navigation      |
-| `stickyGroupHeaders`             | `boolean`                         | `false`   | Keep headers visible when scrolling      |
-| `liGroupHeaderClass`             | `string`                          | `''`      | CSS class for group header `<li>`        |
-| `liGroupHeaderStyle`             | `string \| null`                  | `null`    | Inline style for group headers           |
-| `groupHeader`                    | `Snippet`                         | —         | Custom group header rendering            |
-| `collapseAllGroups`              | `() => void`                      | —         | Bindable function to collapse all        |
-| `expandAllGroups`                | `() => void`                      | —         | Bindable function to expand all          |
-| `ongroupToggle`                  | `fn`                              | —         | Callback when group toggled              |
+| Prop                                | Type                              | Default   | Description                              |
+| ----------------------------------- | --------------------------------- | --------- | ---------------------------------------- |
+| `collapsible_groups`                | `boolean`                         | `false`   | Enable click-to-collapse groups          |
+| `collapsed_groups`                  | `Set<string>`                     | `new Set` | Bindable set of collapsed group names    |
+| `group_select_all`                  | `boolean`                         | `false`   | Add select/deselect all button per group |
+| `ungrouped_position`                | `'first' \| 'last'`               | `'first'` | Where to render ungrouped options        |
+| `group_sort_order`                  | `'none' \| 'asc' \| 'desc' \| fn` | `'none'`  | Sort groups alphabetically or custom     |
+| `search_expands_collapsed_groups`   | `boolean`                         | `false`   | Auto-expand when search matches          |
+| `search_matches_groups`             | `boolean`                         | `false`   | Include group name in search matching    |
+| `keyboard_expands_collapsed_groups` | `boolean`                         | `false`   | Auto-expand on arrow key navigation      |
+| `sticky_group_headers`              | `boolean`                         | `false`   | Keep headers visible when scrolling      |
+| `li_group_header_class`             | `string`                          | `''`      | CSS class for group header `<li>`        |
+| `li_group_header_style`             | `string \| null`                  | `null`    | Inline style for group headers           |
+| `group_header`                      | `Snippet`                         | —         | Custom group header rendering            |
+| `collapse_all_groups`               | `() => void`                      | —         | Bindable function to collapse all        |
+| `expand_all_groups`                 | `() => void`                      | —         | Bindable function to expand all          |
+| `on_group_toggle`                   | `fn`                              | —         | Callback when group toggled              |
 
 ### CSS Variables
 

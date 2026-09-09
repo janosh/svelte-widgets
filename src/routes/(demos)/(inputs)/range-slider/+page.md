@@ -45,7 +45,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
       disabled={locked}
       tick_position={side_ticks ? `sides` : `below`}
       {tick_count}
-      oncommit={() => commits++}
+      on_commit={() => commits++}
       style="--range-slider-color: light-dark(#7c3aed, #c4b5fd)"
     />
     <p class="commit-count">{commits} commits</p>
@@ -156,7 +156,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
   step={10}
   bind:value
   format_value={(value) => '$' + value}
-  oncommit={(value) => console.log('Apply filter', value)}
+  on_commit={(value) => console.log('Apply filter', value)}
 />
 ```
 
@@ -167,7 +167,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 - **Drag or tap:** the nearest handle moves. Handles stop at one another. At the same value, drag in either direction to separate them.
 - **Keyboard:** Tab reaches each handle in a fixed order. Arrows move one step; Shift + arrow and Page Up / Down move ten. Home / End reach that handle’s allowed bounds.
 - **Type:** edits apply on Enter or blur, snap to the nearest step, and stay within the allowed interval. Escape discards a draft. Empty or invalid drafts restore the current value.
-- **Events:** binding and `oninput` update while dragging. `oncommit` runs at the end of a changed gesture, on each keyboard adjustment, or after a changed numeric edit. Pointer cancellation keeps and commits the last value. External prop updates emit neither callback.
+- **Events:** binding and `on_input` update while dragging. `on_commit` runs at the end of a changed gesture, on each keyboard adjustment, or after a changed numeric edit. Pointer cancellation keeps and commits the last value. External prop updates emit neither callback.
 
 ### Props
 
@@ -181,7 +181,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 | `tick_position`             | `below`             | `below` places min/max labels close beneath the track; `sides` shortens the track to fit labels at either end.                                                                                                 |
 | `tick_count`                | `2`                 | Total evenly spaced labels including min and max (integer ≥ 2). A count of 3 adds the midpoint. Intermediate labels appear below the track in both layouts, use `format_value`, and are independent of `step`. |
 | `show_inputs / disabled`    | `true / false`      | Make selected values read-only or disable every interaction.                                                                                                                                                   |
-| `oninput / oncommit`        | —                   | Receive a fresh value pair for live and completed edits.                                                                                                                                                       |
+| `on_input / on_commit`      | —                   | Receive a fresh value pair for live and completed edits.                                                                                                                                                       |
 
 External values must be finite, ordered, and inside the bounds. Update bounds and value together when changing the domain. Invalid configuration throws with the offending values. Extra HTML attributes are forwarded to the group. Native form reset discards numeric drafts; reset the binding in your form handler to restore a saved interval.
 

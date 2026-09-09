@@ -12,7 +12,7 @@
   } from './types'
   import {
     document_used_ids,
-    slugify_heading,
+    slugify_heading as default_slugify_heading,
     unique_heading_id,
   } from './heading-anchors'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
@@ -20,99 +20,99 @@
   import { override_style } from './attachments/shared'
 
   let {
-    activeHeading = $bindable(null),
-    activeHeadingScrollOffset = 100,
-    activeTocLi = $bindable(null),
+    active_heading = $bindable(null),
+    active_heading_scroll_offset = 100,
+    active_toc_li = $bindable(null),
     aside = $bindable(),
     breakpoint = 1000,
     desktop = $bindable(true),
     flash_clicked_headings_for_ms: flash_duration_ms = 1500,
-    getHeadingData = (node: HTMLHeadingElement): TocHeadingData => ({
+    get_heading_data = (node: HTMLHeadingElement): TocHeadingData => ({
       id: node.id,
       level: Number(node.nodeName[1]),
       title: node.textContent ?? ``,
     }),
     headings = $bindable([]),
-    headingSelector = `:is(h2, h3, h4)`,
-    excludeSelector = `.toc-exclude`,
+    heading_selector = `:is(h2, h3, h4)`,
+    exclude_selector = `.toc-exclude`,
     hide = $bindable(false),
-    hideOnIntersect = null,
-    autoIds = true,
-    autoHide = true,
-    keepActiveTocItemInView = true,
-    minItems = 0,
+    hide_on_intersect = null,
+    auto_ids = true,
+    auto_hide = true,
+    keep_active_toc_item_in_view = true,
+    min_items = 0,
     nav = $bindable(),
     open = $bindable(false),
-    openButtonLabel = `Open table of contents`,
-    closeButtonLabel = `Close table of contents`,
-    reactToKeys = [`ArrowDown`, `ArrowUp`, ` `, `Enter`, `Escape`, `Tab`],
-    scrollBehavior = `smooth`,
+    open_button_label = `Open table of contents`,
+    close_button_label = `Close table of contents`,
+    react_to_keys = [`ArrowDown`, `ArrowUp`, ` `, `Enter`, `Escape`, `Tab`],
+    scroll_behavior = `smooth`,
     title = `On this page`,
-    tocItems = $bindable([]),
-    warnOnEmpty = false,
-    collapseSubheadings = false,
-    slugifyHeading = (node: HTMLHeadingElement, idx: number) =>
-      slugify_heading(node.textContent ?? ``) || `heading-${idx + 1}`,
-    blurParams = { duration: 200 },
-    openTocIcon,
-    titleSnippet,
-    tocItem,
+    toc_items = $bindable([]),
+    warn_on_empty = false,
+    collapse_subheadings = false,
+    slugify_heading = (node: HTMLHeadingElement, idx: number) =>
+      default_slugify_heading(node.textContent ?? ``) || `heading-${idx + 1}`,
+    blur_params = { duration: 200 },
+    open_toc_icon,
+    title_snippet,
+    toc_item,
     footer,
-    onOpenChange,
-    asideProps = {},
-    navProps = {},
-    titleProps = {},
-    olProps = {},
-    liProps = {},
-    openButtonProps = {},
-    openButtonIconProps = {},
+    on_open_change,
+    aside_props = {},
+    nav_props = {},
+    title_props = {},
+    ol_props = {},
+    li_props = {},
+    open_button_props = {},
+    open_button_icon_props = {},
   }: {
-    activeHeading?: HTMLHeadingElement | null
-    activeHeadingScrollOffset?: number
-    activeTocLi?: HTMLLIElement | null
+    active_heading?: HTMLHeadingElement | null
+    active_heading_scroll_offset?: number
+    active_toc_li?: HTMLLIElement | null
     aside?: HTMLElement | undefined
     breakpoint?: number // px window width below which the ToC switches to mobile
     desktop?: boolean
     flash_clicked_headings_for_ms?: number
-    getHeadingData?: (node: HTMLHeadingElement) => TocHeadingData | null
-    // the querySelectorAll(headingSelector) result, exposed for binding
+    get_heading_data?: (node: HTMLHeadingElement) => TocHeadingData | null
+    // the querySelectorAll(heading_selector) result, exposed for binding
     headings?: HTMLHeadingElement[]
-    headingSelector?: string
-    excludeSelector?: string
+    heading_selector?: string
+    exclude_selector?: string
     hide?: boolean
-    hideOnIntersect?: string | HTMLElement[] | null
-    autoIds?: boolean
-    autoHide?: boolean
-    keepActiveTocItemInView?: boolean // requires scrollend event browser support
-    minItems?: number
+    hide_on_intersect?: string | HTMLElement[] | null
+    auto_ids?: boolean
+    auto_hide?: boolean
+    keep_active_toc_item_in_view?: boolean // requires scrollend event browser support
+    min_items?: number
     nav?: HTMLElement | undefined
     open?: boolean
-    openButtonLabel?: string
+    open_button_label?: string
     // the toggle stays put and becomes the close button while open, so it needs a second name
-    closeButtonLabel?: string
-    reactToKeys?: false | string[]
-    scrollBehavior?: `auto` | `smooth`
+    close_button_label?: string
+    react_to_keys?: false | string[]
+    scroll_behavior?: `auto` | `smooth`
     title?: string
-    tocItems?: HTMLLIElement[]
-    warnOnEmpty?: boolean
+    toc_items?: HTMLLIElement[]
+    warn_on_empty?: boolean
     // collapse subheadings under inactive parents. true = every level collapses
     // independently; 'h3' = deepest collapsing level, h4+ expand with their h3 ancestor
-    collapseSubheadings?: CollapseMode
-    slugifyHeading?: SlugifyHeading
-    blurParams?: BlurParams | null | undefined
-    openTocIcon?: Snippet
-    titleSnippet?: Snippet
-    tocItem?: Snippet<[HTMLHeadingElement]>
+    collapse_subheadings?: CollapseMode
+    slugify_heading?: SlugifyHeading
+    blur_params?: BlurParams | null | undefined
+    open_toc_icon?: Snippet
+    title_snippet?: Snippet
+    toc_item?: Snippet<[HTMLHeadingElement]>
     // Supplemental navigation inside the same desktop/mobile panel.
     footer?: Snippet
-    onOpenChange?: OpenChangeHandler
-    asideProps?: SvelteHTMLElements[`aside`]
-    navProps?: SvelteHTMLElements[`nav`]
-    titleProps?: SvelteHTMLElements[`h2`]
-    olProps?: SvelteHTMLElements[`ol`]
-    liProps?: SvelteHTMLElements[`li`]
-    openButtonProps?: SvelteHTMLElements[`button`]
-    openButtonIconProps?: SVGAttributes<SVGSVGElement>
+    on_open_change?: OpenChangeHandler
+    aside_props?: SvelteHTMLElements[`aside`]
+    nav_props?: SvelteHTMLElements[`nav`]
+    title_props?: SvelteHTMLElements[`h2`]
+    ol_props?: SvelteHTMLElements[`ol`]
+    li_props?: SvelteHTMLElements[`li`]
+    open_button_props?: SvelteHTMLElements[`button`]
+    open_button_icon_props?: SVGAttributes<SVGSVGElement>
   } = $props()
 
   // Distinguish the TOC from Nav's burger; cropped viewBoxes align their visual weight.
@@ -139,7 +139,7 @@
   let page_has_scrolled: boolean = $state(false)
   // desktop only
   let is_overlapping_hide_target: boolean = $state(false)
-  // target of a programmatic scroll; keeps scroll events from moving activeHeading to
+  // target of a programmatic scroll; keeps scroll events from moving active_heading to
   // intermediate headings while a smooth scroll is under way
   let scroll_target: HTMLHeadingElement | null = $state(null)
   let scroll_target_timeout: ReturnType<typeof setTimeout> | null = null
@@ -168,7 +168,7 @@
     if ((last_reported_open ?? open) === value) return
     last_reported_open = value
     open = value
-    onOpenChange?.({ open: value, desktop, trigger })
+    on_open_change?.({ open: value, desktop, trigger })
   }
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {
@@ -176,7 +176,7 @@
   }
 
   function event_targets_custom_interactive(event: LiEvent) {
-    if (!tocItem || !(event.target instanceof Element)) return false
+    if (!toc_item || !(event.target instanceof Element)) return false
     // only bypass scroll-to-heading for an interactive element nested *inside* the li;
     // the li's own fallback semantics must not count as custom content
     const interactive = event.target.closest(custom_interactive_selector)
@@ -196,14 +196,16 @@
     if (!collapse_mode_warned[mode]) {
       collapse_mode_warned[mode] = true
       console.warn(
-        `Toc received invalid collapseSubheadings='${mode}'. Not collapsing subheadings.`,
+        `Toc received invalid collapse_subheadings='${mode}'. Not collapsing subheadings.`,
       )
     }
     return false
   }
 
   // read this, never the raw prop, so an invalid value disables collapsing everywhere
-  let collapse_mode: CollapseMode = $derived(normalize_collapse_mode(collapseSubheadings))
+  let collapse_mode: CollapseMode = $derived(
+    normalize_collapse_mode(collapse_subheadings),
+  )
 
   function get_collapse_threshold(mode: CollapseMode): number {
     if (mode === true) return 6
@@ -215,7 +217,7 @@
 
   let heading_visibility: boolean[] = $derived.by(() => {
     const active_idx =
-      collapse_mode && activeHeading ? headings.indexOf(activeHeading) : null
+      collapse_mode && active_heading ? headings.indexOf(active_heading) : null
     return get_heading_visibility(levels, active_idx, collapse_threshold)
   })
 
@@ -227,13 +229,13 @@
     if (current_open === last_reported_open) return
     untrack(() => {
       last_reported_open = current_open
-      onOpenChange?.({ open: current_open, desktop, trigger: `programmatic` })
+      on_open_change?.({ open: current_open, desktop, trigger: `programmatic` })
     })
   })
 
   $effect(() => {
     void headings // register as dependencies
-    void hideOnIntersect
+    void hide_on_intersect
     check_toc_overlap()
   })
 
@@ -264,7 +266,7 @@
     (first_custom_interactive(node) ?? node)?.focus({ preventScroll: true })
 
   function focus_is_in_custom_interactive_toc_item() {
-    if (!tocItem || !(document.activeElement instanceof HTMLElement)) return false
+    if (!toc_item || !(document.activeElement instanceof HTMLElement)) return false
     const current_toc_li = document.activeElement.closest<HTMLLIElement>(`li`)
     const interactive = document.activeElement.closest<HTMLElement>(
       custom_interactive_selector,
@@ -285,29 +287,29 @@
 
   function activate_heading(node: HTMLHeadingElement, idx = headings.indexOf(node)) {
     if (idx === -1) return
-    activeHeading = node
-    activeTocLi = tocItems[idx]
+    active_heading = node
+    active_toc_li = toc_items[idx]
     scroll_target = node
     prev_scroll_target_distance = Infinity
     if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
     scroll_target_timeout = setTimeout(clear_scroll_target, scroll_target_fallback_ms)
-    node.scrollIntoView?.({ behavior: scrollBehavior, block: `start` })
+    node.scrollIntoView?.({ behavior: scroll_behavior, block: `start` })
 
     // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
     restore_scroll_behavior?.()
     restore_scroll_behavior = override_style(
       document.documentElement.style,
       `scroll-behavior`,
-      scrollBehavior,
+      scroll_behavior,
     )
 
     if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }
 
-  type SelectorName = `headingSelector` | `excludeSelector` | `hideOnIntersect`
+  type SelectorName = `heading_selector` | `exclude_selector` | `hide_on_intersect`
 
   function selector_is_valid(selector_name: SelectorName, selector: string) {
-    if (selector_name === `excludeSelector` && selector === ``) return true
+    if (selector_name === `exclude_selector` && selector === ``) return true
 
     const key = `${selector_name}:${selector}`
     if (key in selector_validity) return selector_validity[key]
@@ -316,7 +318,7 @@
       selector_validity[key] = true
     } catch {
       const fallback =
-        selector_name === `hideOnIntersect`
+        selector_name === `hide_on_intersect`
           ? `Ignoring selector.`
           : `Showing empty table of contents.`
       console.warn(`Toc received invalid ${selector_name}='${selector}'. ${fallback}`)
@@ -327,24 +329,24 @@
 
   function query_toc_headings() {
     if (
-      !selector_is_valid(`headingSelector`, headingSelector) ||
-      !selector_is_valid(`excludeSelector`, excludeSelector)
+      !selector_is_valid(`heading_selector`, heading_selector) ||
+      !selector_is_valid(`exclude_selector`, exclude_selector)
     )
       return null
 
     return Array.from(
-      document.querySelectorAll<HTMLHeadingElement>(headingSelector),
+      document.querySelectorAll<HTMLHeadingElement>(heading_selector),
     ).filter(
       (heading) =>
         !heading.closest(`aside.toc`) &&
-        (!excludeSelector || !heading.closest(excludeSelector)),
+        (!exclude_selector || !heading.closest(exclude_selector)),
     )
   }
 
   const element_matches_heading_selector = (element: Element | null) =>
     element !== null &&
-    selector_is_valid(`headingSelector`, headingSelector) &&
-    element.closest(headingSelector) !== null
+    selector_is_valid(`heading_selector`, heading_selector) &&
+    element.closest(heading_selector) !== null
 
   // only nodes that are or contain a heading can change the result: short-circuiting every
   // childList record to `true` re-queried all headings on any DOM insertion (toast, tooltip,
@@ -354,7 +356,7 @@
     return false
   }
   const childlist_touches_headings = (record: MutationRecord): boolean => {
-    if (!selector_is_valid(`headingSelector`, headingSelector)) return false
+    if (!selector_is_valid(`heading_selector`, heading_selector)) return false
     const { target } = record
     // `heading.textContent = '…'` swaps a text node: no Element in either node list, but
     // the record targets the heading itself
@@ -363,7 +365,7 @@
       some_element(
         record.addedNodes,
         (node) =>
-          node.matches(headingSelector) || Boolean(node.querySelector(headingSelector)),
+          node.matches(heading_selector) || Boolean(node.querySelector(heading_selector)),
       ) ||
       // a removed node is detached, so `main > h2` can't match it — compare against the
       // headings currently held instead
@@ -384,9 +386,9 @@
       const target = record.target
       if (target === document.body) return false
       return (
-        selector_is_valid(`headingSelector`, headingSelector) &&
-        (target.closest(headingSelector) !== null ||
-          target.querySelector(headingSelector) !== null ||
+        selector_is_valid(`heading_selector`, heading_selector) &&
+        (target.closest(heading_selector) !== null ||
+          target.querySelector(heading_selector) !== null ||
           headings.some((heading) => target.contains(heading)))
       )
     })
@@ -399,10 +401,10 @@
   ): TocHeadingData {
     if (heading.id) return data.id === heading.id ? data : { ...data, id: heading.id }
 
-    if (!autoIds) return data
+    if (!auto_ids) return data
 
     const used_ids = get_used_ids()
-    const id = unique_heading_id(data.id || slugifyHeading(heading, idx), used_ids)
+    const id = unique_heading_id(data.id || slugify_heading(heading, idx), used_ids)
     heading.id = id
     return { ...data, id }
   }
@@ -417,7 +419,7 @@
     const get_used_ids = document_used_ids()
     const heading_entries: { data: TocHeadingData; heading: HTMLHeadingElement }[] = []
     for (const [idx, heading] of (queried_headings ?? []).entries()) {
-      const heading_meta = getHeadingData(heading)
+      const heading_meta = get_heading_data(heading)
       if (heading_meta === null) continue
       heading_entries.push({
         data: normalize_heading_data(heading, heading_meta, idx, get_used_ids),
@@ -428,7 +430,7 @@
     // untrack: this writes the very state it would otherwise depend on
     untrack(() => {
       // skip state churn when an unrelated mutation left the heading set unchanged — the
-      // empty set included, else every mutation on a heading-less page repeats warnOnEmpty
+      // empty set included, else every mutation on a heading-less page repeats warn_on_empty
       const unchanged =
         headings_initialized &&
         heading_entries.length === headings.length &&
@@ -446,15 +448,15 @@
       heading_data = heading_entries.map(({ data }) => data)
       if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
       if (headings.length === 0) {
-        activeHeading = null
-        activeTocLi = null
-        if (warnOnEmpty && !invalid_selector) {
-          const exclude_msg = excludeSelector
-            ? ` after applying excludeSelector='${excludeSelector}'`
+        active_heading = null
+        active_toc_li = null
+        if (warn_on_empty && !invalid_selector) {
+          const exclude_msg = exclude_selector
+            ? ` after applying exclude_selector='${exclude_selector}'`
             : ``
           console.warn(
-            `Toc found no headings for headingSelector='${headingSelector}'${exclude_msg}. ${
-              autoHide && !footer ? `Hiding` : `Showing`
+            `Toc found no headings for heading_selector='${heading_selector}'${exclude_msg}. ${
+              auto_hide && !footer ? `Hiding` : `Showing`
             } table of contents.`,
           )
         }
@@ -466,13 +468,11 @@
 
   $effect(update_toc_headings)
   $effect(() => {
-    if (autoHide) hide = headings.length === 0 && !footer
+    if (auto_hide) hide = headings.length === 0 && !footer
   })
 
   let toc_item_has_interactive = $derived(
-    tocItem
-      ? tocItems.map((toc_item) => Boolean(first_custom_interactive(toc_item)))
-      : [],
+    toc_item ? toc_items.map((item) => Boolean(first_custom_interactive(item))) : [],
   )
 
   $effect(() => {
@@ -480,7 +480,7 @@
       if (should_update_for_mutations(records)) update_toc_headings()
     })
 
-    // Attribute changes can affect headingSelector/excludeSelector membership.
+    // Attribute changes can affect heading_selector/exclude_selector membership.
     observer.observe(document.body, {
       attributes: true,
       childList: true,
@@ -504,7 +504,7 @@
     if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
     if (scroll_target) {
       const distance = Math.abs(
-        scroll_target.getBoundingClientRect().top - activeHeadingScrollOffset,
+        scroll_target.getBoundingClientRect().top - active_heading_scroll_offset,
       )
       // growing distance means the user scrolled away; the threshold tolerates jitter
       if (distance > prev_scroll_target_distance + manual_scroll_threshold_px) {
@@ -520,16 +520,16 @@
       const { top } = headings[idx].getBoundingClientRect()
 
       // last heading the viewport has scrolled past, else the first one
-      if (top < activeHeadingScrollOffset || idx === 0) {
-        activeHeading = headings[idx]
-        activeTocLi = tocItems[idx]
+      if (top < active_heading_scroll_offset || idx === 0) {
+        active_heading = headings[idx]
+        active_toc_li = toc_items[idx]
         return
       }
     }
   }
 
   function check_toc_overlap() {
-    if (!hideOnIntersect || !aside || !desktop) {
+    if (!hide_on_intersect || !aside || !desktop) {
       is_overlapping_hide_target = false
       return
     }
@@ -547,10 +547,10 @@
   }
 
   function hide_on_intersect_elements() {
-    if (!hideOnIntersect) return []
-    if (typeof hideOnIntersect !== `string`) return hideOnIntersect
-    return selector_is_valid(`hideOnIntersect`, hideOnIntersect)
-      ? Array.from(document.querySelectorAll<HTMLElement>(hideOnIntersect))
+    if (!hide_on_intersect) return []
+    if (typeof hide_on_intersect !== `string`) return hide_on_intersect
+    return selector_is_valid(`hide_on_intersect`, hide_on_intersect)
+      ? Array.from(document.querySelectorAll<HTMLElement>(hide_on_intersect))
       : []
   }
 
@@ -558,8 +558,8 @@
   // click/key handler on ToC items: scrolls to the heading
   const li_click_key_handler = (node: HTMLHeadingElement) => (event: LiEvent) => {
     if (forwarding_navigation) return
-    if (event instanceof KeyboardEvent) liProps.onkeydown?.(event)
-    else liProps.onclick?.(event)
+    if (event instanceof KeyboardEvent) li_props.onkeydown?.(event)
+    else li_props.onclick?.(event)
     if (event.defaultPrevented) return
     if (event_targets_custom_interactive(event)) return
     if (event instanceof MouseEvent && is_modified_click(event)) return
@@ -581,9 +581,9 @@
     activate_heading(node, idx)
     if (!link) {
       event.preventDefault()
-      // Reuse the real link; plain snippets need a temporary child to inherit liProps.
+      // Reuse the real link; plain snippets need a temporary child to inherit li_props.
       const anchor =
-        (tocItem
+        (toc_item
           ? null
           : event.currentTarget.querySelector<HTMLAnchorElement>(`a[href]`)) ??
         document.createElement(`a`)
@@ -604,15 +604,15 @@
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
-    if (keepActiveTocItemInView && activeTocLi && nav) {
+    if (keep_active_toc_item_in_view && active_toc_li && nav) {
       // centre the active item: offsetTop and scrollTop both count from the padding box,
       // so halve clientHeight (the scrollport), not the border box
-      const top = activeTocLi.offsetTop - nav.clientHeight / 2
+      const top = active_toc_li.offsetTop - nav.clientHeight / 2
       nav.scrollTo?.({ top, behavior })
     }
   }
 
-  // show the active item when the mobile ToC opens. untracked because tracking activeTocLi
+  // show the active item when the mobile ToC opens. untracked because tracking active_toc_li
   // (which set_active_heading writes) would re-run this on every arrow-key move.
   $effect(() => {
     if (!open || !nav) return
@@ -624,7 +624,7 @@
 
   function on_keydown(event: KeyboardEvent) {
     if (event.defaultPrevented) return
-    if (!reactToKeys || !reactToKeys.includes(event.key)) return
+    if (!react_to_keys || !react_to_keys.includes(event.key)) return
 
     // `:hover`.at(-1) returns the most deeply nested hovered element
     const hovered = [...document.querySelectorAll(`:hover`)].at(-1)
@@ -660,14 +660,14 @@
     const focused = document.activeElement
     const focus_is_idle =
       !focused || focused === document.body || focused === document.documentElement
-    // a text field owns its arrows even when a custom tocItem renders it inside nav
+    // a text field owns its arrows even when a custom toc_item renders it inside nav
     const key_belongs_elsewhere =
       !nav?.contains(focused) || is_editable_event_target(focused)
     if (!focus_is_idle && key_belongs_elsewhere) return
     if (event.key === `Enter` && focused?.matches(`a[href]`)) return
 
     event.preventDefault()
-    const current_toc_li = activeTocLi ?? nav?.querySelector<HTMLLIElement>(`li.active`)
+    const current_toc_li = active_toc_li ?? nav?.querySelector<HTMLLIElement>(`li.active`)
 
     if (current_toc_li) {
       const sibling_prop =
@@ -676,19 +676,19 @@
           : event.key === `ArrowUp`
             ? `previousElementSibling`
             : null
-      activeTocLi = sibling_prop
+      active_toc_li = sibling_prop
         ? (visible_toc_sibling(current_toc_li, sibling_prop) ?? current_toc_li)
         : current_toc_li
       // move DOM focus along, else the previously focused link's keydown handler hijacks
       // the next Enter/Space (tab -> arrow -> Enter)
-      if (sibling_prop) focus_toc_item(activeTocLi)
-      activeHeading = headings[tocItems.indexOf(activeTocLi)]
+      if (sibling_prop) focus_toc_item(active_toc_li)
+      active_heading = headings[toc_items.indexOf(active_toc_li)]
     }
-    if (activeTocLi && is_activation_key(event.key) && activeHeading) {
-      const link = tocItem
+    if (active_toc_li && is_activation_key(event.key) && active_heading) {
+      const link = toc_item
         ? null
-        : activeTocLi.querySelector<HTMLAnchorElement>(`a[href]`)
-      ;(link ?? activeTocLi).click()
+        : active_toc_li.querySelector<HTMLAnchorElement>(`a[href]`)
+      ;(link ?? active_toc_li).click()
     }
   }
 
@@ -723,8 +723,8 @@
 />
 
 <aside
-  {...asideProps}
-  class={[`toc`, asideProps.class]}
+  {...aside_props}
+  class={[`toc`, aside_props.class]}
   class:collapsible={collapse_mode}
   class:desktop
   class:hidden={hide}
@@ -741,11 +741,11 @@
 >
   <!-- the toggle stays mounted and becomes the close button: unmounting it left touch users
   no visible way out, only an outside click, Escape or a tab-out -->
-  {#if !desktop && (headings.length >= minItems || footer)}
+  {#if !desktop && (headings.length >= min_items || footer)}
     <button
-      {...openButtonProps}
+      {...open_button_props}
       onclick={(event) => {
-        openButtonProps.onclick?.(event)
+        open_button_props.onclick?.(event)
         if (event.defaultPrevented) return
         event.stopPropagation()
         event.preventDefault()
@@ -753,15 +753,15 @@
       }}
       type="button"
       aria-expanded={open}
-      aria-label={open ? closeButtonLabel : openButtonLabel}
+      aria-label={open ? close_button_label : open_button_label}
     >
-      {#if openTocIcon}{@render openTocIcon()}{:else}
+      {#if open_toc_icon}{@render open_toc_icon()}{:else}
         <!-- both glyphs stay mounted and cross-fade instead of swapping in one frame -->
         {#each Object.entries(TOGGLE_ICONS) as [state, icon] (state)}
           <svg
             width="1em"
             height="0.9em"
-            {...openButtonIconProps}
+            {...open_button_icon_props}
             viewBox={icon.view_box}
             fill="none"
             stroke="currentColor"
@@ -777,38 +777,38 @@
       {/if}
     </button>
   {/if}
-  {#if open || (desktop && (headings.length >= minItems || footer))}
+  {#if open || (desktop && (headings.length >= min_items || footer))}
     <nav
-      {...navProps}
-      transition:blur={blurParams === null ? { duration: 0 } : blurParams}
+      {...nav_props}
+      transition:blur={blur_params === null ? { duration: 0 } : blur_params}
       bind:this={nav}
     >
-      {#if titleSnippet}
-        {@render titleSnippet()}
+      {#if title_snippet}
+        {@render title_snippet()}
       {:else if title}
-        <h2 {...titleProps} class={[`toc-title`, `toc-exclude`, titleProps.class]}>
+        <h2 {...title_props} class={[`toc-title`, `toc-exclude`, title_props.class]}>
           {title}
         </h2>
       {/if}
-      <ol {...olProps}>
+      <ol {...ol_props}>
         {#each headings as heading, idx (`${idx}-${heading.id}`)}
           {@const indent = levels[idx] - min_level}
           {@const collapsed = collapse_mode && !heading_visibility[idx]}
           {@const heading_id = heading_data[idx]?.id}
-          {@const is_active = heading === activeHeading}
+          {@const is_active = heading === active_heading}
           {@const item_tabindex = collapsed ? -1 : 0}
           {@const use_fallback_toc_item =
-            tocItem && toc_item_has_interactive[idx] === false}
+            toc_item && toc_item_has_interactive[idx] === false}
           {@const item_margin_left = `calc(${indent} * var(--toc-indent-per-level, 1em))`}
           {@const item_font_size = `max(var(--toc-li-font-size-min, 2ex), calc(var(--toc-li-font-size-base, 3ex) - ${indent} * var(--toc-li-font-size-step, 0.1ex)))`}
-          <!-- svelte-ignore a11y_no_noninteractive_tabindex - fallback for custom tocItem snippets without their own focusable element -->
+          <!-- svelte-ignore a11y_no_noninteractive_tabindex - fallback for custom toc_item snippets without their own focusable element -->
           <li
-            {...liProps}
+            {...li_props}
             class:active={is_active}
             class:collapsed
             aria-hidden={collapsed || undefined}
-            aria-current={tocItem && is_active ? `location` : undefined}
-            bind:this={tocItems[idx]}
+            aria-current={toc_item && is_active ? `location` : undefined}
+            bind:this={toc_items[idx]}
             role={use_fallback_toc_item ? `link` : undefined}
             tabindex={use_fallback_toc_item ? item_tabindex : undefined}
             style:margin-left={item_margin_left}
@@ -816,8 +816,8 @@
             onclick={li_click_key_handler(heading)}
             onkeydown={li_click_key_handler(heading)}
           >
-            {#if tocItem}
-              {@render tocItem(heading)}
+            {#if toc_item}
+              {@render toc_item(heading)}
             {:else}
               <a
                 href={href_for_id(heading_id)}

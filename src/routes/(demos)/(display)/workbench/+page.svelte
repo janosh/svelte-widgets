@@ -60,7 +60,7 @@
 <p>
   Draft text stays local until it is finite and within bounds. Clearing retains the value;
   use <code>empty="undefined"</code> for optional fields. <code>commit="change"</code>
-  waits for Enter, blur, or change. <code>oncommit</code> receives accepted changes.
+  waits for Enter, blur, or change. <code>on_commit</code> receives accepted changes.
   Native input attributes go in <code>number_props</code> and <code>range_props</code>.
 </p>
 <NumberRangeInput bind:value min={0} max={1} step={0.1} commit="change"
@@ -108,7 +108,7 @@
 <p>
   Picker and drop validation share <code>accept</code>, <code>max_size</code>,
   <code>max_files</code>, and <code>multiple</code>. Rejections include type, size, or
-  count reasons. Supply <code>onfiles(files, signal)</code> to parse or upload; replacement,
+  count reasons. Supply <code>on_files(files, signal)</code> to parse or upload; replacement,
   cancellation, and unmount abort the signal. Supply a children snippet for custom previews,
   including FileDetails for text.
 </p>
@@ -123,10 +123,10 @@
   state={task_state}
   label={task_state === `running` ? `Processing files` : `Cancelled`}
   value={35}
-  oncancel={() => {
+  on_cancel={() => {
     task_state = `cancelled`
   }}
-  onretry={() => {
+  on_retry={() => {
     task_state = `running`
   }}
 />

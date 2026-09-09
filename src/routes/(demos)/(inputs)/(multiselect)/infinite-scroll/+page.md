@@ -1,6 +1,6 @@
 ## Dynamic Options Loading
 
-For large datasets or server-side data, use `loadOptions` to dynamically load options as the user scrolls and searches. The component handles all state management, debouncing, and pagination automatically. Requested in [GitHub discussion #342](https://github.com/janosh/svelte-widgets/discussions/342).
+For large datasets or server-side data, use `load_options` to dynamically load options as the user scrolls and searches. The component handles all state management, debouncing, and pagination automatically. Requested in [GitHub discussion #342](https://github.com/janosh/svelte-widgets/discussions/342).
 
 ### Basic Example
 
@@ -33,13 +33,13 @@ This runnable example filters an in-memory dataset with a simulated network dela
       : all_items
 
     const options = filtered.slice(offset, offset + limit)
-    const hasMore = offset + limit < filtered.length
-    return { options, hasMore }
+    const has_more = offset + limit < filtered.length
+    return { options, has_more }
   }
 </script>
 
 <label><input type="checkbox" bind:checked={fail_next} /> Fail the next request</label>
-<MultiSelect loadOptions={load_options} placeholder="Search 10,000 items..." />
+<MultiSelect {load_options} placeholder="Search 10,000 items..." />
 ```
 
 The component handles the required state management:
@@ -91,12 +91,12 @@ This runnable example searches an in-memory user list; it does not contact a ser
 
     return {
       options: filtered.slice(offset, offset + limit),
-      hasMore: offset + limit < filtered.length,
+      has_more: offset + limit < filtered.length,
     }
   }
 </script>
 
-<MultiSelect loadOptions={fetch_users} placeholder="Search users by name or email...">
+<MultiSelect load_options={fetch_users} placeholder="Search users by name or email...">
   {#snippet children({ option })}
     <div>
       <strong>{option.label}</strong>
@@ -132,11 +132,11 @@ This complete component expects your endpoint to return `{ items: string[], tota
     const response = await fetch(`/api/items?${query}`, { signal })
     if (!response.ok) throw new Error(`Loading items failed: HTTP ${response.status}`)
     const { items, total }: { items: string[]; total: number } = await response.json()
-    return { options: items, hasMore: offset + items.length < total }
+    return { options: items, has_more: offset + items.length < total }
   }
 </script>
 
-<MultiSelect loadOptions={load_options} placeholder="Search remote items..." />
+<MultiSelect {load_options} placeholder="Search remote items..." />
 ```
 
 `URLSearchParams` preserves punctuation such as `&` and `#` within the search term. Forward `signal` so a new search, closing the dropdown, or unmounting cancels the old fetch. Let errors propagate so the component can show Retry; returning an empty array from a catch would hide the failure. A successful empty response is `{ items: [], total: 0 }` and shows the normal no-matches message without Retry.
@@ -165,13 +165,13 @@ For advanced control, pass an object with `fetch` function and config:
 
     return {
       options: filtered.slice(offset, offset + limit),
-      hasMore: offset + limit < filtered.length,
+      has_more: offset + limit < filtered.length,
     }
   }
 </script>
 
 <MultiSelect
-  loadOptions={{ fetch: load_options, debounceMs: 500, batchSize: 20 }}
+  load_options={{ fetch: load_options, debounce_ms: 500, batch_size: 20 }}
   placeholder="Custom config (500ms debounce, 20 items per batch)"
 />
 ```
@@ -217,12 +217,12 @@ Use object options with custom snippets:
 
     return {
       options: filtered.slice(offset, offset + limit),
-      hasMore: offset + limit < filtered.length,
+      has_more: offset + limit < filtered.length,
     }
   }
 </script>
 
-<MultiSelect loadOptions={load_options} placeholder="Search languages...">
+<MultiSelect {load_options} placeholder="Search languages...">
   {#snippet children({ option })}
     <span>{option.label} <small style="opacity: 0.6">({option.year})</small></span>
   {/snippet}
@@ -231,7 +231,7 @@ Use object options with custom snippets:
 
 ### Lazy Loading on Open
 
-By default, options load when the dropdown opens. Set `onOpen: false` to disable:
+By default, options load when the dropdown opens. Set `on_open: false` to disable:
 
 ```svelte example id="load-lazy"
 <script lang="ts">
@@ -251,7 +251,7 @@ By default, options load when the dropdown opens. Set `onOpen: false` to disable
       : items
     return {
       options: filtered.slice(offset, offset + limit),
-      hasMore: offset + limit < filtered.length,
+      has_more: offset + limit < filtered.length,
     }
   }
 
@@ -259,7 +259,7 @@ By default, options load when the dropdown opens. Set `onOpen: false` to disable
 </script>
 
 <MultiSelect
-  loadOptions={{ fetch: load_options, onOpen: false }}
+  load_options={{ fetch: load_options, on_open: false }}
   bind:selected
   placeholder="Type to search (won't load on open)..."
 />
@@ -269,22 +269,22 @@ By default, options load when the dropdown opens. Set `onOpen: false` to disable
 
 ## Props Reference
 
-The `loadOptions` prop accepts either a function (simple) or an object (with config):
+The `load_options` prop accepts either a function (simple) or an object (with config):
 
 ```typescript
 // Function shorthand
-loadOptions={myFetchFn}
+load_options={myFetchFn}
 
 // With config: object with fetch + options
-loadOptions={{ fetch: myFetchFn, debounceMs: 500, batchSize: 20, onOpen: false }}
+load_options={{ fetch: myFetchFn, debounce_ms: 500, batch_size: 20, on_open: false }}
 ```
 
-| Config Key   | Type      | Default | Description                                 |
-| ------------ | --------- | ------- | ------------------------------------------- |
-| `fetch`      | `fn`      | —       | Async function to load options (required)   |
-| `debounceMs` | `number`  | `300`   | Debounce delay for search queries           |
-| `batchSize`  | `number`  | `50`    | Number of options to load per batch         |
-| `onOpen`     | `boolean` | `true`  | Whether to load options when dropdown opens |
+| Config Key    | Type      | Default | Description                                 |
+| ------------- | --------- | ------- | ------------------------------------------- |
+| `fetch`       | `fn`      | —       | Async function to load options (required)   |
+| `debounce_ms` | `number`  | `300`   | Debounce delay for search queries           |
+| `batch_size`  | `number`  | `50`    | Number of options to load per batch         |
+| `on_open`     | `boolean` | `true`  | Whether to load options when dropdown opens |
 
 ### LoadOptions Parameters
 
@@ -298,7 +298,7 @@ interface LoadOptionsParams {
 
 interface LoadOptionsResult<T> {
   options: T[] // Array of options to add
-  hasMore: boolean // Whether more options are available
+  has_more: boolean // Whether more options are available
   replace?: boolean // Replace loaded options with this ordered snapshot
   error?: Error // Show partial results alongside Retry
 }
@@ -330,7 +330,7 @@ function make_load_options() {
     // Check after the final await before updating shared pagination state.
     signal?.throwIfAborted()
     cursor = next_cursor
-    return { options: items, hasMore: next_cursor !== null }
+    return { options: items, has_more: next_cursor !== null }
   }
 }
 ```
@@ -346,11 +346,11 @@ Create one loader per MultiSelect instance and pass the same reference; changing
   const load_options = make_load_options()
 </script>
 
-<MultiSelect loadOptions={load_options} />
+<MultiSelect {load_options} />
 ```
 
 ### Error Handling
 
-If `loadOptions` throws or rejects, the component displays an error and a Retry button while keeping previously loaded options available. Retry repeats the failed request; changing the search starts a new request.
+If `load_options` throws or rejects, the component displays an error and a Retry button while keeping previously loaded options available. Retry repeats the failed request; changing the search starts a new request.
 
-For partial failures, return successful `options` with `error`. Retry passes the number of loaded options as `offset`, so retain failed items in the loader and retry those downloads. Return `replace: true` with the full ordered result snapshot to restore their original positions without appending duplicates. Retry remains available even when `hasMore` is `false`.
+For partial failures, return successful `options` with `error`. Retry passes the number of loaded options as `offset`, so retain failed items in the loader and retry those downloads. Return `replace: true` with the full ordered result snapshot to restore their original positions without appending duplicates. Retry remains available even when `has_more` is `false`.

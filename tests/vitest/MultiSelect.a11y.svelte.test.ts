@@ -160,9 +160,9 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 async function setup_user_message(search_text = `Purple`) {
   const props = $state({
     options: [`Red`],
-    activeIndex: null as number | null,
-    allowUserOptions: true,
-    autoActiveFirstOption: true,
+    active_index: null as number | null,
+    allow_user_options: true,
+    auto_active_first_option: true,
     open: true,
   })
   mount_multiselect(props)
@@ -194,7 +194,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
 
   props.options = [`Purple Rain`, `Purple Haze`, `Red`]
   await tick()
-  expect(props.activeIndex).toBe(2)
+  expect(props.active_index).toBe(2)
   expect(user_msg.classList.contains(`active`)).toBe(true)
 
   await type_search_text(`red`, input)
@@ -202,8 +202,8 @@ test(`user message exposes active descendant and toggles active class`, async ()
   expect(doc_query(`li.user-msg`).classList.contains(`active`)).toBe(false)
 })
 
-test(`clearing searchText while create-option message is active drops aria-activedescendant`, async () => {
-  mount_multiselect({ options: [`foo`], allowUserOptions: true })
+test(`clearing search_text while create-option message is active drops aria-activedescendant`, async () => {
+  mount_multiselect({ options: [`foo`], allow_user_options: true })
   const input = get_input()
   await type_search_text(`xyz`, input)
 
@@ -224,7 +224,7 @@ describe(`ARIA correctness`, () => {
   test(`select-all aria-selected tracks all-selectable-selected, not max capacity`, async () => {
     const first = mount_multiselect({
       options: [1, 2],
-      selectAllOption: true,
+      select_all_option: true,
       open: true,
     })
 
@@ -238,15 +238,15 @@ describe(`ARIA correctness`, () => {
     )
 
     // at max capacity the row is disabled but must NOT announce as selected: aria-selected
-    // tracks whether all selectable options are selected (option 3 is not), not maxSelect
+    // tracks whether all selectable options are selected (option 3 is not), not max_select
     await unmount_component(first)
     mount_multiselect({
       options: [1, 2, 3],
       selected: [1, 2],
-      maxSelect: 2,
-      selectAllOption: true,
+      max_select: 2,
+      select_all_option: true,
       open: true,
-      keepSelectedInDropdown: `plain`,
+      keep_selected_in_dropdown: `plain`,
     })
 
     const capped_select_all = doc_query(`ul.options li.select-all`)
@@ -255,8 +255,8 @@ describe(`ARIA correctness`, () => {
   })
 
   test(`aria-controls is absent while the listbox is not rendered`, async () => {
-    // no options + allowEmpty → the options <ul> is not in the DOM
-    const props = $state<MultiSelectProps>({ options: [], allowEmpty: true })
+    // no options + allow_empty → the options <ul> is not in the DOM
+    const props = $state<MultiSelectProps>({ options: [], allow_empty: true })
     mount_multiselect(props)
 
     const input = get_input()

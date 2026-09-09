@@ -30,11 +30,11 @@ Favorite Frontend Tools?
 
 ## Mental model
 
-| Prop            | Purpose                                                | Value                                                                               |
-| --------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------- |
-| `options`       | What users can choose from                             | Array of strings, numbers, or objects with `label` property                         |
-| `bind:selected` | Which options users have chosen                        | Always an array: `[]`, `['Apple']` or `['Apple', 'Banana']`                         |
-| `bind:value`    | Single-select convenience for the user-selected option | Single item: `'Apple'` (or `null`) if `maxSelect={1}`, otherwise same as `selected` |
+| Prop            | Purpose                                                | Value                                                                                |
+| --------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `options`       | What users can choose from                             | Array of strings, numbers, or objects with `label` property                          |
+| `bind:selected` | Which options users have chosen                        | Always an array: `[]`, `['Apple']` or `['Apple', 'Banana']`                          |
+| `bind:value`    | Single-select convenience for the user-selected option | Single item: `'Apple'` (or `null`) if `max_select={1}`, otherwise same as `selected` |
 
 ### Common Patterns
 
@@ -43,7 +43,7 @@ Favorite Frontend Tools?
 <MultiSelect bind:selected options={['A', 'B', 'C']} />
 
 <!-- Single-select -->
-<MultiSelect bind:value options={colors} maxSelect={1} />
+<MultiSelect bind:value options={colors} max_select={1} />
 
 <!-- Object options (need 'label' property, can have arbitrary other keys, some like `value`, `disabled`, `preselected`, `style` have special meaning, see type ObjectOption) -->
 <MultiSelect
@@ -59,7 +59,7 @@ Favorite Frontend Tools?
 
 - **Object options not working?** → Add `label` property
 - **Dropdown not showing?** → Check you have `options` and not `disabled={true}`
-- **Want single item not array?** → Use `bind:value` with `maxSelect={1}`
+- **Want single item not array?** → Use `bind:value` with `max_select={1}`
 - **Types confusing?** → Component auto-infers type of `selected` and `value` from your `options` array
 
 ## Props
@@ -71,10 +71,10 @@ Props ordered by how often you'll reach for them.
 ### Essential Props
 
 1. ```ts
-   options?: Option[]  // required unless loadOptions is provided
+   options?: Option[]  // required unless load_options is provided
    ```
 
-   Array of strings, numbers, or objects that users can select from. Objects must have a `label` property that will be displayed in the dropdown. Optional when `loadOptions` supplies the dropdown contents; if you pass both, these options are filtered client-side and listed ahead of each loaded batch (see [`loadOptions`](#advanced-props)).
+   Array of strings, numbers, or objects that users can select from. Objects must have a `label` property that will be displayed in the dropdown. Optional when `load_options` supplies the dropdown contents; if you pass both, these options are filtered client-side and listed ahead of each loaded batch (see [`load_options`](#advanced-props)).
 
    ```svelte
    <!-- Simple options -->
@@ -107,18 +107,18 @@ Props ordered by how often you'll reach for them.
    value: Option | Option[] | null = null  // bindable
    ```
 
-   **Alternative to `selected`.** When `maxSelect={1}`, `value` is the single selected item (not an array). Otherwise, `value` equals `selected`.
+   **Alternative to `selected`.** When `max_select={1}`, `value` is the single selected item (not an array). Otherwise, `value` equals `selected`.
 
    ```svelte
    <!-- Single-select: value = 'Red' (not ['Red']) -->
-   <MultiSelect bind:value options={colors} maxSelect={1} />
+   <MultiSelect bind:value options={colors} max_select={1} />
 
    <!-- Multi-select: value = ['Red', 'Blue'] (same as selected) -->
    <MultiSelect bind:value options={colors} />
    ```
 
 1. ```ts
-   maxSelect: number | null = null
+   max_select: number | null = null
    ```
 
    **Controls selection behavior.** `null` = unlimited, `1` = single select, `2+` = limited multi-select.
@@ -128,10 +128,10 @@ Props ordered by how often you'll reach for them.
    <MultiSelect options={colors} />
 
    <!-- Single selection -->
-   <MultiSelect options={colors} maxSelect={1} />
+   <MultiSelect options={colors} max_select={1} />
 
    <!-- Max 3 selections -->
-   <MultiSelect options={colors} maxSelect={3} />
+   <MultiSelect options={colors} max_select={3} />
    ```
 
 1. ```ts
@@ -163,7 +163,7 @@ Props ordered by how often you'll reach for them.
 ### Commonly Used Props
 
 1. ```ts
-   searchText: string = `` // bindable
+   search_text: string = `` // bindable
    ```
 
    The text user entered to filter options. Bindable for external control.
@@ -175,16 +175,16 @@ Props ordered by how often you'll reach for them.
    Whether the dropdown is visible. Bindable for external control.
 
 1. ```ts
-   allowUserOptions: boolean | `append` = false
+   allow_user_options: boolean | `append` = false
    ```
 
    Whether users can create new options by typing. `true` = add to selected only, `'append'` = add to both options and selected.
 
 1. ```ts
-   allowEmpty: boolean = false
+   allow_empty: boolean = false
    ```
 
-   Whether to allow the component to exist with no options. If `false`, shows console error when no options provided (unless `loading`, `disabled`, or `allowUserOptions` is `true`).
+   Whether to allow the component to exist with no options. If `false`, shows console error when no options provided (unless `loading`, `disabled`, or `allow_user_options` is `true`).
 
 1. ```ts
    loading: boolean = false
@@ -201,22 +201,22 @@ Props ordered by how often you'll reach for them.
 ### Advanced Props
 
 1. ```ts
-   loadOptions: LoadOptionsFn | LoadOptionsConfig = undefined
+   load_options: LoadOptionsFn | LoadOptionsConfig = undefined
    ```
 
    **Dynamic loading for large datasets.** Enables lazy loading / infinite scroll instead of passing static `options`. Pass either a function or an object with config:
 
    ```svelte
    <!-- Function shorthand -->
-   <MultiSelect loadOptions={myFetchFn} />
+   <MultiSelect load_options={myFetchFn} />
 
    <!-- With config -->
-   <MultiSelect loadOptions={{ fetch: myFetchFn, debounceMs: 500, batchSize: 20 }} />
+   <MultiSelect load_options={{ fetch: myFetchFn, debounce_ms: 500, batch_size: 20 }} />
    ```
 
-   Failed requests show an error and a Retry button. Retry preserves previously loaded options and requests the same page again. Bind `loadError` (`Error | null`) to inspect the failure; it clears on retry or a new search. Customize the messages through `labels.loading_failed` and `labels.retry`.
+   Failed requests show an error and a Retry button. Retry preserves previously loaded options and requests the same page again. Bind `load_error` (`Error | null`) to inspect the failure; it clears on retry or a new search. Customize the messages through `labels.loading_failed` and `labels.retry`.
 
-   The function receives `{ search, offset, limit, signal }` and returns `{ options, hasMore, replace?, error? }`. Return `error` to display a partial batch alongside Retry; `replace: true` replaces previously loaded options with an ordered snapshot, useful when retrying missing results. `signal` is an `AbortSignal` that fires when the request is superseded by a newer search or when the component closes or unmounts. Forward it to `fetch` to cancel work in flight:
+   The function receives `{ search, offset, limit, signal }` and returns `{ options, has_more, replace?, error? }`. Return `error` to display a partial batch alongside Retry; `replace: true` replaces previously loaded options with an ordered snapshot, useful when retrying missing results. `signal` is an `AbortSignal` that fires when the request is superseded by a newer search or when the component closes or unmounts. Forward it to `fetch` to cancel work in flight:
 
    ```ts
    import type { LoadOptionsParams, LoadOptionsResult } from 'svelte-widgets'
@@ -235,7 +235,7 @@ Props ordered by how often you'll reach for them.
      const response = await fetch(`/api/items?${query}`, { signal })
      if (!response.ok) throw new Error(`Loading items failed: HTTP ${response.status}`)
      const { items, total }: { items: string[]; total: number } = await response.json()
-     return { options: items, hasMore: offset + items.length < total }
+     return { options: items, has_more: offset + items.length < total }
    }
    ```
 
@@ -243,34 +243,34 @@ Props ordered by how often you'll reach for them.
 
    Config options (when passing an object):
 
-   | Key          | Type      | Default | Description                                 |
-   | ------------ | --------- | ------- | ------------------------------------------- |
-   | `fetch`      | `fn`      | —       | Async function to load options (required)   |
-   | `debounceMs` | `number`  | `300`   | Debounce delay for search queries           |
-   | `batchSize`  | `number`  | `50`    | Number of options to load per batch         |
-   | `onOpen`     | `boolean` | `true`  | Whether to load options when dropdown opens |
+   | Key           | Type      | Default | Description                                 |
+   | ------------- | --------- | ------- | ------------------------------------------- |
+   | `fetch`       | `fn`      | —       | Async function to load options (required)   |
+   | `debounce_ms` | `number`  | `300`   | Debounce delay for search queries           |
+   | `batch_size`  | `number`  | `50`    | Number of options to load per batch         |
+   | `on_open`     | `boolean` | `true`  | Whether to load options when dropdown opens |
 
    Features automatic state management, debounced search, infinite scroll pagination, and loading indicators. See the [infinite-scroll demo](https://svelte-widgets.janosh.dev/infinite-scroll) for live examples.
 
-   Passing `options` alongside `loadOptions` combines both sources: the static options are filtered client-side with `filterFunc` and rendered above the loaded batches. Since they need neither the debounce nor a request, they appear on the first keystroke, which is what lets [`PageSearch`](https://svelte-widgets.janosh.dev/command-menu) match known routes instantly while its Pagefind index is still loading.
+   Passing `options` alongside `load_options` combines both sources: the static options are filtered client-side with `filter_func` and rendered above the loaded batches. Since they need neither the debounce nor a request, they appear on the first keystroke, which is what lets [`PageSearch`](https://svelte-widgets.janosh.dev/command-menu) match known routes instantly while its Pagefind index is still loading.
 
 1. ```ts
-   activeIndex: number | null = null  // bindable
+   active_index: number | null = null  // bindable
    ```
 
    Zero-based index of currently active option in the filtered list.
 
 1. ```ts
-   activeOption: Option | null = null  // bindable
+   active_option: Option | null = null  // bindable
    ```
 
    Currently active option (hovered or navigated to with arrow keys).
 
 1. ```ts
-   createOptionMsg: string | ((state: { searchText: string; selected: Option[]; options: Option[]; matchingOptions: Option[] }) => string) | null = `Create this option...`
+   create_option_msg: string | ((state: { search_text: string; selected: Option[]; options: Option[]; matching_options: Option[] }) => string) | null = `Create this option...`
    ```
 
-   Message shown when `allowUserOptions` is enabled and user can create a new option. Can be a static string or a function that receives component state and returns a dynamic message.
+   Message shown when `allow_user_options` is enabled and user can create a new option. Can be a static string or a function that receives component state and returns a dynamic message.
 
 1. ```ts
    duplicates: boolean | 'case-insensitive' = false
@@ -279,13 +279,13 @@ Props ordered by how often you'll reach for them.
    Controls duplicate detection. `false` (default) blocks exact duplicates. `true` allows selecting the same option multiple times. `'case-insensitive'` blocks case variants (e.g. "Apple" blocks "apple").
 
 1. ```ts
-   expandIconPosition: 'left' | 'right' | 'none' = 'left'
+   expand_icon_position: 'left' | 'right' | 'none' = 'left'
    ```
 
-   Which side of the input to render the expand icon on, or `'none'` to hide it entirely (applies to both the default chevron and a custom `expandIcon` snippet). Clicking the icon toggles the dropdown.
+   Which side of the input to render the expand icon on, or `'none'` to hide it entirely (applies to both the default chevron and a custom `expand_icon` snippet). Clicking the icon toggles the dropdown.
 
 1. ```ts
-   filterFunc: (opt: Option, searchText: string) => boolean
+   filter_func: (opt: Option, search_text: string) => boolean
    ```
 
    Custom function to filter options based on search text. Default filters by label.
@@ -297,19 +297,19 @@ Props ordered by how often you'll reach for them.
    Generates the identity key for an option. Default: an object's `value` if it defines one, else its `label`; primitives are their own key. No case folding — use `duplicates="case-insensitive"` for that.
 
 1. ```ts
-   closeDropdownOnSelect: boolean | 'if-mobile' | 'retain-focus' = false
+   close_dropdown_on_select: boolean | 'if-mobile' | 'retain-focus' = false
    ```
 
-   Whether to close dropdown after selection. `false` (default) keeps dropdown open for rapid multi-selection. `true` closes after each selection. `'if-mobile'` closes on mobile devices only (screen width below `breakpoint`). `'retain-focus'` closes dropdown but keeps input focused for rapid typing to create custom options from text input (see `allowUserOptions`).
+   Whether to close dropdown after selection. `false` (default) keeps dropdown open for rapid multi-selection. `true` closes after each selection. `'if-mobile'` closes on mobile devices only (screen width below `breakpoint`). `'retain-focus'` closes dropdown but keeps input focused for rapid typing to create custom options from text input (see `allow_user_options`).
 
 1. ```ts
-   resetFilterOnAdd: boolean = true
+   reset_filter_on_add: boolean = true
    ```
 
    Whether to clear search text when an option is selected.
 
 1. ```ts
-   sortSelected: boolean | ((a: Option, b: Option) => number) = false
+   sort_selected: boolean | ((a: Option, b: Option) => number) = false
    ```
 
    Whether/how to sort selected options. `true` uses default sort, function enables custom sorting.
@@ -334,97 +334,97 @@ Group related options together with visual headers. Add a `group` key to your op
   ]
 </script>
 
-<MultiSelect {options} collapsibleGroups groupSelectAll />
+<MultiSelect {options} collapsible_groups group_select_all />
 ```
 
 See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live examples.
 
 1. ```ts
-   collapsibleGroups: boolean = false
+   collapsible_groups: boolean = false
    ```
 
    Enable click-to-collapse groups. When `true`, users can click group headers to hide/show options in that group.
 
 1. ```ts
-   collapsedGroups: Set<string> = new Set()
+   collapsed_groups: Set<string> = new Set()
    ```
 
-   Bindable set of collapsed group names. Use `bind:collapsedGroups` to control which groups are collapsed externally or to persist collapse state.
+   Bindable set of collapsed group names. Use `bind:collapsed_groups` to control which groups are collapsed externally or to persist collapse state.
 
 1. ```ts
-   groupSelectAll: boolean = false
+   group_select_all: boolean = false
    ```
 
    Add a "Select all" button to each group header, allowing users to select all options in a specific group at once.
 
 1. ```ts
-   ungroupedPosition: 'first' | 'last' = 'first'
+   ungrouped_position: 'first' | 'last' = 'first'
    ```
 
    Where to render options that don't have a `group` key. `'first'` places them at the top, `'last'` at the bottom.
 
 1. ```ts
-   groupSortOrder: 'none' | 'asc' | 'desc' | ((a: string, b: string) => number) = 'none'
+   group_sort_order: 'none' | 'asc' | 'desc' | ((a: string, b: string) => number) = 'none'
    ```
 
    Sort groups alphabetically (`'asc'` or `'desc'`) or with a custom comparator function. Default `'none'` preserves order of first occurrence.
 
 1. ```ts
-   searchExpandsCollapsedGroups: boolean = false
+   search_expands_collapsed_groups: boolean = false
    ```
 
    When `true`, collapsed groups automatically expand when the search query matches options within them.
 
 1. ```ts
-   searchMatchesGroups: boolean = false
+   search_matches_groups: boolean = false
    ```
 
    When `true`, the search query also matches against group names, not just option labels. If a group name matches, all options in that group are shown.
 
 1. ```ts
-   keyboardExpandsCollapsedGroups: boolean = false
+   keyboard_expands_collapsed_groups: boolean = false
    ```
 
    When `true`, collapsed groups automatically expand when the user navigates into them with arrow keys.
 
 1. ```ts
-   stickyGroupHeaders: boolean = false
+   sticky_group_headers: boolean = false
    ```
 
    When `true`, group headers stick to the top of the dropdown while scrolling through their options.
 
 1. ```ts
-   collapseAllGroups: () => void  // bindable
+   collapse_all_groups: () => void  // bindable
    ```
 
-   Programmatically collapse all groups. Use with `bind:collapseAllGroups` to get a callable function.
+   Programmatically collapse all groups. Use with `bind:collapse_all_groups` to get a callable function.
 
 1. ```ts
-   expandAllGroups: () => void  // bindable
+   expand_all_groups: () => void  // bindable
    ```
 
-   Programmatically expand all groups. Use with `bind:expandAllGroups` to get a callable function.
+   Programmatically expand all groups. Use with `bind:expand_all_groups` to get a callable function.
 
 1. ```ts
-   liGroupHeaderClass: string = ''
+   li_group_header_class: string = ''
    ```
 
    CSS class applied to group header `<li>` elements.
 
 1. ```ts
-   liGroupHeaderStyle: string | null = null
+   li_group_header_style: string | null = null
    ```
 
    Inline style for group header elements.
 
 1. ```ts
-   groupHeader: Snippet<[{ group: string; options: T[]; collapsed: boolean }]>
+   group_header: Snippet<[{ group: string; options: T[]; collapsed: boolean }]>
    ```
 
    Custom snippet for rendering group headers. Receives the group name, array of options in that group, and whether the group is collapsed.
 
 1. ```ts
-   ongroupToggle: (data: { group: string; collapsed: boolean }) => void
+   on_group_toggle: (data: { group: string; collapsed: boolean }) => void
    ```
 
    Callback fired when a group is collapsed or expanded. Receives the group name and its new collapsed state.
@@ -441,13 +441,13 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    name: string | null = null
    ```
 
-   Form field name for form submission. When selected options are displayed as chips (the default display mode), they submit as `JSON.stringify(selected)`. Prefer stable object `value` fields for server processing, or customize serialization with `formSerialize`.
+   Form field name for form submission. When selected options are displayed as chips (the default display mode), they submit as `JSON.stringify(selected)`. Prefer stable object `value` fields for server processing, or customize serialization with `form_serialize`.
 
 1. ```ts
-   formSerialize: (selected: Option[]) => string | null = JSON.stringify
+   form_serialize: (selected: Option[]) => string | null = JSON.stringify
    ```
 
-   Customizes the submitted value in chip mode. For object options, use `formSerialize={(selected) => selected.map(({ value }) => value).join(',')}`. For primitive options, use `formSerialize={(selected) => selected.join(',')}`.
+   Customizes the submitted value in chip mode. For object options, use `form_serialize={(selected) => selected.map(({ value }) => value).join(',')}`. For primitive options, use `form_serialize={(selected) => selected.join(',')}`.
 
 1. ```ts
    autocomplete: string = 'off'
@@ -470,37 +470,37 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
 ### UI and Behavior Props
 
 1. ```ts
-   maxOptions: number | undefined = undefined
+   max_options: number | undefined = undefined
    ```
 
    Limit number of options shown in dropdown. `undefined` = no limit.
 
 1. ```ts
-   maxVisibleChips: number | null = null
+   max_visible_chips: number | null = null
    ```
 
-   Max number of selected chips to render before collapsing the rest into a `+N more` toggle chip (click to expand/collapse). `null` renders all chips. Keyboard chip navigation auto-expands so hidden chips can't be highlighted invisibly. Ignored in `selectedDisplay="input"` mode.
+   Max number of selected chips to render before collapsing the rest into a `+N more` toggle chip (click to expand/collapse). `null` renders all chips. Keyboard chip navigation auto-expands so hidden chips can't be highlighted invisibly. Ignored in `selected_display="input"` mode.
 
 1. ```ts
-   selectedDisplay: 'chips' | 'input' = 'chips'
+   selected_display: 'chips' | 'input' = 'chips'
    ```
 
-   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and requires `maxSelect={1}`; other values throw a configuration error. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
+   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and requires `max_select={1}`; other values throw a configuration error. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
 
 1. ```ts
-   virtualList: boolean | { itemHeight?: number; overscan?: number } = false
+   virtual_list: boolean | { item_height?: number; overscan?: number } = false
    ```
 
-   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `itemHeight` (px per row, default 30, also applies to group headers) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported, but combining them with `stickyGroupHeaders` throws a configuration error.
+   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `item_height` (px per row, default 30, also applies to group headers) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported, but combining them with `sticky_group_headers` throws a configuration error.
 
 1. ```ts
-   minSelect: number | null = null
+   min_select: number | null = null
    ```
 
    Minimum selections required before remove buttons appear.
 
 1. ```ts
-   autoScroll: boolean = true
+   auto_scroll: boolean = true
    ```
 
    Whether to keep active option in view when navigating with arrow keys.
@@ -518,13 +518,13 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    Whether to use fuzzy matching for filtering options. When `true` (default), matches non-consecutive characters (e.g., "ga" matches "Grapes" and "Green Apple"). When `false`, uses substring matching only.
 
 1. ```ts
-   highlightMatches: boolean = true
+   highlight_matches: boolean = true
    ```
 
    Whether to highlight matching text in dropdown options.
 
 1. ```ts
-   keepSelectedInDropdown: false | 'plain' | 'checkboxes' = false
+   keep_selected_in_dropdown: false | 'plain' | 'checkboxes' = false
    ```
 
    Controls whether selected options remain visible in dropdown. `false` (default) hides selected options. `'plain'` shows them with visual distinction. `'checkboxes'` prefixes each option with a checkbox.
@@ -533,12 +533,12 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    labels: Partial<MultiSelectLabels> = {}
    ```
 
-   Overrides for the strings MultiSelect renders itself, merged over the `MULTI_SELECT_LABELS` defaults exported from `svelte-widgets/labels`. Covers the `+N more` / `show less` chip toggle, group headers, the three disabled select-all titles, screen-reader announcements and form-validity messages. Entries that interpolate a count or a label are functions, so a locale controls its own word order and plural rules. A key set to `undefined` falls back to its default, so `condition ? translation : undefined` is safe. Strings a dedicated prop supplies outright (`removeBtnTitle`, `noMatchingOptionsMsg`, ...) are not part of this record. Every other component that renders text of its own takes the same prop.
+   Overrides for the strings MultiSelect renders itself, merged over the `MULTI_SELECT_LABELS` defaults exported from `svelte-widgets/labels`. Covers the `+N more` / `show less` chip toggle, group headers, the three disabled select-all titles, screen-reader announcements and form-validity messages. Entries that interpolate a count or a label are functions, so a locale controls its own word order and plural rules. A key set to `undefined` falls back to its default, so `condition ? translation : undefined` is safe. Strings a dedicated prop supplies outright (`remove_btn_title`, `no_matching_options_msg`, ...) are not part of this record. Every other component that renders text of its own takes the same prop.
 
    ```svelte
    <MultiSelect
      {options}
-     maxVisibleChips={3}
+     max_visible_chips={3}
      labels={{
        more_chips: (hidden) => `+${hidden} weitere`,
        show_less: `weniger anzeigen`,
@@ -547,37 +547,37 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    ```
 
 1. ```ts
-   selectAllOption: boolean | string = false
+   select_all_option: boolean | string = false
    ```
 
    Adds a "Select All" option at the top of the dropdown. `true` shows default label, or pass a custom string label.
 
 1. ```ts
-   selectAllScope: 'visible' | 'matching' = 'visible'
+   select_all_scope: 'visible' | 'matching' = 'visible'
    ```
 
-   Which options "Select All" adds. `'visible'` (default) adds only the rows the dropdown currently renders, i.e. options in expanded groups up to the `maxOptions` limit (virtualization doesn't narrow the scope). `'matching'` adds every option matching the current search, including those in collapsed groups and beyond `maxOptions`. `'matching'` requires local `options` and is disabled when `loadOptions` is set, since the component can't know the full remote result set.
+   Which options "Select All" adds. `'visible'` (default) adds only the rows the dropdown currently renders, i.e. options in expanded groups up to the `max_options` limit (virtualization doesn't narrow the scope). `'matching'` adds every option matching the current search, including those in collapsed groups and beyond `max_options`. `'matching'` requires local `options` and is disabled when `load_options` is set, since the component can't know the full remote result set.
 
 1. ```ts
-   rangeSelect: boolean = false
+   range_select: boolean = false
    ```
 
-   Whether Shift-click and Shift+Arrow select an inclusive range of options. The first plain click (or the option active before Shift+Arrow) sets the anchor, then the range spans from the anchor to the shift-targeted option. Disabled options are skipped, `maxSelect` is respected. Off by default since enabling it changes what Shift-click does for existing consumers.
+   Whether Shift-click and Shift+Arrow select an inclusive range of options. The first plain click (or the option active before Shift+Arrow) sets the anchor, then the range spans from the anchor to the shift-targeted option. Disabled options are skipped, `max_select` is respected. Off by default since enabling it changes what Shift-click does for existing consumers.
 
 1. ```ts
-   liSelectAllClass: string = ''
+   li_select_all_class: string = ''
    ```
 
    CSS class applied to the "Select All" `<li>` element.
 
 1. ```ts
-   selectedOptionsDraggable: boolean = !sortSelected
+   selected_options_draggable: boolean = !sort_selected
    ```
 
    Whether selected options can be reordered by dragging.
 
 1. ```ts
-   selectedFlipParams: FlipParams = { duration: 100 }
+   selected_flip_params: FlipParams = { duration: 100 }
    ```
 
    Animation parameters for the [Svelte flip animation](https://svelte.dev/docs/svelte/svelte-animate) when reordering selected options via drag-and-drop. Set `{ duration: 0 }` to disable animation. Accepts `duration`, `delay`, and `easing` properties.
@@ -602,47 +602,47 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
 ### Message Props
 
 1. ```ts
-   noMatchingOptionsMsg: string = 'No matching options'
+   no_matching_options_msg: string = 'No matching options'
    ```
 
    Message when search yields no results.
 
 1. ```ts
-   duplicateOptionMsg: string = 'This option is already selected'
+   duplicate_option_msg: string = 'This option is already selected'
    ```
 
    Message when user tries to create duplicate option.
 
 1. ```ts
-   defaultDisabledTitle: string = 'This option is disabled'
+   default_disabled_title: string = 'This option is disabled'
    ```
 
    Tooltip for disabled options.
 
 1. ```ts
-   disabledInputTitle: string = 'This input is disabled'
+   disabled_input_title: string = 'This input is disabled'
    ```
 
    Tooltip when component is disabled.
 
 1. ```ts
-   removeAllTitle: string = 'Remove all'
+   remove_all_title: string = 'Remove all'
    ```
 
    Tooltip for remove-all button.
 
 1. ```ts
-   removeBtnTitle: string = 'Remove'
+   remove_btn_title: string = 'Remove'
    ```
 
    Tooltip for individual remove buttons.
 
 1. ```ts
-   maxSelectMsg: ((current: number, max: number) => string) | null = (current, max) =>
+   max_select_msg: ((current: number, max: number) => string) | null = (current, max) =>
      max > 1 ? `${current}/${max}` : ``
    ```
 
-   Renders a `2/5` counter next to the input. The default returns an empty string when `maxSelect <= 1`. `null` = no message.
+   Renders a `2/5` counter next to the input. The default returns an empty string when `max_select <= 1`. `null` = no message.
 
 ### DOM Element References (bindable)
 
@@ -661,7 +661,7 @@ These give you access to DOM elements after the component mounts:
    Handle to the hidden form input used for validation.
 
 1. ```ts
-   outerDiv: HTMLDivElement | null = null  // bindable
+   outer_div: HTMLDivElement | null = null  // bindable
    ```
 
    Handle to the outer wrapper `<div>` element.
@@ -677,31 +677,31 @@ For custom styling with CSS frameworks or one-off styles:
    CSS rules for the outer wrapper div.
 
 1. ```ts
-   inputStyle: string | null = null
+   input_style: string | null = null
    ```
 
    CSS rules for the main input element.
 
 1. ```ts
-   ulSelectedStyle: string | null = null
+   ul_selected_style: string | null = null
    ```
 
    CSS rules for the selected options list.
 
 1. ```ts
-   ulOptionsStyle: string | null = null
+   ul_options_style: string | null = null
    ```
 
    CSS rules for the dropdown options list.
 
 1. ```ts
-   liSelectedStyle: string | null = null
+   li_selected_style: string | null = null
    ```
 
    CSS rules for selected option list items.
 
 1. ```ts
-   liOptionStyle: string | null = null
+   li_option_style: string | null = null
    ```
 
    CSS rules for dropdown option list items.
@@ -711,61 +711,61 @@ For custom styling with CSS frameworks or one-off styles:
 For use with CSS frameworks like Tailwind:
 
 1. ```ts
-   outerDivClass: string = ''
+   outer_div_class: string = ''
    ```
 
    CSS class for outer wrapper div.
 
 1. ```ts
-   inputClass: string = ''
+   input_class: string = ''
    ```
 
    CSS class for main input element.
 
 1. ```ts
-   ulSelectedClass: string = ''
+   ul_selected_class: string = ''
    ```
 
    CSS class for selected options list.
 
 1. ```ts
-   ulOptionsClass: string = ''
+   ul_options_class: string = ''
    ```
 
    CSS class for dropdown options list.
 
 1. ```ts
-   liSelectedClass: string = ''
+   li_selected_class: string = ''
    ```
 
    CSS class for selected option items.
 
 1. ```ts
-   liOptionClass: string = ''
+   li_option_class: string = ''
    ```
 
    CSS class for dropdown option items.
 
 1. ```ts
-   liActiveOptionClass: string = ''
+   li_active_option_class: string = ''
    ```
 
    CSS class for the currently active dropdown option.
 
 1. ```ts
-   liUserMsgClass: string = ''
+   li_user_msg_class: string = ''
    ```
 
    CSS class for user messages (no matches, create option, etc.).
 
 1. ```ts
-   liActiveUserMsgClass: string = ''
+   li_active_user_msg_class: string = ''
    ```
 
    CSS class for active user messages.
 
 1. ```ts
-   maxSelectMsgClass: string = ''
+   max_select_msg_class: string = ''
    ```
 
    CSS class for the "X of Y selected" message.
@@ -775,32 +775,32 @@ For use with CSS frameworks like Tailwind:
 These reflect internal component state:
 
 1. ```ts
-   matchingOptions: Option[] = []  // bindable
+   matching_options: Option[] = []  // bindable
    ```
 
    Currently filtered options based on search text.
 
 ### Bindable Props
 
-`selected`, `value`, `searchText`, `open`, `maxSelect`, `activeIndex`, `activeOption`, `invalid`, `input`, `outerDiv`, `form_input`, `options`, `matchingOptions`, `collapsedGroups`, `collapseAllGroups`, `expandAllGroups`, `loadError`
+`selected`, `value`, `search_text`, `open`, `max_select`, `active_index`, `active_option`, `invalid`, `input`, `outer_div`, `form_input`, `options`, `matching_options`, `collapsed_groups`, `collapse_all_groups`, `expand_all_groups`, `load_error`
 
 ## Snippets
 
 `MultiSelect.svelte` accepts the following named snippets:
 
 1. `#snippet option({ option, idx, selected, active, disabled })`: Customize rendering of dropdown options. Receives the `option`, its zero-indexed position (`idx`) in the dropdown, whether it is `selected`, `active` (keyboard-highlighted), and `disabled`.
-1. `#snippet selectedItem({ option, idx })`: Customize rendering of selected items. Receives as props an `option` and the zero-indexed position (`idx`) it has in the list of selected items.
-1. `#snippet children({ option, idx, type })`: Convenience snippet that applies to both dropdown options AND selected items. Use this when you want the same custom rendering for both. Takes precedence if `option` or `selectedItem` are not provided. `type` is `'selected'` when rendering a selected pill and `'option'` when rendering a dropdown item, allowing conditional styling/content by context.
+1. `#snippet selected_item({ option, idx })`: Customize rendering of selected items. Receives as props an `option` and the zero-indexed position (`idx`) it has in the list of selected items.
+1. `#snippet children({ option, idx, type })`: Convenience snippet that applies to both dropdown options AND selected items. Use this when you want the same custom rendering for both. Takes precedence if `option` or `selected_item` are not provided. `type` is `'selected'` when rendering a selected pill and `'option'` when rendering a dropdown item, allowing conditional styling/content by context.
 1. `#snippet spinner()`: Custom spinner component to display when in `loading` state. Receives no props.
-1. `#snippet disabledIcon()`: Custom icon to display inside the input when in `disabled` state. Receives no props. Use an empty `{#snippet disabledIcon()}{/snippet}` to remove the default disabled icon.
-1. `#snippet expandIcon({ open, disabled })`: Allows setting a custom icon to indicate to users that the Multiselect text input field is expandable into a dropdown list. `open` is `true` if the dropdown is visible and `false` if hidden. `disabled` reflects the component's disabled state. Use the `expandIconPosition` prop to control which side of the input the icon renders on.
-1. `#snippet removeIcon({ option, isRemoveAll })`: Custom icon to display as remove button. Used both by per-option remove buttons (`isRemoveAll: false`, `option` is the item being removed) and the 'remove all' button (`isRemoveAll: true`, `option` is `undefined`).
-1. `#snippet userMsg({ searchText, msgType, msg })`: Displayed like a dropdown item when the list is empty and user is allowed to create custom options based on text input (or if the user's text input clashes with an existing option). Receives props:
-   - `searchText`: The text user typed into search input.
-   - `msgType: false | 'create' | 'dupe' | 'no-match'`: `'dupe'` means user input is a duplicate of an existing option. `'create'` means user is allowed to convert their input into a new option not previously in the dropdown. `'no-match'` means user input doesn't match any dropdown items and users are not allowed to create new options. `false` means none of the above.
-   - `msg`: Will be [`duplicateOptionMsg`](#message-props) or [`createOptionMsg`](#advanced-props) based on whether user input is a duplicate or can be created as new option. Note this snippet replaces the default UI for displaying these messages so the snippet needs to render them instead (unless purposely not showing a message).
-1. `#snippet beforeInput({ selected, disabled, invalid, id, placeholder, open, required, searchText })`: Placed before the selected chips and search input. For arbitrary content like a search icon or prefix badge.
-1. `#snippet afterInput({ selected, disabled, invalid, id, placeholder, open, required, searchText })`: Placed after the search input. For arbitrary content like icons or temporary messages. Can serve as a more dynamic, more customizable alternative to the `placeholder` prop.
+1. `#snippet disabled_icon()`: Custom icon to display inside the input when in `disabled` state. Receives no props. Use an empty `{#snippet disabled_icon()}{/snippet}` to remove the default disabled icon.
+1. `#snippet expand_icon({ open, disabled })`: Allows setting a custom icon to indicate to users that the Multiselect text input field is expandable into a dropdown list. `open` is `true` if the dropdown is visible and `false` if hidden. `disabled` reflects the component's disabled state. Use the `expand_icon_position` prop to control which side of the input the icon renders on.
+1. `#snippet remove_icon({ option, is_remove_all })`: Custom icon to display as remove button. Used both by per-option remove buttons (`is_remove_all: false`, `option` is the item being removed) and the 'remove all' button (`is_remove_all: true`, `option` is `undefined`).
+1. `#snippet user_msg({ search_text, msg_type, msg })`: Displayed like a dropdown item when the list is empty and user is allowed to create custom options based on text input (or if the user's text input clashes with an existing option). Receives props:
+   - `search_text`: The text user typed into search input.
+   - `msg_type: false | 'create' | 'dupe' | 'no-match'`: `'dupe'` means user input is a duplicate of an existing option. `'create'` means user is allowed to convert their input into a new option not previously in the dropdown. `'no-match'` means user input doesn't match any dropdown items and users are not allowed to create new options. `false` means none of the above.
+   - `msg`: Will be [`duplicate_option_msg`](#message-props) or [`create_option_msg`](#advanced-props) based on whether user input is a duplicate or can be created as new option. Note this snippet replaces the default UI for displaying these messages so the snippet needs to render them instead (unless purposely not showing a message).
+1. `#snippet before_input({ selected, disabled, invalid, id, placeholder, open, required, search_text })`: Placed before the selected chips and search input. For arbitrary content like a search icon or prefix badge.
+1. `#snippet after_input({ selected, disabled, invalid, id, placeholder, open, required, search_text })`: Placed after the search input. For arbitrary content like icons or temporary messages. Can serve as a more dynamic, more customizable alternative to the `placeholder` prop.
 
 Example using several snippets:
 
@@ -819,8 +819,8 @@ Example using several snippets:
   {#snippet spinner()}
     <CustomSpinner />
   {/snippet}
-  {#snippet removeIcon({ isRemoveAll })}
-    <strong>{isRemoveAll ? `Clear` : `X`}</strong>
+  {#snippet remove_icon({ is_remove_all })}
+    <strong>{is_remove_all ? `Clear` : `X`}</strong>
   {/snippet}
 </MultiSelect>
 ```
@@ -830,110 +830,110 @@ Example using several snippets:
 `MultiSelect.svelte` provides the following event callback props:
 
 1. ```ts
-   onadd={({ option, selected }) => console.log(option, selected)}
+   on_add={({ option, selected }) => console.log(option, selected)}
    ```
 
    Triggers when a new option is selected. `option` is the newly selected option, `selected` is the updated array of all selected options.
 
 1. ```ts
-   oncreate={({ option }) => console.log(option)}
+   on_create={({ option }) => console.log(option)}
    ```
 
-   Triggers when a user creates a new option (when `allowUserOptions` is enabled). The created option is provided as `option`. Doubles as a validation hook: return `false` to reject the option, return a replacement option to transform it, or `undefined` to accept it as-is. May be async — paste handling awaits it.
+   Triggers when a user creates a new option (when `allow_user_options` is enabled). The created option is provided as `option`. Doubles as a validation hook: return `false` to reject the option, return a replacement option to transform it, or `undefined` to accept it as-is. May be async — paste handling awaits it.
 
 1. ```ts
-   onremove={({ option, selected }) => console.log(option, selected)}
+   on_remove={({ option, selected }) => console.log(option, selected)}
    ```
 
    Triggers when a single selected option is removed. `option` is the removed option, `selected` is the updated array of remaining selected options.
 
 1. ```ts
-   onremoveAll={({ options }) => console.log(options)}
+   on_remove_all={({ options }) => console.log(options)}
    ```
 
-   Triggers when all selected options are removed. The `options` payload gives the options that were removed (might not be all if `minSelect` is set).
+   Triggers when all selected options are removed. The `options` payload gives the options that were removed (might not be all if `min_select` is set).
 
 1. ```ts
-   onselectAll={({ options, scope }) => console.log(options, scope)}
+   on_select_all={({ options, scope }) => console.log(options, scope)}
    ```
 
-   Triggers when the "Select All" option is clicked (requires `selectAllOption` to be enabled). The `options` payload contains the options that were added. `scope` is the active [`selectAllScope`](#ui-and-behavior-props) for the top-level "Select All", and `undefined` when a group's own select-all fired the event.
+   Triggers when the "Select All" option is clicked (requires `select_all_option` to be enabled). The `options` payload contains the options that were added. `scope` is the active [`select_all_scope`](#ui-and-behavior-props) for the top-level "Select All", and `undefined` when a group's own select-all fired the event.
 
 1. ```ts
-   onrangeSelect={({ added, from, to, selected }) => console.log(added, from, to)}
+   on_range_select={({ added, from, to, selected }) => console.log(added, from, to)}
    ```
 
-   Triggers when a Shift-click or Shift+Arrow selects a range (requires `rangeSelect`). `added` are the newly selected options (already excluding disabled, duplicate and over-`maxSelect` ones), `from` is the anchor option, `to` is the shift-targeted option, and `selected` is the resulting selection.
+   Triggers when a Shift-click or Shift+Arrow selects a range (requires `range_select`). `added` are the newly selected options (already excluding disabled, duplicate and over-`max_select` ones), `from` is the anchor option, `to` is the shift-targeted option, and `selected` is the resulting selection.
 
 1. ```ts
-   onreorder={({ options, previous }) => console.log(options, previous)}
+   on_reorder={({ options, previous }) => console.log(options, previous)}
    ```
 
-   Triggers when selected options are reordered via drag-and-drop (enabled by default when `sortSelected` is false). `options` is the newly ordered array, `previous` is the array before reordering.
+   Triggers when selected options are reordered via drag-and-drop (enabled by default when `sort_selected` is false). `options` is the newly ordered array, `previous` is the array before reordering.
 
 1. ```ts
-   onchange={({ type, option, options }) => console.log(type, option ?? options)}
+   on_change={({ type, option, options }) => console.log(type, option ?? options)}
    ```
 
-   Triggers when an option is either added (selected) or removed from selected, all selected options are removed at once, a range is selected, or selected options are reordered via drag-and-drop. `type` is one of `'add' | 'remove' | 'removeAll' | 'selectAll' | 'rangeSelect' | 'reorder'` and payload will be `option: Option` or `options: Option[]`, respectively.
+   Triggers when an option is either added (selected) or removed from selected, all selected options are removed at once, a range is selected, or selected options are reordered via drag-and-drop. `type` is one of `'add' | 'remove' | 'remove_all' | 'select_all' | 'range_select' | 'reorder'` and payload will be `option: Option` or `options: Option[]`, respectively.
 
 1. ```ts
-   onopen={({ event }) => console.log(`Dropdown opened by`, event)}
+   on_open={({ event }) => console.log(`Dropdown opened by`, event)}
    ```
 
    Triggers when the dropdown list of options appears. `event` is the DOM's `FocusEvent`, `KeyboardEvent` or `ClickEvent` that triggered the open.
 
 1. ```ts
-   onclose={({ event }) => console.log(`Dropdown closed by`, event)}
+   on_close={({ event }) => console.log(`Dropdown closed by`, event)}
    ```
 
    Triggers when the dropdown list of options disappears. `event` is the DOM's `FocusEvent`, `KeyboardEvent` or `ClickEvent` that triggered the close.
 
 1. ```ts
-   onsearch={({ searchText, matchingOptions }) => console.log(searchText, matchingOptions.length)}
+   on_search={({ search_text, matching_options }) => console.log(search_text, matching_options.length)}
    ```
 
-   Triggers (debounced, 150ms) when the search text changes. Useful for analytics or loading remote options. `searchText` is the current input value, `matchingOptions` is the array of options matching the search.
+   Triggers (debounced, 150ms) when the search text changes. Useful for analytics or loading remote options. `search_text` is the current input value, `matching_options` is the array of options matching the search.
 
 1. ```ts
-   onmaxreached={({ selected, maxSelect, attemptedOption }) => console.log(attemptedOption)}
+   on_max_reached={({ selected, max_select, attempted_option }) => console.log(attempted_option)}
    ```
 
-   Triggers when a user tries to select more options than `maxSelect` allows. Useful for showing feedback. Does not fire for `maxSelect=1` (which uses replace behavior).
+   Triggers when a user tries to select more options than `max_select` allows. Useful for showing feedback. Does not fire for `max_select=1` (which uses replace behavior).
 
 1. ```ts
-   onduplicate={({ option }) => console.log(`Duplicate:`, option)}
+   on_duplicate={({ option }) => console.log(`Duplicate:`, option)}
    ```
 
    Triggers when a user tries to add an already-selected option (when `duplicates=false`). Useful for showing feedback to the user.
 
 1. ```ts
-   onactivate={({ option, index }) => console.log(`Active:`, option, index)}
+   on_activate={({ option, index }) => console.log(`Active:`, option, index)}
    ```
 
    Triggers during keyboard navigation (ArrowUp/ArrowDown) through options. `option` is the newly active option, `index` is its position. Does not fire on mouse hover.
 
 1. ```ts
-   oncollapseAll={({ groups }) => console.log(`Collapsed:`, groups)}
+   on_collapse_all={({ groups }) => console.log(`Collapsed:`, groups)}
    ```
 
-   Triggers when all groups are collapsed (e.g. via `collapseAllGroups()`). `groups` lists the group names that were collapsed.
+   Triggers when all groups are collapsed (e.g. via `collapse_all_groups()`). `groups` lists the group names that were collapsed.
 
 1. ```ts
-   onexpandAll={({ groups }) => console.log(`Expanded:`, groups)}
+   on_expand_all={({ groups }) => console.log(`Expanded:`, groups)}
    ```
 
-   Triggers when all groups are expanded (e.g. via `expandAllGroups()`). `groups` lists the group names that were expanded.
+   Triggers when all groups are expanded (e.g. via `expand_all_groups()`). `groups` lists the group names that were expanded.
 
 The following example shows an alert whenever one or more options are added or removed:
 
 ```svelte
 <MultiSelect
-  onchange={({ type, option, options }) => {
+  on_change={({ type, option, options }) => {
     if (type === 'add') alert(`You added ${option}`)
     if (type === 'remove') alert(`You removed ${option}`)
-    if (type === 'removeAll') alert(`You removed ${options}`)
-    if (type === 'selectAll') alert(`You selected all: ${options}`)
+    if (type === 'remove_all') alert(`You removed ${options}`)
+    if (type === 'select_all') alert(`You selected all: ${options}`)
     if (type === 'reorder') alert(`New order: ${options}`)
   }}
 />
@@ -941,7 +941,7 @@ The following example shows an alert whenever one or more options are added or r
 
 > Note: Depending on the data passed to the component the `option(s)` payload will either be objects or simple strings/numbers.
 
-This component also forwards these DOM events from the `<input>` node: `blur`, `click`, `focus`, `input`, `keydown`, `keyup`, `mousedown`, `mouseenter`, `mouseleave`, `touchcancel`, `touchend`, `touchmove`, `touchstart`. Note `onchange` is _not_ forwarded — it's reused as the custom selection-change callback documented above. Registering listeners for the forwarded events works the same:
+This component also forwards these DOM events from the `<input>` node: `blur`, `click`, `focus`, `input`, `keydown`, `keyup`, `mousedown`, `mouseenter`, `mouseleave`, `touchcancel`, `touchend`, `touchmove`, `touchstart`. The custom `on_change` callback reports selection changes separately from native DOM events. Registering listeners for the forwarded events works the same:
 
 ```svelte
 <MultiSelect
@@ -1058,7 +1058,7 @@ Minimal example that changes the background color of the options dropdown:
   - `background: var(--sms-li-selected-plain-bg, light-dark(rgba(0, 123, 255, 0.1), rgba(100, 180, 255, 0.2)))`: Background of selected list items in options pane.
   - `border-left: var(--sms-li-selected-plain-border, 1px solid var(--sms-active-color, cornflowerblue))`: Left border of selected list items in options pane.
 - `div.multiselect > ul.options > li.active`
-  - `background: var(--sms-li-active-bg, var(--sms-active-color, light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.15))))`: Background of active options. Options in the dropdown list become active either by mouseover or by navigating to them with arrow keys. Selected options become active when `selectedOptionsDraggable=true` and an option is being dragged to a new position. Note the active option in that case is not the dragged option but the option under it whose place it will take on drag end.
+  - `background: var(--sms-li-active-bg, var(--sms-active-color, light-dark(rgba(0, 0, 0, 0.15), rgba(255, 255, 255, 0.15))))`: Background of active options. Options in the dropdown list become active either by mouseover or by navigating to them with arrow keys. Selected options become active when `selected_options_draggable=true` and an option is being dragged to a new position. Note the active option in that case is not the dragged option but the option under it whose place it will take on drag end.
 - `div.multiselect > ul.options > li.disabled`
   - `background: var(--sms-li-disabled-bg, light-dark(#f5f5f6, #2a2a2a))`: Background of disabled options in the dropdown list.
   - `color: var(--sms-li-disabled-text, light-dark(#b8b8b8, #666))`: Text color of disabled option in the dropdown list.
@@ -1080,7 +1080,7 @@ Minimal example that changes the background color of the options dropdown:
   - `margin-top: var(--sms-group-header-margin-top, 4pt)`: Top margin for group headers (except the first).
   - `border-top: var(--sms-group-header-border-top, 1px solid light-dark(#eee, #333))`: Top border for group headers (except the first).
   - `background (hover): var(--sms-group-header-hover-bg, light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.05)))`: Background of collapsible group headers on hover.
-  - `background (sticky): var(--sms-group-header-sticky-bg, ...)`: Background when `stickyGroupHeaders` is enabled. Falls back to `--sms-options-bg`.
+  - `background (sticky): var(--sms-group-header-sticky-bg, ...)`: Background when `sticky_group_headers` is enabled. Falls back to `--sms-options-bg`.
 - `div.multiselect > ul.options > li` (grouped options)
   - `padding-left: var(--sms-group-item-padding-left, var(--sms-group-option-indent, 1.5ex))`: Indentation for options within a group.
 - Group chevron icon
@@ -1088,7 +1088,7 @@ Minimal example that changes the background color of the options dropdown:
 - Group "Select/Deselect All" button
   - `background (hover): var(--sms-group-select-all-hover-bg, light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1)))`: Background of per-group select-all button on hover.
   - `color (deselect): var(--sms-group-deselect-color, light-dark(#c44, #f77))`: Text color of "Deselect All" button (when all group options are already selected).
-- `::highlight(sms-search-matches)`: applies to search results in dropdown list that match the current search query if `highlightMatches=true`. These styles [cannot be set via CSS variables](https://stackoverflow.com/a/56799215). Instead, use a new rule set. For example:
+- `::highlight(sms-search-matches)`: applies to search results in dropdown list that match the current search query if `highlight_matches=true`. These styles [cannot be set via CSS variables](https://stackoverflow.com/a/56799215). Instead, use a new rule set. For example:
 
   ```css
   ::highlight(sms-search-matches) {
@@ -1102,33 +1102,35 @@ Minimal example that changes the background color of the options dropdown:
 
 The second method allows you to pass in custom classes to the important DOM elements of this component to target them with frameworks like [Tailwind CSS](https://tailwindcss.com).
 
-- `outerDivClass`: wrapper `div` enclosing the whole component
-- `ulSelectedClass`: list of selected options
-- `liSelectedClass`: selected list items
-- `ulOptionsClass`: available options listed in the dropdown when component is in `open` state
-- `liOptionClass`: list items selectable from dropdown list
-- `liActiveOptionClass`: the currently active dropdown list item (i.e. hovered or navigated to with arrow keys)
-- `liSelectAllClass`: the "Select All" option at the top of the dropdown (when `selectAllOption` is enabled)
-- `liUserMsgClass`: user message (last child of dropdown list when no options match user input)
-- `liActiveUserMsgClass`: user message when active (i.e. hovered or navigated to with arrow keys)
-- `maxSelectMsgClass`: small span toward the right end of the input field displaying to the user how many of the allowed number of options they've already selected
+- `outer_div_class`: wrapper `div` enclosing the whole component
+- `ul_selected_class`: list of selected options
+- `li_selected_class`: selected list items
+- `ul_options_class`: available options listed in the dropdown when component is in `open` state
+- `li_option_class`: list items selectable from dropdown list
+- `li_active_option_class`: the currently active dropdown list item (i.e. hovered or navigated to with arrow keys)
+- `li_select_all_class`: the "Select All" option at the top of the dropdown (when `select_all_option` is enabled)
+- `li_user_msg_class`: user message (last child of dropdown list when no options match user input)
+- `li_active_user_msg_class`: user message when active (i.e. hovered or navigated to with arrow keys)
+- `max_select_msg_class`: small span toward the right end of the input field displaying to the user how many of the allowed number of options they've already selected
 
 This simplified version of the DOM structure of the component shows where these classes are inserted:
 
 ```svelte
-<div class="multiselect {outerDivClass}">
-  <input class={inputClass} />
-  <ul class="selected {ulSelectedClass}">
-    <li class={liSelectedClass}>Selected 1</li>
-    <li class={liSelectedClass}>Selected 2</li>
+<div class="multiselect {outer_div_class}">
+  <input class={input_class} />
+  <ul class="selected {ul_selected_class}">
+    <li class={li_selected_class}>Selected 1</li>
+    <li class={li_selected_class}>Selected 2</li>
   </ul>
-  <span class="max-select-msg {maxSelectMsgClass}">2/5</span>
-  <ul class="options {ulOptionsClass}">
-    <li class="select-all {liSelectAllClass}">Select all</li>
-    <li class={liOptionClass}>Option 1</li>
-    <li class="{liOptionClass} {liActiveOptionClass}">Option 2 (currently active)</li>
+  <span class="max-select-msg {max_select_msg_class}">2/5</span>
+  <ul class="options {ul_options_class}">
+    <li class="select-all {li_select_all_class}">Select all</li>
+    <li class={li_option_class}>Option 1</li>
+    <li class="{li_option_class} {li_active_option_class}">
+      Option 2 (currently active)
+    </li>
     ...
-    <li class="{liUserMsgClass} {liActiveUserMsgClass}">Create this option...</li>
+    <li class="{li_user_msg_class} {li_active_user_msg_class}">Create this option...</li>
   </ul>
 </div>
 ```

@@ -74,7 +74,7 @@ For HTTP loaders, pass `signal` to `fetch`, check `response.ok`, and validate th
 | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
 | `nodes: readonly TreeNode[]`     | Each node needs a globally unique `id` and a `label`; optionally provide `children`, `load(signal)` or `disabled`. |
 | `bind:expanded`, `bind:selected` | Control expanded branch IDs and the selected ID. Replace the set when updating it externally.                      |
-| `onselect(node)`                 | Receive the selected node; disabled nodes cannot be selected or expanded.                                          |
+| `on_select(node)`                | Receive the selected node; disabled nodes cannot be selected or expanded.                                          |
 | `children(node)`                 | Customize the label without replacing the row's selection and expansion behavior.                                  |
 | `label`                          | Accessible tree name; defaults to `Tree`. Other HTML attributes apply to the outer wrapper.                        |
 

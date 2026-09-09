@@ -617,14 +617,14 @@ describe(`Nav`, () => {
       expect(disabled.getAttribute(`style`)).toContain(`opacity: 0.3`)
     })
 
-    test(`clicking disabled item does not trigger onnavigate`, async () => {
+    test(`clicking disabled item does not trigger on_navigate`, async () => {
       const on_navigate = vi.fn()
       const routes: NavRoute[] = [
         { href: `/home` },
         { href: `/disabled`, disabled: true },
         { href: `/disabled2`, disabled: `Coming soon` },
       ]
-      mount_nav({ routes, onnavigate: on_navigate })
+      mount_nav({ routes, on_navigate })
       await click(doc_query(`.disabled`))
       expect(on_navigate).not.toHaveBeenCalled()
       expect(document.querySelectorAll(`a`)).toHaveLength(1)
@@ -697,7 +697,7 @@ describe(`Nav`, () => {
     })
   })
 
-  test(`external links have target attrs and trigger onnavigate callback`, async () => {
+  test(`external links have target attrs and trigger on_navigate callback`, async () => {
     const on_navigate = vi.fn()
     const routes: NavRoute[] = [
       { href: `/internal` },
@@ -710,7 +710,7 @@ describe(`Nav`, () => {
         label: `Link`,
       },
     ]
-    mount_nav({ routes, onnavigate: on_navigate })
+    mount_nav({ routes, on_navigate })
     const links = document.querySelectorAll(`a`)
     // internal link gets no target/rel, external ones do
     expect([0, 1, 2].map((idx) => links[idx].getAttribute(`target`))).toEqual([
@@ -750,10 +750,10 @@ describe(`Nav`, () => {
   })
 
   describe(`callbacks`, () => {
-    test(`onnavigate called with href, event, and route`, async () => {
+    test(`on_navigate called with href, event, and route`, async () => {
       const on_navigate = vi.fn()
       const routes = [{ href: `/home`, icon: `gear`, count: 42 }]
-      mount_nav({ routes, onnavigate: on_navigate })
+      mount_nav({ routes, on_navigate })
       await click(doc_query(`a`))
       expect(on_navigate).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -764,20 +764,20 @@ describe(`Nav`, () => {
       )
     })
 
-    test(`onnavigate returning false prevents default`, async () => {
+    test(`on_navigate returning false prevents default`, async () => {
       const on_navigate = vi.fn((): false => false)
-      mount_nav({ routes: [`/home`], onnavigate: on_navigate })
+      mount_nav({ routes: [`/home`], on_navigate })
       const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
       doc_query(`a`).dispatchEvent(event)
       await tick()
       expect(event.defaultPrevented).toBe(true)
     })
 
-    test(`onnavigate fires for dropdown child links`, async () => {
+    test(`on_navigate fires for dropdown child links`, async () => {
       const on_navigate = vi.fn()
       mount_nav({
         routes: [{ href: `/docs`, children: [`/docs`, `/docs/intro`] }],
-        onnavigate: on_navigate,
+        on_navigate,
       })
       await click(doc_query(`a[href="/docs/intro"]`))
       expect(on_navigate).toHaveBeenCalledWith(
@@ -785,14 +785,14 @@ describe(`Nav`, () => {
       )
     })
 
-    test(`onopen and onclose callbacks on menu toggle`, async () => {
+    test(`on_open and on_close callbacks on menu toggle`, async () => {
       const [on_open, on_close] = [vi.fn(), vi.fn()]
       set_window_width(500)
 
       mount_nav({
         routes: [`/home`],
-        onopen: on_open,
-        onclose: on_close,
+        on_open,
+        on_close,
         breakpoint: 767,
       })
       await tick()
@@ -807,7 +807,7 @@ describe(`Nav`, () => {
       expect(on_close).toHaveBeenCalledTimes(1)
     })
 
-    // No per-cause onclose test: one $effect watches is_open go true->false, covered above.
+    // No per-cause on_close test: one $effect watches is_open go true->false, covered above.
   })
 
   describe(`breakpoint prop`, () => {

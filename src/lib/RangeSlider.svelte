@@ -21,8 +21,8 @@
     tick_position = `below`,
     tick_count = 2,
     disabled = false,
-    oninput,
-    oncommit,
+    on_input,
+    on_commit,
     class: class_name,
     ...rest
   }: {
@@ -41,11 +41,11 @@
     // Total evenly spaced labels, including min and max. Must be an integer >= 2.
     tick_count?: number
     disabled?: boolean
-    // oninput follows each accepted change; oncommit runs once on pointer release,
+    // on_input follows each accepted change; on_commit runs once on pointer release,
     // each keyboard adjustment, or an accepted numeric edit. Neither fires for prop updates.
-    oninput?: (value: RangeValue) => void
-    oncommit?: (value: RangeValue) => void
-  } & Omit<HTMLAttributes<HTMLDivElement>, `oninput`> = $props()
+    on_input?: (value: RangeValue) => void
+    on_commit?: (value: RangeValue) => void
+  } & HTMLAttributes<HTMLDivElement> = $props()
 
   const uid = $props.id()
   const ends = [0, 1] as const
@@ -107,14 +107,14 @@
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
     value = next_value
-    oninput?.([...next_value])
+    on_input?.([...next_value])
     return next_value
   }
   const commit_value = (next: RangeValue | undefined): void => {
-    // A caller can replace the binding synchronously inside oninput. That reset is
+    // A caller can replace the binding synchronously inside on_input. That reset is
     // external state, not a completed user edit, just like a reset between pointer events.
     if (!is_disabled() && next && next[0] === values[0] && next[1] === values[1]) {
-      oncommit?.([...next])
+      on_commit?.([...next])
     }
   }
   const commit_number = (input: HTMLInputElement, thumb: 0 | 1): void => {

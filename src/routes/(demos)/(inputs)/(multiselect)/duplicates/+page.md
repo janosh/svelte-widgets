@@ -36,7 +36,7 @@
   bind:selected
   {duplicates}
   key={key === 'JSON.stringify' ? JSON.stringify : (option) => option}
-  onduplicate={({ option }) => (dupe_msg = `'${option.label}' is already selected`)}
+  on_duplicate={({ option }) => (dupe_msg = `'${option.label}' is already selected`)}
 />
 
 {#if dupe_msg}

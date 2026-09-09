@@ -252,9 +252,9 @@
         doc_info = {
           ...result,
           uri: active_model.uri,
-          lineCount: active_model.line_count,
+          line_count: active_model.line_count,
           eol: active_model.eol,
-          hadBom: active_model.had_bom,
+          had_bom: active_model.had_bom,
         }
         error_message = null
         on_ready?.(doc_info)
@@ -527,7 +527,7 @@
     try {
       await save_handler(saving_model.disk_text(), {
         ...info,
-        lineCount: saving_model.line_count,
+        line_count: saving_model.line_count,
       })
       if (saving_model.revision === saving_revision) saving_model.mark_saved()
       if (model === saving_model) error_message = null

@@ -35,7 +35,7 @@ tightest result, at the cost of items jumping around.
   Items <input type="number" min="1" max="40" bind:value={n_items} style="width: 4em" />
 </label>
 
-<Masonry {items} {order} minColWidth={120} gap={10} style="margin-top: 1em">
+<Masonry {items} {order} min_col_width={120} gap={10} style="margin-top: 1em">
   {#snippet children({ item })}
     <div
       style="height: {item.height}px; display: grid; place-items: center; border-radius:
@@ -87,9 +87,9 @@ few hundred items, where the DOM node count starts to cost more than the measuri
   {virtualize}
   height={360}
   overscan={3}
-  minColWidth={130}
+  min_col_width={130}
   gap={8}
-  getEstimatedHeight={(item) => item.height}
+  get_estimated_height={(item) => item.height}
   style="margin-top: 0.75em; padding: 8px; border: 1px solid var(--border);
   {virtualize ? `` : `max-height: 360px; overflow-y: auto`}"
 >
@@ -106,5 +106,5 @@ few hundred items, where the DOM node count starts to cost more than the measuri
 
 Two things change while virtualizing, because off-screen items are never measured:
 `order` is forced to `row-first`, and the FLIP animation is switched off. Scroll position
-is driven entirely by `getEstimatedHeight` (default 150px), so the closer that is to your
+is driven entirely by `get_estimated_height` (default 150px), so the closer that is to your
 real item heights, the better the scrollbar behaves.
