@@ -9,14 +9,14 @@ and a `ContributorList` of avatars.
 The counterpart to [`Nav`](nav): a centered row of icon links above whatever the page
 puts below them, typically a logo and a copyright line. `links` takes
 `{ href, label, icon?, title?, external? }`; `icon` accepts an `IconData` value imported
-from `$lib/icons`, such as `GitHub`. `children` renders after the nav, and the
+from `svelte-widgets/icons`, such as `GitHub`. `children` renders after the nav, and the
 `--footer-*` custom properties cover padding, background, gap and link color.
 
 ```svelte example id="footer-demo"
 <script lang="ts">
-  import { GitHub, Svelte } from '$lib/icons'
-  import Footer from '$lib/Footer.svelte'
-  import type { FooterLink } from '$lib'
+  import { GitHub, Svelte } from 'svelte-widgets/icons'
+  import Footer from 'svelte-widgets/Footer.svelte'
+  import type { FooterLink } from 'svelte-widgets'
 
   const repo = `https://github.com/janosh/svelte-widgets`
   const links: FooterLink[] = [
@@ -55,7 +55,7 @@ default when set, so pass `autoplay: 1` along with the rest to keep playing on c
 
 ```svelte example id="lite-youtube-demo"
 <script lang="ts">
-  import LiteYouTubeEmbed from '$lib/LiteYouTubeEmbed.svelte'
+  import LiteYouTubeEmbed from 'svelte-widgets/LiteYouTubeEmbed.svelte'
 </script>
 
 <LiteYouTubeEmbed
@@ -76,8 +76,8 @@ row.
 
 ```svelte example id="contributor-list-demo"
 <script lang="ts">
-  import ContributorList from '$lib/ContributorList.svelte'
-  import type { Contributor } from '$lib'
+  import ContributorList from 'svelte-widgets/ContributorList.svelte'
+  import type { Contributor } from 'svelte-widgets'
 
   // shaped like the GitHub /repos/{owner}/{repo}/contributors response
   const contributors: Contributor[] = [`janosh`, `sveltejs`, `vitejs`].map((login) => ({

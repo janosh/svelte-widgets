@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { JsonTree } from '$lib'
+  import { JsonTree } from 'svelte-widgets'
   import SourceInput from '$site/SourceInput.svelte'
-  import { default_highlighter } from '$lib/highlight'
+  import { default_highlighter } from 'svelte-widgets/highlight'
   import syntax_styles from '@wooorm/starry-night/style/light?raw'
-  import type { Diagnostic } from '$lib/markdown'
+  import type { Diagnostic } from 'svelte-widgets/markdown'
   import { onMount } from 'svelte'
   import { bibliography, manifest_source, scientific_source } from './examples'
 
@@ -43,7 +43,7 @@
         validate_content,
         content_toc,
         content_search_record,
-      } = await import('$lib/markdown')
+      } = await import('svelte-widgets/markdown')
       let next: NonNullable<typeof output>
       if (mode === `manifest`) {
         const engine = create_markdown({

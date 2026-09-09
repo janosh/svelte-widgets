@@ -33,6 +33,14 @@ describe(`Nav`, () => {
   }
   const pointer_event = (element: Element, type: string, pointer_type = `mouse`) =>
     element.dispatchEvent(new PointerEvent(type, { pointerType: pointer_type }))
+  const open_dropdown = async (dropdown: Element, interaction: string) => {
+    if (interaction === `click`)
+      await click(dropdown.querySelector(`[data-dropdown-toggle]`))
+    else {
+      pointer_event(dropdown, `pointerenter`)
+      await tick()
+    }
+  }
   const focus_in = (el: Element) =>
     el.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
   const focus_out = (el: Element, relatedTarget: EventTarget | null) =>
@@ -953,35 +961,31 @@ describe(`Nav`, () => {
           { dropdown: dropdown2, menu: menu2 },
         ] = query_all_dropdowns()
 
-        const open = async (dropdown: Element) => {
-          if (interaction === `click`)
-            await click(dropdown.querySelector(`[data-dropdown-toggle]`))
-          else {
-            pointer_event(dropdown, `pointerenter`)
-            await tick()
-          }
-        }
-        await open(dropdown1)
+        await open_dropdown(dropdown1, interaction)
         expect(is_visible(menu1)).toBe(true)
 
-        await open(dropdown2)
+        await open_dropdown(dropdown2, interaction)
         expect(is_visible(menu1)).toBe(false)
         expect(is_visible(menu2)).toBe(true)
       },
     )
 
-    test(`ArrowDown on the toggle of an open dropdown navigates into it`, async () => {
-      const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
+    test.each([`click`, `hover`])(
+      `ArrowDown takes keyboard control of a dropdown opened by %s`,
+      async (interaction) => {
+        const { dropdown, dropdown_menu, toggle } = mount_dropdown(two_child_props)
+        await tick()
+        await open_dropdown(dropdown, interaction)
+        expect(is_visible(dropdown_menu)).toBe(true)
 
-      await click(toggle)
-      expect(is_visible(dropdown_menu)).toBe(true)
-
-      // ArrowDown navigates instead of closing; the focus move is in a setTimeout(.., 0)
-      keydown(`ArrowDown`, toggle)
-      await next_task()
-      expect(is_visible(dropdown_menu)).toBe(true)
-      expect(document.activeElement).toBe(dropdown_menu.querySelector(`a`))
-    })
+        keydown(`ArrowDown`, toggle)
+        await tick()
+        pointer_event(dropdown, `pointerleave`)
+        await tick()
+        expect(is_visible(dropdown_menu)).toBe(true)
+        expect(document.activeElement).toBe(dropdown_menu.querySelector(`a`))
+      },
+    )
 
     test(`Escape on a submenu link closes it for good and restores focus`, async () => {
       const { dropdown_menu, toggle } = mount_dropdown(two_child_props)

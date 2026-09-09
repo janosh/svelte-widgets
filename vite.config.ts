@@ -24,7 +24,6 @@ const docs = markdown_vite(
     examples: {
       wrapper: '/src/lib/CodeExample.svelte',
       collapsible: true,
-      hide_style: true,
     },
   }),
   { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
@@ -43,6 +42,10 @@ const svelte_config = {
   alias: {
     $root: `.`,
     $site: `./src/site`,
+    'svelte-widgets/clipboard': `./src/lib/clipboard.svelte.ts`,
+    'svelte-widgets/dialogs': `./src/lib/dialogs.svelte.ts`,
+    'svelte-widgets/theme': `./src/lib/theme.svelte.ts`,
+    'svelte-widgets/toast-queue': `./src/lib/toast-queue.svelte.ts`,
     'svelte-widgets': `./src/lib`,
   },
 

@@ -11,7 +11,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes: string[] = ['/', '/about', '/contact', '/blog']
@@ -27,7 +27,7 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const link_props = { onclick: (event: MouseEvent) => event.preventDefault() }
@@ -53,13 +53,13 @@ Flexible, accessible navigation with dropdown support, mobile burger menu, and k
 
 Use tuple syntax `[parent, [children...]]` for nested routes. When the parent exists in the children array, it becomes a clickable link. Otherwise, it is a non-clickable label.
 
-On desktop, hovering a navigation entry opens its submenu; moving outside the entry and its pane closes a hover-opened submenu. Panes opened by clicking the caret or using the keyboard stay open when the pointer leaves. On mobile, tap the caret to toggle the submenu. The caret also supports clicks and keyboard navigation with `Enter`, `Space` and `ArrowDown`; `Escape` or a click outside closes the pane.
+On desktop, hovering a navigation entry opens its submenu; moving outside the entry and its pane closes a hover-opened submenu. Panes opened by clicking the caret or using the keyboard stay open when the pointer leaves. Using arrow keys inside a hover-opened pane also keeps it open. On mobile, tap the caret to toggle the submenu. The caret also supports clicks and keyboard navigation with `Enter`, `Space` and `ArrowDown`; `Escape` or a click outside closes the pane.
 
 Desktop submenus with more than 10 child links use two columns, reading down the first column before the second. Set `dropdown_column_threshold` to change that cutoff. Mobile submenus always use one column.
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = [
@@ -94,7 +94,7 @@ For full control, use objects with all available properties:
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = [
@@ -150,7 +150,7 @@ Use the `link` snippet to customize how all links render:
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = ['/', '/about', '/contact']
@@ -173,7 +173,7 @@ Add extra content to the nav menu via `children` snippet:
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = ['/', '/about', '/blog']
@@ -212,7 +212,7 @@ Use `item` snippet for per-item customization. The `render_default` escape hatch
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = [
@@ -247,7 +247,7 @@ Handle navigation events with `onnavigate`, `onopen`, and `onclose`:
 
 ```svelte example collapsible
 <script lang="ts">
-  import { Nav } from '$lib'
+  import { Nav } from 'svelte-widgets'
   import { page } from '$app/state'
 
   const routes = ['/', '/about', '/contact', '/blog']

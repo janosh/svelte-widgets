@@ -4,7 +4,7 @@ For a surface assembled from several elements, call `dismiss_on_outside_press()`
 
 ```svelte example id="attachments-dismiss-multiple"
 <script lang="ts">
-  import { dismiss_on_outside_press } from '$lib/attachments'
+  import { dismiss_on_outside_press } from 'svelte-widgets/attachments'
 
   let open = $state(true)
   let first = $state<HTMLElement | null>(null)

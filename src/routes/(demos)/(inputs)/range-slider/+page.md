@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RangeSlider, type RangeValue } from '$lib'
+  import { RangeSlider, type RangeValue } from 'svelte-widgets'
 
   let price = $state<RangeValue>([120, 360])
   let temperature = $state<RangeValue>([-5, 22])

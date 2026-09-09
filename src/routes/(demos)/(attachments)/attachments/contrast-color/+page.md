@@ -4,7 +4,7 @@
 
 ```svelte example id="attachments-contrast-color"
 <script lang="ts">
-  import { contrast_color } from '$lib/attachments'
+  import { contrast_color } from 'svelte-widgets/attachments'
 
   const colors = [`#f7d154`, `#1769aa`, `oklch(45% 0.2 25)`]
 </script>

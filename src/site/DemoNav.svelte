@@ -1,27 +1,35 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
   import { page } from '$app/state'
   import { Nav, ThemeToggle } from '$lib'
   import type { ComponentProps } from 'svelte'
-  import { demo_labels, demo_nav_routes } from '../routes/(demos)'
+  import {
+    demo_title,
+    demo_pages,
+    demo_nav_routes,
+    multiselect_recipes,
+  } from '../routes/(demos)'
+  import { resolve_demo_path as resolve_path } from './paths'
 
   let props: Partial<ComponentProps<typeof Nav>> = $props()
 
-  // resolve's arg type distributes over the Pathname union, so a route read out of the
-  // demo list can't match a single arm; every demo route is param-free
-  const resolve_path = resolve as (path: string) => string
-  const prefixed_routes = [`/`, ...demo_nav_routes].map((route) =>
-    typeof route === `string`
-      ? resolve_path(route)
-      : {
-          ...route,
-          href: route.href.startsWith(`#`) ? route.href : resolve_path(route.href),
-          children: route.children.map(resolve_path),
-        },
-  )
+  const prefixed_routes = [
+    resolve_path(`/`),
+    ...demo_nav_routes.map((route) => ({
+      ...route,
+      href: resolve_path(route.href),
+      children: route.children.map(resolve_path),
+    })),
+  ]
 
   const nav_route_labels: Record<string, string> = { [resolve_path(`/`)]: `Home` }
-  for (const [route, label] of Object.entries(demo_labels)) {
+  const recipe_paths = multiselect_recipes.map(resolve_path)
+  const nav_page = $derived(
+    recipe_paths.includes(page.url.pathname)
+      ? { url: { pathname: resolve_path(`/multiselect`) } }
+      : page,
+  )
+  for (const route of demo_pages) {
+    const label = demo_title(route)
     nav_route_labels[resolve_path(route)] = route.startsWith(`/attachments/`)
       ? `<code>${label}</code>`
       : label
@@ -31,8 +39,8 @@
 <Nav
   {...props}
   routes={prefixed_routes}
-  {page}
-  route_labels={{ ...nav_route_labels, ...(props.route_labels ?? {}) }}
+  page={nav_page}
+  route_labels={{ ...nav_route_labels, ...props.route_labels }}
 >
   <ThemeToggle />
 </Nav>

@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { default_highlighter } from '$lib/highlight'
+  import { resolve } from '$app/paths'
+  import { default_highlighter } from 'svelte-widgets/highlight'
   import {
     CodeBlock,
     StatGrid,
@@ -15,7 +16,7 @@
     TreeView,
     VirtualList,
     type TreeNode,
-  } from '$lib'
+  } from 'svelte-widgets'
 
   let message = $state<string | undefined>(`Your changes were saved.`)
   let dragging = $state(false)
@@ -44,7 +45,17 @@
 </script>
 
 <h2>Workbench widgets</h2>
-<p>Shared controls for settings, file loading, pane layouts, and large data explorers.</p>
+<p>
+  Compose controls for settings, file loading, pane layouts, and large data explorers.
+  Start with the focused examples and API guides for <a href={resolve(`/tree-view`)}
+    >TreeView</a
+  >,
+  <a href={resolve(`/json-tree`)}>JsonTree</a>,
+  <a href={resolve(`/split-pane`)}>SplitPane</a>,
+  <a href={resolve(`/virtual-list`)}>VirtualList</a>, and
+  <a href={resolve(`/file-input`)}>FileInput</a>. The combined explorer below shares
+  selection and settings between its panes.
+</p>
 <h3>NumberRangeInput</h3>
 <p>
   Draft text stays local until it is finite and within bounds. Clearing retains the value;

@@ -174,6 +174,13 @@ test.describe(`Nav dropdown`, () => {
     await expect(menu.locator(`a`).first()).toBeVisible()
     await page.mouse.move(0, 0)
     await expect(menu).toHaveCSS(`display`, `none`)
+    await dropdown.locator(`[data-dropdown-toggle]`).hover()
+    await dropdown.locator(`[data-dropdown-toggle]`).focus()
+    await page.keyboard.press(`ArrowDown`)
+    await expect(menu.locator(`a`).first()).toBeFocused()
+    await page.mouse.move(0, 0)
+    await expect(menu).toBeVisible()
+    await expect(menu.locator(`a`).first()).toBeFocused()
   })
 
   // the caret only faded 0.6 -> 1 on hover, which reads as the whole row lighting up rather
@@ -490,3 +497,67 @@ test(`the mobile menu clears the burger and shares its left edge`, async ({ page
     burger_box.y + burger_box.height,
   )
 })
+
+test(`demo section navigation and titles render before hydration`, async ({
+  request,
+}) => {
+  const events = await request.get(`/events`)
+  expect(events.ok()).toBe(true)
+  const markup = await events.text()
+  expect(markup).toContain(`aria-label="Demo section"`)
+  expect(markup).toContain(`MultiSelect guide`)
+  expect(markup).toMatch(/class="prev-next(?:\s|")/u)
+  const overview = await request.get(`/multiselect`)
+  expect(await overview.text()).toContain(`<title>MultiSelect</title>`)
+})
+
+// oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
+for (const width of [390, 1440]) {
+  test(`demo navigation keeps recipes local at width ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 })
+    await page.goto(`/inputs`, { waitUntil: `networkidle` })
+    await expect(page.locator(`main h1`)).toHaveText(`Inputs`)
+    await page.locator(`main .card[href="/multiselect"]`).click()
+    await expect(page.getByLabel(`MultiSelect guide`)).toHaveValue(`/multiselect`)
+    await page.getByLabel(`MultiSelect guide`).selectOption(`/events`)
+    await expect(page).toHaveURL(/\/events$/u)
+    await expect(page.getByLabel(`MultiSelect guide`)).toHaveValue(`/events`)
+    const form_box = await page.locator(`.demo-section`).boundingBox()
+    const log_box = await page.locator(`.event-log`).boundingBox()
+    if (!form_box || !log_box) throw new Error(`Missing event demo panels`)
+    if (width < 768)
+      expect(log_box.y).toBeGreaterThanOrEqual(form_box.y + form_box.height)
+    else expect(log_box.x).toBeGreaterThanOrEqual(form_box.x + form_box.width)
+    const header = page.locator(`.site-header`)
+    await expect(header.locator(`a[href="/events"]`)).toHaveCount(0)
+    await expect(header.locator(`a[href="/multiselect"]`)).toHaveAttribute(
+      `aria-current`,
+      `page`,
+    )
+    const previous_next = page.locator(`main .prev-next`)
+    await expect(previous_next.getByRole(`link`)).toHaveText([`Duplicates`, `Form`])
+    await previous_next.getByRole(`link`, { name: `Form`, exact: true }).click()
+    await expect(page.getByLabel(`MultiSelect guide`)).toHaveValue(`/form`)
+    if (width < 768)
+      await header.getByRole(`button`, { name: `Toggle navigation menu` }).click()
+    const inputs_toggle = header.getByRole(`button`, { name: `Toggle Inputs submenu` })
+    if (width < 768) await inputs_toggle.click()
+    else await inputs_toggle.hover()
+    await expect(
+      header.locator(`.dropdown[data-href="/inputs"] [data-submenu] a`),
+    ).toHaveText([
+      `ActionButton`,
+      `Button Group`,
+      `FileInput`,
+      `MultiSelect`,
+      `RangeSlider`,
+      `Settings`,
+    ])
+    await header.getByRole(`link`, { name: `FileInput`, exact: true }).click()
+    await expect(page).toHaveURL(/\/file-input$/u)
+    await expect(page.getByLabel(`MultiSelect guide`)).toHaveCount(0)
+    await expect(
+      page.getByRole(`navigation`, { name: `Demo section` }).getByRole(`link`),
+    ).toHaveText(`Inputs`)
+  })
+}

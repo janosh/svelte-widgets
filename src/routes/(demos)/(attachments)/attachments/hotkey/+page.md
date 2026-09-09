@@ -6,7 +6,7 @@ chords always fire.
 
 ```svelte example id="attachments-hotkey"
 <script lang="ts">
-  import { hotkey } from '$lib/attachments'
+  import { hotkey } from 'svelte-widgets/attachments'
 
   let log = $state<string[]>([])
   const record = (label: string) => (log = [label, ...log].slice(0, 5))

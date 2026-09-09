@@ -4,7 +4,7 @@
 
 ```svelte example id="attachments-forward-window-keydown"
 <script lang="ts">
-  import { forward_window_keydown } from '$lib/attachments'
+  import { forward_window_keydown } from 'svelte-widgets/attachments'
 
   let last_key = $state(`none`)
 </script>

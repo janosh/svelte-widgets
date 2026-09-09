@@ -24,8 +24,8 @@ Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')
 
 ```svelte example id="confirm-dialog-demo"
 <script lang="ts">
-  import ConfirmDialog from '$lib/ConfirmDialog.svelte'
-  import { ask_confirm, ask_prompt, request_choice } from '$lib/dialogs.svelte'
+  import ConfirmDialog from 'svelte-widgets/ConfirmDialog.svelte'
+  import { ask_confirm, ask_prompt, request_choice } from 'svelte-widgets/dialogs'
 
   let answers = $state<string[]>([])
   const record = (answer: string) => (answers = [answer, ...answers].slice(0, 5))
@@ -109,7 +109,7 @@ Print the current page with an optional suggested PDF filename. The helper tempo
 
 ```svelte example id="print-page-demo"
 <script lang="ts">
-  import { format_print_filename, print_page } from '$lib/print'
+  import { format_print_filename, print_page } from 'svelte-widgets/print'
 </script>
 
 <button
@@ -128,7 +128,7 @@ timer, and re-copying a key restarts that timer so the checkmark cannot blink ou
 
 ```svelte example id="clipboard-feedback-demo"
 <script lang="ts">
-  import { create_clipboard_feedback } from '$lib/clipboard.svelte'
+  import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
 
   const { copied, copy } = create_clipboard_feedback(1500, (error) =>
     console.error(error),
@@ -182,7 +182,7 @@ an ancestor would otherwise recurse without end — which is why the handler bel
 
 ```svelte example id="file-drop-demo"
 <script lang="ts">
-  import { files_from_data_transfer } from '$lib/file-drop'
+  import { files_from_data_transfer } from 'svelte-widgets/file-drop'
 
   let dropped = $state<File[]>([])
   let is_dragging = $state(false)

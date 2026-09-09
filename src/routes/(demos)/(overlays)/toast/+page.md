@@ -22,8 +22,8 @@ seconds.
 
 ```svelte example id="toast-priorities"
 <script lang="ts">
-  import Toast from '$lib/Toast.svelte'
-  import { TOAST_PRIORITIES, ToastStore } from '$lib/toast-queue.svelte.ts'
+  import Toast from 'svelte-widgets/Toast.svelte'
+  import { TOAST_PRIORITIES, ToastStore } from 'svelte-widgets/toast-queue'
 
   const store = new ToastStore()
 </script>
@@ -70,8 +70,8 @@ refreshes only the text, leaving the original's priority, timing and action alon
 
 ```svelte example id="toast-actions"
 <script lang="ts">
-  import Toast from '$lib/Toast.svelte'
-  import { ToastStore } from '$lib/toast-queue.svelte.ts'
+  import Toast from 'svelte-widgets/Toast.svelte'
+  import { ToastStore } from 'svelte-widgets/toast-queue'
 
   const store = new ToastStore()
   let log = $state<string[]>([])
@@ -140,8 +140,8 @@ yourself; it receives the `ToastItem`.
 
 ```svelte example id="toast-custom"
 <script lang="ts">
-  import Toast from '$lib/Toast.svelte'
-  import { ToastStore } from '$lib/toast-queue.svelte.ts'
+  import Toast from 'svelte-widgets/Toast.svelte'
+  import { ToastStore } from 'svelte-widgets/toast-queue'
 
   const store = new ToastStore()
 </script>

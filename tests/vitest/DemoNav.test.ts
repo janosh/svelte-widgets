@@ -1,43 +1,62 @@
+import { page } from '$app/state'
 import { DemoNav } from '$site'
+import CategoryOverview from '$site/CategoryOverview.svelte'
 import { mount } from 'svelte'
-import { expect, test, vi } from 'vitest'
-import { demo_labels, demo_nav_routes, demo_pages } from '../../src/routes/(demos)'
+import { expect, onTestFinished, test, vi } from 'vitest'
+import {
+  demo_labels,
+  demo_nav_routes,
+  demo_pages,
+  multiselect_recipes,
+} from '../../src/routes/(demos)'
 
 const base = `/docs`
+const resolver = vi.hoisted(() => ({ relative: false }))
 vi.mock(`$app/paths`, () => ({
-  resolve: (path: string): string => `/docs${path}`,
+  resolve: (path: string): string => (resolver.relative ? `.${path}` : `/docs${path}`),
 }))
-vi.mock(`$app/state`, () => ({ page: { url: { pathname: `/docs/` } } }))
+vi.mock(`$app/state`, () => ({ page: { url: new URL(`https://example.com/docs/`) } }))
 
-test(`DemoNav contains all base-prefixed demo pages`, () => {
+const page_files = Object.keys(
+  import.meta.glob(`../../src/routes/**/+page.{svelte,md}`),
+).filter((filename) => filename.includes(`/(demos)/`) && !filename.includes(`/(hide)/`))
+const route_of = (filename: string) =>
+  filename
+    .replace(`../../src/routes`, ``)
+    .replaceAll(/\/\([^)]+\)/gu, ``)
+    .replace(/\/\+page\.(?:svelte|md)$/u, ``)
+
+test(`DemoNav lists components while recipes remain in the complete searchable catalog`, () => {
   mount(DemoNav, { target: document.body })
-
-  // Category headers without overview pages are anchors, not pages.
-  const hrefs = Array.from(document.querySelectorAll(`nav a`)).flatMap((link) => {
-    const href = link.getAttribute(`href`)
-    return href && !href.startsWith(`#`) ? [href] : []
-  })
-
-  const page_files = Object.keys(
-    import.meta.glob(`../../src/routes/**/+page.{svelte,md}`),
-  ).filter((filename) => filename.includes(`/(demos)/`) && !filename.includes(`/(hide)/`))
-  const expected = [
-    `${base}/`,
-    ...page_files.map(
-      (filename) =>
-        `${base}${filename
-          .replace(`../../src/routes`, ``)
-          .replaceAll(/\/\([^)]+\)/gu, ``)
-          .replace(/\/\+page\.(?:svelte|md)$/u, ``)}`,
-    ),
-  ]
-  // A broken glob must not make both sides trivially equal.
-  expect(expected).toEqual(
-    expect.arrayContaining([`${base}/multiselect`, `${base}/ui`, `${base}/range-select`]),
+  const hrefs = new Set(
+    Array.from(document.querySelectorAll(`nav a`), (link) => link.getAttribute(`href`)),
   )
-  expect(new Set(hrefs)).toEqual(new Set(expected))
-  expect(hrefs).toHaveLength(expected.length)
-  expect(demo_pages.map((route) => `${base}${route}`)).toEqual(hrefs.slice(1))
+  const expected_pages = page_files.map(route_of)
+  expect(expected_pages).toEqual(
+    expect.arrayContaining([`/multiselect`, `/ui`, `/range-select`]),
+  )
+  expect(new Set(demo_pages)).toEqual(new Set(expected_pages))
+  expect(demo_pages).toHaveLength(expected_pages.length)
+  expect(new Set(multiselect_recipes)).toEqual(
+    new Set(
+      page_files
+        .filter(
+          (filename) =>
+            filename.includes(`/(multiselect)/`) && route_of(filename) !== `/multiselect`,
+        )
+        .map(route_of),
+    ),
+  )
+  expect(multiselect_recipes).toContain(`/events`)
+  const recipe_set = new Set<string>(multiselect_recipes)
+  expect(hrefs).toEqual(
+    new Set([
+      `${base}/`,
+      ...expected_pages
+        .filter((route) => !recipe_set.has(route))
+        .map((route) => `${base}${route}`),
+    ]),
+  )
   expect(demo_nav_routes.map(({ label }) => label)).toEqual([
     `Inputs`,
     `Navigation`,
@@ -47,34 +66,72 @@ test(`DemoNav contains all base-prefixed demo pages`, () => {
     `Attachments`,
   ])
   expect(document.querySelectorAll(`.menu > .dropdown`)).toHaveLength(6)
-  for (const { label, children } of demo_nav_routes) {
-    const category = label.toLowerCase()
-    expect(children.length).toBeGreaterThan(0)
+  for (const { name, href, children } of demo_nav_routes) {
+    expect(children).toContain(href)
     for (const route of children) {
-      const source = `../../src/routes/(demos)/(${category})${route}/+page.`
-      expect(page_files.some((filename) => filename.startsWith(source))).toBe(true)
+      expect(
+        page_files.some(
+          (filename) =>
+            filename.startsWith(`../../src/routes/(demos)/(${name})/`) &&
+            route_of(filename) === route,
+        ),
+      ).toBe(true)
     }
   }
   expect(
-    document.querySelector(`.dropdown[data-href="#inputs"] a[href="/docs/multiselect"]`),
+    document.querySelector(
+      `.dropdown[data-href="/docs/inputs"] a[href="/docs/multiselect"]`,
+    ),
   ).not.toBeNull()
   expect(
-    document.querySelector(`.dropdown[data-href="#navigation"] a[href="/docs/nav"]`),
+    document.querySelector(`.dropdown[data-href="/docs/navigation"] a[href="/docs/nav"]`),
   ).not.toBeNull()
-
-  // Nav takes labels from route.label for top-level items but from the href for dropdown
-  // children, so the wrong source silently regresses to slug casing (`Multiselect`)
-  const link_text = new Set(
-    Array.from(document.querySelectorAll(`nav a`), (link) => link.textContent?.trim()),
-  )
   expect(demo_labels).toMatchObject({
     '/attachments/tooltip': `tooltip`,
     '/attachments/dismiss-on-outside-press': `dismiss_on_outside_press`,
   })
   for (const [route, label] of Object.entries(demo_labels)) {
-    expect(link_text).toContain(label)
-    const code = document.querySelector(`nav a[href="${base}${route}"] code`)
-    if (route.startsWith(`/attachments/`)) expect(code?.textContent).toBe(label)
-    else expect(code).toBeNull()
+    if (recipe_set.has(route)) continue
+    const link = document.querySelector(`nav a[href="${base}${route}"]`)
+    expect(link?.textContent?.trim()).toBe(label)
+    if (route.startsWith(`/attachments/`))
+      expect(link?.querySelector(`code`)?.textContent).toBe(label)
+    else expect(link?.querySelector(`code`)).toBeNull()
   }
 })
+
+test.each([`inputs`, `navigation`, `overlays`, `display`])(
+  `%s overview links to its components with descriptions`,
+  (name) => {
+    mount(CategoryOverview, { target: document.body, props: { name } })
+    const category = demo_nav_routes.find((entry) => entry.name === name)
+    expect(document.querySelector(`h1`)?.textContent).toBe(category?.label)
+    const cards = Array.from(document.querySelectorAll(`.card`))
+    expect(cards.map((card) => card.getAttribute(`href`))).toEqual(
+      category?.children
+        .filter((route) => route !== category.href)
+        .map((route) => `${base}${route}`),
+    )
+    for (const card of cards)
+      expect(card.querySelector(`p`)?.textContent?.trim().length).toBeGreaterThan(15)
+  },
+)
+
+test.each([false, true])(
+  `recipe pages mark their MultiSelect parent active with relative paths=%s`,
+  (relative) => {
+    resolver.relative = relative
+    onTestFinished(() => {
+      resolver.relative = false
+      page.url.pathname = `${base}/`
+    })
+    page.url.pathname = `${base}/events`
+    mount(DemoNav, { target: document.body })
+    expect(
+      document
+        .querySelector(`a[href="${base}/multiselect"]`)
+        ?.getAttribute(`aria-current`),
+    ).toBe(`page`)
+    expect(document.querySelector(`a[href="${base}/events"]`)).toBeNull()
+  },
+)

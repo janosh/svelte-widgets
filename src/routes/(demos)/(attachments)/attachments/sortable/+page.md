@@ -2,7 +2,7 @@
 
 ```svelte example id="attachments-sortable"
 <script lang="ts">
-  import { sortable } from '$lib/attachments'
+  import { sortable } from 'svelte-widgets/attachments'
 
   const planets = [
     { planet: `Mercury`, moons: 0, discovery: `ancient`, notes: `` },

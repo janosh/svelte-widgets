@@ -21,7 +21,7 @@ so the label can react to the state. Everything else spreads onto the wrapping `
 
 ```svelte example id="toggle-demo"
 <script lang="ts">
-  import { Toggle } from '$lib'
+  import { Toggle } from 'svelte-widgets'
 
   let [notifications, telemetry] = $state([true, false])
 </script>
@@ -50,7 +50,7 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">
-  import { ThemeToggle } from '$lib'
+  import { ThemeToggle } from 'svelte-widgets'
 </script>
 
 <ThemeToggle
@@ -67,9 +67,9 @@ Pass the glyph value (`<Icon icon={Info} />`), not a name.
 
 ```svelte example id="icon-demo"
 <script lang="ts">
-  import { CopyButton, Icon } from '$lib'
-  import * as icons from '$lib/icons'
-  import type { IconData } from '$lib/icons'
+  import { CopyButton, Icon } from 'svelte-widgets'
+  import * as icons from 'svelte-widgets/icons'
+  import type { IconData } from 'svelte-widgets/icons'
 
   const catalog = Object.entries<IconData>(icons)
   // zero-width spaces let long CamelCase names wrap between words instead of mid-word
@@ -120,7 +120,7 @@ so any unit works.
 
 ```svelte example id="spinner-demo"
 <script lang="ts">
-  import { CircleSpinner } from '$lib'
+  import { CircleSpinner } from 'svelte-widgets'
 </script>
 
 <CircleSpinner />
@@ -134,7 +134,7 @@ A list of collapsible `<details>`, one per file, with a button that opens or clo
 
 ```svelte example id="file-details-demo"
 <script lang="ts">
-  import { FileDetails } from '$lib'
+  import { FileDetails } from 'svelte-widgets'
 
   const files = [
     {
@@ -158,7 +158,7 @@ Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` 
 
 ```svelte example id="prev-next-demo"
 <script lang="ts">
-  import { PrevNext } from '$lib'
+  import { PrevNext } from 'svelte-widgets'
 
   // relative hrefs so the links survive the docs site's base path
   const chapters = [

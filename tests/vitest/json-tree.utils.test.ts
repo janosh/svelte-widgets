@@ -84,6 +84,7 @@ it.each([
   [{}, {}, `{0 keys}`],
   [{ a: 1 }, { a: 1 }, `{1 key}`],
   [{ a: 1, b: 2 }, { a: 1, b: 2 }, `{2 keys}`],
+  [{ toJSON: () => undefined }, `[object Object]`, `{1 key}`],
   [
     new Map([
       [`a`, 1],

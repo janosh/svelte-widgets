@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Wiggle from '$lib/Wiggle.svelte'
+  import Wiggle from 'svelte-widgets/Wiggle.svelte'
 
   let wiggle = $state(false)
   let angle = $state(20)

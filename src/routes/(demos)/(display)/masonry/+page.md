@@ -11,8 +11,8 @@ tightest result, at the cost of items jumping around.
 
 ```svelte example id="masonry-basic"
 <script lang="ts">
-  import { Masonry, type MasonryOrder } from '$lib'
-  import { order_options } from '$lib/utils'
+  import { Masonry, type MasonryOrder } from 'svelte-widgets'
+  import { order_options } from 'svelte-widgets/utils'
 
   let order = $state<MasonryOrder>(`balanced-stable`)
   let n_items = $state(12)
@@ -54,7 +54,7 @@ few hundred items, where the DOM node count starts to cost more than the measuri
 
 ```svelte example id="masonry-virtualized"
 <script lang="ts">
-  import { Masonry } from '$lib'
+  import { Masonry } from 'svelte-widgets'
 
   let virtualize = $state(true)
   let rendered = $state(0)

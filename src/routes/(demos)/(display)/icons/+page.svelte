@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { CodeBlock, Icon } from '$lib'
-  import { default_highlighter } from '$lib/highlight'
-  import { create_clipboard_feedback } from '$lib/clipboard.svelte'
-  import * as icon_module from '$lib/icons'
-  import type { IconData } from '$lib/icons/types'
+  import { CodeBlock, Icon } from 'svelte-widgets'
+  import { default_highlighter } from 'svelte-widgets/highlight'
+  import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
+  import * as icon_module from 'svelte-widgets/icons'
+  import type { IconData } from 'svelte-widgets/icons'
 
   // The catalog is the one place a star import is right: every other call site should
   // import the single glyph it needs so the bundler can drop the rest.

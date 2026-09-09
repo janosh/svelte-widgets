@@ -16,10 +16,10 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 
 ```svelte example id="code-editor-basic"
 <script lang="ts">
-  import '$lib/code-editor/editor.css'
-  import { CodeEditor } from '$lib'
-  import { create_editor_model, TOKEN_CLASS_NAMES } from '$lib/code-editor'
-  import type { EditorBackend, EditorUpdate, TextEdit } from '$lib/code-editor'
+  import 'svelte-widgets/code-editor/editor.css'
+  import { CodeEditor } from 'svelte-widgets'
+  import { create_editor_model, TOKEN_CLASS_NAMES } from 'svelte-widgets/code-editor'
+  import type { EditorBackend, EditorUpdate, TextEdit } from 'svelte-widgets/code-editor'
 
   const initial_text = `const greeting = \`Hello\`\nconsole.log(greeting)\n`
   const model = create_editor_model({ uri: `greeting.ts`, text: initial_text })
@@ -134,10 +134,15 @@ app startup.
 
 ```svelte example id="diff-view-basic"
 <script lang="ts">
-  import '$lib/code-editor/editor.css'
-  import { DiffView } from '$lib'
-  import { EMPHASIS_BIT, TOKEN_CLASS_NAMES } from '$lib/code-editor'
-  import type { DiffBackend, DiffResult, DiffRow, RowKind } from '$lib/code-editor'
+  import 'svelte-widgets/code-editor/editor.css'
+  import { DiffView } from 'svelte-widgets'
+  import { EMPHASIS_BIT, TOKEN_CLASS_NAMES } from 'svelte-widgets/code-editor'
+  import type {
+    DiffBackend,
+    DiffResult,
+    DiffRow,
+    RowKind,
+  } from 'svelte-widgets/code-editor'
 
   const unchanged_prefix = [
     `type GreetingOptions = {`,

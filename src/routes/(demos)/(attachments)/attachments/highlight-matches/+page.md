@@ -2,7 +2,7 @@
 
 ```svelte example id="attachments-highlight"
 <script lang="ts">
-  import { highlight_matches } from '$lib/attachments'
+  import { highlight_matches } from 'svelte-widgets/attachments'
 
   let search_text = $state('')
   let disabled = $state(false)

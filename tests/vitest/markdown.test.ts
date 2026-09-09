@@ -249,45 +249,50 @@ describe(`code and math`, () => {
     expect(await render_markdown(`$x$`, { math: true })).toContain(`<span class="katex">`)
   })
 
-  test(`live examples register source before imports resolve and hide only real script/style blocks`, async () => {
-    const on_manifest = vi.fn()
-    const instance = markdown_vite({ examples: { hide_style: true }, on_manifest })
-    const source =
-      '<script module>export const value = 1</script>\n\n```svelte example id="test"\n<script>let count = 0</script>\n<button onclick={() => count++}>{count}</button>\n<style>button { color: red }</style>\n```'
-    const result = await preprocess(source, instance.preprocess, {
-      filename: `/project/page.md`,
-    })
-    compile(result.code, { generate: false })
-    expect(on_manifest).toHaveBeenCalledExactlyOnceWith(
-      expect.objectContaining({ filename: `/project/page.md` }),
-    )
-    expect(result.code).not.toContain(`__live_example_src`)
-    expect(result.code).not.toContain(`button { color: red }`)
-    expect(result.code).toContain(`<script>import`)
-    const load = instance.plugin.load
-    if (typeof load !== `function`) throw new Error(`Expected load hook`)
-    const module_id = /"(?<id>\/project\/page\.md\.widgets-example-[^"]+)"/u.exec(
-      result.code,
-    )?.[1]
-    if (!module_id) throw new Error(`Missing example import`)
-    const loaded = await load.call({} as never, module_id)
-    expect(loaded).toMatchObject({
-      code: expect.stringContaining(`button { color: red }`),
-      map: { sourcesContent: [expect.stringContaining(`button { color: red }`)] },
-    })
-    expect(await load.call({} as never, `${module_id}?svelte&type=style`)).toBeUndefined()
-    await preprocess(`# Removed`, instance.preprocess, { filename: `/project/page.md` })
-    expect(() => load.call({} as never, module_id)).toThrow(`not registered`)
-    on_manifest.mockImplementationOnce(() => {
-      throw new Error(`Manifest rejected`)
-    })
-    await expect(
-      preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
-    ).rejects.toThrow(`Manifest rejected`)
-    await expect(
-      preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
-    ).resolves.toHaveProperty(`code`)
-  })
+  test.each([undefined, true])(
+    `live examples register complete source and respect hide_style=%s`,
+    async (hide_style) => {
+      const on_manifest = vi.fn()
+      const instance = markdown_vite({ examples: { hide_style }, on_manifest })
+      const source =
+        '<script module>export const value = 1</script>\n\n```svelte example id="test"\n<script>let count = 0</script>\n<button onclick={() => count++}>{count}</button>\n<style>button { color: red }</style>\n```'
+      const result = await preprocess(source, instance.preprocess, {
+        filename: `/project/page.md`,
+      })
+      compile(result.code, { generate: false })
+      expect(on_manifest).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ filename: `/project/page.md` }),
+      )
+      expect(result.code).not.toContain(`__live_example_src`)
+      expect(result.code.includes(`button { color: red }`)).toBe(!hide_style)
+      expect(result.code).toContain(`<script>import`)
+      const load = instance.plugin.load
+      if (typeof load !== `function`) throw new Error(`Expected load hook`)
+      const module_id = /"(?<id>\/project\/page\.md\.widgets-example-[^"]+)"/u.exec(
+        result.code,
+      )?.[1]
+      if (!module_id) throw new Error(`Missing example import`)
+      const loaded = await load.call({} as never, module_id)
+      expect(loaded).toMatchObject({
+        code: expect.stringContaining(`button { color: red }`),
+        map: { sourcesContent: [expect.stringContaining(`button { color: red }`)] },
+      })
+      expect(
+        await load.call({} as never, `${module_id}?svelte&type=style`),
+      ).toBeUndefined()
+      await preprocess(`# Removed`, instance.preprocess, { filename: `/project/page.md` })
+      expect(() => load.call({} as never, module_id)).toThrow(`not registered`)
+      on_manifest.mockImplementationOnce(() => {
+        throw new Error(`Manifest rejected`)
+      })
+      await expect(
+        preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
+      ).rejects.toThrow(`Manifest rejected`)
+      await expect(
+        preprocess(`# Retry`, instance.preprocess, { filename: `/project/page.md` }),
+      ).resolves.toHaveProperty(`code`)
+    },
+  )
 
   test(`CSR examples use dynamic imports, ordinary code fences do not create components`, async () => {
     const result = await compile_page(

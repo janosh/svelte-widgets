@@ -4,7 +4,7 @@
 
 ```svelte example id="patterns-tabs"
 <script lang="ts">
-  import { Tabs } from '$lib'
+  import { Tabs } from 'svelte-widgets'
 
   const items = [
     { value: `overview`, label: `Overview` },
@@ -27,7 +27,7 @@
 
 ```svelte example id="patterns-accordion"
 <script lang="ts">
-  import { Accordion } from '$lib'
+  import { Accordion } from 'svelte-widgets'
 
   const items = [
     { value: `install`, label: `Installation` },
@@ -52,7 +52,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ```svelte example id="patterns-find-bar"
 <script lang="ts">
-  import { FindBar } from '$lib'
+  import { FindBar } from 'svelte-widgets'
 
   let root = $state<HTMLElement>()
   let open = $state(true)
@@ -92,7 +92,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ```svelte example id="patterns-dialog"
 <script lang="ts">
-  import { Dialog } from '$lib'
+  import { Dialog } from 'svelte-widgets'
 
   let open = $state(false)
   let last_close = $state(`none`)
@@ -139,7 +139,7 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ```svelte example id="patterns-sheet"
 <script lang="ts">
-  import { Sheet } from '$lib'
+  import { Sheet } from 'svelte-widgets'
 
   let open = $state(false)
 </script>

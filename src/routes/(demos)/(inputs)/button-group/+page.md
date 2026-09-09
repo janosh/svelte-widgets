@@ -19,8 +19,8 @@ Style the arrow with `sort_button_props` (it sits outside the radiogroup, so hos
 
 ```svelte example id="button-group-single"
 <script lang="ts">
-  import { GitHub } from '$lib/icons'
-  import ButtonGroup, { type ButtonGroupOption } from '$lib/ButtonGroup.svelte'
+  import { GitHub } from 'svelte-widgets/icons'
+  import ButtonGroup, { type ButtonGroupOption } from 'svelte-widgets/ButtonGroup.svelte'
 
   const options: ButtonGroupOption[] = [
     {
@@ -61,7 +61,7 @@ selection, and every color is a `--btn-group-*` custom property.
 
 ```svelte example id="button-group-multi"
 <script lang="ts">
-  import ButtonGroup from '$lib/ButtonGroup.svelte'
+  import ButtonGroup from 'svelte-widgets/ButtonGroup.svelte'
 
   const tags: Record<string, string> = {
     svelte: `Svelte`,

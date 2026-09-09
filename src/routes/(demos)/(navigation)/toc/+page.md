@@ -9,7 +9,7 @@ document with `headingSelector`, so it lists those headings rather than the page
 
 ```svelte example id="toc-basic"
 <script lang="ts">
-  import { Toc } from '$lib'
+  import { Toc } from 'svelte-widgets'
 
   let open = $state(false)
 </script>

@@ -165,17 +165,15 @@
       event.preventDefault()
       close_menus()
       dropdown_toggle(href)?.focus()
-    } else step_focus(event, [...dropdown_links(href)])
+    } else if (step_focus(event, [...dropdown_links(href)])) hover_open = false
   }
 
   function is_current(path: string | undefined) {
     if (!path) return
-    if (path === `/`) return page?.url.pathname === `/` ? `page` : undefined
     // exact path or `path/` prefix, never a partial segment match
     const pathname = page?.url.pathname
-    const exact_match = pathname === path
-    const prefix_match = pathname?.startsWith(`${path}/`)
-    return exact_match || prefix_match ? `page` : undefined
+    if (pathname === path || (path !== `/` && pathname?.startsWith(`${path}/`)))
+      return `page`
   }
 
   const is_child_current = (sub_routes: string[]) =>
@@ -200,10 +198,6 @@
       return Array.isArray(second) ? { href, children: second } : { href, label: second }
     }
     return { ...route, href: route.href ?? `` }
-  }
-
-  function get_route_key(route: NavRoute, route_idx: number): string {
-    return `${route_idx}-${parse_route(route).href || `sep-${route_idx}`}`
   }
 
   function get_tooltip(route: NavRouteObject) {
@@ -316,8 +310,7 @@
     class={[`menu`, menu_props?.class, { open: is_open }]}
     onkeydown={chain_handlers(onkeydown, menu_props?.onkeydown)}
   >
-    {#each routes as route, route_idx (get_route_key(route, route_idx))}
-      {@const parsed_route = parse_route(route)}
+    {#each routes.map(parse_route) as parsed_route, route_idx (`${route_idx}-${parsed_route.href || `sep-${route_idx}`}`)}
       {@const formatted = format_label(parsed_route.label ?? parsed_route.href)}
       {@const sub_routes = parsed_route.children}
       {@const is_active = is_current(parsed_route.href) === `page`}

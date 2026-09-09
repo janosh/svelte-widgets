@@ -12,8 +12,8 @@ dropdown too small.
 
 ```svelte example id="draggable-pane-basic"
 <script lang="ts">
-  import DraggablePane from '$lib/DraggablePane.svelte'
-  import { Toggle } from '$lib'
+  import DraggablePane from 'svelte-widgets/DraggablePane.svelte'
+  import { Toggle } from 'svelte-widgets'
 
   let [open, persistent] = $state([false, false])
   let resize = $state<`both` | `width` | `height` | `none`>(`both`)
@@ -33,8 +33,7 @@ dropdown too small.
 </div>
 
 <div
-  class="demo-box"
-  style="position: relative; height: 22em; margin-block: 1em; padding: 6pt; display: flex; justify-content: flex-end"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); position: relative; height: 22em; margin-block: 1em; padding: 6pt; display: flex; justify-content: flex-end"
 >
   <DraggablePane
     bind:open
@@ -71,12 +70,11 @@ click handling, stays with the component. It receives the same state as `childre
 
 ```svelte example id="draggable-pane-toggle"
 <script lang="ts">
-  import DraggablePane from '$lib/DraggablePane.svelte'
+  import DraggablePane from 'svelte-widgets/DraggablePane.svelte'
 </script>
 
 <div
-  class="demo-box"
-  style="position: relative; height: 10em; padding: 6pt; display: flex; justify-content: flex-end"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); position: relative; height: 10em; padding: 6pt; display: flex; justify-content: flex-end"
 >
   <DraggablePane toggle_props={{ title: `Layer info` }}>
     {#snippet toggle({ open })}
@@ -106,12 +104,11 @@ remains below.
 
 ```svelte example id="draggable-pane-fixed"
 <script lang="ts">
-  import DraggablePane from '$lib/DraggablePane.svelte'
+  import DraggablePane from 'svelte-widgets/DraggablePane.svelte'
 </script>
 
 <div
-  class="demo-box"
-  style="height: 6em; overflow: hidden; padding: 6pt; display: flex; justify-content: flex-end"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); height: 6em; overflow: hidden; padding: 6pt; display: flex; justify-content: flex-end"
 >
   <DraggablePane position="fixed" resize="height" max_width="320px">
     {#snippet children()}

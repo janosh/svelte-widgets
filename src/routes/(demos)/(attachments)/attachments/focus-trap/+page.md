@@ -4,7 +4,7 @@ Keeps Tab inside a surface and hands the keyboard back when it closes — the ot
 
 ```svelte example id="attachments-focus-trap"
 <script lang="ts">
-  import { click_outside, focus_trap } from '$lib/attachments'
+  import { click_outside, focus_trap } from 'svelte-widgets/attachments'
 
   let open = $state(false)
   let trigger = $state<HTMLButtonElement | null>(null)

@@ -20,7 +20,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 ```svelte example id="fullscreen-isolation"
 <script lang="ts">
-  import FullscreenButton from '$lib/FullscreenButton.svelte'
+  import FullscreenButton from 'svelte-widgets/FullscreenButton.svelte'
 
   let left_wrapper = $state<HTMLElement | undefined>(undefined)
   let right_wrapper = $state<HTMLElement | undefined>(undefined)
@@ -76,7 +76,7 @@ toggle for the flag, for consumers that call the Fullscreen API themselves.
 
 ```svelte example id="fullscreen-bound"
 <script lang="ts">
-  import FullscreenButton from '$lib/FullscreenButton.svelte'
+  import FullscreenButton from 'svelte-widgets/FullscreenButton.svelte'
 
   let wrapper = $state<HTMLElement | undefined>(undefined)
   let fullscreen = $state(false)

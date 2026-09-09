@@ -11,6 +11,12 @@
 
 <h1>Interactive authoring</h1>
 <p>Check code examples, inspect content manifests, and edit scientific references.</p>
+<nav aria-label="Authoring guides">
+  <a href={resolve(`/code-editor`)}>CodeEditor / DiffView — edit and compare code</a>
+  <a href={resolve(`/authoring/hot-reload`)}
+    >Live Markdown hot reload — update examples as you write</a
+  >
+</nav>
 <nav aria-label="Authoring features">
   <a href="#figure-and-equation-navigation">Figure and equation navigation</a>
   <a href="#checked-examples">Checked examples</a>

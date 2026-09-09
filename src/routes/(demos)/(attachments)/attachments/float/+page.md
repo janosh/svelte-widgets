@@ -8,8 +8,8 @@ which is how `ActionMenu` hangs its context form off the pointer.
 
 ```svelte example id="attachments-float"
 <script lang="ts">
-  import { float } from '$lib/attachments'
-  import type { Placement } from '$lib/utils'
+  import { float } from 'svelte-widgets/attachments'
+  import type { Placement } from 'svelte-widgets/utils'
 
   let anchor = $state<HTMLElement | null>(null)
   let placement = $state<Placement>(`bottom`)

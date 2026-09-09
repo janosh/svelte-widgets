@@ -12,8 +12,8 @@ The button reserves the width of its widest label up front, so swapping `Save` f
 
 ```svelte example id="action-button-states"
 <script lang="ts">
-  import { ActionButton, type ActionState } from '$lib'
-  import { Check, Close, Refresh } from '$lib/icons'
+  import { ActionButton, type ActionState } from 'svelte-widgets'
+  import { Check, Close, Refresh } from 'svelte-widgets/icons'
 
   let action_state = $state<ActionState>(`ready`)
   let attempts = $state(0)
@@ -57,7 +57,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 
 ```svelte example id="action-button-children"
 <script lang="ts">
-  import { ActionButton, CircleSpinner } from '$lib'
+  import { ActionButton, CircleSpinner } from 'svelte-widgets'
 
   const roll = async (): Promise<number> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 700))
@@ -84,7 +84,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 
 ```svelte example id="copy-button"
 <script lang="ts">
-  import { CopyButton } from '$lib'
+  import { CopyButton } from 'svelte-widgets'
 
   let content = $state(`npm test`)
   let disabled = $state(false)

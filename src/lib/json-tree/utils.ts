@@ -4,7 +4,7 @@ import type { DiffEntry, JsonValueType } from './types'
 type JsonChild = { key: string | number; value: unknown }
 
 // Circular-safe JSON.stringify
-function safe_stringify(val: unknown): string {
+function safe_stringify(val: unknown): string | undefined {
   const ancestors: object[] = []
   return JSON.stringify(
     val,
@@ -147,7 +147,7 @@ export function serialize_for_copy(value: unknown): string {
         ? Array.from(value as Set<unknown>)
         : value
   try {
-    return safe_stringify(data)
+    return safe_stringify(data) ?? String(value)
   } catch {
     return String(value)
   }

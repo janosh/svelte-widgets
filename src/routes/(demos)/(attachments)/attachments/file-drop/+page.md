@@ -4,8 +4,8 @@
 
 ```svelte example id="attachments-file-drop"
 <script lang="ts">
-  import { file_drop } from '$lib/attachments'
-  import { filter_accepted_files } from '$lib/file-drop'
+  import { file_drop } from 'svelte-widgets/attachments'
+  import { filter_accepted_files } from 'svelte-widgets/file-drop'
 
   let names = $state<string[]>([])
   let drag_active = $state(false)

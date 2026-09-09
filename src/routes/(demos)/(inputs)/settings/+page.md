@@ -31,7 +31,7 @@ field and returns focus to the magnifier.
 
 ```svelte example id="settings-search"
 <script lang="ts">
-  import { SettingsGroup, SettingsSearch, SettingsSection } from '$lib'
+  import { SettingsGroup, SettingsSearch, SettingsSection } from 'svelte-widgets'
 
   let trigger = $state<`inline` | `icon`>(`icon`)
   let query = $state(``)
@@ -47,8 +47,7 @@ field and returns focus to the magnifier.
 {#if query}<small>filtering on <code>{query}</code></small>{/if}
 
 <div
-  class="demo-box"
-  style="position: relative; max-width: 26em; margin-block: 1em; padding: 1ex"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); position: relative; max-width: 26em; margin-block: 1em; padding: 1ex"
 >
   <SettingsSearch {trigger} bind:query>
     <SettingsGroup title="Appearance" open>
@@ -112,13 +111,15 @@ controls line up down the section instead of starting wherever each label ends.
 
 ```svelte example id="settings-section"
 <script lang="ts">
-  import { SettingsSection } from '$lib'
+  import { SettingsSection } from 'svelte-widgets'
 
   const defaults = { radius: 1, opacity: 0.8, show_labels: true }
   let settings = $state({ ...defaults })
 </script>
 
-<div class="demo-box" style="max-width: 26em; padding: 1ex">
+<div
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); max-width: 26em; padding: 1ex"
+>
   <SettingsSection
     title="Atoms"
     layout="grid"
@@ -155,12 +156,14 @@ screen. `open` is bindable and `subtitle` shows a short hint — a count, or the
 
 ```svelte example id="settings-group"
 <script lang="ts">
-  import { SettingsGroup } from '$lib'
+  import { SettingsGroup } from 'svelte-widgets'
 
   let open = $state(true)
 </script>
 
-<div class="demo-box" style="max-width: 26em; padding: 1ex">
+<div
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); max-width: 26em; padding: 1ex"
+>
   <SettingsGroup title="Appearance" subtitle={open ? `` : `3 settings`} bind:open>
     <label>Background <input type="color" value="#1a1a1a" /></label>
     <label>Grid <input type="checkbox" checked /></label>
@@ -181,12 +184,14 @@ without repeating the key at the call site.
 
 ```svelte example id="number-range-input"
 <script lang="ts">
-  import { NumberRangeInput } from '$lib'
+  import { NumberRangeInput } from 'svelte-widgets'
 
   let [radius, opacity] = $state([1, 0.5])
 </script>
 
-<div class="demo-box" style="display: grid; gap: 4pt; max-width: 26em; padding: 1ex">
+<div
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); display: grid; gap: 4pt; max-width: 26em; padding: 1ex"
+>
   <NumberRangeInput
     setting="atom_radius"
     min={0}

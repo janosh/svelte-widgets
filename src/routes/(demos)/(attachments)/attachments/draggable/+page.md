@@ -2,7 +2,7 @@
 
 ```svelte example id="attachments-draggable"
 <script lang="ts">
-  import { draggable } from '$lib/attachments'
+  import { draggable } from 'svelte-widgets/attachments'
 
   let last_drag: string = $state('')
 </script>

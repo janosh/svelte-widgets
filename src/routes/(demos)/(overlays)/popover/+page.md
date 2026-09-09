@@ -8,8 +8,8 @@ The `trigger` snippet receives the click handler and `aria-expanded`/`aria-haspo
 
 ```svelte example id="popover-basic"
 <script lang="ts">
-  import { Popover } from '$lib'
-  import type { Placement } from '$lib/utils'
+  import { Popover } from 'svelte-widgets'
+  import type { Placement } from 'svelte-widgets/utils'
 
   let placement = $state<Placement>(`bottom`)
   let last_close = $state(``)
@@ -61,7 +61,7 @@ Use `trigger_mode="hover"` or `trigger_mode="focus"` for non-click interactions.
 
 ```svelte example id="popover-hover"
 <script lang="ts">
-  import { Popover } from '$lib'
+  import { Popover } from 'svelte-widgets'
 </script>
 
 <Popover trigger_mode="hover" open_delay_ms={150} close_delay_ms={250} trap_focus={false}>
@@ -81,8 +81,8 @@ the same shape `CommandMenu` takes, so a command can appear in both.
 
 ```svelte example id="action-menu-basic"
 <script lang="ts">
-  import { ActionMenu } from '$lib'
-  import type { CmdAction } from '$lib/types'
+  import { ActionMenu } from 'svelte-widgets'
+  import type { CmdAction } from 'svelte-widgets'
 
   let log = $state<string[]>([])
   const record = (label: string) => (log = [label, ...log].slice(0, 4))
@@ -102,7 +102,9 @@ the same shape `CommandMenu` takes, so a command can appear in both.
 <button type="button">After menu</button>
 
 <ActionMenu {actions}>
-  <div class="demo-box" style="display: grid; place-items: center; height: 8em">
+  <div
+    style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); display: grid; place-items: center; height: 8em"
+  >
     Right-click me
   </div>
 </ActionMenu>

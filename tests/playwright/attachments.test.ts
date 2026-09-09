@@ -120,7 +120,7 @@ test.describe(`tooltip layout and lifecycle`, () => {
       name: `Click, then scroll me past the edges`,
     })
     const boundary = button.locator(
-      `xpath=ancestor::div[contains(@class, "demo-box")][1]`,
+      `xpath=ancestor::div[contains(@style, "overflow: auto")][1]`,
     )
     const tooltip_el = page.locator(`.custom-tooltip`)
 

@@ -9,7 +9,7 @@ CommandMenu supports search, grouping, async loading, and recent actions. It exe
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
   import type { Pathname } from '$app/types'
-  import { CommandMenu } from '$lib'
+  import { CommandMenu } from 'svelte-widgets'
   import { demo_pages } from '../../index'
 
   const resolve_path = resolve as (path: Pathname) => string
@@ -41,7 +41,7 @@ CommandMenu supports search, grouping, async loading, and recent actions. It exe
   import { goto } from '$app/navigation'
   import { asset, resolve } from '$app/paths'
   import type { Pathname } from '$app/types'
-  import { PageSearch } from '$lib'
+  import { PageSearch } from 'svelte-widgets'
   import { demo_pages } from '../../index'
 
   const resolve_path = resolve as (path: Pathname) => string
@@ -117,8 +117,8 @@ when the menu reopens.
 
 ```svelte example id="command-menu-shortcuts"
 <script lang="ts">
-  import { CommandMenu } from '$lib'
-  import { apply_theme_mode, theme, THEME_MODE_CYCLE } from '$lib/theme.svelte'
+  import { CommandMenu } from 'svelte-widgets'
+  import { apply_theme_mode, theme, THEME_MODE_CYCLE } from 'svelte-widgets/theme'
 
   let last_triggered = $state(``)
 

@@ -20,8 +20,8 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 
 ```svelte example id="attachments-tooltip-placement"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
-  import type { Placement } from '$lib/utils'
+  import { tooltip } from 'svelte-widgets/attachments'
+  import type { Placement } from 'svelte-widgets/utils'
 
   let placement = $state<Placement | `auto`>(`auto`)
   let align = $state<`start` | `center` | `end`>(`center`)
@@ -51,8 +51,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 </div>
 
 <div
-  class="demo-box"
-  style="display: grid; place-items: center; height: 9em; margin-top: 1em"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); display: grid; place-items: center; height: 9em; margin-top: 1em"
 >
   <button
     {@attach tooltip({
@@ -69,8 +68,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 <!-- scrolling starves one side, flipping the tooltip; padding keeps the button visible -->
 <div
   bind:this={scroll_boundary}
-  class="demo-box"
-  style="height: 9em; overflow: auto; margin-top: 1em"
+  style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); height: 9em; overflow: auto; margin-top: 1em"
 >
   <div style="padding: 5em 0; display: grid; place-items: center">
     <button
@@ -93,7 +91,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ```svelte example id="attachments-tooltip-content"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
 
   const all_planets = [`Mercury`, `Venus`, `Earth`, `Mars`, `Jupiter`, `Saturn`]
   let shown = $state(3)
@@ -129,7 +127,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ```svelte example id="attachments-tooltip-rich"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
 </script>
 
 <div style="display: flex; gap: 1em; flex-wrap: wrap">
@@ -169,7 +167,7 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
 
   let [open_delay_ms, close_delay_ms] = $state([100, 100])
   let manual_open = $state(false)
@@ -229,7 +227,7 @@ Every CSS variable is read off the trigger, so a tooltip can be themed by the el
 
 ```svelte example id="attachments-tooltip-styling"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
 </script>
 
 <div style="display: flex; gap: 1em; flex-wrap: wrap">
@@ -264,7 +262,7 @@ Width resolves to `min(--tooltip-max-width, viewport − padding)`, so a tooltip
 
 ```svelte example id="attachments-tooltip-wrapping"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
 </script>
 
 <div style="display: flex; gap: 1em; flex-wrap: wrap">
@@ -318,7 +316,7 @@ A `MutationObserver` watches the trigger, so a tooltip already on screen re-rend
 
 ```svelte example id="attachments-tooltip-reactive"
 <script lang="ts">
-  import { tooltip } from '$lib/attachments'
+  import { tooltip } from 'svelte-widgets/attachments'
   let text = $state(`Edit me!`)
 </script>
 

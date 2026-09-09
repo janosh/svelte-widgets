@@ -377,7 +377,7 @@ test.describe(`portal feature`, () => {
   })
 })
 
-// Windowing needs real layout (happy-dom reports zero heights). The internal /virtual-list
+// Windowing needs real layout (happy-dom reports zero heights). The internal /multiselect-virtual-list
 // page mounts 2000 options with rows pinned to the default 30px itemHeight.
 test.describe(`virtualList`, () => {
   const item_height = 30
@@ -388,7 +388,7 @@ test.describe(`virtualList`, () => {
     page.locator(`.virtual ul.options > li[aria-hidden="true"]`)
 
   const goto_virtual_list = async (page: Page): Promise<void> => {
-    await page.goto(`/virtual-list`, { waitUntil: `networkidle` })
+    await page.goto(`/multiselect-virtual-list`, { waitUntil: `networkidle` })
     await expect(page.locator(`.virtual ul.options`)).toBeVisible()
     // scroll + keyboard handlers only work once hydration installs the input.focus override
     await page.waitForFunction(() => {
