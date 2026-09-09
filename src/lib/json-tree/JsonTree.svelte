@@ -99,10 +99,12 @@
     copy_feedback.reset()
     context_menu_state = null
     force_expanded = new SvelteSet()
-    const valid_paths = new Set(collect_all_paths(value, root_path))
-    collapsed_paths = new SvelteSet(
-      [...collapsed_paths].filter((path) => valid_paths.has(path)),
-    )
+    if (collapsed_paths.size > 0) {
+      const valid_paths = new Set(collect_all_paths(value, root_path))
+      collapsed_paths = new SvelteSet(
+        [...collapsed_paths].filter((path) => valid_paths.has(path)),
+      )
+    }
     pinned_paths.clear()
     selected_paths.clear()
     last_selected_path = null

@@ -1,7 +1,4 @@
-export { default as ColorSnippet } from './ColorSnippet.svelte'
 export { default as Confetti } from './Confetti.svelte'
 export { default as DemoNav } from './DemoNav.svelte'
 export { default as Examples } from './Examples.md'
 export { default as Footer } from './Footer.svelte'
-export { default as LanguageSnippet } from './LanguageSnippet.svelte'
-export { default as MinusIcon } from './MinusIcon.svelte'

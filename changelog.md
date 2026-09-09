@@ -1,5 +1,7 @@
 # Changelog
 
+**Breaking in the next release:** Public custom props, callbacks, snippet fields and backend payloads now use snake_case (for example, `search_text`, `max_select`, `on_change` and `on_select`); old names are removed. Native DOM event handlers retain their standard names.
+
 ## [v1.7.1](https://github.com/janosh/svelte-widgets/compare/v1.7.0...v1.7.1)
 
 > 5 September 2026

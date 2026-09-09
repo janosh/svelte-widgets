@@ -33,10 +33,10 @@ const create_backend = () => {
       text = args.text
       return Promise.resolve(args.revision)
     },
-    highlight_lines: ({ startLine, endLine }) =>
-      Promise.resolve(Array.from({ length: endLine - startLine }, () => [])),
+    highlight_lines: ({ start_line, end_line }) =>
+      Promise.resolve(Array.from({ length: end_line - start_line }, () => [])),
     cancel_highlight: () => undefined,
-    close_doc: ({ docId }) => Promise.resolve(void closed.push(docId)),
+    close_doc: ({ doc_id }) => Promise.resolve(void closed.push(doc_id)),
   }
   return { backend, edits, opens, closed, get_text: () => text }
 }
@@ -103,8 +103,8 @@ test(`native input, selection, history, commands, and backend deltas share the m
   expect(model.text()).toBe(`const xylambda!first = 1\nconst second = 2\nconst third = 3`)
   expect(text_spy).toHaveBeenCalledTimes(1)
   expect(
-    recorder.edits.map(({ baseRevision, revision, edits }) => [
-      baseRevision,
+    recorder.edits.map(({ base_revision, revision, edits }) => [
+      base_revision,
       revision,
       edits,
     ]),
@@ -302,8 +302,8 @@ test(`an edit keeps tokens above it and invalidates downstream syntax`, async ()
   const recorder = create_backend()
   const highlight_lines = vi
     .fn()
-    .mockImplementation(({ startLine, endLine }) =>
-      Promise.resolve(Array.from({ length: endLine - startLine }, () => [0, 6])),
+    .mockImplementation(({ start_line, end_line }) =>
+      Promise.resolve(Array.from({ length: end_line - start_line }, () => [0, 6])),
     )
   recorder.backend.highlight_lines = highlight_lines
   const model = create_editor_model({
@@ -342,8 +342,8 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
   const highlight_lines = vi
     .fn()
     .mockResolvedValueOnce(Array.from({ length: 2048 }, () => [0, 6]))
-    .mockImplementation(({ startLine, endLine }) =>
-      Promise.resolve(Array.from({ length: endLine - startLine }, () => [0, 6])),
+    .mockImplementation(({ start_line, end_line }) =>
+      Promise.resolve(Array.from({ length: end_line - start_line }, () => [0, 6])),
     )
   recorder.backend.highlight_lines = highlight_lines
   const { textarea } = await mount_editor(model, { backend: recorder.backend })

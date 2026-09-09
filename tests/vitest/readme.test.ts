@@ -10,7 +10,7 @@ const pages: Record<string, string> = import.meta.glob(
   { query: `?raw`, import: `default`, eager: true },
 )
 
-// './(demos)/(extras)/extras/+page.md' -> '/extras'
+// './(demos)/(display)/extras/+page.md' -> '/extras'
 const route_sources = Object.fromEntries(
   Object.entries(pages).map(([file, source]) => [
     file

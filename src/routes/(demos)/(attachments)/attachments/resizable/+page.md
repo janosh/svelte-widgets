@@ -7,7 +7,7 @@ enabled edge or corner also resets it.
 
 ```svelte example id="attachments-resizable"
 <script lang="ts">
-  import { resizable } from '$lib/attachments'
+  import { resizable } from 'svelte-widgets/attachments'
 
   let dimensions = $state({ width: 240, height: 120 })
 </script>

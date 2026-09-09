@@ -1,0 +1,218 @@
+<script>
+  // eslint-disable-next-line import/no-unassigned-import -- styles this route's KaTeX demo
+  import 'katex/dist/katex.min.css'
+</script>
+
+## Extras
+
+The small components that ship alongside the headline ones. Each is a named export from
+the package root:
+
+```svelte
+<script>
+  import { CircleSpinner, Icon, ThemeToggle, Toggle } from 'svelte-widgets'
+</script>
+```
+
+### `Toggle`
+
+A checkbox styled as a switch. `checked` is bindable and the children snippet receives it,
+so the label can react to the state. Everything else spreads onto the wrapping `<label>`.
+
+```svelte example id="toggle-demo"
+<script lang="ts">
+  import { Toggle } from 'svelte-widgets'
+
+  let [notifications, telemetry] = $state([true, false])
+</script>
+
+<div style="display: flex; flex-direction: column; gap: 8pt">
+  <Toggle bind:checked={notifications} style="gap: 8pt">
+    {#snippet children({ checked })}
+      Notifications <em>({checked ? `on` : `off`})</em>
+    {/snippet}
+  </Toggle>
+
+  <Toggle
+    bind:checked={telemetry}
+    style="gap: 8pt"
+    --toggle-background="forestgreen"
+    --toggle-knob-width="4em"
+  >
+    Telemetry (custom CSS vars)
+  </Toggle>
+</div>
+```
+
+### `ThemeToggle`
+
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can install `listen_theme_storage()` directly; flash-free first paint still requires equivalent synchronous logic in the HTML shell because hydration is too late.
+
+```svelte example id="theme-toggle-demo"
+<script lang="ts">
+  import { ThemeToggle } from 'svelte-widgets'
+</script>
+
+<ThemeToggle
+  style="font-size: 2em"
+  tooltip={{ placement: `right` }}
+  icon_props={{ style: `color: var(--accent)` }}
+/>
+```
+
+### `Icon`
+
+Renders one glyph from the bundled icon set at `1em` square, inheriting `currentColor`.
+Pass the glyph value (`<Icon icon={Info} />`), not a name.
+
+```svelte example id="icon-demo"
+<script lang="ts">
+  import { CopyButton, Icon } from 'svelte-widgets'
+  import * as icons from 'svelte-widgets/icons'
+  import type { IconData } from 'svelte-widgets/icons'
+
+  const catalog = Object.entries<IconData>(icons)
+  // zero-width spaces let long CamelCase names wrap between words instead of mid-word
+  const wrappable = (name: string) => name.replace(/(?<=[a-z\d])(?=[A-Z])/g, `​`)
+  let query = $state(``)
+  let filtered_catalog = $derived(
+    catalog.filter(([name]) => name.toLowerCase().includes(query.trim().toLowerCase())),
+  )
+</script>
+
+<label style="display: grid; gap: 0.3em; max-width: 28em">
+  Search {catalog.length} icons
+  <input type="search" bind:value={query} placeholder="Try GitHub, arrow, file…" />
+</label>
+
+<p aria-live="polite">{filtered_catalog.length} matching icons</p>
+
+<div
+  style="display: grid; grid-template-columns: repeat(auto-fill, minmax(12em, 1fr)); gap: 0.6em; --card-bg: var(--sms-options-bg, light-dark(white, #333))"
+>
+  {#each filtered_catalog as [name, icon] (name)}
+    <CopyButton
+      content={`import { ${name} } from 'svelte-widgets/icons'`}
+      title={`Copy ${name} import`}
+      aria-label={`Copy ${name} import`}
+      style="position: relative; display: grid; padding: 0.65em; width: 100%; white-space: normal; border: 1px solid var(--sms-border, light-dark(lightgray, #555)); border-radius: 5px; background: var(--card-bg); color: inherit; cursor: pointer"
+    >
+      {#snippet children({ state })}
+        <Icon {icon} style="font-size: 1.5em; flex: none" />
+        <code style="line-height: 1.3">{wrappable(name)}</code>
+        <small
+          style="position: absolute; inset: 0; display: grid; place-items: center; background: var(--card-bg)"
+          style:visibility={state === `ready` ? `hidden` : `visible`}
+          >{state === `error` ? `Failed` : `Copied`}</small
+        >
+      {/snippet}
+    </CopyButton>
+  {:else}
+    <p>No icons match “{query}”.</p>
+  {/each}
+</div>
+```
+
+### `CircleSpinner`
+
+A dependency-free loading indicator. `size`, `color` and `duration` are plain CSS strings,
+so any unit works.
+
+```svelte example id="spinner-demo"
+<script lang="ts">
+  import { CircleSpinner } from 'svelte-widgets'
+</script>
+
+<CircleSpinner />
+<CircleSpinner size="2em" color="tomato" />
+<CircleSpinner size="3em" color="mediumseagreen" duration="0.6s" />
+```
+
+### `FileDetails`
+
+A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. CodeBlock highlights content using `language` (or `default_lang`) and reports highlighter failures alongside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
+
+```svelte example id="file-details-demo"
+<script lang="ts">
+  import { FileDetails } from 'svelte-widgets'
+
+  const files = [
+    {
+      title: `+page.svelte`,
+      content: `<script>\n  import { Toggle } from 'svelte-widgets'\n<\/script>\n\n<Toggle />`,
+    },
+    {
+      title: `vite.config.ts`,
+      content: `export default { plugins: [] }`,
+      language: `ts`,
+    },
+  ]
+</script>
+
+<FileDetails {files} />
+```
+
+### `PrevNext`
+
+Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and the `current` href. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. Navigation uses ordinary links; apps own keyboard shortcuts and router behavior. The links at the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
+
+```svelte example id="prev-next-demo"
+<script lang="ts">
+  import { PrevNext } from 'svelte-widgets'
+
+  // relative hrefs so the links survive the docs site's base path
+  const chapters = [
+    [`toc`, `Toc`],
+    [`masonry`, `Masonry`],
+    [`popover`, `Popover`],
+  ]
+</script>
+
+<PrevNext items={chapters} current="masonry" />
+```
+
+### `SubpageGrid`
+
+A card grid for linking to child pages, built from `[title, href, description]` tuples.
+The [MultiSelect overview](multiselect) is one.
+
+```svelte
+<SubpageGrid
+  title="MultiSelect Overview"
+  subtitle="Keyboard-friendly, accessible multi-select."
+  subpages={[
+    [`Form`, `/form`, `Form integration and native validation behavior.`],
+    [`Events`, `/events`, `Event callbacks and payloads.`],
+  ]}
+/>
+```
+
+### `GitHubCorner`
+
+The animated Octocat ribbon, `position: fixed` in a corner of the viewport. The one in the
+top right of this page links to this repo.
+
+```svelte
+<GitHubCorner href="https://github.com/janosh/svelte-widgets" corner="top-right" />
+```
+
+Colors come from `--github-corner-bg` and `--github-corner-color`, or the `fill` and
+`color` props for one-off overrides.
+
+### `CodeExample`
+
+The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `create_markdown({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })` and pass that engine to `markdown_vite(engine)`. Every "View code" button on this site uses this component.
+
+Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported.
+
+## Build-time helpers
+
+### Markdown and math
+
+The docs site's `create_markdown({ math: true })` engine turns inline math such as $e^{i\pi} + 1 = 0$ and display math into static KaTeX markup:
+
+$$
+\int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
+$$
+
+Import `katex/dist/katex.min.css` once in the app to style the generated markup.

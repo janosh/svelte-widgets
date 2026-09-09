@@ -37,8 +37,8 @@ export type ObjectOption = {
   title?: string // on-hover tooltip
   disabled?: boolean // make this option unselectable
   preselected?: boolean // make this option selected on page load (before any user interaction)
-  disabledTitle?: string // override MultiSelect's defaultDisabledTitle for this option
-  selectedTitle?: string // tooltip to display when this option is selected and hovered
+  disabled_title?: string // override MultiSelect's default_disabled_title for this option
+  selected_title?: string // tooltip to display when this option is selected and hovered
   style?: OptionStyle
   group?: string // optional group name for grouping options in dropdown
   [key: string]: unknown // allow any other keys users might want
@@ -70,39 +70,39 @@ export type PlaceholderConfig = {
 }
 
 export interface OptionListEvents<T extends Option = Option> {
-  onopen?: (data: { event: Event }) => unknown
-  onclose?: (data: { event: Event }) => unknown
-  ongroupToggle?: (data: { group: string; collapsed: boolean }) => unknown
-  oncollapseAll?: (data: { groups: string[] }) => unknown
-  onexpandAll?: (data: { groups: string[] }) => unknown
-  onsearch?: (data: { searchText: string; matchingOptions: T[] }) => unknown // debounced
-  onactivate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
+  on_open?: (data: { event: Event }) => unknown
+  on_close?: (data: { event: Event }) => unknown
+  on_group_toggle?: (data: { group: string; collapsed: boolean }) => unknown
+  on_collapse_all?: (data: { groups: string[] }) => unknown
+  on_expand_all?: (data: { groups: string[] }) => unknown
+  on_search?: (data: { search_text: string; matching_options: T[] }) => unknown // debounced
+  on_activate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
 }
 
 export interface MultiSelectEvents<
   T extends Option = Option,
 > extends OptionListEvents<T> {
-  onadd?: (data: { option: T; selected: T[] }) => unknown
-  oncreate?: (data: {
+  on_add?: (data: { option: T; selected: T[] }) => unknown
+  on_create?: (data: {
     option: T
   }) => false | T | undefined | Promise<false | T | undefined> // false rejects, T transforms, undefined accepts as-is
-  onremove?: (data: { option: T; selected: T[] }) => unknown
-  onremoveAll?: (data: { options: T[] }) => unknown
-  onselectAll?: (data: { options: T[]; scope?: SelectAllScope }) => unknown
-  onrangeSelect?: (data: { added: T[]; from: T; to: T; selected: T[] }) => unknown
-  onreorder?: (data: { options: T[]; previous: T[] }) => unknown // drag-and-drop reorder
-  onchange?: (data: {
+  on_remove?: (data: { option: T; selected: T[] }) => unknown
+  on_remove_all?: (data: { options: T[] }) => unknown
+  on_select_all?: (data: { options: T[]; scope?: SelectAllScope }) => unknown
+  on_range_select?: (data: { added: T[]; from: T; to: T; selected: T[] }) => unknown
+  on_reorder?: (data: { options: T[]; previous: T[] }) => unknown // drag-and-drop reorder
+  on_change?: (data: {
     option?: T
     options?: T[]
-    type: `add` | `remove` | `removeAll` | `selectAll` | `rangeSelect` | `reorder`
+    type: `add` | `remove` | `remove_all` | `select_all` | `range_select` | `reorder`
   }) => unknown
-  onmaxreached?: (data: {
+  on_max_reached?: (data: {
     selected: T[]
-    maxSelect: number
-    attemptedOption: T
-  }) => unknown // user tried to exceed maxSelect
-  onduplicate?: (data: { option: T }) => unknown // attempted duplicate when duplicates is false or 'case-insensitive'
-  onparsed_paste?: (data: {
+    max_select: number
+    attempted_option: T
+  }) => unknown // user tried to exceed max_select
+  on_duplicate?: (data: { option: T }) => unknown // attempted duplicate when duplicates is false or 'case-insensitive'
+  on_parsed_paste?: (data: {
     added: T[]
     rejected: T[]
     overflow: T[]
@@ -120,7 +120,7 @@ export interface LoadOptionsParams {
 
 export interface LoadOptionsResult<T extends Option = Option> {
   options: T[]
-  hasMore: boolean
+  has_more: boolean
   replace?: boolean // Replace loaded options with an ordered snapshot instead of appending.
   error?: Error // Display partial results alongside Retry.
 }
@@ -131,9 +131,9 @@ export type LoadOptionsFn<T extends Option = Option> = (
 
 export interface LoadOptionsConfig<T extends Option = Option> {
   fetch: LoadOptionsFn<T>
-  debounceMs?: number // default: 300
-  batchSize?: number // default: 50
-  onOpen?: boolean // default: true
+  debounce_ms?: number // default: 300
+  batch_size?: number // default: 50
+  on_open?: boolean // default: true
 }
 
 export type LoadOptions<T extends Option = Option> =
@@ -142,14 +142,14 @@ export type LoadOptions<T extends Option = Option> =
 
 export type FormSerialize<T extends Option = Option> = (selected: T[]) => string | null
 
-// passed to beforeInput+afterInput snippets
+// passed to before_input+after_input snippets
 type InputSnippetProps<T extends Option = Option> = Pick<
   MultiSelectProps<T>,
-  `selected` | `disabled` | `invalid` | `id` | `open` | `required` | `searchText`
+  `selected` | `disabled` | `invalid` | `id` | `open` | `required` | `search_text`
 > & { placeholder: string | null }
 type UserMsgProps = {
-  searchText: string
-  msgType: false | `dupe` | `create` | `no-match`
+  search_text: string
+  msg_type: false | `dupe` | `create` | `no-match`
   msg: null | string
 }
 export type GroupHeaderProps<T extends Option = Option> = {
@@ -166,27 +166,27 @@ export type GroupedOptions<T extends Option = Option> = {
 }
 
 export interface OptionListSnippets<T extends Option = Option> {
-  // icon marking the input as expandable into a dropdown; placed by expandIconPosition
-  expandIcon?: Snippet<[{ open: boolean; disabled: boolean }]>
+  // icon marking the input as expandable into a dropdown; placed by expand_icon_position
+  expand_icon?: Snippet<[{ open: boolean; disabled: boolean }]>
   children?: Snippet<[{ option: T; idx: number; type: `option` | `selected` }]>
-  beforeInput?: Snippet<[InputSnippetProps<T>]>
-  afterInput?: Snippet<[InputSnippetProps<T>]>
+  before_input?: Snippet<[InputSnippetProps<T>]>
+  after_input?: Snippet<[InputSnippetProps<T>]>
   spinner?: Snippet
-  disabledIcon?: Snippet
+  disabled_icon?: Snippet
   option?: Snippet<
     [{ option: T; idx: number; selected: boolean; active: boolean; disabled: boolean }]
   >
-  groupHeader?: Snippet<[GroupHeaderProps<T>]>
+  group_header?: Snippet<[GroupHeaderProps<T>]>
 }
 
 export interface MultiSelectSnippets<
   T extends Option = Option,
 > extends OptionListSnippets<T> {
-  selectedItem?: Snippet<[{ option: T; idx: number }]>
-  removeIcon?: Snippet<
-    [{ option: T; isRemoveAll: false } | { option?: undefined; isRemoveAll: true }]
+  selected_item?: Snippet<[{ option: T; idx: number }]>
+  remove_icon?: Snippet<
+    [{ option: T; is_remove_all: false } | { option?: undefined; is_remove_all: true }]
   >
-  userMsg?: Snippet<[UserMsgProps]>
+  user_msg?: Snippet<[UserMsgProps]>
 }
 
 export interface PortalParams {
@@ -201,11 +201,11 @@ export interface PortalParams {
 
 export type SelectAllScope = `visible` | `matching`
 
-// Why the select-all row is disabled, handed to `selectAllDisabledTitle`. The booleans name
+// Why the select-all row is disabled, handed to `select_all_disabled_title`. The booleans name
 // the reason; `default_title` lets a callback wrap the default instead of rebuilding it.
 export interface SelectAllDisabledState {
   max_reached: boolean
-  maxSelect: number | null
+  max_select: number | null
   selected_count: number
   all_selectable_selected: boolean
   matching_scope_unavailable: boolean
@@ -219,139 +219,136 @@ export interface OptionListProps<T extends Option = Option>
   extends
     OptionListEvents<T>,
     OptionListSnippets<T>,
-    Omit<
-      HTMLAttributes<HTMLDivElement>,
-      `children` | `onchange` | `onclose` | `placeholder`
-    > {
-  activeIndex?: number | null
-  activeOption?: T | null
-  autoActiveFirstOption?: boolean
+    Omit<HTMLAttributes<HTMLDivElement>, `children` | `placeholder`> {
+  active_index?: number | null
+  active_option?: T | null
+  auto_active_first_option?: boolean
   autocomplete?: HTMLInputAttributes[`autocomplete`]
-  autoScroll?: boolean
+  auto_scroll?: boolean
   breakpoint?: number // wider screens count as desktop, narrower as mobile
-  defaultDisabledTitle?: string
+  default_disabled_title?: string
   disabled?: boolean
-  disabledInputTitle?: string
-  expandIconPosition?: `left` | `right` | `none`
+  disabled_input_title?: string
+  expand_icon_position?: `left` | `right` | `none`
   // Unique option key, default value ?? label for objects and the primitive otherwise.
   // Dupe detection also checks labels, so a second "Apple" is blocked unless duplicates=true.
   key?: (opt: T) => unknown
-  filterFunc?: (opt: T, searchText: string) => boolean
+  filter_func?: (opt: T, search_text: string) => boolean
   fuzzy?: boolean // fuzzy (default) vs substring matching
-  closeDropdownOnSelect?: boolean | `if-mobile` | `retain-focus`
+  close_dropdown_on_select?: boolean | `if-mobile` | `retain-focus`
   form_input?: HTMLInputElement | null
-  formSerialize?: FormSerialize<T>
-  highlightMatches?: boolean
+  form_serialize?: FormSerialize<T>
+  highlight_matches?: boolean
   id?: string | null
   input?: HTMLInputElement | null
-  inputClass?: ClassValue
-  inputProps?: InputProps
-  inputStyle?: string | null
+  input_class?: ClassValue
+  input_props?: InputProps
+  input_style?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
   invalid?: boolean
   // i18n overrides, shallow-merged over MULTI_SELECT_LABELS (see labels.ts)
   labels?: Partial<MultiSelectLabels>
-  liActiveOptionClass?: ClassValue
-  liOptionClass?: ClassValue
-  liOptionStyle?: string | null
+  li_active_option_class?: ClassValue
+  li_option_class?: ClassValue
+  li_option_style?: string | null
   loading?: boolean
-  matchingOptions?: T[]
-  maxOptions?: number | undefined
-  // Render only rows near the scroll viewport. `itemHeight` (px, default 30, group headers
+  matching_options?: T[]
+  max_options?: number | undefined
+  // Render only rows near the scroll viewport. `item_height` (px, default 30, group headers
   // included) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
-  // not with stickyGroupHeaders: a header outside the render window cannot stay pinned.
-  virtualList?: boolean | { itemHeight?: number; overscan?: number }
+  // not with sticky_group_headers: a header outside the render window cannot stay pinned.
+  virtual_list?: boolean | { item_height?: number; overscan?: number }
   name?: string | null
-  noMatchingOptionsMsg?: string
+  no_matching_options_msg?: string
   open?: boolean
   // Mostly reaches portalled dropdowns: an outside press blurs the focused input, which
   // already closes an in-place dropdown before any click. See dismiss_on_outside_press.
   dismiss_on?: DismissConfig[`dismiss_on`]
-  options?: T[] // static options, or omit when using loadOptions
-  outerDiv?: HTMLDivElement | null
-  outerDivClass?: ClassValue
+  options?: T[] // static options, or omit when using load_options
+  outer_div?: HTMLDivElement | null
+  outer_div_class?: ClassValue
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
   required?: boolean | number
-  resetFilterOnAdd?: boolean
-  searchText?: string
+  reset_filter_on_add?: boolean
+  search_text?: string
   style?: string | null
-  ulOptionsClass?: ClassValue
-  ulOptionsStyle?: string | null
+  ul_options_class?: ClassValue
+  ul_options_style?: string | null
   portal?: PortalParams
-  loadOptions?: LoadOptions<T>
-  loadError?: Error | null // bindable, cleared on retry or a new search
+  load_options?: LoadOptions<T>
+  load_error?: Error | null // bindable, cleared on retry or a new search
   // Option grouping feature (https://github.com/janosh/svelte-widgets/issues/135)
-  collapsibleGroups?: boolean // enable click-to-collapse groups
-  collapsedGroups?: Set<string> // externally controlled collapsed state (bindable)
-  ungroupedPosition?: `first` | `last` // where to render options without a group
+  collapsible_groups?: boolean // enable click-to-collapse groups
+  collapsed_groups?: Set<string> // externally controlled collapsed state (bindable)
+  ungrouped_position?: `first` | `last` // where to render options without a group
   // group order: 'none' (default, source order), alphabetical 'asc'/'desc', or a comparator
-  groupSortOrder?: `none` | `asc` | `desc` | ((a: string, b: string) => number)
-  searchExpandsCollapsedGroups?: boolean // auto-expand collapsed groups when search matches their options
-  searchMatchesGroups?: boolean // include group name in search matching
-  keyboardExpandsCollapsedGroups?: boolean // auto-expand collapsed groups when navigating with arrow keys
-  stickyGroupHeaders?: boolean // keep group headers visible at top when scrolling
-  liGroupHeaderClass?: ClassValue // CSS class for group header <li>
-  liGroupHeaderStyle?: string | null // inline style for group headers
+  group_sort_order?: `none` | `asc` | `desc` | ((a: string, b: string) => number)
+  search_expands_collapsed_groups?: boolean // auto-expand collapsed groups when search matches their options
+  search_matches_groups?: boolean // include group name in search matching
+  keyboard_expands_collapsed_groups?: boolean // auto-expand collapsed groups when navigating with arrow keys
+  sticky_group_headers?: boolean // keep group headers visible at top when scrolling
+  li_group_header_class?: ClassValue // CSS class for group header <li>
+  li_group_header_style?: string | null // inline style for group headers
   // Programmatic group control (exposed via bindable)
-  collapseAllGroups?: () => void
-  expandAllGroups?: () => void
+  collapse_all_groups?: () => void
+  expand_all_groups?: () => void
   // Keyboard shortcuts for common actions
   shortcuts?: Partial<KeyboardShortcuts>
 }
 
 export interface MultiSelectProps<T extends Option = Option>
   extends OptionListProps<T>, MultiSelectEvents<T>, MultiSelectSnippets<T> {
-  createOptionMsg?:
+  create_option_msg?:
     | string
     | ((state: {
-        searchText: string
+        search_text: string
         selected: T[]
         options: T[]
-        matchingOptions: T[]
+        matching_options: T[]
       }) => string)
     | null
-  allowUserOptions?: boolean | `append`
-  allowEmpty?: boolean // allow an empty options array without loading, disabled, or user-option mode
-  duplicateOptionMsg?: string
+  allow_user_options?: boolean | `append`
+  allow_empty?: boolean // allow an empty options array without loading, disabled, or user-option mode
+  duplicate_option_msg?: string
   // false (default) blocks dupes case-sensitively, true allows all, 'case-insensitive'
   // also blocks case variants
   duplicates?: boolean | `case-insensitive`
   // keep selected options in the dropdown, marked either by a left border and background
   // ('plain') or a checkbox prefix ('checkboxes')
-  keepSelectedInDropdown?: false | `plain` | `checkboxes`
-  liActiveUserMsgClass?: ClassValue
-  liSelectedClass?: ClassValue
-  liSelectedStyle?: string | null
-  liUserMsgClass?: ClassValue
-  maxSelect?: number | null // null means there is no upper limit for selected.length
-  maxSelectMsg?: ((current: number, max: number) => string) | null
-  maxSelectMsgClass?: ClassValue
+  keep_selected_in_dropdown?: false | `plain` | `checkboxes`
+  li_active_user_msg_class?: ClassValue
+  li_selected_class?: ClassValue
+  li_selected_style?: string | null
+  li_user_msg_class?: ClassValue
+  max_select?: number | null // null means there is no upper limit for selected.length
+  max_select_msg?: ((current: number, max: number) => string) | null
+  max_select_msg_class?: ClassValue
   // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
-  // all. Ignored for selectedDisplay="input"; keyboard chip navigation auto-expands.
-  maxVisibleChips?: number | null
-  removeAllTitle?: string
-  removeBtnTitle?: string
-  minSelect?: number | null // null means there is no lower limit for selected.length
+  // all. Ignored for selected_display="input"; keyboard chip navigation auto-expands.
+  max_visible_chips?: number | null
+  remove_all_title?: string
+  remove_btn_title?: string
+  min_select?: number | null // null means there is no lower limit for selected.length
   parse_paste?: (text: string) => T[]
-  selected?: T[] // don't allow more than maxSelect preselected options
-  // 'chips' (default) renders selected options as tags; 'input' requires maxSelect === 1
-  selectedDisplay?: `chips` | `input`
-  sortSelected?: boolean | ((op1: T, op2: T) => number)
-  selectedOptionsDraggable?: boolean
-  rangeSelect?: boolean
-  ulSelectedClass?: ClassValue
-  ulSelectedStyle?: string | null
+  selected?: T[] // don't allow more than max_select preselected options
+  // 'chips' (default) renders selected options as tags; 'input' requires max_select === 1
+  selected_display?: `chips` | `input`
+  sort_selected?: boolean | ((op1: T, op2: T) => number)
+  selected_options_draggable?: boolean
+  range_select?: boolean
+  ul_selected_class?: ClassValue
+  ul_selected_style?: string | null
   value?: T | T[] | null
   // Select all feature
-  selectAllOption?: boolean | string // enable select all; if string, use as label
-  selectAllScope?: SelectAllScope
-  selectAllDisabledTitle?: string | ((state: SelectAllDisabledState) => string) | null
-  liSelectAllClass?: ClassValue // CSS class for the select all <li>
+  select_all_option?: boolean | string // enable select all; if string, use as label
+  select_all_scope?: SelectAllScope
+  select_all_disabled_title?: string | ((state: SelectAllDisabledState) => string) | null
+  li_select_all_class?: ClassValue // CSS class for the select all <li>
   // flip animation for selected options; { duration: 0 } disables
   // (https://github.com/janosh/svelte-widgets/issues/356)
-  selectedFlipParams?: FlipParams
-  groupSelectAll?: boolean // per-group header select/deselect-all toggle
+  selected_flip_params?: FlipParams
+  group_select_all?: boolean // per-group header select/deselect-all toggle
 }
 
 // "modifier+...+key" with modifiers ctrl, shift, alt, meta, cmd (e.g. 'ctrl+shift+a');

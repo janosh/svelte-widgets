@@ -62,8 +62,8 @@ describe(`option grouping feature`, () => {
   }
 
   test(`renders grouped and ungrouped options that remain selectable`, async () => {
-    const onchange = vi.fn()
-    await mount_grouped({ onchange })
+    const on_change = vi.fn()
+    await mount_grouped({ on_change })
 
     expect(header_names()).toEqual([`Genre`, `Key`])
     expect(option_items()).toHaveLength(6)
@@ -73,23 +73,23 @@ describe(`option grouping feature`, () => {
     )
     rock_option?.click()
     await tick()
-    expect(onchange).toHaveBeenCalledWith({
+    expect(on_change).toHaveBeenCalledWith({
       option: { label: `Rock`, group: `Genre` },
       type: `add`,
     })
   })
 
   test.each([`first`, `last`] as const)(
-    `ungroupedPosition=%s renders ungrouped options in correct position`,
-    async (ungroupedPosition) => {
-      await mount_grouped({ ungroupedPosition })
+    `ungrouped_position=%s renders ungrouped options in correct position`,
+    async (ungrouped_position) => {
+      await mount_grouped({ ungrouped_position })
 
       const all_lis = document.querySelectorAll(`ul.options > li`)
       const ungrouped_idx = Array.from(all_lis).findIndex((li) =>
         li.textContent?.includes(`Ungrouped Option`),
       )
 
-      expect(ungrouped_idx).toBe(ungroupedPosition === `first` ? 0 : all_lis.length - 1)
+      expect(ungrouped_idx).toBe(ungrouped_position === `first` ? 0 : all_lis.length - 1)
     },
   )
 
@@ -126,9 +126,9 @@ describe(`option grouping feature`, () => {
       (header: HTMLElement) =>
         header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
     ],
-  ])(`collapsibleGroups toggles group visibility via %s`, async (_via, toggle) => {
-    const ongroupToggle = vi.fn()
-    await mount_grouped({ collapsibleGroups: true, ongroupToggle })
+  ])(`collapsible_groups toggles group visibility via %s`, async (_via, toggle) => {
+    const on_group_toggle = vi.fn()
+    await mount_grouped({ collapsible_groups: true, on_group_toggle })
 
     const genre_header = find_group_header(`Genre`)
     expect(genre_header.classList.contains(`collapsible`)).toBe(true)
@@ -140,7 +140,7 @@ describe(`option grouping feature`, () => {
     await tick()
     expect(count_options()).toBeLessThan(initial_count)
     expect(group_expanded(genre_header)).toBe(`false`)
-    expect(ongroupToggle).toHaveBeenNthCalledWith(1, {
+    expect(on_group_toggle).toHaveBeenNthCalledWith(1, {
       group: `Genre`,
       collapsed: true,
     })
@@ -149,17 +149,17 @@ describe(`option grouping feature`, () => {
     await tick()
     expect(count_options()).toBe(initial_count)
     expect(group_expanded(genre_header)).toBe(`true`)
-    expect(ongroupToggle).toHaveBeenNthCalledWith(2, {
+    expect(on_group_toggle).toHaveBeenNthCalledWith(2, {
       group: `Genre`,
       collapsed: false,
     })
   })
 
-  test(`groupSelectAll buttons select groups by click and keyboard`, async () => {
+  test(`group_select_all buttons select groups by click and keyboard`, async () => {
     const onselectAll_spy = vi.fn()
     await mount_grouped({
-      groupSelectAll: true,
-      onselectAll: onselectAll_spy,
+      group_select_all: true,
+      on_select_all: onselectAll_spy,
     })
 
     const select_all_buttons = document.querySelectorAll(
@@ -181,12 +181,12 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [1, 0, 0], // maxSelect=1: button hidden, 0 selected
-    [2, 2, 2], // maxSelect=2: button visible (2 groups), 2 selected when clicked
+    [1, 0, 0], // max_select=1: button hidden, 0 selected
+    [2, 2, 2], // max_select=2: button visible (2 groups), 2 selected when clicked
   ] as const)(
-    `groupSelectAll with maxSelect=%s shows %s buttons and selects up to maxSelect`,
-    async (maxSelect, expected_buttons, expected_selected) => {
-      await mount_grouped({ groupSelectAll: true, maxSelect })
+    `group_select_all with max_select=%s shows %s buttons and selects up to max_select`,
+    async (max_select, expected_buttons, expected_selected) => {
+      await mount_grouped({ group_select_all: true, max_select })
 
       const select_all_buttons = document.querySelectorAll(
         `ul.options > li.group-header button.group-select-all`,
@@ -205,8 +205,8 @@ describe(`option grouping feature`, () => {
 
   test.each([
     [
-      `maxSelect already reached`,
-      { selected: [grouped_options[0], grouped_options[1]], maxSelect: 2 },
+      `max_select already reached`,
+      { selected: [grouped_options[0], grouped_options[1]], max_select: 2 },
       `Genre`,
       { disabled: true, label: `Select all` },
     ],
@@ -223,20 +223,20 @@ describe(`option grouping feature`, () => {
       { disabled: false, label: `Select all` },
     ],
   ])(`group select-all when %s`, async (_desc, props, group, expected) => {
-    await mount_grouped({ groupSelectAll: true, ...props })
+    await mount_grouped({ group_select_all: true, ...props })
 
     const btn = group_select_all_btn(group)
     expect(btn?.disabled).toBe(expected.disabled)
     expect(btn?.textContent?.trim()).toBe(expected.label)
   })
 
-  test(`group select-all partial fill fires onmaxreached with correct payload`, async () => {
+  test(`group select-all partial fill fires on_max_reached with correct payload`, async () => {
     const onmaxreached_spy = vi.fn()
     await mount_grouped({
-      groupSelectAll: true,
+      group_select_all: true,
       selected: [grouped_options[0]],
-      maxSelect: 2,
-      onmaxreached: onmaxreached_spy,
+      max_select: 2,
+      on_max_reached: onmaxreached_spy,
     })
 
     const genre_btn = group_select_all_btn(`Genre`)
@@ -247,15 +247,15 @@ describe(`option grouping feature`, () => {
     expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(2)
     expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
     expect(onmaxreached_spy).toHaveBeenCalledWith(
-      expect.objectContaining({ maxSelect: 2 }),
+      expect.objectContaining({ max_select: 2 }),
     )
   })
 
   test(`applies group header class, style, and sticky mode`, async () => {
     await mount_grouped({
-      liGroupHeaderClass: `custom-header-class`,
-      liGroupHeaderStyle: `background: red`,
-      stickyGroupHeaders: true,
+      li_group_header_class: `custom-header-class`,
+      li_group_header_style: `background: red`,
+      sticky_group_headers: true,
     })
 
     const group_headers = document.querySelectorAll<HTMLElement>(
@@ -273,14 +273,14 @@ describe(`option grouping feature`, () => {
     [`Genre`, undefined, 3],
     [`Key`, 2, 2],
   ] as const)(
-    `selectAllOption skips collapsed %s group (maxSelect=%s)`,
-    async (collapsed_group, maxSelect, expected_selected) => {
+    `select_all_option skips collapsed %s group (max_select=%s)`,
+    async (collapsed_group, max_select, expected_selected) => {
       const onselectAll_spy = vi.fn()
       await mount_grouped({
-        collapsibleGroups: true,
-        selectAllOption: true,
-        maxSelect,
-        onselectAll: onselectAll_spy,
+        collapsible_groups: true,
+        select_all_option: true,
+        max_select,
+        on_select_all: onselectAll_spy,
       })
 
       find_group_header(collapsed_group).click()
@@ -301,7 +301,7 @@ describe(`option grouping feature`, () => {
     },
   )
 
-  test(`groupSelectAll skips disabled options`, async () => {
+  test(`group_select_all skips disabled options`, async () => {
     const options_with_disabled = [
       { label: `Enabled 1`, group: `Test` },
       { label: `Disabled 1`, group: `Test`, disabled: true },
@@ -312,8 +312,8 @@ describe(`option grouping feature`, () => {
     const onselectAll_spy = vi.fn()
     await mount_grouped({
       options: options_with_disabled,
-      groupSelectAll: true,
-      onselectAll: onselectAll_spy,
+      group_select_all: true,
+      on_select_all: onselectAll_spy,
     })
 
     group_select_all_btn(`Test`)?.click()
@@ -326,12 +326,12 @@ describe(`option grouping feature`, () => {
     ])
   })
 
-  test(`groupSelectAll works on collapsed groups`, async () => {
+  test(`group_select_all works on collapsed groups`, async () => {
     const onselectAll_spy = vi.fn()
     await mount_grouped({
-      collapsibleGroups: true,
-      groupSelectAll: true,
-      onselectAll: onselectAll_spy,
+      collapsible_groups: true,
+      group_select_all: true,
+      on_select_all: onselectAll_spy,
     })
 
     const genre_header = find_group_header(`Genre`)
@@ -352,9 +352,9 @@ describe(`option grouping feature`, () => {
   // focusability or a global ARIA attribute on the <li> would demote it to listitem, hence
   // no aria-label/tabindex/role=button and the group name rides option aria-describedby
   test.each([true, false] as const)(
-    `group headers stay presentational when collapsibleGroups=%s`,
-    async (collapsibleGroups) => {
-      await mount_grouped({ collapsibleGroups })
+    `group headers stay presentational when collapsible_groups=%s`,
+    async (collapsible_groups) => {
+      await mount_grouped({ collapsible_groups })
 
       const group_headers = document.querySelectorAll(`ul.options > li.group-header`)
       expect(group_headers).toHaveLength(2) // else the loop below asserts nothing
@@ -371,7 +371,7 @@ describe(`option grouping feature`, () => {
       const toggles = document.querySelectorAll(
         `li.group-header button.group-collapse-toggle`,
       )
-      expect(toggles).toHaveLength(collapsibleGroups ? 2 : 0)
+      expect(toggles).toHaveLength(collapsible_groups ? 2 : 0)
       for (const toggle of toggles) {
         expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
         expect(toggle.getAttribute(`aria-label`)).toMatch(/^Group: /u)
@@ -406,10 +406,10 @@ describe(`option grouping feature`, () => {
     }
   })
 
-  test(`collapsedGroups prop controls initial collapsed state`, async () => {
+  test(`collapsed_groups prop controls initial collapsed state`, async () => {
     await mount_grouped({
-      collapsibleGroups: true,
-      collapsedGroups: new Set([`Genre`]),
+      collapsible_groups: true,
+      collapsed_groups: new Set([`Genre`]),
     })
 
     const genre_header = find_group_header(`Genre`)
@@ -433,10 +433,10 @@ describe(`option grouping feature`, () => {
       [`C`, `BB`, `AAA`],
     ],
   ] as const)(
-    `groupSortOrder=%s orders groups correctly`,
-    async (groupSortOrder, expected_order) => {
+    `group_sort_order=%s orders groups correctly`,
+    async (group_sort_order, expected_order) => {
       const options_for_sort =
-        typeof groupSortOrder === `function`
+        typeof group_sort_order === `function`
           ? [
               { label: `Item 1`, group: `BB` },
               { label: `Item 2`, group: `AAA` },
@@ -449,7 +449,7 @@ describe(`option grouping feature`, () => {
               { label: `M Item`, group: `Middle` },
             ]
 
-      await mount_grouped({ options: options_for_sort, groupSortOrder })
+      await mount_grouped({ options: options_for_sort, group_sort_order })
 
       expect(header_names()).toEqual(expected_order)
     },
@@ -458,9 +458,9 @@ describe(`option grouping feature`, () => {
   test.each([
     [`basic count`, {}, `(3)`],
     [
-      `selected count with keepSelectedInDropdown`,
+      `selected count with keep_selected_in_dropdown`,
       {
-        keepSelectedInDropdown: `checkboxes`,
+        keep_selected_in_dropdown: `checkboxes`,
         selected: [{ label: `Rock`, group: `Genre` }],
       } satisfies Partial<MultiSelectProps>,
       `(1/3)`,
@@ -478,13 +478,13 @@ describe(`option grouping feature`, () => {
     // a bare space fuzzy-matches "C Major"/"D Minor", so the has_search_text guard must
     // keep the Key group collapsed
     [`ignores whitespace-only input`, ` `, null],
-  ])(`searchExpandsCollapsedGroups %s`, async (_name, search, expected_toggle) => {
+  ])(`search_expands_collapsed_groups %s`, async (_name, search, expected_toggle) => {
     const ongroupToggle_spy = vi.fn()
     await mount_grouped({
-      collapsibleGroups: true,
-      collapsedGroups: new Set([`Genre`, `Key`]), // both collapsed initially
-      searchExpandsCollapsedGroups: true,
-      ongroupToggle: ongroupToggle_spy,
+      collapsible_groups: true,
+      collapsed_groups: new Set([`Genre`, `Key`]), // both collapsed initially
+      search_expands_collapsed_groups: true,
+      on_group_toggle: ongroupToggle_spy,
     })
 
     expect(option_items()).toHaveLength(1)
@@ -497,16 +497,16 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [`groupSelectAll`, { groupSelectAll: true }, `button.group-select-all`, false],
-    [`selectAllOption`, { selectAllOption: true }, `li.select-all`, false],
-    [`repeated reference`, { groupSelectAll: true }, `button.group-select-all`, true],
+    [`group_select_all`, { group_select_all: true }, `button.group-select-all`, false],
+    [`select_all_option`, { select_all_option: true }, `li.select-all`, false],
+    [`repeated reference`, { group_select_all: true }, `button.group-select-all`, true],
     [
       `collapse disabled`,
-      { groupSelectAll: true, collapsedGroups: new Set([`TestGroup`]) },
+      { group_select_all: true, collapsed_groups: new Set([`TestGroup`]) },
       `button.group-select-all`,
       false,
     ],
-  ] as const)(`%s respects maxOptions limit`, async (_name, props, selector, repeat) => {
+  ] as const)(`%s respects max_options limit`, async (_name, props, selector, repeat) => {
     const many_options = [
       { label: `Option 1`, group: `TestGroup` },
       { label: `Option 2`, group: `TestGroup` },
@@ -520,8 +520,8 @@ describe(`option grouping feature`, () => {
     const onselectAll_spy = vi.fn()
     await mount_grouped({
       options: many_options,
-      maxOptions: 3,
-      onselectAll: onselectAll_spy,
+      max_options: 3,
+      on_select_all: onselectAll_spy,
       ...props,
     })
 
@@ -546,7 +546,7 @@ describe(`option grouping feature`, () => {
     [`fuzzy group-name match`, `Pythn`, {}, [`Django`, `Flask`]],
     [`substring match with fuzzy=false`, `script`, { fuzzy: false }, [`React`, `Vue`]],
   ] as const)(
-    `searchMatchesGroups shows options for %s`,
+    `search_matches_groups shows options for %s`,
     async (_desc, search_text, extra_props, expected_labels) => {
       const options_with_groups = [
         { label: `React`, group: `JavaScript` },
@@ -557,7 +557,7 @@ describe(`option grouping feature`, () => {
 
       await mount_grouped({
         options: options_with_groups,
-        searchMatchesGroups: true,
+        search_matches_groups: true,
         ...extra_props,
       })
 
@@ -568,10 +568,10 @@ describe(`option grouping feature`, () => {
     },
   )
 
-  test(`keyboardExpandsCollapsedGroups expands groups on arrow navigation`, async () => {
+  test(`keyboard_expands_collapsed_groups expands groups on arrow navigation`, async () => {
     await mount_grouped({
-      collapsibleGroups: true,
-      keyboardExpandsCollapsedGroups: true,
+      collapsible_groups: true,
+      keyboard_expands_collapsed_groups: true,
     })
 
     const genre_header = find_group_header(`Genre`)
@@ -586,21 +586,21 @@ describe(`option grouping feature`, () => {
     expect(group_expanded(genre_header)).toBe(`true`)
   })
 
-  test(`collapseAllGroups and expandAllGroups functions are bindable`, async () => {
+  test(`collapse_all_groups and expand_all_groups functions are bindable`, async () => {
     const [oncollapseAll_spy, onexpandAll_spy] = [vi.fn(), vi.fn()]
     const props = $state<MultiSelectProps>({
       options: grouped_options,
-      collapsibleGroups: true,
-      oncollapseAll: oncollapseAll_spy,
-      onexpandAll: onexpandAll_spy,
+      collapsible_groups: true,
+      on_collapse_all: oncollapseAll_spy,
+      on_expand_all: onexpandAll_spy,
       open: true,
-      collapseAllGroups: undefined,
-      expandAllGroups: undefined,
+      collapse_all_groups: undefined,
+      expand_all_groups: undefined,
     })
     mount_multiselect(props)
     await tick()
 
-    props.collapseAllGroups?.()
+    props.collapse_all_groups?.()
     await tick()
 
     expect(oncollapseAll_spy).toHaveBeenCalledTimes(1)
@@ -608,7 +608,7 @@ describe(`option grouping feature`, () => {
 
     expect(option_items()).toHaveLength(1) // the ungrouped option is all that is left
 
-    props.expandAllGroups?.()
+    props.expand_all_groups?.()
     await tick()
 
     expect(onexpandAll_spy).toHaveBeenCalledTimes(1)
@@ -620,12 +620,13 @@ describe(`option grouping feature`, () => {
     `group selection preserves other groups (colliding keys=%s)`,
     async (colliding_keys) => {
       const onremoveAll_spy = vi.fn()
-      const onchange = vi.fn()
+      const on_change = vi.fn()
       await mount_grouped({
-        groupSelectAll: true,
-        keepSelectedInDropdown: `checkboxes`,
-        onremoveAll: onremoveAll_spy,
-        onchange,
+        group_select_all: true,
+        collapsible_groups: true,
+        keep_selected_in_dropdown: `checkboxes`,
+        on_remove_all: onremoveAll_spy,
+        on_change,
         selected: [grouped_options[3]],
         duplicates: colliding_keys,
         key: colliding_keys ? () => `shared` : undefined,
@@ -646,24 +647,37 @@ describe(`option grouping feature`, () => {
 
       expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
       expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
-      expect(onchange).toHaveBeenLastCalledWith({
+      expect(on_change).toHaveBeenLastCalledWith({
         options: [grouped_options[3]],
-        type: `removeAll`,
+        type: `remove_all`,
       })
 
       expect(select_btn?.textContent?.trim()).toBe(`Select all`)
+
+      const key_option = [...option_items()].find(
+        (item) => item.textContent?.trim() === `C Major`,
+      )
+      expect(key_option).toBeDefined()
+      for (const expanded of [false, true]) {
+        find_group_header(`Genre`).click()
+        await tick()
+        expect(group_expanded(`Genre`)).toBe(String(expanded))
+        expect(
+          [...option_items()].find((item) => item.textContent?.trim() === `C Major`),
+        ).toBe(key_option)
+      }
     },
   )
 })
 
-test(`group deselect-all keeps at least minSelect options selected`, async () => {
+test(`group deselect-all keeps at least min_select options selected`, async () => {
   const group_opts = [`Rock`, `Jazz`, `Pop`].map((label) => ({ label, group: `Genre` }))
   const props = $state<MultiSelectProps>({
     options: group_opts,
     selected: [...group_opts],
-    groupSelectAll: true,
-    keepSelectedInDropdown: `plain`,
-    minSelect: 2,
+    group_select_all: true,
+    keep_selected_in_dropdown: `plain`,
+    min_select: 2,
     open: true,
   })
   mount_multiselect(props)
@@ -674,11 +688,11 @@ test(`group deselect-all keeps at least minSelect options selected`, async () =>
   deselect_btn?.click()
   await tick()
 
-  // previously dropped to 0 selected, violating minSelect=2
+  // previously dropped to 0 selected, violating min_select=2
   expect(props.selected).toHaveLength(2)
 })
 
-test(`searchExpandsCollapsedGroups: manually collapsed group stays collapsed until the search changes`, async () => {
+test(`search_expands_collapsed_groups: manually collapsed group stays collapsed until the search changes`, async () => {
   mount_multiselect({
     options: [
       { label: `apple`, group: `Fruits` },
@@ -686,9 +700,9 @@ test(`searchExpandsCollapsedGroups: manually collapsed group stays collapsed unt
       { label: `ant`, group: `Animals` },
     ],
     open: true,
-    collapsibleGroups: true,
-    searchExpandsCollapsedGroups: true,
-    collapsedGroups: new Set([`Fruits`]),
+    collapsible_groups: true,
+    search_expands_collapsed_groups: true,
+    collapsed_groups: new Set([`Fruits`]),
   })
   const input = get_input()
   await type_search_text(`a`, input)

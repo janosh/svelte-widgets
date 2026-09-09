@@ -1,79 +1,119 @@
 import type { Pathname } from '$app/types'
-import { slug_to_title } from '$lib/utils'
+import { slug_to_title } from 'svelte-widgets/utils'
 
-// Labels slug_to_title cannot derive, keyed by unresolved route path. Shared by DemoNav's
-// nav labels and the layout's page titles.
+const category_info = {
+  inputs: [`Inputs`, `Choose values, collect files, and organize settings.`],
+  navigation: [`Navigation`, `Help users move through pages, commands, and trees.`],
+  overlays: [`Overlays`, `Present dialogs, contextual actions, and notifications.`],
+  display: [`Display`, `Inspect data, arrange content, and show application state.`],
+  authoring: [`Authoring`, `Write interactive documentation and edit code.`],
+  attachments: [`Attachments`, `Add reusable behavior to ordinary elements.`],
+} as const
+
+export const demo_descriptions: Record<string, string> = {
+  '/action-button': `Run asynchronous actions with pending, success, and error feedback.`,
+  '/button-group': `Choose one or several values with a segmented control.`,
+  '/file-input': `Pick or drop files with validation, cancellation, and retry.`,
+  '/multiselect': `Select and search options, with recipes for forms, loading, and styling.`,
+  '/range-slider': `Adjust a numeric interval using two handles or number fields.`,
+  '/settings': `Organize, search, and reset related application settings.`,
+  '/command-menu': `Find commands and search site content from a keyboard palette.`,
+  '/nav': `Build responsive navigation with dropdowns and keyboard controls.`,
+  '/site-chrome': `Add footers, contributor lists, and lightweight media embeds.`,
+  '/toc': `Navigate headings with an automatically generated table of contents.`,
+  '/tree-view': `Explore a keyboard-navigable tree with lazy-loaded branches.`,
+  '/dialogs': `Queue confirmations, choices, and text prompts.`,
+  '/popover': `Show contextual content and action menus beside their triggers.`,
+  '/toast': `Display queued notifications with priorities and deduplication.`,
+  '/draggable-pane': `Move and resize floating panels.`,
+  '/extras': `Explore small utilities for themes, icons, and source viewers.`,
+  '/fullscreen': `Expand a selected part of the page into fullscreen.`,
+  '/icons': `Browse and search the bundled SVG icons.`,
+  '/json-tree': `Inspect, search, edit, and compare structured data.`,
+  '/masonry': `Arrange variable-height content into balanced columns.`,
+  '/patterns': `Compose dialogs, sheets, tabs, accordions, and in-page search.`,
+  '/split-pane': `Resize adjacent panels with pointer and keyboard controls.`,
+  '/virtual-list': `Render a small visible window into a large fixed-height list.`,
+  '/wiggle': `Animate a component to draw attention to a change.`,
+  '/workbench': `Combine file loading, data inspection, and resizable panels.`,
+  '/form': `Form integration and native validation behavior.`,
+  '/kit-form-actions': `Progressively enhanced SvelteKit form actions.`,
+  '/persistent': `Persist selection across page reloads with sessionStorage.`,
+  '/events': `Event callbacks and payloads.`,
+  '/disabled': `Disabled options and disabled component states.`,
+  '/grouping': `Grouped options, sticky headers, and group actions.`,
+  '/infinite-scroll': `Incremental loading with load_options.`,
+  '/min-max-select': `Use max_select and required constraints.`,
+  '/input-dropdown': `Single-select editable input with dropdown suggestions.`,
+  '/duplicates': `Handle duplicate labels and options.`,
+  '/sort-selected': `Keep selected options sorted.`,
+  '/range-select': `Select visible ranges with Shift-click and Shift+Arrow.`,
+  '/keep-selected': `Keep selected items visible in dropdown.`,
+  '/allow-user-options': `Create options from user input.`,
+  '/ui': `Core UI controls and visual states.`,
+  '/css-classes': `Class-based styling hooks.`,
+  '/snippets': `Custom rendering with snippets.`,
+  '/portal': `Portaled dropdown rendering and layering.`,
+}
+
+// Source groups determine membership; recipes remain searchable without filling the nav.
+export const demo_nav_routes = Object.entries(category_info).map(
+  ([name, [label, description]]) => ({
+    name,
+    label,
+    description,
+    href: `/${name}` as Pathname,
+    children: [] as Pathname[],
+  }),
+)
+export const multiselect_recipes: Pathname[] = []
+export const demo_pages: Pathname[] = []
+for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) {
+  if (filename.includes(`/(hide)/`)) continue
+  const parts = /^\.\/\((?<category>[^)]+)\)\/(?<route>.+)\/\+page\.(?:svelte|md)$/u.exec(
+    filename,
+  )?.groups
+  const category = demo_nav_routes.find(({ name }) => name === parts?.category)
+  if (!parts || !category)
+    throw new Error(`Demo page needs a navigation category: ${filename}`)
+  const route = `/${parts.route.replaceAll(/\([^)]+\)\//gu, ``)}` as Pathname
+  demo_pages.push(route)
+  if (filename.includes(`/(multiselect)/`) && route !== `/multiselect`)
+    multiselect_recipes.push(route)
+  else category.children.push(route)
+}
+
+for (const { href, children } of demo_nav_routes) {
+  children.sort((left_route, right_route) => {
+    if (left_route === href) return -1
+    if (right_route === href) return 1
+    return left_route.localeCompare(right_route)
+  })
+}
+multiselect_recipes.sort()
+
 export const demo_labels: Record<string, string> = {
   '/multiselect': `MultiSelect`,
   '/range-slider': `RangeSlider`,
   '/command-menu': `CommandMenu`,
   '/action-button': `ActionButton`,
+  '/file-input': `FileInput`,
+  '/tree-view': `TreeView`,
+  '/json-tree': `JsonTree`,
+  '/split-pane': `SplitPane`,
+  '/virtual-list': `VirtualList`,
   '/code-editor': `CodeEditor / DiffView`,
   '/ui': `UI`,
   '/css-classes': `CSS Classes`,
   '/kit-form-actions': `Form Actions`,
   '/min-max-select': `Min/Max`,
   '/allow-user-options': `User Options`,
-  // attachments are named after their exports, so the nav shows the snake_case symbol
-  // rather than slug_to_title's "Click Outside"
   ...Object.fromEntries(
-    [
-      `tooltip`,
-      `draggable`,
-      `resizable`,
-      `sortable`,
-      `highlight_matches`,
-      `click_outside`,
-      `dismiss_on_outside_press`,
-      `focus_trap`,
-      `hotkey`,
-      `float`,
-      `portal`,
-      `contrast_color`,
-      `forward_window_keydown`,
-      `file_drop`,
-    ].map((name) => [`/attachments/${name.replaceAll(`_`, `-`)}`, name]),
+    demo_pages
+      .filter((route) => route.startsWith(`/attachments/`))
+      .map((route) => [route, route.slice(`/attachments/`.length).replaceAll(`-`, `_`)]),
   ),
 }
 
-export const routes = Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))
-  .filter((filename) => !filename.includes(`/(hide)/`))
-  .map((filename) => {
-    const segments = filename.split(`/`)
-    const group =
-      segments.find((segment) => segment.startsWith(`(`))?.slice(1, -1) ?? `other`
-    const parts = segments.filter((part) => !part.startsWith(`(`)) // remove hidden route segments
-    const route = `/${parts.slice(1, -1).join(`/`)}` as Pathname
-    return { group, route }
-  })
-
-if (routes.length < 3) {
-  console.error(`Too few demo routes found: ${routes.length}`)
-}
-
-const groups = [...new Set(routes.map(({ group }) => group))].toSorted()
-
-export const demo_nav_routes = groups.map((group) => {
-  const overview_route = `/${group}` as Pathname
-  const children = routes
-    .filter((route) => route.group === group)
-    .map(({ route }) => route)
-    .toSorted((left_route, right_route) => {
-      if (left_route === overview_route) return -1
-      if (right_route === overview_route) return 1
-      return left_route.localeCompare(right_route)
-    })
-  // a single-page group is that page, so link straight to it instead of a dropdown whose
-  // only entry repeats its parent
-  return {
-    href: children[0],
-    // Nav keys route_labels on route.label when set, so group labels belong here;
-    // the path-keyed route_labels map only reaches the dropdown children.
-    label: demo_labels[overview_route] ?? slug_to_title(group),
-    ...(children.length > 1 && { children }),
-  }
-})
-
-export const demo_pages = demo_nav_routes.flatMap(
-  ({ href, children }) => children ?? [href],
-)
+export const demo_title = (route: string): string =>
+  demo_labels[route] ?? slug_to_title(route.split(`/`).at(-1) ?? route)

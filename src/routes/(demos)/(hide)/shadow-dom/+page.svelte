@@ -1,7 +1,7 @@
 <script lang="ts">
   // Fixture for tests/playwright/CommandMenu.test.ts. happy-dom retargets nothing, so a
   // shadow root is the only place composedPath() and event.target differ.
-  import { CommandMenu } from '$lib'
+  import { CommandMenu } from 'svelte-widgets'
   import { mount, unmount } from 'svelte'
 
   const actions = [`alpha`, `beta`, `gamma`].map((label) => ({

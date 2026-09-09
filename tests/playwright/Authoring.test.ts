@@ -1,6 +1,38 @@
 import { expect, test } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
 
+test(`standalone example buttons keep their natural width across demos`, async ({
+  page,
+}) => {
+  for (const route of [`/authoring/hot-reload`, `/toast`, `/attachments/tooltip`]) {
+    await page.goto(`http://localhost:3005${route}`, { waitUntil: `networkidle` })
+    const buttons = page.locator(`.code-example > button`)
+    expect(
+      await buttons.count(),
+      `Missing standalone buttons on ${route}`,
+    ).toBeGreaterThan(0)
+    for (const button of await buttons.all()) {
+      const ratio = await button.evaluate((element) => {
+        const parent = element.parentElement
+        if (!parent) throw new Error(`Missing example wrapper`)
+        return (
+          element.getBoundingClientRect().width / parent.getBoundingClientRect().width
+        )
+      })
+      expect(ratio, `Button stretches across ${route}`).toBeLessThan(0.5)
+    }
+  }
+  // Explicit sizing remains available for intentionally wide controls.
+  const button = page.locator(`.code-example > button`).first()
+  const ratio = await button.evaluate((element) => {
+    element.style.width = `100%`
+    const parent = element.parentElement
+    if (!parent) throw new Error(`Missing example wrapper`)
+    return element.getBoundingClientRect().width / parent.getBoundingClientRect().width
+  })
+  expect(ratio).toBeCloseTo(1, 2)
+})
+
 test.beforeEach(async ({ page }) => {
   // Exercise the real highlighter without depending on CDN latency or availability.
   await page.route(`https://esm.sh/vscode-oniguruma@*/release/onig.wasm`, (route) =>
@@ -137,6 +169,9 @@ for (const width of [390, 1440]) {
     await expect(heading).not.toHaveClass(/toc-clicked/u)
     await expect(heading).toHaveCSS(`color`, original_color)
     if (mobile) await page.getByRole(`button`, { name: `Toggle navigation menu` }).click()
+    const inputs_toggle = page.getByRole(`button`, { name: `Toggle Inputs submenu` })
+    if (mobile) await inputs_toggle.click()
+    else await inputs_toggle.hover()
     await page.getByRole(`link`, { name: `RangeSlider`, exact: true }).click()
     await expect(page).toHaveURL(/\/range-slider$/u)
     await expect(sidebar.locator(`.reference-navigation`)).toHaveCount(0)

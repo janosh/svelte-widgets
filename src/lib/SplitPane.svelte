@@ -9,7 +9,7 @@
     max_ratio = 0.85,
     collapsed = $bindable(false),
     collapsible = false,
-    onresize,
+    on_resize,
     ratio = $bindable(0.5),
     first_px = $bindable(undefined),
     min_px,
@@ -22,7 +22,7 @@
     max_ratio?: number
     collapsed?: boolean
     collapsible?: boolean
-    onresize?: (size: {
+    on_resize?: (size: {
       ratio: number
       first_px: number | undefined
       collapsed: boolean
@@ -119,7 +119,7 @@
     notify_resize()
   }
 
-  const notify_resize = () => onresize?.({ ratio, first_px, collapsed })
+  const notify_resize = () => on_resize?.({ ratio, first_px, collapsed })
   $effect(() => update_parent(pane_size))
 
   const resize_from_pointer = (event: PointerEvent): void => {

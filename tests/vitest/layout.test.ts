@@ -34,9 +34,9 @@ test.each([
   [`/`, `/`, `readme.md`],
   [`/changelog`, `/changelog`, `changelog.md`],
   [
-    `/(demos)/(multiselect)/multiselect`,
+    `/(demos)/(inputs)/(multiselect)/multiselect`,
     `/multiselect`,
-    `src/routes/(demos)/(multiselect)/multiselect/+page.md`,
+    `src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md`,
   ],
   // a 404 has no route id, so it must not fall into the `/` entry (readme.md)
   [null, `/no-such-page`, `src/routes`],

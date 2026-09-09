@@ -2,7 +2,7 @@
 
 ```svelte example id="attachments-click-outside"
 <script lang="ts">
-  import { click_outside, tooltip } from '$lib/attachments'
+  import { click_outside, tooltip } from 'svelte-widgets/attachments'
 
   let open_menu = $state(false)
 </script>

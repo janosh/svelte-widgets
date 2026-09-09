@@ -9,6 +9,7 @@ import { markdown_vite } from './src/lib/markdown/vite.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 import { asset_imports } from './src/lib/assets.ts'
+import package_json from './package.json' with { type: 'json' }
 
 await generate_icons()
 
@@ -24,11 +25,18 @@ const docs = markdown_vite(
     examples: {
       wrapper: '/src/lib/CodeExample.svelte',
       collapsible: true,
-      hide_style: true,
     },
   }),
   { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
 )
+
+const stateful_aliases: Record<string, string> = {}
+for (const [path, target] of Object.entries(package_json.exports)) {
+  if (`default` in target && target.default.endsWith(`.svelte.js`))
+    stateful_aliases[path.replace(`.`, `svelte-widgets`)] = target.default
+      .replace(`./dist/`, `./src/lib/`)
+      .replace(/\.js$/u, `.ts`)
+}
 
 // Inline Kit options configure the docs site. svelte-package uses its defaults;
 // src/lib needs no preprocessing, and the package script removes Markdown guides.
@@ -43,6 +51,7 @@ const svelte_config = {
   alias: {
     $root: `.`,
     $site: `./src/site`,
+    ...stateful_aliases,
     'svelte-widgets': `./src/lib`,
   },
 

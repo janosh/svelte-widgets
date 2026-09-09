@@ -20,7 +20,7 @@
     labels,
     empty = `retain`,
     commit = `input`,
-    oncommit,
+    on_commit,
     number_props,
     range_props,
     ...rest
@@ -33,7 +33,7 @@
     // Invalid drafts never replace the committed value. Clearing retains it by default.
     empty?: `retain` | `undefined`
     commit?: `input` | `change`
-    oncommit?: (value: number | undefined) => void
+    on_commit?: (value: number | undefined) => void
     number_props?: Omit<HTMLInputAttributes, `type` | `value` | `min` | `max` | `step`>
     range_props?: Omit<HTMLInputAttributes, `type` | `value` | `min` | `max` | `step`>
     title?: string
@@ -77,7 +77,7 @@
       const next_value = valid ? next : undefined
       if (next_value !== value) {
         value = next_value
-        oncommit?.(value)
+        on_commit?.(value)
       }
     }
     if (final) draft = value === undefined ? `` : String(value)

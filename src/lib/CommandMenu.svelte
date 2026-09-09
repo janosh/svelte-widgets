@@ -32,37 +32,37 @@
   const command_selection = {
     selected: [] as Action[],
     value: null,
-    maxSelect: 1,
-    minSelect: null,
-    selectedDisplay: `chips`,
-    selectedOptionsDraggable: false,
-    maxVisibleChips: null,
-    keepSelectedInDropdown: false,
-    sortSelected: false,
+    max_select: 1,
+    min_select: null,
+    selected_display: `chips`,
+    selected_options_draggable: false,
+    max_visible_chips: null,
+    keep_selected_in_dropdown: false,
+    sort_selected: false,
     duplicates: false,
-    allowUserOptions: false,
-    selectAllOption: false,
-    groupSelectAll: false,
-    rangeSelect: false,
+    allow_user_options: false,
+    select_all_option: false,
+    group_select_all: false,
+    range_select: false,
     parse_paste: undefined,
-    oncreate: undefined,
-    onchange: undefined,
-    onremove: undefined,
-    onremoveAll: undefined,
-    onselectAll: undefined,
-    onrangeSelect: undefined,
-    onreorder: undefined,
-    onduplicate: undefined,
-    onmaxreached: undefined,
-    onparsed_paste: undefined,
-    selectedItem: undefined,
-    removeIcon: undefined,
+    on_create: undefined,
+    on_change: undefined,
+    on_remove: undefined,
+    on_remove_all: undefined,
+    on_select_all: undefined,
+    on_range_select: undefined,
+    on_reorder: undefined,
+    on_duplicate: undefined,
+    on_max_reached: undefined,
+    on_parsed_paste: undefined,
+    selected_item: undefined,
+    remove_icon: undefined,
   } satisfies Partial<MultiSelectProps<Action>>
 
   let {
     actions,
-    activeIndex: active_idx = $bindable(null),
-    activeOption: active_option = $bindable(null),
+    active_index: active_idx = $bindable(null),
+    active_option = $bindable(null),
     triggers = [`k`],
     close_keys = [`Escape`],
     backdrop_dim = true,
@@ -72,26 +72,26 @@
     dialog = $bindable(null),
     input = $bindable(null),
     aria_label = `Command menu`,
-    filterFunc: filter_func,
+    filter_func,
     fuzzy = true,
-    inputProps: input_props,
+    input_props,
     input_aria_label = aria_label === `Command menu` ? `Search commands` : aria_label,
-    matchingOptions: matching_actions = $bindable([]),
-    noMatchingOptionsMsg: no_matching_options_msg = `No matching commands`,
-    onexecute,
+    matching_options: matching_actions = $bindable([]),
+    no_matching_options_msg = `No matching commands`,
+    on_execute,
     onkeydown,
     option: option_snippet,
     placeholder = `Type a command…`,
-    searchText: search_text = $bindable(``),
+    search_text = $bindable(``),
     dialog_props,
     global_shortcuts = true,
     recent_actions_key = null,
     max_recent = 20,
     ...rest
-  }: Omit<OptionListProps<Action>, `autoActiveFirstOption` | `key` | `options`> & {
+  }: Omit<OptionListProps<Action>, `auto_active_first_option` | `key` | `options`> & {
     actions: Action[]
     // Called after a menu selection or global shortcut invokes its action.
-    onexecute?: (detail: { action: Action }) => unknown
+    on_execute?: (detail: { action: Action }) => unknown
     triggers?: string[]
     close_keys?: string[]
     backdrop_dim?: boolean
@@ -144,7 +144,9 @@
   })
   // Validate remote batches before MultiSelect merges and proxies the static matches.
   const remote_fetch = $derived(
-    typeof rest.loadOptions === `function` ? rest.loadOptions : rest.loadOptions?.fetch,
+    typeof rest.load_options === `function`
+      ? rest.load_options
+      : rest.load_options?.fetch,
   )
   const checked_fetch = $derived.by(() => {
     const fetch = remote_fetch
@@ -163,7 +165,7 @@
   })
   const load_options = $derived(
     checked_fetch && {
-      ...(typeof rest.loadOptions === `object` ? rest.loadOptions : {}),
+      ...(typeof rest.load_options === `object` ? rest.load_options : {}),
       fetch: checked_fetch,
     },
   )
@@ -192,7 +194,7 @@
 
   // Dynamic actions may contain metadata not present in the static action list.
   const has_action_meta = $derived(
-    Boolean(rest.loadOptions) ||
+    Boolean(rest.load_options) ||
       actions.some(
         (action) =>
           action.shortcut || action.description || action.badge || action.metadata,
@@ -279,7 +281,7 @@
     record_recent(action)
     if (open) close_menu()
     action.action(action.label)
-    onexecute?.({ action })
+    on_execute?.({ action })
   }
 </script>
 
@@ -332,21 +334,21 @@
       {...rest}
       {...command_selection}
       options={sorted_actions}
-      loadOptions={load_options}
-      bind:activeIndex={active_idx}
-      bind:activeOption={active_option}
-      autoActiveFirstOption
+      {load_options}
+      bind:active_index={active_idx}
+      bind:active_option
+      auto_active_first_option
       bind:input
-      bind:matchingOptions={matching_actions}
-      bind:searchText={search_text}
-      filterFunc={filter_func ??
+      bind:matching_options={matching_actions}
+      bind:search_text
+      filter_func={filter_func ??
         ((action, search) => cmd_action_matches(action, search, fuzzy))}
       {fuzzy}
-      inputProps={{ 'aria-label': input_aria_label, ...input_props }}
-      noMatchingOptionsMsg={no_matching_options_msg}
+      input_props={{ 'aria-label': input_aria_label, ...input_props }}
+      {no_matching_options_msg}
       {placeholder}
       key={({ id }) => `${id}`}
-      onadd={({ option }) => execute_action(option)}
+      on_add={({ option }) => execute_action(option)}
       onkeydown={chain_handlers(
         (event) => run_hotkeys(event, toggle_bindings),
         onkeydown,

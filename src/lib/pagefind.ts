@@ -123,7 +123,7 @@ export const create_pagefind_loader = (
     const query = search.trim()
     // fallback_actions are handed to CommandMenu as static options, which match them
     // locally without waiting on Pagefind, so this loader only returns index hits
-    if (!query) return { options: [], hasMore: false }
+    if (!query) return { options: [], has_more: false }
     let cache = search_cache
     try {
       const api = await (pagefind_api_promise ??= load_api().catch((error: unknown) => {
@@ -183,7 +183,7 @@ export const create_pagefind_loader = (
         options,
         replace: true,
         error: cache.error,
-        hasMore:
+        has_more:
           actions.length > options.length || cache.next_result_idx < page_results.length,
       }
     } catch (error) {

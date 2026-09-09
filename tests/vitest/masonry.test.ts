@@ -92,16 +92,19 @@ const mount_virtualized = (count: number, overrides = {}) => {
     items: make_items(count),
     virtualize: true,
     height: 300,
-    calcCols: () => 2,
-    masonryWidth: 500,
+    calc_cols: () => 2,
+    masonry_width: 500,
     ...overrides,
   })
 }
 
 describe(`Masonry`, () => {
   test.each([true, false])(`renders items with animate=%s`, (animate) => {
-    mount_masonry({ items: indices, animate })
+    mock_height = 0
+    const get_estimated_height = vi.fn(() => 150)
+    mount_masonry({ items: indices, animate, order: `row-first`, get_estimated_height })
     expect(child_els()).toHaveLength(n_items)
+    expect(get_estimated_height).not.toHaveBeenCalled()
   })
 
   test.each([
@@ -109,22 +112,22 @@ describe(`Masonry`, () => {
     [[`custom`, `col-class`], /masonry custom/u, /col col-\d+ col-class/u],
     [[``, ``], /^masonry\s+svelte-\w+/u, /col col-\d+\s+svelte-\w+/u],
   ])(
-    `applies class=%j and columnProps.class correctly`,
+    `applies class=%j and column_props.class correctly`,
     ([cls, colCls], divRe, colRe) => {
-      mount_masonry({ items: indices, class: cls, columnProps: { class: colCls } })
+      mount_masonry({ items: indices, class: cls, column_props: { class: colCls } })
       expect(masonry_el()?.className).toMatch(divRe)
       expect(col_els()[0]?.className).toMatch(colRe)
     },
   )
 
-  test(`merges container attributes and style with layout and spreads columnProps`, async () => {
+  test(`merges container attributes and style with layout and spreads column_props`, async () => {
     const style = `background-color: darkblue;`
     const column_style = `border: 1px solid red;`
     mount_masonry({
       items: [1, 2],
       style,
-      columnProps: { style: column_style, 'data-testid': `col`, role: `list` },
-      maxColWidth: 150,
+      column_props: { style: column_style, 'data-testid': `col`, role: `list` },
+      max_col_width: 150,
       gap: 5,
       'data-testid': `my-masonry`,
       'aria-label': `Image gallery`,
@@ -136,7 +139,7 @@ describe(`Masonry`, () => {
     expect(masonry?.getAttribute(`style`)).toContain(style)
     expect(masonry?.style.display).toBe(`flex`)
     expect(masonry?.style.boxSizing).toBe(`border-box`)
-    // every column: columnProps style merges with the style: directives, arbitrary attrs pass through
+    // every column: column_props style merges with the style: directives, arbitrary attrs pass through
     for (const col of col_els()) {
       expect(col.getAttribute(`style`)).toContain(column_style)
       expect(col.style.gap).toBe(`5px`)
@@ -157,16 +160,16 @@ describe(`Masonry`, () => {
   ])(
     `calculates columns: width=%d, minCol=%d, gap=%d -> %d cols`,
     (width, minCol, gap, expected) => {
-      mount_masonry({ items: indices, masonryWidth: width, minColWidth: minCol, gap })
+      mount_masonry({ items: indices, masonry_width: width, min_col_width: minCol, gap })
       expect(col_els()).toHaveLength(expected)
     },
   )
 
-  test(`warns if maxColWidth < minColWidth`, () => {
+  test(`warns if max_col_width < min_col_width`, () => {
     vi.spyOn(console, `warn`).mockImplementation(() => {})
-    mount_masonry({ items: indices, minColWidth: 50, maxColWidth: 40 })
+    mount_masonry({ items: indices, min_col_width: 50, max_col_width: 40 })
     expect(console.warn).toHaveBeenCalledWith(
-      `Masonry: maxColWidth (40) < minColWidth (50).`,
+      `Masonry: max_col_width (40) < min_col_width (50).`,
     )
   })
 
@@ -176,17 +179,17 @@ describe(`Masonry`, () => {
     )
   })
 
-  test(`uses custom getId function`, () => {
+  test(`uses custom get_id function`, () => {
     // Masonry's props type the item as unknown, so narrow inside the callback
     const get_id = vi.fn((item: unknown) => (item as { x: number }).x)
-    mount_masonry({ items: [{ x: 1 }, { x: 2 }], getId: get_id })
+    mount_masonry({ items: [{ x: 1 }, { x: 2 }], get_id })
     expect(get_id).toHaveBeenCalled()
     expect(item_els()).toHaveLength(2)
   })
 
-  test(`uses custom calcCols and adds col-N classes`, () => {
+  test(`uses custom calc_cols and adds col-N classes`, () => {
     const calc_cols = vi.fn<() => number>(() => 3)
-    mount_masonry({ items: indices, calcCols: calc_cols, masonryWidth: 500 })
+    mount_masonry({ items: indices, calc_cols, masonry_width: 500 })
     expect(calc_cols).toHaveBeenCalled()
     const columns = col_els()
     expect(columns).toHaveLength(3)
@@ -198,32 +201,32 @@ describe(`Masonry`, () => {
     expect(child_els()).toHaveLength(count)
   })
 
-  test.each([`id`, `key`, `uuid`])(`works with idKey=%s`, (idKey) => {
-    mount_masonry({ items: [{ [idKey]: 1 }, { [idKey]: 2 }], idKey })
+  test.each([`id`, `key`, `uuid`])(`works with id_key=%s`, (id_key) => {
+    mount_masonry({ items: [{ [id_key]: 1 }, { [id_key]: 2 }], id_key })
     expect(item_els()).toHaveLength(2)
   })
 
-  test(`renders max columns when masonryWidth=0 (SSR mode)`, () => {
-    mount_masonry({ items: indices, minColWidth: 200, gap: 10, masonryWidth: 0 })
+  test(`renders max columns when masonry_width=0 (SSR mode)`, () => {
+    mount_masonry({ items: indices, min_col_width: 200, gap: 10, masonry_width: 0 })
     expect(col_els()).toHaveLength(Math.floor(1930 / 210))
   })
 
   test.each([
-    [{ initialCols: 4, masonryWidth: 0 }, 4],
-    [{ initialCols: 99, masonryWidth: 0 }, n_items],
-    [{ masonryWidth: 0, calcCols: (): number => 40 }, 40],
-    [{ initialCols: 4, masonryWidth: 500, calcCols: (): number => 2 }, 2],
+    [{ initial_cols: 4, masonry_width: 0 }, 4],
+    [{ initial_cols: 99, masonry_width: 0 }, n_items],
+    [{ masonry_width: 0, calc_cols: (): number => 40 }, 40],
+    [{ initial_cols: 4, masonry_width: 500, calc_cols: (): number => 2 }, 2],
   ])(`resolves column count from %o`, (props, expected) => {
     mount_masonry({ items: indices, ...props })
     expect(col_els()).toHaveLength(expected)
   })
 
   test.each([0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
-    `throws for invalid initialCols=%s even after width is measured`,
+    `throws for invalid initial_cols=%s even after width is measured`,
     (initial_cols) => {
       expect(() =>
-        mount_masonry({ items: indices, initialCols: initial_cols, masonryWidth: 500 }),
-      ).toThrow(`Masonry: initialCols must be a positive integer when provided`)
+        mount_masonry({ items: indices, initial_cols, masonry_width: 500 }),
+      ).toThrow(`Masonry: initial_cols must be a positive integer when provided`)
     },
   )
 
@@ -233,20 +236,20 @@ describe(`Masonry`, () => {
         (cols) => ({ items, cols }),
       ),
     ),
-  )(`rejects invalid calcCols=$cols for $items`, ({ items, cols }) => {
+  )(`rejects invalid calc_cols=$cols for $items`, ({ items, cols }) => {
     expect(() =>
-      mount_masonry({ items, calcCols: () => cols, masonryWidth: 500 }),
-    ).toThrow(`Masonry: calcCols must return a positive integer`)
+      mount_masonry({ items, calc_cols: () => cols, masonry_width: 500 }),
+    ).toThrow(`Masonry: calc_cols must return a positive integer`)
   })
 
   test.each([0, 2])(`accepts %s columns when there is nothing to place`, (cols) => {
     expect(() =>
-      mount_masonry({ items: [], calcCols: () => cols, masonryWidth: 500 }),
+      mount_masonry({ items: [], calc_cols: () => cols, masonry_width: 500 }),
     ).not.toThrow()
   })
 
   test(`injects named container query CSS into <head>`, () => {
-    mount_masonry({ items: indices, minColWidth: 200, gap: 10 })
+    mount_masonry({ items: indices, min_col_width: 200, gap: 10 })
     const masonry_id = masonry_el()?.getAttribute(`data-masonry-id`)
     if (!masonry_id) throw new Error(`data-masonry-id not found`)
     const head_styles = Array.from(document.head.querySelectorAll(`style`))
@@ -276,7 +279,7 @@ describe(`Masonry`, () => {
   })
 
   test(`limits columns to items.length`, () => {
-    mount_masonry({ items: [1, 2, 3], minColWidth: 100, masonryWidth: 0 })
+    mount_masonry({ items: [1, 2, 3], min_col_width: 100, masonry_width: 0 })
     expect(col_els()).toHaveLength(3)
   })
 })
@@ -319,7 +322,7 @@ describe(`Masonry order modes`, () => {
         items: make_items(heights.length),
         order: `column-balanced`,
         animate: false,
-        calcCols: () => cols,
+        calc_cols: () => cols,
         gap,
       })
       await tick()
@@ -353,10 +356,10 @@ describe(`Masonry order modes`, () => {
       items: make_items(7),
       order,
       animate: false,
-      calcCols: () => 3,
+      calc_cols: () => 3,
       gap: 10,
-      masonryWidth: 500,
-      getEstimatedHeight: (item: unknown) => dist_height(Number(item)),
+      masonry_width: 500,
+      get_estimated_height: (item: unknown) => dist_height(Number(item)),
     })
     await tick()
     expect(as_columns()).toBe(expected)
@@ -389,8 +392,8 @@ describe(`Masonry order modes`, () => {
       mount_masonry({
         items: make_items(count),
         order: `column-sequential`,
-        calcCols: () => cols,
-        masonryWidth: 500,
+        calc_cols: () => cols,
+        masonry_width: 500,
       })
       const columns = get_col_dist()
       expect(columns.flat().map(Number)).toEqual(make_items(count))
@@ -413,7 +416,7 @@ describe(`Masonry order modes`, () => {
         order,
         animate: false,
         gap: 0,
-        calcCols: () => 3,
+        calc_cols: () => 3,
       })
       await tick()
       expect(as_columns()).toBe(before)
@@ -470,10 +473,10 @@ describe(`Masonry order modes`, () => {
     mount_masonry({
       items: make_items(3),
       order: `balanced-stable`,
-      calcCols: () => 2,
+      calc_cols: () => 2,
       gap: 0,
-      getEstimatedHeight: () => 0,
-      masonryWidth: 500,
+      get_estimated_height: () => 0,
+      masonry_width: 500,
     })
 
     expect(as_columns()).toBe(`0,2 | 1`)
@@ -482,7 +485,7 @@ describe(`Masonry order modes`, () => {
   test.each(ALL_ORDER_MODES)(
     `order=%s always attaches ResizeObservers for mode switching support`,
     async (order) => {
-      mount_masonry({ items: [1, 2, 3], order, masonryWidth: 500 })
+      mount_masonry({ items: [1, 2, 3], order, masonry_width: 500 })
       await tick()
       // All modes attach observers to support runtime mode switching
       expect(resize_observers.size).toBe(4) // masonry container + 3 items
@@ -495,7 +498,7 @@ describe(`Masonry order modes`, () => {
       order: `balanced`,
       virtualize: true,
       height: 300,
-      masonryWidth: 500,
+      masonry_width: 500,
     })
     // Only masonry container observer, no item observers during virtualization
     expect(resize_observers.size).toBe(1)
@@ -519,7 +522,7 @@ describe(`Masonry bindable props`, () => {
     expect(bound_div?.classList).toContain(`masonry`)
   })
 
-  test(`exposes masonryHeight bindable`, async () => {
+  test(`exposes masonry_height bindable`, async () => {
     let bound_height = 0
     const height_spy = vi
       .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
@@ -529,10 +532,10 @@ describe(`Masonry bindable props`, () => {
     onTestFinished(() => height_spy.mockRestore())
     mount_masonry({
       items: [1, 2],
-      get masonryHeight() {
+      get masonry_height() {
         return bound_height
       },
-      set masonryHeight(val: number) {
+      set masonry_height(val: number) {
         bound_height = val
       },
     })
@@ -543,7 +546,7 @@ describe(`Masonry bindable props`, () => {
 describe(`Masonry default rendering`, () => {
   test(`renders string items as spans with correct content`, () => {
     const items = [`apple`, `banana`, `cherry`, `date`, `elderberry`, `fig`]
-    mount_masonry({ items, masonryWidth: 500, minColWidth: 200 })
+    mount_masonry({ items, masonry_width: 500, min_col_width: 200 })
     const spans = document.querySelectorAll(`div.masonry > div.col > div > span`) // default rendering
     expect(spans).toHaveLength(items.length)
     // balanced-stable alternates equal-height items across 2 columns; DOM order is by column
@@ -578,15 +581,15 @@ describe(`Masonry virtualization`, () => {
     expect(masonry_el()?.getAttribute(`style`)).not.toContain(`\n`)
   })
 
-  test(`calls getEstimatedHeight and applies column padding`, async () => {
+  test(`calls get_estimated_height and applies column padding`, async () => {
     const get_estimated_height = vi.fn<() => number>(() => 120)
     mount_masonry({
       items: indices,
       virtualize: true,
       height: 500,
-      getEstimatedHeight: get_estimated_height,
+      get_estimated_height,
       order: `balanced`,
-      masonryWidth: 500,
+      masonry_width: 500,
     })
     expect(get_estimated_height).toHaveBeenCalled()
     expect(col_els()[0]?.getAttribute(`style`)).toMatch(/padding-top:.*padding-bottom:/u)
@@ -594,16 +597,16 @@ describe(`Masonry virtualization`, () => {
 
   test(`respects overscan prop`, async () => {
     mount_virtualized(100, {
-      getEstimatedHeight: () => 100,
+      get_estimated_height: () => 100,
       overscan: 1,
-      calcCols: () => 1,
+      calc_cols: () => 1,
     })
     const count_1 = item_els().length
 
     mount_virtualized(100, {
-      getEstimatedHeight: () => 100,
+      get_estimated_height: () => 100,
       overscan: 5,
-      calcCols: () => 1,
+      calc_cols: () => 1,
     })
     const count_5 = item_els().length
 
@@ -614,10 +617,10 @@ describe(`Masonry virtualization`, () => {
   // item went unrendered, leaving a blank strip
   test(`overscan=0 still renders the item at the viewport's bottom edge`, () => {
     mount_virtualized(50, {
-      getEstimatedHeight: () => 100,
+      get_estimated_height: () => 100,
       overscan: 0,
       gap: 0,
-      calcCols: () => 1,
+      calc_cols: () => 1,
     })
     // 100px items in a 300px viewport: rows 0, 1 and 2 all sit on screen
     expect([...item_els()].map((el) => el.textContent?.trim())).toEqual([`0`, `1`, `2`])
@@ -627,7 +630,7 @@ describe(`Masonry virtualization`, () => {
     [`balanced`, 2],
     [`row-first`, 3],
   ] as const)(`renders subset of items %s`, async (order, cols) => {
-    mount_virtualized(100, { order, calcCols: () => cols })
+    mount_virtualized(100, { order, calc_cols: () => cols })
     expect(col_els()).toHaveLength(cols)
     const rendered = item_els().length
     expect(rendered).toBeGreaterThan(0)
@@ -639,8 +642,8 @@ describe(`Masonry virtualization`, () => {
     // handler and their callback silently stops firing
     const consumer_scroll = vi.fn()
     mount_virtualized(200, {
-      calcCols: () => 1,
-      getEstimatedHeight: () => 100,
+      calc_cols: () => 1,
+      get_estimated_height: () => 100,
       gap: 0,
       height: 300,
       onscroll: consumer_scroll,
@@ -660,7 +663,7 @@ describe(`Masonry virtualization`, () => {
     expect(consumer_scroll).toHaveBeenCalledOnce()
   })
 
-  test(`defers virtualization until masonryHeight is measured for string heights`, async () => {
+  test(`defers virtualization until masonry_height is measured for string heights`, async () => {
     const height_spy = vi
       .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
       .mockReturnValue(0)
@@ -669,7 +672,7 @@ describe(`Masonry virtualization`, () => {
       items: make_items(100),
       virtualize: true,
       height: `500px`,
-      calcCols: () => 2,
+      calc_cols: () => 2,
     })
 
     // clientHeight=0 means unmeasured, so virtualization is deferred
@@ -721,7 +724,7 @@ describe(`Masonry CSS reset compatibility`, () => {
     [`div.masonry`, `flex`],
     [`div.masonry > div.col`, `grid`],
   ])(`%s has inline display:%s style`, async (selector, display) => {
-    mount_masonry({ items: [1, 2, 3], masonryWidth: 500 })
+    mount_masonry({ items: [1, 2, 3], masonry_width: 500 })
     expect(document.querySelector<HTMLElement>(selector)?.style.display).toBe(display)
   })
 })
@@ -748,8 +751,8 @@ describe(`Masonry virtual scroll stability`, () => {
   test(`uses round-robin distribution when virtualizing regardless of order prop`, async () => {
     mount_virtualized(12, {
       order: `balanced`,
-      calcCols: () => 3,
-      getEstimatedHeight: () => 100,
+      calc_cols: () => 3,
+      get_estimated_height: () => 100,
     })
     const columns = col_els()
     // round-robin: item N belongs in column N % 3
@@ -772,10 +775,10 @@ describe(`Masonry virtual scroll stability`, () => {
       items: make_items(item_count),
       virtualize: true,
       height: 300,
-      calcCols: () => 1,
+      calc_cols: () => 1,
       gap,
-      getEstimatedHeight: () => estimated,
-      masonryWidth: 500,
+      get_estimated_height: () => estimated,
+      masonry_width: 500,
     })
 
     const col = col_els()[0]
@@ -792,8 +795,8 @@ describe(`Masonry virtual scroll stability`, () => {
 
   test(`10k items render only a virtualized window`, async () => {
     mount_virtualized(10000, {
-      calcCols: () => 4,
-      getEstimatedHeight: () => 100,
+      calc_cols: () => 4,
+      get_estimated_height: () => 100,
       height: 500,
     })
 
@@ -804,8 +807,8 @@ describe(`Masonry virtual scroll stability`, () => {
 
   // A 0 estimate must fall through to the 150 default; with `??` it stays 0, prefix sums
   // become gaps alone and the window swells to 58 items instead of 14.
-  test(`a zero getEstimatedHeight falls back to the default rather than collapsing`, () => {
-    mount_virtualized(500, { getEstimatedHeight: () => 0, height: 500 })
+  test(`a zero get_estimated_height falls back to the default rather than collapsing`, () => {
+    mount_virtualized(500, { get_estimated_height: () => 0, height: 500 })
 
     expect(item_els().length).toBeLessThan(30)
   })
@@ -824,7 +827,7 @@ describe(`Masonry order mode edge cases`, () => {
   test.each(
     ALL_ORDER_MODES.flatMap((order) => shapes.map((shape) => [order, ...shape] as const)),
   )(`order=%s renders %s`, async (order, _label, items, n_cols, expected) => {
-    mount_masonry({ items, order, calcCols: () => n_cols, masonryWidth: 500 })
+    mount_masonry({ items, order, calc_cols: () => n_cols, masonry_width: 500 })
     expect(child_els()).toHaveLength(expected)
   })
 })

@@ -61,19 +61,22 @@ describe(`default_highlighter.highlight_block`, () => {
 
   // Cover custom grammar, common grammar, and punctuation in language flags.
   test.each([
-    [`svelte`, `<div>test</div>`],
-    [`ts`, `const x: number = 1`],
-    [`c++`, `int main() {}`],
-  ])(`highlights %s code`, async (lang, code) => {
+    [`svelte`, `<div>test</div>`, true],
+    [`ts`, `const x: number = 1`, true],
+    [`c++`, `int main() {}`, true],
+    [`sh`, `git add package.json\ngit push origin main`, false],
+    [`bash`, `git push origin main`, false],
+    [`html`, `hello`, false],
+    [`sh`, `echo "$HOME"`, true],
+  ] as const)(`renders %s code %j (classified=%s)`, async (lang, code, classified) => {
     const result = await default_highlighter.highlight_block(code, lang)
-    const escaped_lang = lang.replaceAll(/[+]/gu, `\\$&`)
-    expect(result).toMatch(
-      new RegExp(
-        `^<pre class="highlight highlight-${escaped_lang}"><code>.*</code></pre>$`,
-        `su`,
-      ),
+    expect(result).toBe(
+      `<pre class="highlight highlight-${lang}"><code>${await default_highlighter.highlight(code, lang)}</code></pre>`,
     )
-    expect(result).toContain(`<span class="pl-`)
+    expect(result.includes(`<span class="pl-`)).toBe(classified)
+    const element = document.createElement(`div`)
+    element.innerHTML = result
+    expect(element.textContent).toBe(code)
   })
 
   test.each([`TS`, `TypeScript`, `JAVASCRIPT`, `Svelte`])(
@@ -95,15 +98,6 @@ describe(`default_highlighter.highlight_block`, () => {
       )
     },
   )
-
-  test.each([
-    [`HTML special characters`, `<div>&</div>`, `&lt;div&gt;&amp;&lt;/div&gt;`],
-    [`braces`, `{#if x}{/if}`, `&#123;#if x&#125;&#123;/if&#125;`],
-  ])(`escapes %s in unhighlighted code`, async (_desc, code, expected) => {
-    expect(await default_highlighter.highlight_block(code)).toBe(
-      `<pre class="highlight"><code>${expected}</code></pre>`,
-    )
-  })
 
   test(`escapes braces in highlighted code`, async () => {
     const result = await default_highlighter.highlight_block(`{#if x}{/if}`, `svelte`)

@@ -31,8 +31,8 @@ const ROW_HEIGHT = editor_line_height(DEFAULT_OPTIONS.font_size)
 const packed = (class_name: TokenClassName, emphasized = false): number =>
   TOKEN_CLASS_NAMES.indexOf(class_name) | (emphasized ? EMPHASIS_BIT : 0)
 
-const diff_line = (lineNo: number, text: string, spans: SpanList = []): DiffLine => ({
-  lineNo,
+const diff_line = (line_no: number, text: string, spans: SpanList = []): DiffLine => ({
+  line_no,
   text,
   spans,
 })
@@ -44,9 +44,9 @@ const diff_row = (
 ): DiffRow => ({ kind, old, new: new_line })
 
 const hunk_of = (rows: DiffRow[], overrides: Partial<DiffHunk> = {}): DiffHunk => ({
-  oldStart: rows.find((row) => row.old)?.old?.lineNo ?? 1,
-  newStart: rows.find((row) => row.new)?.new?.lineNo ?? 1,
-  skippedBefore: 0,
+  old_start: rows.find((row) => row.old)?.old?.line_no ?? 1,
+  new_start: rows.find((row) => row.new)?.new?.line_no ?? 1,
+  skipped_before: 0,
   rows,
   ...overrides,
 })
@@ -56,17 +56,22 @@ const diff_result = (overrides: Partial<DiffResult> = {}): DiffResult => ({
   added: 0,
   removed: 0,
   language: `Rust`,
-  oldLineCount: 0,
-  newLineCount: 0,
-  skippedAfter: 0,
-  oldEndsWithNewline: true,
-  newEndsWithNewline: true,
+  old_line_count: 0,
+  new_line_count: 0,
+  skipped_after: 0,
+  old_ends_with_newline: true,
+  new_ends_with_newline: true,
   truncated: false,
   ...overrides,
 })
 
 const rows_result = (rows: DiffRow[], overrides: Partial<DiffResult> = {}): DiffResult =>
-  diff_result({ hunks: [hunk_of(rows)], oldLineCount: 1, newLineCount: 1, ...overrides })
+  diff_result({
+    hunks: [hunk_of(rows)],
+    old_line_count: 1,
+    new_line_count: 1,
+    ...overrides,
+  })
 
 const simple_change = diff_row(`replace`, diff_line(1, `a`), diff_line(1, `a-changed`))
 
@@ -159,8 +164,8 @@ describe(`rows and layouts`, () => {
         added: 2,
         removed: 2,
         language: `Python`,
-        oldLineCount: 5,
-        newLineCount: 3,
+        old_line_count: 5,
+        new_line_count: 3,
         truncated: true,
       }),
     )
@@ -192,7 +197,7 @@ describe(`rows and layouts`, () => {
       diff_row(`insert`, null, diff_line(3, `arrived`)),
     ]
     const expected = new Set([`keep me`, `was here`, `is here`, `dropped`, `arrived`])
-    await mount_diff(rows_result(rows, { oldLineCount: 3, newLineCount: 3 }), {
+    await mount_diff(rows_result(rows, { old_line_count: 3, new_line_count: 3 }), {
       options: { ...DEFAULT_OPTIONS, layout: `unified` },
     })
 
@@ -216,9 +221,9 @@ describe(`rows and layouts`, () => {
     await mount_diff(
       rows_result(created, {
         added: 2,
-        newLineCount: 2,
-        oldEndsWithNewline: false,
-        newEndsWithNewline: false,
+        new_line_count: 2,
+        old_ends_with_newline: false,
+        new_ends_with_newline: false,
       }),
       {
         single_col: true,
@@ -246,15 +251,15 @@ test.each([4, 150_000])(
       diff_line(count + 1, `old five`),
       diff_line(count + 1, `new five`),
     )
-    const hunk = hunk_of([row], { skippedBefore: count })
+    const hunk = hunk_of([row], { skipped_before: count })
     await mount_diff(
       diff_result({
         hunks: [hunk],
         added: 1,
         removed: 1,
-        oldLineCount: count + 2,
-        newLineCount: count + 2,
-        skippedAfter: 1,
+        old_line_count: count + 2,
+        new_line_count: count + 2,
+        skipped_after: 1,
       }),
       {
         old_text: `${context}old five\ntail`,
@@ -284,14 +289,14 @@ test(`gap lines missing a side stay context instead of reading as edits`, async 
   // Four rows yield new-only `a`–`c`, then old `only one` paired with new `d`;
   // unified equal rows prefer `row.old`, so offset reconstruction omits `d`.
   const row = diff_row(`replace`, diff_line(2, `old two`), diff_line(5, `new five`))
-  const hunk = hunk_of([row], { oldStart: 2, newStart: 5, skippedBefore: 4 })
+  const hunk = hunk_of([row], { old_start: 2, new_start: 5, skipped_before: 4 })
   await mount_diff(
     diff_result({
       hunks: [hunk],
       added: 1,
       removed: 1,
-      oldLineCount: 2,
-      newLineCount: 5,
+      old_line_count: 2,
+      new_line_count: 5,
     }),
     {
       old_text: `only one\nold two`,
@@ -325,8 +330,8 @@ test.each([
   async (missing_side, old_ends, new_ends) => {
     await mount_diff(
       rows_result([simple_change], {
-        oldEndsWithNewline: old_ends,
-        newEndsWithNewline: new_ends,
+        old_ends_with_newline: old_ends,
+        new_ends_with_newline: new_ends,
       }),
     )
     const other_side = missing_side === `old` ? `new` : `old`
@@ -358,7 +363,7 @@ describe(`states and backend wiring`, () => {
   ])(
     `renders an identical-input empty state with %s`,
     async (_case, labels, heading, detail) => {
-      await mount_diff(diff_result({ oldLineCount: 9, newLineCount: 9 }), { labels })
+      await mount_diff(diff_result({ old_line_count: 9, new_line_count: 9 }), { labels })
       const empty = query_element(`[data-empty]`)
       expect(text_of(empty.querySelector(`strong`))).toBe(heading)
       expect(text_of(empty.querySelector(`span`))).toBe(detail)
@@ -411,7 +416,7 @@ describe(`states and backend wiring`, () => {
     await vi.waitFor(() => expect(resolvers).toHaveLength(2))
 
     const line_result = (text: string) =>
-      rows_result([diff_row(`insert`, null, diff_line(1, text))], { newLineCount: 1 })
+      rows_result([diff_row(`insert`, null, diff_line(1, text))], { new_line_count: 1 })
     resolvers[1](line_result(`fresh`)) // newer request answers first
     await flush_async()
     resolvers[0](line_result(`stale`))
@@ -445,7 +450,7 @@ describe(`states and backend wiring`, () => {
 
   test(`uses the registered backend and forwards diff arguments once`, async () => {
     const diff_text = await mount_diff(
-      diff_result({ oldLineCount: 1, newLineCount: 1 }),
+      diff_result({ old_line_count: 1, new_line_count: 1 }),
       {
         old_text: `left`,
         new_text: `right`,
@@ -455,10 +460,10 @@ describe(`states and backend wiring`, () => {
     )
     // The load effect must not refire on its own writes and double-diff large docs.
     expect(diff_text).toHaveBeenCalledExactlyOnceWith({
-      oldText: `left`,
-      newText: `right`,
+      old_text: `left`,
+      new_text: `right`,
       filename: `main.rs`,
-      contextLines: 5,
+      context_lines: 5,
     })
   })
 })
@@ -471,7 +476,7 @@ describe(`virtualization`, () => {
         ? diff_row(`replace`, line(`old`), line(`new`))
         : diff_row(`equal`, line(`line`), line(`line`))
     })
-    return rows_result(rows, { oldLineCount: row_count, newLineCount: row_count })
+    return rows_result(rows, { old_line_count: row_count, new_line_count: row_count })
   }
 
   test(`renders a bounded window and navigates to the next change`, async () => {
@@ -531,7 +536,7 @@ describe(`virtualization`, () => {
         diff_line(idx + 1, `new ${idx}`),
       ),
     )
-    await mount_diff(rows_result(rows, { oldLineCount: 100, newLineCount: 100 }), {
+    await mount_diff(rows_result(rows, { old_line_count: 100, new_line_count: 100 }), {
       options: { ...DEFAULT_OPTIONS, layout: `unified` },
     })
     const scroller = query_element<HTMLDivElement>(`.diff-scroll`)

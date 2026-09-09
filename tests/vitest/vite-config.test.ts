@@ -46,3 +46,17 @@ test(`a returned config owns its nested state`, () => {
 
   expect(make_config()).toEqual(before)
 })
+
+const stateful_sources = import.meta.glob(`/src/lib/*.svelte.ts`)
+test.each([
+  [`clipboard`, () => import(`svelte-widgets/clipboard`)],
+  [`dialogs`, () => import(`svelte-widgets/dialogs`)],
+  [`find-in-page`, () => import(`svelte-widgets/find-in-page`)],
+  [`fullscreen`, () => import(`svelte-widgets/fullscreen`)],
+  [`toast-queue`, () => import(`svelte-widgets/toast-queue`)],
+  [`theme`, () => import(`svelte-widgets/theme`)],
+  [`roving-focus`, () => import(`svelte-widgets/roving-focus`)],
+  [`canvas`, () => import(`svelte-widgets/canvas`)],
+] as const)(`public %s imports share the live source module`, async (name, load) => {
+  expect(await load()).toBe(await stateful_sources[`/src/lib/${name}.svelte.ts`]())
+})

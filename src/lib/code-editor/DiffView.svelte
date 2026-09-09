@@ -122,10 +122,10 @@
   const context_lines = $derived(options.context_lines)
   $effect(() => {
     void load_diff({
-      oldText: old_text,
-      newText: new_text,
+      old_text,
+      new_text,
       filename,
-      contextLines: context_lines,
+      context_lines,
     })
     return () => void load_generation++
   })
@@ -137,7 +137,7 @@
 
   const plain_line = (lines: string[], line_no: number): DiffLine | null => {
     const text = lines[line_no - 1]
-    return text === undefined ? null : { lineNo: line_no, text, spans: [] }
+    return text === undefined ? null : { line_no, text, spans: [] }
   }
 
   const display_rows_of = (
@@ -166,8 +166,8 @@
             row_kind,
             side,
             line,
-            old_no: side === `new` ? null : (old?.lineNo ?? null),
-            new_no: side === `old` ? null : (next?.lineNo ?? null),
+            old_no: side === `new` ? null : (old?.line_no ?? null),
+            new_no: side === `old` ? null : (next?.line_no ?? null),
           })
       }
     }
@@ -185,25 +185,25 @@
     }
 
     result.hunks.forEach((hunk, hunk_idx) => {
-      // 1-based starts: the elided run is [start - skippedBefore, start).
-      const skipped = hunk.skippedBefore
-      push_gap(hunk_idx, skipped, [hunk.oldStart - skipped, hunk.newStart - skipped])
+      // 1-based starts: the elided run is [start - skipped_before, start).
+      const skipped = hunk.skipped_before
+      push_gap(hunk_idx, skipped, [hunk.old_start - skipped, hunk.new_start - skipped])
       for (const row of hunk.rows) push_row(row)
     })
 
     if (result.hunks.length === 0) return rows
 
-    // The trailing elided run is unchanged: the last `skippedAfter` lines of a side.
-    const { skippedAfter: skipped } = result
+    // The trailing elided run is unchanged: the last `skipped_after` lines of a side.
+    const { skipped_after: skipped } = result
     push_gap(result.hunks.length, skipped, [
-      result.oldLineCount - skipped + 1,
-      result.newLineCount - skipped + 1,
+      result.old_line_count - skipped + 1,
+      result.new_line_count - skipped + 1,
     ])
 
     const missing: Side[] = []
     // Solo has no old column to mark, and the side it would mark is empty anyway.
-    if (current_layout !== `solo` && !result.oldEndsWithNewline) missing.push(`old`)
-    if (!result.newEndsWithNewline) missing.push(`new`)
+    if (current_layout !== `solo` && !result.old_ends_with_newline) missing.push(`old`)
+    if (!result.new_ends_with_newline) missing.push(`new`)
     if (missing.length === 0) return rows
     // Only side-by-side has two columns to mark at once.
     if (current_layout !== `side-by-side`) {
@@ -317,7 +317,7 @@
 {/snippet}
 
 {#snippet pair_side(line: DiffLine | null, row_kind: RowKind, side: Side)}
-  {@render gutter_cell(line?.lineNo ?? null, gutter_tone(line, row_kind, side))}
+  {@render gutter_cell(line?.line_no ?? null, gutter_tone(line, row_kind, side))}
   {@render code_cell(line, cell_class(row_kind === `equal` ? `equal` : side), side)}
 {/snippet}
 
@@ -335,8 +335,8 @@
   class={[`diff-view`, rest.class]}
   style:--editor-font-size={`${options.font_size}px`}
   style:--editor-line-height={`${row_height}px`}
-  style:--diff-old-gutter={`${String(diff?.oldLineCount ?? 1).length + 2}ch`}
-  style:--diff-new-gutter={`${String(diff?.newLineCount ?? 1).length + 2}ch`}
+  style:--diff-old-gutter={`${String(diff?.old_line_count ?? 1).length + 2}ch`}
+  style:--diff-new-gutter={`${String(diff?.new_line_count ?? 1).length + 2}ch`}
 >
   {#if !single_col}
     <header class="panel-header">
@@ -374,7 +374,7 @@
     <div class="diff-empty" data-empty>
       <strong>{single_col ? msg.empty_file : msg.no_changes}</strong>
       {#if !single_col}
-        <span>{msg.identical(old_label, new_label, diff.newLineCount)}</span>
+        <span>{msg.identical(old_label, new_label, diff.new_line_count)}</span>
       {/if}
     </div>
   {:else}

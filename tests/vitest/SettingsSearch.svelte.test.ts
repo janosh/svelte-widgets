@@ -1,7 +1,7 @@
 import { SettingsSearch } from '$lib'
 import type { SettingsSearchLabels } from '$lib/labels'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 
@@ -50,6 +50,35 @@ describe(`SettingsSearch`, () => {
     expect(camera.open).toBe(true)
     expect(filtered_out(setting_row(`rotation_damping`))).toBe(false)
     expect(filtered_out(setting_row(`zoom_speed`))).toBe(true)
+  })
+
+  test(`reuses its search index and refreshes changed text, metadata and rows`, async () => {
+    const { input } = await mounted_search()
+    await set_query(input, `radius`)
+    const root = doc_query(`.settings-rows`)
+    const discover = vi.spyOn(root, `querySelectorAll`)
+    await set_query(input, `damping`)
+    expect(discover).not.toHaveBeenCalled()
+    discover.mockRestore()
+
+    const row = setting_row(`atom_radius`)
+    row.textContent = `Damping range`
+    await vi.waitFor(() => expect(filtered_out(row)).toBe(false))
+    row.textContent = `Bond width`
+    await vi.waitFor(() => expect(filtered_out(row)).toBe(true))
+    row.dataset.label = `Damping strength`
+    await vi.waitFor(() => expect(filtered_out(row)).toBe(false))
+
+    const added = document.createElement(`div`)
+    added.textContent = `Other curve`
+    const rediscover = vi.spyOn(root, `querySelectorAll`)
+    row.parentElement?.append(added)
+    await vi.waitFor(() => expect(rediscover).toHaveBeenCalled())
+    rediscover.mockRestore()
+    added.className = `setting`
+    await vi.waitFor(() => expect(filtered_out(added)).toBe(true))
+    added.textContent = `Damping curve`
+    await vi.waitFor(() => expect(filtered_out(added)).toBe(false))
   })
 
   test(`Escape clears filtering and restores each group's prior open state`, async () => {

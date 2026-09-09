@@ -1,12 +1,35 @@
 import { expect, test } from '@playwright/test'
 
-test.use({ viewport: { width: 390, height: 780 } })
+test.use({ baseURL: `http://localhost:3005`, viewport: { width: 390, height: 780 } })
 test.beforeEach(({ page }) => page.goto(`/extras`, { waitUntil: `networkidle` }))
 
 // The title's rule cancels the panel's inline padding, a custom property that substitutes as
 // text: in `em` it resolved against the h2's larger font-size and overhung the panel.
 test(`mobile ToC title rule spans the panel without overflowing it`, async ({ page }) => {
-  await page.locator(`aside.toc.mobile > button`).first().click()
+  const toggle = page.locator(`aside.toc.mobile > button`).first()
+  const burger = page.locator(`nav.mobile > button.burger`).first()
+  const button_geometry = (button: HTMLElement) => {
+    const { width, height } = button.getBoundingClientRect()
+    const style = getComputedStyle(button)
+    return { width, height, radius: style.borderRadius, padding: style.padding }
+  }
+  const toc_box = await toggle.evaluate(button_geometry)
+  const nav_box = await burger.evaluate(button_geometry)
+  expect(toc_box.width).toBeCloseTo(nav_box.width, 1)
+  expect(toc_box.height).toBeCloseTo(nav_box.height, 1)
+  expect(toc_box.radius).toBe(nav_box.radius)
+  expect(toc_box.padding).toBe(nav_box.padding)
+  expect(toc_box.height / toc_box.width).toBeGreaterThan(0.85)
+  expect(toc_box.height / toc_box.width).toBeLessThan(0.9)
+  const bar_gap = await burger
+    .locator(`span`)
+    .evaluateAll(
+      (bars) =>
+        bars[1].getBoundingClientRect().top - bars[0].getBoundingClientRect().bottom,
+    )
+  expect(bar_gap).toBeLessThan(4)
+  await toggle.click()
+  expect(await toggle.evaluate(button_geometry)).toEqual(toc_box)
   const panel = page.locator(`aside.toc.mobile > nav`).first()
   await expect(panel.locator(`.toc-title`)).toBeVisible()
 
@@ -74,7 +97,7 @@ test(`active ToC row keeps its accent under the pointer`, async ({ page }) => {
     .evaluate((ol) => getComputedStyle(ol).color)
   expect(idle, `active row carries no accent to lose`).not.toBe(list_color)
 
-  // hover inside the poll: activeHeading can still move to another row just after the scroll,
+  // hover inside the poll: active_heading can still move to another row just after the scroll,
   // which leaves the pointer over the previous one and the locator pointing at a third
   await expect(async () => {
     await active.hover()

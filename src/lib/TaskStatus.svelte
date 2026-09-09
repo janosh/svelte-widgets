@@ -8,8 +8,8 @@
     label,
     value,
     max = 100,
-    oncancel,
-    onretry,
+    on_cancel,
+    on_retry,
     children,
     cancel_label = `Cancel`,
     retry_label = `Retry`,
@@ -19,8 +19,8 @@
     label: string
     value?: number
     max?: number
-    oncancel?: () => void
-    onretry?: () => void
+    on_cancel?: () => void
+    on_retry?: () => void
     cancel_label?: string
     retry_label?: string
     children?: Snippet
@@ -31,10 +31,10 @@
   <div role="status" aria-live="polite">{label}</div>
   {#if state === `running`}<Progress {value} {max} {label} />{/if}
   {@render children?.()}
-  {#if state === `running` && oncancel}
-    <button type="button" onclick={oncancel}>{cancel_label}</button>
-  {:else if (state === `error` || state === `cancelled`) && onretry}
-    <button type="button" onclick={onretry}>{retry_label}</button>
+  {#if state === `running` && on_cancel}
+    <button type="button" onclick={on_cancel}>{cancel_label}</button>
+  {:else if (state === `error` || state === `cancelled`) && on_retry}
+    <button type="button" onclick={on_retry}>{retry_label}</button>
   {/if}
 </div>
 

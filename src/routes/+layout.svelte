@@ -1,9 +1,8 @@
 <script lang="ts">
   import { browser } from '$app/environment'
   import { afterNavigate, goto } from '$app/navigation'
-  import { asset, resolve } from '$app/paths'
+  import { asset } from '$app/paths'
   import { page } from '$app/state'
-  import type { Pathname } from '$app/types'
   import { CopyButton, GitHubCorner, PageSearch, Toc } from '$lib'
   import { slug_to_title } from '$lib/utils'
   import { flash_toc_target } from '$lib/toc-utils'
@@ -11,13 +10,14 @@
   import { apply_theme_mode, resolve_theme_mode } from '$lib/theme.svelte'
   import { repository } from '$root/package.json'
   import { DemoNav, Footer } from '$site'
+  import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
   import { link_source_mentions } from '$site/source-links'
   import favicon from '$site/favicon.svg'
   import type { Snippet } from 'svelte'
   import { slide } from 'svelte/transition'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
   import '../app.css'
-  import { demo_labels, routes } from './(demos)'
+  import { demo_pages, demo_title } from './(demos)'
 
   let { children }: { children?: Snippet<[]> } = $props()
   let page_search_query = $state(``)
@@ -50,12 +50,9 @@
     return () => observer.disconnect()
   }
 
-  // resolve's arg type distributes over the Pathname union, so a dynamic route can't
-  // match a single arm. Same widening as DemoNav; every demo route is param-free.
-  const resolve_path = resolve as (path: Pathname) => string
-  const actions = routes.map(({ route }) => ({
+  const actions = demo_pages.map((route) => ({
     id: route,
-    label: demo_labels[route] ?? route,
+    label: demo_title(route),
     keywords: [route],
     action: () => goto(resolve_path(route)),
   }))
@@ -66,7 +63,8 @@
       .findLast(Boolean)
       ?.replace(/\.html$/, ``)
     if (is_home || !route_slug) return `Svelte Widgets`
-    return demo_labels[`/${route_slug}`] ?? slug_to_title(route_slug)
+    const route = current_demo_route()
+    return route ? demo_title(route) : slug_to_title(route_slug)
   })
 
   // source file behind each route, so the footer's edit link hits the page you're on
@@ -194,9 +192,9 @@
     {/each}
   {/snippet}
   <Toc
-    headingSelector="main > :where(h2, h3)"
+    heading_selector="main > :where(h2, h3)"
     breakpoint={1100}
-    minItems={5}
+    min_items={5}
     bind:open={toc_open}
     footer={reference_links.length ? reference_navigation : undefined}
   />

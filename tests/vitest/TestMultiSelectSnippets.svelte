@@ -29,35 +29,42 @@
   </MultiSelect>
 {:else}
   <MultiSelect {...rest}>
-    {#snippet expandIcon({ open, disabled })}
+    {#snippet expand_icon({ open, disabled })}
       <span class="expand-snippet" data-open={open} data-disabled={disabled}>▼</span>
     {/snippet}
-    {#snippet removeIcon({ option, isRemoveAll })}
-      <span class="remove-snippet" data-option={option} data-is-remove-all={isRemoveAll}>
+    {#snippet remove_icon({ option, is_remove_all })}
+      <span
+        class="remove-snippet"
+        data-option={option}
+        data-is-remove-all={is_remove_all}
+      >
         ✕
       </span>
     {/snippet}
-    {#snippet beforeInput({ searchText })}
-      <span class="before-input-snippet" data-search-text={searchText}>before</span>
+    {#snippet before_input({ search_text })}
+      <span class="before-input-snippet" data-search-text={search_text}>before</span>
     {/snippet}
-    {#snippet afterInput({ searchText })}
-      <span class="after-input-snippet" data-search-text={searchText}>after</span>
+    {#snippet after_input({ search_text })}
+      <span class="after-input-snippet" data-search-text={search_text}>after</span>
     {/snippet}
-    {#snippet selectedItem({ option, idx })}
+    {#snippet selected_item({ option, idx })}
       <span class="selected-item-snippet" data-idx={idx}>{option}</span>
     {/snippet}
-    {#snippet userMsg({ searchText, msgType, msg })}
-      <span class="user-msg-snippet" data-search-text={searchText} data-msg-type={msgType}
+    {#snippet user_msg({ search_text, msg_type, msg })}
+      <span
+        class="user-msg-snippet"
+        data-search-text={search_text}
+        data-msg-type={msg_type}
         >{msg}
       </span>
     {/snippet}
     {#snippet spinner()}
       <span class="spinner-snippet">loading</span>
     {/snippet}
-    {#snippet disabledIcon()}
+    {#snippet disabled_icon()}
       <span class="disabled-icon-snippet">disabled</span>
     {/snippet}
-    {#snippet groupHeader({ group, options, collapsed })}
+    {#snippet group_header({ group, options, collapsed })}
       <span
         class="group-header-snippet"
         data-group={group}

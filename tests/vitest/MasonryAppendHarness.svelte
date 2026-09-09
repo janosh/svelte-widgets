@@ -27,8 +27,8 @@
 <Masonry
   {items}
   animate={false}
-  calcCols={() => n_cols}
-  idKey="id"
+  calc_cols={() => n_cols}
+  id_key="id"
   {order}
   {virtualize}
   height={300}

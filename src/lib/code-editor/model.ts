@@ -22,18 +22,33 @@ const priority_for = (sequence: number): number => {
   mixed = Math.imul(mixed ^ (mixed >>> 15), 0x735a2d97)
   return (mixed ^ (mixed >>> 15)) >>> 0
 }
-const text_breaks = (text: string): number => text.match(/\n/g)?.length ?? 0
 class RopeNode {
   readonly priority = priority_for(++node_sequence)
   left: RopeNode | null = null
   right: RopeNode | null = null
   length: number
   readonly own_breaks: number
+  private cached_offsets: number[] | undefined
   breaks: number
   constructor(readonly text: string) {
     this.length = text.length
-    this.own_breaks = text_breaks(text)
+    this.own_breaks = text.match(/\n/g)?.length ?? 0
     this.breaks = this.own_breaks
+  }
+  // Most edited chunks are replaced before anyone asks for a line in them. Build the
+  // offset index only on lookup, then share it across all viewport and cursor queries.
+  get newline_offsets(): readonly number[] {
+    if (!this.cached_offsets) {
+      const offsets: number[] = []
+      for (
+        let offset = this.text.indexOf(`\n`);
+        offset !== -1;
+        offset = this.text.indexOf(`\n`, offset + 1)
+      )
+        offsets.push(offset)
+      this.cached_offsets = offsets
+    }
+    return this.cached_offsets
   }
 }
 const rope_length = (node: RopeNode | null): number => node?.length ?? 0
@@ -109,8 +124,17 @@ const breaks_before = (root: RopeNode | null, offset: number): number => {
     }
     count += rope_breaks(node.left)
     remaining -= left_length
-    if (remaining <= node.text.length)
-      return count + text_breaks(node.text.slice(0, remaining))
+    if (remaining <= node.text.length) {
+      // Lower bound: a newline at the cursor still belongs to the preceding line.
+      let low = 0
+      let high = node.own_breaks
+      while (low < high) {
+        const mid = (low + high) >>> 1
+        if (node.newline_offsets[mid] < remaining) low = mid + 1
+        else high = mid
+      }
+      return count + low
+    }
     count += node.own_breaks
     remaining -= node.text.length
     node = node.right
@@ -131,10 +155,7 @@ const break_offset = (root: RopeNode | null, target: number): number => {
     remaining -= left_count
     base += left_length
     if (remaining < node.own_breaks) {
-      let offset = -1
-      for (let count = 0; count <= remaining; count++)
-        offset = node.text.indexOf(`\n`, offset + 1)
-      return base + offset
+      return base + node.newline_offsets[remaining]
     }
     remaining -= node.own_breaks
     base += node.text.length

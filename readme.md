@@ -34,11 +34,11 @@ Every component is a named export from the package root and has a direct subpath
 | `DraggablePane`    | Floating panel you can drag by its header, resize and reset to its anchor                 | [docs](https://svelte-widgets.janosh.dev/draggable-pane)               |
 | `NumberRangeInput` | Paired number and range inputs with explicit min, max, and step                           | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
 | `RangeSlider`      | Two-handle interval slider with numeric fields, step snapping, RTL, and keyboard controls | [docs](https://svelte-widgets.janosh.dev/range-slider)                 |
-| `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                           | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                              | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| `FileInput`        | File picker and drop zone with validation, cancellation and retry                         | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| `TreeView`         | Keyboard-navigable tree with lazy loading and custom node rendering                       | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| `JsonTree`         | Searchable JSON inspector with editing, copying and diffs                                 | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                           | [docs](https://svelte-widgets.janosh.dev/split-pane)                   |
+| `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                              | [docs](https://svelte-widgets.janosh.dev/virtual-list)                 |
+| `FileInput`        | File picker and drop zone with validation, cancellation and retry                         | [docs](https://svelte-widgets.janosh.dev/file-input)                   |
+| `TreeView`         | Keyboard-navigable tree with lazy loading and custom node rendering                       | [docs](https://svelte-widgets.janosh.dev/tree-view)                    |
+| `JsonTree`         | Searchable JSON inspector with editing, copying and diffs                                 | [docs](https://svelte-widgets.janosh.dev/json-tree)                    |
 | `Progress`         | Accessible determinate or indeterminate progress                                          | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `TaskStatus`       | Task progress and errors with caller-owned cancellation and retry                         | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `SettingsGroup`    | Collapsible group for organizing related settings sections                                | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |

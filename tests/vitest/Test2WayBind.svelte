@@ -3,16 +3,16 @@
   import type { Test2WayBindProps } from './index'
 
   let {
-    activeIndex = null,
-    activeOption = null,
-    maxSelect = $bindable(null),
+    active_index = null,
+    active_option = null,
+    max_select = $bindable(null),
     options = $bindable(),
     selected = $bindable(
       options
         ?.filter((opt) => opt instanceof Object && opt?.preselected)
-        .slice(0, maxSelect ?? undefined) ?? [],
+        .slice(0, max_select ?? undefined) ?? [],
     ),
-    searchText = $bindable(``),
+    search_text = $bindable(``),
     value = $bindable(null),
     breakpoint = $bindable(800),
     open = $bindable(false),
@@ -26,16 +26,16 @@
   }: Test2WayBindProps = $props()
 
   $effect.pre(() => {
-    onActiveIndexChanged?.(activeIndex)
+    onActiveIndexChanged?.(active_index)
   })
   $effect.pre(() => {
-    onActiveOptionChanged?.(activeOption)
+    onActiveOptionChanged?.(active_option)
   })
   $effect.pre(() => {
     onOptionsChanged?.(options)
   })
   $effect.pre(() => {
-    onSearchTextChanged?.(searchText)
+    onSearchTextChanged?.(search_text)
   })
   $effect.pre(() => {
     onSelectedChanged?.(selected)
@@ -44,15 +44,15 @@
     onValueChanged?.(value)
   })
 
-  export { breakpoint, maxSelect, searchText, selected, value }
+  export { breakpoint, max_select, search_text, selected, value }
 </script>
 
 <MultiSelect
-  bind:maxSelect
-  bind:activeIndex
-  bind:activeOption
+  bind:max_select
+  bind:active_index
+  bind:active_option
   bind:options
-  bind:searchText
+  bind:search_text
   bind:selected
   bind:value
   bind:open

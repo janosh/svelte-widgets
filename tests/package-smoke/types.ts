@@ -1,5 +1,9 @@
 import {
   type ActionMenu,
+  type MultiSelectProps,
+  type LoadOptionsResult,
+  type Nav,
+  type RangeSlider,
   type CommandMenu,
   listen_theme_storage,
   type CmdAction,
@@ -36,9 +40,34 @@ export { yaml_plugin } from 'svelte-widgets/yaml'
 
 export { check_document as check_markdown_document } from 'svelte-widgets/markdown/check'
 
+// Custom callbacks and payloads use snake_case; DOM handlers keep native names.
+export const multiselect_api: MultiSelectProps<string> = {
+  options: [`Alpha`],
+  search_text: `Al`,
+  max_select: 2,
+  on_change: ({ type }) => type,
+  on_search: ({ search_text, matching_options }) => [search_text, matching_options],
+  oninput: (event) => event.currentTarget,
+  onchange: (event) => event.currentTarget,
+}
+export const loaded_options: LoadOptionsResult<string> = {
+  options: [`Alpha`],
+  has_more: false,
+}
+// @ts-expect-error The old custom prop is removed, not retained as an alias.
+export const removed_search_prop: MultiSelectProps<string> = { searchText: `Al` }
+// @ts-expect-error Custom callback names need the on_ prefix.
+export const removed_add_callback: MultiSelectProps<string> = { onadd: () => {} }
+export const nav_callback: ComponentProps<typeof Nav>[`on_navigate`] = ({ href }) =>
+  href ? undefined : false
+export const slider_callbacks: ComponentProps<typeof RangeSlider> = {
+  on_input: ([lower, upper]) => lower + upper,
+  oninput: (event) => event.currentTarget,
+}
+
 // The published callback must preserve the consumer's custom action fields.
-export const onexecute: NonNullable<
-  ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`onexecute`]
+export const on_execute: NonNullable<
+  ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`on_execute`]
 > = ({ action }) => action.route.toUpperCase()
 
 type MenuProps = ComponentProps<typeof ActionMenu>

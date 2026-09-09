@@ -40,6 +40,8 @@ Install Chromium once with `npx playwright install chromium` before running brow
 
 New features should include corresponding tests. Bug fixes should include a test that fails under the old code and passes with the change. PRs without tests are accepted when assistance is needed, but may take longer to merge.
 
+Demo pages live in `src/routes/(demos)` under the same categories as the navigation: `(inputs)`, `(navigation)`, `(overlays)`, `(display)`, `(authoring)`, and `(attachments)`. Put new pages directly in the appropriate category, for example `(inputs)/range-slider/+page.md`. The category folders do not appear in URLs. Navigation, search, and previous/next links discover pages automatically; only custom display labels and category order live in `(demos)/index.ts`. Pages in `(hide)` stay outside those menus.
+
 ## ✅ CI checks
 
 The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.yml) ([workflow code](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/ci.yml)) runs these jobs:

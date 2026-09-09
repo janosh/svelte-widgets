@@ -254,13 +254,13 @@ test(`handles action selection and execution`, async () => {
     label,
     action: vi.fn(() => pending.promise),
   }))
-  const onexecute = vi.fn()
+  const on_execute = vi.fn()
   const props = $state({
     open: true,
     actions: actions_with_spies,
-    activeIndex: null as number | null,
-    searchText: `action`,
-    onexecute,
+    active_index: null as number | null,
+    search_text: `action`,
+    on_execute,
   })
   mount_menu(props)
   await tick()
@@ -275,41 +275,41 @@ test(`handles action selection and execution`, async () => {
   expect(actions_with_spies[1].action).toHaveBeenCalledExactlyOnceWith(`action 2`)
   expect(actions_with_spies[0].action).not.toHaveBeenCalled()
   expect(actions_with_spies[2].action).not.toHaveBeenCalled()
-  expect(onexecute).toHaveBeenCalledExactlyOnceWith({ action: actions_with_spies[1] })
+  expect(on_execute).toHaveBeenCalledExactlyOnceWith({ action: actions_with_spies[1] })
   expect(actions_with_spies[1].action.mock.invocationCallOrder[0]).toBeLessThan(
-    onexecute.mock.invocationCallOrder[0],
+    on_execute.mock.invocationCallOrder[0],
   )
   expect(props.open).toBe(false)
-  expect(props.activeIndex).toBeNull()
-  expect(props.searchText).toBe(``)
+  expect(props.active_index).toBeNull()
+  expect(props.search_text).toBe(``)
   pending.resolve(undefined)
 })
 
 test(`keeps command groups but excludes selection state, chips and bulk controls`, async () => {
   expectTypeOf<keyof ComponentProps<typeof CommandMenu>>()
     .extract<
-      | `allowUserOptions`
-      | `groupSelectAll`
-      | `selectAllOption`
-      | `rangeSelect`
+      | `allow_user_options`
+      | `group_select_all`
+      | `select_all_option`
+      | `range_select`
       | `parse_paste`
       | `selected`
       | `value`
-      | `maxSelect`
-      | `minSelect`
-      | `selectedDisplay`
-      | `selectedItem`
-      | `keepSelectedInDropdown`
-      | `maxVisibleChips`
-      | `selectedOptionsDraggable`
-      | `onadd`
-      | `onchange`
-      | `onremove`
+      | `max_select`
+      | `min_select`
+      | `selected_display`
+      | `selected_item`
+      | `keep_selected_in_dropdown`
+      | `max_visible_chips`
+      | `selected_options_draggable`
+      | `on_add`
+      | `on_change`
+      | `on_remove`
     >()
     .toEqualTypeOf<never>()
   const action = vi.fn()
   const selection_callback = vi.fn()
-  const onexecute = vi.fn()
+  const on_execute = vi.fn()
   const actions = [
     { id: `existing`, label: `Existing`, group: `Commands`, preselected: true, action },
     { id: `other`, label: `Other`, group: `Commands`, action },
@@ -320,19 +320,19 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
     actions,
     selected: actions,
     value: actions,
-    maxSelect: 0,
-    minSelect: 2,
-    selectedDisplay: `input`,
-    keepSelectedInDropdown: `checkboxes`,
-    selectedOptionsDraggable: true,
-    maxVisibleChips: -1,
-    allowUserOptions: true,
-    groupSelectAll: true,
-    selectAllOption: true,
-    onadd: selection_callback,
-    onchange: selection_callback,
-    onremove: selection_callback,
-    onexecute,
+    max_select: 0,
+    min_select: 2,
+    selected_display: `input`,
+    keep_selected_in_dropdown: `checkboxes`,
+    selected_options_draggable: true,
+    max_visible_chips: -1,
+    allow_user_options: true,
+    group_select_all: true,
+    select_all_option: true,
+    on_add: selection_callback,
+    on_change: selection_callback,
+    on_remove: selection_callback,
+    on_execute,
   })
   mount_menu(props)
   await tick()
@@ -357,7 +357,7 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
     await tick()
     expect(action).toHaveBeenCalledTimes(execution_count)
     expect(props.open).toBe(false)
-    expect(onexecute).toHaveBeenLastCalledWith({ action: actions[0] })
+    expect(on_execute).toHaveBeenLastCalledWith({ action: actions[0] })
     props.open = true
     await tick()
     expect(option_labels()).toEqual([`Existing`, `Other`])
@@ -456,7 +456,7 @@ test(`applies custom styles and props correctly`, async () => {
     class: custom_class,
     placeholder: custom_placeholder,
     dialog_props: { style: custom_dialog_style },
-    liOptionStyle: custom_li_style,
+    li_option_style: custom_li_style,
   })
 
   mount_menu(props)
@@ -481,9 +481,9 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
   const on_close = vi.fn()
   const props = $state({
     open: true,
-    activeIndex: 1,
-    activeOption: mock_actions[1],
-    searchText: `action`,
+    active_index: 1,
+    active_option: mock_actions[1],
+    search_text: `action`,
     actions: mock_actions,
     dialog_props: { class: `custom-dialog`, onclose: on_close },
   })
@@ -500,9 +500,9 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
   expect(on_close).toHaveBeenCalledOnce()
   expect(props).toMatchObject({
     open: false,
-    activeIndex: null,
-    activeOption: null,
-    searchText: ``,
+    active_index: null,
+    active_option: null,
+    search_text: ``,
   })
 })
 
@@ -611,7 +611,7 @@ test(`selects the first enabled action and preserves pointer selection across gr
   const props = $state({
     open: true,
     actions,
-    activeIndex: null as number | null,
+    active_index: null as number | null,
   })
   mount_menu(props)
   await tick()
@@ -628,14 +628,14 @@ test(`selects the first enabled action and preserves pointer selection across gr
   const renamed_beta = { ...actions[2], label: `Renamed Beta` }
   props.actions = [actions[1], renamed_beta, actions[3], actions[0]]
   await tick()
-  expect(props.activeIndex).toBe(2)
+  expect(props.active_index).toBe(2)
   expect(doc_query(`li.active`).textContent).toContain(`Renamed Beta`)
 
-  props.activeIndex = 3
+  props.active_index = 3
   await tick()
   props.actions = [renamed_beta, actions[0], actions[1], actions[3]]
   await tick()
-  expect(props.activeIndex).toBe(1)
+  expect(props.active_index).toBe(1)
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 
   await type_search(`alpha`)
@@ -649,18 +649,18 @@ test(`auto-active considers only visible enabled actions`, async () => {
       { id: `Disabled`, label: `Disabled`, disabled: true, action: vi.fn() },
       { id: `Enabled`, label: `Enabled`, action: vi.fn() },
     ],
-    activeIndex: 0,
-    maxOptions: 1,
+    active_index: 0,
+    max_options: 1,
   })
   mount_menu(props)
   await tick()
 
-  expect(props.activeIndex).toBeNull()
+  expect(props.active_index).toBeNull()
   expect(document.querySelector(`li.active`)).toBeNull()
 
-  props.maxOptions = 2
+  props.max_options = 2
   await tick()
-  expect(props.activeIndex).toBe(1)
+  expect(props.active_index).toBe(1)
   expect(doc_query(`li.active`).textContent).toContain(`Enabled`)
 
   props.actions = [
@@ -668,7 +668,7 @@ test(`auto-active considers only visible enabled actions`, async () => {
     { ...props.actions[1], disabled: true },
   ]
   await tick()
-  expect(props.activeIndex).toBe(0)
+  expect(props.active_index).toBe(0)
 })
 
 test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`, async () => {
@@ -683,18 +683,18 @@ test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`
   const props = $state({
     open: true,
     actions: [first_action, second_action, third_action],
-    activeIndex: 1,
+    active_index: 1,
   })
   mount_menu(props)
   await tick()
 
-  expect(props.activeIndex).toBe(1)
+  expect(props.active_index).toBe(1)
   const active_option = doc_query<HTMLLIElement>(`li.active`)
 
   props.actions = [first_action, third_action, second_action]
   await tick()
 
-  expect(props.activeIndex).toBe(2)
+  expect(props.active_index).toBe(2)
   expect(doc_query(`li.active`)).toBe(active_option)
 
   const renamed_action = { ...second_action, label: `Renamed duplicate` }
@@ -709,7 +709,7 @@ test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`
     { ...renamed_action, action: rebuilt_action },
   ]
   await tick()
-  expect(props.activeIndex).toBe(2)
+  expect(props.active_index).toBe(2)
 
   menu_input().dispatchEvent(
     new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
@@ -745,26 +745,26 @@ test.each(
     const error = vi.spyOn(console, `error`).mockImplementation(() => {})
     const fetch = vi.fn(async () => ({
       options: [{ id, label: `Remote`, action: vi.fn() }],
-      hasMore: paginated,
+      has_more: paginated,
     }))
     const props = $state({
       open: true,
       actions: paginated ? [] : [{ id: `1`, label: `Static`, action: vi.fn() }],
-      searchText: `remote`,
-      loadOptions: { fetch, batchSize: 1, debounceMs: 0 },
+      search_text: `remote`,
+      load_options: { fetch, batch_size: 1, debounce_ms: 0 },
     })
     mount_menu(props)
     if (paginated) {
       await vi.waitFor(() => expect(option_labels()).toEqual([`Remote`]))
-      props.loadOptions.batchSize = 2
-      props.loadOptions.debounceMs = 10
+      props.load_options.batch_size = 2
+      props.load_options.debounce_ms = 10
       await tick()
       expect(fetch).toHaveBeenCalledOnce()
       doc_query(`ul.options`).dispatchEvent(new Event(`scroll`))
     }
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith(
-        `MultiSelect: loadOptions error:`,
+        `MultiSelect: load_options error:`,
         expect.objectContaining({ message: `Duplicate CommandMenu action id: 1` }),
       ),
     )
@@ -772,7 +772,7 @@ test.each(
     expect(option_labels()).toEqual(paginated ? [`Remote`] : [])
     fetch.mockResolvedValueOnce({
       options: [{ id: `2`, label: `Retry result`, action: vi.fn() }],
-      hasMore: false,
+      has_more: false,
     })
     doc_query<HTMLButtonElement>(`[role='alert'] + button`).click()
     await vi.waitFor(() => expect(option_labels()).toContain(`Retry result`))
@@ -998,13 +998,13 @@ describe(`PageSearch`, () => {
   )
 
   test(`keeps the loader stable while using current callback props`, async () => {
-    const [first_navigate, second_navigate, onexecute] = [vi.fn(), vi.fn(), vi.fn()]
+    const [first_navigate, second_navigate, on_execute] = [vi.fn(), vi.fn(), vi.fn()]
     const search = vi.fn(async () => make_pagefind_response(`Fresh`))
     const props = $state({
       ...base_props,
       load_pagefind: async () => ({ search }),
       navigate: first_navigate,
-      onexecute,
+      on_execute,
       strip_html_suffix: false,
       transform_url: (url: string) => `/old${url}`,
     })
@@ -1018,7 +1018,7 @@ describe(`PageSearch`, () => {
 
     expect(search).toHaveBeenCalledOnce()
     doc_query<HTMLLIElement>(`li[role='option']`).click()
-    expect(onexecute.mock.calls[0][0].action.id).toBe(`pagefind:Fresh:0:/fresh.html`)
+    expect(on_execute.mock.calls[0][0].action.id).toBe(`pagefind:Fresh:0:/fresh.html`)
     expect(first_navigate).not.toHaveBeenCalled()
     expect(second_navigate).toHaveBeenCalledExactlyOnceWith(`/new/fresh`, {
       query: `fresh`,
@@ -1231,8 +1231,8 @@ test.each([
       disabled,
     },
   ]
-  const onexecute = vi.fn()
-  mount_menu({ actions, open, global_shortcuts, onexecute })
+  const on_execute = vi.fn()
+  mount_menu({ actions, open, global_shortcuts, on_execute })
   await tick()
 
   globalThis.dispatchEvent(
@@ -1246,10 +1246,10 @@ test.each([
   await tick()
 
   expect(spy).toHaveBeenCalledTimes(calls)
-  expect(onexecute).toHaveBeenCalledTimes(calls)
+  expect(on_execute).toHaveBeenCalledTimes(calls)
   if (calls > 0) {
     expect(spy).toHaveBeenCalledWith(`save`)
-    expect(onexecute).toHaveBeenCalledWith({ action: actions[0] })
+    expect(on_execute).toHaveBeenCalledWith({ action: actions[0] })
   }
 })
 

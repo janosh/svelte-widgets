@@ -21,7 +21,7 @@ const mock_console_error = () =>
 
 // Empty options while loading, disabled, or allowing user options, and the base error
 // case, all live in the `accepts empty options in %s mode` matrix in MultiSelect.svelte.test.ts
-// deferred loadOptions fetch: tests decide exactly when each request settles
+// deferred load_options fetch: tests decide exactly when each request settles
 type LoadResult = LoadOptionsResult<string>
 
 function deferred_load() {
@@ -41,7 +41,7 @@ async function mount_deferred_open() {
   const load = deferred_load()
   vi.useFakeTimers()
   mount_multiselect({
-    loadOptions: { fetch: load.fn, debounceMs: 10 },
+    load_options: { fetch: load.fn, debounce_ms: 10 },
     open: true,
   })
   await vi.runAllTimersAsync()
@@ -53,7 +53,7 @@ function reopen() {
 }
 
 // Dynamic options loading tests (https://github.com/janosh/svelte-widgets/discussions/342)
-describe(`loadOptions feature`, () => {
+describe(`load_options feature`, () => {
   const mock_data = Array.from({ length: 100 }, (_, idx) => `Option ${idx + 1}`)
 
   async function flush_ticks(count = 4) {
@@ -70,14 +70,14 @@ describe(`loadOptions feature`, () => {
   test.each([
     [`function shorthand`, null, 50],
     [`default batch on open`, {}, 50],
-    [`batchSize config`, { batchSize: 25 }, 25],
-    [`minimum batch and debounce`, { batchSize: 1, debounceMs: 0 }, 1],
-    [`fractional debounce`, { debounceMs: 0.5 }, 50],
-    [`onOpen=false skips open load`, { onOpen: false }, null],
-  ])(`loadOptions initial fetch: %s`, async (_label, config_extra, limit) => {
-    const load_options = vi.fn(async () => ({ options: [], hasMore: false }))
+    [`batch_size config`, { batch_size: 25 }, 25],
+    [`minimum batch and debounce`, { batch_size: 1, debounce_ms: 0 }, 1],
+    [`fractional debounce`, { debounce_ms: 0.5 }, 50],
+    [`on_open=false skips open load`, { on_open: false }, null],
+  ])(`load_options initial fetch: %s`, async (_label, config_extra, limit) => {
+    const load_options = vi.fn(async () => ({ options: [], has_more: false }))
     mount_multiselect({
-      loadOptions:
+      load_options:
         config_extra === null ? load_options : { fetch: load_options, ...config_extra },
       open: true,
     })
@@ -92,21 +92,21 @@ describe(`loadOptions feature`, () => {
 
   test.each([
     ...[0, -1, 0.5, NaN, Infinity, null, `1`, false].map(
-      (value) => [`batchSize`, value] as const,
+      (value) => [`batch_size`, value] as const,
     ),
     ...[-1, NaN, Infinity, null, `0`, false].map(
-      (value) => [`debounceMs`, value] as const,
+      (value) => [`debounce_ms`, value] as const,
     ),
-  ])(`rejects loadOptions.%s=%s initially and on update`, (field, value) => {
-    const load_options = { fetch: vi.fn(async () => ({ options: [], hasMore: false })) }
+  ])(`rejects load_options.%s=%s initially and on update`, (field, value) => {
+    const load_options = { fetch: vi.fn(async () => ({ options: [], has_more: false })) }
     const invalid_options = { ...load_options, [field]: value }
-    const message = `MultiSelect: loadOptions.${field} must be`
-    expect(() => mount_multiselect({ loadOptions: invalid_options })).toThrow(message)
+    const message = `MultiSelect: load_options.${field} must be`
+    expect(() => mount_multiselect({ load_options: invalid_options })).toThrow(message)
 
-    const props = $state<MultiSelectProps>({ loadOptions: load_options })
+    const props = $state<MultiSelectProps>({ load_options })
     mount_multiselect(props)
     flushSync()
-    props.loadOptions = invalid_options
+    props.load_options = invalid_options
     expect(flushSync).toThrow(message)
     expect(load_options.fetch).not.toHaveBeenCalled()
   })
@@ -118,7 +118,7 @@ describe(`loadOptions feature`, () => {
     const { fn: fetch_fn, resolvers } = deferred_load()
     mount_multiselect({
       options: [`Alpha`, `Beta`],
-      loadOptions: { fetch: fetch_fn, debounceMs: 500 },
+      load_options: { fetch: fetch_fn, debounce_ms: 500 },
       open: true,
     })
     await vi.runAllTimersAsync()
@@ -137,7 +137,7 @@ describe(`loadOptions feature`, () => {
       HTMLLIElement,
     )
 
-    resolvers[1]({ options: [`Remote alpha`], hasMore: false })
+    resolvers[1]({ options: [`Remote alpha`], has_more: false })
     await vi.runAllTimersAsync()
 
     expect(rendered()).toEqual([`Alpha`, `Remote alpha`])
@@ -146,18 +146,18 @@ describe(`loadOptions feature`, () => {
 
   test.each([
     [
-      `triggers another fetch when hasMore=true`,
+      `triggers another fetch when has_more=true`,
       () =>
         vi
           .fn()
-          .mockResolvedValueOnce({ options: mock_data.slice(0, 50), hasMore: true })
-          .mockResolvedValueOnce({ options: mock_data.slice(50, 100), hasMore: false }),
+          .mockResolvedValueOnce({ options: mock_data.slice(0, 50), has_more: true })
+          .mockResolvedValueOnce({ options: mock_data.slice(50, 100), has_more: false }),
       2,
       { search: ``, offset: 50, limit: 50 },
     ],
     [
-      `does not fetch again when hasMore=false`,
-      () => vi.fn(() => Promise.resolve({ options: [`A`, `B`], hasMore: false })),
+      `does not fetch again when has_more=false`,
+      () => vi.fn(() => Promise.resolve({ options: [`A`, `B`], has_more: false })),
       1,
       null,
     ],
@@ -165,7 +165,7 @@ describe(`loadOptions feature`, () => {
     `scroll pagination: %s`,
     async (_label, make_load_options, expected_calls, last_args) => {
       const load_options = make_load_options()
-      mount_multiselect({ loadOptions: load_options, open: true })
+      mount_multiselect({ load_options, open: true })
       await flush_ticks(2)
 
       expect(load_options).toHaveBeenCalledTimes(1)
@@ -181,9 +181,12 @@ describe(`loadOptions feature`, () => {
   )
 
   // https://github.com/janosh/svelte-widgets/issues/412
-  test(`auto-fills when small batchSize doesn't overflow dropdown`, async () => {
+  test(`auto-fills when small batch_size doesn't overflow dropdown`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ loadOptions: { fetch: load_options, batchSize: 5 }, open: true })
+    mount_multiselect({
+      load_options: { fetch: load_options, batch_size: 5 },
+      open: true,
+    })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -192,18 +195,21 @@ describe(`loadOptions feature`, () => {
     vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
 
-    resolvers[0]({ options: mock_data.slice(0, 5), hasMore: true })
+    resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
     await flush_ticks()
     expect(load_options).toHaveBeenCalledTimes(2)
 
-    resolvers[1]({ options: mock_data.slice(5, 10), hasMore: false })
+    resolvers[1]({ options: mock_data.slice(5, 10), has_more: false })
     await flush_ticks()
-    expect(load_options).toHaveBeenCalledTimes(2) // hasMore=false stops auto-fill
+    expect(load_options).toHaveBeenCalledTimes(2) // has_more=false stops auto-fill
   })
 
   test(`auto-fill stops when list becomes scrollable`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ loadOptions: { fetch: load_options, batchSize: 5 }, open: true })
+    mount_multiselect({
+      load_options: { fetch: load_options, batch_size: 5 },
+      open: true,
+    })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -212,7 +218,7 @@ describe(`loadOptions feature`, () => {
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(500)
     vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
 
-    resolvers[0]({ options: mock_data.slice(0, 5), hasMore: true })
+    resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
     await flush_ticks()
     expect(load_options).toHaveBeenCalledTimes(1)
   })
@@ -220,7 +226,7 @@ describe(`loadOptions feature`, () => {
   // the unmount abort lives in a teardown-returning $effect that reads like a missing call
   test(`unmounting aborts the in-flight fetch`, async () => {
     const { fn: load_options } = deferred_load()
-    const component = mount_multiselect({ loadOptions: load_options, open: true })
+    const component = mount_multiselect({ load_options, open: true })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(false)
@@ -233,7 +239,7 @@ describe(`loadOptions feature`, () => {
 
   test(`a search reset aborts an in-flight pagination request`, async () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
-    resolvers[0]({ options: mock_data.slice(0, 50), hasMore: true })
+    resolvers[0]({ options: mock_data.slice(0, 50), has_more: true })
     await vi.runAllTimersAsync()
 
     mock_scroll_near_bottom(doc_query(`ul.options`))
@@ -247,15 +253,18 @@ describe(`loadOptions feature`, () => {
     expect(load_options.mock.calls[1][0].signal?.aborted).toBe(true)
   })
 
-  // a server can report hasMore with an empty batch; refetching the same offset makes no
+  // a server can report has_more with an empty batch; refetching the same offset makes no
   // progress, and offset 0 means "reset your cursor" in the documented pagination pattern
   test(`auto-fill stops on an empty batch and never reuses offset 0`, async () => {
     const offsets: number[] = []
     const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
       offsets.push(offset)
-      return { options: [] as string[], hasMore: true }
+      return { options: [] as string[], has_more: true }
     })
-    mount_multiselect({ loadOptions: { fetch: load_options, batchSize: 5 }, open: true })
+    mount_multiselect({
+      load_options: { fetch: load_options, batch_size: 5 },
+      open: true,
+    })
     await tick()
 
     const ul = doc_query(`ul.options`)
@@ -284,13 +293,13 @@ describe(`loadOptions feature`, () => {
     })
 
     // resolve the stale first request
-    resolvers[0]({ options: [`Stale Result`], hasMore: false })
+    resolvers[0]({ options: [`Stale Result`], has_more: false })
     await vi.runAllTimersAsync()
 
     const ul = doc_query(`ul.options`)
     expect(ul.textContent).not.toContain(`Stale Result`)
 
-    resolvers[1]({ options: [`Fresh Result`], hasMore: false })
+    resolvers[1]({ options: [`Fresh Result`], has_more: false })
     await vi.runAllTimersAsync()
     expect(ul.textContent).toContain(`Fresh Result`)
   })
@@ -306,10 +315,10 @@ describe(`loadOptions feature`, () => {
       const console_error = mock_console_error()
       const { fn: load_options, resolvers, rejectors } = deferred_load()
       const props = $state<MultiSelectProps>({
-        loadOptions: load_options,
+        load_options,
         open: true,
-        searchText: `query`,
-        loadError: null,
+        search_text: `query`,
+        load_error: null,
       })
       mount_multiselect(props)
       await tick()
@@ -317,7 +326,7 @@ describe(`loadOptions feature`, () => {
       const request_idx = offset ? 1 : 0
       const previous = mock_data.slice(0, offset)
       if (offset) {
-        resolvers[0]({ options: previous, hasMore: true })
+        resolvers[0]({ options: previous, has_more: true })
         await tick()
         mock_scroll_near_bottom(ul)
         await tick()
@@ -329,16 +338,16 @@ describe(`loadOptions feature`, () => {
       if (partial)
         resolvers[request_idx]({
           options: visible_options,
-          hasMore: false,
+          has_more: false,
           replace: true,
           error,
         })
       else rejectors[request_idx](error)
       await tick()
-      expect(props.loadError).toBe(error)
+      expect(props.load_error).toBe(error)
       if (!partial)
         expect(console_error).toHaveBeenCalledWith(
-          `MultiSelect: loadOptions error:`,
+          `MultiSelect: load_options error:`,
           error,
         )
       expect(get_input().getAttribute(`aria-busy`)).toBeNull()
@@ -359,7 +368,7 @@ describe(`loadOptions feature`, () => {
 
       retry.click()
       await tick()
-      expect(props.loadError).toBeNull()
+      expect(props.load_error).toBeNull()
       expect(load_options).toHaveBeenLastCalledWith(
         expect.objectContaining({
           search: `query`,
@@ -371,7 +380,7 @@ describe(`loadOptions feature`, () => {
       const recovered = [...previous, `Recovered`, ...available]
       resolvers[request_idx + 1]({
         options: partial ? recovered : [`Recovered`],
-        hasMore: false,
+        has_more: false,
         replace: partial,
       })
       await tick()
@@ -387,7 +396,7 @@ describe(`loadOptions feature`, () => {
 
   test(`close during fetch clears loading state`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ loadOptions: load_options, open: true })
+    mount_multiselect({ load_options, open: true })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -402,7 +411,7 @@ describe(`loadOptions feature`, () => {
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
     // a stale resolve after close must not corrupt state
-    resolvers[0]({ options: [`Result`], hasMore: false })
+    resolvers[0]({ options: [`Result`], has_more: false })
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
 
@@ -413,7 +422,10 @@ describe(`loadOptions feature`, () => {
 
   test(`scroll after auto-fill cap resets counter and allows more loading`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ loadOptions: { fetch: load_options, batchSize: 5 }, open: true })
+    mount_multiselect({
+      load_options: { fetch: load_options, batch_size: 5 },
+      open: true,
+    })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -423,13 +435,13 @@ describe(`loadOptions feature`, () => {
 
     // resolve batches until the auto-fill cap is reached
     for (let idx = 0; idx < 20; idx++) {
-      resolvers[idx]({ options: [`Item ${idx}`], hasMore: true })
+      resolvers[idx]({ options: [`Item ${idx}`], has_more: true })
       await flush_ticks()
     }
     const capped_count = load_options.mock.calls.length
     expect(capped_count).toBe(21) // MAX_AUTO_FILL_ROUNDS rounds plus the on-open load
     // Auto-fill should have stopped at the cap
-    resolvers[capped_count - 1]({ options: [`Capped`], hasMore: true })
+    resolvers[capped_count - 1]({ options: [`Capped`], has_more: true })
     await flush_ticks()
     expect(load_options).toHaveBeenCalledTimes(capped_count)
 
@@ -442,14 +454,14 @@ describe(`loadOptions feature`, () => {
 
     // auto-fill resumes once the scroll-triggered load resolves, proving the counter reset
     vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
-    resolvers[capped_count]({ options: [`Post-scroll`], hasMore: true })
+    resolvers[capped_count]({ options: [`Post-scroll`], has_more: true })
     await flush_ticks()
     expect(load_options).toHaveBeenCalledTimes(capped_count + 2)
   })
 
   test(`reopen before stale fetch resolves triggers fresh load`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ loadOptions: load_options, open: true })
+    mount_multiselect({ load_options, open: true })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -467,12 +479,12 @@ describe(`loadOptions feature`, () => {
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
     // the late resolve must be discarded, not corrupt the new session
-    resolvers[0]({ options: [`Stale`], hasMore: false })
+    resolvers[0]({ options: [`Stale`], has_more: false })
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
     expect(doc_query(`ul.options`).textContent).not.toContain(`Stale`)
 
-    resolvers[1]({ options: [`Fresh`], hasMore: false })
+    resolvers[1]({ options: [`Fresh`], has_more: false })
     await tick()
     expect(doc_query(`ul.options`).textContent).toContain(`Fresh`)
     expect(input.getAttribute(`aria-busy`)).toBeNull()
@@ -494,7 +506,7 @@ describe(`loadOptions feature`, () => {
       expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
       if (state === `settled`) {
-        resolvers[1]({ options: [`Result A`], hasMore: true })
+        resolvers[1]({ options: [`Result A`], has_more: true })
         await vi.runAllTimersAsync()
       }
 
@@ -503,15 +515,18 @@ describe(`loadOptions feature`, () => {
       rejectors[0](error)
       await vi.runAllTimersAsync()
 
-      expect(console_error).toHaveBeenCalledWith(`MultiSelect: loadOptions error:`, error)
+      expect(console_error).toHaveBeenCalledWith(
+        `MultiSelect: load_options error:`,
+        error,
+      )
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
       if (state === `pending`) {
         expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-        resolvers[1]({ options: [`Result A`], hasMore: true })
+        resolvers[1]({ options: [`Result A`], has_more: true })
         await vi.runAllTimersAsync()
       }
       expect(ul.textContent).toContain(`Result A`)
-      // pagination still fires, so hasMore survived the stale error
+      // pagination still fires, so has_more survived the stale error
       mock_scroll_near_bottom(ul)
       await vi.runAllTimersAsync()
       expect(load_options).toHaveBeenCalledTimes(3)
@@ -522,13 +537,13 @@ describe(`loadOptions feature`, () => {
     mock_console_error()
     const { fn: load_options, resolvers, rejectors } = deferred_load()
     vi.useFakeTimers()
-    // onOpen=false so retry requires typing, exposing has_more via pending
+    // on_open=false so retry requires typing, exposing has_more via pending
     mount_multiselect({
-      loadOptions: { fetch: load_options, onOpen: false, debounceMs: 10 },
+      load_options: { fetch: load_options, on_open: false, debounce_ms: 10 },
       open: true,
     })
 
-    // with onOpen=false, typing is what triggers the initial load
+    // with on_open=false, typing is what triggers the initial load
     const input = get_input()
     await type_search_text(`q`, input)
     await vi.runAllTimersAsync()
@@ -550,7 +565,7 @@ describe(`loadOptions feature`, () => {
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(2)
 
-    resolvers[1]({ options: [`Recovered`], hasMore: false })
+    resolvers[1]({ options: [`Recovered`], has_more: false })
     await vi.runAllTimersAsync()
     expect(doc_query(`ul.options`).textContent).toContain(`Recovered`)
     expect(input.getAttribute(`aria-busy`)).toBeNull()
@@ -563,14 +578,14 @@ describe(`loadOptions feature`, () => {
       const { fn: load_options, resolvers, rejectors } = deferred_load()
       vi.useFakeTimers()
       mount_multiselect({
-        loadOptions: { fetch: load_options, debounceMs: 100 },
+        load_options: { fetch: load_options, debounce_ms: 100 },
         open: true,
-        searchText: `a`,
+        search_text: `a`,
       })
       await vi.runAllTimersAsync()
       if (outcome === `error`) rejectors[0](new Error(`fail`))
       else
-        resolvers[0]({ options: outcome === `results` ? [`Apple`] : [], hasMore: false })
+        resolvers[0]({ options: outcome === `results` ? [`Apple`] : [], has_more: false })
       await vi.runAllTimersAsync()
       expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -584,7 +599,7 @@ describe(`loadOptions feature`, () => {
       expect(load_options).toHaveBeenLastCalledWith(
         expect.objectContaining({ search: `a`, offset: 0, limit: 50 }),
       )
-      resolvers[1]({ options: [`Apple`], hasMore: false })
+      resolvers[1]({ options: [`Apple`], has_more: false })
       await vi.runAllTimersAsync()
       expect(doc_query(`ul.options`).textContent).toContain(`Apple`)
     },
@@ -595,8 +610,8 @@ describe(`loadOptions feature`, () => {
 // User messages during async loading: create/no-match suppressed, dupe allowed
 test.each([
   {
-    name: `createOptionMsg hidden while loading, shown after`,
-    props: { allowUserOptions: true, createOptionMsg: `Create this option` },
+    name: `create_option_msg hidden while loading, shown after`,
+    props: { allow_user_options: true, create_option_msg: `Create this option` },
     initial_options: [`Existing`],
     search: `new tag`,
     while_loading: null,
@@ -604,8 +619,8 @@ test.each([
     resolve_with: [],
   },
   {
-    name: `duplicateOptionMsg shown during loading`,
-    props: { selected: [`Apple`], duplicateOptionMsg: `Already selected` },
+    name: `duplicate_option_msg shown during loading`,
+    props: { selected: [`Apple`], duplicate_option_msg: `Already selected` },
     initial_options: [`Apple`, `Banana`],
     search: `Apple`,
     while_loading: `Already selected`,
@@ -613,8 +628,8 @@ test.each([
     resolve_with: null,
   },
   {
-    name: `noMatchingOptionsMsg hidden while loading, shown after`,
-    props: { noMatchingOptionsMsg: `No matches` },
+    name: `no_matching_options_msg hidden while loading, shown after`,
+    props: { no_matching_options_msg: `No matches` },
     initial_options: [`Apple`],
     search: `xyz`,
     while_loading: null,
@@ -635,12 +650,12 @@ test.each([
     const { fn: fetch_fn, resolvers } = deferred_load()
 
     mount_multiselect({
-      loadOptions: { fetch: fetch_fn, debounceMs: 0 },
+      load_options: { fetch: fetch_fn, debounce_ms: 0 },
       open: true,
       ...props,
     })
     await vi.runAllTimersAsync()
-    resolvers[0]({ options: [...initial_options], hasMore: false })
+    resolvers[0]({ options: [...initial_options], has_more: false })
     await vi.runAllTimersAsync()
 
     const input = get_input()
@@ -653,7 +668,7 @@ test.each([
     else expect(document.querySelector(`.user-msg`)).toBeNull()
 
     if (resolve_with) {
-      resolvers[1]({ options: resolve_with, hasMore: false })
+      resolvers[1]({ options: resolve_with, has_more: false })
       await vi.runAllTimersAsync()
       expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(after_resolve)
     }
@@ -667,7 +682,7 @@ describe(`load_options_pending`, () => {
   test(`typing during the first in-flight load debounces instead of firing immediate fetches`, async () => {
     const { fn: fetch_fn } = deferred_load()
 
-    mount_multiselect({ loadOptions: { fetch: fetch_fn, debounceMs: 200 }, open: true })
+    mount_multiselect({ load_options: { fetch: fetch_fn, debounce_ms: 200 }, open: true })
     await tick()
     expect(fetch_fn).toHaveBeenCalledTimes(1) // immediate open load, still in-flight
 
@@ -684,27 +699,27 @@ describe(`load_options_pending`, () => {
     expect(fetch_fn).toHaveBeenLastCalledWith(expect.objectContaining({ search: `ab` }))
   })
 
-  // onOpen=true loads immediately on open, onOpen=false stays idle until the user types.
+  // on_open=true loads immediately on open, on_open=false stays idle until the user types.
   // Either way Enter must wait for the debounce and fetch to settle before creating.
   test.each([true, false])(
-    `onOpen=%s: Enter during debounce does not create unwanted option`,
+    `on_open=%s: Enter during debounce does not create unwanted option`,
     async (on_open) => {
       const { fn: fetch_fn, resolvers: fetch_resolvers } = deferred_load()
       const oncreate_spy = vi.fn()
 
       mount_multiselect({
-        loadOptions: { fetch: fetch_fn, onOpen: on_open, debounceMs: 300 },
-        allowUserOptions: true,
-        createOptionMsg: `Create this option`,
+        load_options: { fetch: fetch_fn, on_open, debounce_ms: 300 },
+        allow_user_options: true,
+        create_option_msg: `Create this option`,
         open: true,
-        oncreate: oncreate_spy,
+        on_create: oncreate_spy,
       })
       await vi.runAllTimersAsync()
 
       const input = get_input()
       if (on_open) {
         expect(fetch_fn).toHaveBeenCalledTimes(1)
-        fetch_resolvers[0]({ options: [`Apple`, `Banana`], hasMore: false })
+        fetch_resolvers[0]({ options: [`Apple`, `Banana`], has_more: false })
         await vi.runAllTimersAsync()
       } else {
         expect(fetch_fn).not.toHaveBeenCalled()
@@ -721,7 +736,7 @@ describe(`load_options_pending`, () => {
       expect(document.querySelector(`.user-msg`)).toBeNull()
 
       await vi.runAllTimersAsync()
-      fetch_resolvers.at(-1)?.({ options: [], hasMore: false })
+      fetch_resolvers.at(-1)?.({ options: [], has_more: false })
       await vi.runAllTimersAsync()
 
       expect(input.getAttribute(`aria-busy`)).toBeNull()
@@ -739,13 +754,13 @@ describe(`load_options_pending`, () => {
     const console_error = mock_console_error()
     const fetch_fn = vi
       .fn()
-      .mockResolvedValueOnce({ options: [`Apple`], hasMore: false })
+      .mockResolvedValueOnce({ options: [`Apple`], has_more: false })
       .mockRejectedValue(new Error(`network error`))
 
     mount_multiselect({
-      loadOptions: { fetch: fetch_fn, debounceMs: 0 },
-      allowUserOptions: true,
-      createOptionMsg: `Create this option`,
+      load_options: { fetch: fetch_fn, debounce_ms: 0 },
+      allow_user_options: true,
+      create_option_msg: `Create this option`,
       open: true,
     })
     await vi.runAllTimersAsync()
@@ -759,7 +774,7 @@ describe(`load_options_pending`, () => {
       `Create this option`,
     )
     expect(console_error).toHaveBeenCalledWith(
-      `MultiSelect: loadOptions error:`,
+      `MultiSelect: load_options error:`,
       expect.any(Error),
     )
   })
@@ -768,11 +783,11 @@ describe(`load_options_pending`, () => {
     const { fn: fetch_fn, resolvers: fetch_resolvers } = deferred_load()
 
     mount_multiselect({
-      loadOptions: { fetch: fetch_fn, debounceMs: 0 },
+      load_options: { fetch: fetch_fn, debounce_ms: 0 },
       open: true,
     })
     await vi.runAllTimersAsync()
-    fetch_resolvers[0]({ options: [`Apple`], hasMore: false })
+    fetch_resolvers[0]({ options: [`Apple`], has_more: false })
     await vi.runAllTimersAsync()
     expect(fetch_fn).toHaveBeenCalledTimes(1)
 
@@ -786,7 +801,7 @@ describe(`load_options_pending`, () => {
     await tick()
 
     // the late resolve after close must be discarded
-    fetch_resolvers[1]({ options: [`Rust Lang`], hasMore: false })
+    fetch_resolvers[1]({ options: [`Rust Lang`], has_more: false })
     await vi.runAllTimersAsync()
 
     // reopen takes the is_first_load path, loading immediately
@@ -802,7 +817,7 @@ describe(`load_options_pending`, () => {
   })
 })
 
-describe(`async oncreate`, () => {
+describe(`async on_create`, () => {
   type OncreateResult = false | Option | undefined
 
   const submit_create = async (text: string) => {
@@ -814,17 +829,17 @@ describe(`async oncreate`, () => {
 
   test(`resolving undefined adds typed option after resolve, spinner shown only while pending`, async () => {
     const { promise, resolve } = Promise.withResolvers<OncreateResult>()
-    const oncreate = vi.fn(() => promise)
-    const onadd = vi.fn()
+    const on_create = vi.fn(() => promise)
+    const on_add = vi.fn()
     const spinner = createRawSnippet(() => ({
       render: () => `<span class="custom-spinner">creating</span>`,
     }))
     const props = $state<MultiSelectProps>({
       options: [`foo`, `bar`],
       selected: [],
-      allowUserOptions: true,
-      oncreate,
-      onadd,
+      allow_user_options: true,
+      on_create,
+      on_add,
       spinner,
     })
     mount_multiselect(props)
@@ -836,13 +851,13 @@ describe(`async oncreate`, () => {
     input.dispatchEvent(fresh_key(`Enter`))
     await tick()
 
-    expect(oncreate).toHaveBeenCalledTimes(1)
-    expect(oncreate).toHaveBeenCalledWith({ option: `new async option` })
+    expect(on_create).toHaveBeenCalledTimes(1)
+    expect(on_create).toHaveBeenCalledWith({ option: `new async option` })
     // while the promise is pending: spinner visible, input busy, nothing added yet
     expect(doc_query(`.custom-spinner`).textContent).toBe(`creating`)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
     expect(props.selected).toEqual([])
-    expect(onadd).not.toHaveBeenCalled()
+    expect(on_add).not.toHaveBeenCalled()
 
     resolve(undefined)
     await promise
@@ -851,8 +866,8 @@ describe(`async oncreate`, () => {
     expect(document.querySelector(`.custom-spinner`)).toBeNull()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
     expect(props.selected).toEqual([`new async option`])
-    expect(onadd).toHaveBeenCalledTimes(1)
-    expect(onadd).toHaveBeenCalledWith({
+    expect(on_add).toHaveBeenCalledTimes(1)
+    expect(on_add).toHaveBeenCalledWith({
       option: `new async option`,
       selected: [`new async option`],
     })
@@ -866,13 +881,13 @@ describe(`async oncreate`, () => {
     async (_label, resolved_value, expected_selected, expected_onadd_calls) => {
       const console_error = mock_console_error()
       const { promise, resolve } = Promise.withResolvers<OncreateResult>()
-      const onadd = vi.fn()
+      const on_add = vi.fn()
       const props = $state<MultiSelectProps>({
         options: [`foo`, `bar`],
         selected: [],
-        allowUserOptions: true,
-        oncreate: () => promise,
-        onadd,
+        allow_user_options: true,
+        on_create: () => promise,
+        on_add,
       })
       mount_multiselect(props)
 
@@ -883,13 +898,13 @@ describe(`async oncreate`, () => {
       await tick()
 
       expect(props.selected).toEqual(expected_selected)
-      expect(onadd).toHaveBeenCalledTimes(expected_onadd_calls)
+      expect(on_add).toHaveBeenCalledTimes(expected_onadd_calls)
       expect(console_error).not.toHaveBeenCalled()
     },
   )
 
-  test(`non-native thenable oncreate result is awaited, not added as an option`, async () => {
-    const onadd = vi.fn()
+  test(`non-native thenable on_create result is awaited, not added as an option`, async () => {
+    const on_add = vi.fn()
     // custom thenable (e.g. from a non-native promise implementation): must be
     // awaited like a Promise instead of being treated as an option object
     const thenable = {
@@ -899,9 +914,9 @@ describe(`async oncreate`, () => {
     const props = $state<MultiSelectProps>({
       options: [`foo`],
       selected: [],
-      allowUserOptions: true,
-      oncreate: () => thenable as unknown as OncreateResult,
-      onadd,
+      allow_user_options: true,
+      on_create: () => thenable as unknown as OncreateResult,
+      on_add,
     })
     mount_multiselect(props)
 
@@ -909,41 +924,44 @@ describe(`async oncreate`, () => {
     await tick() // extra microtask hop for the thenable resolution
 
     expect(props.selected).toEqual([`from-thenable`])
-    expect(onadd).toHaveBeenCalledTimes(1)
+    expect(on_add).toHaveBeenCalledTimes(1)
   })
 
-  test(`oncreate throwing synchronously adds nothing and logs console.error`, async () => {
+  test(`on_create throwing synchronously adds nothing and logs console.error`, async () => {
     const console_error = mock_console_error()
-    const onadd = vi.fn()
+    const on_add = vi.fn()
     const sync_error = new Error(`validation blew up`)
     const props = $state<MultiSelectProps>({
       options: [`foo`],
       selected: [],
-      allowUserOptions: true,
-      oncreate: () => {
+      allow_user_options: true,
+      on_create: () => {
         throw sync_error
       },
-      onadd,
+      on_add,
     })
     mount_multiselect(props)
 
     await submit_create(`doomed-opt`)
 
     expect(props.selected).toEqual([])
-    expect(onadd).not.toHaveBeenCalled()
-    expect(console_error).toHaveBeenCalledWith(`MultiSelect: oncreate threw:`, sync_error)
+    expect(on_add).not.toHaveBeenCalled()
+    expect(console_error).toHaveBeenCalledWith(
+      `MultiSelect: on_create threw:`,
+      sync_error,
+    )
   })
 
   test(`rejecting adds nothing and logs console.error`, async () => {
     const console_error = mock_console_error()
     const { promise, reject } = Promise.withResolvers<OncreateResult>()
-    const onadd = vi.fn()
+    const on_add = vi.fn()
     const props = $state<MultiSelectProps>({
       options: [`foo`],
       selected: [],
-      allowUserOptions: true,
-      oncreate: () => promise,
-      onadd,
+      allow_user_options: true,
+      on_create: () => promise,
+      on_add,
     })
     mount_multiselect(props)
 
@@ -956,10 +974,10 @@ describe(`async oncreate`, () => {
     await tick()
 
     expect(props.selected).toEqual([])
-    expect(onadd).not.toHaveBeenCalled()
+    expect(on_add).not.toHaveBeenCalled()
     expect(console_error).toHaveBeenCalledTimes(1)
     expect(console_error).toHaveBeenCalledWith(
-      `MultiSelect: oncreate promise rejected:`,
+      `MultiSelect: on_create promise rejected:`,
       rejection,
     )
     // busy state must reset even on rejection
@@ -968,12 +986,12 @@ describe(`async oncreate`, () => {
 
   test(`double Enter while async create is pending adds only one option`, async () => {
     const { promise, resolve } = Promise.withResolvers<OncreateResult>()
-    const oncreate = vi.fn(() => promise)
+    const on_create = vi.fn(() => promise)
     const props = $state<MultiSelectProps>({
       options: [`foo`],
       selected: [],
-      allowUserOptions: true,
-      oncreate,
+      allow_user_options: true,
+      on_create,
     })
     mount_multiselect(props)
 
@@ -981,7 +999,7 @@ describe(`async oncreate`, () => {
     input.dispatchEvent(fresh_key(`Enter`)) // second Enter while first create pending
     await tick()
 
-    expect(oncreate).toHaveBeenCalledTimes(1)
+    expect(on_create).toHaveBeenCalledTimes(1)
 
     resolve(undefined)
     await promise
@@ -990,7 +1008,7 @@ describe(`async oncreate`, () => {
     expect(props.selected).toEqual([`only-once`])
   })
 
-  test.each<[string, MultiSelectProps[`oncreate`], Option[], Option[]?]>([
+  test.each<[string, MultiSelectProps[`on_create`], Option[], Option[]?]>([
     [`returning false blocks the option`, () => false, []],
     [
       `returning an option transforms it`,
@@ -1001,13 +1019,13 @@ describe(`async oncreate`, () => {
     [`returning empty string keeps the original option`, () => ``, [`sync-opt`]],
     [`transforming to a selected option is rejected`, () => `foo`, [`foo`], [`foo`]],
   ])(
-    `sync oncreate regression: %s`,
-    async (_label, oncreate, expected_selected, selected = []) => {
+    `sync on_create regression: %s`,
+    async (_label, on_create, expected_selected, selected = []) => {
       const props = $state<MultiSelectProps>({
         options: [`foo`],
         selected,
-        allowUserOptions: true,
-        oncreate,
+        allow_user_options: true,
+        on_create,
       })
       mount_multiselect(props)
 

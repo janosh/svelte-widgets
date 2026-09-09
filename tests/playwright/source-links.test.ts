@@ -54,6 +54,7 @@ test(`inline code mentions of components link to their source, on load and after
   await expect(
     page.locator(`code > a[href$="/src/lib/Popover.svelte"]`).first(),
   ).toBeVisible()
+  await page.getByRole(`button`, { name: `Toggle Overlays submenu` }).hover()
   await page.locator(`header nav a[href="/dialogs"]`).first().click()
   await expect(page).toHaveURL(/\/dialogs$/)
   await expect(

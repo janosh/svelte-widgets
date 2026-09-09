@@ -7,7 +7,7 @@ const nested_levels = [2, 3, 4, 4, 3, 4, 2, 3]
 test.each([
   [`empty`, [], -1, 6, []],
   [`skipped levels`, [2, 4, 3, 5, 2, 6], 3, 4, [true, true, true, true, true, true]],
-  // Toc reaches this via headings.indexOf(activeHeading) === -1: collapsing is on but
+  // Toc reaches this via headings.indexOf(active_heading) === -1: collapsing is on but
   // no heading is active, so only the top-level ones stay visible
   [
     `active heading not found`,

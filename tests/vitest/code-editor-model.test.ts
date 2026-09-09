@@ -203,37 +203,44 @@ test(`invalid resulting selections leave the model unchanged`, () => {
   ).toThrow(`Invalid history timestamp=Infinity`)
   expect(model.text()).toBe(`abc`)
 })
-test(`property: random edits, lines, undo, and redo match a string oracle`, () => {
-  let rng_state = 20_260_819
-  const random = (bound: number): number => {
-    rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
-    return bound <= 0 ? 0 : rng_state % bound
-  }
-  let expected = `alpha\nbeta😀\ngamma`
-  const model = create_editor_model({ uri: `memory:property`, text: expected })
-  const states = [expected]
-  for (let step_idx = 0; step_idx < 400; step_idx++) {
-    const bound_a = random(expected.length + 1)
-    const bound_b = random(expected.length + 1)
-    const from = Math.min(bound_a, bound_b)
-    const to = Math.max(bound_a, bound_b)
-    const insert = [``, `x`, `\n`, `two`, `😀`][random(5)]
-    expected = expected.slice(0, from) + insert + expected.slice(to)
-    const caret = from + insert.length
-    model.transact([{ from, to, insert }], {
-      selection: { anchor: caret, head: caret },
-      source: `external`,
-      timestamp: step_idx * 1000,
-    })
-    states.push(expected)
-    const line_idx = random(model.line_count)
-    expect(model.line(line_idx).text).toBe(expected.split(`\n`)[line_idx])
-  }
-  for (let state_idx = states.length - 2; state_idx >= 0; state_idx--)
-    expect([model.undo(), model.text()]).toEqual([true, states[state_idx]])
-  for (let state_idx = 1; state_idx < states.length; state_idx++)
-    expect([model.redo(), model.text()]).toEqual([true, states[state_idx]])
-})
+test.each([1, 6000])(
+  `property: random edits, lines, undo, and redo match a string oracle (%i initial lines)`,
+  (initial_lines) => {
+    let rng_state = 20_260_819
+    const random = (bound: number): number => {
+      rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
+      return bound <= 0 ? 0 : rng_state % bound
+    }
+    let expected = `${`line😀\n`.repeat(initial_lines)}end`
+    const model = create_editor_model({ uri: `memory:property`, text: expected })
+    const states = [expected]
+    for (let step_idx = 0; step_idx < 400; step_idx++) {
+      const bound_a = random(expected.length + 1)
+      const bound_b = random(expected.length + 1)
+      const from = Math.min(bound_a, bound_b)
+      const to = Math.max(bound_a, bound_b)
+      const insert = [``, `x`, `\n`, `two`, `😀`][random(5)]
+      expected = expected.slice(0, from) + insert + expected.slice(to)
+      const caret = from + insert.length
+      model.transact([{ from, to, insert }], {
+        selection: { anchor: caret, head: caret },
+        source: `external`,
+        timestamp: step_idx * 1000,
+      })
+      states.push(expected)
+      const line_idx = random(model.line_count)
+      expect(model.line(line_idx).text).toBe(expected.split(`\n`)[line_idx])
+      const offset = random(expected.length + 1)
+      expect(model.line_at(offset).line_idx).toBe(
+        expected.slice(0, offset).split(`\n`).length - 1,
+      )
+    }
+    for (let state_idx = states.length - 2; state_idx >= 0; state_idx--)
+      expect([model.undo(), model.text()]).toEqual([true, states[state_idx]])
+    for (let state_idx = 1; state_idx < states.length; state_idx++)
+      expect([model.redo(), model.text()]).toEqual([true, states[state_idx]])
+  },
+)
 test.skipIf(!process.env.RUN_LARGE_EDITOR_TESTS)(
   `100MB / 1M-line model stress target`,
   () => {

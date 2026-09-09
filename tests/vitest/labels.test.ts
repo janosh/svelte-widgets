@@ -33,7 +33,7 @@ test(`a conditionally undefined label renders the default, not nothing`, async (
     props: {
       options: [`a`, `b`, `c`],
       selected: [`a`, `b`, `c`],
-      maxVisibleChips: 1,
+      max_visible_chips: 1,
       labels: {
         more_chips: translate ? (hidden: number) => `noch ${hidden}` : undefined,
         show_less: translate ? `weniger` : undefined,

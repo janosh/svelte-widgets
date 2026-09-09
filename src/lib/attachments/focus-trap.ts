@@ -76,22 +76,33 @@ const get_tab_candidates = (roots: Element[]): (HTMLElement | SVGElement)[] => {
   const candidate_set = new Set<Element>()
   for (const root of roots) collect_tab_candidates(root, candidate_set)
   const candidates = [...candidate_set]
-
-  return candidates
-    .filter(is_tab_candidate)
-    .filter((element) => {
-      if (!is_named_radio(element)) return true
-      const checked_peer = candidates.find(
-        (peer) =>
-          is_named_radio(peer) &&
-          peer.name === element.name &&
-          peer.form === element.form &&
-          peer.getRootNode() === element.getRootNode() &&
-          peer.checked,
-      )
-      return !checked_peer || checked_peer === element
-    })
-    .toSorted((left, right) => candidate_order(left) - candidate_order(right))
+  // Radio groups are scoped by DOM root, form owner and name. Index checked peers once,
+  // including disabled peers, which still exclude unchecked radios from the tab order.
+  const checked_radios = new Map<
+    Node,
+    Map<HTMLFormElement | null, Map<string, HTMLInputElement>>
+  >()
+  for (const element of candidates) {
+    if (!is_named_radio(element) || !element.checked) continue
+    const root = element.getRootNode()
+    let forms = checked_radios.get(root)
+    if (!forms) checked_radios.set(root, (forms = new Map()))
+    let names = forms.get(element.form)
+    if (!names) forms.set(element.form, (names = new Map()))
+    if (!names.has(element.name)) names.set(element.name, element)
+  }
+  const tabbable = candidates.filter((element): element is HTMLElement | SVGElement => {
+    if (is_named_radio(element)) {
+      const checked_peer = checked_radios
+        .get(element.getRootNode())
+        ?.get(element.form)
+        ?.get(element.name)
+      if (checked_peer && checked_peer !== element) return false
+    }
+    return is_tab_candidate(element)
+  })
+  tabbable.sort((left, right) => candidate_order(left) - candidate_order(right))
+  return tabbable
 }
 
 const deep_active_element = (): Element | null => {

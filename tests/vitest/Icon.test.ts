@@ -161,7 +161,7 @@ describe(`icon catalog page`, () => {
     onTestFinished(() => void vi.unstubAllGlobals())
 
     const { default: IconsPage } = await import(
-      `$root/src/routes/(demos)/(icons)/icons/+page.svelte`
+      `$root/src/routes/(demos)/(display)/icons/+page.svelte`
     )
     mount(IconsPage, { target: document.body })
     const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)

@@ -542,9 +542,20 @@ export function fuzzy_match_indices(
 
 // True if search is a subsequence of target, e.g. "tageoo" matches "tasks/geo-opt"
 export function fuzzy_match(search_text: string, target_text: string): boolean {
-  // fuzzy_match_indices would throw on .toLowerCase() of null/undefined
   if (search_text == null || target_text == null) return false
-  return fuzzy_match_indices(search_text, target_text) !== null
+  // Filtering needs no source offsets or highlighted indices, even when case folding
+  // expands a character. Only the rendering helper pays for those allocations.
+  let search = search_text.toLowerCase()
+  if (HAS_COLLAPSIBLE_WHITESPACE.test(search)) search = search.replaceAll(/\s+/gu, ` `)
+  let target = target_text.toLowerCase()
+  if (HAS_NON_PLAIN_WHITESPACE.test(target)) target = target.replaceAll(/\s/gu, ` `)
+  let offset = 0
+  for (const character of search) {
+    offset = target.indexOf(character, offset)
+    if (offset === -1) return false
+    offset += character.length
+  }
+  return true
 }
 
 // A titled run of ActionMenu actions. Setting `selected` (matched against an action's

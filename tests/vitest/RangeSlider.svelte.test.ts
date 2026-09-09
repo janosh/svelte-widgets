@@ -1,5 +1,5 @@
 import { RangeSlider, type RangeValue } from '$lib'
-import RangeSliderDemo from '../../src/routes/(demos)/(range-slider)/range-slider/+page.md'
+import RangeSliderDemo from '../../src/routes/(demos)/(inputs)/range-slider/+page.md'
 import { snap_range_value, step_range_value, validate_range } from '$lib/range-slider'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
@@ -155,13 +155,13 @@ describe(`RangeSlider`, () => {
     },
   )
   test.each([`keyboard`, `number`, `pointer`])(
-    `synchronous external resets inside oninput do not commit (%s)`,
+    `synchronous external resets inside on_input do not commit (%s)`,
     async (mode) => {
-      const oncommit = vi.fn()
+      const on_commit = vi.fn()
       const props = $state<Props>({
         value: [20, 80],
-        oncommit,
-        oninput: () => {
+        on_commit,
+        on_input: () => {
           props.value = [25, 75]
         },
       })
@@ -174,7 +174,7 @@ describe(`RangeSlider`, () => {
       }
       await tick()
       expect(announced(thumbs)).toEqual([25, 75])
-      expect(oncommit).not.toHaveBeenCalled()
+      expect(on_commit).not.toHaveBeenCalled()
     },
   )
   test.each([
@@ -253,7 +253,7 @@ describe(`RangeSlider`, () => {
   test.each([false, true])(
     `an external reset during a drag does not commit (moved=%s)`,
     async (moved) => {
-      const props = $state<Props>({ value: [20, 80], oncommit: vi.fn() })
+      const props = $state<Props>({ value: [20, 80], on_commit: vi.fn() })
       const { thumbs, pointer } = setup(props)
       pointer(`pointerdown`, 20, thumbs[0])
       if (moved) pointer(`pointermove`, 40)
@@ -262,7 +262,7 @@ describe(`RangeSlider`, () => {
       pointer(`pointerup`, 20)
       await tick()
       expect(announced(thumbs)).toEqual([30, 70])
-      expect(props.oncommit).not.toHaveBeenCalled()
+      expect(props.on_commit).not.toHaveBeenCalled()
     },
   )
   test(`names both ends, reports dependent limits and follows external state without events`, async () => {
@@ -271,8 +271,8 @@ describe(`RangeSlider`, () => {
       label: `Budget`,
       description: `Per night`,
       format_value: (value: number) => `$${value}`,
-      oninput: vi.fn(),
-      oncommit: vi.fn(),
+      on_input: vi.fn(),
+      on_commit: vi.fn(),
     })
     const { thumbs, inputs } = setup(props)
     const ticks = [...document.querySelectorAll(`.limit`)]
@@ -315,8 +315,8 @@ describe(`RangeSlider`, () => {
     expect(
       [...document.querySelectorAll(`.formatted`)].map((node) => node.textContent),
     ).toEqual([`$-10`, `$40`])
-    expect(props.oninput).not.toHaveBeenCalled()
-    expect(props.oncommit).not.toHaveBeenCalled()
+    expect(props.on_input).not.toHaveBeenCalled()
+    expect(props.on_commit).not.toHaveBeenCalled()
     props.tick_count = 2
     await tick()
     expect(document.querySelector(`.ticks`)).toBeNull()
@@ -343,18 +343,22 @@ describe(`RangeSlider`, () => {
     [1, `PageDown`, {}, [20, 70]],
     [0, `ArrowRight`, { shiftKey: true }, [30, 80]],
   ] as const)(`thumb %s handles %s (%j)`, async (thumb, key, modifiers, expected) => {
-    const props = $state<Props>({ value: [20, 80], oninput: vi.fn(), oncommit: vi.fn() })
+    const props = $state<Props>({
+      value: [20, 80],
+      on_input: vi.fn(),
+      on_commit: vi.fn(),
+    })
     const { thumbs } = setup(props)
     expect(press_key(thumbs[thumb], key, modifiers).defaultPrevented).toBe(true)
     await tick()
     expect(props.value).toEqual(expected)
     expect(announced(thumbs)).toEqual(expected)
-    expect(props.oninput).toHaveBeenCalledExactlyOnceWith(expected)
-    expect(props.oncommit).toHaveBeenCalledExactlyOnceWith(expected)
+    expect(props.on_input).toHaveBeenCalledExactlyOnceWith(expected)
+    expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(expected)
   })
   test(`ignores claimed and unrelated keys, and emits nothing at a bound`, async () => {
-    const oncommit = vi.fn()
-    const { thumbs } = setup({ value: [0, 100], oncommit })
+    const on_commit = vi.fn()
+    const { thumbs } = setup({ value: [0, 100], on_commit })
     const event = new KeyboardEvent(`keydown`, {
       key: `ArrowRight`,
       bubbles: true,
@@ -366,7 +370,7 @@ describe(`RangeSlider`, () => {
     press_key(thumbs[0], `ArrowLeft`)
     await tick()
     expect(announced(thumbs)).toEqual([0, 100])
-    expect(oncommit).not.toHaveBeenCalled()
+    expect(on_commit).not.toHaveBeenCalled()
   })
   test(`mirrors horizontal keys in RTL while keeping vertical keys increasing upwards`, async () => {
     const { thumbs, rail, pointer } = setup({ value: [20, 80], dir: `rtl` })
@@ -389,15 +393,15 @@ describe(`RangeSlider`, () => {
     [``, 20],
     [`not a number`, 20],
   ])(`numeric draft %s commits as %s and never crosses`, async (draft, expected) => {
-    const oncommit = vi.fn()
-    const { inputs, thumbs } = setup({ value: [20, 80], step: 5, oncommit })
+    const on_commit = vi.fn()
+    const { inputs, thumbs } = setup({ value: [20, 80], step: 5, on_commit })
     await edit(inputs[0], draft, false)
     expect(announced(thumbs)).toEqual([20, 80])
     inputs[0].dispatchEvent(new Event(`blur`))
     await tick()
     expect(announced(thumbs)).toEqual([expected, 80])
     expect(inputs[0].valueAsNumber).toBe(expected)
-    expect(oncommit).toHaveBeenCalledTimes(expected === 20 ? 0 : 1)
+    expect(on_commit).toHaveBeenCalledTimes(expected === 20 ? 0 : 1)
   })
   test(`Enter commits once, Escape discards, and numeric arrows use the configured step`, async () => {
     const props = $state<Props>({
@@ -405,14 +409,14 @@ describe(`RangeSlider`, () => {
       max: 1,
       step: 0.1,
       value: [0.2, 0.8],
-      oncommit: vi.fn(),
+      on_commit: vi.fn(),
     })
     const { inputs, thumbs } = setup(props)
     await edit(inputs[0], `0.34`, false)
     expect(press_key(inputs[0], `Enter`).defaultPrevented).toBe(true)
     inputs[0].dispatchEvent(new Event(`blur`))
     await tick()
-    expect(props.oncommit).toHaveBeenCalledExactlyOnceWith([0.3, 0.8])
+    expect(props.on_commit).toHaveBeenCalledExactlyOnceWith([0.3, 0.8])
     await edit(inputs[0], `0.7`, false)
     press_key(inputs[0], `Escape`)
     await tick()
@@ -426,8 +430,8 @@ describe(`RangeSlider`, () => {
     async (ending) => {
       const props = $state<Props>({
         value: [20, 80],
-        oninput: vi.fn(),
-        oncommit: vi.fn(),
+        on_input: vi.fn(),
+        on_commit: vi.fn(),
       })
       const { thumbs, rail, pointer } = setup(props)
       pointer(`pointerdown`, 20, thumbs[0])
@@ -435,13 +439,13 @@ describe(`RangeSlider`, () => {
       await tick()
       expect(props.value).toEqual([40, 80])
       expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(true)
-      expect(props.oncommit).not.toHaveBeenCalled()
+      expect(props.on_commit).not.toHaveBeenCalled()
       pointer(`pointermove`, 120)
       pointer(ending, 120)
       pointer(`pointerup`, 120)
       await tick()
       expect(props.value).toEqual([80, 80])
-      expect(props.oncommit).toHaveBeenCalledExactlyOnceWith([80, 80])
+      expect(props.on_commit).toHaveBeenCalledExactlyOnceWith([80, 80])
       expect(rail.releasePointerCapture).toHaveBeenCalledWith(1)
       expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(false)
     },
@@ -481,8 +485,8 @@ describe(`RangeSlider`, () => {
     expect(announced(thumbs)).toEqual([30, 80])
   })
   test(`ignores other pointers and non-primary buttons, no-op gestures do not commit`, async () => {
-    const oncommit = vi.fn()
-    const { thumbs, rail, pointer } = setup({ value: [20, 80], oncommit })
+    const on_commit = vi.fn()
+    const { thumbs, rail, pointer } = setup({ value: [20, 80], on_commit })
     pointer(`pointerdown`, 50, rail, { button: 2 })
     pointer(`pointerdown`, 50, rail, { isPrimary: false })
     pointer(`pointerdown`, 20, thumbs[0])
@@ -491,10 +495,10 @@ describe(`RangeSlider`, () => {
     pointer(`pointerup`, 20)
     await tick()
     expect(announced(thumbs)).toEqual([20, 80])
-    expect(oncommit).not.toHaveBeenCalled()
+    expect(on_commit).not.toHaveBeenCalled()
   })
   test(`disabled controls reject input and disabling during a drag releases capture`, async () => {
-    const props = $state<Props>({ value: [20, 80], disabled: true, oncommit: vi.fn() })
+    const props = $state<Props>({ value: [20, 80], disabled: true, on_commit: vi.fn() })
     const { thumbs, inputs, rail, pointer } = setup(props)
     expect([...thumbs, ...inputs].every((input) => input.disabled)).toBe(true)
     pointer(`pointerdown`, 40)
@@ -513,6 +517,6 @@ describe(`RangeSlider`, () => {
     expect(announced(thumbs)).toEqual([30, 80])
     expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(false)
     expect(rail.releasePointerCapture).toHaveBeenCalledWith(1)
-    expect(props.oncommit).not.toHaveBeenCalled()
+    expect(props.on_commit).not.toHaveBeenCalled()
   })
 })

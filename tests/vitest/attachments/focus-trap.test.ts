@@ -50,6 +50,8 @@ describe(`focus_trap`, () => {
       <button id="plain"></button><button disabled></button><button tabindex="-1"></button>
       <input type="hidden" style="display: block"><button style="visibility: collapse"></button>
       <input type="radio" name="choice"><input id="checked" type="radio" name="choice" checked>
+      <form><input type="radio" name="choice"><input id="form-checked" type="radio" name="choice" checked></form>
+      <form><input type="radio" name="choice"><input type="radio" name="choice" checked disabled></form>
       <details id="details" tabindex="0"><summary id="summary"></summary><button></button></details>
       <fieldset disabled><legend><button id="legend"></button></legend><button></button></fieldset>
       <div hidden><button></button></div>
@@ -62,6 +64,7 @@ describe(`focus_trap`, () => {
       `three`,
       `plain`,
       `checked`,
+      `form-checked`,
       `details`,
       `summary`,
       `legend`,

@@ -1,4 +1,4 @@
-// Backend payloads stay camelCase for direct JSON forwarding; library methods stay snake_case.
+// Public backend payloads and library methods use snake_case.
 export const TOKEN_CLASS_NAMES = [
   `plain`,
   `comment`,
@@ -81,17 +81,17 @@ export type OpenDocResult = {
 }
 export interface EditorDocumentInfo extends OpenDocResult {
   uri: string
-  lineCount: number
+  line_count: number
   eol: Eol
-  hadBom: boolean
+  had_bom: boolean
 }
 export type RowKind = `equal` | `delete` | `insert` | `replace`
-export type DiffLine = { lineNo: number; text: string; spans: SpanList }
+export type DiffLine = { line_no: number; text: string; spans: SpanList }
 export type DiffRow = { kind: RowKind; old: DiffLine | null; new: DiffLine | null }
 export interface DiffHunk {
-  oldStart: number
-  newStart: number
-  skippedBefore: number
+  old_start: number
+  new_start: number
+  skipped_before: number
   rows: DiffRow[]
 }
 export interface DiffResult {
@@ -99,11 +99,11 @@ export interface DiffResult {
   added: number
   removed: number
   language: string
-  oldLineCount: number
-  newLineCount: number
-  skippedAfter: number
-  oldEndsWithNewline: boolean
-  newEndsWithNewline: boolean
+  old_line_count: number
+  new_line_count: number
+  skipped_after: number
+  old_ends_with_newline: boolean
+  new_ends_with_newline: boolean
   truncated: boolean
 }
 export type DiffLayout = `side-by-side` | `unified`
@@ -121,30 +121,30 @@ export interface CodeEditorOptions {
 }
 export const to_error = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error))
-export type OpenDocArgs = { docId: string; uri: string; revision: number; text: string }
+export type OpenDocArgs = { doc_id: string; uri: string; revision: number; text: string }
 export interface HighlightLinesArgs {
-  docId: string
-  requestId: number
+  doc_id: string
+  request_id: number
   revision: number
-  startLine: number
-  endLine: number
+  start_line: number
+  end_line: number
 }
 export interface ApplyEditsArgs {
-  docId: string
-  baseRevision: number
+  doc_id: string
+  base_revision: number
   revision: number
   edits: readonly TextEdit[]
-  expectedLineCount: number
-  expectedLength: number
+  expected_line_count: number
+  expected_length: number
 }
-export type SetTextArgs = { docId: string; revision: number; text: string }
-export type CancelHighlightArgs = { docId: string; requestId: number }
-export type CloseDocArgs = { docId: string }
+export type SetTextArgs = { doc_id: string; revision: number; text: string }
+export type CancelHighlightArgs = { doc_id: string; request_id: number }
+export type CloseDocArgs = { doc_id: string }
 export type DiffTextArgs = {
-  oldText: string
-  newText: string
+  old_text: string
+  new_text: string
   filename: string
-  contextLines: number
+  context_lines: number
 }
 export interface EditorBackend {
   open_doc: (args: OpenDocArgs) => Promise<OpenDocResult>
