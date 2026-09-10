@@ -482,8 +482,8 @@
       )
         suffix_length += 1
       if (
-        (prefix_length === 0 && window_from > 0) ||
-        (suffix_length === 0 && window_to < model.length)
+        (prefix_length === 0 && window_from > input_from) ||
+        (suffix_length === 0 && window_to < input_to)
       )
         throw new Error(`Replacement exceeds ${CONTEXT_CHECK_CHARS}-character context`)
       from = window_from + prefix_length
@@ -907,10 +907,11 @@
       void run_save()
       return
     }
+    const { anchor, head } = selection_of(area)
     const state: EditorState = {
       model,
-      selection_start: Math.min(selection_of(area).anchor, selection_of(area).head),
-      selection_end: Math.max(selection_of(area).anchor, selection_of(area).head),
+      selection_start: Math.min(anchor, head),
+      selection_end: Math.max(anchor, head),
     }
     if (event.key === `Tab`) {
       event.preventDefault() // a no-op dedent must not move focus

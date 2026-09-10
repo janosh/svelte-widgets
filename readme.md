@@ -75,7 +75,7 @@ Every component is a named export from the package root and has a direct subpath
 | `Icon`             | Inline SVG icon from the bundled set                                                      | [docs](https://svelte-widgets.janosh.dev/extras#icon)                  |
 | `GitHubCorner`     | The classic corner ribbon link                                                            | [docs](https://svelte-widgets.janosh.dev/extras#githubcorner)          |
 | `CircleSpinner`    | Minimal loading spinner                                                                   | [docs](https://svelte-widgets.janosh.dev/extras#circlespinner)         |
-| `ContributorList`  | Avatar row of GitHub contributors, grayscale until hover                                  | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
+| `ContributorList`  | Avatar row of GitHub contributors                                                         | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
 | `LiteYouTubeEmbed` | YouTube poster that only loads the player iframe once clicked                             | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
 | `Wiggle`           | Spring-animated shake wrapper                                                             | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
 

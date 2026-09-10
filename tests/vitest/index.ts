@@ -142,7 +142,7 @@ export const track = <T>(promise: Promise<T>) => {
   return state
 }
 
-export type Test2WayBindProps = Pick<MultiSelectProps, keyof MultiSelectProps> & {
+export type Test2WayBindProps = MultiSelectProps & {
   onActiveIndexChanged?: (data: MultiSelectProps[`active_index`]) => unknown
   onActiveOptionChanged?: (data: MultiSelectProps[`active_option`]) => unknown
   onOptionsChanged?: (data: MultiSelectProps[`options`]) => unknown

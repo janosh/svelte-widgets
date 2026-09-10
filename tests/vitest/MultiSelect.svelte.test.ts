@@ -322,7 +322,7 @@ test.each([0, ``])(`single mode preserves falsy value %j`, (value) => {
   expect(select.value).toBe(value)
 })
 
-const invalid_selection_fixtures: [MultiSelectProps, string][] = [
+const invalid_selection_fixtures: [Test2WayBindProps, string][] = [
   // @ts-expect-error Single mode rejects array values at compile time and runtime.
   [{ mode: `single`, value: [`Red`] }, `value must be an option or null`],
   // @ts-expect-error Multiple mode rejects scalar values at compile time and runtime.
@@ -373,7 +373,7 @@ describe(`selected_display=input`, () => {
   }
 
   const mount_input_display = (
-    props: Partial<Test2WayBindProps> = {},
+    props: Partial<Extract<Test2WayBindProps, { mode: `single` }>> = {},
     target: HTMLElement = document.body,
   ) => mount(Test2WayBind, { target, props: { ...input_display_props, ...props } })
 
@@ -1594,8 +1594,7 @@ test.each([
       target: document.body,
       props: {
         options: [1, 2, 3],
-        mode: max_select === 1 ? `single` : `multiple`,
-        max_select: max_select === 1 ? null : max_select,
+        ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
         onValueChanged: (data: Option | Option[] | null | undefined) =>
           (value = data ?? undefined),
       },

@@ -287,7 +287,8 @@
   function query_toc_headings() {
     if (items) {
       return items.flatMap(({ id }) => {
-        const heading = document.querySelector(`#${id}`)
+        // eslint-disable-next-line unicorn/prefer-query-selector -- IDs need not be valid CSS selectors.
+        const heading = document.getElementById(id)
         return heading instanceof HTMLHeadingElement ? [heading] : []
       })
     }

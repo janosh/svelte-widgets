@@ -153,9 +153,9 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.style.display).toBe(`none`)
   })
 
-  it(`delegates to descendants added after attachment`, () => {
+  it.each([{}, { content: undefined }])(`delegates with absent content %j`, (options) => {
     const root = create_element()
-    attach_tooltip(root)
+    attach_tooltip(root, options)
     const child = document.createElement(`button`)
     child.title = `Dynamic child`
     root.append(child)
@@ -172,12 +172,12 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Dynamic child`)
   })
 
-  it(`does not infer delegation from explicitly undefined content`, () => {
+  it(`honors explicitly disabled delegation with undefined content`, () => {
     const root = create_element()
     const child = document.createElement(`button`)
     child.title = `<b>Untrusted</b>`
     root.append(child)
-    attach_tooltip(root, { content: undefined })
+    attach_tooltip(root, { content: undefined, delegate: false })
 
     pointer_over(child)
     expect(document.querySelector(`.tooltip-content`)).toBeNull()

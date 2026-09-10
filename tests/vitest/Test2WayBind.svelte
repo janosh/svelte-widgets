@@ -1,10 +1,13 @@
 <script lang="ts">
   import { MultiSelect } from '$lib'
+  import type { MultiSelectProps } from '$lib/types'
   import type { Component } from 'svelte'
 
   import type { Test2WayBindProps } from './index'
 
-  const Select = MultiSelect as Component<Test2WayBindProps>
+  // Independent mutable bindings lose mode/value narrowing inside this fixture only;
+  // callers still supply the full discriminated Test2WayBindProps union.
+  const Select = MultiSelect as Component<Pick<MultiSelectProps, keyof MultiSelectProps>>
 
   let {
     mode = `multiple`,

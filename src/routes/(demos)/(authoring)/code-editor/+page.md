@@ -4,6 +4,8 @@
 
 The rope model is validated with generated 100 MB / 1,000,000-line documents. The native input and syntax overlay contain only viewport lines plus a small overscan. Selections expand the input window so native copying, cutting, and assistive technology retain the selected text; selecting the whole document or a very long line can still materialize a large string. The outer viewport remains subject to browser scroll-height limits.
 
+Pointer selection and vertical navigation require [`document.caretPositionFromPoint()`](https://developer.mozilla.org/en-US/docs/Web/API/Document/caretPositionFromPoint), and grapheme navigation requires [`Intl.Segmenter`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter). Use Chrome/Edge 128+, Firefox 125+, or Safari 26.2+ (including iOS/iPadOS); older browser versions are unsupported.
+
 Import the shared token palette once wherever the editor or diff view is used:
 
 ```ts

@@ -4,7 +4,7 @@ import { create_editor_model } from '$lib/code-editor/model'
 import type { ApplyEditsArgs, EditorBackend, OpenDocArgs } from '$lib/code-editor/types'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, press_key } from './index'
+import { doc_query, press_key, stub_prop } from './index'
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
 const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
@@ -106,9 +106,8 @@ const mount_editor = async (
     )
     return Object.assign([rect], { item: (index: number) => (index === 0 ? rect : null) })
   })
-  Object.defineProperty(document, `caretPositionFromPoint`, {
-    configurable: true,
-    value: (column: number) => {
+  onTestFinished(
+    stub_prop(document, `caretPositionFromPoint`, (column: number) => {
       const node = document.querySelector(`[data-editor-measure]`)?.firstChild
       if (!node) return null
       let offset = 0
@@ -124,8 +123,8 @@ const mount_editor = async (
         offset += segment.length
       }
       return { offsetNode: node, offset }
-    },
-  })
+    }),
+  )
   const recorder = create_backend()
   const props = $state<EditorProps>({ model, backend: recorder.backend, ...overrides })
   const instance = mount(CodeEditor, { target: document.body, props })
@@ -336,6 +335,44 @@ test.each([
     const { textarea } = await mount_editor(model)
     emit_input(textarea, input_type, selection_start, selection_end, insert, from, to)
     expect(model.text()).toBe(expected)
+  },
+)
+
+test.each([
+  [`start`, 1],
+  [`end`, 1],
+  [`start`, 64],
+  [`end`, 64],
+] as const)(
+  `replacement at input %s with %i characters respects context bounds`,
+  async (edge, length) => {
+    const text = `${`a`.repeat(80)}\n`.repeat(400)
+    const model = create_editor_model({ uri: `memory:replacement`, text })
+    const on_error = vi.fn()
+    const { textarea, recorder } = await mount_editor(model, { on_error })
+    const selection = model.line(100).from + 40
+    model.set_selection({ anchor: selection, head: selection })
+    await tick()
+    const input_from = Number(textarea.dataset.inputFrom)
+    const value = textarea.value
+    expect(input_from).toBeGreaterThan(0)
+    expect(input_from + value.length).toBeLessThan(model.length)
+    const caret = edge === `start` ? length : value.length - length
+    const from = edge === `start` ? 0 : caret
+    const to = edge === `start` ? caret : value.length
+    emit_input(textarea, `insertReplacementText`, caret, caret, `X`, from, to)
+    await flush_async()
+    if (length === 64) {
+      expect(on_error).toHaveBeenCalledWith(`Replacement exceeds 32-character context`)
+      expect(model.text()).toBe(text)
+      expect(textarea.value).toBe(value)
+      expect(recorder.edits).toEqual([])
+    } else {
+      expect(on_error).not.toHaveBeenCalled()
+      const expected = `${text.slice(0, input_from + from)}X${text.slice(input_from + to)}`
+      expect(model.text()).toBe(expected)
+      expect(recorder.get_text()).toBe(expected)
+    }
   },
 )
 

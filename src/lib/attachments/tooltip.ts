@@ -797,7 +797,7 @@ export const tooltip =
       )
 
     const has_root_source =
-      Object.hasOwn(options, `content`) || node.matches(TOOLTIP_SOURCE_SELECTOR)
+      options.content !== undefined || node.matches(TOOLTIP_SOURCE_SELECTOR)
     const delegate = options.delegate ?? !has_root_source
     const delegate_selector =
       typeof delegate === `string` ? delegate : delegate ? TOOLTIP_SOURCE_SELECTOR : null

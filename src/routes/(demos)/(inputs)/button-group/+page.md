@@ -124,8 +124,4 @@ the buttons from your own stylesheet to change either.
 The root is a `<div>`. Pass `as="span"` where a div would be invalid, such as inside a
 heading or a paragraph.
 
-Per-option tooltips come from each option's `tooltip` field. `tooltip_options` forwards
-everything else to the [`tooltip`](attachments/tooltip) attachment, so
-Tooltips render plain text. Use `Popover` for formatted content or interactive controls.
-Only turn that on for trusted or sanitized markup — an HTML tooltip built from
-user-controlled text is an XSS vector.
+Per-option tooltips come from each option's `tooltip` field. `tooltip_options` forwards everything else to the [`tooltip`](attachments/tooltip) attachment. Tooltips render plain text. Use `Popover` for formatted content or interactive controls.
