@@ -30,15 +30,15 @@ const edit_href = (route_id: string | null, pathname: string) => {
 }
 
 test.each([
-  // the root pages render markdown from the repo root, not their wrapper component
-  [`/`, `/`, `readme.md`],
+  [`/`, `/`, `src/routes/+page.svelte`],
+  // Changelog content comes from the repo root, not its wrapper component.
   [`/changelog`, `/changelog`, `changelog.md`],
   [
     `/(demos)/(inputs)/(multiselect)/multiselect`,
     `/multiselect`,
     `src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md`,
   ],
-  // a 404 has no route id, so it must not fall into the `/` entry (readme.md)
+  // A 404 has no route id, so it must not fall into the landing-page entry.
   [null, `/no-such-page`, `src/routes`],
 ])(`footer edit link for route %s points at %s`, (route_id, pathname, source) => {
   expect(edit_href(route_id, pathname)).toBe(`${repository}/blob/-/${source}`)

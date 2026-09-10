@@ -43,7 +43,7 @@
       tools for Svelte 5.
     </p>
     <div class="getting-started">
-      <pre><code>npm install svelte-widgets</code></pre>
+      <pre class="language-sh"><code>npm install svelte-widgets</code></pre>
       <a href="#try-it">View example <span aria-hidden="true">↓</span></a>
     </div>
   </section>
