@@ -75,6 +75,57 @@ const mount_editor = async (
   model = create_editor_model({ uri: `demo.ts`, text: DEMO_TEXT }),
   overrides: Partial<EditorProps> = {},
 ) => {
+  // happy-dom has no text layout. Browser tests compare actual native bidi/font
+  // geometry; unit tests emulate fixed-width grapheme cells and two-column tabs.
+  const cells = (text: string): number => {
+    let width = 0
+    for (const { segment } of new Intl.Segmenter(undefined, {
+      granularity: `grapheme`,
+    }).segment(text))
+      width +=
+        segment === `\t`
+          ? 2 - (width % 2)
+          : /\p{Extended_Pictographic}/u.test(segment)
+            ? 2
+            : 1
+    return width
+  }
+  vi.spyOn(HTMLDivElement.prototype, `getBoundingClientRect`).mockImplementation(
+    function (this: HTMLDivElement) {
+      return this.hasAttribute(`data-editor-measure`)
+        ? new DOMRect(0, 0, 800, 20)
+        : new DOMRect()
+    },
+  )
+  vi.spyOn(Range.prototype, `getClientRects`).mockImplementation(function (this: Range) {
+    const rect = new DOMRect(
+      cells((this.startContainer.textContent ?? ``).slice(0, this.startOffset)),
+      0,
+      0,
+      20,
+    )
+    return Object.assign([rect], { item: (index: number) => (index === 0 ? rect : null) })
+  })
+  Object.defineProperty(document, `caretPositionFromPoint`, {
+    configurable: true,
+    value: (column: number) => {
+      const node = document.querySelector(`[data-editor-measure]`)?.firstChild
+      if (!node) return null
+      let offset = 0
+      let width = 0
+      for (const { segment } of new Intl.Segmenter(undefined, {
+        granularity: `grapheme`,
+      }).segment(node.textContent ?? ``)) {
+        const next_width = cells(
+          (node.textContent ?? ``).slice(0, offset + segment.length),
+        )
+        if ((width + next_width) / 2 >= column) break
+        width = next_width
+        offset += segment.length
+      }
+      return { offsetNode: node, offset }
+    },
+  })
   const recorder = create_backend()
   const props = $state<EditorProps>({ model, backend: recorder.backend, ...overrides })
   const instance = mount(CodeEditor, { target: document.body, props })
@@ -346,19 +397,229 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
       Promise.resolve(Array.from({ length: end_line - start_line }, () => [0, 6])),
     )
   recorder.backend.highlight_lines = highlight_lines
-  const { textarea } = await mount_editor(model, { backend: recorder.backend })
+  await mount_editor(model, { backend: recorder.backend })
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
   await flush_async()
   model.set_selection({ anchor: 1, head: 1 })
   await flush_async()
-  textarea.scrollTop = 2049 * 20
-  textarea.dispatchEvent(new Event(`scroll`))
+  const scrollport = doc_query<HTMLDivElement>(`.content`)
+  scrollport.scrollTop = 2049 * 20
+  scrollport.dispatchEvent(new Event(`scroll`))
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
-  textarea.scrollTop = 0
-  textarea.dispatchEvent(new Event(`scroll`))
+  scrollport.scrollTop = 0
+  scrollport.dispatchEvent(new Event(`scroll`))
   await tick()
   expect(highlight_lines).toHaveBeenCalledTimes(2)
   expect(doc_query(`.token-layer .line span`).classList.contains(`tok-keyword`)).toBe(
     true,
   )
+})
+
+test(`viewport input maps edits, IME, external updates, and history to document offsets`, async () => {
+  const model = create_editor_model({
+    uri: `memory:large-input`,
+    text: Array.from({ length: 100_000 }, (_unused, line_idx) => `line ${line_idx}`).join(
+      `\n`,
+    ),
+  })
+  const { textarea, instance } = await mount_editor(model)
+  const scrollport = doc_query<HTMLDivElement>(`.content`)
+  const text_spy = vi.spyOn(model, `text`)
+  const slice_spy = vi.spyOn(model, `slice`)
+  const offset = () => Number(textarea.dataset.inputFrom)
+  scrollport.scrollTop = 50_000 * 20
+  scrollport.dispatchEvent(new Event(`scroll`))
+  await tick()
+  expect(offset()).toBeGreaterThan(0)
+  expect(textarea.value.split(`\n`).length).toBeLessThan(30)
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+
+  const caret = model.line(50_000).from + 5
+  model.set_selection({ anchor: caret, head: caret })
+  await tick()
+  emit_input(textarea, `insertText`, caret - offset(), caret - offset(), `!`)
+  expect(model.slice(caret, caret + 1)).toBe(`!`)
+  expect(model.selection).toEqual({ anchor: caret + 1, head: caret + 1 })
+  await tick()
+  textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
+  const composition_offset = offset()
+  emit_input(
+    textarea,
+    `insertCompositionText`,
+    caret + 1 - offset(),
+    caret + 1 - offset(),
+    `λ`,
+  )
+  scrollport.scrollTop = 60_000 * 20
+  scrollport.dispatchEvent(new Event(`scroll`))
+  await tick()
+  expect(offset()).toBe(composition_offset)
+  emit_input(
+    textarea,
+    `insertCompositionText`,
+    caret + 2 - offset(),
+    caret + 2 - offset(),
+    `lambda`,
+    caret + 1 - offset(),
+    caret + 2 - offset(),
+  )
+  textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
+  await flush_async()
+  expect(model.slice(caret, caret + 7)).toBe(`!lambda`)
+  expect(instance.undo()).toBe(true)
+  expect(model.slice(caret, caret + 2)).toBe(`!5`)
+  expect(instance.redo()).toBe(true)
+  model.transact([{ from: caret, to: caret + 1, insert: `?` }])
+  await tick()
+  expect(textarea.value).toContain(`line ?lambda50000`)
+  expect(text_spy).not.toHaveBeenCalled()
+  expect(
+    Math.max(...slice_spy.mock.calls.map(([from = 0, to = model.length]) => to - from)),
+  ).toBeLessThan(1000)
+})
+
+test(`document navigation and backward selections expand and release the input window`, async () => {
+  const model = create_editor_model({
+    uri: `memory:navigation`,
+    text: `abcdefghij\n`.repeat(200),
+  })
+  const { textarea, props } = await mount_editor(model)
+  press_key(textarea, `End`, { ctrlKey: true })
+  await tick()
+  expect(model.selection).toEqual({ anchor: model.length, head: model.length })
+  expect(Number(textarea.dataset.inputFrom)).toBeGreaterThan(0)
+  press_key(textarea, `Home`, { ctrlKey: true, shiftKey: true })
+  expect(model.selection).toEqual({ anchor: model.length, head: 0 })
+  expect(textarea.value).toBe(model.text())
+  expect(textarea.selectionDirection).toBe(`backward`)
+  press_key(textarea, `Home`, { ctrlKey: true })
+  expect(textarea.value.length).toBeLessThan(200)
+  press_key(textarea, `PageDown`)
+  expect(model.selection.head).toBe(11)
+  press_key(textarea, `End`)
+  expect(model.selection.head).toBe(21)
+  press_key(textarea, `Home`, { shiftKey: true })
+  expect(model.selection).toEqual({ anchor: 21, head: 11 })
+  press_key(textarea, `PageUp`, { shiftKey: true })
+  expect(model.selection).toEqual({ anchor: 21, head: 0 })
+  press_key(textarea, `PageUp`)
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+  props.read_only = true
+  await tick()
+  press_key(textarea, `a`, { metaKey: true })
+  expect(model.selection).toEqual({ anchor: 0, head: model.length })
+  expect(textarea.value).toBe(model.text())
+})
+
+test(`vertical navigation keeps a preferred column and respects external selections`, async () => {
+  const model = create_editor_model({
+    uri: `memory:columns`,
+    text: `abcdefghij\nx\nabcdefghij\nA🧪B`,
+  })
+  const { textarea } = await mount_editor(model)
+  model.set_selection({ anchor: 8, head: 8 })
+  press_key(textarea, `ArrowDown`)
+  expect(model.selection.head).toBe(12)
+  press_key(textarea, `ArrowDown`, { shiftKey: true })
+  expect(model.selection).toEqual({ anchor: 12, head: 21 })
+  model.set_selection({ anchor: 15, head: 15 })
+  press_key(textarea, `ArrowDown`)
+  expect(model.selection.head).toBe(25)
+  press_key(textarea, `ArrowUp`)
+  expect(model.selection.head).toBe(15)
+  model.set_selection({ anchor: 8, head: 8 })
+  press_key(textarea, `ArrowDown`)
+  expect(model.selection.head).toBe(12)
+  press_key(textarea, `PageDown`)
+  expect(model.selection.head).toBe(14) // page keys use the actual, clamped column
+  press_key(textarea, `ArrowUp`)
+  expect(model.selection.head).toBe(12)
+})
+
+test.each([
+  [`ab\n\tx`, 2, 4],
+  [`\tx\nab`, 1, 5],
+])(`vertical movement aligns tab stops in %j`, async (text, start, expected) => {
+  const model = create_editor_model({ uri: `memory:tabs`, text })
+  const { textarea } = await mount_editor(model)
+  model.set_selection({ anchor: start, head: start })
+  press_key(textarea, `ArrowDown`)
+  expect(model.selection.head).toBe(expected)
+})
+
+test.each([
+  [`a\u0301a\u0301a\u0301\n123456`, 6, 10],
+  [`👩‍💻\n123456`, 5, 8],
+  [`12\na\u0301a\u0301a\u0301`, 2, 7],
+  [`12\n👩‍💻x`, 2, 8],
+  [`a\u0301\t\n123456`, 3, 6],
+])(`vertical movement follows grapheme widths in %j`, async (text, start, expected) => {
+  const model = create_editor_model({ uri: `memory:graphemes`, text })
+  const { textarea } = await mount_editor(model)
+  model.set_selection({ anchor: start, head: start })
+  press_key(textarea, `ArrowDown`)
+  expect(model.selection.head).toBe(expected)
+})
+
+test(`mouse selection retains its anchor and supports word and line selection`, async () => {
+  const model = create_editor_model({ uri: `memory:pointer`, text: `alpha\nbeta\ngamma` })
+  const { textarea } = await mount_editor(model)
+  const port = doc_query<HTMLDivElement>(`.content`)
+  vi.spyOn(port, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 100, 60))
+  Object.defineProperty(port, `clientHeight`, { value: 60 })
+  port.scrollTop = 0
+  port.dispatchEvent(new Event(`scroll`))
+  textarea.style.paddingLeft = `8px`
+  textarea.setPointerCapture = vi.fn()
+  textarea.dispatchEvent(
+    new PointerEvent(`pointerdown`, {
+      bubbles: true,
+      button: 0,
+      pointerType: `mouse`,
+      pointerId: 1,
+      clientX: 9,
+      clientY: 5,
+    }),
+  )
+  textarea.dispatchEvent(
+    new PointerEvent(`pointermove`, {
+      bubbles: true,
+      pointerId: 1,
+      clientX: 10,
+      clientY: 25,
+    }),
+  )
+  textarea.dispatchEvent(new PointerEvent(`pointerup`, { bubbles: true, pointerId: 1 }))
+  expect(model.selection).toEqual({ anchor: 1, head: 8 })
+  textarea.dispatchEvent(
+    new MouseEvent(`click`, { bubbles: true, detail: 2, clientX: 10, clientY: 5 }),
+  )
+  expect(model.selection).toEqual({ anchor: 0, head: 5 })
+  textarea.dispatchEvent(
+    new MouseEvent(`click`, { bubbles: true, detail: 3, clientX: 10, clientY: 5 }),
+  )
+  expect(model.selection).toEqual({ anchor: 0, head: 6 })
+})
+
+test(`host selection changes reveal both horizontal edges`, async () => {
+  const model = create_editor_model({ uri: `memory:horizontal`, text: `a`.repeat(1000) })
+  const { textarea } = await mount_editor(model)
+  const port = doc_query<HTMLDivElement>(`.content`)
+  Object.defineProperties(port, {
+    clientWidth: { value: 300 },
+    clientHeight: { value: 60 },
+  })
+  Object.defineProperties(textarea, {
+    clientWidth: { value: 1200 },
+    scrollWidth: { value: 1200 },
+  })
+  textarea.style.padding = `0 8px`
+  vi.spyOn(port, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 300, 60))
+  vi.spyOn(textarea, `getBoundingClientRect`).mockImplementation(
+    () => new DOMRect(-port.scrollLeft, 0, 1200, 40),
+  )
+  model.set_selection({ anchor: 900, head: 900 })
+  expect(port.scrollLeft).toBeGreaterThan(600)
+  model.set_selection({ anchor: 0, head: 0 })
+  expect(port.scrollLeft).toBe(0)
 })

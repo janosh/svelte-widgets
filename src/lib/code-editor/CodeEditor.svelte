@@ -5,7 +5,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { register_escape_layer } from '../attachments/index'
+  import { css_px, register_escape_layer } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
   import {
@@ -40,6 +40,8 @@
   const OVERSCAN_ROWS = 8
   const TOKEN_CACHE_LINES = 2048
   const CONTEXT_CHECK_CHARS = 32
+  const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
+  const words = new Intl.Segmenter(undefined, { granularity: `word` })
   let {
     model,
     options = {},
@@ -68,20 +70,26 @@
 
   const msg = $derived(merge_defaults(CODE_EDITOR_LABELS, labels))
   let textarea = $state<HTMLTextAreaElement>()
+  let scrollport = $state<HTMLDivElement>()
+  let input_from = $state(0)
+  let input_to = 0
+  let rendered_selection: EditorSelection | null = null
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
   let model_revision = $state(0)
   // Bumped when highlight spans land, so the viewport LRU touch re-runs then
   let token_revision = $state(0)
   let scroll_top = $state(0)
-  let scroll_left = $state(0)
   let viewport_height = $state(0)
   let viewport_width = $state(0)
   let overlay_width = $state(0)
   let caret_line = $state(0)
   let saving = $state(false)
   let local_model_update = false
+  let refreshing_input = false
   let tab_moves_focus = false
+  let preferred_column: number | null = null
+  let preferred_head = -1
   let composing = false
   let composition_seq = 0
   let composition_range: EditorSelection | null = null
@@ -182,23 +190,87 @@
   })
   const total_height = $derived(line_count * line_height)
   const gutter_digits = $derived(String(line_count).length)
+  const dom_selection = ({
+    selectionStart: start,
+    selectionEnd: end,
+    selectionDirection: direction,
+  }: HTMLTextAreaElement): EditorSelection =>
+    direction === `backward` ? { anchor: end, head: start } : { anchor: start, head: end }
   const set_dom_selection = (
     area: HTMLTextAreaElement,
     { anchor, head }: EditorSelection,
   ): void => {
     const direction = anchor > head ? `backward` : `forward`
-    area.setSelectionRange(Math.min(anchor, head), Math.max(anchor, head), direction)
+    const start = Math.max(
+      0,
+      Math.min(area.value.length, Math.min(anchor, head) - input_from),
+    )
+    const end = Math.max(
+      0,
+      Math.min(area.value.length, Math.max(anchor, head) - input_from),
+    )
+    if (
+      area.selectionStart !== start ||
+      area.selectionEnd !== end ||
+      area.selectionDirection !== direction
+    )
+      area.setSelectionRange(start, end, direction)
+    rendered_selection = dom_selection(area)
   }
-  const sync_dom_from_model = (update: EditorUpdate): void => {
+  const reveal_selection = (): void => {
+    const port = scrollport
+    if (!port) return
+    const top = model.line_at(model.selection.head).line_idx * line_height
+    if (top < scroll_top) scroll_top = top
+    else if (top + line_height > scroll_top + port.clientHeight)
+      scroll_top = Math.max(0, top + line_height - port.clientHeight)
+    port.scrollTop = scroll_top
+  }
+  // Native input owns only visible lines and explicit selections. A selection spanning
+  // the document deliberately expands this window so native copy/cut and AT keep working.
+  const refresh_input = (reveal = false): void => {
     const area = textarea
-    if (!area || local_model_update) return
-    const { anchor, head } = selection_of(area)
-    const moved = anchor !== update.selection.anchor || head !== update.selection.head
-    if (update.transaction) area.value = model.text()
-    // Re-selecting an unchanged range would still cancel an active IME composition.
-    if (update.transaction || moved) set_dom_selection(area, update.selection)
-    area.scrollTop = scroll_top
-    area.scrollLeft = scroll_left
+    if (!area || composing || before_snapshot) return
+    if (reveal) reveal_selection()
+    const window = visible_line_window(
+      scroll_top,
+      viewport_height,
+      line_height,
+      model.line_count,
+      OVERSCAN_ROWS,
+    )
+    const { anchor, head } = model.selection
+    if (anchor !== head || reveal) {
+      window.start = Math.min(
+        window.start,
+        model.line_at(Math.min(anchor, head)).line_idx,
+      )
+      window.end = Math.max(
+        window.end,
+        model.line_at(Math.max(anchor, head)).line_idx + 1,
+      )
+    }
+    input_from = model.line(window.start).from
+    input_to = window.end < model.line_count ? model.line(window.end).from : model.length
+    const value = model.slice(input_from, input_to)
+    // Position synchronously before setting a caret: native navigation uses layout before
+    // Svelte's next render, and stale window geometry can swallow an arrow-key movement.
+    area.style.top = `${window.start * line_height}px`
+    area.style.height = `${Math.max(1, window.end - window.start) * line_height}px`
+    refreshing_input = true
+    try {
+      if (area.value !== value) area.value = value
+      set_dom_selection(area, model.selection)
+    } finally {
+      refreshing_input = false
+    }
+    // The outer viewport owns scrolling; the native field must not introduce a second offset.
+    area.scrollTop = 0
+    area.scrollLeft = 0
+    if (reveal) {
+      measure_overlay_width()
+      reveal_horizontal_selection()
+    }
   }
   $effect(() => {
     const active_model = model
@@ -220,7 +292,6 @@
     doc_info = null
     error_message = null
     scroll_top = 0
-    scroll_left = 0
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
     before_snapshot = null
@@ -234,16 +305,16 @@
         invalidate_tokens(active_model, update.transaction)
         active.apply_transaction(update.transaction)
       }
-      sync_dom_from_model(update)
+      if (!local_model_update) refresh_input(true)
       on_update?.(update)
     })
     queueMicrotask(() => {
       if (!is_current() || !textarea) return
-      textarea.value = active_model.text()
-      textarea.scrollTop = 0
-      textarea.scrollLeft = 0
-      set_dom_selection(textarea, active_model.selection)
-      measure_overlay_width()
+      if (scrollport) {
+        scrollport.scrollTop = 0
+        scrollport.scrollLeft = 0
+      }
+      refresh_input(true)
     })
     active
       .open()
@@ -285,12 +356,19 @@
   const measure_overlay_width = (): void => {
     const area = textarea
     if (!area) return
+    area.style.minWidth = `0`
     const width = Math.max(area.scrollWidth, area.clientWidth)
+    // Caret scrolling must see the new width before the next Svelte render.
+    area.style.minWidth = `${width}px`
     if (width !== overlay_width) overlay_width = width
   }
   $effect(() => {
     void viewport_height
     void viewport_width
+    void scroll_top
+    void model_revision
+    untrack(() => refresh_input())
+    if (scrollport) scrollport.scrollTop = scroll_top
     measure_overlay_width()
   })
   const on_focus = (): void => {
@@ -307,10 +385,21 @@
     tab_moves_focus = false
   }
   onDestroy(on_blur)
-  const selection_of = (area: HTMLTextAreaElement): EditorSelection =>
-    area.selectionDirection === `backward`
-      ? { anchor: area.selectionEnd, head: area.selectionStart }
-      : { anchor: area.selectionStart, head: area.selectionEnd }
+  const selection_of = (
+    area: HTMLTextAreaElement,
+    preserve_clamped = true,
+  ): EditorSelection => {
+    const { anchor, head } = dom_selection(area)
+    if (
+      preserve_clamped &&
+      (Math.min(model.selection.anchor, model.selection.head) < input_from ||
+        Math.max(model.selection.anchor, model.selection.head) > input_to) &&
+      rendered_selection?.anchor === anchor &&
+      rendered_selection.head === head
+    )
+      return model.selection
+    return { anchor: input_from + anchor, head: input_from + head }
+  }
   const update_locally = (update: () => void): void => {
     local_model_update = true
     try {
@@ -321,7 +410,7 @@
   }
   const sync_selection = (): void => {
     const area = textarea
-    if (!area || local_model_update || before_snapshot) return
+    if (!area || local_model_update || refreshing_input || before_snapshot) return
     update_locally(() => model.set_selection(selection_of(area)))
   }
   const on_before_input = (event: InputEvent): void => {
@@ -364,18 +453,21 @@
   ): TextEdit => {
     const shape = input_shape(before.input_type)
     if (!shape) throw new Error(`Unsupported editor input type ${before.input_type}`)
-    if (before.value_length !== model.length)
+    if (before.value_length !== input_to - input_from)
       throw new Error(
-        `Editor input length mismatch: textarea=${before.value_length}, model=${model.length}`,
+        `Editor input length mismatch: textarea=${before.value_length}, window=${input_to - input_from}`,
       )
     let from = Math.min(before.anchor, before.head)
     let to = Math.max(before.anchor, before.head)
-    const delta = next_value.length - model.length
+    const delta = next_value.length - before.value_length
     if (before.input_type === `insertReplacementText` && from === to) {
-      const window_from = Math.max(0, from - CONTEXT_CHECK_CHARS)
-      const window_to = Math.min(model.length, to + CONTEXT_CHECK_CHARS)
+      const window_from = Math.max(input_from, from - CONTEXT_CHECK_CHARS)
+      const window_to = Math.min(input_to, to + CONTEXT_CHECK_CHARS)
       const old_window = model.slice(window_from, window_to)
-      const new_window = next_value.slice(window_from, window_to + delta)
+      const new_window = next_value.slice(
+        window_from - input_from,
+        window_to + delta - input_from,
+      )
       let prefix_length = 0
       while (
         prefix_length < old_window.length &&
@@ -411,14 +503,20 @@
       throw new Error(
         `Invalid ${before.input_type} edit from=${from}, to=${to}, insert_length=${insert_length}`,
       )
-    const prefix_from = Math.max(0, from - CONTEXT_CHECK_CHARS)
-    const suffix_to = Math.min(model.length, to + CONTEXT_CHECK_CHARS)
+    const prefix_from = Math.max(input_from, from - CONTEXT_CHECK_CHARS)
+    const suffix_to = Math.min(input_to, to + CONTEXT_CHECK_CHARS)
     if (
-      model.slice(prefix_from, from) !== next_value.slice(prefix_from, from) ||
-      model.slice(to, suffix_to) !== next_value.slice(to + delta, suffix_to + delta)
+      model.slice(prefix_from, from) !==
+        next_value.slice(prefix_from - input_from, from - input_from) ||
+      model.slice(to, suffix_to) !==
+        next_value.slice(to + delta - input_from, suffix_to + delta - input_from)
     )
       throw new Error(`Editor input context diverged for ${before.input_type}`)
-    return { from, to, insert: next_value.slice(from, from + insert_length) }
+    return {
+      from,
+      to,
+      insert: next_value.slice(from - input_from, from + insert_length - input_from),
+    }
   }
   const history_group = (input_type: string): string | null => {
     if (input_type.includes(`Composition`) || composing)
@@ -432,7 +530,7 @@
     const area = textarea
     if (!area) return
     if (editing_disabled) {
-      area.value = model.text()
+      area.value = model.slice(input_from, input_to)
       before_snapshot = null
       return
     }
@@ -440,7 +538,7 @@
     try {
       if (!snapshot) throw new Error(`Input arrived without a beforeinput snapshot`)
       update_locally(() => {
-        const next_selection = selection_of(area)
+        const next_selection = selection_of(area, false)
         const edit = derive_input_edit(snapshot, area.value, next_selection)
         const unchanged =
           edit.to - edit.from === edit.insert.length &&
@@ -457,23 +555,23 @@
             anchor: edit.from,
             head: edit.from + edit.insert.length,
           }
+        input_to += edit.insert.length - (edit.to - edit.from)
         if (snapshot.input_type === `insertFromComposition`) composition_range = null
       })
     } catch (error) {
-      area.value = model.text()
+      area.value = model.slice(input_from, input_to)
       if (snapshot) set_dom_selection(area, snapshot)
       report_error(error)
     } finally {
       before_snapshot = null
     }
     sync_selection()
-    measure_overlay_width()
+    refresh_input(true)
   }
   const on_scroll = (): void => {
-    const area = textarea
-    if (!area) return
-    scroll_top = area.scrollTop
-    scroll_left = area.scrollLeft
+    const port = scrollport
+    if (!port) return
+    scroll_top = port.scrollTop
   }
   const on_composition_start = (): void => {
     composing = true
@@ -482,6 +580,8 @@
   }
   const on_composition_end = (): void => {
     composing = false
+    // Some browsers deliver the final input after compositionend in the same task.
+    queueMicrotask(() => refresh_input(true))
   }
   const apply_edit = (edit: RangeEdit, source: `command` | `input` = `command`): void => {
     const area = textarea
@@ -494,27 +594,23 @@
       selection_end: head,
     } = edit
     if (from === to && insert === ``) {
-      area.setSelectionRange(anchor, head)
-      sync_selection()
+      model.set_selection({ anchor, head })
       return
     }
     try {
       update_locally(() => {
-        area.setRangeText(insert, from, to, `end`)
-        area.setSelectionRange(anchor, head)
         model.transact([{ from, to, insert }], {
           selection: { anchor, head },
           source,
         })
       })
     } catch (error) {
-      area.value = model.text()
+      area.value = model.slice(input_from, input_to)
       set_dom_selection(area, model.selection)
       report_error(error)
       return
     }
-    sync_selection()
-    measure_overlay_width()
+    refresh_input(true)
   }
   const run_save = async (): Promise<boolean> => {
     const info = doc_info
@@ -549,9 +645,198 @@
     event.preventDefault()
     apply_edit(edit, source)
   }
+  const measure_line = (text: string): { element: HTMLDivElement; node: Text } => {
+    const area = textarea
+    if (!area) throw new Error(`Cannot measure editor text before mounting`)
+    const style = getComputedStyle(area)
+    const element = area.ownerDocument.createElement(`div`)
+    element.dataset.editorMeasure = ``
+    Object.assign(element.style, {
+      position: `fixed`,
+      top: `0`,
+      left: `0`,
+      zIndex: `2147483647`,
+      opacity: `0`,
+      width: `${area.clientWidth - css_px(style.paddingLeft) - css_px(style.paddingRight)}px`,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSize,
+      fontStyle: style.fontStyle,
+      fontWeight: style.fontWeight,
+      fontVariantLigatures: style.fontVariantLigatures,
+      lineHeight: style.lineHeight,
+      letterSpacing: style.letterSpacing,
+      wordSpacing: style.wordSpacing,
+      tabSize: style.tabSize,
+      whiteSpace: `pre`,
+      direction: style.direction,
+    })
+    const node = area.ownerDocument.createTextNode(text || `\u200B`)
+    element.append(node)
+    area.ownerDocument.body.append(element)
+    return { element, node }
+  }
+  const column_at = (text: string, offset: number): number => {
+    const { element, node } = measure_line(text)
+    try {
+      const range = node.ownerDocument.createRange()
+      range.setStart(node, offset)
+      range.collapse(true)
+      // A bidi boundary can have two caret boxes. Native selection uses the paragraph's
+      // leading affinity; getBoundingClientRect() only returns the first box here.
+      const rtl = element.style.direction === `rtl`
+      const positions = Array.from(range.getClientRects(), (rect) =>
+        rtl ? rect.right : rect.left,
+      )
+      return (
+        (rtl ? Math.max(...positions) : Math.min(...positions)) -
+        element.getBoundingClientRect().left
+      )
+    } finally {
+      element.remove()
+    }
+  }
+  const reveal_horizontal_selection = (): void => {
+    const area = textarea
+    const port = scrollport
+    if (!area || !port) return
+    if (area.clientWidth <= port.clientWidth) {
+      port.scrollLeft = 0
+      return
+    }
+    const style = getComputedStyle(area)
+    const line = model.line_at(model.selection.head)
+    const caret_x =
+      area.getBoundingClientRect().left +
+      css_px(style.paddingLeft) +
+      column_at(line.text, model.selection.head - line.from)
+    const viewport_left = port.getBoundingClientRect().left + port.clientLeft
+    const left = viewport_left + css_px(style.paddingLeft)
+    const right = viewport_left + port.clientWidth - css_px(style.paddingRight) - 1
+    if (caret_x < left) port.scrollLeft += caret_x - left
+    else if (caret_x > right) port.scrollLeft += caret_x - right
+  }
+  const offset_at_column = (text: string, target: number): number => {
+    if (!text) return 0
+    const { element, node } = measure_line(text)
+    try {
+      const target_column = Math.max(
+        0,
+        Math.min(target, element.getBoundingClientRect().width - 0.5),
+      )
+      // Keep the queried caret on screen even when a horizontally scrolled line is wider
+      // than the viewport. Moving the measuring surface does not change its line layout.
+      element.style.left = `${Math.min(0, node.ownerDocument.documentElement.clientWidth / 2 - target_column)}px`
+      const box = element.getBoundingClientRect()
+      const caret = node.ownerDocument.caretPositionFromPoint(
+        box.left + target_column,
+        box.top + box.height / 2,
+      )
+      if (!caret || caret.offsetNode !== node)
+        throw new Error(`Cannot hit-test editor line at column ${target}`)
+      // Browser hit-testing owns bidi/shaping; clamp to a complete grapheme boundary.
+      return graphemes.segment(text).containing(caret.offset)?.index ?? text.length
+    } finally {
+      element.remove()
+    }
+  }
+  let pointer_selection: { anchor: number; client_x: number; client_y: number } | null =
+    null
+  let selection_frame = 0
+  const pointer_offset = (client_x: number, client_y: number): number => {
+    const port = scrollport
+    const area = textarea
+    if (!port || !area) return model.selection.head
+    const box = port.getBoundingClientRect()
+    const line_idx = Math.max(
+      0,
+      Math.min(
+        model.line_count - 1,
+        Math.floor((client_y - box.top + port.scrollTop) / line_height),
+      ),
+    )
+    const line = model.line(line_idx)
+    const column =
+      client_x - box.left + port.scrollLeft - css_px(getComputedStyle(area).paddingLeft)
+    return line.from + offset_at_column(line.text, Math.max(0, column))
+  }
+  const stop_pointer_selection = (): void => {
+    pointer_selection = null
+    if (selection_frame) cancelAnimationFrame(selection_frame)
+    selection_frame = 0
+  }
+  onDestroy(stop_pointer_selection)
+  const update_pointer_selection = (): void => {
+    const port = scrollport
+    const selection = pointer_selection
+    if (!port || !selection) return
+    const box = port.getBoundingClientRect()
+    const outside =
+      selection.client_y < box.top
+        ? selection.client_y - box.top
+        : Math.max(0, selection.client_y - box.bottom)
+    const outside_x =
+      selection.client_x < box.left
+        ? selection.client_x - box.left
+        : Math.max(0, selection.client_x - box.right)
+    if (outside_x)
+      port.scrollLeft += Math.sign(outside_x) * Math.min(Math.abs(outside_x), 60)
+    if (outside) {
+      port.scrollTop += Math.sign(outside) * Math.min(Math.abs(outside), line_height * 3)
+      scroll_top = port.scrollTop
+    }
+    const head = pointer_offset(selection.client_x, selection.client_y)
+    update_locally(() => model.set_selection({ anchor: selection.anchor, head }))
+    refresh_input()
+    if (outside || outside_x)
+      selection_frame = requestAnimationFrame(update_pointer_selection)
+  }
+  const on_pointer_down = (event: PointerEvent): void => {
+    // Touch gestures retain native selection handles and scrolling.
+    if (event.pointerType === `touch` || event.button !== 0 || composing) return
+    event.preventDefault()
+    const area = textarea
+    if (!area) return
+    area.focus({ preventScroll: true })
+    const head = pointer_offset(event.clientX, event.clientY)
+    pointer_selection = {
+      anchor: event.shiftKey ? model.selection.anchor : head,
+      client_x: event.clientX,
+      client_y: event.clientY,
+    }
+    preferred_column = null
+    area.setPointerCapture(event.pointerId)
+    update_pointer_selection()
+  }
+  const on_pointer_move = (event: PointerEvent): void => {
+    if (!pointer_selection) return
+    pointer_selection.client_x = event.clientX
+    pointer_selection.client_y = event.clientY
+    if (selection_frame) cancelAnimationFrame(selection_frame)
+    update_pointer_selection()
+  }
+  const on_pointer_click = (event: MouseEvent): void => {
+    if (event.detail < 2) return
+    const offset = pointer_offset(event.clientX, event.clientY)
+    const line = model.line_at(offset)
+    if (event.detail >= 3) {
+      model.set_selection({
+        anchor: line.from,
+        head: Math.min(model.length, line.to + 1),
+      })
+      return
+    }
+    const word = words.segment(line.text).containing(offset - line.from)
+    if (word) {
+      model.set_selection({
+        anchor: line.from + word.index,
+        head: line.from + word.index + word.segment.length,
+      })
+    }
+  }
   const on_keydown = (event: KeyboardEvent): void => {
     const area = textarea
-    if (!area || editing_disabled || event.isComposing) return
+    if (!area || event.isComposing) return
+    if (editing_disabled && event.key === `Tab`) return
     if (event.key === `Tab` && tab_moves_focus) {
       tab_moves_focus = false
       return
@@ -559,6 +844,55 @@
     tab_moves_focus = false
     const command_modifier = event.metaKey || event.ctrlKey
     const lower_key = event.key.toLowerCase()
+    const vertical =
+      !command_modifier &&
+      !event.altKey &&
+      (event.key === `ArrowUp` || event.key === `ArrowDown`)
+    if (!vertical) preferred_column = null
+    if (command_modifier && lower_key === `a`) {
+      event.preventDefault()
+      model.set_selection({ anchor: 0, head: model.length })
+      return
+    }
+    const selection = selection_of(area)
+    const move_caret = (head: number): void =>
+      model.set_selection({ anchor: event.shiftKey ? selection.anchor : head, head })
+    if (
+      (command_modifier && (event.key === `Home` || event.key === `End`)) ||
+      (event.metaKey && (event.key === `ArrowUp` || event.key === `ArrowDown`))
+    ) {
+      event.preventDefault()
+      move_caret(event.key === `Home` || event.key === `ArrowUp` ? 0 : model.length)
+      return
+    }
+    if (vertical || event.key === `PageUp` || event.key === `PageDown`) {
+      event.preventDefault()
+      const line = model.line_at(selection.head)
+      if (vertical && selection.head !== preferred_head) preferred_column = null
+      const column = preferred_column ?? column_at(line.text, selection.head - line.from)
+      if (vertical) preferred_column = column
+      const direction = event.key === `ArrowUp` || event.key === `PageUp` ? -1 : 1
+      const distance = vertical
+        ? 1
+        : Math.max(1, Math.floor(viewport_height / line_height))
+      const target = model.line(
+        Math.max(0, Math.min(model.line_count - 1, line.line_idx + direction * distance)),
+      )
+      const head = target.from + offset_at_column(target.text, column)
+      if (vertical) preferred_head = head
+      move_caret(head)
+      return
+    }
+    if (event.key === `Home` || event.key === `End`) {
+      event.preventDefault()
+      const line = model.line_at(selection.head)
+      move_caret(event.key === `Home` ? line.from : line.to)
+      return
+    }
+    // Recenter before native navigation/deletion reaches either edge of the input slice.
+    sync_selection()
+    refresh_input(true)
+    if (editing_disabled) return
     if (
       command_modifier &&
       !event.altKey &&
@@ -575,8 +909,8 @@
     }
     const state: EditorState = {
       model,
-      selection_start: area.selectionStart,
-      selection_end: area.selectionEnd,
+      selection_start: Math.min(selection_of(area).anchor, selection_of(area).head),
+      selection_end: Math.max(selection_of(area).anchor, selection_of(area).head),
     }
     if (event.key === `Tab`) {
       event.preventDefault() // a no-op dedent must not move focus
@@ -636,21 +970,30 @@
     {/if}
     <div
       class="content"
+      bind:this={scrollport}
+      onscroll={on_scroll}
       bind:clientHeight={viewport_height}
       bind:clientWidth={viewport_width}
     >
+      <div
+        class="scroll-space"
+        aria-hidden="true"
+        style:height={`${total_height}px`}
+        style:width={`${overlay_width}px`}
+      ></div>
       <pre
         aria-hidden="true"
         class="token-layer layer"
         style:height={`${total_height}px`}
-        style:min-width={`${overlay_width}px`}
-        style:transform={`translate(${-scroll_left}px, ${-scroll_top}px)`}>{#each visible_rows as row (row.line_idx)}<div
+        style:min-width={`${overlay_width}px`}>{#each visible_rows as row (row.line_idx)}<div
             class="line"
             style:top={`${row.top}px`}>{#each row.tokens as token (token.start)}<span
                 class={token.css}>{token.text}</span
               >{/each}</div>{/each}</pre>
       <textarea
         aria-describedby={keyboard_help_id}
+        data-input-from={input_from}
+        style:min-width={`${overlay_width}px`}
         aria-label={aria_label ?? `${model.uri} source`}
         autocapitalize="off"
         autocomplete="off"
@@ -663,9 +1006,21 @@
         onfocus={on_focus}
         oninput={on_input}
         onkeydown={on_keydown}
-        onkeyup={sync_selection}
-        onpointerup={sync_selection}
-        onscroll={on_scroll}
+        onkeyup={() => {
+          sync_selection()
+          refresh_input(true)
+        }}
+        onclick={on_pointer_click}
+        onpointerdown={on_pointer_down}
+        onpointermove={on_pointer_move}
+        onpointercancel={stop_pointer_selection}
+        onlostpointercapture={stop_pointer_selection}
+        onpointerup={() => {
+          stop_pointer_selection()
+          rendered_selection = null
+          preferred_column = null
+          sync_selection()
+        }}
         onselect={sync_selection}
         readonly={editing_disabled}
         spellcheck="false"
@@ -721,7 +1076,11 @@
     position: relative;
     flex: 1 1 auto;
     min-width: 0;
-    overflow: hidden;
+    overflow: auto;
+    overflow-anchor: none;
+  }
+  .scroll-space {
+    pointer-events: none;
   }
   .layer,
   .gutter,
@@ -754,7 +1113,6 @@
   }
   .token-layer {
     pointer-events: none;
-    will-change: transform;
     border-radius: 0;
     background: none;
   }
@@ -766,7 +1124,7 @@
     background: transparent;
     outline: none;
     resize: none;
-    overflow: auto;
+    overflow: hidden;
     &::selection {
       background: var(--editor-selection-bg);
     }
