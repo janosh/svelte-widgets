@@ -22,14 +22,14 @@ const route_sources = Object.fromEntries(
   ]),
 )
 
-// Avoid duplicating heading_ids' full slug rules.
+// Compare anchors without duplicating Markdown slug normalization.
 const bare = (text: string) => text.replaceAll(/[^a-z0-9]/giu, ``).toLowerCase()
 
 // The Markdown route renders an imported guide rather than authoring its headings locally.
 const headings_on = (route: string) =>
   [
     ...(route === `/markdown` ? markdown_guide : (route_sources[route] ?? ``)).matchAll(
-      /^#{2,4} (?<text>.+)$|<h[2-4]\s+id="(?<id>[^"]+)"/gmu,
+      /^#{2,4} (?<text>.+)$|<(?:h[2-4]\s+|Heading\s+[^>]*?)id="(?<id>[^"]+)"/gmu,
     ),
   ].map((match) => bare(match.groups?.id ?? match.groups?.text ?? ``))
 
