@@ -36,7 +36,6 @@ export type ObjectOption = {
   value?: unknown // associated value; option identity falls back to label when null or undefined
   title?: string // on-hover tooltip
   disabled?: boolean // make this option unselectable
-  preselected?: boolean // make this option selected on page load (before any user interaction)
   disabled_title?: string // override MultiSelect's default_disabled_title for this option
   selected_title?: string // tooltip to display when this option is selected and hovered
   style?: OptionStyle
@@ -71,8 +70,6 @@ export type PlaceholderConfig = {
 }
 
 export interface OptionListEvents<T extends Option = Option> {
-  on_open?: (data: { event: Event }) => unknown
-  on_close?: (data: { event: Event }) => unknown
   on_group_toggle?: (data: { group: string; collapsed: boolean }) => unknown
   on_collapse_all?: (data: { groups: string[] }) => unknown
   on_expand_all?: (data: { groups: string[] }) => unknown
@@ -83,6 +80,8 @@ export interface OptionListEvents<T extends Option = Option> {
 export interface MultiSelectEvents<
   T extends Option = Option,
 > extends OptionListEvents<T> {
+  on_open?: (data: { event: Event }) => unknown
+  on_close?: (data: { event: Event }) => unknown
   on_add?: (data: { option: T; selected: T[] }) => unknown
   on_create?: (data: {
     option: T
@@ -146,8 +145,8 @@ export type FormSerialize<T extends Option = Option> = (selected: T[]) => string
 // passed to before_input+after_input snippets
 type InputSnippetProps<T extends Option = Option> = Pick<
   MultiSelectProps<T>,
-  `selected` | `disabled` | `invalid` | `id` | `open` | `required` | `search_text`
-> & { placeholder: string | null }
+  `disabled` | `invalid` | `id` | `open` | `required` | `search_text`
+> & { selected: T[]; placeholder: string | null }
 type UserMsgProps = {
   search_text: string
   msg_type: false | `dupe` | `create` | `no-match`
@@ -167,13 +166,7 @@ export type GroupedOptions<T extends Option = Option> = {
 }
 
 export interface OptionListSnippets<T extends Option = Option> {
-  // icon marking the input as expandable into a dropdown; placed by expand_icon_position
-  expand_icon?: Snippet<[{ open: boolean; disabled: boolean }]>
   children?: Snippet<[{ option: T; idx: number; type: `option` | `selected` }]>
-  before_input?: Snippet<[InputSnippetProps<T>]>
-  after_input?: Snippet<[InputSnippetProps<T>]>
-  spinner?: Snippet
-  disabled_icon?: Snippet
   option?: Snippet<
     [{ option: T; idx: number; selected: boolean; active: boolean; disabled: boolean }]
   >
@@ -183,6 +176,12 @@ export interface OptionListSnippets<T extends Option = Option> {
 export interface MultiSelectSnippets<
   T extends Option = Option,
 > extends OptionListSnippets<T> {
+  // icon marking the input as expandable into a dropdown; placed by expand_icon_position
+  expand_icon?: Snippet<[{ open: boolean; disabled: boolean }]>
+  before_input?: Snippet<[InputSnippetProps<T>]>
+  after_input?: Snippet<[InputSnippetProps<T>]>
+  spinner?: Snippet
+  disabled_icon?: Snippet
   selected_item?: Snippet<[{ option: T; idx: number }]>
   remove_icon?: Snippet<
     [{ option: T; is_remove_all: false } | { option?: undefined; is_remove_all: true }]
@@ -226,19 +225,12 @@ export interface OptionListProps<T extends Option = Option>
   auto_active_first_option?: boolean
   autocomplete?: HTMLInputAttributes[`autocomplete`]
   auto_scroll?: boolean
-  breakpoint?: number // wider screens count as desktop, narrower as mobile
   default_disabled_title?: string
   disabled?: boolean
-  disabled_input_title?: string
-  expand_icon_position?: `left` | `right` | `none`
   // Unique option key, default value ?? label for objects and the primitive otherwise.
-  // Dupe detection also checks labels, so a second "Apple" is blocked unless duplicates=true.
   key?: (opt: T) => unknown
   filter_func?: (opt: T, search_text: string) => boolean
   fuzzy?: boolean // fuzzy (default) vs substring matching
-  close_dropdown_on_select?: boolean | `if-mobile` | `retain-focus`
-  form_input?: HTMLInputElement | null
-  form_serialize?: FormSerialize<T>
   highlight_matches?: boolean
   id?: string | null
   input?: HTMLInputElement | null
@@ -246,7 +238,6 @@ export interface OptionListProps<T extends Option = Option>
   input_props?: InputProps
   input_style?: string | null
   inputmode?: HTMLInputAttributes[`inputmode`] | null
-  invalid?: boolean
   // i18n overrides, shallow-merged over MULTI_SELECT_LABELS (see labels.ts)
   labels?: Partial<MultiSelectLabels>
   li_active_option_class?: ClassValue
@@ -259,24 +250,16 @@ export interface OptionListProps<T extends Option = Option>
   // included) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
   // not with sticky_group_headers: a header outside the render window cannot stay pinned.
   virtual_list?: boolean | { item_height?: number; overscan?: number }
-  name?: string | null
   no_matching_options_msg?: string
-  open?: boolean
-  // Mostly reaches portalled dropdowns: an outside press blurs the focused input, which
-  // already closes an in-place dropdown before any click. See dismiss_on_outside_press.
-  dismiss_on?: DismissConfig[`dismiss_on`]
   options?: T[] // static options, or omit when using load_options
   outer_div?: HTMLDivElement | null
   outer_div_class?: ClassValue
   pattern?: string | null
   placeholder?: string | PlaceholderConfig | null
-  required?: boolean | number
-  reset_filter_on_add?: boolean
   search_text?: string
   style?: string | null
   ul_options_class?: ClassValue
   ul_options_style?: string | null
-  portal?: PortalParams
   load_options?: LoadOptions<T>
   load_error?: Error | null // bindable, cleared on retry or a new search
   // Option grouping feature (https://github.com/janosh/svelte-widgets/issues/135)
@@ -294,12 +277,27 @@ export interface OptionListProps<T extends Option = Option>
   // Programmatic group control (exposed via bindable)
   collapse_all_groups?: () => void
   expand_all_groups?: () => void
-  // Keyboard shortcuts for common actions
-  shortcuts?: Partial<KeyboardShortcuts>
 }
 
-export interface MultiSelectProps<T extends Option = Option>
+interface MultiSelectBaseProps<T extends Option = Option>
   extends OptionListProps<T>, MultiSelectEvents<T>, MultiSelectSnippets<T> {
+  breakpoint?: number // wider screens count as desktop, narrower as mobile
+  disabled_input_title?: string
+  expand_icon_position?: `left` | `right` | `none`
+  close_dropdown_on_select?: boolean | `if-mobile` | `retain-focus`
+  form_input?: HTMLInputElement | null
+  form_serialize?: FormSerialize<T>
+  invalid?: boolean
+  name?: string | null
+  open?: boolean
+  // Mostly reaches portalled dropdowns: an outside press blurs the focused input, which
+  // already closes an in-place dropdown before any click. See dismiss_on_outside_press.
+  dismiss_on?: DismissConfig[`dismiss_on`]
+  required?: boolean | number
+  reset_filter_on_add?: boolean
+  portal?: PortalParams
+  // Keyboard shortcuts for common actions
+  shortcuts?: Partial<KeyboardShortcuts>
   create_option_msg?:
     | string
     | ((state: {
@@ -322,7 +320,6 @@ export interface MultiSelectProps<T extends Option = Option>
   li_selected_class?: ClassValue
   li_selected_style?: string | null
   li_user_msg_class?: ClassValue
-  max_select?: number | null // null means there is no upper limit for selected.length
   max_select_msg?: ((current: number, max: number) => string) | null
   max_select_msg_class?: ClassValue
   // Chips rendered before the rest collapse into a "+N more" toggle; null (default) renders
@@ -332,15 +329,11 @@ export interface MultiSelectProps<T extends Option = Option>
   remove_btn_title?: string
   min_select?: number | null // null means there is no lower limit for selected.length
   parse_paste?: (text: string) => T[]
-  selected?: T[] // don't allow more than max_select preselected options
-  // 'chips' (default) renders selected options as tags; 'input' requires max_select === 1
-  selected_display?: `chips` | `input`
   sort_selected?: boolean | ((op1: T, op2: T) => number)
   selected_options_draggable?: boolean
   range_select?: boolean
   ul_selected_class?: ClassValue
   ul_selected_style?: string | null
-  value?: T | T[] | null
   // Select all feature
   select_all_option?: boolean | string // enable select all; if string, use as label
   select_all_scope?: SelectAllScope
@@ -351,6 +344,22 @@ export interface MultiSelectProps<T extends Option = Option>
   selected_flip_params?: FlipParams
   group_select_all?: boolean // per-group header select/deselect-all toggle
 }
+
+export type MultiSelectProps<T extends Option = Option> = MultiSelectBaseProps<T> &
+  (
+    | {
+        mode: `single`
+        value?: T | null
+        max_select?: never
+        selected_display?: `chips` | `input`
+      }
+    | {
+        mode?: `multiple`
+        value?: T[]
+        max_select?: number | null
+        selected_display?: `chips`
+      }
+  )
 
 // "modifier+...+key" with modifiers ctrl, shift, alt, meta, cmd (e.g. 'ctrl+shift+a');
 // null disables. Evaluated BEFORE built-in handlers (Enter, Escape, arrows, Backspace), so
@@ -394,7 +403,6 @@ export type OpenChangeEvent = {
   trigger: OpenChangeTrigger
 }
 export type OpenChangeHandler = (event: OpenChangeEvent) => void
-export type SlugifyHeading = (node: HTMLHeadingElement, idx: number) => string
 export type TocHeadingData = { id: string; level: number; title: string }
 
 // === Footer ===

@@ -10,7 +10,7 @@
 <MultiSelect
   id="home-languages"
   {options}
-  bind:selected
+  bind:value={selected}
   placeholder="Choose your languages…"
 />
 <p aria-live="polite">Selected: {selected.join(`, `) || `None yet`}</p>

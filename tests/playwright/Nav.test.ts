@@ -3,6 +3,88 @@ import { expect, test } from '@playwright/test'
 test.use({ baseURL: `http://localhost:3005` })
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
+for (const route of [`/`, `/range-slider`, `/markdown`]) {
+  test(`heading anchors reserve their space before hydration on ${route}`, async ({
+    page,
+  }) => {
+    const scripts = Promise.withResolvers<undefined>()
+    const warnings: string[] = []
+    page.on(`console`, (message) => {
+      if (/hydration/iu.test(message.text())) warnings.push(message.text())
+    })
+    await page.route(`**/*`, async (request) => {
+      if (request.request().resourceType() === `script`) await scripts.promise
+      await request.continue()
+    })
+    try {
+      await page.goto(route, { waitUntil: `commit` })
+      const heading = page.locator(`.docs-body h1`).first()
+      const anchor = heading.locator(`a[data-heading-anchor]`)
+      await expect(anchor).toHaveCount(1)
+      await expect(anchor.locator(`svg`)).toHaveCount(1)
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll<HTMLLinkElement>(`link[rel="stylesheet"]`)].every(
+          (link) => link.sheet,
+        ),
+      )
+      await page.evaluate(() => document.fonts.ready)
+      const text_box = () =>
+        heading.evaluate((element) => {
+          const text = [...element.childNodes].find(
+            (node) => node.nodeType === Node.TEXT_NODE && node.textContent?.trim(),
+          )
+          if (!text) throw new Error(`Heading has no text node`)
+          const range = document.createRange()
+          range.selectNode(text)
+          const { x, y, width, height } = range.getBoundingClientRect()
+          const heading_box = element.getBoundingClientRect()
+          // Relative to the heading center: sidebar width changes cannot masquerade as
+          // an anchor-induced text shift. No authored DOM styles are changed by the test.
+          return {
+            x: x + width / 2 - heading_box.x - heading_box.width / 2,
+            y: y - heading_box.y,
+            width,
+            height,
+          }
+        })
+      const before = await text_box()
+      const toc_links = page.locator(`aside.toc ol > li > a`)
+      const server_links = await toc_links.evaluateAll((links) =>
+        links.map((link) => link.getAttribute(`href`)),
+      )
+      if (route !== `/`) expect(server_links.length).toBeGreaterThan(0)
+      const original_anchor = await anchor.elementHandle()
+      scripts.resolve(undefined)
+      await expect(page.locator(`pre [data-sms-copy]`).first()).toBeAttached()
+      await page.waitForLoadState(`networkidle`)
+      expect(await text_box()).toEqual(before)
+      if (route !== `/`)
+        expect(
+          await toc_links.evaluateAll((links) =>
+            links.map((link) => link.getAttribute(`href`)),
+          ),
+        ).toEqual(server_links)
+      expect(
+        await anchor.evaluate(
+          (element, original) => element === original,
+          original_anchor,
+        ),
+      ).toBe(true)
+      await heading.hover()
+      await expect(anchor).toHaveCSS(`opacity`, `1`)
+      expect(await text_box()).toEqual(before)
+      await anchor.focus()
+      await page.mouse.move(0, 0)
+      await expect(anchor).toHaveCSS(`opacity`, `1`)
+      expect(await text_box()).toEqual(before)
+      expect(warnings).toEqual([])
+    } finally {
+      scripts.resolve(undefined)
+    }
+  })
+}
+
+// oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
 for (const [width, color_scheme] of [
   [320, `dark`],
   [1280, `light`],
@@ -52,7 +134,7 @@ for (const [width, color_scheme] of [
     )
     await page.getByRole(`button`, { name: `View code`, exact: true }).click()
     await expect(page.locator(`.code-example pre`)).toBeVisible()
-    await expect(page.locator(`.code-example pre`)).toContainText(`bind:selected`)
+    await expect(page.locator(`.code-example pre`)).toContainText(`bind:value`)
     await page
       .getByRole(`region`, { name: `Inputs`, exact: true })
       .getByRole(`link`, { name: `RangeSlider`, exact: true })

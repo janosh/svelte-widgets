@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import { page } from '$app/state'
   import { homepage, name } from '$root/package.json'
   import favicon from '$site/favicon.svg'
@@ -15,7 +16,9 @@
 <svelte:window bind:online />
 
 <div>
-  <h1>Error {String(page.status).replace(`0`, `😵`)}: {page.error?.message}</h1>
+  <Heading level={1} id="error"
+    >Error {String(page.status).replace(`0`, `😵`)}: {page.error?.message}</Heading
+  >
 
   {#if page.status >= 500}
     <p>

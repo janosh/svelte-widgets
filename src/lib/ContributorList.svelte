@@ -9,7 +9,7 @@
     ...rest
   }: Omit<HTMLAttributes<HTMLUListElement>, `children`> & {
     contributors: Contributor[]
-    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
+    tooltip_options?: Omit<TooltipOptions, `content`>
   } = $props()
 </script>
 
@@ -45,10 +45,5 @@
     height: var(--contributor-avatar-size, 60px);
     border-radius: 50%;
     display: block;
-    filter: grayscale(100%);
-    transition: filter 0.3s ease-in-out;
-  }
-  ul img:hover {
-    filter: none;
   }
 </style>

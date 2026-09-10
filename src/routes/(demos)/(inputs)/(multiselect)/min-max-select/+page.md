@@ -33,7 +33,7 @@
   max_select={5}
   placeholder="What languages do you know?"
   min_select={1}
-  bind:selected
+  bind:value={selected}
   on_max_reached={() => (max_msg = `Maximum of 5 reached!`)}
 >
   {#snippet children({ option })}
@@ -122,7 +122,7 @@ Use `select_all_option` to add a "Select all" button at the top of the dropdown.
 
 <MultiSelect
   options={fruits}
-  bind:selected
+  bind:value={selected}
   select_all_option
   shortcuts={{ select_all: `ctrl+a` }}
   max_select={5}
@@ -156,7 +156,7 @@ Pass a string to customize the label:
 
 <MultiSelect
   options={colors}
-  bind:selected
+  bind:value={selected}
   select_all_option="Add all colors"
   placeholder="Select colors..."
 />
@@ -172,7 +172,7 @@ Pass a string to customize the label:
 
 ## Initialize with `value` prop
 
-For single select (`max_select={1}`), you can use `bind:value` to initialize the selected option. Simpler than `selected={[option]}`. Works with any option type (strings, numbers, objects).
+Use `mode="single"` with a scalar `value` to initialize single selection. Strings, numbers, and objects are supported.
 
 ```svelte example id="single-select-bind-value"
 <script lang="ts">
@@ -191,7 +191,7 @@ For single select (`max_select={1}`), you can use `bind:value` to initialize the
   let selected_color: ColorOption | null = $state(options[2]) // Preselect Blue
 </script>
 
-<MultiSelect {options} bind:value={selected_color} max_select={1} />
+<MultiSelect {options} bind:value={selected_color} mode="single" />
 
 <p style="color: {selected_color?.value}">
   Selected: <strong>{selected_color?.label ?? `none`}</strong>
@@ -210,7 +210,6 @@ For single select (`max_select={1}`), you can use `bind:value` to initialize the
     {
       label: red_pill,
       value: `red pill`,
-      preselected: true,
     },
     {
       label: blue_pill,
@@ -218,8 +217,8 @@ For single select (`max_select={1}`), you can use `bind:value` to initialize the
     },
   ]
 
-  let value: ObjectOption | null = $state(null)
+  let value: ObjectOption | null = $state(options[0])
 </script>
 
-<MultiSelect {options} max_select={1} bind:value />
+<MultiSelect {options} mode="single" bind:value />
 ```

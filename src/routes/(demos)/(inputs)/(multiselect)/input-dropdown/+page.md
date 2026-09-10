@@ -1,10 +1,10 @@
 ## Editable Input Dropdown
 
-Use `selected_display="input"` with `max_select={1}` for a `<datalist>`-like
+Use `selected_display="input"` with `mode="single"` for a `<datalist>`-like
 autocomplete field backed by the existing dropdown
 ([discussion #221](https://github.com/janosh/svelte-widgets/discussions/221)).
 The visible input is editable: `search_text` mirrors what the user sees and, when
-the component has a `name`, is what the form submits. `value`/`selected` only
+the component has a `name`, is what the form submits. `value` only
 update once an option is committed (clicked or activated via `Enter`). Editing
 the text after a commit clears `value` but keeps the draft in `search_text`.
 Forward extra `<input>` attributes via `input_props` (e.g. `maxlength`,
@@ -33,7 +33,7 @@ with `aria-selected="true"`.
 
 <MultiSelect
   options={color_options}
-  max_select={1}
+  mode="single"
   selected_display="input"
   bind:search_text={color_text}
   bind:value={selected_color}
@@ -67,7 +67,7 @@ provided.
 </script>
 
 <MultiSelect
-  max_select={1}
+  mode="single"
   selected_display="input"
   allow_user_options
   create_option_msg={null}

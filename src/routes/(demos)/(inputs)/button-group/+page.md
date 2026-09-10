@@ -126,6 +126,6 @@ heading or a paragraph.
 
 Per-option tooltips come from each option's `tooltip` field. `tooltip_options` forwards
 everything else to the [`tooltip`](attachments/tooltip) attachment, so
-`tooltip_options={{ allow_html: true }}` renders rich content instead of escaping it.
+Tooltips render plain text. Use `Popover` for formatted content or interactive controls.
 Only turn that on for trusted or sanitized markup — an HTML tooltip built from
 user-controlled text is an XSS vector.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import type { PageData } from './$types'
   import SourceInput from '$site/SourceInput.svelte'
   import { CodeBlock } from 'svelte-widgets'
@@ -75,7 +76,9 @@ const document = assert_ok(await engine.parse(await readFile('guide.md', 'utf8')
 assert_ok(await check_document(document))`}
     />
   </details>
-  <h3>Try the Svelte syntax checker</h3>
+  <Heading level={3} id="try-the-svelte-syntax-checker"
+    >Try the Svelte syntax checker</Heading
+  >
   <p>
     Edit the component below and check it in your browser. This uses the real Svelte
     compiler; it checks syntax and compiler warnings, not TypeScript semantics.
@@ -102,7 +105,7 @@ assert_ok(await check_document(document))`}
 </section>
 
 <style>
-  h3 {
+  section > :global(h3) {
     margin-top: 2rem;
   }
   label {

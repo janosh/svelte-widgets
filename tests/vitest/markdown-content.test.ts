@@ -140,7 +140,7 @@ describe(`Markdown content manifests`, () => {
       { id: `set{x}`, text: `Explicit` },
     ])
     expect(assert_ok(await render_markdown(document))).toContain(
-      `<h2 id="set-x">Set {x}</h2>`,
+      `<h2 id="set-x">Set {x}<a data-heading-anchor`,
     )
     expect(manifest.links).toHaveLength(3)
     expect(manifest.links[2].text).toBe(`Broken {link}`)
@@ -178,7 +178,7 @@ describe(`Markdown content manifests`, () => {
       )
       expect(result.manifest.headings.map(({ id }) => id)).toEqual([`title-1`])
       expect(result.manifest.anchors.map(({ id }) => id)).toEqual([`title`, `title-1`])
-      expect(result.code).toContain(`<h1 id="title-1">Title</h1>`)
+      expect(result.code).toContain(`<h1 id="title-1">Title<a data-heading-anchor`)
     },
   )
 

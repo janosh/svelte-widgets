@@ -25,29 +25,29 @@ Favorite Frontend Tools?
 
 <code>selected = {JSON.stringify(selected)}</code>
 
-<MultiSelect bind:selected options={ui_libs} />
+<MultiSelect bind:value={selected} options={ui_libs} />
 ```
 
 ## Mental model
 
-| Prop            | Purpose                                                | Value                                                                                |
-| --------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `options`       | What users can choose from                             | Array of strings, numbers, or objects with `label` property                          |
-| `bind:selected` | Which options users have chosen                        | Always an array: `[]`, `['Apple']` or `['Apple', 'Banana']`                          |
-| `bind:value`    | Single-select convenience for the user-selected option | Single item: `'Apple'` (or `null`) if `max_select={1}`, otherwise same as `selected` |
+| Prop         | Purpose           | Value                                                         |
+| ------------ | ----------------- | ------------------------------------------------------------- |
+| `options`    | Available choices | Strings, numbers, or objects with a `label`                   |
+| `mode`       | Selection shape   | `multiple` (default) or `single`                              |
+| `bind:value` | Selected choices  | An array in multiple mode; an option or `null` in single mode |
 
 ### Common Patterns
 
 ```svelte
 <!-- Multi-select -->
-<MultiSelect bind:selected options={['A', 'B', 'C']} />
+<MultiSelect bind:value={selected} options={['A', 'B', 'C']} />
 
 <!-- Single-select -->
-<MultiSelect bind:value options={colors} max_select={1} />
+<MultiSelect bind:value options={colors} mode="single" />
 
-<!-- Object options (need 'label' property, can have arbitrary other keys, some like `value`, `disabled`, `preselected`, `style` have special meaning, see type ObjectOption) -->
+<!-- Object options (need 'label' property, can have arbitrary other keys, some like `value`, `disabled`, `style` have special meaning, see type ObjectOption) -->
 <MultiSelect
-  bind:selected
+  bind:value={selected}
   options={[
     { label: 'Red', value: '#ff0000' },
     { label: 'Blue', value: '#0000ff' },
@@ -59,8 +59,8 @@ Favorite Frontend Tools?
 
 - **Object options not working?** → Add `label` property
 - **Dropdown not showing?** → Check you have `options` and not `disabled={true}`
-- **Want single item not array?** → Use `bind:value` with `max_select={1}`
-- **Types confusing?** → Component auto-infers type of `selected` and `value` from your `options` array
+- **Want single item not array?** → Use `bind:value` with `mode="single"`
+- **Types confusing?** → Component auto-infers type of `value` from your `options` array
 
 ## Props
 
@@ -89,46 +89,27 @@ Props ordered by how often you'll reach for them.
    />
    ```
 
-1. ```ts
-   selected: Option[] = []  // bindable
-   ```
+1. `mode: 'multiple' | 'single' = 'multiple'` and bindable `value`
 
-   **Your main state variable.** Array of currently selected options. Use `bind:selected` for two-way binding.
+   Multiple mode uses an array, initially `[]`. Single mode uses one option or `null`. Pass initial selections through `value`; option metadata never initializes state.
 
    ```svelte
-   <script>
-     let selected = $state(['Red']) // Preselect Red
-   </script>
-
-   <MultiSelect bind:selected options={colors} />
-   ```
-
-1. ```ts
-   value: Option | Option[] | null = null  // bindable
-   ```
-
-   **Alternative to `selected`.** When `max_select={1}`, `value` is the single selected item (not an array). Otherwise, `value` equals `selected`.
-
-   ```svelte
-   <!-- Single-select: value = 'Red' (not ['Red']) -->
-   <MultiSelect bind:value options={colors} max_select={1} />
-
-   <!-- Multi-select: value = ['Red', 'Blue'] (same as selected) -->
-   <MultiSelect bind:value options={colors} />
+   <MultiSelect options={colors} bind:value={selected_colors} />
+   <MultiSelect options={colors} mode="single" bind:value={selected_color} />
    ```
 
 1. ```ts
    max_select: number | null = null
    ```
 
-   **Controls selection behavior.** `null` = unlimited, `1` = single select, `2+` = limited multi-select.
+   **Limits multiple selection.** `null` means unlimited; positive integers cap the number of selected options. Use `mode="single"` for a scalar value; single mode does not accept `max_select`.
 
    ```svelte
    <!-- Unlimited selection -->
    <MultiSelect options={colors} />
 
    <!-- Single selection -->
-   <MultiSelect options={colors} max_select={1} />
+   <MultiSelect options={colors} mode="single" />
 
    <!-- Max 3 selections -->
    <MultiSelect options={colors} max_select={3} />
@@ -485,7 +466,7 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    selected_display: 'chips' | 'input' = 'chips'
    ```
 
-   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and requires `max_select={1}`; other values throw a configuration error. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
+   How selected options are shown. `'chips'` renders them as removable tags inside the input. `'input'` writes the selected label straight into the text input (combobox/datalist style) and requires `mode="single"`; other values throw a configuration error. See the [input-dropdown demo](https://svelte-widgets.janosh.dev/input-dropdown).
 
 1. ```ts
    virtual_list: boolean | { item_height?: number; overscan?: number } = false

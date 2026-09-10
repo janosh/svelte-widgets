@@ -5,7 +5,7 @@
 
   // keyed by route slug; titles come from demo_labels so they can't drift from the nav
   const descriptions: Record<string, string> = {
-    tooltip: `Top-layer tooltips with automatic placement, delegation and controlled state.`,
+    tooltip: `Top-layer tooltips with automatic placement, delegation and hover/focus interaction.`,
     draggable: `Pointer dragging with handles, axis locks and position callbacks.`,
     resizable: `Edge and corner resize handles with keyboard support and size caps.`,
     sortable: `Click-to-sort table headers with custom comparators and styling.`,

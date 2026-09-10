@@ -48,7 +48,7 @@ This example shows the SvelteKit form action way of handling MultiSelect fields 
     name="colors"
     required
     invalid={!!form?.error}
-    selected={form?.colors ?? [`Red`]}
+    value={form?.colors ?? [`Red`]}
   >
     {#snippet children({ idx, option })}
       {@render color_option(option, idx)}

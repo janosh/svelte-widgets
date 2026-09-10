@@ -1,15 +1,14 @@
 import {
   heading_anchors,
-  heading_ids,
+  heading_anchor_html,
   slugify_heading,
   unique_heading_id,
 } from '$lib/heading-anchors'
+import Heading from '$lib/Heading.svelte'
+import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, it, onTestFinished } from 'vitest'
 import { doc_query, stub_prop } from './index'
-
-const preprocess = (content: string, filename?: string) =>
-  heading_ids().markup({ content, filename })
 
 describe(`slugify_heading`, () => {
   // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
@@ -34,173 +33,41 @@ describe(`slugify_heading`, () => {
   })
 })
 
-describe(`heading_ids preprocessor`, () => {
-  // exact VLQ mappings; a lone `AAAA` per line is the identity map for unshifted text
-  it.each([
-    [`<h2>A</h2>\n<h2>B</h2>`, `AAAA,GAAG,OAAA,OAAO;AACV,GAAG,OAAA,OAAO`],
-    [`<div>\n  <h2>N</h2>\n</div>`, `AAAA;AACA,KAAK,OAAA,OAAO;AACZ`],
-    [`<p>no heading</p>\n<span>x</span>`, `AAAA;AACA`], // headingless fast path
-  ])(`maps original markup before and after inserted IDs in %j`, (source, mappings) => {
-    expect(preprocess(source, `Heading.svelte`).map).toEqual({
-      version: 3,
-      names: [],
-      sources: [`Heading.svelte`],
-      sourcesContent: [source],
-      mappings,
+describe(`Heading`, () => {
+  it.each([1, 2, 6] as const)(
+    `renders an explicit h%i with one encoded anchor`,
+    (level) => {
+      const component = mount(Heading, {
+        target: document.body,
+        props: {
+          id: `a&b%20c`,
+          level,
+          children: createRawSnippet(() => ({ render: () => `<span>Diatomics</span>` })),
+        },
+      })
+      onTestFinished(() => unmount(component))
+      const heading = doc_query(`h${level}`)
+      expect(heading.id).toBe(`a&b%20c`)
+      expect(heading.textContent).toBe(`Diatomics`)
+      expect(heading.querySelectorAll(`a`)).toHaveLength(1)
+      expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#a%26b%2520c`)
+    },
+  )
+  it(`supports link-free headings and rejects missing identity`, () => {
+    const component = mount(Heading, {
+      target: document.body,
+      props: { id: `title`, link: false },
     })
-  })
-
-  it.each([
-    [`<h6>Sixth Level</h6>`, `<h6 id="sixth-level">Sixth Level</h6>`],
-    [`<h1>Title</h1>`, `<h1 id="title">Title</h1>`],
-    [`<h2>✨ Styling</h2>`, `<h2 id="styling">✨ Styling</h2>`], // emoji stripped
-    [
-      `<h2>Multi\nLine\nContent</h2>`,
-      `<h2 id="multi-line-content">Multi\nLine\nContent</h2>`,
-    ],
-    // existing attributes are preserved, the id is inserted first
-    [`<h2 data-id="foo">Hello</h2>`, `<h2 id="hello" data-id="foo">Hello</h2>`],
-    [
-      `<h2 onclick={handler}>Clickable</h2>`,
-      `<h2 id="clickable" onclick={handler}>Clickable</h2>`,
-    ],
-    [
-      `<h2 data-label="left > right">Quoted</h2>`,
-      `<h2 id="quoted" data-label="left > right">Quoted</h2>`,
-    ],
-    [
-      `</p><h3 title='left > right'>Inline</h3>`,
-      `</p><h3 id="inline" title='left > right'>Inline</h3>`,
-    ],
-    [
-      `<h2 title="contains id=foo">Visible</h2>`,
-      `<h2 id="visible" title="contains id=foo">Visible</h2>`,
-    ],
-    [
-      `<h2 class={condition ? "id=foo" : "other"}>Visible</h2>`,
-      `<h2 id="visible" class={condition ? "id=foo" : "other"}>Visible</h2>`,
-    ],
-    [
-      `<h2>{@html "<span>{</span>"} Details</h2>`,
-      `<h2 id="details">{@html "<span>{</span>"} Details</h2>`,
-    ],
-    // Svelte expressions are stripped from the slug source but kept in the markup
-    [`<h2>{first} and {second}</h2>`, `<h2 id="and">{first} and {second}</h2>`],
-    [
-      `<h2>Result {fn({a: {b: {c: 1}}})}</h2>`,
-      `<h2 id="result">Result {fn({a: {b: {c: 1}}})}</h2>`,
-    ],
-    // unmatched } kept literal, else content is lost when the depth would go negative
-    [`<h2>Price: $100}</h2>`, `<h2 id="price-100">Price: $100}</h2>`],
-    // inline headings (Markdown output)
-    [`</p> <h2>Title</h2>`, `</p> <h2 id="title">Title</h2>`],
-    [
-      `</p><h2>First</h2></section><h3>Second</h3>`,
-      `</p><h2 id="first">First</h2></section><h3 id="second">Second</h3>`,
-    ],
-    [
-      `</p><h2>First</h2><h2>Second</h2>`,
-      `</p><h2 id="first">First</h2><h2 id="second">Second</h2>`,
-    ],
-    // text of nested HTML tags contributes to the slug
-    [
-      `<h2>Using <code>someFunction</code></h2>`,
-      `<h2 id="using-somefunction">Using <code>someFunction</code></h2>`,
-    ],
-    // entities decode to what the browser renders (Markdown escapes `&`, `<`, `{`)
-    [`<h2>Foo &amp; Bar</h2>`, `<h2 id="foo-bar">Foo &amp; Bar</h2>`],
-    [
-      `<h2>🔗 &thinsp; Links&ensp;to&emsp;WBM Files</h2>`,
-      `<h2 id="links-to-wbm-files">🔗 &thinsp; Links&ensp;to&emsp;WBM Files</h2>`,
-    ],
-    [`<h2>Using &#123;foo&#125;</h2>`, `<h2 id="using-foo">Using &#123;foo&#125;</h2>`],
-    [`<h2>&lt;b&gt;x &#x1F600;</h2>`, `<h2 id="b-x">&lt;b&gt;x &#x1F600;</h2>`],
-  ])(`%s → %s`, (input: string, expected: string) => {
-    expect(preprocess(input).code).toBe(expected)
-  })
-
-  it.each([
-    `<h2 id="">Empty ID</h2>`, // an existing id, even empty, is never replaced
-    `<h2 id=>Malformed ID</h2>`,
-    `<h2 class="test" id="existing" data-foo="bar">Text</h2>`,
-    `<h2>{dynamicOnly}</h2>`, // no static text → no id
-    `<h2><span></span></h2>`,
-    // after stripping {test} only the literal } remains, which slugifies to empty
-    `<h2>}{test}</h2>`,
-  ])(`leaves %s unchanged`, (input: string) => {
-    expect(preprocess(input).code).toBe(input)
-  })
-
-  it.each([
-    [`HTML comments`, `<!-- <div id="same"></div><h2>Comment heading</h2> -->`, `same`],
-    [`pre`, `<pre><h2>Code sample heading</h2><div id="same"></div></pre>`, `same-1`],
-    [
-      `script`,
-      `<script>const html = '<div id="same"></div><h2>Template heading</h2>'</script>`,
-      `same`,
-    ],
-    [
-      `style`,
-      `<style>.x::after { content: '<div id="same"></div>' } /* <h2>CSS heading</h2> */</style>`,
-      `same`,
-    ],
-    [
-      `textarea`,
-      `<textarea><div id="same"></div><h2>Textarea content</h2></textarea>`,
-      `same`,
-    ],
-    [`title`, `<title><div id="same"></div><h2>Title content</h2></title>`, `same`],
-  ])(
-    `skips headings and handles IDs inside %s`,
-    (_label, excluded_content, visible_id) => {
-      const source = `${excluded_content}\n<h2>Same</h2>`
-      expect(preprocess(source, `Protected.svelte`).code).toBe(
-        `${excluded_content}\n<h2 id="${visible_id}">Same</h2>`,
-      )
-    },
-  )
-
-  it.each([`pre`, `script`, `style`, `textarea`, `title`])(
-    `does not treat %s-prefixed custom elements as excluded content`,
-    (tag) => {
-      const custom_tag = `${tag}-custom`
-      const source =
-        `<${custom_tag}><h2>Visible</h2></${custom_tag}>` +
-        `<${tag}><h2>Hidden</h2></${tag}>`
-      expect(preprocess(source).code).toBe(
-        `<${custom_tag}><h2 id="visible">Visible</h2></${custom_tag}>` +
-          `<${tag}><h2>Hidden</h2></${tag}>`,
-      )
-    },
-  )
-
-  it(`handles duplicate headings with -1, -2 suffixes`, () => {
-    const result = preprocess(
-      `<h2>Foo</h2>\n<h2>Foo</h2>\n<h3>Foo 1</h3>\n<h2>Foo</h2>\n<h2>Bar</h2>\n<h2>Café</h2>\n<h2>Cafe\u0301</h2>`,
-    )
-    // the already-suffixed `Foo 1` must not collide with the duplicate Foo's `foo-1`; NFC
-    // also makes decomposed `Cafe\u0301` a duplicate of `Café`
-    expect(result.code).toBe(
-      `<h2 id="foo">Foo</h2>\n<h2 id="foo-1">Foo</h2>\n<h3 id="foo-1-1">Foo 1</h3>\n` +
-        `<h2 id="foo-2">Foo</h2>\n<h2 id="bar">Bar</h2>\n<h2 id="café">Café</h2>\n` +
-        `<h2 id="café-1">Cafe\u0301</h2>`,
-    )
-  })
-
-  it.each([
-    [`<div id="same"></div>\n<h2>Same</h2>`, `same-1`],
-    [`<h2>Foo</h2>\n<custom-card id="foo"></custom-card>`, `foo-1`],
-    [`<script id="same"></script>\n<h2>Same</h2>`, `same-1`],
-    [`<script id="same"></script><h2>Same</h2>`, `same-1`], // id on excluded host; abutting end
-  ])(`reserves static element IDs before generating headings`, (source, expected_id) => {
-    expect(preprocess(source).code).toBe(
-      source.replace(`<h2>`, `<h2 id="${expected_id}">`),
-    )
+    onTestFinished(() => unmount(component))
+    expect(doc_query(`h2`).querySelector(`a`)).toBeNull()
+    expect(() =>
+      flushSync(() => mount(Heading, { target: document.body, props: { id: ` ` } })),
+    ).toThrow(`Heading requires a nonempty id`)
   })
 })
 
 describe(`heading_anchors attachment`, () => {
-  // production attaches to <main>; the default :scope selector matches h1-h6 that are
+  // The opt-in dynamic attachment selects h1-h6 that are
   // direct or 2nd-level children of the attached node
   const create_container = (html = ``) => {
     document.body.innerHTML = `<main>${html}</main>`
@@ -221,13 +88,15 @@ describe(`heading_anchors attachment`, () => {
 
   it(`keeps managed anchors unique and synced without rewriting consumer links`, async () => {
     const container = create_container(
-      `<h1 id="title">Title</h1><h2 id="one">One</h2><h3 id="two">Two</h3>` +
+      `<h1 id="title">Title${heading_anchor_html(`title`)}</h1><h2 id="one">One</h2><h3 id="two">Two</h3>` +
         `<h4 id="consumer">Four<a aria-hidden="true" href="#custom">custom</a></h4>`,
     )
+    const original_anchor = container.querySelector(`h1 a`)
     heading_anchors()(container)
     heading_anchors()(container) // call twice to test duplicate prevention
     const [managed_heading, consumer_heading] = container.querySelectorAll(`h1, h4`)
-    managed_heading.id = `renamed`
+    expect(container.querySelector(`h1 a`)).toBe(original_anchor)
+    managed_heading.id = `renamed%20&`
     consumer_heading.id = `changed`
     await tick()
 
@@ -235,11 +104,16 @@ describe(`heading_anchors attachment`, () => {
       [...container.querySelectorAll(anchor_selector)].map((anchor) =>
         anchor.getAttribute(`href`),
       ),
-    ).toEqual([`#renamed`, `#one`, `#two`, `#custom`])
+    ).toEqual([`#renamed%2520%26`, `#one`, `#two`, `#custom`])
   })
 
   it.each([
     [`sibling headings`, `<h2>Same</h2><h3>Same</h3>`, [`same`, `same-1`]],
+    [
+      `SSR placeholder with custom icon text`,
+      `<h2>Title${heading_anchor_html(undefined, `<svg><text>Link</text></svg>`)}</h2>`,
+      [`title`],
+    ],
     [
       `Unicode sibling headings`,
       `<h2>Über Café</h2><h3>Über Café</h3>`,

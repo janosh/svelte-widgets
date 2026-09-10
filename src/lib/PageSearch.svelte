@@ -41,7 +41,7 @@
   const pagefind_source = $derived(
     load_pagefind ? `custom-loader:${pagefind_key ?? ``}` : pagefind_path,
   )
-  // MultiSelect reloads when fetch identity changes, so key it only to the index.
+  // The option loader reloads when fetch identity changes, so key it only to the index.
   const load_options = $derived(
     create_pagefind_loader(pagefind_source, () => ({
       load_pagefind,

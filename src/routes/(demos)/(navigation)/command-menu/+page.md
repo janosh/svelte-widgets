@@ -1,8 +1,10 @@
 ## `CommandMenu`
 
-[`<MultiSelect />`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/MultiSelect.svelte) powers a full navigation [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte).
+`CommandMenu` renders a searchable option list with keyboard navigation, grouping, and async loading.
 
-CommandMenu supports search, grouping, async loading, and recent actions. It executes one command at a time and closes, without retaining a selection. Selection bindings (`selected`, `value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to MultiSelect. Remove `max_select={1}` from existing command menus; single-command execution is built in. Use `on_execute={({ action }) => …}` to observe commands invoked by menu selection or global shortcut, and `on_activate` to track keyboard navigation. Replace the former `on_add` callback with `on_execute`; it reports invocation, without waiting for asynchronous actions to finish.
+It executes one command at a time and closes, without retaining a selection. Selection bindings (`value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to MultiSelect. Use `on_execute={({ action }) => …}` to observe commands invoked by menu selection or global shortcut, and `on_activate` to track keyboard navigation. Replace the former `on_add` callback with `on_execute`; it reports invocation, without waiting for asynchronous actions to finish.
+
+Search, grouping, loading, and styling props share `OptionListProps` with MultiSelect. The `labels` prop accepts `loading_more`, `loading_failed`, `retry`, and `group` overrides to localize status messages and group buttons. `placeholder`, `no_matching_options_msg`, and `default_disabled_title` control their respective text separately.
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">

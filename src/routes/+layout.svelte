@@ -13,11 +13,30 @@
   import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
   import { link_source_mentions } from '$site/source-links'
   import favicon from '$site/favicon.svg'
+  import type { TocHeadingData } from '$lib/types'
+  import markdown_guide_toc from '$lib/markdown/readme.md?toc'
   import type { Snippet } from 'svelte'
   import { slide } from 'svelte/transition'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
   import '../app.css'
   import { demo_pages, demo_title } from './(demos)'
+
+  const manifest_tocs = Object.fromEntries(
+    Object.entries(
+      import.meta.glob<TocHeadingData[]>(`./**/+page.md`, {
+        // Rolldown's production glob parser requires string literals for these options.
+        query: '?toc',
+        import: 'default',
+        eager: true,
+      }),
+    ).map(([filename, items]) => [
+      filename
+        .slice(1)
+        .replaceAll(/\([^)]+\)\//gu, ``)
+        .replace(/\/\+page\.md$/u, ``) || `/`,
+      items,
+    ]),
+  )
 
   let { children }: { children?: Snippet<[]> } = $props()
   let page_search_query = $state(``)
@@ -56,6 +75,7 @@
     keywords: [route],
     action: () => goto(resolve_path(route)),
   }))
+  const demo_route = $derived(current_demo_route())
   const is_home = $derived(page.route.id === `/`)
   const page_title = $derived.by(() => {
     const route_slug = page.url.pathname
@@ -188,13 +208,19 @@
       {/if}
     {/each}
   {/snippet}
-  <Toc
-    heading_selector="main > :where(h2, h3)"
-    breakpoint={1100}
-    min_items={5}
-    bind:open={toc_open}
-    footer={reference_links.length ? reference_navigation : undefined}
-  />
+  {#key page.url.pathname}
+    <Toc
+      items={(page.url.pathname === resolve_path(`/markdown`)
+        ? markdown_guide_toc
+        : manifest_tocs[demo_route ?? ``]
+      )?.filter(({ level }) => level === 2 || level === 3)}
+      heading_selector="main > :where(h2, h3)"
+      breakpoint={1100}
+      min_items={5}
+      bind:open={toc_open}
+      footer={reference_links.length ? reference_navigation : undefined}
+    />
+  {/key}
 </div>
 
 <Footer {edit_href} />

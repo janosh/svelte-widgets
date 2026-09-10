@@ -1,26 +1,25 @@
 <script lang="ts">
   import { MultiSelect } from '$lib'
+  import type { Component } from 'svelte'
+
   import type { Test2WayBindProps } from './index'
 
+  const Select = MultiSelect as Component<Test2WayBindProps>
+
   let {
-    active_index = null,
-    active_option = null,
-    max_select = $bindable(null),
+    mode = `multiple`,
+    value = $bindable(mode === `single` ? null : []),
+    active_index = $bindable(null),
+    active_option = $bindable(null),
+    max_select = null,
     options = $bindable(),
-    selected = $bindable(
-      options
-        ?.filter((opt) => opt instanceof Object && opt?.preselected)
-        .slice(0, max_select ?? undefined) ?? [],
-    ),
     search_text = $bindable(``),
-    value = $bindable(null),
     breakpoint = $bindable(800),
     open = $bindable(false),
     onActiveIndexChanged,
     onActiveOptionChanged,
     onOptionsChanged,
     onSearchTextChanged,
-    onSelectedChanged,
     onValueChanged,
     ...rest
   }: Test2WayBindProps = $props()
@@ -38,23 +37,19 @@
     onSearchTextChanged?.(search_text)
   })
   $effect.pre(() => {
-    onSelectedChanged?.(selected)
-  })
-  $effect.pre(() => {
     onValueChanged?.(value)
   })
-
-  export { breakpoint, max_select, search_text, selected, value }
+  export { breakpoint, max_select, search_text, value }
 </script>
 
-<MultiSelect
-  bind:max_select
+<Select
+  {...rest}
+  {mode}
+  {max_select}
   bind:active_index
   bind:active_option
   bind:options
   bind:search_text
-  bind:selected
   bind:value
   bind:open
-  {...rest}
 />

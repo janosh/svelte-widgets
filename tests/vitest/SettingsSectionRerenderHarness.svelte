@@ -1,18 +1,19 @@
 <script lang="ts">
   import { SettingsSection } from '$lib'
 
-  let current_values = $state({ radius: 1, diameter: 2, palette: `warm` })
+  const defaults = { radius: 1, diameter: 2, palette: `warm` }
+  let current_values = $state({ ...defaults })
+  const changed_keys = $derived(
+    Object.keys(defaults).filter(
+      (key) => Reflect.get(current_values, key) !== Reflect.get(defaults, key),
+    ),
+  )
   let [generation, input_generation] = $state([0, 0])
   let row_key = $state<`radius` | `diameter`>(`radius`)
   let [radius_visible, descriptions_open] = $state([true, true])
 
-  const reset_key = (
-    key: string,
-    reference_value: unknown,
-    reference_present: boolean,
-  ): void => {
-    if (reference_present) Reflect.set(current_values, key, reference_value)
-    else Reflect.deleteProperty(current_values, key)
+  const reset_key = (key: string): void => {
+    Reflect.set(current_values, key, Reflect.get(defaults, key))
   }
 </script>
 
@@ -49,7 +50,7 @@
 
 <SettingsSection
   title="Atoms"
-  {current_values}
+  {changed_keys}
   on_reset_key={reset_key}
   setting_metadata={{
     radius: `Radius of rendered atoms`,

@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import type { Plugin } from 'vite'
 import {
@@ -10,6 +11,7 @@ import {
 import { source_map } from './source-map.ts'
 import type { ContentManifest } from './content.ts'
 
+const TOC_MODULE_PREFIX = `\0widgets-toc:`
 const MODULE_ID = /\.widgets-example-[a-f\d]+-[a-f\d]+-\d+\.svelte(?:\?|$)/u
 
 export type MarkdownViteOptions = {
@@ -118,10 +120,26 @@ export function markdown_vite(
     plugin: {
       name: `widgets-markdown-examples`,
       enforce: `pre`,
-      resolveId(id) {
+      resolveId(id, importer) {
+        const [filename, query] = id.split(`?`)
+        if (new URLSearchParams(query).has(`toc`) && is_markdown(filename))
+          return this.resolve(filename, importer, { skipSelf: true }).then((resolved) =>
+            resolved ? `${TOC_MODULE_PREFIX}${resolved.id}.js` : undefined,
+          )
         return MODULE_ID.test(id) ? id : undefined
       },
       load(id) {
+        if (id.startsWith(TOC_MODULE_PREFIX)) {
+          const filename = id.slice(TOC_MODULE_PREFIX.length, -3)
+          this.addWatchFile(filename)
+          return readFile(filename, `utf8`)
+            .then((content) => cached_engine.parse(content, { filename }))
+            .then(assert_ok)
+            .then(
+              ({ manifest }) =>
+                `export default ${JSON.stringify(manifest.headings.map(({ id: heading_id, depth, text }) => ({ id: heading_id, level: depth, title: text })))};`,
+            )
+        }
         if (!MODULE_ID.test(id) || id.includes(`?`)) return undefined
         const source = modules.get(id)
         if (source === undefined) throw new Error(`Markdown module not registered: ${id}`)
@@ -141,16 +159,26 @@ export function markdown_vite(
       },
       async hotUpdate(context) {
         const filename = context.file.replaceAll(`\\`, `/`)
-        if (context.type === `delete` || !files.has(filename)) return undefined
-        await compile_file(await context.read(), filename)
+        const graph = this.environment.moduleGraph
+        if (
+          context.type === `delete` ||
+          (!files.has(filename) &&
+            !graph.idToModuleMap.has(`${TOC_MODULE_PREFIX}${filename}.js`))
+        )
+          return undefined
+        if (files.has(filename)) await compile_file(await context.read(), filename)
         // Client and SSR share compilation but load modules independently. Compare
         // against each environment's loaded source, not another environment's update.
         const previous = loaded_sources.get(this.environment)
         const affected = new Set(
           context.modules.filter((module) => !MODULE_ID.test(module.id ?? ``)),
         )
-        const graph = this.environment.moduleGraph
         for (const [id, module] of graph.idToModuleMap) {
+          if (id === `${TOC_MODULE_PREFIX}${filename}.js`) {
+            graph.invalidateModule(module, new Set(), context.timestamp)
+            affected.add(module)
+            continue
+          }
           if (!id.startsWith(`${filename}.widgets-`)) continue
           const source_id = id.split(`?`)[0]
           if (previous?.get(source_id) === modules.get(source_id)) continue

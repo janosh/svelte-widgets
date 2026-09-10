@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import MultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import type { SelectAllScope } from 'svelte-widgets'
 
@@ -18,7 +19,8 @@
 <svelte:head><title>Range and select-all scopes demo</title></svelte:head>
 
 <section class="demo" style="max-width: 42rem; margin: 2rem auto">
-  <h1>Range and select-all scopes</h1>
+  <Heading level={1} id="range-and-select-all-scopes">Range and select-all scopes</Heading
+  >
   <p>
     Select an anchor, then Shift-click or use Shift+Arrow to add an inclusive range. The
     scope selector controls whether select-all includes rows beyond <code
@@ -36,7 +38,7 @@
 
   <MultiSelect
     {options}
-    bind:selected
+    bind:value={selected}
     input_props={{ [`aria-label`]: `Filter roadmap tasks` }}
     keep_selected_in_dropdown="checkboxes"
     max_options={4}

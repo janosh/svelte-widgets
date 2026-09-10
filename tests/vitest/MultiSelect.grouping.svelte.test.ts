@@ -56,7 +56,7 @@ describe(`option grouping feature`, () => {
     { label: `Y`, group: `AllDisabled`, disabled: true },
     { label: `Z`, group: `HasEnabled` },
   ]
-  const mount_grouped = async (props: Partial<MultiSelectProps> = {}) => {
+  const mount_grouped = async (props: MultiSelectProps = {}) => {
     mount_multiselect({ options: grouped_options, open: true, ...props })
     await tick()
   }
@@ -181,12 +181,13 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [1, 0, 0], // max_select=1: button hidden, 0 selected
-    [2, 2, 2], // max_select=2: button visible (2 groups), 2 selected when clicked
+    [{ mode: `single` }, 0, 0],
+    [{ max_select: 1 }, 2, 1],
+    [{ max_select: 2 }, 2, 2],
   ] as const)(
-    `group_select_all with max_select=%s shows %s buttons and selects up to max_select`,
-    async (max_select, expected_buttons, expected_selected) => {
-      await mount_grouped({ group_select_all: true, max_select })
+    `group_select_all with %j shows %i buttons and selects %i options`,
+    async (props, expected_buttons, expected_selected) => {
+      await mount_grouped({ group_select_all: true, ...props })
 
       const select_all_buttons = document.querySelectorAll(
         `ul.options > li.group-header button.group-select-all`,
@@ -196,17 +197,17 @@ describe(`option grouping feature`, () => {
       if (expected_buttons > 0) {
         group_select_all_btn(`Genre`)?.click()
         await tick()
-        expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(
-          expected_selected,
-        )
       }
+      expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(
+        expected_selected,
+      )
     },
   )
 
   test.each([
     [
       `max_select already reached`,
-      { selected: [grouped_options[0], grouped_options[1]], max_select: 2 },
+      { value: [grouped_options[0], grouped_options[1]], max_select: 2 },
       `Genre`,
       { disabled: true, label: `Select all` },
     ],
@@ -234,7 +235,7 @@ describe(`option grouping feature`, () => {
     const onmaxreached_spy = vi.fn()
     await mount_grouped({
       group_select_all: true,
-      selected: [grouped_options[0]],
+      value: [grouped_options[0]],
       max_select: 2,
       on_max_reached: onmaxreached_spy,
     })
@@ -461,8 +462,8 @@ describe(`option grouping feature`, () => {
       `selected count with keep_selected_in_dropdown`,
       {
         keep_selected_in_dropdown: `checkboxes`,
-        selected: [{ label: `Rock`, group: `Genre` }],
-      } satisfies Partial<MultiSelectProps>,
+        value: [{ label: `Rock`, group: `Genre` }],
+      } satisfies MultiSelectProps,
       `(1/3)`,
     ],
   ])(`group count in header: %s`, async (_desc, extra_props, expected_count) => {
@@ -627,7 +628,7 @@ describe(`option grouping feature`, () => {
         keep_selected_in_dropdown: `checkboxes`,
         on_remove_all: onremoveAll_spy,
         on_change,
-        selected: [grouped_options[3]],
+        value: [grouped_options[3]],
         duplicates: colliding_keys,
         key: colliding_keys ? () => `shared` : undefined,
       })
@@ -674,7 +675,7 @@ test(`group deselect-all keeps at least min_select options selected`, async () =
   const group_opts = [`Rock`, `Jazz`, `Pop`].map((label) => ({ label, group: `Genre` }))
   const props = $state<MultiSelectProps>({
     options: group_opts,
-    selected: [...group_opts],
+    value: [...group_opts],
     group_select_all: true,
     keep_selected_in_dropdown: `plain`,
     min_select: 2,
@@ -689,7 +690,7 @@ test(`group deselect-all keeps at least min_select options selected`, async () =
   await tick()
 
   // previously dropped to 0 selected, violating min_select=2
-  expect(props.selected).toHaveLength(2)
+  expect(props.value).toHaveLength(2)
 })
 
 test(`search_expands_collapsed_groups: manually collapsed group stays collapsed until the search changes`, async () => {

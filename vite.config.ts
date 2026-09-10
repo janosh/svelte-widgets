@@ -2,7 +2,6 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import { generate_icons } from './scripts/generate-icons.ts'
 import { site_adapter } from './scripts/site-content.ts'
 import type { ContentManifest } from './src/lib/markdown/content.ts'
-import { heading_ids } from './src/lib/heading-anchors.ts'
 import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
 import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
@@ -43,7 +42,7 @@ for (const [path, target] of Object.entries(package_json.exports)) {
 const svelte_config = {
   extensions: [`.svelte`, `.md`],
 
-  preprocess: [docs.preprocess, asset_imports(), heading_ids()],
+  preprocess: [docs.preprocess, asset_imports()],
 
   adapter: site_adapter(manifests),
   paths: { base: base_path },

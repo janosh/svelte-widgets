@@ -30,7 +30,6 @@
     <SettingsSection
       title="Atoms"
       layout="grid"
-      current_values={{ atom_radius: 1, color_scheme: `Vesta` }}
       setting_metadata={{
         atom_radius: { description: `Radius multiplier for rendered atoms` },
         color_scheme: { description: `Element color palette` },
@@ -53,7 +52,6 @@
   <SettingsGroup title="Camera" subtitle="Navigation" bind:open={camera_open}>
     <SettingsSection
       title="Pointer sensitivity"
-      current_values={{ rotation_damping: 0.1, zoom_speed: 1 }}
       setting_metadata={{
         rotation_damping: { description: `Motion inertia after releasing the pointer` },
         zoom_speed: { description: `Pointer wheel zoom sensitivity` },

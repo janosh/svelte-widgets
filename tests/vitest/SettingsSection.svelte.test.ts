@@ -7,7 +7,6 @@ import {
   unmount,
   type ComponentProps,
 } from 'svelte'
-import { SvelteMap, SvelteSet } from 'svelte/reactivity'
 import { describe, expect, onTestFinished, test } from 'vitest'
 import { doc_query } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
@@ -36,15 +35,21 @@ const mount_tracked_section = (
   reset_values?: SettingValues,
 ) => {
   let current_values = $state<SettingValues>({ ...initial })
+  const defaults = reset_values ?? initial
   const reset_calls: [string, unknown, boolean][] = []
   mount_section({
     title: `Atoms`,
-    get current_values() {
-      return current_values
+    get changed_keys() {
+      return Object.keys({ ...defaults, ...current_values }).filter(
+        (key) =>
+          Object.hasOwn(defaults, key) !== Object.hasOwn(current_values, key) ||
+          defaults[key] !== current_values[key],
+      )
     },
-    reset_values,
     children: snippet(children),
-    on_reset_key: (key: string, value: unknown, present: boolean) => {
+    on_reset_key: (key: string) => {
+      const value = defaults[key]
+      const present = Object.hasOwn(defaults, key)
       reset_calls.push([key, value, present])
       const next_values = { ...current_values }
       if (present) next_values[key] = value
@@ -94,105 +99,45 @@ describe(`SettingsSection`, () => {
   })
 
   test(`hides reset controls when no reset callback is available`, () => {
-    const current_values = $state<SettingValues>({ radius: 1 })
     mount_section({
       title: `A`,
-      current_values,
+      changed_keys: [`radius`],
       setting_metadata: { radius: `Size` },
       children: snippet(`<label data-key="radius"><input></label>`),
     })
-    flushSync(() => (current_values.radius = 2))
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(
       doc_query(`[data-key="radius"]`).classList.contains(`setting-resettable`),
     ).toBe(false)
   })
 
-  test.each<[string, SettingValues, SettingValues, boolean]>([
-    [`equal arrays`, { setting1: [`a`, `b`] }, { setting1: [`a`, `b`] }, false],
-    [
-      `equal nested arrays`,
-      { setting1: [{ key: 1 }] },
-      { setting1: [{ key: 1 }] },
-      false,
-    ],
-    [
-      `equal nullish values`,
-      { setting1: undefined, setting2: null },
-      { setting1: undefined, setting2: null },
-      false,
-    ],
-    [`negative zero`, { setting1: 0 }, { setting1: -0 }, false],
-    [
-      `object key insertion order`,
-      { setting1: { a: 1, b: 2 } },
-      { setting1: { b: 2, a: 1 } },
-      false,
-    ],
-    [`nested change`, { setting1: { a: 1 } }, { setting1: { a: 2 } }, true],
-    [
-      `equal dates`,
-      { setting1: new Date(`2026-01-01`) },
-      { setting1: new Date(`2026-01-01`) },
-      false,
-    ],
-    [
-      `equal invalid dates`,
-      { setting1: new Date(`invalid`) },
-      { setting1: new Date(`invalid`) },
-      false,
-    ],
-    [
-      `date change`,
-      { setting1: new Date(`2026-01-01`) },
-      { setting1: new Date(`2026-01-02`) },
-      true,
-    ],
-    [`equal regexps`, { setting1: /test/gi }, { setting1: /test/gi }, false],
-    [`regexp change`, { setting1: /test/gi }, { setting1: /test/g }, true],
-    [`key removal`, { setting1: `a`, setting2: undefined }, { setting1: `a` }, true],
-  ])(`reset button after %s`, (_name, initial, next, expect_reset) => {
-    const tracked = mount_tracked_section(initial, `<span>content</span>`)
+  test(`uses caller-supplied changed keys and gives section reset precedence`, async () => {
+    let changed_keys = $state<string[]>([])
+    const calls: string[] = []
+    mount_section({
+      title: `Values`,
+      get changed_keys() {
+        return changed_keys
+      },
+      on_reset: () => {
+        calls.push(`section`)
+        changed_keys = []
+      },
+      on_reset_key: (key: string) => calls.push(key),
+      children: snippet(`<label data-key="nested"><input></label>`),
+    })
     expect(document.querySelector(`.reset-button`)).toBeNull()
-
-    flushSync(() => (tracked.values = { ...next }))
-    const reset_button = document.querySelector<HTMLButtonElement>(`.reset-button`)
-    expect(Boolean(reset_button)).toBe(expect_reset)
-    if (expect_reset) expect(reset_button?.type).toBe(`button`)
+    flushSync(() => {
+      changed_keys = [`nested`]
+    })
+    await tick()
+    expect(document.querySelector(`.setting-reset-button`)).not.toBeNull()
+    await click_and_tick(`.settings-section-heading .reset-button`)
+    expect(calls).toEqual([`section`])
+    expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
-  test.each([
-    [`Set`, new SvelteSet([`a`]), `must not contain Set or Map`],
-    [`Map`, new SvelteMap([[`key`, `value`]]), `must not contain Set or Map`],
-    [`custom-prototype`, Object.create({ inherited: true }), `must be plain objects`],
-  ])(`rejects %s-valued settings`, (_name, value, message) => {
-    expect(() =>
-      mount_section({
-        title: `Unsupported`,
-        current_values: { value },
-        children: snippet(`content`),
-      }),
-    ).toThrow(message)
-  })
-
-  test.each([
-    [`Set`, () => new SvelteSet([`a`]), `must not contain Set or Map`],
-    [`Map`, () => new SvelteMap([[`key`, `value`]]), `must not contain Set or Map`],
-    [
-      `custom-prototype`,
-      () => Object.create({ inherited: true }),
-      `must be plain objects`,
-    ],
-  ])(`rejects %s-valued reactive updates`, (_name, make_value, message) => {
-    const tracked = mount_tracked_section({ value: {} }, `<span>content</span>`)
-    expect(() =>
-      flushSync(() => {
-        tracked.values = { value: make_value() }
-      }),
-    ).toThrow(message)
-  })
-
-  test(`reset_values overrides mounted values and deletes keys absent from the baseline`, async () => {
+  test(`caller resets changed values and deletes added keys`, async () => {
     const tracked = mount_tracked_section(
       { radius: 3, temporary: true },
       `<div>
@@ -217,7 +162,7 @@ describe(`SettingsSection`, () => {
     {
       name: `existing key`,
       label: `Radius`,
-      initial: { radius: 1, palette: { colors: [`red`, `blue`] } },
+      initial: { radius: 1, palette: `warm` },
       change: { radius: 2 },
       key: `radius`,
       reference_value: 1,
@@ -284,17 +229,18 @@ describe(`SettingsSection`, () => {
 
     flushSync(() => (tracked.values = { radius: 2, opacity: 0.8 }))
     await tick()
+    doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
     await click_and_tick(`.settings-section-heading .reset-button`)
 
     expect(tracked.values).toEqual({ radius: 1, opacity: 0.5 })
     expect(tracked.reset_calls.map(([key]) => key)).toEqual([`radius`, `opacity`])
     expect(document.querySelector(`.reset-button`)).toBeNull()
+    expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
   test(`reveals mapped row descriptions with an accessible section toggle`, async () => {
     mount_section({
       title: `Pointer sensitivity`,
-      current_values: { rotate_speed: 1, rotation_damping: 0.1 },
       setting_metadata: {
         rotate_speed: { description: `Pointer rotation speed` },
         rotation_damping: { description: `Motion inertia after releasing the pointer` },
@@ -335,8 +281,7 @@ describe(`SettingsSection`, () => {
   test(`labels reword the heading actions, key by key`, async () => {
     mount_section({
       title: `Atoms`,
-      current_values: { radius: 1 },
-      reset_values: { radius: 2 }, // differs at mount, so the Reset button renders
+      changed_keys: [`radius`],
       on_reset_key: () => undefined,
       labels: {
         explain: `Erklären`,
@@ -386,7 +331,6 @@ describe(`SettingsSection`, () => {
   test(`offers the toggle for rows that only carry their own data-description`, async () => {
     mount_section({
       title: `Atoms`,
-      current_values: { radius: 1 },
       on_reset_key: () => undefined,
       children: snippet(
         `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input></label>`,
@@ -405,7 +349,6 @@ describe(`SettingsSection`, () => {
   test(`follows a caller's later data-description instead of restoring the mount-time one`, async () => {
     mount_section({
       title: `Atoms`,
-      current_values: { radius: 1 },
       on_reset_key: () => undefined,
       children: snippet(
         `<label data-key="radius" data-description="Old text"><span>Radius</span><input></label>`,
@@ -428,7 +371,6 @@ describe(`SettingsSection`, () => {
   test(`keeps a data-description added after mount`, async () => {
     mount_section({
       title: `Atoms`,
-      current_values: { radius: 1 },
       on_reset_key: () => undefined,
       children: snippet(`<label data-key="radius"><span>Radius</span><input></label>`),
     })
@@ -461,10 +403,10 @@ describe(`SettingsSection`, () => {
     expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
-  test(`reserves reset gutters only for eligible rows, before and after edits`, async () => {
+  test(`reserves reset gutters for every keyed row, before and after edits`, async () => {
     const tracked = mount_tracked_section(
       { radius: 1 },
-      `<div><label data-key="radius"><span>Radius</span><input type="range"></label><label data-key="unknown">Untracked<input></label></div>`,
+      `<div><label data-key="radius"><span>Radius</span><input type="range"></label><label data-key="unknown">Unchanged<input></label></div>`,
     )
     await tick()
     const row = doc_query(`[data-key="radius"]`)
@@ -475,11 +417,11 @@ describe(`SettingsSection`, () => {
       expect(Boolean(row.querySelector(`.setting-reset-button`))).toBe(radius !== 1)
       expect(
         doc_query(`[data-key="unknown"]`).classList.contains(`setting-resettable`),
-      ).toBe(false)
+      ).toBe(true)
     }
     tracked.values = {}
     await tick()
-    expect(row.classList.contains(`setting-resettable`)).toBe(false)
+    expect(row.classList.contains(`setting-resettable`)).toBe(true)
   })
 
   test(`ignores unmapped and explicitly empty descriptions`, async () => {

@@ -103,7 +103,7 @@ query does not drag it back into view.
 
 ### `SettingsSection`
 
-A titled region that diffs `current_values` against a reset baseline. The baseline defaults to the mounted values; pass `reset_values` when reset should restore library defaults instead. Changed rows grow a reset arrow, and the heading grows a Reset button once anything differs. Pass `on_reset_key` to restore a single key; it receives the baseline value and whether that key existed, so a caller can restore or delete it exactly.
+A titled region that displays reset controls for caller-supplied `changed_keys`. The caller owns values, defaults, and equality. Keyed rows reserve a reset gutter from the start; changed rows show a reset arrow. `on_reset_key(key)` restores one setting. The heading Reset button calls `on_reset`, or resets each changed key when that callback is omitted.
 
 `setting_metadata` supplies per-row descriptions, revealed by the Explain toggle, and
 `layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so
@@ -123,14 +123,15 @@ controls line up down the section instead of starting wherever each label ends.
   <SettingsSection
     title="Atoms"
     layout="grid"
-    current_values={settings}
-    reset_values={defaults}
+    changed_keys={Object.keys(defaults).filter(
+      (key) => Reflect.get(settings, key) !== Reflect.get(defaults, key),
+    )}
     setting_metadata={{
       radius: `Radius multiplier applied to every rendered atom`,
       opacity: `Fill opacity, 0 is fully transparent`,
       show_labels: `Draw the element symbol on each site`,
     }}
-    on_reset_key={(key, value) => Reflect.set(settings, key, value)}
+    on_reset_key={(key) => Reflect.set(settings, key, Reflect.get(defaults, key))}
   >
     <label data-key="radius">
       <span>Radius</span>

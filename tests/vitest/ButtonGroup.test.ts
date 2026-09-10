@@ -361,14 +361,11 @@ describe(`ButtonGroup`, () => {
     ])
   })
 
-  test.each([
-    [`escapes markup by default`, undefined, `&lt;b&gt;bold&lt;/b&gt;`],
-    [`renders it under allow_html`, { allow_html: true }, `<b>bold</b>`],
-  ] as const)(`a per-option tooltip %s`, async (_desc, tooltip_options, expected) => {
+  test(`per-option tooltips always render plain text`, async () => {
     vi.useFakeTimers()
     try {
       const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
-      const buttons = mount_group({ options, tooltip_options })
+      const buttons = mount_group({ options })
       await tick()
 
       dispatch_hover(buttons[1])
@@ -377,7 +374,7 @@ describe(`ButtonGroup`, () => {
 
       dispatch_hover(buttons[0])
       vi.runAllTimers()
-      expect(doc_query(`.tooltip-content`).innerHTML).toBe(expected)
+      expect(doc_query(`.tooltip-content`).innerHTML).toBe(`&lt;b&gt;bold&lt;/b&gt;`)
     } finally {
       vi.useRealTimers()
     }

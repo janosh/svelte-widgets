@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import { CodeBlock, Icon } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
@@ -39,7 +40,7 @@
 <Icon icon={Download} />`
 </script>
 
-<h2>Icons</h2>
+<Heading level={2} id="icons">Icons</Heading>
 
 <p>
   {catalog.length} glyphs, tree-shakeable one by one. Import the glyph itself rather than its

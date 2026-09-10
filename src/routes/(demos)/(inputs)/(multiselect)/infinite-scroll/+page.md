@@ -260,7 +260,7 @@ By default, options load when the dropdown opens. Set `on_open: false` to disabl
 
 <MultiSelect
   load_options={{ fetch: load_options, on_open: false }}
-  bind:selected
+  bind:value={selected}
   placeholder="Type to search (won't load on open)..."
 />
 

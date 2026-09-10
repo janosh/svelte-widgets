@@ -12,7 +12,7 @@ import {
 } from './MultiSelect.test-utils'
 
 describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
-  const mount_a11y = (props: Partial<MultiSelectProps> = {}) =>
+  const mount_a11y = (props: MultiSelectProps = {}) =>
     mount_multiselect({ options: [`foo`, `bar`, `baz`], ...props })
 
   test(`implements ARIA combobox pattern with proper attributes and listbox association`, async () => {
@@ -242,7 +242,7 @@ describe(`ARIA correctness`, () => {
     await unmount_component(first)
     mount_multiselect({
       options: [1, 2, 3],
-      selected: [1, 2],
+      value: [1, 2],
       max_select: 2,
       select_all_option: true,
       open: true,

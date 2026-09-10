@@ -114,7 +114,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
 test(`Shift-click adds one visible range without intercepting native undo`, async () => {
   const onrange_select = mount_range({
     options: alpha_options,
-    selected: [],
+    value: [],
     max_options: 3,
   })
 
@@ -161,7 +161,7 @@ test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async
 test(`Shift-click is an ordinary click while range_select is off`, async () => {
   const onrange_select = mount_range({
     options: alpha_options,
-    selected: [],
+    value: [],
     range_select: false,
   })
 
@@ -181,7 +181,7 @@ test(`range selection skips disabled rows and obeys max_select`, async () => {
   ]
   const onrange_select = mount_range({
     options,
-    selected: [],
+    value: [],
     max_select: 2,
     on_max_reached,
   })

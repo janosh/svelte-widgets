@@ -8,6 +8,7 @@ import {
 } from './meta.ts'
 import {
   decode_entities,
+  has_heading_anchor,
   heading_text,
   slugify_heading,
   unique_heading_id,
@@ -16,6 +17,7 @@ import {
 import {
   source_locator,
   DiagnosticError,
+  error_diagnostics,
   type Diagnostic,
   type SourcePosition,
   type SourceRange,
@@ -30,7 +32,9 @@ export type ContentAnalysis = {
   omit_html?: boolean
   positions: Map<Token, TokenSource>
   heading_ids: Map<Token, string>
+  unlinked_headings: Set<Token>
   html_edits: Map<Token, SourceEdit[]>
+  heading_link?: (id: string) => string
   reserved_ids?: Iterable<string>
   examples?: ExampleOptions
 }
@@ -180,7 +184,9 @@ export function content_manifest(
     omit_html,
     positions,
     heading_ids,
+    unlinked_headings,
     html_edits,
+    heading_link,
     reserved_ids = [],
     examples,
   }: ContentAnalysis,
@@ -202,6 +208,7 @@ export function content_manifest(
     id?: string
     token: Token
     insertion?: number
+    link_insertion?: number
   })[] = []
   const prose: string[] = []
   const body_offset = source.length - body.length
@@ -214,6 +221,7 @@ export function content_manifest(
   }
   const html_attributes =
     /\s+(?<name>[^\s"'=<>`]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?/gu
+  const interactive_containers: string[] = []
   const scan_html = (mapped: MappedText, token: Token) => {
     // Raw element contents are not Markdown or navigable document headings.
     const visible = mapped.text.replaceAll(
@@ -226,12 +234,20 @@ export function content_manifest(
       (match) => ({ start: match.index, end: match.index + match[0].length }),
     )
     for (const match of visible.matchAll(
-      /<(?<tag>[a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
+      /<(?<closing>\/?)(?<tag>[a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
     )) {
-      const tag = match[1].toLowerCase()
+      const tag = match[2].toLowerCase()
       const in_pre = pre_ranges.some(
         ({ start, end }) => match.index > start && match.index < end,
       )
+      if (!in_pre && (tag === `a` || tag === `button`)) {
+        if (match[1]) {
+          const ancestor = interactive_containers.lastIndexOf(tag)
+          if (ancestor !== -1) interactive_containers.splice(ancestor)
+        } else if (!/\/\s*>$/u.test(match[0])) interactive_containers.push(tag)
+      }
+      if (match[1]) continue
+      let links_enabled = true
       let id: string | undefined
       for (const attr of match[0].matchAll(html_attributes)) {
         const name = attr[1].toLowerCase()
@@ -246,6 +262,7 @@ export function content_manifest(
           mapped.offsets[attr_offset] ?? body_offset,
           (mapped.offsets[attr_offset + attr[0].length - 1] ?? body_offset) + 1,
         )
+        if (name === `data-heading-anchor`) links_enabled = url !== `false`
         if (name === `id`) {
           id = url
           manifest.anchors.push({ id, range: at })
@@ -268,6 +285,13 @@ export function content_manifest(
               (mapped.offsets[end + tag.length + 2] ?? body_offset) + 1,
             ),
             token,
+            link_insertion:
+              heading_link &&
+              links_enabled &&
+              !has_heading_anchor(visible.slice(start, end)) &&
+              interactive_containers.length === 0
+                ? end
+                : undefined,
             insertion: id === undefined ? match.index + match[0].length - 1 : undefined,
           })
       }
@@ -306,14 +330,7 @@ export function content_manifest(
           try {
             settings = fence_settings(info, examples)
           } catch (error) {
-            throw new DiagnosticError([
-              {
-                code: `fence`,
-                severity: `error`,
-                range: at,
-                message: error instanceof Error ? error.message : String(error),
-              },
-            ])
+            throw new DiagnosticError(error_diagnostics(error, `fence`, at))
           }
           const fence: ContentFence = {
             language,
@@ -334,6 +351,7 @@ export function content_manifest(
         continue
       }
       if (token.type === `heading`) {
+        if (interactive_containers.length) unlinked_headings.add(token)
         const heading = token as Tokens.Heading
         const text = inline_text(heading.tokens)
         headings.push({ depth: heading.depth, text, range: at, token })
@@ -386,15 +404,22 @@ export function content_manifest(
     const base = slugify_heading(heading.text)
     if (heading.id === undefined && !base) continue
     const id = heading.id ?? unique_heading_id(base, used_ids)
-    const { token, insertion, ...content } = heading
+    const { token, insertion, link_insertion, ...content } = heading
     manifest.headings.push({ ...content, id })
-    if (insertion !== undefined) {
+    if (insertion !== undefined || link_insertion !== undefined) {
       const edits = html_edits.get(token) ?? []
-      edits.push({
-        start: insertion,
-        end: insertion,
-        text: ` id="${id.replaceAll(`&`, `&amp;`).replaceAll(`"`, `&quot;`)}"`,
-      })
+      if (insertion !== undefined)
+        edits.push({
+          start: insertion,
+          end: insertion,
+          text: ` id="${id.replaceAll(`&`, `&amp;`).replaceAll(`"`, `&quot;`)}"`,
+        })
+      if (link_insertion !== undefined && heading_link)
+        edits.push({
+          start: link_insertion,
+          end: link_insertion,
+          text: heading_link(id),
+        })
       html_edits.set(token, edits)
     } else if (token.type === `heading`) heading_ids.set(token, id)
     if (heading.id === undefined) manifest.anchors.push({ id, range: heading.range })

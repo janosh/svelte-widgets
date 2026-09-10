@@ -4,16 +4,10 @@ import { clamp, compute_position, get_uuid } from '../utils'
 import { auto_update_position } from './float'
 import { css_px, register_escape_layer } from './shared'
 
-export type TooltipTrigger = `hover-focus` | `hover` | `focus` | `manual`
+export type TooltipTrigger = `hover-focus` | `hover` | `focus`
 export type TooltipWrap = `balance` | `normal` | `nowrap`
 export type TooltipStrategy = `top-layer` | `fixed` | `absolute`
-export type TooltipOpenReason =
-  | `pointer`
-  | `focus`
-  | `blur`
-  | `escape`
-  | `controlled`
-  | `visibility`
+export type TooltipOpenReason = `pointer` | `focus` | `blur` | `escape` | `visibility`
 
 export type TooltipOpenDetail = {
   trigger: HTMLElement
@@ -22,7 +16,6 @@ export type TooltipOpenDetail = {
 
 export interface TooltipOptions {
   content?: string | ((trigger: HTMLElement) => string)
-  render?: (content_el: HTMLElement, trigger: HTMLElement) => undefined | (() => void)
   placement?: Placement | `auto`
   align?: `center` | `start` | `end`
   fallback_placements?: Placement[]
@@ -38,16 +31,11 @@ export interface TooltipOptions {
   open_delay_ms?: number
   close_delay_ms?: number
   skip_delay_ms?: number
-  open?: boolean
   on_open_change?: (open: boolean, detail: TooltipOpenDetail) => void
   disabled?: boolean
   delegate?: boolean | string
   style?: string
   show_arrow?: boolean
-  // Opt-in, including delegated title/aria-label/data-title. Trusted content only; pair
-  // user-controlled delegated attributes with sanitize_html.
-  allow_html?: boolean
-  sanitize_html?: (html: string) => string
 }
 
 type TooltipRegistration = {
@@ -58,17 +46,14 @@ type TooltipRegistration = {
   cleaned: boolean
 }
 
-type TooltipLocation = `trigger` | `surface` | null
-type TooltipPhase = `idle` | `open-requested` | `close-requested` | `dismissed`
-
 type ActiveTooltip = {
   registration: TooltipRegistration
   trigger: HTMLElement
   pointer_trigger: boolean
   pointer_surface: boolean
-  focus: TooltipLocation
+  focus: boolean
   open: boolean
-  phase: TooltipPhase
+  dismissed: boolean
 }
 
 type HideOptions = { keep_active?: boolean; notify?: boolean }
@@ -256,9 +241,9 @@ const create_active_tooltip = (
   trigger,
   pointer_trigger: false,
   pointer_surface: false,
-  focus: null,
+  focus: false,
   open: false,
-  phase: `idle`,
+  dismissed: false,
 })
 
 const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
@@ -277,15 +262,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   // subscriptions that live exactly as long as the tooltip is open; collecting their
   // stoppers means opening can't start one that closing forgets
   let stop_open_effects: (() => void)[] = []
-  let render_cleanup: (() => void) | undefined
   let last_closed_at = -Infinity
   let last_input_was_touch = false
 
   const compact_balanced_tooltip = () => {
     const can_compact =
-      surface.style.width === `max-content` &&
-      surface.style.textWrap === `balance` &&
-      content_el.childElementCount === 0
+      surface.style.width === `max-content` && surface.style.textWrap === `balance`
     if (!can_compact) return
     const content_range = doc.createRange()
     content_range.selectNodeContents(content_el)
@@ -306,8 +288,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     surface.style.display = `none`
   }
 
-  // Every exit path comes through here: a dismissal that hands focus back to the trigger
-  // re-enters and can reopen, so a dropped owner is no proof nothing is subscribed.
+  // Every exit path releases the observers and Escape layer of the open tooltip.
   const stop_open_subscriptions = () => {
     active_observer.disconnect()
     removal_observer.disconnect()
@@ -331,7 +312,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // focuses the trigger, itself a show state.
     if (tooltip_trigger(active.registration.options) !== `hover`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
-      request_close(`pointer`, true)
+      hide_active(`pointer`, { keep_active: true })
     }
   }
   doc.addEventListener(`pointerdown`, track_input, true)
@@ -346,19 +327,6 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (!active) return
     active.pointer_surface = false
     close_if_interaction_ended(`pointer`)
-  })
-  surface.addEventListener(`focusin`, () => {
-    if (!active) return
-    active.focus = `surface`
-    clear_close_timeout()
-  })
-  surface.addEventListener(`focusout`, (event) => {
-    if (!active) return
-    active.focus =
-      event.relatedTarget instanceof Node && surface.contains(event.relatedTarget)
-        ? `surface`
-        : null
-    close_if_interaction_ended(`blur`)
   })
 
   const release_delegated_title = (
@@ -468,22 +436,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
 
   const render_active_content = (): boolean => {
     if (!active) return false
-    render_cleanup?.()
-    render_cleanup = undefined
-    content_el.replaceChildren()
-    const { options } = active.registration
-    if (options.render) {
-      render_cleanup = options.render(content_el, active.trigger) ?? undefined
-      return true
-    }
     const content = resolve_content(active.registration, active.trigger)
     if (!content) return false
-    if (options.allow_html !== true) content_el.textContent = content
-    else {
-      let html = content.replaceAll(/\r\n?|\n/gu, `<br/>`)
-      if (options.sanitize_html) html = options.sanitize_html(html)
-      content_el.innerHTML = html
-    }
+    content_el.textContent = content
     return true
   }
 
@@ -547,27 +502,16 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     clear_open_timeout()
     clear_close_timeout()
     stop_open_subscriptions()
-    render_cleanup?.()
-    render_cleanup = undefined
     if (!closing) return
     const was_open = closing.open
     closing.open = false
-    closing.phase = keep_active ? `dismissed` : `idle`
-    if (closing.trigger.isConnected && surface.contains(doc.activeElement)) {
-      closing.phase = `dismissed`
-      closing.trigger.focus({ preventScroll: true })
-    }
+    closing.dismissed = keep_active
     remove_description(closing.trigger, surface.id)
     if (surface.hasAttribute(`popover`) && surface.matches(`:popover-open`))
       surface.hidePopover()
     hide_surface()
-    if (keep_active) {
-      closing.pointer_surface = false
-      if (closing.focus === `surface`) closing.focus = null
-      // not a self-assignment: handing focus back re-enters via focusout/focusin, which
-      // can null `active` or install a fresh one over the dismissal
-      active = closing
-    } else {
+    if (keep_active) closing.pointer_surface = false
+    else {
       release_delegated_title(closing.registration, closing.trigger)
       active = null
     }
@@ -577,21 +521,6 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         trigger: closing.trigger,
         reason,
       })
-  }
-
-  const request_close = (
-    reason: `pointer` | `blur` | `escape`,
-    keep_active = false,
-  ): void => {
-    if (!active) return
-    const { options } = active.registration
-    if (options.open !== true) {
-      hide_active(reason, { keep_active })
-      return
-    }
-    if (active.phase === `close-requested`) return
-    active.phase = `close-requested`
-    options.on_open_change?.(false, { trigger: active.trigger, reason })
   }
 
   // A custom element can restore `title` from attributeChangedCallback, so strip until it
@@ -634,12 +563,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       TOOLTIP_CONTENT_ATTRIBUTES.includes(attribute),
     )
     const { options } = observed.registration
-    if (
-      content_changed &&
-      options.content === undefined &&
-      !options.render &&
-      !render_active_content()
-    ) {
+    if (content_changed && options.content === undefined && !render_active_content()) {
       hide_active(`visibility`)
       return
     }
@@ -671,22 +595,10 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
 
   const show_active = (reason: TooltipOpenReason): void => {
     clear_open_timeout()
-    if (
-      !active ||
-      active.phase === `dismissed` ||
-      active.open ||
-      !is_trigger_visible(active.trigger)
-    )
+    if (!active || active.dismissed || active.open || !is_trigger_visible(active.trigger))
       return
     const opening = active
     const { options } = opening.registration
-    if (options.open === false && reason !== `controlled`) {
-      if (opening.phase !== `open-requested`) {
-        opening.phase = `open-requested`
-        options.on_open_change?.(true, { trigger: opening.trigger, reason })
-      }
-      return
-    }
     apply_surface_context(opening.trigger, options)
     if (!render_active_content()) {
       hide_surface()
@@ -695,7 +607,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     mount_surface(opening.trigger, options)
     add_description(opening.trigger, surface.id)
     opening.open = true
-    opening.phase = `idle`
+    opening.dismissed = false
     active_observer.observe(opening.trigger, {
       attributes: true,
       attributeFilter: TOOLTIP_OBSERVED_ATTRIBUTES,
@@ -707,7 +619,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         if (!active?.open) return false
         event.preventDefault()
         event.stopPropagation()
-        request_close(`escape`, true)
+        hide_active(`escape`, { keep_active: true })
         return true
       }),
     ]
@@ -717,9 +629,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     position_active()
   }
 
-  const request_open = (reason: `pointer` | `focus` | `controlled`): void => {
+  const request_open = (reason: `pointer` | `focus`): void => {
     clear_close_timeout() // re-entering during the close delay supersedes it
-    if (!active || active.phase === `dismissed` || active.open) return
+    if (!active || active.dismissed || active.open) return
     const { options } = active.registration
     const elapsed_since_close = Date.now() - last_closed_at
     const warm =
@@ -734,18 +646,17 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
 
   function close_if_interaction_ended(reason: `pointer` | `blur`): void {
     if (!active) return
-    if (active.registration.options.trigger === `manual`) return
     clear_close_timeout()
     if (active.pointer_trigger || active.pointer_surface || active.focus) return
     clear_open_timeout()
-    if (active.phase === `dismissed` || !active.open) {
+    if (active.dismissed || !active.open) {
       stop_open_subscriptions()
       release_delegated_title(active.registration, active.trigger)
       active = null
       return
     }
     close_timeout = setTimeout(
-      () => request_close(reason),
+      () => hide_active(reason),
       active.registration.options.close_delay_ms ?? 100,
     )
   }
@@ -759,14 +670,13 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     trigger: HTMLElement,
     reason: `pointer` | `focus`,
   ): void => {
-    // One surface serves the document, so the newest interaction takes it; a controlled
+    // One surface serves the document, so the newest interaction takes it; a previous
     // tooltip is preempted like any other and hears the close via on_open_change.
     if (active && !owns(registration, trigger)) hide_active(CLOSE_REASON[reason])
     remember_and_strip_title(registration, trigger)
     active ??= create_active_tooltip(registration, trigger)
-    if (active.phase === `close-requested`) active.phase = `idle`
     if (reason === `pointer`) active.pointer_trigger = true
-    else active.focus = `trigger`
+    else active.focus = true
     request_open(reason)
   }
 
@@ -790,16 +700,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     const entered = event.relatedTarget instanceof Node ? event.relatedTarget : null
     if (entered && active.trigger.contains(entered)) return // moving within the trigger
     // crossing onto the hoverable surface hands the interaction over rather than ending it
-    if (entered && surface.contains(entered)) {
-      if (reason === `pointer`) {
-        active.pointer_trigger = false
-        active.pointer_surface = true
-      } else active.focus = `surface`
+    if (reason === `pointer` && entered && surface.contains(entered)) {
+      active.pointer_trigger = false
+      active.pointer_surface = true
       clear_close_timeout()
       return
     }
     if (reason === `pointer`) active.pointer_trigger = false
-    else active.focus = null
+    else active.focus = false
     close_if_interaction_ended(CLOSE_REASON[reason])
   }
 
@@ -812,26 +720,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     activate(registration, trigger, `focus`)
   }
 
-  const sync_controlled = (registration: TooltipRegistration): void => {
-    if (registration.cleaned) return
-    if (registration.options.open !== true) {
-      if (active?.registration === registration) {
-        hide_active(`controlled`, { notify: false })
-      }
-      return
-    }
-    if (active && !owns(registration, registration.root)) hide_active(`controlled`)
-    active ??= create_active_tooltip(registration, registration.root)
-    request_open(`controlled`)
-  }
-
   const register = (registration: TooltipRegistration): (() => void) => {
     registration_count += 1
     return () => {
       if (registration.cleaned) return
       registration.cleaned = true
-      if (active?.registration === registration)
-        hide_active(`controlled`, { notify: false })
+      if (active?.registration === registration) hide_active(`visibility`)
       for (const [element, title] of registration.original_titles) {
         if (!element.hasAttribute(`title`)) element.setAttribute(`title`, title)
       }
@@ -850,7 +744,6 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     enter_pointer,
     leave_trigger,
     enter_focus,
-    sync_controlled,
   }
 }
 
@@ -865,29 +758,6 @@ const get_tooltip_manager = (doc: Document) => {
   const manager = create_tooltip_manager(doc, () => tooltip_managers.delete(doc))
   tooltip_managers.set(doc, manager)
   return manager
-}
-
-const validate_tooltip_options = (options: TooltipOptions, delegates: boolean): void => {
-  if (
-    options.render &&
-    (options.content !== undefined || options.allow_html !== undefined)
-  ) {
-    throw new Error(`tooltip render cannot be combined with content or allow_html`)
-  }
-  if (options.sanitize_html && options.allow_html !== true) {
-    throw new Error(`tooltip sanitize_html requires allow_html: true`)
-  }
-  if (
-    delegates &&
-    options.allow_html === true &&
-    options.content === undefined &&
-    !options.sanitize_html
-  ) {
-    throw new Error(`tooltip delegated allow_html requires sanitize_html`)
-  }
-  if (options.trigger === `manual` && options.open === undefined) {
-    throw new Error(`tooltip trigger: 'manual' requires the open option`)
-  }
 }
 
 const registration_target = (
@@ -918,14 +788,19 @@ export const tooltip =
     if (typeof document === `undefined` || !(node instanceof HTMLElement))
       return undefined
 
+    if (
+      options.trigger !== undefined &&
+      ![`hover-focus`, `hover`, `focus`].includes(options.trigger)
+    )
+      throw new Error(
+        `tooltip trigger must be hover-focus, hover, or focus; got ${options.trigger}`,
+      )
+
     const has_root_source =
-      Object.hasOwn(options, `content`) ||
-      Boolean(options.render) ||
-      node.matches(TOOLTIP_SOURCE_SELECTOR)
-    const delegate = options.delegate ?? (!has_root_source && options.open === undefined)
+      Object.hasOwn(options, `content`) || node.matches(TOOLTIP_SOURCE_SELECTOR)
+    const delegate = options.delegate ?? !has_root_source
     const delegate_selector =
       typeof delegate === `string` ? delegate : delegate ? TOOLTIP_SOURCE_SELECTOR : null
-    validate_tooltip_options(options, Boolean(delegate_selector))
     if (options.disabled) return undefined
     // Throws the native SyntaxError naming the selector here rather than on first hover
     if (delegate_selector) node.matches(delegate_selector)
@@ -966,9 +841,6 @@ export const tooltip =
     node.addEventListener(`focusin`, on_focus_in, { signal })
     node.addEventListener(`pointerout`, leave(`pointer`), { signal })
     node.addEventListener(`focusout`, leave(`focus`), { signal })
-    if (options.open !== undefined) {
-      queueMicrotask(() => manager.sync_controlled(registration))
-    }
 
     return () => {
       listeners.abort()

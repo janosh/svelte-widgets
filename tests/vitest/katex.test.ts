@@ -1,11 +1,9 @@
 /* oxlint-disable no-template-curly-in-string -- Literal JavaScript fixtures. */
-import { heading_ids } from '$lib/heading-anchors'
 import {
   compile_source as compile_markdown,
-  markdown_preprocessor as markdown,
   render_source as render_markdown,
 } from './markdown-helpers'
-import { compile, preprocess } from 'svelte/compiler'
+import { compile } from 'svelte/compiler'
 import { describe, expect, it } from 'vitest'
 
 const has_math = (html: string) => html.includes(`katex-html`)
@@ -94,9 +92,11 @@ describe(`Markdown math`, () => {
     [`## $E = mc^2$`, `e-mc-2`],
     [`## $\\{$ Details`, `details`],
   ])(`maps math heading %j to ID %j and valid Svelte`, async (source, expected_id) => {
-    const { code } = await preprocess(source, [markdown({ math: true }), heading_ids()], {
+    const { code, manifest } = await compile_markdown(source, {
+      math: true,
       filename: `page.md`,
     })
+    expect(manifest.headings[0].id).toBe(expected_id)
     expect(code).toContain(`<h2 id="${expected_id}">`)
     expect(has_math(code)).toBe(true)
     compile(code, { generate: false })

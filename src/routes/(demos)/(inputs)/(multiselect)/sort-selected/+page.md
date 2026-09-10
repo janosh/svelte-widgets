@@ -44,7 +44,7 @@ selected = {selected.map((itm, idx) => `${idx + 1}. ${itm.label}`).join(`, `) ||
   options={frontend_libs}
   placeholder="Pick your favorite frontend libs"
   sort_selected
-  bind:selected
+  bind:value={selected}
 />
 ```
 

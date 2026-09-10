@@ -18,7 +18,11 @@ import {
   source_map,
 } from '$lib/markdown/source-map'
 import { compile, preprocess } from 'svelte/compiler'
-import { describe, expect, test, vi } from 'vitest'
+import { heading_anchors } from '$lib/heading-anchors'
+import { describe, expect, test, vi, onTestFinished } from 'vitest'
+import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { build } from 'vite'
 
 const compile_page = async (
   source: string,
@@ -34,11 +38,55 @@ const compile_page = async (
 }
 
 describe(`Markdown output`, () => {
+  test.each([`markdown`, `svelte`] as const)(
+    `renders one stable heading anchor in the %s dialect`,
+    async (dialect) => {
+      const source = `# Diatomics\n\nLiteral \uE000widgets placeholder prefix.\n\n## Explicit <a aria-hidden="true" href="#custom">custom</a>`
+      const parsed = assert_ok(await create_markdown().parse(source, { dialect }))
+      const result =
+        dialect === `markdown`
+          ? assert_ok(await render_document(parsed))
+          : assert_ok(await compile_document(parsed)).code
+      const container = document.createElement(`main`)
+      container.innerHTML = result
+      const anchor = container.querySelector(`h1 a`)
+      expect(anchor?.getAttribute(`href`)).toBe(`#diatomics`)
+      expect(anchor?.querySelector(`svg`)).not.toBeNull()
+      const cleanup = heading_anchors()(container)
+      expect(container.querySelector(`h1 a`)).toBe(anchor)
+      expect(container.querySelectorAll(`h2 a`)).toHaveLength(1)
+      expect(container.querySelector(`h2 a`)?.getAttribute(`href`)).toBe(`#custom`)
+      cleanup?.()
+      compile(result, { generate: false })
+    },
+  )
+
+  test.each([
+    `<a href="/foo">\n\n## Inside\n\n</a>`,
+    `<a href="/foo">\n\n<h2>Inside</h2>\n\n</a>`,
+    `<h2 data-heading-anchor = "false">Inside</h2>`,
+    `<h2 data-heading-anchor=false>Inside</h2>`,
+    `<h2 DATA-HEADING-ANCHOR = 'false'>Inside</h2>`,
+  ])(
+    `omits links inside interactive containers and opted-out headings: %s`,
+    async (source) => {
+      const output = await compile_page(`${source}\n\n## Outside`)
+      const container = document.createElement(`main`)
+      container.innerHTML = output.code
+      const [inside, outside] = container.querySelectorAll(`h2`)
+      expect(inside.id).toBe(`inside`)
+      expect(inside.querySelector(`a`)).toBeNull()
+      expect(outside.querySelector(`a[data-heading-anchor]`)?.getAttribute(`href`)).toBe(
+        `#outside`,
+      )
+    },
+  )
+
   test.each([
     [
       `# Title\n\n**bold** and _em_ and ~~gone~~`,
       [
-        `<h1 id="title">Title</h1>`,
+        `<h1 id="title">Title<a data-heading-anchor`,
         `<strong>bold</strong>`,
         `<em>em</em>`,
         `<del>gone</del>`,
@@ -87,7 +135,7 @@ describe(`Markdown output`, () => {
   ])(
     `preserves leading separators when frontmatter is disabled: %s`,
     async (source, expected) => {
-      const engine = create_markdown({ frontmatter: false })
+      const engine = create_markdown({ frontmatter: false, heading_links: false })
       const document = assert_ok(await engine.parse(source, { dialect: `markdown` }))
       expect(document.metadata).toEqual({})
       expect(document.manifest.headings[0]?.range.start.line).toBe(
@@ -219,7 +267,7 @@ describe(`Svelte integration`, () => {
     ).toBe(`# Hello`)
     expect(
       (await preprocess(`# Hello`, processor, { filename: `page.md` })).code,
-    ).toContain(`<h1 id="hello">Hello</h1>`)
+    ).toContain(`<h1 id="hello">Hello<a data-heading-anchor`)
   })
 })
 
@@ -247,6 +295,87 @@ describe(`code and math`, () => {
     expect(code).toContain(`$escaped$`)
     expect(code).toContain(`$fenced$`)
     expect(await render_markdown(`$x$`, { math: true })).toContain(`<span class="katex">`)
+  })
+
+  test(`ToC imports are plain JS modules from the current manifest`, async () => {
+    // Exercise the production glob parser against the actual consumer: template-valued
+    // options are silently ignored by Rolldown, unlike Vite's development transform.
+    const layout_file = `${process.cwd()}/src/routes/+layout.svelte`
+    const layout_source = await readFile(layout_file, `utf8`)
+    const output = await build({
+      configFile: false,
+      logLevel: `silent`,
+      experimental: { importGlobRestoreExtension: true },
+      plugins: [
+        {
+          name: `toc-layout-fixture`,
+          load(id) {
+            if (id === layout_file)
+              return compile(layout_source, { filename: layout_file, generate: `server` })
+                .js.code
+            return undefined
+          },
+        },
+      ],
+      build: {
+        ssr: true,
+        write: false,
+        minify: false,
+        rolldownOptions: {
+          input: layout_file,
+          external: (id) => id !== layout_file,
+        },
+      },
+    })
+    if (!(`output` in output)) throw new Error(`Expected in-memory bundle`)
+    const generated = output.output.find((chunk) => chunk.type === `chunk`)?.code
+    expect(generated).toMatch(/from "[^"\n]+\+page\.md\?toc&lang\.md"/u)
+    const directory = await mkdtemp(`${tmpdir()}/widgets-toc-`)
+    onTestFinished(() => rm(directory, { recursive: true }))
+    const filename = `${directory}/page.md`
+    const highlight = vi.fn((code: string) => code)
+    const instance = markdown_vite({ highlight })
+    const { load, resolveId: resolve_id } = instance.plugin
+    if (typeof load !== `function` || typeof resolve_id !== `function`)
+      throw new Error(`Expected load and resolve hooks`)
+    const context = {
+      resolve: vi.fn(async () => ({ id: filename })),
+      addWatchFile: vi.fn(),
+    }
+    const module_ids = await Promise.all(
+      [`?toc`, `?toc&lang.md`, `?lang.md&toc`].map(async (query) =>
+        resolve_id.call(context as never, `./page.md${query}`, undefined, {} as never),
+      ),
+    )
+    const [module_id] = module_ids
+    expect(new Set(module_ids).size).toBe(1)
+    expect(typeof module_id).toBe(`string`)
+    if (typeof module_id !== `string`) throw new Error(`Expected virtual module ID`)
+    expect(module_id).toMatch(/\.js$/u)
+    for (const title of [`First`, `Changed`]) {
+      await writeFile(filename, `## ${title}\n\n\`\`\`ts\nconst value = 1\n\`\`\``)
+      const code = await load.call(context as never, module_id)
+      if (typeof code !== `string`) throw new Error(`Expected JS module source`)
+      expect(JSON.parse(code.slice(`export default `.length, -1))).toEqual([
+        { id: title.toLowerCase(), level: 2, title },
+      ])
+    }
+    expect(context.addWatchFile).toHaveBeenCalledWith(filename)
+    expect(highlight).not.toHaveBeenCalled()
+    const update = instance.plugin.hotUpdate
+    if (typeof update !== `function`) throw new Error(`Expected hotUpdate hook`)
+    const toc_module = { id: module_id }
+    const graph = {
+      idToModuleMap: new Map([[module_id, toc_module]]),
+      invalidateModule: vi.fn(),
+    }
+    expect(
+      await update.call(
+        { environment: { moduleGraph: graph } } as never,
+        { file: filename, type: `update`, modules: [], timestamp: 1 } as never,
+      ),
+    ).toEqual([toc_module])
+    expect(graph.invalidateModule).toHaveBeenCalledWith(toc_module, new Set(), 1)
   })
 
   test.each([undefined, true])(
@@ -456,7 +585,7 @@ describe(`incremental Markdown compilation`, () => {
       { examples: {} },
     )
     expect(edited.examples[1].id).toBe(initial.examples[0].id)
-    expect(edited.code).toContain(`<h1 id="new-prose">New prose</h1>`)
+    expect(edited.code).toContain(`<h1 id="new-prose">New prose<a data-heading-anchor`)
     const duplicates = await compile_page(`${source}\n\n${source}`, { examples: {} })
     expect(new Set(duplicates.examples.map(({ id }) => id)).size).toBe(2)
     const named = await compile_page(fence(`<p>First</p>`, `id="counter"`), {
@@ -571,7 +700,7 @@ describe(`document pipeline`, () => {
     expect(second.manifest).toBe(document.manifest)
     expect(second.metadata).toBe(document.metadata)
     expect(second.manifest.headings[0].text).toBe(`Heading`)
-    expect(second.code).toContain(`<h1 id="heading">Heading</h1>`)
+    expect(second.code).toContain(`<h1 id="heading">Heading<a data-heading-anchor`)
   })
 
   test(`decoded maps preserve gaps, duplicate columns, other sources, and signed deltas`, () => {
@@ -660,7 +789,7 @@ describe(`document pipeline`, () => {
       const output = assert_ok(result)
       expect(output.manifest).toBe(document.manifest)
       expect(output.examples).toHaveLength(1)
-      expect(output.code).toContain('<h1 id="guide">Guide</h1>')
+      expect(output.code).toContain('<h1 id="guide">Guide<a data-heading-anchor')
     }
     const bad = await engine.parse('```svelte example csr="yes"\n<p/>\n```', {
       filename: 'bad.md',

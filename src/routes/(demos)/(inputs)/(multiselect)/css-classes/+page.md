@@ -21,7 +21,7 @@
   li_active_user_msg_class="hovered-or-arrow-keyed-msg-li"
   max_select_msg_class="user-hint-max-selected-reached"
   placeholder="Which foods do you like?"
-  bind:selected
+  bind:value={selected}
   allow_user_options
   max_select={2}
   --sms-bg="color-mix(in srgb, cornflowerblue 15%, light-dark(white, #1a1a2e))"

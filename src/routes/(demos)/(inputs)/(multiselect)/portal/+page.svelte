@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import { MultiSelect } from 'svelte-widgets'
   import { get_label } from 'svelte-widgets/utils'
   import { languages, octicons } from '$site/options'
@@ -41,7 +42,9 @@
 
 <svelte:window onkeydowncapture={handle_modal_keydown} />
 
-<h2>Portalled MultiSelect in Modal Demo</h2>
+<Heading level={2} id="portalled-multiselect-in-modal-demo"
+  >Portalled MultiSelect in Modal Demo</Heading
+>
 
 <button
   id="open-modal"
@@ -69,16 +72,16 @@
       tabindex="-1"
       {@attach (node) => node.focus()}
     >
-      <h2 id="modal-title">Modal: Languages & Octicons</h2>
+      <Heading level={2} id="modal-title">Modal: Languages & Octicons</Heading>
       <MultiSelect
-        bind:selected={selected_languages}
+        bind:value={selected_languages}
         options={languages}
         portal={{ active: true }}
         placeholder="Choose languages..."
         style="margin-bottom: 1em"
       />
       <MultiSelect
-        bind:selected={selected_octicons}
+        bind:value={selected_octicons}
         options={octicons}
         portal={{ active: true }}
         placeholder="Choose octicons..."
@@ -103,7 +106,7 @@
     padding: 10px 20px 20px;
     border-radius: 8pt;
   }
-  .modal-content h2 {
+  .modal-content :global(h2) {
     margin-top: 0;
   }
   .modal-content button {

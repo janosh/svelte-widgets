@@ -1,6 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
-  import { untrack } from 'svelte'
+  import { tick, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import { Reset } from './icons'
@@ -9,7 +8,7 @@
     SETTINGS_SECTION_LABELS,
     type SettingsSectionLabels,
   } from './labels'
-  import { is_object, observe_subtree } from './utils'
+  import { observe_subtree } from './utils'
 
   type SettingMetadata = Readonly<
     Record<string, string | { readonly description: string } | undefined>
@@ -18,8 +17,7 @@
   let {
     title,
     labels,
-    current_values = {},
-    reset_values,
+    changed_keys = [],
     children,
     layout = `flow`,
     on_reset,
@@ -31,12 +29,8 @@
     title: string
     // the Explain/Reset strings; the interpolating ones receive `title` verbatim
     labels?: Partial<SettingsSectionLabels>
-    // Omit for action-only sections with nothing to diff. Values may be primitives, arrays,
-    // plain objects, Date or RegExp; Map, Set and typed arrays are unsupported.
-    current_values?: Record<string, unknown>
-    // Reset baseline: keys absent here count as additions and are removed on reset; keys not
-    // in current_values are ignored.
-    reset_values?: Record<string, unknown>
+    // The caller owns values, defaults, and equality; only changed keys belong here.
+    changed_keys?: readonly string[]
     children: Snippet
     // `grid` aligns every direct label/.setting row on one [label][value][wide control]
     // rhythm instead of wherever each label's text ends; `flow` leaves layout to the caller.
@@ -44,13 +38,8 @@
     // Omit to reset every changed key through `on_reset_key`. Pass one only when reset has to
     // do more than restore values (clearing validation state, say).
     on_reset?: () => void
-    // Rows opt in with `data-key`. Receives the mounted reference value and whether that key
-    // originally existed, so callers can restore or delete it exactly.
-    on_reset_key?: (
-      key: string,
-      reference_value: unknown,
-      reference_present: boolean,
-    ) => void
+    // Rows opt in with `data-key`; the caller restores or deletes the requested key.
+    on_reset_key?: (key: string) => void
     // Accepts schema objects directly as well as a compact key-to-description map.
     setting_metadata?: SettingMetadata
     descriptions_open?: boolean
@@ -58,90 +47,10 @@
 
   const msg = $derived(merge_defaults(SETTINGS_SECTION_LABELS, labels))
 
-  const validate_object_shape = (value: object): void => {
-    if (value instanceof Set || value instanceof Map) {
-      throw new TypeError(`SettingsSection values must not contain Set or Map instances`)
-    }
-    if (value instanceof Date || value instanceof RegExp || Array.isArray(value)) return
-    const prototype = Object.getPrototypeOf(value)
-    if (prototype && prototype !== Object.prototype) {
-      throw new TypeError(`SettingsSection values must be plain objects`)
-    }
-  }
-
-  const deep_copy = (value: unknown): unknown => {
-    if (!is_object(value)) return value
-    validate_object_shape(value)
-    if (value instanceof Date) return new Date(value)
-    if (value instanceof RegExp) return new RegExp(value)
-    if (Array.isArray(value)) return value.map(deep_copy)
-    return Object.fromEntries(
-      Object.entries(value).map(([key, item]) => [key, deep_copy(item)]),
-    )
-  }
-
-  const validate_value_shape = (value: unknown): void => {
-    if (!is_object(value)) return
-    validate_object_shape(value)
-    if (value instanceof Date || value instanceof RegExp) return
-    for (const item of Array.isArray(value) ? value : Object.values(value))
-      validate_value_shape(item)
-  }
-
-  // Capture reset values once at mount - must NOT be $derived or it tracks changes.
-  const reference_values = untrack(() => {
-    if (!reset_values) return deep_copy(current_values) as Record<string, unknown>
-    return Object.fromEntries(
-      Object.keys(current_values)
-        .filter((key) => Object.hasOwn(reset_values, key))
-        .map((key) => [key, deep_copy(reset_values[key])]),
-    )
-  })
-
   // per-instance id so aria-labelledby stays valid with multiple sections on a page
   const section_id = $props.id()
   const title_id = `settings-section-title-${section_id}`
 
-  const scalar_of = (value: object): number | string | undefined =>
-    value instanceof Date
-      ? value.getTime()
-      : value instanceof RegExp
-        ? String(value)
-        : undefined
-
-  // Order-independent deep equality over the shapes `deep_copy` preserves
-  const setting_equal = (left: unknown, right: unknown): boolean => {
-    if (left === right || Object.is(left, right)) return true
-    if (!is_object(left) || !is_object(right)) return false
-    const [left_scalar, right_scalar] = [scalar_of(left), scalar_of(right)]
-    if (left_scalar !== undefined || right_scalar !== undefined)
-      return Object.is(left_scalar, right_scalar)
-    if (Array.isArray(left) || Array.isArray(right)) {
-      return (
-        Array.isArray(left) &&
-        Array.isArray(right) &&
-        left.length === right.length &&
-        left.every((item, idx) => setting_equal(item, right[idx]))
-      )
-    }
-    const left_entries = Object.entries(left)
-    return (
-      left_entries.length === Object.keys(right).length &&
-      left_entries.every(
-        ([key, value]) => Object.hasOwn(right, key) && setting_equal(value, right[key]),
-      )
-    )
-  }
-
-  // Key presence counts on its own: additions/removals differ even when the value is undefined
-  const changed_keys = $derived.by(() => {
-    validate_value_shape(current_values)
-    return Object.keys({ ...reference_values, ...current_values }).filter(
-      (key) =>
-        Object.hasOwn(reference_values, key) !== Object.hasOwn(current_values, key) ||
-        !setting_equal(reference_values[key], current_values[key]),
-    )
-  })
   let has_descriptions = $state(false)
   const show_reset = $derived(
     changed_keys.length > 0 && Boolean(on_reset || on_reset_key),
@@ -149,8 +58,7 @@
 
   const reset_key = (key: string): void => {
     if (!on_reset_key || !changed_keys.includes(key)) return
-    const reference_present = Object.hasOwn(reference_values, key)
-    on_reset_key(key, deep_copy(reference_values[key]), reference_present)
+    on_reset_key(key)
   }
 
   // Reset buttons may sit inside a <summary> or <label>, neither of which should react to them.
@@ -160,10 +68,21 @@
     action()
   }
 
-  const handle_reset = swallow_click(() => {
+  let section_element = $state<HTMLElement>()
+  const handle_reset = swallow_click(async () => {
+    const focused = document.activeElement
     if (on_reset) on_reset()
     // snapshot: each reset_key shrinks changed_keys as the caller writes the value back
     else for (const key of changed_keys.slice()) reset_key(key)
+    await tick()
+    if (focused && !focused.isConnected && section_element) {
+      const target =
+        section_element.querySelector<HTMLElement>(
+          `input:not(:disabled), select:not(:disabled), textarea:not(:disabled), button:not(:disabled), [tabindex="0"]`,
+        ) ?? section_element
+      if (target === section_element) target.tabIndex = -1
+      target.focus()
+    }
   })
 
   const DESCRIPTION_SELECTOR = `:scope > .settings-row-description`
@@ -289,7 +208,7 @@
       }
 
       // Reserve the gutter before the value changes, including during keyboard edits.
-      const resettable = Boolean(on_reset_key) && Object.hasOwn(current_values, key)
+      const resettable = Boolean(on_reset_key)
       row.classList.toggle(`setting-resettable`, resettable)
       if (!resettable || !changed_keys.includes(key)) remove_reset_button(row)
       else {
@@ -347,7 +266,7 @@
 </script>
 
 <div class="settings-section-heading">
-  <h4 id={title_id}>{title}</h4>
+  <h4 id={title_id} data-heading-anchor="false">{title}</h4>
   {#if has_descriptions || show_reset}
     <span class="heading-actions">
       {#if has_descriptions}
@@ -377,6 +296,7 @@
   {/if}
 </div>
 <section
+  bind:this={section_element}
   {...rest}
   class={[`settings-section`, rest.class, layout]}
   aria-labelledby={title_id}

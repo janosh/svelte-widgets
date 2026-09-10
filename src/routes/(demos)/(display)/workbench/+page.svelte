@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
@@ -44,7 +45,7 @@
   const items = Array.from({ length: 10000 }, (_value, idx) => `Item ${idx + 1}`)
 </script>
 
-<h2>Workbench widgets</h2>
+<Heading level={2} id="workbench-widgets">Workbench widgets</Heading>
 <p>
   Compose controls for settings, file loading, pane layouts, and large data explorers.
   Start with the focused examples and API guides for <a href={resolve(`/tree-view`)}
@@ -56,7 +57,7 @@
   <a href={resolve(`/file-input`)}>FileInput</a>. The combined explorer below shares
   selection and settings between its panes.
 </p>
-<h3>NumberRangeInput</h3>
+<Heading level={3} id="numberrangeinput">NumberRangeInput</Heading>
 <p>
   Draft text stays local until it is finite and within bounds. Clearing retains the value;
   use <code>empty="undefined"</code> for optional fields. <code>commit="change"</code>
@@ -67,7 +68,7 @@
   >Opacity</NumberRangeInput
 >
 <p>Committed: {value}</p>
-<h3>SplitPane and TreeView</h3>
+<Heading level={3} id="splitpane-and-treeview">SplitPane and TreeView</Heading>
 <p>
   SplitPane sizes its parent through <code>--split-pane-size</code>. Bind
   <code>ratio</code>
@@ -93,7 +94,7 @@
   type-to-focus. JsonTree adds search, copy, paths, editing callbacks and comparison highlighting
   for object data.
 </p>
-<h3>VirtualList</h3>
+<Heading level={3} id="virtuallist">VirtualList</Heading>
 <p>
   Only visible rows plus <code>overscan</code> are mounted. Set a fixed
   <code>item_size</code>
@@ -104,7 +105,7 @@
 <VirtualList {items} item_size={32} style="height: 160px" aria-label="Ten thousand items">
   {#snippet children(item, idx)}<div>{idx + 1}: {item}</div>{/snippet}
 </VirtualList>
-<h3>FileInput</h3>
+<Heading level={3} id="fileinput">FileInput</Heading>
 <p>
   Picker and drop validation share <code>accept</code>, <code>max_size</code>,
   <code>max_files</code>, and <code>multiple</code>. Rejections include type, size, or
@@ -113,7 +114,7 @@
   including FileDetails for text.
 </p>
 <FileInput accept=".json,.txt" multiple max_files={3} max_size={1000000} />
-<h3>Progress and TaskStatus</h3>
+<Heading level={3} id="progress-and-taskstatus">Progress and TaskStatus</Heading>
 <p>
   Progress uses a native progress element; omit value for indeterminate work. TaskStatus
   adds a live label and caller-owned cancellation/retry callbacks, so it can be used
@@ -131,7 +132,7 @@
   }}
 />
 
-<h3>CodeBlock and StatGrid</h3>
+<Heading level={3} id="codeblock-and-statgrid">CodeBlock and StatGrid</Heading>
 <p>
   <code>CodeBlock</code> accepts plain code or an optional
   <code>highlight(code, language, signal)</code>
@@ -157,7 +158,7 @@
     { label: 'State', value: 'Ready' },
   ]}
 />
-<h3>Feedback</h3>
+<Heading level={3} id="feedback">Feedback</Heading>
 <Spinner text="Loading preview" />
 <StatusMessage bind:message type="success" dismissible />
 <p>
@@ -182,7 +183,9 @@
   <code>DragOverlay</code> fills a positioned parent; <code>ClickFeedback</code> uses viewport
   coordinates. The caller owns visibility and timing.
 </p>
-<h3>Canvas and keyboard primitives</h3>
+<Heading level={3} id="canvas-and-keyboard-primitives"
+  >Canvas and keyboard primitives</Heading
+>
 <p>
   <code>create_canvas_surface</code> from <code>svelte-widgets/canvas</code> takes
   reactive canvas and optional overlay getters, an optional CSS height, draw callbacks and

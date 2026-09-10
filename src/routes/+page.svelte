@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { ContributorList, heading_anchors, type Contributor } from '$lib'
+  import Heading from '$lib/Heading.svelte'
+  import { ContributorList, type Contributor } from '$lib'
   import { repository, version } from '$root/package.json'
   import { Examples } from '$site'
   import { resolve_demo_path as resolve_path } from '$site/paths'
@@ -33,10 +34,10 @@
   />
 </svelte:head>
 
-<main {@attach heading_anchors()}>
+<main>
   <section class="intro" aria-labelledby="overview">
     <p class="eyebrow">Svelte 5 · TypeScript · MIT <span>v{version}</span></p>
-    <h1 id="overview">Components, attachments, and tools</h1>
+    <Heading level={1} id="overview">Components, attachments, and tools</Heading>
     <p class="summary">
       Accessible, keyboard-friendly components, element attachments, and documentation
       tools for Svelte 5.
@@ -47,16 +48,16 @@
     </div>
   </section>
 
-  <h2 id="explore">Demo categories</h2>
+  <Heading level={2} id="explore">Demo categories</Heading>
   <p class="section-intro">
     Component and attachment guides with working examples and API details.
   </p>
   <div class="catalog">
     {#each demo_nav_routes as { name, label, description, href, children } (name)}
       <section aria-labelledby={`category-${name}`}>
-        <h3 id={`category-${name}`}>
+        <Heading level={3} link={false} id={`category-${name}`}>
           <a href={resolve_path(href)}>{label}<span aria-hidden="true">↗</span></a>
-        </h3>
+        </Heading>
         <p>{description}</p>
         <ul>
           {#each children.filter((route) => route !== href) as route (route)}
@@ -79,14 +80,14 @@
     {/each}
   </div>
 
-  <h2 id="try-it">MultiSelect example</h2>
+  <Heading level={2} id="try-it">MultiSelect example</Heading>
   <p class="section-intro">
     Select options in <code>MultiSelect</code> with the mouse or keyboard. Expand the code to
     view the source.
   </p>
   <Examples />
 
-  <h2 id="beyond-components">Guides and APIs</h2>
+  <Heading level={2} id="beyond-components">Guides and APIs</Heading>
   <div class="resources">
     <a href={resolve_path(`/markdown`)}>
       <strong>Markdown documentation <span aria-hidden="true">→</span></strong>
@@ -131,7 +132,7 @@
 <style>
   .intro {
     margin-block: 1.5rem 2.5rem;
-    h1 {
+    :global(h1) {
       justify-content: start;
       font-size: clamp(1.8rem, 4vw, 2.5rem);
       line-height: 1.2;
@@ -170,7 +171,7 @@
       font-size: 0.9rem;
     }
   }
-  main > h2 {
+  main > :global(h2) {
     margin: 2.5rem 0 0.35rem;
     font-size: 1.35rem;
   }
@@ -188,7 +189,7 @@
       border: 1px solid var(--border);
       border-radius: 6px;
     }
-    h3 {
+    :global(h3) {
       margin: 0;
       font-size: 1.1rem;
       a {

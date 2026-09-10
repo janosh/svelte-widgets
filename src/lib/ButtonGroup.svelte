@@ -56,9 +56,8 @@
     // a radiogroup owns only radios per ARIA, so anything focusable here is an extra tab stop
     // and an aria-required-children violation (hence the sort arrow sitting outside).
     option_suffix?: Snippet<[{ option: ButtonGroupOption<Value>; selected: boolean }]>
-    // Content comes from each option's own `tooltip`; the rest is yours, so a consumer can
-    // opt into allow_html for rich tooltips
-    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
+    // Content comes from each option's own `tooltip`; options control timing and placement.
+    tooltip_options?: Omit<TooltipOptions, `content`>
     // a div can't sit inside phrasing content, so a group in a heading or paragraph needs
     // to be a span
     as?: string
