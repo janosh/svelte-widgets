@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { untrack, type Snippet } from 'svelte'
   import { file_drop } from './attachments/file-drop'
-  import { file_matches_accept } from './file-drop'
+  import { create_file_accept_filter } from './file-drop'
   import TaskStatus from './TaskStatus.svelte'
 
   let {
@@ -62,8 +62,9 @@
     if (disabled) return
     const accepted: File[] = []
     const rejections: FileRejection[] = []
+    const matches_accept = create_file_accept_filter(accept)
     for (const file of incoming) {
-      const reason = !file_matches_accept(file, accept)
+      const reason = !matches_accept(file)
         ? `type`
         : file.size > max_size
           ? `size`

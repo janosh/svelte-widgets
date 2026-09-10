@@ -1,6 +1,6 @@
 ## VirtualList
 
-Render a large array while mounting only visible rows plus a small overscan. Every row must have the fixed height specified by `item_size`; this component does not measure variable-height content or fetch additional data.
+Render a large array while mounting only visible rows plus a small overscan. Rows use a fixed `item_size`. Data fetching stays in the caller.
 
 ### Minimal example
 
@@ -82,7 +82,7 @@ Use stable keys when filtering or reordering items. `scroll_to_index` reveals a 
 | Prop / method            | Purpose                                                                            |
 | ------------------------ | ---------------------------------------------------------------------------------- |
 | `items: readonly Item[]` | Complete array available for scrolling.                                            |
-| `children(item, idx)`    | Render each mounted row. Keep its total content height within `item_size`.         |
+| `children(item, idx)`    | Render each mounted row. Each row must have the configured fixed height.           |
 | `item_size={32}`         | Positive fixed row height in pixels.                                               |
 | `overscan={5}`           | Extra rows mounted above and below the visible window.                             |
 | `initial_count={20}`     | Initial render window before the viewport is measured, including server rendering. |
