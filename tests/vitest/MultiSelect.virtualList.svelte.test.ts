@@ -124,13 +124,13 @@ describe(`virtual_list`, () => {
   })
 
   test(`clicking a rendered option selects it`, async () => {
-    const props = $state<MultiSelectProps>({ ...virtual_props, selected: [] })
+    const props = $state<MultiSelectProps>({ ...virtual_props, value: [] })
     mount_multiselect(props)
 
     get_rendered_options()[0].click()
     await tick()
 
-    expect(props.selected).toEqual([`option 0`])
+    expect(props.value).toEqual([`option 0`])
     expect(doc_query(`ul.selected > li`).textContent?.trim()).toContain(`option 0`)
   })
 

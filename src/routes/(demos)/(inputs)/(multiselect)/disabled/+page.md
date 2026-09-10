@@ -18,7 +18,7 @@ Toggle the checkbox to enable/disable the component. When disabled, it shows a c
 <MultiSelect
   id="disabled"
   options={[`Svelte`, `React`, `Vue`, `Angular`]}
-  bind:selected
+  bind:value={selected}
   {disabled}
   disabled_input_title="Super special disabled message (shows on hover)"
   --sms-disabled-bg="darkred"

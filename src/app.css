@@ -167,13 +167,15 @@ h1 {
 }
 :is(h2, h3, h4, h5, h6) {
   scroll-margin-top: 60px;
-  /* anchor links from the heading_anchors attachment, revealed on hover */
+}
+:is(h1, h2, h3, h4, h5, h6) {
+  /* Build-time and dynamic heading links occupy the same space before hover/focus. */
   a[aria-hidden='true'] {
     margin-left: 0.5em;
     opacity: 0;
     transition: opacity 0.2s;
   }
-  &:hover a[aria-hidden='true'] {
+  &:is(:hover, :focus-within) a[aria-hidden='true'] {
     opacity: 1;
   }
 }

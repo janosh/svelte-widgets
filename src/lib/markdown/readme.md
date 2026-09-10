@@ -7,18 +7,16 @@ One Markdown engine provides Svelte pages and ordinary HTML. Marked handles Comm
 ```ts
 import { create_markdown, markdown } from 'svelte-widgets/markdown'
 import { default_highlighter } from 'svelte-widgets/highlight'
-import { heading_ids } from 'svelte-widgets/heading-anchors'
 
 export default {
   extensions: [`.svelte`, `.md`, `.svx`],
   preprocess: [
     markdown(create_markdown({ math: true, highlight: default_highlighter.highlight })),
-    heading_ids(),
   ],
 }
 ```
 
-`create_markdown(options)` creates a reusable engine. `markdown(engine)` adapts it to a Svelte markup preprocessor, processing `.md` and `.svx` by default; set the engine's `extensions` option to change that list. Markdown headings receive stable IDs during analysis; use `heading_ids()` only when native Svelte pages also need anchors. Scripts, styles, components, expressions, snippets and control blocks use ordinary Svelte syntax. Escape literal braces in prose as `\{` and `\}`; code spans and fences are always literal. Markdown outside code supports GFM tables, task lists, strikethrough and autolinks.
+`create_markdown(options)` creates a reusable engine. `markdown(engine)` adapts it to a Svelte markup preprocessor, processing `.md` and `.svx` by default; set the engine's `extensions` option to change that list. Markdown headings receive stable IDs during analysis and anchor links during rendering, reserving the link's space before hydration. Native Svelte pages use `<Heading id="section-id">Title</Heading>` from `svelte-widgets`; IDs are explicit and anchors render on the server. Raw HTML headings within Markdown receive IDs and links during the same analysis pass. Set `heading_links: false` for Markdown IDs without links, or `heading_links: { icon_svg }` for a custom trusted SVG. Scripts, styles, components, expressions, snippets and control blocks use ordinary Svelte syntax. Escape literal braces in prose as `\{` and `\}`; code spans and fences are always literal. Markdown outside code supports GFM tables, task lists, strikethrough and autolinks.
 
 YAML frontmatter exports a `metadata` object from the module script. Access values explicitly as `{metadata.title}` or `{metadata["custom-key"]}`. Frontmatter keys never create local bindings, so a component can declare its own `title` and frontmatter can contain reserved JavaScript words. YAML uses the core schema: dates stay strings and `yes`/`no` stay strings. Frontmatter and validator output must be mappings of JSON data. Nonfinite numbers, cycles, functions, undefined values, and objects such as dates are rejected during parsing rather than silently changed during emission. The module name `metadata` is reserved for the frontmatter export.
 
@@ -236,3 +234,7 @@ Create an engine with `create_markdown(options)` and pass it to `markdown(engine
 Replace implicit frontmatter references such as `{title}` with `{metadata.title}`. Fence settings are now validated: move `defaults.Wrapper` to `examples.wrapper` and use `hide_style`, not `hideStyle`. Replace `check_markdown()` with `check_document(document)`; checker options `throw_on_error` and `markdown_options` are removed. Manifest `.position` and `.code_position` are now `.range.start` and `.code_range.start`.
 
 Remove remark plugin registration and the old live-example Vite plugin. Replace the KaTeX before/after pair with `math`. Highlighter callbacks return inner HTML; use `default_highlighter.highlight` or `create_highlighter(grammars).highlight` from `/highlight`. The `/live-examples`, `/live-examples/create-highlighter` and `/katex` subpaths are removed.
+
+## Table of contents
+
+The Vite integration exposes `import items from "./page.md?toc"`, an array of `{ id, level, title }` from the content manifest. Pass it to `<Toc {items} />` to render navigation during SSR. Without `items`, Toc reads existing heading IDs once at mount. Set `dynamic` explicitly for content whose headings change after mount. Toc never creates IDs. Custom `toc_item` snippets receive heading metadata, so they also render on the server. Invalid selectors and collapse modes throw.

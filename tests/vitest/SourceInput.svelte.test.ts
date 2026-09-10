@@ -1,4 +1,5 @@
 import SourceInput from '$site/SourceInput.svelte'
+import { default_highlighter } from '$lib/highlight'
 import { mount, tick, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query } from './index'
@@ -15,6 +16,7 @@ test(`source input highlights edits without changing the editable text and synch
   onTestFinished(() => unmount(component))
   const input = doc_query<HTMLTextAreaElement>(`textarea`)
   const preview = doc_query(`.preview`)
+  await default_highlighter.ready()
   await vi.waitFor(() =>
     expect(preview.querySelector(`.pl-k`)?.textContent).toBe(`const`),
   )

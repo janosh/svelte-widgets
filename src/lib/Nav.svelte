@@ -64,7 +64,7 @@
     route_labels?: Record<string, string>
     labels?: Partial<NavLabels>
     tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
-    tooltip_options?: Omit<TooltipOptions, `content` | `render`>
+    tooltip_options?: Omit<TooltipOptions, `content`>
     breakpoint?: number
     // Desktop panes use two columns above this number of visible child links.
     dropdown_column_threshold?: number

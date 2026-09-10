@@ -569,27 +569,35 @@ export type CmdSection = {
 export const format_cmd_metadata = (metadata: CmdAction[`metadata`]): string =>
   Array.isArray(metadata) ? metadata.join(` · `) : (metadata ?? ``)
 
-export function cmd_action_matches(
+export const cmd_action_matches = (
   action: CmdAction,
   search: string,
   fuzzy = true,
-): boolean {
+): boolean => create_cmd_action_filter(search, fuzzy)(action)
+
+// Prepare query terms once for a batch; action fields remain live between calls.
+export function create_cmd_action_filter(
+  search: string,
+  fuzzy = true,
+): (action: CmdAction) => boolean {
   const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  const searchable_text = [
-    action.label,
-    action.description,
-    action.badge,
-    action.group,
-    action.shortcut,
-    action.keywords?.join(` `),
-    format_cmd_metadata(action.metadata),
-  ]
-    .filter(Boolean)
-    .join(` `)
-    .toLowerCase()
-  return terms.every((term) =>
-    fuzzy ? fuzzy_match(term, searchable_text) : searchable_text.includes(term),
-  )
+  return (action) => {
+    const searchable_text = [
+      action.label,
+      action.description,
+      action.badge,
+      action.group,
+      action.shortcut,
+      action.keywords?.join(` `),
+      format_cmd_metadata(action.metadata),
+    ]
+      .filter(Boolean)
+      .join(` `)
+      .toLowerCase()
+    return terms.every((term) =>
+      fuzzy ? fuzzy_match(term, searchable_text) : searchable_text.includes(term),
+    )
+  }
 }
 
 // Coalesces subtree mutations (including ones `refresh` causes) into one refresh per

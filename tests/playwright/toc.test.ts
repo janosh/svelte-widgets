@@ -66,6 +66,9 @@ test(`closed mobile toggle hugs its own box`, async ({ page }) => {
       ?.style.setProperty(`--toc-min-width`, `15em`),
   )
   const aside = page.locator(`aside.toc.mobile`).first()
+  // Mobile hydration removes the server-rendered desktop panel with an outro.
+  await expect(aside).toBeVisible()
+  await expect(aside.locator(`:scope > nav`)).toHaveCount(0)
 
   const corner = await aside.evaluate((node) => {
     const box = node.getBoundingClientRect()

@@ -1,6 +1,7 @@
 import {
   files_from_data_transfer,
   file_matches_accept,
+  create_file_accept_filter,
   filter_accepted_files,
 } from '$lib/file-drop'
 import { expect, test, vi } from 'vitest'
@@ -86,6 +87,7 @@ test.each([
   ],
 ] as const)(`accept matching supports %s`, (_description, file, accept, expected) => {
   expect(file_matches_accept(file, accept)).toBe(expected)
+  expect(create_file_accept_filter(accept)(file)).toBe(expected)
 })
 
 test(`accept filtering happens before the multiple limit`, () => {

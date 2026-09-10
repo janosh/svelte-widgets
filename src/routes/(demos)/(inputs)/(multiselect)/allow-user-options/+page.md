@@ -21,7 +21,7 @@
   options={foods}
   allow_user_options
   {duplicates}
-  bind:selected
+  bind:value={selected}
   create_option_msg={({ search_text }) => `Add '${search_text}' as custom food`}
   on_create={({ option }) => (last_created = String(option))}
 />
@@ -74,7 +74,7 @@
 <MultiSelect
   options={languages}
   allow_user_options="append"
-  bind:selected={selected_append}
+  bind:value={selected_append}
   create_option_msg={({ search_text, options }) =>
     `Add '${search_text}' (${options.length} languages available)`}
 >
@@ -103,7 +103,7 @@ You can start with no options and let users populate MultiSelect from scratch. I
 
 <MultiSelect
   allow_user_options="append"
-  bind:selected
+  bind:value={selected}
   no_matching_options_msg=""
   create_option_msg={null}
 />
@@ -146,7 +146,7 @@ You can start with no options and let users populate MultiSelect from scratch. I
 
 <MultiSelect
   allow_user_options="append"
-  bind:selected
+  bind:value={selected}
   no_matching_options_msg=""
   create_option_msg={null}
   parse_paste={(text) =>

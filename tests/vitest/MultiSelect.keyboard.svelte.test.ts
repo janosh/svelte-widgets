@@ -17,7 +17,7 @@ test(`can select 1st and last option with arrow and enter key`, async () => {
   const props = $state<MultiSelectProps>({
     open: true,
     options: [1, 2, 3],
-    selected: [],
+    value: [],
   })
   mount_multiselect(props)
 
@@ -28,13 +28,13 @@ test(`can select 1st and last option with arrow and enter key`, async () => {
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(props.selected).toEqual([1])
+  expect(props.value).toEqual([1])
 
   input.dispatchEvent(fresh_key(`ArrowUp`))
   await tick()
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(props.selected).toEqual([1, 3])
+  expect(props.value).toEqual([1, 3])
 })
 
 // https://github.com/janosh/svelte-widgets/issues/183
@@ -94,20 +94,23 @@ test.each([
 )
 
 test(`option row Enter key selects option`, async () => {
-  const props = $state<MultiSelectProps>({ options: [`Red`, `Blue`], selected: [] })
+  const props = $state<MultiSelectProps>({
+    options: [`Red`, `Blue`],
+    value: [],
+  })
   mount_multiselect(props)
 
   doc_query(`ul.options li`).dispatchEvent(fresh_key(`Enter`))
   await tick()
 
-  expect(props.selected).toEqual([`Red`])
+  expect(props.value).toEqual([`Red`])
 })
 
 test(`Enter on a closed dropdown reopens it instead of selecting the auto-active option`, async () => {
   const props = $state<MultiSelectProps>({
     options: [`Alpha`, `Beta`],
     auto_active_first_option: true,
-    selected: [],
+    value: [],
     active_index: null,
     open: false,
   })
@@ -122,7 +125,7 @@ test(`Enter on a closed dropdown reopens it instead of selecting the auto-active
 
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(props.selected).toEqual([])
+  expect(props.value).toEqual([])
   expect(props.open).toBe(true)
   expect(props.active_index).toBe(0)
 })
@@ -154,7 +157,7 @@ test(`Enter key deselection preserves search_text (matching mouse behavior)`, as
   // fixes #362, where only the mouse path preserved the filter
   mount_multiselect({
     options: [1, 2, 3],
-    selected: [1, 2],
+    value: [1, 2],
     reset_filter_on_add: false,
     close_dropdown_on_select: false,
     keep_selected_in_dropdown: `plain`, // Allow clicking on selected options to toggle them
@@ -206,7 +209,7 @@ test(`backspace does not remove items when min_select would be violated`, async 
   const selected = [`Red`]
   const min_select = 1
 
-  mount_multiselect({ options, selected, min_select })
+  mount_multiselect({ options, value: selected, min_select })
 
   const backspace = fresh_key(`Backspace`)
   const input = get_input()
@@ -228,7 +231,7 @@ describe(`arrow key navigation between selected items`, () => {
     selected = [`Red`, `Green`, `Blue`],
     extra_props: Record<string, unknown> = {},
   ) {
-    mount_multiselect({ options, selected, ...extra_props })
+    mount_multiselect({ options, value: selected, ...extra_props })
     return get_input()
   }
 
@@ -375,7 +378,7 @@ describe(`arrow key navigation between selected items`, () => {
     let removed: unknown
     mount_multiselect({
       options: [first, second],
-      selected: [first, second],
+      value: [first, second],
       duplicates: true,
       on_remove: ({ option }: { option: unknown }) => (removed = option),
     })
@@ -403,7 +406,7 @@ describe(`arrow key navigation between selected items`, () => {
   ])(`external selected %s`, async (_name, next_selected, expected_idx) => {
     const props = $state<MultiSelectProps>({
       options,
-      selected: [`Red`, `Green`, `Blue`],
+      value: [`Red`, `Green`, `Blue`],
     })
     mount_multiselect(props)
     const input = get_input()
@@ -411,7 +414,7 @@ describe(`arrow key navigation between selected items`, () => {
     input.dispatchEvent(press(`ArrowLeft`))
     await tick()
     expect(is_highlighted(2)).toBe(true)
-    props.selected = next_selected
+    props.value = next_selected
     await tick()
     expect(selected_items()).toHaveLength(next_selected.length)
     if (expected_idx === null) expect(highlighted()).toHaveLength(0)
@@ -443,7 +446,7 @@ describe(`keyboard shortcuts`, () => {
   // mounts, focuses the input and dispatches one keydown, returning the bound props and
   // the cancelable event so callers can assert selection and defaultPrevented
   async function test_shortcut(
-    shortcut_props: Partial<MultiSelectProps>,
+    shortcut_props: Extract<MultiSelectProps, { mode?: `multiple` }>,
     key_event: {
       key: string
       ctrlKey?: boolean
@@ -451,10 +454,14 @@ describe(`keyboard shortcuts`, () => {
       altKey?: boolean
       metaKey?: boolean
     },
-  ): Promise<{ props: MultiSelectProps; input: HTMLInputElement; event: KeyboardEvent }> {
+  ): Promise<{
+    props: MultiSelectProps
+    input: HTMLInputElement
+    event: KeyboardEvent
+  }> {
     const props = $state<MultiSelectProps>({
       options: [`a`, `b`, `c`],
-      selected: [],
+      value: [],
       open: true,
       ...shortcut_props,
     })
@@ -486,7 +493,7 @@ describe(`keyboard shortcuts`, () => {
       { select_all_option: true, shortcuts: { select_all: shortcut } },
       { key, ...modifiers },
     )
-    expect(props.selected).toEqual([`a`, `b`, `c`])
+    expect(props.value).toEqual([`a`, `b`, `c`])
     expect(event.defaultPrevented).toBe(true)
   })
 
@@ -498,14 +505,14 @@ describe(`keyboard shortcuts`, () => {
     async (_label, shortcut_override, modifiers) => {
       const { props, event } = await test_shortcut(
         {
-          selected: [`a`, `b`],
+          value: [`a`, `b`],
           ...(Object.keys(shortcut_override).length > 0
             ? { shortcuts: shortcut_override }
             : {}),
         },
         { key: `Backspace`, ...modifiers },
       )
-      expect(props.selected).toEqual([])
+      expect(props.value).toEqual([])
       expect(event.defaultPrevented).toBe(true)
     },
   )
@@ -516,13 +523,13 @@ describe(`keyboard shortcuts`, () => {
       { select_all_option: true, shortcuts: { select_all: `ctrl+e` } },
       { key: `a`, ctrlKey: true },
     )
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
 
     input.dispatchEvent(
       new KeyboardEvent(`keydown`, { key: `e`, ctrlKey: true, bubbles: true }),
     )
     await tick()
-    expect(props.selected).toEqual([`a`, `b`, `c`])
+    expect(props.value).toEqual([`a`, `b`, `c`])
   })
 
   test.each([
@@ -533,7 +540,7 @@ describe(`keyboard shortcuts`, () => {
       { select_all_option: true, ...extra_props },
       { key: `a`, ctrlKey: true },
     )
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
     expect(event.defaultPrevented).toBe(false)
   })
 
@@ -541,7 +548,7 @@ describe(`keyboard shortcuts`, () => {
     [
       `select_all respects max_select`,
       {
-        selected: [],
+        value: [],
         select_all_option: true,
         shortcuts: { select_all: `ctrl+a` },
         max_select: 2,
@@ -551,21 +558,21 @@ describe(`keyboard shortcuts`, () => {
     ],
     [
       `clear_all respects min_select`,
-      { selected: [`a`, `b`, `c`], min_select: 1 },
+      { value: [`a`, `b`, `c`], min_select: 1 },
       { key: `Backspace`, ctrlKey: true },
       1,
     ],
   ])(`%s`, async (_label, extra_props, key_event, expected_length) => {
     const { props } = await test_shortcut(extra_props, key_event)
-    expect(props.selected).toHaveLength(expected_length)
+    expect(props.value).toHaveLength(expected_length)
   })
 
   test(`clear_all skipped when search_text is non-empty`, async () => {
     const { props, event } = await test_shortcut(
-      { selected: [`a`, `b`], search_text: `xyz` },
+      { value: [`a`, `b`], search_text: `xyz` },
       { key: `Backspace`, ctrlKey: true },
     )
-    expect(props.selected).toEqual([`a`, `b`])
+    expect(props.value).toEqual([`a`, `b`])
     expect(event.defaultPrevented).toBe(false)
   })
 
@@ -574,7 +581,7 @@ describe(`keyboard shortcuts`, () => {
       { select_all_option: false, shortcuts: { select_all: `ctrl+a` } },
       { key: `a`, ctrlKey: true },
     )
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
   })
 
   test(`custom open and close shortcuts toggle the dropdown`, async () => {
@@ -605,7 +612,7 @@ describe(`keyboard shortcuts`, () => {
       { select_all_option: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
       { key: `a`, ctrlKey: true },
     )
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
   })
 
   test.each([
@@ -618,19 +625,19 @@ describe(`keyboard shortcuts`, () => {
         { select_all_option: true, shortcuts: { select_all: shortcut } },
         { key: `a`, ...modifiers },
       )
-      expect(props.selected).toEqual([])
+      expect(props.value).toEqual([])
     },
   )
 
   test.each([
     [
       `select_all`,
-      { select_all_option: true, selected: [], shortcuts: { select_all: `ctrl+a` } },
+      { select_all_option: true, value: [], shortcuts: { select_all: `ctrl+a` } },
       `a`,
       { ctrlKey: true },
       [`a`, `b`, `c`],
     ],
-    [`clear_all`, { selected: [`a`, `b`] }, `Backspace`, { ctrlKey: true }, []],
+    [`clear_all`, { value: [`a`, `b`] }, `Backspace`, { ctrlKey: true }, []],
   ])(
     `%s shortcut works when dropdown is closed`,
     async (_name, extra_props, key, modifiers, expected) => {
@@ -638,7 +645,7 @@ describe(`keyboard shortcuts`, () => {
         { open: false, ...extra_props },
         { key, ...modifiers },
       )
-      expect(props.selected).toEqual(expected)
+      expect(props.value).toEqual(expected)
     },
   )
 
@@ -696,7 +703,7 @@ describe(`keyboard shortcuts`, () => {
       const props = $state<MultiSelectProps>({
         options: [`a`, `b`, `c`],
         shortcuts,
-        selected: [],
+        value: [],
         ...extra_props,
       })
 
@@ -709,13 +716,16 @@ describe(`keyboard shortcuts`, () => {
       await tick()
 
       expect(props.open).toBe(expected_open)
-      expect(props.selected).toEqual(expected_selected)
+      expect(props.value).toEqual(expected_selected)
     },
   )
 })
 
 test(`falsy option values (0, '') are navigable and selectable via keyboard`, async () => {
-  const props = $state<MultiSelectProps>({ options: [0, 1, 2], selected: [] })
+  const props = $state<MultiSelectProps>({
+    options: [0, 1, 2],
+    value: [],
+  })
   mount_multiselect(props)
   const input = get_input()
 
@@ -734,7 +744,7 @@ test(`falsy option values (0, '') are navigable and selectable via keyboard`, as
   await tick()
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(props.selected).toEqual([0])
+  expect(props.value).toEqual([0])
 })
 
 test(`keyboard navigation respects max_options: arrow keys wrap within rendered options`, async () => {
@@ -755,7 +765,10 @@ test(`keyboard navigation respects max_options: arrow keys wrap within rendered 
 })
 
 test(`IME composition guard: Enter during composition is ignored`, async () => {
-  const props = $state<MultiSelectProps>({ options: [`foo`, `bar`], selected: [] })
+  const props = $state<MultiSelectProps>({
+    options: [`foo`, `bar`],
+    value: [],
+  })
   mount_multiselect(props)
   const input = get_input()
 
@@ -768,12 +781,12 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   Object.defineProperty(composing_enter, `isComposing`, { value: true })
   input.dispatchEvent(composing_enter)
   await tick()
-  expect(props.selected).toEqual([])
+  expect(props.value).toEqual([])
 
   // same keystroke outside composition selects normally
   input.dispatchEvent(fresh_key(`Enter`))
   await tick()
-  expect(props.selected).toEqual([`foo`])
+  expect(props.value).toEqual([`foo`])
 })
 
 // the remove button is unmounted by the removal it just ran, so focus fell to <body>
@@ -781,7 +794,7 @@ test.each([
   [`a single chip's remove button`, `ul.selected button.remove`],
   [`the remove-all button`, `button.remove-all`],
 ])(`keyboard removal via %s hands focus back to the input`, async (_case, selector) => {
-  mount_multiselect({ options: [`a`, `b`, `c`], selected: [`a`, `b`] })
+  mount_multiselect({ options: [`a`, `b`, `c`], value: [`a`, `b`] })
   await tick()
   const button = doc_query<HTMLButtonElement>(selector)
   button.focus()

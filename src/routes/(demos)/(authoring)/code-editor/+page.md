@@ -2,7 +2,9 @@
 
 `CodeEditor` combines a host-owned rope model with a native textarea and virtualized syntax-token overlay. The model owns UTF-16 offsets, transactions, selection, dirty checkpoints, and bounded undo/redo history; the component sends ordered edits to a host-supplied `EditorBackend`. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
 
-The rope model is validated with generated 100 MB / 1,000,000-line documents. Editing still uses a full-document textarea in this phase, so usable document size remains subject to browser textarea and scroll-height limits. A later input-proxy phase must replace native input and scrolling together.
+The rope model is validated with generated 100 MB / 1,000,000-line documents. The native input and syntax overlay contain only viewport lines plus a small overscan. Selections expand the input window so native copying, cutting, and assistive technology retain the selected text; selecting the whole document or a very long line can still materialize a large string. The outer viewport remains subject to browser scroll-height limits.
+
+Pointer selection and vertical navigation require [`document.caretPositionFromPoint()`](https://developer.mozilla.org/en-US/docs/Web/API/Document/caretPositionFromPoint), and grapheme navigation requires [`Intl.Segmenter`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Intl/Segmenter). Use Chrome/Edge 128+, Firefox 125+, or Safari 26.2+ (including iOS/iPadOS); older browser versions are unsupported.
 
 Import the shared token palette once wherever the editor or diff view is used:
 

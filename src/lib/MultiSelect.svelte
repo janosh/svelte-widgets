@@ -1,6 +1,17 @@
 <script lang="ts" generics="Option extends import('./types').Option">
   // === Imports ===
-  import { virtual_window as get_virtual_window } from './virtual'
+  import OptionRows from './internal/OptionRows.svelte'
+  import {
+    create_option_rows,
+    type OptionGroupRow,
+    group_options as group_list_options,
+    next_option_index,
+    option_disabled as is_disabled,
+    option_matches,
+    option_window,
+    validate_option_list_config,
+  } from './internal/option-list'
+  import { create_option_loader } from './internal/option-loader.svelte'
   import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
   import { fromAction } from 'svelte/attachments'
@@ -18,7 +29,6 @@
   import type {
     GroupedOptions,
     KeyboardShortcuts,
-    LoadOptionsConfig,
     MultiSelectProps,
     SelectAllScope,
   } from './types'
@@ -43,8 +53,7 @@
     duplicates = false,
     keep_selected_in_dropdown = false,
     key = (opt) => utils.get_option_key(opt),
-    filter_func = (opt, search_text) =>
-      !search_text || text_matches(search_text, label_of(opt)),
+    filter_func = (opt, search_text) => option_matches(opt, search_text, fuzzy),
     fuzzy = true,
     close_dropdown_on_select = false,
     form_input = $bindable(null),
@@ -69,8 +78,9 @@
     matching_options = $bindable([]),
     max_options,
     virtual_list = false,
-    max_select = $bindable(null),
-    max_select_msg = (current, max) => (max > 1 ? `${current}/${max}` : ``),
+    mode = `multiple`,
+    max_select: selection_limit = null,
+    max_select_msg = (current, max) => (mode === `multiple` ? `${current}/${max}` : ``),
     max_select_msg_class = ``,
     max_visible_chips = null,
     name = null,
@@ -89,16 +99,7 @@
     reset_filter_on_add = true,
     parse_paste,
     search_text = $bindable(``),
-    value = $bindable(null),
-    selected = $bindable(
-      value !== null && value !== undefined
-        ? Array.isArray(value)
-          ? value
-          : [value]
-        : options
-            .filter((opt) => typeof opt === `object` && opt !== null && opt?.preselected)
-            .slice(0, max_select ?? undefined),
-    ),
+    value = $bindable(mode === `single` ? null : []),
     sort_selected = false,
     selected_options_draggable = !sort_selected,
     selected_display = `chips`,
@@ -177,6 +178,14 @@
     ...rest
   }: MultiSelectProps<Option> = $props()
 
+  const max_select = $derived(mode === `single` ? 1 : selection_limit)
+  const selected = $derived<Option[]>(
+    Array.isArray(value) ? value : value == null ? [] : [value],
+  )
+  const set_selection = (items: Option[]) => {
+    value = mode === `single` ? (items[0] ?? null) : items
+  }
+
   // every string this component renders on its own, overridable key by key for i18n
   const msg = $derived(merge_defaults(MULTI_SELECT_LABELS, labels))
   // `get_label` returns string | number; coerce once here rather than at each call site
@@ -192,6 +201,7 @@
     typeof candidate === `number` && Number.isInteger(candidate) && candidate >= minimum
 
   const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
+    if (`selected` in rest) invalid_config(`use value instead of selected`)
     if (!load_options && !options.length) {
       if (!(allow_user_options || loading || disabled || allow_empty))
         invalid_config(`received no options`)
@@ -199,9 +209,14 @@
     if (max_select !== null && !is_integer_at_least(max_select, 1)) {
       invalid_config(`max_select must be null or a positive integer, got ${max_select}`)
     }
-    if (!Array.isArray(selected)) {
-      invalid_config(`selected prop must be an array, got ${selected}`)
+    if (mode !== `single` && mode !== `multiple`) invalid_config(`unknown mode ${mode}`)
+    if (mode === `single` ? Array.isArray(value) : !Array.isArray(value)) {
+      invalid_config(
+        `value must be ${mode === `single` ? `an option or null` : `an array`} in ${mode} mode`,
+      )
     }
+    if (mode === `single` && selection_limit !== null)
+      invalid_config(`max_select is only available in multiple mode`)
     if (max_select && typeof required === `number` && required > max_select) {
       invalid_config(
         `max_select=${max_select} < required=${required}, which makes valid form submission impossible`,
@@ -212,19 +227,12 @@
         `sort_selected cannot be combined with selected_options_draggable because sorting would overwrite the user's order`,
       )
     }
-    if (selected_display === `input` && max_select !== 1) {
-      invalid_config(
-        `selected_display="input" requires max_select={1}, got max_select=${max_select}`,
-      )
+    if (selected_display === `input` && mode !== `single`) {
+      invalid_config(`selected_display="input" requires mode="single"`)
     }
     if (allow_user_options && !create_option_msg && create_option_msg !== null) {
       invalid_config(
         `allow_user_options=${allow_user_options} requires a non-empty create_option_msg or explicit null, got ${create_option_msg}`,
-      )
-    }
-    if (max_options != null && !is_integer_at_least(max_options, 0)) {
-      invalid_config(
-        `max_options must be null, undefined, or a non-negative integer, got ${max_options}`,
       )
     }
     if (max_visible_chips !== null && !is_integer_at_least(max_visible_chips, 0)) {
@@ -232,41 +240,16 @@
         `max_visible_chips must be null or a non-negative integer, got ${max_visible_chips}`,
       )
     }
-    if (load_options && typeof load_options === `object`) {
-      const { batch_size, debounce_ms } = load_options
-      if (batch_size !== undefined && !is_integer_at_least(batch_size, 1)) {
-        invalid_config(
-          `load_options.batch_size must be a positive integer, got ${batch_size}`,
-        )
-      }
-      if (
-        debounce_ms !== undefined &&
-        (!Number.isFinite(debounce_ms) || debounce_ms < 0)
-      ) {
-        invalid_config(
-          `load_options.debounce_ms must be finite and non-negative, got ${debounce_ms}`,
-        )
-      }
-    }
-    if (typeof virtual_list === `object`) {
-      const { item_height, overscan } = virtual_list
-      if (
-        item_height !== undefined &&
-        (!Number.isFinite(item_height) || item_height <= 0)
-      ) {
-        invalid_config(`virtual_list.item_height must be positive, got ${item_height}`)
-      }
-      if (overscan !== undefined && !is_integer_at_least(overscan, 0)) {
-        invalid_config(
-          `virtual_list.overscan must be a non-negative integer, got ${overscan}`,
-        )
-      }
-    }
-    if (virtual_list && sticky_group_headers && has_grouped_options) {
-      invalid_config(
-        `virtual_list cannot be combined with sticky_group_headers for grouped options`,
-      )
-    }
+    validate_option_list_config(
+      {
+        max_options,
+        load_options,
+        virtual_list,
+        sticky_group_headers,
+        has_grouped_options,
+      },
+      `MultiSelect`,
+    )
   }
 
   // Initial props must fail before any synchronization effect can normalize them.
@@ -278,7 +261,7 @@
   const base_id = $derived(id ?? `sms-${unique_id}`)
   const listbox_id = $derived(`${base_id}-listbox`)
   const input_display = $derived(selected_display === `input`)
-  const multi_select = $derived(max_select === null || max_select > 1)
+  const multi_select = $derived(mode === `multiple`)
 
   // used by the default filter_func and by group-name matching
   const text_matches = (search: string, target: string): boolean =>
@@ -299,35 +282,17 @@
   }
   const effective_shortcuts = $derived({ ...default_shortcuts, ...shortcuts })
 
-  // normalizes the function-or-config-object prop into one shape
-  const load_options_config = $derived.by(() => {
-    if (!load_options) return null
-    const load_config: LoadOptionsConfig<Option> =
-      typeof load_options === `function` ? { fetch: load_options } : load_options
-    return {
-      fetch: load_config.fetch,
-      debounce_ms: load_config.debounce_ms ?? 300,
-      batch_size: load_config.batch_size ?? 50,
-      should_fetch_on_open: load_config.on_open ?? true,
-    }
+  const loader = create_option_loader<Option>({
+    config: () => load_options,
+    query: () => effective_filter_text,
+    open: () => open,
+    element: () => options_list_el,
+    search_text: () => search_text,
+    matching_options: () => matching_options,
+    on_search: () => on_search,
   })
-
-  // === Selection and value sync ===
-  // sync selected ↔ value. untrack keeps each effect off its own destination; values_equal
-  // avoids infinite loops with reactive wrappers that clone arrays. See issue #309.
-  $effect.pre(() => {
-    const new_value = max_select === 1 ? (selected[0] ?? null) : selected
-    const old_value = untrack(() => value)
-    if (!utils.values_equal(old_value, new_value)) value = new_value
-  })
-  $effect.pre(() => {
-    const new_selected = Array.isArray(value)
-      ? value
-      : max_select === 1 && value != null
-        ? [value]
-        : []
-    const old_selected = untrack(() => selected)
-    if (!utils.values_equal(old_selected, new_selected)) selected = new_selected
+  $effect(() => {
+    load_error = loader.error
   })
 
   let should_wiggle = $state(false) // wiggle when the user tries to exceed max_select
@@ -371,33 +336,6 @@
     return () => clearTimeout(timer)
   })
 
-  // on_search fires 150ms after the search text stops changing
-  let search_initialized = false
-  $effect(() => {
-    const current_search = search_text
-    // skip mount, only fire on real user input
-    if (!search_initialized) {
-      search_initialized = true
-      return
-    }
-    if (!on_search) return // cleanup handles any pending timer
-
-    const timer = setTimeout(() => {
-      // optional chaining: on_search may be removed while the timer is pending
-      on_search?.({ search_text: current_search, matching_options })
-    }, 150)
-    return () => clearTimeout(timer)
-  })
-
-  let loaded_options = $state<Option[]>([])
-  let [load_options_has_more, is_loading_options] = $state([true, false])
-  let load_options_last_search: string | null = $state(null) // null = nothing dispatched yet
-  let load_request_id = 0 // monotonic counter to invalidate stale in-flight fetches
-  let load_abort_controller: AbortController | null = null
-  let previous_load_options_fetch: LoadOptionsConfig<Option>[`fetch`] | null = null
-  let auto_fill_count = 0
-  const MAX_AUTO_FILL_ROUNDS = 20
-
   // === Derived collections and indexing ===
   let has_search_text = $derived(search_text.trim().length > 0)
   // cached to avoid repeated .map() calls
@@ -429,11 +367,11 @@
   // the list (no debounce, no request) while remote batches append behind them
   let effective_options = $derived.by(() => {
     const local_options = options
-    if (!load_options_config) return local_options
+    if (!loader.config) return local_options
     const local_matches = local_options.filter((opt) =>
       matches_search(opt, effective_filter_text),
     )
-    return [...local_matches, ...loaded_options]
+    return [...local_matches, ...loader.options]
   })
   let form_value = $derived.by(() => {
     // input mode deliberately submits the visible text, committed or draft: the free-text
@@ -459,11 +397,11 @@
     prev_input_committed_label = input_committed_label
   })
   let load_options_pending = $derived(
-    Boolean(load_options_config) &&
-      (is_loading_options ||
+    Boolean(loader.config) &&
+      (loader.loading ||
         (open &&
-          load_options_has_more &&
-          (load_options_last_search ?? ``) !== effective_filter_text)),
+          loader.has_more &&
+          (loader.last_search ?? ``) !== effective_filter_text)),
   )
   // plain Sets for O(1) lookups: these deriveds are rebuilt wholesale, never mutated in
   // place, so reactive collections would buy nothing
@@ -478,9 +416,6 @@
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option, label: string | number): boolean =>
     has_selected_option(opt) || (lower_dupes && is_label_selected(`${label}`))
-
-  const is_disabled = (opt: Option): boolean =>
-    Boolean(utils.is_object(opt) && opt.disabled)
 
   // identity check for bulk/range ops. Compares label too, since a custom `key` may
   // deliberately collapse distinct options onto one key.
@@ -509,48 +444,12 @@
       ? (selected_option_counts.get(key(opt))?.has(utils.get_label(opt)) ?? false)
       : selected_keys_set.has(key(opt))
 
-  // Group options by their `group` key in the same order used by the dropdown.
-  const group_options = (options_to_group: Option[]): GroupedOptions<Option>[] => {
-    const groups_map = new Map<string, Option[]>()
-    const ungrouped: Option[] = []
-
-    for (const opt of options_to_group) {
-      if (utils.has_group(opt)) {
-        const existing = groups_map.get(opt.group)
-        if (existing) existing.push(opt)
-        else groups_map.set(opt.group, [opt])
-      } else {
-        ungrouped.push(opt)
-      }
-    }
-
-    const grouped = [...groups_map.entries()].map(([group, options_in_group]) => ({
-      group,
-      options: options_in_group,
-      collapsed: collapsed_groups.has(group),
-    }))
-
-    if (group_sort_order && group_sort_order !== `none`) {
-      grouped.sort((group_a, group_b) => {
-        if (typeof group_sort_order === `function`) {
-          return group_sort_order(group_a.group, group_b.group)
-        }
-        const cmp = group_a.group.localeCompare(group_b.group)
-        return group_sort_order === `desc` ? -cmp : cmp
-      })
-    }
-
-    if (ungrouped.length === 0) return grouped
-
-    const ungrouped_entry = {
-      group: null,
-      options: ungrouped,
-      collapsed: false,
-    }
-    return ungrouped_position === `first`
-      ? [ungrouped_entry, ...grouped]
-      : [...grouped, ungrouped_entry]
-  }
+  const group_options = (items: Option[]) =>
+    group_list_options(items, {
+      collapsed: collapsed_groups,
+      sort: group_sort_order,
+      ungrouped: ungrouped_position,
+    })
   let grouped_options = $derived(group_options(matching_options))
   // Flatten groups for navigation (excludes options in collapsed groups)
   const flatten_navigable = (groups: GroupedOptions<Option>[]): Option[] =>
@@ -576,13 +475,7 @@
     ).filter((option_item) => !is_disabled(option_item)),
   )
 
-  // === Virtualized dropdown rendering (flat/ungrouped option lists only) ===
-  const virtual_config = $derived.by(() => {
-    if (!virtual_list) return null
-    const { item_height: item_height_prop = 30, overscan: overscan_prop = 10 } =
-      typeof virtual_list === `object` ? virtual_list : {}
-    return { item_height: item_height_prop, overscan: overscan_prop }
-  })
+  // === Virtualized dropdown rendering ===
   const has_grouped_options = $derived(
     grouped_options.some(({ group }) => group !== null),
   )
@@ -594,92 +487,30 @@
   const virtual_viewport = $derived(
     options_client_height > 0 ? options_client_height : 400,
   )
-  // renderable rows: headers interleaved with their options (max_options truncates,
-  // collapsed groups keep only their header)
-  type HeaderRow = GroupedOptions<Option> & {
-    kind: `header`
-    group: string
-    render_key: symbol
-    selectable: Option[]
-  }
-  type RenderRow =
-    | {
-        kind: `option`
-        option: Option
-        flat_idx: number
-        render_key: unknown
-        group: string | null
-      }
-    | HeaderRow
-  // symbols as header render keys: they can't collide with user option keys, and caching
-  // them per group name keeps them stable when filtering temporarily drops a group
-  const header_key_cache = new Map<string, symbol>()
-  const header_key = (group: string): symbol => {
-    const header_symbol = header_key_cache.get(group) ?? Symbol(`sms-header-${group}`)
-    header_key_cache.set(group, header_symbol)
-    return header_symbol
-  }
-  const render_rows = $derived.by((): RenderRow[] => {
-    const rows: RenderRow[] = []
-    const next_render_key = render_key_assigner()
-    let flat_idx = 0
-    grouped_options.forEach(({ group, options: group_items, collapsed }) => {
-      const hidden = collapsed && collapsible_groups
-      const selectable: Option[] = []
-      if (group !== null) {
-        rows.push({
-          kind: `header`,
-          group,
-          options: group_items,
-          collapsed,
-          selectable,
-          render_key: header_key(group),
-        })
-      }
-      group_items.forEach((option_item) => {
-        // Count hidden occurrences too, so collapsing a group cannot rekey later duplicates.
-        const render_key = next_render_key(option_item)
-        const visible = !hidden && flat_idx < visible_navigable_count
-        if (group !== null && (hidden || visible) && !is_disabled(option_item)) {
-          selectable.push(option_item)
-        }
-        if (hidden) return
-        if (visible) {
-          rows.push({
-            kind: `option`,
-            option: option_item,
-            flat_idx,
-            render_key,
-            group,
-          })
-        }
-        flat_idx++
-      })
-    })
-    return rows
-  })
+  const build_rows = create_option_rows<Option>()
+  const render_rows = $derived.by(() =>
+    build_rows(
+      grouped_options,
+      render_key_assigner(),
+      collapsible_groups,
+      visible_navigable_count,
+    ),
+  )
   // row index per navigable option: keyboard auto-scroll needs row offsets, which diverge
   // from flat option indices once header rows are interleaved
   const option_row_indices = $derived(
     render_rows.flatMap((row, row_idx) => (row.kind === `option` ? [row_idx] : [])),
   )
   // Window of row indices [start, end) to render as DOM nodes
-  const virtual_window = $derived.by(() => {
-    if (!virtual_config || render_rows.length === 0) return null
-    const { item_height, overscan } = virtual_config
-    const { start, end } = get_virtual_window({
-      scroll: options_scroll_top,
-      viewport: virtual_viewport,
-      item_size: item_height,
-      count: render_rows.length,
-      overscan,
-    })
-    return { start, end, item_height }
-  })
-  const visible_render_rows = $derived(
-    virtual_window
-      ? render_rows.slice(virtual_window.start, virtual_window.end)
-      : render_rows,
+  const virtual_window = $derived(
+    render_rows.length
+      ? option_window(
+          virtual_list,
+          options_scroll_top,
+          virtual_viewport,
+          render_rows.length,
+        )
+      : null,
   )
   // keys for the dropdown's keyed {#each}: key(opt) for unique options, so filtering keeps
   // DOM nodes stable, but repeats (options=['a', 'a']) would crash Svelte with
@@ -700,7 +531,7 @@
       return cached[occurrence - 1]
     }
   }
-  // chips need the same: two selected entries can share a key (`selected={['a', 'a']}`).
+  // chips need the same: two selected entries can share a key (`value={['a', 'a']}`).
   // Symbols beat keying by index, which would defeat move detection on reorder.
   let chip_render_keys = $derived.by(() => {
     const next_render_key = render_key_assigner()
@@ -742,7 +573,9 @@
   }
 
   const get_collapsed_with_matches = () =>
-    grouped_options.flatMap(({ group, collapsed }) => (group && collapsed ? [group] : []))
+    grouped_options.flatMap(({ group, collapsed }) =>
+      group !== null && collapsed ? [group] : [],
+    )
 
   // auto-expand groups whose options match. Reacts only to search-text changes, else a
   // group the user collapses mid-search is instantly re-expanded.
@@ -914,10 +747,10 @@
 
   // false once removing would drop selected below min_select
   const can_remove = $derived(min_select === null || selected.length > min_select)
-  // max_select=1 replaces rather than blocks, so it never counts as at-capacity. Called
+  // Single mode replaces rather than blocks, so it never counts as at-capacity. Called
   // again after an async on_create resolves.
   const at_max_capacity = () =>
-    max_select !== null && max_select !== 1 && selected.length >= max_select
+    max_select !== null && mode !== `single` && selected.length >= max_select
 
   // merges a per-option style with the matching li*Style prop
   const merge_styles = (
@@ -1056,14 +889,14 @@
 
     // Finish fallible consumer sorting before mutating editor state.
     const next_selected =
-      max_select === 1 ? [option_to_add] : sort_selection([...selected, option_to_add])
+      mode === `single` ? [option_to_add] : sort_selection([...selected, option_to_add])
     if (is_user_option && allow_user_options === `append`) {
-      if (load_options_config) loaded_options = [...loaded_options, option_to_add]
+      if (loader.config) loader.options = [...loader.options, option_to_add]
       else options = [...options, option_to_add]
     }
     if (input_display) search_text = label_of(option_to_add)
     else if (reset_filter_on_add) search_text = ``
-    selected = next_selected
+    set_selection(next_selected)
 
     clear_validity()
     handle_dropdown_after_select(event)
@@ -1101,7 +934,7 @@
       )
     }
 
-    selected = selected.filter((_, remove_idx) => remove_idx !== idx)
+    set_selection(selected.filter((_, remove_idx) => remove_idx !== idx))
     clear_validity()
     announce(msg.option_removed(label_of(option_removed)))
     on_remove?.({ option: option_removed, selected })
@@ -1257,19 +1090,12 @@
     }
     if (active_index === null && navigable_options.length === 0) return
 
-    // wraps around the rendered, enabled options, plus the user-message row when present
-    const total = visible_navigable_count + (has_user_message ? 1 : 0)
-    const start_idx = active_index ?? (direction === 1 ? -1 : 0)
-    active_index = null
-    for (let offset = 1; offset <= total; offset++) {
-      const next_idx = (start_idx + direction * offset + total) % total
-      const is_user_message = has_user_message && next_idx === visible_navigable_count
-      const next_option = navigable_options[next_idx]
-      if (is_user_message || (next_option !== undefined && !is_disabled(next_option))) {
-        active_index = next_idx
-        break
-      }
-    }
+    active_index = next_option_index(
+      rendered_options,
+      active_index,
+      direction,
+      has_user_message,
+    )
     if (active_index === null) return
 
     is_user_message_active = has_user_message && active_index === visible_navigable_count
@@ -1337,7 +1163,7 @@
         `select_all`,
         Boolean(select_all_option) &&
           navigable_options.length > 0 &&
-          max_select !== 1 &&
+          mode !== `single` &&
           !matching_scope_unavailable,
         () => select_all(event),
       ) ||
@@ -1418,7 +1244,7 @@
     const removed_options = selected.slice(keep_count)
     if (removed_options.length === 0) return
 
-    selected = selected.slice(0, keep_count)
+    set_selection(selected.slice(0, keep_count))
     search_text = `` // always clear: reset_filter_on_add only governs adds
     announce(msg.options_removed(removed_options.length))
     on_remove_all?.({ options: removed_options })
@@ -1430,7 +1256,7 @@
     const remaining = Math.max(0, (max_select ?? Infinity) - selected.length)
     const added = unselected.slice(0, remaining)
     if (added.length > 0) {
-      selected = sort_selection([...selected, ...added])
+      set_selection(sort_selection([...selected, ...added]))
       if (reset_filter_on_add) search_text = ``
       clear_validity()
       handle_dropdown_after_select(event)
@@ -1552,7 +1378,7 @@
         } else kept.push(opt)
       }
       if (removed.length === 0) return
-      selected = kept
+      set_selection(kept)
       on_remove_all?.({ options: removed })
       on_change?.({ options: selected, type: `remove_all` })
       return
@@ -1660,7 +1486,7 @@
     const new_selected = [...selected]
     const [moved_option] = new_selected.splice(start_idx, 1)
     new_selected.splice(target_idx, 0, moved_option)
-    selected = new_selected
+    set_selection(new_selected)
     drag_idx = null
     highlighted_idx = null
     on_reorder?.({ options: new_selected, previous })
@@ -1694,7 +1520,7 @@
   function clear_input_committed_selection() {
     const option_removed = selected[0]
     if (option_removed === undefined) return
-    selected = []
+    set_selection([])
     clear_validity()
     announce(msg.option_removed(label_of(option_removed)))
     on_remove?.({ option: option_removed, selected })
@@ -1787,18 +1613,18 @@
         break
       }
       const before = selected.length
-      const before_first = max_select === 1 ? selected[0] : undefined
+      const before_first = mode === `single` ? selected[0] : undefined
       // add() only suspends on a pending async on_create (creating_option is set
       // synchronously), so awaiting just then keeps on_parsed_paste in the paste's own task
       const add_result = add(parsed_option, event, true)
       if (creating_option) await add_result
       if (
         selected.length > before ||
-        (max_select === 1 && selected[0] !== before_first)
+        (mode === `single` && selected[0] !== before_first)
       ) {
         added.push(parsed_option)
       } else rejected.push(parsed_option)
-      if (max_select === 1) {
+      if (mode === `single`) {
         overflow.push(...parsed.slice(idx + 1))
         break
       }
@@ -1814,172 +1640,10 @@
     form_input?.setCustomValidity(``)
   })
 
-  // === Async load_options ===
-  // retire the in-flight fetch: bump the id to discard its result, abort so consumers
-  // forwarding `signal` can bail, drop the now-meaningless loading flag
-  function cancel_in_flight_load() {
-    load_request_id++
-    load_abort_controller?.abort()
-    is_loading_options = false
-  }
-
-  // captures `search` at call time. reset=true bypasses the loading mutex so a new search
-  // can start mid-flight; request_id discards the stale result and the old fetch is aborted.
-  async function load_dynamic_options(reset: boolean) {
-    if (
-      !load_options_config ||
-      // paginating from nothing repeats the first page and hands out offset 0, which the
-      // documented cursor pattern reads as "reset"
-      (!reset &&
-        (is_loading_options ||
-          (!load_options_has_more && !load_error) ||
-          !loaded_options.length))
-    )
-      return
-    if (reset) {
-      auto_fill_count = 0
-      load_abort_controller?.abort()
-    }
-    const search = effective_filter_text
-    const offset = reset ? 0 : loaded_options.length
-    const request_id = ++load_request_id
-    const abort_controller = new AbortController()
-    load_abort_controller = abort_controller
-    load_options_last_search = search
-    is_loading_options = true
-    load_error = null
-    let batch_length = 0
-    try {
-      const result = await load_options_config.fetch({
-        search,
-        offset,
-        limit: load_options_config.batch_size,
-        signal: abort_controller.signal,
-      })
-      if (request_id !== load_request_id) return // stale request, discard
-      batch_length = result.options.length - (result.replace ? offset : 0)
-      loaded_options =
-        reset || result.replace ? result.options : [...loaded_options, ...result.options]
-      load_options_has_more = result.has_more
-      load_error = result.error ?? null
-    } catch (error) {
-      // a consumer forwarding `signal` rejects with a self-inflicted AbortError on cancel,
-      // but one ignoring `signal` still reports real failures — so swallow aborts only
-      if (abort_controller.signal.aborted && (error as Error)?.name === `AbortError`) {
-        return
-      }
-      console.error(`MultiSelect: load_options error:`, error)
-      // a superseded request must not clobber the live request's state
-      if (request_id === load_request_id) {
-        load_error = error instanceof Error ? error : new Error(String(error))
-      }
-    } finally {
-      // only the active request may clear loading; a newer reset may have started meanwhile
-      if (request_id === load_request_id) {
-        is_loading_options = false
-        if (load_abort_controller === abort_controller) load_abort_controller = null
-      }
-    }
-    // auto-fill: a batch that doesn't overflow the dropdown yields no scrollbar, so onscroll
-    // can never fire — keep loading until scrollable or done. An empty batch stops it, since
-    // the next request would be identical (and it keeps offset=0 meaning "reset").
-    if (
-      request_id !== load_request_id ||
-      batch_length <= 0 ||
-      load_error ||
-      !load_options_has_more ||
-      !open ||
-      !options_list_el ||
-      auto_fill_count >= MAX_AUTO_FILL_ROUNDS
-    )
-      return
-    await tick()
-    if (
-      request_id !== load_request_id ||
-      !open ||
-      !options_list_el ||
-      options_list_el.clientHeight <= 0 ||
-      options_list_el.scrollHeight > options_list_el.clientHeight
-    )
-      return
-    auto_fill_count++
-    load_dynamic_options(false)
-  }
-
-  // Single effect handles initial load + search changes.
-  $effect(() => {
-    const config = load_options_config
-    if (!config) {
-      load_error = null
-      cancel_in_flight_load()
-      previous_load_options_fetch = null
-      return
-    }
-    const fetch_changed = config.fetch !== previous_load_options_fetch
-    previous_load_options_fetch = config.fetch
-
-    const clear_loaded_batch = () => {
-      loaded_options = []
-      load_options_has_more = true
-      load_error = null
-    }
-    // Reset when closed or when the loader changes under the current query.
-    if (!open || fetch_changed) {
-      cancel_in_flight_load()
-      load_options_last_search = null
-      clear_loaded_batch()
-    }
-    if (!open) return
-
-    const search = effective_filter_text
-    // first load = nothing dispatched yet for this open (none completed, none in flight).
-    // untrack the loading flag, else its synchronous set re-triggers this effect and
-    // keystrokes during the first fetch fire immediate loads instead of debouncing.
-    const is_first_load =
-      load_options_last_search === null && !untrack(() => is_loading_options)
-    if (is_first_load && config.should_fetch_on_open) {
-      void load_dynamic_options(true)
-      return
-    }
-    // Returning to a cleared query still needs a fetch; unchanged results/errors wait
-    // for explicit retry. Don't subscribe to completion and rerun the scheduling effect.
-    const unchanged_search =
-      search === load_options_last_search &&
-      untrack(
-        () =>
-          is_loading_options ||
-          loaded_options.length > 0 ||
-          !load_options_has_more ||
-          load_error,
-      )
-    if (is_first_load ? !search : unchanged_search) return
-    if (!is_first_load) {
-      // abort the superseded fetch and clear stale results now, then debounce the new search
-      cancel_in_flight_load()
-      clear_loaded_batch()
-    }
-    const debounce_timer = setTimeout(
-      () => void load_dynamic_options(true),
-      config.debounce_ms,
-    )
-    return () => clearTimeout(debounce_timer)
-  })
-  // abort on unmount so callers forwarding `signal` can bail
-  $effect(() => () => cancel_in_flight_load())
-
   function handle_options_scroll(event: Event) {
     if (!(event.target instanceof HTMLElement)) return
-    const { scrollTop, scrollHeight, clientHeight } = event.target
-    options_scroll_top = scrollTop // drives virtual window re-derivation
-    if (
-      !load_options_config ||
-      is_loading_options ||
-      load_error ||
-      !load_options_has_more
-    )
-      return
-    auto_fill_count = 0
-    if (scrollHeight - scrollTop - clientHeight <= 100) load_dynamic_options(false)
+    options_scroll_top = event.target.scrollTop
+    loader.on_scroll(event)
   }
 </script>
 
@@ -2031,7 +1695,7 @@
 <div
   bind:this={outer_div}
   class:disabled
-  class:single={max_select === 1}
+  class:single={mode === `single`}
   class:open
   class:invalid
   class:input-display={input_display}
@@ -2205,7 +1869,7 @@
         {max_select_msg?.(selected.length, max_select)}
       </Wiggle>
     {/if}
-    {#if max_select !== 1 && selected.length > 1 && can_remove}
+    {#if mode !== `single` && selected.length > 1 && can_remove}
       {@render remove_btn(remove_all, remove_all_title, { is_remove_all: true })}
     {/if}
   {/if}
@@ -2324,16 +1988,8 @@
           {/if}
         </li>
       {/snippet}
-      <!-- spacers keep scrollHeight at the full list height, so the scrollbar behaves as if
-        every option were rendered -->
-      {#snippet virtual_spacer(height: number)}
-        <li
-          aria-hidden="true"
-          style="height: {height}px; padding: 0; margin: 0; visibility: hidden"
-        ></li>
-      {/snippet}
       <!-- group header <li> shared by the virtual and non-virtual render paths -->
-      {#snippet group_header_li(row: HeaderRow)}
+      {#snippet group_header_li(row: OptionGroupRow<Option>)}
         {@const { group: group_name, options: group_opts, collapsed, selectable } = row}
         {@const all_selected =
           selectable.length > 0 && selectable.every(has_selected_option)}
@@ -2402,21 +2058,15 @@
           {/if}
         </li>
       {/snippet}
-      {#if virtual_window}
-        {@render virtual_spacer(virtual_window.start * virtual_window.item_height)}
-      {/if}
-      {#each visible_render_rows as row (row.render_key)}
-        {#if row.kind === `option`}
-          {@render option_li(row.option, row.flat_idx, row.group)}
-        {:else}
-          {@render group_header_li(row)}
-        {/if}
-      {/each}
-      {#if virtual_window}
-        {@render virtual_spacer(
-          (render_rows.length - virtual_window.end) * virtual_window.item_height,
-        )}
-      {/if}
+      <OptionRows rows={render_rows} window={virtual_window}>
+        {#snippet children(row)}
+          {#if row.kind === `option`}
+            {@render option_li(row.option, row.flat_idx, row.group)}
+          {:else}
+            {@render group_header_li(row)}
+          {/if}
+        {/snippet}
+      </OptionRows>
       {#if user_message && user_message.msg}
         {@const { type: msg_type, msg: user_msg_text } = user_message}
         {@const can_add_user_option = msg_type === `create`}
@@ -2452,7 +2102,7 @@
           {/if}
         </li>
       {/if}
-      {#if load_options_config && is_loading_options}
+      {#if loader.config && loader.loading}
         <li class="loading-more" role="status" aria-label={msg.loading_more}>
           <CircleSpinner />
         </li>
@@ -2466,7 +2116,7 @@
         type="button"
         {disabled}
         onclick={with_focus_rescue(() => {
-          void load_dynamic_options(!loaded_options.length)
+          void loader.load(!loader.options.length)
         })}>{msg.retry}</button
       >
     </div>
@@ -2512,7 +2162,7 @@
        that never declare color-scheme. Set --sms-text-color: inherit to blend in instead. */
     color: var(--sms-text-color, light-dark(#222, #eee));
     font-size: var(--sms-font-size, inherit);
-    min-height: var(--sms-min-height, 22pt);
+    min-height: var(--sms-min-height, 20.5pt);
     margin: var(--sms-margin);
   }
   :where(div.multiselect.open) {
@@ -2544,7 +2194,7 @@
     align-items: center;
     border-radius: 3pt;
     display: flex;
-    margin: 2pt;
+    margin: 1.25pt 2pt;
     line-height: normal;
     transition: 0.3s;
     white-space: nowrap;

@@ -8,10 +8,10 @@
 
 One recycled tooltip node serves the whole document, rendered in the browser's top layer through the Popover API by default; `fixed` and `absolute` remain explicit positioning strategies. The defaults follow intent rather than raw events: keyboard focus opens immediately, pointer hover waits 100 ms, the pointer may travel onto the tooltip without closing it, Escape dismisses, touch-generated hover is ignored, and moving to a nearby trigger within 300 ms skips the opening delay.
 
-- Content: `content`, a per-trigger `content(trigger)`, or `render(content_el, trigger)` for custom DOM. With none of those, `title`, `aria-label`, then `data-title` are read. Attaching once to a container delegates to matching descendants; `delegate` takes a selector.
+- Content: `content` or a per-trigger `content(trigger)`. Without explicit content, `title`, `aria-label`, then `data-title` are read. Attaching once to a container delegates to matching descendants; `delegate` takes a selector.
 - Position: `placement` defaults to `auto`. `align`, `fallback_placements`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
-- Interaction: `trigger`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `open` with `on_open_change` for controlled or manual tooltips.
-- Rendering: `wrap` is `balance`, `normal` or `nowrap`, `show_arrow` defaults to true, and `allow_html` opts into markup — pair it with `sanitize_html` for anything user-supplied.
+- Interaction: `trigger`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change` reports visibility changes caused by hover, focus, Escape, or teardown.
+- Rendering: content is plain text, `wrap` is `balance`, `normal` or `nowrap`, and `show_arrow` defaults to true.
 - Styling: `style` for one-off declarations, or theme with `--tooltip-bg`, `--text-color`, `--tooltip-border`, `--tooltip-padding`, `--tooltip-radius`, `--tooltip-font-size`, `--tooltip-font-family`, `--tooltip-shadow`, `--tooltip-max-width`, `--tooltip-max-height`, `--tooltip-opacity`, `--tooltip-arrow-size`, `--tooltip-transition` and `--tooltip-z-index`.
 
 ### Placement
@@ -121,56 +121,17 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 </div>
 ```
 
-### Rich and interactive content
+### Content and interaction
 
-`render(content_el, trigger)` receives the content element and may return a cleanup, so a tooltip can hold real DOM instead of a string. The surface accepts pointer events and stays open while the pointer is on it, so its text stays selectable. Keep that content non-interactive though: `role="tooltip"` sits outside the focus order, so a button or link inside is unreachable by keyboard — use <a href={popover_url}>Popover</a> when the surface needs controls. For a trusted HTML string `allow_html: true` is enough; pass untrusted input through `sanitize_html` first.
+Tooltip content is plain text. The surface stays open while hovered so its text can be selected. Use <a href={popover_url}>Popover</a> for formatted content, controls, or application-controlled open state.
 
-```svelte example id="attachments-tooltip-rich"
-<script lang="ts">
-  import { tooltip } from 'svelte-widgets/attachments'
-</script>
-
-<div style="display: flex; gap: 1em; flex-wrap: wrap">
-  <button
-    {@attach tooltip({
-      placement: `top`,
-      render: (content_el, trigger) => {
-        const heading = document.createElement(`strong`)
-        heading.textContent = `Built with render()`
-        content_el.append(heading, ` describing “${trigger.textContent?.trim()}”`)
-        // content_el is emptied for you; cleanup is for what you touch outside it
-        trigger.dataset.described = ``
-        return () => delete trigger.dataset.described
-      },
-    })}
-  >
-    Rich tooltip
-  </button>
-
-  <button
-    aria-label="More info"
-    {@attach tooltip({
-      // allow_html on raw user input is an XSS vector: trusted or sanitized content only
-      content: `<strong>Bold</strong> and <em>italic</em> markup`,
-      allow_html: true,
-      placement: `right`,
-    })}
-  >
-    allow_html
-  </button>
-</div>
-```
-
-### Interaction and controlled state
-
-`trigger` picks `hover-focus` (the default), `hover`, `focus` or `manual`. `open_delay_ms` applies to pointer hover only — focus opens at once so keyboard users are never made to wait — while `skip_delay_ms` keeps that delay skipped when moving between neighbouring triggers. Passing `open` makes the tooltip controlled: the attachment stops opening on its own, reports every intent through `on_open_change`, and shows only what you hand back. Controlled tooltips are not modal — one surface serves the document, so hovering or focusing another trigger takes it over and the controlled consumer hears the close through `on_open_change`.
+`trigger` picks `hover-focus` (the default), `hover`, or `focus`. `open_delay_ms` applies to pointer hover only; focus opens immediately. `skip_delay_ms` skips that delay when moving between neighbouring triggers. `on_open_change` reports visibility changes and their cause.
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">
   import { tooltip } from 'svelte-widgets/attachments'
 
   let [open_delay_ms, close_delay_ms] = $state([100, 100])
-  let manual_open = $state(false)
   let last_reason = $state(`—`)
 </script>
 
@@ -201,21 +162,15 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
   <button {@attach tooltip({ content: `Tab here — no delay`, trigger: `focus` })}>
     focus only
   </button>
-  <button onclick={() => (manual_open = !manual_open)}>
-    {manual_open ? `Close` : `Open`} the manual one
-  </button>
   <button
     {@attach tooltip({
-      content: `Visible only while open is true`,
-      trigger: `manual`,
-      open: manual_open,
-      on_open_change: (next, detail) => {
+      content: `Reports focus, pointer, and Escape changes`,
+      on_open_change: (_open, detail) => {
         last_reason = detail.reason
-        manual_open = next
       },
     })}
   >
-    manual target
+    Visibility events
   </button>
   <small>last reason: <code>{last_reason}</code></small>
 </div>

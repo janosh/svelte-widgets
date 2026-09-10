@@ -7,6 +7,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest
@@ -16,6 +20,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: package.json
 
       - run: npm install --legacy-peer-deps
 
@@ -33,11 +39,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: package.json
 
       - run: npm install --legacy-peer-deps
 
       - name: Unit tests with coverage
-        run: npm run test:coverage
+        run: npm run test:coverage -- --maxWorkers=100%
 
       - name: Package smoke test
         run: npm run test:package
@@ -50,14 +58,16 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: package.json
 
       - run: npm install --legacy-peer-deps
 
       - name: Install Playwright
-        run: npx playwright install chromium
+        run: npx playwright install chromium --only-shell
 
       - name: E2E tests
-        run: npx playwright test
+        run: npx playwright test --workers=4
 
   link-check:
     runs-on: ubuntu-latest
@@ -83,6 +93,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: npm
+          cache-dependency-path: package.json
 
       - run: npm install --legacy-peer-deps
       - run: npm run build:site

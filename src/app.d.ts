@@ -1,5 +1,11 @@
 /// <reference types="@sveltejs/kit" />
 
+declare module '*?toc' {
+  import type { TocHeadingData } from 'svelte-widgets'
+  const items: readonly TocHeadingData[]
+  export default items
+}
+
 declare module '*.md'
 declare module '*package.json'
 

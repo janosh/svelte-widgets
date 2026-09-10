@@ -1,29 +1,26 @@
 ## Toc
 
-A sticky table of contents that finds the headings itself. It queries the document for
-`heading_selector`, watches for mutations so late-rendered headings still show up, and
-tracks which heading is in view to mark the active entry.
+A sticky table of contents that tracks the active heading. Pass `items` from a content manifest to render navigation on the server. Without `items`, it queries existing heading IDs once on mount. Set `dynamic` to observe headings that change after mount.
 
-The one on the right of this page is a `Toc`. The demo below scopes itself to the sample
-document with `heading_selector`, so it lists those headings rather than the page's.
+The site table of contents uses the Markdown manifest. The example scopes its one-time DOM query to explicitly identified sample headings with `heading_selector`. Invalid selectors or `collapse_subheadings` values throw instead of silently disabling navigation.
 
 ```svelte example id="toc-basic"
 <script lang="ts">
-  import { Toc } from 'svelte-widgets'
+  import { Heading, Toc } from 'svelte-widgets'
 
   let open = $state(false)
 </script>
 
 <div class="toc-demo-doc" style="display: flex; gap: 2em">
   <article style="flex: 1">
-    <h2>Getting started</h2>
+    <Heading level={2} id="getting-started">Getting started</Heading>
     <p>Scoped with <code>heading_selector</code> so it ignores the rest of the page.</p>
-    <h3>Installation</h3>
+    <Heading level={3} id="installation">Installation</Heading>
     <p>Subheadings collapse beneath their nearest section.</p>
-    <h2>Reference</h2>
-    <h3>Configuration</h3>
+    <Heading level={2} id="reference">Reference</Heading>
+    <Heading level={3} id="configuration">Configuration</Heading>
     <p>Pass <code>collapse_subheadings</code> to fold levels under their parent.</p>
-    <h3>Troubleshooting</h3>
+    <Heading level={3} id="troubleshooting">Troubleshooting</Heading>
     <p>Set <code>warn_on_empty</code> to hear about a selector that matches nothing.</p>
   </article>
 

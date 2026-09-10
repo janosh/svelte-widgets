@@ -94,7 +94,7 @@ This demo logs common selection, dropdown, search, activation, and native input 
           key: event.key,
           code: event.code,
         })}
-      bind:selected={selected_options}
+      bind:value={selected_options}
     >
       {#snippet children({ idx, option })}
         {@render color_option(option, idx)}

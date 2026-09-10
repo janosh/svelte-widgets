@@ -1,5 +1,6 @@
 import { CommandMenu, PageSearch } from '$lib'
 import type { LoadOptionsParams } from '$lib/types'
+import { MULTI_SELECT_LABELS } from '$lib/labels'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 import { doc_query } from './index'
@@ -306,6 +307,12 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
       | `on_add`
       | `on_change`
       | `on_remove`
+      | `form_input`
+      | `form_serialize`
+      | `required`
+      | `portal`
+      | `before_input`
+      | `expand_icon`
     >()
     .toEqualTypeOf<never>()
   const action = vi.fn()
@@ -334,10 +341,17 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
     on_change: selection_callback,
     on_remove: selection_callback,
     on_execute,
+    collapsible_groups: true,
+    labels: { group: (name: string) => `Gruppe: ${name}` },
+    title: `Command list`,
   })
   mount_menu(props)
   await tick()
   expect(doc_query(`dialog li.group-header`).textContent).toContain(`Commands`)
+  expect(doc_query(`dialog li.group-header button`).getAttribute(`aria-label`)).toBe(
+    `Gruppe: Commands`,
+  )
+  expect(doc_query(`dialog .option-list`).getAttribute(`title`)).toBe(`Command list`)
   expect(document.querySelector(`.group-select-all, .select-all`)).toBeNull()
   expect(document.querySelector(`ul.selected > li, input[type='checkbox']`)).toBeNull()
   expect(option_labels()).toEqual([`Existing`, `Other`])
@@ -463,7 +477,7 @@ test(`applies custom styles and props correctly`, async () => {
   mount_menu(props)
   await tick()
 
-  const select_wrapper = doc_query(`dialog div.multiselect`)
+  const select_wrapper = doc_query(`dialog div.option-list`)
   expect(select_wrapper.classList.contains(custom_class)).toBe(true)
 
   const input = menu_input()
@@ -509,7 +523,7 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
 
 test(`rejects an empty static action list`, () => {
   expect(() => mount_menu({ open: true, actions: [] })).toThrow(
-    `MultiSelect: received no options`,
+    `CommandMenu: received no actions`,
   )
 })
 
@@ -569,7 +583,11 @@ test.each([
     { id: `delete file`, label: `delete file`, action: vi.fn() },
     { id: `update config`, label: `update config`, action: vi.fn() },
   ]
-  mount_menu({ open: true, actions, fuzzy })
+  const on_search = vi.fn()
+  const props = $state({ open: true, actions, fuzzy, on_search })
+  mount_menu(props)
+  await tick()
+  expect(on_search).not.toHaveBeenCalled()
 
   await type_search(search)
 
@@ -579,6 +597,21 @@ test.each([
   expected.forEach((expected_label, idx) => {
     expect(visible_options[idx].textContent).toContain(expected_label)
   })
+  await type_search(`delete`)
+  expect(doc_query(`dialog ul.options li:not(.hidden)`).textContent).toContain(
+    `delete file`,
+  )
+  props.fuzzy = !fuzzy
+  await type_search(`cu`)
+  expect(doc_query(`dialog ul.options li:not(.hidden)`).textContent).toContain(
+    props.fuzzy ? `create user` : `No matching commands`,
+  )
+  await vi.waitFor(() =>
+    expect(on_search).toHaveBeenLastCalledWith({
+      search_text: `cu`,
+      matching_options: props.fuzzy ? [props.actions[0]] : [],
+    }),
+  )
 })
 
 test(`handles bindable props correctly`, async () => {
@@ -587,6 +620,7 @@ test(`handles bindable props correctly`, async () => {
     actions: mock_actions,
     dialog: null,
     input: null,
+    outer_div: null,
   })
   mount_menu(props)
 
@@ -598,6 +632,7 @@ test(`handles bindable props correctly`, async () => {
 
   expect(props.dialog).toBeInstanceOf(HTMLDialogElement)
   expect(props.input).toBeInstanceOf(HTMLInputElement)
+  expect(props.outer_div).toBe(doc_query(`dialog .option-list`))
   expect(menu_input().getAttribute(`aria-label`)).toBe(`Search commands`)
   expect(document.activeElement).toBe(props.input)
 })
@@ -613,6 +648,8 @@ test(`selects the first enabled action and preserves pointer selection across gr
     open: true,
     actions,
     active_index: null as number | null,
+    collapsible_groups: true,
+    max_options: undefined as number | undefined,
   })
   mount_menu(props)
   await tick()
@@ -639,38 +676,183 @@ test(`selects the first enabled action and preserves pointer selection across gr
   expect(props.active_index).toBe(1)
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 
+  const group_headers = [...document.querySelectorAll(`li.group-header`)]
+  props.max_options = 1
+  await tick()
+  expect(option_labels()).toEqual([`Renamed Beta`])
+  doc_query<HTMLButtonElement>(`li.group-header button`).click()
+  await tick()
+  expect(option_labels()).toEqual([`Disabled`])
+  expect(props.active_index).toBeNull()
+  document.querySelectorAll(`li.group-header`).forEach((header, idx) => {
+    expect(header).toBe(group_headers[idx])
+  })
+  doc_query<HTMLButtonElement>(`li.group-header button`).click()
+  props.max_options = undefined
+  await tick()
+
   await type_search(`alpha`)
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 })
 
-test(`auto-active considers only visible enabled actions`, async () => {
+test.each([`search`, `keyboard`])(
+  `%s expands only matching command groups and preserves manual collapse`,
+  async (trigger) => {
+    const on_group_toggle = vi.fn()
+    const on_expand_all = vi.fn()
+    const props = $state<ComponentProps<typeof CommandMenu>>({
+      open: true,
+      actions: [
+        { id: `apple`, label: `Apple`, group: ``, action: vi.fn() },
+        { id: `bear`, label: `Bear`, group: `Animals`, action: vi.fn() },
+      ],
+      collapsed_groups: new Set([``, `Animals`]),
+      collapsible_groups: false,
+      search_expands_collapsed_groups: trigger === `search`,
+      keyboard_expands_collapsed_groups: trigger === `keyboard`,
+      on_group_toggle,
+      on_expand_all,
+      collapse_all_groups: undefined,
+      expand_all_groups: undefined,
+    })
+    mount_menu(props)
+    const search_and_navigate = async (search: string) => {
+      await type_search(search)
+      menu_input().dispatchEvent(
+        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
+      )
+      await tick()
+    }
+    await search_and_navigate(`app`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([``, `Animals`])
+    expect(on_group_toggle).not.toHaveBeenCalled()
+
+    await type_search(``)
+    props.collapsible_groups = true
+    await search_and_navigate(`app`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([`Animals`])
+    expect(on_group_toggle).toHaveBeenCalledExactlyOnceWith({
+      group: ``,
+      collapsed: false,
+    })
+    expect(on_expand_all).not.toHaveBeenCalled()
+    doc_query<HTMLButtonElement>(`li.group-header button`).click()
+    await tick()
+    expect(props.collapsed_groups?.has(``)).toBe(true)
+    await search_and_navigate(`apple`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([`Animals`])
+    expect(option_labels()).toEqual([`Apple`])
+    expect(props.collapse_all_groups).toBeTypeOf(`function`)
+    expect(props.expand_all_groups).toBeTypeOf(`function`)
+    props.collapse_all_groups?.()
+    await tick()
+    expect(props.collapsed_groups?.has(``)).toBe(true)
+    props.expand_all_groups?.()
+    await tick()
+    expect(props.collapsed_groups?.size).toBe(0)
+    expect(on_expand_all).toHaveBeenCalledExactlyOnceWith({ groups: [``] })
+    props.expand_all_groups?.()
+    expect(on_expand_all).toHaveBeenCalledOnce()
+  },
+)
+
+test(`active_option binding selects initial and externally changed commands`, async () => {
   const props = $state({
     open: true,
-    actions: [
-      { id: `Disabled`, label: `Disabled`, disabled: true, action: vi.fn() },
-      { id: `Enabled`, label: `Enabled`, action: vi.fn() },
-    ],
-    active_index: 0,
-    max_options: 1,
+    actions: mock_actions,
+    active_option: mock_actions[1],
+    active_index: null as number | null,
   })
   mount_menu(props)
   await tick()
-
-  expect(props.active_index).toBeNull()
-  expect(document.querySelector(`li.active`)).toBeNull()
-
-  props.max_options = 2
-  await tick()
   expect(props.active_index).toBe(1)
-  expect(doc_query(`li.active`).textContent).toContain(`Enabled`)
-
-  props.actions = [
-    { ...props.actions[0], disabled: false },
-    { ...props.actions[1], disabled: true },
-  ]
+  expect(doc_query(`li.active`).textContent).toContain(`action 2`)
+  props.active_option = { ...mock_actions[2] }
   await tick()
-  expect(props.active_index).toBe(0)
+  expect(props.active_index).toBe(2)
+  expect(doc_query(`li.active`).textContent).toContain(`action 3`)
+  menu_input().dispatchEvent(
+    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
+  )
+  expect(mock_actions[2].action).toHaveBeenCalledExactlyOnceWith(`action 3`)
 })
+
+test.each([
+  [{ virtual_list: { item_height: 0 } }, `item_height`],
+  [{ virtual_list: { item_height: -2 } }, `item_height`],
+  [{ virtual_list: { item_height: Infinity } }, `item_height`],
+  [{ virtual_list: { overscan: -1 } }, `overscan`],
+  [{ virtual_list: { overscan: 0.5 } }, `overscan`],
+  [{ max_options: -1 }, `max_options`],
+  [{ max_options: 0.5 }, `max_options`],
+  [{ virtual_list: true, sticky_group_headers: true }, `sticky_group_headers`],
+] as const)(`rejects invalid command-list config %j`, (config, message) => {
+  expect(() =>
+    mount_menu({
+      open: true,
+      actions: mock_actions.map((action) => ({ ...action, group: `Commands` })),
+      ...config,
+    }),
+  ).toThrow(message)
+})
+
+test(`removing a loader discards remote commands and re-enabling fetches fresh results`, async () => {
+  const fetch = vi.fn(async () => ({
+    options: [{ id: `remote`, label: `Remote`, action: vi.fn() }],
+    has_more: false,
+  }))
+  const props = $state<{
+    actions: typeof mock_actions
+    open: boolean
+    load_options: typeof fetch | undefined
+  }>({ actions: mock_actions, open: true, load_options: fetch })
+  mount_menu(props)
+  await vi.waitFor(() => expect(option_labels()).toContain(`Remote`))
+  props.load_options = undefined
+  await tick()
+  expect(option_labels()).toEqual(mock_actions.map(({ label }) => label))
+  props.load_options = fetch
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledTimes(2))
+  expect(option_labels()).toContain(`Remote`)
+})
+
+test.each([null, undefined])(
+  `auto-active respects max_options=%s and finite limits`,
+  async (max_options) => {
+    const props = $state({
+      open: true,
+      actions: [
+        { id: `Disabled`, label: `Disabled`, disabled: true, action: vi.fn() },
+        { id: `Enabled`, label: `Enabled`, action: vi.fn() },
+      ],
+      active_index: 0,
+      // Runtime validation also accepts null from untyped callers.
+      max_options: max_options as number | undefined,
+    })
+    mount_menu(props)
+    await tick()
+
+    expect(props.active_index).toBe(1)
+    expect(option_labels()).toEqual([`Disabled`, `Enabled`])
+
+    props.max_options = 1
+    await tick()
+    expect(props.active_index).toBeNull()
+    expect(document.querySelector(`li.active`)).toBeNull()
+
+    props.max_options = 2
+    await tick()
+    expect(props.active_index).toBe(1)
+    expect(doc_query(`li.active`).textContent).toContain(`Enabled`)
+
+    props.actions = [
+      { ...props.actions[0], disabled: false },
+      { ...props.actions[1], disabled: true },
+    ]
+    await tick()
+    expect(props.active_index).toBe(0)
+  },
+)
 
 test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`, async () => {
   const first_action = {
@@ -744,6 +926,13 @@ test.each(
   `retries invalid remote ID $id with paginated=$paginated`,
   async ({ id, paginated }) => {
     const error = vi.spyOn(console, `error`).mockImplementation(() => {})
+    const labels = paginated
+      ? {
+          loading_more: `Wird geladen`,
+          loading_failed: `Laden fehlgeschlagen`,
+          retry: `Erneut versuchen`,
+        }
+      : undefined
     const fetch = vi.fn(async ({ offset }: LoadOptionsParams) => ({
       options: [
         // A failed batch must not reserve this ID and prevent the retry below.
@@ -763,8 +952,16 @@ test.each(
       actions: paginated ? [] : [{ id: `1`, label: `Static`, action: vi.fn() }],
       search_text: `remote`,
       load_options: { fetch, batch_size: 1, debounce_ms: 0 },
+      labels,
+      loading: true,
+      load_error: null as Error | null,
     })
     mount_menu(props)
+    await tick()
+    expect(doc_query(`[role='status']`).textContent).toBe(
+      labels?.loading_more ?? MULTI_SELECT_LABELS.loading_more,
+    )
+    props.loading = false
     if (paginated) {
       await vi.waitFor(() => expect(option_labels()).toEqual([`Remote`]))
       props.load_options.batch_size = 2
@@ -775,7 +972,7 @@ test.each(
     }
     await vi.waitFor(() =>
       expect(error).toHaveBeenCalledWith(
-        `MultiSelect: load_options error:`,
+        `OptionList: load_options error:`,
         expect.objectContaining({
           message: expect.stringMatching(
             id === `1` || id === `2`
@@ -785,18 +982,27 @@ test.each(
         }),
       ),
     )
-    expect(doc_query(`[role='alert']`).textContent).toContain(`Could not load options`)
+    expect(doc_query(`[role='alert']`).textContent).toBe(
+      labels?.loading_failed ?? MULTI_SELECT_LABELS.loading_failed,
+    )
+    expect(props.load_error).toBeInstanceOf(Error)
     expect(option_labels()).toEqual(paginated ? [`Remote`] : [])
     fetch.mockResolvedValueOnce({
       options: [{ id: `2`, label: `Retry result`, action: vi.fn() }],
       has_more: false,
     })
-    doc_query<HTMLButtonElement>(`[role='alert'] + button`).click()
+    const retry_button = doc_query<HTMLButtonElement>(`[role='alert'] + button`)
+    expect(retry_button.textContent).toBe(labels?.retry ?? MULTI_SELECT_LABELS.retry)
+    retry_button.focus()
+    retry_button.click()
+    await tick()
+    expect(document.activeElement).toBe(menu_input())
     await vi.waitFor(() => expect(option_labels()).toContain(`Retry result`))
     expect(fetch).toHaveBeenLastCalledWith(
       expect.objectContaining({ offset: paginated ? 1 : 0 }),
     )
     expect(document.querySelector(`[role='alert']`)).toBeNull()
+    expect(props.load_error).toBeNull()
   },
 )
 
@@ -903,19 +1109,29 @@ describe(`PageSearch`, () => {
         },
       ],
     }))
-    const props = $state({
+    const props = $state<ComponentProps<typeof PageSearch>>({
       ...base_props,
       batch_size: 0.5,
       navigate,
       strip_html_suffix,
       transform_url,
       load_pagefind: async () => ({ search }),
+      search_text: ``,
+      matching_options: [],
+      active_index: null,
+      active_option: null,
+      outer_div: null,
     })
     mount(PageSearch, { target: document.body, props })
 
     await search_pagefind(`binary`)
 
     expect(search).toHaveBeenCalledExactlyOnceWith(`binary`)
+    expect(props.search_text).toBe(`binary`)
+    expect(props.matching_options).toHaveLength(1)
+    expect(props.active_option).toBe(props.matching_options?.[0])
+    expect(props.active_index).toBe(0)
+    expect(props.outer_div).toBe(doc_query(`dialog .option-list`))
     expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(1)
     doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
     await vi.runAllTimersAsync()

@@ -3,18 +3,13 @@
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
   import { is_dialog_backdrop_event } from './dialog'
-  import MultiSelect from './MultiSelect.svelte'
+  import OptionList from './internal/OptionList.svelte'
   import { create_recent_list } from './storage'
   import { validate_cmd_actions } from './internal/command'
-  import type {
-    CmdAction,
-    LoadOptionsParams,
-    MultiSelectProps,
-    OptionListProps,
-  } from './types'
+  import type { CmdAction, LoadOptionsParams, OptionListProps } from './types'
   import type { Hotkey } from './utils'
   import {
-    cmd_action_matches,
+    create_cmd_action_filter,
     chain_handlers,
     clamp_integer,
     format_cmd_metadata,
@@ -23,38 +18,6 @@
   } from './utils'
 
   type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
-
-  // A command runs immediately; selection state and chip controls belong to MultiSelect.
-  // Enforce that contract for untyped callers too.
-  const command_selection = {
-    selected: [] as Action[],
-    value: null,
-    max_select: 1,
-    min_select: null,
-    selected_display: `chips`,
-    selected_options_draggable: false,
-    max_visible_chips: null,
-    keep_selected_in_dropdown: false,
-    sort_selected: false,
-    duplicates: false,
-    allow_user_options: false,
-    select_all_option: false,
-    group_select_all: false,
-    range_select: false,
-    parse_paste: undefined,
-    on_create: undefined,
-    on_change: undefined,
-    on_remove: undefined,
-    on_remove_all: undefined,
-    on_select_all: undefined,
-    on_range_select: undefined,
-    on_reorder: undefined,
-    on_duplicate: undefined,
-    on_max_reached: undefined,
-    on_parsed_paste: undefined,
-    selected_item: undefined,
-    remove_icon: undefined,
-  } satisfies Partial<MultiSelectProps<Action>>
 
   let {
     actions,
@@ -68,6 +31,11 @@
     open = $bindable(false),
     dialog = $bindable(null),
     input = $bindable(null),
+    outer_div = $bindable(null),
+    load_error = $bindable(null),
+    collapsed_groups = $bindable(new Set<string>()),
+    collapse_all_groups = $bindable(),
+    expand_all_groups = $bindable(),
     aria_label = `Command menu`,
     filter_func,
     fuzzy = true,
@@ -96,7 +64,6 @@
     fade_duration_ms?: number
     open?: boolean
     dialog?: HTMLDialogElement | null
-    input?: HTMLInputElement | null
     input_aria_label?: string
     aria_label?: string
     placeholder?: string
@@ -108,6 +75,10 @@
     recent_actions_key?: string | null
     max_recent?: number // cap on persisted recent actions (default: 20)
   } = $props()
+
+  const action_filter = $derived(
+    filter_func ?? create_cmd_action_filter(search_text, fuzzy),
+  )
 
   // === Recent actions (most-recently-used ranking) ===
   let recent_action_ids = $state<string[]>([])
@@ -124,13 +95,17 @@
       : null,
   )
   // Reject invalid initial props during SSR, before client effects can run.
-  untrack(() => validate_cmd_actions(actions))
+  untrack(() => {
+    validate_cmd_actions(actions)
+    if (!actions.length && !rest.load_options && !rest.loading && !rest.disabled)
+      throw new TypeError(`CommandMenu: received no actions`)
+  })
   // Includes dynamically loaded options and appended pages.
   $effect(() => {
     validate_cmd_actions(actions)
     validate_cmd_actions(matching_actions)
   })
-  // Validate remote batches before MultiSelect merges and proxies the static matches.
+  // Validate remote batches before the option loader merges and proxies the static matches.
   const remote_fetch = $derived(
     typeof rest.load_options === `function`
       ? rest.load_options
@@ -314,25 +289,28 @@
     )}
     onclick={chain_handlers(track_backdrop_release, dialog_props?.onclick)}
   >
-    <MultiSelect
+    <OptionList
       {...rest}
-      {...command_selection}
       options={sorted_actions}
       {load_options}
       bind:active_index={active_idx}
       bind:active_option
       auto_active_first_option
       bind:input
+      bind:outer_div
+      bind:load_error
+      bind:collapsed_groups
+      bind:collapse_all_groups
+      bind:expand_all_groups
       bind:matching_options={matching_actions}
       bind:search_text
-      filter_func={filter_func ??
-        ((action, search) => cmd_action_matches(action, search, fuzzy))}
+      filter_func={action_filter}
       {fuzzy}
       input_props={{ 'aria-label': input_aria_label, ...input_props }}
       {no_matching_options_msg}
       {placeholder}
       key={({ id }) => id}
-      on_add={({ option }) => execute_action(option)}
+      on_execute={execute_action}
       onkeydown={chain_handlers(
         (event) => run_hotkeys(event, toggle_bindings),
         onkeydown,
@@ -340,11 +318,6 @@
       option={option_snippet ?? (has_action_meta ? action_item : undefined)}
       --sms-bg="var(--sms-options-bg)"
       --sms-width="var(--cmd-width, min(38rem, 90vw))"
-      --sms-max-width="none"
-      --sms-placeholder-color="lightgray"
-      --sms-padding="3pt"
-      --sms-options-margin="1px 0"
-      --sms-options-border-radius="0 0 1ex 1ex"
     />
   </dialog>
 {/if}

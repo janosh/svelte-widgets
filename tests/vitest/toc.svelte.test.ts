@@ -1,7 +1,8 @@
 import Toc from '$lib/Toc.svelte'
-import type { CollapseMode, OpenChangeHandler } from '$lib/types'
+import Heading from '$lib/Heading.svelte'
+import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
@@ -10,11 +11,15 @@ type TocProps = ComponentProps<typeof Toc>
 const mounted_components: Record<string, unknown>[] = []
 
 const mount_toc = (props: TocProps = {}) => {
-  mounted_components.push(mount(Toc, { target: document.body, props }))
+  mounted_components.push(
+    mount(Toc, { target: document.body, props: { dynamic: true, ...props } }),
+  )
 }
 
 const set_body = (html: string) => {
   document.body.innerHTML = html
+  for (const [idx, heading] of document.querySelectorAll(`h1,h2,h3,h4,h5,h6`).entries())
+    if (!heading.id) heading.id = `fixture-${idx}`
 }
 
 const setup_empty_page = () =>
@@ -289,9 +294,9 @@ describe(`Toc`, () => {
     expect(toc_items).toHaveLength(1)
     const toc_item = toc_items[0]
     expect(toc_item.textContent).toBe(`Custom`)
-    expect(doc_query(`body > h2`).id).toBe(`custom`)
-    expect(toc_item.querySelector(`a`)?.getAttribute(`href`)).toBe(`#custom`)
-    expect(document.querySelector(`#custom`)).toBe(doc_query(`body > h2`))
+    expect(doc_query(`body > h2`).id).toBe(`fixture-0`)
+    expect(toc_item.querySelector(`a`)?.getAttribute(`href`)).toBe(`#fixture-0`)
+    expect(document.querySelector(`#fixture-0`)).toBe(doc_query(`body > h2`))
 
     toc_item.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
     expect(replace_state_mock).not.toHaveBeenCalled()
@@ -330,68 +335,75 @@ describe(`Toc`, () => {
     expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#real`)
   })
 
-  test.each([
-    {
-      description: `shares Unicode slugs and -1 duplicate suffixes`,
-      html: `<div id="déjà-vu"></div><h2>Déjà vu!</h2><h2>Déjà vu?</h2><h3 id="custom-id">Custom</h3>`,
-      expected_ids: [`déjà-vu-1`, `déjà-vu-2`, `custom-id`],
-      expected_hrefs: [`#d%C3%A9j%C3%A0-vu-1`, `#d%C3%A9j%C3%A0-vu-2`, `#custom-id`],
+  test.each([`second`, `sec:1`, `123`, `part.one`])(
+    `static metadata keeps matching item indexes for id=%s`,
+    async (id) => {
+      set_body(`<h2 id="${id}">DOM title</h2>`)
+      const scroll_into_view = spy_scroll_into_view()
+      mount_toc({
+        dynamic: false,
+        items: [
+          { id: `first`, level: 2, title: `First` },
+          { id, level: 3, title: `Manifest title` },
+        ],
+      })
+      expect(toc_texts()).toEqual([`First`, `Manifest title`])
+      await tick()
+      expect(doc_query(`aside.toc li.active`).textContent).toBe(`Manifest title`)
+      doc_query(`aside.toc li:last-child a`).click()
+      expect(scroll_into_view).toHaveBeenCalledOnce()
+      expect(doc_query(`aside.toc li.active`).textContent).toBe(`Manifest title`)
     },
-    {
-      description: `avoids collisions with already suffixed slugs`,
-      html: `<h2>Foo</h2><h2>Foo</h2><h3>Foo 1</h3>`,
-      expected_ids: [`foo`, `foo-1`, `foo-1-1`],
-      expected_hrefs: [`#foo`, `#foo-1`, `#foo-1-1`],
-    },
-  ])(`auto_ids $description`, async ({ html, expected_ids, expected_hrefs }) => {
-    set_body(html)
+  )
+
+  test(`Heading keeps its identity and link synchronized with dynamic props`, async () => {
+    const props = $state<ComponentProps<typeof Heading>>({
+      id: `initial`,
+      level: 2,
+      link: true,
+    })
+    mounted_components.push(mount(Heading, { target: document.body, props }))
+    await tick()
+    const heading = doc_query(`h2`)
+    expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#initial`)
+    props.id = `changed & id`
+    await tick()
+    expect(doc_query(`h2`)).toBe(heading)
+    expect(heading.id).toBe(props.id)
+    expect(heading.querySelectorAll(`a`)).toHaveLength(1)
+    expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#changed%20%26%20id`)
+    props.level = 3
+    props.link = false
+    await tick()
+    expect(document.querySelector(`h2`)).toBeNull()
+    expect(doc_query(`h3`).id).toBe(props.id)
+    expect(document.querySelector(`h3 a`)).toBeNull()
+  })
+
+  test(`DOM observation is opt-in`, async () => {
+    set_headings(1)
+    mounted_components.push(mount(Toc, { target: document.body }))
+    await tick()
+    document.body.insertAdjacentHTML(`afterbegin`, `<h2 id="later">Later</h2>`)
+    await new Promise((resolve) => void setTimeout(resolve, 0))
+    expect(toc_texts()).toEqual([`Heading 1`])
+  })
+
+  test(`ignores headings without IDs and never mutates their markup`, async () => {
+    document.body.innerHTML = `<h2>No id</h2><h2 id="stable">Stable</h2>`
     mount_toc()
     await tick()
-
-    expect(
-      [...document.querySelectorAll<HTMLHeadingElement>(`body > :is(h2, h3)`)].map(
-        ({ id }) => id,
-      ),
-    ).toEqual(expected_ids)
-    expect(
-      [...document.querySelectorAll<HTMLAnchorElement>(`aside.toc li > a`)].map(
-        (anchor) => anchor.getAttribute(`href`),
-      ),
-    ).toEqual(expected_hrefs)
-  })
-
-  test(`auto_ids=false leaves headings without ids or hrefs`, async () => {
-    set_body(`<h2>No id</h2>`)
-
-    mount_toc({ auto_ids: false })
-    await tick()
-
-    expect(doc_query(`body > h2`).id).toBe(``)
-    expect(doc_query(`aside.toc li > a`).hasAttribute(`href`)).toBe(false)
-  })
-
-  test(`slugify_heading customizes generated ids`, async () => {
-    set_body(`<h2>First</h2><h2>Second</h2>`)
-
-    mount_toc({
-      slugify_heading: (_heading: HTMLHeadingElement, idx: number) => `section-${idx}`,
-    })
-    await tick()
-
-    expect(
-      [...document.querySelectorAll<HTMLHeadingElement>(`body > h2`)].map(
-        (heading) => heading.id,
-      ),
-    ).toEqual([`section-0`, `section-1`])
+    expect(doc_query(`body > h2`).outerHTML).toBe(`<h2>No id</h2>`)
+    expect(toc_texts()).toEqual([`Stable`])
   })
 
   test(`toc_item snippet replaces default link content`, async () => {
     set_body(`<h2 id="intro">Intro</h2>`)
 
     mount_toc({
-      toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+      toc_item: createRawSnippet<[TocHeadingData]>((heading) => ({
         render: () =>
-          `<span class="custom-toc-item">${heading().id}:${heading().textContent}</span>`,
+          `<span class="custom-toc-item">${heading().id}:${heading().title}</span>`,
       })),
     })
     await tick()
@@ -407,16 +419,16 @@ describe(`Toc`, () => {
   test.each([
     {
       desc: `anchor keeps its own click behavior`,
-      html: (heading: HTMLHeadingElement) =>
-        `<a class="custom-link" href="#${heading.id}">${heading.textContent}</a>`,
+      html: (heading: TocHeadingData) =>
+        `<a class="custom-link" href="#${heading.id}">${heading.title}</a>`,
       n_anchors: 1,
       selector: `aside.toc li > a.custom-link`,
       scrolls: false,
     },
     {
       desc: `button keeps its own click behavior`,
-      html: (heading: HTMLHeadingElement) =>
-        `<button class="custom-button" type="button">${heading.textContent}</button>`,
+      html: (heading: TocHeadingData) =>
+        `<button class="custom-button" type="button">${heading.title}</button>`,
       n_anchors: 0,
       selector: `aside.toc li > button.custom-button`,
       scrolls: false,
@@ -424,8 +436,7 @@ describe(`Toc`, () => {
     },
     {
       desc: `non-interactive span scrolls to the heading`,
-      html: (heading: HTMLHeadingElement) =>
-        `<span class="plain">${heading.textContent}</span>`,
+      html: (heading: TocHeadingData) => `<span class="plain">${heading.title}</span>`,
       n_anchors: 0,
       selector: `aside.toc li > span.plain`,
       scrolls: true,
@@ -441,7 +452,7 @@ describe(`Toc`, () => {
 
       mount_toc({
         li_props: { onclick, 'data-sveltekit-replacestate': `` },
-        toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+        toc_item: createRawSnippet<[TocHeadingData]>((heading) => ({
           render: () => html(heading()),
         })),
       })
@@ -500,7 +511,7 @@ describe(`Toc`, () => {
     mock_active_heading(`first`)
 
     mount_toc({
-      toc_item: createRawSnippet<[HTMLHeadingElement]>((heading) => ({
+      toc_item: createRawSnippet<[TocHeadingData]>((heading) => ({
         render: () => `<input class="filter" value="${heading().id}">`,
       })),
     })
@@ -564,22 +575,12 @@ describe(`Toc`, () => {
     }
   })
 
-  // each case needs its own invalid selector: happy-dom throws only on the first parse, then
-  // caches the failure and returns null, hiding the invalidity from Toc's validation
   test.each([
-    [`heading_selector`, `[`, { heading_selector: `[` }],
-    [`exclude_selector`, `((`, { exclude_selector: `((` }],
-  ])(`warns once and hides for invalid %s`, async (selector_name, selector, props) => {
-    set_body(`<h2>Visible heading</h2>`)
-    const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-
-    mount_toc({ warn_on_empty: true, ...props })
-    await tick()
-
-    expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
-      expect.stringContaining(`invalid ${selector_name}='${selector}'`),
-    )
-    expect(doc_query(`aside.toc`).getAttribute(`hidden`)).toBe(``)
+    { heading_selector: `[` },
+    { exclude_selector: `((` },
+    { hide_on_intersect: `[invalid` },
+  ])(`throws for invalid selectors %j`, (props) => {
+    expect(() => flushSync(() => mount_toc(props))).toThrow(/valid selector/u)
   })
 
   // no selector below matches anything on setup_empty_page ('h2' only hits the excluded one)
@@ -921,6 +922,7 @@ describe(`Toc`, () => {
     const stale_item = doc_query(`aside.toc ol li`)
 
     const new_heading = document.createElement(`h3`)
+    new_heading.id = `added-heading`
     new_heading.textContent = `Added Heading`
     doc_query(`#content`).append(new_heading)
     await tick()
@@ -1199,12 +1201,6 @@ describe(`hide_on_intersect`, () => {
       expected: true,
     },
     { desc: `ignores a selector matching nothing`, target: () => `.x`, expected: false },
-    {
-      desc: `warns once for an invalid selector`,
-      target: () => `[`,
-      expected: false,
-      warns: true,
-    },
   ])(
     `$desc`,
     async ({ target = () => `.banner`, expected, warns, window_width, b2_rect }) => {
@@ -1507,26 +1503,11 @@ describe(`collapse_subheadings`, () => {
     })
   })
 
-  test.each([`h9`, `hx`, `3`])(
-    `invalid collapse_subheadings='%s' warns once and collapses nothing`,
-    async (mode) => {
-      setup_nested_headings()
-      mock_active_heading(`section-1`)
-      const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-
-      // CollapseMode forbids these, so the cast stands in for an untyped JS caller
-      mount_toc({ collapse_subheadings: mode as CollapseMode })
-      await tick()
-
-      expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
-        `Toc received invalid collapse_subheadings='${mode}'. Not collapsing subheadings.`,
-      )
-      // falling back to Infinity alone would still collapse, since the template and the
-      // active-index lookup only test the mode for truthiness
-      expect(get_collapsed_states()).toEqual(Array.from({ length: 8 }, () => false))
-      expect(doc_query(`aside.toc`).classList.contains(`collapsible`)).toBe(false)
-    },
-  )
+  test.each([`h9`, `hx`, `3`])(`invalid collapse mode %s throws`, (mode) => {
+    expect(() =>
+      flushSync(() => mount_toc({ collapse_subheadings: mode as CollapseMode })),
+    ).toThrow(`Toc received invalid collapse_subheadings='${mode}'`)
+  })
 
   test(`unmocked mount expands only the active heading's ancestor chain`, async () => {
     setup_nested_headings()

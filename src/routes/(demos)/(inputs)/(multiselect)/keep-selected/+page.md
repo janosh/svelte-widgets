@@ -34,7 +34,7 @@ Configure how selected options behave in the dropdown. Try different modes:
 <MultiSelect
   id="tech-interactive"
   options={languages}
-  bind:selected
+  bind:value={selected}
   {keep_selected_in_dropdown}
   placeholder="Choose languages..."
   close_dropdown_on_select={false}

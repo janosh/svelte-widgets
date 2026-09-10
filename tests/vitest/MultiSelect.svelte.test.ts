@@ -177,7 +177,7 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
     Object.keys(prop_elem_map).map((cls) => [`${cls}_class`, cls]),
   )
 
-  mount_multiselect({ options: [1, 2, 3], ...css_classes, selected: [1], max_select: 2 })
+  mount_multiselect({ options: [1, 2, 3], ...css_classes, value: [1], max_select: 2 })
 
   // hover to make an option active
   document.querySelector(`ul.options > li`)?.dispatchEvent(fresh_mousemove())
@@ -229,109 +229,128 @@ describe(`bubbles <input> node DOM events`, () => {
   })
 })
 
-describe.each([[null], [1]])(`value is`, (max_select) => {
-  test.each([[[1, 2, 3]], [[`a`, `b`, `c`]]])(
-    `${max_select === 1 ? `single` : `multiple`} options when max_select=${max_select}`,
-    (options) => {
-      const select = mount(Test2WayBind, {
-        target: document.body,
-        props: { options, max_select, selected: options },
-      })
-
-      // every option is handed in as selected, so this also pins that an initial
-      // selection is truncated to max_select rather than kept whole
-      expect(select.value).toStrictEqual(max_select === 1 ? options[0] : options)
-    },
-  )
-})
-
-test.each([[null], [1]])(
-  `2-way binding of value updates selected`,
-  async (max_select) => {
-    const select = mount(Test2WayBind, {
-      target: document.body,
-      props: { options: [1, 2, 3], max_select },
-    })
-
-    // On init, value stays null (no unnecessary sync from null to []). See issue #369.
-    expect(select.value).toBeNull()
-
+test.each([`single`, `multiple`] as const)(
+  `value is the sole controlled state in %s mode`,
+  async (mode) => {
+    const props =
+      mode === `single`
+        ? { options: [0, 1, 2], mode, value: 0 }
+        : { options: [0, 1, 2], mode, value: [0, 1] }
+    const select = mount(Test2WayBind, { target: document.body, props })
+    expect(select.value).toEqual(props.value)
+    select.value = mode === `single` ? 2 : [2]
     await tick()
-    if (max_select === 1) {
-      select.value = 2
-      await tick()
-      expect(select.value).toBe(2)
-      expect(select.selected).toEqual([2])
-    } else {
-      select.value = [1, 2]
-      await tick()
-      expect(select.value).toEqual([1, 2])
-      expect(select.selected).toEqual([1, 2])
-    }
+    expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`2`)
+    select.value = mode === `single` ? null : []
+    await tick()
+    expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
   },
 )
 
-// falsy but valid option values (0, "") must survive the value→selected sync
 test.each([
-  [0, [0, 1, 2]],
-  [``, [``, `a`, `b`]],
-])(`max_select=1 preserves falsy value %j`, async (falsy_val, opts) => {
-  const select = mount(Test2WayBind, {
-    target: document.body,
-    props: { options: opts, max_select: 1 },
-  })
-
-  select.value = falsy_val
-  await tick()
-
-  expect(select.value).toEqual(falsy_val)
-  expect(select.selected).toEqual([falsy_val])
-})
-
-test.each([
-  {
-    initial: null,
-    changed: 1,
-    selected: [1, 2, 3],
-    expectedValue: 1,
-    expectedSelected: [1],
+  { mode: `single`, trigger: `click` },
+  { mode: `single`, trigger: `Enter` },
+  { mode: `multiple`, trigger: `click` },
+  { mode: `multiple`, trigger: `Enter` },
+] as const)(
+  `$mode mode with one selected item handles $trigger according to its mode`,
+  async ({ mode, trigger }) => {
+    const on_max_reached = vi.fn()
+    const props = $state<MultiSelectProps>(
+      mode === `single`
+        ? {
+            options: [`Alpha`, `Beta`],
+            mode,
+            value: `Alpha`,
+            active_index: 0,
+            on_max_reached,
+          }
+        : {
+            options: [`Alpha`, `Beta`],
+            mode,
+            value: [`Alpha`],
+            max_select: 1,
+            active_index: 0,
+            on_max_reached,
+          },
+    )
+    mount_multiselect(props)
+    await tick()
+    expect(doc_query(`ul.options`).getAttribute(`aria-multiselectable`)).toBe(
+      String(mode === `multiple`),
+    )
+    expect(doc_query(`div.multiselect`).classList.contains(`single`)).toBe(
+      mode === `single`,
+    )
+    if (trigger === `click`) doc_query(`ul.options > li`).click()
+    else get_input().dispatchEvent(fresh_key(`Enter`))
+    await tick()
+    expect(props.value).toEqual(mode === `single` ? `Beta` : [`Alpha`])
+    expect(on_max_reached).toHaveBeenCalledTimes(mode === `single` ? 0 : 1)
+    if (mode === `multiple`)
+      expect(on_max_reached).toHaveBeenCalledWith({
+        selected: [`Alpha`],
+        max_select: 1,
+        attempted_option: `Beta`,
+      })
   },
-  { initial: 1, changed: null, selected: [1], expectedValue: [1], expectedSelected: [1] },
-])(`value updates when max_select changes from $initial to $changed`, async (params) => {
-  const select = mount(Test2WayBind, {
-    target: document.body,
-    props: { options: [1, 2, 3], selected: params.selected, max_select: params.initial },
+)
+
+test(`multiple mode with a one-item limit supports the select-all shortcut`, async () => {
+  const props = $state<MultiSelectProps>({
+    options: [`Alpha`, `Beta`],
+    value: [],
+    max_select: 1,
+    select_all_option: true,
+    shortcuts: { select_all: `ctrl+a` },
   })
+  mount_multiselect(props)
   await tick()
-
-  select.max_select = params.changed
+  expect(document.querySelector(`li.select-all`)).not.toBeNull()
+  get_input().dispatchEvent(
+    new KeyboardEvent(`keydown`, { key: `a`, ctrlKey: true, bubbles: true }),
+  )
   await tick()
-
-  expect(select.value).toEqual(params.expectedValue)
-  expect(select.selected).toEqual(params.expectedSelected)
+  expect(props.value).toEqual([`Alpha`])
 })
 
-test(`selected is array of first two options when max_select=2`, () => {
-  // even though all options have preselected=true
-  const options = [1, 2, 3].map((itm) => ({
-    label: itm,
-    preselected: true,
-  }))
-
+test.each([0, ``])(`single mode preserves falsy value %j`, (value) => {
   const select = mount(Test2WayBind, {
     target: document.body,
-    props: { options, max_select: 2 },
+    props: { options: [value, `other`], mode: `single` as const, value },
   })
+  expect(select.value).toBe(value)
+})
 
-  expect(select.selected).toEqual(options.slice(0, 2))
+const invalid_selection_fixtures: [Test2WayBindProps, string][] = [
+  // @ts-expect-error Single mode rejects array values at compile time and runtime.
+  [{ mode: `single`, value: [`Red`] }, `value must be an option or null`],
+  // @ts-expect-error Multiple mode rejects scalar values at compile time and runtime.
+  [{ mode: `multiple`, value: `Red` }, `value must be an array`],
+  // @ts-expect-error Selection limits belong to multiple mode.
+  [{ mode: `single`, max_select: 2 }, `max_select is only available in multiple mode`],
+  // @ts-expect-error The removed selected prop must not bypass the value contract.
+  [{ selected: [`Red`] }, `use value instead of selected`],
+]
+test.each(invalid_selection_fixtures)(
+  `rejects contradictory selection state %j`,
+  (props, message) => {
+    expect(() => mount_multiselect({ options: [`Red`], ...props })).toThrow(message)
+  },
+)
+
+test(`initial selection belongs to value, not option metadata`, () => {
+  const options = [1, 2, 3].map((label) => ({ label, preselected: true }))
+  mount_multiselect({ options })
+  expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
 })
 
 describe(`selected_display=input`, () => {
   const color_options = [`Red`, `Green`, `Blue`]
-  const input_display_props = { max_select: 1, selected_display: `input` } satisfies Pick<
-    MultiSelectProps,
-    `max_select` | `selected_display`
-  >
+  const input_display_props = {
+    mode: `single` as const,
+    selected_display: `input`,
+  } satisfies Pick<MultiSelectProps, `mode` | `selected_display`>
   const press = (key: string) =>
     new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
 
@@ -354,7 +373,7 @@ describe(`selected_display=input`, () => {
   }
 
   const mount_input_display = (
-    props: Partial<Test2WayBindProps> = {},
+    props: Partial<Extract<Test2WayBindProps, { mode: `single` }>> = {},
     target: HTMLElement = document.body,
   ) => mount(Test2WayBind, { target, props: { ...input_display_props, ...props } })
 
@@ -381,14 +400,14 @@ describe(`selected_display=input`, () => {
       expect(input.value).toBe(expected)
       expect(select.search_text).toBe(expected)
       expect(select.value).toEqual(expected_value)
-      expect(select.selected).toEqual([expected_value])
+      expect(select.value).toEqual(expected_value)
       expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
       expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
     },
   )
 
   test(`editing committed text clears selected and value while preserving draft text`, async () => {
-    const select = mount_input_display({ options: [`Red`, `Green`], selected: [`Red`] })
+    const select = mount_input_display({ options: [`Red`, `Green`], value: `Red` })
     await tick()
 
     const input = get_input()
@@ -398,7 +417,7 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Reddish`)
     expect(select.search_text).toBe(`Reddish`)
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
   })
 
@@ -408,7 +427,7 @@ describe(`selected_display=input`, () => {
     await type_search_text(`Red`)
 
     expect(select.search_text).toBe(`Red`)
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
   })
 
@@ -425,14 +444,14 @@ describe(`selected_display=input`, () => {
     const input = get_input()
     expect(input.value).toBe(`Green`)
     expect(select.search_text).toBe(`Green`)
-    expect(select.selected).toEqual([options[1]])
+    expect(select.value).toEqual(options[1])
 
     select.value = null
     await tick()
 
     expect(input.value).toBe(``)
     expect(select.search_text).toBe(``)
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
   })
 
   const reopen_cases: [string, (input: HTMLInputElement) => Promise<void>][] = [
@@ -485,7 +504,7 @@ describe(`selected_display=input`, () => {
       const select = mount_input_display(
         {
           options: color_options,
-          selected: [`Red`],
+          value: `Red`,
           name: field_name,
           required: true,
           open: true,
@@ -500,7 +519,7 @@ describe(`selected_display=input`, () => {
       const input = get_input()
       expect(input.value).toBe(`Green`)
       expect(select.value).toBe(`Green`)
-      expect(select.selected).toEqual([`Green`])
+      expect(select.value).toBe(`Green`)
       expect(form.checkValidity()).toBe(true)
       expect(new FormData(form).get(field_name)).toBe(`Green`)
     } finally {
@@ -511,7 +530,7 @@ describe(`selected_display=input`, () => {
   test(`typing after committed input text returns dropdown to filtered results`, async () => {
     const select = mount_input_display({
       options: color_options,
-      selected: [`Red`],
+      value: `Red`,
       open: true,
     })
     await tick()
@@ -524,7 +543,7 @@ describe(`selected_display=input`, () => {
     expect(option_labels()).toEqual([`Blue`])
     expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
     expect(select.search_text).toBe(`Bl`)
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
 
     await click_expand_icon()
@@ -556,7 +575,7 @@ describe(`selected_display=input`, () => {
     expect(input.value).toBe(`Purple`)
     expect(option_labels()).toEqual(color_options)
     expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
 
     option_by_label(`Green`).click()
@@ -564,7 +583,7 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Green`)
     expect(select.search_text).toBe(`Green`)
-    expect(select.selected).toEqual([`Green`])
+    expect(select.value).toBe(`Green`)
     expect(select.value).toBe(`Green`)
   })
 
@@ -591,7 +610,7 @@ describe(`selected_display=input`, () => {
   })
 
   test(`Backspace edits text normally instead of removing hidden chips`, async () => {
-    const select = mount_input_display({ options: [`Red`, `Green`], selected: [`Red`] })
+    const select = mount_input_display({ options: [`Red`, `Green`], value: `Red` })
     await tick()
     const input = get_input()
 
@@ -603,16 +622,17 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Re`)
     expect(select.search_text).toBe(`Re`)
-    expect(select.selected).toEqual([])
+    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
     expect(document.querySelectorAll(`ul.selected > li.highlighted`)).toHaveLength(0)
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
   })
 
-  test(`input display rejects max_select other than 1`, () => {
+  test(`input display rejects the default multiple mode`, () => {
     expect(() =>
+      // @ts-expect-error Runtime validation must reject input display without single mode.
       mount_multiselect({ options: [`Red`], selected_display: `input` }),
-    ).toThrow(`selected_display="input" requires max_select={1}`)
+    ).toThrow(`selected_display="input" requires mode="single"`)
   })
 
   test(`form submits visible text for draft and object-option values`, async () => {
@@ -686,7 +706,7 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Durian`)
     expect(select.value).toBe(`Durian`)
-    expect(select.selected).toEqual([`Durian`])
+    expect(select.value).toBe(`Durian`)
     expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
   })
 
@@ -694,7 +714,7 @@ describe(`selected_display=input`, () => {
     const select = mount_input_display({
       options: [`Red`, `Green`],
       keep_selected_in_dropdown: `plain`,
-      selected: [`Red`],
+      value: `Red`,
       open: true,
     })
     await tick()
@@ -703,7 +723,7 @@ describe(`selected_display=input`, () => {
     await tick()
 
     expect(select.value).toBe(`Red`)
-    expect(select.selected).toEqual([`Red`])
+    expect(select.value).toBe(`Red`)
     expect(get_input().value).toBe(`Red`)
   })
 
@@ -740,7 +760,7 @@ describe(`selected_display=input`, () => {
       )
       mount_multiselect({
         ...input_display_props,
-        selected: [`Alpha`],
+        value: `Alpha`,
         load_options: { fetch: fetch_fn, debounce_ms: 0 },
       })
       const input = get_input()
@@ -771,7 +791,10 @@ test.each<[string, boolean | number, number[], number | null, boolean]>([
     const form = document.createElement(`form`)
     document.body.append(form)
     try {
-      mount_multiselect({ options: [1, 2, 3], required, selected, max_select }, form)
+      mount_multiselect(
+        { options: [1, 2, 3], required, value: selected, max_select },
+        form,
+      )
       await tick()
 
       // Form is valid if required count is met without exceeding max_select.
@@ -805,8 +828,8 @@ test(`rejects a required count above max_select`, () => {
     mount_multiselect({
       options: [1, 2, 3],
       required: 2,
-      selected: [1, 2],
-      max_select: 1,
+      value: 1,
+      mode: `single` as const,
     }),
   ).toThrow(`max_select=1 < required=2`)
 })
@@ -917,7 +940,7 @@ test(`children snippet receives type='selected' for pills and type='option' for 
     props: {
       snippet_variant: `children`,
       options: [`Red`, `Green`, `Blue`],
-      selected: [`Red`],
+      value: [`Red`],
       open: true,
     },
   })
@@ -945,7 +968,7 @@ test(`option snippet receives selected, active, and disabled booleans`, async ()
         { label: `Enabled`, value: 1 },
         { label: `Disabled`, value: 2, disabled: true },
       ],
-      selected: [{ label: `Enabled`, value: 1 }],
+      value: [{ label: `Enabled`, value: 1 }],
       keep_selected_in_dropdown: `plain`,
       open: true,
     },
@@ -1043,7 +1066,7 @@ test(`expand icon click toggles dropdown in chips mode`, async () => {
 test(`remove_icon snippet receives option for per-item and is_remove_all flag`, async () => {
   mount(TestMultiSelectSnippets, {
     target: document.body,
-    props: { options: [1, 2, 3], selected: [1, 2] },
+    props: { options: [1, 2, 3], value: [1, 2] },
   })
   await tick()
 
@@ -1086,7 +1109,7 @@ test(`before_input and after_input snippets receive search_text and flank the in
 test(`selected_item snippet receives selected option and index`, async () => {
   mount(TestMultiSelectSnippets, {
     target: document.body,
-    props: { options: [`red`, `blue`], selected: [`red`, `blue`] },
+    props: { options: [`red`, `blue`], value: [`red`, `blue`] },
   })
   await tick()
 
@@ -1143,7 +1166,7 @@ test(`filter_func controls rendered options and matching_options`, async () => {
   )
   const props = $state<MultiSelectProps>({
     filter_func,
-    selected: [],
+    value: [],
     matching_options: [],
     open: true,
     options,
@@ -1156,7 +1179,7 @@ test(`filter_func controls rendered options and matching_options`, async () => {
   expect(props.matching_options).toEqual([options[0], options[2]])
   expect(normalized_text(doc_query(`ul.options`))).toBe(`Alpha Algae`)
   filter_func.mockClear()
-  props.selected = [options[0]]
+  props.value = [options[0]]
   await tick()
   expect(props.matching_options).toEqual([options[2]])
   expect(normalized_text(doc_query(`ul.options`))).toBe(`Algae`)
@@ -1188,7 +1211,11 @@ test.each([
   // follows the effective filter text, not the raw search_text
   [
     `committed selected_display=input text is not highlighted`,
-    { max_select: 1, selected_display: `input`, close_dropdown_on_select: false },
+    {
+      mode: `single` as const,
+      selected_display: `input`,
+      close_dropdown_on_select: false,
+    },
     false,
   ],
 ] as const)(`%s`, async (_desc, extra_props, expect_highlight) => {
@@ -1265,7 +1292,7 @@ test.each([
   [[{ label: `foo` }, { label: `bar` }, { label: `baz` }]],
   [[{ label: `foo`, value: 1, key: `whatever` }]],
 ])(`single remove button removes 1 selected option`, async (options_set) => {
-  mount_multiselect({ options: options_set, selected: [...options_set] })
+  mount_multiselect({ options: options_set, value: [...options_set] })
 
   const option_to_remove = options_set[0]
   const initial_selected_count = options_set.length
@@ -1288,7 +1315,7 @@ test(`remove all button removes all selected options and is visible only if more
   const remove_all_btn_selector = `button[title='Remove all']`
 
   // several selected: the button is visible and clicking it removes all
-  mount_multiselect({ options: [1, 2, 3], selected: [1, 2, 3] })
+  mount_multiselect({ options: [1, 2, 3], value: [1, 2, 3] })
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`1 2 3`)
 
   doc_query<HTMLButtonElement>(remove_all_btn_selector).click()
@@ -1297,7 +1324,7 @@ test(`remove all button removes all selected options and is visible only if more
   document.body.innerHTML = `` // Clean up for next mount
 
   // the button appears only on the 2nd selection
-  mount_multiselect({ options: [1, 2, 3], selected: [] })
+  mount_multiselect({ options: [1, 2, 3], value: [] })
 
   const option_lis = document.querySelectorAll<HTMLLIElement>(`ul.options > li`)
   option_lis[0].click() // Select 1
@@ -1316,7 +1343,7 @@ test(`remove_all_title and remove_btn_title are applied correctly`, () => {
   const remove_btn_title = `Custom remove button title`
   const options = [1, 2, 3]
 
-  mount_multiselect({ remove_all_title, remove_btn_title, options, selected: options })
+  mount_multiselect({ remove_all_title, remove_btn_title, options, value: options })
   const remove_all_btn = doc_query<HTMLButtonElement>(`button.remove-all`)
   const remove_btns = document.querySelectorAll<HTMLButtonElement>(
     `ul.selected > li > button`,
@@ -1395,16 +1422,16 @@ test.each([2, 10])(
 test.each([
   {
     name: `stays closed when can_remove is true`,
-    props: { options: [1, 2, 3], selected: [1, 2] },
+    props: { options: [1, 2, 3], value: [1, 2] },
     expect_open: false,
   },
   {
     name: `opens when min_select prevents removal`,
     props: {
       options: [`Red`, `Green`, `Yellow`],
-      selected: [`Red`],
+      value: `Red`,
       min_select: 1,
-      max_select: 1,
+      mode: `single` as const,
     },
     expect_open: true,
   },
@@ -1440,7 +1467,7 @@ describe.each([
         duplicates,
         duplicate_option_msg,
         create_option_msg,
-        selected,
+        value: selected,
       })
 
       const input = get_input()
@@ -1486,19 +1513,19 @@ test.each([
 
 test.each<{
   case_name: string
-  props: Partial<MultiSelectProps>
+  props: MultiSelectProps
   search_text: string
   expected_selected_count: number
 }>([
   {
     case_name: `max_select constraint prevents add`,
-    props: { selected: [1, 2], max_select: 2 },
+    props: { value: [1, 2], max_select: 2 },
     search_text: `3`,
     expected_selected_count: 2,
   },
   {
     case_name: `min_select constraint prevents remove`,
-    props: { selected: [1], min_select: 1, keep_selected_in_dropdown: `plain` },
+    props: { value: [1], min_select: 1, keep_selected_in_dropdown: `plain` },
     search_text: `1`,
     expected_selected_count: 1,
   },
@@ -1531,7 +1558,9 @@ test(`2-way binding of selected`, async () => {
   let selected: Option[] = []
   const props = $state<Test2WayBindProps>({
     options: [1, 2, 3],
-    onSelectedChanged: (data: Option[] | undefined) => (selected = data ?? []),
+    onValueChanged: (data) => {
+      selected = Array.isArray(data) ? data : []
+    },
   })
 
   mount(Test2WayBind, { target: document.body, props })
@@ -1546,7 +1575,7 @@ test(`2-way binding of selected`, async () => {
   expect(selected).toEqual([1, 2])
 
   // external changes bind inward
-  props.selected = [3]
+  props.value = [3]
   await tick()
 
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`3`)
@@ -1565,7 +1594,7 @@ test.each([
       target: document.body,
       props: {
         options: [1, 2, 3],
-        max_select,
+        ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
         onValueChanged: (data: Option | Option[] | null | undefined) =>
           (value = data ?? undefined),
       },
@@ -1586,7 +1615,7 @@ test(`disabled multiselect disables input, removal controls, and shows disabled 
   const disabled_input_title = `Selection unavailable`
   mount_multiselect({
     options: [1, 2, 3],
-    selected: [1, 2],
+    value: [1, 2],
     disabled: true,
     disabled_input_title,
   })
@@ -1689,7 +1718,7 @@ test.each([[[1]], [[1, 2]], [[1, 2, 3]]])(
   `does not render remove buttons if selected.length <= min_select`,
   (selected) => {
     const min_select = 2
-    mount_multiselect({ options: [1, 2, 3, 4], min_select, selected })
+    mount_multiselect({ options: [1, 2, 3, 4], min_select, value: selected })
 
     expect(document.querySelectorAll(`ul.selected button[title*='Remove']`)).toHaveLength(
       selected.length > min_select ? selected.length : 0,
@@ -1702,7 +1731,7 @@ test(`remove all button does not remove items when min_select constraint would b
   const selected = [`Red`]
   const [min_select, max_select] = [1, 2]
 
-  mount_multiselect({ options, selected, min_select, max_select })
+  mount_multiselect({ options, value: selected, min_select, max_select })
 
   const remove_all_button = document.querySelector(`button.remove-all`)
   expect(remove_all_button).toBeNull()
@@ -1733,7 +1762,7 @@ test(`remove all button is hidden when selected.length equals min_select`, async
   // above, selected.length <= 1 hides the button anyway; here min_select is the reason
   mount_multiselect({
     options: [`Red`, `Green`],
-    selected: [`Red`, `Green`],
+    value: [`Red`, `Green`],
     min_select: 2,
   })
   expect(document.querySelector(`button.remove-all`)).toBeNull()
@@ -1775,7 +1804,7 @@ test(`dragging selected options across each other reorders them and fires on_reo
   const [onreorder_spy, onchange_spy] = [vi.fn(), vi.fn()]
   mount_multiselect({
     options,
-    selected: options,
+    value: options,
     on_reorder: onreorder_spy,
     on_change: onchange_spy,
   })
@@ -1798,7 +1827,7 @@ test(`dragging selected options across each other reorders them and fires on_reo
 
 test(`canceled drag clears the active drop-target highlight`, async () => {
   const options = [1, 2, 3]
-  mount_multiselect({ options, selected: options })
+  mount_multiselect({ options, value: options })
 
   const li = doc_query(`ul.selected li`)
   li.dispatchEvent(new DragEvent(`dragenter`, {}))
@@ -1862,7 +1891,7 @@ test.each([
   [`disabled`, { disabled: true }],
   [`allow_user_options`, { allow_user_options: true }],
   [`loading`, { loading: true }],
-] satisfies [string, Partial<MultiSelectProps>][])(
+] satisfies [string, MultiSelectProps][])(
   `accepts empty options in %s mode`,
   (_name, props) => {
     expect(() => mount_multiselect({ options: [], ...props })).not.toThrow()
@@ -1877,8 +1906,8 @@ test.each([
   ],
   [
     `selected`,
-    { options: [1], selected: `not-an-array` as unknown as number[] },
-    `selected prop must be an array`,
+    { options: [1], value: `not-an-array` as unknown as number[] },
+    `value must be an array`,
   ],
 ] satisfies [string, MultiSelectProps, string][])(
   `rejects an invalid %s invariant`,
@@ -1890,7 +1919,7 @@ test.each([
 test.each([[[1]], [[1, 2, 3]]])(
   `buttons to remove selected options have CSS class "remove"`,
   (selected) => {
-    mount_multiselect({ options: selected, selected })
+    mount_multiselect({ options: selected, value: selected })
 
     expect(document.querySelectorAll(`ul.selected button.remove`)).toHaveLength(
       selected.length,
@@ -1910,7 +1939,7 @@ test.each([[[1]], [[1, 2, 3]]])(
 test(`remove buttons lack default-icon class when remove_icon snippet is provided`, async () => {
   mount(TestMultiSelectSnippets, {
     target: document.body,
-    props: { options: [1, 2, 3], selected: [1, 2] },
+    props: { options: [1, 2, 3], value: [1, 2] },
   })
   await tick()
   expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(0)
@@ -1940,7 +1969,7 @@ test.each([
 
     mount_multiselect({
       options: [1, 2, 3],
-      selected: [1, 2],
+      value: [1, 2],
       [`on_${event_name}`]: spy,
     })
 
@@ -2000,7 +2029,7 @@ test.each<[string, boolean | `append`]>([
   const initial_options = [`a`, `b`]
   const props = $state<MultiSelectProps>({
     options: [...initial_options],
-    selected: [],
+    value: [],
     allow_user_options: mode,
     on_create: () => false,
     on_add: onadd_spy,
@@ -2010,14 +2039,14 @@ test.each<[string, boolean | `append`]>([
   await create_user_option(`rejected`)
 
   expect(onadd_spy).not.toHaveBeenCalled()
-  expect(props.selected).toEqual([])
+  expect(props.value).toEqual([])
   if (mode === `append`) expect(props.options).toEqual(initial_options)
 })
 
 test(`allow_user_options=append keeps created options selectable after removal`, async () => {
   const props = $state<MultiSelectProps>({
     options: [`a`, `b`],
-    selected: [],
+    value: [],
     allow_user_options: `append`,
   })
   mount_multiselect(props)
@@ -2025,11 +2054,11 @@ test(`allow_user_options=append keeps created options selectable after removal`,
   await create_user_option(`foobar`)
 
   expect(props.options).toEqual([`a`, `b`, `foobar`])
-  expect(props.selected).toEqual([`foobar`])
+  expect(props.value).toEqual([`foobar`])
 
   doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
   await tick()
-  expect(props.selected).toEqual([])
+  expect(props.value).toEqual([])
 
   const input = get_input()
   await type_search_text(`foobar`, input)
@@ -2038,7 +2067,7 @@ test(`allow_user_options=append keeps created options selectable after removal`,
   expect(appended_option.textContent?.trim()).toBe(`foobar`)
   appended_option.click()
   await tick()
-  expect(props.selected).toEqual([`foobar`])
+  expect(props.value).toEqual([`foobar`])
 })
 
 // string transforms and false/undefined returns are covered by the
@@ -2046,7 +2075,7 @@ test(`allow_user_options=append keeps created options selectable after removal`,
 test(`on_create returning an object transforms the option`, async () => {
   const props = $state<MultiSelectProps>({
     options: [{ label: `existing`, value: 1 }],
-    selected: [],
+    value: [],
     allow_user_options: `append`,
     on_create: ({ option }: { option: Option }) => ({
       ...(typeof option === `object` && option),
@@ -2058,7 +2087,7 @@ test(`on_create returning an object transforms the option`, async () => {
 
   await create_user_option(`new-item`)
 
-  expect(props.selected).toEqual([
+  expect(props.value).toEqual([
     expect.objectContaining({ label: `new-item`, validated: true }),
   ])
 })
@@ -2088,8 +2117,8 @@ test(`on_add selected reflects replacement when max_select=1`, async () => {
   const onadd_spy = vi.fn()
   mount_multiselect({
     options: [1, 2, 3],
-    max_select: 1,
-    selected: [1],
+    mode: `single` as const,
+    value: 1,
     on_add: onadd_spy,
   })
 
@@ -2135,13 +2164,11 @@ test.each([
   [
     `duplicate preselected options`,
     {
-      options: [
-        { label: `x`, preselected: true },
-        { label: `x`, preselected: true },
-      ],
+      options: [{ label: `x` }],
+      value: [{ label: `x` }, { label: `x` }],
     },
   ],
-  [`a selected array with repeats`, { options: [`a`], selected: [`a`, `a`] }],
+  [`a selected array with repeats`, { options: [`a`], value: [`a`, `a`] }],
 ])(`renders chips sharing one key without crashing (%s)`, async (_case, props) => {
   mount_multiselect(props)
   await tick()
@@ -2177,7 +2204,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       const selected = [`Apple`]
       mount_multiselect({
         options,
-        selected,
+        value: selected,
         keep_selected_in_dropdown: mode,
         duplicates: colliding_keys,
         key: colliding_keys ? () => `shared` : undefined,
@@ -2222,11 +2249,11 @@ describe(`keep_selected_in_dropdown feature`, () => {
     // max_select 1 replaces rather than refuses, so a real refusal needs a full multi-select
     [
       `max_select reached`,
-      { max_select: 2, selected: [`Apple`, `Banana`] },
+      { max_select: 2, value: [`Apple`, `Banana`] },
       `Cherry`,
       false,
     ],
-    [`min_select reached`, { min_select: 1, selected: [`Apple`] }, `Apple`, true],
+    [`min_select reached`, { min_select: 1, value: [`Apple`] }, `Apple`, true],
     [
       `disabled option`,
       { options: [`Apple`, { label: `Banana`, disabled: true }] },
@@ -2253,7 +2280,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
   )
 
   test(`hides selected options from dropdown when disabled (default behavior)`, async () => {
-    mount_multiselect({ options, selected: [`Apple`], keep_selected_in_dropdown: false })
+    mount_multiselect({ options, value: [`Apple`], keep_selected_in_dropdown: false })
 
     await focus_input()
 
@@ -2274,7 +2301,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       const on_change = vi.fn()
       mount_multiselect({
         options,
-        selected: [`Apple`],
+        value: [`Apple`],
         keep_selected_in_dropdown: mode,
         on_change,
       })
@@ -2300,7 +2327,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
     `keeps all options visible and styled selected when everything is selected in %s mode`,
     async (mode) => {
       // the partially-selected case is covered where only Apple is selected
-      mount_multiselect({ options, selected: options, keep_selected_in_dropdown: mode })
+      mount_multiselect({ options, value: options, keep_selected_in_dropdown: mode })
 
       await focus_input()
 
@@ -2322,7 +2349,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
     async (mode) => {
       mount_multiselect({
         options,
-        selected: [`Apple`, `Banana`],
+        value: [`Apple`, `Banana`],
         keep_selected_in_dropdown: mode,
         min_select: 1,
       })
@@ -2350,7 +2377,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       const selected = [`Apple`, `Cherry`]
       mount_multiselect({
         options: options_with_date,
-        selected,
+        value: selected,
         keep_selected_in_dropdown: mode,
       })
 
@@ -2389,7 +2416,7 @@ test.each(
   async (allow_user_options, no_matching_options_msg, create_option_msg) => {
     const props = {
       options: [`foo`],
-      selected: [`foo`],
+      value: [`foo`],
       no_matching_options_msg,
       create_option_msg,
       allow_user_options,
@@ -2425,7 +2452,7 @@ test.each([
   const is_dupe_test = prop_name === `duplicate_option_msg`
   mount_multiselect({
     options: [`foo`, `bar`],
-    selected: is_dupe_test ? [`foo`] : [],
+    value: is_dupe_test ? [`foo`] : [],
     [prop_name]: prop_value,
   })
 
@@ -2439,7 +2466,7 @@ test(`empty duplicate_option_msg leaves no phantom navigable row`, async () => {
   // a blank message renders nothing, so it must not stay navigable either
   mount_multiselect({
     options: [`ab`, `abc`],
-    selected: [`ab`],
+    value: [`ab`],
     duplicate_option_msg: ``,
   })
   const input = get_input()
@@ -2504,11 +2531,11 @@ test.each<[OptionStyle, `selected` | `option`, string]>([
       typeof style === `object` && style !== null && `invalid` in style
     if (expect_invalid_style_error) {
       expect(() =>
-        mount_multiselect({ options, selected: key === `selected` ? options : [] }),
+        mount_multiselect({ options, value: key === `selected` ? options : [] }),
       ).toThrow(`MultiSelect: option style may only contain "option" and "selected" keys`)
       return
     }
-    mount_multiselect({ options, selected: key === `selected` ? options : [] })
+    mount_multiselect({ options, value: key === `selected` ? options : [] })
 
     const li = doc_query(key === `selected` ? `ul.selected > li` : `ul.options > li`)
     expect(li.style.cssText).toBe(expected_css)
@@ -2524,7 +2551,7 @@ test.each([
   [`input_style`, `input[autocomplete]`],
 ])(`MultiSelect applies style props to the correct element`, (prop, css_selector) => {
   const css_str = `font-weight: bold; color: red;`
-  mount_multiselect({ options: [1, 2, 3], [prop]: css_str, selected: [1] })
+  mount_multiselect({ options: [1, 2, 3], [prop]: css_str, value: [1] })
 
   const err_msg = `${prop} (${css_selector})`
   const elem = doc_query(css_selector)
@@ -2537,7 +2564,7 @@ test.each([
 ])(
   `MultiSelect doesn't add style attribute to element '$css_selector' if '$prop' prop not passed`,
   ({ prop, css_selector }) => {
-    mount_multiselect({ options: [1, 2, 3], selected: [1] })
+    mount_multiselect({ options: [1, 2, 3], value: [1] })
 
     const elem = doc_query(css_selector)
 
@@ -2614,7 +2641,7 @@ test.each([true, false, `if-mobile`, `retain-focus`] as const)(
   },
 )
 
-const mount_retain_focus = (props: Partial<MultiSelectProps> = {}) =>
+const mount_retain_focus = (props: MultiSelectProps = {}) =>
   mount_multiselect({ close_dropdown_on_select: `retain-focus`, open: true, ...props })
 
 test.each([
@@ -2779,22 +2806,22 @@ describe(`create_option_msg as function`, () => {
     {
       desc: `no matches passes empty matching_options`,
       options: [`apple`, `banana`, `cherry`],
-      selected: [`apple`],
+      value: [`apple`],
       search: `grape`,
       expected_matching: [],
     },
     {
       desc: `partial match passes filtered matching_options`,
       options: [`apple`, `apricot`, `banana`],
-      selected: [],
+      value: [],
       search: `ap`,
       expected_matching: [`apple`, `apricot`],
     },
-  ])(`$desc`, async ({ options, selected, search, expected_matching }) => {
+  ])(`$desc`, async ({ options, value: selected, search, expected_matching }) => {
     let captured_state: Record<string, unknown> = {}
     mount_multiselect({
       options,
-      selected,
+      value: selected,
       allow_user_options: true,
       create_option_msg: (state: Record<string, unknown>) => {
         captured_state = state
@@ -2839,7 +2866,7 @@ describe(`create_option_msg as function`, () => {
   test(`function can combine multiple state fields`, async () => {
     mount_multiselect({
       options: [`a`, `b`, `c`],
-      selected: [`a`, `b`],
+      value: [`a`, `b`],
       allow_user_options: true,
       create_option_msg: ({
         search_text,
@@ -2879,7 +2906,7 @@ describe(`select_all_option feature`, () => {
 
   test.each([
     [{ select_all_option: false }],
-    [{ select_all_option: true, max_select: 1 }],
+    [{ select_all_option: true, mode: `single` as const }],
   ])(`hidden when props=%j`, async (props) => {
     mount_multiselect({ options, ...props })
     get_input().click()
@@ -2932,7 +2959,7 @@ describe(`select_all_option feature`, () => {
     mount_multiselect({
       options: [`a`, `b`, `c`],
       select_all_option: true,
-      selected: [`a`, `b`],
+      value: [`a`, `b`],
       max_select: 2,
       shortcuts: { select_all: `ctrl+a` },
       on_max_reached: onmaxreached_spy,
@@ -2957,7 +2984,7 @@ describe(`select_all_option feature`, () => {
     mount_multiselect({
       options: [`a`, `b`, `c`, `d`, `e`],
       select_all_option: true,
-      selected: [],
+      value: [],
       max_select: 3,
       on_max_reached: onmaxreached_spy,
     })
@@ -2988,7 +3015,7 @@ describe(`select_all_option feature`, () => {
   ])(`select_all_disabled_title %s`, async (_label, title_prop, expected_title) => {
     mount_multiselect({
       options,
-      selected: [...options],
+      value: [...options],
       select_all_option: true,
       select_all_disabled_title: title_prop,
     })
@@ -3013,32 +3040,32 @@ describe(`select_all_option feature`, () => {
     },
   )
 
-  test.each<[string, Partial<MultiSelectProps>, boolean, string]>([
+  test.each<[string, MultiSelectProps, boolean, string]>([
     [
       `all selected`,
-      { options: [`a`, `b`, `c`, `d`], selected: [`a`, `b`, `c`, `d`] },
+      { options: [`a`, `b`, `c`, `d`], value: [`a`, `b`, `c`, `d`] },
       true,
       `All options already selected`,
     ],
-    [`some unselected`, { options: [`a`, `b`, `c`, `d`], selected: [`a`] }, false, ``],
+    [`some unselected`, { options: [`a`, `b`, `c`, `d`], value: [`a`] }, false, ``],
     [
       `all non-disabled selected`,
       {
         options: [{ label: `A` }, { label: `B`, disabled: true }, { label: `C` }],
-        selected: [{ label: `A` }, { label: `C` }],
+        value: [{ label: `A` }, { label: `C` }],
       },
       true,
       `All options already selected`,
     ],
     [
       `max_select reached`,
-      { options: [`a`, `b`, `c`, `d`], selected: [`a`, `b`], max_select: 2 },
+      { options: [`a`, `b`, `c`, `d`], value: [`a`, `b`], max_select: 2 },
       true,
       `Maximum of 2 options selected`,
     ],
     [
       `max_select reached AND all selectable selected`,
-      { options: [`a`, `b`], selected: [`a`, `b`], max_select: 2 },
+      { options: [`a`, `b`], value: [`a`, `b`], max_select: 2 },
       true,
       `All options already selected`,
     ],
@@ -3048,7 +3075,7 @@ describe(`select_all_option feature`, () => {
       `max_select reached, count reworded through labels`,
       {
         options: [`a`, `b`, `c`, `d`],
-        selected: [`a`, `b`],
+        value: [`a`, `b`],
         max_select: 2,
         labels: { max_select_reached: (max) => `hochstens ${max}` },
       },
@@ -3059,7 +3086,7 @@ describe(`select_all_option feature`, () => {
       `all selected, reworded through labels`,
       {
         options: [`a`, `b`],
-        selected: [`a`, `b`],
+        value: [`a`, `b`],
         labels: { all_options_selected: `Alle bereits gewahlt` },
       },
       true,
@@ -3069,7 +3096,7 @@ describe(`select_all_option feature`, () => {
       `case-insensitive duplicates selected`,
       {
         options: [`Apple`, `apple`],
-        selected: [`Apple`],
+        value: [`Apple`],
         duplicates: `case-insensitive`,
       },
       true,
@@ -3127,7 +3154,7 @@ describe(`select_all_option feature`, () => {
       `loaded visible options selected`,
       {
         open: true,
-        selected: [`a`],
+        value: [`a`],
         load_options: async () => ({ options: [`a`], has_more: false }),
       },
       true,
@@ -3154,7 +3181,7 @@ describe(`select_all_option feature`, () => {
     const onselectAll_spy = vi.fn()
     const props = $state<MultiSelectProps>({
       options: [`a`, `b`, `c`],
-      selected: [`a`, `b`],
+      value: [`a`, `b`],
       select_all_option: true,
       max_select: 2,
       on_select_all: onselectAll_spy,
@@ -3167,7 +3194,7 @@ describe(`select_all_option feature`, () => {
     await tick()
 
     expect(onselectAll_spy).not.toHaveBeenCalled()
-    expect(props.selected).toEqual([`a`, `b`])
+    expect(props.value).toEqual([`a`, `b`])
   })
 
   test(`applies li_select_all_class`, async () => {
@@ -3194,28 +3221,31 @@ describe(`select_all_option feature`, () => {
   })
 })
 
-// rows carry their own max_select: crossing a shared describe.each over both max_select modes
-// with every value shape spent half its runs returning at a validity guard, asserting nothing
-test.each<[1 | null, Option | Option[], Option[], string]>([
-  [1, `Red`, [`Red`, `Green`, `Blue`], `Red`],
-  [1, 1, [1, 2, 3], `1`],
-  [1, { label: `Red` }, [{ label: `Red` }, { label: `Green` }], `Red`],
-  [null, [`Red`, `Green`], [`Red`, `Green`, `Blue`], `Red Green`],
-  [null, [1, 2], [1, 2, 3], `1 2`],
+test.each<[MultiSelectProps, string]>([
+  [{ mode: `single`, value: `Red`, options: [`Red`, `Green`, `Blue`] }, `Red`],
+  [{ mode: `single`, value: 1, options: [1, 2, 3] }, `1`],
   [
-    null,
-    [{ label: `Red` }, { label: `Green` }],
-    [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
+    {
+      mode: `single`,
+      value: { label: `Red` },
+      options: [{ label: `Red` }, { label: `Green` }],
+    },
+    `Red`,
+  ],
+  [{ value: [`Red`, `Green`], options: [`Red`, `Green`, `Blue`] }, `Red Green`],
+  [{ value: [1, 2], options: [1, 2, 3] }, `1 2`],
+  [
+    {
+      value: [{ label: `Red` }, { label: `Green` }],
+      options: [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
+    },
     `Red Green`,
   ],
-])(
-  `max_select=%s initializes selected from value=%j`,
-  (max_select, value, options, expected_text) => {
-    mount_multiselect({ options, value, max_select })
+])(`initial selection from %j renders %s`, (props, expected_text) => {
+  mount_multiselect(props)
 
-    expect(doc_query(`ul.selected`).textContent?.trim()).toBe(expected_text)
-  },
-)
+  expect(doc_query(`ul.selected`).textContent?.trim()).toBe(expected_text)
+})
 
 test(`create_option_msg shows immediately with static options`, async () => {
   mount_multiselect({
@@ -3258,42 +3288,20 @@ describe(`binding update event count`, () => {
     expect(onchange_spy).toHaveBeenCalledTimes(1)
   })
 
-  test.each([null, 1])(
-    `selected binding with max_select=%s: ≤1 update on init, exactly 1 per selection`,
-    async (max_select) => {
+  test.each([`single`, `multiple`] as const)(
+    `%s value binding updates once on mount and once per selection`,
+    async (mode) => {
       const spy = vi.fn()
-
       mount(Test2WayBind, {
         target: document.body,
-        props: { options: [1, 2, 3], max_select, onSelectedChanged: spy },
+        props: { options: [1, 2, 3], mode, onValueChanged: spy },
       })
       await tick()
-      expect(spy.mock.calls.length).toBeLessThanOrEqual(1) // init: at most 1 call
-
+      expect(spy).toHaveBeenCalledExactlyOnceWith(mode === `single` ? null : [])
       spy.mockClear()
       doc_query(`ul.options li`).click()
       await tick()
-      expect(spy).toHaveBeenCalledTimes(1) // selection: exactly 1 call
-    },
-  )
-
-  // regression: values_equal(null, []) returned false, so value was synced from null to []
-  test.each([null, 1])(
-    `value binding with max_select=%s: no extra sync from null to [] on init`,
-    async (max_select) => {
-      const spy = vi.fn()
-
-      mount(Test2WayBind, {
-        target: document.body,
-        props: { options: [1, 2, 3], max_select, onValueChanged: spy },
-      })
-      await tick()
-
-      // The effect in Test2WayBind fires at least once on mount with initial value
-      expect(spy.mock.calls.length).toBeGreaterThanOrEqual(1)
-      // pre-fix the last call carried [] for max_select=null
-      const last_value = spy.mock.calls.at(-1)?.[0]
-      expect(last_value, `value should be null, not []`).toBeNull()
+      expect(spy).toHaveBeenCalledExactlyOnceWith(mode === `single` ? 1 : [1])
     },
   )
 })
@@ -3475,39 +3483,39 @@ describe(`on_max_reached event`, () => {
   test.each<{
     desc: string
     options: Option[]
-    selected: Option[]
+    value: Option[]
     trigger: `click` | `keyboard`
     attempted: Option
   }>([
     {
       desc: `click, primitives`,
       options: [1, 2, 3, 4],
-      selected: [1, 2],
+      value: [1, 2],
       trigger: `click`,
       attempted: 3,
     },
     {
       desc: `keyboard Enter, primitives`,
       options: [1, 2, 3, 4],
-      selected: [1, 2],
+      value: [1, 2],
       trigger: `keyboard`,
       attempted: 3,
     },
     {
       desc: `click, object options`,
       options: object_opts,
-      selected: [object_opts[0], object_opts[1]],
+      value: [object_opts[0], object_opts[1]],
       trigger: `click`,
       attempted: object_opts[2],
     },
   ])(
     `fires when adding beyond max_select ($desc)`,
-    async ({ options, selected, trigger, attempted }) => {
+    async ({ options, value: selected, trigger, attempted }) => {
       const onmaxreached_spy = vi.fn()
       mount_multiselect({
         options,
         max_select: 2,
-        selected,
+        value: selected,
         on_max_reached: onmaxreached_spy,
       })
       const input = await focus_input()
@@ -3529,16 +3537,15 @@ describe(`on_max_reached event`, () => {
   )
 
   test.each([
-    { max_select: 3, selected: [1], desc: `under limit` },
-    { max_select: 1, selected: [1], desc: `max_select=1 (replace mode)` },
-    { max_select: null, selected: [1, 2, 3, 4], desc: `max_select=null (unlimited)` },
-  ])(`does not fire when $desc`, async ({ max_select, selected }) => {
+    { max_select: 3, value: [1], desc: `under limit` },
+    { mode: `single` as const, value: 1, desc: `max_select=1 (replace mode)` },
+    { max_select: null, value: [1, 2, 3, 4], desc: `max_select=null (unlimited)` },
+  ])(`does not fire when $desc`, async ({ desc: _description, ...props }) => {
     const onmaxreached_spy = vi.fn()
 
     mount_multiselect({
       options: [1, 2, 3, 4, 5],
-      max_select,
-      selected,
+      ...props,
       on_max_reached: onmaxreached_spy,
     })
 
@@ -3561,7 +3568,7 @@ describe(`on_duplicate event`, () => {
     mount_multiselect({
       options: [1, 2, 3],
       duplicates,
-      selected: [1],
+      value: [1],
       on_duplicate: onduplicate_spy,
     })
 
@@ -3578,7 +3585,7 @@ describe(`on_duplicate event`, () => {
   test.each<{
     desc: string
     options: Option[]
-    selected: Option[]
+    value: Option[]
     typed_value: string
     expected: { option: unknown }
   }>([
@@ -3587,14 +3594,14 @@ describe(`on_duplicate event`, () => {
       // coercion doesn't apply and detection is label-based
       desc: `numeric options coerced to string`,
       options: [1, 2, 3],
-      selected: [1],
+      value: [1],
       typed_value: `1`,
       expected: { option: `1` },
     },
     {
       desc: `string options`,
       options: [`apple`, `banana`, `cherry`],
-      selected: [`apple`],
+      value: [`apple`],
       typed_value: `apple`,
       expected: { option: `apple` },
     },
@@ -3604,19 +3611,19 @@ describe(`on_duplicate event`, () => {
         { label: `Apple`, value: 1 },
         { label: `Banana`, value: 2 },
       ],
-      selected: [{ label: `Apple`, value: 1 }],
+      value: [{ label: `Apple`, value: 1 }],
       typed_value: `Apple`,
       expected: { option: `Apple` },
     },
   ])(
     `fires with $desc via allow_user_options`,
-    async ({ options, selected, typed_value, expected }) => {
+    async ({ options, value: selected, typed_value, expected }) => {
       const onduplicate_spy = vi.fn()
 
       mount_multiselect({
         options,
         duplicates: false,
-        selected,
+        value: selected,
         on_duplicate: onduplicate_spy,
         allow_user_options: true,
       })
@@ -3641,7 +3648,7 @@ describe(`on_duplicate event`, () => {
       options: [1, 2, 3],
       duplicates: false,
       max_select: 2,
-      selected: [1, 2],
+      value: [1, 2],
       on_duplicate: onduplicate_spy,
       on_max_reached: onmaxreached_spy,
       allow_user_options: true,
@@ -3803,7 +3810,7 @@ describe(`case-variant labels (issue #391)`, () => {
   })
 
   test(`can select multiple case-variant options`, async () => {
-    const props = $state<MultiSelectProps>({ options: object_options, selected: [] })
+    const props = $state<MultiSelectProps>({ options: object_options, value: [] })
     mount_multiselect(props)
 
     for (const li of document.querySelectorAll(`ul.options > li`)) {
@@ -3811,8 +3818,10 @@ describe(`case-variant labels (issue #391)`, () => {
       await tick()
     }
 
-    expect(props.selected).toHaveLength(3)
-    expect(props.selected?.map((opt) => get_label(opt))).toEqual([`pd`, `PD`, `Pd`])
+    expect(props.value).toHaveLength(3)
+    expect(
+      (Array.isArray(props.value) ? props.value : []).map((opt) => get_label(opt)),
+    ).toEqual([`pd`, `PD`, `Pd`])
   })
 })
 
@@ -3838,7 +3847,7 @@ describe(`duplicates prop variants`, () => {
     const onduplicate_spy = vi.fn()
     const props = $state<MultiSelectProps>({
       options: [`Apple`, `apple`, `APPLE`],
-      selected: [`Apple`],
+      value: [`Apple`],
       allow_user_options: true,
       duplicates,
       on_duplicate: onduplicate_spy,
@@ -3853,17 +3862,17 @@ describe(`duplicates prop variants`, () => {
 
     if (expect_blocked) {
       expect(onduplicate_spy).toHaveBeenCalledTimes(1)
-      expect(props.selected).not.toContain(typed)
+      expect(props.value).not.toContain(typed)
     } else {
       expect(onduplicate_spy).not.toHaveBeenCalled()
-      expect(props.selected).toContain(typed)
+      expect(props.value).toContain(typed)
     }
   })
 
   test(`duplicates='case-insensitive': shows duplicate message`, async () => {
     mount_multiselect({
       options: [`Apple`, `Banana`],
-      selected: [`Apple`],
+      value: [`Apple`],
       duplicates: `case-insensitive`,
       duplicate_option_msg: `Already selected`,
     })
@@ -3889,7 +3898,7 @@ describe(`duplicates prop variants`, () => {
 
     mount_multiselect({
       options,
-      selected: [options[0]], // preselect first option
+      value: [options[0]], // preselect first option
       on_add: onadd_spy,
       on_duplicate: onduplicate_spy,
     })
@@ -3908,7 +3917,7 @@ describe(`duplicates prop variants`, () => {
     expect(onadd_spy).toHaveBeenCalledTimes(1)
 
     document.body.innerHTML = ``
-    mount_multiselect({ options, selected: [options[0]], duplicates: `case-insensitive` })
+    mount_multiselect({ options, value: [options[0]], duplicates: `case-insensitive` })
 
     get_input().focus()
     await tick()
@@ -3953,7 +3962,7 @@ test.each([
   const onreorder_spy = vi.fn()
   mount_multiselect({
     options: [1, 2, 3],
-    selected: [1, 2, 3],
+    value: [1, 2, 3],
     on_reorder: onreorder_spy,
   })
 
@@ -3974,7 +3983,7 @@ describe(`duplicate entries in options array`, () => {
     const key = vi.fn(() => `shared`)
     mount_multiselect({
       options,
-      selected: options.slice(50),
+      value: options.slice(50),
       duplicates: true,
       keep_selected_in_dropdown: `plain`,
       max_visible_chips: 0,
@@ -4045,7 +4054,7 @@ describe(`max_visible_chips`, () => {
     async (max_visible_chips, toggle_label) => {
       mount_multiselect({
         options,
-        selected: [...options],
+        value: [...options],
         max_visible_chips,
       })
 
@@ -4070,13 +4079,13 @@ describe(`max_visible_chips`, () => {
     [`fits within limit`, 5],
     [`unlimited (null)`, null],
   ])(`renders no toggle when selection %s`, (_desc, max_visible_chips) => {
-    mount_multiselect({ options, selected: [...options].slice(0, 3), max_visible_chips })
+    mount_multiselect({ options, value: [...options].slice(0, 3), max_visible_chips })
     expect(document.querySelector(`li.more-chip`)).toBeNull()
     expect(chips()).toHaveLength(3)
   })
 
   test(`keyboard chip navigation auto-expands hidden chips`, async () => {
-    mount_multiselect({ options, selected: [...options], max_visible_chips: 2 })
+    mount_multiselect({ options, value: [...options], max_visible_chips: 2 })
     expect(chips()).toHaveLength(2)
 
     // ArrowLeft highlights the LAST selected chip (idx 4), which is hidden
@@ -4096,7 +4105,7 @@ describe(`max_visible_chips`, () => {
 
   test(`rejects invalid max_visible_chips`, () => {
     expect(() =>
-      mount_multiselect({ options, selected: [...options], max_visible_chips: -2 }),
+      mount_multiselect({ options, value: [...options], max_visible_chips: -2 }),
     ).toThrow(`max_visible_chips must be null or a non-negative integer`)
   })
 })
@@ -4108,7 +4117,7 @@ describe(`labels`, () => {
   test(`chip overflow toggle is configurable, omitted keys keep English`, async () => {
     mount_multiselect({
       options,
-      selected: [...options],
+      value: [...options],
       max_visible_chips: 1,
       labels: { more_chips: (hidden) => `noch ${hidden}` },
     })
@@ -4132,7 +4141,7 @@ describe(`labels`, () => {
     [
       `remove-button title composed with remove_btn_title`,
       { remove_option: (btn: string, label: string) => `${label} ${btn}` },
-      { options, selected: [`a`], remove_btn_title: `entfernen` },
+      { options, value: [`a`], remove_btn_title: `entfernen` },
       () => doc_query(`ul.selected button.remove`).getAttribute(`title`),
       `a entfernen`,
     ],
@@ -4204,7 +4213,7 @@ describe(`labels`, () => {
   test(`the bulk removal announcement is configurable`, async () => {
     mount_multiselect({
       options,
-      selected: [...options],
+      value: [...options],
       labels: { options_removed: (count) => `${count} entfernt` },
     })
 

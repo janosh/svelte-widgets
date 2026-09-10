@@ -12,7 +12,7 @@ function make_paste_event(text: string): ClipboardEvent {
   return event
 }
 
-async function paste_into(extra_props: Partial<MultiSelectProps>, paste_text: string) {
+async function paste_into(extra_props: MultiSelectProps, paste_text: string) {
   const spies = {
     on_add: vi.fn(),
     on_create: vi.fn(),
@@ -107,7 +107,7 @@ describe(`parse_paste`, () => {
     const { on_create, props } = await paste_into(
       {
         options: [{ label: `existing`, value: 0 }],
-        selected: [],
+        value: [],
         allow_user_options: `append`,
         parse_paste: (text: string) =>
           text.split(`,`).map((str, idx) => ({ label: str.trim(), value: idx + 1 })),
@@ -116,7 +116,7 @@ describe(`parse_paste`, () => {
     )
     expect(on_create).toHaveBeenCalledWith({ option: { label: `alpha`, value: 1 } })
     expect(on_create).toHaveBeenCalledWith({ option: { label: `beta`, value: 2 } })
-    expect(props.selected).toEqual([
+    expect(props.value).toEqual([
       { label: `alpha`, value: 1 },
       { label: `beta`, value: 2 },
     ])
@@ -126,14 +126,14 @@ describe(`parse_paste`, () => {
     const { props } = await paste_into(
       {
         options: [`a`, `b`, `c`, `d`],
-        selected: [`a`, `b`],
+        value: [`a`, `b`],
         // non-empty so clearing is observable, else the assertion below is tautological
         search_text: `partial`,
         max_select: 3,
       },
       `c,d`,
     )
-    expect(props.selected).toEqual([`a`, `b`, `c`])
+    expect(props.value).toEqual([`a`, `b`, `c`])
     expect(props.search_text).toBe(``)
   })
 
@@ -152,7 +152,7 @@ describe(`parse_paste`, () => {
       attempted,
     ) => {
       const { on_add, on_max_reached } = await paste_into(
-        { options: [`a`, `b`, `c`, `d`, `e`], selected, max_select },
+        { options: [`a`, `b`, `c`, `d`, `e`], value: selected, max_select },
         paste_text,
       )
       expect(on_add).toHaveBeenCalledTimes(expected_adds)
@@ -163,6 +163,27 @@ describe(`parse_paste`, () => {
     },
   )
 
+  test.each([`single`, `multiple`] as const)(
+    `paste respects %s mode when one item is already selected`,
+    async (mode) => {
+      const selection: MultiSelectProps =
+        mode === `single` ? { mode, value: `a` } : { mode, value: [`a`], max_select: 1 }
+      const { props, on_add, on_max_reached, on_parsed_paste } = await paste_into(
+        { options: [`a`, `b`, `c`], ...selection },
+        `b,c`,
+      )
+      expect(props.value).toEqual(mode === `single` ? `b` : [`a`])
+      expect(on_add).toHaveBeenCalledTimes(mode === `single` ? 1 : 0)
+      expect(on_max_reached).toHaveBeenCalledTimes(mode === `single` ? 0 : 1)
+      expect(on_parsed_paste).toHaveBeenCalledWith({
+        added: mode === `single` ? [`b`] : [],
+        rejected: [],
+        overflow: mode === `single` ? [`c`] : [`b`, `c`],
+        raw_text: `b,c`,
+      })
+    },
+  )
+
   test.each([
     [`empty selection`, [], [`a`]],
     [`replaces existing`, [`x`], [`a`]],
@@ -170,11 +191,11 @@ describe(`parse_paste`, () => {
     `max_select=1 with %s: only first option selected`,
     async (_label, initial, expected) => {
       const { on_add, props } = await paste_into(
-        { options: [`a`, `b`, `c`, `x`], selected: initial, max_select: 1 },
+        { options: [`a`, `b`, `c`, `x`], value: initial[0] ?? null, mode: `single` },
         `a,b,c`,
       )
       expect(on_add).toHaveBeenCalledTimes(1)
-      expect(props.selected).toEqual(expected)
+      expect(props.value).toEqual(props.mode === `single` ? expected[0] : expected)
     },
   )
 
@@ -185,25 +206,25 @@ describe(`parse_paste`, () => {
     `handles %s`,
     async (_label, initial, paste_text, expected_adds, expected_selected) => {
       const { on_add, on_duplicate, props } = await paste_into(
-        { options: [`a`, `b`, `c`, `d`], selected: initial },
+        { options: [`a`, `b`, `c`, `d`], value: initial },
         paste_text,
       )
       expect(on_add).toHaveBeenCalledTimes(expected_adds)
       expect(on_duplicate).toHaveBeenCalledTimes(1)
       expect(on_duplicate).toHaveBeenCalledWith(expect.objectContaining({ option: `a` }))
-      expect(props.selected).toEqual(expected_selected)
+      expect(props.value).toEqual(expected_selected)
     },
   )
 
   test(`mixed existing and new options with allow_user_options`, async () => {
     const { on_add, on_create, props } = await paste_into(
-      { options: [`existing1`, `existing2`], selected: [], allow_user_options: `append` },
+      { options: [`existing1`, `existing2`], value: [], allow_user_options: `append` },
       `existing1,brand_new,existing2`,
     )
     expect(on_add).toHaveBeenCalledTimes(3)
     expect(on_create).toHaveBeenCalledTimes(1)
     expect(on_create).toHaveBeenCalledWith({ option: `brand_new` })
-    expect(props.selected).toEqual([`existing1`, `brand_new`, `existing2`])
+    expect(props.value).toEqual([`existing1`, `brand_new`, `existing2`])
   })
 
   test(`on_create returning false during paste skips only rejected options`, async () => {
@@ -214,7 +235,7 @@ describe(`parse_paste`, () => {
     const { on_add, props } = await paste_into(
       {
         options: [],
-        selected: [],
+        value: [],
         allow_user_options: `append`,
         on_create: oncreate_spy,
       },
@@ -222,25 +243,25 @@ describe(`parse_paste`, () => {
     )
     expect(oncreate_spy).toHaveBeenCalledTimes(4)
     expect(on_add).toHaveBeenCalledTimes(2)
-    expect(props.selected).toEqual([`valid`, `also_ok`])
+    expect(props.value).toEqual([`valid`, `also_ok`])
   })
 
   test.each<{
     desc: string
-    props: Partial<MultiSelectProps>
+    props: MultiSelectProps
     paste: string
     expected: Record<string, unknown>
     expected_selected?: Option[]
   }>([
     {
       desc: `added/overflow summary beyond max_select`,
-      props: { options: [`a`, `b`, `c`, `d`, `e`], selected: [`a`], max_select: 3 },
+      props: { options: [`a`, `b`, `c`, `d`, `e`], value: [`a`], max_select: 3 },
       paste: `b,c,d,e`,
       expected: { added: [`b`, `c`], overflow: [`d`, `e`], raw_text: `b,c,d,e` },
     },
     {
       desc: `max_select=1 reports replaced option as added`,
-      props: { options: [`a`, `b`, `c`], selected: [`a`], max_select: 1 },
+      props: { options: [`a`, `b`, `c`], value: `a`, mode: `single` },
       paste: `b,c`,
       expected: { added: [`b`], overflow: [`c`] },
       expected_selected: [`b`],
@@ -249,7 +270,7 @@ describe(`parse_paste`, () => {
       desc: `reports rejected options from on_create`,
       props: {
         options: [],
-        selected: [],
+        value: [],
         allow_user_options: `append`,
         on_create: ({ option }) =>
           `${typeof option === `object` ? option.label : option}`.length >= 3
@@ -263,6 +284,9 @@ describe(`parse_paste`, () => {
     const { on_parsed_paste, props: bound } = await paste_into(props, paste)
     expect(on_parsed_paste).toHaveBeenCalledTimes(1)
     expect(on_parsed_paste.mock.calls[0][0]).toEqual(expect.objectContaining(expected))
-    if (expected_selected) expect(bound.selected).toEqual(expected_selected)
+    if (expected_selected)
+      expect(bound.value).toEqual(
+        bound.mode === `single` ? expected_selected[0] : expected_selected,
+      )
   })
 })

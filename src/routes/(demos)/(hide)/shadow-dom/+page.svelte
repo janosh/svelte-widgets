@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   // Fixture for tests/playwright/CommandMenu.test.ts. happy-dom retargets nothing, so a
   // shadow root is the only place composedPath() and event.target differ.
   import { CommandMenu } from 'svelte-widgets'
@@ -19,6 +20,8 @@
   }
 </script>
 
-<h2>Command menu in a shadow root</h2>
+<Heading level={2} id="command-menu-in-a-shadow-root"
+  >Command menu in a shadow root</Heading
+>
 
 <div id="shadow-host" {@attach in_shadow_root}></div>

@@ -347,7 +347,7 @@ describe(`load_options feature`, () => {
       expect(props.load_error).toBe(error)
       if (!partial)
         expect(console_error).toHaveBeenCalledWith(
-          `MultiSelect: load_options error:`,
+          `OptionList: load_options error:`,
           error,
         )
       expect(get_input().getAttribute(`aria-busy`)).toBeNull()
@@ -515,10 +515,7 @@ describe(`load_options feature`, () => {
       rejectors[0](error)
       await vi.runAllTimersAsync()
 
-      expect(console_error).toHaveBeenCalledWith(
-        `MultiSelect: load_options error:`,
-        error,
-      )
+      expect(console_error).toHaveBeenCalledWith(`OptionList: load_options error:`, error)
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
       if (state === `pending`) {
         expect(input.getAttribute(`aria-busy`)).toBe(`true`)
@@ -620,7 +617,7 @@ test.each([
   },
   {
     name: `duplicate_option_msg shown during loading`,
-    props: { selected: [`Apple`], duplicate_option_msg: `Already selected` },
+    props: { value: [`Apple`], duplicate_option_msg: `Already selected` },
     initial_options: [`Apple`, `Banana`],
     search: `Apple`,
     while_loading: `Already selected`,
@@ -774,7 +771,7 @@ describe(`load_options_pending`, () => {
       `Create this option`,
     )
     expect(console_error).toHaveBeenCalledWith(
-      `MultiSelect: load_options error:`,
+      `OptionList: load_options error:`,
       expect.any(Error),
     )
   })
@@ -836,7 +833,7 @@ describe(`async on_create`, () => {
     }))
     const props = $state<MultiSelectProps>({
       options: [`foo`, `bar`],
-      selected: [],
+      value: [],
       allow_user_options: true,
       on_create,
       on_add,
@@ -856,7 +853,7 @@ describe(`async on_create`, () => {
     // while the promise is pending: spinner visible, input busy, nothing added yet
     expect(doc_query(`.custom-spinner`).textContent).toBe(`creating`)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
     expect(on_add).not.toHaveBeenCalled()
 
     resolve(undefined)
@@ -865,7 +862,7 @@ describe(`async on_create`, () => {
 
     expect(document.querySelector(`.custom-spinner`)).toBeNull()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
-    expect(props.selected).toEqual([`new async option`])
+    expect(props.value).toEqual([`new async option`])
     expect(on_add).toHaveBeenCalledTimes(1)
     expect(on_add).toHaveBeenCalledWith({
       option: `new async option`,
@@ -884,7 +881,7 @@ describe(`async on_create`, () => {
       const on_add = vi.fn()
       const props = $state<MultiSelectProps>({
         options: [`foo`, `bar`],
-        selected: [],
+        value: [],
         allow_user_options: true,
         on_create: () => promise,
         on_add,
@@ -897,7 +894,7 @@ describe(`async on_create`, () => {
       await promise
       await tick()
 
-      expect(props.selected).toEqual(expected_selected)
+      expect(props.value).toEqual(expected_selected)
       expect(on_add).toHaveBeenCalledTimes(expected_onadd_calls)
       expect(console_error).not.toHaveBeenCalled()
     },
@@ -913,7 +910,7 @@ describe(`async on_create`, () => {
     }
     const props = $state<MultiSelectProps>({
       options: [`foo`],
-      selected: [],
+      value: [],
       allow_user_options: true,
       on_create: () => thenable as unknown as OncreateResult,
       on_add,
@@ -923,7 +920,7 @@ describe(`async on_create`, () => {
     await submit_create(`typed-text`)
     await tick() // extra microtask hop for the thenable resolution
 
-    expect(props.selected).toEqual([`from-thenable`])
+    expect(props.value).toEqual([`from-thenable`])
     expect(on_add).toHaveBeenCalledTimes(1)
   })
 
@@ -933,7 +930,7 @@ describe(`async on_create`, () => {
     const sync_error = new Error(`validation blew up`)
     const props = $state<MultiSelectProps>({
       options: [`foo`],
-      selected: [],
+      value: [],
       allow_user_options: true,
       on_create: () => {
         throw sync_error
@@ -944,7 +941,7 @@ describe(`async on_create`, () => {
 
     await submit_create(`doomed-opt`)
 
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
     expect(on_add).not.toHaveBeenCalled()
     expect(console_error).toHaveBeenCalledWith(
       `MultiSelect: on_create threw:`,
@@ -958,7 +955,7 @@ describe(`async on_create`, () => {
     const on_add = vi.fn()
     const props = $state<MultiSelectProps>({
       options: [`foo`],
-      selected: [],
+      value: [],
       allow_user_options: true,
       on_create: () => promise,
       on_add,
@@ -973,7 +970,7 @@ describe(`async on_create`, () => {
     await promise.catch(() => {})
     await tick()
 
-    expect(props.selected).toEqual([])
+    expect(props.value).toEqual([])
     expect(on_add).not.toHaveBeenCalled()
     expect(console_error).toHaveBeenCalledTimes(1)
     expect(console_error).toHaveBeenCalledWith(
@@ -989,7 +986,7 @@ describe(`async on_create`, () => {
     const on_create = vi.fn(() => promise)
     const props = $state<MultiSelectProps>({
       options: [`foo`],
-      selected: [],
+      value: [],
       allow_user_options: true,
       on_create,
     })
@@ -1005,7 +1002,7 @@ describe(`async on_create`, () => {
     await promise
     await tick()
 
-    expect(props.selected).toEqual([`only-once`])
+    expect(props.value).toEqual([`only-once`])
   })
 
   test.each<[string, MultiSelectProps[`on_create`], Option[], Option[]?]>([
@@ -1023,7 +1020,7 @@ describe(`async on_create`, () => {
     async (_label, on_create, expected_selected, selected = []) => {
       const props = $state<MultiSelectProps>({
         options: [`foo`],
-        selected,
+        value: selected,
         allow_user_options: true,
         on_create,
       })
@@ -1031,7 +1028,7 @@ describe(`async on_create`, () => {
 
       await submit_create(`sync-opt`)
 
-      expect(props.selected).toEqual(expected_selected)
+      expect(props.value).toEqual(expected_selected)
     },
   )
 })

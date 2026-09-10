@@ -45,7 +45,11 @@ This example shows how to combine MultiSelect with `sessionStorage` to persist t
   </span>
 {/snippet}
 
-<MultiSelect options={languages} placeholder="What languages do you know?" bind:selected>
+<MultiSelect
+  options={languages}
+  placeholder="What languages do you know?"
+  bind:value={selected}
+>
   {#snippet children({ idx, option })}
     {@render language_option(option, idx)}
   {/snippet}
@@ -69,7 +73,7 @@ Tests that binding to reactive wrappers (Svelte stores, Superforms, etc.) that c
   list_store.subscribe(() => increment++)
 </script>
 
-<MultiSelect {options} bind:selected={$list_store} placeholder="Select colors..." />
+<MultiSelect {options} bind:value={$list_store} placeholder="Select colors..." />
 <p id="store-binding-status">
   Modified: {increment} times
   {#if increment > 50}⚠️ Regression!{:else if increment > 1}✅ Fixed{/if}

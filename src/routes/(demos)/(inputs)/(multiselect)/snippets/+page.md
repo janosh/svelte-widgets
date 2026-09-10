@@ -30,7 +30,7 @@
   options={languages}
   max_select={5}
   placeholder="What languages do you know?"
-  selected={['Python', 'TypeScript', 'Julia']}
+  value={['Python', 'TypeScript', 'Julia']}
 >
   {#snippet children({ option })}
     {@render language_option(option)}
@@ -87,7 +87,7 @@ This example also moves the expand icon to the right side of the input via `expa
   options={languages}
   max_select={5}
   placeholder="What languages do you know?"
-  selected={[`Python`, `TypeScript`, `Julia`]}
+  value={[`Python`, `TypeScript`, `Julia`]}
   expand_icon_position="right"
   bind:open
 >
@@ -127,7 +127,7 @@ This example also moves the expand icon to the right side of the input via `expa
 <MultiSelect
   options={languages}
   bind:search_text
-  bind:selected
+  bind:value={selected}
   max_select={5}
   placeholder="What languages do you know?"
   open
@@ -148,7 +148,7 @@ Labels are plain text for filtering and accessibility. Use a `children` snippet 
   import { MultiSelect } from 'svelte-widgets'
 </script>
 
-<MultiSelect options={['Red Pill', 'Blue Pill']} max_select={1}>
+<MultiSelect options={['Red Pill', 'Blue Pill']} mode="single">
   {#snippet children({ option })}
     <strong>{option}</strong>
     <a href="https://wikipedia.org/wiki/Red_pill_and_blue_pill">Explanation</a>

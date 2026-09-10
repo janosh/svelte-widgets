@@ -74,6 +74,12 @@ export const slider_callbacks: ComponentProps<typeof RangeSlider> = {
 export const on_execute: NonNullable<
   ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`on_execute`]
 > = ({ action }) => action.route.toUpperCase()
+export const command_labels: ComponentProps<typeof CommandMenu>[`labels`] = {
+  loading_more: `Wird geladen`,
+  loading_failed: `Laden fehlgeschlagen`,
+  retry: `Erneut versuchen`,
+  group: (name) => `Gruppe: ${name}`,
+}
 
 type MenuProps = ComponentProps<typeof ActionMenu>
 declare const dropdown_trigger: Exclude<MenuProps[`trigger`], string | undefined>

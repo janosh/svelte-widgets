@@ -2,7 +2,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
   import type { Pathname } from '$app/types'
-  import { heading_anchors, PrevNext } from '$lib'
+  import { PrevNext } from '$lib'
   import type { Snippet } from 'svelte'
   import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
   import { demo_nav_routes, demo_title, multiselect_recipes } from './index'
@@ -27,7 +27,7 @@
   )
 </script>
 
-<main {@attach heading_anchors()}>
+<main>
   {#if category && current && current !== category.href}
     <nav class="section-navigation" aria-label="Demo section" data-pagefind-ignore>
       <a href={resolve_path(category.href)}>{category.label}</a>

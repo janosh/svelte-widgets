@@ -20,6 +20,7 @@
     DiffView,
     FindBar,
     FileInput,
+    Heading,
     JsonTree,
     SplitPane,
     TreeView,
@@ -41,6 +42,7 @@
   import DirectJsonTree from 'svelte-widgets/JsonTree.svelte'
   import { virtual_window } from 'svelte-widgets/virtual'
   import DirectFindBar from 'svelte-widgets/FindBar.svelte'
+  import DirectHeading from 'svelte-widgets/Heading.svelte'
   import DirectMultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import DirectPageSearch from 'svelte-widgets/PageSearch.svelte'
   import DirectRangeSlider from 'svelte-widgets/RangeSlider.svelte'
@@ -56,7 +58,7 @@
   import { ask_prompt } from 'svelte-widgets/dialogs'
   import { create_find_state } from 'svelte-widgets/find-in-page'
   import { Claude as direct_claude } from 'svelte-widgets/icons'
-  import { heading_ids } from 'svelte-widgets/heading-anchors'
+  import { heading_anchor_html } from 'svelte-widgets/heading-anchors'
   import type { KatexOptions } from 'svelte-widgets/markdown'
   import { storage_get } from 'svelte-widgets/storage'
   import { apply_theme_mode as apply_theme_from_subpath } from 'svelte-widgets/theme'
@@ -82,6 +84,7 @@
     DirectDialog === Dialog &&
     DirectDiffView === DiffView &&
     DirectFindBar === FindBar &&
+    DirectHeading === Heading &&
     DirectJsonTree === JsonTree &&
     DirectRangeSlider === RangeSlider &&
     [FileInput, SplitPane, TreeView, VirtualList, TaskStatus, Progress].every(
@@ -107,7 +110,7 @@
     editor_model.line_count === 2 &&
     storage_get(`package-smoke-missing`) === null &&
     typeof apply_theme_from_subpath === `function` &&
-    typeof heading_ids === `function` &&
+    typeof heading_anchor_html === `function` &&
     Boolean(direct_claude.d) &&
     katex_options.throwOnError === true &&
     fuzzy_match(`tw`, String(get_label(options[1])))
@@ -115,7 +118,8 @@
 </script>
 
 <main {@attach click_outside({ callback: () => undefined })}>
-  <MultiSelect bind:selected {options} name="choices" />
+  <DirectHeading id="package-heading">Package heading</DirectHeading>
+  <MultiSelect bind:value={selected} {options} name="choices" />
   <DirectMultiSelect {options} />
   <DirectCommandMenu {actions} />
   <DirectPageSearch fallback_actions={actions} />

@@ -4,21 +4,25 @@
 
 // Matches the comma-separated specifiers of `<input type="file" accept="…">`: extensions,
 // exact MIME types and MIME wildcards. Empty accept means no restriction, as natively.
-export const file_matches_accept = (file: File, accept = ``): boolean => {
+export const create_file_accept_filter = (accept: string): ((file: File) => boolean) => {
   const tokens = accept
     .split(`,`)
     .map((token) => token.trim().toLowerCase())
     .filter(Boolean)
-  if (tokens.length === 0) return true
-
-  const file_name = file.name.toLowerCase()
-  const mime_type = file.type.toLowerCase()
-  return tokens.some((token) => {
-    if (token.startsWith(`.`)) return file_name.endsWith(token)
-    if (token.endsWith(`/*`)) return mime_type.startsWith(token.slice(0, -1))
-    return mime_type === token
-  })
+  if (tokens.length === 0) return () => true
+  return (file) => {
+    const file_name = file.name.toLowerCase()
+    const mime_type = file.type.toLowerCase()
+    return tokens.some((token) => {
+      if (token.startsWith(`.`)) return file_name.endsWith(token)
+      if (token.endsWith(`/*`)) return mime_type.startsWith(token.slice(0, -1))
+      return mime_type === token
+    })
+  }
 }
+
+export const file_matches_accept = (file: File, accept = ``): boolean =>
+  create_file_accept_filter(accept)(file)
 
 // Native picker order: drop disallowed files first, so a single-select consumer gets the
 // first acceptable one rather than being blocked by an unacceptable first item.
@@ -27,7 +31,7 @@ export const filter_accepted_files = (
   accept = ``,
   multiple = false,
 ): File[] => {
-  const accepted = Array.from(files).filter((file) => file_matches_accept(file, accept))
+  const accepted = Array.from(files).filter(create_file_accept_filter(accept))
   return multiple ? accepted : accepted.slice(0, 1)
 }
 

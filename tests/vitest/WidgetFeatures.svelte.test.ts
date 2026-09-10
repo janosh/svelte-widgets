@@ -93,16 +93,17 @@ test(`file picker validates, cancels superseded work, removes files and permits 
     })
   })
   const on_reject = vi.fn()
+  const props = $state({
+    accept: `.json`,
+    max_size: 10,
+    multiple: true,
+    max_files: 1,
+    on_files,
+    on_reject,
+  })
   const component = mount(FileInput, {
     target,
-    props: {
-      accept: `.json`,
-      max_size: 10,
-      multiple: true,
-      max_files: 1,
-      on_files,
-      on_reject,
-    },
+    props,
   })
   const input = doc_query<HTMLInputElement>(`input`)
   const good = new File([`{}`], `ok.json`)
@@ -143,8 +144,14 @@ test(`file picker validates, cancels superseded work, removes files and permits 
     ?.click()
   await tick()
   expect(on_files).toHaveBeenCalledTimes(4)
+  props.accept = `.txt`
+  await tick()
+  const text_file = new File([`x`], `accepted.txt`)
+  await select([good, text_file])
+  expect(on_files.mock.lastCall?.[0]).toEqual([text_file])
+  expect(on_reject.mock.lastCall?.[0]).toEqual([{ file: good, reason: `type` }])
   await unmount(component)
-  expect(signals[3].aborted).toBe(true)
+  expect(signals.at(-1)?.aborted).toBe(true)
 })
 
 test.each([0, 5])(
@@ -154,12 +161,17 @@ test.each([0, 5])(
     const children = createRawSnippet<[unknown, number]>((item) => ({
       render: () => `<span>${item()}</span>`,
     }))
+    const key = vi.fn(Number)
+    let items = $state(Array.from({ length: 10000 }, (_value, idx) => idx))
     const component = mount(VirtualList, {
       target,
       props: {
-        items: Array.from({ length: 10000 }, (_value, idx) => idx),
+        get items() {
+          return items
+        },
         item_size: 20,
         initial_count: 10,
+        key,
         overscan,
         children,
       },
@@ -167,10 +179,16 @@ test.each([0, 5])(
     onTestFinished(() => unmount(component))
     flushSync()
     expect(target.querySelectorAll(`[data-index]`)).toHaveLength(10)
+    expect(key.mock.calls.length).toBeLessThan(100)
     component.scroll_to_index(9000)
     await tick()
     expect(target.querySelector(`[data-index="9000"]`)?.textContent).toBe(`9000`)
     expect(target.querySelectorAll(`[data-index]`).length).toBeLessThan(25)
+    expect(() => component.scroll_to_index(1.5)).toThrow(`integer index`)
+    items = []
+    await tick()
+    expect(target.querySelector(`.virtual-list`)?.scrollTop).toBe(0)
+    expect(target.querySelectorAll(`[data-index]`)).toHaveLength(0)
   },
 )
 

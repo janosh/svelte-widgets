@@ -145,7 +145,21 @@ for (const width of [390, 1440]) {
     expect(flash_animation).toContain(`toc-flash`)
     if (mobile)
       await sidebar.getByRole(`button`, { name: `Open table of contents` }).click()
-    await equations.getByRole(`link`, { name: `2 · Hooke's law`, exact: true }).click()
+    const equation_link = equations.getByRole(`link`, {
+      name: `2 · Hooke's law`,
+      exact: true,
+    })
+    // Playwright may scroll the page to expose the link. Back restores the position
+    // at the click, which can differ from the original figure's fragment position.
+    const [figure_scroll] = await Promise.all([
+      equation_link.evaluate(
+        (node) =>
+          new Promise<number>((resolve) => {
+            node.addEventListener(`click`, () => resolve(window.scrollY), { once: true })
+          }),
+      ),
+      equation_link.click(),
+    ])
     await expect(page).toHaveURL(/\/authoring#eq%3Ahooke$/u)
     await expect(second_equation).toBeInViewport()
     await expect(second_equation).toHaveClass(/toc-clicked/u)
@@ -153,7 +167,7 @@ for (const width of [390, 1440]) {
     await expect.poll(history_index).toBeGreaterThan(figure_history)
     await page.goBack()
     await expect(page).toHaveURL(/\/authoring#fig%3Aparticles$/u)
-    await expect(first_figure).toBeInViewport()
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(figure_scroll)
     await page.reload()
     await expect(first_figure).toBeInViewport()
     if (mobile)

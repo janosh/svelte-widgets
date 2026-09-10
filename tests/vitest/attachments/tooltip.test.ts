@@ -85,23 +85,6 @@ describe(`tooltip manager`, () => {
     return { cleanup, element, tooltip_el: visible_tooltip() }
   }
 
-  const setup_controlled_handoff = () => {
-    const on_open_change = vi.fn()
-    const controlled = create_element(`button`)
-    const close = attach_tooltip(controlled, {
-      content: `Controlled`,
-      open: true,
-      on_open_change,
-    })
-    const root = create_element()
-    const child = document.createElement(`button`)
-    child.title = `Next`
-    root.append(child)
-    attach_tooltip(root, { trigger: `hover-focus` })
-    mock_rect(child, { left: 250, top: 100, width: 80, height: 30 })
-    return { child, close, controlled, on_open_change }
-  }
-
   // the registry outlives a retry of the same test, so defining twice would throw
   const define_once = (tag_name: string, element_class: CustomElementConstructor) => {
     if (!customElements.get(tag_name)) customElements.define(tag_name, element_class)
@@ -125,14 +108,34 @@ describe(`tooltip manager`, () => {
   ])(`resolves %s content and restores stripped titles`, (attribute, expected) => {
     const element = create_element(`button`)
     element.setAttribute(attribute, expected)
-    const cleanup = attach_tooltip(element)
+    const on_open_change = vi.fn()
+    const cleanup = attach_tooltip(element, { on_open_change })
     pointer_over(element)
 
     expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
     if (attribute === `title`) expect(element.hasAttribute(`title`)).toBe(false)
     cleanup()
     if (attribute === `title`) expect(element.title).toBe(expected)
+    cleanup()
+    expect(
+      on_open_change.mock.calls.map(([open, detail]) => [open, detail.reason]),
+    ).toEqual([
+      [true, `pointer`],
+      [false, `visibility`],
+    ])
   })
+
+  it.each([`manual`, `bogus`])(
+    `rejects unsupported trigger=%s before changing the title`,
+    (trigger) => {
+      const element = create_element(`button`)
+      element.title = `Description`
+      expect(() => tooltip({ trigger } as unknown as TooltipOptions)(element)).toThrow(
+        `tooltip trigger must be`,
+      )
+      expect(element.title).toBe(`Description`)
+    },
+  )
 
   it(`gives explicit content precedence and treats an empty result as disabled`, () => {
     const element = create_element(`button`)
@@ -150,36 +153,9 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.style.display).toBe(`none`)
   })
 
-  it.each([
-    [
-      `disabled render with content`,
-      { content: `text`, disabled: true, render: (): undefined => undefined },
-      `render cannot be combined`,
-    ],
-    [
-      `render with allow_html: false`,
-      { allow_html: false, render: (): undefined => undefined },
-      `render cannot be combined`,
-    ],
-    [
-      `sanitizer without HTML`,
-      { sanitize_html: (html: string) => html },
-      `sanitize_html requires`,
-    ],
-    [
-      `delegated HTML without a sanitizer`,
-      { allow_html: true, delegate: true },
-      `delegated allow_html requires sanitize_html`,
-    ],
-    [`manual without open`, { trigger: `manual` as const }, `requires the open option`],
-  ])(`rejects invalid options: %s`, (_name, options, message) => {
-    const element = create_element()
-    expect(() => tooltip(options)(element)).toThrow(message)
-  })
-
-  it(`delegates to descendants added after attachment`, () => {
+  it.each([{}, { content: undefined }])(`delegates with absent content %j`, (options) => {
     const root = create_element()
-    attach_tooltip(root)
+    attach_tooltip(root, options)
     const child = document.createElement(`button`)
     child.title = `Dynamic child`
     root.append(child)
@@ -196,30 +172,15 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Dynamic child`)
   })
 
-  it(`does not infer delegation from explicitly undefined content`, () => {
+  it(`honors explicitly disabled delegation with undefined content`, () => {
     const root = create_element()
     const child = document.createElement(`button`)
     child.title = `<b>Untrusted</b>`
     root.append(child)
-    attach_tooltip(root, { allow_html: true, content: undefined })
+    attach_tooltip(root, { content: undefined, delegate: false })
 
     pointer_over(child)
     expect(document.querySelector(`.tooltip-content`)).toBeNull()
-  })
-
-  it(`sanitizes delegated attribute HTML before rendering`, () => {
-    const root = create_element()
-    attach_tooltip(root, {
-      allow_html: true,
-      sanitize_html: (html) => html.replaceAll(/<script.*?<\/script>/giu, ``),
-    })
-    const child = document.createElement(`button`)
-    child.title = `<script>bad()</script><b>Safe</b>`
-    root.append(child)
-    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
-
-    pointer_over(child)
-    expect(doc_query(`.tooltip-content`).innerHTML).toBe(`<b>Safe</b>`)
   })
 
   it(`supports explicit delegated selectors with per-trigger content factories`, () => {
@@ -322,7 +283,7 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(false)
   })
 
-  it(`restores trigger focus without reopening after Escape`, () => {
+  it(`keeps text-only tooltips unfocusable and trigger focus intact after Escape`, () => {
     const on_open_change = vi.fn()
     // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
     const surrounding_layer = vi.fn(() => true)
@@ -331,24 +292,19 @@ describe(`tooltip manager`, () => {
     attach_tooltip(element, {
       trigger: `focus`,
       on_open_change,
-      render: (content_el) => {
-        const control = document.createElement(`button`)
-        control.textContent = `Custom control`
-        content_el.append(control)
-        return undefined
-      },
+      content: `<button>Details</button>`,
     })
-    focus_in(element)
+    element.focus()
     const tooltip_el = visible_tooltip()
-    const control = doc_query<HTMLButtonElement>(`.tooltip-content button`)
-    control.focus()
+    expect(tooltip_el.textContent).toBe(`<button>Details</button>`)
+    expect(tooltip_el.querySelector(`button, a, input, [tabindex]`)).toBeNull()
+    expect(tooltip_el.hasAttribute(`tabindex`)).toBe(false)
 
     document.dispatchEvent(escape_key())
     expect(tooltip_el.hidden).toBe(true)
     expect(document.activeElement).toBe(element)
 
-    // handing focus back re-enters via focusout/focusin, which must not resurrect the
-    // dismissed tooltip — leaving the trigger afterwards is not a second close
+    // Leaving the trigger after dismissal must not announce a second close.
     focus_out(element)
     vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
@@ -356,8 +312,7 @@ describe(`tooltip manager`, () => {
       [false, open_detail(element, `escape`)],
     ])
 
-    // that reopen subscribed an Escape layer of its own; left on the stack it answers
-    // for the surface underneath, which then never hears Escape
+    // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.
     document.dispatchEvent(escape_key())
     expect(surrounding_layer).toHaveBeenCalledOnce()
   })
@@ -395,14 +350,10 @@ describe(`tooltip manager`, () => {
     expect(element.getAttribute(`aria-describedby`)).toBe(`help error`)
   })
 
-  it(`recycles one node across owners, relationships and render cleanup`, () => {
-    const render_cleanup = vi.fn()
+  it(`recycles one node across owners and relationships`, () => {
     const first = create_element(`button`)
     attach_tooltip(first, {
-      render: (content_el) => {
-        content_el.textContent = `First`
-        return render_cleanup
-      },
+      content: `First`,
     })
     const { element: second } = register_tooltip(`Second`)
 
@@ -411,7 +362,6 @@ describe(`tooltip manager`, () => {
     pointer_over(second)
     expect(visible_tooltip()).toBe(shared)
     expect(shared.textContent).toBe(`Second`)
-    expect(render_cleanup).toHaveBeenCalledOnce()
     expect(first.hasAttribute(`aria-describedby`)).toBe(false)
     expect(second.getAttribute(`aria-describedby`)).toBe(shared.id)
   })
@@ -450,88 +400,21 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Second`)
   })
 
-  it(`supports controlled manual opening and reports lifecycle reasons`, async () => {
-    const changes = vi.fn()
-    const element = create_element(`button`)
-    attach_tooltip(element, {
-      content: `Controlled`,
-      trigger: `manual`,
-      open: true,
-      on_open_change: changes,
-    })
-    await Promise.resolve()
-
-    expect(visible_tooltip().textContent).toBe(`Controlled`)
-    expect(changes).toHaveBeenCalledWith(true, open_detail(element, `controlled`))
-    pointer_out(element)
-    focus_out(element)
-    vi.advanceTimersByTime(0)
-    expect(visible_tooltip().textContent).toBe(`Controlled`)
-
-    document.dispatchEvent(escape_key())
-    expect(visible_tooltip().textContent).toBe(`Controlled`)
-    expect(changes).toHaveBeenLastCalledWith(false, open_detail(element, `escape`))
-  })
-
-  it(`keeps controlled hover tooltips visible until open changes`, async () => {
-    const on_open_change = vi.fn()
-    const element = create_element(`button`)
-    attach_tooltip(element, { content: `Controlled`, open: true, on_open_change })
-    await Promise.resolve()
-    const tooltip_el = visible_tooltip()
-
-    pointer_out(element)
-    expect(tooltip_el.hidden).toBe(false)
-    expect(on_open_change).toHaveBeenLastCalledWith(
-      false,
-      open_detail(element, `pointer`),
-    )
-  })
-
-  it(`preempts a controlled tooltip without replaying it`, async () => {
-    const { child, close, controlled, on_open_change } = setup_controlled_handoff()
-    await Promise.resolve()
-    expect(visible_tooltip().textContent).toBe(`Controlled`)
-
-    pointer_over(child)
-    expect(visible_tooltip().textContent).toBe(`Next`)
-    expect(child.hasAttribute(`title`)).toBe(false)
-    expect(on_open_change).toHaveBeenLastCalledWith(
-      false,
-      open_detail(controlled, `pointer`),
-    )
-
-    pointer_out(child)
-    close() // releasing the controlled registration must not resurrect anything
-    vi.advanceTimersByTime(0)
-
-    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
-    expect(child.title).toBe(`Next`)
-  })
-
-  it(`requests controlled opening without showing against open: false`, () => {
-    const on_open_change = vi.fn()
-    const { element } = register_tooltip(`Controlled`, { open: false, on_open_change })
-    pointer_over(element)
-
-    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    expect(on_open_change).toHaveBeenCalledWith(true, open_detail(element, `pointer`))
-  })
-
-  it(`sanitizes trusted HTML and normalizes newline markup`, () => {
-    const sanitizer = vi.fn((html: string) =>
-      html.replaceAll(/<script[^>]*>.*?<\/script>/giu, ``),
-    )
-    const { tooltip_el } = show_tooltip(
-      { allow_html: true, sanitize_html: sanitizer },
-      `<script>bad()</script><b>Safe</b>\nNext`,
-    )
-
-    expect(sanitizer).toHaveBeenCalledOnce()
-    expect(tooltip_el.querySelector(`script`)).toBeNull()
-    expect(tooltip_el.querySelector(`b`)?.textContent).toBe(`Safe`)
-    expect(tooltip_el.querySelector(`br`)).not.toBeNull()
-  })
+  it.each([false, true])(
+    `always renders text, including delegated content=%s`,
+    (delegate) => {
+      const root = create_element()
+      const element = delegate ? document.createElement(`button`) : root
+      if (delegate) root.append(element)
+      const content = `<script>bad()</script><b>Text</b>\nNext`
+      element.title = content
+      attach_tooltip(root, { delegate })
+      mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
+      pointer_over(element)
+      expect(visible_tooltip().textContent).toBe(content)
+      expect(doc_query(`.tooltip-content`).childElementCount).toBe(0)
+    },
+  )
 
   it.each([
     [`balance`, `balance`, `anywhere`, `normal`],

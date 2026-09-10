@@ -27,7 +27,7 @@ Group related options together with visual headers. Add a `group` key to option 
 
 <MultiSelect
   {options}
-  bind:selected
+  bind:value={selected}
   {search_matches_groups}
   placeholder="Select technologies..."
 />
@@ -83,7 +83,7 @@ Enable `collapsible_groups` to let users collapse/expand groups. Use `search_exp
 
 <MultiSelect
   {options}
-  bind:selected
+  bind:value={selected}
   collapsible_groups
   bind:collapsed_groups
   {search_expands_collapsed_groups}
@@ -117,7 +117,7 @@ Enable `group_select_all` to add a toggle button to each group header:
 
 <MultiSelect
   {options}
-  bind:selected
+  bind:value={selected}
   group_select_all
   keep_selected_in_dropdown="checkboxes"
   placeholder="Select colors..."
@@ -174,7 +174,7 @@ Use `ungrouped_position` for options without a `group` key, and `group_sort_orde
 
 <MultiSelect
   {options}
-  bind:selected
+  bind:value={selected}
   {ungrouped_position}
   {group_sort_order}
   placeholder="Select items..."
@@ -233,7 +233,7 @@ Use `sticky_group_headers` for long lists. Grouping also works with `load_option
 
 <MultiSelect
   {load_options}
-  bind:selected
+  bind:value={selected}
   {sticky_group_headers}
   collapsible_groups
   group_select_all
@@ -270,7 +270,7 @@ Use the `group_header` snippet for complete control over header rendering:
 
 <MultiSelect
   {options}
-  bind:selected
+  bind:value={selected}
   collapsible_groups
   group_select_all
   placeholder="Select cities..."

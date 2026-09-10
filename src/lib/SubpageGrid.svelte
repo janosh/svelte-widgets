@@ -1,7 +1,11 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
+  import Heading from './Heading.svelte'
+
   import { ChevronRight, type IconData } from './icons'
+
+  const title_id = $props.id()
 
   type Subpage = [title: string, href: string, description: string, icon?: IconData]
 
@@ -20,7 +24,7 @@
 </script>
 
 <div {...rest} class={[`subpage-grid`, rest.class]}>
-  <h1>{title}</h1>
+  <Heading level={1} id={title_id}>{title}</Heading>
   <p class="subtitle">{subtitle}</p>
 
   <nav class="grid">
@@ -38,7 +42,7 @@
 </div>
 
 <style>
-  h1 {
+  :global(.subpage-grid > h1) {
     text-align: center;
     margin-bottom: 0.3em;
   }

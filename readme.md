@@ -35,7 +35,7 @@ Every component is a named export from the package root and has a direct subpath
 | `NumberRangeInput` | Paired number and range inputs with explicit min, max, and step                           | [docs](https://svelte-widgets.janosh.dev/settings#numberrangeinput)    |
 | `RangeSlider`      | Two-handle interval slider with numeric fields, step snapping, RTL, and keyboard controls | [docs](https://svelte-widgets.janosh.dev/range-slider)                 |
 | `SplitPane`        | Resizable panes with ratio or pixel bounds and collapse support                           | [docs](https://svelte-widgets.janosh.dev/split-pane)                   |
-| `VirtualList`      | Fixed-height list virtualization with programmatic scrolling                              | [docs](https://svelte-widgets.janosh.dev/virtual-list)                 |
+| `VirtualList`      | Fixed-height row virtualization                                                           | [docs](https://svelte-widgets.janosh.dev/virtual-list)                 |
 | `FileInput`        | File picker and drop zone with validation, cancellation and retry                         | [docs](https://svelte-widgets.janosh.dev/file-input)                   |
 | `TreeView`         | Keyboard-navigable tree with lazy loading and custom node rendering                       | [docs](https://svelte-widgets.janosh.dev/tree-view)                    |
 | `JsonTree`         | Searchable JSON inspector with editing, copying and diffs                                 | [docs](https://svelte-widgets.janosh.dev/json-tree)                    |
@@ -43,7 +43,7 @@ Every component is a named export from the package root and has a direct subpath
 | `TaskStatus`       | Task progress and errors with caller-owned cancellation and retry                         | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | `SettingsGroup`    | Collapsible group for organizing related settings sections                                | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
 | `SettingsSearch`   | Settings-row filter that expands matching groups and restores their prior state           | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
-| `SettingsSection`  | Titled settings region with change tracking, resets, descriptions and shared-grid layout  | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
+| `SettingsSection`  | Titled settings region with explicit changed keys, resets, descriptions and grid layout   | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
 | `Sheet`            | Dialog-based modal edge panel with side placement and shared dismissal policies           | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
 | `Tabs`             | Controlled ARIA tabs with automatic or manual keyboard activation                         | [docs](https://svelte-widgets.janosh.dev/patterns#tabs)                |
 | `Accordion`        | Single or multi-open disclosure group with snippet-rendered content                       | [docs](https://svelte-widgets.janosh.dev/patterns#accordion)           |
@@ -58,7 +58,8 @@ Every component is a named export from the package root and has a direct subpath
 | `DiffView`         | Virtualized side-by-side and unified diffs with an injectable backend                     | [docs](https://svelte-widgets.janosh.dev/code-editor)                  |
 | `Toast`            | Notification queue with priorities, dedupe and pause-on-hover                             | [docs](https://svelte-widgets.janosh.dev/toast)                        |
 | `Nav`              | Navigation bar with dropdowns, pinning and active-route styling                           | [docs](https://svelte-widgets.janosh.dev/nav)                          |
-| `Toc`              | Sticky table of contents that finds and tracks its own headings                           | [docs](https://svelte-widgets.janosh.dev/toc)                          |
+| `Heading`          | Native Svelte heading with an explicit ID and server-rendered anchor                      | [docs](https://svelte-widgets.janosh.dev/toc)                          |
+| `Toc`              | Manifest-backed table of contents with optional dynamic heading tracking                  | [docs](https://svelte-widgets.janosh.dev/toc)                          |
 | `Masonry`          | Column-balancing masonry grid with SSR support and virtualization                         | [docs](https://svelte-widgets.janosh.dev/masonry)                      |
 | `Footer`           | Centered row of icon links, sized and themed with `--footer-*`                            | [docs](https://svelte-widgets.janosh.dev/site-chrome#footer)           |
 | `ActionButton`     | Async action button with pending, success and error feedback                              | [docs](https://svelte-widgets.janosh.dev/action-button)                |
@@ -74,7 +75,7 @@ Every component is a named export from the package root and has a direct subpath
 | `Icon`             | Inline SVG icon from the bundled set                                                      | [docs](https://svelte-widgets.janosh.dev/extras#icon)                  |
 | `GitHubCorner`     | The classic corner ribbon link                                                            | [docs](https://svelte-widgets.janosh.dev/extras#githubcorner)          |
 | `CircleSpinner`    | Minimal loading spinner                                                                   | [docs](https://svelte-widgets.janosh.dev/extras#circlespinner)         |
-| `ContributorList`  | Avatar row of GitHub contributors, grayscale until hover                                  | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
+| `ContributorList`  | Avatar row of GitHub contributors                                                         | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
 | `LiteYouTubeEmbed` | YouTube poster that only loads the player iframe once clicked                             | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
 | `Wiggle`           | Spring-animated shake wrapper                                                             | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
 
@@ -117,11 +118,18 @@ Custom library APIs use snake_case. Native DOM handlers such as `onclick`, `onin
 | Editor backend fields such as `docId`, `requestId`, `startLine`, `oldText`      | `doc_id`, `request_id`, `start_line`, `old_text`; update both request and response payloads                                                                                                                   |
 | Optional, numeric, or repeated command action IDs                               | Required, unique, nonempty string IDs across each menu, including sections and loaded pages; convert numeric IDs explicitly and resolve collisions. `CmdSection.selected` is a string or `null` when supplied |
 | `CommandMenu.onadd` and selection/creation controls                             | `on_execute({ action })`; command menus execute one action without retaining selection                                                                                                                        |
-| MultiSelect `history`, `undo`, `redo`, `canUndo`, `canRedo`, `onundo`, `onredo` | Manage selection history in the caller using `bind:selected`                                                                                                                                                  |
+| MultiSelect `history`, `undo`, `redo`, `canUndo`, `canRedo`, `onundo`, `onredo` | Manage selection history in the caller using `bind:value`                                                                                                                                                     |
 | MultiSelect `parseLabelsAsHtml`, `activeOptionFallbackKey`                      | Use `option` / `selected_item` snippets for custom rendering and a stable `key` function for option identity                                                                                                  |
 | `NumberRangeInput.schema`                                                       | Pass explicit `min`, `max`, and `step` values from the schema                                                                                                                                                 |
 | `print_element(node, { single_page, page_width_mm, px_per_inch, filename })`    | `print_page({ filename })` prints the whole page; use `@media print` CSS for visibility and pagination                                                                                                        |
 | `/live-examples`, `/live-examples/create-highlighter`, `/katex`                 | `/markdown`, `/markdown/vite`, `/highlight`; see the [Markdown migration guide](https://svelte-widgets.janosh.dev/markdown#migration)                                                                         |
+
+Additional API changes:
+
+- MultiSelect uses `bind:value` alone: `mode="single"` takes one option or `null`, and the default `mode="multiple"` takes an array.
+- SettingsSection takes `changed_keys` and `on_reset_key(key)`. Value comparison and reset defaults belong to the caller.
+- Tooltips accept plain text and hover/focus triggers. Use Popover for formatted content, controls, and application-controlled visibility.
+- Native Svelte headings use `Heading` with an explicit ID; remove `heading_ids()` from preprocessors. Toc consumes `items` metadata or discovers existing IDs with `dynamic`; invalid selectors and collapse modes throw.
 
 Command IDs are compared exactly, without coercion or trimming. Empty and whitespace-only strings are rejected; action labels and section titles may repeat. Preserve a section object when reordering it to retain its rendered nodes.
 
@@ -180,7 +188,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | `/file-drop`                | Directory expansion and accept filtering                                          |
 | `/find-in-page`             | Reactive find-in-page cursor behind `FindBar`                                     |
 | `/fullscreen`               | Shared fullscreen state                                                           |
-| `/heading-anchors`          | Heading ID preprocessor, slugger and anchor attachment                            |
+| `/heading-anchors`          | Heading text/ID helpers, slugger and anchor attachment                            |
 | `/image-markup`             | Image-fit geometry and canvas rendering of freehand annotation strokes            |
 | `/icons`                    | Dynamic icon registry                                                             |
 | `/json-tree`                | JSON inspector component and types                                                |
@@ -210,22 +218,34 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 
 `StatGrid` changes are neutral by default; set an item's `delta_tone` to `positive` or `negative` when the change has that meaning. `ClickFeedback` restarts when given a fresh `position` object, even at identical coordinates. `rows_to_csv(rows, columns)` accepts explicit readonly columns for sparse rows or header-only exports. URL validators accept native Sets or record keys; present empty strings remain valid when allowed.
 
-`CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM temporarily remains a full-document textarea and is therefore still subject to browser textarea and scroll-height limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
+`CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with `set_editor_backend()` and `set_diff_backend()`. Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM uses a viewport-sized textarea; explicit selections may expand that window, while scroll height remains subject to browser limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
 
 Run the opt-in, hardware-sensitive editor stress target locally with `RUN_LARGE_EDITOR_TESTS=1 npx vitest run tests/vitest/code-editor-model.test.ts`; normal CI deliberately skips it.
 
-Use `markdown()` for Markdown pages with YAML frontmatter, embedded Svelte, GFM tables and task lists. Enable `math` for KaTeX. Markdown assigns its own heading IDs; use `heading_ids()` for native Svelte pages:
+Use `markdown()` for Markdown pages with YAML frontmatter, embedded Svelte, GFM tables and task lists. Enable `math` for KaTeX. Markdown renders heading IDs and anchor links in the initial HTML; use the `Heading` component with an explicit `id` for native Svelte pages:
 
 ```ts
 import { create_markdown, markdown } from 'svelte-widgets/markdown'
-import { heading_ids } from 'svelte-widgets/heading-anchors'
 import { asset_imports } from 'svelte-widgets/assets'
 
 export default {
   extensions: [`.svelte`, `.md`],
-  preprocess: [markdown(create_markdown({ math: true })), asset_imports(), heading_ids()],
+  preprocess: [markdown(create_markdown({ math: true })), asset_imports()],
 }
 ```
+
+```svelte
+<script lang="ts">
+  import { Heading, Toc } from 'svelte-widgets'
+
+  const headings = [{ id: `overview`, title: `Overview`, level: 2 }]
+</script>
+
+<Toc items={headings} />
+<Heading id="overview">Overview</Heading>
+```
+
+Heading links render in the initial HTML. Reveal them with `opacity` on hover or focus so their space stays reserved. `Heading` takes `level`, `id`, and `link={false}` to suppress a link. Markdown owns its generated IDs and anchors; `create_markdown({ heading_links: false })` emits IDs alone. `Toc` consumes heading metadata for its initial render; opt into `dynamic` for DOM-discovered content. The optional `heading_anchors()` attachment enhances dynamically inserted headings.
 
 Use `engine.render(source, { filename })` for HTML strings, or parse once with `engine.parse(source, { dialect: "markdown" })` and pass the document to `render_markdown()` when you also need its manifest. Set `frontmatter: false` in `create_markdown()` for embedded data fields whose leading `---` should remain Markdown. Access frontmatter as `metadata.title`; fence settings are validated during parsing. Use `check_document(document, options)` from `/markdown/check` for one-shot documentation checks. Use `assert_ok()` to unwrap results at build boundaries and `markdown_vite(engine)` for runnable code fences. See the [Markdown API](https://svelte-widgets.janosh.dev/markdown) for configuration and migration details. Import `katex/dist/katex.min.css` once when enabling math.
 

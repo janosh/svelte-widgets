@@ -2,6 +2,7 @@ import type { CmdAction, Option, OptionStyle } from '$lib'
 import {
   chain_handlers,
   cmd_action_matches,
+  create_cmd_action_filter,
   compute_position,
   event_to_combo,
   format_cmd_metadata,
@@ -823,12 +824,17 @@ describe(`cmd_action_matches`, () => {
     [`toggle`, false, true], // substring still matches with fuzzy off
   ])(`%j with fuzzy=%s -> %s`, (search, fuzzy, expected) => {
     expect(cmd_action_matches(action, search, fuzzy)).toBe(expected)
+    expect(create_cmd_action_filter(search, fuzzy)(action)).toBe(expected)
   })
 
   test(`an action with only a label does not throw on absent fields`, () => {
     const bare: CmdAction = { id: `Bare`, label: `Bare`, action: () => {} }
     expect(cmd_action_matches(bare, `bare`)).toBe(true)
     expect(cmd_action_matches(bare, `missing`)).toBe(false)
+    const matches = create_cmd_action_filter(`bare`)
+    expect(matches(bare)).toBe(true)
+    bare.label = `Changed`
+    expect(matches(bare)).toBe(false)
   })
 })
 

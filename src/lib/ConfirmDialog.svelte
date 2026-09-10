@@ -106,7 +106,7 @@
   }, rest.onclose)}
 >
   {#if request}
-    <h2 id={title_id}>{request.title}</h2>
+    <h2 id={title_id} data-heading-anchor="false">{request.title}</h2>
     {#if request.body.kind === `text`}
       <p class="message">{request.body.text}</p>
     {:else}

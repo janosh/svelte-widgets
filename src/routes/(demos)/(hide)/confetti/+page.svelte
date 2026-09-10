@@ -1,11 +1,12 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import Confetti from '$site/Confetti.svelte'
 
   let n_items = $state(50)
   let freeze = $state(false)
 </script>
 
-<h1>Confetti Test</h1>
+<Heading level={1} id="confetti-test">Confetti Test</Heading>
 
 <label>
   n_items: {n_items}

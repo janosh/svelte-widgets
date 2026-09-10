@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Heading from '$lib/Heading.svelte'
   import Wiggle from 'svelte-widgets/Wiggle.svelte'
 
   let wiggle = $state(false)
@@ -9,7 +10,7 @@
   let [stiffness, damping] = $state([0.05, 0.1])
 </script>
 
-<h2>Wiggle</h2>
+<Heading level={2} id="wiggle">Wiggle</Heading>
 
 <p>
   Wraps its children in a spring-animated wrapper that shakes once whenever <code

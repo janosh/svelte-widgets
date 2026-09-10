@@ -13,6 +13,7 @@ import type { KatexOptions } from 'katex'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
+import { heading_anchor_html, has_heading_anchor } from '../heading-anchors.ts'
 import {
   source_map,
   edit_source,
@@ -72,6 +73,8 @@ export type MarkdownOptions = {
   frontmatter?: boolean
   // Omit authored HTML tokens in the Markdown dialect; this is not sanitization.
   raw_html?: 'preserve' | 'omit'
+  // Render heading links in the initial HTML; false emits IDs without links.
+  heading_links?: boolean | { icon_svg?: string }
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | KatexOptions
@@ -237,12 +240,14 @@ async function prepare_document(
   const example_keys = new Map<string, { identity: string; count: number }>()
   const positions = new Map<Token, TokenSource>()
   const heading_ids = new Map<Token, string>()
+  const unlinked_headings = new Set<Token>()
   const html_edits = new Map<Token, SourceEdit[]>()
   const code_html = new Map<Token, string>()
   const retained: MappedSource[] = []
   // Collision-free placeholders avoid re-parsing expressions as Markdown or typography.
   let sentinel = `\uE000widgets`
   while (source.includes(sentinel)) sentinel += `_`
+  const retained_pattern = new RegExp(`${sentinel}(\\d+)\uE001`, `gu`)
   const retain = (text: string, spans: SourceSpan[] = []): string =>
     `${sentinel}${retained.push({ code: text, spans }) - 1}\uE001`
   const url_attribute = (token: Tokens.Link | Tokens.Image): string => {
@@ -273,14 +278,14 @@ async function prepare_document(
   const html = (text: string): string => (syntax ? `{@html ${script_json(text)}}` : text)
   const render_math = options.math
     ? (tex: string, displayMode: boolean) =>
-        html(
-          math
-            ? math.renderToString(tex.trim(), {
+        math
+          ? html(
+              math.renderToString(tex.trim(), {
                 ...(typeof options.math === `object` ? options.math : {}),
                 displayMode,
-              })
-            : escape_html_text(tex.trim()),
-        )
+              }),
+            )
+          : escape_html_text(tex.trim().replaceAll(/[{}]/gu, ``))
     : undefined
   const references = options.references
     ? scientific_references(
@@ -361,13 +366,24 @@ async function prepare_document(
     )
   }
   if (references) extensions.push(...references.extensions)
+  const icon_svg =
+    typeof options.heading_links === `object` ? options.heading_links.icon_svg : undefined
+  const heading_icon = icon_svg && syntax ? `{@html ${script_json(icon_svg)}}` : icon_svg
   const parser = new Marked({
     gfm: true,
     extensions,
     renderer: {
       heading(token) {
         const id = heading_ids.get(token)
-        return `<h${token.depth}${id ? ` id="${escape_html_text(id).replaceAll(`"`, `&quot;`)}"` : ``}>${this.parser.parseInline(token.tokens)}</h${token.depth}>\n`
+        const inner = this.parser.parseInline(token.tokens)
+        const anchor =
+          id &&
+          options.heading_links !== false &&
+          !unlinked_headings.has(token) &&
+          !has_heading_anchor(restore_text(inner))
+            ? heading_anchor_html(id, heading_icon)
+            : ``
+        return `<h${token.depth}${id ? ` id="${escape_html_text(id).replaceAll(`"`, `&quot;`)}"` : ``}>${inner}${anchor}</h${token.depth}>\n`
       },
       html(token) {
         if (options.raw_html === `omit`) return ``
@@ -415,7 +431,7 @@ async function prepare_document(
   }
   const restore_text = (text: string) =>
     text.replaceAll(
-      new RegExp(`${sentinel}(\\d+)\uE001`, `gu`),
+      retained_pattern,
       (_match, index: string) => retained[Number(index)].code,
     )
   const tokens = parser.lexer(body)
@@ -433,7 +449,12 @@ async function prepare_document(
       omit_html: options.raw_html === `omit`,
       positions,
       heading_ids,
+      unlinked_headings,
       html_edits,
+      heading_link:
+        options.heading_links === false
+          ? undefined
+          : (id) => heading_anchor_html(id, heading_icon),
       reserved_ids: references?.reserved_ids(),
       examples: options.examples,
     },
@@ -553,7 +574,7 @@ async function prepare_document(
     const rendered = parser.parser(tokens) + (references?.bibliography() ?? ``)
     let mapped: MappedSource = { code: ``, spans: [] }
     let cursor = 0
-    for (const match of rendered.matchAll(new RegExp(`${sentinel}(\\d+)\uE001`, `gu`))) {
+    for (const match of rendered.matchAll(retained_pattern)) {
       mapped.code += rendered.slice(cursor, match.index)
       const retained_source = retained[Number(match[1])]
       mapped.spans.push(

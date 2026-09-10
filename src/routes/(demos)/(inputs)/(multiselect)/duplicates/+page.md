@@ -33,7 +33,7 @@
 <MultiSelect
   id="duplicates"
   {options}
-  bind:selected
+  bind:value={selected}
   {duplicates}
   key={key === 'JSON.stringify' ? JSON.stringify : (option) => option}
   on_duplicate={({ option }) => (dupe_msg = `'${option.label}' is already selected`)}
