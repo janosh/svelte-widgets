@@ -548,6 +548,24 @@ test(`document navigation and backward selections expand and release the input w
   expect(textarea.value).toBe(model.text())
 })
 
+test.each([
+  [`ArrowUp`, 2, 0],
+  [`ArrowDown`, 7, 9],
+  [`PageUp`, 2, 0],
+  [`PageDown`, 7, 9],
+] as const)(
+  `%s reaches the document boundary from offset %s`,
+  async (key, start, head) => {
+    const model = create_editor_model({ uri: `memory:boundary`, text: `abcd\nefgh` })
+    const { textarea } = await mount_editor(model)
+    for (const shift_key of [false, true]) {
+      model.set_selection({ anchor: start, head: start })
+      press_key(textarea, key, { shiftKey: shift_key })
+      expect(model.selection).toEqual({ anchor: shift_key ? start : head, head })
+    }
+  },
+)
+
 test(`vertical navigation keeps a preferred column and respects external selections`, async () => {
   const model = create_editor_model({
     uri: `memory:columns`,

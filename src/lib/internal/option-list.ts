@@ -42,6 +42,56 @@ export function group_options<T extends Option>(
   }))
 }
 
+export type OptionGroupRow<T extends Option> = GroupedOptions<T> & {
+  kind: `header`
+  group: string
+  render_key: symbol
+  selectable: T[]
+}
+type OptionRow<T extends Option> =
+  | {
+      kind: `option`
+      option: T
+      flat_idx: number
+      render_key: unknown
+      group: string | null
+    }
+  | OptionGroupRow<T>
+
+// Each control owns its header keys; symbols cannot collide with option keys.
+export function create_option_rows<T extends Option>() {
+  const header_keys = new Map<string, symbol>()
+  return (
+    groups: GroupedOptions<T>[],
+    key: (option: T) => unknown,
+    collapsible: boolean,
+    limit: number,
+  ): OptionRow<T>[] => {
+    const rows: OptionRow<T>[] = []
+    let flat_idx = 0
+    for (const { group, options, collapsed } of groups) {
+      const hidden = collapsed && collapsible
+      const selectable: T[] = []
+      if (group !== null) {
+        const render_key = header_keys.get(group) ?? Symbol(`sms-header-${group}`)
+        header_keys.set(group, render_key)
+        rows.push({ kind: `header`, group, options, collapsed, selectable, render_key })
+      }
+      for (const option of options) {
+        // Count hidden occurrences too, so collapsing a group cannot rekey later duplicates.
+        const render_key = key(option)
+        const visible = !hidden && flat_idx < limit
+        if (group !== null && (hidden || visible) && !option_disabled(option))
+          selectable.push(option)
+        if (hidden) continue
+        if (visible) rows.push({ kind: `option`, option, flat_idx, render_key, group })
+        flat_idx++
+      }
+    }
+    return rows
+  }
+}
+
 // Both option controls use fixed-height rows, including their group headers.
 export function option_window(
   config: OptionListProps[`virtual_list`],

@@ -2,6 +2,8 @@
   // === Imports ===
   import OptionRows from './internal/OptionRows.svelte'
   import {
+    create_option_rows,
+    type OptionGroupRow,
     group_options as group_list_options,
     next_option_index,
     option_disabled as is_disabled,
@@ -473,7 +475,7 @@
     ).filter((option_item) => !is_disabled(option_item)),
   )
 
-  // === Virtualized dropdown rendering (flat/ungrouped option lists only) ===
+  // === Virtualized dropdown rendering ===
   const has_grouped_options = $derived(
     grouped_options.some(({ group }) => group !== null),
   )
@@ -485,70 +487,15 @@
   const virtual_viewport = $derived(
     options_client_height > 0 ? options_client_height : 400,
   )
-  // renderable rows: headers interleaved with their options (max_options truncates,
-  // collapsed groups keep only their header)
-  type HeaderRow = GroupedOptions<Option> & {
-    kind: `header`
-    group: string
-    render_key: symbol
-    selectable: Option[]
-  }
-  type RenderRow =
-    | {
-        kind: `option`
-        option: Option
-        flat_idx: number
-        render_key: unknown
-        group: string | null
-      }
-    | HeaderRow
-  // symbols as header render keys: they can't collide with user option keys, and caching
-  // them per group name keeps them stable when filtering temporarily drops a group
-  const header_key_cache = new Map<string, symbol>()
-  const header_key = (group: string): symbol => {
-    const header_symbol = header_key_cache.get(group) ?? Symbol(`sms-header-${group}`)
-    header_key_cache.set(group, header_symbol)
-    return header_symbol
-  }
-  const render_rows = $derived.by((): RenderRow[] => {
-    const rows: RenderRow[] = []
-    const next_render_key = render_key_assigner()
-    let flat_idx = 0
-    grouped_options.forEach(({ group, options: group_items, collapsed }) => {
-      const hidden = collapsed && collapsible_groups
-      const selectable: Option[] = []
-      if (group !== null) {
-        rows.push({
-          kind: `header`,
-          group,
-          options: group_items,
-          collapsed,
-          selectable,
-          render_key: header_key(group),
-        })
-      }
-      group_items.forEach((option_item) => {
-        // Count hidden occurrences too, so collapsing a group cannot rekey later duplicates.
-        const render_key = next_render_key(option_item)
-        const visible = !hidden && flat_idx < visible_navigable_count
-        if (group !== null && (hidden || visible) && !is_disabled(option_item)) {
-          selectable.push(option_item)
-        }
-        if (hidden) return
-        if (visible) {
-          rows.push({
-            kind: `option`,
-            option: option_item,
-            flat_idx,
-            render_key,
-            group,
-          })
-        }
-        flat_idx++
-      })
-    })
-    return rows
-  })
+  const build_rows = create_option_rows<Option>()
+  const render_rows = $derived.by(() =>
+    build_rows(
+      grouped_options,
+      render_key_assigner(),
+      collapsible_groups,
+      visible_navigable_count,
+    ),
+  )
   // row index per navigable option: keyboard auto-scroll needs row offsets, which diverge
   // from flat option indices once header rows are interleaved
   const option_row_indices = $derived(
@@ -626,7 +573,9 @@
   }
 
   const get_collapsed_with_matches = () =>
-    grouped_options.flatMap(({ group, collapsed }) => (group && collapsed ? [group] : []))
+    grouped_options.flatMap(({ group, collapsed }) =>
+      group !== null && collapsed ? [group] : [],
+    )
 
   // auto-expand groups whose options match. Reacts only to search-text changes, else a
   // group the user collapses mid-search is instantly re-expanded.
@@ -2040,7 +1989,7 @@
         </li>
       {/snippet}
       <!-- group header <li> shared by the virtual and non-virtual render paths -->
-      {#snippet group_header_li(row: HeaderRow)}
+      {#snippet group_header_li(row: OptionGroupRow<Option>)}
         {@const { group: group_name, options: group_opts, collapsed, selectable } = row}
         {@const all_selected =
           selectable.length > 0 && selectable.every(has_selected_option)}

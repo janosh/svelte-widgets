@@ -875,10 +875,12 @@
       const distance = vertical
         ? 1
         : Math.max(1, Math.floor(viewport_height / line_height))
-      const target = model.line(
-        Math.max(0, Math.min(model.line_count - 1, line.line_idx + direction * distance)),
-      )
-      const head = target.from + offset_at_column(target.text, column)
+      const target_idx = line.line_idx + direction * distance
+      let head = target_idx < 0 ? 0 : model.length
+      if (target_idx >= 0 && target_idx < model.line_count) {
+        const target = model.line(target_idx)
+        head = target.from + offset_at_column(target.text, column)
+      }
       if (vertical) preferred_head = head
       move_caret(head)
       return

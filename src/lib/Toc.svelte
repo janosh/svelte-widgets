@@ -740,9 +740,8 @@
       {/if}
       <ol {...ol_props}>
         {#each heading_data as heading, idx (heading.id)}
-          {@const indent = levels[idx] - min_level}
+          {@const indent = heading.level - min_level}
           {@const collapsed = collapse_enabled && !heading_visibility[idx]}
-          {@const heading_id = heading_data[idx]?.id}
           {@const is_active = heading.id === active_heading?.id}
           {@const item_tabindex = collapsed ? -1 : 0}
           {@const use_fallback_toc_item =
@@ -768,11 +767,11 @@
               {@render toc_item(heading)}
             {:else}
               <a
-                href={href_for_id(heading_id)}
+                href={href_for_id(heading.id)}
                 tabindex={item_tabindex}
                 aria-current={is_active ? `location` : undefined}
               >
-                {heading_data[idx]?.title}
+                {heading.title}
               </a>
             {/if}
           </li>

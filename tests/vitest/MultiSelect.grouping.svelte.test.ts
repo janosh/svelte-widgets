@@ -693,28 +693,31 @@ test(`group deselect-all keeps at least min_select options selected`, async () =
   expect(props.value).toHaveLength(2)
 })
 
-test(`search_expands_collapsed_groups: manually collapsed group stays collapsed until the search changes`, async () => {
-  mount_multiselect({
-    options: [
-      { label: `apple`, group: `Fruits` },
-      { label: `avocado`, group: `Fruits` },
-      { label: `ant`, group: `Animals` },
-    ],
-    open: true,
-    collapsible_groups: true,
-    search_expands_collapsed_groups: true,
-    collapsed_groups: new Set([`Fruits`]),
-  })
-  const input = get_input()
-  await type_search_text(`a`, input)
-  expect(group_expanded(`Fruits`)).toBe(`true`)
+test.each([`Fruits`, ``])(
+  `search expansion preserves manual collapse for group %j`,
+  async (group) => {
+    mount_multiselect({
+      options: [
+        { label: `apple`, group },
+        { label: `avocado`, group },
+        { label: `ant`, group: `Animals` },
+      ],
+      open: true,
+      collapsible_groups: true,
+      search_expands_collapsed_groups: true,
+      collapsed_groups: new Set([group]),
+    })
+    const input = get_input()
+    await type_search_text(`a`, input)
+    expect(group_expanded(group)).toBe(`true`)
 
-  // manual collapse mid-search must stick (previously insta-re-expanded)
-  find_group_header(`Fruits`).click()
-  await tick()
-  expect(group_expanded(`Fruits`)).toBe(`false`)
+    // manual collapse mid-search must stick (previously insta-re-expanded)
+    find_group_header(group).click()
+    await tick()
+    expect(group_expanded(group)).toBe(`false`)
 
-  // a NEW search re-expands
-  await type_search_text(`av`, input)
-  expect(group_expanded(`Fruits`)).toBe(`true`)
-})
+    // a NEW search re-expands
+    await type_search_text(`av`, input)
+    expect(group_expanded(group)).toBe(`true`)
+  },
+)

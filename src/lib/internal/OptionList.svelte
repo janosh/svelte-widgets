@@ -6,6 +6,7 @@
   import { merge_defaults, MULTI_SELECT_LABELS } from '../labels'
   import { create_option_loader } from './option-loader.svelte'
   import {
+    create_option_rows,
     group_options,
     next_option_index,
     option_disabled,
@@ -126,50 +127,10 @@
       .flatMap((group) => (collapsible_groups && group.collapsed ? [] : group.options))
       .slice(0, max_options ?? undefined),
   )
-  type Row =
-    | {
-        kind: `option`
-        item: Item
-        index: number
-        render_key: unknown
-        group: string | null
-      }
-    | {
-        kind: `group`
-        group: string
-        options: Item[]
-        collapsed: boolean
-        render_key: unknown
-      }
-  const group_keys = new Map<string, symbol>()
-  const rows = $derived.by((): Row[] => {
-    const result: Row[] = []
-    let index = 0
-    for (const { group, options: items, collapsed } of groups) {
-      if (group !== null) {
-        if (!group_keys.has(group)) group_keys.set(group, Symbol(group))
-        result.push({
-          kind: `group`,
-          group,
-          options: items,
-          collapsed,
-          render_key: group_keys.get(group),
-        })
-      }
-      if (!(collapsible_groups && collapsed))
-        for (const item of items) {
-          if (index >= visible_options.length) break
-          result.push({
-            kind: `option`,
-            item,
-            index: index++,
-            render_key: key(item),
-            group,
-          })
-        }
-    }
-    return result
-  })
+  const build_rows = create_option_rows<Item>()
+  const rows = $derived(
+    build_rows(groups, key, collapsible_groups, visible_options.length),
+  )
   const validate_config = (has_grouped_options = options.some(has_group)) =>
     validate_option_list_config({
       max_options,
@@ -222,16 +183,24 @@
   }
   collapse_all_groups = () => {
     const names = groups.flatMap(({ group }) => (group === null ? [] : [group]))
+    if (!names.length) return
     collapsed_groups = new Set(names)
     on_collapse_all?.({ groups: names })
   }
   expand_all_groups = () => {
     const names = [...collapsed_groups]
+    if (!names.length) return
     collapsed_groups = new Set()
     on_expand_all?.({ groups: names })
   }
+  function expand_matching_groups() {
+    for (const { group, collapsed } of groups) {
+      if (group !== null && collapsed) toggle_group(group)
+    }
+  }
   $effect(() => {
-    if (query && search_expands_collapsed_groups) untrack(() => expand_all_groups?.())
+    if (query && search_expands_collapsed_groups && collapsible_groups)
+      untrack(expand_matching_groups)
   })
   async function handle_keydown(
     event: KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement },
@@ -243,8 +212,8 @@
           on_execute(active_option)
       } else if (event.key === `ArrowDown` || event.key === `ArrowUp`) {
         event.preventDefault()
-        if (keyboard_expands_collapsed_groups) {
-          expand_all_groups?.()
+        if (keyboard_expands_collapsed_groups && collapsible_groups) {
+          expand_matching_groups()
           await tick()
         }
         active_index = next_option_index(
@@ -257,7 +226,7 @@
         if (auto_scroll && active_index !== null) {
           if (viewport && list) {
             const row_index = rows.findIndex(
-              (row) => row.kind === `option` && row.index === active_index,
+              (row) => row.kind === `option` && row.flat_idx === active_index,
             )
             const top = row_index * viewport.item_height
             scroll_top = Math.min(
@@ -328,7 +297,7 @@
   >
     <OptionRows {rows} window={viewport}>
       {#snippet children(row)}
-        {#if row.kind === `group`}
+        {#if row.kind === `header`}
           <li
             class={[
               `group-header`,
@@ -353,50 +322,50 @@
               >{/if}
           </li>
         {:else}
-          {@const disabled_option = disabled || option_disabled(row.item)}
+          {@const disabled_option = disabled || option_disabled(row.option)}
           <li
-            id="{base_id}-opt-{row.index}"
+            id="{base_id}-opt-{row.flat_idx}"
             role="option"
             aria-selected="false"
             aria-disabled={disabled_option || undefined}
             aria-describedby={row.group === null
               ? undefined
               : `${base_id}-group-${encodeURIComponent(row.group)}`}
-            aria-posinset={row.index + 1}
+            aria-posinset={row.flat_idx + 1}
             aria-setsize={visible_options.length}
             class={[
               li_option_class,
-              { active: active_index === row.index, disabled: disabled_option },
-              active_index === row.index && li_active_option_class,
+              { active: active_index === row.flat_idx, disabled: disabled_option },
+              active_index === row.flat_idx && li_active_option_class,
             ]}
             style={li_option_style}
             title={disabled_option ? default_disabled_title : undefined}
             onmousemove={() => {
-              if (!disabled_option) active_index = row.index
+              if (!disabled_option) active_index = row.flat_idx
             }}
             onclick={() => {
-              if (!disabled_option) on_execute(row.item)
+              if (!disabled_option) on_execute(row.option)
             }}
             onkeydown={(event) => {
               if (!disabled_option && [`Enter`, ` `].includes(event.key)) {
                 event.preventDefault()
-                on_execute(row.item)
+                on_execute(row.option)
               }
             }}
           >
             {#if option}{@render option({
-                option: row.item,
-                idx: row.index,
+                option: row.option,
+                idx: row.flat_idx,
                 selected: false,
-                active: active_index === row.index,
+                active: active_index === row.flat_idx,
                 disabled: disabled_option,
               })}
             {:else if option_children}{@render option_children({
-                option: row.item,
-                idx: row.index,
+                option: row.option,
+                idx: row.flat_idx,
                 type: `option`,
               })}
-            {:else}{get_label(row.item)}{/if}
+            {:else}{get_label(row.option)}{/if}
           </li>
         {/if}
       {/snippet}

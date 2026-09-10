@@ -31,6 +31,11 @@
     open = $bindable(false),
     dialog = $bindable(null),
     input = $bindable(null),
+    outer_div = $bindable(null),
+    load_error = $bindable(null),
+    collapsed_groups = $bindable(new Set<string>()),
+    collapse_all_groups = $bindable(),
+    expand_all_groups = $bindable(),
     aria_label = `Command menu`,
     filter_func,
     fuzzy = true,
@@ -59,7 +64,6 @@
     fade_duration_ms?: number
     open?: boolean
     dialog?: HTMLDialogElement | null
-    input?: HTMLInputElement | null
     input_aria_label?: string
     aria_label?: string
     placeholder?: string
@@ -293,6 +297,11 @@
       bind:active_option
       auto_active_first_option
       bind:input
+      bind:outer_div
+      bind:load_error
+      bind:collapsed_groups
+      bind:collapse_all_groups
+      bind:expand_all_groups
       bind:matching_options={matching_actions}
       bind:search_text
       filter_func={action_filter}

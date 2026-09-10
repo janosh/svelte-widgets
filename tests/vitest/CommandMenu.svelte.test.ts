@@ -620,6 +620,7 @@ test(`handles bindable props correctly`, async () => {
     actions: mock_actions,
     dialog: null,
     input: null,
+    outer_div: null,
   })
   mount_menu(props)
 
@@ -631,6 +632,7 @@ test(`handles bindable props correctly`, async () => {
 
   expect(props.dialog).toBeInstanceOf(HTMLDialogElement)
   expect(props.input).toBeInstanceOf(HTMLInputElement)
+  expect(props.outer_div).toBe(doc_query(`dialog .option-list`))
   expect(menu_input().getAttribute(`aria-label`)).toBe(`Search commands`)
   expect(document.activeElement).toBe(props.input)
 })
@@ -646,6 +648,8 @@ test(`selects the first enabled action and preserves pointer selection across gr
     open: true,
     actions,
     active_index: null as number | null,
+    collapsible_groups: true,
+    max_options: undefined as number | undefined,
   })
   mount_menu(props)
   await tick()
@@ -672,9 +676,85 @@ test(`selects the first enabled action and preserves pointer selection across gr
   expect(props.active_index).toBe(1)
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 
+  const group_headers = [...document.querySelectorAll(`li.group-header`)]
+  props.max_options = 1
+  await tick()
+  expect(option_labels()).toEqual([`Renamed Beta`])
+  doc_query<HTMLButtonElement>(`li.group-header button`).click()
+  await tick()
+  expect(option_labels()).toEqual([`Disabled`])
+  expect(props.active_index).toBeNull()
+  document.querySelectorAll(`li.group-header`).forEach((header, idx) => {
+    expect(header).toBe(group_headers[idx])
+  })
+  doc_query<HTMLButtonElement>(`li.group-header button`).click()
+  props.max_options = undefined
+  await tick()
+
   await type_search(`alpha`)
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 })
+
+test.each([`search`, `keyboard`])(
+  `%s expands only matching command groups and preserves manual collapse`,
+  async (trigger) => {
+    const on_group_toggle = vi.fn()
+    const on_expand_all = vi.fn()
+    const props = $state<ComponentProps<typeof CommandMenu>>({
+      open: true,
+      actions: [
+        { id: `apple`, label: `Apple`, group: ``, action: vi.fn() },
+        { id: `bear`, label: `Bear`, group: `Animals`, action: vi.fn() },
+      ],
+      collapsed_groups: new Set([``, `Animals`]),
+      collapsible_groups: false,
+      search_expands_collapsed_groups: trigger === `search`,
+      keyboard_expands_collapsed_groups: trigger === `keyboard`,
+      on_group_toggle,
+      on_expand_all,
+      collapse_all_groups: undefined,
+      expand_all_groups: undefined,
+    })
+    mount_menu(props)
+    const search_and_navigate = async (search: string) => {
+      await type_search(search)
+      menu_input().dispatchEvent(
+        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
+      )
+      await tick()
+    }
+    await search_and_navigate(`app`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([``, `Animals`])
+    expect(on_group_toggle).not.toHaveBeenCalled()
+
+    await type_search(``)
+    props.collapsible_groups = true
+    await search_and_navigate(`app`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([`Animals`])
+    expect(on_group_toggle).toHaveBeenCalledExactlyOnceWith({
+      group: ``,
+      collapsed: false,
+    })
+    expect(on_expand_all).not.toHaveBeenCalled()
+    doc_query<HTMLButtonElement>(`li.group-header button`).click()
+    await tick()
+    expect(props.collapsed_groups?.has(``)).toBe(true)
+    await search_and_navigate(`apple`)
+    expect([...(props.collapsed_groups ?? [])]).toEqual([`Animals`])
+    expect(option_labels()).toEqual([`Apple`])
+    expect(props.collapse_all_groups).toBeTypeOf(`function`)
+    expect(props.expand_all_groups).toBeTypeOf(`function`)
+    props.collapse_all_groups?.()
+    await tick()
+    expect(props.collapsed_groups?.has(``)).toBe(true)
+    props.expand_all_groups?.()
+    await tick()
+    expect(props.collapsed_groups?.size).toBe(0)
+    expect(on_expand_all).toHaveBeenCalledExactlyOnceWith({ groups: [``] })
+    props.expand_all_groups?.()
+    expect(on_expand_all).toHaveBeenCalledOnce()
+  },
+)
 
 test(`active_option binding selects initial and externally changed commands`, async () => {
   const props = $state({
@@ -874,6 +954,7 @@ test.each(
       load_options: { fetch, batch_size: 1, debounce_ms: 0 },
       labels,
       loading: true,
+      load_error: null as Error | null,
     })
     mount_menu(props)
     await tick()
@@ -904,6 +985,7 @@ test.each(
     expect(doc_query(`[role='alert']`).textContent).toBe(
       labels?.loading_failed ?? MULTI_SELECT_LABELS.loading_failed,
     )
+    expect(props.load_error).toBeInstanceOf(Error)
     expect(option_labels()).toEqual(paginated ? [`Remote`] : [])
     fetch.mockResolvedValueOnce({
       options: [{ id: `2`, label: `Retry result`, action: vi.fn() }],
@@ -920,6 +1002,7 @@ test.each(
       expect.objectContaining({ offset: paginated ? 1 : 0 }),
     )
     expect(document.querySelector(`[role='alert']`)).toBeNull()
+    expect(props.load_error).toBeNull()
   },
 )
 
@@ -1026,19 +1109,29 @@ describe(`PageSearch`, () => {
         },
       ],
     }))
-    const props = $state({
+    const props = $state<ComponentProps<typeof PageSearch>>({
       ...base_props,
       batch_size: 0.5,
       navigate,
       strip_html_suffix,
       transform_url,
       load_pagefind: async () => ({ search }),
+      search_text: ``,
+      matching_options: [],
+      active_index: null,
+      active_option: null,
+      outer_div: null,
     })
     mount(PageSearch, { target: document.body, props })
 
     await search_pagefind(`binary`)
 
     expect(search).toHaveBeenCalledExactlyOnceWith(`binary`)
+    expect(props.search_text).toBe(`binary`)
+    expect(props.matching_options).toHaveLength(1)
+    expect(props.active_option).toBe(props.matching_options?.[0])
+    expect(props.active_index).toBe(0)
+    expect(props.outer_div).toBe(doc_query(`dialog .option-list`))
     expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(1)
     doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
     await vi.runAllTimersAsync()

@@ -35,6 +35,15 @@
     open = $bindable(false),
     dialog = $bindable(null),
     input = $bindable(null),
+    outer_div = $bindable(null),
+    load_error = $bindable(null),
+    search_text = $bindable(``),
+    matching_options = $bindable([]),
+    active_index = $bindable(null),
+    active_option = $bindable(null),
+    collapsed_groups = $bindable(new Set<string>()),
+    collapse_all_groups = $bindable(),
+    expand_all_groups = $bindable(),
     ...rest
   }: Props = $props()
 
@@ -59,6 +68,15 @@
   bind:open
   bind:dialog
   bind:input
+  bind:outer_div
+  bind:load_error
+  bind:search_text
+  bind:matching_options
+  bind:active_index
+  bind:active_option
+  bind:collapsed_groups
+  bind:collapse_all_groups
+  bind:expand_all_groups
   {fuzzy}
   aria_label="Site search"
   load_options={{
