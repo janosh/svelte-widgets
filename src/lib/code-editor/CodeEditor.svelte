@@ -3,7 +3,7 @@
 </script>
 
 <script lang="ts">
-  import { onDestroy, untrack } from 'svelte'
+  import { onDestroy, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { css_px, register_escape_layer } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
@@ -22,7 +22,9 @@
   import { create_highlight_client } from './highlight-client'
   import type { HighlightSpansEvent } from './highlight-client'
   import { line_comment_token } from './languages'
-  import { render_tokens } from './tokens'
+  import { find_editor_matches, replace_editor_matches } from './search'
+  import type { EditorMatch } from './search'
+  import { render_tokens, type RenderedToken } from './tokens'
   import { resolve_editor_backend, to_error } from './types'
   import type {
     CodeEditorOptions,
@@ -84,6 +86,15 @@
   let viewport_width = $state(0)
   let overlay_width = $state(0)
   let caret_line = $state(0)
+  let search_panel = $state<`find` | `line` | null>(null)
+  let search_input = $state<HTMLInputElement>()
+  let line_input = $state<HTMLInputElement>()
+  let search_query = $state(``)
+  let replacement = $state(``)
+  let show_replace = $state(false)
+  const search_options = $state({ case_sensitive: false, whole_word: false })
+  let target_line = $state(1)
+  let current_selection = $state<EditorSelection>({ anchor: 0, head: 0 })
   let saving = $state(false)
   let local_model_update = false
   let refreshing_input = false
@@ -111,6 +122,19 @@
   )
   const show_line_numbers = $derived(options.line_numbers ?? true)
   const editing_disabled = $derived(read_only || !doc_info?.editable)
+  const search_matches = $derived.by(() => {
+    void model_revision
+    return search_panel === `find`
+      ? find_editor_matches(model, search_query, search_options)
+      : []
+  })
+  const current_match = $derived(
+    search_matches.findIndex(
+      ({ from, to }) =>
+        from === Math.min(current_selection.anchor, current_selection.head) &&
+        to === Math.max(current_selection.anchor, current_selection.head),
+    ),
+  )
   const report_error = (error: unknown): void => {
     const message = to_error(error).message
     error_message = message
@@ -174,6 +198,46 @@
       OVERSCAN_ROWS,
     ),
   )
+  const search_tokens = (tokens: RenderedToken[], line_from: number): RenderedToken[] => {
+    if (search_matches.length === 0) return tokens
+    let low = 0
+    let high = search_matches.length
+    while (low < high) {
+      const middle = (low + high) >>> 1
+      if (search_matches[middle].to <= line_from) low = middle + 1
+      else high = middle
+    }
+    let match_idx = low
+    return tokens.flatMap((token) => {
+      const pieces: RenderedToken[] = []
+      let start = line_from + token.start
+      const end = start + token.text.length
+      const append = (to: number, css = token.css): void => {
+        if (to <= start) return
+        pieces.push({
+          start: start - line_from,
+          text: token.text.slice(
+            start - line_from - token.start,
+            to - line_from - token.start,
+          ),
+          css,
+        })
+        start = to
+      }
+      while (match_idx < search_matches.length && search_matches[match_idx].from < end) {
+        const match = search_matches[match_idx]
+        append(Math.max(start, match.from))
+        append(
+          Math.min(end, match.to),
+          `${token.css} editor-search-match${match_idx === current_match ? ` current` : ``}`,
+        )
+        if (match.to > end) break
+        match_idx += 1
+      }
+      append(end)
+      return pieces
+    })
+  }
   const visible_rows = $derived.by(() => {
     void model_revision
     void token_revision
@@ -184,7 +248,10 @@
       return {
         line_idx,
         top: line_idx * line_height,
-        tokens: render_tokens(line.text, token_cache.get(line_idx) ?? []),
+        tokens: search_tokens(
+          render_tokens(line.text, token_cache.get(line_idx) ?? []),
+          line.from,
+        ),
       }
     })
   })
@@ -294,10 +361,12 @@
     scroll_top = 0
     overlay_width = 0
     caret_line = active_model.line_at(active_model.selection.head).line_idx
+    current_selection = active_model.selection
     before_snapshot = null
     const unsubscribe = active_model.subscribe((update) => {
       if (!is_current()) return
       caret_line = active_model.line_at(update.selection.head).line_idx
+      current_selection = update.selection
       if (update.transaction) {
         // Bumped only for transactions, which `line_count`/`visible_rows` read to re-read
         // the rope; bumping on bare selection changes re-read every row on each caret move.
@@ -375,9 +444,41 @@
     unregister_escape ??= register_escape_layer((event) => {
       event.preventDefault()
       event.stopPropagation()
+      if (search_panel) {
+        close_search()
+        return true
+      }
       tab_moves_focus = true
       return true
     })
+  }
+  // Register above the editor/outer dialog while search controls own focus.
+  const search_escape = (element: HTMLElement): (() => void) => {
+    let release: (() => void) | undefined
+    const activate = (): void => {
+      release?.()
+      release = register_escape_layer((event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        close_search()
+        return true
+      })
+    }
+    const deactivate = (event: FocusEvent): void => {
+      if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget))
+        return
+      release?.()
+      release = undefined
+    }
+    element.addEventListener(`focusin`, activate)
+    element.addEventListener(`focusout`, deactivate)
+    element.addEventListener(`keydown`, handle_search_shortcut)
+    return () => {
+      release?.()
+      element.removeEventListener(`focusin`, activate)
+      element.removeEventListener(`focusout`, deactivate)
+      element.removeEventListener(`keydown`, handle_search_shortcut)
+    }
   }
   const on_blur = (): void => {
     unregister_escape?.()
@@ -833,9 +934,112 @@
       })
     }
   }
+  const select_match = (match: EditorMatch | undefined): boolean => {
+    if (!match) return false
+    model.set_selection({ anchor: match.from, head: match.to })
+    return true
+  }
+  const select_nearest_match = (): void => {
+    const from = Math.min(model.selection.anchor, model.selection.head)
+    select_match(search_matches.find((match) => match.from >= from) ?? search_matches[0])
+  }
+  const close_search = (): void => {
+    search_panel = null
+    textarea?.focus({ preventScroll: true })
+    refresh_input(true)
+  }
+  export const open_search = async (replace = false): Promise<void> => {
+    if (document.activeElement === textarea) sync_selection()
+    const { anchor, head } = model.selection
+    if (anchor !== head)
+      search_query = model.slice(Math.min(anchor, head), Math.max(anchor, head))
+    search_panel = `find`
+    show_replace = replace && !editing_disabled
+    await tick()
+    search_input?.focus()
+    search_input?.select()
+    select_nearest_match()
+  }
+  export const find_next = (direction: 1 | -1 = 1): boolean => {
+    search_panel = `find`
+    const { anchor, head } = model.selection
+    const match =
+      direction === 1
+        ? (search_matches.find(({ from }) => from >= Math.max(anchor, head)) ??
+          search_matches[0])
+        : (search_matches.findLast(({ to }) => to <= Math.min(anchor, head)) ??
+          search_matches.at(-1))
+    return select_match(match)
+  }
+  export const replace_current = (): boolean => {
+    if (editing_disabled || composing) return false
+    const match = search_matches[current_match]
+    if (!match) {
+      find_next()
+      return false
+    }
+    const insert = replacement.replaceAll(/\r\n?/g, `\n`)
+    const head = match.from + insert.length
+    model.transact([{ ...match, insert }], {
+      source: `command`,
+      selection: { anchor: head, head },
+    })
+    find_next()
+    return true
+  }
+  export const replace_all = (): number => {
+    if (editing_disabled || composing || search_panel !== `find`) return 0
+    return replace_editor_matches(model, search_query, replacement, search_options)
+  }
+  // Public line numbers are one-based, matching the gutter. Invalid input is a no-op.
+  export const go_to_line = (line_number: number): boolean => {
+    if (
+      !Number.isInteger(line_number) ||
+      line_number < 1 ||
+      line_number > model.line_count
+    )
+      return false
+    const head = model.line(line_number - 1).from
+    model.set_selection({ anchor: head, head })
+    close_search()
+    return true
+  }
+  const open_line_search = async (): Promise<void> => {
+    target_line = model.line_at(model.selection.head).line_idx + 1
+    search_panel = `line`
+    await tick()
+    line_input?.focus()
+    line_input?.select()
+  }
+  const on_search_enter =
+    (action: (event: KeyboardEvent) => unknown) =>
+    (event: KeyboardEvent): void => {
+      if (event.key !== `Enter` || event.isComposing) return
+      event.preventDefault()
+      action(event)
+    }
+  const handle_search_shortcut = (event: KeyboardEvent): boolean => {
+    if (event.isComposing) return false
+    const key = event.key.toLowerCase()
+    const command = event.ctrlKey || event.metaKey
+    if (command && key === `f` && !event.altKey) void open_search()
+    else if (
+      (event.ctrlKey && !event.metaKey && !event.altKey && key === `h`) ||
+      (event.metaKey && event.altKey && key === `f`)
+    )
+      void open_search(true)
+    else if (command && key === `g` && !event.altKey) void open_line_search()
+    else if (event.key === `F3` && !command && !event.altKey)
+      find_next(event.shiftKey ? -1 : 1)
+    else return false
+    event.preventDefault()
+    event.stopPropagation()
+    return true
+  }
   const on_keydown = (event: KeyboardEvent): void => {
     const area = textarea
     if (!area || event.isComposing) return
+    if (handle_search_shortcut(event)) return
     if (editing_disabled && event.key === `Tab`) return
     if (event.key === `Tab` && tab_moves_focus) {
       tab_moves_focus = false
@@ -949,6 +1153,108 @@
   style:--editor-tab-size={tab_size}
 >
   <span class="sr-only" id={keyboard_help_id}>{msg.keyboard_help}</span>
+  <div class="editor-tools">
+    <button type="button" onclick={() => void open_search()} title="Ctrl/Cmd+F"
+      >{msg.find}</button
+    >
+    <button type="button" onclick={() => void open_line_search()} title="Ctrl/Cmd+G"
+      >{msg.go_to_line}</button
+    >
+  </div>
+  {#if search_panel}
+    <div
+      class="editor-search"
+      role="search"
+      aria-label={search_panel === `find` ? msg.find : msg.go_to_line}
+      {@attach search_escape}
+    >
+      {#if search_panel === `find`}
+        <input
+          type="search"
+          aria-label={msg.find}
+          placeholder={msg.find}
+          bind:this={search_input}
+          value={search_query}
+          oninput={(event) => {
+            search_query = event.currentTarget.value
+            select_nearest_match()
+          }}
+          onkeydown={on_search_enter((event) => find_next(event.shiftKey ? -1 : 1))}
+        />
+        <span role="status"
+          >{search_matches.length
+            ? msg.match_position(current_match + 1, search_matches.length)
+            : msg.no_matches}</span
+        >
+        {#each [-1, 1] as const as direction}
+          <button
+            type="button"
+            aria-label={direction === -1 ? msg.previous_match : msg.next_match}
+            title={direction === -1 ? `Shift+Enter / Shift+F3` : `Enter / F3`}
+            disabled={!search_matches.length}
+            onclick={() => find_next(direction)}>{direction === -1 ? `↑` : `↓`}</button
+          >
+        {/each}
+        {#each [[`case_sensitive`, msg.match_case], [`whole_word`, msg.whole_word]] as const as [option, label]}
+          <label
+            ><input
+              type="checkbox"
+              checked={search_options[option]}
+              onchange={(event) => {
+                search_options[option] = event.currentTarget.checked
+                select_nearest_match()
+              }}
+            />{label}</label
+          >
+        {/each}
+        {#if !editing_disabled}
+          <button
+            type="button"
+            aria-pressed={show_replace}
+            onclick={() => (show_replace = !show_replace)}>{msg.replace}</button
+          >
+        {/if}
+        {#if show_replace && !editing_disabled}
+          <div class="replacement-row">
+            <input
+              type="text"
+              aria-label={msg.replacement}
+              placeholder={msg.replacement}
+              bind:value={replacement}
+              onkeydown={on_search_enter(replace_current)}
+            />
+            <button
+              type="button"
+              disabled={!search_matches.length}
+              onclick={replace_current}>{msg.replace}</button
+            >
+            <button type="button" disabled={!search_matches.length} onclick={replace_all}
+              >{msg.replace_all}</button
+            >
+          </div>
+        {/if}
+      {:else}
+        <input
+          type="number"
+          min="1"
+          max={line_count}
+          required
+          aria-label={msg.line_number}
+          bind:this={line_input}
+          bind:value={target_line}
+          onkeydown={on_search_enter(() => go_to_line(target_line))}
+        />
+        <button type="button" onclick={() => go_to_line(target_line)}>{msg.go}</button>
+      {/if}
+      <button
+        class="search-close"
+        type="button"
+        aria-label={msg.close_search}
+        title="Escape"
+        onclick={close_search}>×</button
+      >
+    </div>
+  {/if}
   {#if error_message}
     <div class="editor-error" role="alert">{error_message}</div>
   {/if}
@@ -1052,6 +1358,43 @@
     background: color-mix(in srgb, var(--error-color, #f85149) 10%, transparent);
     font-size: 0.78rem;
   }
+  .editor-tools,
+  .editor-search {
+    display: flex;
+    flex: 0 0 auto;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.3rem 0.5rem;
+    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    font-size: 0.8rem;
+    button {
+      font: inherit;
+      padding: 0.1rem 0.35rem;
+    }
+  }
+  .editor-search {
+    input:not([type='checkbox']) {
+      flex: 1;
+      min-width: 5rem;
+      width: 9rem;
+      font: inherit;
+    }
+    label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.15rem;
+    }
+    .replacement-row {
+      display: flex;
+      order: 1;
+      width: 100%;
+      gap: inherit;
+    }
+    .search-close {
+      margin-inline-start: auto;
+    }
+  }
   .editor-body {
     display: flex;
     flex: 1 1 auto;
@@ -1118,6 +1461,12 @@
     pointer-events: none;
     border-radius: 0;
     background: none;
+    :global(.editor-search-match) {
+      background: var(--editor-search-bg, #eac54f66);
+      &.current {
+        outline: 1px solid var(--editor-search-active-color, #ba8300);
+      }
+    }
   }
   textarea {
     height: 100%;

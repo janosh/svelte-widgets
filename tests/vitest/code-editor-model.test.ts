@@ -1,6 +1,11 @@
 import { create_editor_model } from '$lib/code-editor/model'
+import {
+  find_editor_matches,
+  replace_editor_matches,
+  type EditorSearchOptions,
+} from '$lib/code-editor/search'
 import type { EditorModel, TextEdit } from '$lib/code-editor/types'
-import { expect, test } from 'vitest'
+import { expect, test, vi } from 'vitest'
 
 const type_text = (
   model: EditorModel,
@@ -17,6 +22,267 @@ const type_text = (
     timestamp,
   })
 }
+test.each([
+  [
+    `foo FOO food foo_bar`,
+    `foo`,
+    {},
+    [
+      [0, 3],
+      [4, 7],
+      [8, 11],
+      [13, 16],
+    ],
+  ],
+  [
+    `foo FOO food foo_bar`,
+    `foo`,
+    { whole_word: true },
+    [
+      [0, 3],
+      [4, 7],
+    ],
+  ],
+  [`foo FOO food foo_bar`, `foo`, { case_sensitive: true, whole_word: true }, [[0, 3]]],
+  [
+    `😀İiKkΣςσ`,
+    `k`,
+    {},
+    [
+      [4, 5],
+      [5, 6],
+    ],
+  ],
+  [
+    `😀İiKkΣςσ`,
+    `σ`,
+    {},
+    [
+      [6, 7],
+      [7, 8],
+      [8, 9],
+    ],
+  ],
+  [
+    `á a_ a$ a😀 a`,
+    `a`,
+    { whole_word: true },
+    [
+      [9, 10],
+      [13, 14],
+    ],
+  ],
+  [
+    `a.*[x] aXXx a.*[x]`,
+    `a.*[x]`,
+    {},
+    [
+      [0, 6],
+      [12, 18],
+    ],
+  ],
+  [`first\n  next first next`, `first\r\n  next`, {}, [[0, 12]]],
+  [
+    `ſSsS`,
+    `sS`,
+    {},
+    [
+      [0, 2],
+      [2, 4],
+    ],
+  ],
+  [
+    `İıiI`,
+    `i`,
+    {},
+    [
+      [2, 3],
+      [3, 4],
+    ],
+  ],
+  [`𐐀𐐨𐐀`, `𐐨𐐨`, {}, [[0, 4]]],
+  [`x-- --`, `--`, { whole_word: true }, [[4, 6]]],
+  [`\uD800 😀 \uDC00`, `\uD800`, {}, [[0, 1]]],
+  [
+    `aaaaa`,
+    `aa`,
+    {},
+    [
+      [0, 2],
+      [2, 4],
+    ],
+  ],
+  [`text`, ``, {}, []],
+  [``, `text`, {}, []],
+] satisfies [string, string, EditorSearchOptions, number[][]][])(
+  `literal model search: %j for %j with %j`,
+  (text, query, options, expected) => {
+    const model = create_editor_model({ uri: `memory:search`, text })
+    expect(
+      find_editor_matches(model, query, options).map(({ from, to }) => [from, to]),
+    ).toEqual(expected)
+  },
+)
+test.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true],
+])(
+  `chunked searches agree with whole-string matches (whole_word=%s, case_sensitive=%s)`,
+  (whole_word, case_sensitive) => {
+    for (let padding = 0; padding < 12; padding++) {
+      const text = `${` `.repeat(32 * 1024 - padding)}😀foo𐐀 foo_bar\nFOO😀 foo\n${`x`.repeat(70_000)} foo\uD800`
+      const model = create_editor_model({ uri: `memory:search-chunks`, text })
+      for (const query of [`foo`, `😀foo`, `FOO😀 foo`, `foo\n`, `𐐨`, `\uD800`]) {
+        const pattern = new RegExp(
+          whole_word
+            ? `(?<![\\p{L}\\p{M}\\p{N}_$])${query}(?![\\p{L}\\p{M}\\p{N}_$])`
+            : query,
+          case_sensitive ? `gu` : `giu`,
+        )
+        const expected = [...text.matchAll(pattern)].map((match) => ({
+          from: match.index,
+          to: match.index + match[0].length,
+        }))
+        expect(find_editor_matches(model, query, { whole_word, case_sensitive })).toEqual(
+          expected,
+        )
+      }
+    }
+  },
+)
+test(`long literal queries verify overlapping candidates without RegExp size limits`, () => {
+  const query = `${`😀x`.repeat(15_000)}end`
+  const text = `😀x${query} ${query}`
+  const model = create_editor_model({ uri: `memory:long-query`, text })
+  const from = 3
+  expect(find_editor_matches(model, query)).toEqual([
+    { from, to: from + query.length },
+    { from: from + query.length + 1, to: text.length },
+  ])
+})
+test.each([1023, 1024, 1025])(
+  `search dispatch preserves Unicode boundaries at query length %s`,
+  (length) => {
+    const query = `😀${`a`.repeat(length - 4)}𐐨`
+    for (const padding of [0, 1, 2, 3]) {
+      const text = `${` `.repeat(32 * 1024 - padding)}x${query} ${query.toUpperCase()} ${query}`
+      const model = create_editor_model({ uri: `memory:search-threshold`, text })
+      for (const whole_word of [false, true]) {
+        for (const case_sensitive of [false, true]) {
+          const word_char = `[\\p{L}\\p{M}\\p{N}_$]`
+          const pattern = new RegExp(
+            whole_word ? `(?<!${word_char})${query}(?!${word_char})` : query,
+            case_sensitive ? `gu` : `giu`,
+          )
+          const expected = Array.from(text.matchAll(pattern), (match) => ({
+            from: match.index,
+            to: match.index + match[0].length,
+          }))
+          const slice_spy = vi.spyOn(model, `slice`)
+          expect(
+            find_editor_matches(model, query, { whole_word, case_sensitive }),
+          ).toEqual(expected)
+          expect(
+            Math.max(
+              ...slice_spy.mock.calls.map(([from = 0, to = model.length]) => to - from),
+            ),
+          ).toBeLessThanOrEqual(32 * 1024 + (length <= 1024 ? length + 4 : 3))
+          slice_spy.mockRestore()
+        }
+      }
+    }
+  },
+)
+test.each([-1, 0, 1])(
+  `long whole-word search checks the code point following a window boundary (%s)`,
+  (offset) => {
+    const query = `a`.repeat(1025)
+    const text = `${` `.repeat(32 * 1024 - query.length + offset)}${query}𐐀 ${query}😀`
+    const model = create_editor_model({ uri: `memory:search-word-boundary`, text })
+    const from = 32 * 1024 + offset + 3
+    expect(find_editor_matches(model, query, { whole_word: true })).toEqual([
+      { from, to: from + query.length },
+    ])
+  },
+)
+test.each([`late`, `middle`, `match`, `whole_word`] as const)(
+  `long repetitive search has linear matching work: %s`,
+  (position) => {
+    const query =
+      position === `whole_word`
+        ? `a`.repeat(1025)
+        : position === `middle`
+          ? `${`a`.repeat(15_000)}b${`a`.repeat(5000)}`
+          : `${`a`.repeat(20_000)}b`
+    const text = `${`a`.repeat(100_000)}${position === `match` ? `b` : ``}`
+    const model = create_editor_model({ uri: `memory:repetitive-search`, text })
+    const slice_spy = vi.spyOn(model, `slice`)
+    const regex_test = RegExp.prototype.test
+    let comparisons = 0
+    const spy = vi.spyOn(RegExp.prototype, `test`).mockImplementation(function (
+      this: RegExp,
+      value: string,
+    ) {
+      comparisons += 1
+      return regex_test.call(this, value)
+    })
+    let matches: ReturnType<typeof find_editor_matches>
+    try {
+      matches = find_editor_matches(model, query, {
+        whole_word: position === `whole_word`,
+      })
+    } finally {
+      spy.mockRestore()
+    }
+    expect(matches).toEqual(position === `match` ? [{ from: 80_000, to: 100_001 }] : [])
+    // Matching and prefix preprocessing visit each input position a bounded number of times.
+    // Counting engine calls catches repeated chunk verification without a timing limit.
+    expect(comparisons).toBeLessThanOrEqual(3 * (text.length + query.length))
+    // Rejected word boundaries must not trigger extra rope traversals per candidate.
+    expect(slice_spy.mock.calls.length).toBeLessThanOrEqual(
+      Math.ceil(text.length / (32 * 1024)),
+    )
+  },
+)
+test(`search reaches 100k offscreen lines without flattening the model`, () => {
+  const text = Array.from(
+    { length: 100_000 },
+    (_unused, line_idx) => `😀 line ${line_idx + 1}`,
+  ).join(`\n`)
+  const model = create_editor_model({ uri: `memory:search-large`, text })
+  const text_spy = vi.spyOn(model, `text`)
+  const slice_spy = vi.spyOn(model, `slice`)
+  const query = `line 99999`
+  const from = model.line(99_998).from + 3
+  expect(find_editor_matches(model, query)).toEqual([{ from, to: from + query.length }])
+  expect(text_spy).not.toHaveBeenCalled()
+  expect(
+    Math.max(
+      ...slice_spy.mock.calls.map(([start = 0, end = model.length]) => end - start),
+    ),
+  ).toBeLessThanOrEqual(32 * 1024 + query.length + 4)
+})
+test(`replace all uses literal text and one undoable transaction with mapped selections`, () => {
+  const text = `😀foo foo_bar Foo\nfoo`
+  const model = create_editor_model({ uri: `memory:replace`, text })
+  const selection = { anchor: model.length, head: 2 }
+  model.set_selection(selection)
+  const updates = vi.fn()
+  model.subscribe(updates)
+  expect(replace_editor_matches(model, `foo`, `$&\r\n`, { whole_word: true })).toBe(3)
+  expect(model.text()).toBe(`😀$&\n foo_bar $&\n\n$&\n`)
+  expect(updates).toHaveBeenCalledTimes(1)
+  expect(updates.mock.calls[0][0].transaction.source).toBe(`command`)
+  expect(updates.mock.calls[0][0].transaction.edits).toHaveLength(3)
+  expect(model.undo()).toBe(true)
+  expect([model.text(), model.selection, model.dirty]).toEqual([text, selection, false])
+  expect(model.redo()).toBe(true)
+  const revision = model.revision
+  expect(replace_editor_matches(model, `missing`, ``)).toBe(0)
+  expect(model.revision).toBe(revision)
+})
 test(`normalizes disk text and indexes lines with UTF-16 offsets`, () => {
   const model = create_editor_model({
     uri: `file:///demo.ts`,

@@ -26,6 +26,20 @@ export type ButtonGroupLabels = typeof BUTTON_GROUP_LABELS
 export const CODE_EDITOR_LABELS = {
   // visually hidden hint announced when the textarea takes focus
   keyboard_help: `Press Escape, then Tab to move focus away`,
+  find: `Find`,
+  replace: `Replace`,
+  replace_all: `Replace all`,
+  replacement: `Replacement`,
+  match_case: `Match case`,
+  whole_word: `Whole word`,
+  previous_match: `Previous match`,
+  next_match: `Next match`,
+  close_search: `Close search`,
+  go_to_line: `Go to line`,
+  line_number: `Line number`,
+  go: `Go`,
+  no_matches: `No matches`,
+  match_position: (position: number, total: number) => `${position} of ${total}`,
 }
 export type CodeEditorLabels = typeof CODE_EDITOR_LABELS
 

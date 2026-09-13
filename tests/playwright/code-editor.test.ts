@@ -1,5 +1,48 @@
 import { expect, test } from '@playwright/test'
 
+test(`CodeEditor search replaces undoably and navigates offscreen document lines`, async ({
+  page,
+}) => {
+  await page.goto(`/code-editor`)
+  const demo = page.locator(`#code-editor-basic`)
+  const code_editor = demo.locator(`.code-editor`)
+  const editor = code_editor.locator(`textarea`)
+  await expect(editor).toBeEditable()
+  const original = await editor.inputValue()
+  await editor.focus()
+  await page.keyboard.press(`ControlOrMeta+f`)
+  const query = code_editor.getByRole(`searchbox`, { name: `Find` })
+  await expect(query).toBeFocused()
+  await query.fill(`greeting`)
+  await expect(code_editor.getByRole(`status`)).toHaveText(`1 of 2`)
+  await query.press(`Enter`)
+  await expect(code_editor.getByRole(`status`)).toHaveText(`2 of 2`)
+  await expect(code_editor.locator(`.editor-search-match.current`)).toHaveText(`greeting`)
+  await code_editor.getByRole(`button`, { name: `Replace`, exact: true }).click()
+  await code_editor.getByRole(`textbox`, { name: `Replacement` }).fill(`welcome`)
+  await code_editor.getByRole(`button`, { name: `Replace all`, exact: true }).click()
+  await expect(editor).toHaveValue(original.replaceAll(`greeting`, `welcome`))
+  await editor.focus()
+  await page.keyboard.press(`ControlOrMeta+z`)
+  await expect(editor).toHaveValue(original)
+
+  await demo.locator(`[data-load-large]`).click()
+  await query.fill(`line 99999`)
+  await expect(code_editor.getByRole(`status`)).toHaveText(`1 of 1`)
+  await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`99999`)
+  expect((await editor.inputValue()).split(`\n`).length).toBeLessThan(50)
+  await query.press(`Escape`)
+  await expect(code_editor.getByRole(`search`)).toHaveCount(0)
+  await expect(editor).toBeFocused()
+  await page.keyboard.press(`ControlOrMeta+g`)
+  const line_input = code_editor.getByRole(`spinbutton`, { name: `Line number` })
+  await expect(line_input).toBeFocused()
+  await line_input.fill(`17`)
+  await line_input.press(`Enter`)
+  await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`17`)
+  await expect(editor).toBeFocused()
+})
+
 test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async ({
   page,
 }) => {
