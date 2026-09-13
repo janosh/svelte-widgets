@@ -690,6 +690,7 @@ for (const width of [390, 1440]) {
     ).toHaveText([
       `ActionButton`,
       `Button Group`,
+      `ColorInput`,
       `FileInput`,
       `MultiSelect`,
       `RangeSlider`,

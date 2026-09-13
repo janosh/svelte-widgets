@@ -60,6 +60,8 @@ test(`unsupported language falls back to escaped raw content`, async () => {
     files: [{ title: `file.xyz`, content, language: `nonexistent-lang-xyz` }],
   })
   flushSync()
+  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
+  await default_highlighter.ready()
   await vi.waitFor(() => expect(doc_query(`pre`).getAttribute(`aria-busy`)).toBe(`false`))
   expect(doc_query(`pre code`).innerHTML).toContain(`&lt;`)
   expect(document.querySelector(`[role=alert]`)).toBeNull()
