@@ -114,6 +114,11 @@
   const collapse = (id: string) => {
     expanded = new Set([...expanded].filter((value) => value !== id))
   }
+  const toggle_expanded = (node: TreeNode): void => {
+    if (node.disabled) return
+    if (expanded.has(node.id)) collapse(node.id)
+    else void expand(node)
+  }
   async function focus_node(id: string | undefined): Promise<void> {
     if (id === undefined) return
     focused = id
@@ -188,6 +193,8 @@
     } else if (event.key === `ArrowLeft`) {
       if (expanded.has(node.id)) collapse(node.id)
       else if (parent !== undefined) next = rows[tree.indices.get(parent) ?? -1]?.node
+    } else if (event.key === `Enter` && expandable && !event.shiftKey && !toggle) {
+      toggle_expanded(node)
     } else if (event.key === `Enter` || event.key === ` `) {
       select(node, event.shiftKey, toggle || (event.key === ` ` && !event.shiftKey))
     } else if (event.key.length === 1) {
@@ -218,6 +225,7 @@
     {#each rows as { node, depth, pos, size, expandable } (node.id)}
       <div
         role="treeitem"
+        aria-label={node.label}
         data-tree-id={node.id}
         {@attach (element) => {
           const { id } = node
@@ -255,8 +263,7 @@
             onclick={(event) => {
               event.stopPropagation()
               void focus_node(node.id)
-              if (expanded.has(node.id)) collapse(node.id)
-              else void expand(node)
+              toggle_expanded(node)
             }}>{expanded.has(node.id) ? `▾` : `▸`}</button
           >{:else}<span aria-hidden="true" style="width: 1.5em"></span>{/if}
         {#if children}{@render children(node)}{:else}{node.label}{/if}

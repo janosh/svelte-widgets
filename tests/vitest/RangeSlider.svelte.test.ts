@@ -43,7 +43,7 @@ const edit = async (input: HTMLInputElement, text: string, final = true) => {
   await tick()
 }
 
-test(`demo Markdown renders highlighted usage and the props table`, () => {
+test(`demo renders highlighted usage, the props table and superscript pressure labels`, () => {
   const component = mount(RangeSliderDemo, { target: document.body })
   onTestFinished(() => unmount(component))
   const usage = doc_query(`[aria-label="RangeSlider usage"]`)
@@ -51,6 +51,13 @@ test(`demo Markdown renders highlighted usage and the props table`, () => {
   expect(doc_query(`table`).textContent).toContain(`Bindable [lower, upper] pair.`)
   expect(usage.textContent).toContain(`bind:value`)
   expect(usage.querySelector(`script`)).toBeNull()
+  const pressure = doc_query(`.range-slider:has([aria-label="Pressure window Minimum"])`)
+  expect(
+    [...pressure.querySelectorAll(`.limit, .ticks span`)].map((node) => node.textContent),
+  ).toEqual([`10⁻¹⁰ bar`, `10⁻⁶ bar`, `10⁻² bar`, `10² bar`])
+  expect(
+    [...pressure.querySelectorAll(`.formatted`)].map((node) => node.textContent),
+  ).toEqual([`10⁻⁶ bar`, `10⁰ bar`])
 })
 
 describe(`range arithmetic`, () => {

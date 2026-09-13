@@ -78,7 +78,25 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   baseURL,
 }) => {
   const group = page.getByRole(`group`, { name: `Pressure window`, exact: true })
+  const labels = group.locator(`.limit, .ticks span`)
+  await expect(labels).toHaveText([`10⁻¹⁰ bar`, `10⁻⁶ bar`, `10⁻² bar`, `10² bar`])
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    const boxes = await labels.evaluateAll((elements) =>
+      elements.map((element) => {
+        // Interior label spans have zero width; measure their rendered text.
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        const { left, right } = range.getBoundingClientRect()
+        return { left, right }
+      }),
+    )
+    for (const [idx, box] of boxes.slice(1).entries()) {
+      expect(box.left).toBeGreaterThan(boxes[idx].right)
+    }
+  }
   const lower = group.getByRole(`slider`).first()
+  await expect(lower).toHaveAttribute(`aria-valuetext`, `10⁻⁶ bar`)
   await lower.press(`ArrowRight`)
   await expect(lower).toHaveAttribute(`aria-valuenow`, `0.00001`)
   await lower.press(`Home`)

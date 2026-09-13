@@ -209,9 +209,14 @@ test.each([
   expect(virtual_window(input)).toEqual(expected)
 })
 
-test.each([false, true])(
-  `tree lazy expansion, keyboard navigation and selection (initial=%s)`,
-  async (initial) => {
+test.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true],
+])(
+  `tree lazy expansion, navigation, selection and disabled branches (initial=%s, multiple=%s)`,
+  async (initial, multiple) => {
     const target = target_for()
     const load = vi.fn(async () => [{ id: `child`, label: `Child` }])
     const nodes: TreeNode[] = [
@@ -219,13 +224,20 @@ test.each([false, true])(
       { id: `last`, label: `Last` },
     ]
     const on_select = vi.fn()
-    const component = mount(TreeView, {
-      target,
-      props: { nodes, on_select, expanded: new Set(initial ? [`root`] : []) },
+    const on_selection_change = vi.fn()
+    const props = $state({
+      nodes,
+      multiple,
+      on_select,
+      on_selection_change,
+      expanded: new Set(initial ? [`root`] : []),
     })
+    const component = mount(TreeView, { target, props })
     onTestFinished(() => unmount(component))
     const root = doc_query(`[data-tree-id="root"]`)
-    if (!initial) fire_key(root, `ArrowRight`)
+    expect(root.getAttribute(`aria-label`)).toBe(`Root`)
+    root.focus()
+    if (!initial) fire_key(root, `Enter`)
     await tick()
     await tick()
     expect(load).toHaveBeenCalledOnce()
@@ -233,23 +245,57 @@ test.each([false, true])(
     fire_key(root, `ArrowRight`)
     await tick()
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(`child`)
-    fire_key(document.activeElement as Element, `Enter`)
+    fire_key(doc_query(`[role="treeitem"]:focus`), `Enter`)
     expect(on_select).toHaveBeenCalledWith({ id: `child`, label: `Child` })
-    fire_key(document.activeElement as Element, `ArrowLeft`)
+    fire_key(doc_query(`[role="treeitem"]:focus`), `ArrowLeft`)
     await tick()
     fire_key(root, `ArrowLeft`)
     await tick()
     expect(target.querySelectorAll(`[role="treeitem"]`)).toHaveLength(2)
+    for (const [key, expanded] of [
+      [`ArrowRight`, true],
+      [`Enter`, false],
+      [`Enter`, true],
+      [`Enter`, false],
+    ] as const) {
+      fire_key(root, key)
+      await tick()
+      expect(root.getAttribute(`aria-expanded`)).toBe(String(expanded))
+      expect(document.activeElement).toBe(root)
+      if (expanded)
+        expect(doc_query(`[data-tree-id="child"]`).getAttribute(`aria-selected`)).toBe(
+          `true`,
+        )
+    }
+    expect(load).toHaveBeenCalledOnce()
+    expect(on_select).toHaveBeenCalledTimes(1)
+    expect(on_selection_change).toHaveBeenCalledTimes(multiple ? 1 : 0)
     for (const [key, id] of [
       [`l`, `last`],
       [`r`, `root`],
       [`End`, `last`],
       [`Home`, `root`],
     ]) {
-      fire_key(document.activeElement as Element, key)
+      fire_key(doc_query(`[role="treeitem"]:focus`), key)
       await tick()
       expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(id)
     }
+    fire_key(root, ` `)
+    await tick()
+    expect(root.getAttribute(`aria-selected`)).toBe(`true`)
+    expect(root.getAttribute(`aria-expanded`)).toBe(`false`)
+
+    props.nodes[0].disabled = true
+    for (const expanded of [false, true]) {
+      props.expanded = new Set(expanded ? [`root`] : [])
+      await tick()
+      fire_key(root, `Enter`)
+      await tick()
+      expect(root.getAttribute(`aria-expanded`)).toBe(String(expanded))
+      expect(document.activeElement).toBe(root)
+    }
+    expect(on_select).toHaveBeenCalledTimes(2)
+    expect(on_selection_change).toHaveBeenCalledTimes(multiple ? 2 : 0)
   },
 )
 

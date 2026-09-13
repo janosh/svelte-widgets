@@ -9,7 +9,7 @@ Navigate hierarchical data with stable node IDs, lazy loading and single or mult
 
 ### Minimal example
 
-Bind `selected` to a node ID and `expanded` to a set of branch IDs. Clicking a label selects it; its caret independently expands or collapses the branch.
+Bind `selected` to a node ID and `expanded` to a set of branch IDs. Clicking a label selects it; its caret or Enter independently expands or collapses the branch.
 
 ```svelte example id="tree-view-basic"
 <script lang="ts">
@@ -35,7 +35,7 @@ Bind `selected` to a node ID and `expanded` to a set of branch IDs. Clicking a l
 
 ### <Icon icon={ListChecks} class="heading-icon" aria-hidden="true" /> Multiple selection
 
-Set `multiple` and bind `selected_ids` to a set of IDs. An ordinary click or Enter selects one node; Ctrl/Cmd-click or Space toggles it. Shift-click, Shift+Space and Shift+Up/Down/Home/End select a range over visible rows. Ctrl/Cmd with Shift adds the range to the existing selection. Ctrl/Cmd+A adds all visible, enabled rows. Arrow navigation alone only moves focus.
+Set `multiple` and bind `selected_ids` to a set of IDs. An ordinary click selects one node; Ctrl/Cmd-click or Space toggles its selection. Enter expands or collapses a branch and selects a leaf. Shift-click, Shift+Space and Shift+Up/Down/Home/End select a range over visible rows. Ctrl/Cmd with Shift adds the range to the existing selection. Ctrl/Cmd+A adds all visible, enabled rows. Arrow navigation alone only moves focus.
 
 Disabled rows can receive focus but cannot be selected or expanded, and ranges skip them. Collapsing a branch preserves selected descendants; replacing a selection with a visible range excludes hidden descendants. If the range anchor disappears, the next range starts at its destination. Replace `selected_ids` when updating it externally; `on_selection_change(ids)` receives a fresh set after each selection gesture, including deselection and select-all.
 
@@ -128,4 +128,4 @@ For HTTP loaders, pass `signal` to `fetch`, check `response.ok`, and validate th
 
 ### <Icon icon={Keyboard} class="heading-icon" aria-hidden="true" /> Keyboard behavior
 
-Tab enters the tree at its active row. Up/Down move through visible rows; Home/End reach the first/last. Right expands a branch or enters its first child; Left collapses it or moves to its parent. Enter/Space selects. Typing a character focuses the next visible label starting with that character. Moving focus does not select a node.
+Tab enters the tree at its active row. Up/Down move through visible rows; Home/End reach the first/last. Right expands a branch or enters its first child; Left collapses it or moves to its parent. Enter toggles a branch without changing selection, or selects a leaf. Space selects the focused row (toggles its selection in multiple mode). Typing a character focuses the next visible label starting with that character. Moving focus does not select a node.

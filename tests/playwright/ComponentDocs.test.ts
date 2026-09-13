@@ -81,6 +81,15 @@ test(`TreeView examples select nodes and ranges, and retry failed lazy branches`
   await app.focus()
   await theme.click({ modifiers: [`Shift`] })
   await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  const source = multiple.getByRole(`treeitem`, { name: `src`, exact: true })
+  await source.focus()
+  for (const expanded of [false, true]) {
+    await source.press(`Enter`)
+    await expect(source).toHaveAttribute(`aria-expanded`, String(expanded))
+    await expect(source).toBeFocused()
+    await expect(multiple.getByRole(`treeitem`)).toHaveCount(expanded ? 5 : 2)
+    await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  }
   await multiple.getByRole(`button`, { name: `Clear selection` }).click()
   await app.click()
   await theme.click({ modifiers: [`ControlOrMeta`] })

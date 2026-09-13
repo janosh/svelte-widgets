@@ -19,6 +19,12 @@
   })
   const money = (value: number): string => currency.format(value)
   const percent = (value: number): string => `${Math.round(value * 100)}%`
+  const format_pressure = (value: number): string => {
+    const exponent = String(Math.round(Math.log10(value))).replace(/./g, (digit) =>
+      digit === `-` ? `⁻` : `⁰¹²³⁴⁵⁶⁷⁸⁹`[Number(digit)],
+    )
+    return `10${exponent} bar`
+  }
 </script>
 
 <svelte:head><title>RangeSlider · Svelte Widgets</title></svelte:head>
@@ -99,9 +105,9 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
       min={1e-10}
       max={100}
       step={1}
-      tick_count={7}
+      tick_count={4}
       bind:value={pressure}
-      format_value={(value) => `${value.toExponential(0)} bar`}
+      format_value={format_pressure}
     />
     <p class="note">Each arrow moves one decade (×10 or ÷10). Values and callbacks stay in bar.</p>
   </section>
