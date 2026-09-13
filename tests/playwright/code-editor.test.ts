@@ -27,6 +27,10 @@ test(`CodeEditor search replaces undoably and navigates offscreen document lines
   await expect(editor).toHaveValue(original)
 
   await demo.locator(`[data-load-large]`).click()
+  await query.fill(`line`)
+  await expect(code_editor.getByRole(`status`)).toHaveText(
+    `1 of 5000+ (first 5000 shown)`,
+  )
   await query.fill(`line 99999`)
   await expect(code_editor.getByRole(`status`)).toHaveText(`1 of 1`)
   await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`99999`)

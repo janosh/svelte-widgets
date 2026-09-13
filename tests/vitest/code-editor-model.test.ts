@@ -1,6 +1,7 @@
 import { create_editor_model } from '$lib/code-editor/model'
 import {
   find_editor_matches,
+  iterate_editor_matches,
   replace_editor_matches,
   type EditorSearchOptions,
 } from '$lib/code-editor/search'
@@ -162,6 +163,41 @@ test(`long literal queries verify overlapping candidates without RegExp size lim
     { from: from + query.length + 1, to: text.length },
   ])
 })
+test.each([3, 1026])(
+  `match iteration stops scanning when the caller stops (query length %s)`,
+  (length) => {
+    const query = length === 3 ? `foo` : `😀${`a`.repeat(length - 2)}`
+    const text = `${`${query} `.repeat(6000)}${`tail `.repeat(20_000)}`
+    const model = create_editor_model({ uri: `memory:lazy-search`, text })
+    const slice_spy = vi.spyOn(model, `slice`)
+    const iterator = iterate_editor_matches(model, query)
+    expect(slice_spy).not.toHaveBeenCalled()
+    const matches: ReturnType<typeof find_editor_matches> = []
+    let truncated = false
+    for (const match of iterator) {
+      if (matches.length === 5000) {
+        truncated = true
+        break
+      }
+      matches.push(match)
+    }
+    expect(truncated).toBe(true)
+    expect(matches).toEqual(
+      Array.from({ length: 5000 }, (_unused, idx) => ({
+        from: idx * (query.length + 1),
+        to: idx * (query.length + 1) + query.length,
+      })),
+    )
+    expect(slice_spy.mock.calls.length).toBeLessThanOrEqual(
+      Math.ceil((5001 * (query.length + 1)) / (32 * 1024)),
+    )
+    expect(
+      Math.max(...slice_spy.mock.calls.map(([_from, to = model.length]) => to)),
+    ).toBeLessThan(model.length)
+    expect(iterator.next()).toEqual({ done: true, value: undefined })
+    expect(find_editor_matches(model, query)).toHaveLength(6000)
+  },
+)
 test.each([1023, 1024, 1025])(
   `search dispatch preserves Unicode boundaries at query length %s`,
   (length) => {

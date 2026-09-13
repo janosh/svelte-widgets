@@ -247,6 +247,42 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
   expect(model.selection).toEqual({ anchor: 12, head: 15 })
   expect(model.text()).toBe(original)
 })
+test.each([5000, 5001])(
+  `live search caps navigation and reports truncation without limiting replace all (%s matches)`,
+  async (count) => {
+    const original = `foo\n`.repeat(count)
+    const { instance, model, recorder } = await mount_editor(
+      create_editor_model({ uri: `many-matches.ts`, text: original }),
+    )
+    await instance.open_search(true)
+    await fill_search(`foo`)
+    const status = doc_query(`[role="status"]`)
+    const total = count === 5000 ? `5000` : `5000+ (first 5000 shown)`
+    expect(status.textContent).toBe(`1 of ${total}`)
+    expect(instance.find_next(-1)).toBe(true)
+    await flush_async()
+    expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })
+    expect(status.textContent).toBe(`5000 of ${total}`)
+    expect(instance.find_next()).toBe(true)
+    await flush_async()
+    expect(model.selection).toEqual({ anchor: 0, head: 3 })
+    expect(status.textContent).toBe(`1 of ${total}`)
+    await fill_search(`x`, `Replacement`)
+    expect(instance.replace_all()).toBe(count)
+    await flush_async()
+    expect([model.text(), recorder.get_text()]).toEqual([
+      `x\n`.repeat(count),
+      `x\n`.repeat(count),
+    ])
+    expect(status.textContent).toBe(`No matches`)
+    expect(instance.undo()).toBe(true)
+    await flush_async()
+    expect(model.text()).toBe(original)
+    expect(model.dirty).toBe(false)
+    expect(status.textContent).toBe(`1 of ${total}`)
+    expect(instance.undo()).toBe(false)
+  },
+)
 test(`go-to-line uses validated gutter numbers and reveals a bounded input window`, async () => {
   const { model, instance, textarea } = await mount_editor(
     create_editor_model({ uri: `lines.ts`, text: `line\n`.repeat(2000) }),

@@ -4,16 +4,15 @@ export type EditorSearchOptions = { case_sensitive?: boolean; whole_word?: boole
 export type EditorMatch = Pick<TextEdit, `from` | `to`>
 
 // Literal, non-overlapping UTF-16 ranges, including matches across lines and rope chunks.
-// Keep only a window in memory: searching does not flatten a large document into a string.
-export const find_editor_matches = (
+// Yield lazily from bounded windows so callers can stop without scanning the full model.
+export function* iterate_editor_matches(
   model: Pick<EditorModel, `slice` | `length`>,
   query: string,
   { case_sensitive = false, whole_word = false }: EditorSearchOptions = {},
-): EditorMatch[] => {
+): Generator<EditorMatch, void, unknown> {
   query = query.replaceAll(/\r\n?/g, `\n`)
-  if (!query) return []
+  if (!query) return
   const window_size = 32 * 1024
-  const matches: EditorMatch[] = []
   // Native literal matching skips quickly over large documents for ordinary queries.
   // Bound the expression size; long queries use the linear matcher below.
   if (query.length <= 1024) {
@@ -40,12 +39,12 @@ export const find_editor_matches = (
         // A Unicode expression may back up into a pair split at the window boundary.
         if (from < cursor) continue
         const to = window_from + pattern.lastIndex
-        matches.push({ from, to })
+        yield { from, to }
         next_cursor = Math.max(next_cursor, to)
       }
       cursor = next_cursor
     }
-    return matches
+    return
   }
   const characters = Array.from(query)
   const patterns = new Map<string, RegExp>()
@@ -106,13 +105,19 @@ export const find_editor_matches = (
       ) {
         matched = prefixes[matched - 1]
       } else {
-        matches.push({ from, to: cursor })
+        yield { from, to: cursor }
         matched = 0
       }
     }
   }
-  return matches
 }
+
+// The public collecting helper remains exhaustive; only the editor UI caps its results.
+export const find_editor_matches = (
+  model: Pick<EditorModel, `slice` | `length`>,
+  query: string,
+  options?: EditorSearchOptions,
+): EditorMatch[] => Array.from(iterate_editor_matches(model, query, options))
 
 // Replacement text is literal. Each edit uses coordinates left by the preceding edit,
 // and the entire batch is one undo step in the model's existing history.
@@ -122,15 +127,14 @@ export const replace_editor_matches = (
   replacement: string,
   options?: EditorSearchOptions,
 ): number => {
-  const matches = find_editor_matches(model, query, options)
-  if (matches.length === 0) return 0
   const insert = replacement.replaceAll(/\r\n?/g, `\n`)
+  const edits: TextEdit[] = []
   let shift = 0
-  const edits = matches.map(({ from, to }) => {
-    const edit = { from: from + shift, to: to + shift, insert }
+  for (const { from, to } of iterate_editor_matches(model, query, options)) {
+    edits.push({ from: from + shift, to: to + shift, insert })
     shift += insert.length - (to - from)
-    return edit
-  })
+  }
+  if (edits.length === 0) return 0
   model.transact(edits, { source: `command` })
-  return matches.length
+  return edits.length
 }

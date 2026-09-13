@@ -4,6 +4,8 @@
 
 Use **Find** (Ctrl/Cmd+F) to search the entire document, including lines outside the viewport. Enter/F3 and Shift+Enter/Shift+F3 navigate forward and backward with wraparound; matches are highlighted in the visible syntax overlay. **Replace** (Ctrl+H or Cmd+Alt+F) offers case-sensitive and whole-word matching, single replacement, and replacement of every match in one undo step. Search and replacement are literal: punctuation, whitespace, and `$&` have no special replacement meaning. Whole-word boundaries include Unicode letters, combining marks, numbers, `_`, and `$`. Replace controls are unavailable in read-only editors.
 
+Live search retains the first 5,000 matches. When more exist, the status shows `5000+ (first 5000 shown)` and navigation wraps within those displayed results; refine the query to reach later matches. **Replace all** still replaces every match in the document in one undo step, including matches beyond the displayed limit.
+
 **Go to line** (Ctrl/Cmd+G) uses the same one-based numbers as the gutter. Escape closes either panel and returns focus to the editor; press Escape again followed by Tab to leave it.
 
 The rope model is validated with generated 100 MB / 1,000,000-line documents. The native input and syntax overlay contain only viewport lines plus a small overscan. Selections expand the input window so native copying, cutting, and assistive technology retain the selected text; selecting the whole document or a very long line can still materialize a large string. The outer viewport remains subject to browser scroll-height limits.
@@ -123,6 +125,8 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 The backend receives the model URI and normalized open text, but never receives save requests. It owns only the open document and token/edit protocol; `model.subscribe()` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook. Successful saves call `model.mark_saved()`.
 
 Search scans overlapping model slices instead of flattening the document. The headless helpers return non-overlapping UTF-16 offsets and also accept multiline queries; CRLF input is normalized to the model's LF line endings. Match lists update after edits, undo, redo, and model replacement.
+
+`find_editor_matches()` and `replace_editor_matches()` are exhaustive. For callers that need only some results, `iterate_editor_matches()` yields the same matches lazily and stops scanning when the caller stops iterating.
 
 ```ts
 import { find_editor_matches, replace_editor_matches } from 'svelte-widgets/code-editor'

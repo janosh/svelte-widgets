@@ -22,7 +22,7 @@
   import { create_highlight_client } from './highlight-client'
   import type { HighlightSpansEvent } from './highlight-client'
   import { line_comment_token } from './languages'
-  import { find_editor_matches, replace_editor_matches } from './search'
+  import { iterate_editor_matches, replace_editor_matches } from './search'
   import type { EditorMatch } from './search'
   import { render_tokens, type RenderedToken } from './tokens'
   import { resolve_editor_backend, to_error } from './types'
@@ -42,6 +42,7 @@
   const OVERSCAN_ROWS = 8
   const TOKEN_CACHE_LINES = 2048
   const CONTEXT_CHECK_CHARS = 32
+  const SEARCH_MATCH_LIMIT = 5000
   const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
   const words = new Intl.Segmenter(undefined, { granularity: `word` })
   let {
@@ -122,12 +123,22 @@
   )
   const show_line_numbers = $derived(options.line_numbers ?? true)
   const editing_disabled = $derived(read_only || !doc_info?.editable)
-  const search_matches = $derived.by(() => {
+  const search_result = $derived.by(() => {
     void model_revision
-    return search_panel === `find`
-      ? find_editor_matches(model, search_query, search_options)
-      : []
+    const matches: EditorMatch[] = []
+    let truncated = false
+    if (search_panel === `find`) {
+      for (const match of iterate_editor_matches(model, search_query, search_options)) {
+        if (matches.length === SEARCH_MATCH_LIMIT) {
+          truncated = true
+          break
+        }
+        matches.push(match)
+      }
+    }
+    return { matches, truncated }
   })
+  const search_matches = $derived(search_result.matches)
   const current_match = $derived(
     search_matches.findIndex(
       ({ from, to }) =>
@@ -1183,7 +1194,9 @@
         />
         <span role="status"
           >{search_matches.length
-            ? msg.match_position(current_match + 1, search_matches.length)
+            ? search_result.truncated
+              ? msg.match_position_truncated(current_match + 1, search_matches.length)
+              : msg.match_position(current_match + 1, search_matches.length)
             : msg.no_matches}</span
         >
         {#each [-1, 1] as const as direction}
