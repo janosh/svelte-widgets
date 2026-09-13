@@ -1,6 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
   import { SubpageGrid } from 'svelte-widgets'
+  import { Puzzle } from 'svelte-widgets/icons'
   import { demo_labels } from '../..'
 
   // keyed by route slug; titles come from demo_labels so they can't drift from the nav
@@ -34,6 +35,7 @@
 
 <SubpageGrid
 title="Attachments"
+title_icon={Puzzle}
 subtitle="One behaviour per attachment, added to an element without wrapping it in a component."
 {subpages}
 />

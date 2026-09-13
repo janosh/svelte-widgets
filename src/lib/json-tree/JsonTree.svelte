@@ -47,7 +47,7 @@
     auto_fold_arrays = 10,
     auto_fold_objects = 20,
     collapsed_paths = $bindable(new SvelteSet<string>()),
-    show_header = true,
+    ui = {},
     show_data_types = $bindable(false),
     show_array_indices = $bindable(true),
     sort_keys = false,
@@ -90,6 +90,9 @@
   const prev_values = new Map<string, unknown>()
 
   const root_path = $derived(root_label ?? ``)
+  $effect.pre(() => {
+    if (ui.node_actions === false) context_menu_state = null
+  })
   const value_at = (path: string): unknown => get_value_at_path(value, path, root_label)
 
   const value_changed = make_change_detector()
@@ -257,6 +260,7 @@
     expandable: boolean,
     is_collapsed: boolean,
   ): void {
+    if (ui.node_actions === false) return
     event.preventDefault()
     event.stopPropagation() // ancestors would otherwise re-target the menu to themselves
     context_menu_state = {
@@ -327,6 +331,7 @@
     max_string_length,
     highlight_changes,
     editable,
+    ui,
   })
 
   const context: JsonTreeContext = {
@@ -454,7 +459,7 @@
   class={[`json-tree`, rest.class]}
   onkeydown={handle_tree_keydown}
 >
-  {#if show_header}
+  {#if ui.header !== false}
     <header class="json-tree-header">
       <div class="search-wrapper">
         <Icon icon={Search} style="width: 14px; height: 14px; opacity: 0.6" />
@@ -534,7 +539,7 @@
     </header>
   {/if}
 
-  {#if focused_path}
+  {#if ui.path !== false && focused_path}
     <div class="path-breadcrumb">
       <button
         type="button"
@@ -548,7 +553,7 @@
     </div>
   {/if}
 
-  {#if pinned_paths.size > 0}
+  {#if ui.node_actions !== false && pinned_paths.size > 0}
     <div class="pinned-panel">
       <div class="pinned-header">
         <span>Pinned ({pinned_paths.size})</span>

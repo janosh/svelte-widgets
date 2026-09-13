@@ -1,6 +1,6 @@
 ## Toc
 
-A sticky table of contents that tracks the active heading. Pass `items` from a content manifest to render navigation on the server. Without `items`, it queries existing heading IDs once on mount. Set `dynamic` to observe headings that change after mount.
+A sticky table of contents that tracks the active heading. Pass `items` from a [content manifest](markdown#content-manifests) to render navigation on the server. Without `items`, it queries existing heading IDs once on mount. Set `dynamic` to observe headings that change after mount.
 
 The site table of contents uses the Markdown manifest. The example scopes its one-time DOM query to explicitly identified sample headings with `heading_selector`. Invalid selectors or `collapse_subheadings` values throw instead of silently disabling navigation.
 

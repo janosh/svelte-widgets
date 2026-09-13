@@ -21,6 +21,24 @@ Search keys or values in the toolbar, expand a branch, or right-click a row to c
 <JsonTree value={result} root_label="result" download_filename="result.json" />
 ```
 
+### Compact display
+
+Use `ui` to hide the toolbar, selected path, extra node actions, or byte-size hints independently. Omitted flags default to `true`; basic expand/collapse arrows, syntax highlighting, and copy shortcuts remain available.
+
+```svelte example id="json-tree-compact"
+<script lang="ts">
+  import { JsonTree } from 'svelte-widgets'
+
+  const config = { optimizer: { name: `FIRE`, max_steps: 500 }, enabled: true }
+</script>
+
+<JsonTree
+  value={config}
+  ui={{ header: false, path: false, node_actions: false, size_hints: false }}
+  default_fold_level={Infinity}
+/>
+```
+
 ### Edit and compare
 
 Editing is caller-owned: `on_change(path, new_value, old_value)` reports a proposed leaf change without mutating your data. The public `set_at_path` helper returns a new value with that path replaced. Pass the same `root_label` to the helper if you set one on the viewer. This example compares edits with a fixed original snapshot; Reset restores it.
@@ -52,7 +70,7 @@ Double-click a leaf to edit; Enter commits and Escape cancels. Edits parse boole
 | `value`, `root_label`                             | Data and optional display label for its root path.                                                                                            |
 | `default_fold_level={2}`                          | Initial expansion depth. Arrays longer than `auto_fold_arrays={10}` and objects larger than `auto_fold_objects={20}` also fold automatically. |
 | `bind:collapsed_paths`                            | Externally control collapsed paths. Use a reactive set or replace the set when changing it.                                                   |
-| `show_header={true}`                              | Show search, fold, copy and download controls.                                                                                                |
+| `ui`                                              | Toggle `header`, `path`, `node_actions` (fold buttons, copy hints, context menu, pinned panel), and `size_hints`. All default to `true`.      |
 | `bind:show_data_types`, `bind:show_array_indices` | Toggle type annotations and numeric array labels. Defaults are `false` and `true`.                                                            |
 | `sort_keys`, `max_string_length={200}`            | Alphabetical object keys and long-string truncation.                                                                                          |
 | `on_select(path, value)`, `on_copy(path, text)`   | Observe node focus/selection and successful copies.                                                                                           |

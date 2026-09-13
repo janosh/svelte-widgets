@@ -34,8 +34,13 @@ export interface JsonTreeProps {
   auto_fold_objects?: number
   // Bindable set of collapsed paths for external control
   collapsed_paths?: Set<string>
-  // Show header with search and expand/collapse controls (default: true)
-  show_header?: boolean
+  // Optional UI elements; omitted flags default to true. Basic folding stays available.
+  ui?: {
+    header?: boolean
+    path?: boolean
+    node_actions?: boolean
+    size_hints?: boolean
+  }
   // Show type annotations next to values (default: false)
   show_data_types?: boolean
   // Show numeric indices for array items (default: true)
@@ -72,6 +77,7 @@ export interface JsonTreeContext {
     max_string_length: number
     highlight_changes: boolean
     editable: boolean
+    ui: NonNullable<JsonTreeProps['ui']>
   }
   collapsed: Set<string>
   force_expanded: Set<string>

@@ -4,6 +4,7 @@ import { JsonTree } from '$lib'
 import { serialize_for_copy } from '$lib/json-tree/utils'
 import { doc_query } from './index'
 import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
+import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, onTestFinished, test, vi } from 'vitest'
 
 const keydown = (key: string, init: KeyboardEventInit = {}) =>
@@ -82,11 +83,52 @@ describe(`rendering`, () => {
     expect(key.textContent?.trim()).toBe(`"nested"`)
   })
 
-  it(`hides header with show_header=false and labels the root with root_label`, () => {
-    mount_tree({ value: [1, 2, 3], root_label: `items`, show_header: false })
-    expect(document.querySelector(`.json-tree-header`)).toBeNull()
-    expect(node_at(`items`)?.querySelector(`.node-key`)?.textContent).toContain(`"items"`)
-  })
+  it.each<NonNullable<ComponentProps<typeof JsonTree>[`ui`]>>([
+    {},
+    { header: false },
+    { path: false },
+    { node_actions: false },
+    { size_hints: false },
+    { header: false, path: false, node_actions: false, size_hints: false },
+  ])(
+    `configures optional UI %j while preserving highlighting and folding`,
+    async (ui) => {
+      mount_tree({
+        value: { nested: { name: `test`, count: 42 } },
+        root_label: `items`,
+        default_fold_level: 1,
+        ui,
+      })
+      for (const [selector, visible] of [
+        [`.json-tree-header`, ui.header !== false],
+        [`.collapse-level-btn`, ui.node_actions !== false],
+        [`.node-key.with-actions`, ui.node_actions !== false],
+        [`.size-hint`, ui.size_hints !== false],
+      ] as const) {
+        expect(Boolean(document.querySelector(selector)), selector).toBe(visible)
+      }
+      expect(node_at(`items`)?.querySelector(`.node-key`)?.textContent).toContain(
+        `"items"`,
+      )
+
+      const nested = node_at(`items.nested`)
+      await click_and_tick(nested)
+      expect(Boolean(document.querySelector(`.path-breadcrumb`))).toBe(ui.path !== false)
+      const menu_event = mouse(`contextmenu`, { cancelable: true })
+      fire(nested, menu_event)
+      expect(menu_event.defaultPrevented).toBe(ui.node_actions !== false)
+      expect(Boolean(document.querySelector(`.context-menu`))).toBe(
+        ui.node_actions !== false,
+      )
+      fire(tree(), keydown(`Escape`))
+      await click_and_tick(nested?.querySelector(`.collapse-toggle`))
+      expect(nested?.getAttribute(`aria-expanded`)).toBe(`true`)
+      expect(nested?.querySelector(`.json-value.string`)?.textContent?.trim()).toBe(
+        `"test"`,
+      )
+      expect(nested?.querySelector(`.json-value.number`)?.textContent?.trim()).toBe(`42`)
+    },
+  )
 
   it.each([
     [`hello`, `string`, `"hello"`],
@@ -111,7 +153,7 @@ describe(`rendering`, () => {
     [`日本語 🚀 ∑`, `string`, `"日本語 🚀 ∑"`],
     [`<div>html</div>`, `string`, `"<div>html</div>"`],
   ])(`renders leaf %p with class %s as %p`, (value, css_class, expected) => {
-    mount_tree({ value: { test: value }, show_header: false })
+    mount_tree({ value: { test: value }, ui: { header: false } })
     const value_el = doc_query(`.json-value`)
     expect(value_el.classList.contains(css_class)).toBe(true)
     expect(value_el.textContent?.trim()).toBe(expected)
@@ -121,14 +163,14 @@ describe(`rendering`, () => {
     [`just a string`, `"just a string"`],
     [null, `null`],
   ])(`renders primitive root %p`, (value, expected) => {
-    mount_tree({ value, show_header: false })
+    mount_tree({ value, ui: { header: false } })
     expect(doc_query(`.json-value`).textContent?.trim()).toBe(expected)
   })
 
   it(`uses [] for arrays, {} for objects and sorts keys with sort_keys`, () => {
     mount_tree({
       value: { zebra: [1], apple: { a: 1 }, 'key-with-dash': 2 },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
       sort_keys: true,
     })
@@ -151,14 +193,14 @@ describe(`rendering`, () => {
     [{ m: new Map([[`a`, 1]]) }, `Map(1)`],
     [{ s: new Set([1, 2, 3, 4]) }, `Set(4)`],
   ])(`collapsed %j previews as %p with a byte-size hint`, (value, expected) => {
-    mount_tree({ value, show_header: false, default_fold_level: 1 })
+    mount_tree({ value, ui: { header: false }, default_fold_level: 1 })
     expect(doc_query(`.preview`).textContent?.trim()).toBe(expected)
     expect(doc_query(`.size-hint`).textContent?.trim()).toMatch(/^\d+ B$/)
   })
 
   it(`renders Map entries as key/value pairs and Set members by index`, () => {
     const nested = new Map([[`inner`, new Set([{ deep: true }])]])
-    mount_tree({ value: { nested }, show_header: false, default_fold_level: 10 })
+    mount_tree({ value: { nested }, ui: { header: false }, default_fold_level: 10 })
     expect(node_at(`nested[0].key`)?.textContent).toContain(`"inner"`)
     expect(node_at(`nested[0].value[0].deep`)?.textContent).toContain(`true`)
   })
@@ -166,7 +208,7 @@ describe(`rendering`, () => {
   it(`truncates long strings behind an expand button`, async () => {
     mount_tree({
       value: { long: `a`.repeat(300) },
-      show_header: false,
+      ui: { header: false },
       max_string_length: 50,
     })
     const value_el = doc_query(`.json-value`)
@@ -179,7 +221,7 @@ describe(`rendering`, () => {
     [`https://example.com`, true],
     [`not a url`, false],
   ])(`URL auto-link for %p = %s`, (text, is_link) => {
-    mount_tree({ value: { link: text }, show_header: false })
+    mount_tree({ value: { link: text }, ui: { header: false } })
     const link = document.querySelector<HTMLAnchorElement>(`.url-link`)
     expect(Boolean(link)).toBe(is_link)
     if (link) {
@@ -192,7 +234,7 @@ describe(`rendering`, () => {
   it.each([`#ff0000`, `#fff`, `rgb(255, 0, 0)`, `hsl(120, 100%, 50%)`, `hello`])(
     `color swatch for %p`,
     (color) => {
-      mount_tree({ value: { color }, show_header: false })
+      mount_tree({ value: { color }, ui: { header: false } })
       const swatch = document.querySelector<HTMLSpanElement>(`.color-swatch`)
       expect(Boolean(swatch)).toBe(color !== `hello`)
       if (swatch) expect(swatch.style.background).not.toBe(``)
@@ -202,7 +244,7 @@ describe(`rendering`, () => {
   it(`marks expanded nodes at depth <= 2 as sticky headers`, () => {
     mount_tree({
       value: { a: { b: { c: { d: 1 } } } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     expect(
@@ -236,7 +278,7 @@ describe(`folding`, () => {
   ])(
     `%s collapses nodes and the toggle re-expands them`,
     async (_name, value, props, preview) => {
-      mount_tree({ value, show_header: false, default_fold_level: 5, ...props })
+      mount_tree({ value, ui: { header: false }, default_fold_level: 5, ...props })
       const collapsed = doc_query(`.json-node.collapsed`)
       const own_preview = () =>
         collapsed.querySelector(`:scope > .node-content > .preview`)
@@ -301,7 +343,7 @@ describe(`folding`, () => {
     const write_text = mock_clipboard_write()
     mount_tree({
       value: { nested: { deep: 42 } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 1,
     })
     expect(node_at(`nested.deep`)).toBeNull()
@@ -342,7 +384,7 @@ describe(`folding`, () => {
   ])(`double-click %s subtree`, async (_desc, default_fold_level, rendered_after) => {
     mount_tree({
       value: { a: { b: { c: 1 }, d: 2 } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level,
     })
     fire(node_at(`a`), mouse(`dblclick`))
@@ -355,7 +397,7 @@ describe(`folding`, () => {
   it(`double-click on the unlabeled root toggles every descendant`, async () => {
     mount_tree({
       value: { a: { b: { c: 1 }, d: 2 } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 10,
     })
     const root = node_at(``)
@@ -372,7 +414,7 @@ describe(`folding`, () => {
   it(`⊟ collapses children while keeping the node itself open`, async () => {
     mount_tree({
       value: { outer: { inner: { deep: 1 } } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     expect(doc_query(`.collapse-level-btn`).textContent?.trim()).toBe(`⊟`)
@@ -386,7 +428,7 @@ describe(`folding`, () => {
     const collapsed = new Set([`nested`])
     mount_tree({
       value: { nested: { a: 1 }, other: { b: 2 } },
-      show_header: false,
+      ui: { header: false },
       collapsed_paths: collapsed,
       default_fold_level: 5,
     })
@@ -522,7 +564,7 @@ describe(`copy and download`, () => {
   it(`clicking a value copies it with inline feedback and fires on_copy`, async () => {
     const write_text = mock_clipboard_write()
     const on_copy = vi.fn()
-    mount_tree({ value: { name: `test` }, show_header: false, on_copy })
+    mount_tree({ value: { name: `test` }, ui: { header: false }, on_copy })
     fire(doc_query(`.json-value`), mouse(`click`, { clientX: 40, clientY: 60 }))
     await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`name`, `test`))
     flushSync()
@@ -536,7 +578,7 @@ describe(`copy and download`, () => {
     const write_text = mock_clipboard_write()
     mount_tree({
       value: { my_key: { inner: 1 } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     fire(
@@ -653,7 +695,7 @@ describe(`keyboard navigation and selection`, () => {
     const on_select = vi.fn()
     mount_tree({
       value: { a: { b: 1 }, c: 2 },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
       on_select,
     })
@@ -694,7 +736,7 @@ describe(`keyboard navigation and selection`, () => {
     const write_text = mock_clipboard_write()
     mount_tree({
       value: { key: 42, obj: { a: 1 } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     fire(tree(), keydown(`ArrowDown`))
@@ -720,7 +762,7 @@ describe(`keyboard navigation and selection`, () => {
     const write_text = mock_clipboard_write()
     mount_tree({
       value: { a: 1, b: 2, c: 3, d: 4 },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     const selected = () =>
@@ -758,7 +800,7 @@ describe(`context menu and pinning`, () => {
   it(`opens on nodes and leaf values, clamps to the viewport, closes on backdrop or Escape`, async () => {
     vi.stubGlobal(`innerWidth`, 100)
     vi.stubGlobal(`innerHeight`, 100)
-    mount_tree({ value: { key: { a: 1 } }, show_header: false, default_fold_level: 5 })
+    mount_tree({ value: { key: { a: 1 } }, ui: { header: false }, default_fold_level: 5 })
     let menu = await open_menu(node_at(`key`), { clientX: 100, clientY: 200 })
     expect(menu.textContent).toContain(`Collapse all children`)
     expect(menu.textContent).toContain(`Pin this path`)
@@ -779,7 +821,7 @@ describe(`context menu and pinning`, () => {
     const write_text = mock_clipboard_write()
     mount_tree({
       value: { key: { a: { b: 1 } } },
-      show_header: false,
+      ui: { header: false },
       default_fold_level: 5,
     })
     await open_menu(node_at(`key`))
@@ -805,15 +847,25 @@ describe(`context menu and pinning`, () => {
 
   it(`pins paths into a panel that copies, unpins and clears`, async () => {
     const write_text = mock_clipboard_write()
+    const node_actions = fromStore(writable(true))
     mount_tree({
       value: { a: 1, b: { c: 2 } },
-      show_header: false,
+      get ui() {
+        return { header: false, node_actions: node_actions.current }
+      },
       default_fold_level: 5,
     })
     await open_menu(node_at(`a`))
     await click_and_tick(menu_button(`Pin this path`))
     await open_menu(node_at(`b`))
     await click_and_tick(menu_button(`Pin this path`))
+    await open_menu(node_at(`b`))
+    node_actions.current = false
+    flushSync()
+    expect(document.querySelector(`.pinned-panel, .context-menu`)).toBeNull()
+    node_actions.current = true
+    flushSync()
+    expect(document.querySelector(`.context-menu`)).toBeNull()
     const panel = doc_query(`.pinned-panel`)
     expect(panel.textContent).toContain(`Pinned (2)`)
     expect(
@@ -836,7 +888,7 @@ describe(`diff mode`, () => {
     [`added`, { a: 1, b: 2 }, { a: 1 }, `b`],
     [`changed`, { a: 99 }, { a: 1 }, `a`],
   ])(`highlights %s values`, (status, value, compare_value, path) => {
-    mount_tree({ value, compare_value, show_header: false, default_fold_level: 5 })
+    mount_tree({ value, compare_value, ui: { header: false }, default_fold_level: 5 })
     expect(node_at(path)?.classList.contains(`diff-${status}`)).toBe(true)
   })
 
@@ -847,7 +899,7 @@ describe(`diff mode`, () => {
         value: { nested: { a: 1 } },
         compare_value: { nested: { a: 1, removed_key: `gone` }, removed: 2 },
         root_label,
-        show_header: false,
+        ui: { header: false },
         default_fold_level: 5,
       })
       const ghost = doc_query(`.json-node .json-node .ghost`)
@@ -859,7 +911,7 @@ describe(`diff mode`, () => {
       expect(document.querySelectorAll(`.ghost`)).toHaveLength(2)
 
       document.body.innerHTML = ``
-      mount_tree({ value: { a: 1, b: 2 }, show_header: false, default_fold_level: 5 })
+      mount_tree({ value: { a: 1, b: 2 }, ui: { header: false }, default_fold_level: 5 })
       expect(
         document.querySelector(`.diff-added, .diff-changed, .diff-removed, .ghost`),
       ).toBeNull()
@@ -874,7 +926,7 @@ describe(`inline editing`, () => {
       const on_change = vi.fn()
       mount_tree({
         value: { n: original, s: `x` },
-        show_header: false,
+        ui: { header: false },
         default_fold_level: 5,
         editable: true,
         on_change,

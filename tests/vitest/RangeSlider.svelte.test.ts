@@ -1,6 +1,11 @@
 import { RangeSlider, type RangeValue } from '$lib'
 import RangeSliderDemo from '../../src/routes/(demos)/(inputs)/range-slider/+page.md'
-import { snap_range_value, step_range_value, validate_range } from '$lib/range-slider'
+import {
+  create_range_scale,
+  snap_range_value,
+  step_range_value,
+  validate_range,
+} from '$lib/range-slider'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, mock_rect, pointer_event, press_key } from './index'
@@ -38,7 +43,7 @@ const edit = async (input: HTMLInputElement, text: string, final = true) => {
   await tick()
 }
 
-test(`demo Markdown renders highlighted usage and the props table`, () => {
+test(`demo renders highlighted usage, the props table and superscript pressure labels`, () => {
   const component = mount(RangeSliderDemo, { target: document.body })
   onTestFinished(() => unmount(component))
   const usage = doc_query(`[aria-label="RangeSlider usage"]`)
@@ -46,9 +51,37 @@ test(`demo Markdown renders highlighted usage and the props table`, () => {
   expect(doc_query(`table`).textContent).toContain(`Bindable [lower, upper] pair.`)
   expect(usage.textContent).toContain(`bind:value`)
   expect(usage.querySelector(`script`)).toBeNull()
+  const pressure = doc_query(`.range-slider:has([aria-label="Pressure window Minimum"])`)
+  expect(
+    [...pressure.querySelectorAll(`.limit, .ticks span`)].map((node) => node.textContent),
+  ).toEqual([`10⁻¹⁰ bar`, `10⁻⁶ bar`, `10⁻² bar`, `10² bar`])
+  expect(
+    [...pressure.querySelectorAll(`.formatted`)].map((node) => node.textContent),
+  ).toEqual([`10⁻⁶ bar`, `10⁰ bar`])
 })
 
 describe(`range arithmetic`, () => {
+  test.each([
+    [1e-300, 1e300, [1e-240, 1e-120, 1, 1e120, 1e240]],
+    [0.003, 3700, [0.01, 0.2, 1, 17, 900]],
+  ])(
+    `logarithmic transforms preserve endpoints and real units in [%s, %s]`,
+    (min, max, samples) => {
+      const domain = create_range_scale(min, max, `log`)
+      expect(domain.from_position(domain.min)).toBe(min)
+      expect(domain.from_position(domain.max)).toBe(max)
+      expect(domain.from_position(domain.min - 1)).toBe(min)
+      expect(domain.from_position(domain.max + 1)).toBe(max)
+      for (const value of samples) {
+        const actual = domain.from_position(domain.to_position(value))
+        // log10 followed by exponentiation amplifies exponent error. Bound the relative
+        // error by 4 ulps of the exponent times ln(10), with no absolute-error allowance.
+        const rtol =
+          4 * Number.EPSILON * Math.max(1, Math.abs(Math.log10(value))) * Math.LN10
+        expect(Math.abs(actual - value) / value).toBeLessThanOrEqual(rtol)
+      }
+    },
+  )
   test(`snapping and stepping match an integer-built decimal grid`, () => {
     const expected_grid = Array.from(
       { length: 11 },
@@ -121,6 +154,142 @@ describe(`range arithmetic`, () => {
     [20, Infinity],
   ] as RangeValue[])(`rejects invalid pair %s/%s`, (lower, upper) => {
     expect(() => validate_range([lower, upper], 0, 100, 1)).toThrow(`ordered pair`)
+  })
+})
+
+describe(`logarithmic RangeSlider`, () => {
+  const log_props = { min: 0.001, max: 1000, step: 1, scale: `log` } as const
+  test(`positions thumbs and ticks geometrically while exposing real values`, () => {
+    const { thumbs, inputs } = setup({ ...log_props, value: [0.1, 10], tick_count: 7 })
+    expect(announced(thumbs)).toEqual([0.1, 10])
+    expect(inputs.map((input) => input.valueAsNumber)).toEqual([0.1, 10])
+    for (const [idx, expected] of [100 / 3, 200 / 3].entries()) {
+      // Two arithmetic operations convert the log fraction to percent.
+      const actual = Number(thumbs[idx].style.insetInlineStart.slice(0, -1))
+      expect(Math.abs(actual - expected)).toBeLessThanOrEqual(
+        2 * Number.EPSILON * expected,
+      )
+    }
+    expect(
+      [...document.querySelectorAll(`.ticks span`)].map((node) => node.textContent),
+    ).toEqual([`0.01`, `0.1`, `1`, `10`, `100`])
+    expect(thumbs[0].getAttribute(`aria-valuemin`)).toBe(`0.001`)
+    expect(thumbs[1].getAttribute(`aria-valuemax`)).toBe(`1000`)
+  })
+  test.each([
+    [0, `ArrowUp`, [1, 10]],
+    [1, `ArrowDown`, [0.1, 1]],
+    [0, `Home`, [0.001, 10]],
+    [1, `End`, [0.1, 1000]],
+    [0, `PageUp`, [10, 10]],
+    [1, `PageDown`, [0.1, 0.1]],
+  ] as const)(`thumb %s %s commits %j`, async (thumb, key, expected) => {
+    const on_commit = vi.fn()
+    const { thumbs } = setup({ ...log_props, value: [0.1, 10], on_commit })
+    press_key(thumbs[thumb], key)
+    await tick()
+    expect(announced(thumbs)).toEqual(expected)
+    expect(on_commit).toHaveBeenCalledExactlyOnceWith(expected)
+  })
+  test.each([
+    [`0`, 0.1],
+    [`-1`, 0.1],
+    [`0.0001`, 0.001],
+    [`0.3`, 0.1],
+    [`0.4`, 1],
+    [`100`, 10],
+  ] as const)(`numeric draft %s commits %s in real units`, async (text, expected) => {
+    const on_commit = vi.fn()
+    const { inputs, thumbs } = setup({ ...log_props, value: [0.1, 10], on_commit })
+    await edit(inputs[0], text)
+    expect(announced(thumbs)).toEqual([expected, 10])
+    expect(inputs[0].valueAsNumber).toBe(expected)
+    expect(on_commit).toHaveBeenCalledTimes(expected === 0.1 ? 0 : 1)
+    press_key(inputs[0], `ArrowUp`)
+    await tick()
+    expect(inputs[0].valueAsNumber).toBe(Math.min(10, expected * 10))
+  })
+  test(`pointer picking, grab offsets and commits use logarithmic distances`, async () => {
+    const on_commit = vi.fn()
+    const { thumbs, pointer } = setup({
+      min: 1,
+      max: 10000,
+      step: 1,
+      scale: `log`,
+      value: [10, 1000],
+      on_commit,
+    })
+    pointer(`pointerdown`, 60)
+    await tick()
+    expect(announced(thumbs)).toEqual([10, 100])
+    expect(document.activeElement).toBe(thumbs[1])
+    expect(on_commit).not.toHaveBeenCalled()
+    pointer(`pointerup`, 60)
+    expect(on_commit).toHaveBeenCalledExactlyOnceWith([10, 100])
+    pointer(`pointerdown`, 30, thumbs[0])
+    pointer(`pointermove`, 55)
+    pointer(`pointerup`, 55)
+    await tick()
+    expect(announced(thumbs)).toEqual([100, 100])
+    expect(on_commit.mock.calls).toEqual([[[10, 100]], [[100, 100]]])
+  })
+  test.each([
+    [0, 100],
+    [-1, 100],
+    [1, Infinity],
+    [1e20, 1e20 + 16384],
+  ])(`rejects invalid logarithmic domain [%s, %s]`, (min, max) => {
+    expect(() => setup({ min, max, scale: `log` })).toThrow(`Logarithmic range needs`)
+  })
+  test.each([-1, 1])(
+    `log grid traversal never stalls in direction %s`,
+    async (direction) => {
+      const { thumbs } = setup({ min: 0.003, max: 3, step: 0.3, scale: `log` })
+      const thumb = direction > 0 ? thumbs[0] : thumbs[1]
+      const limit = direction > 0 ? 3 : 0.003
+      let previous = direction > 0 ? 0.003 : 3
+      for (let idx = 0; idx < 10; idx++) {
+        press_key(thumb, direction > 0 ? `ArrowUp` : `ArrowDown`)
+        await tick()
+        const current = Number(thumb.getAttribute(`aria-valuenow`))
+        expect(direction * (current - previous)).toBeGreaterThan(0)
+        previous = current
+      }
+      expect(previous).toBe(limit)
+    },
+  )
+  test.each([
+    [1, 0.5000014999272548],
+    [-1, 0.5000019999040063],
+  ])(`tiny log steps advance off-grid value %s / %s`, async (direction, initial) => {
+    const on_commit = vi.fn()
+    const value: RangeValue = direction > 0 ? [initial, 0.50005] : [0.5, initial]
+    const { thumbs, inputs } = setup({
+      min: 0.5,
+      max: 0.50005,
+      step: 1.3368417291558519e-16,
+      scale: `log`,
+      value,
+      on_commit,
+    })
+    const active = direction > 0 ? 0 : 1
+    let previous = initial
+    for (let idx = 0; idx < 10; idx++) {
+      press_key(thumbs[active], direction > 0 ? `ArrowUp` : `ArrowDown`)
+      await tick()
+      const current = announced(thumbs)
+      expect(direction * (current[active] - previous)).toBeGreaterThan(0)
+      expect(current[1 - active]).toBe(value[1 - active])
+      expect(inputs[active].valueAsNumber).toBe(current[active])
+      expect(on_commit).toHaveBeenLastCalledWith(current)
+      previous = current[active]
+    }
+    expect(on_commit).toHaveBeenCalledTimes(10)
+  })
+  test(`rejects exponent steps that cannot move a subnormal real endpoint`, () => {
+    expect(() =>
+      setup({ min: Number.MIN_VALUE, max: 1, step: 0.1, scale: `log` }),
+    ).toThrow(`logarithmic step must change a representable value`)
   })
 })
 

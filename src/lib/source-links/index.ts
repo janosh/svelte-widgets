@@ -1,4 +1,4 @@
-// Link exact, unambiguous source names in code spans to files or exported definitions.
+// Link unambiguous source names and function calls to files or exported definitions.
 // `virtual:source-symbols` supplies locations pinned to the build commit.
 
 import { merge_defaults, SOURCE_LINKS_LABELS, type SourceLinksLabels } from '../labels'
@@ -11,7 +11,8 @@ export type SourceSymbols = {
 }
 
 export type SourceLinks = {
-  // repo path (with `#Lline` for definitions) behind `name`, undefined when unknown or ambiguous
+  // Accepts a source name or function call; undefined when unknown or ambiguous.
+  // Returns the repo path, with `#Lline` for exported definitions.
   source_location: (name: string) => string | undefined
   source_href: (name: string) => string | undefined
   // Svelte attachment: links every matching <code> under `root`, now and as content arrives
@@ -42,8 +43,13 @@ export function create_source_links(
     if (!location_by_name.has(name)) location_by_name.set(name, location)
   }
 
-  const source_location = (name: string): string | undefined =>
-    location_by_name.get(name.trim()) ?? undefined
+  const source_location = (name: string): string | undefined => {
+    const mention = name.trim()
+    const source_name = location_by_name.has(mention)
+      ? mention
+      : mention.replace(/^(?<name>[A-Za-z_$][\w$]*)\s*\(.*\)$/su, `$<name>`)
+    return location_by_name.get(source_name) ?? undefined
+  }
   const source_href = (name: string): string | undefined => {
     const location = source_location(name)
     return location && `${repo}/blob/${ref}${location}`

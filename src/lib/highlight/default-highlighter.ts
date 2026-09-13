@@ -44,7 +44,7 @@ const load_highlighter = async (): Promise<Highlighter> => {
   return create_highlighter([...grammars, svelte_grammar])
 }
 
-// One lazy default bundle for build-time highlighting and every FileDetails instance.
+// One lazy default bundle shared by callers that opt into built-in highlighting.
 // The promise also caches failures and prevents concurrent files compiling the grammar
 // bundle independently.
 let highlighter_promise: Promise<Highlighter> | undefined

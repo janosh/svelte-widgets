@@ -63,9 +63,13 @@ export default function source_links({
         const path = `/${relative(root, file).replaceAll(`\\`, `/`)}`
         files.push(path)
         if (!file.endsWith(`.ts`)) continue
+        // Overload signatures and their implementation share one source location.
+        const file_symbols = new Set<string>()
         for (const [idx, line] of readFileSync(file, `utf-8`).split(`\n`).entries()) {
           const name = EXPORT_DEFINITION_RE.exec(line)?.groups?.name
-          if (name) symbols.set(name, symbols.has(name) ? null : `${path}#L${idx + 1}`)
+          if (!name || file_symbols.has(name)) continue
+          file_symbols.add(name)
+          symbols.set(name, symbols.has(name) ? null : `${path}#L${idx + 1}`)
         }
       }
       let ref = `main`
@@ -76,15 +80,16 @@ export default function source_links({
       } catch {
         // no git (tarball build): links follow main instead of a pinned commit
       }
-      const unique = Object.fromEntries(
-        [...symbols].filter(([, location]) => location !== null),
-      )
-      return [
-        `export const repo = ${JSON.stringify(repository_url(pkg.repository))}`,
-        `export const ref = ${JSON.stringify(ref)}`,
-        `export const files = ${JSON.stringify(files.toSorted())}`,
-        `export const symbols = ${JSON.stringify(unique)}`,
-      ].join(`\n`)
+      return Object.entries({
+        repo: repository_url(pkg.repository),
+        ref,
+        files: files.toSorted(),
+        symbols: Object.fromEntries(
+          [...symbols].filter(([, location]) => location !== null),
+        ),
+      })
+        .map(([name, value]) => `export const ${name} = ${JSON.stringify(value)}`)
+        .join(`\n`)
     },
   }
 }

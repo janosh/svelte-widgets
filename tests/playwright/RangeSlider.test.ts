@@ -45,6 +45,7 @@ test(`mouse dragging captures outside the rail, commits once, and keeps handles 
     `Currency range`,
     `Decimal steps`,
     `Percentage formatting`,
+    `Logarithmic pressure`,
     `Overlapping handles`,
     `Right-to-left layout`,
     `Uneven steps and form reset`,
@@ -70,6 +71,121 @@ test(`mouse dragging captures outside the rail, commits once, and keeps handles 
   await expect(page.locator(`.commit-count`)).toHaveText(`${before + 1} commits`)
   await expect(upper).toHaveAttribute(`aria-valuemin`, `360`)
   await expect(group.getByRole(`spinbutton`).nth(0)).toHaveValue(`360`)
+})
+
+test(`logarithmic controls keep native keyboard edits and announcements in real units`, async ({
+  page,
+  baseURL,
+}) => {
+  const group = page.getByRole(`group`, { name: `Pressure window`, exact: true })
+  const labels = group.locator(`.limit, .ticks span`)
+  await expect(labels).toHaveText([`10⁻¹⁰ bar`, `10⁻⁶ bar`, `10⁻² bar`, `10² bar`])
+  for (const width of [320, 390, 1280]) {
+    await page.setViewportSize({ width, height: 900 })
+    const boxes = await labels.evaluateAll((elements) =>
+      elements.map((element) => {
+        // Interior label spans have zero width; measure their rendered text.
+        const range = document.createRange()
+        range.selectNodeContents(element)
+        const { left, right } = range.getBoundingClientRect()
+        return { left, right }
+      }),
+    )
+    for (const [idx, box] of boxes.slice(1).entries()) {
+      expect(box.left).toBeGreaterThan(boxes[idx].right)
+    }
+  }
+  const lower = group.getByRole(`slider`).first()
+  await expect(lower).toHaveAttribute(`aria-valuetext`, `10⁻⁶ bar`)
+  await lower.press(`ArrowRight`)
+  await expect(lower).toHaveAttribute(`aria-valuenow`, `0.00001`)
+  await lower.press(`Home`)
+  await expect(lower).toHaveAttribute(`aria-valuenow`, `1e-10`)
+  const input = group.getByRole(`spinbutton`).first()
+  await input.fill(`0`)
+  await input.press(`Enter`)
+  await expect(input).toHaveValue(`1e-10`)
+  await input.fill(`0.0004`)
+  await input.press(`Enter`)
+  await expect(input).toHaveValue(`0.001`)
+
+  await page.goto(new URL(`/settings`, baseURL ?? `http://localhost:3005`).href)
+  const number = page.getByRole(`spinbutton`, { name: `Pressure bar` })
+  const range = page.getByRole(`slider`, { name: `Pressure in bar` })
+  await expect(async () => {
+    await range.press(`End`)
+    await expect(number).toHaveValue(`100`)
+  }).toPass()
+  await range.press(`Home`)
+  await expect(number).toHaveValue(`1e-10`)
+  await expect(range).toHaveAttribute(`aria-valuenow`, `1e-10`)
+  await number.fill(`2.5`)
+  await number.press(`Enter`)
+  await expect(range).toHaveAttribute(`aria-valuenow`, `2.5`)
+  // Chromium rounds this native position by 1.75 machine eps; allow 4, keeping real values exact.
+  expect(
+    Math.abs(
+      (await range.evaluate((element: HTMLInputElement) => element.valueAsNumber)) -
+        Math.log10(2.5),
+    ),
+  ).toBeLessThanOrEqual(4 * Number.EPSILON)
+  await number.fill(`-1`)
+  await number.press(`Enter`)
+  await expect(number).toHaveValue(`2.5`)
+
+  const gain_number = page.getByRole(`spinbutton`, { name: `Gain` })
+  const gain_range = page.getByRole(`slider`, { name: `Logarithmic gain` })
+  await expect(gain_range).toHaveValue(`1`)
+  await gain_range.press(`End`)
+  await expect(gain_number).toHaveValue(`10`)
+  await gain_range.press(`ArrowLeft`)
+  await expect(gain_number).toHaveValue(String(10 ** 0.9))
+  await gain_range.press(`ArrowRight`)
+  await expect(gain_number).toHaveValue(`10`)
+  await gain_number.fill(`2.5`)
+  await gain_number.press(`Enter`)
+  expect(
+    Math.abs(
+      (await gain_range.evaluate((element: HTMLInputElement) => element.valueAsNumber)) -
+        Math.log10(2.5),
+    ),
+  ).toBeLessThanOrEqual(4 * Number.EPSILON)
+  // The former native spinner hit area must not add 1 in logarithmic mode.
+  const number_box = await box_of(gain_number)
+  await gain_number.click({
+    position: { x: number_box.width - 8, y: number_box.height / 4 },
+  })
+  await expect(gain_number).toHaveValue(`2.5`)
+  const range_box = await box_of(gain_range)
+  await page.mouse.move(
+    range_box.x + range_box.width / 2,
+    range_box.y + range_box.height / 2,
+  )
+  await page.mouse.down()
+  await expect(gain_range).toHaveValue(`0.6`)
+  await expect(gain_number).toHaveValue(`2.5`)
+  await page.mouse.up()
+  await expect(gain_number).toHaveValue(String(10 ** 0.6))
+
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    const insets = await page
+      .locator(`#number-range-input input[type="range"]`)
+      .evaluateAll((sliders) =>
+        sliders.map((slider) => {
+          const row = slider.parentElement
+          const panel = row?.parentElement
+          if (!row || !panel) throw new Error(`Missing NumberRangeInput row or panel`)
+          const panel_box = panel.getBoundingClientRect()
+          return {
+            left: row.getBoundingClientRect().left - panel_box.left,
+            right: panel_box.right - slider.getBoundingClientRect().right,
+          }
+        }),
+      )
+    expect(insets).toHaveLength(4)
+    for (const { left, right } of insets) expect(right).toBeGreaterThanOrEqual(left)
+  }
 })
 
 test(`track clicks, keyboard bounds, focus order, and decimal numeric drafts work together`, async ({

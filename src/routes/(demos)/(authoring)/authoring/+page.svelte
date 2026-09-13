@@ -1,5 +1,6 @@
 <script lang="ts">
   import Heading from '$lib/Heading.svelte'
+  import { FileCode, ClipboardCheck, FileTree, Refresh, Flask } from '$lib/icons'
   import { resolve } from '$app/paths'
   import favicon from '$site/favicon.svg?no-inline'
   import CheckedExamples from './CheckedExamples.svelte'
@@ -10,9 +11,12 @@
   const { data }: { data: PageData } = $props()
 </script>
 
-<Heading level={1} id="interactive-authoring">Interactive authoring</Heading>
+<Heading level={1} id="interactive-authoring" icon={FileCode}
+  >Interactive authoring</Heading
+>
 <p>Check code examples, inspect content manifests, and edit scientific references.</p>
 <nav aria-label="Authoring guides">
+  <a href={resolve(`/markdown`)}>Markdown API guide</a>
   <a href={resolve(`/code-editor`)}>CodeEditor / DiffView — edit and compare code</a>
   <a href={resolve(`/authoring/hot-reload`)}
     >Live Markdown hot reload — update examples as you write</a
@@ -26,34 +30,55 @@
   <a href="#scientific-references">Scientific references</a>
 </nav>
 <ScientificFigures />
-<Heading class="authoring-section-heading" level={2} id="checked-examples"
-  >Checked examples</Heading
+<Heading
+  class="authoring-section-heading"
+  level={2}
+  id="checked-examples"
+  icon={ClipboardCheck}>Checked examples</Heading
 >
+<p><a href="{resolve(`/markdown`)}#checked-examples">Read the checking API guide</a>.</p>
 <CheckedExamples checks={data.checks} />
-<Heading class="authoring-section-heading" level={2} id="content-manifests"
-  >Content manifests</Heading
+<Heading
+  class="authoring-section-heading"
+  level={2}
+  id="content-manifests"
+  icon={FileTree}>Content manifests</Heading
 >
 <p>
   Edit frontmatter, headings, links, or fences, then run the compiler. A title is
   required. The sample inventory contains <code>/next.md#details</code> and
   <code>/plot.svg</code>; try breaking a link or changing the title to a number. Expand
-  the tree to inspect source positions, TOC, search records, and checked fences.
+  the tree to inspect source positions, TOC, search records, and checked fences. See the
+  <a href="{resolve(`/markdown`)}#content-manifests">content manifest API guide</a>.
 </p>
 <MarkdownLab mode="manifest" />
-<Heading class="authoring-section-heading" level={2} id="incremental-compilation"
-  >Incremental compilation</Heading
+<Heading
+  class="authoring-section-heading"
+  level={2}
+  id="incremental-compilation"
+  icon={Refresh}>Incremental compilation</Heading
 >
 <p>
   Unchanged examples reuse their syntax highlights during development. To try hot reload,
   open the <a href={resolve(`/authoring/hot-reload`)}>live Markdown counter</a>, increment
   it, and edit its source. CSS-only edits preserve the counter; page edits may reset it.
+  See the
+  <a href="{resolve(`/markdown`)}#incremental-compilation"
+    >incremental compilation guide</a
+  > for module identity and caching behavior.
 </p>
-<Heading class="authoring-section-heading" level={2} id="scientific-references"
-  >Scientific references</Heading
+<Heading
+  class="authoring-section-heading"
+  level={2}
+  id="scientific-references"
+  icon={Flask}>Scientific references</Heading
 >
 <p>
   Figures, equations, and citations share a validated reference graph. Labels can appear
-  after their first reference; numbering and the bibliography follow automatically.
+  after their first reference; numbering and the bibliography follow automatically. See
+  the <a href="{resolve(`/markdown`)}#scientific-references"
+    >scientific reference API guide</a
+  > for syntax and configuration.
 </p>
 <p>
   Edit a label, equation, or caption and render it again. The bibliography includes <code

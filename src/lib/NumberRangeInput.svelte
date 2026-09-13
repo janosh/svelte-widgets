@@ -7,6 +7,13 @@
     NUMBER_RANGE_INPUT_LABELS,
     type NumberRangeInputLabels,
   } from './labels'
+  import {
+    create_range_scale,
+    range_key_action,
+    snap_range_value,
+    step_range_coordinate,
+    type RangeScale,
+  } from './range-slider'
 
   // The wrapping label names the number input; the slider needs its own accessible label.
   let {
@@ -15,6 +22,7 @@
     min,
     max,
     step,
+    scale = `linear`,
     title,
     children,
     labels,
@@ -29,6 +37,8 @@
     min: number | string
     max: number | string
     step: number | string
+    // Log mode keeps value in real units and measures step in base-10 decades.
+    scale?: RangeScale
     setting?: string
     // Invalid drafts never replace the committed value. Clearing retains it by default.
     empty?: `retain` | `undefined`
@@ -57,6 +67,22 @@
       )
     }
   })
+  const domain = $derived(create_range_scale(Number(min), Number(max), scale))
+  const log_step = $derived(
+    step === `any` ? (domain.max - domain.min) / 100 : Number(step),
+  )
+  $effect(() => {
+    if (scale !== `log`) return
+    domain.validate_step(log_step, `NumberRangeInput`)
+    if (
+      value !== undefined &&
+      (!Number.isFinite(value) || value < Number(min) || value > Number(max))
+    ) {
+      throw new Error(
+        `NumberRangeInput logarithmic value must be within [${min}, ${max}]; got ${value}`,
+      )
+    }
+  })
   const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
   let range_label = $derived(title?.trim() || setting?.trim() || msg.value)
   // With children the <label> already names the number input and an aria-label would override
@@ -64,13 +90,32 @@
   const number_label = $derived(children ? undefined : range_label)
   // A writable derived value follows external updates while allowing incomplete local drafts.
   let draft = $derived(value === undefined ? `` : String(value))
+  let slider_value = $derived(value ?? Number(min))
+  let range_editing = false
+  let keyboard_value: number | undefined
   const commit_input = (input: HTMLInputElement, final: boolean): void => {
     if (input.disabled || input.readOnly) return
-    const next = input.valueAsNumber
+    let next = keyboard_value ?? input.valueAsNumber
+    if (input.type === `range`) {
+      if (final && range_editing) next = slider_value
+      else if (keyboard_value === undefined) {
+        // Native range snapping cannot retain an off-grid maximum or typed value.
+        // Log sliders use step="any" and snap only user edits, in exponent coordinates.
+        if (scale === `log` && step !== `any`) {
+          next = snap_range_value(next, domain.min, domain.max, log_step)
+          input.value = String(next)
+        }
+        next = domain.from_position(next)
+      }
+      // Finalize the preview without decoding the browser's rounded range position again.
+      slider_value = next
+      range_editing = !final
+    }
     const cleared = input.value === `` && !input.validity.badInput
     // Step controls the increment; typed finite values may lie between steps.
     const valid =
       Number.isFinite(next) &&
+      (scale !== `log` || next > 0) &&
       !input.validity.rangeUnderflow &&
       !input.validity.rangeOverflow
     if ((final || commit === `input`) && (valid || (cleared && empty === `undefined`))) {
@@ -80,7 +125,48 @@
         on_commit?.(value)
       }
     }
-    if (final) draft = value === undefined ? `` : String(value)
+    if (final) {
+      draft = value === undefined ? `` : String(value)
+      if (input.type === `number`) input.value = draft
+    }
+  }
+  const log_keydown = (event: KeyboardEvent): void => {
+    const input = event.currentTarget as HTMLInputElement
+    if (scale !== `log` || input.matches(`:disabled`) || input.readOnly) return
+    const action = range_key_action(
+      event,
+      input.type !== `range` ? 0 : getComputedStyle(input).direction === `rtl` ? -1 : 1,
+    )
+    if (action === undefined) return
+    let next: number
+    if (typeof action === `string`) next = domain[action]
+    else {
+      const baseline =
+        input.type === `range`
+          ? slider_value
+          : Number.isFinite(input.valueAsNumber) && input.valueAsNumber > 0
+            ? input.valueAsNumber
+            : (value ?? Number(min))
+      const bounded = Math.max(Number(min), Math.min(Number(max), baseline))
+      next = step_range_coordinate(
+        bounded,
+        domain,
+        log_step,
+        Math.sign(action),
+        Math.abs(action),
+      )
+    }
+    event.preventDefault()
+    input.value = String(input.type === `range` ? next : domain.from_position(next))
+    // A keyboard adjustment is a completed edit, including when commit="change".
+    const previous_keyboard_value = keyboard_value
+    keyboard_value = domain.from_position(next)
+    try {
+      input.dispatchEvent(new Event(`input`, { bubbles: true }))
+      input.dispatchEvent(new Event(`change`, { bubbles: true }))
+    } finally {
+      keyboard_value = previous_keyboard_value
+    }
   }
 </script>
 
@@ -90,9 +176,10 @@
   <input
     {...number_props}
     type="number"
+    class:logarithmic={scale === `log`}
     {min}
     {max}
-    {step}
+    step={scale === `log` ? `any` : step}
     value={draft}
     aria-label={number_props?.['aria-label'] ?? number_label}
     oninput={(event) => {
@@ -112,16 +199,22 @@
       if (event.key === `Enter`) commit_input(event.currentTarget, true)
       if (event.key === `Escape`) draft = value === undefined ? `` : String(value)
       number_props?.onkeydown?.(event)
+      log_keydown(event)
     }}
   />
   <input
     {...range_props}
     type="range"
-    {min}
-    {max}
-    {step}
-    value={value ?? min}
+    min={domain.min}
+    max={domain.max}
+    step={scale === `log` ? `any` : step}
+    value={domain.to_position(slider_value)}
     aria-label={range_props?.['aria-label'] ?? range_label}
+    aria-valuemin={scale === `log` ? Number(min) : range_props?.['aria-valuemin']}
+    aria-valuemax={scale === `log` ? Number(max) : range_props?.['aria-valuemax']}
+    aria-valuenow={scale === `log` ? slider_value : range_props?.['aria-valuenow']}
+    aria-valuetext={range_props?.['aria-valuetext'] ??
+      (scale === `log` ? String(slider_value) : undefined)}
     oninput={(event) => {
       commit_input(event.currentTarget, false)
       range_props?.oninput?.(event)
@@ -130,12 +223,17 @@
       commit_input(event.currentTarget, true)
       range_props?.onchange?.(event)
     }}
+    onkeydown={(event) => {
+      range_props?.onkeydown?.(event)
+      log_keydown(event)
+    }}
   />
 </label>
 
 <style>
   label {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: 10pt;
   }
@@ -146,6 +244,14 @@
   input {
     font-size: inherit;
     font-family: inherit;
+  }
+  input.logarithmic {
+    appearance: textfield;
+    &::-webkit-inner-spin-button,
+    &::-webkit-outer-spin-button {
+      appearance: none;
+      margin: 0;
+    }
   }
   input[type='range'] {
     box-sizing: border-box;

@@ -22,11 +22,17 @@ test.each([undefined, Check])(
         subtitle: `Demo subtitle`,
         subpages,
         fallback_icon,
+        title_icon: fallback_icon,
         style: `max-width: 40rem`,
       },
     })
 
     expect(document.querySelector(`h1`)?.textContent).toBe(`Demo`)
+    const title_icon = document.querySelector(`h1 svg.heading-icon`)
+    if (fallback_icon) {
+      expect(title_icon?.getAttribute(`aria-hidden`)).toBe(`true`)
+      expect(title_icon?.querySelector(`path`)?.getAttribute(`d`)).toBe(fallback_icon.d)
+    } else expect(title_icon).toBeNull()
     expect(document.querySelector(`.subtitle`)?.textContent).toBe(`Demo subtitle`)
     expect(document.querySelector(`.subpage-grid`)?.getAttribute(`style`)).toContain(
       `max-width: 40rem`,

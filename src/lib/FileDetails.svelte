@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import CodeBlock from './CodeBlock.svelte'
+  import type { CodeHighlighter } from './code-block'
   import type {
     HTMLAttributes,
     HTMLButtonAttributes,
@@ -8,7 +9,6 @@
   } from 'svelte/elements'
   import { language_label_html } from './internal/language-label'
   import { merge_defaults, FILE_DETAILS_LABELS, type FileDetailsLabels } from './labels'
-  import { default_highlighter } from './highlight/default-highlighter'
   import { chain_handlers } from './utils'
 
   type File = {
@@ -21,6 +21,7 @@
     files = [],
     toggle_all_btn_title = `Toggle all`,
     default_lang = `svelte`,
+    highlight,
     as = `ol`,
     title_snippet,
     button_props,
@@ -31,6 +32,8 @@
     files?: readonly File[]
     toggle_all_btn_title?: string
     default_lang?: string
+    // Omit for plain code; the caller owns the highlighting engine and grammars.
+    highlight?: CodeHighlighter
     as?: string
     title_snippet?: Snippet<[{ idx: number } & File]>
     button_props?: Omit<HTMLButtonAttributes, `type`>
@@ -65,7 +68,7 @@
     sync_has_open_details()
   }
 
-  // Map file extensions that differ from their starry-night language flag
+  // Normalize common file extensions to language names.
   const ext_to_lang: Record<string, string> = {
     ts: `typescript`,
     js: `javascript`,
@@ -124,7 +127,7 @@
             code={content}
             {language}
             label={`Source (${language})`}
-            highlight={default_highlighter.highlight}
+            {highlight}
             class="language-{language}"
             --code-block-bg="var(--pre-bg, light-dark(#f3f5f8, rgba(0, 0, 0, 0.3)))"
           />

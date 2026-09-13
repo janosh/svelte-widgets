@@ -46,7 +46,7 @@ so the label can react to the state. Everything else spreads onto the wrapping `
 
 ### `ThemeToggle`
 
-Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can install `listen_theme_storage()` directly; flash-free first paint still requires equivalent synchronous logic in the HTML shell because hydration is too late.
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can install `listen_theme_storage()` directly; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">
@@ -130,11 +130,12 @@ so any unit works.
 
 ### `FileDetails`
 
-A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. CodeBlock highlights content using `language` (or `default_lang`) and reports highlighter failures alongside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
+A list of collapsible `<details>`, one per file, with a button that opens or closes all of them at once. Code is plain by default. Pass a `highlight(code, language, signal)` callback to color it; the example uses `default_highlighter` from `svelte-widgets/highlight`, which requires the optional peer `@wooorm/starry-night`. Highlighter failures appear alongside the source. Titles are plain text; use `title_snippet({ title, idx, content, language })` for rich rendering. The `files` array is read-only input; DOM references stay internal.
 
 ```svelte example id="file-details-demo"
 <script lang="ts">
   import { FileDetails } from 'svelte-widgets'
+  import { default_highlighter } from 'svelte-widgets/highlight'
 
   const files = [
     {
@@ -149,7 +150,7 @@ A list of collapsible `<details>`, one per file, with a button that opens or clo
   ]
 </script>
 
-<FileDetails {files} />
+<FileDetails {files} highlight={default_highlighter.highlight} />
 ```
 
 ### `PrevNext`

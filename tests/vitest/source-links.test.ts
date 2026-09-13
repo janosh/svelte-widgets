@@ -10,8 +10,8 @@ import { describe, expect, it, onTestFinished } from 'vitest'
 import { create_element } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
-const load_symbols = (root?: string): SourceSymbols => {
-  const plugin = source_links(root ? { root } : {})
+const load_symbols = async (root?: string): Promise<SourceSymbols> => {
+  const plugin = source_links({ root })
   const resolve = plugin.resolveId as (id: string) => string | null
   const load = plugin.load as (id: string) => string | null
   expect(resolve(`some-other-module`)).toBeNull()
@@ -20,19 +20,13 @@ const load_symbols = (root?: string): SourceSymbols => {
   expect(load(`some-other-module`)).toBeNull()
   const code = load(resolved)
   if (!code) throw new Error(`virtual module not loaded`)
-  // one `export const name = <json>` per line
-  return Object.fromEntries(
-    code.split(`\n`).map((line) => {
-      const match = /^export const (?<name>\w+) = (?<json>.*)$/.exec(line)
-      if (!match?.groups) throw new Error(`unexpected line in virtual module: ${line}`)
-      return [match.groups.name, JSON.parse(match.groups.json) as unknown]
-    }),
-  ) as SourceSymbols
+  return import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
 }
 
 describe(`source_links vite plugin`, () => {
-  it(`indexes this repo's source files and exported definitions, pinned to the build commit`, () => {
-    const { repo, ref, files, symbols } = load_symbols()
+  it(`indexes this repo's source files and exported definitions, pinned to the build commit`, async () => {
+    const data = await load_symbols()
+    const { repo, ref, files, symbols } = data
     expect(repo).toBe(`https://github.com/janosh/svelte-widgets`)
     expect(ref).toMatch(/^(?:[0-9a-f]{40}|main)$/)
     expect(files).toContain(`/src/lib/Footer.svelte`)
@@ -43,45 +37,46 @@ describe(`source_links vite plugin`, () => {
     expect(symbols.create_source_links).toMatch(
       /^\/src\/lib\/source-links\/index\.ts#L\d+$/,
     )
+    expect(
+      create_source_links(data).source_href(`create_markdown({ math: true })`),
+    ).toMatch(/\/src\/lib\/markdown\/index\.ts#L\d+$/)
     // types and interfaces count as definitions too
     expect(symbols.SourceSymbols).toMatch(/^\/src\/lib\/source-links\/index\.ts#L\d+$/)
   })
 
-  it(`drops names exported from more than one file and non-source files`, () => {
+  it(`keeps overloads in one file, dropping cross-file duplicates and non-source files`, async () => {
     const root = mkdtempSync(join(tmpdir(), `source-links-`))
-    try {
-      mkdirSync(join(root, `src/lib/nested`), { recursive: true })
-      writeFileSync(
-        join(root, `package.json`),
-        JSON.stringify({ repository: { url: `git+https://github.com/user/repo.git` } }),
-      )
-      writeFileSync(
-        join(root, `src/lib/a.ts`),
-        `export const shared = 1\nexport function only_a() {}\n`,
-      )
-      writeFileSync(
-        join(root, `src/lib/nested/b.ts`),
-        `\nexport type shared = number\nexport class OnlyB {}\n`,
-      )
-      writeFileSync(join(root, `src/lib/a.test.ts`), `export const from_test = 1\n`)
-      writeFileSync(join(root, `src/lib/types.d.ts`), `export const from_dts = 1\n`)
-      writeFileSync(join(root, `src/lib/Widget.svelte`), `<div />`)
-      writeFileSync(join(root, `src/lib/notes.md`), `# not source`)
-      const { repo, ref, files, symbols } = load_symbols(root)
-      expect(repo).toBe(`https://github.com/user/repo`)
-      expect(ref).toBe(`main`) // no git repository in a temp dir
-      expect(files).toEqual([
-        `/src/lib/Widget.svelte`,
-        `/src/lib/a.ts`,
-        `/src/lib/nested/b.ts`,
-      ])
-      expect(symbols).toEqual({
-        only_a: `/src/lib/a.ts#L2`,
-        OnlyB: `/src/lib/nested/b.ts#L3`,
-      })
-    } finally {
-      rmSync(root, { recursive: true, force: true })
+    onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+    mkdirSync(join(root, `src/lib/nested`), { recursive: true })
+    for (const [path, content] of Object.entries({
+      'package.json': JSON.stringify({
+        repository: { url: `git+https://github.com/user/repo.git` },
+      }),
+      'src/lib/a.ts': `export const shared = 1
+export function only_a(value: string): string
+export function only_a(value: number): number
+export function only_a(value: string | number) { return value }
+`,
+      'src/lib/nested/b.ts': `\nexport type shared = number\nexport class OnlyB {}\n`,
+      'src/lib/a.test.ts': `export const from_test = 1\n`,
+      'src/lib/types.d.ts': `export const from_dts = 1\n`,
+      'src/lib/Widget.svelte': `<div />`,
+      'src/lib/notes.md': `# not source`,
+    })) {
+      writeFileSync(join(root, path), content)
     }
+    const { repo, ref, files, symbols } = await load_symbols(root)
+    expect(repo).toBe(`https://github.com/user/repo`)
+    expect(ref).toBe(`main`) // no git repository in a temp dir
+    expect(files).toEqual([
+      `/src/lib/Widget.svelte`,
+      `/src/lib/a.ts`,
+      `/src/lib/nested/b.ts`,
+    ])
+    expect(symbols).toEqual({
+      only_a: `/src/lib/a.ts#L2`,
+      OnlyB: `/src/lib/nested/b.ts#L3`,
+    })
   })
 
   it.each([
@@ -111,27 +106,22 @@ describe(`create_source_links`, () => {
       `/src/lib/utils.ts`,
       `/src/lib/index.ts`,
       `/src/lib/nested/index.ts`,
+      `/src/lib/Shared.svelte`,
+      `/src/lib/nested/Shared.svelte`,
     ],
     symbols: {
       make_config: `/src/lib/vite-config.ts#L7`,
       Footer: `/src/lib/other.ts#L1`,
+      Shared: `/src/lib/other.ts#L2`,
     },
   }
   const { source_location, source_href, link_source_mentions } = create_source_links(data)
 
-  it(`labels reword the generated link title`, async () => {
-    const root = create_element(`main`)
-    root.innerHTML = `<p><code>Footer</code></p>`
-    const detach = create_source_links(data, {
-      link_title: (path) => `Quelle: ${path}`,
-    }).link_source_mentions(root)
-    onTestFinished(detach)
+  // A scan's DOM mutations schedule another scan, so wait for both frames.
+  const rescan = async () => {
     await new Promise(requestAnimationFrame)
-
-    expect(root.querySelector(`code > a`)?.getAttribute(`title`)).toBe(
-      `Quelle: src/lib/Footer.svelte`,
-    )
-  })
+    await new Promise(requestAnimationFrame)
+  }
 
   // the anchor adopts the span's text nodes, so a reactive `<code>{name}</code>` rewrites
   // text inside the generated link; skipping spans that already hold one froze the old name
@@ -142,27 +132,29 @@ describe(`create_source_links`, () => {
     const text = document.createTextNode(`Footer`)
     code.append(text)
     root.append(code)
-    const detach = link_source_mentions(root)
-    onTestFinished(detach)
-    // one frame to scan, a second for the relink that scan's own mutations schedule
-    const rescan = async () => {
-      await new Promise(requestAnimationFrame)
-      await new Promise(requestAnimationFrame)
+    onTestFinished(
+      create_source_links(data, {
+        link_title: (path) => `Quelle: ${path}`,
+      }).link_source_mentions(root),
+    )
+
+    for (const [name, path] of [
+      [`Footer`, `/src/lib/Footer.svelte`],
+      [`utils.ts`, `/src/lib/utils.ts`],
+      [`make_config({ build: {} })`, `/src/lib/vite-config.ts#L7`],
+      [`label(options)`, undefined], // no longer matches: unwrap the anchor
+    ] as const) {
+      text.textContent = name
+      await rescan()
+      const link = code.querySelector(`a`)
+      expect(link?.getAttribute(`href`)).toBe(
+        path && `${data.repo}/blob/${data.ref}${path}`,
+      )
+      expect(link?.getAttribute(`title`)).toBe(path && `Quelle: ${path.slice(1)}`)
+      expect(code.querySelectorAll(`a`)).toHaveLength(path ? 1 : 0)
+      expect(code.textContent).toBe(name)
+      expect(code.contains(text)).toBe(true) // Svelte still owns this text node
     }
-
-    await rescan()
-    const href = () => code.querySelector(`a`)?.getAttribute(`href`)
-    expect(href()).toContain(`/src/lib/Footer.svelte`)
-
-    text.textContent = `utils.ts` // still resolves, so the link is rebuilt
-    await rescan()
-    expect(href()).toContain(`/src/lib/utils.ts`)
-    expect(code.querySelectorAll(`a`)).toHaveLength(1)
-
-    text.textContent = `label` // resolves to nothing, so the anchor is unwrapped
-    await rescan()
-    expect(code.querySelector(`a`)).toBeNull()
-    expect(code.textContent).toBe(`label`)
   })
 
   it.each([
@@ -170,6 +162,20 @@ describe(`create_source_links`, () => {
     [`Footer.svelte`, `/src/lib/Footer.svelte`],
     [` utils.ts `, `/src/lib/utils.ts`],
     [`make_config`, `/src/lib/vite-config.ts#L7`],
+    [`make_config()`, `/src/lib/vite-config.ts#L7`],
+    [`make_config({ build: { target: 'esnext' } })`, `/src/lib/vite-config.ts#L7`],
+    [
+      ` make_config (\n  { plugins: [plugin({ nested: true })] },\n) `,
+      `/src/lib/vite-config.ts#L7`,
+    ],
+    [`make_config(')')`, `/src/lib/vite-config.ts#L7`],
+    [`make_config({`, undefined],
+    [`make_config(options).build`, undefined],
+    [`other(make_config(options))`, undefined],
+    [`config.make_config(options)`, undefined],
+    [`utils.ts(options)`, undefined],
+    [`label(options)`, undefined],
+    [`Shared(options)`, undefined], // ambiguous component names stay ambiguous in calls
     [`index.ts`, undefined], // one per folder: ambiguous
     [`label`, undefined], // a prop, not a file
     [`utils`, undefined], // only .svelte files link by bare name
@@ -183,12 +189,14 @@ describe(`create_source_links`, () => {
   it(`links matching code spans in place, skipping pre blocks and existing links`, async () => {
     const root = create_element(`main`)
     root.innerHTML =
-      `<p><code>Footer</code> and <code>label</code></p>` +
-      `<pre><code>Footer</code></pre><a href="/x"><code>Footer</code></a>`
+      `<p><code>Footer</code> and <code>label(options)</code></p>` +
+      `<pre><code>make_config(options)</code></pre>` +
+      `<a href="/x"><code>make_config(options)</code></a>` +
+      `<code><a href="/custom">make_config(options)</a></code>`
     const detach = link_source_mentions(root)
     onTestFinished(detach)
     await new Promise(requestAnimationFrame)
-    const links = root.querySelectorAll(`code > a`)
+    const links = root.querySelectorAll(`code > a[data-source-link]`)
     expect(links).toHaveLength(1)
     expect(links[0].getAttribute(`href`)).toBe(
       `https://github.com/user/repo/blob/abc123/src/lib/Footer.svelte`,
@@ -196,21 +204,25 @@ describe(`create_source_links`, () => {
     expect(links[0].getAttribute(`title`)).toBe(`Source: src/lib/Footer.svelte`)
     expect(links[0].textContent).toBe(`Footer`)
     root.append(document.createElement(`span`))
-    await new Promise(requestAnimationFrame)
-    await new Promise(requestAnimationFrame)
-    expect(root.querySelectorAll(`code > a`)).toHaveLength(1)
+    await rescan()
+    expect(root.querySelectorAll(`code > a[data-source-link]`)).toHaveLength(1)
     expect(root.querySelector(`code > a`)).toBe(links[0])
-    // late-arriving content is picked up too, and a detached root is left alone
-    root.insertAdjacentHTML(`beforeend`, `<p><code>make_config</code></p>`)
-    await new Promise(requestAnimationFrame)
-    await new Promise(requestAnimationFrame)
-    expect(root.querySelectorAll(`code > a`)[1]?.getAttribute(`href`)).toMatch(
-      /vite-config\.ts#L7$/,
+    expect(root.querySelector(`a[href="/x"]`)?.textContent).toBe(`make_config(options)`)
+    expect(root.querySelector(`a[href="/custom"]`)?.textContent).toBe(
+      `make_config(options)`,
     )
+    // late-arriving content is picked up too, and a detached root is left alone
+    root.insertAdjacentHTML(
+      `beforeend`,
+      `<p><code>make_config({ plugins: [] })</code></p>`,
+    )
+    await rescan()
+    const call_link = root.querySelectorAll(`code > a[data-source-link]`)[1]
+    expect(call_link?.getAttribute(`href`)).toMatch(/vite-config\.ts#L7$/)
+    expect(call_link?.textContent).toBe(`make_config({ plugins: [] })`)
     detach()
     root.insertAdjacentHTML(`beforeend`, `<p><code>utils.ts</code></p>`)
-    await new Promise(requestAnimationFrame)
-    await new Promise(requestAnimationFrame)
-    expect(root.querySelectorAll(`code > a`)).toHaveLength(2)
+    await rescan()
+    expect(root.querySelectorAll(`code > a[data-source-link]`)).toHaveLength(2)
   })
 })

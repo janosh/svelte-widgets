@@ -9,7 +9,10 @@
     nodes,
     expanded = $bindable(new Set<string>()),
     selected = $bindable(),
+    multiple = false,
+    selected_ids = $bindable(new Set<string>()),
     on_select,
+    on_selection_change,
     children,
     label = `Tree`,
     ...rest
@@ -17,12 +20,17 @@
     nodes: readonly TreeNode[]
     expanded?: Set<string>
     selected?: string
+    multiple?: boolean
+    selected_ids?: Set<string>
     on_select?: (node: TreeNode) => void
+    on_selection_change?: (ids: Set<string>) => void
     children?: Snippet<[TreeNode]>
     label?: string
   } = $props()
   let focused = $state<string>()
+  let selection_anchor: string | undefined
   const node_elements = new Map<string, HTMLElement>()
+  const range_keys = new Set([`ArrowDown`, `ArrowUp`, `Home`, `End`])
   const branches = new SvelteMap<TreeNode, AbortController | readonly TreeNode[]>()
   let error = $state(``)
   $effect(() => {
@@ -74,8 +82,16 @@
       if (expanded.has(node.id)) void expand(node)
     }
   })
+  const is_selected = (node: TreeNode): boolean | undefined =>
+    node.disabled
+      ? undefined
+      : multiple
+        ? selected_ids.has(node.id)
+        : selected === node.id
   const active_id = $derived(
-    focused !== undefined && tree.indices.has(focused) ? focused : rows[0]?.node.id,
+    focused !== undefined && tree.indices.has(focused)
+      ? focused
+      : (rows.find(({ node }) => is_selected(node))?.node.id ?? rows[0]?.node.id),
   )
   async function expand(node: TreeNode): Promise<void> {
     if (node.disabled) return
@@ -98,55 +114,118 @@
   const collapse = (id: string) => {
     expanded = new Set([...expanded].filter((value) => value !== id))
   }
+  const toggle_expanded = (node: TreeNode): void => {
+    if (node.disabled) return
+    if (expanded.has(node.id)) collapse(node.id)
+    else void expand(node)
+  }
   async function focus_node(id: string | undefined): Promise<void> {
     if (id === undefined) return
     focused = id
     await tick()
     node_elements.get(id)?.focus()
   }
-  const select = (node: TreeNode) => {
-    if (node.disabled) return
-    selected = node.id
-    on_select?.(node)
+  const update_selection = (ids: Set<string>) => {
+    selected_ids = ids
+    on_selection_change?.(new Set(ids))
+  }
+  const select = (node: TreeNode, range = false, toggle = false) => {
+    // A range may end on a disabled row; only its enabled members are selected.
+    if (node.disabled && (!multiple || !range)) return
+    if (!multiple) {
+      selected = node.id
+      on_select?.(node)
+      return
+    }
+    const ids = toggle ? new Set(selected_ids) : new Set<string>()
+    if (range) {
+      const end = tree.indices.get(node.id)
+      const start = tree.indices.get(selection_anchor ?? active_id ?? node.id) ?? end
+      if (start === undefined || end === undefined) return
+      selection_anchor = rows[start].node.id
+      for (const { node: entry } of rows.slice(
+        Math.min(start, end),
+        Math.max(start, end) + 1,
+      )) {
+        if (!entry.disabled) ids.add(entry.id)
+      }
+    } else {
+      selection_anchor = node.id
+      if (toggle && ids.has(node.id)) ids.delete(node.id)
+      else ids.add(node.id)
+    }
+    update_selection(ids)
+    if (ids.has(node.id)) on_select?.(node)
   }
   function keydown(event: KeyboardEvent): void {
-    if (is_editable_event_target(event.target) || is_modifier_chord(event)) return
+    if (is_editable_event_target(event.target) || event.altKey) return
+    if (!multiple && is_modifier_chord(event)) return
+    const toggle = event.ctrlKey || event.metaKey
+    if (multiple && toggle && event.key.toLowerCase() === `a`) {
+      update_selection(
+        new Set([
+          ...selected_ids,
+          ...rows.filter(({ node }) => !node.disabled).map(({ node }) => node.id),
+        ]),
+      )
+      event.preventDefault()
+      return
+    }
+    if (
+      toggle &&
+      !range_keys.has(event.key) &&
+      event.key !== ` ` &&
+      event.key !== `Enter`
+    )
+      return
     const idx = active_id === undefined ? -1 : (tree.indices.get(active_id) ?? -1)
     const row = rows[idx]
     if (!row) return
     const { node, expandable, parent } = row
-    let next: string | undefined
-    if (event.key === `ArrowDown`) next = rows[Math.min(idx + 1, rows.length - 1)].node.id
-    else if (event.key === `ArrowUp`) next = rows[Math.max(0, idx - 1)].node.id
-    else if (event.key === `Home`) next = rows[0]?.node.id
-    else if (event.key === `End`) next = rows.at(-1)?.node.id
+    let next: TreeNode | undefined
+    if (event.key === `ArrowDown`) next = rows[Math.min(idx + 1, rows.length - 1)].node
+    else if (event.key === `ArrowUp`) next = rows[Math.max(0, idx - 1)].node
+    else if (event.key === `Home`) next = rows[0]?.node
+    else if (event.key === `End`) next = rows.at(-1)?.node
     else if (event.key === `ArrowRight` && expandable) {
       if (!expanded.has(node.id)) void expand(node)
-      else if (rows[idx + 1]?.parent === node.id) next = rows[idx + 1].node.id
+      else if (rows[idx + 1]?.parent === node.id) next = rows[idx + 1].node
     } else if (event.key === `ArrowLeft`) {
       if (expanded.has(node.id)) collapse(node.id)
-      else next = parent
-    } else if (event.key === `Enter` || event.key === ` `) select(node)
-    else if (event.key.length === 1) {
+      else if (parent !== undefined) next = rows[tree.indices.get(parent) ?? -1]?.node
+    } else if (event.key === `Enter` && expandable && !event.shiftKey && !toggle) {
+      toggle_expanded(node)
+    } else if (event.key === `Enter` || event.key === ` `) {
+      select(node, event.shiftKey, toggle || (event.key === ` ` && !event.shiftKey))
+    } else if (event.key.length === 1) {
       const prefix = event.key.toLocaleLowerCase()
       for (let offset = 1; offset <= rows.length; offset++) {
         const entry = rows[(idx + offset) % rows.length].node
         if (entry.label.toLocaleLowerCase().startsWith(prefix)) {
-          next = entry.id
+          next = entry
           break
         }
       }
     } else return
     event.preventDefault()
-    void focus_node(next)
+    if (multiple && event.shiftKey && range_keys.has(event.key) && next)
+      select(next, true, toggle)
+    void focus_node(next?.id)
   }
 </script>
 
 <div {...rest} class={[`tree-view`, rest.class]}>
-  <div role="tree" tabindex="-1" aria-label={label} onkeydown={keydown}>
+  <div
+    role="tree"
+    tabindex="-1"
+    aria-label={label}
+    aria-multiselectable={multiple || undefined}
+    onkeydown={keydown}
+  >
     {#each rows as { node, depth, pos, size, expandable } (node.id)}
       <div
         role="treeitem"
+        aria-label={node.label}
         data-tree-id={node.id}
         {@attach (element) => {
           const { id } = node
@@ -157,7 +236,7 @@
         aria-posinset={pos}
         aria-setsize={size}
         aria-expanded={expandable ? expanded.has(node.id) : undefined}
-        aria-selected={selected === node.id}
+        aria-selected={is_selected(node)}
         aria-disabled={node.disabled}
         aria-busy={branches.get(node) instanceof AbortController}
         tabindex={active_id === node.id ? 0 : -1}
@@ -165,9 +244,14 @@
         onfocus={() => {
           focused = node.id
         }}
-        onclick={() => {
+        onpointerdown={(event) => {
+          // Pointer default focus runs before click; retain the prior row for a first range.
+          if (multiple && event.shiftKey && selection_anchor === undefined)
+            selection_anchor = active_id
+        }}
+        onclick={(event) => {
+          select(node, event.shiftKey, event.ctrlKey || event.metaKey)
           void focus_node(node.id)
-          select(node)
         }}
         onkeydown={() => {}}
       >
@@ -179,8 +263,7 @@
             onclick={(event) => {
               event.stopPropagation()
               void focus_node(node.id)
-              if (expanded.has(node.id)) collapse(node.id)
-              else void expand(node)
+              toggle_expanded(node)
             }}>{expanded.has(node.id) ? `▾` : `▸`}</button
           >{:else}<span aria-hidden="true" style="width: 1.5em"></span>{/if}
         {#if children}{@render children(node)}{:else}{node.label}{/if}

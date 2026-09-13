@@ -26,6 +26,22 @@ export type ButtonGroupLabels = typeof BUTTON_GROUP_LABELS
 export const CODE_EDITOR_LABELS = {
   // visually hidden hint announced when the textarea takes focus
   keyboard_help: `Press Escape, then Tab to move focus away`,
+  find: `Find`,
+  replace: `Replace`,
+  replace_all: `Replace all`,
+  replacement: `Replacement`,
+  match_case: `Match case`,
+  whole_word: `Whole word`,
+  previous_match: `Previous match`,
+  next_match: `Next match`,
+  close_search: `Close search`,
+  go_to_line: `Go to line`,
+  line_number: `Line number`,
+  go: `Go`,
+  no_matches: `No matches`,
+  match_position: (position: number, total: number) => `${position} of ${total}`,
+  match_position_truncated: (position: number, limit: number) =>
+    `${position} of ${limit}+ (first ${limit} shown)`,
 }
 export type CodeEditorLabels = typeof CODE_EDITOR_LABELS
 
@@ -34,6 +50,17 @@ export const CODE_EXAMPLE_LABELS = {
   hide_code: `Close`,
 }
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
+
+export const COLOR_INPUT_LABELS = {
+  color: `Color`,
+  picker: `Choose color`,
+  hex: `Hex color`,
+  opacity: `Opacity`,
+  preset: (color: string) => `Use ${color}`,
+  invalid: `Enter a valid hexadecimal color`,
+  invalid_opacity: `Enter a whole percentage from 0 to 100`,
+}
+export type ColorInputLabels = typeof COLOR_INPUT_LABELS
 
 export const COPY_BUTTON_LABELS = {
   // Icon-only by default; an empty string suppresses ActionButton's text. Set any of these

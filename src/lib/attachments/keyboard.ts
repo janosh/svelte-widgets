@@ -43,7 +43,8 @@ export const forward_window_keydown =
     const { handle, enabled = true } = options
     if (!enabled) return undefined
 
-    let is_hovered = false
+    // Hydration can attach after the pointer has already entered the server-rendered node.
+    let is_hovered = node.matches(`:hover`)
     const on_enter = () => (is_hovered = true)
     const on_leave = () => (is_hovered = false)
     const on_keydown = (event: Event) => {

@@ -187,7 +187,7 @@ without repeating the key at the call site.
 <script lang="ts">
   import { NumberRangeInput } from 'svelte-widgets'
 
-  let [radius, opacity] = $state([1, 0.5])
+  let [radius, opacity, pressure, gain] = $state([1, 0.5, 1e-4, 10])
 </script>
 
 <div
@@ -206,9 +206,34 @@ without repeating the key at the call site.
   <NumberRangeInput min={0} max={1} step={0.05} title="Fill opacity" bind:value={opacity}>
     Opacity
   </NumberRangeInput>
+  <NumberRangeInput
+    scale="log"
+    min={1e-10}
+    max={100}
+    step={0.1}
+    title="Pressure in bar"
+    bind:value={pressure}
+  >
+    Pressure <small>bar</small>
+  </NumberRangeInput>
+  <NumberRangeInput
+    scale="log"
+    min={1}
+    max={10}
+    step={0.3}
+    commit="change"
+    title="Logarithmic gain"
+    bind:value={gain}>Gain</NumberRangeInput
+  >
 </div>
 
-<p>radius {radius}, opacity {opacity}</p>
+<p>radius {radius}, opacity {opacity}, pressure {pressure} bar, gain {gain}</p>
 ```
 
-Hover either row's label for its `title` tooltip. The slider takes that same text as its accessible name, since the wrapping `<label>` only names the number input.
+Hover a row's label for its `title` tooltip. The slider takes that same text as its accessible name, since the wrapping `<label>` only names the number input.
+
+Use `scale="log"` for positive values across orders of magnitude. Bounds, the binding, numeric drafts, and `on_commit` stay in real units; the slider and arrow keys use base-10 exponent steps (`step={1}` multiplies or divides by 10). `step="any"` allows continuous dragging and uses one percent of the logarithmic span for keyboard steps. Zero, negative, and out-of-bounds numeric drafts never commit; valid typed values need not lie on the slider's step grid. Logarithmic bounds must be finite, strictly positive, and have distinct logarithms; a defined external value must lie inside them. Steps too small to change a representable value throw a configuration error.
+
+The gain example keeps both endpoints selectable even though its step does not divide the span. Logarithmic number fields hide native spin buttons, whose additive increments cannot represent logarithmic steps; use the arrow keys or slider to step instead.
+
+`commit="input"` (the default) updates while typing or dragging. `commit="change"` waits for change, blur, or Enter; a logarithmic arrow adjustment completes and commits one edit. Escape discards a numeric draft. Clearing retains the committed value unless `empty="undefined"` is set. `on_commit` receives each changed committed value once.

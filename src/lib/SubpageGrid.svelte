@@ -11,12 +11,14 @@
 
   const {
     title,
+    title_icon,
     subtitle,
     subpages,
     fallback_icon = ChevronRight,
     ...rest
   }: {
     title: string
+    title_icon?: IconData
     subtitle: string
     subpages: Subpage[]
     fallback_icon?: IconData
@@ -24,7 +26,7 @@
 </script>
 
 <div {...rest} class={[`subpage-grid`, rest.class]}>
-  <Heading level={1} id={title_id}>{title}</Heading>
+  <Heading level={1} id={title_id} icon={title_icon}>{title}</Heading>
   <p class="subtitle">{subtitle}</p>
 
   <nav class="grid">
@@ -43,6 +45,10 @@
 
 <style>
   :global(.subpage-grid > h1) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5em;
     text-align: center;
     margin-bottom: 0.3em;
   }

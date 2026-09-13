@@ -9,8 +9,13 @@ describe(`forward_window_keydown`, () => {
     document.body.innerHTML = ``
   })
 
-  const attach = (handled = true, options: { enabled?: boolean } = {}) => {
+  const attach = (
+    handled = true,
+    options: { enabled?: boolean } = {},
+    initially_hovered = false,
+  ) => {
     const node = create_element()
+    if (initially_hovered) vi.spyOn(node, `matches`).mockReturnValue(true)
     const handle = vi.fn(() => handled)
     const cleanup = forward_window_keydown({ handle, ...options })(node)
     if (cleanup) cleanups.push(cleanup)
@@ -23,25 +28,29 @@ describe(`forward_window_keydown`, () => {
     node.dispatchEvent(new PointerEvent(`pointerleave`, { bubbles: false }))
   const press_key = (key = `f`) => dispatch_key(globalThis, key)
 
-  it(`forwards only while hovered, and never once cleaned up`, () => {
-    const { node, handle, cleanup } = attach()
+  it.each([false, true])(
+    `forwards only while hovered (initial hover: %s), and never once cleaned up`,
+    (initially_hovered) => {
+      const { node, handle, cleanup } = attach(true, {}, initially_hovered)
 
-    press_key()
-    expect(handle).not.toHaveBeenCalled() // No hover, so the attachment must not forward the key.
+      press_key()
+      expect(handle).toHaveBeenCalledTimes(Number(initially_hovered))
+      handle.mockClear()
 
-    hover(node)
-    press_key()
-    expect(handle).toHaveBeenCalledTimes(1)
+      hover(node)
+      press_key()
+      expect(handle).toHaveBeenCalledTimes(1)
 
-    unhover(node)
-    press_key()
-    expect(handle).toHaveBeenCalledTimes(1)
+      unhover(node)
+      press_key()
+      expect(handle).toHaveBeenCalledTimes(1)
 
-    hover(node) // hovered again, but the listener is gone
-    cleanup?.()
-    press_key()
-    expect(handle).toHaveBeenCalledTimes(1)
-  })
+      hover(node) // hovered again, but the listener is gone
+      cleanup?.()
+      press_key()
+      expect(handle).toHaveBeenCalledTimes(1)
+    },
+  )
 
   it(`two hovered-by-turns components never both answer one key`, () => {
     const [first, second] = [attach(), attach()]

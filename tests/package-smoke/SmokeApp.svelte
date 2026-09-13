@@ -13,6 +13,7 @@
     ClickFeedback,
     ActionMenu,
     CodeEditor,
+    ColorInput,
     CommandMenu,
     type CmdAction,
     create_editor_model,
@@ -36,6 +37,7 @@
   } from 'svelte-widgets'
   import DirectActionMenu from 'svelte-widgets/ActionMenu.svelte'
   import DirectCodeEditor from 'svelte-widgets/CodeEditor.svelte'
+  import DirectColorInput from 'svelte-widgets/ColorInput.svelte'
   import DirectCommandMenu from 'svelte-widgets/CommandMenu.svelte'
   import DirectDialog from 'svelte-widgets/Dialog.svelte'
   import DirectDiffView from 'svelte-widgets/DiffView.svelte'
@@ -80,6 +82,7 @@
     ) &&
     DirectActionMenu === ActionMenu &&
     DirectCodeEditor === CodeEditor &&
+    DirectColorInput === ColorInput &&
     DirectCommandMenu === CommandMenu &&
     DirectDialog === Dialog &&
     DirectDiffView === DiffView &&
@@ -119,6 +122,7 @@
 
 <main {@attach click_outside({ callback: () => undefined })}>
   <DirectHeading id="package-heading">Package heading</DirectHeading>
+  <DirectColorInput label="Color input" />
   <MultiSelect bind:value={selected} {options} name="choices" />
   <DirectMultiSelect {options} />
   <DirectCommandMenu {actions} />

@@ -1,6 +1,7 @@
 // These links only resolve after deployment, so the regular link checker cannot check them.
 import * as lib from '$lib'
 import * as utils from '$lib/utils'
+import { heading_text } from '$lib/heading-anchors'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
 import markdown_guide from '$lib/markdown/readme.md?raw'
@@ -31,7 +32,7 @@ const headings_on = (route: string) =>
     ...(route === `/markdown` ? markdown_guide : (route_sources[route] ?? ``)).matchAll(
       /^#{2,4} (?<text>.+)$|<(?:h[2-4]\s+|Heading\s+[^>]*?)id="(?<id>[^"]+)"/gmu,
     ),
-  ].map((match) => bare(match.groups?.id ?? match.groups?.text ?? ``))
+  ].map((match) => bare(match.groups?.id ?? heading_text(match.groups?.text ?? ``)))
 
 const unresolved = (route: string, anchor: string | undefined, label: string) => {
   if (!(route in route_sources)) return `${label}: no such page ${route}`
@@ -72,15 +73,12 @@ test(`demo page links point at a page and heading that exist`, () => {
 })
 
 const docs_links = [
-  ...readme.matchAll(
-    /https:\/\/svelte-widgets\.janosh\.dev\/(?<route>[\w-]+)(?:#(?<anchor>[\w-]+))?/gu,
+  ...`${readme}\n${markdown_guide}`.matchAll(
+    /https:\/\/svelte-widgets\.janosh\.dev\/(?<route>[\w/-]+)(?:#(?<anchor>[\w-]+))?/gu,
   ),
-].map((match) => ({
-  route: `/${match.groups?.route}`,
-  anchor: match.groups?.anchor,
-}))
+].map(({ groups }) => ({ route: `/${groups?.route}`, anchor: groups?.anchor }))
 
-test(`readme docs links point at a page and heading that exist`, () => {
+test(`readme and Markdown guide docs links point at a page and heading that exist`, () => {
   expect(docs_links.length).toBeGreaterThan(15)
   expect(docs_links.filter(({ anchor }) => anchor).length).toBeGreaterThan(8)
 
@@ -90,16 +88,25 @@ test(`readme docs links point at a page and heading that exist`, () => {
   expect(failures).toEqual([])
 })
 
-test(`every non-component subpath appears in the readme export table`, () => {
+test(`every non-component subpath links to its source in the readme export table`, () => {
   expect(pkg_exports).toHaveProperty(`./*.svelte`)
-  const subpaths = Object.keys(pkg_exports)
-    .filter((subpath) => subpath !== `.` && !subpath.endsWith(`.svelte`))
-    .map((subpath) => subpath.slice(1))
-  const documented = [...readme.matchAll(/^\|\s+`(?<subpath>\/[^`]+)`\s+\|/gmu)].flatMap(
-    (match) => match.groups?.subpath ?? [],
-  )
+  const subpaths = Object.entries(pkg_exports)
+    .filter(([subpath]) => subpath !== `.` && !subpath.endsWith(`.svelte`))
+    .map(([subpath, target]) => {
+      const source_path = (`default` in target ? target.default : target.types)
+        .replace(`./dist/`, `src/lib/`)
+        .replace(/\.js$/u, `.ts`)
+      return [
+        subpath.slice(1),
+        `https://github.com/janosh/svelte-widgets/blob/main/${source_path}`,
+      ]
+    })
+  const documented = [
+    ...readme.matchAll(/^\|\s+\[`(?<subpath>\/[^`]+)`\]\((?<href>[^)]+)\)\s+\|/gmu),
+  ].map((match) => [match.groups?.subpath, match.groups?.href])
 
-  expect(documented.toSorted()).toEqual(subpaths.toSorted())
+  expect(documented).toHaveLength(subpaths.length)
+  expect(documented).toEqual(expect.arrayContaining(subpaths))
 })
 
 test(`utilities stay on their focused subpath`, () => {
@@ -107,13 +114,18 @@ test(`utilities stay on their focused subpath`, () => {
   expect(pkg_exports).not.toHaveProperty(`./types`)
 })
 
-test(`every exported component appears in the readme component table`, () => {
+test(`every exported component links to its source in the readme component table`, () => {
   const components = Object.keys(lib).filter((name) => /^[A-Z]/u.test(name))
+  const source_paths = Object.keys(import.meta.glob(`../../src/lib/**/*.svelte`)).map(
+    (path) => path.replace(`../../`, ``),
+  )
   expect(components.length).toBeGreaterThan(15)
 
   for (const name of components) {
+    const source_path = source_paths.find((path) => path.endsWith(`/${name}.svelte`))
+    expect(source_path, `${name} has no source file`).toBeDefined()
     expect(readme, `${name} is missing from the component table`).toContain(
-      `| \`${name}\``,
+      `| [\`${name}\`](https://github.com/janosh/svelte-widgets/blob/main/${source_path})`,
     )
   }
 })

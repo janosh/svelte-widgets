@@ -1,8 +1,10 @@
 <script>
+  import Icon from '$lib/Icon.svelte'
+  import { Flask } from '$lib/icons'
   import 'katex/dist/katex.min.css'
 </script>
 
-## Figure and equation navigation
+## <Icon icon={Flask} class="heading-icon" aria-hidden="true" /> Figure and equation navigation
 
 The sidebar separates figures and equations, preserving document order within each section. Optional `label="…"` metadata gives each entry a short title without changing its caption or number. Mass–energy equivalence, $E = mc^2$, appears in [@eq:mass-energy]. Repeating [@eq:mass-energy] still produces one navigation entry.
 

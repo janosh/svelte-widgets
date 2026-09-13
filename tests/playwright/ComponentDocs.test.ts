@@ -1,13 +1,113 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 
-test(`TreeView examples select by keyboard and retry failed lazy branches`, async ({
+const width_of = (locator: Locator) =>
+  locator.evaluate((element) => element.getBoundingClientRect().width)
+
+test(`ColorInput examples preserve hex drafts and restore transparent colors`, async ({
+  page,
+}) => {
+  await page.goto(`/color-input`, { waitUntil: `networkidle` })
+  const heading = page.getByRole(`heading`, { name: `ColorInput`, exact: true })
+  await expect(heading).toHaveAttribute(`id`, `colorinput`)
+  await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
+  const basic = page.locator(`#color-input-basic`)
+  const hex = basic.getByRole(`textbox`, { name: `Hex color` })
+  await hex.fill(``)
+  const empty_width = await width_of(hex)
+  await hex.pressSequentially(`#abcdef`)
+  await expect(hex).toHaveValue(`#abcdef`)
+  expect(await width_of(hex)).toBeGreaterThan(empty_width)
+  await expect(basic.locator(`> p`)).toHaveText(`Selected color: #abcdef`)
+  await hex.fill(`#wrong`)
+  await expect(hex).toHaveAttribute(`aria-invalid`, `true`)
+  await hex.press(`Escape`)
+  await expect(hex).toHaveValue(`#abcdef`)
+
+  const transparent = page.locator(`#color-input-alpha`)
+  const alpha_hex = transparent.getByRole(`textbox`, { name: `Hex color` })
+  const opacity = transparent.getByRole(`spinbutton`, { name: `Opacity`, exact: true })
+  await expect(opacity).toHaveValue(`50`)
+  const opacity_width = await width_of(opacity)
+  const opacity_font_size = await opacity.evaluate((input) =>
+    Number(getComputedStyle(input).fontSize.replace(`px`, ``)),
+  )
+  expect(opacity_width, `Two digits and padding should fit within 2em`).toBeLessThan(
+    2 * opacity_font_size,
+  )
+  await opacity.fill(`0`)
+  expect(await width_of(opacity)).toBeLessThan(opacity_width)
+  await expect(alpha_hex).toHaveValue(`#e76f5100`)
+  await opacity.fill(`100`)
+  expect(await width_of(opacity)).toBeGreaterThan(opacity_width)
+  await expect(alpha_hex).toHaveValue(`#e76f51ff`)
+  await opacity.press(`ArrowDown`)
+  await expect(opacity).toHaveValue(`99`)
+  await expect(alpha_hex).toHaveValue(`#e76f51fc`)
+  await opacity.fill(`101`)
+  await expect(opacity).toHaveAttribute(`aria-invalid`, `true`)
+  await expect(opacity).toHaveAccessibleDescription(
+    `Enter a whole percentage from 0 to 100`,
+  )
+  await opacity.press(`Tab`)
+  await expect(opacity).toHaveValue(`99`)
+  await expect(opacity).not.toHaveAttribute(`aria-invalid`)
+  await expect(opacity).toHaveAccessibleDescription(``)
+  await opacity.fill(``)
+  await opacity.press(`Escape`)
+  await expect(opacity).toHaveValue(`99`)
+
+  const deferred = page.locator(`#color-input-commit`)
+  await deferred.getByRole(`textbox`, { name: `Hex color` }).fill(`#123456`)
+  await expect(deferred.locator(`> p`)).toContainText(`updates: 0`)
+  await deferred.getByRole(`textbox`, { name: `Hex color` }).press(`Enter`)
+  await expect(deferred.locator(`> p`)).toHaveText(`Committed: #123456 · updates: 1`)
+})
+
+test(`TreeView examples select nodes and ranges, and retry failed lazy branches`, async ({
   page,
 }) => {
   await page.goto(`/tree-view`, { waitUntil: `networkidle` })
+  const heading = page.getByRole(`heading`, { name: `TreeView`, exact: true })
+  await expect(heading).toHaveAttribute(`id`, `treeview`)
+  await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
   const basic = page.locator(`#tree-view-basic`)
   await basic.getByRole(`treeitem`, { name: `README.md`, exact: true }).focus()
   await page.keyboard.press(`Enter`)
   await expect(basic.locator(`> p`)).toHaveText(`Selected: readme`)
+
+  const multiple = page.locator(`#tree-view-multiple`)
+  const app = multiple.getByRole(`treeitem`, { name: `App.svelte`, exact: true })
+  const theme = multiple.getByRole(`treeitem`, { name: `theme.css`, exact: true })
+  await app.focus()
+  await theme.click({ modifiers: [`Shift`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  const source = multiple.getByRole(`treeitem`, { name: `src`, exact: true })
+  await source.focus()
+  for (const expanded of [false, true]) {
+    await source.press(`Enter`)
+    await expect(source).toHaveAttribute(`aria-expanded`, String(expanded))
+    await expect(source).toBeFocused()
+    await expect(multiple.getByRole(`treeitem`)).toHaveCount(expanded ? 5 : 2)
+    await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  }
+  await multiple.getByRole(`button`, { name: `Clear selection` }).click()
+  await app.click()
+  await theme.click({ modifiers: [`ControlOrMeta`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  await app.click({ modifiers: [`ControlOrMeta`] })
+  await multiple
+    .getByRole(`treeitem`, { name: `README.md`, exact: true })
+    .click({ modifiers: [`Shift`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme, readme`)
+  await expect(
+    multiple.getByRole(`treeitem`, { name: `config.ts`, exact: true }),
+  ).toHaveAttribute(`aria-disabled`, `true`)
+  await multiple.getByRole(`button`, { name: `Clear selection` }).click()
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: None`)
+  await app.focus()
+  await page.keyboard.press(`Shift+ArrowDown`)
+  await page.keyboard.press(`Shift+ArrowDown`)
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
 
   const lazy = page.locator(`#tree-view-loading`)
   await lazy.getByRole(`button`, { name: `Expand Remote files` }).click()
@@ -40,6 +140,10 @@ test(`FileInput example reports parse errors then displays and removes valid JSO
   await page.goto(`/file-input`, { waitUntil: `networkidle` })
   const demo = page.locator(`#file-input-json`)
   const input = demo.getByLabel(`Choose a JSON file`)
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await width_of(input)).toBeLessThanOrEqual(await width_of(input.locator(`..`)))
+  }
   await input.setInputFiles({
     name: `invalid.json`,
     mimeType: `application/json`,

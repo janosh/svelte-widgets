@@ -80,7 +80,8 @@ jobs:
         with:
           # Deployed docs and unreleased compare tags are unavailable until after merge.
           # The prerender crawl validates internal docs links.
-          args: --exclude '%7B' --exclude '^file://' --exclude '^https://svelte-widgets\.janosh\.dev' --exclude '^https://github\.com/janosh/svelte-widgets/compare/' --root-dir . --accept 100..=103,200..=299,403,429,502,503 -- ./**/*.{md,svelte,ts}
+          # Source links follow main in published docs; validate them against the revision under review.
+          args: --remap '^https://github\.com/janosh/svelte-widgets/(blob|tree)/main/(.*) https://github.com/janosh/svelte-widgets/$1/${{ github.event.pull_request.head.sha || github.sha }}/$2' --exclude '%7B' --exclude '^file://' --exclude '^https://svelte-widgets\.janosh\.dev' --exclude '^https://github\.com/janosh/svelte-widgets/compare/' --root-dir . --accept 100..=103,200..=299,403,429,502,503 -- ./**/*.{md,svelte,ts}
 
   build:
     runs-on: ubuntu-latest

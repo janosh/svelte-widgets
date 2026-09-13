@@ -181,6 +181,7 @@
         class={[
           `node-key`,
           {
+            'with-actions': ctx.settings.ui.node_actions !== false,
             'array-index': typeof node_key === `number`,
             collapsed: expandable && is_collapsed,
           },
@@ -215,26 +216,26 @@
         <button type="button" class="preview" tabindex="-1" onclick={toggle_collapse}>
           {format_preview(value)}
         </button>
-        <span class="size-hint">{format_bytes(estimate_byte_size(value))}</span>
+        {#if ctx.settings.ui.size_hints !== false}
+          <span class="size-hint">{format_bytes(estimate_byte_size(value))}</span>
+        {/if}
         <span class="bracket close">{close_bracket}</span>
+      {:else if ctx.settings.ui.node_actions !== false}
+        <button
+          type="button"
+          class="collapse-level-btn"
+          title="Collapse children to this level"
+          tabindex="-1"
+          onclick={(event) => {
+            event.stopPropagation()
+            ctx.collapse_children_only(path)
+          }}
+        >
+          ⊟
+        </button>
       {/if}
     {:else}
       <JsonValue {value} {value_type} {path} />
-    {/if}
-
-    {#if expandable && !is_collapsed}
-      <button
-        type="button"
-        class="collapse-level-btn"
-        title="Collapse children to this level"
-        tabindex="-1"
-        onclick={(event) => {
-          event.stopPropagation()
-          ctx.collapse_children_only(path)
-        }}
-      >
-        ⊟
-      </button>
     {/if}
   </span>
 
@@ -411,7 +412,7 @@
   .node-key {
     color: var(--jt-key, light-dark(#001080, #9cdcfe));
     /* hover hint: ▸ expands a collapsed node, ⧉ copies an expanded/leaf value */
-    &::after {
+    &.with-actions::after {
       content: '⧉';
       opacity: 0;
       font-size: 0.8em;
@@ -419,7 +420,7 @@
       transition: opacity 0.15s;
       color: var(--jt-arrow, light-dark(#6e6e6e, #858585));
     }
-    &.collapsed::after {
+    &.with-actions.collapsed::after {
       content: '▸';
     }
     &:hover {

@@ -133,6 +133,186 @@ const mount_editor = async (
   const textarea = doc_query<HTMLTextAreaElement>(`textarea`)
   return { instance, model, props, recorder, textarea }
 }
+const fill_search = async (value: string, label = `Find`): Promise<HTMLInputElement> => {
+  const input = doc_query<HTMLInputElement>(`input[aria-label="${label}"]`)
+  input.value = value
+  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+  await flush_async()
+  return input
+}
+test(`search navigates offscreen matches, refreshes after edits, and preserves focus on Escape`, async () => {
+  const lines = Array.from({ length: 2000 }, (_unused, line_idx) =>
+    [0, 999, 1999].includes(line_idx) ? `😀foo ${line_idx}` : `line ${line_idx}`,
+  )
+  const { model, textarea, props } = await mount_editor(
+    create_editor_model({ uri: `large.ts`, text: lines.join(`\n`) }),
+  )
+  const parent_escape = vi.fn(() => true)
+  onTestFinished(register_escape_layer(parent_escape))
+  textarea.focus()
+  expect(press_key(textarea, `f`, { ctrlKey: true }).defaultPrevented).toBe(true)
+  await flush_async()
+  const input = await fill_search(`foo`)
+  expect(document.activeElement).toBe(input)
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  expect(model.selection).toEqual({ anchor: 2, head: 5 })
+  expect(doc_query(`.editor-search-match`).textContent).toBe(`foo`)
+  expect(press_key(input, `Enter`, { isComposing: true }).defaultPrevented).toBe(false)
+  expect(model.selection).toEqual({ anchor: 2, head: 5 })
+  press_key(input, `Enter`)
+  await flush_async()
+  const middle = model.line(999).from + 2
+  expect(model.selection).toEqual({ anchor: middle, head: middle + 3 })
+  expect(doc_query(`.content`).scrollTop).toBeGreaterThan(0)
+  expect(textarea.value.slice(textarea.selectionStart, textarea.selectionEnd)).toBe(`foo`)
+  expect(textarea.value.split(`\n`).length).toBeLessThan(50)
+  expect(doc_query(`.editor-search-match.current`).textContent).toBe(`foo`)
+  press_key(input, `Enter`, { shiftKey: true })
+  press_key(input, `Enter`, { shiftKey: true })
+  await flush_async()
+  expect(model.line_at(model.selection.head).line_idx).toBe(1999)
+  press_key(input, `F3`)
+  await flush_async()
+  expect(model.selection).toEqual({ anchor: 2, head: 5 })
+  for (const [label, from] of [
+    [`Next match`, middle],
+    [`Previous match`, 2],
+  ] as const) {
+    doc_query<HTMLButtonElement>(`button[aria-label="${label}"]`).click()
+    await flush_async()
+    expect(model.selection).toEqual({ anchor: from, head: from + 3 })
+  }
+  model.transact([{ from: 2, to: 5, insert: `bar` }])
+  await flush_async()
+  expect(doc_query(`[role="status"]`).textContent).toBe(`0 of 2`)
+  model.undo()
+  await flush_async()
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  props.model = create_editor_model({ uri: `other.ts`, text: `foo` })
+  await flush_async()
+  expect(doc_query(`[role="status"]`).textContent).toBe(`0 of 1`)
+  press_key(input, `Enter`)
+  await flush_async()
+  expect(props.model.selection).toEqual({ anchor: 0, head: 3 })
+  expect(press_key(input, `Escape`).defaultPrevented).toBe(true)
+  await flush_async()
+  expect(document.querySelector(`[role="search"]`)).toBeNull()
+  expect(document.activeElement).toBe(textarea)
+  expect(parent_escape).not.toHaveBeenCalled()
+})
+test(`replace controls honor case, words, history, backend updates, and read-only changes`, async () => {
+  const original = `foo foo_bar FOO`
+  const { instance, model, textarea, recorder, props } = await mount_editor(
+    create_editor_model({ uri: `replace.ts`, text: original }),
+  )
+  textarea.focus()
+  press_key(textarea, `h`, { ctrlKey: true })
+  await flush_async()
+  await fill_search(`foo`)
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  const checkboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]`)
+  checkboxes[0].click()
+  await flush_async()
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 2`)
+  checkboxes[1].click()
+  await flush_async()
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 1`)
+  const replacement = await fill_search(`bar$&`, `Replacement`)
+  expect(press_key(replacement, `Enter`, { isComposing: true }).defaultPrevented).toBe(
+    false,
+  )
+  expect(model.text()).toBe(original)
+  press_key(replacement, `Enter`)
+  await flush_async()
+  expect(model.text()).toBe(`bar$& foo_bar FOO`)
+  expect(doc_query(`[role="status"]`).textContent).toBe(`No matches`)
+  expect(instance.undo()).toBe(true)
+  checkboxes[0].click()
+  await flush_async()
+  expect(instance.replace_all()).toBe(2)
+  await flush_async()
+  expect([model.text(), recorder.get_text()]).toEqual([
+    `bar$& foo_bar bar$&`,
+    `bar$& foo_bar bar$&`,
+  ])
+  expect(instance.undo()).toBe(true)
+  await flush_async()
+  expect(model.text()).toBe(original)
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 2`)
+  props.read_only = true
+  await flush_async()
+  expect(document.querySelector(`input[aria-label="Replacement"]`)).toBeNull()
+  expect([instance.replace_current(), instance.replace_all()]).toEqual([false, 0])
+  expect(instance.find_next()).toBe(true)
+  expect(model.selection).toEqual({ anchor: 12, head: 15 })
+  expect(model.text()).toBe(original)
+})
+test.each([5000, 5001])(
+  `live search caps navigation and reports truncation without limiting replace all (%s matches)`,
+  async (count) => {
+    const original = `foo\n`.repeat(count)
+    const { instance, model, recorder } = await mount_editor(
+      create_editor_model({ uri: `many-matches.ts`, text: original }),
+    )
+    await instance.open_search(true)
+    await fill_search(`foo`)
+    const status = doc_query(`[role="status"]`)
+    const total = count === 5000 ? `5000` : `5000+ (first 5000 shown)`
+    expect(status.textContent).toBe(`1 of ${total}`)
+    expect(instance.find_next(-1)).toBe(true)
+    await flush_async()
+    expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })
+    expect(status.textContent).toBe(`5000 of ${total}`)
+    expect(instance.find_next()).toBe(true)
+    await flush_async()
+    expect(model.selection).toEqual({ anchor: 0, head: 3 })
+    expect(status.textContent).toBe(`1 of ${total}`)
+    await fill_search(`x`, `Replacement`)
+    expect(instance.replace_all()).toBe(count)
+    await flush_async()
+    expect([model.text(), recorder.get_text()]).toEqual([
+      `x\n`.repeat(count),
+      `x\n`.repeat(count),
+    ])
+    expect(status.textContent).toBe(`No matches`)
+    expect(instance.undo()).toBe(true)
+    await flush_async()
+    expect(model.text()).toBe(original)
+    expect(model.dirty).toBe(false)
+    expect(status.textContent).toBe(`1 of ${total}`)
+    expect(instance.undo()).toBe(false)
+  },
+)
+test(`go-to-line uses validated gutter numbers and reveals a bounded input window`, async () => {
+  const { model, instance, textarea } = await mount_editor(
+    create_editor_model({ uri: `lines.ts`, text: `line\n`.repeat(2000) }),
+  )
+  for (const invalid of [0, -1, 1.5, Infinity, NaN, 2002])
+    expect(instance.go_to_line(invalid)).toBe(false)
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+  textarea.focus()
+  expect(press_key(textarea, `g`, { metaKey: true }).defaultPrevented).toBe(true)
+  await flush_async()
+  const input = await fill_search(`1999`, `Line number`)
+  expect(document.activeElement).toBe(input)
+  expect(press_key(input, `Enter`, { isComposing: true }).defaultPrevented).toBe(false)
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+  press_key(input, `Enter`)
+  await flush_async()
+  expect(model.selection).toEqual({ anchor: 9990, head: 9990 })
+  expect(document.activeElement).toBe(textarea)
+  expect(Number(textarea.dataset.inputFrom)).toBeGreaterThan(0)
+  expect(textarea.value.split(`\n`).length).toBeLessThan(50)
+  expect(instance.go_to_line(2001)).toBe(true)
+  expect(model.selection.head).toBe(model.length)
+  expect(model.revision).toBe(0)
+  await instance.open_search()
+  doc_query<HTMLButtonElement>(`.editor-search button[aria-label="Go to line"]`).click()
+  await flush_async()
+  const reopened_input = doc_query<HTMLInputElement>(`input[aria-label="Line number"]`)
+  expect(reopened_input.value).toBe(`2001`)
+  expect(document.activeElement).toBe(reopened_input)
+})
 test(`native input, selection, history, commands, and backend deltas share the model`, async () => {
   const on_update = vi.fn()
   const { instance, model, recorder, textarea } = await mount_editor(undefined, {

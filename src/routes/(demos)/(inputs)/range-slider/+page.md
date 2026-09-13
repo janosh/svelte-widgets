@@ -7,6 +7,7 @@
   let overlap = $state<RangeValue>([50, 50])
   let rtl_range = $state<RangeValue>([20, 75])
   let batches = $state<RangeValue>([0, 10])
+  let pressure = $state<RangeValue>([1e-6, 1])
   let locked = $state(false)
   let side_ticks = $state(false)
   let tick_count = $state(2)
@@ -18,6 +19,12 @@
   })
   const money = (value: number): string => currency.format(value)
   const percent = (value: number): string => `${Math.round(value * 100)}%`
+  const format_pressure = (value: number): string => {
+    const exponent = String(Math.round(Math.log10(value))).replace(/./g, (digit) =>
+      digit === `-` ? `⁻` : `⁰¹²³⁴⁵⁶⁷⁸⁹`[Number(digit)],
+    )
+    return `10${exponent} bar`
+  }
 </script>
 
 <svelte:head><title>RangeSlider · Svelte Widgets</title></svelte:head>
@@ -88,6 +95,21 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
       style="--range-slider-color: light-dark(#047857, #6ee7b7)"
     />
     <p class="note">Arrow keys move 1%. Shift + arrow or Page Up / Down moves 10%.</p>
+  </section>
+  <section>
+    <header><h2>Logarithmic pressure</h2></header>
+    <RangeSlider
+      label="Pressure window"
+      description="Pressure in bar across twelve orders of magnitude."
+      scale="log"
+      min={1e-10}
+      max={100}
+      step={1}
+      tick_count={4}
+      bind:value={pressure}
+      format_value={format_pressure}
+    />
+    <p class="note">Each arrow moves one decade (×10 or ÷10). Values and callbacks stay in bar.</p>
   </section>
   <section>
     <header>
@@ -168,6 +190,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 - **Keyboard:** Tab reaches each handle in a fixed order. Arrows move one step; Shift + arrow and Page Up / Down move ten. Home / End reach that handle’s allowed bounds.
 - **Type:** edits apply on Enter or blur, snap to the nearest step, and stay within the allowed interval. Escape discards a draft. Empty or invalid drafts restore the current value.
 - **Events:** binding and `on_input` update while dragging. `on_commit` runs at the end of a changed gesture, on each keyboard adjustment, or after a changed numeric edit. Pointer cancellation keeps and commits the last value. External prop updates emit neither callback.
+- **Logarithmic scale:** `scale="log"` spaces positions and ticks geometrically. `min`, `max`, bound values, numeric fields, formatters, and callbacks stay in real units. `step` is a base-10 exponent increment: `1` multiplies or divides by 10; `0.1` uses a factor of 10^0.1. Positive numeric drafts snap to this logarithmic grid and clamp to the allowed interval; zero and negative drafts are discarded. Both endpoints remain exactly selectable, even off the grid.
 
 ### Props
 
@@ -175,6 +198,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 | --------------------------- | ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `value`                     | `[min, max]`        | Bindable `[lower, upper]` pair.                                                                                                                                                                                |
 | `min / max / step`          | `0 / 100 / 1`       | Finite bounds and a positive step anchored at min. Max is always selectable, even between steps.                                                                                                               |
+| `scale`                     | `linear`            | `linear` uses additive steps; `log` uses base-10 decades and requires strictly positive bounds with distinct logarithms.                                                                                       |
 | `label / description`       | `Range / undefined` | Visible group name and optional help text.                                                                                                                                                                     |
 | `lower_label / upper_label` | `Minimum / Maximum` | Accessible endpoint names and input tooltips; translate these along with the label.                                                                                                                            |
 | `format_value`              | `String`            | Formats the selected values, limits, and announced slider values. Click a selected value to edit its underlying number.                                                                                        |
@@ -183,7 +207,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
 | `show_inputs / disabled`    | `true / false`      | Make selected values read-only or disable every interaction.                                                                                                                                                   |
 | `on_input / on_commit`      | —                   | Receive a fresh value pair for live and completed edits.                                                                                                                                                       |
 
-External values must be finite, ordered, and inside the bounds. Update bounds and value together when changing the domain. Invalid configuration throws with the offending values. Extra HTML attributes are forwarded to the group. Native form reset discards numeric drafts; reset the binding in your form handler to restore a saved interval.
+External values must be finite, ordered, and inside the bounds. Update bounds and value together when changing the domain. Invalid configuration, including steps too small to change a representable value, throws with the offending values. Extra HTML attributes are forwarded to the group. Native form reset discards numeric drafts; reset the binding in your form handler to restore a saved interval.
 
 Style with `--range-slider-color`, `--range-slider-track`, `--range-slider-thumb`, and `--range-slider-input-bg`. Touch targets are 44 pixels, focus rings remain visible, and the control supports reduced motion and forced colors.
 

@@ -1,6 +1,17 @@
-## `CodeEditor`
+<script lang="ts">
+  import Icon from '$lib/Icon.svelte'
+  import { FileCode, ContentDuplicate } from '$lib/icons'
+</script>
+
+## <Icon icon={FileCode} class="heading-icon" aria-hidden="true" /> `CodeEditor`
 
 `CodeEditor` combines a host-owned rope model with a native textarea and virtualized syntax-token overlay. The model owns UTF-16 offsets, transactions, selection, dirty checkpoints, and bounded undo/redo history; the component sends ordered edits to a host-supplied `EditorBackend`. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
+
+Hover or focus the editor to reveal the **Find** icon in its top-right corner; touch devices show it without hovering. The pane floats over the code without moving it, with the query and match navigation on the first row and search options, Replace, and Go to line on the second. Use **Find** (Ctrl/Cmd+F) to search the entire document, including lines outside the viewport. Enter/F3 and Shift+Enter/Shift+F3 navigate forward and backward with wraparound; matches are highlighted in the visible syntax overlay. **Replace** (Ctrl+H or Cmd+Alt+F) offers case-sensitive and whole-word matching, single replacement, and replacement of every match in one undo step. Search and replacement are literal: punctuation, whitespace, and `$&` have no special replacement meaning. Whole-word boundaries include Unicode letters, combining marks, numbers, `_`, and `$`. Replace controls are unavailable in read-only editors.
+
+Live search retains the first 5,000 matches. When more exist, the status shows `5000+ (first 5000 shown)` and navigation wraps within those displayed results; refine the query to reach later matches. **Replace all** still replaces every match in the document in one undo step, including matches beyond the displayed limit.
+
+Open **Go to line** from the Find pane or directly with Ctrl/Cmd+G. It uses the same one-based numbers as the gutter. Escape closes either panel and returns focus to the editor; press Escape again followed by Tab to leave it.
 
 The rope model is validated with generated 100 MB / 1,000,000-line documents. The native input and syntax overlay contain only viewport lines plus a small overscan. Selections expand the input window so native copying, cutting, and assistive technology retain the selected text; selecting the whole document or a very long line can still materialize a large string. The outer viewport remains subject to browser scroll-height limits.
 
@@ -108,7 +119,7 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
   }
 </script>
 
-<div style="height: 13rem; border: 1px solid lightgray">
+<div style="height: 17rem; border: 1px solid lightgray">
   <CodeEditor {backend} {model} {on_update} on_save={save} />
 </div>
 
@@ -118,7 +129,25 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 
 The backend receives the model URI and normalized open text, but never receives save requests. It owns only the open document and token/edit protocol; `model.subscribe()` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook. Successful saves call `model.mark_saved()`.
 
-## `DiffView`
+Search scans overlapping model slices instead of flattening the document. The headless helpers return non-overlapping UTF-16 offsets and also accept multiline queries; CRLF input is normalized to the model's LF line endings. Match lists update after edits, undo, redo, and model replacement.
+
+`find_editor_matches()` and `replace_editor_matches()` are exhaustive. For callers that need only some results, `iterate_editor_matches()` yields the same matches lazily and stops scanning when the caller stops iterating.
+
+```ts
+import { find_editor_matches, replace_editor_matches } from 'svelte-widgets/code-editor'
+
+const matches = find_editor_matches(model, `greeting`, { whole_word: true })
+// [{ from: 6, to: 14 }, ...]
+const replaced = replace_editor_matches(model, `greeting`, `welcome`, {
+  case_sensitive: true,
+  whole_word: true,
+})
+model.undo() // restores the entire replacement batch
+```
+
+With `bind:this={editor}`, use `editor.open_search(replace = false)`, `editor.find_next(direction = 1)`, `editor.replace_current()`, `editor.replace_all()`, and `editor.go_to_line(line_number)`. The replacement methods use the panel's current query, options, and replacement text. `replace_current()` selects the next match without changing text when the current selection is not a match. Navigation and single replacement return whether they succeeded; replacement of all matches returns the count. Invalid line numbers leave the selection unchanged.
+
+## <Icon icon={ContentDuplicate} class="heading-icon" aria-hidden="true" /> `DiffView`
 
 `DiffView` renders side-by-side or unified diffs from a host-supplied `DiffBackend`. The
 package owns virtualization, gap expansion, layout switching and accessible line
