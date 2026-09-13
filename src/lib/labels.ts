@@ -58,6 +58,7 @@ export const COLOR_INPUT_LABELS = {
   opacity: `Opacity`,
   preset: (color: string) => `Use ${color}`,
   invalid: `Enter a valid hexadecimal color`,
+  invalid_opacity: `Enter a whole percentage from 0 to 100`,
 }
 export type ColorInputLabels = typeof COLOR_INPUT_LABELS
 

@@ -233,6 +233,7 @@
 <style>
   label {
     display: flex;
+    min-width: 0;
     align-items: center;
     gap: 10pt;
   }

@@ -148,6 +148,26 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   await expect(gain_number).toHaveValue(`2.5`)
   await page.mouse.up()
   await expect(gain_number).toHaveValue(String(10 ** 0.6))
+
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 900 })
+    const insets = await page
+      .locator(`#number-range-input input[type="range"]`)
+      .evaluateAll((sliders) =>
+        sliders.map((slider) => {
+          const row = slider.parentElement
+          const panel = row?.parentElement
+          if (!row || !panel) throw new Error(`Missing NumberRangeInput row or panel`)
+          const panel_box = panel.getBoundingClientRect()
+          return {
+            left: row.getBoundingClientRect().left - panel_box.left,
+            right: panel_box.right - slider.getBoundingClientRect().right,
+          }
+        }),
+      )
+    expect(insets).toHaveLength(4)
+    for (const { left, right } of insets) expect(right).toBeGreaterThanOrEqual(left)
+  }
 })
 
 test(`track clicks, keyboard bounds, focus order, and decimal numeric drafts work together`, async ({

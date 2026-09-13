@@ -30,6 +30,7 @@
 
   const component_id = $props.id()
   const error_id = `${component_id}-error`
+  const opacity_error_id = `${component_id}-opacity-error`
   const msg = $derived(merge_defaults(COLOR_INPUT_LABELS, labels))
   const pattern = $derived(
     alpha
@@ -61,6 +62,12 @@
     const alpha_byte = alpha ? parseInt(preview.slice(7), 16) : 255
     return Math.round((alpha_byte / 255) * 100)
   })
+  // A new displayed percentage or a newly mounted opacity field clears its draft error.
+  let opacity_invalid = $derived.by(() => {
+    void opacity
+    void alpha
+    return false
+  })
 
   const update = (next_draft: string, final = false): void => {
     if (disabled || readonly) return
@@ -79,7 +86,9 @@
   const change_opacity = (input: HTMLInputElement, final = false): void => {
     if (disabled || readonly) return
     const next_opacity = input.valueAsNumber
-    if (Number.isFinite(next_opacity) && input.validity.valid) {
+    const valid = Number.isFinite(next_opacity) && input.validity.valid
+    opacity_invalid = !final && !valid
+    if (valid) {
       // Blurring an unchanged percentage must preserve the exact alpha byte.
       const alpha_hex =
         next_opacity === opacity
@@ -103,6 +112,7 @@
     } else if (event.key === `Escape`) {
       event.preventDefault()
       draft = color
+      opacity_invalid = false
       input.value = input.type === `number` ? String(opacity) : draft
     }
   }
@@ -149,7 +159,9 @@
           step="1"
           required
           value={opacity}
-          aria-valuetext={`${opacity}%`}
+          aria-valuetext={opacity_invalid ? undefined : `${opacity}%`}
+          aria-invalid={opacity_invalid || undefined}
+          aria-describedby={opacity_invalid ? opacity_error_id : undefined}
           disabled={disabled || readonly}
           oninput={(event) => change_opacity(event.currentTarget)}
           onchange={(event) => change_opacity(event.currentTarget, true)}
@@ -161,6 +173,9 @@
     {/if}
   </div>
   {#if !parsed}<small id={error_id}>{msg.invalid}</small>{/if}
+  {#if alpha && opacity_invalid}
+    <small id={opacity_error_id}>{msg.invalid_opacity}</small>
+  {/if}
   {#if palette.length}
     <div class="presets">
       {#each palette as preset}
@@ -244,6 +259,14 @@
   }
   .opacity {
     font-size: 0.85em;
+    input {
+      appearance: textfield;
+      &::-webkit-inner-spin-button,
+      &::-webkit-outer-spin-button {
+        appearance: none;
+        margin: 0;
+      }
+    }
   }
   .presets {
     margin-top: 0.6em;

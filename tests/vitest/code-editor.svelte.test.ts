@@ -306,6 +306,12 @@ test(`go-to-line uses validated gutter numbers and reveals a bounded input windo
   expect(instance.go_to_line(2001)).toBe(true)
   expect(model.selection.head).toBe(model.length)
   expect(model.revision).toBe(0)
+  await instance.open_search()
+  doc_query<HTMLButtonElement>(`.editor-search button[aria-label="Go to line"]`).click()
+  await flush_async()
+  const reopened_input = doc_query<HTMLInputElement>(`input[aria-label="Line number"]`)
+  expect(reopened_input.value).toBe(`2001`)
+  expect(document.activeElement).toBe(reopened_input)
 })
 test(`native input, selection, history, commands, and backend deltas share the model`, async () => {
   const on_update = vi.fn()

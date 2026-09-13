@@ -1,7 +1,7 @@
 import { expect, test, type Locator } from '@playwright/test'
 
-const input_width = (input: Locator) =>
-  input.evaluate((element) => element.getBoundingClientRect().width)
+const width_of = (locator: Locator) =>
+  locator.evaluate((element) => element.getBoundingClientRect().width)
 
 test(`ColorInput examples preserve hex drafts and restore transparent colors`, async ({
   page,
@@ -13,10 +13,10 @@ test(`ColorInput examples preserve hex drafts and restore transparent colors`, a
   const basic = page.locator(`#color-input-basic`)
   const hex = basic.getByRole(`textbox`, { name: `Hex color` })
   await hex.fill(``)
-  const empty_width = await input_width(hex)
+  const empty_width = await width_of(hex)
   await hex.pressSequentially(`#abcdef`)
   await expect(hex).toHaveValue(`#abcdef`)
-  expect(await input_width(hex)).toBeGreaterThan(empty_width)
+  expect(await width_of(hex)).toBeGreaterThan(empty_width)
   await expect(basic.locator(`> p`)).toHaveText(`Selected color: #abcdef`)
   await hex.fill(`#wrong`)
   await expect(hex).toHaveAttribute(`aria-invalid`, `true`)
@@ -27,19 +27,31 @@ test(`ColorInput examples preserve hex drafts and restore transparent colors`, a
   const alpha_hex = transparent.getByRole(`textbox`, { name: `Hex color` })
   const opacity = transparent.getByRole(`spinbutton`, { name: `Opacity`, exact: true })
   await expect(opacity).toHaveValue(`50`)
-  const opacity_width = await input_width(opacity)
+  const opacity_width = await width_of(opacity)
+  const opacity_font_size = await opacity.evaluate((input) =>
+    Number(getComputedStyle(input).fontSize.replace(`px`, ``)),
+  )
+  expect(opacity_width, `Two digits and padding should fit within 2em`).toBeLessThan(
+    2 * opacity_font_size,
+  )
   await opacity.fill(`0`)
-  expect(await input_width(opacity)).toBeLessThan(opacity_width)
+  expect(await width_of(opacity)).toBeLessThan(opacity_width)
   await expect(alpha_hex).toHaveValue(`#e76f5100`)
   await opacity.fill(`100`)
-  expect(await input_width(opacity)).toBeGreaterThan(opacity_width)
+  expect(await width_of(opacity)).toBeGreaterThan(opacity_width)
   await expect(alpha_hex).toHaveValue(`#e76f51ff`)
   await opacity.press(`ArrowDown`)
   await expect(opacity).toHaveValue(`99`)
   await expect(alpha_hex).toHaveValue(`#e76f51fc`)
   await opacity.fill(`101`)
+  await expect(opacity).toHaveAttribute(`aria-invalid`, `true`)
+  await expect(opacity).toHaveAccessibleDescription(
+    `Enter a whole percentage from 0 to 100`,
+  )
   await opacity.press(`Tab`)
   await expect(opacity).toHaveValue(`99`)
+  await expect(opacity).not.toHaveAttribute(`aria-invalid`)
+  await expect(opacity).toHaveAccessibleDescription(``)
   await opacity.fill(``)
   await opacity.press(`Escape`)
   await expect(opacity).toHaveValue(`99`)
@@ -119,6 +131,10 @@ test(`FileInput example reports parse errors then displays and removes valid JSO
   await page.goto(`/file-input`, { waitUntil: `networkidle` })
   const demo = page.locator(`#file-input-json`)
   const input = demo.getByLabel(`Choose a JSON file`)
+  for (const width of [1280, 390, 320]) {
+    await page.setViewportSize({ width, height: 900 })
+    expect(await width_of(input)).toBeLessThanOrEqual(await width_of(input.locator(`..`)))
+  }
   await input.setInputFiles({
     name: `invalid.json`,
     mimeType: `application/json`,

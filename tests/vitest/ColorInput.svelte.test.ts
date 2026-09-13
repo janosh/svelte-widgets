@@ -130,12 +130,18 @@ describe(`ColorInput`, () => {
     await press(`number`, `Escape`)
     expect(input(`number`).value).toBe(`100`)
     expect(input(`text`).value).toBe(`#336699ff`)
+    await change(`number`, `101`)
+    await press(`number`, `Escape`)
+    expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+    await change(`number`, `101`)
     await change(`text`, `#a`)
     props.value = `#ff880000`
     await tick()
     expect(input(`text`).value).toBe(`#ff880000`)
     expect(input(`color`).value).toBe(`#ff8800`)
     expect(input(`number`).value).toBe(`0`)
+    expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+    expect(input(`number`).hasAttribute(`aria-describedby`)).toBe(false)
     expect(props.on_commit).not.toHaveBeenCalled()
   })
 
@@ -148,11 +154,20 @@ describe(`ColorInput`, () => {
       })
       await change(`number`, draft)
       expect(input(`number`).value).toBe(draft)
+      expect(input(`number`).getAttribute(`aria-invalid`)).toBe(`true`)
+      expect(input(`number`).hasAttribute(`aria-valuetext`)).toBe(false)
+      const error_id = input(`number`).getAttribute(`aria-describedby`)
+      expect(target.querySelector(`[id="${error_id}"]`)?.textContent).toBe(
+        `Enter a whole percentage from 0 to 100`,
+      )
       expect(target.checkValidity()).toBe(false)
       expect(props.value).toBe(`#33669980`)
       expect(input(`text`).value).toBe(`#33669980`)
       await change(`number`, draft, `blur`)
       expect(input(`number`).value).toBe(`50`)
+      expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+      expect(input(`number`).hasAttribute(`aria-describedby`)).toBe(false)
+      expect(target.querySelector(`[id="${error_id}"]`)).toBeNull()
       expect(target.checkValidity()).toBe(true)
       expect(props.on_commit).not.toHaveBeenCalled()
     },
@@ -186,7 +201,7 @@ describe(`ColorInput`, () => {
   )
 
   test(`presets commit immediately and accessible labels can be translated`, async () => {
-    const { props, target, input } = mount_color({
+    const { props, target, input, change } = mount_color({
       alpha: true,
       commit: `change`,
       label: `Surface`,
@@ -195,6 +210,7 @@ describe(`ColorInput`, () => {
         picker: `Farbe wählen`,
         hex: `Hex-Farbe`,
         opacity: `Deckkraft`,
+        invalid_opacity: `Ganze Prozentzahl zwischen 0 und 100 eingeben`,
         preset: (color: string) => `Wähle ${color}`,
       },
     })
@@ -202,6 +218,10 @@ describe(`ColorInput`, () => {
     expect(input(`color`).getAttribute(`aria-label`)).toBe(`Farbe wählen`)
     expect(input(`text`).getAttribute(`aria-label`)).toBe(`Hex-Farbe`)
     expect(input(`number`).closest(`label`)?.textContent).toContain(`Deckkraft`)
+    await change(`number`, `101`)
+    expect(target.querySelector(`small`)?.textContent).toBe(
+      `Ganze Prozentzahl zwischen 0 und 100 eingeben`,
+    )
     const preset = target.querySelector(`button`)
     expect(preset?.getAttribute(`aria-label`)).toBe(`Wähle #aabbcc00`)
     preset?.click()
@@ -210,6 +230,8 @@ describe(`ColorInput`, () => {
     expect(preset?.getAttribute(`aria-pressed`)).toBe(`true`)
     expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(`#aabbcc00`)
     expect(input(`number`).getAttribute(`aria-valuetext`)).toBe(`0%`)
+    expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+    expect(target.querySelector(`small`)).toBeNull()
   })
 
   test.each([`disabled`, `readonly`] as const)(

@@ -5,6 +5,8 @@
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
+  import Icon from '../Icon.svelte'
+  import { Hash, TextSearch } from '../icons'
   import { css_px, register_escape_layer } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp_integer } from '../utils'
@@ -1164,71 +1166,103 @@
   style:--editor-tab-size={tab_size}
 >
   <span class="sr-only" id={keyboard_help_id}>{msg.keyboard_help}</span>
-  <div class="editor-tools">
-    <button type="button" onclick={() => void open_search()} title="Ctrl/Cmd+F"
-      >{msg.find}</button
-    >
-    <button type="button" onclick={() => void open_line_search()} title="Ctrl/Cmd+G"
-      >{msg.go_to_line}</button
-    >
-  </div>
+  <button
+    class="search-toggle"
+    type="button"
+    onclick={() => void open_search()}
+    aria-label={msg.find}
+    title={`${msg.find} (Ctrl/Cmd+F)`}
+    ><Icon icon={TextSearch} aria-hidden="true" /></button
+  >
   {#if search_panel}
     <div
       class="editor-search"
+      class:line-search={search_panel === `line`}
       role="search"
       aria-label={search_panel === `find` ? msg.find : msg.go_to_line}
       {@attach search_escape}
     >
-      {#if search_panel === `find`}
-        <input
-          type="search"
-          aria-label={msg.find}
-          placeholder={msg.find}
-          bind:this={search_input}
-          value={search_query}
-          oninput={(event) => {
-            search_query = event.currentTarget.value
-            select_nearest_match()
-          }}
-          onkeydown={on_search_enter((event) => find_next(event.shiftKey ? -1 : 1))}
-        />
-        <span role="status"
-          >{search_matches.length
-            ? search_result.truncated
-              ? msg.match_position_truncated(current_match + 1, search_matches.length)
-              : msg.match_position(current_match + 1, search_matches.length)
-            : msg.no_matches}</span
-        >
-        {#each [-1, 1] as const as direction}
-          <button
-            type="button"
-            aria-label={direction === -1 ? msg.previous_match : msg.next_match}
-            title={direction === -1 ? `Shift+Enter / Shift+F3` : `Enter / F3`}
-            disabled={!search_matches.length}
-            onclick={() => find_next(direction)}>{direction === -1 ? `↑` : `↓`}</button
+      <div>
+        {#if search_panel === `find`}
+          <input
+            type="search"
+            aria-label={msg.find}
+            placeholder={msg.find}
+            bind:this={search_input}
+            value={search_query}
+            oninput={(event) => {
+              search_query = event.currentTarget.value
+              select_nearest_match()
+            }}
+            onkeydown={on_search_enter((event) => find_next(event.shiftKey ? -1 : 1))}
+          />
+          <span role="status"
+            >{search_matches.length
+              ? search_result.truncated
+                ? msg.match_position_truncated(current_match + 1, search_matches.length)
+                : msg.match_position(current_match + 1, search_matches.length)
+              : msg.no_matches}</span
           >
-        {/each}
-        {#each [[`case_sensitive`, msg.match_case], [`whole_word`, msg.whole_word]] as const as [option, label]}
-          <label
-            ><input
-              type="checkbox"
-              checked={search_options[option]}
-              onchange={(event) => {
-                search_options[option] = event.currentTarget.checked
-                select_nearest_match()
-              }}
-            />{label}</label
-          >
-        {/each}
-        {#if !editing_disabled}
-          <button
-            type="button"
-            aria-pressed={show_replace}
-            onclick={() => (show_replace = !show_replace)}>{msg.replace}</button
-          >
+          {#each [-1, 1] as const as direction}
+            <button
+              type="button"
+              aria-label={direction === -1 ? msg.previous_match : msg.next_match}
+              title={direction === -1 ? `Shift+Enter / Shift+F3` : `Enter / F3`}
+              disabled={!search_matches.length}
+              onclick={() => find_next(direction)}>{direction === -1 ? `↑` : `↓`}</button
+            >
+          {/each}
+        {:else}
+          <input
+            type="number"
+            min="1"
+            max={line_count}
+            required
+            aria-label={msg.line_number}
+            bind:this={line_input}
+            bind:value={target_line}
+            onkeydown={on_search_enter(() => go_to_line(target_line))}
+          />
+          <button type="button" onclick={() => go_to_line(target_line)}>{msg.go}</button>
         {/if}
+        <button
+          type="button"
+          aria-label={msg.close_search}
+          title="Escape"
+          onclick={close_search}>×</button
+        >
+      </div>
+      {#if search_panel === `find`}
+        <div>
+          {#each [[`case_sensitive`, msg.match_case], [`whole_word`, msg.whole_word]] as const as [option, label]}
+            <label
+              ><input
+                type="checkbox"
+                checked={search_options[option]}
+                onchange={(event) => {
+                  search_options[option] = event.currentTarget.checked
+                  select_nearest_match()
+                }}
+              />{label}</label
+            >
+          {/each}
+          {#if !editing_disabled}
+            <button
+              type="button"
+              aria-pressed={show_replace}
+              onclick={() => (show_replace = !show_replace)}>{msg.replace}</button
+            >
+          {/if}
+          <button
+            type="button"
+            onclick={() => void open_line_search()}
+            aria-label={msg.go_to_line}
+            title={`${msg.go_to_line} (Ctrl/Cmd+G)`}
+            ><Icon icon={Hash} aria-hidden="true" /></button
+          >
+        </div>
         {#if show_replace && !editing_disabled}
-          <div class="replacement-row">
+          <div>
             <input
               type="text"
               aria-label={msg.replacement}
@@ -1246,26 +1280,7 @@
             >
           </div>
         {/if}
-      {:else}
-        <input
-          type="number"
-          min="1"
-          max={line_count}
-          required
-          aria-label={msg.line_number}
-          bind:this={line_input}
-          bind:value={target_line}
-          onkeydown={on_search_enter(() => go_to_line(target_line))}
-        />
-        <button type="button" onclick={() => go_to_line(target_line)}>{msg.go}</button>
       {/if}
-      <button
-        class="search-close"
-        type="button"
-        aria-label={msg.close_search}
-        title="Escape"
-        onclick={close_search}>×</button
-      >
     </div>
   {/if}
   {#if error_message}
@@ -1353,6 +1368,7 @@
 
 <style>
   .code-editor {
+    position: relative;
     display: flex;
     flex-direction: column;
     width: 100%;
@@ -1371,22 +1387,52 @@
     background: color-mix(in srgb, var(--error-color, #f85149) 10%, transparent);
     font-size: 0.78rem;
   }
-  .editor-tools,
+  .search-toggle,
   .editor-search {
-    display: flex;
-    flex: 0 0 auto;
-    flex-wrap: wrap;
+    position: absolute;
+    inset-inline-end: 0.375rem;
+    z-index: 2;
+    background: var(--page-bg, light-dark(#fff, #0d0f14));
+  }
+  .search-toggle {
+    top: 0.375rem;
+    display: inline-flex;
     align-items: center;
+    justify-content: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    padding: 0.25em;
+    font-size: 1rem;
+    transition: opacity 0.15s;
+  }
+  @media (hover: hover) {
+    .code-editor:not(:hover, :focus-within) .search-toggle {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+  .editor-search {
+    top: 2.375rem;
+    box-sizing: border-box;
+    width: 22rem;
+    max-width: calc(100% - 0.75rem);
+    max-height: calc(100% - 2.75rem);
+    overflow: auto;
+    display: flex;
+    flex-direction: column;
     gap: 0.35rem;
     padding: 0.3rem 0.5rem;
-    border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+    border-radius: 0.3rem;
+    box-shadow: 0 2px 8px #0002;
     font-size: 0.8rem;
     button {
       font: inherit;
       padding: 0.1rem 0.35rem;
     }
-  }
-  .editor-search {
+    &.line-search {
+      width: 14rem;
+    }
     input:not([type='checkbox']) {
       flex: 1;
       min-width: 5rem;
@@ -1398,13 +1444,13 @@
       align-items: center;
       gap: 0.15rem;
     }
-    .replacement-row {
+    > div {
       display: flex;
-      order: 1;
-      width: 100%;
+      flex-wrap: wrap;
+      align-items: center;
       gap: inherit;
     }
-    .search-close {
+    label + button {
       margin-inline-start: auto;
     }
   }

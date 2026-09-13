@@ -1,5 +1,76 @@
 import { expect, test } from '@playwright/test'
 
+test(`CodeEditor tools reveal on hover and focus without taking space from code`, async ({
+  page,
+}) => {
+  await page.goto(`/code-editor`)
+  const demo = page.locator(`#code-editor-basic`)
+  const code_editor = demo.locator(`.code-editor`)
+  await expect(code_editor.locator(`textarea`)).toBeEditable()
+  const find_button = code_editor.getByRole(`button`, { name: `Find`, exact: true })
+  const panel = code_editor.getByRole(`search`)
+  const body = code_editor.locator(`.editor-body`)
+  const check_rows = async () => {
+    const centers = await panel.evaluate((element) =>
+      [
+        `input[type="search"], [role="status"], button[aria-label="Previous match"], button[aria-label="Next match"], button[aria-label="Close search"]`,
+        `label, button[aria-pressed], button[aria-label="Go to line"]`,
+      ].map((selector) =>
+        [...element.querySelectorAll(selector)].map((control) => {
+          const { top, height } = control.getBoundingClientRect()
+          return top + height / 2
+        }),
+      ),
+    )
+    expect(centers.map((row) => row.length)).toEqual([5, 4])
+    for (const row of centers) expect(Math.max(...row) - Math.min(...row)).toBeLessThan(1)
+    expect(Math.min(...centers[1])).toBeGreaterThan(Math.max(...centers[0]))
+  }
+  await page.mouse.move(0, 0)
+  await expect(find_button).toHaveCSS(`opacity`, `0`)
+  await expect(code_editor.getByRole(`button`)).toHaveCount(1)
+  await expect(find_button.locator(`svg[aria-hidden="true"]`)).toHaveCount(1)
+  await expect(find_button).toHaveText(``)
+  await expect(body).toHaveJSProperty(`offsetTop`, 0)
+  await code_editor.hover()
+  await expect(find_button).toHaveCSS(`opacity`, `1`)
+  await find_button.click()
+  const query = code_editor.getByRole(`searchbox`, { name: `Find` })
+  await expect(query).toBeFocused()
+  const query_width = await query.evaluate(
+    (element) => element.getBoundingClientRect().width,
+  )
+  expect(query_width).toBeLessThan(200)
+  await check_rows()
+  await expect(body).toHaveJSProperty(`offsetTop`, 0)
+  await query.press(`Escape`)
+  await demo.locator(`[data-load-large]`).focus()
+  await page.mouse.move(0, 0)
+  await expect(find_button).toHaveCSS(`opacity`, `0`)
+  await find_button.focus()
+  await expect(find_button).toHaveCSS(`opacity`, `1`)
+  await find_button.press(`Enter`)
+  await expect(query).toBeFocused()
+
+  await page.setViewportSize({ width: 390, height: 800 })
+  await check_rows()
+  const editor_bounds = await code_editor.boundingBox()
+  const panel_bounds = await panel.boundingBox()
+  if (!editor_bounds || !panel_bounds) throw new Error(`Missing editor or search panel`)
+  expect(panel_bounds.x).toBeGreaterThanOrEqual(editor_bounds.x)
+  expect(panel_bounds.x + panel_bounds.width).toBeLessThanOrEqual(
+    editor_bounds.x + editor_bounds.width,
+  )
+  await expect(body).toHaveJSProperty(`offsetTop`, 0)
+  await panel.getByRole(`button`, { name: `Go to line` }).click()
+  const line_input = code_editor.getByRole(`spinbutton`, { name: `Line number` })
+  await expect(line_input).toBeFocused()
+  await line_input.fill(`2`)
+  await line_input.press(`Enter`)
+  await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`2`)
+  await expect(panel).toHaveCount(0)
+})
+
 test(`CodeEditor search replaces undoably and navigates offscreen document lines`, async ({
   page,
 }) => {
