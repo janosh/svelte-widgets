@@ -58,15 +58,14 @@
   let draft = $derived(color)
   const parsed = $derived(normalize(draft))
   const preview = $derived(parsed ?? color)
-  const opacity = $derived.by(() => {
+  const get_opacity = (): number => {
     const alpha_byte = alpha ? parseInt(preview.slice(7), 16) : 255
     return Math.round((alpha_byte / 255) * 100)
-  })
-  // A new displayed percentage or a newly mounted opacity field clears its draft error.
-  let opacity_invalid = $derived.by(() => {
-    void opacity
-    void alpha
-    return false
+  }
+  let opacity_draft = $derived.by(() => {
+    // External writes reset both fields even when the preview already matches.
+    void color
+    return { value: String(get_opacity()), invalid: false }
   })
 
   const update = (next_draft: string, final = false): void => {
@@ -87,18 +86,18 @@
     if (disabled || readonly) return
     const next_opacity = input.valueAsNumber
     const valid = Number.isFinite(next_opacity) && input.validity.valid
-    opacity_invalid = !final && !valid
+    opacity_draft = { value: input.value, invalid: !valid }
     if (valid) {
       // Blurring an unchanged percentage must preserve the exact alpha byte.
       const alpha_hex =
-        next_opacity === opacity
+        next_opacity === get_opacity()
           ? preview.slice(7)
           : Math.round((next_opacity * 255) / 100)
               .toString(16)
               .padStart(2, `0`)
       update(`${preview.slice(0, 7)}${alpha_hex}`, final)
     } else if (final) draft = color
-    if (final) input.value = String(opacity)
+    if (final) opacity_draft = { value: String(get_opacity()), invalid: false }
   }
   const handle_keydown = (
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
@@ -112,8 +111,8 @@
     } else if (event.key === `Escape`) {
       event.preventDefault()
       draft = color
-      opacity_invalid = false
-      input.value = input.type === `number` ? String(opacity) : draft
+      opacity_draft = { value: String(get_opacity()), invalid: false }
+      input.value = input.type === `number` ? opacity_draft.value : draft
     }
   }
 </script>
@@ -158,10 +157,10 @@
           max="100"
           step="1"
           required
-          value={opacity}
-          aria-valuetext={opacity_invalid ? undefined : `${opacity}%`}
-          aria-invalid={opacity_invalid || undefined}
-          aria-describedby={opacity_invalid ? opacity_error_id : undefined}
+          value={opacity_draft.value}
+          aria-valuetext={opacity_draft.invalid ? undefined : `${get_opacity()}%`}
+          aria-invalid={opacity_draft.invalid || undefined}
+          aria-describedby={opacity_draft.invalid ? opacity_error_id : undefined}
           disabled={disabled || readonly}
           oninput={(event) => change_opacity(event.currentTarget)}
           onchange={(event) => change_opacity(event.currentTarget, true)}
@@ -173,7 +172,7 @@
     {/if}
   </div>
   {#if !parsed}<small id={error_id}>{msg.invalid}</small>{/if}
-  {#if alpha && opacity_invalid}
+  {#if alpha && opacity_draft.invalid}
     <small id={opacity_error_id}>{msg.invalid_opacity}</small>
   {/if}
   {#if palette.length}

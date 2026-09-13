@@ -120,30 +120,44 @@ describe(`ColorInput`, () => {
     expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(expected)
   })
 
-  test(`Escape cancels drafts and external writes update all controls`, async () => {
-    const { props, input, change, press } = mount_color({ alpha: true, commit: `change` })
-    await change(`text`, `#abc0`)
-    await press(`text`, `Escape`)
-    expect(input(`text`).value).toBe(`#336699ff`)
-    expect(input(`number`).value).toBe(`100`)
-    await change(`number`, `25`)
-    await press(`number`, `Escape`)
-    expect(input(`number`).value).toBe(`100`)
-    expect(input(`text`).value).toBe(`#336699ff`)
-    await change(`number`, `101`)
-    await press(`number`, `Escape`)
-    expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
-    await change(`number`, `101`)
-    await change(`text`, `#a`)
-    props.value = `#ff880000`
-    await tick()
-    expect(input(`text`).value).toBe(`#ff880000`)
-    expect(input(`color`).value).toBe(`#ff8800`)
-    expect(input(`number`).value).toBe(`0`)
-    expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
-    expect(input(`number`).hasAttribute(`aria-describedby`)).toBe(false)
-    expect(props.on_commit).not.toHaveBeenCalled()
-  })
+  test.each([
+    [`#ff880000`, `#a`, `0`],
+    [`#ff8800ff`, `#a`, `100`],
+    [`#ff8800fe`, `#a`, `100`],
+    [`#336699fe`, `#a`, `100`],
+    [`#ff8800ff`, `#ff8800ff`, `100`],
+  ])(
+    `Escape cancels drafts and external %s replaces draft %s`,
+    async (color, hex_draft, opacity) => {
+      const { props, target, input, change, press } = mount_color({
+        alpha: true,
+        commit: `change`,
+      })
+      await change(`text`, `#abc0`)
+      await press(`text`, `Escape`)
+      expect(input(`text`).value).toBe(`#336699ff`)
+      expect(input(`number`).value).toBe(`100`)
+      await change(`number`, `25`)
+      await press(`number`, `Escape`)
+      expect(input(`number`).value).toBe(`100`)
+      expect(input(`text`).value).toBe(`#336699ff`)
+      await change(`number`, `101`)
+      await press(`number`, `Escape`)
+      expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+      await change(`text`, hex_draft)
+      await change(`number`, `101`)
+      props.value = color
+      await tick()
+      expect(input(`text`).value).toBe(color)
+      expect(input(`color`).value).toBe(color.slice(0, 7))
+      expect(input(`number`).value).toBe(opacity)
+      expect(input(`number`).hasAttribute(`aria-invalid`)).toBe(false)
+      expect(input(`number`).hasAttribute(`aria-describedby`)).toBe(false)
+      expect(target.querySelector(`small`)).toBeNull()
+      expect(target.checkValidity()).toBe(true)
+      expect(props.on_commit).not.toHaveBeenCalled()
+    },
+  )
 
   test.each([``, `-1`, `-0.1`, `101`, `100.1`, `50.5`])(
     `rejects invalid opacity draft %j and restores it on blur`,
