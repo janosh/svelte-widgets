@@ -46,7 +46,7 @@ so the label can react to the state. Everything else spreads onto the wrapping `
 
 ### `ThemeToggle`
 
-Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can install `listen_theme_storage()` directly; flash-free first paint still requires equivalent synchronous logic in the HTML shell because hydration is too late.
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can install `listen_theme_storage()` directly; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">

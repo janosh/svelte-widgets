@@ -3,7 +3,7 @@
 A toggle button and the floating panel it opens. Drag it by the grip on its tab, resize
 it from the gutter along its right and bottom edges, and reset it back under the toggle
 once you have moved it. It composes three attachments rather than reimplementing them:
-[`draggable`](attachments/draggable) moves it, `resizable` sizes it, and
+[`draggable`](attachments/draggable) moves it, [`resizable`](attachments/resizable) sizes it, and
 [`click_outside`](attachments/click-outside) takes it away.
 
 Use it for anything that hangs off a control in the corner of a widget — export

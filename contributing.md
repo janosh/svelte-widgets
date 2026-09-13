@@ -40,7 +40,7 @@ Install Chromium once with `npx playwright install chromium` before running brow
 
 New features should include corresponding tests. Bug fixes should include a test that fails under the old code and passes with the change. PRs without tests are accepted when assistance is needed, but may take longer to merge.
 
-Demo pages live in `src/routes/(demos)` under the same categories as the navigation: `(inputs)`, `(navigation)`, `(overlays)`, `(display)`, `(authoring)`, and `(attachments)`. Put new pages directly in the appropriate category, for example `(inputs)/range-slider/+page.md`. The category folders do not appear in URLs. Navigation, search, and previous/next links discover pages automatically; only custom display labels and category order live in `(demos)/index.ts`. Pages in `(hide)` stay outside those menus.
+Demo pages live in [`src/routes/(demos)`](https://github.com/janosh/svelte-widgets/tree/main/src/routes/%28demos%29) under the same categories as the navigation: `(inputs)`, `(navigation)`, `(overlays)`, `(display)`, `(authoring)`, and `(attachments)`. Put new pages directly in the appropriate category, for example [`(inputs)/range-slider/+page.md`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/%28inputs%29/range-slider/+page.md). The category folders do not appear in URLs. Navigation, search, and previous/next links discover pages automatically; only custom display labels and category order live in [`(demos)/index.ts`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/index.ts). Pages in `(hide)` stay outside those menus.
 
 ## ✅ CI checks
 
@@ -53,15 +53,15 @@ The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.
 
 ## 🆕 New release
 
-To make a release, increase the `"version"` field in `package.json`. This package follows semantic versioning, meaning
+To make a release, increase the `"version"` field in [`package.json`](https://github.com/janosh/svelte-widgets/blob/main/package.json). This package follows semantic versioning, meaning
 
 - `v[x.y.z] -> v[x+1.0.0]`: major release with breaking changes
 - `v[x.y.z] -> v[x.y+1.0]`: minor release with new features
 - `v[x.y.z] -> v[x.y.z+1]`: patch release with bug fixes
 
-The 1.8.0 release is an explicit exception: it includes the breaking API cleanups documented in the changelog and migration guide.
+The 1.8.0 release is an explicit exception: it includes the breaking API cleanups documented in the [changelog](https://github.com/janosh/svelte-widgets/blob/main/changelog.md#v180) and [migration guide](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-18).
 
-Update `changelog.md` with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.8.0, compare `v1.7.1...v1.8.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
+Update [`changelog.md`](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.8.0, compare `v1.7.1...v1.8.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
 
 Keep one H1 title, H2 release headings, and H3 subsections. Use sentence case for entries, plain characters inside code spans, and the existing `> D Month YYYY` date format. Preserve historical API names and release links.
 

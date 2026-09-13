@@ -13,15 +13,17 @@ const category_info = {
 export const demo_descriptions: Record<string, string> = {
   '/action-button': `Run asynchronous actions with pending, success, and error feedback.`,
   '/button-group': `Choose one or several values with a segmented control.`,
+  '/color-input': `Pick colors with editable hex, opacity, presets, and validation.`,
   '/file-input': `Pick or drop files with validation, cancellation, and retry.`,
   '/multiselect': `Select and search options, with recipes for forms, loading, and styling.`,
-  '/range-slider': `Adjust a numeric interval using two handles or number fields.`,
+  '/range-slider': `Adjust a linear or logarithmic interval using two handles or number fields.`,
   '/settings': `Organize, search, and reset related application settings.`,
   '/command-menu': `Find commands and search site content from a keyboard palette.`,
   '/nav': `Build responsive navigation with dropdowns and keyboard controls.`,
   '/site-chrome': `Add footers, contributor lists, and lightweight media embeds.`,
   '/toc': `Navigate headings with an automatically generated table of contents.`,
-  '/tree-view': `Explore a keyboard-navigable tree with lazy-loaded branches.`,
+  '/tree-view': `Select nodes and visible ranges in a keyboard-navigable tree with lazy-loaded branches.`,
+  '/code-editor': `Edit, search, and replace code with virtualized rendering and undoable transactions.`,
   '/dialogs': `Queue confirmations, choices, and text prompts.`,
   '/popover': `Show contextual content and action menus beside their triggers.`,
   '/toast': `Display queued notifications with priorities and deduplication.`,
@@ -93,6 +95,7 @@ for (const { href, children } of demo_nav_routes) {
 multiselect_recipes.sort()
 
 export const demo_labels: Record<string, string> = {
+  '/color-input': `ColorInput`,
   '/multiselect': `MultiSelect`,
   '/range-slider': `RangeSlider`,
   '/command-menu': `CommandMenu`,

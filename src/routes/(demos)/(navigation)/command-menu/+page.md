@@ -2,9 +2,9 @@
 
 `CommandMenu` renders a searchable option list with keyboard navigation, grouping, and async loading.
 
-It executes one command at a time and closes, without retaining a selection. Selection bindings (`value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to MultiSelect. Use `on_execute={({ action }) => …}` to observe commands invoked by menu selection or global shortcut, and `on_activate` to track keyboard navigation. Replace the former `on_add` callback with `on_execute`; it reports invocation, without waiting for asynchronous actions to finish.
+It executes one command at a time and closes, without retaining a selection. Selection bindings (`value`), selection limits, chip controls, user-created options, bulk selection, and pasted option lists belong to [MultiSelect](multiselect). Use `on_execute={({ action }) => …}` to observe commands invoked by menu selection or global shortcut, and `on_activate` to track keyboard navigation. Replace the former `on_add` callback with `on_execute`; it reports invocation, without waiting for asynchronous actions to finish.
 
-Search, grouping, loading, and styling props share `OptionListProps` with MultiSelect. The `labels` prop accepts `loading_more`, `loading_failed`, `retry`, and `group` overrides to localize status messages and group buttons. `placeholder`, `no_matching_options_msg`, and `default_disabled_title` control their respective text separately.
+Search, grouping, loading, and styling props share `OptionListProps` with [MultiSelect](multiselect). The `labels` prop accepts `loading_more`, `loading_failed`, `retry`, and `group` overrides to localize status messages and group buttons. `placeholder`, `no_matching_options_msg`, and `default_disabled_title` control their respective text separately.
 
 ```svelte example id="disabled-input-title"
 <script lang="ts">
@@ -105,7 +105,7 @@ navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widg
 </style>
 ```
 
-See the [`highlight_matches` attachments demo](attachments) for options and effects.
+See the [`highlight_matches` attachments demo](attachments/highlight-matches) for options and effects.
 Stemmed Pagefind results may have no exact substring.
 
 ## Shortcuts, Descriptions & Recent Actions
@@ -167,4 +167,4 @@ when the menu reopens.
 </p>
 ```
 
-Actions require a stable, unique, nonempty string `id`, including across static actions and loaded pages. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels may repeat or change; exact string IDs identify actions and persisted recents. `ActionMenu` uses the same identity rules.
+Actions require a stable, unique, nonempty string `id`, including across static actions and loaded pages. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels may repeat or change; exact string IDs identify actions and persisted recents. [`ActionMenu`](popover#actionmenu) uses the same identity rules.
