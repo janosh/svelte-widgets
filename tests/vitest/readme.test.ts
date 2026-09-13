@@ -1,6 +1,7 @@
 // These links only resolve after deployment, so the regular link checker cannot check them.
 import * as lib from '$lib'
 import * as utils from '$lib/utils'
+import { heading_text } from '$lib/heading-anchors'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
 import markdown_guide from '$lib/markdown/readme.md?raw'
@@ -31,7 +32,7 @@ const headings_on = (route: string) =>
     ...(route === `/markdown` ? markdown_guide : (route_sources[route] ?? ``)).matchAll(
       /^#{2,4} (?<text>.+)$|<(?:h[2-4]\s+|Heading\s+[^>]*?)id="(?<id>[^"]+)"/gmu,
     ),
-  ].map((match) => bare(match.groups?.id ?? match.groups?.text ?? ``))
+  ].map((match) => bare(match.groups?.id ?? heading_text(match.groups?.text ?? ``)))
 
 const unresolved = (route: string, anchor: string | undefined, label: string) => {
   if (!(route in route_sources)) return `${label}: no such page ${route}`

@@ -11,45 +11,49 @@ test.each([
   [`default_highlighter`, 350_000],
   [`create_highlighter`, 60_000],
   [`FileDetails`, 60_000],
-])(`keeps the %s browser bundle within its gzip budget`, async (entry, budget) => {
-  const consumer_id = `virtual:highlight-consumer`
-  const result = await build({
-    configFile: false,
-    logLevel: `silent`,
-    plugins: [
-      svelte({ configFile: false }),
-      {
-        name: `highlight-consumer`,
-        enforce: `pre`,
-        resolveId: (id) => {
-          if (entry === `FileDetails` && id.startsWith(`@wooorm/starry-night`))
-            throw new Error(
-              `FileDetails must not import optional highlighting dependencies`,
-            )
-          return id === consumer_id ? id : undefined
+])(
+  `keeps the %s browser bundle within its gzip budget`,
+  async (entry, budget) => {
+    const consumer_id = `virtual:highlight-consumer`
+    const result = await build({
+      configFile: false,
+      logLevel: `silent`,
+      plugins: [
+        svelte({ configFile: false }),
+        {
+          name: `highlight-consumer`,
+          enforce: `pre`,
+          resolveId: (id) => {
+            if (entry === `FileDetails` && id.startsWith(`@wooorm/starry-night`))
+              throw new Error(
+                `FileDetails must not import optional highlighting dependencies`,
+              )
+            return id === consumer_id ? id : undefined
+          },
+          load: (id) =>
+            id === consumer_id
+              ? `export { ${entry} } from ${JSON.stringify(resolve_path(entry === `FileDetails` ? `src/lib/index.ts` : `src/lib/highlight/index.ts`))}`
+              : undefined,
         },
-        load: (id) =>
-          id === consumer_id
-            ? `export { ${entry} } from ${JSON.stringify(resolve_path(entry === `FileDetails` ? `src/lib/index.ts` : `src/lib/highlight/index.ts`))}`
-            : undefined,
+      ],
+      build: {
+        write: false,
+        rolldownOptions: {
+          input: consumer_id,
+          preserveEntrySignatures: `strict`,
+        },
       },
-    ],
-    build: {
-      write: false,
-      rolldownOptions: {
-        input: consumer_id,
-        preserveEntrySignatures: `strict`,
-      },
-    },
-  })
-  assert(!Array.isArray(result) && `output` in result)
-  const chunks = result.output.filter((chunk) => chunk.type === `chunk`)
-  // Common + Svelte measures ~271 KB; the factory alone ~27 KB. Leave room for
-  // upstream growth, but catch retaining all grammars (~1.9 MB) or common (~267 KB).
-  expect(
-    chunks.reduce((total, chunk) => total + gzipSync(chunk.code).length, 0),
-  ).toBeLessThan(budget)
-})
+    })
+    assert(!Array.isArray(result) && `output` in result)
+    const chunks = result.output.filter((chunk) => chunk.type === `chunk`)
+    // Common + Svelte measures ~271 KB; the factory alone ~27 KB. Leave room for
+    // upstream growth, but catch retaining all grammars (~1.9 MB) or common (~267 KB).
+    expect(
+      chunks.reduce((total, chunk) => total + gzipSync(chunk.code).length, 0),
+    ).toBeLessThan(budget)
+  },
+  30_000,
+)
 
 describe(`default_highlighter.highlight_block`, () => {
   test(`shares one default instance with lazy component consumers`, async () => {
