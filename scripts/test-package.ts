@@ -2,7 +2,14 @@
 // and source aliases cannot hide missing files or undeclared package dependencies.
 /// <reference types="node" />
 import { execFileSync } from 'node:child_process'
-import { cp, mkdtempDisposable, readFile, readdir, writeFile } from 'node:fs/promises'
+import {
+  cp,
+  mkdtempDisposable,
+  readFile,
+  readdir,
+  rename,
+  writeFile,
+} from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 
@@ -109,4 +116,11 @@ run(`npm`, [
   ...packages,
 ])
 run(process.execPath, [`node_modules/typescript/bin/tsc`, `-p`, `tsconfig.json`])
+run(process.execPath, [`node_modules/vite/bin/vite.js`, `build`])
+
+// Root component imports must also bundle when the highlighting peer is absent.
+await rename(
+  resolve(consumer, `node_modules/@wooorm/starry-night`),
+  resolve(consumer, `missing-starry-night`),
+)
 run(process.execPath, [`node_modules/vite/bin/vite.js`, `build`])

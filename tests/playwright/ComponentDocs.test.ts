@@ -1,14 +1,22 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
+
+const input_width = (input: Locator) =>
+  input.evaluate((element) => element.getBoundingClientRect().width)
 
 test(`ColorInput examples preserve hex drafts and restore transparent colors`, async ({
   page,
 }) => {
   await page.goto(`/color-input`, { waitUntil: `networkidle` })
+  const heading = page.getByRole(`heading`, { name: `ColorInput`, exact: true })
+  await expect(heading).toHaveAttribute(`id`, `colorinput`)
+  await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
   const basic = page.locator(`#color-input-basic`)
   const hex = basic.getByRole(`textbox`, { name: `Hex color` })
   await hex.fill(``)
+  const empty_width = await input_width(hex)
   await hex.pressSequentially(`#abcdef`)
   await expect(hex).toHaveValue(`#abcdef`)
+  expect(await input_width(hex)).toBeGreaterThan(empty_width)
   await expect(basic.locator(`> p`)).toHaveText(`Selected color: #abcdef`)
   await hex.fill(`#wrong`)
   await expect(hex).toHaveAttribute(`aria-invalid`, `true`)
@@ -16,16 +24,25 @@ test(`ColorInput examples preserve hex drafts and restore transparent colors`, a
   await expect(hex).toHaveValue(`#abcdef`)
 
   const transparent = page.locator(`#color-input-alpha`)
-  const opacity = transparent.getByRole(`slider`, { name: `Opacity` })
-  await opacity.focus()
-  await opacity.press(`Home`)
-  await expect(transparent.getByRole(`textbox`, { name: `Hex color` })).toHaveValue(
-    `#e76f5100`,
-  )
-  await opacity.press(`End`)
-  await expect(transparent.getByRole(`textbox`, { name: `Hex color` })).toHaveValue(
-    `#e76f51ff`,
-  )
+  const alpha_hex = transparent.getByRole(`textbox`, { name: `Hex color` })
+  const opacity = transparent.getByRole(`spinbutton`, { name: `Opacity`, exact: true })
+  await expect(opacity).toHaveValue(`50`)
+  const opacity_width = await input_width(opacity)
+  await opacity.fill(`0`)
+  expect(await input_width(opacity)).toBeLessThan(opacity_width)
+  await expect(alpha_hex).toHaveValue(`#e76f5100`)
+  await opacity.fill(`100`)
+  expect(await input_width(opacity)).toBeGreaterThan(opacity_width)
+  await expect(alpha_hex).toHaveValue(`#e76f51ff`)
+  await opacity.press(`ArrowDown`)
+  await expect(opacity).toHaveValue(`99`)
+  await expect(alpha_hex).toHaveValue(`#e76f51fc`)
+  await opacity.fill(`101`)
+  await opacity.press(`Tab`)
+  await expect(opacity).toHaveValue(`99`)
+  await opacity.fill(``)
+  await opacity.press(`Escape`)
+  await expect(opacity).toHaveValue(`99`)
 
   const deferred = page.locator(`#color-input-commit`)
   await deferred.getByRole(`textbox`, { name: `Hex color` }).fill(`#123456`)
@@ -38,6 +55,9 @@ test(`TreeView examples select nodes and ranges, and retry failed lazy branches`
   page,
 }) => {
   await page.goto(`/tree-view`, { waitUntil: `networkidle` })
+  const heading = page.getByRole(`heading`, { name: `TreeView`, exact: true })
+  await expect(heading).toHaveAttribute(`id`, `treeview`)
+  await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
   const basic = page.locator(`#tree-view-basic`)
   await basic.getByRole(`treeitem`, { name: `README.md`, exact: true }).focus()
   await page.keyboard.press(`Enter`)

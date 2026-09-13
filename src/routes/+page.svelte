@@ -1,18 +1,14 @@
 <script lang="ts">
   import Heading from '$lib/Heading.svelte'
-  import { ContributorList, type Contributor } from '$lib'
+  import { ContributorList, CopyButton, Icon, type Contributor } from '$lib'
+  import { BookOpen, NPM, PlayCircle, Widgets } from '$lib/icons'
   import { repository, version } from '$root/package.json'
   import { Examples } from '$site'
   import { resolve_demo_path as resolve_path } from '$site/paths'
   import { onMount } from 'svelte'
   import { demo_descriptions, demo_nav_routes, demo_title } from './(demos)'
 
-  const category_details: Partial<Record<string, string>> = {
-    authoring: `Live code examples, checked snippets, content manifests, and scientific references.`,
-    inputs: `Includes MultiSelect recipes for async loading, forms, grouping, and custom rendering.`,
-    overlays: `Confirmations, prompts, action menus, and queued notifications with dismissal and focus handling.`,
-    navigation: `Command palettes, site search, heading navigation, and page layout essentials.`,
-  }
+  const install_command = `npm install svelte-widgets`
   let contributors = $state<Contributor[]>([])
 
   onMount(() => {
@@ -43,20 +39,30 @@
       tools for Svelte 5.
     </p>
     <div class="getting-started">
-      <pre class="language-sh"><code>npm install svelte-widgets</code></pre>
+      <pre class="language-sh"><Icon
+          icon={NPM}
+          aria-hidden="true"
+          style="width: 1.5em; flex-shrink: 0; color: #cb3837"
+        /><code>{install_command}</code><CopyButton
+          content={install_command}
+          style="flex-shrink: 0"
+        /></pre>
       <a href="#try-it">View example <span aria-hidden="true">↓</span></a>
     </div>
   </section>
 
-  <Heading level={2} id="explore">Demo categories</Heading>
+  <Heading level={2} id="explore" icon={Widgets}>Demo categories</Heading>
   <p class="section-intro">
     Component and attachment guides with working examples and API details.
   </p>
   <div class="catalog">
-    {#each demo_nav_routes as { name, label, description, href, children } (name)}
+    {#each demo_nav_routes as { name, title, description, detail, icon, href, children } (name)}
       <section aria-labelledby={`category-${name}`}>
         <Heading level={3} link={false} id={`category-${name}`}>
-          <a href={resolve_path(href)}>{label}<span aria-hidden="true">↗</span></a>
+          <a href={resolve_path(href)}>
+            <span><Icon {icon} class="heading-icon" aria-hidden="true" />{title}</span>
+            <span aria-hidden="true">↗</span>
+          </a>
         </Heading>
         <p>{description}</p>
         <ul>
@@ -68,8 +74,8 @@
             </li>
           {/each}
         </ul>
-        {#if category_details[name]}
-          <p class="detail">{category_details[name]}</p>
+        {#if detail}
+          <p class="detail">{detail}</p>
         {/if}
         {#if name === `authoring`}
           <a href={resolve_path(`/markdown`)}
@@ -80,14 +86,14 @@
     {/each}
   </div>
 
-  <Heading level={2} id="try-it">MultiSelect example</Heading>
+  <Heading level={2} id="try-it" icon={PlayCircle}>MultiSelect example</Heading>
   <p class="section-intro">
     Select options in <code>MultiSelect</code> with the mouse or keyboard. Expand the code to
     view the source.
   </p>
   <Examples />
 
-  <Heading level={2} id="beyond-components">Guides and APIs</Heading>
+  <Heading level={2} id="beyond-components" icon={BookOpen}>Guides and APIs</Heading>
   <div class="resources">
     <a href={resolve_path(`/markdown`)}>
       <strong>Markdown documentation <span aria-hidden="true">→</span></strong>
@@ -162,10 +168,16 @@
     gap: 0.75rem 1.5rem;
     margin-top: 1.25rem;
     pre {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
       margin: 0;
-      padding: 0.6rem 3rem 0.6rem 1rem;
+      padding: 0.25rem 0.4rem;
       border: 1px solid var(--border);
       min-width: 0;
+      code {
+        min-width: 0;
+      }
     }
     a {
       font-size: 0.9rem;
@@ -200,7 +212,14 @@
         &:hover {
           color: var(--accent);
         }
-        span {
+        > span:first-child {
+          display: inline-flex;
+          align-items: center;
+          :global(.heading-icon) {
+            --icon-size: 1.2em;
+          }
+        }
+        > span[aria-hidden='true'] {
           color: var(--text-muted);
           font-size: 0.9em;
         }

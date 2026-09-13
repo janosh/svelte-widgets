@@ -5,6 +5,7 @@ import {
   unique_heading_id,
 } from '$lib/heading-anchors'
 import Heading from '$lib/Heading.svelte'
+import { Check } from '$lib/icons'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, it, onTestFinished } from 'vitest'
@@ -42,6 +43,7 @@ describe(`Heading`, () => {
         props: {
           id: `a&b%20c`,
           level,
+          icon: level === 2 ? Check : undefined,
           children: createRawSnippet(() => ({ render: () => `<span>Diatomics</span>` })),
         },
       })
@@ -51,15 +53,22 @@ describe(`Heading`, () => {
       expect(heading.textContent).toBe(`Diatomics`)
       expect(heading.querySelectorAll(`a`)).toHaveLength(1)
       expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#a%26b%2520c`)
+      const icon = heading.querySelector(`:scope > svg`)
+      if (level === 2) {
+        expect(icon).toBe(heading.firstElementChild)
+        expect(icon?.getAttribute(`aria-hidden`)).toBe(`true`)
+        expect(icon?.querySelector(`path`)?.getAttribute(`d`)).toBe(Check.d)
+      } else expect(icon).toBeNull()
     },
   )
   it(`supports link-free headings and rejects missing identity`, () => {
     const component = mount(Heading, {
       target: document.body,
-      props: { id: `title`, link: false },
+      props: { id: `title`, link: false, icon: Check },
     })
     onTestFinished(() => unmount(component))
     expect(doc_query(`h2`).querySelector(`a`)).toBeNull()
+    expect(doc_query(`h2 > svg`).getAttribute(`aria-hidden`)).toBe(`true`)
     expect(() =>
       flushSync(() => mount(Heading, { target: document.body, props: { id: ` ` } })),
     ).toThrow(`Heading requires a nonempty id`)

@@ -76,13 +76,36 @@
   }
   const pick = (input: HTMLInputElement, final = false): void =>
     update(`${input.value}${alpha ? preview.slice(7) : ``}`, final)
-  const change_opacity = (input: HTMLInputElement, final = false): void =>
-    update(
-      `${preview.slice(0, 7)}${Math.round((input.valueAsNumber * 255) / 100)
-        .toString(16)
-        .padStart(2, `0`)}`,
-      final,
-    )
+  const change_opacity = (input: HTMLInputElement, final = false): void => {
+    if (disabled || readonly) return
+    const next_opacity = input.valueAsNumber
+    if (Number.isFinite(next_opacity) && input.validity.valid) {
+      // Blurring an unchanged percentage must preserve the exact alpha byte.
+      const alpha_hex =
+        next_opacity === opacity
+          ? preview.slice(7)
+          : Math.round((next_opacity * 255) / 100)
+              .toString(16)
+              .padStart(2, `0`)
+      update(`${preview.slice(0, 7)}${alpha_hex}`, final)
+    } else if (final) draft = color
+    if (final) input.value = String(opacity)
+  }
+  const handle_keydown = (
+    event: KeyboardEvent & { currentTarget: HTMLInputElement },
+  ): void => {
+    if (event.isComposing) return
+    const input = event.currentTarget
+    if (event.key === `Enter`) {
+      event.preventDefault()
+      if (input.type === `number`) change_opacity(input, true)
+      else update(input.value, true)
+    } else if (event.key === `Escape`) {
+      event.preventDefault()
+      draft = color
+      input.value = input.type === `number` ? String(opacity) : draft
+    }
+  }
 </script>
 
 <fieldset {...rest} {disabled}>
@@ -114,33 +137,26 @@
       oninput={(event) => update(event.currentTarget.value)}
       onchange={(event) => update(event.currentTarget.value, true)}
       onblur={(event) => update(event.currentTarget.value, true)}
-      onkeydown={(event) => {
-        if (event.isComposing) return
-        if (event.key === `Enter`) {
-          event.preventDefault()
-          update(event.currentTarget.value, true)
-        }
-        if (event.key === `Escape`) {
-          event.preventDefault()
-          draft = color
-        }
-      }}
+      onkeydown={handle_keydown}
     />
     {#if alpha}
       <label class="opacity">
         {msg.opacity}
         <input
-          type="range"
+          type="number"
           min="0"
           max="100"
           step="1"
+          required
           value={opacity}
           aria-valuetext={`${opacity}%`}
           disabled={disabled || readonly}
           oninput={(event) => change_opacity(event.currentTarget)}
           onchange={(event) => change_opacity(event.currentTarget, true)}
+          onblur={(event) => change_opacity(event.currentTarget, true)}
+          onkeydown={handle_keydown}
         />
-        <output>{opacity}%</output>
+        <span aria-hidden="true">%</span>
       </label>
     {/if}
   </div>
@@ -209,24 +225,25 @@
       cursor: pointer;
     }
   }
-  input[type='text'] {
-    width: 10ch;
+  input[type='text'],
+  input[type='number'] {
+    field-sizing: content;
+    min-width: 1ch;
+    max-width: 100%;
     font: inherit;
-    padding: 0.25em;
+    line-height: 1.2;
+    padding: 0.05em 0.1em;
     border: 1px solid light-dark(#888, #777);
     border-radius: 0.3em;
     &[aria-invalid='true'] {
       border-color: var(--color-input-error, #d43f3a);
     }
   }
+  input[type='text'] {
+    padding-inline: 0.35em;
+  }
   .opacity {
     font-size: 0.85em;
-    input {
-      width: 7em;
-    }
-    output {
-      min-width: 4ch;
-    }
   }
   .presets {
     margin-top: 0.6em;

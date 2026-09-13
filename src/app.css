@@ -168,6 +168,15 @@ h1 {
 :is(h2, h3, h4, h5, h6) {
   scroll-margin-top: 60px;
 }
+.heading-icon {
+  margin-inline-end: 0.4em;
+  vertical-align: -0.125em;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+h1 > .heading-icon {
+  margin-inline-end: 0;
+}
 :is(h1, h2, h3, h4, h5, h6) {
   /* Build-time and dynamic heading links occupy the same space before hover/focus. */
   a[aria-hidden='true'] {

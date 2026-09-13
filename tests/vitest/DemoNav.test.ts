@@ -32,10 +32,20 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
   mount(Home, { target: document.body })
   const sections = [...document.querySelectorAll(`.catalog > section`)]
   expect(sections).toHaveLength(demo_nav_routes.length)
-  for (const [idx, { label, href, children }] of demo_nav_routes.entries()) {
+  const titles = [
+    `Forms and inputs`,
+    `Navigation and search`,
+    `Dialogs and overlays`,
+    `Data and layout`,
+    `Code and documentation`,
+    `Element attachments`,
+  ]
+  for (const [idx, { href, children, icon }] of demo_nav_routes.entries()) {
     const section = sections[idx]
-    expect(section.querySelector(`h3 a`)?.textContent).toContain(label)
+    expect(section.querySelector(`h3 a`)?.textContent).toContain(titles[idx])
     expect(section.querySelector(`h3 a`)?.getAttribute(`href`)).toBe(`${base}${href}`)
+    expect(section.querySelector(`h3 svg`)?.getAttribute(`aria-hidden`)).toBe(`true`)
+    expect(section.querySelector(`h3 svg path`)?.getAttribute(`d`)).toBe(icon.d)
     expect(
       [...section.querySelectorAll(`li a`)].map((link) => link.getAttribute(`href`)),
     ).toEqual(
@@ -59,6 +69,13 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
   expect(document.querySelector(`a[href="/docs/workbench"]`)).not.toBeNull()
   expect(document.querySelector(`a[href="/docs/contributing"]`)).not.toBeNull()
   expect(document.querySelector(`#home-languages`)).not.toBeNull()
+  expect(document.querySelector(`.getting-started pre > code`)?.textContent).toBe(
+    `npm install svelte-widgets`,
+  )
+  expect(
+    document.querySelector(`.getting-started pre > svg`)?.getAttribute(`aria-hidden`),
+  ).toBe(`true`)
+  expect(document.querySelectorAll(`.getting-started [data-sms-copy]`)).toHaveLength(1)
   expect(document.querySelectorAll(`h1`)).toHaveLength(1)
 })
 
@@ -142,6 +159,12 @@ test.each([`inputs`, `navigation`, `overlays`, `display`])(
     mount(CategoryOverview, { target: document.body, props: { name } })
     const category = demo_nav_routes.find((entry) => entry.name === name)
     expect(document.querySelector(`h1`)?.textContent).toBe(category?.label)
+    expect(
+      document.querySelector(`h1 svg.heading-icon`)?.getAttribute(`aria-hidden`),
+    ).toBe(`true`)
+    expect(document.querySelector(`h1 svg.heading-icon path`)?.getAttribute(`d`)).toBe(
+      category?.icon.d,
+    )
     const cards = Array.from(document.querySelectorAll(`.card`))
     expect(cards.map((card) => card.getAttribute(`href`))).toEqual(
       category?.children

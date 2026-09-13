@@ -104,6 +104,9 @@ for (const [width, color_scheme] of [
       `page`,
     )
     await expect(page.locator(`main h1`)).toHaveCount(1)
+    await expect(
+      page.locator(`.catalog h3 svg.heading-icon[aria-hidden="true"]`),
+    ).toHaveCount(6)
     await expect(page.getByRole(`link`, { name: `Edit this page` })).toHaveAttribute(
       `href`,
       /\/src\/routes\/\+page\.svelte$/u,
@@ -123,6 +126,14 @@ for (const [width, color_scheme] of [
     if (width < 600) expect(cards[1].top).toBeGreaterThanOrEqual(cards[0].bottom)
     else expect(cards[1].top).toBe(cards[0].top)
 
+    await page.context().grantPermissions([`clipboard-read`, `clipboard-write`])
+    const install_command = page.locator(`.getting-started pre`)
+    await expect(install_command.locator(`[data-sms-copy]`)).toHaveCount(1)
+    await install_command.locator(`[data-sms-copy]`).click()
+    await expect
+      .poll(() => page.evaluate(() => navigator.clipboard.readText()))
+      .toBe(`npm install svelte-widgets`)
+
     await page.getByRole(`link`, { name: `View example`, exact: true }).click()
     await expect(page).toHaveURL(/#try-it$/u)
     const input = page.getByRole(`combobox`, { name: `Your toolkit` })
@@ -136,7 +147,7 @@ for (const [width, color_scheme] of [
     await expect(page.locator(`.code-example pre`)).toBeVisible()
     await expect(page.locator(`.code-example pre`)).toContainText(`bind:value`)
     await page
-      .getByRole(`region`, { name: `Inputs`, exact: true })
+      .getByRole(`region`, { name: `Forms and inputs`, exact: true })
       .getByRole(`link`, { name: `RangeSlider`, exact: true })
       .click()
     await expect(page).toHaveURL(/\/range-slider$/u)

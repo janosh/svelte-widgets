@@ -1,5 +1,16 @@
 <script lang="ts">
   import Heading from '$lib/Heading.svelte'
+  import {
+    Widgets,
+    Tune,
+    FileTree,
+    ListBulleted,
+    Upload,
+    Progress,
+    Braces,
+    MessageText,
+    Keyboard,
+  } from '$lib/icons'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
@@ -45,7 +56,7 @@
   const items = Array.from({ length: 10000 }, (_value, idx) => `Item ${idx + 1}`)
 </script>
 
-<Heading level={2} id="workbench-widgets">Workbench widgets</Heading>
+<Heading level={2} id="workbench-widgets" icon={Widgets}>Workbench widgets</Heading>
 <p>
   Compose controls for settings, file loading, pane layouts, and large data explorers.
   Start with the focused examples and API guides for <a href={resolve(`/tree-view`)}
@@ -57,7 +68,7 @@
   <a href={resolve(`/file-input`)}>FileInput</a>. The combined explorer below shares
   selection and settings between its panes.
 </p>
-<Heading level={3} id="numberrangeinput">NumberRangeInput</Heading>
+<Heading level={3} id="numberrangeinput" icon={Tune}>NumberRangeInput</Heading>
 <p>
   Draft text stays local until it is finite and within bounds. Clearing retains the value;
   use <code>empty="undefined"</code> for optional fields. <code>commit="change"</code>
@@ -68,7 +79,9 @@
   >Opacity</NumberRangeInput
 >
 <p>Committed: {value}</p>
-<Heading level={3} id="splitpane-and-treeview">SplitPane and TreeView</Heading>
+<Heading level={3} id="splitpane-and-treeview" icon={FileTree}
+  >SplitPane and TreeView</Heading
+>
 <p>
   SplitPane sizes its parent through <code>--split-pane-size</code>. Bind
   <code>ratio</code>
@@ -94,7 +107,7 @@
   type-to-focus. JsonTree adds search, copy, paths, editing callbacks and comparison highlighting
   for object data.
 </p>
-<Heading level={3} id="virtuallist">VirtualList</Heading>
+<Heading level={3} id="virtuallist" icon={ListBulleted}>VirtualList</Heading>
 <p>
   Only visible rows plus <code>overscan</code> are mounted. Set a fixed
   <code>item_size</code>
@@ -105,7 +118,7 @@
 <VirtualList {items} item_size={32} style="height: 160px" aria-label="Ten thousand items">
   {#snippet children(item, idx)}<div>{idx + 1}: {item}</div>{/snippet}
 </VirtualList>
-<Heading level={3} id="fileinput">FileInput</Heading>
+<Heading level={3} id="fileinput" icon={Upload}>FileInput</Heading>
 <p>
   Picker and drop validation share <code>accept</code>, <code>max_size</code>,
   <code>max_files</code>, and <code>multiple</code>. Rejections include type, size, or
@@ -114,7 +127,9 @@
   including FileDetails for text.
 </p>
 <FileInput accept=".json,.txt" multiple max_files={3} max_size={1000000} />
-<Heading level={3} id="progress-and-taskstatus">Progress and TaskStatus</Heading>
+<Heading level={3} id="progress-and-taskstatus" icon={Progress}
+  >Progress and TaskStatus</Heading
+>
 <p>
   Progress uses a native progress element; omit value for indeterminate work. TaskStatus
   adds a live label and caller-owned cancellation/retry callbacks, so it can be used
@@ -132,7 +147,9 @@
   }}
 />
 
-<Heading level={3} id="codeblock-and-statgrid">CodeBlock and StatGrid</Heading>
+<Heading level={3} id="codeblock-and-statgrid" icon={Braces}
+  >CodeBlock and StatGrid</Heading
+>
 <p>
   <code>CodeBlock</code> accepts plain code or an optional
   <code>highlight(code, language, signal)</code>
@@ -158,7 +175,7 @@
     { label: 'State', value: 'Ready' },
   ]}
 />
-<Heading level={3} id="feedback">Feedback</Heading>
+<Heading level={3} id="feedback" icon={MessageText}>Feedback</Heading>
 <Spinner text="Loading preview" />
 <StatusMessage bind:message type="success" dismissible />
 <p>
@@ -183,7 +200,7 @@
   <code>DragOverlay</code> fills a positioned parent; <code>ClickFeedback</code> uses viewport
   coordinates. The caller owns visibility and timing.
 </p>
-<Heading level={3} id="canvas-and-keyboard-primitives"
+<Heading level={3} id="canvas-and-keyboard-primitives" icon={Keyboard}
   >Canvas and keyboard primitives</Heading
 >
 <p>

@@ -1,4 +1,9 @@
-## `CodeEditor`
+<script lang="ts">
+  import Icon from '$lib/Icon.svelte'
+  import { FileCode, ContentDuplicate } from '$lib/icons'
+</script>
+
+## <Icon icon={FileCode} class="heading-icon" aria-hidden="true" /> `CodeEditor`
 
 `CodeEditor` combines a host-owned rope model with a native textarea and virtualized syntax-token overlay. The model owns UTF-16 offsets, transactions, selection, dirty checkpoints, and bounded undo/redo history; the component sends ordered edits to a host-supplied `EditorBackend`. Press Escape and then Tab to move keyboard focus out of the editor. File reads, draft storage, conflict handling, and persistence remain host policy; provide `on_save` only when this surface should save directly.
 
@@ -142,7 +147,7 @@ model.undo() // restores the entire replacement batch
 
 With `bind:this={editor}`, use `editor.open_search(replace = false)`, `editor.find_next(direction = 1)`, `editor.replace_current()`, `editor.replace_all()`, and `editor.go_to_line(line_number)`. The replacement methods use the panel's current query, options, and replacement text. `replace_current()` selects the next match without changing text when the current selection is not a match. Navigation and single replacement return whether they succeeded; replacement of all matches returns the count. Invalid line numbers leave the selection unchanged.
 
-## `DiffView`
+## <Icon icon={ContentDuplicate} class="heading-icon" aria-hidden="true" /> `DiffView`
 
 `DiffView` renders side-by-side or unified diffs from a host-supplied `DiffBackend`. The
 package owns virtualization, gap expansion, layout switching and accessible line

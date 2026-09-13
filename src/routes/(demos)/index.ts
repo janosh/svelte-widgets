@@ -1,14 +1,59 @@
 import type { Pathname } from '$app/types'
 import { slug_to_title } from 'svelte-widgets/utils'
+import {
+  Compass,
+  FileCode,
+  Grid2x2,
+  Layers,
+  Puzzle,
+  Tune,
+  type IconData,
+} from 'svelte-widgets/icons'
 
-const category_info = {
-  inputs: [`Inputs`, `Choose values, collect files, and organize settings.`],
-  navigation: [`Navigation`, `Help users move through pages, commands, and trees.`],
-  overlays: [`Overlays`, `Present dialogs, contextual actions, and notifications.`],
-  display: [`Display`, `Inspect data, arrange content, and show application state.`],
-  authoring: [`Authoring`, `Write interactive documentation and edit code.`],
-  attachments: [`Attachments`, `Add reusable behavior to ordinary elements.`],
-} as const
+const category_info: Record<
+  string,
+  {
+    title: string
+    description: string
+    detail?: string
+    icon: IconData
+  }
+> = {
+  inputs: {
+    title: `Forms and inputs`,
+    description: `Choose values, collect files, and organize settings.`,
+    detail: `Includes MultiSelect recipes for async loading, forms, grouping, and custom rendering.`,
+    icon: Tune,
+  },
+  navigation: {
+    title: `Navigation and search`,
+    description: `Help users move through pages, commands, and trees.`,
+    detail: `Command palettes, site search, heading navigation, and page layout essentials.`,
+    icon: Compass,
+  },
+  overlays: {
+    title: `Dialogs and overlays`,
+    description: `Present dialogs, contextual actions, and notifications.`,
+    detail: `Confirmations, prompts, action menus, and queued notifications with dismissal and focus handling.`,
+    icon: Layers,
+  },
+  display: {
+    title: `Data and layout`,
+    description: `Inspect data, arrange content, and show application state.`,
+    icon: Grid2x2,
+  },
+  authoring: {
+    title: `Code and documentation`,
+    description: `Write interactive documentation and edit code.`,
+    detail: `Live code examples, checked snippets, content manifests, and scientific references.`,
+    icon: FileCode,
+  },
+  attachments: {
+    title: `Element attachments`,
+    description: `Add reusable behavior to ordinary elements.`,
+    icon: Puzzle,
+  },
+}
 
 export const demo_descriptions: Record<string, string> = {
   '/action-button': `Run asynchronous actions with pending, success, and error feedback.`,
@@ -59,15 +104,13 @@ export const demo_descriptions: Record<string, string> = {
 }
 
 // Source groups determine membership; recipes remain searchable without filling the nav.
-export const demo_nav_routes = Object.entries(category_info).map(
-  ([name, [label, description]]) => ({
-    name,
-    label,
-    description,
-    href: `/${name}` as Pathname,
-    children: [] as Pathname[],
-  }),
-)
+export const demo_nav_routes = Object.entries(category_info).map(([name, category]) => ({
+  ...category,
+  name,
+  label: slug_to_title(name),
+  href: `/${name}` as Pathname,
+  children: [] as Pathname[],
+}))
 export const multiselect_recipes: Pathname[] = []
 export const demo_pages: Pathname[] = []
 for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) {

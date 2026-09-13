@@ -33,7 +33,13 @@ const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
     element.dispatchEvent(new Event(event, { bubbles: true }))
     await tick()
   }
-  return { props, target, input, change }
+  const press = async (type: string, key: string) => {
+    const event = new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
+    input(type).dispatchEvent(event)
+    expect(event.defaultPrevented).toBe(true)
+    await tick()
+  }
+  return { props, target, input, change, press }
 }
 
 describe(`ColorInput`, () => {
@@ -67,6 +73,11 @@ describe(`ColorInput`, () => {
     expect([...new FormData(target)]).toEqual([[`color`, normalized]])
     input(`text`).dispatchEvent(new FocusEvent(`blur`))
     await tick()
+    if (alpha) {
+      input(`number`).dispatchEvent(new FocusEvent(`blur`))
+      await tick()
+      expect(props.value).toBe(normalized)
+    }
     expect(props.on_commit).toHaveBeenCalledTimes(n_commits)
   })
 
@@ -92,45 +103,60 @@ describe(`ColorInput`, () => {
     },
   )
 
-  test.each([`change`, `blur`, `Enter`])(
-    `commits deferred text drafts on %s`,
-    async (event) => {
-      const { props, input, change } = mount_color({ commit: `change` })
-      await change(`text`, `#abc`)
-      expect(props.value).toBe(`#336699`)
-      expect(input(`color`).value).toBe(`#aabbcc`)
-      if (event === `Enter`) {
-        const keydown = new KeyboardEvent(`keydown`, {
-          key: event,
-          bubbles: true,
-          cancelable: true,
-        })
-        input(`text`).dispatchEvent(keydown)
-        expect(keydown.defaultPrevented).toBe(true)
-      } else input(`text`).dispatchEvent(new Event(event, { bubbles: true }))
-      await tick()
-      expect(props.value).toBe(`#aabbcc`)
-      expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(`#aabbcc`)
-    },
-  )
+  test.each(
+    [`text`, `number`].flatMap((type) =>
+      [`change`, `blur`, `Enter`].map((event) => [type, event]),
+    ),
+  )(`commits deferred %s drafts on %s`, async (type, event) => {
+    const alpha = type === `number`
+    const expected = alpha ? `#33669940` : `#aabbcc`
+    const { props, input, change, press } = mount_color({ alpha, commit: `change` })
+    await change(type, alpha ? `25` : `#abc`)
+    expect(props.value).toBe(`#336699`)
+    expect(input(`color`).value).toBe(expected.slice(0, 7))
+    if (event === `Enter`) await press(type, event)
+    else await change(type, input(type).value, event)
+    expect(props.value).toBe(expected)
+    expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(expected)
+  })
 
   test(`Escape cancels drafts and external writes update all controls`, async () => {
-    const { props, input, change } = mount_color({ alpha: true, commit: `change` })
+    const { props, input, change, press } = mount_color({ alpha: true, commit: `change` })
     await change(`text`, `#abc0`)
-    input(`text`).dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }),
-    )
-    await tick()
+    await press(`text`, `Escape`)
     expect(input(`text`).value).toBe(`#336699ff`)
-    expect(input(`range`).value).toBe(`100`)
+    expect(input(`number`).value).toBe(`100`)
+    await change(`number`, `25`)
+    await press(`number`, `Escape`)
+    expect(input(`number`).value).toBe(`100`)
+    expect(input(`text`).value).toBe(`#336699ff`)
     await change(`text`, `#a`)
     props.value = `#ff880000`
     await tick()
     expect(input(`text`).value).toBe(`#ff880000`)
     expect(input(`color`).value).toBe(`#ff8800`)
-    expect(input(`range`).value).toBe(`0`)
+    expect(input(`number`).value).toBe(`0`)
     expect(props.on_commit).not.toHaveBeenCalled()
   })
+
+  test.each([``, `-1`, `-0.1`, `101`, `100.1`, `50.5`])(
+    `rejects invalid opacity draft %j and restores it on blur`,
+    async (draft) => {
+      const { props, target, input, change } = mount_color({
+        alpha: true,
+        value: `#33669980`,
+      })
+      await change(`number`, draft)
+      expect(input(`number`).value).toBe(draft)
+      expect(target.checkValidity()).toBe(false)
+      expect(props.value).toBe(`#33669980`)
+      expect(input(`text`).value).toBe(`#33669980`)
+      await change(`number`, draft, `blur`)
+      expect(input(`number`).value).toBe(`50`)
+      expect(target.checkValidity()).toBe(true)
+      expect(props.on_commit).not.toHaveBeenCalled()
+    },
+  )
 
   test.each([`input`, `change`] as const)(
     `preserves RGB at zero alpha in %s mode`,
@@ -140,16 +166,16 @@ describe(`ColorInput`, () => {
         commit,
         value: `#33669980`,
       })
-      await change(`range`, `0`)
+      await change(`number`, `0`)
       expect(props.value).toBe(commit === `input` ? `#33669900` : `#33669980`)
-      await change(`range`, `0`, `change`)
+      await change(`number`, `0`, `change`)
       expect(props.value).toBe(`#33669900`)
       expect(input(`color`).value).toBe(`#336699`)
       await change(`color`, `#aabbcc`)
       expect(props.value).toBe(commit === `input` ? `#aabbcc00` : `#33669900`)
       await change(`color`, `#aabbcc`, `change`)
       expect(props.value).toBe(`#aabbcc00`)
-      await change(`range`, `100`, `change`)
+      await change(`number`, `100`, `change`)
       expect(props.value).toBe(`#aabbccff`)
       expect(props.on_commit.mock.calls).toEqual([
         [`#33669900`],
@@ -175,7 +201,7 @@ describe(`ColorInput`, () => {
     expect(target.querySelector(`legend`)?.textContent).toBe(`Surface`)
     expect(input(`color`).getAttribute(`aria-label`)).toBe(`Farbe wählen`)
     expect(input(`text`).getAttribute(`aria-label`)).toBe(`Hex-Farbe`)
-    expect(input(`range`).closest(`label`)?.textContent).toContain(`Deckkraft`)
+    expect(input(`number`).closest(`label`)?.textContent).toContain(`Deckkraft`)
     const preset = target.querySelector(`button`)
     expect(preset?.getAttribute(`aria-label`)).toBe(`Wähle #aabbcc00`)
     preset?.click()
@@ -183,7 +209,7 @@ describe(`ColorInput`, () => {
     expect(props.value).toBe(`#aabbcc00`)
     expect(preset?.getAttribute(`aria-pressed`)).toBe(`true`)
     expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(`#aabbcc00`)
-    expect(input(`range`).getAttribute(`aria-valuetext`)).toBe(`0%`)
+    expect(input(`number`).getAttribute(`aria-valuetext`)).toBe(`0%`)
   })
 
   test.each([`disabled`, `readonly`] as const)(
@@ -195,11 +221,11 @@ describe(`ColorInput`, () => {
         presets: [`#abc`],
       })
       expect(input(`color`).disabled).toBe(true)
-      expect(input(`range`).disabled).toBe(true)
+      expect(input(`number`).disabled).toBe(true)
       expect(input(`text`)[state === `readonly` ? `readOnly` : `disabled`]).toBe(true)
       await change(`text`, `#aabbcc`)
       await change(`color`, `#aabbcc`)
-      await change(`range`, `0`)
+      await change(`number`, `0`)
       const preset = target.querySelector(`button`)
       expect(preset?.disabled).toBe(true)
       preset?.click()

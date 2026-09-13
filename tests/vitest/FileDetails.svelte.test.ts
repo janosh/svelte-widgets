@@ -1,4 +1,5 @@
 import { FileDetails } from '$lib'
+import { default_highlighter } from '$lib/highlight'
 import type { ComponentProps } from 'svelte'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
@@ -54,25 +55,26 @@ test(`file titles and language names escape HTML`, () => {
   expect(doc_query(`.lang-label`).querySelector(`b`)).toBeNull()
 })
 
-test(`unsupported language falls back to escaped raw content`, async () => {
+test(`renders escaped code without a highlighter`, () => {
   const content = `some <weird> content`
-  mount_files({
-    files: [{ title: `file.xyz`, content, language: `nonexistent-lang-xyz` }],
-  })
+  mount_files({ files: [{ title: `file.ts`, content }] })
   flushSync()
-  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
-  await default_highlighter.ready()
-  await vi.waitFor(() => expect(doc_query(`pre`).getAttribute(`aria-busy`)).toBe(`false`))
-  expect(doc_query(`pre code`).innerHTML).toContain(`&lt;`)
+  const code = doc_query(`pre code`)
+  expect(doc_query(`pre`).getAttribute(`aria-busy`)).toBe(`false`)
+  expect(code.innerHTML).toContain(`&lt;`)
   expect(document.querySelector(`[role=alert]`)).toBeNull()
-  expect(doc_query(`pre code`).textContent).toBe(content)
+  expect(code.textContent).toBe(content)
+  expect(code.querySelector(`span`)).toBeNull()
 })
 
 test.each([
   [`Svelte script`, `<script lang="ts">\n  let count = $state(0)\n</script>`],
   [`HTML content`, `<div class="foo">&amp; bar</div>`],
 ])(`escapes %s before loading syntax highlighting`, async (_case, content) => {
-  mount_files({ files: [{ title: `App.svelte`, content }] })
+  mount_files({
+    files: [{ title: `App.svelte`, content }],
+    highlight: default_highlighter.highlight,
+  })
   const code = doc_query(`pre code`)
   expect(code.textContent).toBe(content)
   expect(code.querySelector(`div, script`)).toBeNull()
@@ -87,6 +89,7 @@ test.each([
 test(`renders distinct language-content pairs independently`, async () => {
   const contents = [`bar`, `foo:bar`]
   mount_files({
+    highlight: default_highlighter.highlight,
     files: [
       { title: `plain`, content: contents[0], language: `typescript:foo` },
       { title: `typed.ts`, content: contents[1], language: `typescript` },
@@ -101,18 +104,17 @@ test(`renders distinct language-content pairs independently`, async () => {
 })
 
 test(`highlights siblings independently and ignores stale completions after edits`, async () => {
-  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
   const requests: { code: string; resolve: (html: string) => void }[] = []
-  const highlight = vi.spyOn(default_highlighter, `highlight`).mockImplementation(
-    (code) =>
-      new Promise((resolve) => {
+  const highlight = vi.fn(
+    (code: string) =>
+      new Promise<string>((resolve) => {
         requests.push({ code, resolve })
       }),
   )
   const files = $state(
     [`a`, `bb`, `ccc`].map((content) => ({ title: `${content}.ts`, content })),
   )
-  mount_files({ files })
+  mount_files({ files, highlight })
   await vi.waitFor(() => expect(requests).toHaveLength(3))
   files[0].content = `updated`
   await vi.waitFor(() => expect(requests).toHaveLength(4))
@@ -128,11 +130,8 @@ test(`highlights siblings independently and ignores stale completions after edit
 })
 
 test(`reports highlighting failures without hiding source`, async () => {
-  const { default_highlighter } = await import(`$lib/highlight/default-highlighter`)
-  vi.spyOn(default_highlighter, `highlight`).mockRejectedValue(
-    new Error(`Grammar unavailable`),
-  )
-  mount_files({ files: [{ title: `file.ts`, content: `<source>` }] })
+  const highlight = vi.fn().mockRejectedValue(new Error(`Grammar unavailable`))
+  mount_files({ files: [{ title: `file.ts`, content: `<source>` }], highlight })
   await vi.waitFor(() =>
     expect(doc_query(`[role=alert]`).textContent).toBe(`Grammar unavailable`),
   )

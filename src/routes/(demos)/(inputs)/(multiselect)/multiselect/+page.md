@@ -1,11 +1,13 @@
 <script lang="ts">
   import { SubpageGrid } from 'svelte-widgets'
+  import { ListChecks } from 'svelte-widgets/icons'
   import { demo_card } from '$site/paths'
   import { multiselect_recipes } from '../../..'
 </script>
 
 <SubpageGrid
 title="MultiSelect"
+title_icon={ListChecks}
 subtitle="Keyboard-friendly, accessible multi-select with grouping, async loading, and deep styling hooks."
 subpages={multiselect_recipes.map(demo_card)}
 />

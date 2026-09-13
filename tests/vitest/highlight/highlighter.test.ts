@@ -4,23 +4,33 @@ import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { resolve as resolve_path } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { build } from 'vite'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { assert, describe, expect, onTestFinished, test, vi } from 'vitest'
 
 test.each([
   [`default_highlighter`, 350_000],
   [`create_highlighter`, 60_000],
+  [`FileDetails`, 60_000],
 ])(`keeps the %s browser bundle within its gzip budget`, async (entry, budget) => {
   const consumer_id = `virtual:highlight-consumer`
   const result = await build({
     configFile: false,
     logLevel: `silent`,
     plugins: [
+      svelte({ configFile: false }),
       {
         name: `highlight-consumer`,
-        resolveId: (id) => (id === consumer_id ? id : undefined),
+        enforce: `pre`,
+        resolveId: (id) => {
+          if (entry === `FileDetails` && id.startsWith(`@wooorm/starry-night`))
+            throw new Error(
+              `FileDetails must not import optional highlighting dependencies`,
+            )
+          return id === consumer_id ? id : undefined
+        },
         load: (id) =>
           id === consumer_id
-            ? `export { ${entry} } from ${JSON.stringify(resolve_path(`src/lib/highlight/index.ts`))}`
+            ? `export { ${entry} } from ${JSON.stringify(resolve_path(entry === `FileDetails` ? `src/lib/index.ts` : `src/lib/highlight/index.ts`))}`
             : undefined,
       },
     ],
