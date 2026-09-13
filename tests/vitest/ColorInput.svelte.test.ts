@@ -1,0 +1,218 @@
+import type ColorInput from '$lib/ColorInput.svelte'
+import { mount, tick, unmount, type ComponentProps } from 'svelte'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
+import ColorInputHarness from './ColorInputHarness.svelte'
+
+const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
+  const { value: initial_value = `#336699`, on_commit: handle_commit, ...rest } = options
+  const on_commit = vi.fn(handle_commit)
+  const target = document.createElement(`form`)
+  document.body.append(target)
+  const component = mount(ColorInputHarness, {
+    target,
+    props: { ...rest, initial_value, on_commit },
+  })
+  const props = {
+    get value() {
+      return component.read_value()
+    },
+    set value(next: string) {
+      component.write_value(next)
+    },
+    on_commit,
+  }
+  onTestFinished(() => unmount(component))
+  const input = (type: string): HTMLInputElement => {
+    const element = target.querySelector<HTMLInputElement>(`input[type="${type}"]`)
+    if (!element) throw new Error(`Missing ${type} input`)
+    return element
+  }
+  const change = async (type: string, value: string, event = `input`) => {
+    const element = input(type)
+    element.value = value
+    element.dispatchEvent(new Event(event, { bubbles: true }))
+    await tick()
+  }
+  return { props, target, input, change }
+}
+
+describe(`ColorInput`, () => {
+  test.each([
+    [`#AbC`, false, `#aabbcc`],
+    [`112233`, false, `#112233`],
+    [`#ABCD`, true, `#aabbccdd`],
+    [`#112233`, true, `#112233ff`],
+    [`#ABCDEF00`, true, `#abcdef00`],
+    [` \t#AbCdEf \t`, false, `#abcdef`],
+    [` \t#AbCdEf80 \t`, true, `#abcdef80`],
+  ])(`normalizes %s with alpha=%s`, async (value, alpha, normalized) => {
+    const { props, target, input, change } = mount_color({ alpha, name: `color` })
+    input(`text`).focus()
+    await change(`text`, ``)
+    let typed = ``
+    for (const character of value) {
+      typed += character
+      // Append to the rendered field, so premature expansion of short hex corrupts
+      // the next input just as it would while a user types a six-digit color.
+      await change(`text`, input(`text`).value + character)
+      expect(input(`text`).value).toBe(typed)
+    }
+    expect(props.value).toBe(normalized)
+    expect(input(`color`).value).toBe(normalized.slice(0, 7))
+    expect(input(`text`).value).toBe(value)
+    expect(props.on_commit).toHaveBeenLastCalledWith(normalized)
+    const n_commits = props.on_commit.mock.calls.length
+    await change(`text`, value, `change`)
+    expect(input(`text`).value).toBe(normalized)
+    expect([...new FormData(target)]).toEqual([[`color`, normalized]])
+    input(`text`).dispatchEvent(new FocusEvent(`blur`))
+    await tick()
+    expect(props.on_commit).toHaveBeenCalledTimes(n_commits)
+  })
+
+  test.each([``, `#12`, `#12xz89`, `red`, `#aabbcc00`])(
+    `keeps invalid draft %j out of committed state and form submissions`,
+    async (draft) => {
+      const { props, target, input, change } = mount_color({ name: `surface` })
+      await change(`text`, draft)
+      expect(props.value).toBe(`#336699`)
+      expect(props.on_commit).not.toHaveBeenCalled()
+      expect(input(`text`).getAttribute(`aria-invalid`)).toBe(`true`)
+      expect(target.checkValidity()).toBe(false)
+      const error_id = input(`text`).getAttribute(`aria-describedby`)
+      expect(target.querySelector(`[id="${error_id}"]`)?.textContent).toBe(
+        `Enter a valid hexadecimal color`,
+      )
+      expect(input(`color`).value).toBe(`#336699`)
+      await change(`text`, draft, `change`)
+      expect(input(`text`).value).toBe(`#336699`)
+      expect(input(`text`).hasAttribute(`aria-invalid`)).toBe(false)
+      expect(target.checkValidity()).toBe(true)
+      expect([...new FormData(target)]).toEqual([[`surface`, `#336699`]])
+    },
+  )
+
+  test.each([`change`, `blur`, `Enter`])(
+    `commits deferred text drafts on %s`,
+    async (event) => {
+      const { props, input, change } = mount_color({ commit: `change` })
+      await change(`text`, `#abc`)
+      expect(props.value).toBe(`#336699`)
+      expect(input(`color`).value).toBe(`#aabbcc`)
+      if (event === `Enter`) {
+        const keydown = new KeyboardEvent(`keydown`, {
+          key: event,
+          bubbles: true,
+          cancelable: true,
+        })
+        input(`text`).dispatchEvent(keydown)
+        expect(keydown.defaultPrevented).toBe(true)
+      } else input(`text`).dispatchEvent(new Event(event, { bubbles: true }))
+      await tick()
+      expect(props.value).toBe(`#aabbcc`)
+      expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(`#aabbcc`)
+    },
+  )
+
+  test(`Escape cancels drafts and external writes update all controls`, async () => {
+    const { props, input, change } = mount_color({ alpha: true, commit: `change` })
+    await change(`text`, `#abc0`)
+    input(`text`).dispatchEvent(
+      new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }),
+    )
+    await tick()
+    expect(input(`text`).value).toBe(`#336699ff`)
+    expect(input(`range`).value).toBe(`100`)
+    await change(`text`, `#a`)
+    props.value = `#ff880000`
+    await tick()
+    expect(input(`text`).value).toBe(`#ff880000`)
+    expect(input(`color`).value).toBe(`#ff8800`)
+    expect(input(`range`).value).toBe(`0`)
+    expect(props.on_commit).not.toHaveBeenCalled()
+  })
+
+  test.each([`input`, `change`] as const)(
+    `preserves RGB at zero alpha in %s mode`,
+    async (commit) => {
+      const { props, input, change } = mount_color({
+        alpha: true,
+        commit,
+        value: `#33669980`,
+      })
+      await change(`range`, `0`)
+      expect(props.value).toBe(commit === `input` ? `#33669900` : `#33669980`)
+      await change(`range`, `0`, `change`)
+      expect(props.value).toBe(`#33669900`)
+      expect(input(`color`).value).toBe(`#336699`)
+      await change(`color`, `#aabbcc`)
+      expect(props.value).toBe(commit === `input` ? `#aabbcc00` : `#33669900`)
+      await change(`color`, `#aabbcc`, `change`)
+      expect(props.value).toBe(`#aabbcc00`)
+      await change(`range`, `100`, `change`)
+      expect(props.value).toBe(`#aabbccff`)
+      expect(props.on_commit.mock.calls).toEqual([
+        [`#33669900`],
+        [`#aabbcc00`],
+        [`#aabbccff`],
+      ])
+    },
+  )
+
+  test(`presets commit immediately and accessible labels can be translated`, async () => {
+    const { props, target, input } = mount_color({
+      alpha: true,
+      commit: `change`,
+      label: `Surface`,
+      presets: [`#abc0`, `#000`],
+      labels: {
+        picker: `Farbe wählen`,
+        hex: `Hex-Farbe`,
+        opacity: `Deckkraft`,
+        preset: (color: string) => `Wähle ${color}`,
+      },
+    })
+    expect(target.querySelector(`legend`)?.textContent).toBe(`Surface`)
+    expect(input(`color`).getAttribute(`aria-label`)).toBe(`Farbe wählen`)
+    expect(input(`text`).getAttribute(`aria-label`)).toBe(`Hex-Farbe`)
+    expect(input(`range`).closest(`label`)?.textContent).toContain(`Deckkraft`)
+    const preset = target.querySelector(`button`)
+    expect(preset?.getAttribute(`aria-label`)).toBe(`Wähle #aabbcc00`)
+    preset?.click()
+    await tick()
+    expect(props.value).toBe(`#aabbcc00`)
+    expect(preset?.getAttribute(`aria-pressed`)).toBe(`true`)
+    expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(`#aabbcc00`)
+    expect(input(`range`).getAttribute(`aria-valuetext`)).toBe(`0%`)
+  })
+
+  test.each([`disabled`, `readonly`] as const)(
+    `%s blocks changes through every control`,
+    async (state) => {
+      const { props, target, input, change } = mount_color({
+        [state]: true,
+        alpha: true,
+        presets: [`#abc`],
+      })
+      expect(input(`color`).disabled).toBe(true)
+      expect(input(`range`).disabled).toBe(true)
+      expect(input(`text`)[state === `readonly` ? `readOnly` : `disabled`]).toBe(true)
+      await change(`text`, `#aabbcc`)
+      await change(`color`, `#aabbcc`)
+      await change(`range`, `0`)
+      const preset = target.querySelector(`button`)
+      expect(preset?.disabled).toBe(true)
+      preset?.click()
+      expect(props.value).toBe(`#336699`)
+      expect(props.on_commit).not.toHaveBeenCalled()
+    },
+  )
+
+  test.each([
+    { value: `red` },
+    { presets: [`#xyxyxy`] },
+    { value: `#1234`, alpha: false },
+  ])(`rejects invalid configured colors %j`, (props) =>
+    expect(() => mount_color(props)).toThrow(`ColorInput needs a hex color`),
+  )
+})

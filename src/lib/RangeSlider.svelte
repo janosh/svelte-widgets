@@ -1,9 +1,12 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
   import {
+    create_range_scale,
+    range_key_action,
     snap_range_value,
-    step_range_value,
+    step_range_coordinate,
     validate_range,
+    type RangeScale,
     type RangeValue,
   } from './range-slider'
 
@@ -11,6 +14,7 @@
     min = 0,
     max = 100,
     step = 1,
+    scale = `linear`,
     value = $bindable<RangeValue>([min, max]),
     label = `Range`,
     description,
@@ -29,6 +33,8 @@
     min?: number
     max?: number
     step?: number
+    // Log mode requires positive bounds; step is measured in base-10 decades.
+    scale?: RangeScale
     value?: RangeValue
     label?: string
     description?: string
@@ -50,18 +56,25 @@
   const uid = $props.id()
   const ends = [0, 1] as const
   const values = $derived.by(() => {
-    validate_range(value, min, max, step)
+    validate_range(value, min, max, step, scale)
     return value
   })
   const names = $derived([lower_label, upper_label])
-  const positions = $derived(values.map((end) => ((end - min) / (max - min)) * 100))
+  const domain = $derived(create_range_scale(min, max, scale))
+  const coordinates = $derived(values.map(domain.to_position))
+  const positions = $derived(
+    coordinates.map((end) => ((end - domain.min) / (domain.max - domain.min)) * 100),
+  )
   const interior_ticks = $derived.by(() => {
     if (!Number.isSafeInteger(tick_count) || tick_count < 2) {
       throw new Error(`RangeSlider needs an integer tick_count >= 2; got ${tick_count}`)
     }
     return Array.from({ length: tick_count - 2 }, (_value, idx) => {
       const fraction = (idx + 1) / (tick_count - 1)
-      return { value: min + (max - min) * fraction, position: fraction * 100 }
+      return {
+        value: domain.from_position(domain.min + (domain.max - domain.min) * fraction),
+        position: fraction * 100,
+      }
     })
   })
   let drafts = $derived(values.map(String))
@@ -94,15 +107,21 @@
   }
   const update = (thumb: 0 | 1, next: number, snap = true): RangeValue | undefined => {
     const [floor, ceiling] = bounds(thumb)
-    const accepted =
-      next <= floor
-        ? floor
-        : next >= ceiling
-          ? ceiling
-          : Math.max(
-              floor,
-              Math.min(ceiling, snap ? snap_range_value(next, min, max, step) : next),
-            )
+    let accepted = next
+    if (next <= floor) accepted = floor
+    else if (next >= ceiling) accepted = ceiling
+    else {
+      if (snap) {
+        const coordinate = snap_range_value(
+          domain.to_position(next),
+          domain.min,
+          domain.max,
+          step,
+        )
+        accepted = domain.from_position(coordinate)
+      }
+      accepted = Math.max(floor, Math.min(ceiling, accepted))
+    }
     if (accepted === values[thumb]) return
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
@@ -121,45 +140,28 @@
     if (
       !is_disabled() &&
       !input.validity.badInput &&
-      Number.isFinite(input.valueAsNumber)
+      Number.isFinite(input.valueAsNumber) &&
+      (scale !== `log` || input.valueAsNumber > 0)
     ) {
       commit_value(update(thumb, input.valueAsNumber))
     }
     drafts = values.map(String)
+    input.value = drafts[thumb]
   }
   const keydown = (
     event: KeyboardEvent,
     thumb: 0 | 1,
     baseline = values[thumb],
   ): void => {
-    if (
-      is_disabled() ||
-      event.defaultPrevented ||
-      event.isComposing ||
-      event.altKey ||
-      event.ctrlKey ||
-      event.metaKey
-    )
-      return
+    if (is_disabled()) return
+    const action = range_key_action(event, is_rtl() ? -1 : 1)
+    if (action === undefined) return
     let next: number
-    const [floor, ceiling] = bounds(thumb)
-    if (event.key === `Home`) next = floor
-    else if (event.key === `End`) next = ceiling
+    if (typeof action === `string`) next = bounds(thumb)[action === `min` ? 0 : 1]
     else {
-      let direction = 0
-      if (event.key === `ArrowUp` || event.key === `PageUp`) direction = 1
-      else if (event.key === `ArrowDown` || event.key === `PageDown`) direction = -1
-      else if (event.key === `ArrowRight` || event.key === `ArrowLeft`)
-        direction = (event.key === `ArrowRight` ? 1 : -1) * (is_rtl() ? -1 : 1)
-      if (!direction) return
-      const stride = event.key.startsWith(`Page`) || event.shiftKey ? 10 : 1
-      next = step_range_value(
-        Math.max(min, Math.min(max, baseline)),
-        min,
-        max,
-        step,
-        direction,
-        stride,
+      const bounded = Math.max(min, Math.min(max, baseline))
+      next = domain.from_position(
+        step_range_coordinate(bounded, domain, step, Math.sign(action), Math.abs(action)),
       )
     }
     event.preventDefault()
@@ -171,7 +173,7 @@
     if (rect.width <= 0) return
     const fraction =
       (is_rtl() ? rect.right - event.clientX : event.clientX - rect.left) / rect.width
-    return min + fraction * (max - min)
+    return domain.min + fraction * (domain.max - domain.min)
   }
   const move_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
@@ -189,7 +191,7 @@
       focus_thumb(drag.thumb)
     }
     const gesture = drag
-    const next_value = update(drag.thumb, next - drag.offset)
+    const next_value = update(drag.thumb, domain.from_position(next - drag.offset))
     if (next_value) gesture.latest = next_value
   }
   const start_pointer = (event: PointerEvent): void => {
@@ -204,7 +206,8 @@
     const next = pointer_value(event)
     if (next === undefined || !rail) return
     event.preventDefault()
-    const thumb = Math.abs(next - values[0]) <= Math.abs(next - values[1]) ? 0 : 1
+    const thumb =
+      Math.abs(next - coordinates[0]) <= Math.abs(next - coordinates[1]) ? 0 : 1
     const on_handle =
       event.target instanceof Element && Boolean(event.target.closest(`[role=slider]`))
     const coincident = on_handle && values[0] === values[1]
@@ -213,7 +216,7 @@
       start: [...values],
       thumb: coincident ? undefined : thumb,
       origin: next,
-      offset: on_handle ? next - values[thumb] : 0,
+      offset: on_handle ? next - coordinates[thumb] : 0,
     }
     focus_thumb(thumb)
     rail.setPointerCapture(event.pointerId)

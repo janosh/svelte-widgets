@@ -35,6 +35,16 @@ export const CODE_EXAMPLE_LABELS = {
 }
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
 
+export const COLOR_INPUT_LABELS = {
+  color: `Color`,
+  picker: `Choose color`,
+  hex: `Hex color`,
+  opacity: `Opacity`,
+  preset: (color: string) => `Use ${color}`,
+  invalid: `Enter a valid hexadecimal color`,
+}
+export type ColorInputLabels = typeof COLOR_INPUT_LABELS
+
 export const COPY_BUTTON_LABELS = {
   // Icon-only by default; an empty string suppresses ActionButton's text. Set any of these
   // to show a label beside the icon. `pending` is absent: the in-flight copy reuses

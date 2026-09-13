@@ -1,5 +1,39 @@
 import { expect, test } from '@playwright/test'
 
+test(`ColorInput examples preserve hex drafts and restore transparent colors`, async ({
+  page,
+}) => {
+  await page.goto(`/color-input`, { waitUntil: `networkidle` })
+  const basic = page.locator(`#color-input-basic`)
+  const hex = basic.getByRole(`textbox`, { name: `Hex color` })
+  await hex.fill(``)
+  await hex.pressSequentially(`#abcdef`)
+  await expect(hex).toHaveValue(`#abcdef`)
+  await expect(basic.locator(`> p`)).toHaveText(`Selected color: #abcdef`)
+  await hex.fill(`#wrong`)
+  await expect(hex).toHaveAttribute(`aria-invalid`, `true`)
+  await hex.press(`Escape`)
+  await expect(hex).toHaveValue(`#abcdef`)
+
+  const transparent = page.locator(`#color-input-alpha`)
+  const opacity = transparent.getByRole(`slider`, { name: `Opacity` })
+  await opacity.focus()
+  await opacity.press(`Home`)
+  await expect(transparent.getByRole(`textbox`, { name: `Hex color` })).toHaveValue(
+    `#e76f5100`,
+  )
+  await opacity.press(`End`)
+  await expect(transparent.getByRole(`textbox`, { name: `Hex color` })).toHaveValue(
+    `#e76f51ff`,
+  )
+
+  const deferred = page.locator(`#color-input-commit`)
+  await deferred.getByRole(`textbox`, { name: `Hex color` }).fill(`#123456`)
+  await expect(deferred.locator(`> p`)).toContainText(`updates: 0`)
+  await deferred.getByRole(`textbox`, { name: `Hex color` }).press(`Enter`)
+  await expect(deferred.locator(`> p`)).toHaveText(`Committed: #123456 · updates: 1`)
+})
+
 test(`TreeView examples select by keyboard and retry failed lazy branches`, async ({
   page,
 }) => {
