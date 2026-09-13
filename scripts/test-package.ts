@@ -71,11 +71,13 @@ await writeFile(
   smoke_app,
   `${smoke_source}\n${demo_components.map((name) => `<${name} />`).join(`\n`)}\n`,
 )
-const [tarball]: { filename: string }[] = JSON.parse(
-  execFileSync(
-    `npm`,
-    [`pack`, `--ignore-scripts`, `--json`, `--pack-destination`, consumer],
-    { cwd: root, encoding: `utf8` },
+const [tarball] = Object.values<{ filename: string }>(
+  JSON.parse(
+    execFileSync(
+      `npm`,
+      [`pack`, `--ignore-scripts`, `--json`, `--pack-destination`, consumer],
+      { cwd: root, encoding: `utf8` },
+    ),
   ),
 )
 if (!tarball) throw new Error(`npm pack returned no tarball for ${root}`)
