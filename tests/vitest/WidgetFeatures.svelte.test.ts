@@ -24,9 +24,9 @@ const target_for = () => {
   onTestFinished(() => target.remove())
   return target
 }
-const fire_key = (target: Element, key: string) =>
+const fire_key = (target: Element, key: string, options: KeyboardEventInit = {}) =>
   target.dispatchEvent(
-    new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
+    new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true, ...options }),
   )
 
 test(`split collapse restores size and Home/End respect bounds`, async () => {
@@ -292,3 +292,127 @@ test.each([false, true])(
     expect(requests[2].signal.aborted).toBe(true)
   },
 )
+
+test.each([`ctrlKey`, `metaKey`] as const)(
+  `tree multiple selection supports %s toggles and visible ranges`,
+  async (modifier) => {
+    const target = target_for()
+    const on_selection_change = vi.fn()
+    const props = $state({
+      multiple: true,
+      nodes: [
+        {
+          id: `folder`,
+          label: `Folder`,
+          children: [
+            { id: `alpha`, label: `Alpha` },
+            { id: `disabled`, label: `Disabled`, disabled: true },
+            { id: `gamma`, label: `Gamma` },
+          ],
+        },
+        { id: `delta`, label: `Delta` },
+      ],
+      expanded: new Set([`folder`]),
+      selected_ids: new Set([`alpha`]),
+      on_selection_change,
+    })
+    const component = mount(TreeView, { target, props })
+    onTestFinished(() => unmount(component))
+    const row = (id: string) => doc_query(`[data-tree-id="${id}"]`)
+    expect(row(`alpha`).tabIndex).toBe(0)
+    const selected = () =>
+      [...target.querySelectorAll(`[aria-selected="true"]`)].map((element) =>
+        element.getAttribute(`data-tree-id`),
+      )
+    expect(doc_query(`[role="tree"]`).getAttribute(`aria-multiselectable`)).toBe(`true`)
+    row(`alpha`).focus()
+    row(`gamma`).dispatchEvent(
+      new PointerEvent(`pointerdown`, { shiftKey: true, bubbles: true }),
+    )
+    row(`gamma`).focus() // native pointer focus precedes click
+    row(`gamma`).dispatchEvent(new MouseEvent(`click`, { shiftKey: true, bubbles: true }))
+    await tick()
+    expect(selected()).toEqual([`alpha`, `gamma`])
+    for (const [id, options, expected] of [
+      [`alpha`, {}, [`alpha`]],
+      [`gamma`, { [modifier]: true }, [`alpha`, `gamma`]],
+      [`alpha`, { [modifier]: true }, [`gamma`]],
+      [`delta`, { shiftKey: true }, [`alpha`, `gamma`, `delta`]],
+      [`gamma`, { shiftKey: true }, [`alpha`, `gamma`]],
+    ] as const) {
+      row(id).dispatchEvent(new MouseEvent(`click`, { bubbles: true, ...options }))
+      await tick()
+      expect(selected()).toEqual(expected)
+      expect(on_selection_change).toHaveBeenLastCalledWith(new Set(expected))
+    }
+    const calls = on_selection_change.mock.calls.length
+    row(`disabled`).click()
+    await tick()
+    expect(on_selection_change).toHaveBeenCalledTimes(calls)
+    expect(row(`disabled`).hasAttribute(`aria-selected`)).toBe(false)
+
+    // Collapsing keeps hidden selections; ranges only include rows still visible.
+    doc_query<HTMLButtonElement>(`button[aria-label="Collapse Folder"]`).click()
+    await tick()
+    expect(selected()).toEqual([])
+    row(`delta`).dispatchEvent(new MouseEvent(`click`, { bubbles: true, shiftKey: true }))
+    await tick()
+    expect(selected()).toEqual([`delta`])
+    // Caller-owned selection remains writable after interactions.
+    props.selected_ids = new Set([`alpha`])
+    await tick()
+    fire_key(row(`delta`), `a`, { [modifier]: true })
+    await tick()
+    expect(selected()).toEqual([`folder`, `delta`])
+    expect(on_selection_change).toHaveBeenLastCalledWith(
+      new Set([`alpha`, `folder`, `delta`]),
+    )
+  },
+)
+
+test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
+  const target = target_for()
+  const on_selection_change = vi.fn()
+  const component = mount(TreeView, {
+    target,
+    props: {
+      multiple: true,
+      nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
+        id: label,
+        label,
+        disabled: label === `Disabled`,
+      })),
+      on_selection_change,
+    },
+  })
+  onTestFinished(() => unmount(component))
+  doc_query(`[data-tree-id="Alpha"]`).focus()
+  for (const [key, options, focused, selected] of [
+    [`ArrowDown`, { shiftKey: true }, `Disabled`, [`Alpha`]],
+    [`ArrowDown`, { shiftKey: true }, `Beta`, [`Alpha`, `Beta`]],
+    [`ArrowDown`, { shiftKey: true }, `Gamma`, [`Alpha`, `Beta`, `Gamma`]],
+    [`ArrowUp`, { shiftKey: true }, `Beta`, [`Alpha`, `Beta`]],
+    [`End`, {}, `Gamma`, [`Alpha`, `Beta`]],
+    [` `, {}, `Gamma`, [`Alpha`, `Beta`, `Gamma`]],
+    [` `, {}, `Gamma`, [`Alpha`, `Beta`]],
+    [`Home`, { shiftKey: true }, `Alpha`, [`Alpha`, `Beta`, `Gamma`]],
+    [`Enter`, {}, `Alpha`, [`Alpha`]],
+  ] as const) {
+    fire_key(doc_query(`[role="treeitem"]:focus`), key, options)
+    await tick()
+    expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(focused)
+    expect(on_selection_change).toHaveBeenLastCalledWith(new Set(selected))
+  }
+  const input = document.createElement(`input`)
+  doc_query(`[data-tree-id="Alpha"]`).append(input)
+  const select_all = new KeyboardEvent(`keydown`, {
+    key: `a`,
+    ctrlKey: true,
+    bubbles: true,
+    cancelable: true,
+  })
+  const calls = on_selection_change.mock.calls.length
+  input.dispatchEvent(select_all)
+  expect(select_all.defaultPrevented).toBe(false)
+  expect(on_selection_change).toHaveBeenCalledTimes(calls)
+})

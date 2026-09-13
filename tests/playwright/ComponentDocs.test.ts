@@ -34,7 +34,7 @@ test(`ColorInput examples preserve hex drafts and restore transparent colors`, a
   await expect(deferred.locator(`> p`)).toHaveText(`Committed: #123456 · updates: 1`)
 })
 
-test(`TreeView examples select by keyboard and retry failed lazy branches`, async ({
+test(`TreeView examples select nodes and ranges, and retry failed lazy branches`, async ({
   page,
 }) => {
   await page.goto(`/tree-view`, { waitUntil: `networkidle` })
@@ -42,6 +42,31 @@ test(`TreeView examples select by keyboard and retry failed lazy branches`, asyn
   await basic.getByRole(`treeitem`, { name: `README.md`, exact: true }).focus()
   await page.keyboard.press(`Enter`)
   await expect(basic.locator(`> p`)).toHaveText(`Selected: readme`)
+
+  const multiple = page.locator(`#tree-view-multiple`)
+  const app = multiple.getByRole(`treeitem`, { name: `App.svelte`, exact: true })
+  const theme = multiple.getByRole(`treeitem`, { name: `theme.css`, exact: true })
+  await app.focus()
+  await theme.click({ modifiers: [`Shift`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  await multiple.getByRole(`button`, { name: `Clear selection` }).click()
+  await app.click()
+  await theme.click({ modifiers: [`ControlOrMeta`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
+  await app.click({ modifiers: [`ControlOrMeta`] })
+  await multiple
+    .getByRole(`treeitem`, { name: `README.md`, exact: true })
+    .click({ modifiers: [`Shift`] })
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme, readme`)
+  await expect(
+    multiple.getByRole(`treeitem`, { name: `config.ts`, exact: true }),
+  ).toHaveAttribute(`aria-disabled`, `true`)
+  await multiple.getByRole(`button`, { name: `Clear selection` }).click()
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: None`)
+  await app.focus()
+  await page.keyboard.press(`Shift+ArrowDown`)
+  await page.keyboard.press(`Shift+ArrowDown`)
+  await expect(multiple.locator(`> p`)).toHaveText(`Selected: app, theme`)
 
   const lazy = page.locator(`#tree-view-loading`)
   await lazy.getByRole(`button`, { name: `Expand Remote files` }).click()
