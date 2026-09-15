@@ -26,7 +26,25 @@ export type TabItem<Value extends string = string> = {
 }
 
 export type AccordionItem<Value extends string = string> = TabItem<Value>
-export type AccordionValue<Value extends string = string> = Value | Value[] | null
+
+// Selection controls share one binding and callback; the mode determines their shape.
+export type SelectionProps<Value = string> =
+  | {
+      mode?: `single`
+      value?: Value | null
+      on_change?: (value: Value | null) => void
+    }
+  | {
+      mode: `multiple`
+      value?: Value[]
+      on_change?: (value: Value[]) => void
+    }
+
+export type ButtonGroupOption<Value extends string = string> = TabItem<Value> & {
+  tooltip?: string
+  icon?: IconData
+  loading?: boolean // trailing spinner; pass false initially to reserve its width
+}
 
 // `option` styles the dropdown list, `selected` the list of selected options
 export type OptionStyle = string | { option?: string; selected?: string }
@@ -308,7 +326,6 @@ interface MultiSelectBaseProps<T extends Option = Option>
       }) => string)
     | null
   allow_user_options?: boolean | `append`
-  allow_empty?: boolean // allow an empty options array without loading, disabled, or user-option mode
   duplicate_option_msg?: string
   // false (default) blocks dupes case-sensitively, true allows all, 'case-insensitive'
   // also blocks case variants

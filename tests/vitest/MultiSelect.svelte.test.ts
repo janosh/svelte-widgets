@@ -400,7 +400,6 @@ describe(`selected_display=input`, () => {
       expect(input.value).toBe(expected)
       expect(select.search_text).toBe(expected)
       expect(select.value).toEqual(expected_value)
-      expect(select.value).toEqual(expected_value)
       expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
       expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
     },
@@ -418,7 +417,6 @@ describe(`selected_display=input`, () => {
     expect(input.value).toBe(`Reddish`)
     expect(select.search_text).toBe(`Reddish`)
     expect(select.value).toBeNull()
-    expect(select.value).toBeNull()
   })
 
   test(`typing exact option label does not auto-select without explicit commit`, async () => {
@@ -427,7 +425,6 @@ describe(`selected_display=input`, () => {
     await type_search_text(`Red`)
 
     expect(select.search_text).toBe(`Red`)
-    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
   })
 
@@ -519,7 +516,6 @@ describe(`selected_display=input`, () => {
       const input = get_input()
       expect(input.value).toBe(`Green`)
       expect(select.value).toBe(`Green`)
-      expect(select.value).toBe(`Green`)
       expect(form.checkValidity()).toBe(true)
       expect(new FormData(form).get(field_name)).toBe(`Green`)
     } finally {
@@ -543,7 +539,6 @@ describe(`selected_display=input`, () => {
     expect(option_labels()).toEqual([`Blue`])
     expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
     expect(select.search_text).toBe(`Bl`)
-    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
 
     await click_expand_icon()
@@ -576,14 +571,12 @@ describe(`selected_display=input`, () => {
     expect(option_labels()).toEqual(color_options)
     expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
     expect(select.value).toBeNull()
-    expect(select.value).toBeNull()
 
     option_by_label(`Green`).click()
     await tick()
 
     expect(input.value).toBe(`Green`)
     expect(select.search_text).toBe(`Green`)
-    expect(select.value).toBe(`Green`)
     expect(select.value).toBe(`Green`)
   })
 
@@ -622,7 +615,6 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Re`)
     expect(select.search_text).toBe(`Re`)
-    expect(select.value).toBeNull()
     expect(select.value).toBeNull()
     expect(document.querySelectorAll(`ul.selected > li.highlighted`)).toHaveLength(0)
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
@@ -706,7 +698,6 @@ describe(`selected_display=input`, () => {
 
     expect(input.value).toBe(`Durian`)
     expect(select.value).toBe(`Durian`)
-    expect(select.value).toBe(`Durian`)
     expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
   })
 
@@ -722,7 +713,6 @@ describe(`selected_display=input`, () => {
     doc_query(`ul.options > li.selected`).click()
     await tick()
 
-    expect(select.value).toBe(`Red`)
     expect(select.value).toBe(`Red`)
     expect(get_input().value).toBe(`Red`)
   })
@@ -1858,12 +1848,6 @@ test.each([
   },
 )
 
-test(`rejects empty options without an empty-state mode`, () => {
-  expect(() => mount_multiselect({ options: [] })).toThrow(
-    `MultiSelect: received no options`,
-  )
-})
-
 test(`throws synchronously when adding an empty option`, () => {
   mount_multiselect({ options: [``] })
   const empty_option = doc_query<HTMLLIElement>(`ul.options > li`)
@@ -1887,7 +1871,7 @@ test(`throws synchronously when adding an empty option`, () => {
 })
 
 test.each([
-  [`allow_empty`, { allow_empty: true }],
+  [`default`, {}],
   [`disabled`, { disabled: true }],
   [`allow_user_options`, { allow_user_options: true }],
   [`loading`, { loading: true }],
@@ -3264,6 +3248,42 @@ test(`create_option_msg shows immediately with static options`, async () => {
 
 // https://github.com/janosh/svelte-widgets/issues/369
 describe(`binding update event count`, () => {
+  test.each([
+    `click`,
+    `keyup`,
+    `mousedown`,
+    `mouseenter`,
+    `mouseleave`,
+    `touchcancel`,
+    `touchend`,
+    `touchmove`,
+    `touchstart`,
+  ] as const)(
+    `forwards %s handlers to the input and follows replacements`,
+    async (type) => {
+      const first_handler = vi.fn((event: Event) => event.currentTarget)
+      const next_handler = vi.fn((event: Event) => event.currentTarget)
+      const event_prop = `on${type}` as const
+      const props = $state<MultiSelectProps>({
+        options: [`a`],
+        [event_prop]: first_handler,
+      })
+      mount_multiselect(props)
+      const input = get_input()
+
+      for (const handler of [first_handler, next_handler]) {
+        props[event_prop] = handler
+        await tick()
+        const event = new Event(type, { bubbles: true })
+        input.dispatchEvent(event)
+        doc_query(`div.multiselect`).dispatchEvent(new Event(type, { bubbles: true }))
+        expect(handler).toHaveBeenCalledExactlyOnceWith(event)
+        expect(handler).toHaveReturnedWith(input)
+      }
+      expect(first_handler).toHaveBeenCalledOnce()
+    },
+  )
+
   test(`on_change fires 0 times on init and exactly once per selection`, async () => {
     const onchange_spy = vi.fn()
     const native_change = vi.fn()

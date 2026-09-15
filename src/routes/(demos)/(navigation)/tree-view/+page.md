@@ -9,7 +9,7 @@ Navigate hierarchical data with stable node IDs, lazy loading and single or mult
 
 ### Minimal example
 
-Bind `selected` to a node ID and `expanded` to a set of branch IDs. Clicking a label selects it; its caret or Enter independently expands or collapses the branch.
+Bind `value` to a node ID and `expanded` to a set of branch IDs. Clicking a label selects it; its caret or Enter independently expands or collapses the branch.
 
 ```svelte example id="tree-view-basic"
 <script lang="ts">
@@ -25,19 +25,19 @@ Bind `selected` to a node ID and `expanded` to a set of branch IDs. Clicking a l
       ],
     },
   ]
-  let selected = $state<string>()
+  let selected = $state<string | null>(null)
   let expanded = $state(new Set([`project`]))
 </script>
 
-<TreeView {nodes} bind:selected bind:expanded label="Project files" />
+<TreeView {nodes} bind:value={selected} bind:expanded label="Project files" />
 <p>Selected: {selected ?? `None`}</p>
 ```
 
 ### <Icon icon={ListChecks} class="heading-icon" aria-hidden="true" /> Multiple selection
 
-Set `multiple` and bind `selected_ids` to a set of IDs. An ordinary click selects one node; Ctrl/Cmd-click or Space toggles its selection. Enter expands or collapses a branch and selects a leaf. Shift-click, Shift+Space and Shift+Up/Down/Home/End select a range over visible rows. Ctrl/Cmd with Shift adds the range to the existing selection. Ctrl/Cmd+A adds all visible, enabled rows. Arrow navigation alone only moves focus.
+Set `mode="multiple"` and bind `value` to an array of IDs. An ordinary click selects one node; Ctrl/Cmd-click or Space toggles its selection. Enter expands or collapses a branch and selects a leaf. Shift-click, Shift+Space and Shift+Up/Down/Home/End select a range over visible rows. Ctrl/Cmd with Shift adds the range to the existing selection. Ctrl/Cmd+A adds all visible, enabled rows. Arrow navigation alone only moves focus.
 
-Disabled rows can receive focus but cannot be selected or expanded, and ranges skip them. Collapsing a branch preserves selected descendants; replacing a selection with a visible range excludes hidden descendants. If the range anchor disappears, the next range starts at its destination. Replace `selected_ids` when updating it externally; `on_selection_change(ids)` receives a fresh set after each selection gesture, including deselection and select-all.
+Disabled rows can receive focus but cannot be selected or expanded, and ranges skip them. Collapsing a branch preserves selected descendants; replacing a selection with a visible range excludes hidden descendants. If the range anchor disappears, the next range starts at its destination. Replace `value` when updating it externally; `on_change(value)` receives a fresh array after each selection gesture, including deselection and select-all.
 
 ```svelte example id="tree-view-multiple"
 <script lang="ts">
@@ -55,21 +55,21 @@ Disabled rows can receive focus but cannot be selected or expanded, and ranges s
     },
     { id: `readme`, label: `README.md` },
   ]
-  let selected_ids = $state(new Set<string>())
+  let selected_ids = $state<string[]>([])
   let expanded = $state(new Set([`source`]))
 </script>
 
 <TreeView
   {nodes}
-  multiple
-  bind:selected_ids
+  mode="multiple"
+  bind:value={selected_ids}
   bind:expanded
   label="Files for batch actions"
 />
-<p>Selected: {[...selected_ids].join(`, `) || `None`}</p>
+<p>Selected: {selected_ids.join(`, `) || `None`}</p>
 <button
   onclick={() => {
-    selected_ids = new Set()
+    selected_ids = []
   }}>Clear selection</button
 >
 ```
@@ -116,15 +116,15 @@ For HTTP loaders, pass `signal` to `fetch`, check `response.ok`, and validate th
 
 ### <Icon icon={BookOpen} class="heading-icon" aria-hidden="true" /> Main API
 
-| Prop                             | Purpose                                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
-| `nodes: readonly TreeNode[]`     | Each node needs a globally unique `id` and a `label`; optionally provide `children`, `load(signal)` or `disabled`. |
-| `bind:expanded`, `bind:selected` | Control expanded branch IDs and the selected ID. Replace the set when updating it externally.                      |
-| `multiple`, `bind:selected_ids`  | Enable multiple selection and control its IDs; `selected` is only used in single-selection mode.                   |
-| `on_select(node)`                | Receive an individually selected node; deselection and select-all only notify `on_selection_change`.               |
-| `on_selection_change(ids)`       | Receive the complete multiple-selection set after a gesture, including selected descendants of collapsed branches. |
-| `children(node)`                 | Customize the label without replacing the row's selection and expansion behavior.                                  |
-| `label`                          | Accessible tree name; defaults to `Tree`. Other HTML attributes apply to the outer wrapper.                        |
+| Prop                            | Purpose                                                                                                                    |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `nodes: readonly TreeNode[]`    | Each node needs a globally unique `id` and a `label`; optionally provide `children`, `load(signal)` or `disabled`.         |
+| `bind:expanded`, `bind:value`   | Control expanded branch IDs and the selected ID. Replace the set when updating it externally.                              |
+| `mode="multiple"`, `bind:value` | Select multiple IDs through an array; single mode uses one ID or null.                                                     |
+| `on_select(node)`               | Receive an individually selected node; deselection and select-all only notify `on_change`.                                 |
+| `on_change(value)`              | Receive the selected ID or complete selection array after a gesture, including selected descendants of collapsed branches. |
+| `children(node)`                | Customize the label without replacing the row's selection and expansion behavior.                                          |
+| `label`                         | Accessible tree name; defaults to `Tree`. Other HTML attributes apply to the outer wrapper.                                |
 
 ### <Icon icon={Keyboard} class="heading-icon" aria-hidden="true" /> Keyboard behavior
 

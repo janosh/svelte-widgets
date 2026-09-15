@@ -105,7 +105,8 @@ query does not drag it back into view.
 
 A titled region that displays reset controls for caller-supplied `changed_keys`. The caller owns values, defaults, and equality. Keyed rows reserve a reset gutter from the start; changed rows show a reset arrow. `on_reset_key(key)` restores one setting. The heading Reset button calls `on_reset`, or resets each changed key when that callback is omitted.
 
-`setting_metadata` supplies per-row descriptions, revealed by the Explain toggle, and
+Each keyed row supplies its description through `data-description`, used by both Explain and SettingsSearch. Bind that attribute directly to a schema description when needed.
+
 `layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so
 controls line up down the section instead of starting wherever each label ends.
 
@@ -126,22 +127,20 @@ controls line up down the section instead of starting wherever each label ends.
     changed_keys={Object.keys(defaults).filter(
       (key) => Reflect.get(settings, key) !== Reflect.get(defaults, key),
     )}
-    setting_metadata={{
-      radius: `Radius multiplier applied to every rendered atom`,
-      opacity: `Fill opacity, 0 is fully transparent`,
-      show_labels: `Draw the element symbol on each site`,
-    }}
     on_reset_key={(key) => Reflect.set(settings, key, Reflect.get(defaults, key))}
   >
-    <label data-key="radius">
+    <label
+      data-key="radius"
+      data-description="Radius multiplier applied to every rendered atom"
+    >
       <span>Radius</span>
       <input type="number" min="0" max="2" step="0.1" bind:value={settings.radius} />
     </label>
-    <label data-key="opacity">
+    <label data-key="opacity" data-description="Fill opacity, 0 is fully transparent">
       <span>Opacity</span>
       <input type="number" min="0" max="1" step="0.05" bind:value={settings.opacity} />
     </label>
-    <label data-key="show_labels">
+    <label data-key="show_labels" data-description="Draw the element symbol on each site">
       <span>Site labels</span>
       <input type="checkbox" bind:checked={settings.show_labels} />
     </label>

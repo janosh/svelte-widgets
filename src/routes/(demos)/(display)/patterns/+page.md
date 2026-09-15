@@ -23,7 +23,7 @@
 
 ## Accordion
 
-`Accordion` uses real heading buttons and regions. Set `multiple` to bind an array of open values, or set `collapsible={false}` in single mode to keep the open item from closing itself. It is also headless: `.accordion-item`, `.accordion-trigger`, `.accordion-panel` and `data-state` are the styling hooks.
+`Accordion` uses real heading buttons and regions. Set `mode="multiple"` to bind an array of open values, or set `collapsible={false}` in single mode to keep the open item from closing itself. It is also headless: `.accordion-item`, `.accordion-trigger`, `.accordion-panel` and `data-state` are the styling hooks.
 
 ```svelte example id="patterns-accordion"
 <script lang="ts">
@@ -37,7 +37,7 @@
   let value = $state<string[]>([`install`])
 </script>
 
-<Accordion {items} multiple bind:value>
+<Accordion {items} mode="multiple" bind:value>
   {#snippet panel({ item })}
     <p>Content for {item.label}.</p>
   {/snippet}
@@ -88,26 +88,28 @@ Because this example renders the bar inside `root`, `also_ignore=".find-bar"` ke
 
 ## Dialog
 
-`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close` for dismissals started inside the dialog; it does not fire when you set the bound `open` state to `false` yourself. Turn off `close_on_backdrop` or `close_on_escape` when dismissal would lose work. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
+`Dialog` is a centered native modal with bindable state and surface, composable trigger/header/footer snippets, focus restoration and nested-dialog stacking. `on_close` reports `pointer`, `escape` or `close` for dismissals started inside the dialog; it does not fire when you set the bound `open` state to `false` yourself. Use `closedby="any"` (the default) for backdrop and Escape dismissal, `closedby="closerequest"` for Escape only, or `closedby="none"` to require an explicit close action. Keep nested dialogs and other overlays inside its content so the browser's modal top layer can make only the innermost one interactive.
 
 ```svelte example id="patterns-dialog"
 <script lang="ts">
-  import { Dialog } from 'svelte-widgets'
+  import { Dialog, type DialogProps } from 'svelte-widgets'
 
   let open = $state(false)
   let last_close = $state(`none`)
-  let close_on_backdrop = $state(true)
-  let close_on_escape = $state(true)
+  let closedby = $state<DialogProps[`closedby`]>(`any`)
 </script>
 
 <label
-  ><input type="checkbox" bind:checked={close_on_backdrop} /> Backdrop dismissal</label
->
-<label><input type="checkbox" bind:checked={close_on_escape} /> Escape dismissal</label>
+  >Dismissal policy
+  <select bind:value={closedby}>
+    <option value="any">Backdrop and Escape</option>
+    <option value="closerequest">Escape only</option>
+    <option value="none">Explicit close only</option>
+  </select>
+</label>
 <Dialog
   bind:open
-  {close_on_backdrop}
-  {close_on_escape}
+  {closedby}
   aria-labelledby="profile-dialog-title"
   on_close={({ via }) => (last_close = via)}
 >

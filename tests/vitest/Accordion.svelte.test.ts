@@ -15,7 +15,7 @@ describe(`Accordion`, () => {
   type Props = ComponentProps<typeof Accordion>
 
   const mount_accordion = (extra: Partial<Props> = {}) => {
-    const props: Props = $state({ items, ...extra })
+    const props = $state({ items, ...extra } as Props)
     mount(Accordion, { target: document.body, props })
     return props
   }
@@ -98,7 +98,7 @@ describe(`Accordion`, () => {
   test(`multiple mode adds and removes controlled values independently`, async () => {
     const on_change = vi.fn()
     const props = mount_accordion({
-      multiple: true,
+      mode: `multiple`,
       collapsible: false,
       value: [`alpha`],
       on_change,
@@ -118,14 +118,10 @@ describe(`Accordion`, () => {
     expect(on_change).toHaveBeenLastCalledWith([`gamma`])
   })
 
-  // An uncontrolled accordion falls back to the empty shape for its mode, and a value
-  // whose shape belongs to the other mode reads as nothing open rather than throwing.
   test.each([
     [`uncontrolled single`, {}, []],
-    [`uncontrolled multiple`, { multiple: true }, []],
-    [`array value in single mode`, { value: [`alpha`] }, []],
-    [`single value in multiple mode`, { multiple: true, value: `alpha` }, []],
-    [`matching multiple value`, { multiple: true, value: [`alpha`, `gamma`] }, [0, 2]],
+    [`uncontrolled multiple`, { mode: `multiple` }, []],
+    [`matching multiple value`, { mode: `multiple`, value: [`alpha`, `gamma`] }, [0, 2]],
   ] as [string, Partial<Props>, number[]][])(`%s`, (_name, props, open_panel_indices) => {
     mount_accordion(props)
     expect(

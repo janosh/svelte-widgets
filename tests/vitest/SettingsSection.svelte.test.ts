@@ -102,8 +102,9 @@ describe(`SettingsSection`, () => {
     mount_section({
       title: `A`,
       changed_keys: [`radius`],
-      setting_metadata: { radius: `Size` },
-      children: snippet(`<label data-key="radius"><input></label>`),
+      children: snippet(
+        `<label data-key="radius" data-description="Size"><input></label>`,
+      ),
     })
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(
@@ -238,17 +239,14 @@ describe(`SettingsSection`, () => {
     expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
-  test(`reveals mapped row descriptions with an accessible section toggle`, async () => {
+  test(`reveals row descriptions with an accessible section toggle`, async () => {
     mount_section({
       title: `Pointer sensitivity`,
-      setting_metadata: {
-        rotate_speed: { description: `Pointer rotation speed` },
-        rotation_damping: { description: `Motion inertia after releasing the pointer` },
-      },
       children: snippet(`
-          <div>
-            <label data-key="rotate_speed"><span>Rotate speed</span><input></label>
-            <label data-key="rotation_damping"><span>Damping</span><input></label>
+          <div data-key="wrapper">
+            <label data-key="rotate_speed" data-description="Pointer rotation speed"><span>Rotate speed</span><input></label>
+            <label data-key="rotation_damping" data-description="Motion inertia after releasing the pointer"><span>Damping</span><input></label>
+            <section class="settings-section"><label data-key="nested" data-description="Nested description"><input aria-label="Nested label" data-auto-label="Nested label"><input aria-label="Nested label" data-auto-label="Nested label"></label></section>
           </div>
         `),
     })
@@ -258,6 +256,11 @@ describe(`SettingsSection`, () => {
     expect(document.querySelector(`h4`)?.textContent?.trim()).toBe(`Pointer sensitivity`)
     expect(toggle?.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
+    const nested_controls = [...document.querySelectorAll(`[data-key="nested"] input`)]
+    expect(nested_controls.map((control) => control.getAttribute(`aria-label`))).toEqual([
+      `Nested label`,
+      `Nested label`,
+    ])
     expect(
       document
         .querySelector(`[data-key="rotation_damping"]`)
@@ -274,6 +277,16 @@ describe(`SettingsSection`, () => {
 
     await click_and_tick(`.description-toggle`)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
+
+    // Cleaning up a keyed wrapper must leave nested rows' generated labels intact too.
+    doc_query(`[data-key="wrapper"]`).removeAttribute(`data-key`)
+    await tick()
+    expect(
+      nested_controls.map((control) => control.getAttribute(`data-auto-label`)),
+    ).toEqual([`Nested label`, `Nested label`])
+    expect(doc_query(`[data-key="rotate_speed"] input`).getAttribute(`aria-label`)).toBe(
+      `Rotate speed`,
+    )
   })
 
   // two keys overridden, two omitted, so both halves of the merge run; the interpolating
@@ -328,10 +341,9 @@ describe(`SettingsSection`, () => {
     ]).toEqual([`Atom radius zurücksetzen`, `Atom radius zurücksetzen`, `Atom radius`])
   })
 
-  test(`offers the toggle for rows that only carry their own data-description`, async () => {
+  test(`offers descriptions without requiring a reset callback`, async () => {
     mount_section({
       title: `Atoms`,
-      on_reset_key: () => undefined,
       children: snippet(
         `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input></label>`,
       ),
@@ -424,17 +436,18 @@ describe(`SettingsSection`, () => {
     expect(row.classList.contains(`setting-resettable`)).toBe(true)
   })
 
-  test(`ignores unmapped and explicitly empty descriptions`, async () => {
+  test(`ignores missing and explicitly empty descriptions`, async () => {
     mount_section({
       title: `Atoms`,
-      setting_metadata: { radius: ``, unrelated: `Not rendered here` },
-      children: snippet(`<div data-key="radius" data-description="Fallback"></div>`),
+      children: snippet(
+        `<div><div data-key="radius" data-description=""></div><div data-key="unrelated"></div></div>`,
+      ),
     })
     await tick()
     expect(document.querySelector(`.description-toggle`)).toBeNull()
     expect(
-      document.querySelector(`[data-key="radius"]`)?.hasAttribute(`data-description`),
-    ).toBe(false)
+      document.querySelector(`[data-key="radius"]`)?.getAttribute(`data-description`),
+    ).toBe(``)
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {

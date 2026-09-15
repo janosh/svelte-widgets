@@ -1,10 +1,4 @@
-import {
-  apply_theme_mode,
-  listen_theme_storage,
-  system_preference,
-  theme,
-  ThemeToggle,
-} from '$lib'
+import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '$lib'
 import { Monitor, Moon, Sun } from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
@@ -123,29 +117,53 @@ test(`click cycles through light -> system -> dark -> light`, async () => {
   expect(observed_modes).toEqual([`system`, `dark`, `light`])
 })
 
-test(`system mode reapplies theme when media query changes`, async () => {
-  let matches = false
-  let change_handler: (() => void) | undefined
-  const match_media = vi.fn((media: string) => ({
-    media,
-    get matches() {
-      return matches
-    },
-    addEventListener: (_event: string, handler: () => void) => (change_handler = handler),
-    removeEventListener: () => {},
-  }))
-  vi.stubGlobal(`matchMedia`, match_media)
-  localStorage.setItem(`theme`, `system`)
-  await mount_theme_toggle()
-  expect(applied_theme()).toEqual([`light`, `light`])
-  expect(match_media).toHaveBeenCalledWith(`(prefers-color-scheme: dark)`)
+test.each([true, false])(
+  `system mode follows the OS with a toggle=%s`,
+  async (with_toggle) => {
+    let matches = false
+    let change_handler: (() => void) | undefined
+    const remove_listener = vi.fn()
+    const match_media = vi.fn((media: string) => ({
+      media,
+      get matches() {
+        return matches
+      },
+      addEventListener: (_event: string, handler: () => void) =>
+        (change_handler = handler),
+      removeEventListener: remove_listener,
+    }))
+    vi.stubGlobal(`matchMedia`, match_media)
+    localStorage.setItem(`theme`, `system`)
+    let stop: (() => void) | undefined
+    if (with_toggle) await mount_theme_toggle()
+    else stop = watch_theme()
+    expect(applied_theme()).toEqual([`light`, `light`])
+    expect(match_media).toHaveBeenCalledWith(`(prefers-color-scheme: dark)`)
 
-  matches = true
-  change_handler?.()
-  await tick()
+    matches = true
+    change_handler?.()
+    await tick()
 
-  expect(applied_theme()).toEqual([`dark`, `dark`])
-})
+    expect(applied_theme()).toEqual([`dark`, `dark`])
+    apply_theme_mode(`light`)
+    change_handler?.()
+    expect(applied_theme()).toEqual([`light`, `light`])
+    if (stop) stop()
+    else {
+      const app = mounted.pop()
+      if (app) await unmount(app)
+    }
+    expect(remove_listener).toHaveBeenCalledExactlyOnceWith(`change`, change_handler)
+
+    // A valid choice written while no watcher exists takes effect when an owner returns.
+    localStorage.setItem(`theme`, `dark`)
+    if (with_toggle) await mount_theme_toggle()
+    else stop = watch_theme()
+    expect(theme.mode).toBe(`dark`)
+    expect(applied_theme()).toEqual([`dark`, `dark`])
+    stop?.()
+  },
+)
 
 test(`storage events synchronize the theme key until unmount`, async () => {
   const dispatch_storage = async (key: string | null, storage_area = localStorage) => {
@@ -229,15 +247,10 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
   }
 })
 
-test(`system_preference defaults to light without matchMedia`, () => {
-  vi.stubGlobal(`matchMedia`, undefined)
-  expect(system_preference()).toBe(`light`)
-})
-
 test.each([`document`, `addEventListener`] as const)(
-  `listen_theme_storage fails clearly without browser global %s`,
+  `watch_theme fails clearly without browser global %s`,
   (global_name) => {
     vi.stubGlobal(global_name, undefined)
-    expect(() => listen_theme_storage()).toThrow(`listen_theme_storage() is client-only`)
+    expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
   },
 )

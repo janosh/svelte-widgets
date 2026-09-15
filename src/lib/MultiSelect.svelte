@@ -26,12 +26,7 @@
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
-  import type {
-    GroupedOptions,
-    KeyboardShortcuts,
-    MultiSelectProps,
-    SelectAllScope,
-  } from './types'
+  import type { GroupedOptions, MultiSelectProps, SelectAllScope } from './types'
   import * as utils from './utils'
   import Wiggle from './Wiggle.svelte'
 
@@ -42,7 +37,6 @@
     auto_active_first_option = false,
     create_option_msg = `Create this option...`,
     allow_user_options = false,
-    allow_empty = false,
     autocomplete = `off`,
     auto_scroll = true,
     breakpoint = 800,
@@ -120,18 +114,9 @@
     option,
     user_msg,
     onblur,
-    onclick,
     onfocus,
     oninput,
     onkeydown,
-    onkeyup,
-    onmousedown,
-    onmouseenter,
-    onmouseleave,
-    ontouchcancel,
-    ontouchend,
-    ontouchmove,
-    ontouchstart,
     on_add,
     on_create,
     on_remove,
@@ -202,10 +187,6 @@
 
   const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
     if (`selected` in rest) invalid_config(`use value instead of selected`)
-    if (!load_options && !options.length) {
-      if (!(allow_user_options || loading || disabled || allow_empty))
-        invalid_config(`received no options`)
-    }
     if (max_select !== null && !is_integer_at_least(max_select, 1)) {
       invalid_config(`max_select must be null or a positive integer, got ${max_select}`)
     }
@@ -269,18 +250,7 @@
       ? utils.fuzzy_match(search, target)
       : target.toLowerCase().includes(search.toLowerCase())
 
-  // Mac uses Cmd for shortcuts, everything else Ctrl
-  const is_mac =
-    typeof navigator !== `undefined` && /Mac|iPhone|iPad|iPod/u.test(navigator.userAgent)
-  const mod_key = is_mac ? `meta` : `ctrl`
-
-  const default_shortcuts: KeyboardShortcuts = {
-    select_all: null,
-    clear_all: `${mod_key}+backspace`,
-    open: null,
-    close: null,
-  }
-  const effective_shortcuts = $derived({ ...default_shortcuts, ...shortcuts })
+  const effective_shortcuts = $derived({ clear_all: `mod+backspace`, ...shortcuts })
 
   const loader = create_option_loader<Option>({
     config: () => load_options,
@@ -866,11 +836,7 @@
         if (typeof (raw_result as PromiseLike<unknown>)?.then === `function`) {
           was_async = true
           creating_option = true
-          try {
-            oncreate_result = await (raw_result as PromiseLike<CreateResult>)
-          } finally {
-            creating_option = false
-          }
+          oncreate_result = await (raw_result as PromiseLike<CreateResult>)
         } else oncreate_result = raw_result as CreateResult
       } catch (error) {
         // sync throws too: this function is async, so an uncaught throw would surface as an
@@ -878,6 +844,8 @@
         const failure = was_async ? `promise rejected` : `threw`
         console.error(`MultiSelect: on_create ${failure}:`, error)
         return
+      } finally {
+        if (was_async) creating_option = false
       }
       if (oncreate_result === false) return
       if (is_non_empty_option(oncreate_result)) option_to_add = oncreate_result
@@ -934,7 +902,15 @@
       )
     }
 
-    set_selection(selected.filter((_, remove_idx) => remove_idx !== idx))
+    commit_removal(
+      selected.filter((_, remove_idx) => remove_idx !== idx),
+      option_removed,
+    )
+  }
+
+  // Chip removal and editing a committed input share validation, announcements, and events.
+  function commit_removal(next_selected: Option[], option_removed: Option) {
+    set_selection(next_selected)
     clear_validity()
     announce(msg.option_removed(label_of(option_removed)))
     on_remove?.({ option: option_removed, selected })
@@ -1134,21 +1110,6 @@
       handle_option_interact(active_option, event, active_index)
   }
 
-  function run_shortcut(
-    event: KeyboardEvent,
-    shortcut_key: keyof KeyboardShortcuts,
-    condition: boolean,
-    action: () => void,
-  ): boolean {
-    if (!condition || !utils.matches_shortcut(event, effective_shortcuts[shortcut_key])) {
-      return false
-    }
-    event.preventDefault()
-    event.stopPropagation()
-    action()
-    return true
-  }
-
   // keydown on the search input; option/header rows use if_enter_or_space instead
   async function handle_keydown(event: KeyboardEvent) {
     if (disabled) return
@@ -1158,20 +1119,42 @@
     const chip_navigation_enabled = !input_display && selected.length > 0 && !search_text
 
     if (
-      run_shortcut(
+      utils.run_hotkeys(
         event,
-        `select_all`,
-        Boolean(select_all_option) &&
-          navigable_options.length > 0 &&
-          mode !== `single` &&
-          !matching_scope_unavailable,
-        () => select_all(event),
-      ) ||
-      run_shortcut(event, `clear_all`, chip_navigation_enabled, () =>
-        remove_all(event),
-      ) ||
-      run_shortcut(event, `open`, !open, () => open_dropdown(event)) ||
-      run_shortcut(event, `close`, open, () => close_and_clear(event))
+        [
+          {
+            keys: effective_shortcuts.select_all ?? [],
+            enabled:
+              Boolean(select_all_option) &&
+              navigable_options.length > 0 &&
+              multi_select &&
+              !matching_scope_unavailable,
+            handler: select_all,
+          },
+          {
+            keys: effective_shortcuts.clear_all ?? [],
+            enabled: chip_navigation_enabled,
+            handler: remove_all,
+          },
+          {
+            keys: effective_shortcuts.open ?? [],
+            enabled: !open,
+            handler: open_dropdown,
+          },
+          {
+            keys: effective_shortcuts.close ?? [],
+            enabled: open,
+            handler: close_and_clear,
+          },
+        ].map(({ handler, ...binding }) => ({
+          ...binding,
+          allow_in_inputs: true,
+          handler: () => {
+            event.stopPropagation()
+            handler(event)
+          },
+        })),
+      )
     )
       return
 
@@ -1520,11 +1503,7 @@
   function clear_input_committed_selection() {
     const option_removed = selected[0]
     if (option_removed === undefined) return
-    set_selection([])
-    clear_validity()
-    announce(msg.option_removed(label_of(option_removed)))
-    on_remove?.({ option: option_removed, selected })
-    on_change?.({ option: option_removed, type: `remove` })
+    commit_removal([], option_removed)
   }
 
   // clears before the value change so the input_committed_label → search_text sync effect
@@ -1826,15 +1805,6 @@
       }}
       onfocus={handle_input_focus}
       onblur={handle_input_blur}
-      {onclick}
-      {onkeyup}
-      {onmousedown}
-      {onmouseenter}
-      {onmouseleave}
-      {ontouchcancel}
-      {ontouchend}
-      {ontouchmove}
-      {ontouchstart}
     />
     {@render after_input?.(input_snippet_props)}
   </ul>

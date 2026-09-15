@@ -30,6 +30,12 @@ const demo_ids = new Set([
   `attachments-tooltip-styling`,
   `attachments-tooltip-placement`,
   `settings-section`,
+  `button-group-single`,
+  `button-group-multi`,
+  `patterns-accordion`,
+  `patterns-dialog`,
+  `tree-view-basic`,
+  `tree-view-multiple`,
   `toast-actions`,
   `code-editor-basic`,
 ])

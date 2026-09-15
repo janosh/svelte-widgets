@@ -12,13 +12,13 @@ export const THEME_MODE_CYCLE = {
   dark: `light`,
 } as const
 
-export const system_preference = (): `light` | `dark` =>
+const system_preference = (): `light` | `dark` =>
   typeof matchMedia !== `undefined` && matchMedia(`(prefers-color-scheme: dark)`).matches
     ? `dark`
     : `light`
 
-export const resolve_theme_mode = (): ThemeMode =>
-  persisted_choice(`theme`, THEME_MODES, `system`)
+const resolve_theme_mode = (initial_mode: ThemeMode = `system`): ThemeMode =>
+  persisted_choice(`theme`, THEME_MODES, initial_mode)
 
 // Shared so ThemeToggle's icon stays in sync when apply_theme_mode is called elsewhere
 let theme_mode = $state<ThemeMode>(`system`)
@@ -38,16 +38,27 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
   storage_set(`theme`, mode)
 }
 
-export const listen_theme_storage = (): (() => void) => {
+// Mount once per owner and dispose with it. Also works without a ThemeToggle.
+export const watch_theme = (): (() => void) => {
   if (
     typeof document === `undefined` ||
     typeof globalThis.addEventListener !== `function`
   )
-    throw new TypeError(`listen_theme_storage() is client-only`)
+    throw new TypeError(`watch_theme() is client-only`)
+  // Read a valid stored choice on every start, retaining in-memory choices if none is readable.
+  apply_theme_mode(resolve_theme_mode(theme.mode))
+  const color_scheme_query = matchMedia(`(prefers-color-scheme: dark)`)
+  const on_change = () => {
+    if (theme.mode === `system`) apply_theme_mode(`system`)
+  }
   const on_storage = ({ key, storageArea: storage_area }: StorageEvent) => {
     if (storage_area === localStorage && (key === null || key === `theme`))
       apply_theme_mode(resolve_theme_mode())
   }
   globalThis.addEventListener(`storage`, on_storage)
-  return () => globalThis.removeEventListener(`storage`, on_storage)
+  color_scheme_query.addEventListener(`change`, on_change)
+  return () => {
+    globalThis.removeEventListener(`storage`, on_storage)
+    color_scheme_query.removeEventListener(`change`, on_change)
+  }
 }

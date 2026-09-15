@@ -37,7 +37,7 @@
   let value = $state<number | undefined>(0.5)
   let ratio = $state(0.4)
   let collapsed = $state(false)
-  let selected = $state<string>()
+  let selected = $state<string | null>(null)
   let task_state = $state<`running` | `cancelled`>(`running`)
   const nodes: TreeNode[] = [
     {
@@ -93,7 +93,7 @@
 </p>
 <div class="split-demo">
   <section style:width="var(--split-pane-size, 40%)">
-    <TreeView {nodes} bind:selected label="Project files" />
+    <TreeView {nodes} bind:value={selected} label="Project files" />
   </section>
   <SplitPane bind:ratio bind:collapsed collapsible />
   <section style:flex="1">

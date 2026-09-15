@@ -483,6 +483,7 @@ describe(`keyboard shortcuts`, () => {
   }
 
   test.each([
+    [`a`, `a`, {}],
     [`ctrl+a`, `a`, { ctrlKey: true }],
     [`meta+a`, `a`, { metaKey: true }],
     [`cmd+a`, `a`, { metaKey: true }],
@@ -498,11 +499,18 @@ describe(`keyboard shortcuts`, () => {
   })
 
   test.each([
-    [`ctrl+backspace (default)`, {}, { ctrlKey: true }],
-    [`meta+backspace (explicit)`, { clear_all: `meta+backspace` }, { metaKey: true }],
+    [`ctrl+backspace (default)`, `X11; Linux x86_64`, {}, { ctrlKey: true }],
+    [`meta+backspace (default)`, `Macintosh; Intel Mac OS X`, {}, { metaKey: true }],
+    [
+      `meta+backspace (explicit)`,
+      `X11; Linux x86_64`,
+      { clear_all: `meta+backspace` },
+      { metaKey: true },
+    ],
   ])(
     `%s clears all selected options and prevents default`,
-    async (_label, shortcut_override, modifiers) => {
+    async (_label, user_agent, shortcut_override, modifiers) => {
+      vi.spyOn(navigator, `userAgent`, `get`).mockReturnValue(user_agent)
       const { props, event } = await test_shortcut(
         {
           value: [`a`, `b`],

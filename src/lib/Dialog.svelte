@@ -15,8 +15,6 @@
     open = $bindable(false),
     backdrop_dim = true,
     backdrop_blur = false,
-    close_on_backdrop = true,
-    close_on_escape = true,
     surface = $bindable(null),
     trigger,
     header,
@@ -24,17 +22,13 @@
     children,
     on_close,
     id,
-    closedby,
+    closedby = `any`,
     'aria-label': aria_label,
     'aria-labelledby': aria_labelledby,
     ...rest
   }: DialogProps = $props()
 
   const dialog_id = $derived(id ?? unique_id)
-  const effective_closedby = $derived(
-    closedby ?? (close_on_escape ? (close_on_backdrop ? `any` : `closerequest`) : `none`),
-  )
-  const dismiss_on_backdrop = $derived(closedby ? closedby === `any` : close_on_backdrop)
   let focus_origin: HTMLElement | SVGElement | null = null
   let pending_close_via: DialogCloseVia | null = null
   let backdrop_press_started = false
@@ -76,7 +70,7 @@
   const track_backdrop_release = (event: MouseEvent) => {
     if (
       backdrop_press_started &&
-      dismiss_on_backdrop &&
+      closedby === `any` &&
       is_dialog_backdrop_event(surface, event)
     ) {
       // Browsers without `closedby` support leave the surface open; those with it have
@@ -101,7 +95,7 @@
     class={[`dialog`, rest.class]}
     data-backdrop-dim={backdrop_dim || undefined}
     data-backdrop-blur={backdrop_blur || undefined}
-    closedby={effective_closedby}
+    {closedby}
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Dialog`)}
     aria-labelledby={aria_labelledby}
     onpointerdown={chain_handlers(track_backdrop_press, rest.onpointerdown)}
@@ -109,7 +103,7 @@
     oncancel={(event) => {
       rest.oncancel?.(event)
       if (event.defaultPrevented) return
-      if (effective_closedby === `none`) event.preventDefault()
+      if (closedby === `none`) event.preventDefault()
       else pending_close_via = `escape`
     }}
     onclose={chain_handlers((event) => {
