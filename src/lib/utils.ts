@@ -553,14 +553,6 @@ export function fuzzy_match(search_text: string, target_text: string): boolean {
   return true
 }
 
-// A titled run of ActionMenu actions. Setting `selected` (matched against an action's
-// `id`, null for nothing chosen) makes it a radio group instead of a plain heading.
-export type CmdSection = {
-  title: string
-  actions: CmdAction[]
-  selected?: string | null
-}
-
 export const format_cmd_metadata = (metadata: CmdAction[`metadata`]): string =>
   Array.isArray(metadata) ? metadata.join(` · `) : (metadata ?? ``)
 

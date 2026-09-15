@@ -75,7 +75,7 @@
   waits for Enter, blur, or change. <code>on_commit</code> receives accepted changes.
   Native input attributes go in <code>number_props</code> and <code>range_props</code>.
 </p>
-<NumberRangeInput bind:value min={0} max={1} step={0.1} commit="change"
+<NumberRangeInput label="Opacity" bind:value min={0} max={1} step={0.1} commit="change"
   >Opacity</NumberRangeInput
 >
 <p>Committed: {value}</p>

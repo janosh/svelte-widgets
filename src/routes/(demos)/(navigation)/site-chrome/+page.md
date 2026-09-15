@@ -20,8 +20,20 @@ from `svelte-widgets/icons`, such as `GitHub`. `children` renders after the nav,
 
   const repo = `https://github.com/janosh/svelte-widgets`
   const links: FooterLink[] = [
-    { href: `${repo}/issues`, label: `Issues`, icon: GitHub, external: true },
-    { href: `https://svelte.dev`, label: `Svelte`, icon: Svelte, external: true },
+    {
+      href: `${repo}/issues`,
+      label: `Issues`,
+      icon: GitHub,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
+    {
+      href: `https://svelte.dev`,
+      label: `Svelte`,
+      icon: Svelte,
+      target: '_blank',
+      rel: 'noopener noreferrer',
+    },
     { href: `multiselect`, label: `Docs` },
   ]
 </script>

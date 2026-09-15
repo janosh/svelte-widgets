@@ -1,5 +1,5 @@
-import { SubpageGrid } from '$lib'
-import { Check, ChevronRight, Copy, type IconData } from '$lib/icons'
+import { SubpageGrid, type Subpage } from '$lib'
+import { Check, ChevronRight, Copy } from '$lib/icons'
 import MultiSelectPage from '$root/src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md'
 import { mount } from 'svelte'
 import { expect, test, vi } from 'vitest'
@@ -11,9 +11,17 @@ vi.mock(`$app/state`, () => ({ page: { url: new URL(`https://example.com/docs/`)
 test.each([undefined, Check])(
   `renders ordered cards with shared hrefs and fallback_icon=%j`,
   (fallback_icon) => {
-    const subpages: [string, string, string, icon?: IconData][] = [
-      [`Basics`, `/basics`, `Basics overview`],
-      [`Styling`, `/basics`, `Styling overview`, Copy],
+    const subpages: Subpage[] = [
+      { label: `Basics`, href: `/basics`, description: `Basics overview` },
+      {
+        label: `Styling`,
+        href: `/basics`,
+        description: `Styling overview`,
+        icon: Copy,
+        target: `_blank`,
+        rel: `noreferrer`,
+        title: `Open styling`,
+      },
     ]
     mount(SubpageGrid, {
       target: document.body,
@@ -39,6 +47,11 @@ test.each([undefined, Check])(
     )
 
     const cards = [...document.querySelectorAll<HTMLAnchorElement>(`nav.grid a.card`)]
+    expect([cards[1].target, cards[1].rel, cards[1].title]).toEqual([
+      `_blank`,
+      `noreferrer`,
+      `Open styling`,
+    ])
     expect(
       cards.map((card) => [
         card.getAttribute(`href`),
@@ -47,9 +60,9 @@ test.each([undefined, Check])(
         card.querySelector(`svg.icon path`)?.getAttribute(`d`),
       ]),
     ).toEqual(
-      subpages.map(([page_title, href, description, icon]) => [
+      subpages.map(({ label, href, description, icon }) => [
         href,
-        page_title,
+        label,
         description,
         (icon ?? fallback_icon ?? ChevronRight).d,
       ]),

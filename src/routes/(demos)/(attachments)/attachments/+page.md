@@ -25,11 +25,11 @@
   // single arm; every demo route is param-free
   const resolve_path = resolve as (path: string) => string
   const subpages = Object.entries(descriptions).map(
-    ([slug, description]): [string, string, string] => [
-      demo_labels[`/attachments/${slug}`] ?? slug,
-      resolve_path(`/attachments/${slug}`),
+    ([slug, description]) => ({
+      label: demo_labels[`/attachments/${slug}`] ?? slug,
+      href: resolve_path(`/attachments/${slug}`),
       description,
-    ],
+    }),
   )
 </script>
 

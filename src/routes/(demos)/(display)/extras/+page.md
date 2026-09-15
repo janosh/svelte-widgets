@@ -155,7 +155,7 @@ A list of collapsible `<details>`, one per file, with a button that opens or clo
 
 ### `PrevNext`
 
-Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` tuples and the `current` href. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. Navigation uses ordinary links; apps own keyboard shortcuts and router behavior. The links at the bottom of every demo page on this site are a `PrevNext` fed by the demo route list.
+Sequential navigation with wraparound. Pass `items` as `{ href, label }` objects and the `current` href. A nonempty list must contain `current`. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. `labels` translates the previous/next headings; `as` changes the wrapper element. Navigation uses ordinary links; apps own keyboard shortcuts, preloading, and router behavior. The links at the bottom of every demo page use this component.
 
 ```svelte example id="prev-next-demo"
 <script lang="ts">
@@ -163,9 +163,9 @@ Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` 
 
   // relative hrefs so the links survive the docs site's base path
   const chapters = [
-    [`toc`, `Toc`],
-    [`masonry`, `Masonry`],
-    [`popover`, `Popover`],
+    { href: `toc`, label: `Toc` },
+    { href: `masonry`, label: `Masonry` },
+    { href: `popover`, label: `Popover` },
   ]
 </script>
 
@@ -174,16 +174,19 @@ Sequential navigation with wraparound. Pass `items` as hrefs or `[href, label]` 
 
 ### `SubpageGrid`
 
-A card grid for linking to child pages, built from `[title, href, description]` tuples.
-The [MultiSelect overview](multiselect) is one.
+A card grid using `{ href, label, description, icon? }` objects. Like Footer and PrevNext, it accepts native `target`, `rel`, and `title` on each link. The [MultiSelect overview](multiselect) uses it.
 
 ```svelte
 <SubpageGrid
   title="MultiSelect Overview"
   subtitle="Keyboard-friendly, accessible multi-select."
   subpages={[
-    [`Form`, `/form`, `Form integration and native validation behavior.`],
-    [`Events`, `/events`, `Event callbacks and payloads.`],
+    {
+      label: `Form`,
+      href: `/form`,
+      description: `Form integration and native validation behavior.`,
+    },
+    { label: `Events`, href: `/events`, description: `Event callbacks and payloads.` },
   ]}
 />
 ```

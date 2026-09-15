@@ -13,7 +13,14 @@ import { doc_query, hover, press_key } from './index'
 const label_snippet = createRawSnippet(() => ({
   render: () => `<span>Atom radius</span>`,
 }))
-const named_props = { min: 0, max: 1, step: 0.1, value: 0, title: `Atom radius` }
+const named_props = {
+  min: 0,
+  max: 1,
+  step: 0.1,
+  value: 0,
+  label: `Atom radius`,
+  title: `Adjust the radius`,
+}
 
 const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
   const target = document.createElement(`div`)
@@ -40,7 +47,9 @@ describe(`NumberRangeInput`, () => {
       }
       hover(doc_query(`label > span`))
       await vi.advanceTimersByTimeAsync(150)
-      expect(document.querySelector(`.custom-tooltip`)?.textContent).toBe(`Atom radius`)
+      expect(document.querySelector(`.custom-tooltip`)?.textContent).toBe(
+        `Adjust the radius`,
+      )
     } finally {
       await unmount(component)
       vi.useRealTimers()
@@ -48,7 +57,7 @@ describe(`NumberRangeInput`, () => {
   })
 
   test(`renders number before range and two-way binds both to one value`, async () => {
-    const props = $state({ min: 0, max: 1, step: 0.1, title: `vol`, value: 0.5 })
+    const props = $state({ min: 0, max: 1, step: 0.1, label: `vol`, value: 0.5 })
     const { number, range } = mount_range(props)
 
     expect(
@@ -75,11 +84,11 @@ describe(`NumberRangeInput`, () => {
   // without children the label is empty and the number input goes unnamed too
   test.each([
     [`children name the number input`, { children: label_snippet }, null, `Atom radius`],
-    [`a bare title names both inputs`, {}, `Atom radius`, `Atom radius`],
-    [`neither falls back to a generic name`, { title: undefined }, `Value`, `Value`],
+    [`an explicit label names both inputs`, {}, `Atom radius`, `Atom radius`],
+    [`neither falls back to a generic name`, { label: undefined }, `Value`, `Value`],
     [
       `labels reword that generic fallback`,
-      { title: undefined, labels: { value: `Wert` } },
+      { label: undefined, labels: { value: `Wert` } },
       `Wert`,
       `Wert`,
     ],
@@ -88,7 +97,7 @@ describe(`NumberRangeInput`, () => {
     expect(inputs.map((input) => input.getAttribute(`aria-label`))).toEqual(expected)
   })
 
-  test.each([0.25, `any`])(
+  test.each([0.25, `any`] as const)(
     `forwards explicit bounds and setting metadata with step=%s`,
     (step_size) => {
       const { target, inputs, range } = mount_range({
@@ -96,7 +105,8 @@ describe(`NumberRangeInput`, () => {
         min: 0.25,
         max: 1.25,
         step: step_size,
-        setting: `radius`,
+        'data-key': `radius`,
+        label: `radius`,
       })
       expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
       expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
@@ -109,9 +119,19 @@ describe(`NumberRangeInput`, () => {
 
   test.each([
     ...[`min`, `max`, `step`].flatMap((prop) =>
-      [undefined, ``, `NaN`, Infinity, `100garbage`, `0x10`, ` 1 `, `+1`, `1.`].map(
-        (value) => [prop, value],
-      ),
+      [
+        undefined,
+        ``,
+        NaN,
+        Infinity,
+        `1`,
+        `0.1`,
+        `100garbage`,
+        `0x10`,
+        ` 1 `,
+        `+1`,
+        `1.`,
+      ].map((value) => [prop, value]),
     ),
     [`min`, 2],
     [`max`, -1],
@@ -326,7 +346,7 @@ describe(`logarithmic NumberRangeInput`, () => {
   test(`empty values remain unset and any-step keys use one percent of the log span`, async () => {
     const props = $state({
       ...log_props,
-      step: `any`,
+      step: `any` as const,
       value: 1,
       empty: `undefined` as const,
     })

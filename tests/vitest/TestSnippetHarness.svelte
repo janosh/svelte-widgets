@@ -11,6 +11,7 @@
     | ({ component: `toggle` } & ComponentProps<typeof Toggle>)
 
   let props: SnippetHarnessProps = $props()
+  let nav_open = $derived(props.component === `nav` && (props.open ?? false))
 </script>
 
 {#if props.component === `action-button`}
@@ -43,23 +44,17 @@
   </FileDetails>
 {:else if props.component === `nav`}
   {@const { component, ...rest } = props}
-  <Nav {...rest}>
-    {#snippet link({ href, label, is_active })}
-      <a data-testid="nav-link" {href} data-is-active={is_active}>{label}</a>
-    {/snippet}
-    {#snippet item({ href, label, is_active, is_dropdown, render_default })}
-      <div
-        data-testid="nav-item"
-        data-href={href}
-        data-active={is_active}
-        data-dropdown={is_dropdown}
+  <button data-testid="nav-external-toggle" onclick={() => (nav_open = !nav_open)}
+    >Toggle from parent</button
+  >
+  <Nav {...rest} bind:open={nav_open}>
+    {#snippet item({ route, is_active })}
+      <span data-testid="nav-item" data-href={route.href} data-active={is_active}
+        >{route.label}</span
       >
-        <span>{label}</span>
-        {@render render_default()}
-      </div>
     {/snippet}
-    {#snippet children({ is_open, panel_id, routes })}
-      <div data-testid="nav-children" data-open={is_open} data-panel-id={panel_id}>
+    {#snippet children({ open, panel_id, routes })}
+      <div data-testid="nav-children" data-open={open} data-panel-id={panel_id}>
         {routes.length} routes
       </div>
     {/snippet}
@@ -73,7 +68,7 @@
         data-kind={kind}
         data-index={index}
         data-total={total}
-        >{item[0]}
+        >{item.href}
       </span>
     {/snippet}
     {#snippet between()}

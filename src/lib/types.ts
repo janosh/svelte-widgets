@@ -1,7 +1,12 @@
 import type { Snippet } from 'svelte'
 import type { FlipParams } from 'svelte/animate'
-import type { ClassValue, HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
-import type { DismissConfig } from './attachments/index'
+import type {
+  ClassValue,
+  HTMLAnchorAttributes,
+  HTMLAttributes,
+  HTMLInputAttributes,
+} from 'svelte/elements'
+import type { DismissConfig, TooltipOptions } from './attachments/index'
 import type { IconData } from './icons/types'
 import type { MultiSelectLabels } from './labels'
 
@@ -75,6 +80,13 @@ export type CmdAction = {
   metadata?: string | string[]
   shortcut?: string
 } & Record<string, unknown>
+
+// A titled group of actions; selected makes it a radio group, with null for no selection.
+export type CmdSection<Action extends CmdAction = CmdAction> = {
+  title: string
+  actions: readonly Action[]
+  selected?: string | null
+}
 
 export type PageSearchNavigateDetails = {
   query: string
@@ -388,22 +400,24 @@ export interface KeyboardShortcuts {
   close?: string | null // default: null (Escape already works)
 }
 
-// Nav component types
-export type NavRouteObject = {
-  label?: string // custom label (default: derived from href)
-  children?: string[] // sub-routes for dropdown
-  disabled?: boolean | string // true or tooltip message
-  separator?: boolean // render as visual divider after this item
-  align?: `left` | `right` // default: `left`
-  external?: boolean // add target="_blank" rel="noopener noreferrer"
-  tooltip?: string // on-hover tooltip (takes precedence over top-level tooltips prop)
-  class?: ClassValue // custom CSS class
-  style?: string // custom inline style
-  [key: string]: unknown // allow additional custom properties
-} & ({ href: string } | { separator: true; href?: string })
-
-// shorthands: "/about", ["/about", "About Us"], ["/docs", ["/docs/intro"]]
-export type NavRoute = string | [string, string] | [string, string[]] | NavRouteObject
+// Navigation components use explicit labels and native link attributes.
+export type LinkItem = Pick<HTMLAnchorAttributes, `target` | `rel` | `title`> & {
+  href: string
+  label: string
+}
+type NavDetails = Omit<LinkItem, `href`> & {
+  disabled?: boolean
+  tooltip?: string | Omit<TooltipOptions, `disabled`>
+  class?: ClassValue
+  style?: string
+  [key: string]: unknown
+}
+export type NavLink = NavDetails & { href: string; children?: never }
+// Omit href for a heading without a destination; children contain only submenu links.
+export type NavGroup = NavDetails & { href?: string; children: readonly NavLink[] }
+export type NavRoute =
+  | ((NavLink | NavGroup) & { align?: `left` | `right`; separator?: false })
+  | { separator: true }
 
 // === Toc ===
 export type CollapseMode = boolean | `h${2 | 3 | 4 | 5 | 6}`
@@ -423,13 +437,11 @@ export type OpenChangeHandler = (event: OpenChangeEvent) => void
 export type TocHeadingData = { id: string; level: number; title: string }
 
 // === Footer ===
-export interface FooterLink {
-  href: string
-  label: string
+export type FooterLink = LinkItem & {
   icon?: IconData
-  title?: string
-  external?: boolean // adds target=_blank and rel=noopener noreferrer
 }
+
+export type Subpage = LinkItem & { description: string; icon?: IconData }
 
 // === ContributorList ===
 // structural, so a GitHub API response satisfies it without a cast

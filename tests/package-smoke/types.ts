@@ -11,6 +11,12 @@ import {
   type CommandMenu,
   watch_theme,
   type CmdAction,
+  type CmdSection,
+  type LinkItem,
+  type NavRoute,
+  type Subpage,
+  type PrevNext,
+  type NumberRangeInput,
   type CodeHighlighter,
   type StatItem,
   type DialogCloseDetail,
@@ -21,7 +27,6 @@ import {
   type ThemeMode,
 } from 'svelte-widgets'
 import type { ComponentProps } from 'svelte'
-import type { CmdSection } from 'svelte-widgets/utils'
 import type { FileDropOptions } from 'svelte-widgets/attachments'
 import type {
   CodeEditorOptions,
@@ -119,6 +124,39 @@ export const record_button_options: ComponentProps<typeof ButtonGroup> = {
 export const on_execute: NonNullable<
   ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`on_execute`]
 > = ({ action }) => action.route.toUpperCase()
+export const action_menu_execute: NonNullable<
+  ComponentProps<typeof ActionMenu<CmdAction & { route: string }>>[`on_execute`]
+> = ({ action, section }) => [
+  action.route.toUpperCase(),
+  section?.actions.map((entry) => entry.route.toUpperCase()),
+]
+
+export const links: readonly LinkItem[] = [
+  { href: `/guide`, label: `Guide`, target: `_blank` },
+]
+export const nav_routes: readonly NavRoute[] = [
+  { label: `Docs`, children: links },
+  { separator: true },
+]
+export const nav_api: ComponentProps<typeof Nav> = {
+  routes: nav_routes,
+  pathname: `/guide`,
+  open: true,
+}
+export const subpages: readonly Subpage[] = [
+  { ...links[0], description: `Read the guide` },
+]
+export const prev_next_api: ComponentProps<typeof PrevNext> = {
+  items: links,
+  current: `/guide`,
+  as: `div`,
+  labels: { prev: `Back` },
+}
+// @ts-expect-error Positional navigation tuples are removed.
+export const tuple_route: NavRoute = [`/guide`, `Guide`]
+// @ts-expect-error Bounds must be numbers.
+export const numeric_string_bound: ComponentProps<typeof NumberRangeInput>[`min`] = `1`
+
 export const command_labels: ComponentProps<typeof CommandMenu>[`labels`] = {
   loading_more: `Wird geladen`,
   loading_failed: `Laden fehlgeschlagen`,

@@ -1,16 +1,10 @@
-<script lang="ts">
+<script lang="ts" generics="Action extends CmdAction = CmdAction">
   import { onDestroy, untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
-  import type { CmdAction } from './types'
+  import type { CmdAction, CmdSection } from './types'
   import { validate_cmd_actions } from './internal/command'
-  import {
-    chain_handlers,
-    type CmdSection,
-    format_shortcut,
-    type Placement,
-    step_focus,
-  } from './utils'
+  import { chain_handlers, format_shortcut, type Placement, step_focus } from './utils'
 
   type TriggerProps = {
     onclick: (event: MouseEvent) => void
@@ -44,13 +38,13 @@
     children?: never
   }
   type Props = HTMLAttributes<HTMLMenuElement> & {
-    actions: (CmdAction | CmdSection)[]
+    actions: readonly (Action | CmdSection<Action>)[]
     disabled?: boolean
     // Native light-dismiss by default; press dismissal, escape/enabled false, or extra
     // inside regions switch to the custom dismissal path.
     dismiss?: DismissConfig
-    item?: Snippet<[{ action: CmdAction; section?: CmdSection; checked?: boolean }]>
-    on_select?: (action: CmdAction, section?: CmdSection) => void
+    item?: Snippet<[{ action: Action; section?: CmdSection<Action>; checked?: boolean }]>
+    on_execute?: (detail: { action: Action; section?: CmdSection<Action> }) => unknown
     padding?: number
     strategy?: `fixed` | `absolute`
   } & (ContextMode | DropdownMode)
@@ -63,7 +57,7 @@
     disabled = false,
     dismiss,
     item,
-    on_select,
+    on_execute,
     open = $bindable(false),
     placement = `bottom`,
     align = `start`,
@@ -104,7 +98,7 @@
 
   // CmdAction takes arbitrary extra keys, so a `title`/`actions` pair is no proof of a
   // section; its required `action` callback is what one entry has and the other lacks.
-  const is_section = (entry: CmdAction | CmdSection): entry is CmdSection =>
+  const is_section = (entry: Action | CmdSection<Action>): entry is CmdSection<Action> =>
     !(`action` in entry)
   const flat_actions = $derived(
     actions.flatMap((entry) => (is_section(entry) ? entry.actions : [entry])),
@@ -157,12 +151,10 @@
 
   onDestroy(() => clearTimeout(context_open_timeout))
 
-  function run(action: CmdAction, section?: CmdSection) {
+  function run(action: Action, section?: CmdSection<Action>) {
     close()
     action.action(action.label)
-    // Flat consumers keep the one-argument callback they were written against.
-    if (section) on_select?.(action, section)
-    else on_select?.(action)
+    on_execute?.({ action, section })
   }
 
   const enabled_items = (parent: ParentNode) => [
@@ -258,7 +250,7 @@
   </menu>
 {/if}
 
-{#snippet menu_item(action: CmdAction, section?: CmdSection)}
+{#snippet menu_item(action: Action, section?: CmdSection<Action>)}
   <!-- Undefined leaves the item a plain menuitem; a boolean makes it a radio. -->
   {@const checked =
     section?.selected === undefined ? undefined : section.selected === action.id}
