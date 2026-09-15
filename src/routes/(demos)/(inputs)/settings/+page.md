@@ -105,7 +105,8 @@ query does not drag it back into view.
 
 A titled region that displays reset controls for caller-supplied `changed_keys`. The caller owns values, defaults, and equality. Keyed rows reserve a reset gutter from the start; changed rows show a reset arrow. `on_reset_key(key)` restores one setting. The heading Reset button calls `on_reset`, or resets each changed key when that callback is omitted.
 
-`setting_metadata` supplies per-row descriptions, revealed by the Explain toggle, and
+Each keyed row supplies its description through `data-description`, used by both Explain and SettingsSearch. Bind that attribute directly to a schema description when needed.
+
 `layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so
 controls line up down the section instead of starting wherever each label ends.
 
@@ -126,22 +127,20 @@ controls line up down the section instead of starting wherever each label ends.
     changed_keys={Object.keys(defaults).filter(
       (key) => Reflect.get(settings, key) !== Reflect.get(defaults, key),
     )}
-    setting_metadata={{
-      radius: `Radius multiplier applied to every rendered atom`,
-      opacity: `Fill opacity, 0 is fully transparent`,
-      show_labels: `Draw the element symbol on each site`,
-    }}
     on_reset_key={(key) => Reflect.set(settings, key, Reflect.get(defaults, key))}
   >
-    <label data-key="radius">
+    <label
+      data-key="radius"
+      data-description="Radius multiplier applied to every rendered atom"
+    >
       <span>Radius</span>
       <input type="number" min="0" max="2" step="0.1" bind:value={settings.radius} />
     </label>
-    <label data-key="opacity">
+    <label data-key="opacity" data-description="Fill opacity, 0 is fully transparent">
       <span>Opacity</span>
       <input type="number" min="0" max="1" step="0.05" bind:value={settings.opacity} />
     </label>
-    <label data-key="show_labels">
+    <label data-key="show_labels" data-description="Draw the element symbol on each site">
       <span>Site labels</span>
       <input type="checkbox" bind:checked={settings.show_labels} />
     </label>
@@ -180,8 +179,7 @@ screen. `open` is bindable and `subtitle` shows a short hint — a count, or the
 
 A number input and a slider bound to one value, wrapped in a flex `<label>`. Pass `min`, `max` and `step` explicitly, and use `title` for the description.
 
-`data-key` defaults to `setting`, so a row drops into a searchable, resettable section
-without repeating the key at the call site.
+Use native `data-key` to include a row in settings search and reset. Bounds must be numbers; `step` accepts a positive number or `"any"`. Numeric strings are rejected.
 
 ```svelte example id="number-range-input"
 <script lang="ts">
@@ -194,7 +192,8 @@ without repeating the key at the call site.
   style="box-sizing: border-box; width: 100%; margin-inline: auto; border: 1px solid gray; border-radius: 5pt; box-shadow: 0 3px 12px rgba(0, 0, 0, 0.3); display: grid; gap: 4pt; max-width: 26em; padding: 1ex"
 >
   <NumberRangeInput
-    setting="atom_radius"
+    data-key="atom_radius"
+    label="Radius"
     min={0}
     max={2}
     step={0.05}
@@ -203,7 +202,14 @@ without repeating the key at the call site.
   >
     Radius <small>&times;</small>
   </NumberRangeInput>
-  <NumberRangeInput min={0} max={1} step={0.05} title="Fill opacity" bind:value={opacity}>
+  <NumberRangeInput
+    min={0}
+    max={1}
+    step={0.05}
+    label="Opacity"
+    title="Fill opacity"
+    bind:value={opacity}
+  >
     Opacity
   </NumberRangeInput>
   <NumberRangeInput
@@ -211,6 +217,7 @@ without repeating the key at the call site.
     min={1e-10}
     max={100}
     step={0.1}
+    label="Pressure in bar"
     title="Pressure in bar"
     bind:value={pressure}
   >
@@ -222,6 +229,7 @@ without repeating the key at the call site.
     max={10}
     step={0.3}
     commit="change"
+    label="Logarithmic gain"
     title="Logarithmic gain"
     bind:value={gain}>Gain</NumberRangeInput
   >
@@ -230,7 +238,7 @@ without repeating the key at the call site.
 <p>radius {radius}, opacity {opacity}, pressure {pressure} bar, gain {gain}</p>
 ```
 
-Hover a row's label for its `title` tooltip. The slider takes that same text as its accessible name, since the wrapping `<label>` only names the number input.
+Hover a row's visible text for its `title` tooltip. The separate `label` names the slider for assistive technology. Without children, it also names the number input; with children, the visible text names that input. `number_props` and `range_props` can override individual ARIA attributes.
 
 Use `scale="log"` for positive values across orders of magnitude. Bounds, the binding, numeric drafts, and `on_commit` stay in real units; the slider and arrow keys use base-10 exponent steps (`step={1}` multiplies or divides by 10). `step="any"` allows continuous dragging and uses one percent of the logarithmic span for keyboard steps. Zero, negative, and out-of-bounds numeric drafts never commit; valid typed values need not lie on the slider's step grid. Logarithmic bounds must be finite, strictly positive, and have distinct logarithms; a defined external value must lie inside them. Steps too small to change a representable value throw a configuration error.
 

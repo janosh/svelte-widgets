@@ -24,7 +24,12 @@ describe(`Footer`, () => {
     ],
     [
       `external link`,
-      { href: `https://example.com`, label: `Docs`, external: true },
+      {
+        href: `https://example.com`,
+        label: `Docs`,
+        target: `_blank`,
+        rel: `noopener noreferrer`,
+      },
       false,
       `_blank`,
       `noopener noreferrer`,

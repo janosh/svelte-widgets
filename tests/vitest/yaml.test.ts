@@ -1,4 +1,5 @@
-import { yaml_plugin, type YamlOptions } from '$lib/yaml'
+import { parse_yaml, stringify_yaml, yaml_plugin, type YamlOptions } from '$lib/yaml'
+import { YAML11_SCHEMA } from 'js-yaml'
 import { expect, test } from 'vitest'
 
 const import_yaml = async (
@@ -32,6 +33,7 @@ copies: [*base, *base]
     ),
   )
   expect(Object.getPrototypeOf(data)).toBe(Object.prototype)
+  expect(parse_yaml(stringify_yaml(data))).toEqual(data)
 })
 
 test.each([
@@ -39,9 +41,23 @@ test.each([
   [`false`, false],
   [`null`, null],
   [`hello`, `hello`],
+  [`2026-09-07`, `2026-09-07`],
   [`[one, two]`, [`one`, `two`]],
 ])(`supports a scalar or sequence document: %s`, async (source, expected) => {
   expect(await import_yaml(source)).toEqual(expected)
+  expect(parse_yaml(stringify_yaml(expected))).toEqual(expected)
+})
+
+test(`uses core schema by default and forwards serialization options`, () => {
+  const date = new Date(`2026-09-07T00:00:00.000Z`)
+  const data = { date, label: `Long description with spaces. `.repeat(8).trim() }
+  const options = { schema: YAML11_SCHEMA, lineWidth: -1 }
+  const yaml_text = stringify_yaml(data, options)
+  expect(yaml_text).toContain(`label: ${data.label}\n`)
+  expect(parse_yaml(yaml_text, options)).toEqual(data)
+  expect(() => stringify_yaml(date, { schema: undefined })).toThrow(
+    `unacceptable kind of an object to dump`,
+  )
 })
 
 test.each([

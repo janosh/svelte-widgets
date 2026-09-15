@@ -167,4 +167,4 @@ when the menu reopens.
 </p>
 ```
 
-Actions require a stable, unique, nonempty string `id`, including across static actions and loaded pages. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels may repeat or change; exact string IDs identify actions and persisted recents. [`ActionMenu`](popover#actionmenu) uses the same identity rules.
+Empty action lists are valid and can be populated later. Actions require a stable, unique, nonempty string `id`, including across static actions and loaded pages. Numeric, empty, whitespace-only, and duplicate IDs are rejected. Labels may repeat or change; exact string IDs identify actions and persisted recents. [`ActionMenu`](popover#actionmenu) uses the same identity rules.

@@ -15,5 +15,5 @@
   title={category.label}
   title_icon={category.icon}
   subtitle={category.description}
-  subpages={category.children.filter((route) => route !== category.href).map(demo_card)}
+  subpages={category.children.map(demo_card)}
 />

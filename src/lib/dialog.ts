@@ -14,8 +14,8 @@ export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   open?: boolean
   backdrop_dim?: boolean // default: true
   backdrop_blur?: boolean // default: false
-  close_on_backdrop?: boolean
-  close_on_escape?: boolean
+  // `any` (default): backdrop or Escape; `closerequest`: Escape; `none`: explicit close.
+  closedby?: `any` | `closerequest` | `none`
   surface?: HTMLDialogElement | null
   trigger?: Snippet<[DialogTriggerProps]>
   header?: Snippet<[DialogControls]>

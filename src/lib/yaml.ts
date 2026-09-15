@@ -1,6 +1,12 @@
-import { CORE_SCHEMA, load } from 'js-yaml'
+import { CORE_SCHEMA, dump, load, type DumpOptions } from 'js-yaml'
 import type { Plugin } from 'vite'
 import { assert_json_node } from './serialization.ts'
+
+export { load as parse_yaml } from 'js-yaml'
+
+// Match load's YAML 1.2 core schema; dates remain strings.
+export const stringify_yaml = (value: unknown, options: DumpOptions = {}): string =>
+  dump(value, { ...options, schema: options.schema ?? CORE_SCHEMA })
 
 export type YamlOptions = {
   // Enrich or validate parsed data at build time; return the data to export.
@@ -40,7 +46,7 @@ export const yaml_plugin = ({ transform }: YamlOptions = {}) =>
     async transform(source: string, filename: string) {
       if (!/\.(?:ya?ml|cff)$/iu.test(filename)) return null
       try {
-        let data: unknown = load(source, { filename, schema: CORE_SCHEMA })
+        let data = load(source, { filename, schema: CORE_SCHEMA })
         if (transform) data = await transform(data, filename)
         return {
           code: `export default ${serialize_data(data, filename)};`,

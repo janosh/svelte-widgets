@@ -175,8 +175,7 @@ describe(`Dialog`, () => {
     const on_close = vi.fn()
     mount_dialog({
       open: true,
-      close_on_backdrop: false,
-      close_on_escape: false,
+      closedby: `none`,
       on_close,
     })
     await tick()
@@ -193,21 +192,19 @@ describe(`Dialog`, () => {
   })
 
   test.each([
-    [`none`, `pointer`, true, true, false],
-    [`none`, `escape`, true, true, false],
-    [`closerequest`, `pointer`, true, false, false],
-    [`closerequest`, `escape`, true, false, true],
-    [`any`, `pointer`, false, false, true],
-    [`any`, `escape`, false, false, true],
+    [`none`, `pointer`, false],
+    [`none`, `escape`, false],
+    [`closerequest`, `pointer`, false],
+    [`closerequest`, `escape`, true],
+    [`any`, `pointer`, true],
+    [`any`, `escape`, true],
   ] as const)(
-    `closedby=%s overrides boolean options for %s dismissal`,
-    async (closedby, via, close_on_backdrop, close_on_escape, should_close) => {
+    `closedby=%s controls %s dismissal`,
+    async (closedby, via, should_close) => {
       const on_close = vi.fn()
       mount_dialog({
         open: true,
         closedby,
-        close_on_backdrop,
-        close_on_escape,
         on_close,
       })
       await tick()

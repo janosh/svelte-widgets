@@ -37,7 +37,7 @@
   let value = $state<number | undefined>(0.5)
   let ratio = $state(0.4)
   let collapsed = $state(false)
-  let selected = $state<string>()
+  let selected = $state<string | null>(null)
   let task_state = $state<`running` | `cancelled`>(`running`)
   const nodes: TreeNode[] = [
     {
@@ -75,7 +75,7 @@
   waits for Enter, blur, or change. <code>on_commit</code> receives accepted changes.
   Native input attributes go in <code>number_props</code> and <code>range_props</code>.
 </p>
-<NumberRangeInput bind:value min={0} max={1} step={0.1} commit="change"
+<NumberRangeInput label="Opacity" bind:value min={0} max={1} step={0.1} commit="change"
   >Opacity</NumberRangeInput
 >
 <p>Committed: {value}</p>
@@ -93,7 +93,7 @@
 </p>
 <div class="split-demo">
   <section style:width="var(--split-pane-size, 40%)">
-    <TreeView {nodes} bind:selected label="Project files" />
+    <TreeView {nodes} bind:value={selected} label="Project files" />
   </section>
   <SplitPane bind:ratio bind:collapsed collapsible />
   <section style:flex="1">

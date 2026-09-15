@@ -192,6 +192,9 @@ export const NAV_LABELS = {
 }
 export type NavLabels = typeof NAV_LABELS
 
+export const PREV_NEXT_LABELS = { prev: `← Previous`, next: `Next →` }
+export type PrevNextLabels = typeof PREV_NEXT_LABELS
+
 // last-resort slider name, only when the row has no title, schema description or `setting` key
 export const NUMBER_RANGE_INPUT_LABELS = {
   value: `Value`,

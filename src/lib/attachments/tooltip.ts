@@ -28,6 +28,8 @@ export interface TooltipOptions {
   strategy?: TooltipStrategy
   wrap?: TooltipWrap
   trigger?: TooltipTrigger
+  // Allow touch-induced focus to open hover-focus help; touch hover stays suppressed.
+  touch_focus?: boolean
   open_delay_ms?: number
   close_delay_ms?: number
   skip_delay_ms?: number
@@ -714,9 +716,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   const enter_focus = (registration: TooltipRegistration, trigger: HTMLElement): void => {
     const { options } = registration
     if (!accepts_tooltip_trigger(options, `focus`)) return
-    // a tap focuses right after suppressing the hover tooltip; only explicit focus
-    // mode still wants to open there
-    if (last_input_was_touch && options.trigger !== `focus`) return
+    // A tap focuses after suppressing hover; opening on that focus is opt-in.
+    if (last_input_was_touch && options.trigger !== `focus` && !options.touch_focus)
+      return
     activate(registration, trigger, `focus`)
   }
 

@@ -10,7 +10,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 
 - Content: `content` or a per-trigger `content(trigger)`. Without explicit content, `title`, `aria-label`, then `data-title` are read. Attaching once to a container delegates to matching descendants; `delegate` takes a selector.
 - Position: `placement` defaults to `auto`. `align`, `fallback_placements`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
-- Interaction: `trigger`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change` reports visibility changes caused by hover, focus, Escape, or teardown.
+- Interaction: `trigger`, `touch_focus`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change` reports visibility changes caused by hover, focus, Escape, or teardown.
 - Rendering: content is plain text, `wrap` is `balance`, `normal` or `nowrap`, and `show_arrow` defaults to true.
 - Styling: `style` for one-off declarations, or theme with `--tooltip-bg`, `--text-color`, `--tooltip-border`, `--tooltip-padding`, `--tooltip-radius`, `--tooltip-font-size`, `--tooltip-font-family`, `--tooltip-shadow`, `--tooltip-max-width`, `--tooltip-max-height`, `--tooltip-opacity`, `--tooltip-arrow-size`, `--tooltip-transition` and `--tooltip-z-index`.
 
@@ -126,6 +126,8 @@ Attach `tooltip()` once to a container and every descendant carrying `title`, `a
 Tooltip content is plain text. The surface stays open while hovered so its text can be selected. Use <a href={popover_url}>Popover</a> for formatted content, controls, or application-controlled open state.
 
 `trigger` picks `hover-focus` (the default), `hover`, or `focus`. `open_delay_ms` applies to pointer hover only; focus opens immediately. `skip_delay_ms` skips that delay when moving between neighbouring triggers. `on_open_change` reports visibility changes and their cause.
+
+With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is set. This allows a focusable trigger to show help after a tap while retaining desktop hover behavior. `focus` always accepts touch-induced focus; `hover` never does. Touch-generated hover remains ignored in every mode.
 
 ```svelte example id="attachments-tooltip-interaction"
 <script lang="ts">

@@ -16,14 +16,21 @@
   )
   const category = $derived(
     current &&
-      demo_nav_routes.find(({ children: routes }) =>
-        routes.includes(is_multiselect ? `/multiselect` : current),
+      demo_nav_routes.find(
+        ({ href, children: routes }) =>
+          href === current || routes.includes(is_multiselect ? `/multiselect` : current),
       ),
   )
   const items = $derived(
-    (is_multiselect ? multiselect_pages : (category?.children ?? [])).map(
-      (route): [string, string] => [resolve_path(route), demo_title(route)],
-    ),
+    (is_multiselect
+      ? multiselect_pages
+      : category
+        ? [category.href, ...category.children]
+        : []
+    ).map((route) => ({
+      href: resolve_path(route),
+      label: demo_title(route),
+    })),
   )
 </script>
 

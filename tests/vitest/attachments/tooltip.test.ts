@@ -68,10 +68,12 @@ describe(`tooltip manager`, () => {
   }
   const focus_in = (element: HTMLElement) =>
     element.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
-  const focus_out = (element: HTMLElement) =>
+  const focus_out = (element: HTMLElement) => {
     element.dispatchEvent(
       new FocusEvent(`focusout`, { bubbles: true, relatedTarget: document.body }),
     )
+    vi.advanceTimersByTime(0)
+  }
 
   const visible_tooltip = (): HTMLElement => {
     const tooltip_el = doc_query(`.custom-tooltip`)
@@ -205,7 +207,6 @@ describe(`tooltip manager`, () => {
     const tooltip_el = visible_tooltip()
     expect(tooltip_el.textContent).toBe(`Keyboard`)
     focus_out(element)
-    vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
   })
 
@@ -233,7 +234,6 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(false)
 
     focus_out(element)
-    vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change).toHaveBeenLastCalledWith(false, open_detail(element, `blur`))
   })
@@ -306,7 +306,6 @@ describe(`tooltip manager`, () => {
 
     // Leaving the trigger after dismissal must not announce a second close.
     focus_out(element)
-    vi.advanceTimersByTime(0)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
       [false, open_detail(element, `escape`)],
@@ -317,21 +316,34 @@ describe(`tooltip manager`, () => {
     expect(surrounding_layer).toHaveBeenCalledOnce()
   })
 
-  it(`suppresses touch-induced default triggers but allows explicit focus mode`, () => {
-    const { element: automatic } = register_tooltip(`Automatic`)
-    // Browser ordering puts pointerover before pointerdown on first contact.
-    pointer_over(automatic, `touch`)
-    automatic.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
-    focus_in(automatic)
-    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-    pointer_over(automatic, `mouse`)
-    expect(visible_tooltip().textContent).toBe(`Automatic`)
-
-    const { element: focus_only } = register_tooltip(`Focus only`, { trigger: `focus` })
-    focus_only.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
-    focus_in(focus_only)
-    expect(visible_tooltip().textContent).toBe(`Focus only`)
-  })
+  it.each<[TooltipOptions, boolean, boolean]>([
+    [{}, false, true],
+    [{ touch_focus: false }, false, true],
+    [{ touch_focus: true }, true, true],
+    [{ trigger: `hover`, touch_focus: true }, false, true],
+    [{ trigger: `focus` }, true, false],
+    [{ trigger: `focus`, touch_focus: false }, true, false],
+  ])(
+    `%j opens on touch focus: %s, mouse hover: %s`,
+    (options, touch_opens, hover_opens) => {
+      const { element } = register_tooltip(`Help`, options)
+      // Browser ordering puts pointerover before pointerdown on first contact.
+      pointer_over(element, `touch`)
+      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
+      element.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
+      focus_in(element)
+      expect(element.hasAttribute(`aria-describedby`)).toBe(touch_opens)
+      expect(
+        document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null,
+      ).toBe(touch_opens ? `Help` : null)
+      focus_out(element)
+      expect(document.querySelector(`.custom-tooltip:not([hidden])`)).toBeNull()
+      pointer_over(element, `mouse`)
+      expect(
+        document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null,
+      ).toBe(hover_opens ? `Help` : null)
+    },
+  )
 
   it(`merges and removes only its aria-describedby token`, () => {
     const element = create_element(`button`)

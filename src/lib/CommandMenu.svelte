@@ -95,11 +95,7 @@
       : null,
   )
   // Reject invalid initial props during SSR, before client effects can run.
-  untrack(() => {
-    validate_cmd_actions(actions)
-    if (!actions.length && !rest.load_options && !rest.loading && !rest.disabled)
-      throw new TypeError(`CommandMenu: received no actions`)
-  })
+  untrack(() => validate_cmd_actions(actions))
   // Includes dynamically loaded options and appended pages.
   $effect(() => {
     validate_cmd_actions(actions)

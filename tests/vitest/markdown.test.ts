@@ -401,6 +401,56 @@ describe(`code and math`, () => {
         result.code,
       )?.[1]
       if (!module_id) throw new Error(`Missing example import`)
+      const resolve_id = instance.plugin.resolveId
+      if (typeof resolve_id !== `function`) throw new Error(`Expected resolve hook`)
+      for (const suffix of [``, `?inline&svelte&type=style&lang.css`]) {
+        for (const path of [module_id, module_id.slice(`/project`.length)]) {
+          expect(
+            await resolve_id.call(
+              { environment: { config: { root: `/project` } } } as never,
+              `${path}${suffix}`,
+              undefined,
+              {} as never,
+            ),
+          ).toBe(`${module_id}${suffix}`)
+        }
+      }
+      // A served URL can equal a different example's absolute ID when the root repeats.
+      const nested_id = `/project${module_id}`
+      await preprocess(source.replace(`color: red`, `color: blue`), instance.preprocess, {
+        filename: `/project/project/page.md`,
+      })
+      const context = {
+        environment: {
+          mode: `dev`,
+          config: { root: `/project` },
+          moduleGraph: {
+            urlToModuleMap: new Map([
+              [module_id, { id: nested_id }],
+              [module_id.slice(`/project`.length), { id: module_id }],
+            ]),
+          },
+        },
+      }
+      for (const [path, importer, resolved] of [
+        [module_id, undefined, nested_id],
+        [module_id, `/project/index.html`, nested_id],
+        [module_id, `/project/importer.js`, module_id],
+        [module_id.slice(`/project`.length), undefined, module_id],
+      ]) {
+        const suffix = `?inline&svelte&type=style&lang.css`
+        expect(
+          await resolve_id.call(
+            context as never,
+            `${path}${suffix}`,
+            importer,
+            {} as never,
+          ),
+        ).toBe(`${resolved}${suffix}`)
+      }
+      expect(await load.call({} as never, nested_id)).toMatchObject({
+        code: expect.stringContaining(`color: blue`),
+      })
       const loaded = await load.call({} as never, module_id)
       expect(loaded).toMatchObject({
         code: expect.stringContaining(`button { color: red }`),

@@ -218,9 +218,6 @@ export function compute_position(
 const is_apple_platform = (): boolean =>
   /mac|iphone|ipad|ipod/iu.test(globalThis.navigator?.userAgent ?? ``)
 
-const resolve_mod = (shortcut: string): string =>
-  shortcut.replaceAll(/\bmod\b/giu, is_apple_platform() ? `meta` : `ctrl`)
-
 // `,`, `+` and space are spelled out so a combo can always be split on `+`;
 // matching needs the literal `event.key` back
 const KEY_TOKENS = new Map([
@@ -246,15 +243,17 @@ export function parse_shortcut(shortcut: string): {
   shift: boolean
   alt: boolean
   meta: boolean
-} {
-  const parts = split_shortcut(resolve_mod(shortcut))
-  const last = parts.pop() ?? ``
-  const key = TOKEN_KEYS.get(last) ?? last
-  const ctrl = parts.includes(`ctrl`)
-  const shift = parts.includes(`shift`)
-  const alt = parts.includes(`alt`)
-  const meta = parts.includes(`meta`) || parts.includes(`cmd`)
-  return { key, ctrl, shift, alt, meta }
+} | null {
+  const parts = shortcut_parts(shortcut, true)
+  if (!parts) return null
+  const key = parts.pop() ?? ``
+  return {
+    key: TOKEN_KEYS.get(key) ?? key,
+    ctrl: parts.includes(`ctrl`),
+    shift: parts.includes(`shift`),
+    alt: parts.includes(`alt`),
+    meta: parts.includes(`meta`),
+  }
 }
 
 export function matches_shortcut(
@@ -262,8 +261,9 @@ export function matches_shortcut(
   shortcut: string | null | undefined,
 ): boolean {
   if (!shortcut) return false
-  const { key, ctrl, shift, alt, meta } = parse_shortcut(shortcut)
-  if (!key) return false // else "ctrl+" would match any key held with ctrl
+  const parsed = parse_shortcut(shortcut)
+  if (!parsed) return false
+  const { key, ctrl, shift, alt, meta } = parsed
   return (
     event.key.toLowerCase() === key &&
     event.ctrlKey === ctrl &&
@@ -276,7 +276,6 @@ export function matches_shortcut(
 // Display symbols per segment. Only `mod` is platform-dependent, the rest render alike.
 const key_symbols = new Map([
   [`meta`, `⌘`],
-  [`cmd`, `⌘`],
   [`shift`, `⇧`],
   [`alt`, `⌥`],
   [`ctrl`, `Ctrl`],
@@ -293,11 +292,14 @@ const key_symbols = new Map([
   [`space`, `␣`],
 ])
 
-export const format_shortcut = (shortcut: string): string[] =>
-  split_shortcut(resolve_mod(shortcut)).map(
+export function format_shortcut(shortcut: string): string[] {
+  const parts = shortcut_parts(shortcut, true)
+  if (!parts) throw new TypeError(`Invalid keyboard shortcut: ${shortcut}`)
+  return parts.map(
     (part) =>
       key_symbols.get(part) ?? part.replace(/^./u, (first) => first.toUpperCase()),
   )
+}
 
 export type Hotkey = {
   keys: string | string[] // e.g. `mod+k`, `ctrl+shift+p`, `Escape`
@@ -386,8 +388,6 @@ const MODIFIER_ALIASES = new Map([
   [`option`, `alt`],
 ])
 const canonical_modifier = (part: string): string => MODIFIER_ALIASES.get(part) ?? part
-const is_modifier = (part: string): boolean =>
-  MODIFIER_ORDER.includes(canonical_modifier(part))
 
 // `event.key` values that are a modifier in their own right, never a combo's key
 const MODIFIER_EVENT_KEYS = new Set(
@@ -418,6 +418,20 @@ export function event_to_combo(
   return [...mods, KEY_TOKENS.get(key) ?? key].join(`+`)
 }
 
+// Parsing, formatting, matching and conflict detection all use this grammar.
+function shortcut_parts(combo: string, resolve_mod = false): string[] | null {
+  const primary = is_apple_platform() ? `meta` : `ctrl`
+  const parts = split_shortcut(combo).map((part) => {
+    const name = canonical_modifier(part)
+    return resolve_mod && name === `mod` ? primary : name
+  })
+  if (parts.includes(``)) return null
+  const keys = parts.filter((part) => !MODIFIER_ORDER.includes(part))
+  if (keys.length !== 1 || MODIFIER_EVENT_KEYS.has(keys[0])) return null
+  const key = KEY_TOKENS.get(keys[0]) ?? keys[0]
+  return [...MODIFIER_ORDER.filter((name) => parts.includes(name)), key]
+}
+
 // Canonical form of a hand-written or stored combo; null for junk (no key, several keys,
 // lone modifier). Bare keys like `escape` pass since run_hotkeys accepts them;
 // require_modifier rejects them for rebinding UIs, where they'd swallow ordinary typing.
@@ -425,28 +439,17 @@ export function normalize_combo(
   combo: string,
   { require_modifier = false }: { require_modifier?: boolean } = {},
 ): string | null {
-  const parts = split_shortcut(combo).filter(Boolean)
-  const mods = new Set(parts.filter(is_modifier).map(canonical_modifier))
-  const keys = parts.filter((part) => !is_modifier(part))
-  if (keys.length !== 1 || (require_modifier && mods.size === 0)) return null
-  const key = KEY_TOKENS.get(keys[0]) ?? keys[0]
-  if (MODIFIER_EVENT_KEYS.has(key)) return null
-  return [...MODIFIER_ORDER.filter((name) => mods.has(name)), key].join(`+`)
+  const parts = shortcut_parts(combo)
+  if (!parts || (require_modifier && parts.length === 1)) return null
+  return parts.join(`+`)
 }
 
 // `mod+k` and the platform's own spelling of that chord are one shortcut and must collide,
 // so conflicts are judged on this resolved form; storage keeps the `mod` spelling.
 const resolve_combo = (combo: string): string => {
-  const primary = is_apple_platform() ? `meta` : `ctrl`
-  const parts = combo.split(`+`)
-  const mods = new Set(
-    parts.filter(is_modifier).map((part) => {
-      const name = canonical_modifier(part)
-      return name === `mod` ? primary : name
-    }),
-  )
-  const keys = parts.filter((part) => !is_modifier(part))
-  return [...MODIFIER_ORDER.filter((name) => mods.has(name)), ...keys].join(`+`)
+  const parts = shortcut_parts(combo, true)
+  if (!parts) throw new TypeError(`Invalid keyboard shortcut: ${combo}`)
+  return parts.join(`+`)
 }
 
 // Validate stored `action id -> combo` overrides against defaults, dropping unknown ids,
@@ -455,19 +458,24 @@ export function sanitize_shortcut_overrides(
   value: unknown,
   defaults: Record<string, string>,
 ): Record<string, string> {
-  if (!is_object(value)) return {}
   const canonical_defaults = Object.fromEntries(
-    Object.entries(defaults).map(([id, combo]) => [id, normalize_combo(combo) ?? combo]),
+    Object.entries(defaults).map(([id, combo]) => {
+      const normalized = normalize_combo(combo)
+      if (!normalized) throw new TypeError(`Invalid shortcut for action ${id}: ${combo}`)
+      return [id, normalized]
+    }),
   )
-  const overrides: Record<string, string> = {}
+  if (!is_object(value)) return {}
+  const entries: [string, string][] = []
   for (const [action_id, combo] of Object.entries(value)) {
     if (!Object.hasOwn(canonical_defaults, action_id) || typeof combo !== `string`)
       continue
     const normalized = normalize_combo(combo)
     if (normalized && normalized !== canonical_defaults[action_id]) {
-      overrides[action_id] = normalized
+      entries.push([action_id, normalized])
     }
   }
+  const overrides = Object.fromEntries(entries)
   // dropping an override reinstates its default, which can collide in turn, so repeat
   for (;;) {
     const effective = Object.values({ ...canonical_defaults, ...overrides }).map(
@@ -480,19 +488,6 @@ export function sanitize_shortcut_overrides(
     if (conflicting.length === 0) return overrides
     for (const id of conflicting) Reflect.deleteProperty(overrides, id)
   }
-}
-
-// Skips updates when nothing changed, so reactive wrappers that clone arrays on assignment
-// (Superforms, stores) can't loop forever (#309). null/undefined/[] all count as empty (#369).
-export function values_equal(val1: unknown, val2: unknown): boolean {
-  if (val1 === val2) return true
-  const is_empty = (val: unknown) =>
-    val === null || val === undefined || (Array.isArray(val) && val.length === 0)
-  if (is_empty(val1) && is_empty(val2)) return true
-  if (Array.isArray(val1) && Array.isArray(val2)) {
-    return val1.length === val2.length && val1.every((item, idx) => item === val2[idx])
-  }
-  return false
 }
 
 // replaceAll rebuilds the whole string, so skip it when there is nothing to normalize
@@ -556,14 +551,6 @@ export function fuzzy_match(search_text: string, target_text: string): boolean {
     offset += character.length
   }
   return true
-}
-
-// A titled run of ActionMenu actions. Setting `selected` (matched against an action's
-// `id`, null for nothing chosen) makes it a radio group instead of a plain heading.
-export type CmdSection = {
-  title: string
-  actions: CmdAction[]
-  selected?: string | null
 }
 
 export const format_cmd_metadata = (metadata: CmdAction[`metadata`]): string =>

@@ -66,7 +66,7 @@
         </Heading>
         <p>{description}</p>
         <ul>
-          {#each children.filter((route) => route !== href) as route (route)}
+          {#each children as route (route)}
             <li>
               <a href={resolve_path(route)} title={demo_descriptions[route]}>
                 {demo_title(route)}

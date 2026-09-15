@@ -1,5 +1,5 @@
 import { CommandMenu, PageSearch } from '$lib'
-import type { LoadOptionsParams } from '$lib/types'
+import type { CmdAction, LoadOptionsParams } from '$lib/types'
 import { MULTI_SELECT_LABELS } from '$lib/labels'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
@@ -521,10 +521,15 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
   })
 })
 
-test(`rejects an empty static action list`, () => {
-  expect(() => mount_menu({ open: true, actions: [] })).toThrow(
-    `CommandMenu: received no actions`,
-  )
+test(`renders an empty list and accepts later actions`, async () => {
+  const props = $state({ open: true, actions: [] as CmdAction[] })
+  mount_menu(props)
+  await tick()
+  expect(document.querySelectorAll(`[role="option"]:not(.user-msg)`)).toHaveLength(0)
+  expect(document.body.textContent).toContain(`No matching commands`)
+  props.actions = mock_actions
+  await tick()
+  expect(document.querySelectorAll(`[role="option"]`)).toHaveLength(mock_actions.length)
 })
 
 test(`remains open when trigger keys are pressed while already open`, async () => {

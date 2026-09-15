@@ -1,10 +1,13 @@
 import {
+  Accordion,
+  ButtonGroup,
   FileInput,
   SplitPane,
   TaskStatus,
   TreeView,
   VirtualList,
   type TreeNode,
+  type SelectionProps,
 } from '$lib'
 import { virtual_window } from '$lib/virtual'
 import {
@@ -28,6 +31,41 @@ const fire_key = (target: Element, key: string, options: KeyboardEventInit = {})
   target.dispatchEvent(
     new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true, ...options }),
   )
+
+test.each([
+  [
+    `Accordion`,
+    (props: SelectionProps) =>
+      mount(Accordion, {
+        target: target_for(),
+        props: { items: [{ value: `alpha` }], ...props },
+      }),
+  ],
+  [
+    `ButtonGroup`,
+    (props: SelectionProps) =>
+      mount(ButtonGroup, {
+        target: target_for(),
+        props: { options: [`alpha`], ...props },
+      }),
+  ],
+  [
+    `TreeView`,
+    (props: SelectionProps) =>
+      mount(TreeView, {
+        target: target_for(),
+        props: { nodes: [{ id: `alpha`, label: `Alpha` }], ...props },
+      }),
+  ],
+] as const)(`%s rejects a selection with the wrong mode`, (_name, mount_selection) => {
+  for (const props of [
+    { mode: `single`, value: [`alpha`] },
+    { mode: `multiple`, value: `alpha` },
+    { mode: `multiple`, value: null },
+  ]) {
+    expect(() => mount_selection(props as SelectionProps)).toThrow(`incompatible value`)
+  }
+})
 
 test(`split collapse restores size and Home/End respect bounds`, async () => {
   const target = target_for()
@@ -224,12 +262,12 @@ test.each([
       { id: `last`, label: `Last` },
     ]
     const on_select = vi.fn()
-    const on_selection_change = vi.fn()
+    const on_change = vi.fn()
     const props = $state({
       nodes,
-      multiple,
+      ...(multiple ? { mode: `multiple` as const } : { mode: `single` as const }),
       on_select,
-      on_selection_change,
+      on_change,
       expanded: new Set(initial ? [`root`] : []),
     })
     const component = mount(TreeView, { target, props })
@@ -269,7 +307,7 @@ test.each([
     }
     expect(load).toHaveBeenCalledOnce()
     expect(on_select).toHaveBeenCalledTimes(1)
-    expect(on_selection_change).toHaveBeenCalledTimes(multiple ? 1 : 0)
+    expect(on_change).toHaveBeenCalledTimes(1)
     for (const [key, id] of [
       [`l`, `last`],
       [`r`, `root`],
@@ -295,7 +333,7 @@ test.each([
       expect(document.activeElement).toBe(root)
     }
     expect(on_select).toHaveBeenCalledTimes(2)
-    expect(on_selection_change).toHaveBeenCalledTimes(multiple ? 2 : 0)
+    expect(on_change).toHaveBeenCalledTimes(2)
   },
 )
 
@@ -343,9 +381,9 @@ test.each([`ctrlKey`, `metaKey`] as const)(
   `tree multiple selection supports %s toggles and visible ranges`,
   async (modifier) => {
     const target = target_for()
-    const on_selection_change = vi.fn()
+    const on_change = vi.fn()
     const props = $state({
-      multiple: true,
+      mode: `multiple` as const,
       nodes: [
         {
           id: `folder`,
@@ -359,8 +397,8 @@ test.each([`ctrlKey`, `metaKey`] as const)(
         { id: `delta`, label: `Delta` },
       ],
       expanded: new Set([`folder`]),
-      selected_ids: new Set([`alpha`]),
-      on_selection_change,
+      value: [`alpha`],
+      on_change,
     })
     const component = mount(TreeView, { target, props })
     onTestFinished(() => unmount(component))
@@ -389,12 +427,12 @@ test.each([`ctrlKey`, `metaKey`] as const)(
       row(id).dispatchEvent(new MouseEvent(`click`, { bubbles: true, ...options }))
       await tick()
       expect(selected()).toEqual(expected)
-      expect(on_selection_change).toHaveBeenLastCalledWith(new Set(expected))
+      expect(on_change).toHaveBeenLastCalledWith(expected)
     }
-    const calls = on_selection_change.mock.calls.length
+    const calls = on_change.mock.calls.length
     row(`disabled`).click()
     await tick()
-    expect(on_selection_change).toHaveBeenCalledTimes(calls)
+    expect(on_change).toHaveBeenCalledTimes(calls)
     expect(row(`disabled`).hasAttribute(`aria-selected`)).toBe(false)
 
     // Collapsing keeps hidden selections; ranges only include rows still visible.
@@ -405,30 +443,28 @@ test.each([`ctrlKey`, `metaKey`] as const)(
     await tick()
     expect(selected()).toEqual([`delta`])
     // Caller-owned selection remains writable after interactions.
-    props.selected_ids = new Set([`alpha`])
+    props.value = [`alpha`]
     await tick()
     fire_key(row(`delta`), `a`, { [modifier]: true })
     await tick()
     expect(selected()).toEqual([`folder`, `delta`])
-    expect(on_selection_change).toHaveBeenLastCalledWith(
-      new Set([`alpha`, `folder`, `delta`]),
-    )
+    expect(on_change).toHaveBeenLastCalledWith([`alpha`, `folder`, `delta`])
   },
 )
 
 test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
   const target = target_for()
-  const on_selection_change = vi.fn()
+  const on_change = vi.fn()
   const component = mount(TreeView, {
     target,
     props: {
-      multiple: true,
+      mode: `multiple` as const,
       nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
         id: label,
         label,
         disabled: label === `Disabled`,
       })),
-      on_selection_change,
+      on_change,
     },
   })
   onTestFinished(() => unmount(component))
@@ -447,7 +483,7 @@ test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves sele
     fire_key(doc_query(`[role="treeitem"]:focus`), key, options)
     await tick()
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(focused)
-    expect(on_selection_change).toHaveBeenLastCalledWith(new Set(selected))
+    expect(on_change).toHaveBeenLastCalledWith(selected)
   }
   const input = document.createElement(`input`)
   doc_query(`[data-tree-id="Alpha"]`).append(input)
@@ -457,8 +493,8 @@ test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves sele
     bubbles: true,
     cancelable: true,
   })
-  const calls = on_selection_change.mock.calls.length
+  const calls = on_change.mock.calls.length
   input.dispatchEvent(select_all)
   expect(select_all.defaultPrevented).toBe(false)
-  expect(on_selection_change).toHaveBeenCalledTimes(calls)
+  expect(on_change).toHaveBeenCalledTimes(calls)
 })

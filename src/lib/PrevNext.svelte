@@ -1,57 +1,56 @@
-<script lang="ts" generics="Item extends [string, unknown] = [string, unknown]">
+<script lang="ts" generics="Item extends LinkItem = LinkItem">
   import type { Snippet } from 'svelte'
-  import type { HTMLAttributes } from 'svelte/elements'
+  import type { HTMLAnchorAttributes, HTMLAttributes } from 'svelte/elements'
+  import type { LinkItem } from './types'
+  import { merge_defaults, PREV_NEXT_LABELS, type PrevNextLabels } from './labels'
 
-  type NavItem = Item | [string, string]
-  type SnippetProps = { item: NavItem; index: number | null; total: number }
+  type SnippetProps = { item: Item; index: number; total: number }
   type NavEntry = {
     kind: `prev` | `next`
-    item: NavItem | undefined
+    item: Item | undefined
     title: string
   }
 
   let {
-    items = [],
-    node = `nav`,
-    current = ``,
-    titles = { prev: `&larr; Previous`, next: `Next &rarr;` },
+    items,
+    as: tag = `nav`,
+    current,
+    labels,
     children,
     between,
     min_items = 3,
     link_props,
     ...rest
   }: Omit<HTMLAttributes<HTMLElement>, `children`> & {
-    items?: (string | Item)[]
-    node?: string
-    current?: string
-    titles?: { prev: string; next: string }
+    items: readonly Item[]
+    as?: string
+    current: string
+    labels?: Partial<PrevNextLabels>
     children?: Snippet<[SnippetProps & { kind: `prev` | `next` }]>
     between?: Snippet<[]>
     min_items?: number
-    link_props?: HTMLAttributes<HTMLAnchorElement>
+    link_props?: Omit<HTMLAnchorAttributes, `href`>
   } = $props()
 
-  let items_arr = $derived(
-    (items ?? []).map((item): NavItem =>
-      typeof item === `string` ? [item, item] : item,
-    ),
-  )
-
+  const msg = $derived(merge_defaults(PREV_NEXT_LABELS, labels))
   // Calculate prev/next items with wraparound
-  let idx = $derived(items_arr.findIndex(([key]) => key === current))
-  // position of `current` in items (not the prev/next item), null if not found
-  let index = $derived(idx >= 0 ? idx : null)
-  let total = $derived(items_arr.length)
-  let prev = $derived(items_arr[idx - 1] ?? items_arr.at(-1))
-  let next = $derived(items_arr[idx + 1] ?? items_arr[0])
+  const index = $derived.by(() => {
+    const idx = items.findIndex(({ href }) => href === current)
+    if (idx === -1 && items.length)
+      throw new Error(`PrevNext current=${JSON.stringify(current)} is absent from items`)
+    return idx
+  })
+  const total = $derived(items.length)
+  const prev = $derived(items[index - 1] ?? items.at(-1))
+  const next = $derived(items[index + 1] ?? items[0])
   let nav_entries: NavEntry[] = $derived([
-    { kind: `prev`, item: prev, title: titles.prev },
-    { kind: `next`, item: next, title: titles.next },
+    { kind: `prev`, item: prev, title: msg.prev },
+    { kind: `next`, item: next, title: msg.next },
   ])
 </script>
 
-{#if items_arr.length >= min_items}
-  <svelte:element this={node} class="prev-next" {...rest}>
+{#if index >= 0 && total >= min_items}
+  <svelte:element this={tag} {...rest} class={[`prev-next`, rest.class]}>
     {#each nav_entries as { kind, item, title } (kind)}
       {#if kind === `next`}{@render between?.()}{/if}
       {#if item}
@@ -59,9 +58,14 @@
           {@render children({ kind, item, index, total })}
         {:else}
           <div>
-            {#if title}<span>{@html title}</span>{/if}
-            <a data-sveltekit-preload-data="hover" {...link_props} href={item[0]}
-              >{typeof item[1] === `string` ? item[1] : item[0]}
+            {#if title}<span>{title}</span>{/if}
+            <a
+              {...link_props}
+              href={item.href}
+              target={item.target ?? link_props?.target}
+              rel={item.rel ?? link_props?.rel}
+              title={item.title ?? link_props?.title}
+              >{item.label}
             </a>
           </div>
         {/if}

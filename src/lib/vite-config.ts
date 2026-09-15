@@ -208,19 +208,17 @@ export type ConfigOverrides = {
 
 // A factory, not a spreadable object: spreading a function trips no-misused-spread, and
 // vite-plus JSON.stringifies these members to reach Rust, silently dropping functions.
-export const make_config = (overrides: ConfigOverrides = {}): SharedConfig => {
-  // deep copy, so a caller mutating `cfg.lint.rules` can't rewrite the defaults
-  const base = structuredClone({ lint, fmt, build, staged })
-  return {
+// Clone the merged result: neither defaults nor caller-owned overrides are shared.
+export const make_config = (overrides: ConfigOverrides = {}): SharedConfig =>
+  structuredClone({
     lint: {
-      ...base.lint,
+      ...lint,
       ...overrides.lint,
-      options: { ...base.lint.options, ...overrides.lint?.options },
-      categories: { ...base.lint.categories, ...overrides.lint?.categories },
-      rules: { ...base.lint.rules, ...overrides.lint?.rules },
+      options: { ...lint.options, ...overrides.lint?.options },
+      categories: { ...lint.categories, ...overrides.lint?.categories },
+      rules: { ...lint.rules, ...overrides.lint?.rules },
     },
-    fmt: { ...base.fmt, ...overrides.fmt },
-    build: { ...base.build, ...overrides.build },
-    staged: { ...base.staged, ...overrides.staged },
-  }
-}
+    fmt: { ...fmt, ...overrides.fmt },
+    build: { ...build, ...overrides.build },
+    staged: { ...staged, ...overrides.staged },
+  })

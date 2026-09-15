@@ -15,32 +15,20 @@
   } from './attachments/index'
   import Icon from './Icon.svelte'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
-  import type { NavRoute, NavRouteObject } from './types'
+  import type { NavGroup, NavLink, NavRoute } from './types'
   import { chain_handlers, step_focus } from './utils'
 
-  type NavLinkRouteObject = NavRouteObject & { href: string }
-
-  interface ItemSnippetParams {
-    route: NavRouteObject
-    href: string
-    label: string
-    is_active: boolean
-    is_dropdown: boolean
-    render_default: Snippet
-  }
-
+  type Route = NavLink | NavGroup
   let {
-    routes = [],
+    routes,
+    open = $bindable(false),
     children,
     item,
-    link,
     menu_props,
     link_props,
     burger_props,
-    page,
-    route_labels,
+    pathname,
     labels,
-    tooltips,
     tooltip_options,
     breakpoint = 767,
     dropdown_column_threshold = 10,
@@ -49,21 +37,16 @@
     on_close,
     ...rest
   }: {
-    routes: NavRoute[]
-    children?: Snippet<[{ is_open: boolean; panel_id: string; routes: NavRoute[] }]>
-    item?: Snippet<[ItemSnippetParams]>
-    link?: Snippet<[{ href: string; label: string; is_active: boolean }]>
+    routes: readonly NavRoute[]
+    open?: boolean
+    children?: Snippet<[{ open: boolean; panel_id: string; routes: readonly NavRoute[] }]>
+    item?: Snippet<[{ route: Route; is_active: boolean }]>
     menu_props?: Omit<HTMLAttributes<HTMLDivElement>, `id`>
-    // `href`/`aria-current` stay component-owned: one shared bag would point every link
-    // at the same page
+    // Component-owned href/aria-current cannot be replaced by shared attributes.
     link_props?: Omit<HTMLAnchorAttributes, `aria-current` | `href`>
-    // mobile menu toggle; style/class land here rather than on the <nav> host
     burger_props?: Omit<HTMLButtonAttributes, `aria-controls` | `aria-expanded` | `type`>
-    page?: { url: { pathname: string } }
-    // renames individual routes, keyed by the auto-generated label
-    route_labels?: Record<string, string>
+    pathname?: string
     labels?: Partial<NavLabels>
-    tooltips?: Record<string, string | Omit<TooltipOptions, `disabled`>>
     tooltip_options?: Omit<TooltipOptions, `content`>
     breakpoint?: number
     // Desktop panes use two columns above this number of visible child links.
@@ -71,201 +54,189 @@
     on_navigate?: (data: {
       href: string
       event: MouseEvent
-      route: NavRouteObject
+      route: Route
     }) => false | undefined
     on_open?: () => void
     on_close?: () => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
-
-  let is_open = $state(false)
-  let open_dropdown = $state<string | null>(null)
+  const checked_routes = $derived.by(() => {
+    for (const [idx, route] of routes.entries()) {
+      if (!route || typeof route !== `object`)
+        throw new TypeError(`Nav route ${idx} must be a link, group, or separator object`)
+      if (route.separator) continue
+      if (
+        typeof route.label !== `string` ||
+        (!route.children && typeof route.href !== `string`)
+      )
+        throw new TypeError(`Nav route ${idx} needs a label and href or children`)
+      if (
+        route.children &&
+        (!Array.isArray(route.children) ||
+          route.children.some(
+            (child) => typeof child.href !== `string` || typeof child.label !== `string`,
+          ))
+      )
+        throw new TypeError(
+          `Nav route ${idx} children must be link objects with href and label`,
+        )
+    }
+    return routes
+  })
+  let open_dropdown = $state.raw<NavRoute | null>(null)
   let hover_open = $state(false)
-  // Start from the real width on the client so hydration doesn't flash the desktop nav on phones
+  // Start from the real client width to avoid flashing desktop navigation on phones.
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
-  let is_mobile = $derived(viewport_width <= breakpoint)
+  const is_mobile = $derived(viewport_width <= breakpoint)
   let focus_timeout: ReturnType<typeof setTimeout> | undefined
-  // `$props.id()` survives hydration; a random uuid would mismatch aria-controls
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
-
-  // deliberately not $state: written inside the $effect below, which would self-retrigger
-  let prev_is_open = false
-
+  // Plain bookkeeping avoids retriggering the observer when it records the new state.
+  let was_open = false
   $effect(() => {
-    if (is_open && !prev_is_open) {
-      on_open?.()
-    } else if (!is_open && prev_is_open) {
-      on_close?.()
+    if (open !== was_open) {
+      if (open) on_open?.()
+      else {
+        open_dropdown = null
+        on_close?.()
+      }
     }
-    prev_is_open = is_open
+    was_open = open
   })
-
+  $effect(() => {
+    if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null
+  })
   $effect(() => () => clearTimeout(focus_timeout))
 
   function close_menus() {
-    is_open = false
+    open = false
     open_dropdown = null
   }
 
-  // scoped per instance, else two Navs rendering the same route match each other's
-  // dropdowns and steal focus. An id string, not `bind:this`, so it's usable while
-  // children render — when `focus_trap`'s `restore` reads the toggle.
-  const dropdown_sel = (href: string) =>
-    `[data-nav="${unique_id}"] .dropdown[data-href="${CSS.escape(href)}"]`
-  const dropdown_links = (href: string) =>
-    document.querySelectorAll<HTMLElement>(`${dropdown_sel(href)} [data-submenu] a`)
-  const dropdown_toggle = (href: string) =>
+  // Instance and position identify a dropdown, even when destinations repeat.
+  const dropdown_sel = (idx: number) =>
+    `[data-nav="${unique_id}"] .dropdown[data-dropdown-index="${idx}"]`
+  const dropdown_links = (idx: number) =>
+    document.querySelectorAll<HTMLElement>(`${dropdown_sel(idx)} [data-submenu] a`)
+  const dropdown_toggle = (idx: number) =>
     document.querySelector<HTMLButtonElement>(
-      `${dropdown_sel(href)} [data-dropdown-toggle]`,
+      `${dropdown_sel(idx)} [data-dropdown-toggle]`,
     )
 
-  function toggle_dropdown(href: string, focus_first = false) {
+  function toggle_dropdown(idx: number, focus_first = false) {
     hover_open = false
-    const is_opening = open_dropdown !== href
-    open_dropdown = is_opening ? href : null
-    if (is_opening && focus_first) {
+    const opening = open_dropdown !== checked_routes[idx]
+    open_dropdown = opening ? checked_routes[idx] : null
+    if (opening && focus_first) {
       clearTimeout(focus_timeout)
       focus_timeout = setTimeout(() => {
-        if (open_dropdown === href) dropdown_links(href)[0]?.focus()
+        if (open_dropdown === checked_routes[idx]) dropdown_links(idx)[0]?.focus()
       }, 0)
     }
   }
-
-  function handle_dropdown_pointer(event: PointerEvent, href: string) {
+  function handle_dropdown_pointer(event: PointerEvent, idx: number) {
     if (is_mobile || event.pointerType !== `mouse`) return
-    if (event.type === `pointerenter` && open_dropdown !== href) {
+    if (event.type === `pointerenter` && open_dropdown !== checked_routes[idx]) {
       hover_open = true
-      open_dropdown = href
-    } else if (event.type === `pointerleave` && open_dropdown === href && hover_open) {
+      open_dropdown = checked_routes[idx]
+    } else if (
+      event.type === `pointerleave` &&
+      open_dropdown === checked_routes[idx] &&
+      hover_open
+    ) {
       hover_open = false
       open_dropdown = null
     }
   }
-
   function onkeydown(event: KeyboardEvent) {
     if (event.key === `Escape`) close_menus()
   }
-
-  function handle_toggle_keydown(event: KeyboardEvent, href: string) {
+  function handle_toggle_keydown(event: KeyboardEvent, idx: number) {
     const { key } = event
-    const opens =
-      key === `Enter` || key === ` ` || (key === `ArrowDown` && open_dropdown !== href)
-    if (!opens) return
+    if (
+      key !== `Enter` &&
+      key !== ` ` &&
+      (key !== `ArrowDown` || open_dropdown === checked_routes[idx])
+    )
+      return
     event.preventDefault()
-    toggle_dropdown(href, true)
+    toggle_dropdown(idx, true)
   }
-
-  // on the whole dropdown so arrows keep working once focus leaves the toggle, and
-  // Escape returns focus to the toggle from anywhere inside
-  function handle_dropdown_keydown(event: KeyboardEvent, href: string) {
-    if (open_dropdown !== href) return
+  function handle_dropdown_keydown(event: KeyboardEvent, idx: number) {
+    if (open_dropdown !== checked_routes[idx]) return
     if (event.key === `Escape`) {
       event.preventDefault()
       close_menus()
-      dropdown_toggle(href)?.focus()
+      dropdown_toggle(idx)?.focus()
     } else if (
       (event.key === `Tab` && !event.isComposing) ||
-      step_focus(event, [...dropdown_links(href)])
-    )
+      step_focus(event, [...dropdown_links(idx)])
+    ) {
       hover_open = false
+    }
   }
-
   function is_current(path: string | undefined) {
-    if (!path) return
-    // exact path or `path/` prefix, never a partial segment match
-    const pathname = page?.url.pathname
-    if (pathname === path || (path !== `/` && pathname?.startsWith(`${path}/`)))
+    if (path && (pathname === path || (path !== `/` && pathname?.startsWith(`${path}/`))))
       return `page`
   }
-
-  const is_child_current = (sub_routes: string[]) =>
-    sub_routes.some((child_path) => is_current(child_path) === `page`)
-
-  function format_label(text: string | undefined, remove_parent = false) {
-    if (!text) return { label: ``, style: `` }
-    const custom_label = route_labels?.[text]
-    if (custom_label) return { label: custom_label, style: `` }
-
-    if (remove_parent) text = text.split(`/`).findLast(Boolean) ?? text
-    let label = text.replace(/^\//u, ``).replaceAll(`-`, ` `)
-    // '/' strips to the empty string
-    if (!label && text === `/`) label = `Home`
-    return { label, style: label ? `text-transform: capitalize` : `` }
+  const is_active = (route: Route): boolean =>
+    is_current(route.href) === `page` ||
+    Boolean(route.children?.some((child) => is_current(child.href)))
+  const route_tooltip = (route: Route) => {
+    if (!route.tooltip) return
+    return tooltip({
+      ...tooltip_options,
+      ...(typeof route.tooltip === `string` ? { content: route.tooltip } : route.tooltip),
+    })
   }
-
-  function parse_route(route: NavRoute): NavLinkRouteObject {
-    if (typeof route === `string`) return { href: route }
-    if (Array.isArray(route)) {
-      const [href, second] = route
-      return Array.isArray(second) ? { href, children: second } : { href, label: second }
-    }
-    return { ...route, href: route.href ?? `` }
-  }
-
-  function get_tooltip(route: NavRouteObject) {
-    // Priority: disabled message > route.tooltip > tooltips[href]
-    if (typeof route.disabled === `string`) {
-      return tooltip({ ...tooltip_options, content: route.disabled })
-    }
-    const content = route.tooltip ?? (route.href ? tooltips?.[route.href] : undefined)
-    if (!content) return
-    const tooltip_overrides = typeof content === `string` ? { content } : content
-    return tooltip({ ...tooltip_options, ...tooltip_overrides })
-  }
-
-  function handle_link_click(event: MouseEvent, route: NavLinkRouteObject) {
-    if (route.disabled || on_navigate?.({ href: route.href, event, route }) === false) {
+  function handle_link_click(event: MouseEvent, route: Route) {
+    if (
+      route.href === undefined ||
+      route.disabled ||
+      on_navigate?.({ href: route.href, event, route }) === false
+    ) {
       event.preventDefault()
       return
     }
     close_menus()
   }
-  const link_click_handler = (route: NavLinkRouteObject) =>
-    chain_handlers(
-      (event: MouseEvent) => handle_link_click(event, route),
-      link_props?.onclick,
-    )
-  function get_external_attrs(route: NavRouteObject) {
-    if (!route.external) return {}
-    return { target: `_blank`, rel: `noopener noreferrer` }
-  }
 </script>
 
 <svelte:window {onkeydown} bind:innerWidth={viewport_width} />
 
-{#snippet default_item_render(
-  parsed_route: NavLinkRouteObject,
-  formatted: { label: string; style: string },
-  item_tooltip: ReturnType<typeof tooltip> | undefined,
-)}
-  {#if parsed_route.disabled}
+{#snippet default_link(route: Route)}
+  {#if route.disabled || route.href === undefined}
     <span
-      class={[`disabled`, parsed_route.class]}
-      style={`${formatted.style}; ${parsed_route.style ?? ``}`}
-      aria-disabled="true"
-      {@attach item_tooltip}>{@html formatted.label}</span
+      class={[{ disabled: route.disabled }, route.class]}
+      style={route.style}
+      aria-disabled={route.disabled || undefined}
+      {@attach route_tooltip(route)}>{@render item_content(route)}</span
     >
-  {:else if link}
-    {@render link({
-      href: parsed_route.href,
-      label: formatted.label,
-      is_active: is_current(parsed_route.href) === `page`,
-    })}
   {:else}
     <a
       {...link_props}
-      {...get_external_attrs(parsed_route)}
-      href={parsed_route.href}
-      aria-current={is_current(parsed_route.href)}
-      class={[parsed_route.class, link_props?.class]}
-      style={`${formatted.style}; ${link_props?.style ?? ``}; ${parsed_route.style ?? ``}`}
-      onclick={link_click_handler(parsed_route)}
-      {@attach item_tooltip}
+      href={route.href}
+      target={route.target ?? link_props?.target}
+      rel={route.rel ?? link_props?.rel}
+      title={route.title ?? link_props?.title}
+      aria-current={is_current(route.href)}
+      class={[route.class, link_props?.class]}
+      style={`${link_props?.style ?? ``}; ${route.style ?? ``}`}
+      onclick={chain_handlers(
+        (event: MouseEvent) => handle_link_click(event, route),
+        link_props?.onclick,
+      )}
+      {@attach route_tooltip(route)}>{@render item_content(route)}</a
     >
-      {@html formatted.label}
-    </a>
+  {/if}
+{/snippet}
+
+{#snippet item_content(route: Route)}
+  {#if item}
+    {@render item({ route, is_active: is_active(route) })}
+  {:else}
+    {route.label}
   {/if}
 {/snippet}
 
@@ -274,14 +245,12 @@
   data-nav={unique_id}
   class:mobile={is_mobile}
   onclick={chain_handlers((event: MouseEvent) => {
-    // the `link` snippet's markup misses `link_click_handler`'s wiring, so without this
-    // the burger overlay stayed up over the page it had just navigated to
     const target = event.target
-    if (target instanceof Element && target.closest(`a[href]`)) close_menus()
-  }, rest?.onclick)}
+    if (target instanceof Element && target.closest(`a[href]`) && !event.defaultPrevented)
+      close_menus()
+  }, rest.onclick)}
   {@attach click_outside({
-    // skip the document listener (and its scrollbar layout read) when nothing is open
-    enabled: is_open || Boolean(open_dropdown),
+    enabled: open || open_dropdown !== null,
     callback: close_menus,
   })}
 >
@@ -289,75 +258,55 @@
     aria-label="Toggle navigation menu"
     {...burger_props}
     type="button"
-    aria-expanded={is_open}
+    aria-expanded={open}
     aria-controls={panel_id}
     class={[`burger`, burger_props?.class]}
-    onclick={chain_handlers(() => (is_open = !is_open), burger_props?.onclick)}
+    onclick={chain_handlers(() => (open = !open), burger_props?.onclick)}
   >
     <span aria-hidden="true"></span>
     <span aria-hidden="true"></span>
     <span aria-hidden="true"></span>
   </button>
-
-  <!-- also on window, but a consumer onkeydown that stops propagation would block that -->
+  <!-- Also on window; a consumer can stop propagation on the menu. -->
   <div
     {...menu_props}
     id={panel_id}
-    class={[`menu`, menu_props?.class, { open: is_open }]}
+    class={[`menu`, menu_props?.class, { open }]}
     onkeydown={chain_handlers(onkeydown, menu_props?.onkeydown)}
   >
-    {#each routes.map(parse_route) as parsed_route, route_idx (`${route_idx}-${parsed_route.href || `sep-${route_idx}`}`)}
-      {@const formatted = format_label(parsed_route.label ?? parsed_route.href)}
-      {@const sub_routes = parsed_route.children}
-      {@const is_active = is_current(parsed_route.href) === `page`}
-      {@const is_right = parsed_route.align === `right`}
-      {@const item_tooltip = get_tooltip(parsed_route)}
-
-      {#if parsed_route.separator && !parsed_route.href}
+    {#each checked_routes as route, route_idx (route)}
+      {#if route.separator}
         <div class="separator" role="separator"></div>
-      {:else if sub_routes}
-        {@const child_is_active = is_child_current(sub_routes)}
-        {@const parent_link =
-          !parsed_route.disabled && sub_routes.includes(parsed_route.href)}
-        {@const filtered_sub_routes = sub_routes.filter(
-          (route) => route !== parsed_route.href,
-        )}
-        {@const dropdown_open = open_dropdown === parsed_route.href}
-        <!-- svelte-ignore a11y_no_static_element_interactions -- native navigation links keep semantics; the keydown handler only routes arrows/Escape within the open submenu -->
+      {:else if route.children}
+        {@const sub_routes = route.children}
+        {@const dropdown_open = open_dropdown === route}
+        <!-- svelte-ignore a11y_no_static_element_interactions -- links keep native semantics; the handler routes arrows/Escape -->
         <div
-          class={[`dropdown`, { active: child_is_active, 'align-right': is_right }]}
-          data-href={parsed_route.href}
-          onpointerenter={(event) => handle_dropdown_pointer(event, parsed_route.href)}
-          onpointerleave={(event) => handle_dropdown_pointer(event, parsed_route.href)}
-          onkeydown={(event: KeyboardEvent) =>
-            handle_dropdown_keydown(event, parsed_route.href)}
+          class={[
+            `dropdown`,
+            {
+              active: is_active(route),
+              'align-right': route.align === `right`,
+            },
+          ]}
+          data-href={route.href}
+          data-dropdown-index={route_idx}
+          onpointerenter={(event) => handle_dropdown_pointer(event, route_idx)}
+          onpointerleave={(event) => handle_dropdown_pointer(event, route_idx)}
+          onkeydown={(event: KeyboardEvent) => handle_dropdown_keydown(event, route_idx)}
         >
           <div>
-            <svelte:element
-              this={parent_link ? `a` : `span`}
-              href={parent_link ? parsed_route.href : undefined}
-              aria-current={parent_link ? is_current(parsed_route.href) : undefined}
-              aria-disabled={parsed_route.disabled ? `true` : undefined}
-              onclick={parent_link
-                ? (event: MouseEvent) => handle_link_click(event, parsed_route)
-                : undefined}
-              class={[{ disabled: parsed_route.disabled }, parsed_route.class]}
-              style={`${formatted.style}; ${parsed_route.style ?? ``}`}
-              {...parent_link ? get_external_attrs(parsed_route) : {}}
-              {@attach item_tooltip}
-            >
-              {@html formatted.label}
-            </svelte:element>
+            {@render default_link(route)}
             <button
               type="button"
               class={[`dropdown-toggle`, { open: dropdown_open }]}
               data-dropdown-toggle
-              aria-label={msg.toggle_submenu(formatted.label)}
+              aria-label={msg.toggle_submenu(route.label)}
               aria-expanded={dropdown_open}
               aria-haspopup="true"
-              onclick={() => toggle_dropdown(parsed_route.href, false)}
+              onclick={() => toggle_dropdown(route_idx)}
               onkeydown={(event: KeyboardEvent) =>
-                handle_toggle_keydown(event, parsed_route.href)}
+                handle_toggle_keydown(event, route_idx)}
             >
               <Icon icon={ChevronDown} style="width: 1.3em; height: 1.3em" />
             </button>
@@ -365,8 +314,8 @@
           <div
             class:visible={dropdown_open}
             class:two-columns={!is_mobile &&
-              filtered_sub_routes.length > dropdown_column_threshold}
-            style:--submenu-rows={Math.ceil(filtered_sub_routes.length / 2)}
+              sub_routes.length > dropdown_column_threshold}
+            style:--submenu-rows={Math.ceil(sub_routes.length / 2)}
             data-submenu
             tabindex="-1"
             {@attach (node) => {
@@ -374,7 +323,7 @@
               let shift = 0
               const update = () => {
                 const { left, right } = node.getBoundingClientRect()
-                // Undo the previous translation when measuring the CSS-anchored position.
+                // Remove the previous translation before measuring the anchored position.
                 shift = Math.max(
                   8 - left + shift,
                   Math.min(0, innerWidth - 8 - right + shift),
@@ -391,48 +340,24 @@
             {@attach focus_trap({
               enabled: dropdown_open,
               initial: false, // toggle_dropdown already picks the entry point
-              restore: hover_open ? false : (dropdown_toggle(parsed_route.href) ?? false),
+              restore: hover_open ? false : (dropdown_toggle(route_idx) ?? false),
             })}
           >
-            <!-- `display: contents` except on mobile, where it's the grid row animating 0fr -> 1fr -->
+            <!-- display: contents on desktop; the mobile grid row animates 0fr to 1fr. -->
             <div class="submenu-inner">
-              {#each filtered_sub_routes as child_href (child_href)}
-                {@render default_item_render(
-                  { href: child_href },
-                  format_label(child_href, true),
-                  get_tooltip({ href: child_href }),
-                )}
+              {#each sub_routes as child (child)}
+                {@render default_link(child)}
               {/each}
             </div>
           </div>
         </div>
       {:else}
-        <span class:align-right={is_right}>
-          {#if item}
-            {#snippet render_default_snippet()}
-              {@render default_item_render(parsed_route, formatted, item_tooltip)}
-            {/snippet}
-            {@render item({
-              route: parsed_route,
-              href: parsed_route.href,
-              label: formatted.label,
-              is_active,
-              is_dropdown: false,
-              // svelte2tsx types inline snippets as `() => ReturnType<Snippet>`, whose
-              // brand doesn't unify with Snippet (svelte#13670); plain assertion suffices
-              render_default: render_default_snippet as Snippet,
-            })}
-          {:else}
-            {@render default_item_render(parsed_route, formatted, item_tooltip)}
-          {/if}
-        </span>
-      {/if}
-      {#if parsed_route.separator && parsed_route.href}
-        <div class="separator" role="separator"></div>
+        <span class:align-right={route.align === `right`}
+          >{@render default_link(route)}</span
+        >
       {/if}
     {/each}
-
-    {@render children?.({ is_open, panel_id, routes })}
+    {@render children?.({ open, panel_id, routes })}
   </div>
 </nav>
 
@@ -477,7 +402,7 @@
   .dropdown > div:first-child:hover {
     background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));
   }
-  .menu > span > a,
+  .menu > span > :is(a, span.disabled),
   .dropdown > div:first-child > :is(a, span) {
     line-height: 1.3;
     padding: var(--nav-item-padding, 1pt 4pt);
@@ -491,7 +416,6 @@
   .menu .disabled {
     opacity: var(--nav-disabled-opacity, 0.5);
     cursor: not-allowed;
-    pointer-events: none;
   }
   /* only the first right-aligned item gets the auto margin */
   .menu > :is(.align-right, .dropdown.align-right) {
@@ -593,7 +517,7 @@
   .submenu-inner {
     display: contents;
   }
-  .dropdown > div:last-child a {
+  .dropdown > div:last-child :is(a, span.disabled) {
     padding: var(--nav-dropdown-link-padding, 2pt 6pt);
     text-decoration: none;
     color: inherit;
@@ -701,7 +625,7 @@
   /* make the whole pill tappable: flex:1 only fills the content box, so the negative margin
      pulls the link out over the span's padding, which would otherwise be a dead band. The
      padding stays on the span so a custom `item` snippet still gets it. */
-  nav.mobile .menu > span > a {
+  nav.mobile .menu > span > :is(a, span.disabled) {
     flex: 1;
     margin: -1pt -4pt;
     padding: 1pt 4pt;
@@ -783,7 +707,7 @@
   nav.mobile .dropdown > div:last-child.visible .submenu-inner {
     padding-top: 2pt;
   }
-  nav.mobile .dropdown > div:last-child a {
+  nav.mobile .dropdown > div:last-child :is(a, span.disabled) {
     /* the desktop rule's nowrap makes a long label set the panel's min-content width, so the
        phone menu scrolled sideways to reach the tail. `anywhere` (not break-word) is what
        lowers min-content, and top-level rows already wrap this way. */

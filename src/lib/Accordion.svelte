@@ -1,7 +1,8 @@
 <script lang="ts" generics="Value extends string = string">
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { AccordionItem, AccordionValue } from './types'
+  import type { AccordionItem, SelectionProps } from './types'
+  import { selection_values } from './internal/selection'
   import { chain_handlers, step_focus } from './utils'
 
   // Headless styling hooks: .accordion, .accordion-item, .accordion-heading,
@@ -12,17 +13,14 @@
     heading_level?: HeadingLevel
     trigger?: Snippet<[{ item: AccordionItem<Value>; open: boolean }]>
     panel?: Snippet<[{ item: AccordionItem<Value>; open: boolean }]>
-    multiple?: boolean
     collapsible?: boolean
-    value?: AccordionValue<Value>
-    on_change?: (value: AccordionValue<Value>) => void
-  }
+  } & SelectionProps<Value>
 
   let {
     items,
-    multiple = false,
+    mode = `single`,
     collapsible = true,
-    value = $bindable(multiple ? [] : null),
+    value = $bindable(),
     heading_level = 3,
     trigger,
     panel,
@@ -32,17 +30,13 @@
 
   const unique_id = $props.id()
   const base_id = `accordion-${unique_id}`
-  // `value` is an array in multiple mode and a single value or null otherwise. Anything
-  // that does not match the current mode reads as nothing open.
-  const open_values = $derived.by(() => {
-    if (Array.isArray(value)) return multiple ? value : []
-    return multiple || value == null ? [] : [value]
-  })
+  const multiple = $derived(mode === `multiple`)
+  const open_values = $derived(selection_values(mode, value))
   const open_set = $derived(new Set(open_values))
   function toggle(item: AccordionItem<Value>) {
     const is_open = open_set.has(item.value)
     if (!multiple && is_open && !collapsible) return
-    const next_value: AccordionValue<Value> = multiple
+    const next_value = multiple
       ? is_open
         ? open_values.filter((entry) => entry !== item.value)
         : [...open_values, item.value]
@@ -50,7 +44,7 @@
         ? null
         : item.value
     value = next_value
-    on_change?.(next_value)
+    ;(on_change as ((value: Value | Value[] | null) => void) | undefined)?.(next_value)
   }
 
   function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
