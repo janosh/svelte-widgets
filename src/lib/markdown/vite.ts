@@ -126,7 +126,24 @@ export function markdown_vite(
           return this.resolve(filename, importer, { skipSelf: true }).then((resolved) =>
             resolved ? `${TOC_MODULE_PREFIX}${resolved.id}.js` : undefined,
           )
-        return MODULE_ID.test(id) ? id : undefined
+        if (!MODULE_ID.test(id)) return undefined
+        const root = this.environment.config.root
+          .replaceAll(`\\`, `/`)
+          .replace(/\/$/u, ``)
+        // Vite supplies root/index.html as the importer for top-level URL requests.
+        // The graph distinguishes URLs from absolute IDs even when the root path repeats.
+        if (
+          this.environment.mode === `dev` &&
+          (!importer || importer.replaceAll(`\\`, `/`) === `${root}/index.html`)
+        ) {
+          const source_id = this.environment.moduleGraph.urlToModuleMap.get(filename)?.id
+          if (source_id && modules.has(source_id))
+            return `${source_id}${id.slice(filename.length)}`
+        }
+        if (modules.has(filename)) return id
+        // SvelteKit requests SSR styles relative to the Vite root. Virtual files do not
+        // exist on disk, so Vite cannot resolve them to the compiler's absolute cache key.
+        return modules.has(`${root}${filename}`) ? `${root}${id}` : id
       },
       load(id) {
         if (id.startsWith(TOC_MODULE_PREFIX)) {
