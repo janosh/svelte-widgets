@@ -6,11 +6,7 @@ and a `ContributorList` of avatars.
 
 ### `Footer`
 
-The counterpart to [`Nav`](nav): a centered row of icon links above whatever the page
-puts below them, typically a logo and a copyright line. `links` takes
-`{ href, label, icon?, title?, external? }`; `icon` accepts an `IconData` value imported
-from `svelte-widgets/icons`, such as `GitHub`. `children` renders after the nav, and the
-`--footer-*` custom properties cover padding, background, gap and link color.
+The counterpart to [`Nav`](nav): a centered row of icon links followed by `children`, typically a logo and copyright line. `links` takes `FooterLink` objects: `{ href, label, icon?, title?, target?, rel? }`. `icon` accepts an `IconData` value from `svelte-widgets/icons`, such as `GitHub`; `target` and `rel` are native anchor attributes. The `--footer-*` custom properties control padding, background, gap and link color.
 
 ```svelte example id="footer-demo"
 <script lang="ts">
@@ -49,9 +45,7 @@ from `svelte-widgets/icons`, such as `GitHub`. `children` renders after the nav,
 </Footer>
 ```
 
-The bundled icon set is small, so a footer wanting an icon it doesn't carry passes an
-`item` snippet instead, which replaces the default anchor for every link and leaves the
-nav layout in place.
+Use an `item({ link })` snippet for custom icons or markup. It replaces each default anchor while preserving the nav layout.
 
 ### `LiteYouTubeEmbed`
 
