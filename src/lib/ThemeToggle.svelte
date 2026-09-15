@@ -5,13 +5,7 @@
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
   import { merge_defaults, THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
-  import {
-    apply_theme_mode,
-    listen_theme_storage,
-    resolve_theme_mode,
-    theme,
-    THEME_MODE_CYCLE,
-  } from './theme.svelte'
+  import { apply_theme_mode, watch_theme, theme, THEME_MODE_CYCLE } from './theme.svelte'
   import { chain_handlers } from './utils'
 
   let {
@@ -32,21 +26,9 @@
   let title = $derived(msg.switch_to(msg[next_mode]))
 
   onMount(() => {
-    // Only hydrate from storage when still at the default. An externally applied mode
-    // (e.g. CommandMenu before this mounts) wins when storage is empty or unavailable.
-    if (theme.mode === `system`) apply_theme_mode(resolve_theme_mode())
+    const stop_watching = watch_theme()
     is_hydrated = true
-
-    const color_scheme_query = matchMedia(`(prefers-color-scheme: dark)`)
-    const on_change = () => {
-      if (theme.mode === `system`) apply_theme_mode(`system`)
-    }
-    color_scheme_query.addEventListener(`change`, on_change)
-    const stop_storage_listener = listen_theme_storage()
-    return () => {
-      color_scheme_query.removeEventListener(`change`, on_change)
-      stop_storage_listener()
-    }
+    return stop_watching
   })
 </script>
 

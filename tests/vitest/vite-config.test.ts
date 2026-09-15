@@ -1,4 +1,4 @@
-import { make_config } from '$lib/vite-config'
+import { make_config, type ConfigOverrides } from '$lib/vite-config'
 import { expect, test } from 'vitest'
 
 test(`overrides merge into their section without dropping the rest`, () => {
@@ -45,6 +45,21 @@ test(`a returned config owns its nested state`, () => {
   config.staged[`*`] = `LEAKED` // a sibling section
 
   expect(make_config()).toEqual(before)
+
+  const overrides = {
+    lint: {
+      ignorePatterns: [`custom/**`],
+      rules: { 'no-console': [`error`, { allow: [`info`] }] },
+    },
+  } satisfies ConfigOverrides
+  const overridden = make_config(overrides)
+  overridden.lint.ignorePatterns.push(`LEAKED`)
+  const [, rule_options] = overridden.lint.rules[
+    `no-console`
+  ] as (typeof overrides.lint.rules)[`no-console`]
+  rule_options.allow.push(`LEAKED`)
+  expect(overrides.lint.ignorePatterns).toEqual([`custom/**`])
+  expect(overrides.lint.rules[`no-console`]).toEqual([`error`, { allow: [`info`] }])
 })
 
 const stateful_sources = import.meta.glob(`/src/lib/*.svelte.ts`)

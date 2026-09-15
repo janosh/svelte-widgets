@@ -70,28 +70,22 @@ test(`Dialog backdrop dims without blurring by default`, async ({ page }) => {
 })
 
 test(`Dialog supports every backdrop and Escape dismissal policy`, async ({ page }) => {
-  for (const [close_on_backdrop, close_on_escape] of [
-    [true, true],
-    [true, false],
-    [false, true],
-    [false, false],
-  ] as const) {
+  for (const closedby of [`any`, `closerequest`, `none`] as const) {
     const demo = page.locator(`#patterns-dialog`)
-    await demo.getByLabel(`Backdrop dismissal`).setChecked(close_on_backdrop)
-    await demo.getByLabel(`Escape dismissal`).setChecked(close_on_escape)
+    await demo.getByLabel(`Dismissal policy`).selectOption(closedby)
     const opener = demo.getByRole(`button`, { name: `Edit profile` })
     const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
 
     await opener.click()
     await page.keyboard.press(`Escape`)
-    if (close_on_escape) {
+    if (closedby !== `none`) {
       await expect(dialog).toBeHidden()
       await expect(demo.getByText(`Last close: escape`)).toBeVisible()
       await opener.click()
     } else await expect(dialog).toBeVisible()
 
     await page.mouse.click(1, 1)
-    if (close_on_backdrop) {
+    if (closedby === `any`) {
       await expect(dialog).toBeHidden()
       await expect(demo.getByText(`Last close: pointer`)).toBeVisible()
     } else {

@@ -3,7 +3,7 @@ import { mount, type ComponentProps, unmount } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
-const items = [`page1`, `page2`, `page3`, `page4`]
+const items = [`page1`, `page2`, `page3`, `page4`].map((href) => ({ href, label: href }))
 
 describe(`PrevNext`, () => {
   let target: HTMLElement
@@ -29,10 +29,10 @@ describe(`PrevNext`, () => {
     mounted.length = 0
   })
 
-  test.each<[string, ComponentProps<typeof PrevNext>, number]>([
-    [`fewer items than the default min_items`, { items: [`page1`, `page2`] }, 0],
+  test.each<[string, Omit<ComponentProps<typeof PrevNext>, `current`>, number]>([
+    [`fewer items than the default min_items`, { items: items.slice(0, 2) }, 0],
     [`fewer items than a custom min_items`, { items, min_items: 5 }, 0],
-    [`exactly min_items`, { items: [`page1`, `page2`], min_items: 2 }, 2],
+    [`exactly min_items`, { items: items.slice(0, 2), min_items: 2 }, 2],
   ])(`min_items gate: %s renders %d links`, (_desc, props, expected_links) => {
     mount_prev_next({ ...props, current: `page1` })
     expect(target.querySelectorAll(`a`)).toHaveLength(expected_links)
@@ -50,8 +50,8 @@ describe(`PrevNext`, () => {
   test.each([
     [`custom`, { prev: `Back`, next: `Forward` }, [`Back`, `Forward`]],
     [`empty`, { prev: ``, next: `` }, []],
-  ] as const)(`%s titles`, (_label, titles, expected_labels) => {
-    mount_prev_next({ items, current: `page2`, titles })
+  ] as const)(`%s labels`, (_label, labels, expected_labels) => {
+    mount_prev_next({ items, current: `page2`, labels })
     expect([...target.querySelectorAll(`span`)].map((span) => span.textContent)).toEqual(
       expected_labels,
     )
@@ -78,19 +78,17 @@ describe(`PrevNext`, () => {
     }
   })
 
-  test(`custom node element`, () => {
-    mount_prev_next({ items, current: `page2`, node: `div` })
+  test(`custom wrapper preserves its class`, () => {
+    mount_prev_next({ items, current: `page2`, as: `div`, class: `custom` })
     expect(target.querySelector(`div.prev-next`)).toBeInstanceOf(HTMLDivElement)
     expect(target.querySelector(`nav`)).toBeNull()
+    expect(target.querySelector(`div.prev-next.custom`)).not.toBeNull()
     expect(link_hrefs()).toEqual([`page1`, `page3`]) // links still render inside the div
   })
 
-  test(`uses tuple href and label`, () => {
-    const tuple_items: [string, string][] = [1, 2, 3, 4].map((num) => [
-      `/page/${num}`,
-      `P${num}`,
-    ])
-    mount_prev_next({ items: tuple_items, current: `/page/2` })
+  test(`uses explicit href and label`, () => {
+    const pages = [1, 2, 3, 4].map((num) => ({ href: `/page/${num}`, label: `P${num}` }))
+    mount_prev_next({ items: pages, current: `/page/2` })
     expect(link_hrefs()).toEqual([`/page/1`, `/page/3`])
     expect(
       [...target.querySelectorAll(`a`)].map((link) => link.textContent?.trim()),
@@ -99,7 +97,7 @@ describe(`PrevNext`, () => {
 
   test.each([
     [`page2`, `1`],
-    [`nonexistent`, undefined], // index is not rendered when current is not among items
+    [`page1`, `0`],
   ])(`children snippet receives kind, index and total (current=%s)`, (current, index) => {
     const component = `prev-next-children`
     mount_snippet_harness({ component, items, current })
@@ -115,28 +113,48 @@ describe(`PrevNext`, () => {
       [`next`, index, `4`],
     ])
     expect(child_snippets().map((snippet) => snippet.textContent?.trim())).toEqual(
-      current === `page2` ? [`page1`, `page3`] : [`page4`, `page1`],
+      current === `page2` ? [`page1`, `page3`] : [`page4`, `page2`],
     )
     expect(target.querySelector(`[data-testid="prevnext-between"]`)?.textContent).toBe(
       `between`,
     )
   })
 
-  test(`link_props and default attributes applied to links`, () => {
+  test(`rejects an unknown current destination but allows empty lists`, () => {
+    expect(() => mount_prev_next({ items, current: `missing` })).toThrow(
+      `current="missing" is absent`,
+    )
+    mount_prev_next({ items: [], current: `missing` })
+    expect(target.querySelector(`nav`)).toBeNull()
+  })
+
+  test(`item attributes override shared link_props`, () => {
     const link_props = {
       class: `custom-class`,
       'data-testid': `nav-link`,
       target: `_blank`,
+      'data-sveltekit-preload-data': `hover`,
     }
-    mount_prev_next({ items, current: `page2`, link_props })
+    mount_prev_next({
+      items: [
+        { ...items[0], target: `_self`, rel: `author`, title: `First page` },
+        ...items.slice(1),
+      ],
+      current: `page2`,
+      link_props,
+    })
 
     const link_attrs = [...target.querySelectorAll(`a`)].map((link) => [
       link.classList.contains(`custom-class`),
       link.getAttribute(`data-testid`),
       link.getAttribute(`target`),
-      link.getAttribute(`data-sveltekit-preload-data`), // component default
+      link.getAttribute(`data-sveltekit-preload-data`), // caller-owned router policy
     ])
     const expected = [true, `nav-link`, `_blank`, `hover`]
-    expect(link_attrs).toEqual([expected, expected])
+    expect(link_attrs).toEqual([[true, `nav-link`, `_self`, `hover`], expected])
+    expect([target.querySelector(`a`)?.rel, target.querySelector(`a`)?.title]).toEqual([
+      `author`,
+      `First page`,
+    ])
   })
 })

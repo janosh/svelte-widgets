@@ -52,17 +52,16 @@
   title="Atoms"
   {changed_keys}
   on_reset_key={reset_key}
-  setting_metadata={{
-    radius: `Radius of rendered atoms`,
-    diameter: `Diameter of rendered atoms`,
-    palette: `Palette used for rendered atoms`,
-  }}
   bind:descriptions_open
   layout="grid"
 >
   {#if radius_visible}
     {#key generation}
-      <label data-key={row_key} data-generation={generation}>
+      <label
+        data-key={row_key}
+        data-description={`${row_key === `radius` ? `Radius` : `Diameter`} of rendered atoms`}
+        data-generation={generation}
+      >
         <span>Radius</span>
         {#key input_generation}
           <input type="range" bind:value={current_values.radius} />
@@ -70,7 +69,7 @@
       </label>
     {/key}
   {/if}
-  <label data-key="palette">
+  <label data-key="palette" data-description="Palette used for rendered atoms">
     <span>Palette</span>
     <select bind:value={current_values.palette}>
       <option value="warm">Warm</option>

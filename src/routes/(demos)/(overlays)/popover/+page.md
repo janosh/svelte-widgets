@@ -111,6 +111,8 @@ Render a `trigger` snippet for a button-anchored dropdown, or pass a region as c
 </ol>
 ```
 
+Use `on_execute={({ action, section }) => ...}` to observe completed action invocation, matching CommandMenu’s `on_execute({ action })`. The `item` snippet and callback preserve your custom action fields. Import `CmdSection<Action>` from the package root for typed sections.
+
 Both forms share the same menu semantics: Arrow keys walk the items (skipping disabled ones and wrapping at both ends), Home and End jump to either end, Tab/Shift+Tab close and continue after/before the trigger, and the browser closes on Escape or an outside interaction. The trigger form supports `bind:open`, `placement`, `align`, `offset`, `padding`, `match_width` and `strategy`.
 
 In context mode, drop the region and the whole page qualifies; `trigger="none"` installs no right-click handler, so you can bind `at` and open from a long-press or keyboard shortcut. The default `dismiss` policy uses native light dismissal; `dismiss_on: 'press'`, `escape: false`, `enabled: false`, `inside`, or `scope` selects the custom [`click_outside`](attachments/click-outside) path. An `item` snippet renders rows your own way.

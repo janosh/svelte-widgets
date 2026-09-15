@@ -715,3 +715,34 @@ for (const width of [390, 1440]) {
     ).toHaveText(`Inputs`)
   })
 }
+
+test(`Nav item content keeps link styling and disabled tooltips`, async ({ page }) => {
+  await page.goto(`/nav`, { waitUntil: `networkidle` })
+  const demo = page.locator(`#nav-items`)
+  const link = demo.getByRole(`link`, { name: `📚 Docs` })
+  await expect(link).toHaveAttribute(`href`, `/docs`)
+  await expect(link).toHaveAttribute(`aria-current`, `page`)
+  expect(
+    await link.evaluate((element) =>
+      Number(getComputedStyle(element).paddingInlineStart.replace(`px`, ``)),
+    ),
+  ).toBeGreaterThan(0)
+  await link.click()
+  await expect(page).toHaveURL(/\/nav$/u)
+
+  const links = page.locator(`#nav-links`)
+  await links.getByRole(`button`, { name: `Toggle Documentation submenu` }).hover()
+  const disabled = links.getByText(`Upcoming`, { exact: true })
+  await expect(disabled).toHaveAttribute(`aria-disabled`, `true`)
+  const row_style = (element: Element) => {
+    const { padding, fontSize: font_size } = getComputedStyle(element)
+    return { padding, font_size }
+  }
+  expect(await disabled.evaluate(row_style)).toEqual(
+    await links
+      .getByRole(`link`, { name: `Introduction`, exact: true })
+      .evaluate(row_style),
+  )
+  await disabled.hover()
+  await expect(page.getByRole(`tooltip`)).toHaveText(`Coming soon`)
+})

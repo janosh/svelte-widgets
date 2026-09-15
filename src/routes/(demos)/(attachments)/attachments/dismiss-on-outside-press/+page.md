@@ -30,18 +30,3 @@ For a surface assembled from several elements, call `dismiss_on_outside_press()`
   </div>
 {/if}
 ```
-
-<style>
-  h3, h3 code {
-    font-size: 1.2em;
-    margin-top: 2em;
-  }
-  /* the index at the top is this page's only prose list, so lay it out inline */
-  ul {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 3pt 1em;
-    padding: 0;
-    list-style: none;
-  }
-</style>

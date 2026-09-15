@@ -1,12 +1,22 @@
 import {
   type ActionMenu,
   type MultiSelectProps,
+  type Accordion,
+  type ButtonGroup,
+  type ButtonGroupOption,
+  type TreeView,
   type LoadOptionsResult,
   type Nav,
   type RangeSlider,
   type CommandMenu,
-  listen_theme_storage,
+  watch_theme,
   type CmdAction,
+  type CmdSection,
+  type LinkItem,
+  type NavRoute,
+  type Subpage,
+  type PrevNext,
+  type NumberRangeInput,
   type CodeHighlighter,
   type StatItem,
   type DialogCloseDetail,
@@ -17,7 +27,6 @@ import {
   type ThemeMode,
 } from 'svelte-widgets'
 import type { ComponentProps } from 'svelte'
-import type { CmdSection } from 'svelte-widgets/utils'
 import type { FileDropOptions } from 'svelte-widgets/attachments'
 import type {
   CodeEditorOptions,
@@ -70,10 +79,84 @@ export const slider_callbacks: ComponentProps<typeof RangeSlider> = {
   oninput: (event) => event.currentTarget,
 }
 
+export const button_options: ButtonGroupOption<`alpha` | `beta`>[] = [{ value: `alpha` }]
+export const button_selection: ComponentProps<typeof ButtonGroup<`alpha` | `beta`>> = {
+  options: button_options,
+  value: `alpha`,
+  on_change: (value) => value?.toUpperCase(),
+}
+export const accordion_selection: ComponentProps<typeof Accordion> = {
+  items: button_options,
+  mode: `multiple`,
+  value: [`alpha`],
+  on_change: (value) => value.join(`,`),
+}
+export const tree_selection: ComponentProps<typeof TreeView> = {
+  nodes: [{ id: `alpha`, label: `Alpha` }],
+  mode: `multiple`,
+  value: [`alpha`],
+  on_change: (value) => value.join(`,`),
+}
+// @ts-expect-error Single selection cannot carry an array.
+export const wrong_button_selection: ComponentProps<typeof ButtonGroup> = {
+  options: [],
+  mode: `single`,
+  value: [`alpha`],
+}
+// @ts-expect-error Multiple selection cannot carry one value.
+export const wrong_accordion_selection: ComponentProps<typeof Accordion> = {
+  items: [],
+  mode: `multiple`,
+  value: `alpha`,
+}
+export const wrong_tree_selection: ComponentProps<typeof TreeView> = {
+  nodes: [],
+  mode: `multiple`,
+  // @ts-expect-error Tree selection uses arrays, not sets.
+  value: new Set<string>(),
+}
+export const record_button_options: ComponentProps<typeof ButtonGroup> = {
+  // @ts-expect-error ButtonGroup options have one array representation.
+  options: { alpha: `Alpha` },
+}
+
 // The published callback must preserve the consumer's custom action fields.
 export const on_execute: NonNullable<
   ComponentProps<typeof CommandMenu<CmdAction & { route: string }>>[`on_execute`]
 > = ({ action }) => action.route.toUpperCase()
+export const action_menu_execute: NonNullable<
+  ComponentProps<typeof ActionMenu<CmdAction & { route: string }>>[`on_execute`]
+> = ({ action, section }) => [
+  action.route.toUpperCase(),
+  section?.actions.map((entry) => entry.route.toUpperCase()),
+]
+
+export const links: readonly LinkItem[] = [
+  { href: `/guide`, label: `Guide`, target: `_blank` },
+]
+export const nav_routes: readonly NavRoute[] = [
+  { label: `Docs`, children: links },
+  { separator: true },
+]
+export const nav_api: ComponentProps<typeof Nav> = {
+  routes: nav_routes,
+  pathname: `/guide`,
+  open: true,
+}
+export const subpages: readonly Subpage[] = [
+  { ...links[0], description: `Read the guide` },
+]
+export const prev_next_api: ComponentProps<typeof PrevNext> = {
+  items: links,
+  current: `/guide`,
+  as: `div`,
+  labels: { prev: `Back` },
+}
+// @ts-expect-error Positional navigation tuples are removed.
+export const tuple_route: NavRoute = [`/guide`, `Guide`]
+// @ts-expect-error Bounds must be numbers.
+export const numeric_string_bound: ComponentProps<typeof NumberRangeInput>[`min`] = `1`
+
 export const command_labels: ComponentProps<typeof CommandMenu>[`labels`] = {
   loading_more: `Wird geladen`,
   loading_failed: `Laden fehlgeschlagen`,
@@ -119,7 +202,7 @@ export const hotkey: Hotkey = { keys: `Escape`, handler: () => undefined }
 export const line_window: LineWindow = { start: 0, end: 0 }
 export const position_options: PositionOptions = { placement: `auto` }
 export const position_result: PositionResult = { top: 0, left: 0, placement: `bottom` }
-export const start_theme_storage_listener = () => listen_theme_storage()
+export const start_theme_watcher = () => watch_theme()
 export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) => ({
   aborted: signal.aborted,
   file_count: files.length,

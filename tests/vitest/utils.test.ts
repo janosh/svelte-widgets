@@ -24,7 +24,6 @@ import {
   sanitize_shortcut_overrides,
   slug_to_title,
   step_focus,
-  values_equal,
 } from '$lib/utils'
 import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, stub_prop } from './index'
@@ -142,7 +141,7 @@ describe(`keyboard shortcut parsing`, () => {
     [`+`, { key: `+`, ctrl: false, shift: false, alt: false, meta: false }],
     [`ctrl++`, { key: `+`, ctrl: true, shift: false, alt: false, meta: false }],
     [`ctrl+shift++`, { key: `+`, ctrl: true, shift: true, alt: false, meta: false }],
-    [`ctrl+`, { key: ``, ctrl: true, shift: false, alt: false, meta: false }],
+    [`ctrl+`, null],
     // non-plus keys and the remaining modifiers (alt, meta, cmd alias)
     [`k`, { key: `k`, ctrl: false, shift: false, alt: false, meta: false }],
     [`cmd+k`, { key: `k`, ctrl: false, shift: false, alt: false, meta: true }],
@@ -174,11 +173,16 @@ describe(`keyboard shortcut parsing`, () => {
 
   // spelled-out tokens render as the literal `event.key` they stand for
   test.each([
-    [`ctrl+comma+plus+space`, [`Ctrl`, `,`, `+`, `␣`]],
-    [` SHIFT + Escape + F12 + x `, [`⇧`, `Esc`, `F12`, `X`]],
-    [`ß+😀+𐐨rest+`, [`SS`, `😀`, `𐐀rest`, ``]],
-    [`constructor+__proto__`, [`Constructor`, `__proto__`]],
-    [``, [``]],
+    [`control+comma`, [`Ctrl`, `,`]],
+    [`cmd+plus`, [`⌘`, `+`]],
+    [`option+space`, [`⌥`, `␣`]],
+    [` SHIFT + Escape `, [`⇧`, `Esc`]],
+    [`F12`, [`F12`]],
+    [`ß`, [`SS`]],
+    [`😀`, [`😀`]],
+    [`𐐨rest`, [`𐐀rest`]],
+    [`constructor`, [`Constructor`]],
+    [`__proto__`, [`__proto__`]],
   ])(`format_shortcut(%j) renders %j`, (shortcut, expected) => {
     expect(format_shortcut(shortcut)).toEqual(expected)
   })
@@ -190,6 +194,9 @@ describe(`keyboard shortcut parsing`, () => {
     [`ctrl+`, { key: `+`, ctrlKey: true }, false],
     // the shift escape hatch is plus-only: every other modifier must match exactly
     [`cmd+k`, { key: `K`, metaKey: true }, true], // event key is lowercased
+    [`command+k`, { key: `k`, metaKey: true }, true],
+    [`control+k`, { key: `k`, ctrlKey: true }, true],
+    [`option+k`, { key: `k`, altKey: true }, true],
     [`cmd+k`, { key: `k`, metaKey: true, shiftKey: true }, false],
     [`cmd+k`, { key: `k`, ctrlKey: true }, false],
     [`alt+k`, { key: `k`, altKey: true }, true],
@@ -197,6 +204,21 @@ describe(`keyboard shortcut parsing`, () => {
     const event = new KeyboardEvent(`keydown`, event_init)
     expect(matches_shortcut(event, shortcut)).toBe(expected)
   })
+
+  test.each([``, `ctrl+`, `ctrl+a+b`, `hyper+k`, `ctrl++k`, `ctrl+shift`])(
+    `all shortcut APIs reject malformed %j`,
+    (shortcut) => {
+      expect(normalize_combo(shortcut)).toBeNull()
+      expect(parse_shortcut(shortcut)).toBeNull()
+      expect(format_shortcut.bind(null, shortcut)).toThrow(`Invalid keyboard shortcut`)
+      expect(
+        matches_shortcut(
+          new KeyboardEvent(`keydown`, { key: `b`, ctrlKey: true }),
+          shortcut,
+        ),
+      ).toBe(false)
+    },
+  )
 })
 
 describe(`shortcut rebinding`, () => {
@@ -284,6 +306,12 @@ describe(`shortcut rebinding`, () => {
   describe(`sanitize_shortcut_overrides`, () => {
     const defaults = { copy: `mod+c`, cut: `mod+x`, paste: `mod+v` }
 
+    test(`invalid defaults fail with the action ID instead of becoming active shortcuts`, () => {
+      expect(() => sanitize_shortcut_overrides(null, { copy: `ctrl+a+b` })).toThrow(
+        `Invalid shortcut for action copy: ctrl+a+b`,
+      )
+    })
+
     test.each([
       [`non-object input`, `mod+c`, {}],
       [`null`, null, {}],
@@ -318,6 +346,18 @@ describe(`shortcut rebinding`, () => {
         paste: `mod+p`,
       })
     })
+
+    test.each([`__proto__`, `constructor`, `toString`])(
+      `preserves an explicitly declared action ID %s`,
+      (action_id) => {
+        const declared = { [action_id]: `ctrl+c`, paste: `ctrl+v` }
+        const override = { [action_id]: `ctrl+x` }
+        expect(sanitize_shortcut_overrides(override, declared)).toEqual(override)
+        expect(sanitize_shortcut_overrides({ [action_id]: `ctrl+v` }, declared)).toEqual(
+          {},
+        )
+      },
+    )
 
     // `mod` resolves to the platform's primary modifier, so an override spelling that
     // modifier out lands on the very same keystroke as a `mod` default
@@ -659,30 +699,6 @@ describe(`chain_handlers`, () => {
     }
     expect(() => chain_handlers(boom, later)(new MouseEvent(`click`))).toThrow(`boom`)
     expect(later).not.toHaveBeenCalled()
-  })
-})
-
-describe(`values_equal`, () => {
-  // MultiSelect syncs `value`/`selected` through this on every change, so a false
-  // negative is an assignment loop against a wrapper that clones arrays (#309, #369)
-  const same_items = [{ id: 1 }]
-  test.each([
-    [`null vs undefined`, null, undefined, true],
-    [`null vs empty array`, null, [], true],
-    [`undefined vs empty array`, undefined, [], true],
-    [`empty vs non-empty array`, [], [`a`], false],
-    [`same items in order`, [`a`, `b`], [`a`, `b`], true],
-    [`same items reordered`, [`a`, `b`], [`b`, `a`], false],
-    [`different lengths`, [`a`], [`a`, `b`], false],
-    [`equal objects compared by identity`, [{ id: 1 }], [{ id: 1 }], false],
-    [`same array reference`, same_items, same_items, true],
-    [`equal primitives`, 3, 3, true],
-    [`primitive vs array`, 3, [3], false],
-    [`zero vs empty array`, 0, [], false], // 0 is a real value, not an empty state
-    [`empty string vs empty array`, ``, [], false],
-  ] as const)(`%s`, (_desc, val1, val2, expected) => {
-    expect(values_equal(val1, val2)).toBe(expected)
-    expect(values_equal(val2, val1)).toBe(expected) // symmetric
   })
 })
 

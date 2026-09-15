@@ -164,12 +164,6 @@ Props ordered by how often you'll reach for them.
    Whether users can create new options by typing. `true` = add to selected only, `'append'` = add to both options and selected.
 
 1. ```ts
-   allow_empty: boolean = false
-   ```
-
-   Whether to allow the component to exist with no options. If `false`, shows console error when no options provided (unless `loading`, `disabled`, or `allow_user_options` is `true`).
-
-1. ```ts
    loading: boolean = false
    ```
 

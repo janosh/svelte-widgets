@@ -10,10 +10,6 @@
   } from './labels'
   import { observe_subtree } from './utils'
 
-  type SettingMetadata = Readonly<
-    Record<string, string | { readonly description: string } | undefined>
-  >
-
   let {
     title,
     labels,
@@ -22,7 +18,6 @@
     layout = `flow`,
     on_reset,
     on_reset_key,
-    setting_metadata,
     descriptions_open = $bindable(false),
     ...rest
   }: HTMLAttributes<HTMLElementTagNameMap[`section`]> & {
@@ -40,8 +35,6 @@
     on_reset?: () => void
     // Rows opt in with `data-key`; the caller restores or deletes the requested key.
     on_reset_key?: (key: string) => void
-    // Accepts schema objects directly as well as a compact key-to-description map.
-    setting_metadata?: SettingMetadata
     descriptions_open?: boolean
   } = $props()
 
@@ -100,14 +93,15 @@
     control.removeAttribute(AUTO_LABEL_ATTR)
   }
 
-  // Only explicitly keyed rows are enhanced; without either opt-in prop the DOM is untouched.
+  // Keyed rows own their descriptions through data-description.
   const enhance_rows = (section: HTMLElement): (() => void) => {
-    // Plain Map: reactive entries would make `refresh` loop. Keep caller text alongside
-    // the component's last write so external updates are re-snapshotted rather than overwritten.
-    const descriptions = new Map<
-      HTMLElement,
-      { original: string | null; written: string | null }
-    >()
+    const enhanced_rows = new Set<HTMLElement>()
+    const owned_controls = (row: HTMLElement, selector: string): HTMLElement[] =>
+      [...row.querySelectorAll<HTMLElement>(selector)].filter((control) => {
+        const owner = control.closest(`[data-key], .settings-section`)
+        // A removed data-key or detached row still owns its controls; nested rows do not.
+        return owner === row || !row.contains(owner)
+      })
 
     const remove_reset_button = (row: HTMLElement): void => {
       const button = row.querySelector(RESET_SELECTOR)
@@ -116,20 +110,18 @@
       const had_focus = button !== null && button === document.activeElement
       button?.remove()
       if (!had_focus) return
-      const control = row.querySelector<HTMLElement>(`input, select, textarea, button`)
+      const [control] = owned_controls(row, `input, select, textarea, button`)
       if (control) control.focus()
       else if (row.tabIndex >= 0) row.focus()
     }
 
-    const cleanup_enhancement = (row: HTMLElement, original: string | null): void => {
+    const cleanup_enhancement = (row: HTMLElement): void => {
       row.querySelector(DESCRIPTION_SELECTOR)?.remove()
       remove_reset_button(row)
       row.classList.remove(`setting-resettable`)
-      for (const control of row.querySelectorAll(`[${AUTO_LABEL_ATTR}]`)) {
+      for (const control of owned_controls(row, `[${AUTO_LABEL_ATTR}]`)) {
         release_auto_label(control)
       }
-      if (original === null) row.removeAttribute(`data-description`)
-      else row.setAttribute(`data-description`, original)
     }
 
     // `data-label` short-circuits the clone, which only strips controls and the appended
@@ -149,7 +141,7 @@
     }
 
     const sync_labeled_controls = (row: HTMLElement, label: string): void => {
-      for (const control of row.querySelectorAll(`input, select, textarea`)) {
+      for (const control of owned_controls(row, `input, select, textarea`)) {
         const marker = control.getAttribute(AUTO_LABEL_ATTR)
         // Preserve author-set names that differ from the recorded generated label.
         if (control.getAttribute(`aria-label`) !== marker) {
@@ -168,29 +160,10 @@
     const enhance_row = (row: HTMLElement): boolean => {
       const key = row.dataset.key
       if (!key) return false
-      const current_description = row.getAttribute(`data-description`)
-      const saved = descriptions.get(row) ?? {
-        original: current_description,
-        written: current_description,
-      }
-      if (current_description !== saved.written) saved.original = current_description
+      const description = row.dataset.description
+      enhanced_rows.add(row)
       const label = label_text(row)
       sync_labeled_controls(row, row instanceof HTMLLabelElement ? label : ``)
-
-      // `setting_metadata` overrides the row's `data-description`, restored if the key drops
-      const metadata = setting_metadata?.[key]
-      const description =
-        (typeof metadata === `string` ? metadata : metadata?.description) ??
-        saved.original
-      // Write only on real change: setAttribute queues a mutation record even for an identical
-      // value, and SettingsSearch observes this attribute.
-      const next_description = description || null
-      if (next_description !== current_description) {
-        if (next_description) row.setAttribute(`data-description`, next_description)
-        else row.removeAttribute(`data-description`)
-      }
-      saved.written = next_description
-      descriptions.set(row, saved)
 
       let description_element = row.querySelector(DESCRIPTION_SELECTOR)
       if (!descriptions_open || !description) description_element?.remove()
@@ -236,13 +209,20 @@
     }
 
     const refresh = (): void => {
-      // `map`, not `some`: every row has to be enhanced, short-circuiting would skip the rest
-      const rows = [...section.querySelectorAll<HTMLElement>(`[data-key]`)]
-      has_descriptions = rows.map(enhance_row).includes(true)
-      for (const [row, { original }] of descriptions) {
-        if (!row.isConnected || !section.contains(row) || !row.dataset.key) {
-          cleanup_enhancement(row, original)
-          descriptions.delete(row)
+      let descriptions_found = false
+      for (const row of section.querySelectorAll<HTMLElement>(`[data-key]`)) {
+        if (row.closest(`.settings-section`) === section && enhance_row(row))
+          descriptions_found = true
+      }
+      has_descriptions = descriptions_found
+      for (const row of enhanced_rows) {
+        if (
+          !row.isConnected ||
+          row.closest(`.settings-section`) !== section ||
+          !row.dataset.key
+        ) {
+          cleanup_enhancement(row)
+          enhanced_rows.delete(row)
         }
       }
     }
@@ -253,13 +233,13 @@
       refresh,
       true,
     )
-    // `refresh` reads `changed_keys`, `descriptions_open` and `setting_metadata`, so this
+    // `refresh` reads `changed_keys` and `descriptions_open`, so this
     // re-enhances on change; from the attachment body it would tear everything off first.
     $effect(refresh)
 
     return () => {
       stop_observing()
-      for (const [row, { original }] of descriptions) cleanup_enhancement(row, original)
+      for (const row of enhanced_rows) cleanup_enhancement(row)
       has_descriptions = false
     }
   }
@@ -300,7 +280,7 @@
   {...rest}
   class={[`settings-section`, rest.class, layout]}
   aria-labelledby={title_id}
-  {@attach on_reset_key || setting_metadata ? enhance_rows : null}
+  {@attach enhance_rows}
 >
   {@render children()}
 </section>

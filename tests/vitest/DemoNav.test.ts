@@ -48,9 +48,7 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
     expect(section.querySelector(`h3 svg path`)?.getAttribute(`d`)).toBe(icon.d)
     expect(
       [...section.querySelectorAll(`li a`)].map((link) => link.getAttribute(`href`)),
-    ).toEqual(
-      children.filter((route) => route !== href).map((route) => `${base}${route}`),
-    )
+    ).toEqual(children.map((route) => `${base}${route}`))
   }
   expect(
     sections.map((section) => section.querySelector(`.detail`)?.textContent?.trim()),
@@ -120,7 +118,7 @@ test(`DemoNav lists components while recipes remain in the complete searchable c
   ])
   expect(document.querySelectorAll(`.menu > .dropdown`)).toHaveLength(6)
   for (const { name, href, children } of demo_nav_routes) {
-    expect(children).toContain(href)
+    expect(children).not.toContain(href)
     for (const route of children) {
       expect(
         page_files.some(
@@ -167,9 +165,7 @@ test.each([`inputs`, `navigation`, `overlays`, `display`])(
     )
     const cards = Array.from(document.querySelectorAll(`.card`))
     expect(cards.map((card) => card.getAttribute(`href`))).toEqual(
-      category?.children
-        .filter((route) => route !== category.href)
-        .map((route) => `${base}${route}`),
+      category?.children.map((route) => `${base}${route}`),
     )
     for (const card of cards)
       expect(card.querySelector(`p`)?.textContent?.trim().length).toBeGreaterThan(15)

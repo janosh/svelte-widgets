@@ -1,40 +1,8 @@
-<script module lang="ts">
-  import type { IconData } from './icons/types'
-  import { chain_handlers, is_object, step_focus } from './utils'
-
-  // Only `value` is required; the rest are display extras any option shape may omit
-  export type ButtonGroupOption<Value extends string = string> = {
-    value: Value
-    label?: string
-    tooltip?: string
-    icon?: IconData
-    disabled?: boolean
-    loading?: boolean // trailing spinner; pass false initially to reserve its width
-  }
-
-  // The shapes segmented controls are written with in the wild
-  export type ButtonGroupOptions<Value extends string = string> =
-    | readonly Value[]
-    | Readonly<Record<Value, string>>
-    | readonly (readonly [Value, string])[]
-    | readonly ButtonGroupOption<Value>[]
-
-  const to_option = <Value extends string>(entry: unknown): ButtonGroupOption<Value> => {
-    if (typeof entry === `string`) return { value: entry as Value, label: entry }
-    if (Array.isArray(entry)) {
-      const [value, label] = entry as [Value, string]
-      return { value, label: label ?? value }
-    }
-    if (is_object(entry) && typeof entry.value === `string`) {
-      const option = entry as ButtonGroupOption<Value>
-      return { ...option, label: option.label ?? option.value }
-    }
-    throw new Error(`ButtonGroup: unsupported option ${JSON.stringify(entry)}`)
-  }
-</script>
-
 <script lang="ts" generics="Value extends string = string">
   import type { Snippet } from 'svelte'
+  import type { ButtonGroupOption, SelectionProps } from './types'
+  import { selection_values } from './internal/selection'
+  import { chain_handlers, step_focus } from './utils'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
   import { tooltip, type TooltipOptions } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
@@ -42,7 +10,7 @@
   import { merge_defaults, BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
 
   type CommonProps<Value extends string> = {
-    options: ButtonGroupOptions<Value>
+    options: readonly (Value | ButtonGroupOption<Value>)[]
     label?: string // aria-label for the group, since a bare row of buttons has none
     labels?: Partial<ButtonGroupLabels> // overrides for the sort button's aria-label
     disabled?: boolean // disables every option, on top of per-option `disabled`
@@ -62,20 +30,10 @@
     // to be a span
     as?: string
   }
-  // Literal arms keep on_change narrow; `multiple: boolean` covers `multiple={flag}`
-  type SelectionProps<Value> =
-    | { multiple?: false; selected?: Value | null; on_change?: (selected: Value) => void }
-    | { multiple: true; selected?: Value[]; on_change?: (selected: Value[]) => void }
-    | {
-        multiple: boolean
-        selected?: Value | Value[] | null
-        on_change?: (selected: Value | Value[]) => void
-      }
-
   let {
     options,
-    selected = $bindable(),
-    multiple = false,
+    value = $bindable(),
+    mode = `single`,
     label,
     labels,
     disabled = false,
@@ -94,15 +52,19 @@
   const msg = $derived(merge_defaults(BUTTON_GROUP_LABELS, labels))
 
   const option_list = $derived(
-    (Array.isArray(options) ? options : Object.entries(options)).map(to_option<Value>),
+    options.map((entry) => {
+      if (typeof entry === `string`) return { value: entry }
+      if (!entry || typeof entry.value !== `string`)
+        throw new TypeError(`ButtonGroup: unsupported option ${JSON.stringify(entry)}`)
+      return entry
+    }),
   )
+  const multiple = $derived(mode === `multiple`)
   // keyboard-reachable buttons in render order; the roving stop falls back to the first
   const enabled_options = $derived(
     disabled ? [] : option_list.filter((opt) => !opt.disabled),
   )
-  const selected_values = $derived(
-    Array.isArray(selected) ? selected : selected == null ? [] : [selected],
-  )
+  const selected_values = $derived(selection_values(mode, value))
   const selected_set = $derived(new Set(selected_values))
 
   // Roving tabindex: one stop on the checked option. Falls back so a selection pointing at
@@ -113,16 +75,14 @@
     return (checked_option ?? enabled_options[0])?.value
   })
 
-  function select(value: Value) {
-    if (!multiple && selected === value) return // re-picking the checked radio changes nothing
-    selected = multiple
-      ? selected_set.has(value)
-        ? selected_values.filter((val) => val !== value)
-        : [...selected_values, value]
-      : value
-    // TS can't correlate the consumer-facing discriminated union with the `multiple` local,
-    // so widen the call back to what this branch just set
-    ;(on_change as ((selected: Value | Value[]) => void) | undefined)?.(selected)
+  function select(next_value: Value) {
+    if (!multiple && value === next_value) return
+    value = multiple
+      ? selected_set.has(next_value)
+        ? selected_values.filter((entry) => entry !== next_value)
+        : [...selected_values, next_value]
+      : next_value
+    ;(on_change as ((value: Value | Value[] | null) => void) | undefined)?.(value)
   }
 
   function handle_keydown(event: KeyboardEvent) {
@@ -155,7 +115,7 @@
       {@render option({ option: opt, selected: is_selected })}
     {:else}
       {#if opt.icon}<Icon icon={opt.icon} />{/if}
-      {opt.label}
+      {opt.label ?? opt.value}
       {#if opt.loading !== undefined}
         <!-- decoration for sighted users; `aria-busy` on the button is what AT reads -->
         <CircleSpinner

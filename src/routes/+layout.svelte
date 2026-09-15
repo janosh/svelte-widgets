@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { browser } from '$app/environment'
   import { afterNavigate, goto } from '$app/navigation'
   import { asset } from '$app/paths'
   import { page } from '$app/state'
@@ -7,7 +6,6 @@
   import { slug_to_title } from '$lib/utils'
   import { flash_toc_target } from '$lib/toc-utils'
   import { highlight_matches } from '$lib/attachments'
-  import { apply_theme_mode, resolve_theme_mode } from '$lib/theme.svelte'
   import { repository } from '$root/package.json'
   import { DemoNav, Footer } from '$site'
   import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
@@ -116,9 +114,6 @@
       if (reference) requestAnimationFrame(() => reference.target.scrollIntoView())
     }
   })
-
-  // FOUC script in app.html already painted; this syncs shared theme state for ThemeToggle.
-  if (browser) apply_theme_mode(resolve_theme_mode())
 </script>
 
 <svelte:head>

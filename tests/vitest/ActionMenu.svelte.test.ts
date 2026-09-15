@@ -1,6 +1,5 @@
 import { ActionMenu } from '$lib'
-import type { CmdAction } from '$lib/types'
-import type { CmdSection } from '$lib/utils'
+import type { CmdAction, CmdSection } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
@@ -11,7 +10,7 @@ describe(`ActionMenu`, () => {
   type ActionMenuProps = ComponentProps<typeof ActionMenu>
   type ContextProps = Extract<ActionMenuProps, { trigger?: string }>
   type MenuProps = Partial<Omit<ContextProps, `actions`>>
-  type MenuEntries = ActionMenuProps[`actions`]
+  type MenuEntries = ActionMenuProps[`actions`][number][]
   const make_actions = (): CmdAction[] => [
     { id: `Copy`, label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { id: `Delete`, label: `Delete`, action: vi.fn(), disabled: true },
@@ -210,19 +209,19 @@ describe(`ActionMenu`, () => {
 
   test(`choosing an action runs it and closes, disabled ones do neither`, async () => {
     const actions = make_actions()
-    const on_select = vi.fn()
-    await open_menu(actions, { on_select })
+    const on_execute = vi.fn()
+    await open_menu(actions, { on_execute })
 
     items()[1].click() // disabled
     await tick()
     expect(actions[1].action).not.toHaveBeenCalled()
-    expect(on_select).not.toHaveBeenCalled()
+    expect(on_execute).not.toHaveBeenCalled()
     expect(menu()).not.toBeNull()
 
     items()[0].click()
     await tick()
     expect(actions[0].action).toHaveBeenCalledWith(`Copy`)
-    expect(on_select).toHaveBeenCalledWith(actions[0])
+    expect(on_execute).toHaveBeenCalledWith({ action: actions[0], section: undefined })
     expect(menu()).toBeNull()
   })
 
@@ -415,13 +414,16 @@ describe(`ActionMenu`, () => {
 
     test(`choosing a section item reports the section it came from`, async () => {
       const sections = make_sections()
-      const on_select = vi.fn()
-      await open_menu(sections, { on_select })
+      const on_execute = vi.fn()
+      await open_menu(sections, { on_execute })
 
       items()[1].click()
       await tick()
       expect(sections[0].actions[1].action).toHaveBeenCalledWith(`Double`)
-      expect(on_select).toHaveBeenCalledWith(sections[0].actions[1], sections[0])
+      expect(on_execute).toHaveBeenCalledWith({
+        action: sections[0].actions[1],
+        section: sections[0],
+      })
       expect(menu()).toBeNull()
     })
 

@@ -127,8 +127,19 @@ Custom library APIs use snake_case. Native DOM handlers such as `onclick`, `onin
 
 Additional API changes:
 
-- MultiSelect uses `bind:value` alone: `mode="single"` takes one option or `null`, and the default `mode="multiple"` takes an array.
-- SettingsSection takes `changed_keys` and `on_reset_key(key)`. Value comparison and reset defaults belong to the caller.
+- Nav, PrevNext, Footer, and SubpageGrid share named link fields: `{ href, label, target?, rel?, title? }`. PrevNext takes link objects; SubpageGrid adds `description` and optional `icon`. String/tuple routes and `external` are removed; use native `target`/`rel`.
+- Nav uses `pathname`, `bind:open`, and one `item({ route, is_active })` content snippet for every link and group heading; Nav owns the enclosing anchor or span. Replace `page`, `route_labels`, `tooltips`, and `link`; put plain-text labels and tooltip options on each route. Groups explicitly list child link objects and optionally have their own href. Disabled is boolean; separators are separate `{ separator: true }` entries.
+- PrevNext uses `as` and `labels` instead of `node` and `titles`. Nonempty lists require a matching `current` href. Supply router attributes through `link_props`.
+- ActionMenu uses `on_execute({ action, section })` instead of `on_select(action, section)`; custom action types flow through callbacks and snippets. Import `CmdSection<Action>` from the package root instead of `utils`. CommandMenu accepts initially empty actions.
+- NumberRangeInput requires numeric bounds and a numeric step or `"any"`. Use `label` for its accessible name, `title` for the tooltip, and native `data-key` instead of `setting`.
+
+- MultiSelect uses `bind:value` alone: `mode="single"` takes one option or `null`, and the default `mode="multiple"` takes an array. Empty options are valid without an `allow_empty` flag; remove that prop.
+- ButtonGroup, Accordion, and TreeView use `mode="single" | "multiple"`, `bind:value`, and `on_change(value)`. Single mode (the default) uses one value or `null`; multiple mode uses an array. ButtonGroup no longer accepts record or tuple options: pass an array of strings or `{ value, label?, ... }` objects. `ButtonGroupOption` is exported from the package root.
+- SettingsSection takes `changed_keys` and `on_reset_key(key)`. Value comparison and reset defaults belong to the caller. Put descriptions on rows with `data-description`; the `setting_metadata` prop is removed.
+- Dialog and Sheet use only `closedby="any" | "closerequest" | "none"` for dismissal. The default `any` allows backdrop and Escape; `closerequest` allows Escape; `none` requires an explicit close action. Remove `close_on_backdrop` and `close_on_escape`.
+- `watch_theme()` initializes and follows system and storage changes, returning a cleanup function. It replaces `listen_theme_storage()`; `resolve_theme_mode` and `system_preference` are internal. ThemeToggle starts and stops its own watcher.
+- Shortcut parsing, formatting, matching, and rebinding share one grammar, including modifier aliases. Invalid shortcuts return `null` from `parse_shortcut` and `normalize_combo`, never match key events, and throw from `format_shortcut`. Invalid default shortcuts throw during override validation.
+- The unused `utils.values_equal` export is removed. Shared Vite config returns independently owned nested settings, including overrides.
 - Tooltips accept plain text and hover/focus triggers. Use Popover for formatted content, controls, and application-controlled visibility.
 - Native Svelte headings use `Heading` with an explicit ID; remove `heading_ids()` from preprocessors. Toc consumes `items` metadata or discovers existing IDs with `dynamic`; invalid selectors and collapse modes throw.
 

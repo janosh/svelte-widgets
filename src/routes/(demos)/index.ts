@@ -125,16 +125,10 @@ for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) 
   demo_pages.push(route)
   if (filename.includes(`/(multiselect)/`) && route !== `/multiselect`)
     multiselect_recipes.push(route)
-  else category.children.push(route)
+  else if (route !== category.href) category.children.push(route)
 }
 
-for (const { href, children } of demo_nav_routes) {
-  children.sort((left_route, right_route) => {
-    if (left_route === href) return -1
-    if (right_route === href) return 1
-    return left_route.localeCompare(right_route)
-  })
-}
+for (const { children } of demo_nav_routes) children.sort()
 multiselect_recipes.sort()
 
 export const demo_labels: Record<string, string> = {

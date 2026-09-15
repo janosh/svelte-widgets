@@ -10,15 +10,12 @@
     children,
     ...rest
   }: Omit<HTMLAttributes<HTMLElement>, `children`> & {
-    links?: FooterLink[]
+    links?: readonly FooterLink[]
     // replaces the default <a> for every link, e.g. to use an icon set this package
     // doesn't bundle
     item?: Snippet<[{ link: FooterLink }]>
     children?: Snippet
   } = $props()
-
-  const external_attrs = (link: FooterLink) =>
-    link.external ? { target: `_blank`, rel: `noopener noreferrer` } : {}
 </script>
 
 <footer {...rest}>
@@ -29,7 +26,7 @@
         {#if item}
           {@render item({ link })}
         {:else}
-          <a href={link.href} title={link.title} {...external_attrs(link)}>
+          <a href={link.href} title={link.title} target={link.target} rel={link.rel}>
             {#if link.icon}<Icon icon={link.icon} />{/if}{link.label}
           </a>
         {/if}

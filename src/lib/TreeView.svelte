@@ -1,5 +1,6 @@
 <script lang="ts">
-  import type { TreeNode } from './types'
+  import type { SelectionProps, TreeNode } from './types'
+  import { selection_values } from './internal/selection'
   import { tick, type Snippet } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
@@ -8,25 +9,22 @@
   let {
     nodes,
     expanded = $bindable(new Set<string>()),
-    selected = $bindable(),
-    multiple = false,
-    selected_ids = $bindable(new Set<string>()),
+    value = $bindable(),
+    mode = `single`,
     on_select,
-    on_selection_change,
+    on_change,
     children,
     label = `Tree`,
     ...rest
   }: HTMLAttributes<HTMLDivElement> & {
     nodes: readonly TreeNode[]
     expanded?: Set<string>
-    selected?: string
-    multiple?: boolean
-    selected_ids?: Set<string>
     on_select?: (node: TreeNode) => void
-    on_selection_change?: (ids: Set<string>) => void
     children?: Snippet<[TreeNode]>
     label?: string
-  } = $props()
+  } & SelectionProps<string> = $props()
+  const multiple = $derived(mode === `multiple`)
+  const selected_ids = $derived(new Set(selection_values(mode, value)))
   let focused = $state<string>()
   let selection_anchor: string | undefined
   const node_elements = new Map<string, HTMLElement>()
@@ -83,11 +81,7 @@
     }
   })
   const is_selected = (node: TreeNode): boolean | undefined =>
-    node.disabled
-      ? undefined
-      : multiple
-        ? selected_ids.has(node.id)
-        : selected === node.id
+    node.disabled ? undefined : selected_ids.has(node.id)
   const active_id = $derived(
     focused !== undefined && tree.indices.has(focused)
       ? focused
@@ -112,7 +106,7 @@
     }
   }
   const collapse = (id: string) => {
-    expanded = new Set([...expanded].filter((value) => value !== id))
+    expanded = new Set([...expanded].filter((entry) => entry !== id))
   }
   const toggle_expanded = (node: TreeNode): void => {
     if (node.disabled) return
@@ -125,15 +119,15 @@
     await tick()
     node_elements.get(id)?.focus()
   }
-  const update_selection = (ids: Set<string>) => {
-    selected_ids = ids
-    on_selection_change?.(new Set(ids))
+  const update_selection = (next_value: string | string[]) => {
+    value = next_value
+    ;(on_change as ((value: string | string[] | null) => void) | undefined)?.(next_value)
   }
   const select = (node: TreeNode, range = false, toggle = false) => {
     // A range may end on a disabled row; only its enabled members are selected.
     if (node.disabled && (!multiple || !range)) return
     if (!multiple) {
-      selected = node.id
+      update_selection(node.id)
       on_select?.(node)
       return
     }
@@ -154,7 +148,7 @@
       if (toggle && ids.has(node.id)) ids.delete(node.id)
       else ids.add(node.id)
     }
-    update_selection(ids)
+    update_selection([...ids])
     if (ids.has(node.id)) on_select?.(node)
   }
   function keydown(event: KeyboardEvent): void {
@@ -162,12 +156,9 @@
     if (!multiple && is_modifier_chord(event)) return
     const toggle = event.ctrlKey || event.metaKey
     if (multiple && toggle && event.key.toLowerCase() === `a`) {
-      update_selection(
-        new Set([
-          ...selected_ids,
-          ...rows.filter(({ node }) => !node.disabled).map(({ node }) => node.id),
-        ]),
-      )
+      const ids = new Set(selected_ids)
+      for (const { node } of rows) if (!node.disabled) ids.add(node.id)
+      update_selection([...ids])
       event.preventDefault()
       return
     }

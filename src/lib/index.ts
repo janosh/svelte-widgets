@@ -45,14 +45,7 @@ export { default as Heading } from './Heading.svelte'
 export { default as Toc } from './Toc.svelte'
 export { default as Toggle } from './Toggle.svelte'
 export { default as ThemeToggle } from './ThemeToggle.svelte'
-export {
-  apply_theme_mode,
-  listen_theme_storage,
-  resolve_theme_mode,
-  system_preference,
-  theme,
-  type ThemeMode,
-} from './theme.svelte.ts'
+export { apply_theme_mode, watch_theme, theme, type ThemeMode } from './theme.svelte.ts'
 export type * from './types'
 export type * from './utils'
 export { default as Wiggle } from './Wiggle.svelte'

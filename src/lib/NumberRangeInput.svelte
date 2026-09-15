@@ -18,7 +18,7 @@
   // The wrapping label names the number input; the slider needs its own accessible label.
   let {
     value = $bindable(),
-    setting,
+    label,
     min,
     max,
     step,
@@ -34,12 +34,13 @@
     ...rest
   }: {
     value: number | undefined
-    min: number | string
-    max: number | string
-    step: number | string
+    min: number
+    max: number
+    step: number | `any`
     // Log mode keeps value in real units and measures step in base-10 decades.
     scale?: RangeScale
-    setting?: string
+    // Accessible name for the slider and, without children, the number input.
+    label?: string
     // Invalid drafts never replace the committed value. Clearing retains it by default.
     empty?: `retain` | `undefined`
     commit?: `input` | `change`
@@ -52,45 +53,37 @@
   } & Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
   // A range input with invalid min/max silently defaults to 0-100 while the number input stays
   // unbounded, so one slider touch clamps and writes back a value the caller never limited.
-  const is_numeric = (bound: number | string) =>
-    Number.isFinite(Number(bound)) &&
-    /^-?(?:\d+|\d*\.\d+)(?:[eE][+-]?\d+)?$/.test(String(bound))
   $effect(() => {
     if (
-      !is_numeric(min) ||
-      !is_numeric(max) ||
-      Number(max) < Number(min) ||
-      (step !== `any` && (!is_numeric(step) || Number(step) <= 0))
+      !Number.isFinite(min) ||
+      !Number.isFinite(max) ||
+      max < min ||
+      (step !== `any` && (!Number.isFinite(step) || step <= 0))
     ) {
       throw new Error(
         `NumberRangeInput needs finite min <= max and positive step or "any", got min=${min}, max=${max}, step=${step}`,
       )
     }
   })
-  const domain = $derived(create_range_scale(Number(min), Number(max), scale))
-  const log_step = $derived(
-    step === `any` ? (domain.max - domain.min) / 100 : Number(step),
-  )
+  const domain = $derived(create_range_scale(min, max, scale))
+  const log_step = $derived(step === `any` ? (domain.max - domain.min) / 100 : step)
   $effect(() => {
     if (scale !== `log`) return
     domain.validate_step(log_step, `NumberRangeInput`)
-    if (
-      value !== undefined &&
-      (!Number.isFinite(value) || value < Number(min) || value > Number(max))
-    ) {
+    if (value !== undefined && (!Number.isFinite(value) || value < min || value > max)) {
       throw new Error(
         `NumberRangeInput logarithmic value must be within [${min}, ${max}]; got ${value}`,
       )
     }
   })
   const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
-  let range_label = $derived(title?.trim() || setting?.trim() || msg.value)
+  let range_label = $derived(label?.trim() || msg.value)
   // With children the <label> already names the number input and an aria-label would override
   // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
   // A writable derived value follows external updates while allowing incomplete local drafts.
   let draft = $derived(value === undefined ? `` : String(value))
-  let slider_value = $derived(value ?? Number(min))
+  let slider_value = $derived(value ?? min)
   let range_editing = false
   let keyboard_value: number | undefined
   const commit_input = (input: HTMLInputElement, final: boolean): void => {
@@ -146,8 +139,8 @@
           ? slider_value
           : Number.isFinite(input.valueAsNumber) && input.valueAsNumber > 0
             ? input.valueAsNumber
-            : (value ?? Number(min))
-      const bounded = Math.max(Number(min), Math.min(Number(max), baseline))
+            : (value ?? min)
+      const bounded = Math.max(min, Math.min(max, baseline))
       next = step_range_coordinate(
         bounded,
         domain,
@@ -170,8 +163,7 @@
   }
 </script>
 
-<!-- Settings reset/search use data-key; callers may override it through rest. -->
-<label data-key={setting} {...rest}>
+<label {...rest}>
   <span {@attach tooltip()} {title}>{@render children?.()}</span>
   <input
     {...number_props}
@@ -210,8 +202,8 @@
     step={scale === `log` ? `any` : step}
     value={domain.to_position(slider_value)}
     aria-label={range_props?.['aria-label'] ?? range_label}
-    aria-valuemin={scale === `log` ? Number(min) : range_props?.['aria-valuemin']}
-    aria-valuemax={scale === `log` ? Number(max) : range_props?.['aria-valuemax']}
+    aria-valuemin={scale === `log` ? min : range_props?.['aria-valuemin']}
+    aria-valuemax={scale === `log` ? max : range_props?.['aria-valuemax']}
     aria-valuenow={scale === `log` ? slider_value : range_props?.['aria-valuenow']}
     aria-valuetext={range_props?.['aria-valuetext'] ??
       (scale === `log` ? String(slider_value) : undefined)}

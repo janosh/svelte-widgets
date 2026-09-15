@@ -4,10 +4,9 @@
   import Heading from './Heading.svelte'
 
   import { ChevronRight, type IconData } from './icons'
+  import type { Subpage } from './types'
 
   const title_id = $props.id()
-
-  type Subpage = [title: string, href: string, description: string, icon?: IconData]
 
   const {
     title,
@@ -20,7 +19,7 @@
     title: string
     title_icon?: IconData
     subtitle: string
-    subpages: Subpage[]
+    subpages: readonly Subpage[]
     fallback_icon?: IconData
   } & HTMLAttributes<HTMLDivElement> = $props()
 </script>
@@ -31,11 +30,11 @@
 
   <nav class="grid">
     <!-- index-prefixed: an href is a destination, so two cards may point at one page -->
-    {#each subpages as [page_title, href, description, icon], idx (`${idx}-${href}`)}
-      <a {href} class="card">
+    {#each subpages as { label, href, description, icon, target, rel, title: link_title }, idx (`${idx}-${href}`)}
+      <a {href} {target} {rel} title={link_title} class="card">
         <Icon icon={icon ?? fallback_icon} class="icon" aria-hidden="true" />
         <div>
-          <h2>{page_title}</h2>
+          <h2>{label}</h2>
           <p>{description}</p>
         </div>
       </a>

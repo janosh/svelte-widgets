@@ -3,13 +3,11 @@
 The n-way sibling of [`Toggle`](extras#toggle): a row of buttons over a fixed set of
 options, either as a segmented control (pick one) or a filter row (pick any).
 
-Options come in whichever shape you already have them in — bare values, a
-`Record<value, label>`, `[value, label]` pairs, or objects carrying a `tooltip`,
-`icon`, `disabled` or `loading` flag.
+Pass an array of strings or objects with a required `value` and optional `label`, `tooltip`, `icon`, `disabled`, and `loading` fields.
 
 ### Single select
 
-`multiple` defaults to `false`, so the group is a `radiogroup` of `role="radio"`
+`mode` defaults to `"single"`, so the group is a `radiogroup` of `role="radio"`
 buttons: one tab stop for the whole group, arrow keys walk it (wrapping at both ends,
 skipping disabled options) and carry the selection with focus, Home and End jump to
 either end.
@@ -20,7 +18,7 @@ Style the arrow with `sort_button_props` (it sits outside the radiogroup, so hos
 ```svelte example id="button-group-single"
 <script lang="ts">
   import { GitHub } from 'svelte-widgets/icons'
-  import ButtonGroup, { type ButtonGroupOption } from 'svelte-widgets/ButtonGroup.svelte'
+  import { ButtonGroup, type ButtonGroupOption } from 'svelte-widgets'
 
   const options: ButtonGroupOption[] = [
     {
@@ -38,7 +36,7 @@ Style the arrow with `sort_button_props` (it sits outside the radiogroup, so hos
 
 <ButtonGroup
   {options}
-  bind:selected={sort_by}
+  bind:value={sort_by}
   bind:sort_order
   label="Sort projects by"
   style="--btn-group-gap: 6pt"
@@ -51,10 +49,10 @@ Style the arrow with `sort_button_props` (it sits outside the radiogroup, so hos
 
 ### Multi-select
 
-`multiple` swaps the semantics rather than just the bookkeeping: the container becomes
+`mode="multiple"` swaps the semantics rather than just the bookkeeping: the container becomes
 a plain `group` of independent toggle buttons carrying `aria-pressed`, each its own tab
 stop, since there is nothing mutually exclusive left for a radio group to announce.
-`selected` is an array here.
+`value` is an array here.
 
 The `option` snippet replaces a button's contents, `on_change` fires with the new
 selection, and every color is a `--btn-group-*` custom property.
@@ -63,20 +61,20 @@ selection, and every color is a `--btn-group-*` custom property.
 <script lang="ts">
   import ButtonGroup from 'svelte-widgets/ButtonGroup.svelte'
 
-  const tags: Record<string, string> = {
-    svelte: `Svelte`,
-    kit: `SvelteKit`,
-    ts: `TypeScript`,
-    css: `CSS`,
-  }
+  const tags = [
+    { value: `svelte`, label: `Svelte` },
+    { value: `kit`, label: `SvelteKit` },
+    { value: `ts`, label: `TypeScript` },
+    { value: `css`, label: `CSS` },
+  ]
   const tag_counts: Record<string, number> = { svelte: 12, kit: 8, ts: 17, css: 5 }
   let active = $state([`svelte`])
 </script>
 
 <ButtonGroup
   options={tags}
-  multiple
-  bind:selected={active}
+  mode="multiple"
+  bind:value={active}
   label="Filter by tag"
   style="--btn-group-btn-radius: 1em; --btn-group-btn-active-bg: cornflowerblue; --btn-group-btn-active-color: white"
 >
