@@ -20,6 +20,7 @@ async function paste_into(extra_props: MultiSelectProps, paste_text: string) {
     on_max_reached: vi.fn(),
     on_duplicate: vi.fn(),
     on_parsed_paste: vi.fn(),
+    onpaste: vi.fn((event: ClipboardEvent) => event.currentTarget),
   }
   const props = $state<MultiSelectProps>({
     parse_paste: (text: string) => text.split(`,`),
@@ -37,7 +38,7 @@ async function paste_into(extra_props: MultiSelectProps, paste_text: string) {
 
 describe(`parse_paste`, () => {
   test(`splits pasted text into multiple selected options`, async () => {
-    const { on_add, event } = await paste_into(
+    const { on_add, onpaste, event } = await paste_into(
       { options: [`alpha`, `beta`, `gamma`] },
       `alpha,beta`,
     )
@@ -45,6 +46,41 @@ describe(`parse_paste`, () => {
     expect(on_add).toHaveBeenCalledTimes(2)
     expect(on_add).toHaveBeenCalledWith(expect.objectContaining({ option: `alpha` }))
     expect(on_add).toHaveBeenCalledWith(expect.objectContaining({ option: `beta` }))
+    expect(onpaste).toHaveBeenCalledExactlyOnceWith(event)
+    expect(onpaste).toHaveReturnedWith(get_input())
+  })
+
+  test(`native paste runs during dispatch while parsed paste waits for async creation`, async () => {
+    const creation = Promise.withResolvers<undefined>()
+    const completed = Promise.withResolvers<undefined>()
+    const on_parsed_paste = vi.fn(() => completed.resolve(undefined))
+    const { onpaste, props, event } = await paste_into(
+      {
+        options: [],
+        value: [],
+        allow_user_options: `append`,
+        on_create: () => creation.promise,
+        on_parsed_paste,
+      },
+      `alpha,beta`,
+    )
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onpaste).toHaveBeenCalledExactlyOnceWith(event)
+    expect(onpaste).toHaveReturnedWith(get_input())
+    expect(on_parsed_paste).not.toHaveBeenCalled()
+    expect(props.value).toEqual([])
+
+    creation.resolve(undefined)
+    await completed.promise
+    expect(props.value).toEqual([`alpha`, `beta`])
+    expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
+      added: [`alpha`, `beta`],
+      rejected: [],
+      overflow: [],
+      raw_text: `alpha,beta`,
+    })
+    expect(onpaste).toHaveBeenCalledOnce()
   })
 
   // an empty parsed entry makes `add` throw; that throw used to reject handle_paste, so
@@ -81,12 +117,14 @@ describe(`parse_paste`, () => {
     [`without parse_paste`, { parse_paste: undefined }],
     [`parse_paste returns empty`, { parse_paste: () => [] }],
   ])(`%s: paste not intercepted`, async (_label, override) => {
-    const { on_add, event } = await paste_into(
+    const { on_add, onpaste, event } = await paste_into(
       { options: [`a`, `b`, `c`], ...override },
       `a,b`,
     )
     expect(on_add).not.toHaveBeenCalled()
     expect(event.defaultPrevented).toBe(false)
+    expect(onpaste).toHaveBeenCalledExactlyOnceWith(event)
+    expect(onpaste).toHaveReturnedWith(get_input())
   })
 
   test(`object options via allow_user_options`, async () => {

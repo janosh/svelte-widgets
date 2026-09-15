@@ -523,32 +523,47 @@ describe(`selected_display=input`, () => {
     }
   })
 
-  test(`typing after committed input text returns dropdown to filtered results`, async () => {
-    const select = mount_input_display({
-      options: color_options,
-      value: `Red`,
-      open: true,
-    })
-    await tick()
+  test.each([false, true])(
+    `typing after committed input text filters results with beforeinput=%s`,
+    async (beforeinput) => {
+      const onbeforeinput = vi.fn()
+      const select = mount_input_display({
+        options: color_options,
+        value: `Red`,
+        open: true,
+        onbeforeinput,
+      })
+      await tick()
 
-    expect(option_labels()).toEqual(color_options)
+      expect(option_labels()).toEqual(color_options)
 
-    const input = get_input()
-    await type_search_text(`Bl`, input)
+      const input = get_input()
+      onbeforeinput.mockImplementation(() => select.value)
+      if (beforeinput) {
+        const event = new InputEvent(`beforeinput`, {
+          bubbles: true,
+          inputType: `insertText`,
+        })
+        input.dispatchEvent(event)
+        expect(onbeforeinput).toHaveBeenCalledExactlyOnceWith(event)
+        expect(onbeforeinput).toHaveReturnedWith(null)
+      }
+      await type_search_text(`Bl`, input)
 
-    expect(option_labels()).toEqual([`Blue`])
-    expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
-    expect(select.search_text).toBe(`Bl`)
-    expect(select.value).toBeNull()
+      expect(option_labels()).toEqual([`Blue`])
+      expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
+      expect(select.search_text).toBe(`Bl`)
+      expect(select.value).toBeNull()
 
-    await click_expand_icon()
+      await click_expand_icon()
 
-    expect(input.getAttribute(`aria-expanded`)).toBe(`false`)
+      expect(input.getAttribute(`aria-expanded`)).toBe(`false`)
 
-    await click_expand_icon()
+      await click_expand_icon()
 
-    expect(option_labels()).toEqual(color_options)
-  })
+      expect(option_labels()).toEqual(color_options)
+    },
+  )
 
   test(`caret click after custom draft shows all options and toggles closed`, async () => {
     const select = mount_input_display({ options: color_options })
@@ -3249,11 +3264,15 @@ test(`create_option_msg shows immediately with static options`, async () => {
 // https://github.com/janosh/svelte-widgets/issues/369
 describe(`binding update event count`, () => {
   test.each([
+    `beforeinput`,
     `click`,
+    `drop`,
     `keyup`,
     `mousedown`,
     `mouseenter`,
     `mouseleave`,
+    `mouseup`,
+    `paste`,
     `touchcancel`,
     `touchend`,
     `touchmove`,
@@ -3266,6 +3285,7 @@ describe(`binding update event count`, () => {
       const event_prop = `on${type}` as const
       const props = $state<MultiSelectProps>({
         options: [`a`],
+        open: false,
         [event_prop]: first_handler,
       })
       mount_multiselect(props)
@@ -3274,11 +3294,13 @@ describe(`binding update event count`, () => {
       for (const handler of [first_handler, next_handler]) {
         props[event_prop] = handler
         await tick()
-        const event = new Event(type, { bubbles: true })
+        const event = new Event(type, { bubbles: true, cancelable: true })
         input.dispatchEvent(event)
         doc_query(`div.multiselect`).dispatchEvent(new Event(type, { bubbles: true }))
         expect(handler).toHaveBeenCalledExactlyOnceWith(event)
         expect(handler).toHaveReturnedWith(input)
+        if (type === `drop`) expect(event.defaultPrevented).toBe(true)
+        if (type === `mouseup`) expect(props.open).toBe(true)
       }
       expect(first_handler).toHaveBeenCalledOnce()
     },

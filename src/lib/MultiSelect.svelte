@@ -113,10 +113,14 @@
     disabled_icon,
     option,
     user_msg,
+    onbeforeinput,
     onblur,
+    ondrop,
     onfocus,
     oninput,
     onkeydown,
+    onmouseup,
+    onpaste,
     on_add,
     on_create,
     on_remove,
@@ -1567,6 +1571,7 @@
     onblur?.(event)
   }
 
+  // Native onpaste stays synchronous; on_parsed_paste reports async creation completion.
   async function handle_paste(event: ClipboardEvent) {
     if (!parse_paste) return
     const text = event.clipboardData?.getData(`text/plain`)
@@ -1794,11 +1799,11 @@
       aria-activedescendant={active_option_id}
       aria-busy={loading || load_options_pending || creating_option || null}
       aria-invalid={invalid ? `true` : null}
-      ondrop={(event) => event.preventDefault()}
-      onpaste={handle_paste}
-      onbeforeinput={handle_input_beforeinput}
+      ondrop={utils.chain_handlers((event) => event.preventDefault(), ondrop)}
+      onpaste={utils.chain_handlers(handle_paste, onpaste)}
+      onbeforeinput={utils.chain_handlers(handle_input_beforeinput, onbeforeinput)}
       oninput={handle_input_input}
-      onmouseup={open_dropdown}
+      onmouseup={utils.chain_handlers(open_dropdown, onmouseup)}
       onkeydown={(event) => {
         handle_keydown(event) // internal logic first, then forwarded handler
         onkeydown?.(event)
