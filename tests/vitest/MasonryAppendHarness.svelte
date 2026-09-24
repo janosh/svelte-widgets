@@ -28,7 +28,6 @@
   {items}
   animate={false}
   calc_cols={() => n_cols}
-  id_key="id"
   {order}
   {virtualize}
   height={300}

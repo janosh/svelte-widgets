@@ -235,19 +235,6 @@ const remember_and_strip_title = (
   return title
 }
 
-const create_active_tooltip = (
-  registration: TooltipRegistration,
-  trigger: HTMLElement,
-): ActiveTooltip => ({
-  registration,
-  trigger,
-  pointer_trigger: false,
-  pointer_surface: false,
-  focus: false,
-  open: false,
-  dismissed: false,
-})
-
 const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   let registration_count = 0
   let active: ActiveTooltip | null = null
@@ -663,10 +650,6 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     )
   }
 
-  // surface currently serves this registration aimed at this exact trigger
-  const owns = (registration: TooltipRegistration, trigger: HTMLElement): boolean =>
-    active?.registration === registration && active.trigger === trigger
-
   const activate = (
     registration: TooltipRegistration,
     trigger: HTMLElement,
@@ -674,9 +657,18 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   ): void => {
     // One surface serves the document, so the newest interaction takes it; a previous
     // tooltip is preempted like any other and hears the close via on_open_change.
-    if (active && !owns(registration, trigger)) hide_active(CLOSE_REASON[reason])
+    if (active && (active.registration !== registration || active.trigger !== trigger))
+      hide_active(CLOSE_REASON[reason])
     remember_and_strip_title(registration, trigger)
-    active ??= create_active_tooltip(registration, trigger)
+    active ??= {
+      registration,
+      trigger,
+      pointer_trigger: false,
+      pointer_surface: false,
+      focus: false,
+      open: false,
+      dismissed: false,
+    }
     if (reason === `pointer`) active.pointer_trigger = true
     else active.focus = true
     request_open(reason)

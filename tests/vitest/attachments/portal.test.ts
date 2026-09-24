@@ -6,18 +6,13 @@ describe(`portal`, () => {
   // home has siblings on both sides, so restoring to the wrong index is visible
   const setup = () => {
     const [home, target] = [create_element(), create_element()]
-    const [before, node, after] = [
-      document.createElement(`i`),
-      document.createElement(`b`),
-      document.createElement(`u`),
-    ]
-    home.append(before, node, after)
+    const node = document.createElement(`b`)
+    home.append(document.createElement(`i`), node, document.createElement(`u`))
     return { home, target, node }
   }
 
   it(`moves the node into the target and restores its position on teardown`, () => {
     const { home, target, node } = setup()
-
     const cleanup = portal(target)(node)
 
     expect(node.parentElement).toBe(target)
@@ -37,41 +32,37 @@ describe(`portal`, () => {
       const target = { null: null, undefined, 'already the parent': home }[kind]
 
       expect(portal(target)(node)).toBeUndefined()
-      expect(node.parentElement).toBe(home)
       expect(home.innerHTML).toBe(`<i></i><b></b><u></u>`) // not re-appended after <u>
     },
   )
 
-  it(`removes the node instead of stranding it when its anchor is gone`, () => {
-    const { home, target, node } = setup()
-    const cleanup = portal(target)(node)
+  // Svelte tears a destroyed block's DOM down before running teardown. The node can only
+  // be in home or target, so home's markup and an empty target pin where it ended up.
+  type TearDown = (fixture: ReturnType<typeof setup>) => void
+  it.each<[string, TearDown, string]>([
+    [
+      `removes the node when its anchor is gone`,
+      ({ home }) => home.replaceChildren(),
+      ``,
+    ],
+    [
+      `does not resurrect a node its block removed`,
+      ({ node }) => node.remove(),
+      `<i></i><u></u>`,
+    ],
+    // whole subtree detached, anchor still marks the spot inside it
+    [
+      `restores into a detached home`,
+      ({ home }) => home.remove(),
+      `<i></i><b></b><u></u>`,
+    ],
+  ])(`%s`, (_desc, tear_down, home_html) => {
+    const fixture = setup()
+    const cleanup = portal(fixture.target)(fixture.node)
 
-    home.innerHTML = `` // the block that owned the node tore its markup down
+    tear_down(fixture)
     cleanup?.()
-
-    expect(node.parentElement).toBeNull()
-    expect(target.childNodes).toHaveLength(0)
-  })
-
-  it(`does not resurrect a node its block already removed`, () => {
-    const { home, target, node } = setup()
-    const cleanup = portal(target)(node)
-
-    node.remove() // Svelte tears the block's DOM down before running teardown
-    cleanup?.()
-
-    expect(node.parentElement).toBeNull()
-    expect(home.innerHTML).toBe(`<i></i><u></u>`) // anchor gone too
-  })
-
-  it(`restores into a detached home rather than dropping the node`, () => {
-    const { home, target, node } = setup()
-    const cleanup = portal(target)(node)
-
-    home.remove() // whole subtree detached, anchor still marks the spot inside it
-    cleanup?.()
-
-    expect(node.parentElement).toBe(home)
-    expect(target.childNodes).toHaveLength(0)
+    expect(fixture.home.innerHTML).toBe(home_html)
+    expect(fixture.target.childNodes).toHaveLength(0)
   })
 })

@@ -4,7 +4,7 @@ import { ask_prompt, dialog_queue, request_choice } from '$lib/dialogs.svelte'
 import { type ComponentProps, createRawSnippet, mount, tick, unmount } from 'svelte'
 import { render } from 'svelte/server'
 import { afterEach, expect, test, vi } from 'vitest'
-import { create_element, doc_query, track } from './index'
+import { create_element, doc_query, pointer_event, track } from './index'
 
 // happy-dom implements <dialog> (showModal, .open, close, close event) but not Escape
 // closing a modal nor a real ::backdrop, so those two are driven as the browser does:
@@ -32,24 +32,44 @@ const mount_dialog = async (props: ComponentProps<typeof ConfirmDialog> = {}) =>
   await flush()
   return doc_query<HTMLDialogElement>(`dialog.confirm-dialog`)
 }
+const unmount_host = async (index = -1) => {
+  const [app] = mounted.splice(index, 1)
+  if (!app) throw new Error(`No mounted ConfirmDialog at index ${index}`)
+  await unmount(app)
+  await flush()
+}
 const buttons = () => [
   ...document.querySelectorAll<HTMLButtonElement>(`dialog.confirm-dialog button`),
 ]
 const ask = (message: string, title: string) =>
   track(request_choice(message, title, write_choices, `cancel`))
+const ask_write = () => ask(`Overwrite?`, `Write files`)
+const ask_name = () => track(ask_prompt(`Name?`, `Profile`))
 
 // happy-dom does no layout, so supply the dialog box before pressing its ::backdrop.
 const press_backdrop = (dialog: HTMLDialogElement) => {
-  const rect = { left: 100, top: 100, right: 300, bottom: 200, width: 200, height: 100 }
-  dialog.getBoundingClientRect = () => rect as DOMRect
-  const init = { bubbles: true, clientX: 10, clientY: 10 }
-  dialog.dispatchEvent(new PointerEvent(`pointerdown`, { isPrimary: true, ...init }))
-  dialog.dispatchEvent(new MouseEvent(`click`, init))
+  dialog.getBoundingClientRect = () =>
+    ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
+  dialog.dispatchEvent(pointer_event(`pointerdown`, 10, 10))
+  dialog.dispatchEvent(pointer_event(`click`, 10, 10))
   dialog.close() // happy-dom does not implement native closedby="any" light dismissal
 }
+const submit_form = () =>
+  doc_query<HTMLFormElement>(`dialog form`).dispatchEvent(
+    new SubmitEvent(`submit`, { bubbles: true, cancelable: true }),
+  )
+const type_into = (input: HTMLInputElement, value: string) => {
+  input.value = value
+  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+}
+const heading = () => doc_query(`dialog h2`).textContent
 
-test(`shows the queued question and closes once the queue drains`, async () => {
+test(`shows the queued question, closes once drained and ignores a stale close`, async () => {
   const dialog = await mount_dialog({ backdrop_dim: false, backdrop_blur: true })
+  // defer the native close event so it can arrive after the next request is queued
+  const close_dialog = vi
+    .spyOn(dialog, `close`)
+    .mockImplementation(() => dialog.removeAttribute(`open`))
   expect(dialog.open).toBe(false)
   expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
   expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
@@ -59,7 +79,7 @@ test(`shows the queued question and closes once the queue drains`, async () => {
   await flush()
 
   expect(dialog.open).toBe(true)
-  expect(doc_query(`dialog h2`).textContent).toBe(`Write files`)
+  expect(heading()).toBe(`Write files`)
   expect(doc_query(`dialog p`).textContent).toBe(`Overwrite src/lib?`)
   expect(buttons().map((btn) => btn.textContent?.trim())).toEqual([`Cancel`, `Write`])
   // tone marks the answer to reach for, the dismiss choice stays plain
@@ -68,37 +88,23 @@ test(`shows the queued question and closes once the queue drains`, async () => {
   buttons()[1].click()
   await flush()
   expect([answer.settled, answer.value]).toEqual([true, `write`])
+  expect(close_dialog).toHaveBeenCalledOnce()
   expect(dialog.open).toBe(false)
   expect(buttons()).toHaveLength(0)
-})
-
-test(`a stale native close cannot dismiss a newly queued request`, async () => {
-  const dialog = await mount_dialog()
-  const close_dialog = vi
-    .spyOn(dialog, `close`)
-    .mockImplementation(() => dialog.removeAttribute(`open`))
-  const first = ask(`First?`, `First`)
-  await flush()
-  buttons()[1].click()
-  await flush()
-  expect(first.settled).toBe(true)
-  expect(close_dialog).toHaveBeenCalledOnce()
 
   const second = ask(`Second?`, `Second`)
   dialog.dispatchEvent(new Event(`close`))
   await flush()
-
   expect(second.settled).toBe(false)
   expect(dialog.open).toBe(true)
-  expect(doc_query(`dialog h2`).textContent).toBe(`Second`)
+  expect(heading()).toBe(`Second`)
 })
 
 test(`renders a typed rich body snippet`, async () => {
-  const dialog = await mount_dialog()
+  await mount_dialog()
   const body = createRawSnippet(() => ({
     render: () => `<strong data-testid="rich-body">Three files will be removed</strong>`,
   }))
-
   void request_choice(
     { kind: `snippet`, snippet: body },
     `Remove files`,
@@ -107,7 +113,6 @@ test(`renders a typed rich body snippet`, async () => {
   )
   await flush()
 
-  expect(dialog.open).toBe(true)
   expect(doc_query(`[data-testid="rich-body"]`).textContent).toBe(
     `Three files will be removed`,
   )
@@ -149,16 +154,10 @@ test(`prompt validation stays open, reports the error, then resolves the value`,
   ])
   expect(input.getAttribute(`aria-describedby`)).toBe(`consumer-hint`)
   expect(doc_query(`dialog label span`).textContent).toBe(`Workspace name`)
-  expect(buttons().map((button) => button.textContent?.trim())).toEqual([
-    `Cancel`,
-    `Create`,
-  ])
+  expect(buttons().map((btn) => btn.textContent?.trim())).toEqual([`Cancel`, `Create`])
 
-  input.value = ` `
-  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
-  doc_query<HTMLFormElement>(`dialog form`).dispatchEvent(
-    new SubmitEvent(`submit`, { bubbles: true, cancelable: true }),
-  )
+  type_into(input, ` `)
+  submit_form()
   await flush()
   expect(answer.settled).toBe(false)
   expect(dialog.open).toBe(true)
@@ -167,29 +166,16 @@ test(`prompt validation stays open, reports the error, then resolves the value`,
   expect(input.getAttribute(`aria-invalid`)).toBe(`true`)
   expect(input.getAttribute(`aria-describedby`)).toBe(`consumer-hint ${alert.id}`)
 
-  input.value = `widgets`
-  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+  type_into(input, `widgets`)
   await tick()
   expect(document.querySelector(`[role="alert"]`)).toBeNull()
   expect(input.getAttribute(`aria-invalid`)).toBeNull()
   expect(input.getAttribute(`aria-describedby`)).toBe(`consumer-hint`)
   expect(oninput).toHaveBeenCalledTimes(2)
-  doc_query<HTMLFormElement>(`dialog form`).dispatchEvent(
-    new SubmitEvent(`submit`, { bubbles: true, cancelable: true }),
-  )
+  submit_form()
   await flush()
   expect([answer.settled, answer.value]).toEqual([true, `widgets`])
   expect(dialog.open).toBe(false)
-})
-
-test(`dismissing a prompt returns null`, async () => {
-  const dialog = await mount_dialog()
-  const answer = track(ask_prompt(`Name?`, `Profile`))
-  await flush()
-
-  dialog.close()
-  await flush()
-  expect([answer.settled, answer.value]).toEqual([true, null])
 })
 
 // why the queue exists: a double-click's second half would otherwise answer the prompt
@@ -200,14 +186,14 @@ test(`one click cannot answer two racing requests`, async () => {
   const second = ask(`Delete .git?`, `Second`)
   await flush()
 
-  expect(doc_query(`dialog h2`).textContent).toBe(`First`)
+  expect(heading()).toBe(`First`)
   const stale_write_button = buttons()[1]
 
   stale_write_button.click()
   await flush()
   expect([first.settled, first.value]).toEqual([true, `write`])
   expect(second.settled).toBe(false)
-  expect(doc_query(`dialog h2`).textContent).toBe(`Second`) // dialog stayed up
+  expect(heading()).toBe(`Second`) // dialog stayed up
 
   // the second question reuses the same choice ids, so without {#key request} Svelte
   // keep these DOM nodes and the stale click would answer a question nobody read
@@ -227,20 +213,24 @@ test(`one click cannot answer two racing requests`, async () => {
 })
 
 // dismissing is not consent: both paths must answer dismiss_id, never the accented choice
+const escape = (dialog: HTMLDialogElement) => dialog.close()
 test.each([
-  [`Escape`, (dialog: HTMLDialogElement) => dialog.close()],
-  [`a backdrop click`, press_backdrop],
-])(`%s resolves with dismiss_id`, async (_desc, dismiss) => {
-  const dialog = await mount_dialog()
-  const answer = ask(`Overwrite?`, `Write files`)
-  await flush()
+  [`Escape on a choice`, escape, ask_write, `cancel`],
+  [`a backdrop click on a choice`, press_backdrop, ask_write, `cancel`],
+  [`Escape on a prompt`, escape, ask_name, null],
+] as const)(
+  `%s resolves with its dismiss value`,
+  async (_desc, dismiss, ask_fn, expected) => {
+    const dialog = await mount_dialog()
+    const answer = ask_fn()
+    await flush()
 
-  dismiss(dialog)
-  await flush()
-
-  expect([answer.settled, answer.value]).toEqual([true, `cancel`])
-  expect(dialog.open).toBe(false)
-})
+    dismiss(dialog)
+    await flush()
+    expect([answer.settled, answer.value]).toEqual([true, expected])
+    expect(dialog.open).toBe(false)
+  },
+)
 
 // answering removes the focused button, so without a hand-off the next question comes up
 // with the keyboard on <body>, outside the trap
@@ -277,16 +267,13 @@ test(`focus enters each question and returns to the opener`, async () => {
 
 test(`unmount safely dismisses every queued request`, async () => {
   await mount_dialog()
-  const first = ask(`Overwrite?`, `Write files`)
-  const second = track(ask_prompt(`Name?`, `Profile`))
+  const first = ask_write()
+  const second = ask_name()
   await flush()
 
   const elsewhere = create_element(`button`)
   elsewhere.focus()
-  const app = mounted.pop()
-  if (!app) throw new Error(`ConfirmDialog test app was not mounted`)
-  await unmount(app)
-  await flush()
+  await unmount_host()
 
   expect([first.settled, first.value]).toEqual([true, `cancel`])
   expect([second.settled, second.value]).toEqual([true, null])
@@ -295,27 +282,22 @@ test(`unmount safely dismisses every queued request`, async () => {
 })
 
 test(`only the last mounted host dismisses queued requests`, async () => {
-  const first_app = mount(ConfirmDialog, { target: document.body })
-  const second_app = mount(ConfirmDialog, { target: document.body })
-  mounted.push(first_app, second_app)
-  const answer = ask(`Overwrite?`, `Write files`)
+  await mount_dialog()
+  await mount_dialog()
+  const answer = ask_write()
   await flush()
 
-  await unmount(first_app)
-  mounted.splice(mounted.indexOf(first_app), 1)
-  await flush()
+  await unmount_host(0)
   expect(answer.settled).toBe(false)
   expect(dialog_queue).toHaveLength(1)
   expect(doc_query<HTMLDialogElement>(`dialog.confirm-dialog`).open).toBe(true)
 
-  await unmount(second_app)
-  mounted.splice(mounted.indexOf(second_app), 1)
-  await flush()
+  await unmount_host()
   expect([answer.settled, answer.value]).toEqual([true, `cancel`])
 })
 
 test(`SSR rendering does not settle the shared browser queue`, async () => {
-  const answer = ask(`Overwrite?`, `Write files`)
+  const answer = ask_write()
 
   render(ConfirmDialog)
   await flush()

@@ -21,7 +21,9 @@ describe(`Dialog`, () => {
     if (!app) throw new Error(`Dialog test app was not mounted`)
     await unmount(app)
   }
-  const trigger = () => doc_query<HTMLButtonElement>(`[data-testid="dialog-trigger"]`)
+  const item = (test_id: string) =>
+    doc_query<HTMLButtonElement>(`[data-testid="${test_id}"]`)
+  const trigger = () => item(`dialog-trigger`)
   const surface = () => document.querySelector<HTMLDialogElement>(`dialog.dialog`)
   // jsdom has no `closedby` light dismiss, so this doubles as the no-support fallback test
   const press_dialog_at = (dialog: HTMLDialogElement, client_x = 0, client_y = 0) => {
@@ -30,14 +32,13 @@ describe(`Dialog`, () => {
     dialog.dispatchEvent(pointer_event(`pointerdown`, client_x, client_y))
     dialog.dispatchEvent(pointer_event(`click`, client_x, client_y))
   }
+  // Escape as the browser drives it: a cancelable cancel event, then close unless prevented
   const cancel_dialog = (dialog: HTMLDialogElement) => {
     const event = new Event(`cancel`, { cancelable: true })
     dialog.dispatchEvent(event)
-    if (!event.defaultPrevented && dialog.getAttribute(`closedby`) !== `none`) {
-      dialog.close()
-    }
-    return event
+    if (!event.defaultPrevented) dialog.close()
   }
+  const dismiss = { pointer: press_dialog_at, escape: cancel_dialog }
 
   test(`trigger opens a native surface with header, footer, attributes and binding`, async () => {
     const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
@@ -65,30 +66,28 @@ describe(`Dialog`, () => {
     expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
     expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
-    expect(doc_query(`[data-testid="dialog-footer"]`).textContent).toBe(
-      `Changes are local`,
-    )
-    expect(doc_query(`[data-testid="bound-surface"]`).textContent).toBe(dialog.id)
+    expect(item(`dialog-footer`).textContent).toBe(`Changes are local`)
+    expect(item(`bound-surface`).textContent).toBe(dialog.id)
   })
 
   test.each([
-    [`Escape`, `escape`],
-    [`the backdrop`, `pointer`],
+    [`any`, `escape`],
+    [`any`, `pointer`],
+    [`closerequest`, `escape`],
   ] as const)(
-    `%s closes with its reason and restores focus without clobbering later focus`,
-    async (_label, via) => {
+    `closedby=%s closes on %s with its reason and restores focus`,
+    async (closedby, via) => {
       const on_close = vi.fn()
-      mount_dialog({ on_close })
+      mount_dialog({ closedby, on_close })
       trigger().focus()
       trigger().click()
       await tick()
 
       const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
-      if (via === `pointer`) {
-        press_dialog_at(dialog, 50, 50)
-        expect(surface()).toBe(dialog)
-        press_dialog_at(dialog)
-      } else cancel_dialog(dialog)
+      press_dialog_at(dialog, 50, 50) // a press inside the box never dismisses
+      await tick()
+      expect(surface()).toBe(dialog)
+      dismiss[via](dialog)
       await tick()
 
       expect(surface()).toBeNull()
@@ -103,12 +102,18 @@ describe(`Dialog`, () => {
     },
   )
 
-  test(`snippet controls and native close report close exactly once`, async () => {
+  test(`snippet, native and controlled closes each report once`, async () => {
     const on_close = vi.fn()
-    const props = mount_dialog({ open: true, on_close })
-    await tick()
+    const onclose = vi.fn()
+    const props = mount_dialog({ open: false, on_close, onclose })
+    const reopen = async () => {
+      props.open = true
+      await tick()
+    }
+    trigger().focus()
+    await reopen()
 
-    doc_query<HTMLButtonElement>(`[data-testid="dialog-action"]`).click()
+    item(`dialog-action`).click()
     await tick()
     expect([props.open, surface(), on_close.mock.calls]).toEqual([
       false,
@@ -116,42 +121,19 @@ describe(`Dialog`, () => {
       [[{ via: `close` }]],
     ])
 
-    props.open = true
-    await tick()
+    await reopen()
     doc_query<HTMLDialogElement>(`dialog.dialog`).close()
     await tick()
-    expect(props.open).toBe(false)
-    expect(surface()).toBeNull()
+    expect([props.open, surface()]).toEqual([false, null])
     expect(on_close).toHaveBeenCalledTimes(2)
     expect(on_close).toHaveBeenLastCalledWith({ via: `close` })
-  })
 
-  test(`consumer can prevent Escape dismissal`, async () => {
-    const on_close = vi.fn()
-    const oncancel = vi.fn((event: Event) => event.preventDefault())
-    mount_dialog({ open: true, on_close, oncancel })
-    await tick()
-
-    const cancel = cancel_dialog(doc_query<HTMLDialogElement>(`dialog.dialog`))
-    await tick()
-
-    expect(cancel.defaultPrevented).toBe(true)
-    expect(surface()?.open).toBe(true)
-    expect(on_close).not.toHaveBeenCalled()
-  })
-
-  test(`controlled open=false forwards the native close event`, async () => {
-    const onclose = vi.fn()
-    const props = mount_dialog({ onclose })
-    trigger().focus()
-    props.open = true
-    await tick()
-
+    // a controlled close is the consumer's own: it still forwards the native close event
+    await reopen()
     props.open = false
     await tick()
-
-    expect(onclose).toHaveBeenCalledOnce()
     expect(surface()).toBeNull()
+    expect([on_close.mock.calls.length, onclose.mock.calls.length]).toEqual([2, 3])
     expect(document.activeElement).toBe(trigger())
   })
 
@@ -164,66 +146,33 @@ describe(`Dialog`, () => {
     await tick()
     props.open = true
     await tick()
-    const current_surface = doc_query<HTMLDialogElement>(`dialog.dialog`)
-
-    expect(current_surface).not.toBe(old_surface)
+    expect(surface()).not.toBe(old_surface)
     old_surface.dispatchEvent(new Event(`close`))
     expect(props.open).toBe(true)
   })
 
-  test(`dismissal policies can keep backdrop and Escape open`, async () => {
-    const on_close = vi.fn()
-    mount_dialog({
-      open: true,
-      closedby: `none`,
-      on_close,
-    })
-    await tick()
-
-    const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
-    press_dialog_at(dialog)
-    const cancel = cancel_dialog(dialog)
-    await tick()
-
-    expect(surface()).toBe(dialog)
-    expect(dialog.open).toBe(true)
-    expect(cancel.defaultPrevented).toBe(true)
-    expect(on_close).not.toHaveBeenCalled()
-  })
-
   test.each([
-    [`none`, `pointer`, false],
-    [`none`, `escape`, false],
-    [`closerequest`, `pointer`, false],
-    [`closerequest`, `escape`, true],
-    [`any`, `pointer`, true],
-    [`any`, `escape`, true],
-  ] as const)(
-    `closedby=%s controls %s dismissal`,
-    async (closedby, via, should_close) => {
-      const on_close = vi.fn()
-      mount_dialog({
-        open: true,
-        closedby,
-        on_close,
-      })
-      await tick()
+    [`closedby=none`, { closedby: `none` }, `pointer`],
+    [`closedby=none`, { closedby: `none` }, `escape`],
+    [`closedby=closerequest`, { closedby: `closerequest` }, `pointer`],
+    [
+      `a preventing oncancel`,
+      { oncancel: (event: Event) => event.preventDefault() },
+      `escape`,
+    ],
+  ] as const)(`%s ignores %s dismissal`, async (_label, extra, via) => {
+    const on_close = vi.fn()
+    mount_dialog({ ...extra, open: true, on_close })
+    await tick()
 
-      const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
-      if (via === `pointer`) press_dialog_at(dialog)
-      else cancel_dialog(dialog)
-      await tick()
-
-      expect(surface() === null).toBe(should_close)
-      if (should_close) {
-        expect(on_close).toHaveBeenCalledExactlyOnceWith({ via })
-      } else {
-        doc_query<HTMLButtonElement>(`[data-testid="dialog-action"]`).click()
-        await tick()
-        expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `close` })
-      }
-    },
-  )
+    dismiss[via](doc_query<HTMLDialogElement>(`dialog.dialog`))
+    await tick()
+    expect(surface()?.open).toBe(true)
+    // the ignored dismissal must not leave its reason behind for the next close
+    item(`dialog-action`).click()
+    await tick()
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `close` })
+  })
 
   test(`nested dialogs stack, close independently, and restore each opener`, async () => {
     const on_close = vi.fn()
@@ -233,7 +182,7 @@ describe(`Dialog`, () => {
     trigger().click()
     await tick()
 
-    const nested_trigger = doc_query<HTMLButtonElement>(`[data-testid="nested-trigger"]`)
+    const nested_trigger = item(`nested-trigger`)
     nested_trigger.focus()
     nested_trigger.click()
     await tick()
@@ -267,8 +216,6 @@ describe(`Dialog`, () => {
     expect(doc_query<HTMLDialogElement>(`dialog.dialog`).open).toBe(true)
 
     await unmount_dialog()
-    await tick()
-
     expect(surface()).toBeNull()
     expect(on_close).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(focus_origin)

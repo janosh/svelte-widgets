@@ -12,8 +12,21 @@ describe(`draggable`, () => {
     mock_rect(element, rect)
     return element
   }
+  // cleanup also ends any drag a test leaves active
   const attach_draggable = (element: HTMLElement, options: DraggableOptions = {}) =>
     onTestFinished(draggable(options)(element) ?? (() => {}))
+  const move = (x: number, y: number, init: PointerEventInit = {}) =>
+    globalThis.dispatchEvent(pointer_event(`pointermove`, x, y, init))
+  const drag = (element: Element, from: number[], to: number[]) => {
+    element.dispatchEvent(pointer_event(`pointerdown`, from[0], from[1]))
+    move(to[0], to[1])
+  }
+  const position = ({ style }: HTMLElement) => [style.left, style.top]
+  const with_offsets = (element: HTMLElement) =>
+    Object.defineProperties(element, {
+      offsetLeft: { value: 25, configurable: true },
+      offsetTop: { value: 35, configurable: true },
+    })
 
   it(`handles normal and rejected-capture drag lifecycles`, () => {
     const element = create_fixed_box()
@@ -24,25 +37,20 @@ describe(`draggable`, () => {
       touchAction: `pan-y`,
     })
     const [on_drag_start, on_drag, on_drag_end] = [vi.fn(), vi.fn(), vi.fn()]
-
     const cleanup = draggable({ on_drag_start, on_drag, on_drag_end })(element)
     document.body.style.userSelect = `text`
     onTestFinished(() => void document.body.style.removeProperty(`user-select`))
-    expect(element.style.cursor).toBe(`grab`)
-    expect(element.style.touchAction).toBe(`none`)
+    expect([element.style.cursor, element.style.touchAction]).toEqual([`grab`, `none`])
 
     element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
-    expect(element.style.left).toBe(`10px`)
-    expect(element.style.top).toBe(`20px`)
+    expect(position(element)).toEqual([`10px`, `20px`])
     expect(element.style.cursor).toBe(`grabbing`)
     expect(document.body.style.userSelect).toBe(`none`)
     expect(on_drag_start).toHaveBeenCalledOnce()
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 15, 25))
-    expect(element.style.left).toBe(`20px`)
-    expect(element.style.top).toBe(`40px`)
-    expect(element.style.right).toBe(`auto`)
-    expect(element.style.bottom).toBe(`auto`)
+    move(15, 25)
+    const { left, top, right, bottom } = element.style
+    expect([left, top, right, bottom]).toEqual([`20px`, `40px`, `auto`, `auto`])
     expect(on_drag).toHaveBeenCalledOnce()
 
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
@@ -59,12 +67,14 @@ describe(`draggable`, () => {
     expect(on_drag_end).toHaveBeenCalledOnce()
     expect(element.style.cursor).toBe(`grab`)
     expect(document.body.style.userSelect).toBe(`text`)
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 25, 25))
+    move(25, 25)
     expect(on_drag).not.toHaveBeenCalled()
 
     cleanup?.()
-    expect(element.style.cursor).toBe(`pointer`)
-    expect(element.style.touchAction).toBe(`pan-y`)
+    expect([element.style.cursor, element.style.touchAction]).toEqual([
+      `pointer`,
+      `pan-y`,
+    ])
   })
 
   it.each([
@@ -72,39 +82,22 @@ describe(`draggable`, () => {
     [`y`, [`1px`, `60px`, `3px`, `auto`]],
   ] as const)(`locks dragging to the %s axis`, (axis, expected) => {
     const element = create_fixed_box()
-    Object.assign(element.style, {
-      left: `1px`,
-      top: `2px`,
-      right: `3px`,
-      bottom: `4px`,
-    })
+    Object.assign(element.style, { left: `1px`, top: `2px`, right: `3px`, bottom: `4px` })
     attach_draggable(element, { axis })
 
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 35, 45))
-
-    expect([
-      element.style.left,
-      element.style.top,
-      element.style.right,
-      element.style.bottom,
-    ]).toEqual(expected)
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 35, 45))
+    drag(element, [5, 5], [35, 45])
+    const { left, top, right, bottom } = element.style
+    expect([left, top, right, bottom]).toEqual(expected)
   })
 
   it(`keeps a fixed node within viewport-coordinate bounds`, () => {
     const element = create_fixed_box()
-    attach_draggable(element, {
-      bounds: { top: 0, right: 120, bottom: 80, left: 0 },
-    })
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
+    attach_draggable(element, { bounds: { top: 0, right: 120, bottom: 80, left: 0 } })
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 100))
-    expect([element.style.left, element.style.top]).toEqual([`20px`, `30px`])
-
-    globalThis.dispatchEvent(pointer_event(`pointermove`, -100, -100))
-    expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, -100, -100))
+    drag(element, [5, 5], [100, 100])
+    expect(position(element)).toEqual([`20px`, `30px`])
+    move(-100, -100)
+    expect(position(element)).toEqual([`0px`, `0px`])
   })
 
   it.each([`parent`, `element`] as const)(
@@ -115,37 +108,27 @@ describe(`draggable`, () => {
       const element = create_element(`div`, { position: `absolute` })
       parent.append(element)
       mock_rect(element, { left: 125, top: 235, width: 50, height: 40 })
-      Object.defineProperties(element, {
-        offsetLeft: { value: 25, configurable: true },
-        offsetTop: { value: 35, configurable: true },
-      })
+      with_offsets(element)
       attach_draggable(element, { bounds: kind === `parent` ? `parent` : parent })
-      element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
 
-      globalThis.dispatchEvent(pointer_event(`pointermove`, 500, 500))
-      expect([element.style.left, element.style.top]).toEqual([`250px`, `160px`])
-
-      globalThis.dispatchEvent(pointer_event(`pointermove`, -500, -500))
-      expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
-      globalThis.dispatchEvent(pointer_event(`pointerup`, -500, -500))
+      drag(element, [0, 0], [500, 500])
+      expect(position(element)).toEqual([`250px`, `160px`])
+      move(-500, -500)
+      expect(position(element)).toEqual([`0px`, `0px`])
     },
   )
 
   it.each([`relative`, `static`] as const)(
     `drags an in-flow %s node from its insets, not its offset`,
-    (position) => {
-      const element = create_element(`div`, { position, left: `5px` })
-      Object.defineProperties(element, {
-        offsetLeft: { value: 25, configurable: true },
-        offsetTop: { value: 35, configurable: true },
-      })
+    (css_position) => {
+      const element = with_offsets(
+        create_element(`div`, { position: css_position, left: `5px` }),
+      )
       attach_draggable(element)
-      element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-      globalThis.dispatchEvent(pointer_event(`pointermove`, 10, 10))
 
+      drag(element, [0, 0], [10, 10])
       expect(element.style.position).toBe(`relative`)
-      expect([element.style.left, element.style.top]).toEqual([`15px`, `10px`])
-      globalThis.dispatchEvent(pointer_event(`pointerup`, 10, 10))
+      expect(position(element)).toEqual([`15px`, `10px`])
     },
   )
 
@@ -155,21 +138,17 @@ describe(`draggable`, () => {
     const element = create_fixed_box()
     parent.append(element)
     attach_draggable(element, { bounds: `parent` })
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 15, 25))
 
-    expect([element.style.left, element.style.top]).toEqual([`20px`, `40px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 15, 25))
+    drag(element, [5, 5], [15, 25])
+    expect(position(element)).toEqual([`20px`, `40px`])
   })
 
   it(`pins the leading edge when the node is larger than its bounds`, () => {
     const element = create_fixed_box({ left: 10, top: 20, width: 150, height: 100 })
     attach_draggable(element, { bounds: new DOMRect(0, 0, 100, 80) })
-    element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 100))
 
-    expect([element.style.left, element.style.top]).toEqual([`0px`, `0px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 100, 100))
+    drag(element, [0, 0], [100, 100])
+    expect(position(element)).toEqual([`0px`, `0px`])
   })
 
   it.each([
@@ -179,8 +158,8 @@ describe(`draggable`, () => {
     const element = create_fixed_box()
     attach_draggable(element)
     element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, init))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50))
-    expect([element.style.left, element.style.top]).toEqual([``, ``])
+    move(50, 50)
+    expect(position(element)).toEqual([``, ``])
   })
 
   // either ends the drag: nothing more arrives for a canceled pointer or one whose capture
@@ -188,94 +167,83 @@ describe(`draggable`, () => {
   it.each([
     [
       `pointercancel`,
-      (el: HTMLElement, id: number) =>
-        globalThis.dispatchEvent(pointer_event(`pointercancel`, 0, 0, { pointerId: id })),
+      (_el: HTMLElement, init: PointerEventInit) =>
+        globalThis.dispatchEvent(pointer_event(`pointercancel`, 0, 0, init)),
     ],
     [
       `lostpointercapture`,
-      (el: HTMLElement, id: number) =>
-        el.dispatchEvent(pointer_event(`lostpointercapture`, 0, 0, { pointerId: id })),
+      (el: HTMLElement, init: PointerEventInit) =>
+        el.dispatchEvent(pointer_event(`lostpointercapture`, 0, 0, init)),
     ],
   ])(`ignores another pointer and ends on %s`, (_end_type, dispatch_end) => {
     const element = create_fixed_box()
     const on_drag_end = vi.fn()
     attach_draggable(element, { on_drag_end })
+    const [first, second] = [{ pointerId: 3 }, { pointerId: 2 }]
 
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, { pointerId: 3 }))
+    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, first))
     expect(element.hasPointerCapture(3)).toBe(true)
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50, { pointerId: 2 }))
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 50, 50, { pointerId: 2 }))
-    expect([element.style.left, element.style.top]).toEqual([`10px`, `20px`])
+    move(50, 50, second)
+    globalThis.dispatchEvent(pointer_event(`pointerup`, 50, 50, second))
+    expect(position(element)).toEqual([`10px`, `20px`])
     expect(on_drag_end).not.toHaveBeenCalled()
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 15, 25, { pointerId: 3 }))
-    dispatch_end(element, 3)
+    move(15, 25, first)
+    dispatch_end(element, first)
     expect(on_drag_end).toHaveBeenCalledOnce()
     expect(document.body.style.userSelect).toBe(``)
     expect(element.hasPointerCapture(3)).toBe(false)
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50, { pointerId: 3 }))
-    expect([element.style.left, element.style.top]).toEqual([`20px`, `40px`])
+    move(50, 50, first)
+    expect(position(element)).toEqual([`20px`, `40px`])
   })
 
   it(`does not set up dragging when disabled`, () => {
     const element = create_fixed_box()
-    const cleanup = draggable({ disabled: true })(element)
-    expect(cleanup).toBeUndefined()
+    expect(draggable({ disabled: true })(element)).toBeUndefined()
     expect(element.style.cursor).toBe(``)
 
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50))
-    expect([element.style.left, element.style.top]).toEqual([``, ``])
+    drag(element, [5, 5], [50, 50])
+    expect(position(element)).toEqual([``, ``])
   })
 
   it(`warns and returns undefined for a missing handle selector`, () => {
-    const element = create_element()
     const warn_spy = vi.spyOn(console, `warn`).mockImplementation(() => {})
+    onTestFinished(() => warn_spy.mockRestore())
 
-    const cleanup = draggable({ handle_selector: `.nonexistent` })(element)
-
-    expect(cleanup).toBeUndefined()
+    expect(
+      draggable({ handle_selector: `.nonexistent` })(create_element()),
+    ).toBeUndefined()
     expect(warn_spy).toHaveBeenCalledWith(expect.stringContaining(`.nonexistent`))
-    warn_spy.mockRestore()
   })
 
   it(`drags only when the event originates from handle_selector`, () => {
     const element = create_fixed_box({ left: 0, top: 0 })
-
     const handle = document.createElement(`div`)
     handle.className = `drag-handle`
     element.append(handle)
-
     attach_draggable(element, { handle_selector: `.drag-handle` })
 
-    element.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 50, 50))
-    expect(element.style.left).toBe(``)
-    expect(element.style.top).toBe(``)
+    drag(element, [0, 0], [50, 50])
+    expect(position(element)).toEqual([``, ``])
 
-    handle.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 30, 40))
-    expect(element.style.left).toBe(`30px`)
-    expect(element.style.top).toBe(`40px`)
+    drag(handle, [0, 0], [30, 40])
+    expect(position(element)).toEqual([`30px`, `40px`])
   })
 
   it(`ignores a second primary press and cleans up mid-drag`, () => {
     const element = create_fixed_box({ left: 0, top: 0 })
-
     const cleanup = draggable()(element)
     element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, { pointerId: 1 }))
     expect(document.body.style.userSelect).toBe(`none`)
     expect(element.style.cursor).toBe(`grabbing`)
 
-    // A second primary press must not replace the first pointer follower.
+    // a second primary press must not replace the first pointer follower
     element.dispatchEvent(pointer_event(`pointerdown`, 8, 8, { pointerId: 2 }))
     cleanup?.() // unmount mid-drag, before any release
-    expect(document.body.style.userSelect).toBe(``)
-    expect(element.style.cursor).toBe(``)
+    expect([document.body.style.userSelect, element.style.cursor]).toEqual([``, ``])
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 100, { pointerId: 1 }))
-    expect(element.style.left).toBe(`0px`)
-    expect(element.style.top).toBe(`0px`)
+    move(100, 100, { pointerId: 1 })
+    expect(position(element)).toEqual([`0px`, `0px`])
   })
 })

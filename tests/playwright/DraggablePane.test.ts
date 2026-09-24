@@ -23,13 +23,23 @@ const mouse_drag = async (page: Page, from: Point, [dx, dy]: readonly number[]) 
   await page.mouse.up()
 }
 
+// default offset={ x: 5, y: 5 } hangs the pane off the toggle's bottom right; 0 is anchored
+const anchoring_error = async (pane: Locator, toggle: Locator) => {
+  const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
+  return {
+    right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
+    top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
+  }
+}
+
 const open_pane = async (page: Page) => {
   await page.goto(`/draggable-pane`, { waitUntil: `networkidle` })
-  await page.locator(`button.pane-toggle`).first().click()
+  const toggle = page.locator(`button.pane-toggle`).first()
+  await toggle.click()
   const pane = page.locator(`div.draggable-pane`).first()
   await expect(pane).toBeVisible()
   await pane.scrollIntoViewIfNeeded() // coords outside the viewport hit nothing
-  return { pane, handle: pane.locator(`.drag-handle`) }
+  return { pane, toggle, handle: pane.locator(`.drag-handle`) }
 }
 
 test(`a mouse drag moves the pane`, async ({ page }) => {
@@ -62,17 +72,8 @@ test(`the outermost pixel of the right edge still resizes`, async ({ page }) => 
 test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, async ({
   page,
 }) => {
-  const { pane } = await open_pane(page)
-  const toggle = page.locator(`button.pane-toggle`).first()
-  const anchoring_error = async () => {
-    const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
-    return {
-      // default offset={ x: 5, y: 5 } hangs the pane off the toggle's bottom right
-      right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
-      top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
-    }
-  }
-  expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
+  const { pane, toggle } = await open_pane(page)
+  expect(await anchoring_error(pane, toggle)).toEqual({ right: 0, top: 0 })
 
   await toggle.evaluate((element: HTMLElement) => {
     const ancestor = element.offsetParent as HTMLElement
@@ -82,7 +83,7 @@ test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, asy
   await toggle.click()
   await toggle.click()
   await expect(pane).toBeVisible()
-  expect(await anchoring_error()).toEqual({ right: 0, top: 0 })
+  expect(await anchoring_error(pane, toggle)).toEqual({ right: 0, top: 0 })
 })
 
 // A toggle outside the pane's containing block has offsetParent null (viewport) while the
@@ -91,8 +92,7 @@ test(`a bordered positioned ancestor keeps the pane anchored to its toggle`, asy
 test(`a fixed toggle still anchors the pane to its own offset parent`, async ({
   page,
 }) => {
-  const { pane } = await open_pane(page)
-  const toggle = page.locator(`button.pane-toggle`).first()
+  const { pane, toggle } = await open_pane(page)
 
   await toggle.evaluate((element: HTMLElement) => {
     const host = element.offsetParent as HTMLElement
@@ -108,12 +108,7 @@ test(`a fixed toggle still anchors the pane to its own offset parent`, async ({
   await toggle.click()
   await toggle.click()
   await expect(pane).toBeVisible()
-
-  const [pane_box, toggle_box] = await Promise.all([box_of(pane), box_of(toggle)])
-  expect({
-    right: pane_box.x + pane_box.width - (toggle_box.x + toggle_box.width + 5),
-    top: pane_box.y - (toggle_box.y + toggle_box.height + 5),
-  }).toEqual({ right: 0, top: 0 })
+  expect(await anchoring_error(pane, toggle)).toEqual({ right: 0, top: 0 })
 })
 
 // The corner has its own square handle painted over the two edge strips it overlaps, so it

@@ -1,21 +1,20 @@
-import { file_drop } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { file_drop, type FileDropOptions } from '$lib/attachments'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { create_element, data_transfer, drag_event } from '../index'
 
 describe(`file_drop`, () => {
-  const cleanups: (() => void)[] = []
-  afterEach(() => {
-    for (const cleanup of cleanups.splice(0)) cleanup()
-    vi.unstubAllGlobals()
-  })
   const attach_file_drop = (
     options: Parameters<typeof file_drop>[0],
     node = create_element(),
   ) => {
     const cleanup = file_drop(options)(node)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     return { node, cleanup }
   }
+  const file = (name: string, type = ``) => new File([``], name, { type })
+  const files_of = (...names: string[]) => data_transfer(names.map((name) => file(name)))
+  const drop = (node: HTMLElement, transfer: DataTransfer) =>
+    node.dispatchEvent(drag_event(`drop`, transfer))
   const flush_tasks = () => new Promise<void>((resolve) => void setTimeout(resolve, 0))
   const pending_until_aborted = (signal: AbortSignal) =>
     new Promise<void>((_resolve, reject) => {
@@ -25,27 +24,26 @@ describe(`file_drop`, () => {
         { once: true },
       )
     })
-  const delayed_transfer = (file: File) => {
-    let deliver_file: FileCallback | undefined
-    const entry = {
-      isFile: true,
-      isDirectory: false,
-      name: file.name,
-      fullPath: `/${file.name}`,
-      file: (callback: FileCallback) => {
-        deliver_file = callback
-      },
-    } as unknown as FileSystemFileEntry
+  const aborted_calls = (on_files: ReturnType<typeof vi.fn>) =>
+    on_files.mock.calls.map(([, signal]) => (signal as AbortSignal).aborted)
+  const active_calls = (on_drag_active: ReturnType<typeof vi.fn>) =>
+    on_drag_active.mock.calls.map(([active]) => active)
+  // a directory-style drop whose single file entry reads through `read_file`
+  const entry_transfer = (name: string, read_file: FileSystemFileEntry[`file`]) => {
+    const entry = { isFile: true, isDirectory: false, name, fullPath: `/${name}` }
     const item = {
       kind: `file`,
-      webkitGetAsEntry: () => entry,
+      webkitGetAsEntry: () => ({ ...entry, file: read_file }),
     } as unknown as DataTransferItem
+    return data_transfer([], [item])
+  }
+  const delayed_transfer = (name: string) => {
+    let deliver_file: FileCallback | undefined
     return {
-      transfer: data_transfer([], [item]),
+      transfer: entry_transfer(name, (callback) => void (deliver_file = callback)),
       resolve: () => {
-        if (!deliver_file)
-          throw new Error(`Delayed file ${file.name} was never requested`)
-        deliver_file(file)
+        if (!deliver_file) throw new Error(`Delayed file ${name} was never requested`)
+        deliver_file(file(name))
       },
     }
   }
@@ -53,10 +51,10 @@ describe(`file_drop`, () => {
   it(`tracks nested drag activity, filters accept types, and honors multiple`, async () => {
     const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
     const transfer = data_transfer([
-      new File([`one`], `one.TXT`, { type: `text/plain` }),
-      new File([`image`], `photo.webp`, { type: `image/webp` }),
-      new File([`pdf`], `notes.bin`, { type: `application/pdf` }),
-      new File([`skip`], `skip.json`, { type: `application/json` }),
+      file(`one.TXT`, `text/plain`),
+      file(`photo.webp`, `image/webp`),
+      file(`notes.bin`, `application/pdf`),
+      file(`skip.json`, `application/json`),
     ])
     const { node } = attach_file_drop({
       accept: `.txt,image/*,application/pdf`,
@@ -79,41 +77,37 @@ describe(`file_drop`, () => {
 
     node.dispatchEvent(drag_event(`dragleave`, transfer))
     expect(node.hasAttribute(`data-drag-active`)).toBe(true)
-    node.dispatchEvent(drag_event(`drop`, transfer))
+    drop(node, transfer)
 
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
-    expect(on_files.mock.calls[0][0].map((file: File) => file.name)).toEqual([
+    expect(on_files.mock.calls[0][0].map((dropped: File) => dropped.name)).toEqual([
       `one.TXT`,
       `photo.webp`,
       `notes.bin`,
     ])
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
-    expect(on_drag_active.mock.calls.map(([active]) => active)).toEqual([true, false])
+    expect(active_calls(on_drag_active)).toEqual([true, false])
   })
 
   it.each([
     [
       `single-file mode chooses the first accepted file`,
       [
-        new File([``], `skip.txt`, { type: `text/plain` }),
-        new File([``], `first.png`, { type: `image/png` }),
-        new File([``], `second.png`, { type: `image/png` }),
+        file(`skip.txt`, `text/plain`),
+        file(`first.png`, `image/png`),
+        file(`second.png`, `image/png`),
       ],
       [[`first.png`]],
     ],
-    [
-      `a drop with no accepted file is ignored`,
-      [new File([``], `notes.txt`, { type: `text/plain` })],
-      [],
-    ],
-  ] as const)(`%s`, async (_description, files, expected_calls) => {
+    [`a drop with no accepted file is ignored`, [file(`notes.txt`, `text/plain`)], []],
+  ])(`%s`, async (_description, files, expected_calls) => {
     const on_files = vi.fn<(files: File[]) => void>()
     const { node } = attach_file_drop({ accept: `image/*`, on_files })
 
-    node.dispatchEvent(drag_event(`drop`, data_transfer([...files])))
+    drop(node, data_transfer(files))
     await flush_tasks()
     expect(
-      on_files.mock.calls.map(([accepted]) => accepted.map((file) => file.name)),
+      on_files.mock.calls.map(([accepted]) => accepted.map(({ name }) => name)),
     ).toEqual(expected_calls)
   })
 
@@ -123,36 +117,31 @@ describe(`file_drop`, () => {
       pending_until_aborted(signal),
     )
     const { node, cleanup } = attach_file_drop({ accept: `.txt`, on_files, on_error })
-    const first = delayed_transfer(new File([``], `first.txt`))
-    const second = new File([``], `second.txt`)
+    const first = delayed_transfer(`first.txt`)
 
-    node.dispatchEvent(drag_event(`drop`, first.transfer))
-    node.dispatchEvent(drag_event(`drop`, data_transfer([second])))
+    drop(node, first.transfer)
+    drop(node, files_of(`second.txt`))
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
-    expect(on_files.mock.calls[0][0].map((file: File) => file.name)).toEqual([
-      `second.txt`,
-    ])
+    expect(on_files.mock.calls[0][0].map(({ name }) => name)).toEqual([`second.txt`])
 
     first.resolve()
     await flush_tasks()
     expect(on_files).toHaveBeenCalledOnce()
 
-    const rejected_transfer = data_transfer([new File([``], `rejected.png`)])
-    node.dispatchEvent(drag_event(`drop`, rejected_transfer))
+    drop(node, files_of(`rejected.png`))
     await flush_tasks()
-    expect(on_files.mock.calls.map(([, signal]) => signal.aborted)).toEqual([false])
+    expect(aborted_calls(on_files)).toEqual([false])
 
-    const third = new File([``], `third.txt`)
-    node.dispatchEvent(drag_event(`drop`, data_transfer([third])))
+    drop(node, files_of(`third.txt`))
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledTimes(2))
-    expect(on_files.mock.calls.map(([, signal]) => signal.aborted)).toEqual([true, false])
+    expect(aborted_calls(on_files)).toEqual([true, false])
 
-    const after_cleanup = delayed_transfer(new File([``], `after-cleanup.txt`))
-    node.dispatchEvent(drag_event(`drop`, after_cleanup.transfer))
+    const after_cleanup = delayed_transfer(`after-cleanup.txt`)
+    drop(node, after_cleanup.transfer)
     cleanup?.()
     after_cleanup.resolve()
     await flush_tasks()
-    expect(on_files.mock.calls.map(([, signal]) => signal.aborted)).toEqual([true, true])
+    expect(aborted_calls(on_files)).toEqual([true, true])
     expect(on_error).not.toHaveBeenCalled()
   })
 
@@ -165,36 +154,24 @@ describe(`file_drop`, () => {
       return pending_until_aborted(signal)
     })
     const attached = attach_file_drop({ on_files })
-    if (typeof attached.cleanup !== `function`) throw new Error(`Missing cleanup`)
-    cleanup = attached.cleanup
-    const first_transfer = data_transfer([new File([``], `first.txt`)])
-    const second_transfer = data_transfer([new File([``], `second.txt`)])
+    cleanup = attached.cleanup || undefined
 
-    attached.node.dispatchEvent(drag_event(`drop`, first_transfer))
+    drop(attached.node, files_of(`first.txt`))
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
-    attached.node.dispatchEvent(drag_event(`drop`, second_transfer))
+    drop(attached.node, files_of(`second.txt`))
     await flush_tasks()
-
     expect(on_files).toHaveBeenCalledOnce()
   })
 
   it(`reports directory expansion failures through on_error`, async () => {
     const failure = new DOMException(`entry disappeared`, `NotFoundError`)
-    const broken_entry = {
-      isFile: true,
-      isDirectory: false,
-      name: `broken.txt`,
-      fullPath: `/broken.txt`,
-      file: (_on_file: FileCallback, on_error?: ErrorCallback) => on_error?.(failure),
-    } as FileSystemFileEntry
-    const item = {
-      kind: `file`,
-      webkitGetAsEntry: () => broken_entry,
-    } as unknown as DataTransferItem
     const [on_files, on_error] = [vi.fn(), vi.fn()]
     const { node } = attach_file_drop({ multiple: true, on_files, on_error })
 
-    node.dispatchEvent(drag_event(`drop`, data_transfer([], [item])))
+    drop(
+      node,
+      entry_transfer(`broken.txt`, (_on_file, on_fail) => on_fail?.(failure)),
+    )
     await vi.waitFor(() => expect(on_error).toHaveBeenCalledExactlyOnceWith(failure))
     expect(on_files).not.toHaveBeenCalled()
   })
@@ -206,18 +183,18 @@ describe(`file_drop`, () => {
       on_files,
       on_drag_active,
     })
-    const transfer = data_transfer([
-      new File([``], `ignored.txt`, { type: `text/plain` }),
-    ])
-    const dragover = drag_event(`dragover`, transfer)
-    const drop = drag_event(`drop`, transfer)
+    const transfer = data_transfer([file(`ignored.txt`, `text/plain`)])
+    const [dragover, drop_event] = [
+      drag_event(`dragover`, transfer),
+      drag_event(`drop`, transfer),
+    ]
 
     node.dispatchEvent(dragover)
-    node.dispatchEvent(drop)
+    node.dispatchEvent(drop_event)
     expect(cleanup).toBeTypeOf(`function`)
     expect(dragover.defaultPrevented).toBe(true)
     expect(transfer.dropEffect).toBe(`none`)
-    expect(drop.defaultPrevented).toBe(true)
+    expect(drop_event.defaultPrevented).toBe(true)
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
     expect(on_drag_active).not.toHaveBeenCalled()
     expect(on_files).not.toHaveBeenCalled()
@@ -225,7 +202,7 @@ describe(`file_drop`, () => {
 
   it(`global dragend clears activity after unbalanced dragenter events`, () => {
     const on_drag_active = vi.fn()
-    const transfer = data_transfer([new File([``], `file.txt`)])
+    const transfer = files_of(`file.txt`)
     const { node } = attach_file_drop({ on_files: vi.fn(), on_drag_active })
 
     node.dispatchEvent(drag_event(`dragenter`, transfer))
@@ -234,72 +211,50 @@ describe(`file_drop`, () => {
     globalThis.dispatchEvent(drag_event(`dragend`, transfer))
 
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
-    expect(on_drag_active.mock.calls.map(([active]) => active)).toEqual([true, false])
+    expect(active_calls(on_drag_active)).toEqual([true, false])
   })
 
-  it(`uses reportError when asynchronous processing fails without on_error`, async () => {
-    const report_error = vi.fn()
-    vi.stubGlobal(`reportError`, report_error)
-    const failure = new Error(`consumer rejected files`)
-    const on_files = vi.fn((files: File[], signal: AbortSignal) => {
-      if (files[0]?.name === `second.txt`) throw failure
-      return pending_until_aborted(signal)
-    })
-    const { node } = attach_file_drop({ on_files })
-
-    const first_transfer = data_transfer([new File([``], `first.txt`)])
-    node.dispatchEvent(drag_event(`drop`, first_transfer))
-    await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
-    const second_transfer = data_transfer([new File([``], `second.txt`)])
-    node.dispatchEvent(drag_event(`drop`, second_transfer))
-    await vi.waitFor(() => expect(report_error).toHaveBeenCalledExactlyOnceWith(failure))
-    expect(on_files.mock.calls.map(([, signal]) => signal.aborted)).toEqual([true, false])
-  })
-
+  // a consumer's handler failing must not itself become an unhandled rejection
+  const consumer_failure = new Error(`consumer rejected files`)
   const reporting_error = new Error(`error reporter failed`)
-  it.each([
+  it.each<[string, FileDropOptions[`on_error`], Error]>([
+    [`on_error is absent`, undefined, consumer_failure],
     [
-      `throws`,
+      `on_error throws`,
       () => {
         throw reporting_error
       },
+      reporting_error,
     ],
-    [`rejects`, () => Promise.reject(reporting_error)],
-  ])(`uses reportError when on_error %s`, async (_description, report_failure) => {
+    [`on_error rejects`, () => Promise.reject(reporting_error), reporting_error],
+  ])(`uses reportError when %s`, async (_description, on_error, reported) => {
     const report_error = vi.fn()
     vi.stubGlobal(`reportError`, report_error)
-    const initial_failure = new Error(`consumer rejected files`)
-    const on_error = vi.fn(report_failure)
-    const { node } = attach_file_drop({
-      on_files: vi.fn(() => {
-        throw initial_failure
-      }),
-      on_error,
-    })
+    onTestFinished(() => void vi.unstubAllGlobals())
+    const on_files = () => {
+      throw consumer_failure
+    }
+    const { node } = attach_file_drop({ on_files, on_error })
 
-    const transfer = data_transfer([new File([``], `file.txt`)])
-    node.dispatchEvent(drag_event(`drop`, transfer))
-    await vi.waitFor(() =>
-      expect(report_error).toHaveBeenCalledExactlyOnceWith(reporting_error),
-    )
-    expect(on_error).toHaveBeenCalledExactlyOnceWith(initial_failure)
+    drop(node, files_of(`file.txt`))
+    await vi.waitFor(() => expect(report_error).toHaveBeenCalledExactlyOnceWith(reported))
   })
 
   it(`cleanup removes handlers, resets state, and restores the prior data attribute`, () => {
     const node = create_element()
     node.setAttribute(`data-drag-active`, `consumer-value`)
     const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
-    const transfer = data_transfer([new File([``], `file.txt`)])
+    const transfer = files_of(`file.txt`)
     const { cleanup } = attach_file_drop({ on_files, on_drag_active }, node)
 
     node.dispatchEvent(drag_event(`dragenter`, transfer))
     cleanup?.()
-    expect(on_drag_active.mock.calls.map(([active]) => active)).toEqual([true, false])
+    expect(active_calls(on_drag_active)).toEqual([true, false])
     expect(node.getAttribute(`data-drag-active`)).toBe(`consumer-value`)
 
-    const drop = drag_event(`drop`, transfer)
-    node.dispatchEvent(drop)
-    expect(drop.defaultPrevented).toBe(false)
+    const drop_event = drag_event(`drop`, transfer)
+    node.dispatchEvent(drop_event)
+    expect(drop_event.defaultPrevented).toBe(false)
     expect(on_files).not.toHaveBeenCalled()
   })
 })

@@ -1,4 +1,4 @@
-import type { TooltipOpenReason, TooltipOptions } from '$lib/attachments'
+import type { TooltipOptions } from '$lib/attachments'
 import { register_escape_layer, tooltip } from '$lib/attachments'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -49,21 +49,20 @@ describe(`tooltip manager`, () => {
     return { cleanup: attach_tooltip(element, options), element }
   }
 
-  const open_detail = (trigger: HTMLElement, reason: TooltipOpenReason) => ({
-    trigger,
-    reason,
-  })
+  const append_child = (root: HTMLElement, attribute: string, value: string) => {
+    const child = document.createElement(`button`)
+    child.setAttribute(attribute, value)
+    root.append(child)
+    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
+    return child
+  }
 
   const pointer_out = (
     element: HTMLElement,
     related_target: EventTarget = document.body,
   ) => {
-    element.dispatchEvent(
-      pointer_event(`pointerout`, 110, 110, {
-        pointerType: `mouse`,
-        relatedTarget: related_target,
-      }),
-    )
+    const init = { pointerType: `mouse`, relatedTarget: related_target }
+    element.dispatchEvent(pointer_event(`pointerout`, 110, 110, init))
     vi.advanceTimersByTime(0)
   }
   const focus_in = (element: HTMLElement) =>
@@ -75,6 +74,8 @@ describe(`tooltip manager`, () => {
     vi.advanceTimersByTime(0)
   }
 
+  const visible_text = () =>
+    document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null
   const visible_tooltip = (): HTMLElement => {
     const tooltip_el = doc_query(`.custom-tooltip`)
     expect(tooltip_el.hidden).toBe(false)
@@ -107,7 +108,7 @@ describe(`tooltip manager`, () => {
     [`title`, `From title`],
     [`aria-label`, `From aria`],
     [`data-title`, `From data`],
-  ])(`resolves %s content and restores stripped titles`, (attribute, expected) => {
+  ])(`resolves %s content and closes once on repeated cleanup`, (attribute, expected) => {
     const element = create_element(`button`)
     element.setAttribute(attribute, expected)
     const on_open_change = vi.fn()
@@ -115,9 +116,7 @@ describe(`tooltip manager`, () => {
     pointer_over(element)
 
     expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
-    if (attribute === `title`) expect(element.hasAttribute(`title`)).toBe(false)
     cleanup()
-    if (attribute === `title`) expect(element.title).toBe(expected)
     cleanup()
     expect(
       on_open_change.mock.calls.map(([open, detail]) => [open, detail.reason]),
@@ -140,10 +139,7 @@ describe(`tooltip manager`, () => {
   )
 
   it(`gives explicit content precedence and treats an empty result as disabled`, () => {
-    const element = create_element(`button`)
-    element.title = `Native`
-    attach_tooltip(element, { content: `Explicit` })
-    pointer_over(element)
+    pointer_over(register_tooltip(`Native`, { content: `Explicit` }).element)
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Explicit`)
 
     const empty = create_element(`button`)
@@ -151,17 +147,13 @@ describe(`tooltip manager`, () => {
     attach_tooltip(empty, { content: () => `` })
     pointer_over(empty)
     const tooltip_el = doc_query(`.custom-tooltip`)
-    expect(tooltip_el.hidden).toBe(true)
-    expect(tooltip_el.style.display).toBe(`none`)
+    expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
   })
 
   it.each([{}, { content: undefined }])(`delegates with absent content %j`, (options) => {
     const root = create_element()
     attach_tooltip(root, options)
-    const child = document.createElement(`button`)
-    child.title = `Dynamic child`
-    root.append(child)
-    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
+    const child = append_child(root, `title`, `Dynamic child`)
 
     pointer_over(child)
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Dynamic child`)
@@ -176,9 +168,7 @@ describe(`tooltip manager`, () => {
 
   it(`honors explicitly disabled delegation with undefined content`, () => {
     const root = create_element()
-    const child = document.createElement(`button`)
-    child.title = `<b>Untrusted</b>`
-    root.append(child)
+    const child = append_child(root, `title`, `<b>Untrusted</b>`)
     attach_tooltip(root, { content: undefined, delegate: false })
 
     pointer_over(child)
@@ -191,12 +181,7 @@ describe(`tooltip manager`, () => {
       delegate: `[data-tip]`,
       content: (trigger) => trigger.getAttribute(`data-tip`) ?? ``,
     })
-    const child = document.createElement(`button`)
-    child.setAttribute(`data-tip`, `Selected child`)
-    root.append(child)
-    mock_rect(child, { left: 120, top: 120, width: 80, height: 30 })
-
-    pointer_over(child)
+    pointer_over(append_child(root, `data-tip`, `Selected child`))
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
   })
 
@@ -204,10 +189,9 @@ describe(`tooltip manager`, () => {
     const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
     document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
     focus_in(element)
-    const tooltip_el = visible_tooltip()
-    expect(tooltip_el.textContent).toBe(`Keyboard`)
+    expect(visible_text()).toBe(`Keyboard`)
     focus_out(element)
-    expect(tooltip_el.hidden).toBe(true)
+    expect(visible_text()).toBeNull()
   })
 
   it(`explicit hover stays dismissed after a press until re-entered`, () => {
@@ -235,7 +219,10 @@ describe(`tooltip manager`, () => {
 
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
-    expect(on_open_change).toHaveBeenLastCalledWith(false, open_detail(element, `blur`))
+    expect(on_open_change).toHaveBeenLastCalledWith(false, {
+      trigger: element,
+      reason: `blur`,
+    })
   })
 
   it(`closes only once every pointer has left both trigger and tooltip`, () => {
@@ -308,7 +295,7 @@ describe(`tooltip manager`, () => {
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
-      [false, open_detail(element, `escape`)],
+      [false, { trigger: element, reason: `escape` }],
     ])
 
     // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.
@@ -333,40 +320,28 @@ describe(`tooltip manager`, () => {
       element.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerType: `touch` }))
       focus_in(element)
       expect(element.hasAttribute(`aria-describedby`)).toBe(touch_opens)
-      expect(
-        document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null,
-      ).toBe(touch_opens ? `Help` : null)
+      expect(visible_text()).toBe(touch_opens ? `Help` : null)
       focus_out(element)
-      expect(document.querySelector(`.custom-tooltip:not([hidden])`)).toBeNull()
+      expect(visible_text()).toBeNull()
       pointer_over(element, `mouse`)
-      expect(
-        document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null,
-      ).toBe(hover_opens ? `Help` : null)
+      expect(visible_text()).toBe(hover_opens ? `Help` : null)
     },
   )
 
   it(`merges and removes only its aria-describedby token`, () => {
-    const element = create_element(`button`)
-    element.title = `Described`
+    const { element } = register_tooltip(`Described`)
     element.setAttribute(`aria-describedby`, `help error`)
-    attach_tooltip(element)
     pointer_over(element)
-    const tooltip_id = visible_tooltip().id
 
-    expect(element.getAttribute(`aria-describedby`)?.split(/\s+/u)).toEqual([
-      `help`,
-      `error`,
-      tooltip_id,
-    ])
+    expect(element.getAttribute(`aria-describedby`)).toBe(
+      `help error ${visible_tooltip().id}`,
+    )
     pointer_out(element)
     expect(element.getAttribute(`aria-describedby`)).toBe(`help error`)
   })
 
   it(`recycles one node across owners and relationships`, () => {
-    const first = create_element(`button`)
-    attach_tooltip(first, {
-      content: `First`,
-    })
+    const { element: first } = register_tooltip(``, { content: `First` })
     const { element: second } = register_tooltip(`Second`)
 
     pointer_over(first)
@@ -385,10 +360,8 @@ describe(`tooltip manager`, () => {
     const { cleanup: cleanup_second } = register_tooltip(`Second`)
     const manager_events = (calls: unknown[][]) =>
       calls
-        .filter(
-          ([event_name]) => event_name === `pointerdown` || event_name === `keydown`,
-        )
-        .map(([event_name]) => event_name)
+        .map(([name]) => name)
+        .filter((name) => name === `pointerdown` || name === `keydown`)
 
     expect(manager_events(add_listener.mock.calls)).toEqual([`pointerdown`, `keydown`])
     cleanup_first()
@@ -402,7 +375,7 @@ describe(`tooltip manager`, () => {
     const { element: first } = register_tooltip(`First`, options)
     const { element: second } = register_tooltip(`Second`, options)
 
-    first.dispatchEvent(pointer_event(`pointerover`, 0, 0, { pointerType: `mouse` }))
+    pointer_over(first)
     vi.advanceTimersByTime(99)
     expect(document.querySelector(`.custom-tooltip`)).toBeNull()
     vi.advanceTimersByTime(1)
@@ -412,21 +385,14 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Second`)
   })
 
-  it.each([false, true])(
-    `always renders text, including delegated content=%s`,
-    (delegate) => {
-      const root = create_element()
-      const element = delegate ? document.createElement(`button`) : root
-      if (delegate) root.append(element)
-      const content = `<script>bad()</script><b>Text</b>\nNext`
-      element.title = content
-      attach_tooltip(root, { delegate })
-      mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
-      pointer_over(element)
-      expect(visible_tooltip().textContent).toBe(content)
-      expect(doc_query(`.tooltip-content`).childElementCount).toBe(0)
-    },
-  )
+  it(`renders delegated title markup as plain text`, () => {
+    const content = `<script>bad()</script><b>Text</b>\nNext`
+    const root = create_element()
+    attach_tooltip(root, { delegate: true })
+    pointer_over(append_child(root, `title`, content))
+    expect(visible_tooltip().textContent).toBe(content)
+    expect(doc_query(`.tooltip-content`).childElementCount).toBe(0)
+  })
 
   it.each([
     [`balance`, `balance`, `anywhere`, `normal`],
@@ -489,10 +455,8 @@ describe(`tooltip manager`, () => {
       document.body.style.colorScheme = page_scheme
       cleanups.push(() => document.body.style.removeProperty(`color-scheme`))
     }
-    const element = create_element(`button`)
-    element.title = `Themed`
+    const { element } = register_tooltip(`Themed`, style ? { style } : {})
     if (bg) element.style.setProperty(`--tooltip-bg`, bg)
-    attach_tooltip(element, style ? { style } : {})
     pointer_over(element)
 
     const tooltip_el = visible_tooltip()
@@ -503,28 +467,25 @@ describe(`tooltip manager`, () => {
     )
   })
 
-  it(`updates active attribute content and repositions it`, async () => {
+  it(`rerenders on an active aria-label update`, async () => {
     const element = create_element(`button`)
     element.setAttribute(`aria-label`, `Initial`)
     attach_tooltip(element)
     pointer_over(element)
-    const tooltip_el = visible_tooltip()
-    const initial_left = tooltip_el.style.left
-
-    mock_rect(element, { left: 300, top: 100, width: 80, height: 30 })
     element.setAttribute(`aria-label`, `Updated`)
     await Promise.resolve()
-    expect(doc_query(`.tooltip-content`).textContent).toBe(`Updated`)
-    expect(tooltip_el.style.left).not.toBe(initial_left)
+    expect(visible_tooltip().textContent).toBe(`Updated`)
   })
 
-  it(`uses the final title from a batched update and restores it`, async () => {
-    const { cleanup, element } = show_tooltip({}, `Initial`)
-
+  it(`repositions on a batched title update and restores the final title`, async () => {
+    const { cleanup, element, tooltip_el } = show_tooltip({}, `Initial`)
+    const initial_left = tooltip_el.style.left
+    mock_rect(element, { left: 300, top: 100, width: 80, height: 30 })
     element.title = `Intermediate`
     element.title = `Final`
     await Promise.resolve()
-    expect(doc_query(`.tooltip-content`).textContent).toBe(`Final`)
+    expect(tooltip_el.textContent).toBe(`Final`)
+    expect(tooltip_el.style.left).not.toBe(initial_left)
     expect(element.hasAttribute(`title`)).toBe(false)
 
     cleanup()
@@ -576,63 +537,56 @@ describe(`tooltip manager`, () => {
     )
     const errors = vi.spyOn(console, `error`).mockImplementation(() => {})
     const element = create_element(tag_name)
-    const cleanup = attach_tooltip(element, { content: `Custom` })
+    attach_tooltip(element, { content: `Custom` })
     pointer_over(element)
-    visible_tooltip()
+    const tooltip_el = visible_tooltip()
 
     element.setAttribute(`title`, `Insistent`)
     await Promise.resolve()
-
     expect(errors).toHaveBeenCalledOnce()
-    expect(doc_query(`.custom-tooltip`).hidden).toBe(true)
-    cleanup()
-  })
-
-  it(`hides once the trigger leaves the document`, async () => {
-    const { element, tooltip_el } = show_tooltip({}, `Transient`)
-
-    // No scroll or resize follows a detachment, so only the removal observer sees it.
-    element.remove()
-    await Promise.resolve()
     expect(tooltip_el.hidden).toBe(true)
   })
 
-  it(`repositions on scroll and hides when the trigger stops rendering`, () => {
-    const { element, tooltip_el } = show_tooltip({}, `Moving`)
+  it(`repositions on scroll, hides when unrendered or detached, and unsubscribes`, async () => {
+    const { element, tooltip_el } = show_tooltip()
     const first_top = tooltip_el.style.top
+    const scroll = () => {
+      window.dispatchEvent(new Event(`scroll`))
+      vi.advanceTimersByTime(20)
+    }
 
     mock_rect(element, { left: 100, top: 200, width: 80, height: 30 })
-    window.dispatchEvent(new Event(`scroll`))
-    vi.advanceTimersByTime(20)
+    scroll()
     expect(tooltip_el.style.top).not.toBe(first_top)
-
     element.style.display = `none`
-    window.dispatchEvent(new Event(`scroll`))
-    vi.advanceTimersByTime(20)
+    scroll()
     expect(tooltip_el.hidden).toBe(true)
-  })
-
-  it(`stops listening for repositions once closed`, () => {
-    const { element } = show_tooltip({}, `Temporary`)
-    pointer_out(element)
 
     // a surviving subscription still schedules a frame even though its guard no-ops it,
     // so the frame is what proves the release
     const frame = vi.spyOn(window, `requestAnimationFrame`)
     window.dispatchEvent(new Event(`scroll`))
     expect(frame).not.toHaveBeenCalled()
+    frame.mockRestore()
+
+    element.style.display = ``
+    pointer_out(element)
+    pointer_over(element)
+    expect(tooltip_el.hidden).toBe(false)
+    // no scroll or resize follows a detachment, so only the removal observer sees it
+    element.remove()
+    await Promise.resolve()
+    expect(tooltip_el.hidden).toBe(true)
   })
 
   it(`keeps one bordered arrow visible and aimed after shifting`, () => {
     mock_tooltip_rect(200, 40)
-    const element = create_element(`button`)
-    element.title = `Edge`
-    mock_rect(element, { left: 940, top: 100, width: 40, height: 20 })
-    attach_tooltip(element, {
+    const { element } = register_tooltip(`Edge`, {
       placement: `bottom`,
-      // happy-dom drops a repeated border shorthand after one containing var().
+      // happy-dom drops a repeated border shorthand after one containing var()
       style: `--tooltip-bg: rgb(1, 2, 3); --tooltip-border: 2px solid rgb(4, 5, 6)`,
     })
+    mock_rect(element, { left: 940, top: 100, width: 40, height: 20 })
     pointer_over(element)
     const tooltip_el = visible_tooltip()
     const arrow = doc_query(`.custom-tooltip-arrow`)
@@ -658,9 +612,8 @@ describe(`tooltip manager`, () => {
     [`right`, `left`],
   ] as const)(`positions the arrow for %s placement`, (placement, inset_side) => {
     mock_tooltip_rect(200, 40)
-    show_tooltip({ placement, flip: false }, `Arrow`)
+    show_tooltip({ placement, flip: false })
     const arrow = doc_query(`.custom-tooltip-arrow`)
-
     expect(arrow.style.getPropertyValue(inset_side)).not.toBe(``)
   })
 
@@ -668,15 +621,10 @@ describe(`tooltip manager`, () => {
     mock_tooltip_rect(200, 100)
     const boundary = create_element()
     mock_rect(boundary, { left: 0, top: 0, width: 300, height: 200 })
-    const element = create_element(`button`)
-    element.title = `Bounded`
+    const options = { placement: `auto`, boundary, style: `font-weight: bold` } as const
+    const { element } = register_tooltip(`Bounded`, options)
+    // the 1000x800 viewport leaves room to the right; the boundary leaves only above
     mock_rect(element, { left: 100, top: 150, width: 80, height: 30 })
-    // The 1000x800 viewport leaves room to the right; the boundary leaves only above.
-    attach_tooltip(element, {
-      placement: `auto`,
-      boundary,
-      style: `font-weight: bold`,
-    })
     pointer_over(element)
 
     const tooltip_el = visible_tooltip()
@@ -697,9 +645,7 @@ describe(`tooltip manager`, () => {
       stub_prop(HTMLElement.prototype, `showPopover`, show_popover),
       stub_prop(HTMLElement.prototype, `hidePopover`, hide_popover),
     )
-    const { element } = register_tooltip(`Top layer`, { strategy: `top-layer` })
-    pointer_over(element)
-    const tooltip_el = visible_tooltip()
+    const { element, tooltip_el } = show_tooltip({ strategy: `top-layer` })
     const native_matches = tooltip_el.matches.bind(tooltip_el)
     vi.spyOn(tooltip_el, `matches`).mockImplementation((selector) =>
       selector === `:popover-open` ? popover_open : native_matches(selector),
@@ -722,10 +668,7 @@ describe(`tooltip manager`, () => {
 
   it(`falls back to absolute positioning without the Popover API`, () => {
     cleanups.push(stub_prop(HTMLElement.prototype, `showPopover`, undefined))
-    const { element } = register_tooltip(`No popover`, { strategy: `top-layer` })
-    pointer_over(element)
-    const tooltip_el = visible_tooltip()
-
+    const { element, tooltip_el } = show_tooltip({ strategy: `top-layer` })
     expect(tooltip_el.hasAttribute(`popover`)).toBe(false)
     expect(tooltip_el.style.position).toBe(`absolute`)
     pointer_out(element)
@@ -739,10 +682,7 @@ describe(`tooltip manager`, () => {
         throw show_error
       }),
     )
-    const element = create_element(`button`)
-    element.title = `Top layer`
-    attach_tooltip(element, { strategy: `top-layer` })
-
+    const { element } = register_tooltip(`Top layer`, { strategy: `top-layer` })
     expect(() => pointer_over(element)).toThrow(show_error)
   })
 })

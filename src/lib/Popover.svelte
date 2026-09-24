@@ -112,11 +112,17 @@
   const handle_native_toggle = (event: ToggleEvent) => {
     if (event.newState === `closed` && open) close(native_close_via)
   }
+  // The trackers only listen while open, so closed popovers cost the document nothing.
   const show_native_popover = (node: HTMLElement): (() => void) => {
     native_close_via = `pointer`
+    const listeners = new AbortController()
+    const { signal } = listeners
+    document.addEventListener(`keydown`, track_native_escape, { signal })
+    document.addEventListener(`pointerdown`, track_native_pointer, { signal })
     const source = anchor instanceof HTMLElement ? anchor : undefined
     node.showPopover(source ? { source } : undefined)
     return () => {
+      listeners.abort()
       if (node.matches(`:popover-open`)) node.hidePopover()
     }
   }
@@ -214,8 +220,6 @@
   // Returning the function clears pending timers on teardown.
   $effect(() => clear_timeouts)
 </script>
-
-<svelte:document onkeydown={track_native_escape} onpointerdown={track_native_pointer} />
 
 <span bind:this={trigger_wrapper} style="display: contents">
   {@render trigger?.(trigger_props)}

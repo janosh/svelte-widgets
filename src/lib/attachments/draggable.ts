@@ -25,10 +25,14 @@ export const draggable =
     let stop_pointer_follow: (() => void) | undefined
     let restore_user_select: (() => void) | undefined
     let start = { x: 0, y: 0 }
-    let min_delta_x = -Infinity
-    let max_delta_x = Infinity
-    let min_delta_y = -Infinity
-    let max_delta_y = Infinity
+    // pointer delta range keeping the node inside `bounds`
+    const unbounded = {
+      min_x: -Infinity,
+      max_x: Infinity,
+      min_y: -Infinity,
+      max_y: Infinity,
+    }
+    let limits = unbounded
     const initial = { left: 0, top: 0 }
 
     const found = handle_selector
@@ -75,10 +79,7 @@ export const draggable =
         node.style.bottom = `auto`
       }
 
-      min_delta_x = -Infinity
-      max_delta_x = Infinity
-      min_delta_y = -Infinity
-      max_delta_y = Infinity
+      limits = unbounded
       const boundary = bounds === `parent` ? node.parentElement : bounds
       const bounds_rect =
         boundary instanceof Element ? boundary.getBoundingClientRect() : boundary
@@ -92,10 +93,14 @@ export const draggable =
         // after normalizing inset styles, which can move a node positioned from its right
         // or bottom edge
         const node_rect = node.getBoundingClientRect()
-        min_delta_x = bounds_rect.left - node_rect.left
-        max_delta_x = Math.max(min_delta_x, bounds_rect.right - node_rect.right)
-        min_delta_y = bounds_rect.top - node_rect.top
-        max_delta_y = Math.max(min_delta_y, bounds_rect.bottom - node_rect.bottom)
+        const min_x = bounds_rect.left - node_rect.left
+        const min_y = bounds_rect.top - node_rect.top
+        limits = {
+          min_x,
+          max_x: Math.max(min_x, bounds_rect.right - node_rect.right),
+          min_y,
+          max_y: Math.max(min_y, bounds_rect.bottom - node_rect.bottom),
+        }
       }
       start = { x: event.clientX, y: event.clientY }
       restore_user_select = override_style(
@@ -117,11 +122,11 @@ export const draggable =
     function on_pointermove(event: PointerEvent) {
       if (!dragging) return
       if (move_x) {
-        const delta_x = clamp(event.clientX - start.x, min_delta_x, max_delta_x)
+        const delta_x = clamp(event.clientX - start.x, limits.min_x, limits.max_x)
         node.style.left = `${initial.left + delta_x}px`
       }
       if (move_y) {
-        const delta_y = clamp(event.clientY - start.y, min_delta_y, max_delta_y)
+        const delta_y = clamp(event.clientY - start.y, limits.min_y, limits.max_y)
         node.style.top = `${initial.top + delta_y}px`
       }
       options.on_drag?.(event)

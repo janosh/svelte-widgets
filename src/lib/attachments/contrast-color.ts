@@ -203,11 +203,8 @@ const COLOR_SPACES: Record<
   },
 }
 // Component tokens to a rectangular triple, `refs` giving each one's 100% reference
-const components = (tokens: string[], refs: Triple): Triple => [
-  parse_component(tokens[0], refs[0]),
-  parse_component(tokens[1], refs[1]),
-  parse_component(tokens[2], refs[2]),
-]
+const components = (tokens: string[], refs: Triple): Triple =>
+  refs.map((ref, idx) => parse_component(tokens[idx], ref)) as Triple
 // lch/oklch are lab/oklab in polar coordinates, so they convert and reuse the rectangular
 // transform instead of carrying their own
 const polar_components = (tokens: string[], refs: [number, number]): Triple => {

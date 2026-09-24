@@ -13,22 +13,33 @@ type PixelClamps = {
   second_min_px?: number
   first_px?: number
 }
-type Size = { width: number; height: number }
-// `clamps` is copied by descriptor so a bindable `first_px` accessor pair (see bound_first_px)
-// survives; `size` may be a getter for container resizes
-const mount_divider = (
-  orientation: `horizontal` | `vertical`,
-  direction: `ltr` | `rtl` = `ltr`,
-  ratio?: number,
-  clamps: PixelClamps = {},
-  size: Size | (() => Size) = { width: 400, height: 200 },
-) => {
+type DividerOptions = {
+  orientation?: `horizontal` | `vertical`
+  direction?: `ltr` | `rtl`
+  ratio?: number
+  clamps?: PixelClamps
+  width?: number | (() => number) // a getter simulates container resizes
+}
+// the container is `width` x 200 px at (100, 50). `clamps` is copied by descriptor so a
+// bindable `first_px` accessor pair (see bound_first_px) survives
+const mount_divider = ({
+  orientation = `horizontal`,
+  direction = `ltr`,
+  ratio,
+  clamps = {},
+  width = 400,
+}: DividerOptions = {}) => {
   const parent = document.createElement(`div`)
   parent.dir = direction
   parent.style.direction = direction
   document.body.append(parent)
   parent.getBoundingClientRect = () =>
-    DOMRect.fromRect({ x: 100, y: 50, ...(typeof size === `function` ? size() : size) })
+    DOMRect.fromRect({
+      x: 100,
+      y: 50,
+      width: typeof width === `function` ? width() : width,
+      height: 200,
+    })
   const props = Object.defineProperties(
     { orientation, ratio },
     Object.getOwnPropertyDescriptors(clamps),
@@ -44,9 +55,7 @@ const mount_divider = (
       }
     },
   )
-  onTestFinished(() => {
-    vi.unstubAllGlobals()
-  })
+  onTestFinished(() => void vi.unstubAllGlobals())
   const component = mount(PaneDivider, { target: parent, props })
   onTestFinished(() => unmount(component).finally(() => parent.remove()))
   flushSync()
@@ -76,7 +85,7 @@ test.each([
 ] as const)(
   `%s %s divider resizes during pointer movement`,
   (orientation, direction, position, aria) => {
-    const { divider, parent } = mount_divider(orientation, direction)
+    const { divider, parent } = mount_divider({ orientation, direction })
     expect(divider.getAttribute(`aria-orientation`)).toBe(aria)
     // no pixel clamps: the announced range is the bare ratio range
     expect(divider.getAttribute(`aria-valuemin`)).toBe(`15`)
@@ -100,7 +109,7 @@ test.each([
 ] as const)(
   `%s keyboard resizing clamps`,
   (_name, orientation, direction, key, ratio, repeats, expected) => {
-    const { divider, parent } = mount_divider(orientation, direction, ratio)
+    const { divider, parent } = mount_divider({ orientation, direction, ratio })
     for (let repeat = 0; repeat < repeats; repeat++) {
       divider.dispatchEvent(
         new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
@@ -115,7 +124,7 @@ test.each([
 )
 
 test(`an active drag ignores other pointers and ends on lost capture`, () => {
-  const { divider, parent } = mount_divider(`horizontal`)
+  const { divider, parent } = mount_divider()
   divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 7 }))
   divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 8 }))
   divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 400, pointerId: 8 }))
@@ -147,7 +156,7 @@ test.each([
 ] as const)(
   `%j clamps %s pointer drags in pixels`,
   (clamps, orientation, low, low_pct, high, high_pct) => {
-    const { divider, parent } = mount_divider(orientation, `ltr`, 0.5, clamps)
+    const { divider, parent } = mount_divider({ orientation, ratio: 0.5, clamps })
     expect(divider.getAttribute(`aria-valuemin`)).toBe(`${Math.min(low_pct, high_pct)}`)
     expect(divider.getAttribute(`aria-valuemax`)).toBe(`${Math.max(low_pct, high_pct)}`)
     const axis = orientation === `horizontal` ? `clientX` : `clientY`
@@ -163,7 +172,7 @@ test.each([
 )
 
 test(`an initial ratio outside the pixel clamps is shown clamped`, () => {
-  const { divider, parent } = mount_divider(`horizontal`, `ltr`, 0.2, { min_px: 160 })
+  const { divider, parent } = mount_divider({ ratio: 0.2, clamps: { min_px: 160 } })
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`40%`)
   expect(divider.getAttribute(`aria-valuenow`)).toBe(`40`)
 })
@@ -179,20 +188,14 @@ test.each([
   [{ first_px: 50, min_px: 150 }, 1000, `150px`, 150],
   [{ first_px: 900, max_px: 600 }, 1000, `600px`, 600],
 ] as const)(`%j in a %i px container shows %s`, (clamps, width, expected, aria_now) => {
-  const { divider, parent } = mount_divider(`horizontal`, `ltr`, undefined, clamps, {
-    width,
-    height: 200,
-  })
+  const { divider, parent } = mount_divider({ clamps, width })
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(expected)
   expect(divider.getAttribute(`aria-valuenow`)).toBe(`${aria_now}`)
 })
 
 test(`pixel-mode drags move the first pane in px and bind the clamped value back`, () => {
   const bound = bound_first_px(320, { min_px: 150, second_min_px: 200 })
-  const { divider, parent } = mount_divider(`horizontal`, `ltr`, undefined, bound, {
-    width: 1000,
-    height: 200,
-  })
+  const { divider, parent } = mount_divider({ clamps: bound, width: 1000 })
   const measure = vi.spyOn(parent, `getBoundingClientRect`)
   divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 2 }))
   // container starts at x=100: pointer at 600 puts the divider 500 px in
@@ -211,13 +214,8 @@ test(`pixel-mode drags move the first pane in px and bind the clamped value back
 
 // Keyboard steps 5% of the container (50 px here) and never drop below the first pane's floor
 test(`pixel-mode keyboard resizing steps in px within the clamps`, () => {
-  const { divider, parent } = mount_divider(
-    `horizontal`,
-    `ltr`,
-    undefined,
-    { first_px: 320, min_px: 150, second_min_px: 200 },
-    { width: 1000, height: 200 },
-  )
+  const clamps = { first_px: 320, min_px: 150, second_min_px: 200 }
+  const { divider, parent } = mount_divider({ clamps, width: 1000 })
   const press = (key: string) =>
     divider.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
   press(`ArrowLeft`)
@@ -237,10 +235,7 @@ test(`pixel-mode keyboard resizing steps in px within the clamps`, () => {
 test(`pixel mode re-clamps on container resize without overwriting first_px`, () => {
   let width = 1000
   const bound = bound_first_px(320, { second_min_px: 200 })
-  const { parent } = mount_divider(`horizontal`, `ltr`, undefined, bound, () => ({
-    width,
-    height: 200,
-  }))
+  const { parent } = mount_divider({ clamps: bound, width: () => width })
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`320px`)
 
   width = 400

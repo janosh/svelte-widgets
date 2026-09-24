@@ -22,18 +22,10 @@ describe(`contrast_color`, () => {
     [`six-digit hex`, `#ffffff`, `black`],
     [`three-digit hex`, `#111`, `white`],
     [`eight-digit hex`, `#ffffffcc`, `black`],
-    // computed styles keep the authored color space, so these reach get_bg_color verbatim
-    [`white oklch`, `oklch(1 0 0)`, `black`],
-    [`black oklab`, `oklab(0 0 0)`, `white`],
-    [`red oklch`, `oklch(0.627955 0.257683 29.2338)`, `white`],
-    [`white lab`, `lab(100 0 0)`, `black`],
-    [`red lch`, `lch(54.291 106.837 40.853)`, `white`],
-    [`white display-p3`, `color(display-p3 1 1 1)`, `black`],
-    [`black srgb`, `color(srgb 0 0 0)`, `white`],
-    [`white rec2020`, `color(rec2020 1 1 1)`, `black`],
+    // computed styles keep the authored color space, so these reach get_bg_color verbatim;
+    // the luminance tables below pin each space precisely
     [`white xyz`, `color(xyz 0.9505 1 1.089)`, `black`],
-    [`red hsl`, `hsl(0 100% 50%)`, `white`],
-    [`white hwb`, `hwb(0 100% 0%)`, `black`],
+    [`white hwb`, `hwb(0 100% 0%)`, `black`], // white + black >= 1 short-circuits to gray
   ])(`picks contrast text for a %s`, (_desc, bg_color, expected) => {
     expect(pick_contrast_color({ bg_color })).toBe(expected)
   })
@@ -53,6 +45,10 @@ describe(`contrast_color`, () => {
     // same cyan: 200grad is 180deg; `grad` must not parse as the `rad` it ends with (NaN)
     [`hwb(200grad 0% 0%)`, 0.701],
     [`oklch(0.627955 0.257683 0.51022606rad)`, 0.299], // red, the 29.2338deg above in radians
+    // perceived brightness weights green 0.587, red 0.299, blue 0.114; a plain channel
+    // average would land all three on 0.333
+    [`rgb(0, 255, 0)`, 0.587],
+    [`rgb(0, 0, 255)`, 0.114],
     // percentages are as legal in rgb() as anywhere else, in channels and alpha alike
     [`rgb(100% 0% 0%)`, 0.299],
     [`rgb(0 0 0 / 50%)`, 0],
@@ -85,16 +81,6 @@ describe(`contrast_color`, () => {
   ])(`%s lands where Chrome paints it`, (bg_color, [red, green, blue]) => {
     const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
     expect(luminance_brackets(bg_color, luminance, 2e-3)).toEqual(bracketed)
-  })
-
-  // perceived brightness weights green ×0.587, red ×0.299, blue ×0.114; a plain channel
-  // average would land all three on 0.333 and answer the same for the lot
-  it.each([
-    [`green`, `rgb(0, 255, 0)`, `black`],
-    [`red`, `rgb(255, 0, 0)`, `white`],
-    [`blue`, `rgb(0, 0, 255)`, `white`],
-  ])(`weighs channels perceptually: full %s`, (_desc, bg_color, expected) => {
-    expect(pick_contrast_color({ bg_color, luminance_threshold: 0.5 })).toBe(expected)
   })
 
   it.each<[string, ContrastOptions, string]>([
@@ -132,9 +118,8 @@ describe(`contrast_color`, () => {
     [`translucent over the page`, `rgba(0, 0, 0, 0)`, tint, `rgb(242 242 242)`, `black`],
   ])(`resolves %s`, (_desc, background, overlay, expected_bg, expected_color) => {
     const painted = create_element(`div`, { backgroundColor: background })
-    const middle = document.createElement(`div`)
+    const [middle, node] = [document.createElement(`div`), document.createElement(`span`)]
     middle.style.backgroundColor = overlay
-    const node = document.createElement(`span`)
     painted.append(middle)
     middle.append(node)
 
@@ -151,12 +136,8 @@ describe(`contrast_color`, () => {
     [`rgb(0 0 0 / 0%)`, `black`, false], // a percentage alpha reads as transparent too
     [`color(display-p3 1 1 1)`, `black`, true],
   ])(`sees %s as a painted ancestor: %s`, (background, expected_color, painted) => {
-    const [ancestor, node] = [
-      document.createElement(`div`),
-      document.createElement(`span`),
-    ]
+    const [ancestor, node] = [create_element(), document.createElement(`span`)]
     ancestor.append(node)
-    document.body.append(ancestor)
     vi.spyOn(globalThis, `getComputedStyle`).mockImplementation(
       (element) =>
         ({

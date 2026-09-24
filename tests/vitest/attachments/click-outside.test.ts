@@ -1,6 +1,6 @@
 import { click_outside } from '$lib/attachments'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create_element, escape_key, mock_rect, stub_prop } from '../index'
+import { create_element, mock_rect, press_key, stub_prop } from '../index'
 
 describe(`click_outside`, () => {
   const dispatch_press = (
@@ -26,19 +26,17 @@ describe(`click_outside`, () => {
     return event
   }
 
-  // returns the event so callers can assert on identity or defaultPrevented
-  const press_escape = (init: KeyboardEventInit = {}) => {
-    const event = escape_key(init)
-    document.dispatchEvent(event)
-    return event
-  }
+  const press_escape = (init: KeyboardEventInit = {}) =>
+    press_key(document, `Escape`, init)
 
   // innerHTML = '' would leave document capture listeners and Escape layers behind
   const cleanups: (() => void)[] = []
   afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
-  const attach_outside = (config: Parameters<typeof click_outside>[0] = {}) => {
-    const element = create_element()
+  const attach_outside = (
+    config: Parameters<typeof click_outside>[0] = {},
+    element = create_element(),
+  ) => {
     const callback = vi.fn()
     const cleanup = click_outside({ callback, ...config })(element)
     if (cleanup) cleanups.push(cleanup)
@@ -52,13 +50,10 @@ describe(`click_outside`, () => {
   })
 
   it(`inside selectors keep matching regions from dismissing (single, multiple, nested)`, () => {
-    const [modal, popover, nested] = [
-      create_element(),
-      create_element(),
-      create_element(),
-    ]
+    const [modal, popover] = [create_element(), create_element()]
     modal.className = `modal`
     popover.className = `popover`
+    const nested = document.createElement(`span`)
     modal.append(nested)
 
     const { callback } = attach_outside({ inside: [`.modal`, `.popover`] })
@@ -73,27 +68,27 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  it(`triggers on clicks landing on SVG elements outside the node`, () => {
-    const { callback } = attach_outside()
-
-    const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
-    document.body.append(svg)
-    dispatch_press(svg)
-
-    expect(callback).toHaveBeenCalledTimes(1)
-  })
-
   it(`dispatches a custom event without a callback`, () => {
     const element = create_element()
     const listener = vi.fn()
     element.addEventListener(`dismiss`, listener)
-    const cleanup = click_outside({})(element) // no callback
+    const cleanup = click_outside({})(element)
     if (cleanup) cleanups.push(cleanup)
     dispatch_press(create_element())
     expect(listener).toHaveBeenCalled()
   })
 
-  it(`dismisses only on outside presses and stops after cleanup`, () => {
+  it(`skips the layout-forcing scrollbar test for presses inside`, () => {
+    const { element, callback } = attach_outside()
+    const child = document.createElement(`span`)
+    element.append(child)
+    const measure = vi.spyOn(child, `getBoundingClientRect`)
+    dispatch_press(child)
+    expect(measure).not.toHaveBeenCalled()
+    expect(callback).not.toHaveBeenCalled()
+  })
+
+  it(`dismisses only on outside presses, SVG included, and stops after cleanup`, () => {
     const { element, callback, cleanup } = attach_outside()
     dispatch_press(element)
     expect(callback).not.toHaveBeenCalled()
@@ -112,9 +107,14 @@ describe(`click_outside`, () => {
     outside.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
     expect(callback).toHaveBeenCalledTimes(1)
 
+    const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
+    document.body.append(svg)
+    dispatch_press(svg)
+    expect(callback).toHaveBeenCalledTimes(2)
+
     cleanup?.()
     dispatch_press(outside)
-    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledTimes(2)
   })
 
   // same selector, another instance's trigger: it must not shield this surface. The
@@ -127,8 +127,7 @@ describe(`click_outside`, () => {
         create_element(),
         create_element(),
       ]
-      own_trigger.className = `trigger`
-      other_trigger.className = `trigger`
+      for (const trigger of [own_trigger, other_trigger]) trigger.className = `trigger`
       own_scope.append(own_trigger)
 
       let scope_el: Element | null = kind === `element` ? own_scope : null
@@ -167,7 +166,7 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  it(`Escape is opt-in, dismisses only the top layer, and stops page handlers`, () => {
+  it(`Escape is opt-in, dismisses only the top layer, skips IME, stops page handlers`, () => {
     const without_escape = attach_outside()
     const page_handler = vi.fn()
     document.addEventListener(`keydown`, page_handler)
@@ -180,6 +179,11 @@ describe(`click_outside`, () => {
 
     const outer = attach_outside({ escape: true })
     const inner = attach_outside({ escape: true })
+
+    press_escape({ isComposing: true }) // only ending an IME composition
+    expect(inner.callback).not.toHaveBeenCalled()
+    expect(page_handler).toHaveBeenCalledOnce()
+    page_handler.mockClear()
 
     const event = press_escape()
     expect(inner.callback).toHaveBeenCalledTimes(1)
@@ -247,59 +251,37 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  it(`ignores Escape that is only ending an IME composition`, () => {
-    const { callback, cleanup } = attach_outside({ escape: true })
-
-    press_escape({ isComposing: true })
-    expect(callback).not.toHaveBeenCalled()
-
-    press_escape()
-    expect(callback).toHaveBeenCalledTimes(1)
-    cleanup?.()
-  })
-
   it(`tolerates an empty inside selector instead of throwing on every press`, () => {
     // a trailing empty entry makes the joined selector invalid, which would throw out of
     // the capture listener on every press anywhere on the page
-    const { callback, cleanup } = attach_outside({ inside: [`.modal`, ``] })
-
+    const { callback } = attach_outside({ inside: [`.modal`, ``] })
     expect(() => dispatch_press(create_element())).not.toThrow()
     expect(callback).toHaveBeenCalledTimes(1)
-    cleanup?.()
   })
 
   it.each([true, false])(`escape reports focus_inside=%s`, (focus_inside) => {
-    const { element, callback, cleanup } = attach_outside({ escape: true })
-    const inner = create_element()
-    element.append(inner)
-    const focus_target = focus_inside ? inner : create_element()
-    focus_target.setAttribute(`tabindex`, `0`)
-    focus_target.focus()
+    const { element, callback } = attach_outside({ escape: true })
+    const focus_target = focus_inside ? element : create_element()
+    const focusable = document.createElement(`button`)
+    focus_target.append(focusable)
+    focusable.focus()
 
     const event = press_escape()
-
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback.mock.calls[0][2]).toEqual({ focus_inside, via: `escape`, event })
-    cleanup?.()
   })
 
   // for a surface in a shadow tree, document.activeElement reports the host, which the
   // surface does not contain, so only descending the chain finds the focus
   it(`escape sees focus on a node that shares the surface's shadow tree`, () => {
-    const host = create_element()
-    const [surface, inner] = [
-      document.createElement(`div`),
-      document.createElement(`button`),
-    ]
-    surface.append(inner)
-    host.attachShadow({ mode: `open` }).append(surface)
-    inner.focus()
+    const surface = document.createElement(`div`)
+    create_element().attachShadow({ mode: `open` }).append(surface)
+    const focusable = document.createElement(`button`)
+    surface.append(focusable)
+    focusable.focus()
 
-    const callback = vi.fn()
-    const cleanup = click_outside({ callback, escape: true })(surface)
-    if (cleanup) cleanups.push(cleanup)
+    const { callback } = attach_outside({ escape: true }, surface)
     const event = press_escape()
-
     expect(callback.mock.calls[0][2]).toEqual({
       focus_inside: true,
       via: `escape`,
@@ -338,18 +320,12 @@ describe(`click_outside`, () => {
     dispatch_press(element, [], `pointerdown`, { button: 2 })
     dispatch_press(create_element(), [], `click`)
     expect(callback).toHaveBeenCalledTimes(3)
-  })
 
-  // a press inside can end with no click at all (released off-screen, OS-owned drag), so
-  // its verdict must not hit a pointerless click: Enter and .click() report detail 0
-  it(`dismiss_on: 'release' still dismisses on a keyboard-driven click`, () => {
-    const { element, callback } = attach_outside({ dismiss_on: `release` })
-    const outside = create_element()
-
-    dispatch_press(element) // pointerdown inside that never produces a click
+    // a press inside can end with no click at all (released off-screen, OS-owned drag),
+    // so its verdict must not hit a pointerless click: Enter and .click() report detail 0
+    dispatch_press(element)
     outside.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 0 }))
-
-    expect(callback).toHaveBeenCalledTimes(1)
+    expect(callback).toHaveBeenCalledTimes(4)
   })
 
   // capture makes dismissal unsuppressable at the price of running before the pressed
