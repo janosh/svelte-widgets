@@ -436,12 +436,11 @@ describe(`Toc`, () => {
       expect(item.getAttribute(`role`)).toBe(scrolls ? `link` : null)
       expect(item.getAttribute(`tabindex`)).toBe(scrolls ? `0` : null)
       const native_click = HTMLAnchorElement.prototype.click
-      vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(
-        function (this: HTMLAnchorElement) {
-          expect(this.closest(`[data-sveltekit-replacestate]`)).toBe(item)
-          native_click.call(this)
-        },
-      )
+      function checked_click(this: HTMLAnchorElement) {
+        expect(this.closest(`[data-sveltekit-replacestate]`)).toBe(item)
+        native_click.call(this)
+      }
+      vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(checked_click)
 
       const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
       doc_query(selector).dispatchEvent(event)

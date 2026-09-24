@@ -626,11 +626,10 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
 test(`a scroll that widens the overlay measures and refreshes the input once`, async () => {
   const { textarea } = await mount_editor()
   let width_reads = 0
-  vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(
-    function (this: Element) {
-      return this === textarea ? ++width_reads && 640 : 0
-    },
-  )
+  function scroll_width(this: Element) {
+    return this === textarea ? ++width_reads && 640 : 0
+  }
+  vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(scroll_width)
   // happy-dom clamps scrollTop to its zero layout height
   const scrollport = doc_query<HTMLDivElement>(`.content`)
   let scroll_top = 0

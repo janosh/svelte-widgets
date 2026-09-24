@@ -1181,8 +1181,8 @@
             selected.length === 0 ? null : Math.min(prev_highlighted, selected.length - 1)
         }
       }
-    }  // any other keypress while open activates the first matching option
-    else if (open && navigable_options.length > 0 && active_index === null) {
+    } else if (open && navigable_options.length > 0 && active_index === null) {
+      // any other keypress while open activates the first matching option
       // no stopPropagation/preventDefault here, normal character input must go through
       active_index = next_option_index(rendered_options, null, 1)
     }
