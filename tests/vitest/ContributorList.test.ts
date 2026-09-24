@@ -48,17 +48,9 @@ describe(`ContributorList`, () => {
     expect([alt, width, height, loading]).toEqual([``, 60, 60, `lazy`])
   })
 
-  test(`hovering an avatar shows the login in a tooltip`, async () => {
-    await mount_list()
-    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-
-    hover(doc_query(`ul li a`))
-    vi.runAllTimers()
-    expect(doc_query(`.tooltip-content`).textContent).toBe(`janosh`)
-  })
-
-  test(`tooltip_options reach the attachment`, async () => {
+  test(`hovering an avatar shows its login with tooltip_options applied`, async () => {
     await mount_list({ tooltip_options: { show_arrow: false, style: `color: teal` } })
+    expect(document.querySelector(`.custom-tooltip`)).toBeNull()
 
     hover(doc_query(`ul li:last-child a`))
     vi.runAllTimers()

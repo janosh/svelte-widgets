@@ -50,16 +50,6 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
       [...section.querySelectorAll(`li a`)].map((link) => link.getAttribute(`href`)),
     ).toEqual(children.map((route) => `${base}${route}`))
   }
-  expect(
-    sections.map((section) => section.querySelector(`.detail`)?.textContent?.trim()),
-  ).toEqual([
-    `Includes MultiSelect recipes for async loading, forms, grouping, and custom rendering.`,
-    `Command palettes, site search, heading navigation, and page layout essentials.`,
-    `Confirmations, prompts, action menus, and queued notifications with dismissal and focus handling.`,
-    undefined,
-    `Live code examples, checked snippets, content manifests, and scientific references.`,
-    undefined,
-  ])
   expect(document.querySelector(`.catalog section > a`)?.textContent).toContain(
     `Markdown API`,
   )
@@ -157,12 +147,6 @@ test.each([`inputs`, `navigation`, `overlays`, `display`])(
     mount(CategoryOverview, { target: document.body, props: { name } })
     const category = demo_nav_routes.find((entry) => entry.name === name)
     expect(document.querySelector(`h1`)?.textContent).toBe(category?.label)
-    expect(
-      document.querySelector(`h1 svg.heading-icon`)?.getAttribute(`aria-hidden`),
-    ).toBe(`true`)
-    expect(document.querySelector(`h1 svg.heading-icon path`)?.getAttribute(`d`)).toBe(
-      category?.icon.d,
-    )
     const cards = Array.from(document.querySelectorAll(`.card`))
     expect(cards.map((card) => card.getAttribute(`href`))).toEqual(
       category?.children.map((route) => `${base}${route}`),

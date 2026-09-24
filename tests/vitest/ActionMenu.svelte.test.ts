@@ -64,7 +64,12 @@ describe(`ActionMenu`, () => {
 
   test(`a right-click opens the menu at the pointer, replacing the native one`, async () => {
     const ontoggle = vi.fn()
-    mount_menu(make_actions(), { class: `consumer-class`, id: `consumer-menu`, ontoggle })
+    mount_menu(make_actions(), {
+      class: `consumer-class`,
+      id: `consumer-menu`,
+      tabindex: 0,
+      ontoggle,
+    })
     expect(menu()).toBeNull()
 
     const event = right_click(document.body)
@@ -83,7 +88,7 @@ describe(`ActionMenu`, () => {
     expect([surface.id, surface.getAttribute(`aria-label`), surface.tabIndex]).toEqual([
       `consumer-menu`,
       `Actions`,
-      -1,
+      0, // a consumer tabindex wins over the default -1
     ])
     // .action-menu comes after {...rest}, so a consumer class adds instead of replacing
     expect(surface.classList.contains(`action-menu`)).toBe(true)
@@ -93,11 +98,6 @@ describe(`ActionMenu`, () => {
     await tick()
     expect(menu()).toBeNull()
     expect(ontoggle).toHaveBeenCalledWith(expect.objectContaining({ newState: `closed` }))
-  })
-
-  test(`preserves a consumer-provided menu tabindex`, async () => {
-    await open_menu(make_actions(), { tabindex: 0 })
-    expect(doc_query<HTMLMenuElement>(`menu[role="menu"]`).tabIndex).toBe(0)
   })
 
   // with a region, svelte:body's handler is dropped: the page keeps its native menu

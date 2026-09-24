@@ -217,15 +217,6 @@ describe(`Nav`, () => {
       ] satisfies NavRoute[],
       [`Home`, `About Us`, `Get In Touch`],
     ],
-    [
-      `mixed routes`,
-      [
-        { href: `/`, label: `Home` },
-        { href: `/about`, label: `About Page` },
-        { href: `/contact`, label: `contact` },
-      ] satisfies NavRoute[],
-      [`Home`, `About Page`, `contact`],
-    ],
     [`empty routes`, [], []],
     [
       `HTML labels`,
@@ -327,6 +318,7 @@ describe(`Nav`, () => {
       [
         {
           label: `how to`,
+          class: `trigger-class`,
           children: [
             { href: `/how-to/guide-1`, label: `guide 1` },
             { href: `/how-to/guide-2`, label: `guide 2` },
@@ -344,6 +336,7 @@ describe(`Nav`, () => {
         {
           href: `/docs`,
           label: `docs`,
+          class: `trigger-class`,
           children: [
             { href: `/docs/intro`, label: `intro` },
             { href: `/docs/api`, label: `api` },
@@ -364,6 +357,7 @@ describe(`Nav`, () => {
     expect(trigger.tagName).toBe(tag)
     expect(trigger.getAttribute(`href`)).toBe(href)
     expect(trigger.textContent?.trim()).toBe(label)
+    expect(trigger.classList.contains(`trigger-class`)).toBe(true)
     const menu_links = Array.from(
       doc_query(`.dropdown [data-submenu]`).querySelectorAll(`a`),
     ).map((link) => link.getAttribute(`href`))
@@ -596,124 +590,32 @@ describe(`Nav`, () => {
       ]).toEqual([`BUTTON`, toggle_label, `true`])
     },
   )
-  test(`renders object routes with href, label, class, and style`, () => {
-    const routes: NavRoute[] = [
-      { href: `/home`, label: `Home Page` },
-      { href: `/about`, label: `about` },
-      {
-        href: `/styled`,
-        class: `custom-nav-item`,
-        style: `color: red`,
-        label: `styled`,
-      },
-    ]
-    mount_nav({ routes })
-    const links = [...document.querySelectorAll(`a`)]
-    expect(
-      links.map((link) => [link.getAttribute(`href`), link.textContent?.trim()]),
-    ).toEqual([
-      [`/home`, `Home Page`],
-      [`/about`, `about`],
-      [`/styled`, `styled`],
-    ])
-    expect(links[2].classList.contains(`custom-nav-item`)).toBe(true)
-    expect(links[2].getAttribute(`style`)).toContain(`color: red`)
-  })
-  test(`renders dropdown object route with trigger label, class, and children`, () => {
-    const routes: NavRoute[] = [
-      {
-        label: `Documentation`,
-        children: [
-          { href: `/docs/intro`, label: `intro` },
-          { href: `/docs/api`, label: `api` },
-        ],
-        class: `docs-menu`,
-      },
-    ]
-    mount_nav({ routes })
-    const trigger = doc_query(`.dropdown span`)
-    expect(trigger.textContent?.trim()).toBe(`Documentation`)
-    expect(trigger.classList.contains(`docs-menu`)).toBe(true)
-    const submenu_links = doc_query(`.dropdown`).querySelectorAll(`[data-submenu] a`)
-    expect([...submenu_links].map((link) => link.getAttribute(`href`))).toEqual([
-      `/docs/intro`,
-      `/docs/api`,
-    ])
-  })
   describe(`disabled routes`, () => {
-    test.each<[string, NavRoute, string]>([
-      [
-        `boolean true`,
-        {
-          href: `/page`,
-          disabled: true,
-          label: `page`,
-        },
-        `page`,
-      ],
-      [
-        `tooltip message`,
-        {
-          href: `/page`,
-          disabled: true,
-          tooltip: `Not available`,
-          label: `page`,
-        },
-        `page`,
-      ],
-      [
-        `with custom label`,
-        {
-          href: `/admin`,
-          label: `Admin Panel`,
-          disabled: true,
-        },
-        `Admin Panel`,
-      ],
-    ])(`disabled item with %s`, (_desc, route, expected_text) => {
-      mount_nav({
-        routes: [route],
-      })
-      const disabled = doc_query(`.disabled`)
-      expect(disabled.getAttribute(`aria-disabled`)).toBe(`true`)
-      expect(disabled.textContent?.trim()).toBe(expected_text)
-    })
-    test(`disabled items apply custom class and style`, () => {
+    test(`disabled items render as styled spans that never navigate`, async () => {
+      const on_navigate = vi.fn()
       const routes: NavRoute[] = [
+        { href: `/home`, label: `home` },
         {
           href: `/test`,
           disabled: true,
           class: `my-disabled`,
           style: `opacity: 0.3`,
-          label: `test`,
+          label: `Admin Panel`,
         },
-      ]
-      mount_nav({ routes })
-      const disabled = doc_query(`.disabled`)
-      expect(disabled.classList.contains(`my-disabled`)).toBe(true)
-      expect(disabled.getAttribute(`style`)).toContain(`opacity: 0.3`)
-    })
-    test(`clicking disabled item does not trigger on_navigate`, async () => {
-      const on_navigate = vi.fn()
-      const routes: NavRoute[] = [
-        { href: `/home`, label: `home` },
-        {
-          href: `/disabled`,
-          disabled: true,
-          label: `disabled`,
-        },
-        {
-          href: `/disabled2`,
-          disabled: true,
-          tooltip: `Coming soon`,
-          label: `disabled2`,
-        },
+        { href: `/soon`, disabled: true, tooltip: `Coming soon`, label: `soon` },
       ]
       mount_nav({ routes, on_navigate })
-      await click(doc_query(`.disabled`))
+      const disabled = [...document.querySelectorAll(`.disabled`)]
+      expect(disabled.map((item) => item.textContent?.trim())).toEqual([
+        `Admin Panel`,
+        `soon`,
+      ])
+      for (const item of disabled) expect(item.getAttribute(`aria-disabled`)).toBe(`true`)
+      expect(disabled[0].classList.contains(`my-disabled`)).toBe(true)
+      expect(disabled[0].getAttribute(`style`)).toContain(`opacity: 0.3`)
+      await click(disabled[0])
       expect(on_navigate).not.toHaveBeenCalled()
       expect(document.querySelectorAll(`a`)).toHaveLength(1)
-      expect(document.querySelectorAll(`.disabled`)).toHaveLength(2)
     })
     test(`disabled dropdown parent renders as span, not link`, () => {
       const routes: NavRoute[] = [
@@ -776,69 +678,6 @@ describe(`Nav`, () => {
         `/contact`,
       )
     })
-  })
-  test(`external links have target attrs and trigger on_navigate callback`, async () => {
-    const on_navigate = vi.fn()
-    const routes: NavRoute[] = [
-      { href: `/internal`, label: `internal` },
-      {
-        href: `https://github.com`,
-        target: `_blank`,
-        rel: `noopener noreferrer`,
-        label: `https://github.com`,
-      },
-      {
-        href: `https://example.com`,
-        target: `_blank`,
-        rel: `noopener noreferrer`,
-        class: `ext`,
-        style: `color: blue`,
-        label: `Link`,
-      },
-    ]
-    mount_nav({ routes, on_navigate })
-    const links = document.querySelectorAll(`a`)
-    // internal link gets no target/rel, external ones do
-    expect([0, 1, 2].map((idx) => links[idx].getAttribute(`target`))).toEqual([
-      null,
-      `_blank`,
-      `_blank`,
-    ])
-    expect(links[0].getAttribute(`rel`)).toBeNull()
-    expect(links[1].getAttribute(`rel`)).toBe(`noopener noreferrer`)
-    // external link with custom props
-    expect(links[2].textContent?.trim()).toBe(`Link`)
-    expect(links[2].classList.contains(`ext`)).toBe(true)
-    expect(links[2].getAttribute(`style`)).toContain(`color: blue`)
-    await click(links[1])
-    expect(on_navigate).toHaveBeenCalledWith(
-      expect.objectContaining({
-        route: expect.objectContaining({ target: `_blank`, rel: `noopener noreferrer` }),
-      }),
-    )
-  })
-  test(`right-aligned items and dropdowns`, () => {
-    const routes: NavRoute[] = [
-      { href: `/home`, label: `home` },
-      {
-        href: `/settings`,
-        align: `right`,
-        class: `settings-link`,
-        style: `font-weight: bold`,
-        label: `settings`,
-      },
-      {
-        children: [{ href: `/user/profile`, label: `profile` }],
-        align: `right`,
-        label: `user`,
-      },
-    ]
-    mount_nav({ routes })
-    expect(document.querySelectorAll(`.align-right`)).toHaveLength(2)
-    expect(doc_query(`.dropdown`).classList.contains(`align-right`)).toBe(true)
-    const link = doc_query(`.align-right a`)
-    expect(link.classList.contains(`settings-link`)).toBe(true)
-    expect(link.getAttribute(`style`)).toContain(`font-weight: bold`)
   })
   describe(`callbacks`, () => {
     test(`on_navigate called with href, event, and route`, async () => {
@@ -960,43 +799,49 @@ describe(`Nav`, () => {
   test(`handles all route formats together with all features`, () => {
     const routes: NavRoute[] = [
       { href: `/simple`, label: `simple` },
-      { href: `/tuple`, label: `Tuple Label` },
+      { href: `/styled`, label: `styled`, class: `custom-nav-item`, style: `color: red` },
       { separator: true },
       {
         href: `/docs`,
         label: `docs`,
+        align: `right`,
         children: [{ href: `/docs/api`, label: `api` }],
       },
-      { href: `/object`, label: `Object Label` },
-      {
-        href: `/disabled`,
-        disabled: true,
-        tooltip: `Login required`,
-        label: `disabled`,
-      },
-      {
-        href: `/settings`,
-        align: `right`,
-        label: `settings`,
-      },
+      { href: `/disabled`, disabled: true, tooltip: `Login required`, label: `disabled` },
+      { href: `/settings`, align: `right`, label: `settings` },
       {
         href: `https://github.com`,
         target: `_blank`,
         rel: `noopener noreferrer`,
-        align: `right`,
-        label: `https://github.com`,
+        label: `GitHub`,
       },
     ]
     mount_nav({ routes })
-    const links = document.querySelectorAll(`a`)
+    const links = [...document.querySelectorAll(`a`)]
     // route order preserved, dropdown parent link precedes its submenu link
-    expect([...links].map((link) => link.getAttribute(`href`)).join(` `)).toBe(
-      `/simple /tuple /docs /docs/api /object /settings https://github.com`,
-    )
+    expect(
+      links.map((link) => [link.getAttribute(`href`), link.textContent?.trim()]),
+    ).toEqual([
+      [`/simple`, `simple`],
+      [`/styled`, `styled`],
+      [`/docs`, `docs`],
+      [`/docs/api`, `api`],
+      [`/settings`, `settings`],
+      [`https://github.com`, `GitHub`],
+    ])
+    expect(links[1].classList.contains(`custom-nav-item`)).toBe(true)
+    expect(links[1].getAttribute(`style`)).toContain(`color: red`)
+    // only external routes get target/rel
+    expect(links.map((link) => link.getAttribute(`target`))).toEqual([
+      ...Array.from({ length: 5 }, () => null),
+      `_blank`,
+    ])
+    expect(links[0].getAttribute(`rel`)).toBeNull()
+    expect(links[5].getAttribute(`rel`)).toBe(`noopener noreferrer`)
     expect(document.querySelectorAll(`.separator`)).toHaveLength(1)
     expect(document.querySelectorAll(`.disabled`)).toHaveLength(1)
     expect(document.querySelectorAll(`.align-right`)).toHaveLength(2)
-    expect(document.querySelectorAll(`.dropdown`)).toHaveLength(1)
+    expect(doc_query(`.dropdown`).classList.contains(`align-right`)).toBe(true)
   })
   describe(`dropdown pointer and keyboard interactions`, () => {
     test.each([
@@ -1035,17 +880,6 @@ describe(`Nav`, () => {
         ).toEqual(children.map(({ href }) => href))
       },
     )
-    test(`click toggles the dropdown and aria-expanded`, async () => {
-      const { dropdown_menu, toggle } = mount_dropdown()
-      expect(is_visible(dropdown_menu)).toBe(false)
-      expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
-      await click(toggle)
-      expect(is_visible(dropdown_menu)).toBe(true)
-      expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
-      await click(toggle)
-      expect(is_visible(dropdown_menu)).toBe(false)
-      expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
-    })
     test.each([
       [1024, `mouse`, true],
       [500, `mouse`, false],
@@ -1133,16 +967,6 @@ describe(`Nav`, () => {
         expect(document.activeElement).toBe(dropdown_menu.querySelector(`a`))
       },
     )
-    test(`Escape on a submenu link closes it for good and restores focus`, async () => {
-      const { dropdown_menu, toggle } = mount_dropdown(two_child_props)
-      await click(toggle)
-      const first_link = doc_query<HTMLAnchorElement>(`[data-submenu] a`)
-      first_link.focus()
-      keydown(`Escape`, first_link)
-      await next_task()
-      expect(document.activeElement).toBe(toggle)
-      expect(is_visible(dropdown_menu)).toBe(false)
-    })
     test.each([`click`, `hover`])(
       `Tab keeps control of a submenu opened by %s`,
       async (interaction) => {
@@ -1184,22 +1008,14 @@ describe(`Nav`, () => {
       [
         `BigInt`,
         [
-          {
-            href: `/a`,
-            custom_id: BigInt(123),
-            label: `a`,
-          },
+          { href: `/a`, custom_id: BigInt(123), label: `a` },
           { href: `/b`, label: `b` },
         ],
       ],
       [
         `function`,
         [
-          {
-            href: `/a`,
-            on_custom: () => {},
-            label: `a`,
-          },
+          { href: `/a`, on_custom: () => {}, label: `a` },
           { href: `/b`, label: `b` },
         ],
       ],

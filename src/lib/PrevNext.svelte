@@ -57,7 +57,7 @@
         {#if children}
           {@render children({ kind, item, index, total })}
         {:else}
-          <div>
+          <div class={kind}>
             {#if title}<span>{title}</span>{/if}
             <a
               {...link_props}
@@ -96,7 +96,7 @@
     display: block;
     margin: var(--prev-next-label-margin, 0 auto 1ex);
   }
-  .prev-next > div:nth-child(2) {
+  .prev-next > .next {
     text-align: end;
   }
 </style>

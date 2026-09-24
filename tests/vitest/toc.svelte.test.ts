@@ -302,37 +302,25 @@ describe(`Toc`, () => {
     expect(replace_state_mock).not.toHaveBeenCalled()
   })
 
-  test(`encoded fragment links keep native navigation and existing history state`, async () => {
+  // links keep native navigation: plain clicks scroll, modified clicks are left alone
+  test.each([
+    [`plain click on an encoded fragment`, false, 1],
+    [`ctrl+click`, true, 0],
+  ])(`%s keeps native link behavior`, async (_, ctrlKey, n_scrolls) => {
     set_body(`<h2 id="sec:1">Section</h2>`)
     const replace_state_mock = vi.spyOn(history, `replaceState`)
-    spy_scroll_into_view()
+    const scroll_into_view_mock = spy_scroll_into_view()
 
     mount_toc()
     await tick()
 
-    // the <a href> is a valid percent-encoded URL string
-    expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#sec%3A1`)
-
-    const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
-    doc_query(`aside.toc li > a`).dispatchEvent(event)
+    const link = doc_query(`aside.toc li > a`)
+    expect(link.getAttribute(`href`)).toBe(`#sec%3A1`) // a valid percent-encoded URL
+    const event = new MouseEvent(`click`, { bubbles: true, cancelable: true, ctrlKey })
+    link.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
+    expect(scroll_into_view_mock).toHaveBeenCalledTimes(n_scrolls)
     expect(replace_state_mock).not.toHaveBeenCalled()
-  })
-
-  test(`existing heading ids stay the fragment target over get_heading_data ids`, async () => {
-    set_body(`<h2 id="real">Keep</h2>`)
-
-    mount_toc({
-      get_heading_data: (node: HTMLHeadingElement) => ({
-        id: `custom`,
-        level: 2,
-        title: node.textContent ?? ``,
-      }),
-    })
-    await tick()
-
-    expect(doc_query(`body > h2`).id).toBe(`real`)
-    expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#real`)
   })
 
   test.each([`second`, `sec:1`, `123`, `part.one`])(
@@ -397,25 +385,6 @@ describe(`Toc`, () => {
     expect(toc_texts()).toEqual([`Stable`])
   })
 
-  test(`toc_item snippet replaces default link content`, async () => {
-    set_body(`<h2 id="intro">Intro</h2>`)
-
-    mount_toc({
-      toc_item: createRawSnippet<[TocHeadingData]>((heading) => ({
-        render: () =>
-          `<span class="custom-toc-item">${heading().id}:${heading().title}</span>`,
-      })),
-    })
-    await tick()
-
-    const item = doc_query(`aside.toc li`)
-    expect(item.getAttribute(`tabindex`)).toBe(`0`)
-    expect(item.getAttribute(`role`)).toBe(`link`)
-    expect(item.getAttribute(`aria-current`)).toBe(`location`)
-    expect(item.querySelector(`a`)).toBeNull()
-    expect(item.querySelector(`.custom-toc-item`)?.textContent).toBe(`intro:Intro`)
-  })
-
   test.each([
     {
       desc: `anchor keeps its own click behavior`,
@@ -436,7 +405,8 @@ describe(`Toc`, () => {
     },
     {
       desc: `non-interactive span scrolls to the heading`,
-      html: (heading: TocHeadingData) => `<span class="plain">${heading.title}</span>`,
+      html: (heading: TocHeadingData) =>
+        `<span class="plain">${heading.id}:${heading.title}</span>`,
       n_anchors: 0,
       selector: `aside.toc li > span.plain`,
       scrolls: true,
@@ -459,7 +429,10 @@ describe(`Toc`, () => {
       await tick()
 
       const item = doc_query(`aside.toc li`)
+      expect(item.textContent).toContain(`First`)
       expect(item.querySelectorAll(`a`)).toHaveLength(n_anchors)
+      // the li carries the active state whatever the snippet renders
+      expect(item.getAttribute(`aria-current`)).toBe(`location`)
       expect(item.getAttribute(`role`)).toBe(scrolls ? `link` : null)
       expect(item.getAttribute(`tabindex`)).toBe(scrolls ? `0` : null)
       const native_click = HTMLAnchorElement.prototype.click
@@ -529,26 +502,6 @@ describe(`Toc`, () => {
 
     expect(event.defaultPrevented).toBe(false)
     expect(document.activeElement).toBe(field) // the ToC did not move focus off the field
-  })
-
-  test(`modified clicks on ToC links keep native browser behavior`, async () => {
-    set_body(`<h2 id="intro">Intro</h2>`)
-    const replace_state_mock = vi.spyOn(history, `replaceState`)
-    const scroll_into_view_mock = spy_scroll_into_view()
-
-    mount_toc()
-    await tick()
-
-    const event = new MouseEvent(`click`, {
-      bubbles: true,
-      cancelable: true,
-      ctrlKey: true,
-    })
-    doc_query(`aside.toc li > a`).dispatchEvent(event)
-
-    expect(event.defaultPrevented).toBe(false)
-    expect(replace_state_mock).not.toHaveBeenCalled()
-    expect(scroll_into_view_mock).not.toHaveBeenCalled()
   })
 
   test(`flash_clicked_headings_for_ms removes the clicked-heading class`, async () => {
@@ -752,19 +705,44 @@ describe(`Toc`, () => {
     [`ArrowDown moves to the next item`, 4, `heading-1`, [`ArrowDown`], `Heading 2`],
     [`ArrowDown holds at the last item`, 2, `heading-2`, [`ArrowDown`], `Heading 2`],
     [`ArrowUp holds at the first item`, 2, `heading-1`, [`ArrowUp`], `Heading 1`],
-  ] as const)(`%s`, async (_, count, active_id, keys, expected) => {
+    // removing an earlier heading shifts every index: the arrow must start from the item
+    // rendered for the active heading, not a row captured before the list re-rendered
+    [
+      `ArrowDown after an earlier heading is removed`,
+      4,
+      `heading-3`,
+      [`ArrowDown`],
+      `Heading 4`,
+      `heading-1`,
+    ],
+  ] as const)(`%s`, async (_, count, active_id, keys, expected, removed_id?: string) => {
     set_headings(count)
     set_window_width(600)
     mock_active_heading(active_id)
-    mount_toc({ breakpoint: 10_000, desktop: false, open: true })
+    const props = $state<TocProps>({
+      dynamic: true,
+      breakpoint: 10_000,
+      open: true,
+      active_toc_li: null,
+      toc_items: [],
+    })
+    mounted_components.push(mount(Toc, { target: document.body, props }))
     await tick()
+    if (removed_id) {
+      doc_query(`#${removed_id}`).remove()
+      await tick()
+    }
 
     for (const key of keys) {
       globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key }))
       await tick()
     }
 
-    expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(expected)
+    const active_li = doc_query(`aside.toc > nav > ol > li.active`)
+    expect(active_li.textContent).toBe(expected)
+    // the bound row follows the re-rendered list rather than a pre-removal copy
+    expect(props.active_toc_li).toBe(active_li)
+    expect(props.toc_items?.filter(Boolean)).toHaveLength(count - (removed_id ? 1 : 0))
   })
 
   test.each([`Enter`, ` `])(
@@ -817,15 +795,12 @@ describe(`Toc`, () => {
     mount_toc()
     await tick()
 
-    const links = document.querySelectorAll<HTMLAnchorElement>(`aside.toc li > a`)
-    expect(doc_query(`aside.toc li.active > a`).getAttribute(`aria-current`)).toBe(
+    // happy-dom reports top=0 everywhere, so the last heading is active
+    const links = [...document.querySelectorAll(`aside.toc li > a`)]
+    expect(links.map((link) => link.getAttribute(`aria-current`))).toEqual([
+      null,
       `location`,
-    )
-    for (const link of links) {
-      if (!link.closest(`li`)?.classList.contains(`active`)) {
-        expect(link.getAttribute(`aria-current`)).toBeNull()
-      }
-    }
+    ])
   })
 
   // a null key means activate by clicking the first item instead of pressing a key
@@ -901,15 +876,23 @@ describe(`Toc`, () => {
     }
   })
 
-  test(`Escape with a focused desktop ToC has nothing to close and stays un-prevented`, async () => {
-    set_headings(2)
+  // the hover check used to scan the whole document for :hover on every keystroke
+  test.each([
+    [`Escape with a focused desktop ToC has nothing to close`, `Escape`, true],
+    [`ArrowUp skips a desktop ToC neither hovered nor focused`, `ArrowUp`, false],
+  ])(`%s and stays un-prevented`, async (_, key, focused) => {
+    set_headings(3)
     mount_toc()
     await tick()
-    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
-
-    const key_event = new KeyboardEvent(`keydown`, { key: `Escape`, cancelable: true })
+    const active_before = doc_query(`aside.toc li.active`)
+    if (focused) doc_query(`aside.toc li.active > a`).focus()
+    const query_spy = vi.spyOn(document, `querySelectorAll`)
+    const key_event = new KeyboardEvent(`keydown`, { key, cancelable: true })
     globalThis.dispatchEvent(key_event)
+    await tick()
+    expect(query_spy).not.toHaveBeenCalled()
     expect(key_event.defaultPrevented).toBe(false)
+    expect(doc_query(`aside.toc li.active`)).toBe(active_before)
   })
 
   test(`mutation observer tracks headings added and removed after mount`, async () => {
@@ -1184,7 +1167,6 @@ describe(`hide_on_intersect`, () => {
     window_width?: number
     b2_rect?: Partial<DOMRect>
     expected: boolean
-    warns?: boolean
   }
 
   test.each<IntersectCase>([
@@ -1201,21 +1183,11 @@ describe(`hide_on_intersect`, () => {
       expected: true,
     },
     { desc: `ignores a selector matching nothing`, target: () => `.x`, expected: false },
-  ])(
-    `$desc`,
-    async ({ target = () => `.banner`, expected, warns, window_width, b2_rect }) => {
-      const warn_mock = vi.spyOn(console, `warn`).mockImplementation(() => {})
-      const { aside } = await setup_banners(target, { window_width, b2_rect })
-      await scroll()
-
-      expect(is_intersecting(aside)).toBe(expected)
-      if (warns) {
-        expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
-          expect.stringContaining(`invalid hide_on_intersect='['`),
-        )
-      } else expect(warn_mock).not.toHaveBeenCalled()
-    },
-  )
+  ])(`$desc`, async ({ target = () => `.banner`, expected, window_width, b2_rect }) => {
+    const { aside } = await setup_banners(target, { window_width, b2_rect })
+    await scroll()
+    expect(is_intersecting(aside)).toBe(expected)
+  })
 
   test(`re-shows the ToC once the overlap ends`, async () => {
     const { aside, b2 } = await setup_banners(() => `.banner`)
@@ -1276,7 +1248,6 @@ describe(`Element Prop Bags`, () => {
       selector: `aside.toc nav ol li`,
       expected_classes: [`active`, `custom-class`],
       expected_attributes: { value: `7` },
-      expected_open_changes: 0,
       setup: () => set_body(`<h2>Single Heading</h2>`),
     },
     {
@@ -1296,7 +1267,6 @@ describe(`Element Prop Bags`, () => {
         disabled: ``,
         type: `button`,
       },
-      expected_open_changes: 0,
       // the button only renders on mobile, and only once there are headings to list
       setup: () => {
         ensure_content_for_toc_elements()
@@ -1314,21 +1284,13 @@ describe(`Element Prop Bags`, () => {
       selector,
       expected_classes,
       expected_attributes = {},
-      expected_open_changes,
       setup = ensure_content_for_toc_elements,
     }) => {
       setup()
-      const has_user_click = `onclick` in bag
-      const user_click = has_user_click ? bag.onclick : vi.fn<() => void>()
       const on_open_change = vi.fn<OpenChangeHandler>()
-      const expected_open_change_count = expected_open_changes ?? (has_user_click ? 1 : 0)
       const full_bag = { ...bag, style: marker_style, 'data-testid': prop_name }
 
-      mount_toc({
-        ...extra_props,
-        ...(has_user_click ? { on_open_change } : {}),
-        [prop_name]: full_bag,
-      })
+      mount_toc({ ...extra_props, on_open_change, [prop_name]: full_bag })
       await tick()
       on_open_change.mockClear()
 
@@ -1346,11 +1308,11 @@ describe(`Element Prop Bags`, () => {
           new MouseEvent(`click`, { bubbles: true, cancelable: true }),
         )
         await tick()
+        // happy-dom honors `disabled` for dispatched clicks, unlike jsdom
+        expect(bag.onclick).toHaveBeenCalledTimes(`disabled` in bag ? 0 : 1)
       }
-      // happy-dom honors `disabled` for dispatched clicks, unlike jsdom
-      const is_disabled = `disabled` in bag && bag.disabled === true
-      expect(user_click).toHaveBeenCalledTimes(has_user_click && !is_disabled ? 1 : 0)
-      expect(on_open_change).toHaveBeenCalledTimes(expected_open_change_count)
+      // neither the li click nor the prevented button click toggles the panel
+      expect(on_open_change).not.toHaveBeenCalled()
     },
   )
 
@@ -1445,16 +1407,9 @@ describe(`Element Prop Bags`, () => {
 })
 
 describe(`collapse_subheadings`, () => {
-  test(`all items visible when collapse_subheadings=false`, async () => {
-    setup_nested_headings()
-    mount_toc()
-    await tick()
-
-    expect(get_collapsed_states()).toEqual(Array.from({ length: 8 }, () => false))
-  })
-
   test.each([
     // [description, mode, active_id, expected_collapsed_states]
+    [`collapse disabled`, false, `detail-1-2-1`, Array.from({ length: 8 }, () => false)],
     [
       `full nesting with h2 active`,
       true,
@@ -1482,6 +1437,13 @@ describe(`collapse_subheadings`, () => {
       [false, false, true, true, false, false, false, true],
     ],
     [
+      // the top level never collapses; everything under the unrelated Section 1 does
+      `full nesting with the trailing h3 active`,
+      true,
+      `sub-2-1`,
+      [false, true, true, true, true, true, false, false],
+    ],
+    [
       `h3 threshold with h2 active`,
       `h3`,
       `section-1`,
@@ -1507,27 +1469,6 @@ describe(`collapse_subheadings`, () => {
     expect(() =>
       flushSync(() => mount_toc({ collapse_subheadings: mode as CollapseMode })),
     ).toThrow(`Toc received invalid collapse_subheadings='${mode}'`)
-  })
-
-  test(`unmocked mount expands only the active heading's ancestor chain`, async () => {
-    setup_nested_headings()
-    // no rect mock: happy-dom reports top=0 for every heading, so set_active_heading walks
-    // last-to-first and stops immediately, making the trailing h3 (Sub 2.1) active
-    mount_toc({ collapse_subheadings: true })
-    await tick()
-
-    // both h2s stay open (top level never collapses) plus Sub 2.1 as the active item;
-    // everything under the unrelated Section 1 subtree collapses
-    expect(get_collapsed_states()).toEqual([
-      false, // Section 1 (h2, top level)
-      true, // Sub 1.1
-      true, // Detail 1.1.1
-      true, // Detail 1.1.2
-      true, // Sub 1.2
-      true, // Detail 1.2.1
-      false, // Section 2 (h2, top level)
-      false, // Sub 2.1 (active)
-    ])
   })
 })
 

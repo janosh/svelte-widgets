@@ -5,7 +5,7 @@ import { doc_query } from './index'
 
 const default_expected = {
   aria_label: `View code on GitHub`,
-  class_name: `top-right`,
+  class_names: [`top-right`],
   color: ``,
   fill: ``,
   target: `_self`,
@@ -18,15 +18,17 @@ test.each([
     `custom props`,
     {
       aria_label: `Repo`,
+      class: `custom`,
       color: `red`,
-      corner: `top-left`,
       fill: `blue`,
+      corner: `top-left`,
       target: `_blank`,
       title: `Source`,
     },
     {
       aria_label: `Repo`,
-      class_name: `top-left`,
+      // a caller class used to be overwritten by the corner class
+      class_names: [`top-left`, `custom`],
       color: `red`,
       fill: `blue`,
       target: `_blank`,
@@ -37,10 +39,7 @@ test.each([
   [
     `custom title without aria_label`,
     { title: `Source` },
-    {
-      aria_label: `Source`,
-      title: `Source`,
-    },
+    { aria_label: `Source`, title: `Source` },
   ],
 ] as const)(
   `GitHubCorner renders link with svg and %s`,
@@ -51,9 +50,11 @@ test.each([
     const link = doc_query<HTMLAnchorElement>(`a`)
     expect(link.getAttribute(`href`)).toBe(href)
     expect(link.getAttribute(`aria-label`)).toBe(expected.aria_label)
-    expect(link.classList.contains(expected.class_name)).toBe(true)
-    expect(link.style.color).toBe(expected.color)
-    expect(link.style.fill).toBe(expected.fill)
+    expect([...link.classList]).toEqual(expect.arrayContaining([...expected.class_names]))
+    // colors go through the custom properties, so the :hover variants still win
+    expect(link.style.getPropertyValue(`--github-corner-color`)).toBe(expected.color)
+    expect(link.style.getPropertyValue(`--github-corner-bg`)).toBe(expected.fill)
+    expect(link.style.color).toBe(``)
     expect(link.target).toBe(expected.target)
     expect(link.title).toBe(expected.title)
     expect(link.querySelector(`svg`)).toBeInstanceOf(SVGElement)

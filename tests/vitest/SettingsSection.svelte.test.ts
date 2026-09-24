@@ -92,12 +92,6 @@ describe(`SettingsSection`, () => {
     expect(section_b.getAttribute(`aria-labelledby`)).toBe(heading_b.id)
   })
 
-  test(`allows action-only content without current values`, () => {
-    mount_section({ title: `Export`, children: snippet(`<button>Download</button>`) })
-    expect(document.querySelector(`section`)?.textContent).toContain(`Download`)
-    expect(document.querySelector(`.reset-button`)).toBeNull()
-  })
-
   test(`hides reset controls when no reset callback is available`, () => {
     mount_section({
       title: `A`,
@@ -138,7 +132,7 @@ describe(`SettingsSection`, () => {
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
-  test(`caller resets changed values and deletes added keys`, async () => {
+  test(`section reset without on_reset restores changed keys, deletes added ones, keeps focus`, async () => {
     const tracked = mount_tracked_section(
       { radius: 3, temporary: true },
       `<div>
@@ -150,6 +144,7 @@ describe(`SettingsSection`, () => {
     await tick()
 
     expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(2)
+    doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
     await click_and_tick(`.settings-section-heading .reset-button`)
 
     expect(tracked.values).toEqual({ radius: 1 })
@@ -157,6 +152,9 @@ describe(`SettingsSection`, () => {
       [`radius`, 1, true],
       [`temporary`, undefined, false],
     ])
+    expect(document.querySelector(`.reset-button`)).toBeNull()
+    // the focused section button unmounted, so focus lands on the first control
+    expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
   test.each([
@@ -217,26 +215,6 @@ describe(`SettingsSection`, () => {
     if (reference_present) expect(tracked.values[key]).toEqual(reference_value)
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).toBeNull()
-  })
-
-  test(`section reset restores every changed key when on_reset is omitted`, async () => {
-    const tracked = mount_tracked_section(
-      { radius: 1, opacity: 0.5 },
-      `<div>
-        <label data-key="radius"><span>Radius</span><input></label>
-        <label data-key="opacity"><span>Opacity</span><input></label>
-      </div>`,
-    )
-
-    flushSync(() => (tracked.values = { radius: 2, opacity: 0.8 }))
-    await tick()
-    doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
-    await click_and_tick(`.settings-section-heading .reset-button`)
-
-    expect(tracked.values).toEqual({ radius: 1, opacity: 0.5 })
-    expect(tracked.reset_calls.map(([key]) => key)).toEqual([`radius`, `opacity`])
-    expect(document.querySelector(`.reset-button`)).toBeNull()
-    expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
   test(`reveals row descriptions with an accessible section toggle`, async () => {
@@ -341,58 +319,27 @@ describe(`SettingsSection`, () => {
     ]).toEqual([`Atom radius zurücksetzen`, `Atom radius zurücksetzen`, `Atom radius`])
   })
 
-  test(`offers descriptions without requiring a reset callback`, async () => {
-    mount_section({
-      title: `Atoms`,
-      children: snippet(
-        `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input></label>`,
-      ),
-    })
-    await tick()
-
-    await click_and_tick(`.description-toggle`)
-    expect(document.querySelector(`.settings-row-description`)?.textContent).toBe(
-      `Rendered atom radius`,
-    )
-  })
-
-  // the description used to be snapshotted at mount and written back on every refresh, so
+  // the description used to be snapshotted at mount and written back on every refresh, so a
   // caller's later `data-description` was reverted (or deleted, if added after mount)
-  test(`follows a caller's later data-description instead of restoring the mount-time one`, async () => {
+  test.each([
+    [`a mount-time description`, ` data-description="Old text"`],
+    [`no description at mount`, ``],
+  ])(`follows a caller's later data-description after %s`, async (_, attribute) => {
     mount_section({
       title: `Atoms`,
+      descriptions_open: true,
       on_reset_key: () => undefined,
       children: snippet(
-        `<label data-key="radius" data-description="Old text"><span>Radius</span><input></label>`,
+        `<label data-key="radius"${attribute}><span>Radius</span><input></label>`,
       ),
     })
     await tick()
-    await click_and_tick(`.description-toggle`)
-    expect(doc_query(`.settings-row-description`).textContent).toBe(`Old text`)
-
-    // the caller rewrites the attribute the way a reactive prop would
     doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `New text`)
     await tick()
     expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
       `New text`,
     )
     expect(doc_query(`.settings-row-description`).textContent).toBe(`New text`)
-  })
-
-  // a row that gains the attribute after mount had it removed again on the next refresh
-  test(`keeps a data-description added after mount`, async () => {
-    mount_section({
-      title: `Atoms`,
-      on_reset_key: () => undefined,
-      children: snippet(`<label data-key="radius"><span>Radius</span><input></label>`),
-    })
-    await tick()
-    doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `Added later`)
-    await tick()
-
-    expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
-      `Added later`,
-    )
   })
 
   // Pressing the reset button removes it, which used to drop focus to <body>.

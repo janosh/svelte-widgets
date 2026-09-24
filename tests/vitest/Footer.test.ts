@@ -12,68 +12,30 @@ describe(`Footer`, () => {
   const anchors = () =>
     Array.from(document.querySelectorAll<HTMLAnchorElement>(`footer nav a`))
 
-  test.each([
-    [`plain link`, { href: `/changelog`, label: `Changelog` }, false, null, null, null],
-    [
-      `icon link`,
-      { href: `/repo`, label: `GitHub`, icon: GitHub },
-      true,
-      null,
-      null,
-      null,
-    ],
-    [
-      `external link`,
-      {
-        href: `https://example.com`,
-        label: `Docs`,
-        target: `_blank`,
-        rel: `noopener noreferrer`,
-      },
-      false,
-      `_blank`,
-      `noopener noreferrer`,
-      null,
-    ],
-    [
-      `titled link`,
-      { href: `/rss.xml`, label: `RSS`, title: `Be notified of new releases` },
-      false,
-      null,
-      null,
-      `Be notified of new releases`,
-    ],
-  ] as [string, FooterLink, boolean, string | null, string | null, string | null][])(
-    `renders a %s`,
-    (_desc, link, has_icon, target, rel, title) => {
-      mount_footer({ links: [link] })
-
-      const anchor = doc_query<HTMLAnchorElement>(`footer nav a`)
-      expect(anchor.getAttribute(`href`)).toBe(link.href)
-      expect(anchor.textContent?.trim()).toBe(link.label)
-      expect(Boolean(anchor.querySelector(`svg`))).toBe(has_icon)
-      expect(anchor.getAttribute(`target`)).toBe(target)
-      expect(anchor.getAttribute(`rel`)).toBe(rel)
-      expect(anchor.getAttribute(`title`)).toBe(title)
-    },
-  )
-
-  test(`renders links in order even with shared hrefs, and hides an empty nav`, async () => {
+  test(`renders links in order with their attributes, and hides an empty nav`, async () => {
     const links: FooterLink[] = [
       { href: `/issues`, label: `Issues` },
-      { href: `/issues`, label: `Contact` },
-      { href: `/changelog`, label: `Changelog` },
+      { href: `/issues`, label: `Contact` }, // a shared href must not collide
+      { href: `/repo`, label: `GitHub`, icon: GitHub },
+      { href: `https://x.org`, label: `Docs`, target: `_blank`, rel: `noopener` },
+      { href: `/rss.xml`, label: `RSS`, title: `New releases` },
     ]
     const component = mount_footer({ links })
     expect(
       anchors().map((anchor) => [
         anchor.getAttribute(`href`),
         anchor.textContent?.trim(),
+        Boolean(anchor.querySelector(`svg`)),
+        anchor.getAttribute(`target`),
+        anchor.getAttribute(`rel`),
+        anchor.getAttribute(`title`),
       ]),
     ).toEqual([
-      [`/issues`, `Issues`],
-      [`/issues`, `Contact`],
-      [`/changelog`, `Changelog`],
+      [`/issues`, `Issues`, false, null, null, null],
+      [`/issues`, `Contact`, false, null, null, null],
+      [`/repo`, `GitHub`, true, null, null, null],
+      [`https://x.org`, `Docs`, false, `_blank`, `noopener`, null],
+      [`/rss.xml`, `RSS`, false, null, null, `New releases`],
     ])
 
     await unmount(component)
