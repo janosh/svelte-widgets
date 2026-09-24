@@ -403,6 +403,26 @@ describe(`ToastStore`, () => {
     expect(store.active_toast).toBeNull()
   })
 
+  // setTimeout fires at once past 2^31-1 ms, which spun expire/reschedule in a busy loop
+  test.each([
+    [`duration_ms`, { duration_ms: 30 * 86_400_000 }],
+    [`expires_at_ms`, { expires_at_ms: 30 * 86_400_000, duration_ms: null }],
+  ] as const)(
+    `a %s beyond the 32-bit timer limit waits instead of spinning`,
+    (_desc, options) => {
+      fake_clock()
+      const store = track(new ToastStore())
+      const set_timeout = vi.spyOn(globalThis, `setTimeout`)
+      store.show(`far`, options)
+      vi.advanceTimersByTime(1000)
+      expect(set_timeout).toHaveBeenCalledOnce()
+      vi.advanceTimersByTime(30 * 86_400_000 - 1001)
+      expect(store.active_toast?.message).toBe(`far`)
+      vi.advanceTimersByTime(1)
+      expect(store.active_toast).toBeNull()
+    },
+  )
+
   test.each([
     [`dismiss`, (store: ToastStore) => store.dismiss(`toast-1`)],
     [`action`, (store: ToastStore) => store.run_action(`toast-1`)],
@@ -506,49 +526,28 @@ describe(`<Toast />`, () => {
   })
 
   // One non-sticky rung plus both sticky ones: the polite path is shared, but each sticky
-  // priority must interrupt on its own or a notice that never leaves can go unread.
+  // priority must interrupt on its own or a notice that never leaves can go unread. Urgency
+  // must read the store's sticky set rather than recomputing the ladder's top two.
   test.each([
-    [`info`, `polite`],
-    [`warning`, `assertive`],
-    [`error`, `assertive`],
-  ] as const)(`a %s toast renders into the %s region`, async (priority, region) => {
-    const store = render()
-    store.show(`hello`, { priority })
-    await tick()
+    [`info`, `polite`, {}],
+    [`warning`, `assertive`, {}],
+    [`error`, `assertive`, {}],
+    [`watch`, `assertive`, { priorities: custom_ladder }], // second-highest, so sticky
+    [`action`, `assertive`, { priorities: custom_ladder, sticky_priorities: [`action`] }],
+  ] as const)(
+    `a %s toast renders into the %s region`,
+    async (priority, region, options) => {
+      const store = track(new ToastStore<string>(options))
+      store.show(`hello`, { priority })
+      await tick()
 
-    const [used, empty] =
-      region === `polite` ? [polite(), assertive()] : [assertive(), polite()]
-    expect(used.textContent).toContain(`hello`)
-    expect(empty.textContent?.trim()).toBe(``)
-    expect(doc_query(`.toast`).dataset.priority).toBe(priority)
-  })
-
-  test(`a store built on a custom ladder drives the component`, async () => {
-    // mounted with typed props rather than through `render`, so this also pins that a
-    // narrowly-typed ToastStore is accepted where the component declares any ladder
-    const store = track(new ToastStore({ priorities: custom_ladder }))
-    store.show(`watching src/`, { priority: `watch` })
-    await tick()
-
-    expect(doc_query(`.toast`).dataset.priority).toBe(`watch`)
-    // `watch` is second-highest here, so sticky; urgency must agree, or a notice that
-    // never leaves the screen goes unread
-    expect(assertive().textContent).toContain(`watching src/`)
-    expect(polite().textContent).not.toContain(`watching src/`)
-  })
-
-  test(`a custom sticky_priorities decides urgency too`, async () => {
-    // `action` is sticky here but not one of the ladder's top two, so the two rules only
-    // agree if urgency reads the store's sticky set rather than recomputing slice(-2)
-    const store = track(
-      new ToastStore({ priorities: custom_ladder, sticky_priorities: [`action`] }),
-    )
-    store.show(`rebase needed`, { priority: `action` })
-    await tick()
-
-    expect(assertive().textContent).toContain(`rebase needed`)
-    expect(polite().textContent).not.toContain(`rebase needed`)
-  })
+      const [used, empty] =
+        region === `polite` ? [polite(), assertive()] : [assertive(), polite()]
+      expect(used.textContent).toContain(`hello`)
+      expect(empty.textContent?.trim()).toBe(``)
+      expect(doc_query(`.toast`).dataset.priority).toBe(priority)
+    },
+  )
 
   test(`the waiting count is rendered with a spelled-out label`, async () => {
     const store = render()
@@ -574,50 +573,33 @@ describe(`<Toast />`, () => {
     )
   })
 
-  test(`a labels.pending override replaces the waiting count wording`, async () => {
-    const store = render({
-      labels: { pending: (count: number) => `noch ${count} in der Warteschlange` },
-    })
-    store.show(`a`)
-    store.show(`b`)
-    await tick()
-
-    expect(doc_query(`.toast .sr-only`).textContent?.trim()).toBe(
+  // a key the override omits keeps its own default
+  test.each([
+    [
+      `pending`,
+      { labels: { pending: (count: number) => `noch ${count} in der Warteschlange` } },
       `noch 1 in der Warteschlange`,
-    )
-    // a key the override omits keeps its own prop default
-    expect(doc_query(`.toast-dismiss`).getAttribute(`aria-label`)).toBe(
       `Dismiss notification`,
-    )
-  })
+    ],
+    [`dismiss`, { labels: { dismiss: `Close` } }, `1 more notification pending`, `Close`],
+    [
+      `dismiss with a winning dismiss_label`,
+      { labels: { dismiss: `Close` }, dismiss_label: `Shut` },
+      `1 more notification pending`,
+      `Shut`,
+    ],
+  ] as const)(
+    `a labels.%s override replaces only its own wording`,
+    async (_key, props, pending_text, dismiss_label) => {
+      const store = render(props)
+      store.show(`a`)
+      store.show(`b`)
+      await tick()
 
-  test(`the action button runs the action and closes the toast`, async () => {
-    const store = render()
-    const on_click = vi.fn()
-    store.show(`deleted`, { action: { label: `Undo`, on_click } })
-    await tick()
-
-    const button = doc_query<HTMLButtonElement>(`.toast-action`)
-    expect(button.textContent?.trim()).toBe(`Undo`)
-    button.click()
-    await tick()
-
-    expect(on_click).toHaveBeenCalledOnce()
-    expect(store.active_toast).toBeNull()
-    expect(document.querySelector(`.toast`)).toBeNull()
-  })
-
-  test(`the dismiss button is labeled and removes the toast`, async () => {
-    const store = render({ dismiss_label: `Close` })
-    store.show(`a`)
-    await tick()
-
-    const button = doc_query<HTMLButtonElement>(`.toast-dismiss`)
-    expect(button.getAttribute(`aria-label`)).toBe(`Close`)
-    button.click()
-    await tick()
-    expect(store.active_toast).toBeNull()
-  })
+      expect(doc_query(`.toast .sr-only`).textContent?.trim()).toBe(pending_text)
+      expect(doc_query(`.toast-dismiss`).getAttribute(`aria-label`)).toBe(dismiss_label)
+    },
+  )
 
   // removing the focused button fires no focusout, so the focus pause must be re-derived
   // or the promoted toast would sit paused until the pointer or keyboard came back
@@ -773,7 +755,8 @@ describe(`<Toast />`, () => {
   })
 
   // every exit unmounts the button holding focus, so each must restore the origin rather
-  // than drop focus on <body> — unless the user already moved, when restoring would yank
+  // than drop focus on <body> — unless the user already moved, when restoring would yank.
+  // Only the action button may run the action.
   test.each<[string, (store: ToastStore) => void, boolean?]>([
     [`the action button`, () => doc_query<HTMLButtonElement>(`.toast-action`).click()],
     [`the dismiss button`, () => doc_query<HTMLButtonElement>(`.toast-dismiss`).click()],
@@ -781,27 +764,34 @@ describe(`<Toast />`, () => {
     // no click to hang the restore off: the queue empties from under the toast
     [`a store-driven clear`, (store: ToastStore) => store.clear()],
     [`a clear after the user tabbed away`, (store: ToastStore) => store.clear(), true],
-  ])(`%s leaves focus where the user expects it`, async (_label, close, moved_on) => {
-    const opener = document.createElement(`button`)
-    const elsewhere = document.createElement(`button`)
-    document.body.append(opener, elsewhere)
-    helper_nodes.push(opener, elsewhere)
-    const store = render()
-    store.show(`a`, { action: { label: `Undo` } })
-    await tick()
+  ])(
+    `%s closes the toast and leaves focus where the user expects it`,
+    async (label, close, moved_on) => {
+      const opener = document.createElement(`button`)
+      const elsewhere = document.createElement(`button`)
+      document.body.append(opener, elsewhere)
+      helper_nodes.push(opener, elsewhere)
+      const store = render()
+      const on_click = vi.fn()
+      store.show(`a`, { action: { label: `Undo`, on_click } })
+      await tick()
+      expect(doc_query(`.toast-action`).textContent?.trim()).toBe(`Undo`)
 
-    opener.focus()
-    press_focus_hotkey()
-    expect(document.activeElement).not.toBe(opener)
-    if (moved_on) elsewhere.focus()
+      opener.focus()
+      press_focus_hotkey()
+      expect(document.activeElement).not.toBe(opener)
+      if (moved_on) elsewhere.focus()
 
-    close(store)
-    await tick()
-    await tick() // restore_focus waits a tick for the toast to leave the DOM
+      close(store)
+      await tick()
+      await tick() // restore_focus waits a tick for the toast to leave the DOM
 
-    expect(store.active_toast).toBeNull()
-    expect(document.activeElement).toBe(moved_on ? elsewhere : opener)
-  })
+      expect(store.active_toast).toBeNull()
+      expect(document.querySelector(`.toast`)).toBeNull()
+      expect(on_click).toHaveBeenCalledTimes(label === `the action button` ? 1 : 0)
+      expect(document.activeElement).toBe(moved_on ? elsewhere : opener)
+    },
+  )
 
   // Escape is scoped to the stack and gated on `dismissible`, else it would be the one
   // way left to shut a toast declared undismissable

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte'
+  import { untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { Spring } from 'svelte/motion'
 
@@ -28,7 +28,8 @@
 
   const store = Spring.of(
     () => (wiggle ? { scale, angle, dx, dy } : { angle: 0, scale: 1, dx: 0, dy: 0 }),
-    spring_options,
+    // later option changes flow through the effect below
+    untrack(() => spring_options),
   )
 
   $effect(() => {

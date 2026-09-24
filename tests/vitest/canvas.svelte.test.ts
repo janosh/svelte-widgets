@@ -68,6 +68,15 @@ const make_canvas = (parent: HTMLElement) => {
     .mockReturnValue(context as unknown as CanvasRenderingContext2D)
   return { canvas, context, get_context }
 }
+type Layer = ReturnType<typeof make_canvas>
+const expect_drawn_once = (pairs: [Layer, ReturnType<typeof vi.fn>][]) => {
+  for (const [layer, callback] of pairs)
+    expect(callback).toHaveBeenCalledExactlyOnceWith({
+      ctx: layer.context,
+      width: 400,
+      height: 300,
+    })
+}
 const setup = (width = 400, height = 300, padding = ``) => {
   const parent = document.createElement(`div`)
   parent.style.padding = padding
@@ -108,16 +117,7 @@ const setup = (width = 400, height = 300, padding = ``) => {
   cleanups.push(cleanup)
   flushSync()
   if (!surface) throw new Error(`Canvas surface was not initialized`)
-  return {
-    parent,
-    base,
-    overlay,
-    surface,
-    draw,
-    draw_overlay,
-    cleanup,
-    state,
-  }
+  return { parent, base, overlay, surface, draw, draw_overlay, cleanup, state }
 }
 
 test(`sizes both layers in CSS pixels and retains unchanged contexts`, () => {
@@ -134,16 +134,10 @@ test(`sizes both layers in CSS pixels and retains unchanged contexts`, () => {
   observers[0].resize()
   paint()
   expect(base.get_context).toHaveBeenCalledOnce()
-  for (const [layer, callback] of [
+  expect_drawn_once([
     [base, draw],
     [overlay, draw_overlay],
-  ] as const) {
-    expect(callback).toHaveBeenCalledExactlyOnceWith({
-      ctx: layer.context,
-      width: 400,
-      height: 300,
-    })
-  }
+  ])
   expect(base.context.clearRect).toHaveBeenCalledExactlyOnceWith(0, 0, 400, 300)
   expect(overlay.context.clearRect).not.toHaveBeenCalled()
 
@@ -234,16 +228,10 @@ test(`replacement uses new contexts and removal stops drawing detached layers`, 
   paint()
   expect(observers[0].disconnect).toHaveBeenCalledOnce()
   expect(observers).toHaveLength(2)
-  for (const [layer, callback] of [
+  expect_drawn_once([
     [replacement, draw],
     [replacement_overlay, draw_overlay],
-  ] as const) {
-    expect(callback).toHaveBeenCalledExactlyOnceWith({
-      ctx: layer.context,
-      width: 400,
-      height: 300,
-    })
-  }
+  ])
   expect(base.context.clearRect).not.toHaveBeenCalled()
 
   draw_overlay.mockClear()

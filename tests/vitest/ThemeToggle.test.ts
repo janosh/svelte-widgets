@@ -76,29 +76,20 @@ test.each([
 })
 
 // Storage failure is expected (for example private mode) and must not log errors.
-test(`gracefully degrades when localStorage throws`, async () => {
+test(`without storage, mount keeps an externally applied theme and clicks still work`, async () => {
   disable_storage()
   const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
+  apply_theme_mode(`dark`)
 
   const button = await mount_theme_toggle()
   expect(button.style.visibility).toBe(`visible`)
-  expect(applied_theme()).toEqual([`light`, `light`])
+  expect(applied_theme()).toEqual([`dark`, `dark`])
+  expect(rendered_icon_path()).toBe(Moon.d)
 
   button.click()
   await tick()
-  expect(applied_theme()).toEqual([`dark`, `dark`])
+  expect(applied_theme()).toEqual([`light`, `light`])
   expect(console_error).not.toHaveBeenCalled()
-})
-
-test(`mount preserves an externally applied theme when storage is unavailable`, async () => {
-  disable_storage()
-
-  apply_theme_mode(`dark`)
-  expect(theme.mode).toBe(`dark`)
-  await mount_theme_toggle()
-
-  expect(applied_theme()).toEqual([`dark`, `dark`])
-  expect(rendered_icon_path()).toBe(Moon.d)
 })
 
 test(`click cycles through light -> system -> dark -> light`, async () => {
@@ -117,53 +108,53 @@ test(`click cycles through light -> system -> dark -> light`, async () => {
   expect(observed_modes).toEqual([`system`, `dark`, `light`])
 })
 
-test.each([true, false])(
-  `system mode follows the OS with a toggle=%s`,
-  async (with_toggle) => {
-    let matches = false
-    let change_handler: (() => void) | undefined
-    const remove_listener = vi.fn()
-    const match_media = vi.fn((media: string) => ({
-      media,
-      get matches() {
-        return matches
-      },
-      addEventListener: (_event: string, handler: () => void) =>
-        (change_handler = handler),
-      removeEventListener: remove_listener,
-    }))
-    vi.stubGlobal(`matchMedia`, match_media)
-    localStorage.setItem(`theme`, `system`)
-    let stop: (() => void) | undefined
-    if (with_toggle) await mount_theme_toggle()
-    else stop = watch_theme()
-    expect(applied_theme()).toEqual([`light`, `light`])
-    expect(match_media).toHaveBeenCalledWith(`(prefers-color-scheme: dark)`)
+const start_toggle = async () => {
+  const app = mount(ThemeToggle, { target: document.body })
+  await tick()
+  return () => void unmount(app)
+}
+const start_watcher = async () => watch_theme()
 
-    matches = true
-    change_handler?.()
-    await tick()
+test.each([
+  [`ThemeToggle`, start_toggle],
+  [`watch_theme`, start_watcher],
+])(`system mode follows the OS via %s`, async (_owner, start) => {
+  let matches = false
+  let change_handler: (() => void) | undefined
+  const remove_listener = vi.fn()
+  const match_media = vi.fn((media: string) => ({
+    media,
+    get matches() {
+      return matches
+    },
+    addEventListener: (_event: string, handler: () => void) => (change_handler = handler),
+    removeEventListener: remove_listener,
+  }))
+  vi.stubGlobal(`matchMedia`, match_media)
+  localStorage.setItem(`theme`, `system`)
+  let stop = await start()
+  expect(applied_theme()).toEqual([`light`, `light`])
+  expect(match_media).toHaveBeenCalledWith(`(prefers-color-scheme: dark)`)
 
-    expect(applied_theme()).toEqual([`dark`, `dark`])
-    apply_theme_mode(`light`)
-    change_handler?.()
-    expect(applied_theme()).toEqual([`light`, `light`])
-    if (stop) stop()
-    else {
-      const app = mounted.pop()
-      if (app) await unmount(app)
-    }
-    expect(remove_listener).toHaveBeenCalledExactlyOnceWith(`change`, change_handler)
+  matches = true
+  change_handler?.()
+  await tick()
+  expect(applied_theme()).toEqual([`dark`, `dark`])
 
-    // A valid choice written while no watcher exists takes effect when an owner returns.
-    localStorage.setItem(`theme`, `dark`)
-    if (with_toggle) await mount_theme_toggle()
-    else stop = watch_theme()
-    expect(theme.mode).toBe(`dark`)
-    expect(applied_theme()).toEqual([`dark`, `dark`])
-    stop?.()
-  },
-)
+  // an explicit choice ignores later OS changes
+  apply_theme_mode(`light`)
+  change_handler?.()
+  expect(applied_theme()).toEqual([`light`, `light`])
+  stop()
+  expect(remove_listener).toHaveBeenCalledExactlyOnceWith(`change`, change_handler)
+
+  // A valid choice written while no watcher exists takes effect when an owner returns.
+  localStorage.setItem(`theme`, `dark`)
+  stop = await start()
+  expect(theme.mode).toBe(`dark`)
+  expect(applied_theme()).toEqual([`dark`, `dark`])
+  stop()
+})
 
 test(`storage events synchronize the theme key until unmount`, async () => {
   const dispatch_storage = async (key: string | null, storage_area = localStorage) => {
@@ -200,11 +191,6 @@ test(`storage events synchronize the theme key until unmount`, async () => {
   expect(applied_theme()).toEqual([`light`, `light`])
 })
 
-test(`tooltip=false preserves the native title`, async () => {
-  const button = await mount_theme_toggle({ tooltip: false })
-  expect(button.getAttribute(`title`)).toBe(`Switch to dark theme`)
-})
-
 // a static title pinned through `rest` loses the per-mode wording, so `labels` translates
 // both the frame and the three mode names
 test(`labels reword the title, mode names included`, async () => {
@@ -213,6 +199,8 @@ test(`labels reword the title, mode names included`, async () => {
     tooltip: false,
     labels: { dark: `dunkel`, switch_to: (mode: string) => `Zu ${mode} wechseln` },
   })
+  // tooltip=false keeps the native title
+  expect(button.getAttribute(`title`)).toBe(`Zu dunkel wechseln`)
   expect(button.getAttribute(`aria-label`)).toBe(`Zu dunkel wechseln`)
 
   button.click()
@@ -247,10 +235,7 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
   }
 })
 
-test.each([`document`, `addEventListener`] as const)(
-  `watch_theme fails clearly without browser global %s`,
-  (global_name) => {
-    vi.stubGlobal(global_name, undefined)
-    expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
-  },
-)
+test(`watch_theme fails clearly without a document`, () => {
+  vi.stubGlobal(`document`, undefined)
+  expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
+})

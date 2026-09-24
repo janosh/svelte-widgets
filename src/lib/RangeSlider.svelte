@@ -78,6 +78,7 @@
     })
   })
   let drafts = $derived(values.map(String))
+  const discard_drafts = () => (drafts = values.map(String))
   let rail = $state<HTMLDivElement>()
   let active = $state<0 | 1>(0)
   // Only starting/ending a gesture drives rendering; in-flight bookkeeping stays unproxied.
@@ -145,8 +146,7 @@
     ) {
       commit_value(update(thumb, input.valueAsNumber))
     }
-    drafts = values.map(String)
-    input.value = drafts[thumb]
+    input.value = discard_drafts()[thumb]
   }
   const keydown = (
     event: KeyboardEvent,
@@ -206,8 +206,11 @@
     const next = pointer_value(event)
     if (next === undefined || !rail) return
     event.preventDefault()
+    const [lower_gap, upper_gap] = coordinates.map((end) => Math.abs(next - end))
+    // On a tie (coincident thumbs) pick the side of the press, or the thumb on the
+    // wrong side would be clamped by its neighbor and the press would do nothing.
     const thumb =
-      Math.abs(next - coordinates[0]) <= Math.abs(next - coordinates[1]) ? 0 : 1
+      lower_gap < upper_gap || (lower_gap === upper_gap && next <= coordinates[1]) ? 0 : 1
     const on_handle =
       event.target instanceof Element && Boolean(event.target.closest(`[role=slider]`))
     const coincident = on_handle && values[0] === values[1]
@@ -246,9 +249,9 @@
       queueMicrotask(() => {
         if (event.defaultPrevented || !node.isConnected) return
         // A native reset discards drafts; the caller owns resetting the bound interval.
-        drafts = values.map(String)
+        const committed = discard_drafts()
         node.querySelectorAll<HTMLInputElement>(`input`).forEach((input, idx) => {
-          input.value = drafts[idx]
+          input.value = committed[idx]
         })
       })
     }
@@ -292,7 +295,7 @@
                   commit_number(event.currentTarget, thumb)
                 } else if (event.key === `Escape`) {
                   event.preventDefault()
-                  drafts = values.map(String)
+                  discard_drafts()
                 } else if (
                   [`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`].includes(event.key)
                 ) {
@@ -302,7 +305,7 @@
                     thumb,
                     Number.isFinite(draft_value) ? draft_value : values[thumb],
                   )
-                  if (event.defaultPrevented) drafts = values.map(String)
+                  if (event.defaultPrevented) discard_drafts()
                 }
               }}
             />

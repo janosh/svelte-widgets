@@ -237,6 +237,7 @@ export const THEME_TOGGLE_LABELS = {
 export type ThemeToggleLabels = typeof THEME_TOGGLE_LABELS
 
 export const TOAST_LABELS = {
+  dismiss: `Dismiss notification`,
   // visually hidden count of queued toasts waiting behind the visible one
   pending: (count: number) => `${count} more ${plural(count, `notification`)} pending`,
 }

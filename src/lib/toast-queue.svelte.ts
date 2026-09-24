@@ -38,6 +38,7 @@ const priority_rank = <Priority extends string>(
 // Soft cap on waiting toasts. Soft because an unactioned action is never dropped.
 const DEFAULT_MAX_PENDING = 3
 export const DEFAULT_TOAST_DURATION_MS = 5000
+const MAX_TIMEOUT_MS = 2 ** 31 - 1
 // Where a request that names no priority lands, on any ladder that has this rung
 const DEFAULT_TOAST_PRIORITY = `info`
 
@@ -526,7 +527,12 @@ export class ToastStore<Priority extends string = ToastPriority> {
       .map((toast) => toast.expires_at_ms)
       .filter((deadline) => typeof deadline === `number`)
     if (deadlines.length === 0) return
-    const delay_ms = Math.max(0, Math.min(...deadlines) - Date.now())
+    // setTimeout fires at once past its 32-bit limit (~24.8 days), so a far deadline would
+    // spin expire/reschedule in a busy loop; an early wake-up just reschedules.
+    const delay_ms = Math.min(
+      MAX_TIMEOUT_MS,
+      Math.max(0, Math.min(...deadlines) - Date.now()),
+    )
     this.#timer = setTimeout(
       () => this.#apply(expire_toasts(this.#queue, Date.now())),
       delay_ms,
