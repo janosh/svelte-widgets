@@ -223,7 +223,7 @@ describe(`resizable`, () => {
     // Shift locks the pointer-down aspect ratio
     [`bottom-right`, [200, 150], [300, 160], true, [300, 225], [``, ``]],
   ] as const)(
-    `the %s corner resizes both axes (Shift: %4$s)`,
+    `the $0 corner resizes both axes (Shift: $3)`,
     (corner, from, to, shift_key, [width, height], position) => {
       const element = create_box()
       const on_resize = vi.fn()
