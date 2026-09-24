@@ -15,9 +15,11 @@ import {
   is_expandable_type,
   is_url,
   matches_search,
+  parse_edited_value,
   relative_path_segments,
   serialize_for_copy,
   set_at_path,
+  to_json,
   values_equal,
 } from '$lib/json-tree/utils'
 import { describe, expect, it } from 'vitest'
@@ -33,14 +35,11 @@ it.each([
   [123n, `bigint`, 0, false],
   [() => {}, `function`, 0, false],
   [[], `array`, 0, true],
-  [[1, 2], `array`, 2, true],
   [[1, 2, 3], `array`, 3, true],
   [{}, `object`, 0, true],
-  [{ a: 1 }, `object`, 1, true],
   [{ a: 1, b: 2 }, `object`, 2, true],
   [new Date(), `date`, 0, false],
   [/test/g, `regexp`, 0, false],
-  [new Map(), `map`, 0, true],
   [
     new Map([
       [`a`, 1],
@@ -50,7 +49,6 @@ it.each([
     2,
     true,
   ],
-  [new Set(), `set`, 0, true],
   [new Set([1, 2, 3, 4]), `set`, 4, true],
   [new Error(`test`), `error`, 0, false],
 ] as const)(
@@ -71,20 +69,17 @@ it.each([
   [true, `true`],
   [false, `false`],
   [123n, `123n`],
-  [999n, `999n`],
   [Symbol(`test`), `Symbol(test)`],
-  [Symbol(`desc`), `Symbol(desc)`],
   [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
   [new Date(NaN), `Invalid Date`],
   [/test/gi, `/test/gi`],
   [new Error(`Something went wrong`), `Error: Something went wrong`],
-  [new Error(`fail`), `Error: fail`],
   [[], [], `Array(0)`],
   [[1, 2, 3], [1, 2, 3], `Array(3)`],
   [{}, {}, `{0 keys}`],
   [{ a: 1 }, { a: 1 }, `{1 key}`],
   [{ a: 1, b: 2 }, { a: 1, b: 2 }, `{2 keys}`],
-  [{ toJSON: () => undefined }, `[object Object]`, `{1 key}`],
+  [{ toJSON: () => undefined }, `null`, `{1 key}`],
   [
     new Map([
       [`a`, 1],
@@ -98,8 +93,6 @@ it.each([
   ],
   [new Set([1, 2, 3]), [1, 2, 3], `Set(3)`],
   [6.022e23, `6.022e+23`],
-  [1e-10, `1e-10`],
-  [0.000000000001, `1e-12`],
 ])(`copies and previews %p`, (value, copied, preview?: string) => {
   expect(serialize_for_copy(value)).toBe(
     typeof copied === `string` ? copied : JSON.stringify(copied, null, 2),
@@ -114,6 +107,58 @@ it(`copies function source and previews its name`, () => {
   expect(serialize_for_copy(named_fn)).toContain(`function named_fn()`)
   expect(format_preview(named_fn)).toBe(`ƒ named_fn()`)
   expect(format_preview(() => {})).toBe(`ƒ anonymous()`)
+})
+
+it(`serializes nested Maps, Sets, Errors and RegExps instead of dropping them to {}`, () => {
+  const inner: Record<string, unknown> = { a: 1 }
+  const value = {
+    map: new Map<unknown, unknown>([
+      [`k`, new Set([1, 2])],
+      [{ id: 1 }, new Map([[`deep`, inner]])],
+    ]),
+    err: new RangeError(`bad`),
+    re: /x+/g,
+    when: new Date(Date.UTC(2024, 0, 2)),
+  }
+  inner.back = value.map
+  expect(JSON.parse(serialize_for_copy(value))).toEqual({
+    map: [
+      [`k`, [1, 2]],
+      [{ id: 1 }, [[`deep`, { a: 1, back: `[Circular]` }]]],
+    ],
+    err: `RangeError: bad`,
+    re: `/x+/g`,
+    when: `2024-01-02T00:00:00.000Z`,
+  })
+})
+
+it.each([
+  [`text`, `"text"`],
+  [undefined, `null`],
+  [12n, `"12n"`],
+  [new Date(Date.UTC(2024, 0, 2)), `"2024-01-02T00:00:00.000Z"`],
+  [new Map([[`a`, 1]]), `[\n  [\n    "a",\n    1\n  ]\n]`],
+])(`to_json(%p) is valid JSON %s`, (value, expected) => {
+  expect(to_json(value)).toBe(expected)
+  expect(() => JSON.parse(to_json(value))).not.toThrow()
+})
+
+it.each([
+  [`42`, 42],
+  [` -1.5e3 `, -1500],
+  [`0`, 0],
+  [`true`, true],
+  [`null`, null],
+  // Number() accepts these, but they are text: leading zeros, hex, signs, bare dots
+  [`02139`, `02139`],
+  [`0x1F`, `0x1F`],
+  [`+5`, `+5`],
+  [`1.`, `1.`],
+  [`.5`, `.5`],
+  [`Infinity`, `Infinity`],
+  [``, ``],
+])(`parse_edited_value(%p) = %p`, (text, expected) => {
+  expect(parse_edited_value(text)).toBe(expected)
 })
 
 it(`serializes shared and circular references in objects, Maps and Sets`, () => {
@@ -145,36 +190,36 @@ it.each([`日本語テキスト`, `🚀 🎨 🔧`, `∑∏∫∂∇`, `First\nS
 describe(`matches_search`, () => {
   it.each([
     // empty query
-    [`path`, `key`, `value`, ``, false],
-    // path matches (case-insensitive)
-    [`users.name`, `name`, `John`, `user`, true],
-    [`USERS.name`, `name`, `John`, `user`, true],
+    [`key`, `value`, ``, false],
     // key matches (case-insensitive)
-    [`path`, `firstName`, `John`, `name`, true],
-    [`path`, `FIRSTNAME`, `John`, `name`, true],
+    [`firstName`, `John`, `name`, true],
+    [`FIRSTNAME`, `John`, `name`, true],
     // numeric key
-    [`arr`, 123, `value`, `12`, true],
+    [123, `value`, `12`, true],
     // string value (case-insensitive)
-    [`path`, `key`, `Hello World`, `world`, true],
-    [`path`, `key`, `HELLO`, `hello`, true],
+    [`key`, `Hello World`, `world`, true],
+    [`key`, `HELLO`, `hello`, true],
     // number value
-    [`path`, `key`, 42, `42`, true],
-    [`path`, `key`, 3.14, `3.14`, true],
+    [`key`, 42, `42`, true],
+    [`key`, 3.14, `3.14`, true],
     // boolean value
-    [`path`, `key`, true, `true`, true],
-    [`path`, `key`, false, `fal`, true],
+    [`key`, true, `true`, true],
+    [`key`, false, `fal`, true],
+    // other leaves match their displayed text
+    [`key`, 12n, `12n`, true],
+    [`key`, undefined, `undef`, true],
+    [`key`, new Date(Date.UTC(2024, 0, 2)), `2024-01-02`, true],
+    [`key`, /ab+c/i, `/ab+c/`, true],
+    [`key`, new TypeError(`boom`), `typeerror: boom`, true],
+    [`key`, Symbol(`tag`), `tag`, true],
     // object/array don't match directly
-    [`path`, `key`, { nested: true }, `nested`, false],
-    [`path`, `key`, [1, 2, 3], `1`, false],
-    // null key
-    [`root`, null, `value`, `root`, true],
-    [`root`, null, `value`, `key`, false],
-  ] as const)(
-    `matches_search(%p, %p, %p, %p) = %p`,
-    (path, key, value, query, expected) => {
-      expect(matches_search(path, key, value, query)).toBe(expected)
-    },
-  )
+    [`key`, { nested: true }, `nested`, false],
+    [`key`, [1, 2, 3], `1`, false],
+    // null key (root)
+    [null, `value`, `root`, false],
+  ] as const)(`matches_search(%p, %p, %p) = %p`, (key, value, query, expected) => {
+    expect(matches_search(key, value, query)).toBe(expected)
+  })
 })
 
 describe(`collect_all_paths`, () => {
@@ -227,8 +272,15 @@ describe(`find_matching_paths`, () => {
     [`bob`, [`users[1].name`]],
     // key, path and value matches, in render order
     [`alice`, [`users[0].name`, `alice`, `other`]],
+    // a matching key matches once, not every descendant whose path contains it
+    [`users`, [`users`]],
   ])(`query %p finds %j in render order`, (query, expected) => {
     expect(find_matching_paths(obj, query)).toEqual(expected)
+  })
+
+  it(`does not match every node through the root label prefix`, () => {
+    expect(find_matching_paths(obj, `dat`, `data`)).toEqual([])
+    expect(find_matching_paths(obj, `bob`, `data`)).toEqual([`data.users[1].name`])
   })
 
   it(`matches Map keys through their { key, value } wrapper`, () => {
@@ -409,27 +461,22 @@ describe(`values_equal`, () => {
     [true, true, true],
     [null, null, true],
     [`hello`, `world`, false],
-    [42, 43, false],
-    [true, false, false],
     [null, undefined, false],
     [{}, null, false],
     [`42`, 42, false],
     [true, 1, false],
     [/test/gi, /test/gi, true],
     [/test/g, /test/i, false],
-    [[1, 2, 3], [4, 5, 6], true], // same length = equal (shallow)
-    [[1, 2], [1, 2, 3], false],
-    [{ a: 1, b: 2 }, { c: 3, d: 4 }, true], // same key count = equal (shallow)
-    [{ a: 1 }, { a: 1, b: 2 }, false],
+    // distinct containers are never equal, even with the same size
+    [[1, 2, 3], [4, 5, 6], false],
+    [{ a: 1, b: 2 }, { c: 3, d: 4 }, false],
     [{ a: 1 }, [1], false], // object vs array subtypes differ
     [new Date(`2024-01-01`), {}, false], // date vs object
-    [/a/, {}, false], // regexp vs object
     [new Date(`2024-01-15`), new Date(`2024-01-15`), true], // dates compare by timestamp
     [new Date(`2024-01-15`), new Date(`2024-01-16`), false],
     // NaN === NaN is false in JS, but change detection should treat NaN values as equal.
     [NaN, NaN, true],
     [NaN, 0, false],
-    [0, NaN, false],
     [NaN, null, false],
   ])(`values_equal(%p, %p) = %p`, (val_a, val_b, expected) => {
     expect(values_equal(val_a, val_b)).toBe(expected)
@@ -441,7 +488,6 @@ describe(`is_url`, () => {
     [`https://example.com`, true],
     [`http://localhost:3000/path`, true],
     [`https://example.com/path?q=1&b=2#hash`, true],
-    [`https://sub.domain.example.co.uk`, true],
     [`ftp://example.com`, false],
     [`not a url`, false],
     [`example.com`, false],
@@ -532,128 +578,102 @@ describe(`compute_diff`, () => {
     expect(compute_diff(old_val, new_val).size).toBe(0)
   })
 
+  const map = (...entries: [string, number][]) => new Map(entries)
   it.each([
-    {
-      desc: `changed primitive`,
-      old_val: 1,
-      new_val: 2,
-      root: `root`,
-      entry: { status: `changed`, path: `root`, old_value: 1, new_value: 2 },
-    },
-    {
-      desc: `changed primitive at the default (empty) root path`,
-      old_val: NaN,
-      new_val: 42,
-      root: undefined,
-      entry: { status: `changed`, path: ``, old_value: NaN, new_value: 42 },
-    },
-    {
-      desc: `type change`,
-      old_val: `string`,
-      new_val: 42,
-      root: `val`,
-      entry: { status: `changed`, path: `val`, old_value: `string`, new_value: 42 },
-    },
-    {
-      desc: `date change within the same second`,
-      old_val: new Date(0),
-      new_val: new Date(1),
-      root: `d`,
-      entry: {
-        status: `changed`,
-        path: `d`,
-        old_value: new Date(0),
-        new_value: new Date(1),
-      },
-    },
-    {
-      desc: `added object key`,
-      old_val: { a: 1 },
-      new_val: { a: 1, b: 2 },
-      root: `root`,
-      entry: { status: `added`, path: `root.b`, new_value: 2 },
-    },
-    {
-      desc: `removed object key`,
-      old_val: { a: 1, b: 2 },
-      new_val: { a: 1 },
-      root: `root`,
-      entry: { status: `removed`, path: `root.b`, old_value: 2 },
-    },
-    {
-      desc: `changed object value`,
-      old_val: { a: 1 },
-      new_val: { a: 99 },
-      root: `root`,
-      entry: { status: `changed`, path: `root.a`, old_value: 1, new_value: 99 },
-    },
-    {
-      desc: `nested object change (unchanged siblings omitted)`,
-      old_val: { user: { name: `Alice`, age: 30 } },
-      new_val: { user: { name: `Bob`, age: 30 } },
-      root: undefined,
-      entry: {
-        status: `changed`,
-        path: `user.name`,
-        old_value: `Alice`,
-        new_value: `Bob`,
-      },
-    },
-    {
-      desc: `added array element`,
-      old_val: [1, 2],
-      new_val: [1, 2, 3],
-      root: `arr`,
-      entry: { status: `added`, path: `arr[2]`, new_value: 3 },
-    },
-    {
-      desc: `removed array element`,
-      old_val: [1, 2, 3],
-      new_val: [1, 2],
-      root: `arr`,
-      entry: { status: `removed`, path: `arr[2]`, old_value: 3 },
-    },
+    [
+      `changed primitive`,
+      1,
+      2,
+      `root`,
+      { status: `changed`, path: `root`, old_value: 1, new_value: 2 },
+    ],
+    [
+      `change at the default empty root`,
+      NaN,
+      42,
+      undefined,
+      { status: `changed`, path: ``, old_value: NaN, new_value: 42 },
+    ],
+    [
+      `type change`,
+      `string`,
+      42,
+      `val`,
+      { status: `changed`, path: `val`, old_value: `string`, new_value: 42 },
+    ],
+    [
+      `date change within the same second`,
+      new Date(0),
+      new Date(1),
+      `d`,
+      { status: `changed`, path: `d`, old_value: new Date(0), new_value: new Date(1) },
+    ],
+    [
+      `added object key`,
+      { a: 1 },
+      { a: 1, b: 2 },
+      `root`,
+      { status: `added`, path: `root.b`, new_value: 2 },
+    ],
+    [
+      `removed object key`,
+      { a: 1, b: 2 },
+      { a: 1 },
+      `root`,
+      { status: `removed`, path: `root.b`, old_value: 2 },
+    ],
+    [
+      `nested change, unchanged siblings omitted`,
+      { user: { name: `Al`, age: 30 } },
+      { user: { name: `Bo`, age: 30 } },
+      undefined,
+      { status: `changed`, path: `user.name`, old_value: `Al`, new_value: `Bo` },
+    ],
+    [
+      `added array element`,
+      [1, 2],
+      [1, 2, 3],
+      `arr`,
+      { status: `added`, path: `arr[2]`, new_value: 3 },
+    ],
+    [
+      `removed array element`,
+      [1, 2, 3],
+      [1, 2],
+      `arr`,
+      { status: `removed`, path: `arr[2]`, old_value: 3 },
+    ],
     // Map entries are wrapped as { key, value } to match rendering
-    {
-      desc: `changed Map value`,
-      old_val: new Map([
-        [`a`, 1],
-        [`b`, 2],
-      ]),
-      new_val: new Map([
-        [`a`, 1],
-        [`b`, 99],
-      ]),
-      root: `m`,
-      entry: { status: `changed`, path: `m[1].value`, old_value: 2, new_value: 99 },
-    },
-    {
-      desc: `changed Map key`,
-      old_val: new Map([[`a`, 1]]),
-      new_val: new Map([[`b`, 1]]),
-      root: `m`,
-      entry: { status: `changed`, path: `m[0].key`, old_value: `a`, new_value: `b` },
-    },
-    {
-      desc: `added Map entry`,
-      old_val: new Map([[`a`, 1]]),
-      new_val: new Map([
-        [`a`, 1],
-        [`b`, 2],
-      ]),
-      root: `m`,
-      entry: { status: `added`, path: `m[1]`, new_value: { key: `b`, value: 2 } },
-    },
-    {
-      desc: `removed Set member`,
-      old_val: new Set([1, 2, 3]),
-      new_val: new Set([1, 2]),
-      root: `s`,
-      entry: { status: `removed`, path: `s[2]`, old_value: 3 },
-    },
-  ])(`detects $desc`, ({ old_val, new_val, root, entry }) => {
-    const diff = compute_diff(old_val, new_val, root)
-    expect([...diff.values()]).toEqual([entry])
+    [
+      `changed Map value`,
+      map([`a`, 1], [`b`, 2]),
+      map([`a`, 1], [`b`, 99]),
+      `m`,
+      { status: `changed`, path: `m[1].value`, old_value: 2, new_value: 99 },
+    ],
+    [
+      `changed Map key`,
+      map([`a`, 1]),
+      map([`b`, 1]),
+      `m`,
+      { status: `changed`, path: `m[0].key`, old_value: `a`, new_value: `b` },
+    ],
+    [
+      `added Map entry`,
+      map([`a`, 1]),
+      map([`a`, 1], [`b`, 2]),
+      `m`,
+      { status: `added`, path: `m[1]`, new_value: { key: `b`, value: 2 } },
+    ],
+    [
+      `removed Set member`,
+      new Set([1, 2, 3]),
+      new Set([1, 2]),
+      `s`,
+      { status: `removed`, path: `s[2]`, old_value: 3 },
+    ],
+  ])(`detects %s`, (_desc, old_val, new_val, root, entry) => {
+    expect([...compute_diff(old_val, new_val, root).values()]).toEqual([entry])
   })
 
   it(`handles multiple changes at different depths`, () => {

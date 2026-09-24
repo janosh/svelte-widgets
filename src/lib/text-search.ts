@@ -44,28 +44,19 @@ const text_segments = (
   const break_selector = `${segment_selector}, ${BREAK_SELECTOR}`
   let segment: TextSegment | undefined
 
-  const visit = (node: Node): void => {
+  // container: the element text under node belongs to, i.e. its enclosing segment element
+  // or else its nearest non-inline ancestor, threaded down so text nodes need no closest()
+  // climb. Inline wrappers never become containers, so <div>fo<b>o</b></div> stays whole.
+  const visit = (node: Node, container: Element, in_segment: boolean): void => {
     if (node instanceof Text) {
       // Svelte emits empty text anchors; they must not split segments.
       if (!node.data) return
-      const parent = node.parentElement
-      if (!parent || node_filter(node) !== NodeFilter.FILTER_ACCEPT) {
+      if (node_filter(node) !== NodeFilter.FILTER_ACCEPT) {
         segment = undefined
         return
       }
-      const enclosing = parent.closest(segment_selector)
-      let element: Element = parent
-      if (enclosing && root.contains(enclosing)) element = enclosing
-      else {
-        // Climb inline wrappers so <div>fo<b>o</b></div> remains one segment.
-        while (element !== root && element.matches(INLINE_SELECTOR)) {
-          const next_element = element.parentElement
-          if (!next_element) break
-          element = next_element
-        }
-      }
-      if (segment?.element !== element) {
-        segment = { element, nodes: [], text: `` }
+      if (segment?.element !== container) {
+        segment = { element: container, nodes: [], text: `` }
         segments.push(segment)
       }
       const start = segment.text.length
@@ -73,31 +64,50 @@ const text_segments = (
       segment.nodes.push({ node, start, end: segment.text.length })
       return
     }
+    if (!(node instanceof Element)) return
     // Source text is invisible, but surrounding rendered text stays continuous.
-    if (node instanceof Element && node.matches(NON_RENDERED_SELECTOR)) return
-    const is_break =
-      node !== root && node instanceof Element && node.matches(break_selector)
-    if (is_break) segment = undefined
-    if (!(node instanceof Element && node.matches(FORM_CONTROL_SELECTOR))) {
-      for (const child of node.childNodes) visit(child)
+    if (node.matches(NON_RENDERED_SELECTOR)) return
+    if (node === root) {
+      for (const child of node.childNodes) visit(child, container, in_segment)
+      return
     }
+    const is_break = node.matches(break_selector)
+    let child_container = container
+    let child_in_segment = in_segment
+    if (is_break) {
+      segment = undefined
+      // form controls break the text around them but their own text is not rendered
+      if (node.matches(FORM_CONTROL_SELECTOR)) return
+      // the innermost segment element wins, as with closest()
+      if (node.matches(segment_selector)) {
+        child_container = node
+        child_in_segment = true
+      } else if (!in_segment) child_container = node
+    } else if (!in_segment && !node.matches(INLINE_SELECTOR)) child_container = node
+    for (const child of node.childNodes) visit(child, child_container, child_in_segment)
     if (is_break) segment = undefined
   }
 
-  visit(root)
+  visit(root, root, root.matches(segment_selector))
   return segments
 }
 
 type MatchBounds = { start: number; end: number }
-type NormalizedText = { text: string; offsets: MatchBounds[] }
+// null offsets: every normalized unit sits at the same index in the source
+type NormalizedText = { text: string; offsets: MatchBounds[] | null }
 
 const WHITESPACE = /\s/u
+// Printable ASCII has no case expansion, decomposition or surrogates, so without whitespace
+// runs to collapse it lowercases in place and skips the per-char tokens below
+const PRINTABLE_ASCII = /^[ -~]*$/ // space through tilde
 
 // maps each normalized unit back to source bounds despite case/decomposition expansion,
 // astral UTF-16 pairs and collapsed whitespace
 type NormalizedToken = MatchBounds & { char: string }
 
 const normalize_with_offsets = (source: string): NormalizedText => {
+  if (PRINTABLE_ASCII.test(source) && !source.includes(`  `))
+    return { text: source.toLowerCase(), offsets: null }
   let text = ``
   const offsets: MatchBounds[] = []
   let source_idx = 0
@@ -184,37 +194,33 @@ const range_for_match = (
   return range
 }
 
+// Non-overlapping hits. Fuzzy mode finds compact ordered subsequences: the forward pass
+// discovers the earliest end, then the backward pass tightens the start.
 const match_bounds = (text: string, query: string, fuzzy: boolean): MatchBounds[] => {
   const matches: MatchBounds[] = []
   if (!fuzzy) {
-    let match_idx = text.indexOf(query)
-    while (match_idx >= 0) {
-      const end = match_idx + query.length
-      matches.push({ start: match_idx, end })
-      match_idx = text.indexOf(query, end)
-    }
+    for (
+      let idx = text.indexOf(query);
+      idx >= 0;
+      idx = text.indexOf(query, idx + query.length)
+    )
+      matches.push({ start: idx, end: idx + query.length })
     return matches
   }
-
-  // Find compact, non-overlapping ordered subsequences. The forward pass discovers
-  // the earliest end, then the backward pass tightens the start before scanning on.
   const query_chars = Array.from(query)
-  let search_from = 0
-
-  while (search_from < text.length) {
-    let cursor = search_from
+  for (let search_from = 0; search_from < text.length;) {
+    let end = search_from
     for (const query_char of query_chars) {
-      const position = text.indexOf(query_char, cursor)
+      const position = text.indexOf(query_char, end)
       if (position === -1) return matches
-      cursor = position + query_char.length
+      end = position + query_char.length
     }
-
-    const end = cursor
     let start = end
-    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--) {
-      const query_char = query_chars[char_idx]
-      start = text.lastIndexOf(query_char, start - query_char.length)
-    }
+    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--)
+      start = text.lastIndexOf(
+        query_chars[char_idx],
+        start - query_chars[char_idx].length,
+      )
     matches.push({ start, end })
     search_from = end
   }
@@ -222,10 +228,11 @@ const match_bounds = (text: string, query: string, fuzzy: boolean): MatchBounds[
 }
 
 const source_bounds = (
-  offsets: MatchBounds[],
+  offsets: MatchBounds[] | null,
   start: number,
   end: number,
 ): MatchBounds => {
+  if (!offsets) return { start, end }
   let source_start = offsets[start].start
   let source_end = offsets[start].end
   for (let offset_idx = start + 1; offset_idx < end; offset_idx++) {

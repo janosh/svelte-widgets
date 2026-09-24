@@ -99,23 +99,16 @@ describe(`FindBar`, () => {
     ])
   })
 
-  test(`the close button closes the bar`, async () => {
-    const { on_close } = mount_bar(`<p>alpha</p>`)
-    await type_query(`alpha`)
-    doc_query<HTMLButtonElement>(`.find-close`).click()
-    expect(on_close).toHaveBeenCalledOnce()
-  })
-
-  test(`Escape closes the bar without reaching the searched surface`, async () => {
+  test(`the close button and Escape close the bar, Escape without reaching the page`, () => {
     const { on_close } = mount_bar(`<p>alpha</p>`)
     const outer = vi.fn()
     document.body.addEventListener(`keydown`, outer)
+    onTestFinished(() => document.body.removeEventListener(`keydown`, outer))
 
-    const event = press_key(input(), `Escape`)
-    document.body.removeEventListener(`keydown`, outer)
-    expect(on_close).toHaveBeenCalledOnce()
+    doc_query<HTMLButtonElement>(`.find-close`).click()
+    expect(press_key(input(), `Escape`).defaultPrevented).toBe(true)
+    expect(on_close).toHaveBeenCalledTimes(2)
     expect(outer).not.toHaveBeenCalled()
-    expect(event.defaultPrevented).toBe(true)
   })
 
   test(`opens every collapsed <details> ancestor holding a match`, async () => {
