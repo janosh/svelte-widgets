@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs'
 import { tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Option, OptionStyle } from '$lib'
@@ -3897,4 +3898,97 @@ test(`sort_selected orders chips before clearing the accepted search`, async () 
   expect(search_seen_by_comparator).toBe(`b`)
   expect(props.search_text).toBe(``)
   expect(normalized_text(doc_query(`ul.selected`))).toBe(`c b a`)
+})
+
+describe(`CSS static analysis`, () => {
+  const component_source = readFileSync(
+    `${import.meta.dirname}/../../src/lib/MultiSelect.svelte`,
+    `utf-8`,
+  )
+  const css =
+    /<style>(?<style>[\s\S]*?)<\/style>/u.exec(component_source)?.groups?.style ?? ``
+  const get_css_block = (pattern: RegExp) => pattern.exec(css)?.groups?.block ?? ``
+  const options_block = get_css_block(/:where\(ul\.options\)\s*\{(?<block>[\s\S]*?)\}/u)
+
+  const props = [
+    `--sms-border`,
+    `--sms-bg`,
+    `--sms-disabled-bg`,
+    `--sms-selected-bg`,
+    `--sms-li-active-bg`,
+    `--sms-remove-btn-hover-bg`,
+    `--sms-options-bg`,
+    `--sms-options-shadow`,
+    `--sms-li-selected-plain-bg`,
+    `--sms-li-disabled-bg`,
+    `--sms-li-disabled-text`,
+    `--sms-select-all-border-bottom`,
+  ]
+
+  test.each(props)(`%s uses light-dark()`, (prop) => {
+    expect(css).toMatch(
+      new RegExp(`${prop.replaceAll(`-`, `[-]`)}[^;]*light-dark\\(`, `u`),
+    )
+  })
+
+  test(`::highlight is global and uses light-dark()`, () => {
+    expect(css).toMatch(
+      /:global\(::highlight\(sms-search-matches\)\)\s*\{[^}]*light-dark\(/u,
+    )
+  })
+
+  test(`--sms-active-color fallbacks use light-dark()`, () => {
+    expect(
+      css.match(/--sms-active-color,\s*light-dark\(/gu)?.length,
+    ).toBeGreaterThanOrEqual(2)
+  })
+
+  test(`default-icon buttons enforce circle via min-height: 0 + overflow: hidden`, () => {
+    const default_icon_block = get_css_block(
+      /:is\(div\.multiselect button\.default-icon\)\s*\{(?<block>[\s\S]*?)\}/u,
+    )
+    expect(default_icon_block).toMatch(/min-height:\s*0/u)
+    expect(default_icon_block).toMatch(/overflow:\s*hidden/u)
+  })
+
+  test(`options dropdown border and bg use light-dark defaults`, () => {
+    expect(options_block).toMatch(/--sms-options-border,\s*1px solid light-dark\(/u)
+    expect(options_block).toMatch(
+      /border-width:\s*var\(--sms-options-border-width,\s*1px\)/u,
+    )
+    expect(options_block).toMatch(/--sms-options-bg,\s*light-dark\(#fcfcfc/u)
+  })
+
+  // every text-bearing surface must pair its light-dark() background with a light-dark() text
+  // default, else a page that never declares color-scheme renders white-on-white
+  test.each([
+    [`div.multiselect root`, /:where\(div\.multiselect\)\s*\{(?<block>[\s\S]*?)\}/u],
+    [
+      `input`,
+      /:where\(div\.multiselect > ul\.selected > input\)\s*\{(?<block>[\s\S]*?)\}/u,
+    ],
+    [`ul.options dropdown`, /:where\(ul\.options\)\s*\{(?<block>[\s\S]*?)\}/u],
+  ])(`%s pairs text color with a light-dark() default`, (_desc, pattern) => {
+    expect(get_css_block(pattern)).toMatch(
+      /color:\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)/u,
+    )
+  })
+
+  test(`selected option text color chain ends in a light-dark() default`, () => {
+    const selected_block = get_css_block(
+      /:where\(div\.multiselect > ul\.selected > li\)\s*\{(?<block>[\s\S]*?)\}/u,
+    )
+    expect(selected_block).toMatch(
+      /color:\s*var\(--sms-selected-text-color,\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)\)/u,
+    )
+  })
+
+  test(`custom-snippet remove-all overrides circular defaults`, () => {
+    const custom_remove_all = get_css_block(
+      /:is\(div\.multiselect button\.remove-all:not\(\.default-icon\)\)\s*\{(?<block>[\s\S]*?)\}/u,
+    )
+    expect(custom_remove_all).toMatch(/border-radius:\s*3pt/u)
+    expect(custom_remove_all).toMatch(/aspect-ratio:\s*auto/u)
+    expect(custom_remove_all).toMatch(/padding:\s*0 2pt/u)
+  })
 })
