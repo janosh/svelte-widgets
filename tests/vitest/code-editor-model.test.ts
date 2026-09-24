@@ -23,133 +23,63 @@ const type_text = (
     timestamp,
   })
 }
+// Expected matches as space-separated `from-to` UTF-16 ranges.
 test.each([
-  [
-    `foo FOO food foo_bar`,
-    `foo`,
-    {},
-    [
-      [0, 3],
-      [4, 7],
-      [8, 11],
-      [13, 16],
-    ],
-  ],
-  [
-    `foo FOO food foo_bar`,
-    `foo`,
-    { whole_word: true },
-    [
-      [0, 3],
-      [4, 7],
-    ],
-  ],
-  [`foo FOO food foo_bar`, `foo`, { case_sensitive: true, whole_word: true }, [[0, 3]]],
-  [
-    `😀İiKkΣςσ`,
-    `k`,
-    {},
-    [
-      [4, 5],
-      [5, 6],
-    ],
-  ],
-  [
-    `😀İiKkΣςσ`,
-    `σ`,
-    {},
-    [
-      [6, 7],
-      [7, 8],
-      [8, 9],
-    ],
-  ],
-  [
-    `á a_ a$ a😀 a`,
-    `a`,
-    { whole_word: true },
-    [
-      [9, 10],
-      [13, 14],
-    ],
-  ],
-  [
-    `a.*[x] aXXx a.*[x]`,
-    `a.*[x]`,
-    {},
-    [
-      [0, 6],
-      [12, 18],
-    ],
-  ],
-  [`first\n  next first next`, `first\r\n  next`, {}, [[0, 12]]],
-  [
-    `ſSsS`,
-    `sS`,
-    {},
-    [
-      [0, 2],
-      [2, 4],
-    ],
-  ],
-  [
-    `İıiI`,
-    `i`,
-    {},
-    [
-      [2, 3],
-      [3, 4],
-    ],
-  ],
-  [`𐐀𐐨𐐀`, `𐐨𐐨`, {}, [[0, 4]]],
-  [`x-- --`, `--`, { whole_word: true }, [[4, 6]]],
-  [`\uD800 😀 \uDC00`, `\uD800`, {}, [[0, 1]]],
-  [
-    `aaaaa`,
-    `aa`,
-    {},
-    [
-      [0, 2],
-      [2, 4],
-    ],
-  ],
-  [`text`, ``, {}, []],
-  [``, `text`, {}, []],
-] satisfies [string, string, EditorSearchOptions, number[][]][])(
+  [`foo FOO food foo_bar`, `foo`, {}, `0-3 4-7 8-11 13-16`],
+  [`foo FOO food foo_bar`, `foo`, { whole_word: true }, `0-3 4-7`],
+  [`foo FOO food foo_bar`, `foo`, { case_sensitive: true, whole_word: true }, `0-3`],
+  [`😀İi\u212AkΣςσ`, `k`, {}, `4-5 5-6`],
+  [`😀İi\u212AkΣςσ`, `σ`, {}, `6-7 7-8 8-9`],
+  [`a\u0301 a_ a$ a😀 a`, `a`, { whole_word: true }, `9-10 13-14`],
+  [`a.*[x] aXXx a.*[x]`, `a.*[x]`, {}, `0-6 12-18`],
+  [`first\n  next first next`, `first\r\n  next`, {}, `0-12`],
+  [`ſSsS`, `sS`, {}, `0-2 2-4`],
+  [`İıiI`, `i`, {}, `2-3 3-4`],
+  [`𐐀𐐨𐐀`, `𐐨𐐨`, {}, `0-4`],
+  [`x-- --`, `--`, { whole_word: true }, `4-6`],
+  [`\uD800 😀 \uDC00`, `\uD800`, {}, `0-1`],
+  [`aaaaa`, `aa`, {}, `0-2 2-4`],
+  [`text`, ``, {}, ``],
+  [``, `text`, {}, ``],
+] satisfies [string, string, EditorSearchOptions, string][])(
   `literal model search: %j for %j with %j`,
   (text, query, options, expected) => {
     const model = create_editor_model({ uri: `memory:search`, text })
-    expect(
-      find_editor_matches(model, query, options).map(({ from, to }) => [from, to]),
-    ).toEqual(expected)
+    const ranges = find_editor_matches(model, query, options).map(
+      ({ from, to }) => `${from}-${to}`,
+    )
+    expect(ranges.join(` `)).toBe(expected)
   },
 )
-test.each([
-  [false, false],
-  [false, true],
-  [true, false],
-  [true, true],
-])(
-  `chunked searches agree with whole-string matches (whole_word=%s, case_sensitive=%s)`,
-  (whole_word, case_sensitive) => {
+// Whole-string RegExp oracle for chunked model search.
+const regex_matches = (
+  text: string,
+  query: string,
+  { whole_word = false, case_sensitive = false }: EditorSearchOptions,
+) => {
+  const word_char = `[\\p{L}\\p{M}\\p{N}_$]`
+  const pattern = new RegExp(
+    whole_word ? `(?<!${word_char})${query}(?!${word_char})` : query,
+    case_sensitive ? `gu` : `giu`,
+  )
+  return Array.from(text.matchAll(pattern), (match) => ({
+    from: match.index,
+    to: match.index + match[0].length,
+  }))
+}
+const option_grid = [false, true].flatMap((whole_word) =>
+  [false, true].map((case_sensitive) => ({ whole_word, case_sensitive })),
+)
+test.each(option_grid)(
+  `chunked searches agree with whole-string matches (%o)`,
+  (options) => {
     for (let padding = 0; padding < 12; padding++) {
       const text = `${` `.repeat(32 * 1024 - padding)}😀foo𐐀 foo_bar\nFOO😀 foo\n${`x`.repeat(70_000)} foo\uD800`
       const model = create_editor_model({ uri: `memory:search-chunks`, text })
-      for (const query of [`foo`, `😀foo`, `FOO😀 foo`, `foo\n`, `𐐨`, `\uD800`]) {
-        const pattern = new RegExp(
-          whole_word
-            ? `(?<![\\p{L}\\p{M}\\p{N}_$])${query}(?![\\p{L}\\p{M}\\p{N}_$])`
-            : query,
-          case_sensitive ? `gu` : `giu`,
+      for (const query of [`foo`, `😀foo`, `FOO😀 foo`, `foo\n`, `𐐨`, `\uD800`])
+        expect(find_editor_matches(model, query, options)).toEqual(
+          regex_matches(text, query, options),
         )
-        const expected = [...text.matchAll(pattern)].map((match) => ({
-          from: match.index,
-          to: match.index + match[0].length,
-        }))
-        expect(find_editor_matches(model, query, { whole_word, case_sensitive })).toEqual(
-          expected,
-        )
-      }
     }
   },
 )
@@ -205,28 +135,17 @@ test.each([1023, 1024, 1025])(
     for (const padding of [0, 1, 2, 3]) {
       const text = `${` `.repeat(32 * 1024 - padding)}x${query} ${query.toUpperCase()} ${query}`
       const model = create_editor_model({ uri: `memory:search-threshold`, text })
-      for (const whole_word of [false, true]) {
-        for (const case_sensitive of [false, true]) {
-          const word_char = `[\\p{L}\\p{M}\\p{N}_$]`
-          const pattern = new RegExp(
-            whole_word ? `(?<!${word_char})${query}(?!${word_char})` : query,
-            case_sensitive ? `gu` : `giu`,
-          )
-          const expected = Array.from(text.matchAll(pattern), (match) => ({
-            from: match.index,
-            to: match.index + match[0].length,
-          }))
-          const slice_spy = vi.spyOn(model, `slice`)
-          expect(
-            find_editor_matches(model, query, { whole_word, case_sensitive }),
-          ).toEqual(expected)
-          expect(
-            Math.max(
-              ...slice_spy.mock.calls.map(([from = 0, to = model.length]) => to - from),
-            ),
-          ).toBeLessThanOrEqual(32 * 1024 + (length <= 1024 ? length + 4 : 3))
-          slice_spy.mockRestore()
-        }
+      for (const options of option_grid) {
+        const slice_spy = vi.spyOn(model, `slice`)
+        expect(find_editor_matches(model, query, options)).toEqual(
+          regex_matches(text, query, options),
+        )
+        expect(
+          Math.max(
+            ...slice_spy.mock.calls.map(([from = 0, to = model.length]) => to - from),
+          ),
+        ).toBeLessThanOrEqual(32 * 1024 + (length <= 1024 ? length + 4 : 3))
+        slice_spy.mockRestore()
       }
     }
   },
@@ -410,21 +329,14 @@ test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   type_text(backward, `b`, 0)
   expect([backward.undo(), backward.text()]).toEqual([true, `a`])
 })
-test.each([`backspace`, `delete`] as const)(`%s groups replay as one update`, (key) => {
+test.each([
+  [`backspace`, [2, 1]],
+  [`delete`, [0, 0]],
+])(`%s groups replay as one update`, (key, starts) => {
   const model = create_editor_model({ uri: `memory:${key}`, text: `abc` })
-  const edits =
-    key === `backspace`
-      ? [
-          { from: 2, to: 3, insert: `` },
-          { from: 1, to: 2, insert: `` },
-        ]
-      : [
-          { from: 0, to: 1, insert: `` },
-          { from: 0, to: 1, insert: `` },
-        ]
-  for (const [edit_idx, edit] of edits.entries())
-    model.transact([edit], {
-      selection: { anchor: edit.from, head: edit.from },
+  for (const [edit_idx, from] of starts.entries())
+    model.transact([{ from, to: from + 1, insert: `` }], {
+      selection: { anchor: from, head: from },
       history_group: key,
       timestamp: edit_idx,
     })

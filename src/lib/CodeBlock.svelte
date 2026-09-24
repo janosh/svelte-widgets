@@ -19,10 +19,10 @@
 
   let result = $state<{ code: string; language: string; value: CodeHighlight }>()
   let error = $state(``)
-  let pending = $state(false)
   const output = $derived(
     result?.code === code && result.language === language ? result.value : undefined,
   )
+  const pending = $derived(Boolean(highlight) && output === undefined && !error)
   $effect(() => {
     const source = code
     const lang = language
@@ -30,7 +30,6 @@
     const request = new AbortController()
     result = undefined
     error = ``
-    pending = Boolean(highlighter)
     if (highlighter) {
       void Promise.resolve()
         .then(() =>
@@ -38,16 +37,12 @@
         )
         .then(
           (value) => {
-            if (!request.signal.aborted && value !== undefined) {
+            if (!request.signal.aborted && value !== undefined)
               result = { code: source, language: lang, value }
-              pending = false
-            }
           },
           (reason: unknown) => {
-            if (!request.signal.aborted) {
+            if (!request.signal.aborted)
               error = reason instanceof Error ? reason.message : String(reason)
-              pending = false
-            }
           },
         )
     }

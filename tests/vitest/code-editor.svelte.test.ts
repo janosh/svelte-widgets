@@ -1,7 +1,12 @@
 import { register_escape_layer } from '$lib/attachments'
 import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '$lib/code-editor/model'
-import type { ApplyEditsArgs, EditorBackend, OpenDocArgs } from '$lib/code-editor/types'
+import type {
+  ApplyEditsArgs,
+  EditorBackend,
+  HighlightLinesArgs,
+  OpenDocArgs,
+} from '$lib/code-editor/types'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, press_key, stub_prop } from './index'
@@ -13,11 +18,15 @@ const apply_text = (text: string, edits: ApplyEditsArgs[`edits`]): string => {
     text = text.slice(0, from) + insert + text.slice(to)
   return text
 }
-const create_backend = () => {
+// Every highlighted line gets `line_spans()`; the spy lets tests queue other answers.
+const create_backend = (line_spans: () => number[] = () => []) => {
   const edits: ApplyEditsArgs[] = []
   const opens: OpenDocArgs[] = []
   const closed: string[] = []
   let text = ``
+  const highlight_lines = vi.fn(({ start_line, end_line }: HighlightLinesArgs) =>
+    Promise.resolve(Array.from({ length: end_line - start_line }, line_spans)),
+  )
   const backend: EditorBackend = {
     open_doc: (args) => {
       opens.push(args)
@@ -33,13 +42,14 @@ const create_backend = () => {
       text = args.text
       return Promise.resolve(args.revision)
     },
-    highlight_lines: ({ start_line, end_line }) =>
-      Promise.resolve(Array.from({ length: end_line - start_line }, () => [])),
+    highlight_lines,
     cancel_highlight: () => undefined,
     close_doc: ({ doc_id }) => Promise.resolve(void closed.push(doc_id)),
   }
-  return { backend, edits, opens, closed, get_text: () => text }
+  return { backend, edits, opens, closed, highlight_lines, get_text: () => text }
 }
+const numbered_lines = (count: number): string =>
+  Array.from({ length: count }, (_unused, line_idx) => `line ${line_idx}`).join(`\n`)
 const flush_async = async (): Promise<void> => {
   await tick()
   await Promise.resolve()
@@ -226,7 +236,7 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
   await flush_async()
   expect(model.text()).toBe(`bar$& foo_bar FOO`)
   expect(doc_query(`[role="status"]`).textContent).toBe(`No matches`)
-  expect(instance.undo()).toBe(true)
+  expect(model.undo()).toBe(true)
   checkboxes[0].click()
   await flush_async()
   expect(instance.replace_all()).toBe(2)
@@ -235,7 +245,7 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
     `bar$& foo_bar bar$&`,
     `bar$& foo_bar bar$&`,
   ])
-  expect(instance.undo()).toBe(true)
+  expect(model.undo()).toBe(true)
   await flush_async()
   expect(model.text()).toBe(original)
   expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 2`)
@@ -275,12 +285,12 @@ test.each([5000, 5001])(
       `x\n`.repeat(count),
     ])
     expect(status.textContent).toBe(`No matches`)
-    expect(instance.undo()).toBe(true)
+    expect(model.undo()).toBe(true)
     await flush_async()
     expect(model.text()).toBe(original)
     expect(model.dirty).toBe(false)
     expect(status.textContent).toBe(`1 of ${total}`)
-    expect(instance.undo()).toBe(false)
+    expect(model.undo()).toBe(false)
   },
 )
 test(`go-to-line uses validated gutter numbers and reveals a bounded input window`, async () => {
@@ -350,13 +360,14 @@ test(`native input, selection, history, commands, and backend deltas share the m
   expect(model.selection).toEqual({ anchor: 0, head: 5 })
   before_input(textarea, `historyUndo`)
   expect(model.text()).toContain(`xylambdafirst`)
+  // instance undo/redo delegate to the model's history
   expect(instance.undo()).toBe(true)
   expect(model.text()).toContain(`xyfirst`)
   expect(
     on_update.mock.calls.filter(([update]) => update.transaction?.source === `undo`),
   ).toHaveLength(2)
   expect(instance.redo()).toBe(true)
-  expect(instance.redo()).toBe(true)
+  expect(model.redo()).toBe(true)
   textarea.setSelectionRange(0, 0)
   press_key(textarea, `Tab`)
   press_key(textarea, `/`, { metaKey: true })
@@ -566,14 +577,10 @@ test.each([
   expect(textarea.getAttribute(`aria-describedby`)).toBe(help.id)
 })
 
-test(`an edit keeps tokens above it and invalidates downstream syntax`, async () => {
-  const recorder = create_backend()
-  const highlight_lines = vi
-    .fn()
-    .mockImplementation(({ start_line, end_line }) =>
-      Promise.resolve(Array.from({ length: end_line - start_line }, () => [0, 6])),
-    )
-  recorder.backend.highlight_lines = highlight_lines
+test(`an edit keeps downstream tokens painted as stale until re-highlighted`, async () => {
+  let packed_class = 6 // keyword
+  const recorder = create_backend(() => [0, packed_class])
+  const { highlight_lines } = recorder
   const model = create_editor_model({
     uri: `memory:invalidate`,
     text: `alpha\nbeta\ngamma`,
@@ -581,39 +588,69 @@ test(`an edit keeps tokens above it and invalidates downstream syntax`, async ()
   await mount_editor(model, { backend: recorder.backend })
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalled())
   await flush_async()
-  const highlighted_lines = () =>
-    Array.from(document.querySelectorAll(`.token-layer .line`)).map((line) =>
-      Boolean(line.querySelector(`.tok-keyword`)),
+  const line_classes = () =>
+    Array.from(
+      document.querySelectorAll(`.token-layer .line`),
+      (line) => line.querySelector(`span`)?.classList.item(0) ?? ``,
     )
-  expect(highlighted_lines()).toEqual([true, true, true])
+  expect(line_classes()).toEqual(Array(3).fill(`tok-keyword`))
 
-  // Opening a block comment changes later lines without changing the line count.
+  // Opening a block comment changes later lines without changing the line count. Rows
+  // keep their stale spans instead of flashing unstyled, then take the fresh ones.
+  packed_class = 1 // comment
   const line_start = model.line(1).from
   model.transact([{ from: line_start, to: line_start, insert: `/*` }])
   await tick()
-  expect(highlighted_lines()).toEqual([true, false, false])
+  expect(line_classes()).toEqual(Array(3).fill(`tok-keyword`))
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
+  await flush_async()
+  expect(line_classes()).toEqual(Array(3).fill(`tok-comment`))
 
+  // A line split shifts downstream spans; the new line has none until re-highlight.
+  packed_class = 6
   const split_at = model.line(1).from
   model.transact([{ from: split_at, to: split_at, insert: `\n` }])
   await tick()
-  expect(highlighted_lines()).toEqual([true, false, false, false])
+  expect(line_classes()).toEqual([`tok-comment`, ``, `tok-plain`, `tok-comment`])
+  await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(3))
+  await flush_async()
+  expect(line_classes()).toEqual([`tok-keyword`, ``, `tok-keyword`, `tok-keyword`])
+
+  // Joining lines drops the swallowed line's spans without overwriting the edited line.
+  packed_class = 1
+  model.transact([{ from: model.line(1).to, to: model.line(3).from, insert: `` }])
+  await tick()
+  expect(line_classes()).toEqual(Array(2).fill(`tok-keyword`))
+})
+
+test(`a scroll that widens the overlay measures and refreshes the input once`, async () => {
+  const { textarea } = await mount_editor()
+  let width_reads = 0
+  vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(
+    function (this: Element) {
+      return this === textarea ? ++width_reads && 640 : 0
+    },
+  )
+  // happy-dom clamps scrollTop to its zero layout height
+  const scrollport = doc_query<HTMLDivElement>(`.content`)
+  let scroll_top = 0
+  Object.defineProperty(scrollport, `scrollTop`, {
+    configurable: true,
+    get: () => scroll_top,
+    set: (value: number) => void (scroll_top = value),
+  })
+  scroll_top = 40
+  scrollport.dispatchEvent(new Event(`scroll`))
+  await flush_async()
+  expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`640px`)
+  expect(width_reads).toBe(1)
 })
 
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {
-  const recorder = create_backend()
-  const model = create_editor_model({
-    uri: `memory:tokens`,
-    text: Array.from({ length: 2050 }, (_unused, line_idx) => `line ${line_idx}`).join(
-      `\n`,
-    ),
-  })
-  const highlight_lines = vi
-    .fn()
-    .mockResolvedValueOnce(Array.from({ length: 2048 }, () => [0, 6]))
-    .mockImplementation(({ start_line, end_line }) =>
-      Promise.resolve(Array.from({ length: end_line - start_line }, () => [0, 6])),
-    )
-  recorder.backend.highlight_lines = highlight_lines
+  const recorder = create_backend(() => [0, 6])
+  const { highlight_lines } = recorder
+  highlight_lines.mockResolvedValueOnce(Array.from({ length: 2048 }, () => [0, 6]))
+  const model = create_editor_model({ uri: `memory:tokens`, text: numbered_lines(2050) })
   await mount_editor(model, { backend: recorder.backend })
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
   await flush_async()
@@ -635,11 +672,9 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
 test(`viewport input maps edits, IME, external updates, and history to document offsets`, async () => {
   const model = create_editor_model({
     uri: `memory:large-input`,
-    text: Array.from({ length: 100_000 }, (_unused, line_idx) => `line ${line_idx}`).join(
-      `\n`,
-    ),
+    text: numbered_lines(100_000),
   })
-  const { textarea, instance } = await mount_editor(model)
+  const { textarea } = await mount_editor(model)
   const scrollport = doc_query<HTMLDivElement>(`.content`)
   const text_spy = vi.spyOn(model, `text`)
   const slice_spy = vi.spyOn(model, `slice`)
@@ -683,9 +718,9 @@ test(`viewport input maps edits, IME, external updates, and history to document 
   textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
   await flush_async()
   expect(model.slice(caret, caret + 7)).toBe(`!lambda`)
-  expect(instance.undo()).toBe(true)
+  expect(model.undo()).toBe(true)
   expect(model.slice(caret, caret + 2)).toBe(`!5`)
-  expect(instance.redo()).toBe(true)
+  expect(model.redo()).toBe(true)
   model.transact([{ from: caret, to: caret + 1, insert: `?` }])
   await tick()
   expect(textarea.value).toContain(`line ?lambda50000`)
@@ -774,27 +809,21 @@ test(`vertical navigation keeps a preferred column and respects external selecti
 test.each([
   [`ab\n\tx`, 2, 4],
   [`\tx\nab`, 1, 5],
-])(`vertical movement aligns tab stops in %j`, async (text, start, expected) => {
-  const model = create_editor_model({ uri: `memory:tabs`, text })
-  const { textarea } = await mount_editor(model)
-  model.set_selection({ anchor: start, head: start })
-  press_key(textarea, `ArrowDown`)
-  expect(model.selection.head).toBe(expected)
-})
-
-test.each([
   [`a\u0301a\u0301a\u0301\n123456`, 6, 10],
   [`👩‍💻\n123456`, 5, 8],
   [`12\na\u0301a\u0301a\u0301`, 2, 7],
   [`12\n👩‍💻x`, 2, 8],
   [`a\u0301\t\n123456`, 3, 6],
-])(`vertical movement follows grapheme widths in %j`, async (text, start, expected) => {
-  const model = create_editor_model({ uri: `memory:graphemes`, text })
-  const { textarea } = await mount_editor(model)
-  model.set_selection({ anchor: start, head: start })
-  press_key(textarea, `ArrowDown`)
-  expect(model.selection.head).toBe(expected)
-})
+])(
+  `vertical movement follows tab stops and grapheme widths in %j`,
+  async (text, start, expected) => {
+    const model = create_editor_model({ uri: `memory:columns`, text })
+    const { textarea } = await mount_editor(model)
+    model.set_selection({ anchor: start, head: start })
+    press_key(textarea, `ArrowDown`)
+    expect(model.selection.head).toBe(expected)
+  },
+)
 
 test(`mouse selection retains its anchor and supports word and line selection`, async () => {
   const model = create_editor_model({ uri: `memory:pointer`, text: `alpha\nbeta\ngamma` })

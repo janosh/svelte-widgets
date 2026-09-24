@@ -4,7 +4,7 @@ import type { ApplyEditsArgs, EditorBackend, SetTextArgs } from '$lib/code-edito
 import { afterEach, expect, test, vi } from 'vitest'
 
 const OPEN_RESULT = { language: `typescript`, highlightable: true, editable: true }
-const setup = () => {
+const setup = (highlight_interval_ms?: number) => {
   const edits: Parameters<EditorBackend[`apply_edits`]>[0][] = []
   const resyncs: Parameters<EditorBackend[`set_text`]>[0][] = []
   const cancellations: Parameters<EditorBackend[`cancel_highlight`]>[0][] = []
@@ -32,7 +32,7 @@ const setup = () => {
     backend,
     on_spans: spans,
     on_error: errors,
-    highlight_interval_ms: 0,
+    highlight_interval_ms,
   })
   return { backend, model, client, edits, resyncs, cancellations, spans, errors }
 }
@@ -207,4 +207,19 @@ test(`close awaits asynchronous highlight cancellation`, async () => {
   cancellation.resolve(undefined)
   await close
   expect(close_doc).toHaveBeenCalledOnce()
+})
+
+test.each([
+  [undefined, 30],
+  [80, 80],
+])(`highlight_interval_ms=%s debounces requests by %i ms`, async (interval, expected) => {
+  vi.useFakeTimers()
+  const current = setup(interval)
+  const highlight_lines = vi.spyOn(current.backend, `highlight_lines`)
+  await current.client.open()
+  current.client.request_highlight(0, 1)
+  await vi.advanceTimersByTimeAsync(expected - 1)
+  expect(highlight_lines).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(highlight_lines).toHaveBeenCalledOnce()
 })

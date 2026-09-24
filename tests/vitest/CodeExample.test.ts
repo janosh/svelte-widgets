@@ -1,6 +1,6 @@
 import CodeExample from '$lib/CodeExample.svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { assert, expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { doc_query } from './index'
 
 const [id, src] = [`uniq-id`, `some code`]
@@ -62,7 +62,7 @@ test(`forwards host attributes when metadata does not override the ID`, () => {
     `40rem`,
   ])
   expect(host.dataset.testid).toBe(`example`)
-  expect(document.querySelectorAll(`nav a`)).toHaveLength(0)
+  expect(document.querySelectorAll(`nav a, .lang-label`)).toHaveLength(0)
 })
 
 test.each([
@@ -111,21 +111,13 @@ test(`labels prop overrides toggle text, omitted keys keep their default`, async
   expect(toggle_button.textContent?.trim()).toBe(`Close`) // hide_code falls back
 })
 
-test.each([
-  [`typescript`, `typescript`],
-  [undefined, null],
-] as const)(`lang-label for meta.lang=%j`, (lang, expected_text) => {
+test(`meta.lang renders an out-of-flow language label`, () => {
   mount(CodeExample, {
     target: document.body,
-    props: { src, meta: lang === undefined ? {} : { lang } },
+    props: { src, meta: { lang: `typescript` } },
   })
-  const label = document.querySelector<HTMLSpanElement>(`.lang-label`)
-  if (expected_text === null) {
-    expect(label).toBeNull()
-    return
-  }
-  assert(label !== null)
-  expect(label.textContent).toBe(expected_text)
+  const label = doc_query(`.lang-label`)
+  expect(label.textContent).toBe(`typescript`)
   // pre is white-space: pre, so an in-flow label shifts the first code line right.
   // absolute positioning takes it out of flow (regression guard, see CodeExample.svelte)
   expect(getComputedStyle(label).position).toBe(`absolute`)

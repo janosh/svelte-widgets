@@ -495,7 +495,7 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
         throw new Error(`Invalid line ${line_idx} for ${line_count} lines`)
       const from = line_start(root, line_idx)
       const to =
-        line_idx + 1 < line_count ? line_start(root, line_idx + 1) - 1 : rope_length(root)
+        line_idx + 1 < line_count ? break_offset(root, line_idx) : rope_length(root)
       return { line_idx, from, to, text: slice_rope(root, from, to) }
     },
     line_at: (offset) => {

@@ -14,31 +14,27 @@ describe(`escape_html_text`, () => {
 })
 
 describe(`hast_to_html`, () => {
-  test(`serializes root, element classes, nested text, and escaping`, () => {
-    const tree: HastNode = {
-      type: `root`,
-      children: [
-        {
-          type: `element`,
-          tagName: `span`,
-          properties: { className: [`token`, `string`] },
-          children: [{ type: `text`, value: `<hello & bye>` }],
-        },
-      ],
-    }
-
-    expect(hast_to_html(tree)).toBe(
-      `<span class="token string">&lt;hello &amp; bye&gt;</span>`,
-    )
-  })
-
   test.each([
     [{ type: `text` }, ``],
     [{ type: `root` }, ``],
     [{ type: `comment`, value: `skip` }, ``],
     [{ type: `element`, children: [{ type: `text`, value: `missing tag` }] }, ``],
     [{ type: `element`, tagName: `em`, children: undefined }, `<em></em>`],
-  ] satisfies [HastNode, string][])(`serializes edge node %#`, (node, expected) => {
+    [
+      {
+        type: `root`,
+        children: [
+          {
+            type: `element`,
+            tagName: `span`,
+            properties: { className: [`token`, `string`] },
+            children: [{ type: `text`, value: `<hello & bye>` }],
+          },
+        ],
+      },
+      `<span class="token string">&lt;hello &amp; bye&gt;</span>`,
+    ],
+  ] satisfies [HastNode, string][])(`serializes node %#`, (node, expected) => {
     expect(hast_to_html(node)).toBe(expected)
   })
 })

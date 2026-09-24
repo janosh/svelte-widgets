@@ -1,6 +1,7 @@
 import {
   auto_close_pair,
   auto_indent_newline,
+  count_lines,
   create_editor_model,
   dedent_selection,
   indent_selection,
@@ -27,13 +28,7 @@ const marked_state = (marked: string): EditorState => {
 }
 const apply = (before: EditorState, edit: RangeEdit | null): string => {
   if (!edit) return before.model.text()
-  const {
-    range_start: from,
-    range_end: to,
-    replacement: insert,
-    selection_start: anchor,
-    selection_end: head,
-  } = edit
+  const { from, to, insert, anchor, head } = edit
   before.model.transact([{ from, to, insert }], {
     selection: { anchor, head },
     add_to_history: false,
@@ -83,10 +78,10 @@ test(`block commands slice only touched lines and handle very large blocks`, () 
   )
   const text = lines.join(`\n`)
   const from = lines.slice(0, 100_000).join(`\n`).length + 1
-  expect(indent_selection(state(text, from, from + 1), `  `)?.replacement).toBe(`  x`)
+  expect(indent_selection(state(text, from, from + 1), `  `)?.insert).toBe(`  x`)
   expect(
     toggle_line_comment(state(text, 0, text.length), `#`)
-      ?.replacement.split(`\n`)
+      ?.insert.split(`\n`)
       .at(-1),
   ).toBe(`# ${lines.at(-1)}`)
 })
@@ -139,4 +134,14 @@ test.each([
 ])(`visible line window %#`, (scroll, height, row_height, count, overscan, expected) => {
   const { start, end } = visible_line_window(scroll, height, row_height, count, overscan)
   expect([start, end]).toEqual(expected)
+})
+
+test.each([
+  [``, 0],
+  [`one`, 1],
+  [`one\n`, 1],
+  [`one\r\ntwo`, 2],
+  [`one\n\n`, 2],
+])(`count_lines(%j) is %i`, (text, expected) => {
+  expect(count_lines(text)).toBe(expected)
 })

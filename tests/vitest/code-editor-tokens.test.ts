@@ -1,9 +1,4 @@
-import {
-  css_class_for,
-  decode_spans,
-  EMPHASIS_BIT,
-  TOKEN_CLASS_NAMES,
-} from '$lib/code-editor'
+import { decode_spans, EMPHASIS_BIT, TOKEN_CLASS_NAMES } from '$lib/code-editor'
 import type { DecodedSpan, SpanList } from '$lib/code-editor'
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vitest'
@@ -64,13 +59,6 @@ describe(`decode_spans`, () => {
     const sliced = decoded.map(({ start, end }) => line.slice(start, end))
     expect(sliced).toEqual([`let`, ` x = `, `"😀"`])
   })
-})
-
-test.each([
-  [`keyword`, false, `tok-keyword`],
-  [`string`, true, `tok-string tok-emph`],
-] as const)(`css_class_for %s emphasized=%s`, (class_name, emphasized, expected) => {
-  expect(css_class_for(class_name, emphasized)).toBe(expected)
 })
 
 test(`editor CSS styles every token and defines readable dark defaults`, () => {
