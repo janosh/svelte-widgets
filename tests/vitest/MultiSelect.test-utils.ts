@@ -1,5 +1,5 @@
 import { mount, tick, unmount, type Component, type MountOptions } from 'svelte'
-import { afterEach } from 'vitest'
+import { afterEach, onTestFinished } from 'vitest'
 
 import { MultiSelect } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
@@ -62,4 +62,13 @@ export async function type_search_text(
   input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
   await tick()
   return input
+}
+
+// a detached-from-network form: submission is prevented and the node removed after the test
+export const make_form = (): HTMLFormElement => {
+  const form = document.createElement(`form`)
+  form.addEventListener(`submit`, (event) => event.preventDefault())
+  document.body.append(form)
+  onTestFinished(() => form.remove())
+  return form
 }

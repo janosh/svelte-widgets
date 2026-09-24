@@ -378,7 +378,7 @@ test.describe(`portal feature`, () => {
 })
 
 // Windowing needs real layout (happy-dom reports zero heights). The internal /multiselect-virtual-list
-// page mounts 2000 options with rows pinned to the default 30px item_height.
+// page mounts 2000 options, which MultiSelect pins to the default 30px item_height.
 test.describe(`virtual_list`, () => {
   const item_height = 30
   const total_options = 2000

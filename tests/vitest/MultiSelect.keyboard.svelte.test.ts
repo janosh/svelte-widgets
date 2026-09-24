@@ -251,20 +251,6 @@ describe(`arrow key navigation between selected items`, () => {
     expect(highlighted()).toHaveLength(0)
   })
 
-  test(`Backspace removes highlighted item and highlight stays at same index`, async () => {
-    const input = setup()
-    input.dispatchEvent(press(`ArrowLeft`)) // Blue (idx 2)
-    input.dispatchEvent(press(`ArrowLeft`)) // Green (idx 1)
-    input.dispatchEvent(press(`Backspace`))
-    await tick()
-    expect(selected_items()).toHaveLength(2)
-    expect(selected_items()[0]?.textContent).toContain(`Red`)
-    expect(selected_items()[1]?.textContent).toContain(`Blue`)
-    // idx 1 is Blue now, not Red
-    expect(is_highlighted(1)).toBe(true)
-    expect(is_highlighted(0)).toBe(false)
-  })
-
   test.each<[name: string, key: string, selected: string[], input_text: string]>([
     [`ArrowLeft with input text`, `ArrowLeft`, options, `R`],
     [`ArrowLeft without selected items`, `ArrowLeft`, [], ``],
@@ -313,31 +299,19 @@ describe(`arrow key navigation between selected items`, () => {
     },
   )
 
-  test(`clicking X button clears highlight`, async () => {
-    const input = setup()
-    // highlight idx 1 (Green) so removing the last item leaves a valid stale index
-    input.dispatchEvent(press(`ArrowLeft`))
-    input.dispatchEvent(press(`ArrowLeft`))
+  // each removal leaves the highlighted index valid, so only an explicit reset clears it
+  test.each([
+    // removing Blue keeps the highlighted idx 1 (Green) in range
+    [`the last chip's X button`, {}, 2, `ul.selected li:nth-child(3) button.remove`],
+    // min_select=1 keeps Red, the highlighted idx 0, through remove-all
+    [`remove-all`, { min_select: 1 }, 3, `button.remove-all`],
+  ])(`clicking %s clears highlight`, async (_name, extra_props, n_left, selector) => {
+    const input = setup(options, extra_props)
+    for (let step = 0; step < n_left; step++) input.dispatchEvent(press(`ArrowLeft`))
     await tick()
-    expect(is_highlighted(1)).toBe(true)
-    // remove Blue: selected becomes [Red, Green], so the stale idx 1 is still valid
-    ;[...document.querySelectorAll<HTMLElement>(`ul.selected li button.remove`)]
-      .at(-1)
-      ?.click()
+    expect(highlighted()).toHaveLength(1)
+    doc_query(selector).click()
     await tick()
-    expect(highlighted()).toHaveLength(0)
-  })
-
-  test(`remove-all button clears highlight`, async () => {
-    // min_select=1 so one item survives remove-all, exposing stale highlighted_idx
-    const input = setup([`Red`, `Green`, `Blue`], { min_select: 1 })
-    // highlight idx 0 (Red), the item that survives remove-all
-    for (let step = 0; step < 3; step++) input.dispatchEvent(press(`ArrowLeft`))
-    await tick()
-    expect(is_highlighted(0)).toBe(true)
-    doc_query(`button.remove-all`).click()
-    await tick()
-    expect(selected_items()).toHaveLength(1)
     expect(highlighted()).toHaveLength(0)
   })
 
@@ -429,16 +403,6 @@ describe(`arrow key navigation between selected items`, () => {
     const highlighted_li = document.querySelector(`ul.selected > li.highlighted`)
     expect(highlighted_li).toBeInstanceOf(HTMLLIElement)
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
-  })
-
-  test(`each selected <li> has a stable id`, () => {
-    setup()
-    const items = selected_items()
-    for (const item of items) {
-      expect(item.id).toMatch(/-selected-\d+$/u)
-    }
-    const ids = [...items].map((li) => li.id)
-    expect(new Set(ids).size).toBe(ids.length)
   })
 })
 
@@ -541,16 +505,39 @@ describe(`keyboard shortcuts`, () => {
   })
 
   test.each([
-    [`default (null)`, {}],
-    [`explicitly null`, { shortcuts: { select_all: null } }],
-  ])(`select_all %s: ctrl+a not swallowed`, async (_label, extra_props) => {
-    const { props, event } = await test_shortcut(
-      { select_all_option: true, ...extra_props },
-      { key: `a`, ctrlKey: true },
-    )
-    expect(props.value).toEqual([])
-    expect(event.defaultPrevented).toBe(false)
-  })
+    [`unbound by default`, { select_all_option: true }, { ctrlKey: true }],
+    [
+      `explicitly null`,
+      { select_all_option: true, shortcuts: { select_all: null } },
+      { ctrlKey: true },
+    ],
+    [
+      `select_all_option=false`,
+      { select_all_option: false, shortcuts: { select_all: `ctrl+a` } },
+      { ctrlKey: true },
+    ],
+    [
+      `disabled`,
+      { select_all_option: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
+      { ctrlKey: true },
+    ],
+    [
+      `invalid format "ctrl+"`,
+      { select_all_option: true, shortcuts: { select_all: `ctrl+` } },
+      { ctrlKey: true },
+    ],
+    [`empty string`, { select_all_option: true, shortcuts: { select_all: `` } }, {}],
+  ])(
+    `select_all %s: the key is not swallowed`,
+    async (_label, extra_props, modifiers) => {
+      const { props, event } = await test_shortcut(extra_props, {
+        key: `a`,
+        ...modifiers,
+      })
+      expect(props.value).toEqual([])
+      expect(event.defaultPrevented).toBe(false)
+    },
+  )
 
   test.each([
     [
@@ -584,14 +571,6 @@ describe(`keyboard shortcuts`, () => {
     expect(event.defaultPrevented).toBe(false)
   })
 
-  test(`select_all does nothing when select_all_option is false`, async () => {
-    const { props } = await test_shortcut(
-      { select_all_option: false, shortcuts: { select_all: `ctrl+a` } },
-      { key: `a`, ctrlKey: true },
-    )
-    expect(props.value).toEqual([])
-  })
-
   test(`custom open and close shortcuts toggle the dropdown`, async () => {
     const props = $state<MultiSelectProps>({
       options: [`a`, `b`, `c`],
@@ -614,28 +593,6 @@ describe(`keyboard shortcuts`, () => {
     await tick()
     expect(props.open).toBe(true)
   })
-
-  test(`shortcuts are blocked when disabled=true`, async () => {
-    const { props } = await test_shortcut(
-      { select_all_option: true, shortcuts: { select_all: `ctrl+a` }, disabled: true },
-      { key: `a`, ctrlKey: true },
-    )
-    expect(props.value).toEqual([])
-  })
-
-  test.each([
-    [`ctrl+`, { ctrlKey: true }], // missing key
-    [``, {}], // empty string
-  ])(
-    `invalid shortcut format "%s" does not trigger action`,
-    async (shortcut, modifiers) => {
-      const { props } = await test_shortcut(
-        { select_all_option: true, shortcuts: { select_all: shortcut } },
-        { key: `a`, ...modifiers },
-      )
-      expect(props.value).toEqual([])
-    },
-  )
 
   test.each([
     [

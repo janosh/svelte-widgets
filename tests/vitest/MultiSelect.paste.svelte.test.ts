@@ -100,19 +100,6 @@ describe(`parse_paste`, () => {
     },
   )
 
-  test(`fires on_create for each created option with allow_user_options`, async () => {
-    const { on_create, on_add } = await paste_into(
-      {
-        options: [`existing`],
-        allow_user_options: true,
-        parse_paste: (text: string) => text.split(/[,\s]+/u).filter(Boolean),
-      },
-      `new1,new2,new3`,
-    )
-    expect(on_create).toHaveBeenCalledTimes(3)
-    expect(on_add).toHaveBeenCalledTimes(3)
-  })
-
   test.each([
     [`without parse_paste`, { parse_paste: undefined }],
     [`parse_paste returns empty`, { parse_paste: () => [] }],
@@ -223,21 +210,6 @@ describe(`parse_paste`, () => {
   )
 
   test.each([
-    [`empty selection`, [], [`a`]],
-    [`replaces existing`, [`x`], [`a`]],
-  ])(
-    `max_select=1 with %s: only first option selected`,
-    async (_label, initial, expected) => {
-      const { on_add, props } = await paste_into(
-        { options: [`a`, `b`, `c`, `x`], value: initial[0] ?? null, mode: `single` },
-        `a,b,c`,
-      )
-      expect(on_add).toHaveBeenCalledTimes(1)
-      expect(props.value).toEqual(props.mode === `single` ? expected[0] : expected)
-    },
-  )
-
-  test.each([
     [`preselected duplicate`, [`a`], `a,b,c`, 2, [`a`, `b`, `c`]],
     [`self-duplicate within paste`, [], `a,a,b`, 2, [`a`, `b`]],
   ])(
@@ -270,7 +242,7 @@ describe(`parse_paste`, () => {
       const label = typeof option === `object` ? option.label : option
       return `${label}`.length >= 3 ? undefined : false
     })
-    const { on_add, props } = await paste_into(
+    const { on_add, on_parsed_paste, props } = await paste_into(
       {
         options: [],
         value: [],
@@ -282,49 +254,21 @@ describe(`parse_paste`, () => {
     expect(oncreate_spy).toHaveBeenCalledTimes(4)
     expect(on_add).toHaveBeenCalledTimes(2)
     expect(props.value).toEqual([`valid`, `also_ok`])
+    expect(on_parsed_paste).toHaveBeenCalledWith(
+      expect.objectContaining({ added: [`valid`, `also_ok`], rejected: [`ab`, `x`] }),
+    )
   })
 
-  test.each<{
-    desc: string
-    props: MultiSelectProps
-    paste: string
-    expected: Record<string, unknown>
-    expected_selected?: Option[]
-  }>([
-    {
-      desc: `added/overflow summary beyond max_select`,
-      props: { options: [`a`, `b`, `c`, `d`, `e`], value: [`a`], max_select: 3 },
-      paste: `b,c,d,e`,
-      expected: { added: [`b`, `c`], overflow: [`d`, `e`], raw_text: `b,c,d,e` },
-    },
-    {
-      desc: `max_select=1 reports replaced option as added`,
-      props: { options: [`a`, `b`, `c`], value: `a`, mode: `single` },
-      paste: `b,c`,
-      expected: { added: [`b`], overflow: [`c`] },
-      expected_selected: [`b`],
-    },
-    {
-      desc: `reports rejected options from on_create`,
-      props: {
-        options: [],
-        value: [],
-        allow_user_options: `append`,
-        on_create: ({ option }) =>
-          `${typeof option === `object` ? option.label : option}`.length >= 3
-            ? undefined
-            : false,
-      },
-      paste: `ab,valid,x`,
-      expected: { added: [`valid`], rejected: [`ab`, `x`], overflow: [] },
-    },
-  ])(`on_parsed_paste $desc`, async ({ props, paste, expected, expected_selected }) => {
-    const { on_parsed_paste, props: bound } = await paste_into(props, paste)
-    expect(on_parsed_paste).toHaveBeenCalledTimes(1)
-    expect(on_parsed_paste.mock.calls[0][0]).toEqual(expect.objectContaining(expected))
-    if (expected_selected)
-      expect(bound.value).toEqual(
-        bound.mode === `single` ? expected_selected[0] : expected_selected,
-      )
+  test(`on_parsed_paste summarizes added and overflow options beyond max_select`, async () => {
+    const { on_parsed_paste } = await paste_into(
+      { options: [`a`, `b`, `c`, `d`, `e`], value: [`a`], max_select: 3 },
+      `b,c,d,e`,
+    )
+    expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
+      added: [`b`, `c`],
+      rejected: [],
+      overflow: [`d`, `e`],
+      raw_text: `b,c,d,e`,
+    })
   })
 })

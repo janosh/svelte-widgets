@@ -8,7 +8,6 @@ import {
   get_input,
   mount_multiselect,
   type_search_text,
-  unmount_component,
 } from './MultiSelect.test-utils'
 
 describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
@@ -221,25 +220,10 @@ test(`clearing search_text while create-option message is active drops aria-acti
 })
 
 describe(`ARIA correctness`, () => {
-  test(`select-all aria-selected tracks all-selectable-selected, not max capacity`, async () => {
-    const first = mount_multiselect({
-      options: [1, 2],
-      select_all_option: true,
-      open: true,
-    })
-
-    const select_all = doc_query(`ul.options li.select-all`)
-    expect(select_all.getAttribute(`aria-selected`)).toBe(`false`)
-
-    select_all.dispatchEvent(new MouseEvent(`click`, { bubbles: true }))
-    await tick()
-    expect(doc_query(`ul.options li.select-all`).getAttribute(`aria-selected`)).toBe(
-      `true`,
-    )
-
-    // at max capacity the row is disabled but must NOT announce as selected: aria-selected
-    // tracks whether all selectable options are selected (option 3 is not), not max_select
-    await unmount_component(first)
+  // at max capacity the row is disabled but must NOT announce as selected: aria-selected
+  // tracks whether all selectable options are selected (option 3 is not), not max_select.
+  // The false -> true transition on click is covered by the select_all_option tests.
+  test(`select-all aria-selected tracks all-selectable-selected, not max capacity`, () => {
     mount_multiselect({
       options: [1, 2, 3],
       value: [1, 2],

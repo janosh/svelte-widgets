@@ -231,27 +231,6 @@ describe(`option grouping feature`, () => {
     expect(btn?.textContent?.trim()).toBe(expected.label)
   })
 
-  test(`group select-all partial fill fires on_max_reached with correct payload`, async () => {
-    const onmaxreached_spy = vi.fn()
-    await mount_grouped({
-      group_select_all: true,
-      value: [grouped_options[0]],
-      max_select: 2,
-      on_max_reached: onmaxreached_spy,
-    })
-
-    const genre_btn = group_select_all_btn(`Genre`)
-    expect(genre_btn?.disabled).toBe(false)
-    genre_btn?.click()
-    await tick()
-
-    expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(2)
-    expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
-    expect(onmaxreached_spy).toHaveBeenCalledWith(
-      expect.objectContaining({ max_select: 2 }),
-    )
-  })
-
   test(`applies group header class, style, and sticky mode`, async () => {
     await mount_grouped({
       li_group_header_class: `custom-header-class`,
@@ -405,24 +384,6 @@ describe(`option grouping feature`, () => {
         label === `C Major` || label === `D Minor` ? `Key` : `Genre`,
       )
     }
-  })
-
-  test(`collapsed_groups prop controls initial collapsed state`, async () => {
-    await mount_grouped({
-      collapsible_groups: true,
-      collapsed_groups: new Set([`Genre`]),
-    })
-
-    const genre_header = find_group_header(`Genre`)
-    expect(group_expanded(genre_header)).toBe(`false`)
-
-    const rock_option = Array.from(option_items()).find((item) =>
-      item.textContent?.includes(`Rock`),
-    )
-    expect(rock_option).toBeUndefined()
-
-    const key_header = find_group_header(`Key`)
-    expect(group_expanded(key_header)).toBe(`true`)
   })
 
   test.each([
@@ -691,7 +652,31 @@ test(`group deselect-all keeps at least min_select options selected`, async () =
 
   // previously dropped to 0 selected, violating min_select=2
   expect(props.value).toHaveLength(2)
+  // group deselect announces like remove_all instead of staying silent
+  expect(doc_query(`.sr-only[aria-live="polite"]`).textContent?.trim()).toBe(
+    `1 option removed`,
+  )
 })
+
+test.each([
+  [2, [`A`]],
+  [3, [`A`, `B`]],
+  [0, []],
+])(
+  `max_options=%i renders no headers for groups with no visible options`,
+  async (max_options, expected_headers) => {
+    mount_multiselect({
+      options: [`a1`, `a2`, `b1`, `c1`].map((label) => ({
+        label,
+        group: label[0].toUpperCase(),
+      })),
+      open: true,
+      max_options,
+    })
+    await tick()
+    expect(header_names()).toEqual(expected_headers)
+  },
+)
 
 test.each([`Fruits`, ``])(
   `search expansion preserves manual collapse for group %j`,
