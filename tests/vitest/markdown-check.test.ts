@@ -86,24 +86,29 @@ describe(`checked Markdown examples`, () => {
     })
   })
 
-  test.each([`ts`, `typescript`, `js`, `javascript`])(
-    `checks real %s semantic errors`,
-    async (language) => {
-      const source = fence(language, `const value = 1;\nvalue.toUpperCase()`)
-      const result = await check_source(source)
-      expect(result.ok).toBe(false)
-      expect(diagnostics_at_start(result)).toMatchObject([
-        {
-          filename,
-          line: 3,
-          column: 7,
-          code: `TS2339`,
-          severity: `error`,
-          message: expect.stringContaining(`toUpperCase`),
-        },
-      ])
-    },
-  )
+  // TypeScript hands the host forward-slash paths, also for Windows backslash filenames
+  const backslash_filename = resolve(`tests\\checked-examples.md`)
+  test.each([
+    [`ts`, filename],
+    [`typescript`, filename],
+    [`js`, filename],
+    [`javascript`, filename],
+    [`ts`, backslash_filename],
+  ])(`checks real %s semantic errors in %s`, async (language, document_filename) => {
+    const source = fence(language, `const value = 1;\nvalue.toUpperCase()`)
+    const result = await check_source(source, { filename: document_filename })
+    expect(result.ok).toBe(false)
+    expect(diagnostics_at_start(result)).toMatchObject([
+      {
+        filename: document_filename,
+        line: 3,
+        column: 7,
+        code: `TS2339`,
+        severity: `error`,
+        message: expect.stringContaining(`toUpperCase`),
+      },
+    ])
+  })
 
   test(`Svelte checks script assignments and template expressions with original locations`, async () => {
     const source = `---\ntitle: Checks\n---\n\n${fence(`svelte`, `<script lang="ts">\nlet count: number = "bad"\n</script>\n<p>{count.toUpperCase()}</p>`)}`

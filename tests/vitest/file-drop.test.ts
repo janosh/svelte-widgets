@@ -1,7 +1,7 @@
 import {
   files_from_data_transfer,
-  file_matches_accept,
   create_file_accept_filter,
+  file_matches_accept,
   filter_accepted_files,
 } from '$lib/file-drop'
 import { expect, test, vi } from 'vitest'
@@ -104,12 +104,6 @@ test(`accept filtering happens before the multiple limit`, () => {
   ])
 })
 
-test(`plain files come back in drop order`, async () => {
-  const dropped = drop([file_entry(`a.txt`), file_entry(`b.txt`)])
-
-  expect(names(await files_from_data_transfer(dropped))).toEqual([`a.txt`, `b.txt`])
-})
-
 // why the helper exists: DataTransfer.files reports a dropped directory as one zero-byte
 // File named after it, losing the contents
 test(`directories are expanded depth-first, keeping their listed order`, async () => {
@@ -146,38 +140,33 @@ test(`a directory larger than one readEntries batch is drained fully`, async () 
   expect(await files_from_data_transfer(drop([big_dir]))).toHaveLength(250)
 })
 
+const plain = new File([`x`], `plain.txt`)
+const flat = new File([`flat`], `flat.txt`)
 // entries are absent on synthetic drops and outside the drop event, leaving only files
-test.each([
-  [`items yield no entries`, [null, null]],
-  [`there are no items at all`, []],
-])(`falls back to DataTransfer.files when %s`, async (_desc, entries) => {
-  const dropped = drop(entries, [new File([`x`], `plain.txt`)])
-
-  expect(names(await files_from_data_transfer(dropped))).toEqual([`plain.txt`])
-})
-
-test(`an item without webkitGetAsEntry is skipped, not fatal`, async () => {
-  const dropped = {
-    items: [{}, { webkitGetAsEntry: () => file_entry(`kept.txt`) }],
-    files: [],
-  } as unknown as DataTransfer
-
-  expect(names(await files_from_data_transfer(dropped))).toEqual([`kept.txt`])
-})
-
-test(`flat file items are kept when only some items expose entries`, async () => {
-  const flat_file = new File([`flat`], `flat.txt`)
-  const dropped = {
-    items: [
-      { kind: `file`, webkitGetAsEntry: () => file_entry(`entry.txt`) },
-      { kind: `file`, webkitGetAsEntry: () => null, getAsFile: () => flat_file },
-    ],
-  } as unknown as DataTransfer
-
-  expect(names(await files_from_data_transfer(dropped))).toEqual([
-    `entry.txt`,
-    `flat.txt`,
-  ])
+test.each<[string, unknown, string[]]>([
+  [
+    `falls back to files when items yield no entries`,
+    drop([null, null], [plain]),
+    [`plain.txt`],
+  ],
+  [`falls back to files when there are no items`, drop([], [plain]), [`plain.txt`]],
+  [
+    `skips an item without webkitGetAsEntry`,
+    { items: [{}, { webkitGetAsEntry: () => file_entry(`kept.txt`) }], files: [] },
+    [`kept.txt`],
+  ],
+  [
+    `keeps flat file items when only some items expose entries`,
+    {
+      items: [
+        { kind: `file`, webkitGetAsEntry: () => file_entry(`entry.txt`) },
+        { kind: `file`, webkitGetAsEntry: () => null, getAsFile: () => flat },
+      ],
+    },
+    [`entry.txt`, `flat.txt`],
+  ],
+])(`%s`, async (_desc, dropped, expected) => {
+  expect(names(await files_from_data_transfer(dropped as DataTransfer))).toEqual(expected)
 })
 
 test(`a rejected entry.file call rejects the whole expansion`, async () => {

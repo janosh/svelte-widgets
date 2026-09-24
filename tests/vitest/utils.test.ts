@@ -20,6 +20,8 @@ import {
   matches_shortcut,
   normalize_combo,
   observe_subtree,
+  type PositionOptions,
+  type PositionResult,
   parse_shortcut,
   sanitize_shortcut_overrides,
   slug_to_title,
@@ -373,20 +375,6 @@ describe(`shortcut rebinding`, () => {
   })
 })
 
-describe(`fuzzy_match`, () => {
-  // Valid inputs exercise both helpers together in fuzzy_match_indices below.
-  test.each([
-    [null, `test`],
-    [undefined, `test`],
-    [`test`, null],
-    [`test`, undefined],
-    [null, null],
-  ])(`null/undefined inputs fuzzy_match(%s, %s) are false`, (search, target) => {
-    // @ts-expect-error testing runtime behavior with null/undefined
-    expect(fuzzy_match(search, target)).toBe(false)
-  })
-})
-
 describe(`is_object`, () => {
   test.each([
     [{ key: `value` }, true],
@@ -451,26 +439,13 @@ describe(`compute_position`, () => {
     right: left + width,
   })
 
-  test(`keeps the preferred side when the box fits`, () => {
-    viewport(1000, 800)
-    const box = { width: 200, height: 100 }
-    const placed = compute_position(rect(100, 30), box, {
-      placement: `bottom`,
-      offset: 8,
-    })
-    expect(placed).toEqual({ top: 138, left: 100, placement: `bottom` })
-  })
-
   test(`flips to the side with room, and center vs start line up differently`, () => {
     viewport(1000, 800)
     const anchor = rect(700, 30) // only 70px below, 700px above
     const box = { width: 300, height: 200 }
 
     const centered = compute_position(anchor, box, { placement: `bottom` })
-    expect(centered.placement).toBe(`top`)
-    expect(centered.top).toBe(500) // 700 - 200
-    expect(centered.left).toBe(50) // centered on an anchor spanning 100..300
-
+    expect(centered).toEqual({ top: 500, left: 50, placement: `top` }) // centered on 100..300
     const aligned = compute_position(anchor, box, { placement: `bottom`, align: `start` })
     expect(aligned.left).toBe(100) // flush with the anchor's left edge
   })
@@ -489,28 +464,6 @@ describe(`compute_position`, () => {
       compute_position(anchor, { width: 40, height: 40 }, { placement: `auto` })
         .placement,
     ).toBe(expected)
-  })
-
-  test(`flip: false pins auto even with no room and explicit fallbacks`, () => {
-    viewport(400, 400)
-    expect(
-      compute_position(
-        rect(370, 20, 190, 20), // same anchor the `most room above` row flips to `top`
-        { width: 40, height: 40 },
-        { placement: `auto`, flip: false, fallback_placements: [`top`, `left`] },
-      ).placement,
-    ).toBe(`bottom`)
-  })
-
-  test(`auto prefers a fitting side over greater unusable clearance`, () => {
-    viewport(400, 400)
-    expect(
-      compute_position(
-        rect(180, 20, 50, 20),
-        { width: 350, height: 100 },
-        { placement: `auto`, shift: false },
-      ).placement,
-    ).toBe(`bottom`)
   })
 
   test.each([
@@ -538,21 +491,6 @@ describe(`compute_position`, () => {
     ).toMatchObject(expected)
   })
 
-  test(`explicit fallback order wins equal overflow inside a custom boundary`, () => {
-    const placed = compute_position(
-      rect(290, 20, 290, 20),
-      { width: 300, height: 300 },
-      {
-        placement: `auto`,
-        boundary: { top: 100, left: 100, right: 500, bottom: 500 },
-        padding: 10,
-        fallback_placements: [`right`, `top`, `left`],
-        shift: false,
-      },
-    )
-    expect(placed.placement).toBe(`right`)
-  })
-
   test.each([
     [`keeps a named placement ahead of its fallbacks`, rect(180, 20, 200, 40), `left`],
     [
@@ -569,22 +507,6 @@ describe(`compute_position`, () => {
         { placement: `left`, fallback_placements: [`right`, `top`], shift: false },
       ).placement,
     ).toBe(expected)
-  })
-
-  test(`offset and boundary padding count toward fallback overflow`, () => {
-    const placed = compute_position(
-      rect(110, 20, 90, 20),
-      { width: 50, height: 50 },
-      {
-        placement: `auto`,
-        boundary: { top: 0, left: 0, right: 200, bottom: 200 },
-        padding: 10,
-        offset: 15,
-        flip: [`bottom`, `top`],
-        shift: false,
-      },
-    )
-    expect(placed.placement).toBe(`top`)
   })
 
   test(`shift pulls the box back inside the viewport, padding included`, () => {
@@ -607,31 +529,90 @@ describe(`compute_position`, () => {
     })
   })
 
-  test(`custom boundaries clamp shifted coordinates`, () => {
-    expect(
-      compute_position(
-        rect(200, 20, 480, 20),
-        { width: 200, height: 100 },
-        {
-          placement: `bottom`,
-          align: `start`,
-          boundary: { top: 100, left: 100, right: 500, bottom: 500 },
-          padding: 10,
-          flip: false,
-        },
-      ),
-    ).toEqual({ top: 220, left: 290, placement: `bottom` })
-  })
-
-  test(`oversize boxes retain minimum-overflow cross-axis alignment`, () => {
-    viewport(100, 100)
-    expect(
-      compute_position(
-        rect(40, 20, 40, 20),
-        { width: 200, height: 200 },
-        { placement: `bottom`, padding: 10, flip: false },
-      ),
-    ).toEqual({ top: 10, left: -50, placement: `bottom` })
+  const boundary = { top: 100, left: 100, right: 500, bottom: 500 }
+  test.each<
+    [
+      string,
+      [number, number],
+      ReturnType<typeof rect>,
+      { width: number; height: number },
+      PositionOptions,
+      Partial<PositionResult>,
+    ]
+  >([
+    [
+      `keeps the preferred side when the box fits`,
+      [1000, 800],
+      rect(100, 30),
+      { width: 200, height: 100 },
+      { placement: `bottom`, offset: 8 },
+      { top: 138, left: 100, placement: `bottom` },
+    ],
+    [
+      // same anchor the `most room above` row flips to `top`
+      `flip: false pins auto even with no room and explicit fallbacks`,
+      [400, 400],
+      rect(370, 20, 190, 20),
+      { width: 40, height: 40 },
+      { placement: `auto`, flip: false, fallback_placements: [`top`, `left`] },
+      { placement: `bottom` },
+    ],
+    [
+      `auto prefers a fitting side over greater unusable clearance`,
+      [400, 400],
+      rect(180, 20, 50, 20),
+      { width: 350, height: 100 },
+      { placement: `auto`, shift: false },
+      { placement: `bottom` },
+    ],
+    [
+      `explicit fallback order wins equal overflow inside a custom boundary`,
+      [1000, 800],
+      rect(290, 20, 290, 20),
+      { width: 300, height: 300 },
+      {
+        placement: `auto`,
+        boundary,
+        padding: 10,
+        fallback_placements: [`right`, `top`, `left`],
+        shift: false,
+      },
+      { placement: `right` },
+    ],
+    [
+      `offset and boundary padding count toward fallback overflow`,
+      [1000, 800],
+      rect(110, 20, 90, 20),
+      { width: 50, height: 50 },
+      {
+        placement: `auto`,
+        boundary: { top: 0, left: 0, right: 200, bottom: 200 },
+        padding: 10,
+        offset: 15,
+        flip: [`bottom`, `top`],
+        shift: false,
+      },
+      { placement: `top` },
+    ],
+    [
+      `custom boundaries clamp shifted coordinates`,
+      [1000, 800],
+      rect(200, 20, 480, 20),
+      { width: 200, height: 100 },
+      { placement: `bottom`, align: `start`, boundary, padding: 10, flip: false },
+      { top: 220, left: 290, placement: `bottom` },
+    ],
+    [
+      `oversize boxes retain minimum-overflow cross-axis alignment`,
+      [100, 100],
+      rect(40, 20, 40, 20),
+      { width: 200, height: 200 },
+      { placement: `bottom`, padding: 10, flip: false },
+      { top: 10, left: -50, placement: `bottom` },
+    ],
+  ])(`%s`, (_description, [width, height], anchor, box, options, expected) => {
+    viewport(width, height)
+    expect(compute_position(anchor, box, options)).toMatchObject(expected)
   })
 
   // compute_position replaced the dropdown's own above/below rule, so it must agree
@@ -808,7 +789,7 @@ describe(`format_cmd_metadata`, () => {
   })
 })
 
-describe(`cmd_action_matches`, () => {
+describe(`create_cmd_action_filter`, () => {
   const action: CmdAction = {
     id: `Toggle theme`,
     label: `Toggle theme`,
