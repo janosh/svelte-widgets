@@ -14,6 +14,7 @@ describe(`ButtonGroup`, () => {
   const mounted: Record<string, unknown>[] = []
   afterEach(() => {
     for (const app of mounted.splice(0)) void unmount(app)
+    vi.useRealTimers()
   })
 
   const mount_group = (props: Props) => {
@@ -144,6 +145,14 @@ describe(`ButtonGroup`, () => {
     await tick()
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
     expect(on_change.mock.calls).toEqual([[[`alpha`]], [[`alpha`, `gamma`]], [[`gamma`]]])
+
+    // unlike radios, arrow keys move focus without selecting
+    buttons[0].focus()
+    press(`ArrowRight`)
+    await tick()
+    expect(document.activeElement).toBe(buttons[1])
+    expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
+    expect(on_change).toHaveBeenCalledTimes(3)
   })
 
   test(`arrow keys move focus and the selection with it, wrapping both ends`, async () => {
@@ -166,27 +175,7 @@ describe(`ButtonGroup`, () => {
       expect(document.activeElement, key).toBe(buttons[expected_idx])
       expect(checked_state(buttons[expected_idx]), key).toBe(`true`)
     }
-    expect(on_change.mock.calls.flat()).toEqual([
-      `beta`,
-      `gamma`,
-      `alpha`,
-      `gamma`,
-      `beta`,
-      `alpha`,
-      `gamma`,
-    ])
-  })
-
-  test(`arrow keys in multi select move focus without selecting`, async () => {
-    const on_change = vi.fn()
-    const buttons = mount_group({ options: letters, mode: `multiple`, on_change })
-    buttons[0].focus()
-
-    press(`ArrowRight`)
-    await tick()
-    expect(document.activeElement).toBe(buttons[1])
-    expect(buttons.map(checked_state)).toEqual([`false`, `false`, `false`])
-    expect(on_change).not.toHaveBeenCalled() // toggling is the click's job, covered above
+    expect(on_change.mock.calls.flat()).toEqual(walk.map(([, idx]) => letters[idx].value))
   })
 
   test.each([
@@ -275,10 +264,12 @@ describe(`ButtonGroup`, () => {
       type: `submit` as const,
       onclick,
     }
+    // labels merge key by key: only the descending wording is overridden
     mount_group({
       options: letters,
       sort_order: `asc`,
       sort_button_props,
+      labels: { sort_descending: `Absteigend sortiert` },
     })
 
     const arrow = doc_query<HTMLButtonElement>(`.sort-order`)
@@ -288,7 +279,7 @@ describe(`ButtonGroup`, () => {
       arrow.getAttribute(`aria-label`),
     ]
     const ascending = `Sorted ascending, activate to sort descending`
-    const descending = `Sorted descending, activate to sort ascending`
+    const descending = `Absteigend sortiert`
     expect(arrow_state()).toEqual([`↑`, ascending])
     expect(arrow.hasAttribute(`aria-pressed`)).toBe(false)
     // it sits outside the radiogroup, which may only own radios
@@ -358,21 +349,17 @@ describe(`ButtonGroup`, () => {
 
   test(`per-option tooltips always render plain text`, async () => {
     vi.useFakeTimers()
-    try {
-      const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
-      const buttons = mount_group({ options })
-      await tick()
+    const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
+    const buttons = mount_group({ options })
+    await tick()
 
-      dispatch_hover(buttons[1])
-      vi.runAllTimers()
-      expect(document.querySelector(`.tooltip-content`)).toBeNull()
+    dispatch_hover(buttons[1])
+    vi.runAllTimers()
+    expect(document.querySelector(`.tooltip-content`)).toBeNull()
 
-      dispatch_hover(buttons[0])
-      vi.runAllTimers()
-      expect(doc_query(`.tooltip-content`).innerHTML).toBe(`&lt;b&gt;bold&lt;/b&gt;`)
-    } finally {
-      vi.useRealTimers()
-    }
+    dispatch_hover(buttons[0])
+    vi.runAllTimers()
+    expect(doc_query(`.tooltip-content`).innerHTML).toBe(`&lt;b&gt;bold&lt;/b&gt;`)
   })
 
   // Phrasing content requires both wrappers to avoid block elements.
@@ -386,85 +373,64 @@ describe(`ButtonGroup`, () => {
     expect(doc_query(`.options`).tagName.toLowerCase()).toBe(`span`)
   })
 
-  // Font shorthand would override consumer weight/style through higher specificity.
-  test(`leaves font-weight and font-style to the consumer`, () => {
-    expect(styles).toMatch(/font-family:\s*var\(--btn-group-btn-font-family/u)
-    expect(styles).not.toMatch(/[^-]font:/u)
-    expect(styles).not.toMatch(/font-(?:weight|style):/u)
-  })
-
   // Suffix wrappers are opt-in to preserve consumers' direct-child selectors.
+  // the suffix is a sibling of the button and gets the same params as option
   test.each([
-    [`options`, `nothing is slotted`, undefined, 0],
-    [`option`, `a suffix is slotted`, info_link, 3],
+    [`options`, `nothing is slotted`, undefined, []],
+    [
+      `option`,
+      `a suffix is slotted`,
+      info_link,
+      [`/docs/alpha:false`, `/docs/beta:true`, `/docs/gamma:false`],
+    ],
   ] as const)(
     `the button's parent is .%s when %s`,
-    (parent, _desc, option_suffix, wraps) => {
+    (parent, _desc, option_suffix, links) => {
       const buttons = mount_group({ options: letters, value: `beta`, option_suffix })
 
-      expect(document.querySelectorAll(`.options > .option`)).toHaveLength(wraps)
+      expect(document.querySelectorAll(`.options > .option`)).toHaveLength(links.length)
       expect(buttons.map((btn) => btn.parentElement?.classList.contains(parent))).toEqual(
         Array(3).fill(true),
       )
       expect(buttons.map((btn) => btn.querySelector(`a`))).toEqual(Array(3).fill(null))
+      const suffix_links = [
+        ...document.querySelectorAll<HTMLAnchorElement>(`.option > a`),
+      ]
+      expect(
+        suffix_links.map((link) => `${link.getAttribute(`href`)}:${link.dataset.sel}`),
+      ).toEqual(links)
     },
   )
-
-  test(`option_suffix gets the same params as option, so it can react to selection`, () => {
-    mount_group({ options: letters, value: `beta`, option_suffix: info_link })
-
-    const links = [...document.querySelectorAll<HTMLAnchorElement>(`.option > a`)]
-    expect(
-      links.map((link) => `${link.getAttribute(`href`)}:${link.dataset.sel}`),
-    ).toEqual([`/docs/alpha:false`, `/docs/beta:true`, `/docs/gamma:false`])
-  })
 
   // A broad button selector would incorrectly include suffix buttons in navigation.
-  test.each([
-    [`a link`, info_link],
-    [`a button`, remove_button],
-  ])(
-    `the option wrapper holding %s leaves arrow key navigation intact`,
-    async (_label, option_suffix) => {
-      const on_change = vi.fn()
-      const buttons = mount_group({
-        options: letters,
-        value: `alpha`,
-        on_change,
-        option_suffix,
-      })
-      buttons[0].focus()
-
-      press(`ArrowRight`)
-      await tick()
-      expect(document.activeElement).toBe(buttons[1])
-      expect(buttons.map(checked_state)).toEqual([`false`, `true`, `false`])
-
-      press(`End`)
-      await tick()
-      expect(document.activeElement).toBe(buttons[2])
-      expect(on_change.mock.calls.flat()).toEqual([`beta`, `gamma`])
-    },
-  )
-
-  test(`labels reword the sort button, key by key`, async () => {
-    mount_group({
+  test(`suffix buttons stay out of arrow key navigation`, async () => {
+    const on_change = vi.fn()
+    const option_suffix = remove_button
+    const buttons = mount_group({
       options: letters,
-      sort_order: `asc`,
-      labels: { sort_descending: `Absteigend sortiert` },
+      value: `alpha`,
+      on_change,
+      option_suffix,
     })
-    const arrow = doc_query<HTMLButtonElement>(`.sort-order`)
-    expect(arrow.getAttribute(`aria-label`)).toBe(
-      `Sorted ascending, activate to sort descending`,
-    )
+    buttons[0].focus()
 
-    arrow.click()
+    press(`ArrowRight`)
     await tick()
-    expect(arrow.getAttribute(`aria-label`)).toBe(`Absteigend sortiert`)
+    expect(document.activeElement).toBe(buttons[1])
+    expect(buttons.map(checked_state)).toEqual([`false`, `true`, `false`])
+
+    press(`End`)
+    await tick()
+    expect(document.activeElement).toBe(buttons[2])
+    expect(on_change.mock.calls.flat()).toEqual([`beta`, `gamma`])
   })
 
   // Pin the public CSS hooks to catch accidental removals or undocumented additions.
   test(`exposes exactly the documented custom properties`, () => {
+    // font shorthand would override consumer weight/style through higher specificity
+    expect(styles).toMatch(/font-family:\s*var\(--btn-group-btn-font-family/u)
+    expect(styles).not.toMatch(/[^-]font:/u)
+    expect(styles).not.toMatch(/font-(?:weight|style):/u)
     const matches = styles.matchAll(/var\(\s*--btn-group-(?<name>[\w-]+)/gu)
     const used = [...matches].map((match) => match.groups?.name ?? ``)
     expect([...new Set(used)].toSorted().join(` `)).toBe(

@@ -9,7 +9,7 @@ import { Check } from '$lib/icons'
 import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { doc_query, stub_prop } from './index'
+import { doc_query } from './index'
 
 describe(`slugify_heading`, () => {
   // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
@@ -85,16 +85,6 @@ describe(`heading_anchors attachment`, () => {
   const anchor_selector = `a[aria-hidden="true"]`
   const tick = () => new Promise((resolve) => void setTimeout(resolve, 0))
 
-  it.each([`h2`, `h6`])(`adds anchor as last child of %s`, (tag: string) => {
-    const container = create_container(`<${tag} id="test">T <span>x</span></${tag}>`)
-    heading_anchors()(container)
-    const anchor = container.querySelector(`${tag} ${anchor_selector}`)
-    expect(anchor).toBeInstanceOf(HTMLAnchorElement)
-    expect(anchor?.getAttribute(`href`)).toBe(`#test`)
-    // appended after existing children rather than prepended or replacing them
-    expect(container.querySelector(tag)?.lastElementChild).toBe(anchor)
-  })
-
   it(`keeps managed anchors unique and synced without rewriting consumer links`, async () => {
     const container = create_container(
       `<h1 id="title">Title${heading_anchor_html(`title`)}</h1><h2 id="one">One</h2><h3 id="two">Two</h3>` +
@@ -160,14 +150,6 @@ describe(`heading_anchors attachment`, () => {
     expect(container.querySelectorAll(anchor_selector)).toHaveLength(expected_ids.length)
   })
 
-  it(`skips headings with no usable text`, () => {
-    const container = create_container(`<h2></h2>`)
-    heading_anchors()(container)
-    const heading = doc_query(`h2`)
-    expect(heading.querySelector(`a`)).toBeNull()
-    expect(heading.id).toBe(``) // no id invented for text-less headings
-  })
-
   it(`adds anchors to dynamically inserted headings`, async () => {
     const container = create_container()
     heading_anchors()(container)
@@ -193,24 +175,13 @@ describe(`heading_anchors attachment`, () => {
     await tick()
     expect(before_cleanup.querySelector(anchor_selector)).not.toBeNull()
 
-    cleanup?.()
+    cleanup()
 
     const heading = document.createElement(`h2`)
     heading.id = `after`
     container.append(heading)
     await tick()
     expect(heading.querySelector(anchor_selector)).toBeNull()
-  })
-
-  it(`custom selector filters headings`, () => {
-    const container = create_container(
-      `<h2 id="plain">Plain</h2><h2 id="anchored" class="anchored">Anchored</h2>`,
-    )
-    heading_anchors({ selector: `h2.anchored` })(container)
-    expect(container.querySelector(`#plain ${anchor_selector}`)).toBeNull()
-    expect(container.querySelector(`#anchored ${anchor_selector}`)).toBeInstanceOf(
-      HTMLAnchorElement,
-    )
   })
 
   it(`icon_svg customizes icon, default has aria-label`, () => {
@@ -230,12 +201,6 @@ describe(`heading_anchors attachment`, () => {
     )
   })
 
-  it(`returns undefined in SSR (no document)`, () => {
-    const dummy = document.createElement(`div`)
-    onTestFinished(stub_prop(globalThis, `document`, undefined))
-    expect(heading_anchors()(dummy)).toBeUndefined()
-  })
-
   const deeply_nested = `<div><section><h2 id="deep">X</h2></section></div>`
   it.each<[string, string, string | undefined, string | null]>([
     // the default selector uses :scope, so it reaches direct children and grandchildren only
@@ -245,10 +210,20 @@ describe(`heading_anchors attachment`, () => {
     [`3rd-level via custom selector`, deeply_nested, `h2`, `#deep`],
     // an explicit id is used verbatim, even when the heading text is only whitespace
     [`whitespace text with id`, `<h2 id="spaces">   </h2>`, undefined, `#spaces`],
+    [`text-less heading without id`, `<h2></h2>`, undefined, null],
+    [`h6 with children`, `<h6 id="test">T <span>x</span></h6>`, undefined, `#test`],
+    [
+      `custom selector skipping other headings`,
+      `<h2 id="plain">Plain</h2><h2 id="anchored" class="anchored">Anchored</h2>`,
+      `h2.anchored`,
+      `#anchored`,
+    ],
   ])(`anchors a heading: %s`, (_desc, html, selector, expected_href) => {
     const container = create_container(html)
     heading_anchors({ selector })(container)
-    const href = container.querySelector(anchor_selector)?.getAttribute(`href`) ?? null
-    expect(href).toBe(expected_href)
+    const anchor = container.querySelector(anchor_selector)
+    expect(anchor?.getAttribute(`href`) ?? null).toBe(expected_href)
+    // appended after existing children rather than prepended or replacing them
+    if (anchor) expect(anchor.parentElement?.lastElementChild).toBe(anchor)
   })
 })

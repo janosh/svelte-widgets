@@ -40,11 +40,7 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
 
 // Mount once per owner and dispose with it. Also works without a ThemeToggle.
 export const watch_theme = (): (() => void) => {
-  if (
-    typeof document === `undefined` ||
-    typeof globalThis.addEventListener !== `function`
-  )
-    throw new TypeError(`watch_theme() is client-only`)
+  if (typeof document === `undefined`) throw new TypeError(`watch_theme() is client-only`)
   // Read a valid stored choice on every start, retaining in-memory choices if none is readable.
   apply_theme_mode(resolve_theme_mode(theme.mode))
   const color_scheme_query = matchMedia(`(prefers-color-scheme: dark)`)

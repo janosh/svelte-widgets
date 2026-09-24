@@ -5,6 +5,8 @@
     create_option_rows,
     type OptionGroupRow,
     group_options as group_list_options,
+    is_integer_at_least,
+    navigable_options as list_navigable,
     next_option_index,
     option_disabled as is_disabled,
     option_matches,
@@ -16,7 +18,6 @@
   import { flip } from 'svelte/animate'
   import { fromAction } from 'svelte/attachments'
   import type { FocusEventHandler } from 'svelte/elements'
-  import { SvelteSet } from 'svelte/reactivity'
   import {
     click_outside,
     highlight_matches as attach_highlight_matches,
@@ -26,7 +27,7 @@
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
-  import type { GroupedOptions, MultiSelectProps, SelectAllScope } from './types'
+  import type { MultiSelectProps, SelectAllScope } from './types'
   import * as utils from './utils'
   import Wiggle from './Wiggle.svelte'
 
@@ -183,12 +184,6 @@
   const invalid_config = (message: string): never => {
     throw new TypeError(`MultiSelect: ${message}`)
   }
-  const is_integer_at_least = (
-    candidate: unknown,
-    minimum: number,
-  ): candidate is number =>
-    typeof candidate === `number` && Number.isInteger(candidate) && candidate >= minimum
-
   const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
     if (`selected` in rest) invalid_config(`use value instead of selected`)
     if (max_select !== null && !is_integer_at_least(max_select, 1)) {
@@ -247,12 +242,6 @@
   const listbox_id = $derived(`${base_id}-listbox`)
   const input_display = $derived(selected_display === `input`)
   const multi_select = $derived(mode === `multiple`)
-
-  // used by the default filter_func and by group-name matching
-  const text_matches = (search: string, target: string): boolean =>
-    fuzzy
-      ? utils.fuzzy_match(search, target)
-      : target.toLowerCase().includes(search.toLowerCase())
 
   const effective_shortcuts = $derived({ clear_all: `mod+backspace`, ...shortcuts })
 
@@ -335,7 +324,7 @@
     (search_matches_groups &&
       Boolean(search) &&
       utils.has_group(opt) &&
-      text_matches(search, opt.group))
+      option_matches(opt.group, search, fuzzy))
 
   // `options` and `load_options` compose: local options are filtered client-side and lead
   // the list (no debounce, no request) while remote batches append behind them
@@ -388,8 +377,8 @@
   let selected_labels_set = $derived(new Set(selected_labels.map(norm_label)))
   const is_label_selected = (label: string): boolean =>
     selected_labels_set.has(norm_label(label))
-  const is_option_selected = (opt: Option, label: string | number): boolean =>
-    has_selected_option(opt) || (lower_dupes && is_label_selected(`${label}`))
+  const is_option_selected = (opt: Option): boolean =>
+    has_selected_option(opt) || (lower_dupes && is_label_selected(label_of(opt)))
 
   // identity check for bulk/range ops. Compares label too, since a custom `key` may
   // deliberately collapse distinct options onto one key.
@@ -425,12 +414,7 @@
       ungrouped: ungrouped_position,
     })
   let grouped_options = $derived(group_options(matching_options))
-  // Flatten groups for navigation (excludes options in collapsed groups)
-  const flatten_navigable = (groups: GroupedOptions<Option>[]): Option[] =>
-    groups.flatMap(({ options: group_opts, collapsed }) =>
-      collapsed && collapsible_groups ? [] : group_opts,
-    )
-  let navigable_options = $derived(flatten_navigable(grouped_options))
+  let navigable_options = $derived(list_navigable(grouped_options, collapsible_groups))
 
   // keyboard nav must stop at max_options: past it aria-activedescendant would point at a
   // non-existent DOM id and Enter could select an option the user can't see
@@ -486,6 +470,10 @@
         )
       : null,
   )
+  // Pin rendered rows to item_height so spacer math matches the real layout.
+  const virtual_row_height = $derived(
+    virtual_window ? `${virtual_window.item_height}px` : undefined,
+  )
   // keys for the dropdown's keyed {#each}: key(opt) for unique options, so filtering keeps
   // DOM nodes stable, but repeats (options=['a', 'a']) would crash Svelte with
   // each_key_duplicate. Repeats get cached symbols — outside the user key namespace (a
@@ -513,37 +501,30 @@
   })
 
   // === Grouping ===
-  function toggle_group_collapsed(group_name: string) {
-    const was_collapsed = collapsed_groups.has(group_name)
-    const updated = new SvelteSet(collapsed_groups)
-    if (was_collapsed) updated.delete(group_name)
-    else updated.add(group_name)
+  // fires on_group_toggle once per group, unlike the bulk collapse_all/expand_all events
+  function set_groups_collapsed(groups: string[], collapsed: boolean) {
+    if (groups.length === 0) return
+    const updated = new Set(collapsed_groups)
+    for (const group of groups) {
+      if (collapsed) updated.add(group)
+      else updated.delete(group)
+    }
     collapsed_groups = updated
-    on_group_toggle?.({ group: group_name, collapsed: !was_collapsed })
+    for (const group of groups) on_group_toggle?.({ group, collapsed })
   }
 
   // exposed via bindable props
   collapse_all_groups = () => {
     const groups = grouped_options.flatMap(({ group }) => (group === null ? [] : [group]))
     if (groups.length === 0) return
-    collapsed_groups = new SvelteSet(groups)
+    collapsed_groups = new Set(groups)
     on_collapse_all?.({ groups })
   }
   expand_all_groups = () => {
     const groups = [...collapsed_groups]
     if (groups.length === 0) return
-    collapsed_groups = new SvelteSet()
+    collapsed_groups = new Set()
     on_expand_all?.({ groups })
-  }
-
-  function expand_groups(groups_to_expand: string[]) {
-    if (groups_to_expand.length === 0) return
-    const updated = new SvelteSet(collapsed_groups)
-    for (const group of groups_to_expand) updated.delete(group)
-    collapsed_groups = updated
-    for (const group of groups_to_expand) {
-      on_group_toggle?.({ group, collapsed: false })
-    }
   }
 
   const get_collapsed_with_matches = () =>
@@ -564,7 +545,7 @@
       search &&
       search_changed
     ) {
-      untrack(() => expand_groups(get_collapsed_with_matches()))
+      untrack(() => set_groups_collapsed(get_collapsed_with_matches(), false))
     }
   })
 
@@ -608,20 +589,20 @@
       : effective_options.filter((opt) => matches_search(opt, effective_filter_text)),
   )
 
+  // Only read the selection when it filters rows, so toggling options in keep-selected mode
+  // doesn't rebuild every group and row.
   $effect.pre(() => {
-    matching_options = searched_options.filter(
-      (opt) =>
-        !selected_keys_set.has(key(opt)) ||
-        Boolean(duplicates) ||
-        keep_selected_in_dropdown ||
-        input_text_is_committed,
-    )
+    const keep_selected =
+      Boolean(duplicates) || Boolean(keep_selected_in_dropdown) || input_text_is_committed
+    matching_options = keep_selected
+      ? [...searched_options]
+      : searched_options.filter((opt) => !selected_keys_set.has(key(opt)))
   })
 
   // Range selection includes a selected anchor that has left matching_options, while
   // preserving the grouped/sorted order and collapsed-group visibility of the dropdown.
   const range_navigable_options = $derived(
-    flatten_navigable(group_options(searched_options)),
+    list_navigable(group_options(searched_options), collapsible_groups),
   )
 
   // plain (non-reactive) trackers: the effect below compares against the previous run
@@ -683,11 +664,8 @@
     // only while open: a collapsed combobox with an active option would select it on
     // Enter instead of reopening, and point aria-activedescendant at a hidden row
     if (auto_active_first_option && open && should_auto_activate) {
-      const first_enabled_idx = rendered_options.findIndex(
-        (candidate) => !is_disabled(candidate),
-      )
-      active_index = first_enabled_idx === -1 ? null : first_enabled_idx
-      if (first_enabled_idx !== -1) is_user_message_active = false
+      active_index = next_option_index(rendered_options, null, 1)
+      if (active_index !== null) is_user_message_active = false
     }
     active_option = is_user_message_active
       ? null
@@ -735,12 +713,11 @@
 
   function get_option_view(option_item: Option) {
     const {
-      label,
       disabled: option_disabled = null,
       title = null,
       selected_title = null,
       disabled_title = default_disabled_title,
-    } = utils.is_object(option_item) ? option_item : { label: option_item }
+    } = utils.is_object(option_item) ? option_item : {}
     return {
       disabled: option_disabled,
       title,
@@ -748,7 +725,7 @@
       disabled_title,
       // `active` deliberately stays out of this object: it's the only field tracking
       // `active_index`, and bundling it re-rendered every row on each arrow key
-      selected: is_option_selected(option_item, label),
+      selected: is_option_selected(option_item),
       style: merge_styles(option_item, `option`, li_option_style),
     }
   }
@@ -890,16 +867,7 @@
           ? is_same_option(opt, option_to_drop)
           : key(opt) === key(option_to_drop),
       )
-    let option_removed = selected[idx]
-
-    if (option_removed === undefined && allow_user_options) {
-      // not found but allow_user_options is on, so assume the user created it and rebuild an
-      // option object for the event payload
-      const is_object_option = typeof effective_options[0] === `object`
-      option_removed = (
-        is_object_option ? { label: option_to_drop } : option_to_drop
-      ) as Option
-    }
+    const option_removed = selected[idx]
     if (option_removed === undefined) {
       throw new Error(
         `MultiSelect: cannot remove option ${JSON.stringify(option_to_drop)} because it is not selected`,
@@ -1059,7 +1027,7 @@
       collapsible_groups &&
       collapsed_groups.size > 0
     ) {
-      expand_groups(get_collapsed_with_matches())
+      set_groups_collapsed(get_collapsed_with_matches(), false)
       await tick()
     }
 
@@ -1084,15 +1052,15 @@
       : (navigable_options[active_index] ?? null)
 
     if (auto_scroll) {
-      await tick()
       if (
         virtual_window &&
         options_list_el &&
         active_index !== null &&
         !is_user_message_active
       ) {
-        // the active li may not be rendered in virtual mode, so scroll by row offset rather
-        // than scrollIntoView, clamped to [row_bottom - viewport, row_top]
+        // the active li may not be rendered in virtual mode, so first scroll by row offset
+        // (clamped to [row_bottom - viewport, row_top]) to mount it. Leading rows like
+        // select-all sit outside that math, so scrollIntoView below corrects the offset.
         const { item_height } = virtual_window
         const row_top = (option_row_indices[active_index] ?? active_index) * item_height
         const next_scroll_top = Math.min(
@@ -1104,8 +1072,9 @@
           // scrollTop assignment doesn't fire scroll events in happy-dom, sync state directly
           options_scroll_top = next_scroll_top
         }
-      } else
-        options_list_el?.querySelector(`li.active`)?.scrollIntoView({ block: `nearest` })
+      }
+      await tick()
+      options_list_el?.querySelector(`li.active`)?.scrollIntoView({ block: `nearest` })
     }
 
     // keyboard navigation only, not mouse hover
@@ -1212,13 +1181,10 @@
             selected.length === 0 ? null : Math.min(prev_highlighted, selected.length - 1)
         }
       }
-    }  // any other keypress while open activates the first matching option
-    else if (open && navigable_options.length > 0 && active_index === null) {
+    } else if (open && navigable_options.length > 0 && active_index === null) {
+      // any other keypress while open activates the first matching option
       // no stopPropagation/preventDefault here, normal character input must go through
-      const first_enabled_idx = rendered_options.findIndex(
-        (candidate) => !is_disabled(candidate),
-      )
-      active_index = first_enabled_idx === -1 ? null : first_enabled_idx
+      active_index = next_option_index(rendered_options, null, 1)
     }
   }
 
@@ -1366,6 +1332,8 @@
       }
       if (removed.length === 0) return
       set_selection(kept)
+      clear_validity()
+      announce(msg.options_removed(removed.length))
       on_remove_all?.({ options: removed })
       on_change?.({ options: selected, type: `remove_all` })
       return
@@ -1881,9 +1849,7 @@
     >
       {#if select_all_option && effective_options.length > 0 && multi_select}
         {@const max_reached = max_select !== null && selected.length >= max_select}
-        {@const all_selectable_selected = select_all_candidates.every((opt) =>
-          is_option_selected(opt, utils.get_label(opt)),
-        )}
+        {@const all_selectable_selected = select_all_candidates.every(is_option_selected)}
         {@const all_selected =
           max_reached || matching_scope_unavailable || all_selectable_selected}
         {@const disabled_title = get_select_all_disabled_title(
@@ -1933,6 +1899,8 @@
           aria-posinset={flat_idx + 1}
           aria-setsize={visible_navigable_count}
           style={view.style}
+          style:height={virtual_row_height}
+          style:box-sizing={virtual_row_height && `border-box`}
           onkeydown={if_enter_or_space((event) =>
             handle_option_interact(option_item, event, flat_idx),
           )}
@@ -1974,7 +1942,8 @@
         {@const handle_toggle = (event: Event) => {
           // the collapse button sits inside the header, whose own click also toggles
           event.stopPropagation()
-          if (collapsible_groups) toggle_group_collapsed(group_name)
+          if (collapsible_groups)
+            set_groups_collapsed([group_name], !collapsed_groups.has(group_name))
         }}
         {@const handle_group_select = (event: Event) =>
           toggle_group_selection(selectable, all_selected, event)}
@@ -1988,6 +1957,8 @@
           class:sticky={sticky_group_headers}
           role="presentation"
           style={li_group_header_style}
+          style:height={virtual_row_height}
+          style:box-sizing={virtual_row_height && `border-box`}
           onclick={handle_toggle}
         >
           <!-- a hidden span rather than the <li> itself, so screen readers get the group

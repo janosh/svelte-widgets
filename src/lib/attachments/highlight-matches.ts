@@ -1,5 +1,5 @@
 import type { TextMutationOptions, TextSearchNodeFilter } from '../text-search'
-import { create_burst_debounce, sync_owned_highlight } from '../text-search'
+import { create_burst_debounce, search_text, sync_owned_highlight } from '../text-search'
 import { fuzzy_match_indices } from '../utils'
 
 export type HighlightOptions = {
@@ -10,16 +10,16 @@ export type HighlightOptions = {
   css_class?: string
   duration_ms?: number
   scroll_to_match?: false | ScrollIntoViewOptions
+  // Runs after every highlight pass, also without the CSS Highlight API; a returned
+  // function runs before the next pass and on cleanup
   on_highlight?: (context: { node: HTMLElement; ranges: Range[] }) => unknown
-  // Re-run on subtree changes, so consumers need no observer of their own. `true` re-runs
-  // on the mutation microtask, `false` freezes at what the DOM held on attach. An object
-  // coalesces bursts (`debounce_ms` after the last mutation, at most `max_wait_ms` after
-  // the burst's first), so a stream of appended log lines still refreshes steadily.
+  // Re-run on subtree changes: `true` on the mutation microtask, `false` freezes what the
+  // DOM held on attach, and an object coalesces bursts (`debounce_ms` after the last
+  // mutation, at most `max_wait_ms` after the burst's first)
   observe_mutations?: boolean | TextMutationOptions
 }
 
-const HAS_NON_ASCII = /\P{ASCII}/u
-
+// Highlights query matches under node, by default re-running when its subtree changes.
 export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) => {
   const {
     query = ``,
@@ -33,97 +33,67 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     observe_mutations = true,
   } = ops
 
-  const search = query.trim().toLowerCase().replaceAll(/\s+/gu, ` `)
-  if (!search || disabled) return undefined // this instance owns no highlight
+  if (!query.trim() || disabled) return undefined // this instance owns no highlight
+  const fuzzy_search = query.trim().toLowerCase().replaceAll(/\s+/gu, ` `)
   // both halves of the CSS Custom Highlight API: a registry without the constructor would
   // throw in sync_owned_highlight
   const highlight_registry =
     typeof globalThis.Highlight === `function` ? globalThis.CSS?.highlights : undefined
   const highlight_owner = Symbol(css_class)
-  const substring_pattern = new RegExp(
-    search.replaceAll(/[.*+?^${}()|[\]\\]/gu, `\\$&`).replaceAll(` `, `\\s+`),
-    `gu`,
-  )
-  let is_attached = true
   let did_scroll = false
-  let effect_cleanup: (() => void) | undefined
-  let timeout: ReturnType<typeof setTimeout> | undefined
 
-  const find_ranges = (text_node: Node): Range[] => {
-    const original_text = text_node.textContent
-    if (!original_text) return []
-    const text = original_text.toLowerCase()
-
-    // Offsets are computed on lowercased text but applied to the original node, and
-    // lowercasing can grow chars (İ → i̇) while astral ones span two UTF-16 units. Map each
-    // lowered unit to its whole original code point so ranges never shift or split a char.
-    const node_length = original_text.length
-    let original_starts: number[] | null = null
-    let original_ends: number[] | null = null
-    // skip for ASCII, which is never astral nor length-changing when lowercased
-    const needs_offset_map =
-      HAS_NON_ASCII.test(original_text) &&
-      Array.from(original_text).some(
-        (char) => char.length > 1 || char.toLowerCase().length !== char.length,
-      )
-    if (needs_offset_map) {
-      original_starts = []
-      original_ends = []
-      let original_idx = 0
-      for (const character of original_text) {
-        const original_end = original_idx + character.length
-        const lowered_length = character.toLowerCase().length
-        original_starts.push(...Array<number>(lowered_length).fill(original_idx))
-        original_ends.push(...Array<number>(lowered_length).fill(original_end))
-        original_idx = original_end
-      }
+  // One range per matched code point: fuzzy_match_indices returns source UTF-16 offsets, so
+  // a low surrogate folds onto its pair and case-expanded chars (İ) collapse to one index
+  const fuzzy_ranges = (text_node: Text): Range[] => {
+    const text = text_node.data
+    const starts = new Set<number>()
+    for (const idx of fuzzy_match_indices(fuzzy_search, text) ?? []) {
+      const code_unit = text.charCodeAt(idx)
+      starts.add(code_unit >= 0xdc00 && code_unit <= 0xdfff ? idx - 1 : idx)
     }
-    const make_range = (start: number, end: number): Range[] => {
-      const original_start = original_starts
-        ? (original_starts[start] ?? node_length)
-        : start
-      const original_end = original_ends ? (original_ends[end - 1] ?? node_length) : end
-      if (original_start >= node_length) return []
+    return Array.from(starts, (start) => {
       const range = node.ownerDocument.createRange()
-      range.setStart(text_node, original_start)
-      range.setEnd(text_node, Math.min(original_end, node_length))
-      return [range]
-    }
+      range.setStart(text_node, start)
+      range.setEnd(text_node, start + ((text.codePointAt(start) ?? 0) > 0xffff ? 2 : 1))
+      return range
+    })
+  }
 
-    if (fuzzy) {
-      // null means not all characters matched, so highlight nothing
-      const matching_indices = fuzzy_match_indices(search, text)
-      const unique_ranges = new Map<string, Range>()
-      for (const index of matching_indices ?? []) {
-        const [range] = make_range(index, index + 1)
-        if (range) unique_ranges.set(`${range.startOffset}:${range.endOffset}`, range)
-      }
-      return [...unique_ranges.values()]
-    }
-    return [...text.matchAll(substring_pattern)].flatMap((match) =>
-      make_range(match.index, match.index + match[0].length),
+  // Substring matches share search_text with FindBar, so they span inline markup
+  // (`fo<b>o</b>`) and fold case, Unicode normalization and whitespace the same way
+  const find_ranges = (): Range[] => {
+    if (!fuzzy) return search_text(node, query, { node_filter }).map(({ range }) => range)
+    const tree_walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_TEXT, {
+      acceptNode: node_filter,
+    })
+    const ranges: Range[] = []
+    for (
+      let text_node = tree_walker.nextNode();
+      text_node;
+      text_node = tree_walker.nextNode()
     )
+      if (text_node instanceof Text) ranges.push(...fuzzy_ranges(text_node))
+    return ranges
+  }
+
+  let is_attached = true
+  let effect_cleanup: (() => void) | undefined
+  // detach the effect cleanup before running it, so a cleanup that throws or re-enters
+  // cleanup() never runs twice
+  const run_effect_cleanup = () => {
+    const previous = effect_cleanup
+    effect_cleanup = undefined
+    previous?.()
   }
 
   const update_highlight = () => {
     if (!is_attached) return
+    // on_highlight may write to the DOM; observing its own writes would loop
     observer.disconnect()
     try {
-      const previous_cleanup = effect_cleanup
-      effect_cleanup = undefined
-      previous_cleanup?.()
+      run_effect_cleanup()
       if (!is_attached) return
-      const tree_walker = node.ownerDocument.createTreeWalker(
-        node,
-        NodeFilter.SHOW_TEXT,
-        { acceptNode: node_filter },
-      )
-      const ranges: Range[] = []
-      let text_node = tree_walker.nextNode()
-      while (text_node) {
-        ranges.push(...find_ranges(text_node))
-        text_node = tree_walker.nextNode()
-      }
+      const ranges = find_ranges()
       if (highlight_registry)
         sync_owned_highlight(highlight_registry, css_class, highlight_owner, ranges)
       const first_match = ranges[0]?.startContainer.parentElement
@@ -131,11 +101,8 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
         did_scroll = true
         first_match.scrollIntoView(scroll_to_match)
       }
-      const next_effect_cleanup = on_highlight?.({ node, ranges })
-      effect_cleanup =
-        typeof next_effect_cleanup === `function`
-          ? () => next_effect_cleanup()
-          : undefined
+      const next_cleanup = on_highlight?.({ node, ranges })
+      if (typeof next_cleanup === `function`) effect_cleanup = () => next_cleanup()
     } finally {
       if (is_attached && observe_mutations !== false)
         observer.observe(node, { childList: true, subtree: true, characterData: true })
@@ -144,18 +111,16 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
 
   const debounce = typeof observe_mutations === `object` ? observe_mutations : undefined
   const { trigger, cancel } = create_burst_debounce(update_highlight, debounce)
-
   const observer = new MutationObserver(debounce ? trigger : update_highlight)
+  let timeout: ReturnType<typeof setTimeout> | undefined
   const cleanup = () => {
     if (!is_attached) return
     is_attached = false
-    if (timeout !== undefined) clearTimeout(timeout)
+    clearTimeout(timeout)
     cancel()
     observer.disconnect()
-    const final_effect_cleanup = effect_cleanup
-    effect_cleanup = undefined
     try {
-      final_effect_cleanup?.()
+      run_effect_cleanup()
     } finally {
       if (highlight_registry)
         sync_owned_highlight(highlight_registry, css_class, highlight_owner)
@@ -167,9 +132,7 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     cleanup()
     throw error
   }
-  if (duration_ms !== undefined && Number.isFinite(duration_ms) && duration_ms >= 0) {
+  if (duration_ms !== undefined && Number.isFinite(duration_ms) && duration_ms >= 0)
     timeout = setTimeout(cleanup, duration_ms)
-  }
-
   return cleanup
 }

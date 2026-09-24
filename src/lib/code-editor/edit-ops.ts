@@ -1,25 +1,20 @@
 import { clamp, clamp_integer } from '../utils'
-import type { EditorModel } from './types'
+import type { EditorModel, EditorSelection, TextEdit } from './types'
 
 export type EditorState = {
   model: EditorModel
   selection_start: number
   selection_end: number
 }
-export interface RangeEdit {
-  range_start: number
-  range_end: number
-  replacement: string
-  selection_start: number
-  selection_end: number
-}
+// One replacement plus the selection it leaves behind, in post-edit offsets.
+export type RangeEdit = TextEdit & EditorSelection
 const range_edit = (
-  range_start: number,
-  range_end: number,
-  replacement: string,
-  selection_start: number,
-  selection_end = selection_start,
-): RangeEdit => ({ range_start, range_end, replacement, selection_start, selection_end })
+  from: number,
+  to: number,
+  insert: string,
+  anchor: number,
+  head = anchor,
+): RangeEdit => ({ from, to, insert, anchor, head })
 type BlockCommand = (state: EditorState, unit: string) => RangeEdit | null
 const clamp_selection = (state: EditorState): [number, number] => {
   const limit = state.model.length

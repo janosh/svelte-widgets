@@ -468,7 +468,7 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    virtual_list: boolean | { item_height?: number; overscan?: number } = false
    ```
 
-   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `item_height` (px per row, default 30, also applies to group headers) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported, but combining them with `sticky_group_headers` throws a configuration error.
+   Virtualized dropdown rendering for large option lists: only rows near the scroll viewport are rendered as DOM nodes. Pass `true` for defaults or an object to tune `item_height` (px per row, default 30, also applies to group headers; rendered rows are pinned to this height) and `overscan` (extra rows rendered above/below the visible window, default 10). Grouped options are supported, but combining them with `sticky_group_headers` throws a configuration error.
 
 1. ```ts
    min_select: number | null = null

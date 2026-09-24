@@ -20,10 +20,8 @@ describe(`dismiss_on_outside_press`, () => {
   // count every press between them as inside
   it(`without a node, inside alone decides membership`, () => {
     const panel = create_element()
-    const [menu_a, menu_b] = [create_element(), create_element()]
-    const panel_filler = create_element()
-    for (const menu of [menu_a, menu_b]) menu.className = `header-menu-root`
-    panel.append(menu_a, panel_filler, menu_b)
+    panel.innerHTML = `<div class="header-menu-root"></div><div></div><div class="header-menu-root"></div>`
+    const [menu_a, panel_filler, menu_b] = panel.children
 
     // dismiss does not bubble, so this negative assertion requires capture.
     const document_listener = vi.fn()
@@ -58,7 +56,6 @@ describe(`dismiss_on_outside_press`, () => {
 
   it(`disabled registers no listener and returns a callable cleanup`, () => {
     const { callback, cleanup } = listen({ enabled: false })
-
     press(create_element())
     expect(callback).not.toHaveBeenCalled()
     expect(() => cleanup()).not.toThrow()

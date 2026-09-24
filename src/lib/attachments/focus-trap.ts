@@ -183,9 +183,11 @@ export const focus_trap =
       if (is_inside(active)) last_inside = active
     }
 
-    // Wait through the transient body focus between normal focus moves.
+    // A user-initiated move runs microtasks between focusout and focusin while focus sits on
+    // body, so a move landing inside must be recognized by relatedTarget, else the
+    // microtask would snap focus back and no click could move it within the trap.
     const on_focusout = (event: FocusEvent) => {
-      if (!is_inside(event.target)) return
+      if (!is_inside(event.target) || is_inside(event.relatedTarget)) return
       queueMicrotask(() => {
         if (trap_active && !holds_focus()) focus_into()
       })

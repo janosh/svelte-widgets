@@ -1,4 +1,5 @@
 import { create_highlighter, default_highlighter } from '$lib/highlight'
+import { render_block } from '$lib/highlight/create-highlighter'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { resolve as resolve_path } from 'node:path'
@@ -131,7 +132,20 @@ describe(`create_highlighter`, () => {
     expect((await default_highlighter.ready()).flagToScope(`typ`)).toBeUndefined()
     expect(await custom.highlight(`#let x = 1`, `typ`)).toBe(typst_html)
     expect(await custom.highlight(`#let x = 1`, `TYP`)).toBe(typst_html)
+    expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
+      `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
+    )
     expect(await custom.highlight(`\\emph{hi}`, `tex`)).toContain(`<span class="pl-`)
+  })
+
+  test(`render_block wraps a ready instance's output synchronously`, async () => {
+    const instance = await custom.ready()
+    expect(render_block(instance, `#let x = 1`, `TYP`)).toBe(
+      `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
+    )
+    expect(render_block(instance, `<a>{x}</a>`, `py`)).toBe(
+      `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
+    )
   })
 
   test(`registers only the grammars it was given and caches the instance`, async () => {
@@ -142,19 +156,6 @@ describe(`create_highlighter`, () => {
     for (const flag of [`py`, `ts`, `svelte`]) {
       expect(instance.flagToScope(flag)).toBeUndefined()
     }
-  })
-
-  test(`highlight_block wraps in the same markup as default_highlighter.highlight_block`, async () => {
-    expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
-      `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
-    )
-    // Unknown-language output must still be safe to embed in Svelte markup.
-    expect(await custom.highlight(`<a>{x}</a>`, `py`)).toBe(
-      `&lt;a&gt;&#123;x&#125;&lt;/a&gt;`,
-    )
-    expect(await custom.highlight_block(`<a>{x}</a>`, `py`)).toBe(
-      `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
-    )
   })
 })
 

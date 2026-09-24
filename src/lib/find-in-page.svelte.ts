@@ -97,10 +97,7 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
     release?.()
     release = highlight_ranges(
       next_occurrences.map((hit) => hit.range),
-      {
-        css_class: `find-match`,
-        disabled: !root,
-      },
+      { css_class: `find-match`, disabled: !root },
     )
   }
 

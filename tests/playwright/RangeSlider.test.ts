@@ -13,6 +13,15 @@ const tick_layout = (group: Locator) =>
       return { x, y, width, height }
     }),
   )
+const has_no_horizontal_overflow = (page: Page) =>
+  page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)
+// Chromium rounds native log positions by 1.75 machine eps; allow 4, keeping real values exact.
+const expect_log_position = async (range: Locator, value: number) => {
+  const position = await range.evaluate(
+    (element: HTMLInputElement) => element.valueAsNumber,
+  )
+  expect(Math.abs(position - Math.log10(value))).toBeLessThanOrEqual(4 * Number.EPSILON)
+}
 const drag_to = async (page: Page, thumb: Locator, destination: number) => {
   await thumb.scrollIntoViewIfNeeded()
   const box = await box_of(thumb)
@@ -122,13 +131,7 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   await number.fill(`2.5`)
   await number.press(`Enter`)
   await expect(range).toHaveAttribute(`aria-valuenow`, `2.5`)
-  // Chromium rounds this native position by 1.75 machine eps; allow 4, keeping real values exact.
-  expect(
-    Math.abs(
-      (await range.evaluate((element: HTMLInputElement) => element.valueAsNumber)) -
-        Math.log10(2.5),
-    ),
-  ).toBeLessThanOrEqual(4 * Number.EPSILON)
+  await expect_log_position(range, 2.5)
   await number.fill(`-1`)
   await number.press(`Enter`)
   await expect(number).toHaveValue(`2.5`)
@@ -144,12 +147,7 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   await expect(gain_number).toHaveValue(`10`)
   await gain_number.fill(`2.5`)
   await gain_number.press(`Enter`)
-  expect(
-    Math.abs(
-      (await gain_range.evaluate((element: HTMLInputElement) => element.valueAsNumber)) -
-        Math.log10(2.5),
-    ),
-  ).toBeLessThanOrEqual(4 * Number.EPSILON)
+  await expect_log_position(gain_range, 2.5)
   // The former native spinner hit area must not add 1 in logarithmic mode.
   const number_box = await box_of(gain_number)
   await gain_number.click({
@@ -279,9 +277,7 @@ for (const viewport_width of [390, 1280]) {
       await expect(lower).toHaveAttribute(`aria-valuenow`, `100`)
       await check_ticks(direction)
     }
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    ).toBe(true)
+    expect(await has_no_horizontal_overflow(page)).toBe(true)
     await page.getByLabel(`Place ticks at the sides`).uncheck()
     expect((await box_of(group.locator(`.rail`))).width).toBe(below_rail.width)
   })
@@ -342,11 +338,12 @@ test(`disabled controls cannot change values and are skipped by Tab`, async ({
   await page.keyboard.press(`Tab`)
   await expect(page.getByLabel(`Lock this range`)).toBeFocused()
   const rail = await box_of(group.locator(`.rail`))
+  const lower = group.getByRole(`slider`).nth(0)
   await page.mouse.click(rail.x + rail.width / 2, rail.y + rail.height / 2)
-  await expect(group.getByRole(`slider`).nth(0)).toHaveAttribute(`aria-valuenow`, `120`)
+  await expect(lower).toHaveAttribute(`aria-valuenow`, `120`)
   await page.getByLabel(`Lock this range`).uncheck()
-  await group.getByRole(`slider`).nth(0).press(`ArrowRight`)
-  await expect(group.getByRole(`slider`).nth(0)).toHaveAttribute(`aria-valuenow`, `130`)
+  await lower.press(`ArrowRight`)
+  await expect(lower).toHaveAttribute(`aria-valuenow`, `130`)
 })
 
 test.describe(`mobile`, () => {
@@ -375,9 +372,7 @@ test.describe(`mobile`, () => {
     })
     await session.send(`Input.dispatchTouchEvent`, { type: `touchEnd`, touchPoints: [] })
     await expect(lower).toHaveAttribute(`aria-valuenow`, `200`)
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    ).toBe(true)
+    expect(await has_no_horizontal_overflow(page)).toBe(true)
   })
 })
 
@@ -424,13 +419,14 @@ test(`native forms accept off-grid endpoints and reset the complete interval`, a
   const form = page.locator(`.showcase > form`)
   const upper = group.getByRole(`slider`).nth(1)
   const input = group.getByRole(`spinbutton`).nth(1)
+  const reset = () => form.evaluate((element) => (element as HTMLFormElement).reset())
   expect(
     await form.evaluate((element) => (element as HTMLFormElement).checkValidity()),
   ).toBe(true)
   await upper.press(`ArrowLeft`)
   await expect(upper).toHaveAttribute(`aria-valuenow`, `9`)
   await input.fill(`4`)
-  await form.evaluate((element) => (element as HTMLFormElement).reset())
+  await reset()
   await expect(input).toHaveValue(`10`)
   await expect(upper).toHaveAttribute(`aria-valuenow`, `10`)
   await form.evaluate((element) =>
@@ -440,7 +436,7 @@ test(`native forms accept off-grid endpoints and reset the complete interval`, a
     }),
   )
   await input.fill(`4`)
-  await form.evaluate((element) => (element as HTMLFormElement).reset())
+  await reset()
   await expect(input).toHaveValue(`4`)
 })
 

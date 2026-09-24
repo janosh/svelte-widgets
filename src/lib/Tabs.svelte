@@ -95,7 +95,6 @@
         id={tab_id(item)}
         aria-controls={panel_id(item)}
         aria-selected={selected}
-        aria-disabled={item.disabled || undefined}
         disabled={item.disabled}
         tabindex={focused ? 0 : -1}
         data-value={item.value}

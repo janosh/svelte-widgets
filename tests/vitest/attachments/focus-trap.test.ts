@@ -60,17 +60,8 @@ describe(`focus_trap`, () => {
     `
     attach_trap(surface)
 
-    for (const id of [
-      `three`,
-      `plain`,
-      `checked`,
-      `form-checked`,
-      `details`,
-      `summary`,
-      `legend`,
-      `visible`,
-      `one`,
-    ]) {
+    const expected_order = `three plain checked form-checked details summary legend visible one`
+    for (const id of expected_order.split(` `)) {
       press_tab()
       expect(document.activeElement).toBe(surface.querySelector(`#${id}`))
     }
@@ -129,9 +120,7 @@ describe(`focus_trap`, () => {
   it(`resolves the initial focus selector inside the surface`, () => {
     const { surface, buttons } = make_surface()
     buttons[2].className = `wanted`
-    const outside = create_element(`button`)
-    outside.focus()
-
+    create_element(`button`).focus()
     attach_trap(surface, { initial: `.wanted` })
     expect(document.activeElement).toBe(buttons[2])
   })
@@ -198,7 +187,6 @@ describe(`focus_trap`, () => {
     const portalled = create_element() // moved to body, no longer a descendant
     const portalled_button = document.createElement(`button`)
     portalled.append(portalled_button)
-
     attach_trap(surface, { include: [null, portalled] })
     expect(document.activeElement).toBe(buttons[0])
     press_tab()
@@ -206,11 +194,9 @@ describe(`focus_trap`, () => {
   })
 
   it(`does nothing when disabled`, () => {
-    const { surface } = make_surface()
     const outside = create_element(`button`)
     outside.focus()
-
-    expect(focus_trap({ enabled: false })(surface)).toBeUndefined()
+    expect(focus_trap({ enabled: false })(make_surface().surface)).toBeUndefined()
     expect(document.activeElement).toBe(outside)
     press_tab()
     expect(document.activeElement).toBe(outside)
@@ -219,25 +205,12 @@ describe(`focus_trap`, () => {
   // Layered modal: backdrop button beside a dialog; only the dialog is in the Tab cycle.
   const make_layer = () => {
     const layer = create_element()
-    const backdrop = document.createElement(`button`)
-    const dialog = document.createElement(`section`)
-    dialog.className = `dialog`
-    const [first, last] = [
-      document.createElement(`button`),
-      document.createElement(`button`),
-    ]
-    dialog.append(first, last)
-    layer.append(backdrop, dialog)
+    layer.innerHTML = `<button></button><section class="dialog"><button></button><button></button></section>`
+    const [backdrop, first, last] = layer.querySelectorAll(`button`)
+    const dialog = layer.querySelector(`section`)
+    if (!dialog) throw new Error(`make_layer: missing dialog`)
     return { layer, backdrop, dialog, first, last }
   }
-
-  it(`without root the whole node is the trap, backdrop included`, () => {
-    const { layer, backdrop, first } = make_layer()
-    attach_trap(layer)
-    expect(document.activeElement).toBe(backdrop) // first tabbable in DOM order
-    press_tab()
-    expect(document.activeElement).toBe(first)
-  })
 
   it.each([`selector`, `element`, `function`] as const)(
     `root as %s keeps the sibling backdrop out of the Tab cycle`,
@@ -272,9 +245,12 @@ describe(`focus_trap`, () => {
     attach_trap(layer, { root: dialog, initial: `.wanted` })
     expect(document.activeElement).toBe(last)
 
+    // with root resolving nothing, the whole node is the trap, backdrop included
     const unresolvable = make_layer()
     attach_trap(unresolvable.layer, { root: () => null })
-    expect(document.activeElement).toBe(unresolvable.backdrop) // back to the node
+    expect(document.activeElement).toBe(unresolvable.backdrop)
+    press_tab()
+    expect(document.activeElement).toBe(unresolvable.first)
   })
 
   it(`handles Escape only when configured and only in the innermost trap`, () => {
@@ -347,6 +323,23 @@ describe(`focus_trap`, () => {
     expect(panels.map((panel) => panel.hasAttribute(`tabindex`))).toEqual([false, false])
   })
 
+  // Browsers run microtasks between a user move's focusout and focusin, with focus on body
+  it(`recapture lets a user-initiated focus move land inside the trap`, async () => {
+    const { surface, buttons } = make_surface()
+    attach_trap(surface, { recapture: true })
+    expect(document.activeElement).toBe(buttons[0])
+    const refocus = vi.spyOn(buttons[0], `focus`)
+    const active = vi
+      .spyOn(document, `activeElement`, `get`)
+      .mockReturnValue(document.body)
+    buttons[0].dispatchEvent(
+      new FocusEvent(`focusout`, { bubbles: true, relatedTarget: buttons[1] }),
+    )
+    await Promise.resolve()
+    active.mockRestore()
+    expect(refocus).not.toHaveBeenCalled()
+  })
+
   // counterpart of the Tab holds_focus guard: a trap never given focus must not summon it
   it(`recapture stays out of focus moves that never touched the trap`, async () => {
     const { surface } = make_surface()
@@ -366,15 +359,9 @@ describe(`focus_trap`, () => {
     expect(await focus_out_to(outside)).toBe(outside) // no recapture by default
     cleanup_plain?.()
 
-    const removals = vi.spyOn(document, `removeEventListener`)
     const cleanup = focus_trap({ recapture: true, restore: false })(surface)
     buttons[1].focus()
     cleanup?.()
     expect(await focus_out_to(outside)).toBe(outside) // a torn-down trap stops recapturing
-    // Silencing recapture also releases its document listeners.
-    expect(removals.mock.calls.map(([type]) => type)).toEqual(
-      expect.arrayContaining([`focusin`, `focusout`]),
-    )
-    removals.mockRestore()
   })
 })

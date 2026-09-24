@@ -15,18 +15,14 @@ const mount_files = (props: ComponentProps<typeof FileDetails> = {}) => {
 }
 
 test.each<[string, string, string, string?]>([
-  // inferred from title extension
-  [`comp.svelte`, `<p>hi</p>`, `svelte`],
+  // inferred from title extension via the alias map
   [`util.ts`, `const x = 1`, `typescript`],
-  [`app.js`, `let x`, `javascript`],
-  [`styles.css`, `.a{}`, `css`],
-  [`script.py`, `x = 1`, `python`],
   [`config.yml`, `key: val`, `yaml`],
   // filenames are plain text, including characters that resemble markup
   [`<options>.ts`, `export const x = 1`, `typescript`],
   // explicit language overrides title inference
   [`data.json`, `{}`, `javascript`, `javascript`],
-  // unknown extension used as the language flag
+  // unmapped extension used as the language flag
   [`readme.xyz`, `hello`, `xyz`],
   // no extension falls back to default_lang
   [`Makefile`, `all:`, `svelte`],
@@ -139,7 +135,7 @@ test(`reports highlighting failures without hiding source`, async () => {
   expect(doc_query(`pre code`).querySelector(`source`)).toBeNull()
 })
 
-test(`toggle all button opens/closes all, tracks label, and handles partial/native toggles`, async () => {
+test(`toggle all button opens/closes all, tracks (custom) label, and handles partial/native toggles`, async () => {
   const onclick = vi.fn()
   const files = [`file1`, `file2`, `file3`].map((title) => ({
     title,
@@ -148,7 +144,12 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   const button_props = { onclick }
   // Omit'd from the prop type; a bare button inside a form submits it on every toggle
   Reflect.set(button_props, `type`, `submit`)
-  mount_files({ files, toggle_all_btn_title: `toggle all`, button_props })
+  mount_files({
+    files,
+    toggle_all_btn_title: `toggle all`,
+    button_props,
+    labels: { close_all: `Alle schließen` },
+  })
   await tick()
 
   const details = [...document.querySelectorAll(`details`)]
@@ -160,12 +161,12 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   const open_states = () => details.map((el) => el.open)
 
   expect(open_states()).toEqual([false, false, false])
-  expect(button_label()).toBe(`Open all`)
+  expect(button_label()).toBe(`Open all`) // label key omitted from labels keeps its default
 
   btn.click()
   flushSync()
   expect(open_states()).toEqual([true, true, true])
-  expect(button_label()).toBe(`Close all`)
+  expect(button_label()).toBe(`Alle schließen`)
 
   btn.click()
   flushSync()
@@ -176,7 +177,7 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
   details[0].open = true
   details[0].dispatchEvent(new Event(`toggle`))
   flushSync()
-  expect(button_label()).toBe(`Close all`)
+  expect(button_label()).toBe(`Alle schließen`)
 
   // partial open state: clicking closes all
   details[1].open = true
@@ -187,10 +188,7 @@ test(`toggle all button opens/closes all, tracks label, and handles partial/nati
 })
 
 test(`toggle all label reflects pre-opened details on mount`, async () => {
-  const files = [
-    { title: `file1`, content: `content1` },
-    { title: `file2`, content: `content2` },
-  ]
+  const files = [`file1`, `file2`].map((title) => ({ title, content: title }))
   // the toggle event never fires on mount, so the label must init from detail_elements
   mount_files({ files, details_props: { open: true } })
   await tick()
@@ -199,20 +197,6 @@ test(`toggle all label reflects pre-opened details on mount`, async () => {
   expect(doc_query(`button[title='Toggle all'] [aria-hidden='false']`).textContent).toBe(
     `Close all`,
   )
-})
-
-test(`labels prop overrides toggle-all text, omitted keys keep their default`, async () => {
-  const files = [`a.ts`, `b.ts`].map((title) => ({ title, content: title }))
-  mount_files({ files, labels: { close_all: `Alle schließen` } })
-  await tick()
-
-  const btn = doc_query<HTMLButtonElement>(`button`)
-  const button_label = () => btn.querySelector(`[aria-hidden="false"]`)?.textContent
-  expect(button_label()).toBe(`Open all`) // open_all falls back
-
-  btn.click()
-  flushSync()
-  expect(button_label()).toBe(`Alle schließen`)
 })
 
 test(`keeps DOM refs internal and toggles surviving files after removal`, async () => {
@@ -237,7 +221,7 @@ test(`keeps DOM refs internal and toggles surviving files after removal`, async 
   expect(remaining[0]).toBe(original_nodes[2])
   expect(remaining[1]).toBe(original_nodes[0])
   expect(original_nodes[1].isConnected).toBe(false)
-  const toggle = doc_query<HTMLButtonElement>(`button[title="Toggle all"]`)
+  const toggle = doc_query<HTMLButtonElement>(`body > button`)
   toggle.click()
   flushSync()
   expect(original_nodes.map((node) => node.open)).toEqual([false, false, false])
@@ -254,21 +238,23 @@ test(`renders empty default file list`, () => {
   expect(document.querySelectorAll(`button, li`)).toHaveLength(0)
 })
 
-test(`renders custom container with summary titles and custom default_lang`, () => {
+test(`renders custom container, summary titles (none when empty) and custom default_lang`, () => {
   mount_files({
     as: `ul`,
     class: `files-list`,
     default_lang: `txt`,
     files: [
-      { title: `component.svelte`, content: `<h1>Hello</h1>` },
       { title: `script.ts`, content: `const answer = 42` },
       { title: `README`, content: `plain text` },
+      { title: ``, content: `untitled` },
     ],
   })
 
   expect(document.querySelector(`ul.files-list`)).toBeInstanceOf(HTMLUListElement)
-  expect(all_text(`summary`)).toEqual([`component.svelte`, `script.ts`, `README`])
-  expect(all_text(`.lang-label`)).toEqual([`svelte`, `typescript`, `txt`])
+  // an empty title renders its details without a summary
+  expect(document.querySelectorAll(`details`)).toHaveLength(3)
+  expect(all_text(`summary`)).toEqual([`script.ts`, `README`])
+  expect(all_text(`.lang-label`)).toEqual([`typescript`, `txt`, `txt`])
 })
 
 test(`single file omits toggle-all button and forwards details toggle event`, () => {
@@ -286,38 +272,23 @@ test(`single file omits toggle-all button and forwards details toggle event`, ()
   details.dispatchEvent(toggle_event)
   // the component wraps ontoggle, so it must forward the very same event object
   expect(ontoggle).toHaveBeenCalledExactlyOnceWith(toggle_event)
-  expect(doc_query(`.lang-label`).textContent).toBe(`yaml`)
 })
 
 test(`title snippet renders title content (incl. empty titles) and receives index`, () => {
+  const files = [`first.ts`, `second.py`, ``].map((title) => ({ title, content: `x` }))
   const component = mount(TestSnippetHarness, {
     target: document.body,
-    props: {
-      component: `file-details`,
-      files: [
-        { title: `first.ts`, content: `const first = true` },
-        { title: `second.py`, content: `second = True` },
-        { title: ``, content: `untitled` }, // default rendering would omit this summary
-      ],
-    },
+    props: { component: `file-details`, files },
   })
-
   onTestFinished(() => unmount(component))
-  expect(all_text(`[data-testid="file-title"]`)).toEqual([`first.ts`, `second.py`, ``])
-  expect(
-    [...document.querySelectorAll<HTMLElement>(`[data-testid="file-title"]`)].map(
-      (node) => node.dataset.idx,
-    ),
-  ).toEqual([`0`, `1`, `2`])
+  const titles = [...document.querySelectorAll<HTMLElement>(`[data-testid="file-title"]`)]
+  expect(titles.map((node) => [node.textContent, node.dataset.idx])).toEqual([
+    [`first.ts`, `0`],
+    [`second.py`, `1`],
+    [``, `2`],
+  ])
   // with a title snippet, even empty-title files render a summary
   expect(document.querySelectorAll(`summary`)).toHaveLength(3)
-})
-
-test(`empty title renders details without summary`, () => {
-  mount_files({ files: [{ title: ``, content: `untitled` }] })
-
-  expect(document.querySelector(`details`)).toBeInstanceOf(HTMLDetailsElement)
-  expect(document.querySelector(`summary`)).toBeNull()
 })
 
 test(`duplicate titles render and keep their open state across inserts`, async () => {

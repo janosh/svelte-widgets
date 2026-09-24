@@ -49,24 +49,18 @@ test(`re-copying a key restarts its timer without touching the others`, async ()
   expect([...copied]).toEqual([])
 })
 
-test(`a failed write throws when no on_error handler is given`, async () => {
+test(`a failed write throws unless on_error takes it, and flags nothing either way`, async () => {
   const failure = new Error(`clipboard blocked`)
   write_text.mockRejectedValue(failure)
-  const { copied, copy } = create_clipboard_feedback()
+  const unhandled = create_clipboard_feedback()
+  await expect(unhandled.copy(`x`, `key`)).rejects.toThrow(failure) // never silently swallowed
+  expect([...unhandled.copied]).toEqual([])
 
-  await expect(copy(`x`, `key`)).rejects.toThrow(failure) // never silently swallowed
-  expect([...copied]).toEqual([]) // and nothing is flagged as copied
-})
-
-test(`on_error takes over the failure and copy reports false`, async () => {
-  const failure = new Error(`clipboard blocked`)
-  write_text.mockRejectedValue(failure)
   const on_error = vi.fn()
-  const { copied, copy } = create_clipboard_feedback(1000, on_error)
-
-  expect(await copy(`x`, `key`)).toBe(false)
+  const handled = create_clipboard_feedback(1000, on_error)
+  expect(await handled.copy(`x`, `key`)).toBe(false)
   expect(on_error).toHaveBeenCalledWith(failure, `x`)
-  expect([...copied]).toEqual([])
+  expect([...handled.copied]).toEqual([])
 })
 
 test(`clear drops one key or all of them, canceling their timers`, async () => {

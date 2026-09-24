@@ -18,6 +18,7 @@ export interface HighlightClientOptions {
   backend: EditorBackend
   on_spans?: (event: HighlightSpansEvent) => void
   on_error?: (message: string) => void
+  // Debounce for viewport requests, so scrolling sends one highlight call per pause.
   highlight_interval_ms?: number
 }
 interface QueuedTask {
@@ -25,11 +26,15 @@ interface QueuedTask {
   run: () => Promise<void>
   abort?: (error: Error) => void
 }
-const DEFAULT_HIGHLIGHT_INTERVAL_MS = 30
 export const create_highlight_client = (options: HighlightClientOptions) => {
-  const { backend, doc_id, model, on_spans, on_error } = options
-  const highlight_interval_ms =
-    options.highlight_interval_ms ?? DEFAULT_HIGHLIGHT_INTERVAL_MS
+  const {
+    backend,
+    doc_id,
+    model,
+    on_spans,
+    on_error,
+    highlight_interval_ms = 30,
+  } = options
   let disposed = false
   let queue: QueuedTask[] = []
   let queue_head = 0

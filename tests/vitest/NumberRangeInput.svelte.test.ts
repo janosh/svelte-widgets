@@ -7,7 +7,7 @@ import {
   unmount,
   type ComponentProps,
 } from 'svelte'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import { doc_query, hover, press_key } from './index'
 
 const label_snippet = createRawSnippet(() => ({
@@ -30,6 +30,16 @@ const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
   if (!number || !range) throw new Error(`NumberRangeInput did not render both inputs`)
   return { target, inputs, number, range }
 }
+// Optionally set a field's text, then dispatch bubbling events and flush.
+const fire = async (
+  input: HTMLInputElement,
+  text: string | undefined,
+  ...events: string[]
+) => {
+  if (text !== undefined) input.value = text
+  for (const type of events) input.dispatchEvent(new Event(type, { bubbles: true }))
+  await tick()
+}
 
 describe(`NumberRangeInput`, () => {
   test(`shows the description only while hovering the label text`, async () => {
@@ -38,22 +48,21 @@ describe(`NumberRangeInput`, () => {
       target: document.body,
       props: { ...named_props, children: label_snippet },
     })
-    await tick()
-    try {
-      for (const input of document.querySelectorAll(`input`)) {
-        hover(input)
-        await vi.advanceTimersByTimeAsync(150)
-        expect(document.querySelector(`.custom-tooltip`)).toBeNull()
-      }
-      hover(doc_query(`label > span`))
-      await vi.advanceTimersByTimeAsync(150)
-      expect(document.querySelector(`.custom-tooltip`)?.textContent).toBe(
-        `Adjust the radius`,
-      )
-    } finally {
+    onTestFinished(async () => {
       await unmount(component)
       vi.useRealTimers()
+    })
+    await tick()
+    for (const input of document.querySelectorAll(`input`)) {
+      hover(input)
+      await vi.advanceTimersByTimeAsync(150)
+      expect(document.querySelector(`.custom-tooltip`)).toBeNull()
     }
+    hover(doc_query(`label > span`))
+    await vi.advanceTimersByTimeAsync(150)
+    expect(document.querySelector(`.custom-tooltip`)?.textContent).toBe(
+      `Adjust the radius`,
+    )
   })
 
   test(`renders number before range and two-way binds both to one value`, async () => {
@@ -63,19 +72,14 @@ describe(`NumberRangeInput`, () => {
     expect(
       number.compareDocumentPosition(range) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeGreaterThan(0)
-    expect(range.getAttribute(`aria-label`)).toBe(`vol`)
     expect(number.valueAsNumber).toBe(0.5)
     expect(range.valueAsNumber).toBe(0.5)
 
-    number.value = `0.8`
-    number.dispatchEvent(new Event(`input`, { bubbles: true }))
-    await tick()
+    await fire(number, `0.8`, `input`)
     expect(props.value).toBe(0.8)
     expect(range.valueAsNumber).toBe(0.8)
 
-    range.value = `0.3`
-    range.dispatchEvent(new Event(`input`, { bubbles: true }))
-    await tick()
+    await fire(range, `0.3`, `input`)
     expect(props.value).toBe(0.3)
     expect(number.valueAsNumber).toBe(0.3)
   })
@@ -100,20 +104,18 @@ describe(`NumberRangeInput`, () => {
   test.each([0.25, `any`] as const)(
     `forwards explicit bounds and setting metadata with step=%s`,
     (step_size) => {
-      const { target, inputs, range } = mount_range({
+      const { target, inputs } = mount_range({
         value: 0.5,
         min: 0.25,
         max: 1.25,
         step: step_size,
         'data-key': `radius`,
-        label: `radius`,
       })
       expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
       expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
         { min: `0.25`, max: `1.25`, step: String(step_size) },
         { min: `0.25`, max: `1.25`, step: String(step_size) },
       ])
-      expect(range.getAttribute(`aria-label`)).toBe(`radius`)
     },
   )
 
@@ -167,22 +169,16 @@ describe(`logarithmic NumberRangeInput`, () => {
           range.getAttribute(attr),
         ),
       ).toEqual([`0.001`, `1000`, `1`])
-      range.value = `2`
-      range.dispatchEvent(new Event(`input`, { bubbles: true }))
-      await tick()
+      await fire(range, `2`, `input`)
       expect(props.value).toBe(commit === `input` ? 100 : 1)
       expect(range.getAttribute(`aria-valuenow`)).toBe(`100`)
-      range.dispatchEvent(new Event(`change`, { bubbles: true }))
-      await tick()
+      await fire(range, undefined, `change`)
       expect(number.valueAsNumber).toBe(100)
       expect(on_commit).toHaveBeenCalledExactlyOnceWith(100)
 
-      number.value = `2.5`
-      number.dispatchEvent(new Event(`input`, { bubbles: true }))
-      await tick()
+      await fire(number, `2.5`, `input`)
       expect(props.value).toBe(commit === `input` ? 2.5 : 100)
-      number.dispatchEvent(new Event(`change`, { bubbles: true }))
-      await tick()
+      await fire(number, undefined, `change`)
       expect(props.value).toBe(2.5)
       expect(range.valueAsNumber).toBe(Math.log10(2.5))
       expect(number.checkValidity()).toBe(true)
@@ -220,13 +216,10 @@ describe(`logarithmic NumberRangeInput`, () => {
       props.value = 2.5
       await tick()
       expect(range.valueAsNumber).toBe(Math.log10(2.5))
-      range.value = `0.43`
-      range.dispatchEvent(new Event(`input`, { bubbles: true }))
-      await tick()
+      await fire(range, `0.43`, `input`)
       expect(range.valueAsNumber).toBe(Math.log10(10 ** coordinate))
       expect(props.value).toBe(commit === `input` ? 10 ** coordinate : 2.5)
-      range.dispatchEvent(new Event(`change`, { bubbles: true }))
-      await tick()
+      await fire(range, undefined, `change`)
       expect([number.valueAsNumber, props.value]).toEqual([
         10 ** coordinate,
         10 ** coordinate,
@@ -258,10 +251,7 @@ describe(`logarithmic NumberRangeInput`, () => {
   test.each([`0`, `-1`, `0.0001`, `1001`])(`rejects typed value %s`, async (text) => {
     const on_commit = vi.fn()
     const { number } = mount_range({ ...log_props, on_commit })
-    number.value = text
-    number.dispatchEvent(new Event(`input`, { bubbles: true }))
-    number.dispatchEvent(new Event(`change`, { bubbles: true }))
-    await tick()
+    await fire(number, text, `input`, `change`)
     expect(number.valueAsNumber).toBe(1)
     expect(on_commit).not.toHaveBeenCalled()
   })
@@ -351,9 +341,7 @@ describe(`logarithmic NumberRangeInput`, () => {
       empty: `undefined` as const,
     })
     const { number, range } = mount_range(props)
-    number.value = ``
-    number.dispatchEvent(new Event(`change`, { bubbles: true }))
-    await tick()
+    await fire(number, ``, `change`)
     expect(props.value).toBeUndefined()
     expect(range.valueAsNumber).toBe(-3)
     press_key(range, `ArrowRight`)
@@ -379,13 +367,10 @@ test.each([
     on_commit: (value: number | undefined) => updates.push(value),
   })
   const { number, range } = mount_range(props)
-  number.value = draft
-  number.dispatchEvent(new Event(`input`, { bubbles: true }))
-  await tick()
+  await fire(number, draft, `input`)
   expect(props.value).toBe(expected)
   expect(range.valueAsNumber).toBe(expected ?? named_props.min)
-  number.dispatchEvent(new Event(`change`, { bubbles: true }))
-  await tick()
+  await fire(number, undefined, `change`)
   const final = commit === `change` ? 0.8 : expected
   expect(props.value).toBe(final)
   expect(number.value).toBe(final === undefined ? `` : String(final))

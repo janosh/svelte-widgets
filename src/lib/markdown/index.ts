@@ -7,6 +7,7 @@ import {
   type Token,
   type Tokens,
   type TokenizerAndRendererExtension,
+  type TokenizerStartFunction,
 } from 'marked'
 import type { KatexOptions } from 'katex'
 
@@ -158,6 +159,16 @@ const smart_quotes = (text: string): string =>
     .replaceAll(`"`, `”`)
     .replaceAll(/(?<space>^|[\s([{])'/gu, `$1‘`)
     .replaceAll(`'`, `’`)
+
+// Marked cuts each top-level paragraph at the earliest block `start` index, calling every
+// hook on the whole rest of the document once per paragraph. No paragraph spans an empty
+// line, so later matches cannot change the cut; bounding the search there keeps lexing
+// linear in document length instead of quadratic.
+const bounded_start = (start: TokenizerStartFunction): TokenizerStartFunction =>
+  function (text) {
+    const empty_line = text.indexOf(`\n\n`)
+    return start.call(this, empty_line === -1 ? text : text.slice(0, empty_line + 1))
+  }
 
 function serialize_metadata(value: unknown): Record<string, unknown> {
   if (value === null || typeof value !== `object` || Array.isArray(value))
@@ -371,7 +382,11 @@ async function prepare_document(
   const heading_icon = icon_svg && syntax ? `{@html ${script_json(icon_svg)}}` : icon_svg
   const parser = new Marked({
     gfm: true,
-    extensions,
+    extensions: extensions.map((extension) =>
+      `start` in extension && extension.level === `block` && extension.start
+        ? { ...extension, start: bounded_start(extension.start) }
+        : extension,
+    ),
     renderer: {
       heading(token) {
         const id = heading_ids.get(token)
@@ -435,7 +450,7 @@ async function prepare_document(
       (_match, index: string) => retained[Number(index)].code,
     )
   const tokens = parser.lexer(body)
-  references?.resolve(tokens, parser)
+  references?.resolve(tokens)
   const manifest = content_manifest(
     source,
     body,

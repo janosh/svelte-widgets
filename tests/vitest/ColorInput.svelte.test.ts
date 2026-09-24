@@ -1,26 +1,17 @@
-import type ColorInput from '$lib/ColorInput.svelte'
+import { ColorInput } from '$lib'
 import { mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import ColorInputHarness from './ColorInputHarness.svelte'
+import { press_key } from './index'
 
 const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
-  const { value: initial_value = `#336699`, on_commit: handle_commit, ...rest } = options
-  const on_commit = vi.fn(handle_commit)
+  const props = $state({
+    value: `#336699`,
+    ...options,
+    on_commit: vi.fn(options.on_commit),
+  })
   const target = document.createElement(`form`)
   document.body.append(target)
-  const component = mount(ColorInputHarness, {
-    target,
-    props: { ...rest, initial_value, on_commit },
-  })
-  const props = {
-    get value() {
-      return component.read_value()
-    },
-    set value(next: string) {
-      component.write_value(next)
-    },
-    on_commit,
-  }
+  const component = mount(ColorInput, { target, props })
   onTestFinished(() => unmount(component))
   const input = (type: string): HTMLInputElement => {
     const element = target.querySelector<HTMLInputElement>(`input[type="${type}"]`)
@@ -34,9 +25,7 @@ const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
     await tick()
   }
   const press = async (type: string, key: string) => {
-    const event = new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
-    input(type).dispatchEvent(event)
-    expect(event.defaultPrevented).toBe(true)
+    expect(press_key(input(type), key).defaultPrevented).toBe(true)
     await tick()
   }
   return { props, target, input, change, press }

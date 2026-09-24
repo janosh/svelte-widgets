@@ -234,12 +234,14 @@ describe(`logarithmic RangeSlider`, () => {
     expect(on_commit.mock.calls).toEqual([[[10, 100]], [[100, 100]]])
   })
   test.each([
-    [0, 100],
-    [-1, 100],
-    [1, Infinity],
-    [1e20, 1e20 + 16384],
-  ])(`rejects invalid logarithmic domain [%s, %s]`, (min, max) => {
-    expect(() => setup({ min, max, scale: `log` })).toThrow(`Logarithmic range needs`)
+    [0, 100, 1, `Logarithmic range needs`],
+    [-1, 100, 1, `Logarithmic range needs`],
+    [1, Infinity, 1, `Logarithmic range needs`],
+    [1e20, 1e20 + 16384, 1, `Logarithmic range needs`],
+    // exponent step too small to move a subnormal endpoint
+    [Number.MIN_VALUE, 1, 0.1, `logarithmic step must change a representable value`],
+  ])(`rejects invalid logarithmic domain [%s, %s] at step %s`, (min, max, step, msg) => {
+    expect(() => setup({ min, max, step, scale: `log` })).toThrow(msg)
   })
   test.each([-1, 1])(
     `log grid traversal never stalls in direction %s`,
@@ -286,11 +288,6 @@ describe(`logarithmic RangeSlider`, () => {
     }
     expect(on_commit).toHaveBeenCalledTimes(10)
   })
-  test(`rejects exponent steps that cannot move a subnormal real endpoint`, () => {
-    expect(() =>
-      setup({ min: Number.MIN_VALUE, max: 1, step: 0.1, scale: `log` }),
-    ).toThrow(`logarithmic step must change a representable value`)
-  })
 })
 
 describe(`RangeSlider`, () => {
@@ -323,9 +320,16 @@ describe(`RangeSlider`, () => {
       )
     },
   )
-  test.each([`keyboard`, `number`, `pointer`])(
+  test.each<[string, (controls: ReturnType<typeof setup>) => unknown]>([
+    [`keyboard`, ({ thumbs }) => press_key(thumbs[0], `ArrowUp`)],
+    [`number`, ({ inputs }) => edit(inputs[0], `40`)],
+    [
+      `pointer`,
+      ({ pointer }) => [`pointerdown`, `pointerup`].map((type) => pointer(type, 40)),
+    ],
+  ])(
     `synchronous external resets inside on_input do not commit (%s)`,
-    async (mode) => {
+    async (_mode, interact) => {
       const on_commit = vi.fn()
       const props = $state<Props>({
         value: [20, 80],
@@ -334,14 +338,10 @@ describe(`RangeSlider`, () => {
           props.value = [25, 75]
         },
       })
-      const { thumbs, inputs, pointer } = setup(props)
-      if (mode === `keyboard`) press_key(thumbs[0], `ArrowUp`)
-      else if (mode === `number`) await edit(inputs[0], `40`)
-      else {
-        pointer(`pointerdown`, 40)
-        pointer(`pointerup`, 40)
-      }
+      const controls = setup(props)
+      await interact(controls)
       await tick()
+      const { thumbs } = controls
       expect(announced(thumbs)).toEqual([25, 75])
       expect(on_commit).not.toHaveBeenCalled()
     },
@@ -405,19 +405,6 @@ describe(`RangeSlider`, () => {
     form.append(rail.closest(`.range-slider`) as HTMLElement)
     expect(inputs.every((input) => input.checkValidity())).toBe(true)
     expect(form.checkValidity()).toBe(true)
-  })
-  test.each([
-    [`43`, `ArrowUp`, 45],
-    [`43`, `ArrowDown`, 40],
-    [`40`, `ArrowUp`, 45],
-    [``, `ArrowUp`, 25],
-  ])(`numeric draft %s then %s becomes %s`, async (draft, key, expected) => {
-    const { inputs, thumbs } = setup({ value: [20, 80], step: 5 })
-    await edit(inputs[0], draft, false)
-    press_key(inputs[0], key)
-    await tick()
-    expect(announced(thumbs)).toEqual([expected, 80])
-    expect(inputs[0].valueAsNumber).toBe(expected)
   })
   test.each([false, true])(
     `an external reset during a drag does not commit (moved=%s)`,
@@ -556,22 +543,30 @@ describe(`RangeSlider`, () => {
     expect(announced(thumbs)).toEqual([21, 90])
   })
   test.each([
-    [`43`, 45],
-    [`-100`, 0],
-    [`100`, 80],
-    [``, 20],
-    [`not a number`, 20],
-  ])(`numeric draft %s commits as %s and never crosses`, async (draft, expected) => {
-    const on_commit = vi.fn()
-    const { inputs, thumbs } = setup({ value: [20, 80], step: 5, on_commit })
-    await edit(inputs[0], draft, false)
-    expect(announced(thumbs)).toEqual([20, 80])
-    inputs[0].dispatchEvent(new Event(`blur`))
-    await tick()
-    expect(announced(thumbs)).toEqual([expected, 80])
-    expect(inputs[0].valueAsNumber).toBe(expected)
-    expect(on_commit).toHaveBeenCalledTimes(expected === 20 ? 0 : 1)
-  })
+    [`43`, `blur`, 45],
+    [`-100`, `blur`, 0],
+    [`100`, `blur`, 80],
+    [``, `blur`, 20],
+    [`not a number`, `blur`, 20],
+    [`43`, `ArrowUp`, 45],
+    [`43`, `ArrowDown`, 40],
+    [`40`, `ArrowUp`, 45],
+    [``, `ArrowUp`, 25],
+  ])(
+    `numeric draft %j on %s settles at %s without crossing`,
+    async (draft, action, expected) => {
+      const on_commit = vi.fn()
+      const { inputs, thumbs } = setup({ value: [20, 80], step: 5, on_commit })
+      await edit(inputs[0], draft, false)
+      expect(announced(thumbs)).toEqual([20, 80])
+      if (action === `blur`) inputs[0].dispatchEvent(new Event(`blur`))
+      else press_key(inputs[0], action)
+      await tick()
+      expect(announced(thumbs)).toEqual([expected, 80])
+      expect(inputs[0].valueAsNumber).toBe(expected)
+      expect(on_commit).toHaveBeenCalledTimes(expected === 20 ? 0 : 1)
+    },
+  )
   test(`Enter commits once, Escape discards, and numeric arrows use the configured step`, async () => {
     const props = $state<Props>({
       min: 0,
@@ -619,39 +614,41 @@ describe(`RangeSlider`, () => {
       expect(rail.closest(`.range-slider`)?.classList.contains(`dragging`)).toBe(false)
     },
   )
-  test.each([
+  test.each<[number, RangeValue, RangeValue?]>([
     [30, [30, 80]],
     [70, [20, 70]],
     [0, [0, 80]],
     [100, [20, 100]],
-  ] as const)(`track press at %s selects nearest thumb`, async (position, expected) => {
-    const { thumbs, pointer } = setup({ value: [20, 80] })
-    pointer(`pointerdown`, position)
-    pointer(`pointerup`, position)
+    // coincident thumbs: the press side picks the thumb, else its neighbor clamps it
+    [70, [50, 70], [50, 50]],
+    [30, [30, 50], [50, 50]],
+    [60, [0, 60], [0, 0]],
+    [40, [40, 100], [100, 100]],
+  ])(
+    `track press at %s selects nearest thumb`,
+    async (position, expected, value = [20, 80]) => {
+      const { thumbs, pointer } = setup({ value: [...value] })
+      pointer(`pointerdown`, position)
+      pointer(`pointerup`, position)
+      await tick()
+      expect(announced(thumbs)).toEqual(expected)
+      const moved = expected[0] === value[0] ? 1 : 0
+      expect(document.activeElement).toBe(thumbs[moved])
+    },
+  )
+  test.each<[string, RangeValue, number, number, RangeValue]>([
+    [`coincident handles separate down`, [50, 50], 50, 30, [30, 50]],
+    [`coincident handles separate up`, [50, 50], 50, 70, [50, 70]],
+    [`grabbing a thumb edge keeps its offset`, [20, 80], 25, 35, [30, 80]],
+  ])(`%s`, async (_name, value, grab, release, expected) => {
+    const { thumbs, pointer } = setup({ value })
+    pointer(`pointerdown`, grab, thumbs[0])
+    await tick()
+    expect(announced(thumbs)).toEqual(value)
+    pointer(`pointermove`, release)
+    pointer(`pointerup`, release)
     await tick()
     expect(announced(thumbs)).toEqual(expected)
-    expect(document.activeElement).toBe(thumbs[position <= 50 ? 0 : 1])
-  })
-  test.each([
-    [30, [30, 50]],
-    [70, [50, 70]],
-  ] as const)(`coincident handles can separate toward %s`, async (position, expected) => {
-    const { thumbs, pointer } = setup({ value: [50, 50] })
-    pointer(`pointerdown`, 50, thumbs[0])
-    pointer(`pointermove`, position)
-    pointer(`pointerup`, position)
-    await tick()
-    expect(announced(thumbs)).toEqual(expected)
-  })
-  test(`grabbing the edge of a thumb preserves its pointer offset`, async () => {
-    const { thumbs, pointer } = setup({ value: [20, 80] })
-    pointer(`pointerdown`, 25, thumbs[0])
-    await tick()
-    expect(announced(thumbs)).toEqual([20, 80])
-    pointer(`pointermove`, 35)
-    pointer(`pointerup`, 35)
-    await tick()
-    expect(announced(thumbs)).toEqual([30, 80])
   })
   test(`ignores other pointers and non-primary buttons, no-op gestures do not commit`, async () => {
     const on_commit = vi.fn()

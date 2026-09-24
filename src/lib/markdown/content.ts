@@ -122,16 +122,25 @@ function locate(
         offsets.push(parent.offsets[idx])
       offset = start + text.length
     }
-    // Marked replaces each list tab with four spaces and removes escaped table separators.
-    // Keep a source index for every transformed character, including expanded spaces.
+    // Marked replaces each tab in a list line's indentation with four spaces and removes
+    // escaped table separators. Keep a source index for every transformed character,
+    // including expanded spaces.
     if (start === -1) {
       if (!expanded) {
         expanded = { text: ``, offsets: [] }
+        const line_start = parent.text.lastIndexOf(`\n`, offset - 1) + 1
+        let indentation = /^[ \t]*$/u.test(parent.text.slice(line_start, offset))
         for (let idx = offset; idx < parent.text.length; idx++) {
           const char = parent.text[idx]
-          const replacement = char === `\t` ? `    ` : char
-          expanded.text += replacement
-          expanded.offsets.push(...Array<number>(replacement.length).fill(idx))
+          if (char === `\n`) indentation = true
+          else if (char !== ` ` && char !== `\t`) indentation = false
+          if (char === `\t` && indentation) {
+            expanded.text += `    `
+            expanded.offsets.push(idx, idx, idx, idx)
+          } else {
+            expanded.text += char
+            expanded.offsets.push(idx)
+          }
         }
       }
       let transformed = expanded

@@ -21,8 +21,9 @@ export function get_page_background(
   if (typeof document === `undefined`) return ``
   const page_bg = get_bg_color(document.body)
   if (page_bg) return page_bg
-  const prefers_dark = matchMedia(`(prefers-color-scheme: dark)`).matches
-  return prefers_dark ? fallback_dark : fallback_light
+  return matchMedia(`(prefers-color-scheme: dark)`).matches
+    ? fallback_dark
+    : fallback_light
 }
 
 // Two-way sync between a bindable `fullscreen` flag and the browser's fullscreen state,

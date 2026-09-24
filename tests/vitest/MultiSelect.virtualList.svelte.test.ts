@@ -81,6 +81,13 @@ describe(`virtual_list`, () => {
     expect(bottom_spacer.style.height).toBe(
       `${(n_options - initial_end) * item_height}px`,
     )
+    // rows are pinned to item_height, else real layout drifts from the spacer math
+    for (const row of get_rendered_options()) {
+      expect([row.style.height, row.style.boxSizing]).toEqual([
+        `${item_height}px`,
+        `border-box`,
+      ])
+    }
   })
 
   test(`scrolling the dropdown re-windows which options are rendered`, async () => {
@@ -135,7 +142,9 @@ describe(`virtual_list`, () => {
   })
 
   test(`arrow keys keep the active option rendered beyond the initial window`, async () => {
-    mount_multiselect(virtual_props)
+    // select-all is leading content outside the row math, so scrollIntoView must correct it
+    mount_multiselect({ ...virtual_props, select_all_option: true })
+    const scroll_into_view = vi.spyOn(HTMLElement.prototype, `scrollIntoView`)
 
     const input = get_input()
     const n_presses = 25 // active_index 24 lies past the initial window end of 19
@@ -150,6 +159,8 @@ describe(`virtual_list`, () => {
     )
     expect(get_rendered_options()[0]?.textContent?.trim()).not.toBe(`option 0`)
     expect(get_rendered_options().length).toBeLessThan(50)
+    expect(scroll_into_view.mock.contexts.at(-1)).toBe(doc_query(`ul.options li.active`))
+    scroll_into_view.mockRestore()
   })
 
   test(`fuzzy search filtering still works in virtual mode`, async () => {
@@ -190,7 +201,10 @@ describe(`virtual_list`, () => {
     ul_options.dispatchEvent(new Event(`scroll`))
     await tick()
 
-    const headers = [...document.querySelectorAll(`ul.options li.group-header`)]
+    const headers = [
+      ...document.querySelectorAll<HTMLElement>(`ul.options li.group-header`),
+    ]
+    expect(headers[0].style.height).toBe(`${item_height}px`)
     expect(headers.map((el) => el.querySelector(`.group-label`)?.textContent)).toEqual([
       `group 2`,
       `group 3`,

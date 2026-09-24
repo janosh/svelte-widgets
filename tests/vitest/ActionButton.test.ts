@@ -82,43 +82,32 @@ test(`blocks duplicate actions while pending and resets after success`, async ()
   expect(button.dataset.state).toBe(`ready`)
 })
 
-test.each([
-  [`click`, new MouseEvent(`click`, { bubbles: true, cancelable: true })],
-  [
-    `Enter`,
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true, cancelable: true }),
-  ],
-  [`Space`, new KeyboardEvent(`keydown`, { key: ` `, bubbles: true, cancelable: true })],
-] as const)(
-  `disabled custom elements suppress %s activation and consumer handlers`,
-  (_name, event) => {
-    const action = vi.fn()
-    const onclick = vi.fn()
-    const onkeydown = vi.fn()
-    const props = { action, as: `a`, disabled: true, onclick, onkeydown }
-    Reflect.set(props, `href`, `#should-not-navigate`)
-    mount_action_button(props)
+const click = () => new MouseEvent(`click`, { bubbles: true, cancelable: true })
+const keydown = (key: string) => () =>
+  new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
 
-    doc_query<HTMLAnchorElement>(`a[data-sms-action]`).dispatchEvent(event)
+// custom elements never follow href; disabled ones also swallow consumer handlers
+test.each([
+  [`click`, click, true, [0, 0]],
+  [`Enter`, keydown(`Enter`), true, [0, 0]],
+  [`Space`, keydown(` `), true, [0, 0]],
+  [`click`, click, false, [1, 0]],
+  [`Enter`, keydown(`Enter`), false, [0, 1]],
+] as const)(
+  `custom element %s with disabled=%s`,
+  (_name, make_event, disabled, [onclick_calls, onkeydown_calls]) => {
+    const [action, onclick, onkeydown] = [vi.fn(), vi.fn(), vi.fn()]
+    const props = { action, as: `a`, disabled, onclick, onkeydown }
+    Reflect.set(props, `href`, `#should-not-navigate`)
+    const event = make_event()
+    mount_action_button(props).dispatchEvent(event)
 
     expect(event.defaultPrevented).toBe(true)
-    expect(action).not.toHaveBeenCalled()
-    expect(onclick).not.toHaveBeenCalled()
-    expect(onkeydown).not.toHaveBeenCalled()
+    expect(action).toHaveBeenCalledTimes(disabled ? 0 : 1)
+    expect(onclick).toHaveBeenCalledTimes(onclick_calls)
+    expect(onkeydown).toHaveBeenCalledTimes(onkeydown_calls)
   },
 )
-
-test(`enabled custom elements run the action without following href`, () => {
-  const action = vi.fn(() => `saved`)
-  const props = { action, as: `a` }
-  Reflect.set(props, `href`, `#should-not-navigate`)
-  const click = new MouseEvent(`click`, { bubbles: true, cancelable: true })
-
-  mount_action_button(props).dispatchEvent(click)
-
-  expect(click.defaultPrevented).toBe(true)
-  expect(action).toHaveBeenCalledOnce()
-})
 
 test(`reports action errors without throwing from the event handler`, async () => {
   const action_error = new Error(`save failed`)

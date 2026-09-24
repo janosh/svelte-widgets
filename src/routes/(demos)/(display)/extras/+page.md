@@ -200,8 +200,7 @@ top right of this page links to this repo.
 <GitHubCorner href="https://github.com/janosh/svelte-widgets" corner="top-right" />
 ```
 
-Colors come from `--github-corner-bg` and `--github-corner-color`, or the `fill` and
-`color` props for one-off overrides.
+Colors come from `--github-corner-bg` and `--github-corner-color` (plus their `-hover` variants), or the `fill` and `color` props for one-off overrides, which set those same properties.
 
 ### `CodeExample`
 

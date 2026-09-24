@@ -8,12 +8,13 @@ import {
 } from '../index'
 
 describe(`resizable`, () => {
-  // every case resizes the same 200x150 box unless it needs its own position
-  const create_box = (rect = { left: 0, top: 0, width: 200, height: 150 }) => {
+  // every case resizes the same 200x150 box
+  const create_box = () => {
     const element = create_element(`div`, { width: `200px`, height: `150px` })
-    mock_rect(element, rect)
+    mock_rect(element, { left: 0, top: 0, width: 200, height: 150 })
     return element
   }
+  // cleanup also ends any gesture a test leaves active
   const attach_resizable = (element: HTMLElement, options: ResizableOptions = {}) =>
     onTestFinished(resizable(options)(element) ?? (() => {}))
   // the handle the browser hit-tests, in place of coordinates near an edge
@@ -24,8 +25,15 @@ describe(`resizable`, () => {
   }
   const grip = (box: HTMLElement, edge = `right`) =>
     handle_of(box, `data-resize-edge`, edge)
-  const corner_grip = (box: HTMLElement, corner = `bottom-right`) =>
-    handle_of(box, `data-resize-corner`, corner)
+  const handle_names = (box: HTMLElement, attribute: string) =>
+    [...box.querySelectorAll(`[${attribute}]`)].map((el) => el.getAttribute(attribute))
+  const drag = (handle: HTMLElement, from: number[], to: number[], shift_key = false) => {
+    handle.dispatchEvent(pointer_event(`pointerdown`, from[0], from[1]))
+    globalThis.dispatchEvent(
+      pointer_event(`pointermove`, to[0], to[1], { shiftKey: shift_key }),
+    )
+  }
+  const size_of = ({ style }: HTMLElement) => [style.width, style.height]
 
   it(`cleans up when pointer capture is rejected`, () => {
     const element = create_box()
@@ -35,11 +43,9 @@ describe(`resizable`, () => {
       throw new DOMException(`stale pointer`, `NotFoundError`)
     })
 
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
+    drag(grip(element), [195, 75], [400, 75])
     expect(document.body.style.userSelect).toBe(``)
     expect(on_resize_end).toHaveBeenCalledOnce()
-
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 400, 75))
     expect(on_resize).not.toHaveBeenCalled()
   })
 
@@ -66,20 +72,17 @@ describe(`resizable`, () => {
       expect([style[thickness], style[edge], style[across[0]], style[across[1]]]).toEqual(
         [`20px`, `0px`, `0px`, `0px`],
       )
+      const aria = [`orientation`, `valuemin`, `valuemax`, `valuenow`, `label`]
       expect([
         handle.tabIndex,
         handle.getAttribute(`role`),
-        handle.getAttribute(`aria-orientation`),
-        handle.getAttribute(`aria-valuemin`),
-        // an uncapped axis has no infinite aria value, so it reports the largest safe one
-        handle.getAttribute(`aria-valuemax`),
-        handle.getAttribute(`aria-valuenow`),
-        handle.getAttribute(`aria-label`),
+        ...aria.map((name) => handle.getAttribute(`aria-${name}`)),
       ]).toEqual([
         0,
         `separator`,
         orientation,
         `50`,
+        // an uncapped axis has no infinite aria value, so it reports the largest safe one
         `${Number.MAX_SAFE_INTEGER}`,
         value,
         `Resize from ${edge} edge`,
@@ -96,23 +99,23 @@ describe(`resizable`, () => {
         handle: (edge) => `Größe ändern: ${edge === `right` ? `rechts` : `unten`}`,
       },
     })
-
     expect(
-      [...element.querySelectorAll(`[data-resize-edge]`)].map((handle) =>
-        handle.getAttribute(`aria-label`),
-      ),
+      [`bottom`, `right`].map((edge) => grip(element, edge).getAttribute(`aria-label`)),
     ).toEqual([`Größe ändern: unten`, `Größe ändern: rechts`])
   })
 
-  it(`reports a functional width cap below the minimum as both aria limits`, () => {
+  it(`resolves functional size limits per gesture, capping aria limits below the min`, () => {
     const element = create_box()
-    attach_resizable(element, { edges: [`right`], max_width: () => 30 })
-    const handle = grip(element)
+    let current_max_width = 30
+    attach_resizable(element, { edges: [`right`], max_width: () => current_max_width })
+    const aria_limits = () =>
+      [`min`, `max`].map((bound) => grip(element).getAttribute(`aria-value${bound}`))
+    expect(aria_limits()).toEqual([`30`, `30`])
 
-    expect([
-      handle.getAttribute(`aria-valuemin`),
-      handle.getAttribute(`aria-valuemax`),
-    ]).toEqual([`30`, `30`])
+    current_max_width = 260
+    drag(grip(element), [195, 75], [500, 75])
+    expect(element.style.width).toBe(`260px`)
+    expect(aria_limits()).toEqual([`50`, `260`])
   })
 
   // absolute children anchor to the padding box, so a strip flush with its edge sits inside
@@ -138,14 +141,9 @@ describe(`resizable`, () => {
     })
     mock_rect(element, { left: 0, top: 0, width: 230, height: 176 })
     const on_resize = vi.fn()
-    const cleanup = resizable({ min_width: 20, on_resize })(element)
-    onTestFinished(() => {
-      globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 80))
-      cleanup?.()
-    })
+    attach_resizable(element, { min_width: 20, on_resize })
 
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 230, 80))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 230, 80))
+    drag(grip(element), [230, 80], [230, 80])
     // 230 border-box minus the 30px of padding and border CSS width excludes here
     expect(element.style.width).toBe(`200px`)
 
@@ -163,11 +161,8 @@ describe(`resizable`, () => {
     Object.assign(element.style, { width: ``, height: `` })
     attach_resizable(element, { edges: [`bottom`] })
 
-    grip(element, `bottom`).dispatchEvent(pointer_event(`pointerdown`, 100, 145))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 100, 245))
-
-    expect([element.style.width, element.style.height]).toEqual([``, `250px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 100, 245))
+    drag(grip(element, `bottom`), [100, 145], [100, 245])
+    expect(size_of(element)).toEqual([``, `250px`])
   })
 
   // an outer instance rewriting every separator would make a nested pane report wrong sizes
@@ -178,49 +173,26 @@ describe(`resizable`, () => {
     outer.append(inner)
     attach_resizable(inner, { edges: [`right`] })
     attach_resizable(outer, { edges: [`right`] })
-    const outer_strip = outer.querySelector(`:scope > [data-resize-edge="right"]`)
+    const outer_strip = outer.lastElementChild // appended after inner, and no corners
+    if (!(outer_strip instanceof HTMLElement)) throw new Error(`missing outer strip`)
 
+    drag(outer_strip, [195, 75], [295, 75])
+    expect(outer_strip.getAttribute(`aria-valuenow`)).toBe(`300`)
     expect(grip(inner).getAttribute(`aria-valuenow`)).toBe(`80`)
-
-    outer_strip?.dispatchEvent(pointer_event(`pointerdown`, 195, 75))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 295, 75))
-
-    expect(outer_strip?.getAttribute(`aria-valuenow`)).toBe(`300`)
-    expect(grip(inner).getAttribute(`aria-valuenow`)).toBe(`80`)
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 295, 75))
   })
 
-  // detaching a strip does not unbind its listeners, so a retained one could still resize
-  it(`stops responding to a strip retained across cleanup`, () => {
+  it(`creates a strip per edge plus a corner per edge pair, all removed on cleanup`, () => {
     const element = create_box()
     const on_resize = vi.fn()
-    const cleanup = resizable({ on_resize })(element)
-    const strip = grip(element)
+    const cleanup = resizable({ edges: [`right`, `bottom`, `top`], on_resize })(element)
 
-    cleanup?.()
-    strip.dispatchEvent(pointer_event(`pointerdown`, 195, 75))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 300, 75))
-    expect(on_resize).not.toHaveBeenCalled()
-    expect(element.style.width).toBe(`200px`) // untouched from create_box
-  })
-
-  it(`creates a strip per edge, plus a handle per corner the edges form`, () => {
-    const element = create_box()
-    const cleanup = resizable({ edges: [`right`, `bottom`, `top`] })(element)
-
-    const strips = [...element.querySelectorAll(`[data-resize-edge]`)]
-    expect(strips.map((strip) => strip.getAttribute(`data-resize-edge`))).toEqual([
-      `top`,
-      `bottom`,
-      `right`,
-    ])
+    expect(handle_names(element, `data-resize-edge`)).toEqual([`top`, `bottom`, `right`])
     // only the two corners whose *both* edges are enabled; `left` is absent so its are too
-    const corners = [...element.querySelectorAll(`[data-resize-corner]`)]
-    expect(corners.map((corner) => corner.getAttribute(`data-resize-corner`))).toEqual([
+    expect(handle_names(element, `data-resize-corner`)).toEqual([
       `top-right`,
       `bottom-right`,
     ])
-    const corner = corner_grip(element, `top-right`)
+    const corner = handle_of(element, `data-resize-corner`, `top-right`)
     expect([corner.tabIndex, corner.getAttribute(`aria-hidden`)]).toEqual([-1, `true`])
     expect(corner.style.cursor).toBe(`nesw-resize`)
     // corners come last so they paint over the strip overlap they sit on
@@ -228,60 +200,46 @@ describe(`resizable`, () => {
       `bottom-right`,
     )
 
+    const strip = grip(element)
     cleanup?.()
     expect(
       element.querySelectorAll(`[data-resize-edge], [data-resize-corner]`),
     ).toHaveLength(0)
+    // detaching a strip does not unbind its listeners, so a retained one could still resize
+    drag(strip, [195, 75], [300, 75])
+    expect(on_resize).not.toHaveBeenCalled()
+    expect(element.style.width).toBe(`200px`)
 
     // an `edges` change re-runs the attachment; the old handles must not survive it
     attach_resizable(element, { edges: [`left`] })
-    const after = [...element.querySelectorAll(`[data-resize-edge]`)]
-    expect(after.map((strip) => strip.getAttribute(`data-resize-edge`))).toEqual([`left`])
-    // one edge forms no corner
-    expect(element.querySelectorAll(`[data-resize-corner]`)).toHaveLength(0)
+    expect(handle_names(element, `data-resize-edge`)).toEqual([`left`])
+    expect(handle_names(element, `data-resize-corner`)).toEqual([]) // one edge, no corner
   })
 
   // the point of a corner: both axes at once, where the strips it overlaps move only one
   it.each([
-    [`bottom-right`, 300, 250, 300, 250],
-    [`top-left`, -50, -30, 250, 180],
-  ] as const)(`the %s corner resizes both axes`, (corner, to_x, to_y, width, height) => {
-    const element = create_box()
-    const on_resize = vi.fn()
-    attach_resizable(element, {
-      edges: [`top`, `right`, `bottom`, `left`],
-      on_resize,
-    })
+    [`bottom-right`, [200, 150], [300, 250], false, [300, 250], [``, ``]],
+    [`top-left`, [0, 0], [-50, -30], false, [250, 180], [`-50px`, `-30px`]],
+    // Shift locks the pointer-down aspect ratio
+    [`bottom-right`, [200, 150], [300, 160], true, [300, 225], [``, ``]],
+  ] as const)(
+    `the $0 corner resizes both axes (Shift: $3)`,
+    (corner, from, to, shift_key, [width, height], position) => {
+      const element = create_box()
+      const on_resize = vi.fn()
+      attach_resizable(element, { edges: [`top`, `right`, `bottom`, `left`], on_resize })
+      const handle = handle_of(element, `data-resize-corner`, corner)
+      expect(handle.style.cursor).toBe(`nwse-resize`)
 
-    const handle = corner_grip(element, corner)
-    expect(handle.style.cursor).toBe(`nwse-resize`)
-
-    const [from_x, from_y] = corner === `bottom-right` ? [200, 150] : [0, 0]
-    handle.dispatchEvent(pointer_event(`pointerdown`, from_x, from_y))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, to_x, to_y))
-
-    expect([element.style.width, element.style.height]).toEqual([
-      `${width}px`,
-      `${height}px`,
-    ])
-    expect(on_resize).toHaveBeenLastCalledWith(expect.any(PointerEvent), {
-      width,
-      height,
-    })
-    globalThis.dispatchEvent(pointer_event(`pointerup`, to_x, to_y))
-  })
-
-  it(`locks a corner drag to its pointer-down aspect ratio while Shift is held`, () => {
-    const element = create_box()
-    attach_resizable(element, { edges: [`right`, `bottom`] })
-    const handle = corner_grip(element)
-
-    handle.dispatchEvent(pointer_event(`pointerdown`, 200, 150))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 300, 160, { shiftKey: true }))
-
-    expect([element.style.width, element.style.height]).toEqual([`300px`, `225px`])
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 300, 160))
-  })
+      drag(handle, [...from], [...to], shift_key)
+      expect(size_of(element)).toEqual([`${width}px`, `${height}px`])
+      expect([element.style.left, element.style.top]).toEqual(position)
+      expect(on_resize).toHaveBeenLastCalledWith(expect.any(PointerEvent), {
+        width,
+        height,
+      })
+    },
+  )
 
   it.each([
     [`right`, `ArrowRight`, false, `210px`, `150px`, ``],
@@ -298,7 +256,7 @@ describe(`resizable`, () => {
       const event = dispatch_key(grip(element, edge), key, { shiftKey: shift_key })
 
       expect(event.defaultPrevented).toBe(true)
-      expect([element.style.width, element.style.height]).toEqual([width, height])
+      expect(size_of(element)).toEqual([width, height])
       expect(element.style[edge === `left` ? `left` : `top`]).toBe(position)
     },
   )
@@ -308,20 +266,15 @@ describe(`resizable`, () => {
     const [on_resize_start, on_resize_reset] = [vi.fn(), vi.fn()]
     attach_resizable(element, { edges: [`right`], on_resize_start, on_resize_reset })
     const handle = grip(element, `right`)
+    const initial = { width: 200, height: 150 }
 
     dispatch_key(handle, `ArrowRight`, { shiftKey: true })
-    expect(on_resize_start).toHaveBeenCalledWith(expect.any(KeyboardEvent), {
-      width: 200,
-      height: 150,
-    })
+    expect(on_resize_start).toHaveBeenCalledWith(expect.any(KeyboardEvent), initial)
 
     expect(dispatch_key(handle, `Enter`).defaultPrevented).toBe(true)
     expect(handle.getAttribute(`aria-keyshortcuts`)?.split(` `)).toContain(`Enter`)
-    expect([element.style.width, element.style.height]).toEqual([``, `150px`])
-    expect(on_resize_reset).toHaveBeenCalledWith(expect.any(KeyboardEvent), {
-      width: 200,
-      height: 150,
-    })
+    expect(size_of(element)).toEqual([``, `150px`])
+    expect(on_resize_reset).toHaveBeenCalledWith(expect.any(KeyboardEvent), initial)
   })
 
   // the one visible way back from a manual resize, so it has to clear what the drag wrote
@@ -337,32 +290,29 @@ describe(`resizable`, () => {
     element.style.height = `240px`
 
     grip(element).dispatchEvent(pointer_event(`dblclick`, 195, 75))
-    expect([element.style.width, element.style.height]).toEqual([width, height])
+    expect(size_of(element)).toEqual([width, height])
     expect(on_resize_reset).toHaveBeenCalledWith(expect.any(MouseEvent), {
       width: 200,
       height: 150,
     })
   })
 
-  it(`leaves a double-click on the content alone`, () => {
-    const element = create_box()
-    attach_resizable(element)
-    element.style.width = `320px`
-
-    element.dispatchEvent(pointer_event(`dblclick`, 100, 75))
-    expect(element.style.width).toBe(`320px`)
-  })
-
   // `draggable` writes left/top on the same node, so a blanket reset would snap it back
-  it(`double-click leaves a left/top this instance never wrote`, () => {
+  it(`double-click ignores content and keeps a left/top this instance never wrote`, () => {
     const element = create_box()
     attach_resizable(element, { edges: [`left`, `top`] })
     // stands in for draggable having positioned the node
-    element.style.left = `60px`
-    element.style.top = `60px`
+    Object.assign(element.style, { width: `320px`, left: `60px`, top: `60px` })
+
+    element.dispatchEvent(pointer_event(`dblclick`, 100, 75))
+    expect(element.style.width).toBe(`320px`)
 
     grip(element, `left`).dispatchEvent(pointer_event(`dblclick`, 5, 75))
-    expect([element.style.left, element.style.top]).toEqual([`60px`, `60px`])
+    expect([element.style.width, element.style.left, element.style.top]).toEqual([
+      ``,
+      `60px`,
+      `60px`,
+    ])
   })
 
   it.each([
@@ -372,60 +322,41 @@ describe(`resizable`, () => {
     [`max_height`, { max_height: 250 }, `bottom`, [100, 400], `height`, `250px`],
   ] as const)(
     `respects the %s constraint`,
-    (_constraint, options, edge, [drag_client_x, drag_client_y], dimension, expected) => {
+    (_constraint, options, edge, to, dimension, expected) => {
       const element = create_box()
       attach_resizable(element, options)
-
-      grip(element, edge).dispatchEvent(pointer_event(`pointerdown`, 195, 145))
-      globalThis.dispatchEvent(pointer_event(`pointermove`, drag_client_x, drag_client_y))
-
+      drag(grip(element, edge), [195, 145], [...to])
       expect(element.style[dimension]).toBe(expected)
-
-      globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
     },
   )
-
-  it(`resolves functional size limits for each gesture`, () => {
-    const element = create_box()
-    let current_max_width = 240
-    attach_resizable(element, { max_width: () => current_max_width })
-    current_max_width = 260
-
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 500, 75))
-
-    expect(element.style.width).toBe(`260px`)
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 500, 75))
-  })
 
   // a second finger drives nothing; only the first pointer or the OS can end the resize
   it.each([
     [
       `pointercancel`,
-      (el: HTMLElement, id: number) =>
-        globalThis.dispatchEvent(
-          pointer_event(`pointercancel`, 250, 75, { pointerId: id }),
-        ),
+      (_el: HTMLElement, init: PointerEventInit) =>
+        globalThis.dispatchEvent(pointer_event(`pointercancel`, 250, 75, init)),
     ],
     [
       `lostpointercapture`,
-      (el: HTMLElement, id: number) =>
-        el.dispatchEvent(pointer_event(`lostpointercapture`, 250, 75, { pointerId: id })),
+      (el: HTMLElement, init: PointerEventInit) =>
+        el.dispatchEvent(pointer_event(`lostpointercapture`, 250, 75, init)),
     ],
   ])(`ignores another pointer, ends on %s`, (_end_type, dispatch_end) => {
     const element = create_box()
     const on_resize_end = vi.fn()
     attach_resizable(element, { on_resize_end })
+    const [first, second] = [{ pointerId: 1 }, { pointerId: 2 }]
 
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75, { pointerId: 1 }))
+    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75, first))
     expect(element.hasPointerCapture(1)).toBe(true)
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 400, 75, { pointerId: 2 }))
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 400, 75, { pointerId: 2 }))
-    expect(element.style.width).toBe(`200px`) // untouched from create_box
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 400, 75, second))
+    globalThis.dispatchEvent(pointer_event(`pointerup`, 400, 75, second))
+    expect(element.style.width).toBe(`200px`)
     expect(on_resize_end).not.toHaveBeenCalled()
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75, { pointerId: 1 }))
-    dispatch_end(element, 1)
+    globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75, first))
+    dispatch_end(element, first)
     expect(element.style.width).toBe(`255px`)
     expect(on_resize_end).toHaveBeenCalledOnce()
     expect(document.body.style.userSelect).toBe(``)
@@ -435,41 +366,30 @@ describe(`resizable`, () => {
   // the non-primary press matters most: the context menu it opens can swallow the release,
   // leaving the element stuck to the cursor
   it.each([
-    [
-      `a press on the content, clear of every strip`,
-      (box: HTMLElement) => box.dispatchEvent(pointer_event(`pointerdown`, 100, 75)),
-    ],
-    [
-      `a non-primary button on a strip`,
-      (box: HTMLElement) =>
-        grip(box).dispatchEvent(pointer_event(`pointerdown`, 195, 75, { button: 2 })),
-    ],
-  ])(`does not start resizing on %s`, (_desc, gesture) => {
+    [`a press on the content, clear of every strip`, (box: HTMLElement) => box, {}],
+    [`a non-primary button on a strip`, (box: HTMLElement) => grip(box), { button: 2 }],
+  ])(`does not start resizing on %s`, (_desc, target_of, init) => {
     const element = create_box()
     const [on_resize_start, on_resize, on_resize_end] = [vi.fn(), vi.fn(), vi.fn()]
     attach_resizable(element, { on_resize_start, on_resize, on_resize_end })
 
-    gesture(element)
+    target_of(element).dispatchEvent(pointer_event(`pointerdown`, 100, 75, init))
     globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75))
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
 
-    expect(on_resize_start).not.toHaveBeenCalled()
-    expect(on_resize).not.toHaveBeenCalled()
-    expect(on_resize_end).not.toHaveBeenCalled()
-    expect(element.style.width).toBe(`200px`) // untouched from create_box
+    for (const callback of [on_resize_start, on_resize, on_resize_end]) {
+      expect(callback).not.toHaveBeenCalled()
+    }
+    expect(element.style.width).toBe(`200px`)
   })
 
   it(`fires on_resize_start, on_resize and on_resize_end callbacks`, () => {
     const element = create_box()
-
     const [on_resize_start, on_resize_end] = [vi.fn(), vi.fn()]
-    // Consumers can convert the reported pixels back to their own responsive units.
-    const on_resize = vi.fn(
-      (_event: MouseEvent | KeyboardEvent, { width }: { width: number }) => {
-        element.style.width = `${(width / 500) * 100}%`
-      },
-    )
-
+    // consumers can convert the reported pixels back to their own responsive units
+    const on_resize = vi.fn((_event: unknown, { width }: { width: number }) => {
+      element.style.width = `${(width / 500) * 100}%`
+    })
     attach_resizable(element, { on_resize_start, on_resize, on_resize_end })
 
     grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75))
@@ -488,73 +408,30 @@ describe(`resizable`, () => {
 
     globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
     expect(document.body.style.userSelect).toBe(``)
-    expect(on_resize_end).toHaveBeenCalledExactlyOnceWith(
-      expect.any(PointerEvent),
-      { width: 200, height: 150 }, // offsetWidth/Height from mock
-    )
+    // offsetWidth/Height from the mock
+    expect(on_resize_end).toHaveBeenCalledExactlyOnceWith(expect.any(PointerEvent), {
+      width: 200,
+      height: 150,
+    })
   })
 
+  // invalid limits would make clamp() inconsistent, so they are refused like disabled
   it.each([
-    [
-      `left`,
-      { left: 100, top: 50, width: 200, height: 150 },
-      [105, 100],
-      [55, 100],
-      { width: `250px`, left: `-50px` },
-    ],
-    [
-      `top`,
-      { left: 100, top: 100, width: 200, height: 150 },
-      [200, 105],
-      [200, 55],
-      { height: `200px`, top: `-50px` },
-    ],
-  ] as const)(
-    `handles a %s edge resize with position adjustment`,
-    (
-      _edge,
-      rect,
-      [start_client_x, start_client_y],
-      [drag_client_x, drag_client_y],
-      expected_styles,
-    ) => {
-      const element = create_box(rect)
-      attach_resizable(element, { edges: [_edge] })
-
-      grip(element, _edge).dispatchEvent(
-        pointer_event(`pointerdown`, start_client_x, start_client_y),
-      )
-      globalThis.dispatchEvent(pointer_event(`pointermove`, drag_client_x, drag_client_y))
-
-      for (const [property, value] of Object.entries(expected_styles)) {
-        expect(element.style.getPropertyValue(property)).toBe(value)
-      }
-
-      globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
-    },
-  )
-
-  it(`does nothing when disabled`, () => {
-    const element = create_box()
-    const cleanup = resizable({ disabled: true })(element)
-
-    expect(cleanup).toBeUndefined()
-    expect(element.style.position).toBe(``) // disabled skips the position: relative fixup
-    expect(element.querySelectorAll(`[data-resize-edge]`)).toHaveLength(0)
-  })
-
-  it.each([
-    [`width`, { min_width: 300, max_width: 100 }],
-    [`height`, { min_height: 300, max_height: 100 }],
-  ] as const)(`warns and skips invalid %s constraints`, (_dimension, options) => {
+    [`disabled`, { disabled: true }, 0],
+    [`invalid width limits`, { min_width: 300, max_width: 100 }, 1],
+    [`invalid height limits`, { min_height: 300, max_height: 100 }, 1],
+  ] as const)(`attaches nothing when %s`, (_desc, options, n_warnings) => {
     const element = create_box()
     const warn = vi.spyOn(console, `warn`).mockImplementation(() => undefined)
     onTestFinished(() => warn.mockRestore())
 
     expect(resizable(options)(element)).toBeUndefined()
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining(`min dimensions exceed max dimensions`),
+    expect(warn.mock.calls.flat()).toEqual(
+      Array(n_warnings).fill(
+        expect.stringContaining(`min dimensions exceed max dimensions`),
+      ),
     )
+    expect(element.style.position).toBe(``) // skips the position: relative fixup
     expect(element.querySelectorAll(`[data-resize-edge]`)).toHaveLength(0)
   })
 
@@ -564,7 +441,6 @@ describe(`resizable`, () => {
   ])(`position %s becomes %s, then restores`, (initial_position, expected_position) => {
     const element = create_box()
     element.style.position = initial_position
-
     const cleanup = resizable()(element)
     expect(element.style.position).toBe(expected_position)
     cleanup?.()
@@ -576,7 +452,6 @@ describe(`resizable`, () => {
     (order) => {
       const element = create_box()
       const on_resize = vi.fn()
-
       const cleanup = resizable({ on_resize })(element)
       const drag_box = create_box()
       const cleanup_drag = draggable()(drag_box)

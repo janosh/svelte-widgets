@@ -146,6 +146,13 @@ const click = async (element: Element): Promise<void> => {
   await flush_async()
 }
 
+const scroll_to_row = async (row_idx: number): Promise<void> => {
+  const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
+  scroller.scrollTop = row_idx * ROW_HEIGHT
+  scroller.dispatchEvent(new Event(`scroll`))
+  await flush_async()
+}
+
 describe(`rows and layouts`, () => {
   test(`renders aligned split rows with syntax and intra-line emphasis`, async () => {
     const spans = [0, packed(`plain`), 2, packed(`variable`, true), 7, packed(`plain`)]
@@ -277,10 +284,7 @@ test.each([4, 150_000])(
     const expanded = query_element(`.diff-row.pair:nth-child(3)`)
     expect(side_text(expanded, `old`)).toBe(`three`)
     expect([...expanded.querySelectorAll(`.gutter`)].map(text_of)).toEqual([`3`, `3`])
-    const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
-    scroller.scrollTop = count * ROW_HEIGHT
-    scroller.dispatchEvent(new Event(`scroll`))
-    await flush_async()
+    await scroll_to_row(count)
     expect(document.querySelectorAll(`.diff-gap`)).toHaveLength(1)
   },
 )
@@ -425,6 +429,38 @@ describe(`states and backend wiring`, () => {
     expect(code_texts()).toEqual([`fresh`])
   })
 
+  test(`expanded gaps keep the diffed text while newer props are re-diffed`, async () => {
+    const pending = Promise.withResolvers<DiffResult>()
+    const row = diff_row(`replace`, diff_line(2, `old`), diff_line(2, `new`))
+    const first = diff_result({
+      hunks: [hunk_of([row], { skipped_before: 1 })],
+      old_line_count: 2,
+      new_line_count: 2,
+    })
+    const diff_text = vi
+      .fn<(args: DiffTextArgs) => Promise<DiffResult>>()
+      .mockResolvedValueOnce(first)
+      .mockReturnValue(pending.promise)
+    const props = $state({
+      old_text: `kept\nold`,
+      new_text: `kept\nnew`,
+      filename: `main.rs`,
+      options: DEFAULT_OPTIONS,
+      backend: { diff_text },
+    })
+    const instance = mount(DiffView, { target: document.body, props })
+    onTestFinished(() => unmount(instance))
+    await flush_async()
+    await click(query_element(`.diff-gap`))
+    expect(code_texts()).toEqual([`kept`, `kept`, `old`, `new`])
+
+    props.old_text = `edited\nold`
+    props.new_text = `edited\nnew`
+    await flush_async(`.diff-view[aria-busy='true']`)
+    expect(diff_text).toHaveBeenCalledTimes(2)
+    expect(code_texts()).toEqual([`kept`, `kept`, `old`, `new`])
+  })
+
   test(`a pending diff cannot report an error after unmount`, async () => {
     const request = Promise.withResolvers<DiffResult>()
     const on_error = vi.fn()
@@ -491,21 +527,15 @@ describe(`virtualization`, () => {
     expect(code_texts()).not.toContain(`new 1000`)
 
     const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
-    scroller.scrollTop = ROW_HEIGHT * 1000
-    scroller.dispatchEvent(new Event(`scroll`))
-    await flush_async()
+    await scroll_to_row(1000)
     expect([previous_change.disabled, next_change.disabled]).toEqual([false, false])
     expect(code_texts()).toContain(`old 1000`)
     expect(code_texts()).not.toContain(`line 1`)
 
-    scroller.scrollTop = ROW_HEIGHT * 1900
-    scroller.dispatchEvent(new Event(`scroll`))
-    await flush_async()
+    await scroll_to_row(1900)
     expect([previous_change.disabled, next_change.disabled]).toEqual([false, true])
 
-    scroller.scrollTop = 0
-    scroller.dispatchEvent(new Event(`scroll`))
-    await flush_async()
+    await scroll_to_row(0)
     await click(next_change)
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 100)
     expect(code_texts()).toContain(`old 100`)
@@ -539,10 +569,7 @@ describe(`virtualization`, () => {
     await mount_diff(rows_result(rows, { old_line_count: 100, new_line_count: 100 }), {
       options: { ...DEFAULT_OPTIONS, layout: `unified` },
     })
-    const scroller = query_element<HTMLDivElement>(`.diff-scroll`)
-    scroller.scrollTop = ROW_HEIGHT * 150
-    scroller.dispatchEvent(new Event(`scroll`))
-    await flush_async()
+    await scroll_to_row(150)
     expect(code_texts()).toContain(`new 75`)
 
     await click(query_element(`.segmented button[aria-pressed='false']`))

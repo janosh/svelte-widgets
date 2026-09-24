@@ -87,6 +87,10 @@ function project_config(compiler: typeof TypeScript, path: string) {
   return { options: parsed?.options ?? {}, diagnostics }
 }
 
+// TypeScript normalizes every path it passes to the host to forward slashes, so Windows
+// paths from node:path must match that spelling to find the virtual example modules.
+const ts_path = (path: string): string => path.replaceAll(`\\`, `/`)
+
 type CheckedSource = Pick<ContentFence, 'code' | 'range' | 'line_positions'>
 
 const source_position = (
@@ -206,7 +210,9 @@ export async function check_examples(
       report(fence, `language`, `Unsupported checked fence language: ${fence.language}`)
       continue
     }
-    const example_filename = `${document_filename}.example-${idx}.${component ? `svelte` : javascript ? `js` : `ts`}`
+    const example_filename = ts_path(
+      `${document_filename}.example-${idx}.${component ? `svelte` : javascript ? `js` : `ts`}`,
+    )
     try {
       if (component) {
         const result = compile(fence.code, {
@@ -373,7 +379,7 @@ export async function check_examples(
           resolved_filename?.endsWith(`.d.svelte.ts`) && !file_exists(resolved_filename)
             ? resolved_filename.replace(/\.d\.svelte\.ts$/u, `.svelte`)
             : name.startsWith(`.`) && name.endsWith(`.svelte`)
-              ? resolve(dirname(containing_file), name)
+              ? ts_path(resolve(dirname(containing_file), name))
               : undefined
         // Ambient *.svelte declarations must not make missing aliases/packages pass.
         if (name.endsWith(`.svelte`) && !resolved_filename && !component_filename)

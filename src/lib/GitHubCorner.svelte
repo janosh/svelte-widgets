@@ -17,6 +17,7 @@
     title?: string
     aria_label?: string
     target?: `_self` | `_blank`
+    // set --github-corner-color/-bg, so the -hover variants still apply
     color?: string | null
     fill?: string | null
     // bottom-left/right look bad, shouldn't normally be used
@@ -30,9 +31,9 @@
   {title}
   aria-label={aria_label ?? title}
   {...rest}
-  class={corner}
-  style:color
-  style:fill
+  class={[corner, rest.class]}
+  style:--github-corner-color={color}
+  style:--github-corner-bg={fill}
 >
   <svg viewBox="0 0 250 250" aria-hidden="true">
     <path d="M0,0 L115,115 L130,115 L142,142 L250,250 L250,0 Z" />

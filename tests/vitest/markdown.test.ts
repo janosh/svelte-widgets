@@ -1,6 +1,7 @@
 /* oxlint-disable no-template-curly-in-string -- Literal JavaScript and Svelte fixtures. */
 import {
   compile_source as compile_markdown,
+  hook,
   markdown_integration as markdown_vite,
   markdown_preprocessor as markdown,
   render_source as render_markdown,
@@ -56,7 +57,7 @@ describe(`Markdown output`, () => {
       expect(container.querySelector(`h1 a`)).toBe(anchor)
       expect(container.querySelectorAll(`h2 a`)).toHaveLength(1)
       expect(container.querySelector(`h2 a`)?.getAttribute(`href`)).toBe(`#custom`)
-      cleanup?.()
+      cleanup()
       compile(result, { generate: false })
     },
   )
@@ -335,16 +336,17 @@ describe(`code and math`, () => {
     const filename = `${directory}/page.md`
     const highlight = vi.fn((code: string) => code)
     const instance = markdown_vite({ highlight })
-    const { load, resolveId: resolve_id } = instance.plugin
-    if (typeof load !== `function` || typeof resolve_id !== `function`)
-      throw new Error(`Expected load and resolve hooks`)
+    const [load, resolve_id] = [
+      hook(instance.plugin, `load`),
+      hook(instance.plugin, `resolveId`),
+    ]
     const context = {
       resolve: vi.fn(async () => ({ id: filename })),
       addWatchFile: vi.fn(),
     }
     const module_ids = await Promise.all(
       [`?toc`, `?toc&lang.md`, `?lang.md&toc`].map(async (query) =>
-        resolve_id.call(context as never, `./page.md${query}`, undefined, {} as never),
+        resolve_id(context, `./page.md${query}`, undefined, {}),
       ),
     )
     const [module_id] = module_ids
@@ -354,7 +356,7 @@ describe(`code and math`, () => {
     expect(module_id).toMatch(/\.js$/u)
     for (const title of [`First`, `Changed`]) {
       await writeFile(filename, `## ${title}\n\n\`\`\`ts\nconst value = 1\n\`\`\``)
-      const code = await load.call(context as never, module_id)
+      const code = await load(context, module_id)
       if (typeof code !== `string`) throw new Error(`Expected JS module source`)
       expect(JSON.parse(code.slice(`export default `.length, -1))).toEqual([
         { id: title.toLowerCase(), level: 2, title },
@@ -362,17 +364,16 @@ describe(`code and math`, () => {
     }
     expect(context.addWatchFile).toHaveBeenCalledWith(filename)
     expect(highlight).not.toHaveBeenCalled()
-    const update = instance.plugin.hotUpdate
-    if (typeof update !== `function`) throw new Error(`Expected hotUpdate hook`)
+    const update = hook(instance.plugin, `hotUpdate`)
     const toc_module = { id: module_id }
     const graph = {
       idToModuleMap: new Map([[module_id, toc_module]]),
       invalidateModule: vi.fn(),
     }
     expect(
-      await update.call(
-        { environment: { moduleGraph: graph } } as never,
-        { file: filename, type: `update`, modules: [], timestamp: 1 } as never,
+      await update(
+        { environment: { moduleGraph: graph } },
+        { file: filename, type: `update`, modules: [], timestamp: 1 },
       ),
     ).toEqual([toc_module])
     expect(graph.invalidateModule).toHaveBeenCalledWith(toc_module, new Set(), 1)
@@ -395,22 +396,20 @@ describe(`code and math`, () => {
       expect(result.code).not.toContain(`__live_example_src`)
       expect(result.code.includes(`button { color: red }`)).toBe(!hide_style)
       expect(result.code).toContain(`<script>import`)
-      const load = instance.plugin.load
-      if (typeof load !== `function`) throw new Error(`Expected load hook`)
+      const load = hook(instance.plugin, `load`)
       const module_id = /"(?<id>\/project\/page\.md\.widgets-example-[^"]+)"/u.exec(
         result.code,
       )?.[1]
       if (!module_id) throw new Error(`Missing example import`)
-      const resolve_id = instance.plugin.resolveId
-      if (typeof resolve_id !== `function`) throw new Error(`Expected resolve hook`)
+      const resolve_id = hook(instance.plugin, `resolveId`)
       for (const suffix of [``, `?inline&svelte&type=style&lang.css`]) {
         for (const path of [module_id, module_id.slice(`/project`.length)]) {
           expect(
-            await resolve_id.call(
-              { environment: { config: { root: `/project` } } } as never,
+            await resolve_id(
+              { environment: { config: { root: `/project` } } },
               `${path}${suffix}`,
               undefined,
-              {} as never,
+              {},
             ),
           ).toBe(`${module_id}${suffix}`)
         }
@@ -439,28 +438,21 @@ describe(`code and math`, () => {
         [module_id.slice(`/project`.length), undefined, module_id],
       ]) {
         const suffix = `?inline&svelte&type=style&lang.css`
-        expect(
-          await resolve_id.call(
-            context as never,
-            `${path}${suffix}`,
-            importer,
-            {} as never,
-          ),
-        ).toBe(`${resolved}${suffix}`)
+        expect(await resolve_id(context, `${path}${suffix}`, importer, {})).toBe(
+          `${resolved}${suffix}`,
+        )
       }
-      expect(await load.call({} as never, nested_id)).toMatchObject({
+      expect(await load({}, nested_id)).toMatchObject({
         code: expect.stringContaining(`color: blue`),
       })
-      const loaded = await load.call({} as never, module_id)
+      const loaded = await load({}, module_id)
       expect(loaded).toMatchObject({
         code: expect.stringContaining(`button { color: red }`),
         map: { sourcesContent: [expect.stringContaining(`button { color: red }`)] },
       })
-      expect(
-        await load.call({} as never, `${module_id}?svelte&type=style`),
-      ).toBeUndefined()
+      expect(await load({}, `${module_id}?svelte&type=style`)).toBeUndefined()
       await preprocess(`# Removed`, instance.preprocess, { filename: `/project/page.md` })
-      expect(() => load.call({} as never, module_id)).toThrow(`not registered`)
+      expect(() => load({}, module_id)).toThrow(`not registered`)
       on_manifest.mockImplementationOnce(() => {
         throw new Error(`Manifest rejected`)
       })
@@ -546,20 +538,17 @@ describe(`incremental Markdown compilation`, () => {
 
   test(`hot updates ignore unrelated and deleted inputs while retrying failed pages`, async () => {
     const docs = markdown_vite({ examples: {} })
-    const update = docs.plugin.hotUpdate
-    const remove = docs.plugin.watchChange
-    if (typeof update !== `function` || typeof remove !== `function`)
-      throw new Error(`Expected Vite hooks`)
+    const [update, remove] = [
+      hook(docs.plugin, `hotUpdate`),
+      hook(docs.plugin, `watchChange`),
+    ]
     const source = fence(`<p>Fixed example</p>`, `id="fixed"`)
     const read = vi.fn(async () => source)
     const environment = {
       moduleGraph: { idToModuleMap: new Map(), invalidateModule: vi.fn() },
     }
     const hot_update = (file: string, type = `update`) =>
-      update.call(
-        { environment } as never,
-        { file, type, read, modules: [], timestamp: 1 } as never,
-      )
+      update({ environment }, { file, type, read, modules: [], timestamp: 1 })
     await expect(
       hot_update(`/project/.svelte-kit/__package__/markdown/readme.md`),
     ).resolves.toBeUndefined()
@@ -576,7 +565,7 @@ describe(`incremental Markdown compilation`, () => {
 
     read.mockClear()
     await expect(hot_update(filename, `delete`)).resolves.toBeUndefined()
-    await remove.call({} as never, filename, { event: `delete` })
+    await remove({}, filename, { event: `delete` })
     await expect(hot_update(filename)).resolves.toBeUndefined()
     expect(read).not.toHaveBeenCalled()
   })
@@ -585,20 +574,17 @@ describe(`incremental Markdown compilation`, () => {
     `deleting %s removes registered modules and cached compilations`,
     async (filename) => {
       const docs = markdown_vite({ examples: {} })
-      const load = docs.plugin.load
-      const remove = docs.plugin.watchChange
-      if (typeof load !== `function` || typeof remove !== `function`)
-        throw new Error(`Expected Vite hooks`)
+      const [load, remove] = [hook(docs.plugin, `load`), hook(docs.plugin, `watchChange`)]
       const source = fence(`<p>Example</p>`, `id="example"`)
       const render = () => preprocess(source, docs.preprocess, { filename })
       const result = await render()
       const id = /"(?<id>C:\/[^"\n]+\.widgets-example-[^"\n]+)"/u.exec(result.code)?.[1]
       if (!id) throw new Error(`Missing example module`)
-      expect(await load.call({} as never, id)).toMatchObject({ code: `<p>Example</p>` })
-      await remove.call({} as never, filename, { event: `delete` })
-      expect(() => load.call({} as never, id)).toThrow(`not registered`)
+      expect(await load({}, id)).toMatchObject({ code: `<p>Example</p>` })
+      await remove({}, filename, { event: `delete` })
+      expect(() => load({}, id)).toThrow(`not registered`)
       await render()
-      expect(await load.call({} as never, id)).toMatchObject({ code: `<p>Example</p>` })
+      expect(await load({}, id)).toMatchObject({ code: `<p>Example</p>` })
     },
   )
 
@@ -617,9 +603,7 @@ describe(`incremental Markdown compilation`, () => {
       render(`first`, `third.md`),
     ]
     await vi.waitFor(() => expect(highlight).toHaveBeenCalledTimes(2))
-    const close = docs.plugin.closeBundle
-    if (typeof close !== `function`) throw new Error(`Expected closeBundle hook`)
-    await close.call({} as never)
+    await hook(docs.plugin, `closeBundle`)({})
     first.resolve(`first`)
     second.resolve(`second`)
     await Promise.all(requests)
@@ -676,9 +660,7 @@ describe(`incremental Markdown compilation`, () => {
       filename: `page.md`,
     })
     expect(highlight).toHaveBeenCalledTimes(4)
-    const close = docs.plugin.closeBundle
-    if (typeof close !== `function`) throw new Error(`Expected closeBundle hook`)
-    await close.call({} as never)
+    await hook(docs.plugin, `closeBundle`)({})
     await render(`second`)
     expect(highlight).toHaveBeenCalledTimes(5)
   })
@@ -692,18 +674,17 @@ describe(`incremental Markdown compilation`, () => {
     const source = '```txt\nsource\n```'
     const render = () => preprocess(source, docs.preprocess, { filename: `page.md` })
     await expect(render()).rejects.toThrow(`temporary failure`)
-    const update = docs.plugin.hotUpdate
-    if (typeof update !== `function`) throw new Error(`Expected hotUpdate hook`)
+    const update = hook(docs.plugin, `hotUpdate`)
     const environment = { moduleGraph: { idToModuleMap: new Map() } }
-    await update.call(
-      { environment } as never,
+    await update(
+      { environment },
       {
         file: `page.md`,
         type: `update`,
         read: async () => source,
         modules: [],
         timestamp: 0,
-      } as never,
+      },
     )
     await expect(render()).resolves.toMatchObject({ code: expect.stringContaining(`ok`) })
     expect(highlight).toHaveBeenCalledTimes(2)

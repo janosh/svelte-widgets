@@ -18,7 +18,7 @@
     // spellings rather than silently doing nothing on macOS
     focus_hotkey = [`alt+t`, `alt+†`],
     assertive,
-    dismiss_label = `Dismiss notification`,
+    dismiss_label,
     labels,
     children,
     ...rest
@@ -34,6 +34,7 @@
     // Rendered into the assertive live region, interrupting whatever is being read.
     // Defaults to the store's sticky priorities, so urgency tracks what stays on screen.
     assertive?: readonly string[]
+    // wins over labels.dismiss when set
     dismiss_label?: string
     labels?: Partial<ToastLabels>
     children?: Snippet<[ToastItem<string>]>
@@ -153,7 +154,7 @@
       <button
         class="toast-dismiss"
         type="button"
-        aria-label={dismiss_label}
+        aria-label={dismiss_label ?? msg.dismiss}
         onclick={() => dismiss(item.id)}>&times;</button
       >
     {/if}

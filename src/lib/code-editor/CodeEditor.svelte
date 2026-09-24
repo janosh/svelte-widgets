@@ -113,7 +113,10 @@
   let active_client: ReturnType<typeof create_highlight_client> | null = null
   // Plain Map, not SvelteMap: the LRU touch on every render pass made reactive entries
   // rebuild `visible_rows` and reconcile the DOM twice. `token_revision` sequences reads.
-  const token_cache = new Map<number, SpanList>()
+  // Stale entries (at or after an edit) keep painting until fresh spans replace them.
+  const token_cache = new Map<number, { spans: SpanList; fresh: boolean }>()
+  // Line count the cached indices refer to, so an edit can shift entries below it.
+  let cached_line_count = 0
   const font_size = $derived(editor_font_size(Number(options.font_size)))
   const tab_size = $derived(clamp_integer(Number(options.tab_size), 1, 16, 2))
   const line_height = $derived(editor_line_height(font_size))
@@ -156,18 +159,20 @@
   const touch_tokens = (start: number, end: number): boolean => {
     let complete = true
     for (let line_idx = start; line_idx < end; line_idx++) {
-      const spans = token_cache.get(line_idx)
-      if (!spans) {
+      const cached = token_cache.get(line_idx)
+      if (!cached) {
         complete = false
         continue
       }
+      complete &&= cached.fresh
       token_cache.delete(line_idx)
-      token_cache.set(line_idx, spans)
+      token_cache.set(line_idx, cached)
     }
     return complete
   }
-  // Drop only spans an edit can have invalidated: lines before the first edit are untouched.
-  // Clearing the whole cache blanked the viewport until the debounced re-highlight returned.
+  // Lines before the first edit keep fresh spans. Later ones become stale: shifted by the
+  // edit's line delta, they keep painting until re-highlighted. Dropping them repainted
+  // every row below the caret unstyled on each keystroke until the backend answered.
   const invalidate_tokens = (
     active_model: EditorModel,
     transaction: EditorTransaction,
@@ -175,13 +180,21 @@
     const { edits } = transaction
     if (edits.length === 0) return
     token_revision += 1
+    const line_delta = active_model.line_count - cached_line_count
+    cached_line_count = active_model.line_count
     // `validate_edits` rejects `from < previous_end`, so edits ascend; text before the first
     // is identical in both documents, so this line index means the same either side of it.
     const first_line = active_model.line_at(edits[0].from).line_idx
     // Even one character can open a multiline comment/string and change later tokens.
-    // safe to delete while iterating: a Map's key iterator skips entries dropped ahead of it
-    for (const line_idx of token_cache.keys()) {
-      if (line_idx >= first_line) token_cache.delete(line_idx)
+    const entries = [...token_cache]
+    token_cache.clear()
+    // Re-insert in LRU order. Lines swallowed by a deletion map at or above the edit and
+    // are dropped rather than overwrite the edited line's own spans.
+    for (const [line_idx, { spans, fresh }] of entries) {
+      const next_idx = line_idx > first_line ? line_idx + line_delta : line_idx
+      if (line_idx < first_line) token_cache.set(line_idx, { spans, fresh })
+      else if (line_idx === first_line || next_idx > first_line)
+        token_cache.set(next_idx, { spans, fresh: false })
     }
   }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
@@ -189,7 +202,7 @@
     for (const [offset, line_spans] of spans.entries()) {
       const line_idx = start_line + offset
       token_cache.delete(line_idx)
-      token_cache.set(line_idx, line_spans)
+      token_cache.set(line_idx, { spans: line_spans, fresh: true })
     }
     while (token_cache.size > TOKEN_CACHE_LINES) {
       const oldest = token_cache.keys().next().value
@@ -262,7 +275,7 @@
         line_idx,
         top: line_idx * line_height,
         tokens: search_tokens(
-          render_tokens(line.text, token_cache.get(line_idx) ?? []),
+          render_tokens(line.text, token_cache.get(line_idx)?.spans ?? []),
           line.from,
         ),
       }
@@ -367,6 +380,7 @@
     const is_current = (): boolean => active_client === active && model === active_model
     untrack(() => {
       token_cache.clear()
+      cached_line_count = active_model.line_count
       token_revision += 1
     })
     doc_info = null
@@ -451,7 +465,8 @@
     void model_revision
     untrack(() => refresh_input())
     if (scrollport) scrollport.scrollTop = scroll_top
-    measure_overlay_width()
+    // Untracked: it writes `overlay_width`, and reading that back re-ran this whole effect.
+    untrack(measure_overlay_width)
   })
   const on_focus = (): void => {
     unregister_escape ??= register_escape_layer((event) => {
@@ -697,36 +712,7 @@
     // Some browsers deliver the final input after compositionend in the same task.
     queueMicrotask(() => refresh_input(true))
   }
-  const apply_edit = (edit: RangeEdit, source: `command` | `input` = `command`): void => {
-    const area = textarea
-    if (!area) return
-    const {
-      range_start: from,
-      range_end: to,
-      replacement: insert,
-      selection_start: anchor,
-      selection_end: head,
-    } = edit
-    if (from === to && insert === ``) {
-      model.set_selection({ anchor, head })
-      return
-    }
-    try {
-      update_locally(() => {
-        model.transact([{ from, to, insert }], {
-          selection: { anchor, head },
-          source,
-        })
-      })
-    } catch (error) {
-      area.value = model.slice(input_from, input_to)
-      set_dom_selection(area, model.selection)
-      report_error(error)
-      return
-    }
-    refresh_input(true)
-  }
-  const run_save = async (): Promise<boolean> => {
+  export const save = async (): Promise<boolean> => {
     const info = doc_info
     const save_handler = on_save
     const save_error_handler = on_error
@@ -753,11 +739,27 @@
   const apply_command = (
     event: KeyboardEvent,
     edit: RangeEdit | null,
-    source?: `command` | `input`,
+    source: `command` | `input` = `command`,
   ): void => {
-    if (!edit) return
+    const area = textarea
+    if (!edit || !area) return
     event.preventDefault()
-    apply_edit(edit, source)
+    const { from, to, insert, anchor, head } = edit
+    if (from === to && insert === ``) {
+      model.set_selection({ anchor, head })
+      return
+    }
+    try {
+      update_locally(() =>
+        model.transact([{ from, to, insert }], { selection: { anchor, head }, source }),
+      )
+    } catch (error) {
+      area.value = model.slice(input_from, input_to)
+      set_dom_selection(area, model.selection)
+      report_error(error)
+      return
+    }
+    refresh_input(true)
   }
   const measure_line = (text: string): { element: HTMLDivElement; node: Text } => {
     const area = textarea
@@ -1123,7 +1125,7 @@
     }
     if (lower_key === `s` && command_modifier && !event.altKey && on_save) {
       event.preventDefault()
-      void run_save()
+      void save()
       return
     }
     const { anchor, head } = selection_of(area)
@@ -1151,7 +1153,6 @@
     if (command_modifier || event.altKey) return
     apply_command(event, auto_close_pair(state, event.key), `input`)
   }
-  export const save = run_save
   export const focus = (): void => textarea?.focus()
   export const undo = (): boolean => model.undo()
   export const redo = (): boolean => model.redo()

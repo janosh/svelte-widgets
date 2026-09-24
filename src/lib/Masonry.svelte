@@ -23,12 +23,11 @@
     duration_ms = 200,
     gap = 20,
     get_id = (item: Item): ItemId => {
-      if (typeof item === `number`) return item
-      if (typeof item === `string`) return item
+      if (typeof item === `number` || typeof item === `string`) return item
       const resolved = (item as Record<string, unknown>)[id_key]
       if (typeof resolved === `string` || typeof resolved === `number`) return resolved
       throw new Error(
-        `Masonry: item[${JSON.stringify(id_key)}] is ${typeof resolved}, expected string | number. Item: ${JSON.stringify(item)}`,
+        `Masonry: item[${JSON.stringify(id_key)}] is ${typeof resolved}, expected string | number (or pass get_id). Item: ${JSON.stringify(item)}`,
       )
     },
     id_key = `id`,
@@ -112,15 +111,25 @@
   const get_height = (item: Item): number =>
     item_heights.get(get_id(item)) || get_estimated_height?.(item) || avg_measured_height
 
-  // Keep measuring when order changes; virtualized grids use estimates only.
+  // Keep measuring when order changes; virtualized grids use estimates only. One observer
+  // serves every card: per-card observers cost an allocation and a callback each.
+  const measured_ids = new Map<Element, ItemId>()
+  let item_observer: ResizeObserver | undefined
   const measure_height = (item_id: ItemId) => (node: HTMLElement) => {
     if (virtualize) return
-    const observer = new ResizeObserver(() => {
-      const item_height = node.offsetHeight
-      if (item_height > 0) item_heights.set(item_id, item_height)
+    item_observer ??= new ResizeObserver((entries) => {
+      for (const { target } of entries) {
+        const id = measured_ids.get(target)
+        const item_height = target instanceof HTMLElement ? target.offsetHeight : 0
+        if (id !== undefined && item_height > 0) item_heights.set(id, item_height)
+      }
     })
-    observer.observe(node)
-    return () => observer.disconnect()
+    measured_ids.set(node, item_id)
+    item_observer.observe(node)
+    return () => {
+      measured_ids.delete(node)
+      item_observer?.unobserve(node)
+    }
   }
 
   let effective_order = $derived(virtualize ? `row-first` : order)

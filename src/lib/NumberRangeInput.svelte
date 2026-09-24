@@ -82,7 +82,7 @@
   // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
   // A writable derived value follows external updates while allowing incomplete local drafts.
-  let draft = $derived(value === undefined ? `` : String(value))
+  let draft = $derived(String(value ?? ``))
   let slider_value = $derived(value ?? min)
   let range_editing = false
   let keyboard_value: number | undefined
@@ -119,7 +119,7 @@
       }
     }
     if (final) {
-      draft = value === undefined ? `` : String(value)
+      draft = String(value ?? ``)
       if (input.type === `number`) input.value = draft
     }
   }
@@ -189,7 +189,7 @@
     }}
     onkeydown={(event) => {
       if (event.key === `Enter`) commit_input(event.currentTarget, true)
-      if (event.key === `Escape`) draft = value === undefined ? `` : String(value)
+      if (event.key === `Escape`) draft = String(value ?? ``)
       number_props?.onkeydown?.(event)
       log_keydown(event)
     }}

@@ -3,21 +3,28 @@ import type { DiffEntry, JsonValueType } from './types'
 
 type JsonChild = { key: string | number; value: unknown }
 
-// Circular-safe JSON.stringify
+// Circular-safe JSON.stringify that keeps Maps, Sets, Errors and RegExps readable instead of
+// emitting `{}` for them at any depth
 function safe_stringify(val: unknown): string | undefined {
-  const ancestors: object[] = []
+  // Objects JSON.stringify is currently inside, each paired with the value it replaced
+  const ancestors: { holder: object; source: object }[] = []
   return JSON.stringify(
     val,
     function (this: object, _key: string, inner: unknown) {
-      if (typeof inner === `object` && inner !== null) {
-        while (ancestors.length && ancestors.at(-1) !== this) ancestors.pop()
-        if (ancestors.includes(inner)) return `[Circular]`
-        ancestors.push(inner)
-      }
       if (typeof inner === `bigint`) return `${inner}n`
       if (typeof inner === `symbol`) return inner.toString()
       if (typeof inner === `function`) return `[Function: ${inner.name || `anonymous`}]`
-      return inner
+      if (typeof inner !== `object` || inner === null) return inner
+      while (ancestors.length && ancestors.at(-1)?.holder !== this) ancestors.pop()
+      if (ancestors.some(({ source }) => source === inner)) return `[Circular]`
+      const type = get_value_type(inner)
+      const replaced =
+        type === `map` || type === `set`
+          ? Array.from(inner as Iterable<unknown>)
+          : (format_special_value(inner, type) ?? inner)
+      if (typeof replaced === `object`)
+        ancestors.push({ holder: replaced, source: inner })
+      return replaced
     },
     2,
   )
@@ -45,7 +52,7 @@ export const is_expandable_type = (value_type: JsonValueType): boolean =>
   value_type === `map` ||
   value_type === `set`
 
-// Types whose String() form is searchable
+// Scalars compared by value
 const is_primitive_type = (value_type: JsonValueType): boolean =>
   value_type === `string` ||
   value_type === `number` ||
@@ -130,28 +137,18 @@ function format_special_value(value: unknown, type: JsonValueType): string | nul
   return null // not a special type
 }
 
-// Clipboard text for a value: strings verbatim, containers as indented JSON
+// Clipboard text for a value: strings verbatim, other leaves as displayed, containers as
+// indented JSON
 export function serialize_for_copy(value: unknown): string {
   const type = get_value_type(value)
   if (type === `string`) return value as string
   if (type === `function`) return (value as (...args: unknown[]) => unknown).toString()
-
-  const special = format_special_value(value, type)
-  if (special !== null) return special
-
-  // Map/Set/Object/Array - try JSON stringify
-  const data =
-    type === `map`
-      ? Array.from((value as Map<unknown, unknown>).entries())
-      : type === `set`
-        ? Array.from(value as Set<unknown>)
-        : value
-  try {
-    return safe_stringify(data) ?? String(value)
-  } catch {
-    return String(value)
-  }
+  return format_special_value(value, type) ?? to_json(value)
 }
+
+// Valid JSON text for any value (a file export): cycles become "[Circular]", non-JSON leaves
+// their display strings, and a bare undefined `null`
+export const to_json = (value: unknown): string => safe_stringify(value) ?? `null`
 
 // Inline preview of a collapsed node or leaf
 export function format_preview(value: unknown, max_length: number = 50): string {
@@ -173,22 +170,20 @@ export function format_preview(value: unknown, max_length: number = 50): string 
   return format_special_value(value, type) ?? String(value)
 }
 
-// Case-insensitive match of query against the path, the key or a primitive value
+// Case-insensitive match of query against a node's key or its displayed leaf text. Paths
+// are not matched: every descendant of a matching key (and of the root label) would match.
 export function matches_search(
-  path: string,
   key: string | number | null,
   value: unknown,
   query: string,
 ): boolean {
   if (!query) return false
-
   const lower_query = query.toLowerCase()
-  if (path.toLowerCase().includes(lower_query)) return true
   if (key !== null && String(key).toLowerCase().includes(lower_query)) return true
-  return (
-    is_primitive_type(get_value_type(value)) &&
-    String(value).toLowerCase().includes(lower_query)
-  )
+  const type = get_value_type(value)
+  if (is_expandable_type(type)) return false
+  const text = type === `string` ? (value as string) : format_preview(value)
+  return text.toLowerCase().includes(lower_query)
 }
 
 // Depth-first pre-order walk in render order. Skip ancestors to terminate cycles while
@@ -238,7 +233,7 @@ export function collect_all_paths(
   return paths
 }
 
-// Paths whose key, path or primitive value contains query, in render order
+// Paths whose key or leaf text contains query, in render order
 export function find_matching_paths(
   value: unknown,
   query: string,
@@ -248,7 +243,7 @@ export function find_matching_paths(
   const matches: string[] = []
   if (!query) return matches
   walk_tree(value, current_path, sort_keys, (val, path, key) => {
-    if (matches_search(path, key, val, query)) matches.push(path)
+    if (matches_search(key, val, query)) matches.push(path)
     return true
   })
   return matches
@@ -266,33 +261,31 @@ export function get_ancestor_paths(path: string, root_label = ``): string[] {
   return ancestors
 }
 
-// Equality for change detection: NaN equals NaN, containers compare by size only (deep
-// changes are detected at the child level)
+// Leaf equality for change detection and edits: NaN equals NaN, Dates compare by timestamp,
+// RegExps by source and flags. Distinct containers are unequal (JsonTree diffs them per child).
 export function values_equal(val_a: unknown, val_b: unknown): boolean {
   if (val_a === val_b || (Number.isNaN(val_a) && Number.isNaN(val_b))) return true
-  if (val_a === null || val_b === null || typeof val_a !== typeof val_b) return false
-
   const type = get_value_type(val_a)
   if (type !== get_value_type(val_b)) return false
-  if (is_primitive_type(type) || type === `symbol`) return false // strict equality failed above
   if (type === `date`) return (val_a as Date).getTime() === (val_b as Date).getTime()
   if (type === `regexp`)
     return (val_a as RegExp).toString() === (val_b as RegExp).toString()
-  if (type === `array`) return (val_a as unknown[]).length === (val_b as unknown[]).length
-  if (type === `object`) {
-    return Object.keys(val_a as object).length === Object.keys(val_b as object).length
-  }
   return false
 }
 
-// Typed value of an edited string: numbers, booleans and null are detected, the rest stays text
+// JSON number grammar: Number() also accepts `0x1F`, `+5` and `007`, silently turning hex
+// codes and leading-zero IDs (zip codes) into different numbers
+const JSON_NUMBER_RE = /^-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?$/
+
+// Typed value of an edited string: JSON numbers, booleans and null are detected, the rest
+// stays text
 export function parse_edited_value(text: string): unknown {
   const trimmed = text.trim()
   if (trimmed === `null`) return null
   if (trimmed === `true`) return true
   if (trimmed === `false`) return false
   const num = Number(trimmed)
-  if (trimmed !== `` && Number.isFinite(num)) return num
+  if (JSON_NUMBER_RE.test(trimmed) && Number.isFinite(num)) return num
   return text
 }
 

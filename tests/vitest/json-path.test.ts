@@ -44,25 +44,8 @@ describe(`format_path`, () => {
   })
 })
 
+// format_path folds build_path over its segments, so the table above covers build_path
 describe(`build_path`, () => {
-  it.each([
-    // empty parent
-    [``, `key`, `key`],
-    [``, 0, `[0]`],
-    [``, `key.with.dot`, `["key.with.dot"]`],
-    [``, `key-with-dash`, `["key-with-dash"]`],
-    [``, `key"with"quotes`, `["key\\"with\\"quotes"]`],
-    // string keys use dot notation, numeric keys bracket notation
-    [`root`, `child`, `root.child`],
-    [`arr`, 0, `arr[0]`],
-    [`data`, `special-key`, `data["special-key"]`],
-  ] as [string, string | number, string][])(
-    `build_path(%p, %p) = %p`,
-    (parent, key, expected) => {
-      expect(build_path(parent, key)).toBe(expected)
-    },
-  )
-
   it.each([`123`, `0`, `-1`, `1.5`, `1e10`])(
     `treats numeric-looking key %p as string`,
     (key) => {
@@ -71,13 +54,6 @@ describe(`build_path`, () => {
       expect(parse_path(path)).toEqual([`obj`, key])
     },
   )
-
-  it(`handles nested paths`, () => {
-    let path = build_path(``, `users`)
-    path = build_path(path, 0)
-    path = build_path(path, `name`)
-    expect(path).toBe(`users[0].name`)
-  })
 })
 
 describe(`parse_path`, () => {
@@ -97,14 +73,13 @@ describe(`parse_path`, () => {
     [`a[]`, [`a`]],
     [`a[].b`, [`a`, `b`]],
     [`a[-1]`, [`a`, -1]],
+    // only integer tokens become indices
+    [`a[ ]`, [`a`, ` `]],
+    [`a[0x1]`, [`a`, `0x1`]],
+    [`a[1e3]`, [`a`, `1e3`]],
+    [`a[1.5]`, [`a`, `1.5`]],
   ] as [string, (string | number)[]][])(`parse_path(%p) = %j`, (path, expected) => {
     expect(parse_path(path)).toEqual(expected)
-  })
-
-  it(`round-trips keys with quotes via build_path and parse_path`, () => {
-    const key_with_quotes = `say "hello"`
-    const path = build_path(`root`, key_with_quotes)
-    expect(parse_path(path)).toEqual([`root`, key_with_quotes])
   })
 })
 

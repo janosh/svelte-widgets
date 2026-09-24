@@ -4,10 +4,7 @@ import { create_element, press_key as dispatch_key } from '../index'
 
 describe(`forward_window_keydown`, () => {
   const cleanups: (() => void)[] = []
-  afterEach(() => {
-    for (const cleanup of cleanups.splice(0)) cleanup()
-    document.body.innerHTML = ``
-  })
+  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
 
   const attach = (
     handled = true,
@@ -92,20 +89,17 @@ describe(`forward_window_keydown`, () => {
     expect(event.defaultPrevented).toBe(true)
   })
 
-  it(`handles body and document-element targets while page focus is idle`, () => {
-    const { node, handle } = attach()
-    hover(node)
-    for (const target of [document.body, document.documentElement]) {
-      expect(dispatch_key(target, `f`).defaultPrevented).toBe(true)
-    }
-    expect(handle).toHaveBeenCalledTimes(2)
-  })
-
-  it(`leaves the browser default alone when unhandled`, () => {
-    const { node } = attach(false)
-    hover(node)
-    expect(press_key().defaultPrevented).toBe(false)
-  })
+  it.each([true, false])(
+    `prevents the default iff handled=%s on idle-focus window, body and root targets`,
+    (handled) => {
+      const { node, handle } = attach(handled)
+      hover(node)
+      for (const target of [globalThis, document.body, document.documentElement]) {
+        expect(dispatch_key(target, `f`).defaultPrevented).toBe(handled)
+      }
+      expect(handle).toHaveBeenCalledTimes(3)
+    },
+  )
 
   it.each([`prevented`, `composing`])(`does not forward %s keys`, (mode) => {
     const { node, handle } = attach()
@@ -122,7 +116,6 @@ describe(`forward_window_keydown`, () => {
 
   it(`disabled attaches nothing`, () => {
     const { node, handle, cleanup } = attach(true, { enabled: false })
-
     expect(cleanup).toBeUndefined()
     hover(node)
     press_key()

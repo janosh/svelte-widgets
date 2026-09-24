@@ -19,8 +19,6 @@ afterEach(() => {
 const mock_console_error = () =>
   vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
-// Empty options while loading, disabled, or allowing user options, and the base error
-// case, all live in the `accepts empty options in %s mode` matrix in MultiSelect.svelte.test.ts
 // deferred load_options fetch: tests decide exactly when each request settles
 type LoadResult = LoadOptionsResult<string>
 
@@ -394,32 +392,6 @@ describe(`load_options feature`, () => {
     },
   )
 
-  test(`close during fetch clears loading state`, async () => {
-    const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({ load_options, open: true })
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(1)
-
-    const input = get_input()
-    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-
-    // close while the fetch is still pending
-    input.dispatchEvent(fresh_key(`Escape`))
-    await tick()
-
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-    expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
-
-    // a stale resolve after close must not corrupt state
-    resolvers[0]({ options: [`Result`], has_more: false })
-    await tick()
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-
-    reopen()
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(2)
-  })
-
   test(`scroll after auto-fill cap resets counter and allows more loading`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
     mount_multiselect({
@@ -459,18 +431,20 @@ describe(`load_options feature`, () => {
     expect(load_options).toHaveBeenCalledTimes(capped_count + 2)
   })
 
-  test(`reopen before stale fetch resolves triggers fresh load`, async () => {
+  test(`closing aborts the pending fetch and reopening loads fresh, discarding the stale result`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
     mount_multiselect({ load_options, open: true })
     await tick()
     expect(load_options).toHaveBeenCalledTimes(1)
 
     const input = get_input()
+    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-    // close while the first fetch is still pending
+    // close while the first fetch is still pending: it is aborted and loading clears
     input.dispatchEvent(fresh_key(`Escape`))
     await tick()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
+    expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
     // reopen before the old fetch resolves — the critical timing
     reopen()

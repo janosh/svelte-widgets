@@ -48,8 +48,9 @@
   // Flash when the value at this path differs from the last render
   $effect(() => {
     if (ctx.settings.highlight_changes) {
-      const prev = ctx.prev_values.get(path)
-      if (prev !== undefined && !values_equal(prev, value)) changed_flash.show(true)
+      // has(), not a get() !== undefined check: a leaf that was undefined must flash too
+      if (ctx.prev_values.has(path) && !values_equal(ctx.prev_values.get(path), value))
+        changed_flash.show(true)
       ctx.prev_values.set(path, value)
     }
   })

@@ -1,6 +1,5 @@
 import {
   Renderer,
-  type Marked,
   type Token,
   type Tokens,
   type TokenizerAndRendererExtension,
@@ -63,6 +62,20 @@ const citation_url = (citation: Citation): string | undefined =>
   citation.url ??
   (citation.doi === undefined ? undefined : `https://doi.org/${citation.doi}`)
 const reference_key = `[A-Za-z0-9][A-Za-z0-9_.:-]*`
+
+// Same document order as Marked's walkTokens, which concatenates callback results per
+// token and so grows quadratically with the number of top-level blocks.
+function walk_tokens(tokens: readonly Token[], visit: (token: Token) => void): void {
+  for (const token of tokens) {
+    visit(token)
+    if (token.type === `table`) {
+      const { header, rows } = token as Tokens.Table
+      for (const cell of [...header, ...rows.flat()]) walk_tokens(cell.tokens, visit)
+    } else if (token.type === `list`) walk_tokens((token as Tokens.List).items, visit)
+    else if (`tokens` in token && Array.isArray(token.tokens))
+      walk_tokens(token.tokens, visit)
+  }
+}
 
 export function scientific_references(
   options: ReferenceOptions,
@@ -176,10 +189,10 @@ export function scientific_references(
     },
   ]
 
-  const resolve = (tokens: Token[], parser: Marked): void => {
+  const resolve = (tokens: Token[]): void => {
     let equations = 0
     let figures = 0
-    void parser.walkTokens(tokens, (token) => {
+    walk_tokens(tokens, (token) => {
       const reference = token as ReferenceToken
       if (token.type === `reference_equation` || token.type === `reference_figure`) {
         const key = reference.key ?? ``

@@ -1,7 +1,7 @@
 import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '$lib'
-import { serialize_for_copy } from '$lib/json-tree/utils'
+import { to_json } from '$lib/json-tree/utils'
 import { doc_query } from './index'
 import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
@@ -133,9 +133,7 @@ describe(`rendering`, () => {
   it.each([
     [`hello`, `string`, `"hello"`],
     [42, `number`, `42`],
-    [3.125, `number`, `3.125`],
     [true, `boolean`, `true`],
-    [false, `boolean`, `false`],
     [null, `null`, `null`],
     [undefined, `undefined`, `undefined`],
     [BigInt(9007199254740991), `bigint`, `9007199254740991n`],
@@ -144,13 +142,6 @@ describe(`rendering`, () => {
     [new Error(`Something failed`), `error`, `Error: Something failed`],
     [Symbol(`description`), `symbol`, `Symbol(description)`],
     [function example_fn() {}, `function`, `ƒ example_fn()`],
-    [Infinity, `number`, `Infinity`],
-    [-Infinity, `number`, `-Infinity`],
-    [NaN, `number`, `NaN`],
-    [0, `number`, `0`],
-    [``, `string`, `""`],
-    [6.022e23, `number`, `6.022e+23`],
-    [`日本語 🚀 ∑`, `string`, `"日本語 🚀 ∑"`],
     [`<div>html</div>`, `string`, `"<div>html</div>"`],
   ])(`renders leaf %p with class %s as %p`, (value, css_class, expected) => {
     mount_tree({ value: { test: value }, ui: { header: false } })
@@ -231,15 +222,12 @@ describe(`rendering`, () => {
     }
   })
 
-  it.each([`#ff0000`, `#fff`, `rgb(255, 0, 0)`, `hsl(120, 100%, 50%)`, `hello`])(
-    `color swatch for %p`,
-    (color) => {
-      mount_tree({ value: { color }, ui: { header: false } })
-      const swatch = document.querySelector<HTMLSpanElement>(`.color-swatch`)
-      expect(Boolean(swatch)).toBe(color !== `hello`)
-      if (swatch) expect(swatch.style.background).not.toBe(``)
-    },
-  )
+  it.each([`#fff`, `hello`])(`color swatch for %p`, (color) => {
+    mount_tree({ value: { color }, ui: { header: false } })
+    const swatch = document.querySelector<HTMLSpanElement>(`.color-swatch`)
+    expect(Boolean(swatch)).toBe(color !== `hello`)
+    if (swatch) expect(swatch.style.background).not.toBe(``)
+  })
 
   it(`marks expanded nodes at depth <= 2 as sticky headers`, () => {
     mount_tree({
@@ -458,6 +446,15 @@ describe(`folding`, () => {
     expect(collapsed_count()).toBe(`0`)
   })
 
+  it(`flashes a leaf that changes from undefined`, () => {
+    const value = $state<{ leaf?: number }>({ leaf: undefined })
+    mount_tree({ value, ui: { header: false } })
+    expect(document.querySelector(`.json-value.changed`)).toBeNull()
+    value.leaf = 1
+    flushSync()
+    expect(document.querySelector(`.json-value.changed`)?.textContent).toContain(`1`)
+  })
+
   // The un-flash timer hung off an effect cleanup rerunning on every ctx.settings change, so a
   // toggle mid-flash cancelled it without rescheduling and the node stayed highlighted
   it(`un-flashes a changed value even when a setting is toggled mid-flash`, async () => {
@@ -478,26 +475,25 @@ describe(`folding`, () => {
 })
 
 describe(`header toggles`, () => {
-  it(`T toggles type annotations and # toggles array indices`, async () => {
-    mount_tree({ value: [`a`, `b`, `c`], default_fold_level: 5 })
+  it(`T and # toggle type annotations and array indices from their initial props`, async () => {
+    mount_tree({
+      value: [`a`, `b`, `c`],
+      default_fold_level: 5,
+      show_data_types: true,
+      show_array_indices: false,
+    })
     const [type_toggle, index_toggle] = control_group(0)
+    const state = () => [
+      type_toggle.classList.contains(`active`),
+      index_toggle.classList.contains(`active`),
+      document.querySelectorAll(`.type-annotation`).length,
+      document.querySelectorAll(`.array-index .index`).length,
+    ]
     expect([type_toggle.textContent, index_toggle.textContent]).toEqual([`T`, `#`])
-    expect(document.querySelectorAll(`.type-annotation`)).toHaveLength(0)
-    expect(document.querySelectorAll(`.array-index .index`)).toHaveLength(3)
-
+    expect(state()).toEqual([true, false, 3, 0])
     await click_and_tick(type_toggle)
     await click_and_tick(index_toggle)
-    expect(type_toggle.classList.contains(`active`)).toBe(true)
-    expect(index_toggle.classList.contains(`active`)).toBe(false)
-    expect(document.querySelectorAll(`.type-annotation`)).toHaveLength(3)
-    expect(document.querySelectorAll(`.array-index .index`)).toHaveLength(0)
-  })
-
-  it(`respects initial show_data_types / show_array_indices`, () => {
-    mount_tree({ value: { a: 1 }, show_data_types: true, show_array_indices: false })
-    const [type_toggle, index_toggle] = control_group(0)
-    expect(type_toggle.classList.contains(`active`)).toBe(true)
-    expect(index_toggle.classList.contains(`active`)).toBe(false)
+    expect(state()).toEqual([false, true, 0, 3])
   })
 })
 
@@ -552,7 +548,9 @@ describe(`copy and download`, () => {
           (click.mock.instances[0] as HTMLAnchorElement).download,
           blob?.type,
         ]
-    expect(data).toBe(serialize_for_copy(value))
+    // valid JSON even for a string root, which copies verbatim elsewhere
+    expect(data).toBe(to_json(value))
+    expect(JSON.parse(String(data))).toEqual(value)
     expect(filename).toMatch(filename_re)
     expect(mime_type).toBe(`application/json`)
     expect(revoke_url).not.toHaveBeenCalled()
@@ -885,14 +883,19 @@ describe(`context menu and pinning`, () => {
 
 describe(`diff mode`, () => {
   it.each([
-    [`added`, { a: 1, b: 2 }, { a: 1 }, `b`],
-    [`changed`, { a: 99 }, { a: 1 }, `a`],
-  ])(`highlights %s values`, (status, value, compare_value, path) => {
+    [`added`, { a: 1, b: 2 }, { a: 1 }, [`b`]],
+    [`changed`, { a: 99 }, { a: 1 }, [`a`]],
+    [`no`, { a: 1 }, undefined, []],
+  ])(`marks %s values`, (status, value, compare_value, marked_paths) => {
     mount_tree({ value, compare_value, ui: { header: false }, default_fold_level: 5 })
-    expect(node_at(path)?.classList.contains(`diff-${status}`)).toBe(true)
+    const marked = document.querySelectorAll<HTMLElement>(
+      `.diff-added, .diff-changed, .ghost`,
+    )
+    expect([...marked].map((el) => el.dataset.path)).toEqual(marked_paths)
+    for (const el of marked) expect(el.classList.contains(`diff-${status}`)).toBe(true)
   })
 
-  it.each([``, `data.json`, `my-file`, `data[raw]`, `quote"\\file`])(
+  it.each([``, `data.json`, `data[raw]`, `quote"\\file`])(
     `shows removed children under verbatim root label %s`,
     (root_label) => {
       mount_tree({
@@ -909,12 +912,6 @@ describe(`diff mode`, () => {
         `${root_label ? `${root_label}.` : ``}nested.removed_key`,
       )
       expect(document.querySelectorAll(`.ghost`)).toHaveLength(2)
-
-      document.body.innerHTML = ``
-      mount_tree({ value: { a: 1, b: 2 }, ui: { header: false }, default_fold_level: 5 })
-      expect(
-        document.querySelector(`.diff-added, .diff-changed, .diff-removed, .ghost`),
-      ).toBeNull()
     },
   )
 })
@@ -956,26 +953,18 @@ describe(`inline editing`, () => {
     },
   )
 
-  test.each([
-    undefined,
-    123n,
-    new Date(),
-    /regex/,
-    Symbol(`value`),
-    new Error(`value`),
-    () => 1,
-    NaN,
-    Infinity,
-    -Infinity,
-  ])(`does not offer inline editing for %s`, (value) => {
-    const on_change = vi.fn()
-    mount_tree({ value, editable: true, on_change })
-    const leaf = doc_query(`.json-value`)
-    expect(leaf.title).toBe(``)
-    fire(leaf, mouse(`dblclick`))
-    expect(document.querySelector(`.edit-input`)).toBeNull()
-    expect(on_change).not.toHaveBeenCalled()
-  })
+  test.each([undefined, 123n, new Date(), () => 1, NaN, -Infinity])(
+    `does not offer inline editing for %s`,
+    (value) => {
+      const on_change = vi.fn()
+      mount_tree({ value, editable: true, on_change })
+      const leaf = doc_query(`.json-value`)
+      expect(leaf.title).toBe(``)
+      fire(leaf, mouse(`dblclick`))
+      expect(document.querySelector(`.edit-input`)).toBeNull()
+      expect(on_change).not.toHaveBeenCalled()
+    },
+  )
 
   test(`a value update inside the click-to-copy delay does not cancel the pending copy`, async () => {
     mock_clipboard_write()

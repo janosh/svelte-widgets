@@ -42,6 +42,13 @@ export function group_options<T extends Option>(
   }))
 }
 
+// Keyboard order: every option outside collapsed groups.
+export const navigable_options = <T extends Option>(
+  groups: GroupedOptions<T>[],
+  collapsible: boolean,
+): T[] =>
+  groups.flatMap(({ options, collapsed }) => (collapsible && collapsed ? [] : options))
+
 export type OptionGroupRow<T extends Option> = GroupedOptions<T> & {
   kind: `header`
   group: string
@@ -72,7 +79,8 @@ export function create_option_rows<T extends Option>() {
     for (const { group, options, collapsed } of groups) {
       const hidden = collapsed && collapsible
       const selectable: T[] = []
-      if (group !== null) {
+      // Past the max_options limit a header would label an empty section.
+      if (group !== null && flat_idx < limit) {
         const render_key = header_keys.get(group) ?? Symbol(`sms-header-${group}`)
         header_keys.set(group, render_key)
         rows.push({ kind: `header`, group, options, collapsed, selectable, render_key })
@@ -123,6 +131,12 @@ export function next_option_index(
   return null
 }
 
+export const is_integer_at_least = (
+  candidate: unknown,
+  minimum: number,
+): candidate is number =>
+  typeof candidate === `number` && Number.isInteger(candidate) && candidate >= minimum
+
 // Shared controls reject invalid windows and pagination before deriving rows or fetching.
 export function validate_option_list_config(
   {
@@ -140,8 +154,6 @@ export function validate_option_list_config(
   const invalid_config = (message: string): never => {
     throw new TypeError(`${component}: ${message}`)
   }
-  const is_integer_at_least = (value: number, minimum: number): boolean =>
-    Number.isInteger(value) && value >= minimum
   if (max_options != null && !is_integer_at_least(max_options, 0)) {
     invalid_config(
       `max_options must be null, undefined, or a non-negative integer, got ${max_options}`,

@@ -1,5 +1,5 @@
 import { PrevNext } from '$lib'
-import { mount, type ComponentProps, unmount } from 'svelte'
+import { createRawSnippet, mount, type ComponentProps, unmount } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
@@ -76,6 +76,22 @@ describe(`PrevNext`, () => {
       expect(spy).not.toHaveBeenCalled()
       spy.mockRestore()
     }
+  })
+
+  test.each([
+    [`without between`, undefined],
+    [
+      `with between content`,
+      createRawSnippet(() => ({ render: () => `<span>|</span>` })),
+    ],
+  ])(`only the next link is end-aligned %s`, (_desc, between) => {
+    mount_prev_next({ items, current: `page2`, between })
+    // positional nth-child(2) styling landed on the between content instead
+    const aligns = [...target.querySelectorAll(`.prev-next > *`)].map(
+      (element) => getComputedStyle(element).textAlign,
+    )
+    expect(aligns.at(-1)).toBe(`end`)
+    expect(aligns.slice(0, -1)).not.toContain(`end`)
   })
 
   test(`custom wrapper preserves its class`, () => {

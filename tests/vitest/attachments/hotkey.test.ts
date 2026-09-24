@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { create_element, press_key as keydown, stub_prop } from '../index'
 
 describe(`hotkey`, () => {
-  // a global binding outlives document.body.innerHTML = '', so dispose every one
+  // a global binding outlives the body reset between tests, so dispose every one
   const cleanups: (() => void)[] = []
   afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
   const attach_hotkey = (
@@ -103,18 +103,16 @@ describe(`hotkey`, () => {
 
     keydown(node, `k`, other)
     expect(handler).not.toHaveBeenCalled()
-
     keydown(node, `k`, matching)
     expect(handler).toHaveBeenCalledTimes(1)
   })
 
   it(`stays quiet mid IME composition and when disabled`, () => {
-    const node = create_element()
     const handler = vi.fn()
-    const { cleanup } = attach_hotkey(
-      { bindings: [{ keys: `ctrl+k`, handler }], enabled: false },
-      node,
-    )
+    const { node, cleanup } = attach_hotkey({
+      bindings: [{ keys: `ctrl+k`, handler }],
+      enabled: false,
+    })
     expect(cleanup).toBeUndefined()
     keydown(node, `k`, { ctrlKey: true })
     expect(handler).not.toHaveBeenCalled()

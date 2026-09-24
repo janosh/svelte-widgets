@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
-import { create_element, doc_query, pointer_event } from './index'
+import { create_element, doc_query, mock_rect, pointer_event } from './index'
 import TestPopover from './TestPopover.svelte'
 
 describe(`Popover`, () => {
@@ -10,8 +10,11 @@ describe(`Popover`, () => {
   // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
   // so unmount for real between cases
   const mounted: Record<string, unknown>[] = []
+  const unmount_all = () => Promise.all(mounted.splice(0).map((app) => unmount(app)))
+  // hover/focus open and close on timers
+  beforeEach(() => void vi.useFakeTimers())
   afterEach(async () => {
-    await Promise.all(mounted.splice(0).map((app) => unmount(app)))
+    await unmount_all()
     vi.useRealTimers()
   })
   const mount_popover = (extra: Partial<PopoverProps> = {}) => {
@@ -20,6 +23,7 @@ describe(`Popover`, () => {
     return props
   }
   const trigger = () => doc_query<HTMLButtonElement>(`[data-testid="popover-trigger"]`)
+  const item = () => doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`)
   const surface = () => document.querySelector<HTMLElement>(`.popover`)
   // pointer_event sets isPrimary; a bare PointerEvent reads as a second finger
   const press = (target: EventTarget) =>
@@ -28,9 +32,15 @@ describe(`Popover`, () => {
     press(target)
     target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
   }
-  const escape_native_popover = () => {
+  const press_escape = () =>
     document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
+  const escape_native_popover = () => {
+    press_escape()
     doc_query(`.popover`).hidePopover()
+  }
+  const click_trigger = async () => {
+    trigger().click()
+    await tick()
   }
   const mouse_enter = (target: EventTarget = trigger()) =>
     target.dispatchEvent(new MouseEvent(`mouseenter`))
@@ -58,8 +68,7 @@ describe(`Popover`, () => {
       expect(trigger().getAttribute(`aria-haspopup`)).toBe(has_popup)
       expect(trigger().getAttribute(`aria-controls`)).toBeNull()
 
-      trigger().click()
-      await tick()
+      await click_trigger()
 
       const popup = doc_query(`.popover`)
       expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
@@ -70,9 +79,8 @@ describe(`Popover`, () => {
       expect(popup.getAttribute(`aria-label`)).toBe(`Actions`)
       expect(popup.classList.contains(`consumer-class`)).toBe(true)
       // focus_trap moved the keyboard into the surface
-      expect(document.activeElement).toBe(doc_query(`[data-testid="popover-item"]`))
-      trigger().click()
-      await tick()
+      expect(document.activeElement).toBe(item())
+      await click_trigger()
       expect(trigger().getAttribute(`aria-controls`)).toBeNull()
     },
   )
@@ -81,29 +89,27 @@ describe(`Popover`, () => {
   // would pin every popover to the viewport corner
   test(`positions against the trigger, not the wrapper around it`, async () => {
     mount_popover({ offset: 8 })
-    const rect = { top: 20, bottom: 50, left: 100, right: 200, width: 100, height: 30 }
-    trigger().getBoundingClientRect = vi.fn(() => rect as DOMRect)
+    mock_rect(trigger(), { left: 100, top: 20, height: 30 }) // bottom: 50
 
-    trigger().click()
-    await tick()
+    await click_trigger()
 
-    const popup = doc_query(`[role="dialog"]`)
-    expect(popup.id).toBe(trigger().getAttribute(`aria-controls`))
-    expect(popup.style.top).toBe(`58px`) // 50 + 8
+    expect(doc_query(`.popover`).style.top).toBe(`58px`) // 50 + 8
   })
 
   test(`native dismissals report their reason`, async () => {
     const on_close = vi.fn()
+    const added = vi.spyOn(document, `addEventListener`)
     mount_popover({ on_close })
-    trigger().click()
-    await tick()
+    // closed popovers register no document-wide close trackers
+    expect(added.mock.calls.map(([type]) => type)).not.toContain(`keydown`)
+    added.mockRestore()
+    await click_trigger()
 
     escape_native_popover()
     await tick()
     expect(on_close).toHaveBeenLastCalledWith({ via: `escape` })
 
-    trigger().click()
-    await tick()
+    await click_trigger()
     release(document.body)
     doc_query(`.popover`).hidePopover()
     await tick()
@@ -116,8 +122,7 @@ describe(`Popover`, () => {
 
   test(`dismiss_on: 'press' uses a manual popover and closes on pointerdown`, async () => {
     mount_popover({ dismiss_on: `press` })
-    trigger().click()
-    await tick()
+    await click_trigger()
     expect(doc_query(`.popover`).getAttribute(`popover`)).toBe(`manual`)
 
     press(document.body)
@@ -125,27 +130,18 @@ describe(`Popover`, () => {
     expect(surface()).toBeNull()
   })
 
-  test(`escape: false leaves Escape to the consumer`, async () => {
-    mount_popover({ escape: false })
-    trigger().click()
-    await tick()
+  test(`escape: false and trap_focus: false leave Escape and focus to the consumer`, async () => {
+    mount_popover({ escape: false, trap_focus: false })
+    trigger().focus()
+    await click_trigger()
+    expect(document.activeElement).toBe(trigger())
 
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
+    press_escape()
     await tick()
     expect(surface()).not.toBeNull()
   })
 
-  test(`trap_focus: false leaves focus where it was`, async () => {
-    mount_popover({ trap_focus: false })
-    trigger().focus()
-    trigger().click()
-    await tick()
-
-    expect(document.activeElement).toBe(trigger())
-  })
-
   test(`hover honors delays and stays open across the trigger-surface gap`, async () => {
-    vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, open_delay_ms: 40 })
 
     mouse_enter()
@@ -172,17 +168,15 @@ describe(`Popover`, () => {
   test.each([`hover`, `focus`] as const)(
     `%s keeps focus transitions between trigger and surface open`,
     async (trigger_mode) => {
-      vi.useFakeTimers()
       mount_popover({ trigger_mode, close_delay_ms: 25 })
       const outside = create_element(`button`)
 
       trigger().focus()
       await advance_time(0)
-      const item = doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`)
       // Non-click opening must not steal focus before the user moves it.
       expect(document.activeElement).toBe(trigger())
 
-      item.focus()
+      item().focus()
       await advance_time(25)
       expect(surface()).not.toBeNull()
 
@@ -196,7 +190,6 @@ describe(`Popover`, () => {
   )
 
   test(`hover stays open while either pointer or focus remains inside`, async () => {
-    vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, close_delay_ms: 20 })
     const outside = create_element(`button`)
 
@@ -224,13 +217,12 @@ describe(`Popover`, () => {
   })
 
   test(`Escape from a focus popover closes without immediately reopening`, async () => {
-    vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `focus` })
     const outside = create_element(`button`)
 
     trigger().focus()
     await advance_time(0)
-    doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
+    item().focus()
 
     props.trap_focus = false
     escape_native_popover()
@@ -245,10 +237,9 @@ describe(`Popover`, () => {
   })
 
   test(`focus can reopen after Escape without focus restoration`, async () => {
-    vi.useFakeTimers()
     const props = mount_popover({ open: true, trigger_mode: `focus`, trap_focus: false })
     await tick()
-    doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
+    item().focus()
 
     props.trap_focus = true
     escape_native_popover()
@@ -263,11 +254,10 @@ describe(`Popover`, () => {
   // removing a focused surface delivers no focusout, so focus_trap's handback to the
   // trigger reopens what was dismissed unless close drops the stale focus state
   test(`hover dismissal with focus inside stays closed`, async () => {
-    vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `hover`, close_delay_ms: 10 })
     trigger().focus()
     await advance_time(0)
-    doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
+    item().focus()
     await advance_time(0)
     expect(surface()).not.toBeNull()
 
@@ -279,7 +269,6 @@ describe(`Popover`, () => {
   // same stale state from the other side: with nothing to restore focus to, a later hover
   // cycle must still close on mouseleave rather than wait on a focus that left
   test(`hover-out still closes after a dismissal that stranded focus`, async () => {
-    vi.useFakeTimers()
     const props = mount_popover({
       trigger_mode: `hover`,
       open_delay_ms: 0,
@@ -288,7 +277,7 @@ describe(`Popover`, () => {
     })
     mouse_enter()
     await advance_time(0)
-    doc_query<HTMLButtonElement>(`[data-testid="popover-item"]`).focus()
+    item().focus()
     await advance_time(0)
     props.open = false
     await advance_time(100)
@@ -316,13 +305,12 @@ describe(`Popover`, () => {
     const dialog = doc_query(`[role="dialog"]`)
     expect(dialog.dataset.placement).toBe(`right`)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`true`)
-    expect(document.activeElement).toBe(doc_query(`[data-testid="popover-item"]`))
+    expect(document.activeElement).toBe(item())
 
     await close_and_expect_focus(opener)
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`false`)
 
-    trigger().click()
-    await tick()
+    await click_trigger()
     await close_and_expect_focus(trigger())
 
     const next_opener = create_element(`button`)
@@ -335,7 +323,6 @@ describe(`Popover`, () => {
   // a torn-down component renders no surface either way, so only the timer id tells a
   // canceled timer from one that still fires
   test(`unmount cancels a pending delayed open`, async () => {
-    vi.useFakeTimers()
     mount_popover({ trigger_mode: `hover`, open_delay_ms: 50 })
     await tick()
     const set_timeout = vi.spyOn(globalThis, `setTimeout`)
@@ -344,14 +331,11 @@ describe(`Popover`, () => {
     const pending_timer = set_timeout.mock.results.at(-1)?.value as unknown
     expect(pending_timer).toBeDefined()
 
-    const app = mounted.pop()
-    if (!app) throw new Error(`Popover test app was not mounted`)
-    await unmount(app)
+    await unmount_all()
     expect(clear_timeout).toHaveBeenCalledWith(pending_timer)
   })
 
   test(`changing trigger mode invalidates a pending delayed open`, async () => {
-    vi.useFakeTimers()
     const props = mount_popover({ trigger_mode: `hover`, open_delay_ms: 50 })
     mouse_enter()
 

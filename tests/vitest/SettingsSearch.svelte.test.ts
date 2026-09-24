@@ -34,22 +34,42 @@ const mounted_search = async () => {
 }
 
 describe(`SettingsSearch`, () => {
-  test(`matches labels and descriptions while expanding only matching groups`, async () => {
+  // true = filtered out. Headings reveal what they hold even though no row repeats their
+  // words, and a keyed wrapper matched by its own label never hides its nested rows.
+  test.each<[string, string, Record<string, boolean>]>([
+    [
+      `labels`,
+      `radius`,
+      {
+        appearance: false,
+        camera: true,
+        atom_radius: false,
+        color_scheme: true,
+        'chart-legend': false,
+      },
+    ],
+    [
+      `descriptions`,
+      `motion inertia`,
+      { appearance: true, camera: false, rotation_damping: false, zoom_speed: true },
+    ],
+    [
+      `group titles`,
+      `camera`,
+      { appearance: true, camera: false, rotation_damping: false, zoom_speed: false },
+    ],
+    [`section titles`, `atoms`, { appearance: false, camera: true, atom_radius: false }],
+    [`a nested wrapper's label`, `rotation axes`, { rotation: false, rotation_x: false }],
+    [`neither end of a nesting`, `sphere`, { rotation: true, rotation_x: true }],
+  ])(`matches %s (query=%j)`, async (_, query, expected) => {
     const { input, appearance, camera } = await mounted_search()
-
-    await set_query(input, `radius`)
-    expect(filtered_out(appearance)).toBe(false)
-    expect(filtered_out(camera)).toBe(true)
-    expect(filtered_out(setting_row(`atom_radius`))).toBe(false)
-    expect(filtered_out(setting_row(`color_scheme`))).toBe(true)
-    expect(filtered_out(setting_row(`chart-legend`))).toBe(false)
-
-    await set_query(input, `motion inertia`)
-    expect(filtered_out(appearance)).toBe(true)
-    expect(filtered_out(camera)).toBe(false)
-    expect(camera.open).toBe(true)
-    expect(filtered_out(setting_row(`rotation_damping`))).toBe(false)
-    expect(filtered_out(setting_row(`zoom_speed`))).toBe(true)
+    await set_query(input, query)
+    const groups: Record<string, Element> = { appearance, camera }
+    const actual = Object.keys(expected).map((name) => [
+      name,
+      filtered_out(groups[name] ?? setting_row(name)),
+    ])
+    expect(Object.fromEntries(actual)).toEqual(expected)
   })
 
   test(`reuses its search index and refreshes changed text, metadata and rows`, async () => {
@@ -202,20 +222,6 @@ describe(`SettingsSearch`, () => {
     expect(filtered_out(setting_row(`zoom_speed`))).toBe(false)
   })
 
-  // rows nest when a keyed wrapper holds keyed rows: a hit on either end keeps the group,
-  // so a wrapper matched by its own label never hides its children
-  test(`keeps nested rows visible when either end of the nesting matches`, async () => {
-    const { input } = await mounted_search()
-
-    await set_query(input, `rotation axes`) // matches the wrapper's data-label only
-    expect(filtered_out(setting_row(`rotation`))).toBe(false)
-    expect(filtered_out(setting_row(`rotation_x`))).toBe(false)
-
-    await set_query(input, `sphere`) // matches neither end
-    expect(filtered_out(setting_row(`rotation`))).toBe(true)
-    expect(filtered_out(setting_row(`rotation_x`))).toBe(true)
-  })
-
   // emptying the query must never collapse the field under the cursor: deriving open
   // state from `query` alone breaks the first case, dropping focus on clear the second
   test.each([
@@ -246,22 +252,6 @@ describe(`SettingsSearch`, () => {
     expect(input.value).toBe(``)
     expect(document.activeElement).toBe(input)
     expect(document.querySelector(`.open-search`)).toBeNull()
-  })
-
-  // Typing a heading reveals what it holds, even though no row repeats the heading's words
-  test(`matches rows by their section and group titles`, async () => {
-    const { input, appearance, camera } = await mounted_search()
-
-    await set_query(input, `camera`)
-    expect(filtered_out(camera)).toBe(false)
-    expect(filtered_out(appearance)).toBe(true)
-    expect(filtered_out(setting_row(`rotation_damping`))).toBe(false)
-    expect(filtered_out(setting_row(`zoom_speed`))).toBe(false)
-
-    await set_query(input, `atoms`)
-    expect(filtered_out(appearance)).toBe(false)
-    expect(filtered_out(camera)).toBe(true)
-    expect(filtered_out(setting_row(`atom_radius`))).toBe(false)
   })
 
   test(`shows a status message for no matches and offers a clear button`, async () => {

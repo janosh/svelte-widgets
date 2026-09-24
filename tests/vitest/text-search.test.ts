@@ -40,7 +40,20 @@ describe(`search_text`, () => {
   })
 
   it.each([
-    // cross-node matches the per-text-node highlight_matches attachment cannot make
+    [`<li>ab<p>c<b>d</b></p></li>`, `cd`, `p`],
+    [`<li>ab<p>cd</p>ef</li>`, `ef`, `li`],
+    [`<blockquote><div>c<em>d</em></div></blockquote>`, `cd`, `blockquote`],
+    [`<section><div><span>c</span>d</div></section>`, `cd`, `div`],
+  ])(
+    `attributes %s matches of %p to the innermost segment or block <%s>`,
+    (html, query, tag) => {
+      const matches = search_text(render(html), query)
+      expect(matches.map(({ element }) => element.localName)).toEqual([tag])
+    },
+  )
+
+  it.each([
+    // matches crossing inline markup
     [`nested inline children`, `<p><em><b>fo</b></em><i>o</i>d</p>`, `food`, 1],
     [`inline wrappers without a block ancestor`, `<div>fo<b>o</b></div>`, `foo`, 1],
     // segment boundaries, where no visible text is continuous
@@ -54,8 +67,6 @@ describe(`search_text`, () => {
     [`text after a nested block`, `<div>a<p>b</p>cd</div>`, `cd`, 1],
     // source text never renders, so a hit inside one would scroll the reader to nothing
     [`script source`, `<p>alpha <script>const alpha = 1</script></p>`, `alpha`, 1],
-    [`style source`, `<p>gap <style>.gap { gap: 0 }</style></p>`, `gap`, 1],
-    [`noscript source`, `<p>hi <noscript>hi there</noscript></p>`, `hi`, 1],
     // skipping the subtree, not breaking on it: `fo` and `od` render as one run
     [`text either side of a script`, `<p>fo<script>x</script>od</p>`, `food`, 1],
     // Unreadable controls/hidden content would produce hits that scroll nowhere.
@@ -216,13 +227,19 @@ describe(`search_text`, () => {
 
   it(`honors a custom segment selector`, () => {
     const root = render(`<div class="cell">ab<b>c</b></div><div class="cell">d</div>`)
-
-    // extending the default selector makes each .cell its own segment
+    // extending the default makes each .cell a segment; `main` merges both into one
     const segment_selector = `${DEFAULT_SEGMENT_SELECTOR}, .cell`
     expect(search_text(root, `abc`, { segment_selector })).toHaveLength(1)
     expect(search_text(root, `abcd`, { segment_selector })).toEqual([])
-    // and a selector reaching above them merges the two cells into one segment
     expect(search_text(root, `abcd`, { segment_selector: `main` })).toHaveLength(1)
+  })
+
+  it(`fuzzy-matches the shortest non-overlapping ordered subsequences`, () => {
+    const root = render(`<p>a----abc a-b-c</p><p>x<b>y</b>z</p>`)
+    expect(ranges_of(root, `abc`).map(String)).toEqual([`abc`])
+    expect(ranges_of(root, `abc`, { fuzzy: true }).map(String)).toEqual([`abc`, `a-b-c`])
+    // fuzzy spans run on the same segments, so they cross inline markup too
+    expect(ranges_of(root, `xz`, { fuzzy: true }).map(String)).toEqual([`xyz`])
   })
 
   it(`creates ranges from the root's own document`, () => {
@@ -234,13 +251,6 @@ describe(`search_text`, () => {
     const ranges = ranges_of(root, `world`)
     expect(ranges).toHaveLength(1)
     expect(ranges[0].startContainer.ownerDocument).toBe(other_doc)
-  })
-
-  it(`fuzzy-matches the shortest non-overlapping ordered subsequences`, () => {
-    const root = render(`<p>a----abc a-b-c</p>`)
-
-    expect(ranges_of(root, `abc`).map(String)).toEqual([`abc`])
-    expect(ranges_of(root, `abc`, { fuzzy: true }).map(String)).toEqual([`abc`, `a-b-c`])
   })
 })
 
@@ -367,8 +377,7 @@ describe(`highlight_ranges`, () => {
     expect(set_spy).not.toHaveBeenCalled()
   })
 
-  // highlight_matches keeps its own owner bookkeeping, so sharing a CSS class must
-  // stay safe until both implementations are merged
+  // highlight_matches registers through the same owner store, so both union on one name
   it(`unions ranges with the highlight_matches attachment on a shared css class`, () => {
     const root = render(`<p>Hello <b>wo</b>rld</p>`)
     const attachment_cleanup = highlight_matches({

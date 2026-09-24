@@ -75,7 +75,11 @@
   // Rows kept above/below the viewport so a fast scroll shows content, not blank space.
   const OVERSCAN_ROWS = 8
 
-  let diff = $state<DiffResult | null>(null)
+  // Raw: a backend result can hold 100k+ rows, and deep-proxying it on load cost ~12x.
+  let diff = $state.raw<DiffResult | null>(null)
+  // Texts the loaded `diff` came from. Gap expansion reads these, not props still being
+  // re-diffed, so expanded rows never mix the old hunk layout with the new text.
+  let diff_texts = $state.raw<[string, string]>([``, ``])
   let error_message = $state<string | null>(null)
   let is_loading = $state(false)
   // Seed once from options; the toggle owns layout afterward.
@@ -100,6 +104,7 @@
       // A slower earlier request must not overwrite a newer one that already finished.
       if (generation !== load_generation) return
       diff = result
+      diff_texts = [args.old_text, args.new_text]
       error_message = null
       expanded_gaps.clear()
       // New diff rows invalidate the old scroll offset.
@@ -130,10 +135,10 @@
     return () => void load_generation++
   })
 
-  // Expanded gaps are rebuilt from props since DiffResult keeps only hunk lines; gap text
-  // has no spans, so it renders unhighlighted.
-  const old_lines = $derived(split_text_lines(old_text))
-  const new_lines = $derived(split_text_lines(new_text))
+  // Expanded gaps are rebuilt from the diffed texts since DiffResult keeps only hunk lines;
+  // gap text has no spans, so it renders unhighlighted.
+  const old_lines = $derived(split_text_lines(diff_texts[0]))
+  const new_lines = $derived(split_text_lines(diff_texts[1]))
 
   const plain_line = (lines: string[], line_no: number): DiffLine | null => {
     const text = lines[line_no - 1]

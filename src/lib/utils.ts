@@ -537,7 +537,6 @@ export function fuzzy_match_indices(
 
 // True if search is a subsequence of target, e.g. "tageoo" matches "tasks/geo-opt"
 export function fuzzy_match(search_text: string, target_text: string): boolean {
-  if (search_text == null || target_text == null) return false
   // Filtering needs no source offsets or highlighted indices, even when case folding
   // expands a character. Only the rendering helper pays for those allocations.
   let search = search_text.toLowerCase()

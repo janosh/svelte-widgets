@@ -24,6 +24,8 @@ const yes_no: DialogChoice<`yes` | `no`>[] = [
 ]
 
 test(`request_choice queues a request and resolves it with the answer`, async () => {
+  // a stray answer to an empty queue must not be spent on the request that arrives next
+  expect(() => answer_dialog(`yes`)).not.toThrow()
   const answer = track(request_choice(`Overwrite?`, `Confirm`, yes_no, `no`))
 
   expect(dialog_queue).toHaveLength(1)
@@ -62,16 +64,6 @@ test(`a single answer resolves only the request it was given for`, async () => {
   expect([second.settled, second.value]).toEqual([true, `no`])
 })
 
-test(`answering an empty queue resolves nothing and does not throw`, async () => {
-  expect(() => answer_dialog(`yes`)).not.toThrow()
-
-  // a stray answer must not be spent on the request that arrives next
-  const answer = track(request_choice(`Late?`, `Late`, yes_no, `no`))
-  await flush()
-  expect(answer.settled).toBe(false)
-  expect(dialog_queue).toHaveLength(1)
-})
-
 test(`dismiss_all_dialogs settles every request with its own dismiss id`, async () => {
   const first = track(request_choice(`First?`, `One`, yes_no, `no`))
   const second = track(request_choice(`Second?`, `Two`, yes_no, `yes`))
@@ -97,13 +89,13 @@ test.each([
     const confirmed = track(ask_confirm(body, title, confirm_label, cancel_label))
     await flush()
 
-    const request = dialog_queue[0]
-    if (request?.kind !== `choice`) throw new Error(`Expected a choice request`)
-    expect(request.dismiss_id).toBe(`cancel`) // Escape must never mean yes
-    expect(request.choices).toEqual([
-      { id: `cancel`, label: cancel_label ?? `Cancel` },
-      { id: `ok`, label: confirm_label, tone: `accent` },
-    ])
+    expect(dialog_queue[0]).toMatchObject({
+      dismiss_id: `cancel`, // Escape must never mean yes
+      choices: [
+        { id: `cancel`, label: cancel_label ?? `Cancel` },
+        { id: `ok`, label: confirm_label, tone: `accent` },
+      ],
+    })
 
     answer_dialog(answer_id)
     await flush()
@@ -112,32 +104,28 @@ test.each([
 )
 
 test(`ask_prompt validates before resolving and keeps its typed options`, async () => {
-  const prompted = track(
-    ask_prompt(`Choose a project name`, `New project`, {
-      initial_value: `draft`,
-      placeholder: `my-project`,
-      input_label: `Project name`,
-      confirm_label: `Create`,
-      cancel_label: `Never mind`,
-      validate: (value) => (value.trim() ? undefined : `A name is required`),
-    }),
-  )
-
-  const request = dialog_queue[0]
-  if (request?.kind !== `prompt`) throw new Error(`Expected a prompt request`)
-  expect(request).toMatchObject({
-    body: { kind: `text`, text: `Choose a project name` },
+  const options = {
     initial_value: `draft`,
     placeholder: `my-project`,
     input_label: `Project name`,
     confirm_label: `Create`,
     cancel_label: `Never mind`,
+  }
+  const prompted = track(
+    ask_prompt(`Choose a project name`, `New project`, {
+      ...options,
+      validate: (value) => (value.trim() ? undefined : `A name is required`),
+    }),
+  )
+  const request = dialog_queue[0]
+  expect(request).toMatchObject({
+    kind: `prompt`,
+    body: { kind: `text`, text: `Choose a project name` },
+    ...options,
   })
 
-  expect(submit_prompt(`   `)).toEqual({
-    status: `invalid`,
-    message: `A name is required`,
-  })
+  const message = `A name is required`
+  expect(submit_prompt(`   `)).toEqual({ status: `invalid`, message })
   await flush()
   expect(prompted.settled).toBe(false)
   expect(dialog_queue[0]).toBe(request)
@@ -147,21 +135,23 @@ test(`ask_prompt validates before resolving and keeps its typed options`, async 
   expect([prompted.settled, prompted.value]).toEqual([true, `widgets`])
   expect(dialog_queue).toHaveLength(0)
   expect(submit_prompt(`late`)).toEqual({ status: `no_prompt` })
-})
 
-test(`an empty validation message accepts and submits the prompt`, async () => {
-  const prompted = track(
-    ask_prompt(`Optional validation`, `Prompt`, { validate: () => `` }),
-  )
-
+  // an empty validation message counts as valid
+  const optional = track(ask_prompt(`Optional`, `Prompt`, { validate: () => `` }))
   expect(submit_prompt(`accepted`)).toEqual({ status: `submitted` })
   await flush()
-  expect([prompted.settled, prompted.value]).toEqual([true, `accepted`])
+  expect([optional.settled, optional.value]).toEqual([true, `accepted`])
 })
 
-test(`prompt dismissal returns null without consuming a following choice`, async () => {
+test(`prompts ignore choice answers and dismiss to null ahead of the next choice`, async () => {
   const prompt = track(ask_prompt(`Name?`, `Profile`))
   const choice = track(request_choice(`Continue?`, `Next`, yes_no, `no`))
+
+  // a choice answer must not submit the prompt at the queue head
+  answer_dialog(`unexpected`)
+  await flush()
+  expect(prompt.settled).toBe(false)
+  expect(dialog_queue[0]?.kind).toBe(`prompt`)
 
   dismiss_dialog()
   await flush()
@@ -172,13 +162,4 @@ test(`prompt dismissal returns null without consuming a following choice`, async
   answer_dialog(`yes`)
   await flush()
   expect([choice.settled, choice.value]).toEqual([true, `yes`])
-})
-
-test(`choice answers cannot accidentally submit the prompt at the queue head`, async () => {
-  const prompt = track(ask_prompt(`Name?`, `Profile`))
-
-  answer_dialog(`unexpected`)
-  await flush()
-  expect(prompt.settled).toBe(false)
-  expect(dialog_queue[0]?.kind).toBe(`prompt`)
 })

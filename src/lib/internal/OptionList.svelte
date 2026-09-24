@@ -8,6 +8,7 @@
   import {
     create_option_rows,
     group_options,
+    navigable_options,
     next_option_index,
     option_disabled,
     option_matches,
@@ -123,9 +124,7 @@
     }),
   )
   const visible_options = $derived(
-    groups
-      .flatMap((group) => (collapsible_groups && group.collapsed ? [] : group.options))
-      .slice(0, max_options ?? undefined),
+    navigable_options(groups, collapsible_groups).slice(0, max_options ?? undefined),
   )
   const build_rows = create_option_rows<Item>()
   const rows = $derived(
@@ -144,6 +143,8 @@
   const viewport = $derived(
     option_window(virtual_list, scroll_top, client_height || 400, rows.length),
   )
+  // Pin rendered rows to item_height so spacer math matches the real layout.
+  const row_height = $derived(viewport ? `${viewport.item_height}px` : undefined)
   let previous_index: number | null = untrack(() => active_index)
   let previous_option: Item | null = null
   let previous_key: unknown
@@ -306,6 +307,8 @@
             ]}
             role="presentation"
             style={li_group_header_style}
+            style:height={row_height}
+            style:box-sizing={row_height && `border-box`}
           >
             <span id="{base_id}-group-{encodeURIComponent(row.group)}">
               {#if group_header}{@render group_header({
@@ -339,6 +342,8 @@
               active_index === row.flat_idx && li_active_option_class,
             ]}
             style={li_option_style}
+            style:height={row_height}
+            style:box-sizing={row_height && `border-box`}
             title={disabled_option ? default_disabled_title : undefined}
             onmousemove={() => {
               if (!disabled_option) active_index = row.flat_idx

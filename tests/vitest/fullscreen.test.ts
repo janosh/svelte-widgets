@@ -79,18 +79,20 @@ const mount_button = (props: ButtonProps = {}) => {
   return { wrapper, flag, button, component }
 }
 
+const outsider_goes_fullscreen = async (): Promise<void> => {
+  const outsider = document.createElement(`div`)
+  document.body.append(outsider)
+  await set_fullscreen_element(outsider)
+  await settle()
+}
+
 const icon_path = (button: HTMLElement): string | null =>
   button.querySelector(`svg path`)?.getAttribute(`d`) ?? null
 
 describe(`per-wrapper isolation`, () => {
   test(`an unrelated element going fullscreen flips no flag`, async () => {
     const [first, second] = [mount_button(), mount_button()]
-    const outsider = document.createElement(`div`)
-    document.body.append(outsider)
-
-    await set_fullscreen_element(outsider)
-    await settle()
-
+    await outsider_goes_fullscreen()
     expect(get(first.flag)).toBe(false)
     expect(get(second.flag)).toBe(false)
     expect(request_calls).toEqual([])
@@ -301,11 +303,8 @@ describe(`flag <-> browser sync`, () => {
     expect(get(flag)).toBe(true)
     expect(request_calls).toEqual([])
 
-    // An unowned fullscreen session must not overwrite a flag without an explicit sync request.
-    const outsider = document.createElement(`div`)
-    document.body.append(outsider)
-    await set_fullscreen_element(outsider)
-    await settle()
+    // an unowned fullscreen session must not overwrite a flag without an explicit sync request
+    await outsider_goes_fullscreen()
     expect(get(flag)).toBe(true)
   })
 
@@ -340,16 +339,18 @@ describe(`fullscreen background`, () => {
   })
 
   test.each([
-    [true, `#1a1a1a`],
-    [false, `#ffffff`],
-  ])(
-    `get_page_background falls back to prefers-color-scheme (dark=%s)`,
-    (dark, expected) => {
+    [true, [], `#1a1a1a`],
+    [false, [], `#ffffff`],
+    [true, [`#000`, `#eee`], `#000`],
+    [false, [`#000`, `#eee`], `#eee`],
+  ] as const)(
+    `get_page_background falls back to prefers-color-scheme (dark=%s, fallbacks=%j)`,
+    (dark, fallbacks, expected) => {
       // Once: restoreAllMocks spares vi.fn() mocks, so a lasting value would leak onward
       vi.mocked(globalThis.matchMedia).mockReturnValueOnce({
         matches: dark,
       } as MediaQueryList)
-      expect(get_page_background()).toBe(expected)
+      expect(get_page_background(...fallbacks)).toBe(expected)
     },
   )
 

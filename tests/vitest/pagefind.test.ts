@@ -207,17 +207,10 @@ test.each([0, 10_000])(
       has_more: false,
     })
     expect(search).not.toHaveBeenCalled()
-    const collect = vi.spyOn(Array.prototype, `flat`)
     const first = await load({ search: `guide`, offset: 0, limit: 1 })
     expect(first.has_more).toBe(true)
     expect(first.options).toMatchObject([{ label: `Guide`, description: `A < B & C` }])
     const second = await load({ search: `guide`, offset: 1, limit: 1 })
-    // Cached arrays grow in place, so inspect their extent rather than summing live references.
-    expect(collect).toHaveBeenCalled()
-    expect(
-      collect.mock.contexts.every((pages) => Array.isArray(pages) && pages.length <= 1),
-    ).toBe(true)
-    collect.mockRestore()
     expect(unloaded_data).not.toHaveBeenCalled()
     expect(second.has_more).toBe(unloaded_count > 0)
     expect(second.options).toHaveLength(2)

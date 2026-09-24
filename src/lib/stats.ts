@@ -12,11 +12,12 @@ export interface StatItem {
 export const format_stat_value = (value: string | number): string => {
   if (typeof value === `string`) return value
   if (!Number.isFinite(value)) return `n/a`
-  const abs = Math.abs(value)
-  if (abs !== 0 && (abs >= 1e6 || abs < 1e-3)) return value.toExponential(2)
-  return Number.isInteger(value)
-    ? value.toLocaleString(`en-US`)
-    : Number(value.toPrecision(4)).toString()
+  // Round before choosing notation: 999999.9 must not print as the ungrouped `1000000`
+  const rounded = Number.isInteger(value) ? value : Number(value.toPrecision(4))
+  const abs = Math.abs(rounded)
+  if (abs === 0) return `0` // also drops the sign of -0
+  if (abs >= 1e6 || abs < 1e-3) return rounded.toExponential(2)
+  return rounded.toLocaleString(`en-US`, { maximumFractionDigits: 20 })
 }
 
 // Signed change with a direction glyph; the glyph carries the sign, never color alone.

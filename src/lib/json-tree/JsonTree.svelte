@@ -14,8 +14,7 @@
   } from '../icons'
   import { download } from './download'
   import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
-  import { make_change_detector } from './helpers'
-  import { tick } from 'svelte'
+  import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
@@ -32,6 +31,7 @@
     get_value_at_path,
     relative_path_segments,
     serialize_for_copy,
+    to_json,
   } from './utils'
 
   const ARROW_KEYS = new Set([`ArrowDown`, `ArrowUp`, `ArrowLeft`, `ArrowRight`])
@@ -95,9 +95,11 @@
   })
   const value_at = (path: string): unknown => get_value_at_path(value, path, root_label)
 
-  const value_changed = make_change_detector()
+  // Reset per-value UI state when a different value is passed (not on mount)
+  let previous_value = untrack(() => value)
   $effect.pre(() => {
-    if (!value_changed(value)) return
+    if (value === previous_value) return
+    previous_value = value
     focused_path = null
     copy_feedback.reset()
     context_menu_state = null
@@ -417,7 +419,7 @@
 
   const download_json = () =>
     download(
-      serialize_for_copy(value),
+      to_json(value),
       download_filename ?? `data-${new Date().toISOString().slice(0, 10)}.json`,
       `application/json`,
     )
@@ -531,7 +533,7 @@
       <div class="controls">
         {@render header_btn(
           `Copy JSON to clipboard`,
-          () => copy_to_clipboard(`[root]`, serialize_for_copy(value)),
+          () => copy_to_clipboard(`[root]`, to_json(value)),
           Copy,
         )}
         {@render header_btn(`Download as JSON file`, download_json, Download)}

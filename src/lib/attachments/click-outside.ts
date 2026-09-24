@@ -138,7 +138,8 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
     press_started_inside = false
     if (started_inside) return
     const path = event.composedPath()
-    if (is_scrollbar_press(event) || is_inside(event.target, path)) return
+    // containment first: the scrollbar test forces layout, so skip it for inside presses
+    if (is_inside(event.target, path) || is_scrollbar_press(event)) return
     // a press never restores focus — the user already picked where it lands
     dismiss({ focus_inside: false, via: `pointer`, event })
   }

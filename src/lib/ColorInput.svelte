@@ -62,10 +62,11 @@
     const alpha_byte = alpha ? parseInt(preview.slice(7), 16) : 255
     return Math.round((alpha_byte / 255) * 100)
   }
+  const committed_opacity = () => ({ value: String(get_opacity()), invalid: false })
   let opacity_draft = $derived.by(() => {
     // External writes reset both fields even when the preview already matches.
     void color
-    return { value: String(get_opacity()), invalid: false }
+    return committed_opacity()
   })
 
   const update = (next_draft: string, final = false): void => {
@@ -97,7 +98,7 @@
               .padStart(2, `0`)
       update(`${preview.slice(0, 7)}${alpha_hex}`, final)
     } else if (final) draft = color
-    if (final) opacity_draft = { value: String(get_opacity()), invalid: false }
+    if (final) opacity_draft = committed_opacity()
   }
   const handle_keydown = (
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
@@ -111,7 +112,7 @@
     } else if (event.key === `Escape`) {
       event.preventDefault()
       draft = color
-      opacity_draft = { value: String(get_opacity()), invalid: false }
+      opacity_draft = committed_opacity()
       input.value = input.type === `number` ? opacity_draft.value : draft
     }
   }

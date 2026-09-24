@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, type Snippet } from 'svelte'
+  import type { Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
   import type { ResizableOptions } from './attachments/index'
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
@@ -202,22 +202,25 @@
   }
   $effect(reanchor)
   // Async content, fonts and CSS size changes can move the anchored edges without a
-  // viewport resize. Stop observing once a drag or manual resize owns the position.
+  // viewport resize, which is debounced. Both stop once a drag or manual resize owns the
+  // position, so a closed or dragged pane listens to nothing.
   $effect(() => {
     if (!open || !pane || !toggle_btn || has_been_dragged) return
     const observer = new ResizeObserver(reanchor)
     observer.observe(pane, { box: `border-box` })
     observer.observe(toggle_btn, { box: `border-box` })
-    return () => observer.disconnect()
+    let resize_timeout: ReturnType<typeof setTimeout> | undefined
+    const on_viewport_resize = () => {
+      clearTimeout(resize_timeout)
+      resize_timeout = setTimeout(reanchor, 50)
+    }
+    globalThis.addEventListener(`resize`, on_viewport_resize)
+    return () => {
+      observer.disconnect()
+      globalThis.removeEventListener(`resize`, on_viewport_resize)
+      clearTimeout(resize_timeout)
+    }
   })
-
-  let resize_timeout: ReturnType<typeof setTimeout> | undefined
-  onDestroy(() => clearTimeout(resize_timeout))
-  // debounced; reanchor re-checks because the pane may be dragged or closed during the wait
-  const handle_viewport_resize = () => {
-    clearTimeout(resize_timeout)
-    resize_timeout = setTimeout(reanchor, 50)
-  }
 
   // Resolved at gesture time: the pane may have moved since attach. Bounding-client
   // coordinates work for both fixed and absolute panes.
@@ -234,8 +237,6 @@
     )
   }
 </script>
-
-<svelte:window onresize={handle_viewport_resize} />
 
 <button
   bind:this={toggle_btn}

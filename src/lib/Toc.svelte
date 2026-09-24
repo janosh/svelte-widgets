@@ -62,6 +62,7 @@
   }: {
     active_heading?: HTMLHeadingElement | null
     active_heading_scroll_offset?: number
+    // row rendered for active_heading, re-derived whenever the list re-renders
     active_toc_li?: HTMLLIElement | null
     aside?: HTMLElement | undefined
     breakpoint?: number // px window width below which the ToC switches to mobile
@@ -178,6 +179,13 @@
 
   const heading_index = (heading: HTMLHeadingElement) =>
     heading_data.findIndex(({ id }) => id === heading.id)
+  // toc_items is indexed like heading_data, so look the active row up from active_heading
+  // on demand: a copy saved before the list re-rendered at shifted indices goes stale
+  const toc_li_for = (heading: HTMLHeadingElement | null) =>
+    (heading && toc_items[heading_index(heading)]) || null
+  $effect(() => {
+    active_toc_li = toc_li_for(active_heading)
+  })
 
   let levels: number[] = $derived(heading_data.map(({ level }) => level))
   let min_level: number = $derived(levels.length ? Math.min(...levels) : 0)
@@ -212,8 +220,7 @@
   })
 
   $effect(() => {
-    void headings // register as dependencies
-    void hide_on_intersect
+    void headings // heading changes can move the aside; check_toc_overlap reads the rest
     check_toc_overlap()
   })
 
@@ -266,7 +273,6 @@
   function activate_heading(node: HTMLHeadingElement, idx = heading_index(node)) {
     if (idx === -1) return
     active_heading = node
-    active_toc_li = toc_items[idx]
     scroll_target = node
     prev_scroll_target_distance = Infinity
     if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
@@ -386,7 +392,6 @@
       if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
       if (headings.length === 0) {
         active_heading = null
-        active_toc_li = null
         if (warn_on_empty) {
           const exclude_msg = exclude_selector
             ? ` after applying exclude_selector='${exclude_selector}'`
@@ -465,7 +470,6 @@
       // last heading the viewport has scrolled past, else the first one
       if (top < active_heading_scroll_offset || idx === 0) {
         active_heading = headings[idx]
-        active_toc_li = toc_items[heading_index(headings[idx])]
         return
       }
     }
@@ -547,15 +551,16 @@
   }
 
   function scroll_to_active_toc_item(behavior: `auto` | `smooth` | `instant` = `smooth`) {
-    if (keep_active_toc_item_in_view && active_toc_li && nav) {
+    const active_li = toc_li_for(active_heading)
+    if (keep_active_toc_item_in_view && active_li && nav) {
       // centre the active item: offsetTop and scrollTop both count from the padding box,
       // so halve clientHeight (the scrollport), not the border box
-      const top = active_toc_li.offsetTop - nav.clientHeight / 2
+      const top = active_li.offsetTop - nav.clientHeight / 2
       nav.scrollTo?.({ top, behavior })
     }
   }
 
-  // show the active item when the mobile ToC opens. untracked because tracking active_toc_li
+  // show the active item when the mobile ToC opens. untracked because tracking active_heading
   // (which set_active_heading writes) would re-run this on every arrow-key move.
   $effect(() => {
     if (!open || !nav) return
@@ -569,16 +574,15 @@
     if (event.defaultPrevented) return
     if (!react_to_keys || !react_to_keys.includes(event.key)) return
 
-    // `:hover`.at(-1) returns the most deeply nested hovered element
-    const hovered = [...document.querySelectorAll(`:hover`)].at(-1)
-    const toc_is_hovered = hovered && nav?.contains(hovered)
     const toc_has_focus = nav?.contains(document.activeElement)
     const is_open = last_reported_open ?? open
 
     if (
-      // ignore keyboard events when ToC is closed on mobile or inactive on desktop
+      // ignore keyboard events when ToC is closed on mobile or inactive on desktop. :hover
+      // matches every ancestor of the pointer, so nav.matches() asks the same question as
+      // scanning the whole document for hovered elements on each page-scrolling keystroke.
       (!desktop && !is_open) ||
-      (desktop && !toc_is_hovered && !toc_has_focus)
+      (desktop && !toc_has_focus && !nav?.matches(`:hover`))
     )
       return
 
@@ -610,29 +614,27 @@
     if (event.key === `Enter` && focused?.matches(`a[href]`)) return
 
     event.preventDefault()
-    const current_toc_li = active_toc_li ?? nav?.querySelector<HTMLLIElement>(`li.active`)
-
-    if (current_toc_li) {
-      const sibling_prop =
-        event.key === `ArrowDown`
-          ? `nextElementSibling`
-          : event.key === `ArrowUp`
-            ? `previousElementSibling`
-            : null
-      active_toc_li = sibling_prop
-        ? (visible_toc_sibling(current_toc_li, sibling_prop) ?? current_toc_li)
-        : current_toc_li
+    const current_toc_li = toc_li_for(active_heading)
+    if (!current_toc_li) return
+    const sibling_prop =
+      event.key === `ArrowDown`
+        ? `nextElementSibling`
+        : event.key === `ArrowUp`
+          ? `previousElementSibling`
+          : null
+    if (sibling_prop) {
+      const next_toc_li =
+        visible_toc_sibling(current_toc_li, sibling_prop) ?? current_toc_li
       // move DOM focus along, else the previously focused link's keydown handler hijacks
       // the next Enter/Space (tab -> arrow -> Enter)
-      if (sibling_prop) focus_toc_item(active_toc_li)
-      const active_id = heading_data[toc_items.indexOf(active_toc_li)]?.id
-      active_heading = headings.find(({ id }) => id === active_id) ?? null
-    }
-    if (active_toc_li && is_activation_key(event.key) && active_heading) {
+      focus_toc_item(next_toc_li)
+      const next_id = heading_data[toc_items.indexOf(next_toc_li)]?.id
+      active_heading = headings.find(({ id }) => id === next_id) ?? null
+    } else if (is_activation_key(event.key)) {
       const link = toc_item
         ? null
-        : active_toc_li.querySelector<HTMLAnchorElement>(`a[href]`)
-      ;(link ?? active_toc_li).click()
+        : current_toc_li.querySelector<HTMLAnchorElement>(`a[href]`)
+      ;(link ?? current_toc_li).click()
     }
   }
 
@@ -650,8 +652,8 @@
     scroll_to_active_toc_item()
   }
 
+  // desktop follows window_width through its own effect
   function on_resize() {
-    desktop = window_width > breakpoint
     set_active_heading()
     check_toc_overlap()
   }

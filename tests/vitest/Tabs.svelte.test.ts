@@ -73,29 +73,22 @@ describe(`Tabs`, () => {
 
     const initial_ids = tabs().map((tab) => tab.id)
     expect(
-      tabs().map((tab, tab_idx) => [
-        tab.textContent?.trim(),
-        tab.getAttribute(`aria-selected`),
-        tab.getAttribute(`aria-disabled`),
-        tab.tabIndex,
-        tab.getAttribute(`aria-controls`),
-        panels()[tab_idx].id,
-        panels()[tab_idx].getAttribute(`aria-labelledby`),
-        panels()[tab_idx].hidden,
-      ]),
+      tabs().map((tab, tab_idx) => {
+        const panel = panels()[tab_idx]
+        return [
+          tab.textContent?.trim(),
+          tab.getAttribute(`aria-selected`),
+          tab.disabled,
+          tab.tabIndex,
+          panel.hidden,
+          tab.getAttribute(`aria-controls`) === panel.id,
+          panel.getAttribute(`aria-labelledby`) === tab.id,
+        ]
+      }),
     ).toEqual([
-      [`Overview`, `false`, null, -1, panels()[0].id, panels()[0].id, tabs()[0].id, true],
-      [
-        `Disabled`,
-        `false`,
-        `true`,
-        -1,
-        panels()[1].id,
-        panels()[1].id,
-        tabs()[1].id,
-        true,
-      ],
-      [`Details`, `true`, null, 0, panels()[2].id, panels()[2].id, tabs()[2].id, false],
+      [`Overview`, `false`, false, -1, true, true, true],
+      [`Disabled`, `false`, true, -1, true, true, true],
+      [`Details`, `true`, false, 0, false, true, true],
     ])
 
     props.value = `overview`

@@ -277,7 +277,7 @@ export interface OptionListProps<T extends Option = Option>
   matching_options?: T[]
   max_options?: number | undefined
   // Render only rows near the scroll viewport. `item_height` (px, default 30, group headers
-  // included) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
+  // included, rendered rows are pinned to it) and `overscan` (extra rows each side, default 10) tune it. Groups work, but
   // not with sticky_group_headers: a header outside the render window cannot stay pinned.
   virtual_list?: boolean | { item_height?: number; overscan?: number }
   no_matching_options_msg?: string

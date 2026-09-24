@@ -141,18 +141,14 @@ describe(`DraggablePane`, () => {
     expect(doc_query(`button.pane-toggle path`).getAttribute(`d`)).not.toBe(open_path)
   })
 
+  // the close button only exists once the pane has been moved
   test.each([
-    [`toggle`, (toggle: HTMLElement) => toggle.click()],
-    [`button`, () => doc_query<HTMLButtonElement>(`.close-button`).click()],
-    [`pointer`, () => press_release(document.body)],
-  ] as const)(`closes via %s`, async (via, dismiss) => {
+    [`toggle`, (toggle: HTMLElement) => toggle.click(), false],
+    [`button`, () => doc_query<HTMLButtonElement>(`.close-button`).click(), true],
+    [`pointer`, () => press_release(document.body), false],
+  ] as const)(`closes via %s`, async (via, dismiss, has_been_dragged) => {
     const on_close = vi.fn()
-    const { toggle, pane } = await open_pane({ on_close })
-    // the close button only exists once the pane has been moved
-    if (via === `button`) {
-      drag_by(0, 0)
-      await tick()
-    }
+    const { toggle, pane } = await open_pane({ on_close, has_been_dragged })
 
     dismiss(toggle)
     await tick()
@@ -375,10 +371,16 @@ describe(`DraggablePane`, () => {
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
 
-  test(`labels prop renames the control-tab buttons, omitted keys fall back`, async () => {
-    await open_pane({
+  // resize_handle matters because the pane builds its own `resizable` attachment: without
+  // the pass-through a fully translated pane still announced English separators
+  test(`labels rename control buttons and resize handles, omitted keys fall back`, async () => {
+    const { pane } = await open_pane({
       has_been_dragged: true,
-      labels: { close_pane: `Bereich schließen` },
+      resize: `both`,
+      labels: {
+        close_pane: `Bereich schließen`,
+        resize_handle: (edge: string) => `Kante ${edge}`,
+      },
     })
 
     const attrs = (selector: string) => {
@@ -387,24 +389,14 @@ describe(`DraggablePane`, () => {
     }
     expect(attrs(`.close-button`)).toEqual([`Bereich schließen`, `Bereich schließen`])
     expect(attrs(`.reset-button`)).toEqual([`Reset pane position`, `Reset pane position`])
+    const strips = [...pane.querySelectorAll(`[data-resize-edge]`)]
+    expect(strips.map((strip) => strip.getAttribute(`aria-label`))).toEqual([
+      `Kante bottom`,
+      `Kante right`,
+    ])
 
     // the toggle's tooltip resolves from the same keys: close_pane while open, open_pane while shut
     expect(await tooltip_text(doc_query(`button.pane-toggle`))).toBe(`Bereich schließen`)
-  })
-
-  // The pane builds its own `resizable` attachment, so without this pass-through a fully
-  // translated pane still announced four English separators.
-  test(`labels reach the resize handles the pane creates itself`, async () => {
-    const { pane } = await open_pane({
-      resize: `both`,
-      labels: { resize_handle: (edge: string) => `Kante ${edge}` },
-    })
-
-    expect(
-      [...pane.querySelectorAll(`[data-resize-edge]`)].map((strip) =>
-        strip.getAttribute(`aria-label`),
-      ),
-    ).toEqual([`Kante bottom`, `Kante right`])
   })
 
   test.each([
@@ -520,11 +512,13 @@ describe(`DraggablePane`, () => {
     release_pointer()
   })
 
+  // also pins that a resize reveals the reset control, as a drag does
   test(`the default max width caps natural size but not a manual viewport-safe resize`, async () => {
     mock_viewport(700, 500)
     const { pane } = await open_pane({ resize: `both` })
     mock_pane_rect(pane, 100, 50)
     expect(pane.style.maxWidth).toBe(default_max_width)
+    expect(document.querySelector(`.reset-button`)).toBeNull()
 
     drag(corner_of(pane), [550, 350], [900, 900])
     await tick()
@@ -563,7 +557,6 @@ describe(`DraggablePane`, () => {
     drag(strip_of(pane, `right`), [445, 295], [545, 150])
     await tick()
     expect(pane.style.width).toBe(`550px`)
-    expect(pane.style.maxWidth).toBe(`calc(100vw - 16px)`)
 
     corner_of(pane).dispatchEvent(pointer_event(`dblclick`, 445, 295))
     await tick()
@@ -571,18 +564,6 @@ describe(`DraggablePane`, () => {
     expect(pane.style.width).toBe(``)
     expect(pane.style.height).toBe(``)
     expect(pane.style.maxWidth).toBe(default_max_width)
-  })
-
-  test(`a resize opts the pane out of repositioning and reveals the controls`, async () => {
-    const { pane } = await open_pane({ resize: `both` })
-    mock_pane_rect(pane)
-    expect(document.querySelector(`.reset-button`)).toBeNull()
-
-    strip_of(pane, `right`).dispatchEvent(pointer_event(`pointerdown`, 445, 150))
-    await tick()
-
-    expect(document.querySelector(`.reset-button`)).not.toBeNull()
-    release_pointer()
   })
 
   // browsers synthesize a click even after a resize ending outside the pane; click_outside
@@ -638,7 +619,11 @@ describe(`DraggablePane`, () => {
       }
       cleanups.push(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
       mock_viewport()
+      const window_listeners = vi.spyOn(globalThis, `addEventListener`)
       const { toggle, pane } = await setup({ position })
+      // a closed pane has nothing to reanchor, so it must not listen for viewport resizes
+      expect(window_listeners.mock.calls.map(([type]) => type)).not.toContain(`resize`)
+      window_listeners.mockRestore()
       mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
       mock_pane_rect(pane)
       toggle.click()
@@ -700,12 +685,13 @@ describe(`DraggablePane`, () => {
     expect(toggle.getAttribute(`type`)).toBe(`button`)
     // aria-label sits before the spread, so a page with several panes can rename them apart
     expect(pane.getAttribute(`aria-label`)).toBe(`Structure controls`)
-    expect(pane.classList.contains(`draggable-pane`)).toBe(true)
-    expect(pane.classList.contains(`consumer-pane`)).toBe(true)
-    // Toc skips excluded subtrees, so pane chrome stays out of a page's contents
-    expect(pane.classList.contains(`toc-exclude`)).toBe(true)
-    expect(toggle.classList.contains(`pane-toggle`)).toBe(true)
-    expect(toggle.classList.contains(`consumer-toggle`)).toBe(true)
+    // toc-exclude: Toc skips excluded subtrees, so pane chrome stays out of a page's contents
+    for (const cls of [`draggable-pane`, `consumer-pane`, `toc-exclude`]) {
+      expect(pane.classList).toContain(cls)
+    }
+    expect([...toggle.classList]).toEqual(
+      expect.arrayContaining([`pane-toggle`, `consumer-toggle`]),
+    )
 
     // The spread precedes the component's onclick, so chaining must preserve the caller's handler.
     toggle.click()

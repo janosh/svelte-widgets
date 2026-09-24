@@ -3,20 +3,14 @@
 
 const PATH_IDENTIFIER_RE = /^[A-Za-z_$][\w$]*$/u
 
-function format_path_segment(
-  segment: string | number,
-  is_first: boolean = false,
-): string {
-  if (typeof segment === `number`) return `[${segment}]`
-  if (PATH_IDENTIFIER_RE.test(segment)) return is_first ? segment : `.${segment}`
-  return `[${JSON.stringify(segment)}]`
+export function build_path(parent_path: string, key: string | number): string {
+  if (typeof key === `number`) return `${parent_path}[${key}]`
+  if (!PATH_IDENTIFIER_RE.test(key)) return `${parent_path}[${JSON.stringify(key)}]`
+  return parent_path ? `${parent_path}.${key}` : key
 }
 
 export const format_path = (segments: (string | number)[]): string =>
-  segments.map((segment, idx) => format_path_segment(segment, idx === 0)).join(``)
-
-export const build_path = (parent_path: string, key: string | number): string =>
-  parent_path ? parent_path + format_path_segment(key) : format_path_segment(key, true)
+  segments.reduce<string>(build_path, ``)
 
 export function parse_path(path: string): (string | number)[] {
   if (!path) return []
@@ -72,10 +66,8 @@ export function parse_path(path: string): (string | number)[] {
     const start = pos
     while (pos < path.length && path[pos] !== `]`) pos++
     const token = path.slice(start, pos)
-    if (token) {
-      const num = Number(token)
-      segments.push(Number.isNaN(num) ? token : num)
-    }
+    // Only integer tokens are indices: Number() maps `[ ]` to 0 and `[0x1]` to 1
+    if (token) segments.push(/^-?\d+$/.test(token) ? Number(token) : token)
     if (path[pos] === `]`) pos++
   }
 

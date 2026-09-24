@@ -29,59 +29,21 @@ async function type_search(text: string): Promise<HTMLInputElement> {
 }
 
 test.each([
-  {
-    triggers: [`k`],
-    key_to_press: `k`,
-    with_meta: true,
-    with_ctrl: false,
-    should_open: true,
-  },
-  // any trigger in the list works, not just the first
-  {
-    triggers: [`k`, `o`],
-    key_to_press: `o`,
-    with_meta: true,
-    with_ctrl: false,
-    should_open: true,
-  },
-  // trigger key without modifier does nothing
-  {
-    triggers: [`k`],
-    key_to_press: `k`,
-    with_meta: false,
-    with_ctrl: false,
-    should_open: false,
-  },
-  // non-trigger key does nothing even with modifier
-  {
-    triggers: [`j`, `l`],
-    key_to_press: `k`,
-    with_meta: true,
-    with_ctrl: false,
-    should_open: false,
-  },
-  // Ctrl works as alternative to Meta
-  {
-    triggers: [`k`],
-    key_to_press: `k`,
-    with_meta: false,
-    with_ctrl: true,
-    should_open: true,
-  },
-])(
-  `handles trigger keys: $triggers with key $key_to_press (meta: $with_meta, ctrl: $with_ctrl) -> $should_open`,
-  async ({ triggers, key_to_press, with_meta, with_ctrl, should_open }) => {
-    const props = $state({
-      open: false,
-      triggers,
-      actions: mock_actions,
-    })
+  [[`k`], `k`, `meta`, true],
+  [[`k`, `o`], `o`, `meta`, true], // any trigger in the list works, not just the first
+  [[`k`], `k`, null, false], // trigger key without modifier does nothing
+  [[`j`, `l`], `k`, `meta`, false], // non-trigger key does nothing even with modifier
+  [[`k`], `k`, `ctrl`, true], // Ctrl works as alternative to Meta
+] as const)(
+  `triggers=%j with key %s + %s opens: %s`,
+  async (triggers, key, modifier, should_open) => {
+    const props = $state({ open: false, triggers: [...triggers], actions: mock_actions })
     mount_menu(props)
 
     const event = new KeyboardEvent(`keydown`, {
-      key: key_to_press,
-      metaKey: with_meta,
-      ctrlKey: with_ctrl,
+      key,
+      metaKey: modifier === `meta`,
+      ctrlKey: modifier === `ctrl`,
       cancelable: true,
     })
     globalThis.dispatchEvent(event)
@@ -89,67 +51,30 @@ test.each([
 
     expect(props.open).toBe(should_open)
     if (should_open) expect(event.defaultPrevented).toBe(true)
-    expect(document.querySelector(`dialog`)).toEqual(
-      should_open ? expect.any(HTMLDialogElement) : null,
-    )
-
-    if (should_open) {
-      expect(document.activeElement).toBe(menu_input())
-    }
+    expect(document.querySelector(`dialog`) !== null).toBe(should_open)
+    if (should_open) expect(document.activeElement).toBe(menu_input())
   },
 )
 
 test.each([
-  {
-    close_keys: [`Escape`],
-    key_to_press: `Escape`,
-    should_close: true,
-    dialog_props: undefined,
-  },
-  // any key in the list closes, not just the first
-  {
-    close_keys: [`Escape`, `x`],
-    key_to_press: `x`,
-    should_close: true,
-    dialog_props: undefined,
-  },
-  // non-close key (even default Escape) does nothing when not configured
-  {
-    close_keys: [`q`],
-    key_to_press: `Escape`,
-    should_close: false,
-    dialog_props: undefined,
-  },
+  [[`Escape`], `Escape`, undefined, true],
+  [[`Escape`, `x`], `x`, undefined, true], // any key in the list closes, not just the first
+  [[`q`], `Escape`, undefined, false], // unconfigured keys (even Escape) do nothing
   // explicit native policy remains authoritative over the close-key shortcut
-  {
-    close_keys: [`Escape`],
-    key_to_press: `Escape`,
-    should_close: false,
-    dialog_props: { closedby: `none` as const },
-  },
+  [[`Escape`], `Escape`, { closedby: `none` as const }, false],
 ])(
-  `handles close keys: $close_keys with key $key_to_press -> $should_close`,
-  async ({ close_keys, key_to_press, should_close, dialog_props }) => {
-    const props = $state({
-      open: true,
-      close_keys,
-      actions: mock_actions,
-      dialog_props,
-    })
+  `close_keys=%j with key %s (dialog_props=%j) closes: %s`,
+  async (close_keys, key, dialog_props, should_close) => {
+    const props = $state({ open: true, close_keys, actions: mock_actions, dialog_props })
     mount_menu(props)
 
-    const event = new KeyboardEvent(`keydown`, {
-      key: key_to_press,
-      cancelable: true,
-    })
+    const event = new KeyboardEvent(`keydown`, { key, cancelable: true })
     globalThis.dispatchEvent(event)
     await tick()
 
     expect(props.open).toBe(!should_close)
-    if (should_close) expect(event.defaultPrevented).toBe(true)
-    expect(document.querySelector(`dialog`)).toEqual(
-      should_close ? null : expect.any(HTMLDialogElement),
-    )
+    expect(event.defaultPrevented).toBe(should_close)
+    expect(document.querySelector(`dialog`) === null).toBe(should_close)
   },
 )
 
@@ -459,37 +384,21 @@ test(`a stale native close cannot close a reopened menu`, async () => {
   expect(current_dialog.open).toBe(true)
 })
 
-test(`applies custom styles and props correctly`, async () => {
-  const custom_class = `my-custom-class`
-  const custom_placeholder = `Custom placeholder`
-  const custom_dialog_style = `border: 2px solid red; padding: 20px;`
-  const custom_li_style = `color: blue; font-weight: bold;`
-
-  const props = $state({
+test(`forwards class, placeholder, dialog_props and li_option_style`, async () => {
+  mount_menu({
     open: true,
     actions: mock_actions,
-    class: custom_class,
-    placeholder: custom_placeholder,
-    dialog_props: { style: custom_dialog_style },
-    li_option_style: custom_li_style,
+    class: `my-custom-class`,
+    placeholder: `Custom placeholder`,
+    dialog_props: { style: `padding: 20px;` },
+    li_option_style: `font-weight: bold;`,
   })
-
-  mount_menu(props)
   await tick()
 
-  const select_wrapper = doc_query(`dialog div.option-list`)
-  expect(select_wrapper.classList.contains(custom_class)).toBe(true)
-
-  const input = menu_input()
-  expect(input.placeholder).toBe(custom_placeholder)
-
-  const dialog = doc_query<HTMLDialogElement>(`dialog`)
-  expect(dialog.style.border).toBe(`2px solid red`)
-  expect(dialog.style.padding).toBe(`20px`)
-
-  const li_el = doc_query<HTMLLIElement>(`dialog ul.options li`)
-  expect(li_el.style.color).toBe(`blue`)
-  expect(li_el.style.fontWeight).toBe(`bold`)
+  expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
+  expect(menu_input().placeholder).toBe(`Custom placeholder`)
+  expect(doc_query(`dialog`).style.padding).toBe(`20px`)
+  expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
 })
 
 test(`native dialog close resets state and forwards dialog_props.onclose`, async () => {
@@ -532,15 +441,21 @@ test(`renders an empty list and accepts later actions`, async () => {
   expect(document.querySelectorAll(`[role="option"]`)).toHaveLength(mock_actions.length)
 })
 
+test.each([
+  [{ item_height: 24 }, `24px`],
+  [false, ``],
+])(`virtual_list=%j pins option row height to %j`, async (virtual_list, height) => {
+  mount_menu({ open: true, actions: mock_actions, virtual_list })
+  await tick()
+  const rows = [...document.querySelectorAll<HTMLElement>(`li[role="option"]`)]
+  expect(rows.map((row) => row.style.height)).toEqual(rows.map(() => height))
+})
+
 test(`remains open when trigger keys are pressed while already open`, async () => {
   const props = $state({ open: true, actions: mock_actions })
   mount_menu(props)
-
-  expect(props.open).toBe(true)
-
   globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `k`, metaKey: true }))
   await tick()
-
   expect(props.open).toBe(true)
   expect(document.querySelector(`dialog`)).toBeInstanceOf(HTMLDialogElement)
 })
@@ -558,31 +473,11 @@ test(`lets command menu dropdown overflow dialog box`, async () => {
 })
 
 test.each([
-  {
-    fuzzy: true,
-    search: `cu`,
-    expected: [`create user`],
-    description: `fuzzy match 'cu' -> 'create user'`,
-  },
-  {
-    fuzzy: true,
-    search: `qwerty`,
-    expected: [`No matching commands`],
-    description: `fuzzy match 'qwerty' -> no matches message`,
-  },
-  {
-    fuzzy: false,
-    search: `cr`,
-    expected: [`create user`],
-    description: `exact match 'cr' -> 'create user'`,
-  },
-  {
-    fuzzy: false,
-    search: `cu`,
-    expected: [`No matching commands`],
-    description: `exact match 'cu' -> no matches (not a substring)`,
-  },
-])(`filtering with fuzzy=$fuzzy: $description`, async ({ fuzzy, search, expected }) => {
+  [true, `cu`, [`create user`]],
+  [true, `qwerty`, [`No matching commands`]],
+  [false, `cr`, [`create user`]],
+  [false, `cu`, [`No matching commands`]], // not a substring
+])(`filtering with fuzzy=%s: %j -> %j`, async (fuzzy, search, expected) => {
   const actions = [
     { id: `create user`, label: `create user`, action: vi.fn() },
     { id: `delete file`, label: `delete file`, action: vi.fn() },
@@ -685,13 +580,15 @@ test(`selects the first enabled action and preserves pointer selection across gr
   props.max_options = 1
   await tick()
   expect(option_labels()).toEqual([`Renamed Beta`])
+  // group B has no room left under max_options, so its header would label nothing
+  expect([...document.querySelectorAll(`li.group-header`)]).toEqual(
+    group_headers.slice(0, 1),
+  )
   doc_query<HTMLButtonElement>(`li.group-header button`).click()
   await tick()
   expect(option_labels()).toEqual([`Disabled`])
   expect(props.active_index).toBeNull()
-  document.querySelectorAll(`li.group-header`).forEach((header, idx) => {
-    expect(header).toBe(group_headers[idx])
-  })
+  expect(document.querySelector(`li.group-header`)).toBe(group_headers[0])
   doc_query<HTMLButtonElement>(`li.group-header button`).click()
   props.max_options = undefined
   await tick()

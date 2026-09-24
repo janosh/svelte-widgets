@@ -180,9 +180,7 @@ const get_default_headings = (node: Element): Element[] =>
 // adds anchor links to headings within a container
 export const heading_anchors =
   (options: HeadingAnchorsOptions = {}) =>
-  (node: Element): (() => void) | undefined => {
-    if (typeof document === `undefined`) return undefined
-
+  (node: Element): (() => void) => {
     const icon_svg = options.icon_svg ?? link_svg
     const selector = options.selector
     const get_headings = selector
