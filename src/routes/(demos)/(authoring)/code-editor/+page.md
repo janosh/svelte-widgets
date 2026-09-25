@@ -127,11 +127,11 @@ Pass `backend` to one editor, as below, or call `set_editor_backend()` once duri
 <p>{status}. Unsaved changes: {dirty ? `yes` : `no`}. Saved {saved_text.length} bytes.</p>
 ```
 
-The backend receives the model URI and normalized open text, but never receives save requests. It owns only the open document and token/edit protocol; `model.subscribe()` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook. Successful saves call `model.mark_saved()`.
+The backend receives the model URI and normalized open text, but never receives save requests. It owns only the open document and token/edit protocol; `model.subscribe()` is enough for a host that saves elsewhere, while `on_save` and the exported `save()` method provide an opt-in persistence hook. A save calls `model.checkpoint()` when it starts and passes the returned id to `model.mark_saved(id)` when the write finishes, so edits made during the write stay dirty and undoing back to the written text reads clean. Hosts saving asynchronously should do the same: `checkpoint()` also ends the current undo group, so typing during the save can't merge into the saved text's undo step.
 
 Search scans overlapping model slices instead of flattening the document. The headless helpers return non-overlapping UTF-16 offsets and also accept multiline queries; CRLF input is normalized to the model's LF line endings. Match lists update after edits, undo, redo, and model replacement.
 
-`find_editor_matches()` and `replace_editor_matches()` are exhaustive. For callers that need only some results, `iterate_editor_matches()` yields the same matches lazily and stops scanning when the caller stops iterating.
+`find_editor_matches()` and `replace_editor_matches()` are exhaustive. For callers that need only some results, `iterate_editor_matches()` yields the same matches lazily and stops scanning when the caller stops iterating; its optional fourth argument `{ from, to }` limits the scan to matches starting in that range. After a transaction, `update_editor_matches(model, query, matches, transaction.edits, options)` patches a previous match list by rescanning only near the edits, which is how the open find panel keeps up with typing.
 
 ```ts
 import { find_editor_matches, replace_editor_matches } from 'svelte-widgets/code-editor'

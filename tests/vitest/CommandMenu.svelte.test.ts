@@ -3,7 +3,8 @@ import type { CmdAction, LoadOptionsParams } from '$lib/types'
 import { MULTI_SELECT_LABELS } from '$lib/labels'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, press_key } from './index'
+import { type_search_text } from './MultiSelect.test-utils'
 
 const mock_actions = [
   { id: `action 1`, label: `action 1`, action: vi.fn() },
@@ -20,13 +21,7 @@ const mount_menu = (props: ComponentProps<typeof CommandMenu>) => {
   return mount(CommandMenu, { target: document.body, props })
 }
 
-async function type_search(text: string): Promise<HTMLInputElement> {
-  const input = menu_input()
-  input.value = text
-  input.dispatchEvent(new Event(`input`, { bubbles: true }))
-  await tick()
-  return input
-}
+const type_search = (text: string) => type_search_text(text, menu_input())
 
 test.each([
   [[`k`], `k`, `meta`, true],
@@ -40,13 +35,10 @@ test.each([
     const props = $state({ open: false, triggers: [...triggers], actions: mock_actions })
     mount_menu(props)
 
-    const event = new KeyboardEvent(`keydown`, {
-      key,
+    const event = press_key(globalThis, key, {
       metaKey: modifier === `meta`,
       ctrlKey: modifier === `ctrl`,
-      cancelable: true,
     })
-    globalThis.dispatchEvent(event)
     await tick()
 
     expect(props.open).toBe(should_open)
@@ -68,8 +60,7 @@ test.each([
     const props = $state({ open: true, close_keys, actions: mock_actions, dialog_props })
     mount_menu(props)
 
-    const event = new KeyboardEvent(`keydown`, { key, cancelable: true })
-    globalThis.dispatchEvent(event)
+    const event = press_key(globalThis, key)
     await tick()
 
     expect(props.open).toBe(!should_close)
@@ -93,12 +84,7 @@ test.each([`Escape`, `x`])(
     mount_menu(props)
     await tick()
 
-    const event = new KeyboardEvent(`keydown`, {
-      key: close_key,
-      bubbles: true,
-      cancelable: true,
-    })
-    menu_input().dispatchEvent(event)
+    const event = press_key(menu_input(), close_key)
     await tick()
 
     expect(props.open).toBe(false)
@@ -194,10 +180,8 @@ test(`handles action selection and execution`, async () => {
 
   const input_el = menu_input()
 
-  input_el.dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-  )
-  input_el.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }))
+  press_key(input_el, `ArrowDown`)
+  press_key(input_el, `Enter`)
 
   expect(actions_with_spies[1].action).toHaveBeenCalledExactlyOnceWith(`action 2`)
   expect(actions_with_spies[0].action).not.toHaveBeenCalled()
@@ -284,16 +268,12 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
   expect(document.querySelector(`dialog li.user-msg`)?.textContent).toContain(
     `No matching commands`,
   )
-  menu_input().dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-  )
+  press_key(menu_input(), `Enter`)
   expect(action).not.toHaveBeenCalled()
   expect(props.open).toBe(true)
   for (const execution_count of [1, 2]) {
     await type_search(`existing`)
-    menu_input().dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-    )
+    press_key(menu_input(), `Enter`)
     await tick()
     expect(action).toHaveBeenCalledTimes(execution_count)
     expect(props.open).toBe(false)
@@ -620,9 +600,7 @@ test.each([`search`, `keyboard`])(
     mount_menu(props)
     const search_and_navigate = async (search: string) => {
       await type_search(search)
-      menu_input().dispatchEvent(
-        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-      )
+      press_key(menu_input(), `ArrowDown`)
       await tick()
     }
     await search_and_navigate(`app`)
@@ -673,20 +651,16 @@ test(`active_option binding selects initial and externally changed commands`, as
   await tick()
   expect(props.active_index).toBe(2)
   expect(doc_query(`li.active`).textContent).toContain(`action 3`)
-  menu_input().dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-  )
+  press_key(menu_input(), `Enter`)
   expect(mock_actions[2].action).toHaveBeenCalledExactlyOnceWith(`action 3`)
 })
 
+// validate_option_list_config's branches are covered through MultiSelect; these rows pin
+// that CommandMenu's OptionList runs it for each config source
 test.each([
-  [{ virtual_list: { item_height: 0 } }, `item_height`],
-  [{ virtual_list: { item_height: -2 } }, `item_height`],
   [{ virtual_list: { item_height: Infinity } }, `item_height`],
-  [{ virtual_list: { overscan: -1 } }, `overscan`],
   [{ virtual_list: { overscan: 0.5 } }, `overscan`],
   [{ max_options: -1 }, `max_options`],
-  [{ max_options: 0.5 }, `max_options`],
   [{ virtual_list: true, sticky_group_headers: true }, `sticky_group_headers`],
 ] as const)(`rejects invalid command-list config %j`, (config, message) => {
   expect(() =>
@@ -796,9 +770,7 @@ test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`
   await tick()
   expect(props.active_index).toBe(2)
 
-  menu_input().dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-  )
+  press_key(menu_input(), `Enter`)
   expect(rebuilt_action).toHaveBeenCalledExactlyOnceWith(`Renamed duplicate`)
   expect(first_action.action).not.toHaveBeenCalled()
 })
@@ -1370,14 +1342,7 @@ test.each([
   mount_menu({ actions, open, global_shortcuts, on_execute })
   await tick()
 
-  globalThis.dispatchEvent(
-    new KeyboardEvent(`keydown`, {
-      key: `s`,
-      ctrlKey: true,
-      shiftKey: shift,
-      cancelable: true,
-    }),
-  )
+  press_key(globalThis, `s`, { ctrlKey: true, shiftKey: shift })
   await tick()
 
   expect(spy).toHaveBeenCalledTimes(calls)
@@ -1397,15 +1362,7 @@ test(`global shortcuts ignore events consumed by editable controls`, () => {
   textarea.addEventListener(`keydown`, (event) => event.preventDefault())
   document.body.append(textarea)
 
-  textarea.dispatchEvent(
-    new KeyboardEvent(`keydown`, {
-      key: `s`,
-      ctrlKey: true,
-      shiftKey: true,
-      bubbles: true,
-      cancelable: true,
-    }),
-  )
+  press_key(textarea, `s`, { ctrlKey: true, shiftKey: true })
 
   expect(action).not.toHaveBeenCalled()
 })
@@ -1423,14 +1380,8 @@ test.each([`n`, `shift+n`])(
     const press = (tag: string) => {
       const target = document.createElement(tag)
       document.body.append(target)
-      const event = new KeyboardEvent(`keydown`, {
-        key: `n`,
-        shiftKey: shortcut.startsWith(`shift`),
-        bubbles: true,
-        cancelable: true,
-      })
-      target.dispatchEvent(event)
-      return event.defaultPrevented
+      return press_key(target, `n`, { shiftKey: shortcut.startsWith(`shift`) })
+        .defaultPrevented
     }
 
     expect(press(`textarea`)).toBe(false)
@@ -1485,11 +1436,9 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
   // trigger gamma via keyboard (ArrowDown x2 + Enter)
   const input_el = menu_input()
   for (let idx = 0; idx < 2; idx++) {
-    input_el.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-    )
+    press_key(input_el, `ArrowDown`)
   }
-  input_el.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }))
+  press_key(input_el, `Enter`)
   await tick()
 
   expect(actions[2].action).toHaveBeenCalledExactlyOnceWith(`gamma`)
@@ -1519,9 +1468,7 @@ test(`recent_actions_key uses action ids for duplicate labels`, async () => {
 
   expect(doc_query(`li[role='option'] .cmd-description`).textContent).toBe(`Mixed`)
 
-  doc_query(`li[role='option']`).dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `Enter`, bubbles: true }),
-  )
+  press_key(doc_query(`li[role='option']`), `Enter`)
   await tick()
 
   expect(actions[0].action).toHaveBeenCalledExactlyOnceWith(`save`)

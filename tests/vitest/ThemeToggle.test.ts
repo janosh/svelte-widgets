@@ -2,10 +2,8 @@ import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '$lib'
 import { Monitor, Moon, Sun } from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { doc_query } from './index.ts'
-
-const mounted: Record<string, unknown>[] = []
+import { afterEach, beforeEach, expect, test, vi, onTestFinished } from 'vitest'
+import { doc_query, render } from './index.ts'
 
 beforeEach(() => {
   apply_theme_mode(`system`)
@@ -15,13 +13,10 @@ beforeEach(() => {
   delete document.documentElement.dataset.theme
 })
 
-afterEach(async () => {
-  for (const app of mounted.splice(0)) await unmount(app)
-  vi.unstubAllGlobals()
-})
+afterEach(() => void vi.unstubAllGlobals())
 
 const mount_theme_toggle = async (props: ComponentProps<typeof ThemeToggle> = {}) => {
-  mounted.push(mount(ThemeToggle, { target: document.body, props }))
+  render(ThemeToggle, { ...props })
   await tick()
   return doc_query<HTMLButtonElement>(`button`)
 }
@@ -42,7 +37,9 @@ const disable_storage = () => {
 
 test(`initial render stays hidden until hydration`, async () => {
   localStorage.setItem(`theme`, `dark`)
-  mounted.push(mount(ThemeToggle, { target: document.body }))
+  // mounted without render()'s flush: this checks the markup before effects run
+  const toggle = mount(ThemeToggle, { target: document.body, props: {} })
+  onTestFinished(() => unmount(toggle))
   const button = doc_query<HTMLButtonElement>(`button`)
   expect(button.style.visibility).toBe(`hidden`)
   expect(button.querySelector(`svg`)).toBeNull()
@@ -109,9 +106,9 @@ test(`click cycles through light -> system -> dark -> light`, async () => {
 })
 
 const start_toggle = async () => {
-  const app = mount(ThemeToggle, { target: document.body })
+  const unmount_toggle = render(ThemeToggle, {})
   await tick()
-  return () => void unmount(app)
+  return () => void unmount_toggle()
 }
 const start_watcher = async () => watch_theme()
 
@@ -164,7 +161,7 @@ test(`storage events synchronize the theme key until unmount`, async () => {
     await tick()
   }
   localStorage.setItem(`theme`, `light`)
-  await mount_theme_toggle()
+  const stop = await start_toggle()
 
   localStorage.setItem(`theme`, `dark`)
   await dispatch_storage(`theme`)
@@ -183,9 +180,7 @@ test(`storage events synchronize the theme key until unmount`, async () => {
   expect(localStorage.getItem(`theme`)).toBe(`system`)
   expect(rendered_icon_path()).toBe(Monitor.d)
 
-  const app = mounted.pop()
-  if (!app) throw new Error(`ThemeToggle test app was not mounted`)
-  await unmount(app)
+  stop()
   localStorage.setItem(`theme`, `dark`)
   await dispatch_storage(`theme`)
   expect(applied_theme()).toEqual([`light`, `light`])

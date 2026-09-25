@@ -11,10 +11,9 @@
     max?: number
     label?: string
   } = $props()
-  const progress = $derived(
-    value === undefined ? undefined : Math.min(max, Math.max(0, value)),
-  )
-  $effect(() => {
+  // Validated while deriving, not in an $effect: the template assigns max/value first, and a
+  // non-finite one makes the DOM throw a generic TypeError before any effect runs.
+  const progress = $derived.by(() => {
     if (
       !Number.isFinite(max) ||
       max <= 0 ||
@@ -24,6 +23,7 @@
         `Progress requires finite value and positive max, got value=${value}, max=${max}`,
       )
     }
+    return value === undefined ? undefined : Math.min(max, Math.max(0, value))
   })
 </script>
 

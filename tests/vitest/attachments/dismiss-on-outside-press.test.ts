@@ -1,18 +1,15 @@
 import { dismiss_on_outside_press } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create_element, escape_key } from '../index'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { create_element, press_escape } from '../index'
 
 describe(`dismiss_on_outside_press`, () => {
-  const cleanups: (() => void)[] = []
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
-
   const press = (target: Element) =>
     target.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
 
   const listen = (options: Parameters<typeof dismiss_on_outside_press>[0] = {}) => {
     const callback = vi.fn()
     const cleanup = dismiss_on_outside_press({ callback, ...options })
-    cleanups.push(cleanup)
+    onTestFinished(cleanup)
     return { callback, cleanup }
   }
 
@@ -26,7 +23,7 @@ describe(`dismiss_on_outside_press`, () => {
     // dismiss does not bubble, so this negative assertion requires capture.
     const document_listener = vi.fn()
     document.addEventListener(`dismiss`, document_listener, true)
-    cleanups.push(() => document.removeEventListener(`dismiss`, document_listener, true))
+    onTestFinished(() => document.removeEventListener(`dismiss`, document_listener, true))
     const { callback } = listen({ inside: [`.header-menu-root`] })
 
     press(menu_a)
@@ -48,7 +45,7 @@ describe(`dismiss_on_outside_press`, () => {
     focusable.focus()
 
     const { callback } = listen({ inside: [`.header-menu-root`], escape: true })
-    document.dispatchEvent(escape_key())
+    press_escape()
 
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback.mock.calls[0][0]).toMatchObject({ focus_inside: true, via: `escape` })

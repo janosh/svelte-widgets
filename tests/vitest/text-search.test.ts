@@ -146,6 +146,41 @@ describe(`search_text`, () => {
     expect(range_bounds(range)).toEqual(expected)
   })
 
+  // A query without diacritics ignores them; one with diacritics requires them. Ranges
+  // still cover whole source characters, trailing combining marks included.
+  it.each([
+    [`plain query, NFC text`, `<p>a café</p>`, `cafe`, [`café`]],
+    [`plain query, NFD text`, `<p>a cafe\u0301</p>`, `cafe`, [`cafe\u0301`]],
+    [`plain query, inner accent`, `<p>my résumé</p>`, `resume`, [`résumé`]],
+    [
+      `plain query, inner NFD accent`,
+      `<p>re\u0301sume\u0301</p>`,
+      `resume`,
+      [`re\u0301sume\u0301`],
+    ],
+    [`plain multi-accent words`, `<p>Crème Brûlée</p>`, `creme brulee`, [`Crème Brûlée`]],
+    [`plain query across markup`, `<p>ré<b>su</b>mé</p>`, `resume`, [`résumé`]],
+    [`plain query, dotted capital`, `<p>İstanbul</p>`, `istanbul`, [`İstanbul`]],
+    [
+      `plain query after astral chars`,
+      `<p>😀😀re\u0301sumé</p>`,
+      `resume`,
+      [`re\u0301sumé`],
+    ],
+    [`accented query, plain text`, `<p>cafe resume</p>`, `café`, []],
+    [
+      `accented multi-accent query, plain text`,
+      `<p>creme brulee</p>`,
+      `crème brûlée`,
+      [],
+    ],
+    [`accented query, other accent`, `<p>cafè</p>`, `café`, []],
+    [`dakuten is part of the letter`, `<p>が</p>`, `か`, []],
+    [`plain query keeps other marks`, `<p>がか</p>`, `か`, [`か`]],
+  ])(`diacritics: %s`, (_desc, html, query, expected) => {
+    expect(ranges_of(render(html), query).map(String)).toEqual(expected)
+  })
+
   it.each([
     [`the full run`, `q\u0301\u0328`, 0],
     [`only reordered marks`, `\u0301\u0328`, 1],
@@ -238,6 +273,10 @@ describe(`search_text`, () => {
     const root = render(`<p>a----abc a-b-c</p><p>x<b>y</b>z</p>`)
     expect(ranges_of(root, `abc`).map(String)).toEqual([`abc`])
     expect(ranges_of(root, `abc`, { fuzzy: true }).map(String)).toEqual([`abc`, `a-b-c`])
+    // a fuzzy char can't be the base of a marked letter (か is not が)
+    expect(
+      ranges_of(render(`<p>がき かき</p>`), `かき`, { fuzzy: true }).map(String),
+    ).toEqual([`かき`])
     // fuzzy spans run on the same segments, so they cross inline markup too
     expect(ranges_of(root, `xz`, { fuzzy: true }).map(String)).toEqual([`xyz`])
   })

@@ -59,9 +59,9 @@ To make a release, increase the `"version"` field in [`package.json`](https://gi
 - `v[x.y.z] -> v[x.y+1.0]`: minor release with new features
 - `v[x.y.z] -> v[x.y.z+1]`: patch release with bug fixes
 
-The 1.8.0 release is an explicit exception: it includes the breaking API cleanups documented in the [changelog](https://github.com/janosh/svelte-widgets/blob/main/changelog.md#v180) and [migration guide](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-18).
+The 1.8.0 and 1.9.0 releases are explicit exceptions: they include the breaking API cleanups documented in the [changelog](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) and migration guides ([1.8](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-18), [1.9](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-19)).
 
-Update [`changelog.md`](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.8.0, compare `v1.7.1...v1.8.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
+Update [`changelog.md`](https://github.com/janosh/svelte-widgets/blob/main/changelog.md) with concise release notes, including migration instructions for breaking changes. Link the release heading to a comparison with the previous `svelte-widgets` release; for 1.9.0, compare `v1.8.0...v1.9.0`. This repository also contains historical `svelte-multiselect` tags, so sorting all tags does not identify the previous `svelte-widgets` release.
 
 Keep one H1 title, H2 release headings, and H3 subsections. Use sentence case for entries, plain characters inside code spans, and the existing `> D Month YYYY` date format. Preserve historical API names and release links.
 

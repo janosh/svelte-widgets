@@ -1,5 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator } from '@playwright/test'
 import { fileURLToPath } from 'node:url'
+
+// width relative to the parent; `full_width` first stretches the element to 100%
+const width_ratio = (locator: Locator, full_width = false) =>
+  locator.evaluate((element: HTMLElement, stretch) => {
+    if (stretch) element.style.width = `100%`
+    const parent = element.parentElement
+    if (!parent) throw new Error(`Missing example wrapper`)
+    return element.getBoundingClientRect().width / parent.getBoundingClientRect().width
+  }, full_width)
 
 test(`standalone example buttons keep their natural width across demos`, async ({
   page,
@@ -12,25 +21,14 @@ test(`standalone example buttons keep their natural width across demos`, async (
       `Missing standalone buttons on ${route}`,
     ).toBeGreaterThan(0)
     for (const button of await buttons.all()) {
-      const ratio = await button.evaluate((element) => {
-        const parent = element.parentElement
-        if (!parent) throw new Error(`Missing example wrapper`)
-        return (
-          element.getBoundingClientRect().width / parent.getBoundingClientRect().width
-        )
-      })
-      expect(ratio, `Button stretches across ${route}`).toBeLessThan(0.5)
+      expect(await width_ratio(button), `Button stretches across ${route}`).toBeLessThan(
+        0.5,
+      )
     }
   }
   // Explicit sizing remains available for intentionally wide controls.
   const button = page.locator(`.code-example > button`).first()
-  const ratio = await button.evaluate((element) => {
-    element.style.width = `100%`
-    const parent = element.parentElement
-    if (!parent) throw new Error(`Missing example wrapper`)
-    return element.getBoundingClientRect().width / parent.getBoundingClientRect().width
-  })
-  expect(ratio).toBeCloseTo(1, 2)
+  expect(await width_ratio(button, true)).toBeCloseTo(1, 2)
 })
 
 test.beforeEach(async ({ page }) => {

@@ -125,14 +125,15 @@ Custom library APIs use snake_case. Native DOM handlers such as `onclick`, `onin
 | `print_element(node, { single_page, page_width_mm, px_per_inch, filename })`    | `print_page({ filename })` prints the whole page; use `@media print` CSS for visibility and pagination                                                                                                        |
 | `/live-examples`, `/live-examples/create-highlighter`, `/katex`                 | `/markdown`, `/markdown/vite`, `/highlight`; see the [Markdown migration guide](https://svelte-widgets.janosh.dev/markdown#migration)                                                                         |
 
-Additional API changes:
+Command IDs are compared exactly, without coercion or trimming. Empty and whitespace-only strings are rejected; action labels and section titles may repeat. Preserve a section object when reordering it to retain its rendered nodes.
+
+## Migrating to 1.9
 
 - Nav, PrevNext, Footer, and SubpageGrid share named link fields: `{ href, label, target?, rel?, title? }`. PrevNext takes link objects; SubpageGrid adds `description` and optional `icon`. String/tuple routes and `external` are removed; use native `target`/`rel`.
 - Nav uses `pathname`, `bind:open`, and one `item({ route, is_active })` content snippet for every link and group heading; Nav owns the enclosing anchor or span. Replace `page`, `route_labels`, `tooltips`, and `link`; put plain-text labels and tooltip options on each route. Groups explicitly list child link objects and optionally have their own href. Disabled is boolean; separators are separate `{ separator: true }` entries.
 - PrevNext uses `as` and `labels` instead of `node` and `titles`. Nonempty lists require a matching `current` href. Supply router attributes through `link_props`.
 - ActionMenu uses `on_execute({ action, section })` instead of `on_select(action, section)`; custom action types flow through callbacks and snippets. Import `CmdSection<Action>` from the package root instead of `utils`. CommandMenu accepts initially empty actions.
 - NumberRangeInput requires numeric bounds and a numeric step or `"any"`. Use `label` for its accessible name, `title` for the tooltip, and native `data-key` instead of `setting`.
-
 - MultiSelect uses `bind:value` alone: `mode="single"` takes one option or `null`, and the default `mode="multiple"` takes an array. Empty options are valid without an `allow_empty` flag; remove that prop.
 - ButtonGroup, Accordion, and TreeView use `mode="single" | "multiple"`, `bind:value`, and `on_change(value)`. Single mode (the default) uses one value or `null`; multiple mode uses an array. ButtonGroup no longer accepts record or tuple options: pass an array of strings or `{ value, label?, ... }` objects. `ButtonGroupOption` is exported from the package root.
 - SettingsSection takes `changed_keys` and `on_reset_key(key)`. Value comparison and reset defaults belong to the caller. Put descriptions on rows with `data-description`; the `setting_metadata` prop is removed.
@@ -142,8 +143,10 @@ Additional API changes:
 - The unused `utils.values_equal` export is removed. Shared Vite config returns independently owned nested settings, including overrides.
 - Tooltips accept plain text and hover/focus triggers. Use Popover for formatted content, controls, and application-controlled visibility.
 - Native Svelte headings use `Heading` with an explicit ID; remove `heading_ids()` from preprocessors. Toc consumes `items` metadata or discovers existing IDs with `dynamic`; invalid selectors and collapse modes throw.
-
-Command IDs are compared exactly, without coercion or trimming. Empty and whitespace-only strings are rejected; action labels and section titles may repeat. Preserve a section object when reordering it to retain its rendered nodes.
+- CodeEditor's `RangeEdit` is `TextEdit & EditorSelection`: rename `range_start`/`range_end`/`replacement`/`selection_start`/`selection_end` to `from`/`to`/`insert`/`anchor`/`head`. Custom `EditorModel` implementations add `checkpoint()` and accept an optional state id in `mark_saved(state_id?)`.
+- JsonTree's `matches_search(key, value, query)` drops the path argument, and its `values_equal` treats different arrays or objects of the same size as unequal.
+- MultiSelect's bound `collapsed_groups` is a plain `Set`: assign a new one instead of mutating it. Virtual-list `item_height` overrides row heights set through `li_option_style`.
+- `fuzzy_match` throws on `null`/`undefined` instead of returning `false`, and `heading_anchors()` always returns its cleanup function.
 
 ## 🚚 &thinsp; Migrating from `svelte-multiselect`
 
@@ -180,7 +183,12 @@ import {
   sortable,
   tooltip,
 } from 'svelte-widgets/attachments'
-import { compute_position, fuzzy_match, get_label } from 'svelte-widgets/utils'
+import {
+  compute_position,
+  fuzzy_match,
+  get_label,
+  make_change_detector, // (value) => true when it differs (===) from the previous call's
+} from 'svelte-widgets/utils'
 import { heading_anchors } from 'svelte-widgets/heading-anchors'
 ```
 
@@ -220,7 +228,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | [`/text-search`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/text-search.ts)                           | Text ranges, highlighting and search-jump helpers                                 |
 | [`/theme`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/theme.svelte.ts)                                | Headless light/dark/system state                                                  |
 | [`/toast-queue`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/toast-queue.svelte.ts)                    | Toast reducer and reactive store                                                  |
-| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Positioning, fuzzy matching, hotkeys and general helpers                          |
+| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Positioning, fuzzy and term matching (`create_term_matcher`), hotkeys, helpers    |
 | [`/virtual`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/virtual.ts)                                   | Visible-window calculation for fixed-size items                                   |
 | [`/vite-config`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/vite-config.ts)                           | This repository's Vite Plus configuration helper                                  |
 | [`/assets`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/assets.ts)                                     | Svelte preprocessor for relative media, responsive images and downloads           |

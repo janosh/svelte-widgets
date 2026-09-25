@@ -758,6 +758,9 @@
     event: Event,
     from_paste = false,
   ) {
+    // an async on_create lets the user keep typing, so only a draft still equal to the
+    // submitted text is consumed. Pastes never consume it: handle_paste clears it once.
+    const submitted_search = search_text
     if (
       !isNaN(Number(option_to_add)) &&
       (typeof option_to_add !== `string` || option_to_add.trim().length > 0) &&
@@ -843,8 +846,12 @@
       if (loader.config) loader.options = [...loader.options, option_to_add]
       else options = [...options, option_to_add]
     }
+    // Text typed while an async on_create was pending is the newer intent. In input
+    // display the visible text is the selection, so a changed draft also skips selecting.
+    const draft_changed = search_text !== submitted_search
+    if (input_display && draft_changed) return
     if (input_display) search_text = label_of(option_to_add)
-    else if (reset_filter_on_add) search_text = ``
+    else if (reset_filter_on_add && !from_paste && !draft_changed) search_text = ``
     set_selection(next_selected)
 
     clear_validity()
@@ -1547,6 +1554,7 @@
     const parsed = parse_paste(text)
     if (parsed.length === 0) return
     event.preventDefault()
+    const search_before_paste = search_text
     const added: Option[] = []
     const rejected: Option[] = []
     const overflow: Option[] = []
@@ -1581,7 +1589,9 @@
         break
       }
     }
-    if (!input_display && reset_filter_on_add) search_text = ``
+    // keep text typed while an async on_create was pending
+    if (!input_display && reset_filter_on_add && search_text === search_before_paste)
+      search_text = ``
     on_parsed_paste?.({ added, rejected, overflow, raw_text: text })
   }
 

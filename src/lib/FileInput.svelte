@@ -20,7 +20,7 @@
     children,
     remove_label = `Remove`,
     ...rest
-  }: Omit<HTMLAttributes<HTMLDivElement>, `onerror`> & {
+  }: Omit<HTMLAttributes<HTMLDivElement>, `onerror` | `children`> & {
     files?: File[]
     accept?: string
     multiple?: boolean

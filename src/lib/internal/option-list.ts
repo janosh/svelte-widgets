@@ -1,15 +1,18 @@
 import type { GroupedOptions, Option, OptionListProps } from '../types'
-import { fuzzy_match, get_label, has_group, is_object } from '../utils'
+import { create_term_matcher, get_label, has_group, is_object } from '../utils'
 import { virtual_window } from '../virtual'
 
 export const option_disabled = (option: Option): boolean =>
   Boolean(is_object(option) && option.disabled)
 
-export const option_matches = (option: Option, search: string, fuzzy = true): boolean =>
-  !search ||
-  (fuzzy
-    ? fuzzy_match(search, `${get_label(option)}`)
-    : `${get_label(option)}`.toLowerCase().includes(search.toLowerCase()))
+// Filters call this per option with the same query, so reuse the last prepared matcher.
+let last_matcher = { key: ``, matches: (_text: string) => true }
+export const option_matches = (option: Option, search: string, fuzzy = true): boolean => {
+  const key = `${fuzzy}:${search}`
+  if (last_matcher.key !== key)
+    last_matcher = { key, matches: create_term_matcher(search, { fuzzy, split: false }) }
+  return last_matcher.matches(`${get_label(option)}`)
+}
 
 export function group_options<T extends Option>(
   options: T[],

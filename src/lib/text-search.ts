@@ -1,4 +1,5 @@
 // Find across DOM node boundaries by matching concatenated text within block elements.
+import { DIACRITIC, splits_letter } from './internal/diacritics'
 
 // Block elements define match segments regardless of nested inline markup.
 export const DEFAULT_SEGMENT_SELECTOR =
@@ -199,28 +200,38 @@ const range_for_match = (
 const match_bounds = (text: string, query: string, fuzzy: boolean): MatchBounds[] => {
   const matches: MatchBounds[] = []
   if (!fuzzy) {
-    for (
-      let idx = text.indexOf(query);
-      idx >= 0;
-      idx = text.indexOf(query, idx + query.length)
-    )
-      matches.push({ start: idx, end: idx + query.length })
+    for (let idx = text.indexOf(query); idx >= 0;) {
+      if (splits_letter(text, idx + query.length)) idx = text.indexOf(query, idx + 1)
+      else {
+        matches.push({ start: idx, end: idx + query.length })
+        idx = text.indexOf(query, idx + query.length)
+      }
+    }
     return matches
   }
   const query_chars = Array.from(query)
+  // each matched char must be a whole letter, not the base of a marked one
+  const valid_at = (position: number, char_idx: number) =>
+    !splits_letter(
+      text,
+      position + query_chars[char_idx].length,
+      query_chars[char_idx + 1],
+    )
   for (let search_from = 0; search_from < text.length;) {
     let end = search_from
-    for (const query_char of query_chars) {
-      const position = text.indexOf(query_char, end)
+    for (const [char_idx, query_char] of query_chars.entries()) {
+      let position = text.indexOf(query_char, end)
+      while (position !== -1 && !valid_at(position, char_idx))
+        position = text.indexOf(query_char, position + 1)
       if (position === -1) return matches
       end = position + query_char.length
     }
     let start = end
-    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--)
-      start = text.lastIndexOf(
-        query_chars[char_idx],
-        start - query_chars[char_idx].length,
-      )
+    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--) {
+      const query_char = query_chars[char_idx]
+      start = text.lastIndexOf(query_char, start - query_char.length)
+      while (!valid_at(start, char_idx)) start = text.lastIndexOf(query_char, start - 1)
+    }
     matches.push({ start, end })
     search_from = end
   }
@@ -242,25 +253,52 @@ const source_bounds = (
   return { start: source_start, end: source_end }
 }
 
+// Drops diacritics so a query typed without them matches accented text. Each
+// mark's source end folds into the preceding base unit, so a hit ending on `e` of `e\u0301`
+// still covers the mark instead of splitting the character.
+const strip_marks = ({ text, offsets }: NormalizedText): NormalizedText => {
+  if (!offsets || !DIACRITIC.test(text)) return { text, offsets }
+  let stripped = ``
+  const stripped_offsets: MatchBounds[] = []
+  let unit_idx = 0
+  for (const char of text) {
+    const bounds = offsets[unit_idx]
+    unit_idx += char.length
+    if (DIACRITIC.test(char)) {
+      const previous = stripped_offsets.at(-1)
+      if (previous)
+        stripped_offsets[stripped_offsets.length - 1] = {
+          start: previous.start,
+          end: Math.max(previous.end, bounds.end),
+        }
+      continue
+    }
+    stripped += char
+    // an astral char spans two UTF-16 units, each needing its own offset entry
+    stripped_offsets.push(bounds)
+    if (char.length === 2) stripped_offsets.push(bounds)
+  }
+  return { text: stripped, offsets: stripped_offsets }
+}
+
 // `search_text` re-normalizes every segment per keystroke, char by char with a token per
 // code point, though the result depends only on the segment's own text. Bounded memoization
 // keeps typing off every word in the document; the result is read-only, so sharing is safe.
 const NORMALIZE_CACHE_LIMIT = 512
-const normalize_cache = new Map<string, NormalizedText>()
-const normalize_cached = (source: string): NormalizedText => {
-  const cached = normalize_cache.get(source)
-  if (cached) {
-    normalize_cache.delete(source) // reinsert to refresh its LRU position
-    normalize_cache.set(source, cached)
-    return cached
-  }
-  const normalized = normalize_with_offsets(source)
-  normalize_cache.set(source, normalized)
+// entries hold the mark-preserving and mark-stripped forms, the latter built on first use
+type CachedText = { marked: NormalizedText; stripped?: NormalizedText }
+const normalize_cache = new Map<string, CachedText>()
+const normalize_cached = (source: string, keep_marks: boolean): NormalizedText => {
+  let cached = normalize_cache.get(source)
+  if (cached) normalize_cache.delete(source) // reinsert to refresh its LRU position
+  cached ??= { marked: normalize_with_offsets(source) }
+  normalize_cache.set(source, cached)
   if (normalize_cache.size > NORMALIZE_CACHE_LIMIT) {
     const oldest = normalize_cache.keys().next().value
     if (oldest !== undefined) normalize_cache.delete(oldest)
   }
-  return normalized
+  if (keep_marks) return cached.marked
+  return (cached.stripped ??= strip_marks(cached.marked))
 }
 
 // every occurrence of query under root, case- and whitespace-insensitively
@@ -276,10 +314,12 @@ export const search_text = (
   } = options
   const normalized_query = normalize_with_offsets(query).text.trim()
   if (!normalized_query) return []
+  // diacritics in the query must match; a query without them ignores them in the text
+  const keep_marks = DIACRITIC.test(normalized_query)
 
   const matches: TextMatch[] = []
   for (const segment of text_segments(root, node_filter, segment_selector)) {
-    const { text, offsets } = normalize_cached(segment.text)
+    const { text, offsets } = normalize_cached(segment.text, keep_marks)
     for (const { start, end } of match_bounds(text, normalized_query, fuzzy)) {
       const source = source_bounds(offsets, start, end)
       matches.push({

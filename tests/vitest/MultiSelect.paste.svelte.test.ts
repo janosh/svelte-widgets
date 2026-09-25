@@ -2,7 +2,7 @@ import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import type { Option } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
-import { get_input, mount_multiselect } from './MultiSelect.test-utils'
+import { get_input, mount_multiselect, type_search_text } from './MultiSelect.test-utils'
 
 function make_paste_event(text: string): ClipboardEvent {
   const data_transfer = new DataTransfer()
@@ -50,6 +50,29 @@ describe(`parse_paste`, () => {
     expect(onpaste).toHaveReturnedWith(get_input())
   })
 
+  test(`input display keeps a draft typed while pasted creation is pending`, async () => {
+    const creation = Promise.withResolvers<undefined>()
+    const completed = Promise.withResolvers<undefined>()
+    const { props } = await paste_into(
+      {
+        options: [],
+        value: null,
+        mode: `single`,
+        selected_display: `input`,
+        allow_user_options: `append`,
+        on_create: () => creation.promise,
+        on_parsed_paste: () => completed.resolve(undefined),
+      },
+      `alpha`,
+    )
+    await type_search_text(`typed later`)
+    creation.resolve(undefined)
+    await completed.promise
+    // the visible text is the selection, so the newer draft wins and nothing is selected
+    expect(props.value).toBeNull()
+    expect(get_input().value).toBe(`typed later`)
+  })
+
   test(`native paste runs during dispatch while parsed paste waits for async creation`, async () => {
     const creation = Promise.withResolvers<undefined>()
     const completed = Promise.withResolvers<undefined>()
@@ -70,10 +93,13 @@ describe(`parse_paste`, () => {
     expect(onpaste).toHaveReturnedWith(get_input())
     expect(on_parsed_paste).not.toHaveBeenCalled()
     expect(props.value).toEqual([])
+    await type_search_text(`typed later`)
 
     creation.resolve(undefined)
     await completed.promise
     expect(props.value).toEqual([`alpha`, `beta`])
+    // typed while creation was pending, so neither add nor paste may clear it
+    expect(get_input().value).toBe(`typed later`)
     expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
       added: [`alpha`, `beta`],
       rejected: [],

@@ -246,6 +246,6 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
 
    Native DOM event handlers like `onblur`, `onfocus`, `onkeydown`, etc. are forwarded from the `<input>` element and use standard DOM event types (e.g. `FocusEvent`, `KeyboardEvent`).
 
-1. **Custom Options**: The `on_create` event only fires when `allow_user_options` is enabled and users type text that doesn't match existing options.
+1. **Custom Options**: The `on_create` event only fires when `allow_user_options` is enabled and users type (or, with `parse_paste`, paste) text that doesn't match existing options. Text typed while an async `on_create` is pending is kept. With `input_display`, where the visible text is the selection, such an edit also cancels selecting the created option: it is still appended to `options` under `allow_user_options="append"`, but `on_add` and `on_change` don't fire.
 
 1. **Search and Navigation**: The `on_search` event is debounced (150ms) to avoid excessive callbacks while typing. `on_activate` only fires during keyboard navigation (arrow keys), not on mouse hover. `on_duplicate` fires when a duplicate is rejected with `duplicates={false}` (the default) or `duplicates="case-insensitive"`.

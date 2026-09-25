@@ -1,17 +1,15 @@
 import { hotkey } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create_element, press_key as keydown, stub_prop } from '../index'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { create_element, press_key as keydown, stub_props } from '../index'
 
 describe(`hotkey`, () => {
   // a global binding outlives the body reset between tests, so dispose every one
-  const cleanups: (() => void)[] = []
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
   const attach_hotkey = (
     options: Parameters<typeof hotkey>[0],
     node = create_element(),
   ) => {
     const cleanup = hotkey(options)(node)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     return { node, cleanup }
   }
 
@@ -97,7 +95,7 @@ describe(`hotkey`, () => {
     [`Macintosh; Intel Mac OS X 10_15`, { metaKey: true }, { ctrlKey: true }],
     [`X11; Linux x86_64`, { ctrlKey: true }, { metaKey: true }],
   ])(`mod follows the platform (%s)`, (user_agent, matching, other) => {
-    cleanups.push(stub_prop(globalThis.navigator, `userAgent`, user_agent))
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     const handler = vi.fn()
     const { node } = attach_hotkey({ bindings: [{ keys: `mod+k`, handler }] })
 

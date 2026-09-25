@@ -1,24 +1,31 @@
 import ConfirmDialog from '$lib/ConfirmDialog.svelte'
 import type { DialogChoice } from '$lib/dialogs.svelte'
 import { ask_prompt, dialog_queue, request_choice } from '$lib/dialogs.svelte'
-import { type ComponentProps, createRawSnippet, mount, tick, unmount } from 'svelte'
+import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { render } from 'svelte/server'
 import { afterEach, expect, test, vi } from 'vitest'
-import { create_element, doc_query, pointer_event, track } from './index'
+import {
+  create_element,
+  doc_query,
+  render as mount_body,
+  next_task,
+  pointer_event,
+  track,
+} from './index'
 
 // happy-dom implements <dialog> (showModal, .open, close, close event) but not Escape
 // closing a modal nor a real ::backdrop, so those two are driven as the browser does:
 // close() for Escape, a click targeting the dialog element itself for the backdrop
 
-const mounted: Record<string, unknown>[] = []
-afterEach(async () => {
-  await Promise.all(mounted.splice(0).map((app) => unmount(app)))
+const hosts: (() => Promise<void>)[] = []
+afterEach(() => {
+  hosts.length = 0
   dialog_queue.length = 0
 })
 
 const flush = async () => {
   await tick()
-  await new Promise((resolve) => void setTimeout(resolve, 0))
+  await next_task()
   await tick()
 }
 
@@ -28,14 +35,14 @@ const write_choices: DialogChoice<`cancel` | `write`>[] = [
 ]
 
 const mount_dialog = async (props: ComponentProps<typeof ConfirmDialog> = {}) => {
-  mounted.push(mount(ConfirmDialog, { target: document.body, props }))
+  hosts.push(mount_body(ConfirmDialog, props))
   await flush()
   return doc_query<HTMLDialogElement>(`dialog.confirm-dialog`)
 }
 const unmount_host = async (index = -1) => {
-  const [app] = mounted.splice(index, 1)
-  if (!app) throw new Error(`No mounted ConfirmDialog at index ${index}`)
-  await unmount(app)
+  const [unmount] = hosts.splice(index, 1)
+  if (!unmount) throw new Error(`No mounted ConfirmDialog at index ${index}`)
+  await unmount()
   await flush()
 }
 const buttons = () => [

@@ -1,6 +1,6 @@
 import { float } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, mock_rect, stub_prop } from '../index'
+import { describe, expect, it, vi } from 'vitest'
+import { create_element, mock_rect, stub_props } from '../index'
 
 describe(`float`, () => {
   // anchor as a bare rect, so no element geometry has to be mocked for the anchor
@@ -23,8 +23,7 @@ describe(`float`, () => {
   ] as const)(
     `%s strategy positions relative to the right origin`,
     (strategy, scroll_x, scroll_y) => {
-      onTestFinished(stub_prop(globalThis, `scrollX`, scroll_x))
-      onTestFinished(stub_prop(globalThis, `scrollY`, scroll_y))
+      stub_props(globalThis, { scrollX: scroll_x, scrollY: scroll_y })
       const node = floating_node()
       const cleanup = float({
         anchor: anchor_rect,
@@ -86,7 +85,7 @@ describe(`float`, () => {
       cancelAnimationFrame: vi.fn(),
     }) as unknown as Window
     const node = floating_node()
-    onTestFinished(stub_prop(node, `ownerDocument`, { defaultView: animation_host }))
+    stub_props(node, { ownerDocument: { defaultView: animation_host } })
     const cleanup = float({
       anchor: anchor_rect,
       placement: `bottom`,

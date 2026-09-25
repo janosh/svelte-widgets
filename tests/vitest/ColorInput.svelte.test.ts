@@ -1,7 +1,7 @@
 import { ColorInput } from '$lib'
 import { mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { press_key } from './index'
+import { fire_input, press_key } from './index'
 
 const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
   const props = $state({
@@ -18,12 +18,8 @@ const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
     if (!element) throw new Error(`Missing ${type} input`)
     return element
   }
-  const change = async (type: string, value: string, event = `input`) => {
-    const element = input(type)
-    element.value = value
-    element.dispatchEvent(new Event(event, { bubbles: true }))
-    await tick()
-  }
+  const change = (type: string, value: string, event = `input`) =>
+    fire_input(input(type), value, event)
   const press = async (type: string, key: string) => {
     expect(press_key(input(type), key).defaultPrevented).toBe(true)
     await tick()

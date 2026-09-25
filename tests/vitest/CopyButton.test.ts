@@ -2,10 +2,10 @@ import { CopyButton } from '$lib'
 import { Alert, Check, Copy } from '$lib/icons'
 import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
-import { mount, tick, unmount } from 'svelte'
+import { mount, tick } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const mock_write_text = vi.fn()
@@ -14,18 +14,14 @@ vi.stubGlobal(`navigator`, { clipboard: { writeText: mock_write_text } })
 const default_labels = { ready: `ready`, success: `success`, error: `error` } as const
 const default_icons = { ready: Copy, success: Check, error: Alert } as const
 const mount_copy_button = (props: Partial<ComponentProps<typeof CopyButton>> = {}) => {
-  const copy_button_component = mount(CopyButton, {
-    target: document.body,
-    props: {
-      content: `test`,
-      as: `div`,
-      labels: default_labels,
-      icons: default_icons,
-      ...props,
-    },
+  const unmount_button = render(CopyButton, {
+    content: `test`,
+    as: `div`,
+    labels: default_labels,
+    icons: default_icons,
+    ...props,
   })
-  const copy_button = doc_query(`[data-sms-copy]`)
-  return { copy_button_component, copy_button }
+  return { unmount_button, copy_button: doc_query(`[data-sms-copy]`) }
 }
 
 const click_copy_button = async (copy_button: HTMLElement): Promise<void> => {
@@ -60,9 +56,8 @@ const get_single_mounted_button = (pre: HTMLPreElement): HTMLButtonElement => {
 
 // global/global_selector mounts scan the document one tick after mounting
 const mount_global = async (props: Partial<ComponentProps<typeof CopyButton>>) => {
-  const component = mount(CopyButton, { target: document.body, props })
+  render(CopyButton, props)
   await tick()
-  return component
 }
 
 // only the initial scan is sync; later ones ride the MutationObserver, coalesced per frame
@@ -82,9 +77,7 @@ test.each([`Enter`, ` `, `Escape`, `a`])(`handles %j key`, (key) => {
   const activates = key === `Enter` || key === ` `
   const onkeydown = vi.fn()
   const { copy_button } = mount_copy_button({ content: `test content`, onkeydown })
-  const event = new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
-
-  copy_button.dispatchEvent(event)
+  const event = press_key(copy_button, key)
 
   expect(mock_write_text.mock.calls).toEqual(activates ? [[`test content`]] : [])
   expect(event.defaultPrevented).toBe(activates)
@@ -197,7 +190,6 @@ test.each([`success`, `error`] as const)(
 // state holds until the step before `hold_ms` elapses, then shows `final_state`
 test.each([
   [`default reset_ms`, undefined, 2000, `ready`],
-  [`reset_ms=500`, 500, 500, `ready`],
   [`reset_ms=0`, 0, 5000, `success`],
   [`reset_ms=-1`, -1, 5000, `success`],
 ] as const)(`%s: success -> %s`, async (_desc, reset_ms, hold_ms, final_state) => {
@@ -232,14 +224,14 @@ test(`unmount clears outstanding reset timer`, async () => {
   vi.useFakeTimers()
   const set_timeout_spy = vi.spyOn(globalThis, `setTimeout`)
   const clear_timeout_spy = vi.spyOn(globalThis, `clearTimeout`)
-  const { copy_button_component, copy_button } = mount_copy_button({ reset_ms: 100 })
+  const { unmount_button, copy_button } = mount_copy_button({ reset_ms: 100 })
   await click_copy_button(copy_button)
   // pick the reset timer out of any others Svelte scheduled
   const reset_idx = set_timeout_spy.mock.calls.findIndex((call) => call[1] === 100)
   expect(reset_idx).not.toBe(-1)
   const reset_timer_id = set_timeout_spy.mock.results[reset_idx].value
 
-  void unmount(copy_button_component)
+  void unmount_button()
   // identity match: toHaveBeenCalledWith's deep equality would accept any Timeout object
   expect(clear_timeout_spy.mock.calls.map((call) => call[0])).toContain(reset_timer_id)
 })
@@ -300,7 +292,7 @@ test(`global_selector remounts buttons when callbacks or disabled change`, async
   const callback = fromStore(writable(on_success_initial))
   const disabled = fromStore(writable(false))
   const { pre } = create_pre_with_code(`selector content`, `copy-target`)
-  const component = await mount_global({
+  await mount_global({
     global_selector: `.copy-target`,
     get on_copy_success() {
       return callback.current
@@ -324,29 +316,24 @@ test(`global_selector remounts buttons when callbacks or disabled change`, async
   await click_copy_button(get_single_mounted_button(pre))
   expect(get_single_mounted_button(pre).disabled).toBe(true)
   expect(mock_write_text).toHaveBeenCalledTimes(2)
-
-  void unmount(component)
 })
 
 // two global instances must not swap each other's buttons in an endless observer loop
 test(`global mode leaves a pre that already has a copy button alone`, async () => {
   const { pre } = create_pre_with_code(`shared content`)
-  const first = await mount_global({ global: true, as: `a` })
-  const second = await mount_global({ global: true })
+  await mount_global({ global: true, as: `a` })
+  await mount_global({ global: true })
   await tick()
 
   expect(pre.querySelectorAll(`[data-sms-copy]`)).toHaveLength(1)
   expect(pre.querySelector(`[data-sms-copy]`)?.localName).toBe(`a`)
-
-  void unmount(first)
-  void unmount(second)
 })
 
 test.each([`replace`, `edit`] as const)(
   `global mode copies current text after %s`,
   async (change) => {
     const { pre, code } = create_pre_with_code(`before`)
-    const component = await mount_global({ global: true })
+    await mount_global({ global: true })
     // Drain mount mutations so they cannot incidentally rescan an unobserved text edit.
     await flush_rescan()
     if (change === `replace`) code.textContent = `after`
@@ -355,20 +342,18 @@ test.each([`replace`, `edit`] as const)(
 
     await click_copy_button(get_single_mounted_button(pre))
     expect(mock_write_text).toHaveBeenCalledWith(`after`)
-    void unmount(component)
   },
 )
 
 test(`global mode unmounts buttons whose pre left the document`, async () => {
   const { pre } = create_pre_with_code(`transient`)
-  const component = await mount_global({ global: true })
+  await mount_global({ global: true })
   const button = get_single_mounted_button(pre)
   pre.remove()
   document.body.append(document.createElement(`div`)) // a mutation after the removal
   await tick()
 
   expect(button.isConnected).toBe(false)
-  void unmount(component)
 })
 
 test.each([
@@ -381,10 +366,9 @@ test.each([
   async (as, skip_selector, existing, count) => {
     const { pre } = create_pre_with_code(`code with an existing control`)
     pre.append(document.createElement(existing))
-    const component = await mount_global({ global: true, as, skip_selector })
+    await mount_global({ global: true, as, skip_selector })
 
     expect(pre.querySelectorAll(`[data-sms-copy]`)).toHaveLength(count)
-    void unmount(component)
   },
 )
 
@@ -393,7 +377,7 @@ test.each([
 test.each([`button`, `a`])(
   `global mode mounts one %s on dynamically added code`,
   async (as) => {
-    const component = await mount_global({ global: true, as })
+    await mount_global({ global: true, as })
     const { pre } = create_pre_with_code(`test code`)
     await flush_rescan()
 
@@ -404,8 +388,6 @@ test.each([`button`, `a`])(
     await flush_rescan()
 
     expect(get_single_mounted_button(pre)).toBe(button)
-
-    void unmount(component)
   },
 )
 

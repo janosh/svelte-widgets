@@ -1,5 +1,18 @@
 # Changelog
 
+## [v1.9.0](https://github.com/janosh/svelte-widgets/compare/v1.8.0...v1.9.0)
+
+> 25 September 2026
+
+- **Breaking:** Unify selection and navigation APIs. MultiSelect, ButtonGroup, Accordion and TreeView share `mode`, `bind:value` and `on_change`; Nav, PrevNext, Footer and SubpageGrid take `{ href, label, target?, rel?, title? }` link objects; ActionMenu uses `on_execute({ action, section })`. See the [migration guide](https://github.com/janosh/svelte-widgets/blob/main/readme.md#migrating-to-19)
+- **Breaking:** Dialog and Sheet dismiss via native `closedby`; `watch_theme()` replaces `listen_theme_storage()`; tooltips take plain text only; native Svelte headings use `Heading` instead of `heading_ids()`; NumberRangeInput requires numeric bounds and step; SettingsSection takes `changed_keys` and `on_reset_key`
+- **Breaking:** Rename CodeEditor `RangeEdit` fields to `from`/`to`/`insert`/`anchor`/`head`; JsonTree `matches_search` drops its path argument; `fuzzy_match` throws on `null`/`undefined`; MultiSelect `collapsed_groups` is a plain `Set`
+- Add `ColorInput` with editable hex, opacity and presets, logarithmic scales for `NumberRangeInput` and `RangeSlider`, and TreeView multi-selection with Ctrl/Cmd toggles and Shift ranges
+- Add CodeEditor find/replace and go-to-line with Unicode case and whole-word matching; the open find panel patches matches near each edit instead of rescanning. Saves track the written text with `model.checkpoint()` and `mark_saved(state_id)`, so edits made during an async save stay dirty
+- Plain queries ignore diacritics (`resume` matches `résumé`) in FindBar, `highlight_matches`, CommandMenu and MultiSelect's default filter; add `create_term_matcher` and `make_change_detector` utils, JsonTree `to_json` and Toast `labels.dismiss`
+- Parse Markdown in linear time (a 341 KB document drops from 3.3 s to 145 ms) and speed up DiffView loading, MultiSelect keep-selected toggles, `search_text` and the viewport-windowed CodeEditor input
+- Fix about 30 bugs, including JsonTree search/copy/edit, focus-trap recapture, toast timer overflow, RangeSlider coincident thumbs, text typed while MultiSelect creates an option asynchronously, and CodeEditor selection sync after a no-op Backspace
+
 ## [v1.8.0](https://github.com/janosh/svelte-widgets/compare/v1.7.1...v1.8.0)
 
 > 9 September 2026

@@ -71,7 +71,15 @@ export interface EditorModel {
   set_selection: (selection: EditorSelection) => void
   undo: () => boolean
   redo: () => boolean
-  mark_saved: () => void
+  // Ends the current undo group so the next edit starts a new one, and returns the id of
+  // the current text's history state: undo/redo back to that text restores the id, while
+  // every new edit gets a fresh one.
+  // Call it when an async save starts: typing during the save would otherwise merge into
+  // the saved text's group, leaving that text unreachable by undo.
+  checkpoint: () => number
+  // Records `state_id` (default: the current text's) as the text on disk, e.g. the id
+  // `checkpoint()` returned when an asynchronous save started, even if edits landed meanwhile.
+  mark_saved: (state_id?: number) => void
   subscribe: (listener: (update: EditorUpdate) => void) => () => void
 }
 export type OpenDocResult = {

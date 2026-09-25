@@ -3,23 +3,19 @@ import { Check } from '$lib/icons'
 import button_group_source from '$lib/ButtonGroup.svelte?raw'
 import type { ButtonGroupOption } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, hover as dispatch_hover } from './index'
+import { doc_query, hover as dispatch_hover, render, press_key } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
   type Option = ButtonGroupOption
 
-  const mounted: Record<string, unknown>[] = []
-  afterEach(() => {
-    for (const app of mounted.splice(0)) void unmount(app)
-    vi.useRealTimers()
-  })
+  afterEach(() => void vi.useRealTimers())
 
   const mount_group = (props: Props) => {
     const full_props = props as ComponentProps<typeof ButtonGroup>
-    mounted.push(mount(ButtonGroup, { target: document.body, props: full_props }))
+    render(ButtonGroup, full_props)
     // `[data-value]` so an option_suffix rendering its own button doesn't join the list
     return [
       ...document.querySelectorAll<HTMLButtonElement>(`.options button[data-value]`),
@@ -30,9 +26,7 @@ describe(`ButtonGroup`, () => {
   const checked_state = (button: HTMLButtonElement) =>
     button.getAttribute(`aria-checked`) ?? button.getAttribute(`aria-pressed`)
   const press = (key: string, target: Element | null = document.activeElement) =>
-    target?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
-    )
+    target && press_key(target, key)
 
   const letters = [
     { value: `alpha`, label: `Alpha` },

@@ -1,6 +1,6 @@
 import { click_outside } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { create_element, mock_rect, press_key, stub_prop } from '../index'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { create_element, mock_rect, press_escape, stub_props } from '../index'
 
 describe(`click_outside`, () => {
   const dispatch_press = (
@@ -26,20 +26,13 @@ describe(`click_outside`, () => {
     return event
   }
 
-  const press_escape = (init: KeyboardEventInit = {}) =>
-    press_key(document, `Escape`, init)
-
-  // innerHTML = '' would leave document capture listeners and Escape layers behind
-  const cleanups: (() => void)[] = []
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
-
   const attach_outside = (
     config: Parameters<typeof click_outside>[0] = {},
     element = create_element(),
   ) => {
     const callback = vi.fn()
     const cleanup = click_outside({ callback, ...config })(element)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     return { element, callback, cleanup }
   }
 
@@ -73,7 +66,7 @@ describe(`click_outside`, () => {
     const listener = vi.fn()
     element.addEventListener(`dismiss`, listener)
     const cleanup = click_outside({})(element)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     dispatch_press(create_element())
     expect(listener).toHaveBeenCalled()
   })
@@ -170,7 +163,7 @@ describe(`click_outside`, () => {
     const without_escape = attach_outside()
     const page_handler = vi.fn()
     document.addEventListener(`keydown`, page_handler)
-    cleanups.push(() => document.removeEventListener(`keydown`, page_handler))
+    onTestFinished(() => document.removeEventListener(`keydown`, page_handler))
 
     expect(press_escape().defaultPrevented).toBe(false)
     expect(without_escape.callback).not.toHaveBeenCalled()
@@ -206,10 +199,7 @@ describe(`click_outside`, () => {
 
     // no layout in the test DOM, so give the root a client box the gutter sits outside
     const root = document.documentElement
-    cleanups.push(
-      stub_prop(root, `clientWidth`, 800),
-      stub_prop(root, `clientHeight`, 600),
-    )
+    stub_props(root, { clientWidth: 800, clientHeight: 600 })
     const press = (clientX: number, clientY: number) =>
       document.body.dispatchEvent(
         new PointerEvent(`pointerdown`, { bubbles: true, clientX, clientY }),
@@ -231,14 +221,14 @@ describe(`click_outside`, () => {
     // border box wide enough for border + scrollport + a 15px gutter on each axis, so
     // every press below lands inside it as a real hit test would deliver it
     mock_rect(scroller, { left: 100, top: 50, width: 225, height: 125 })
-    cleanups.push(
-      stub_prop(scroller, `clientLeft`, 10), // a 10px border, then...
-      stub_prop(scroller, `clientTop`, 10),
-      stub_prop(scroller, `clientWidth`, 200), // ...200px of scrollport, so the vertical
-      stub_prop(scroller, `clientHeight`, 100), // gutter opens at x 310 and the horizontal at y 160
-      stub_prop(scroller, `scrollWidth`, 400), // overflowing on both axes puts both there
-      stub_prop(scroller, `scrollHeight`, 400),
-    )
+    stub_props(scroller, {
+      clientLeft: 10, // a 10px border, then...
+      clientTop: 10,
+      clientWidth: 200, // ...200px of scrollport, so the vertical
+      clientHeight: 100, // gutter opens at x 310 and the horizontal at y 160
+      scrollWidth: 400, // overflowing on both axes puts both there
+      scrollHeight: 400,
+    })
     const press = (clientX: number, clientY: number) =>
       dispatch_press(scroller, [], `pointerdown`, { clientX, clientY })
 

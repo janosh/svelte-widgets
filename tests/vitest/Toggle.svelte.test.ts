@@ -2,14 +2,13 @@ import { Toggle } from '$lib'
 import type { ComponentProps } from 'svelte'
 import { mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Toggle`, () => {
   const get_input = () => doc_query<HTMLInputElement>(`input[type="checkbox"]`)
-  const create_keydown = (key: string, init: KeyboardEventInit = {}) =>
-    new KeyboardEvent(`keydown`, { key, bubbles: true, ...init })
-  const keydown = (key: string) => get_input().dispatchEvent(create_keydown(key))
+  const keydown = (key: string, init: KeyboardEventInit = {}) =>
+    press_key(get_input(), key, init)
 
   // a checkbox flips its own DOM state on click, so input.checked passes even with
   // bind:checked gone - only the written-back value proves the binding works
@@ -42,13 +41,11 @@ describe(`Toggle`, () => {
       input_props: { onchange, onclick: () => call_order.push(`click`) },
     })
 
-    const event = create_keydown(`Enter`, { cancelable: true })
-    const prevent_default_spy = vi.spyOn(event, `preventDefault`)
-    get_input().dispatchEvent(event)
+    const event = keydown(`Enter`)
 
     expect(state()).toEqual([true, true])
     expect(onchange).toHaveBeenCalledWith(expect.any(Event))
-    expect(prevent_default_spy).toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(true)
     expect(onkeydown).toHaveBeenCalledWith(expect.any(KeyboardEvent))
     // full order, not just call_order[0]: also pins that Enter synthesizes the click
     expect(call_order).toEqual([`onkeydown`, `click`])
@@ -69,9 +66,7 @@ describe(`Toggle`, () => {
       if (mode === `prevented`) event.preventDefault()
     })
     const state = mount_bindable_toggle(false, { onkeydown })
-    get_input().dispatchEvent(
-      create_keydown(`Enter`, { cancelable: true, isComposing: mode === `composing` }),
-    )
+    keydown(`Enter`, { isComposing: mode === `composing` })
     expect(onkeydown).toHaveBeenCalledOnce()
     expect(state()).toEqual([false, false])
   })

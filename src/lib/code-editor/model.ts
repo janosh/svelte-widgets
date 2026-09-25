@@ -534,11 +534,19 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
       trim_history()
       return true
     },
-    mark_saved: () => {
+    checkpoint: () => {
       break_history_group()
-      if (saved_state === state) return
-      saved_state = state
-      notify()
+      return state
+    },
+    mark_saved: (state_id = state) => {
+      if (!Number.isInteger(state_id) || state_id < 0 || state_id > next_state)
+        throw new Error(`Invalid state_id=${state_id}; latest state is ${next_state}`)
+      // Typing may not merge into the saved text's group; an older id leaves the
+      // current group alone, so a save finishing mid-word doesn't split its undo step.
+      if (state_id === state) break_history_group()
+      const was_dirty = state !== saved_state
+      saved_state = state_id
+      if ((state !== saved_state) !== was_dirty) notify()
     },
     subscribe: (listener) => {
       const subscription = (update: EditorUpdate): void => listener(update)

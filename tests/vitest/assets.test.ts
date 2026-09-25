@@ -2,10 +2,10 @@ import { asset_imports } from '$lib/assets'
 import { create_markdown, markdown } from '$lib/markdown'
 import { decode_source_map, original_position } from '$lib/markdown/source-map'
 import { compile, parse, preprocess } from 'svelte/compiler'
-import { mkdtemp, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { writeFile } from 'node:fs/promises'
+import { temp_dir } from './index'
 import { build } from 'vite'
-import { describe, expect, onTestFinished, test } from 'vitest'
+import { describe, expect, test } from 'vitest'
 
 const transform = async (content: string) => {
   const result = await preprocess(content, asset_imports(), {
@@ -183,8 +183,7 @@ describe(`asset imports`, () => {
       await expect(transform(`<img src="${url}">`)).rejects.toThrow(
         `Cannot import asset "${url}" in /src/page.svelte: Vite treats "#" and "?" in filenames as URL delimiters. Rename the file.`,
       )
-    const directory = await mkdtemp(`${tmpdir()}/widgets-assets-`)
-    onTestFinished(() => rm(directory, { recursive: true }))
+    const directory = await temp_dir(`widgets-assets-`)
     const filenames = [`image one.svg`, `東京.svg`, `100%.svg`, `.hidden.svg`]
     const svg = `<svg xmlns="http://www.w3.org/2000/svg"/>`
     await Promise.all(filenames.map((name) => writeFile(`${directory}/${name}`, svg)))

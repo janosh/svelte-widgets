@@ -1,15 +1,16 @@
 import DraggablePane from '$lib/DraggablePane.svelte'
 import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { createRawSnippet, tick } from 'svelte'
+import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import {
   doc_query,
-  escape_key,
   hover,
   mock_rect,
   pointer_event,
-  stub_prop,
+  press_escape,
+  render,
+  stub_props,
 } from './index'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 
@@ -22,14 +23,7 @@ const mock_pane_rect = (pane: HTMLElement, left = 0, top = 0) =>
 const default_max_width = `min(450px, calc(100vw - 16px))`
 
 describe(`DraggablePane`, () => {
-  // click_outside registers document listeners that outlive innerHTML = ''
-  const mounted: Record<string, unknown>[] = []
-  const cleanups: (() => void)[] = []
-  afterEach(() => {
-    for (const app of mounted.splice(0)) void unmount(app)
-    for (const undo of cleanups.splice(0)) undo()
-    vi.useRealTimers()
-  })
+  afterEach(() => void vi.useRealTimers())
 
   // raw snippets render once, so this captures the payload; the reactive half is
   // asserted through the DOM below
@@ -43,9 +37,7 @@ describe(`DraggablePane`, () => {
 
   type PaneProps = Record<string, unknown>
   const setup = async (props: PaneProps = {}) => {
-    mounted.push(
-      mount(DraggablePane, { target: document.body, props: { children, ...props } }),
-    )
+    render(DraggablePane, { children, ...props })
     await tick()
     const pane = doc_query<HTMLDivElement>(`.draggable-pane`)
     // happy-dom skips the component stylesheet; mirror border-box so resizable's
@@ -67,10 +59,7 @@ describe(`DraggablePane`, () => {
 
   // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
   const mock_viewport = (inner_width = 1000, inner_height = 500) => {
-    cleanups.push(
-      stub_prop(globalThis, `innerWidth`, inner_width),
-      stub_prop(globalThis, `innerHeight`, inner_height),
-    )
+    stub_props(globalThis, { innerWidth: inner_width, innerHeight: inner_height })
   }
 
   // for the tests that need no geometry mocked before the pane opens
@@ -96,7 +85,6 @@ describe(`DraggablePane`, () => {
       new PointerEvent(`pointerup`, { bubbles: true, isPrimary: true }),
     )
   // returns false once a handler cancels the key, i.e. the pane swallowed it
-  const escape = () => document.dispatchEvent(escape_key())
   const is_open = (pane: HTMLElement) => pane.style.display === `grid`
 
   // the press-move-release both attachments listen for: the pane (resize) or handle (drag)
@@ -160,7 +148,7 @@ describe(`DraggablePane`, () => {
   // dismiss_on undefined leaves the pane's own default in force, which is what pins it
   const mount_toggles = async (dismiss_on?: `press` | `release`, open = false) => {
     const props = { dismiss_on, open }
-    mounted.push(mount(TestPaneExternalToggles, { target: document.body, props }))
+    render(TestPaneExternalToggles, props)
     await tick()
     return {
       pane: doc_query<HTMLDivElement>(`.draggable-pane`),
@@ -224,7 +212,7 @@ describe(`DraggablePane`, () => {
     async (dismiss_on) => {
       const control = document.createElement(`button`)
       document.body.append(control)
-      cleanups.push(() => control.remove())
+      onTestFinished(() => control.remove())
       const { pane } = await open_pane({ inside: [control], dismiss_on })
 
       press_release(control)
@@ -246,7 +234,7 @@ describe(`DraggablePane`, () => {
     expect(is_open(pane)).toBe(true)
     expect(on_close).not.toHaveBeenCalled()
 
-    escape()
+    press_escape()
     await tick()
     expect(is_open(pane)).toBe(false)
     expect(on_close).toHaveBeenCalledWith({ via: `escape` })
@@ -259,7 +247,7 @@ describe(`DraggablePane`, () => {
     field.focus()
     expect(document.activeElement).toBe(field)
 
-    escape()
+    press_escape()
     await tick()
     expect(document.activeElement).toBe(toggle)
   })
@@ -268,7 +256,7 @@ describe(`DraggablePane`, () => {
     const on_close = vi.fn()
     await setup({ on_close })
 
-    const reached_the_page = escape()
+    const reached_the_page = !press_escape().defaultPrevented
     await tick()
 
     expect(on_close).not.toHaveBeenCalled()
@@ -310,7 +298,7 @@ describe(`DraggablePane`, () => {
       document.body.append(ancestor)
       mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
       const { toggle, pane } = await setup({ align })
-      cleanups.push(stub_prop(pane, `offsetParent`, ancestor))
+      stub_props(pane, { offsetParent: ancestor })
       mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
       mock_pane_rect(pane)
 
@@ -325,12 +313,9 @@ describe(`DraggablePane`, () => {
   )
 
   test(`falls back to document coordinates without a positioned ancestor`, async () => {
-    cleanups.push(
-      stub_prop(globalThis, `scrollX`, 30),
-      stub_prop(globalThis, `scrollY`, 60),
-    )
+    stub_props(globalThis, { scrollX: 30, scrollY: 60 })
     const { toggle, pane } = await setup()
-    cleanups.push(stub_prop(toggle, `offsetParent`, null))
+    stub_props(toggle, { offsetParent: null })
     mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
     mock_pane_rect(pane)
 
@@ -346,7 +331,7 @@ describe(`DraggablePane`, () => {
     document.body.append(ancestor)
     mock_rect(ancestor, { left: 0, top: 0, width: 800, height: 600 })
     const { toggle, pane } = await setup()
-    cleanups.push(stub_prop(toggle, `offsetParent`, ancestor))
+    stub_props(toggle, { offsetParent: ancestor })
     mock_rect(toggle, { left: 500, top: 100, width: 20, height: 20 })
     mock_pane_rect(pane, 75, 125)
 
@@ -617,7 +602,7 @@ describe(`DraggablePane`, () => {
           notify_resize = () => callback([], this)
         }
       }
-      cleanups.push(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
+      stub_props(globalThis, { ResizeObserver: MockResizeObserver })
       mock_viewport()
       const window_listeners = vi.spyOn(globalThis, `addEventListener`)
       const { toggle, pane } = await setup({ position })
@@ -634,12 +619,12 @@ describe(`DraggablePane`, () => {
         [toggle, { box: `border-box` }],
       ])
 
-      cleanups.push(stub_prop(globalThis, `innerWidth`, 600))
+      stub_props(globalThis, { innerWidth: 600 })
       globalThis.dispatchEvent(new Event(`resize`))
       vi.advanceTimersByTime(60)
       await tick()
       expect(pane.style.left).toBe(viewport_left) // Only fixed panes clamp to 600 - 450 - 8.
-      cleanups.push(stub_prop(globalThis, `innerWidth`, 1000))
+      stub_props(globalThis, { innerWidth: 1000 })
 
       // A delayed stylesheet or async content can change width without a window event.
       mock_rect(pane, { left: 0, top: 0, width: 300, height: 300 })
@@ -654,7 +639,7 @@ describe(`DraggablePane`, () => {
       await tick()
       expect(disconnect).toHaveBeenCalledOnce()
       notify_resize() // A queued notification must not undo a user's drag.
-      cleanups.push(stub_prop(globalThis, `innerWidth`, 900))
+      stub_props(globalThis, { innerWidth: 900 })
       globalThis.dispatchEvent(new Event(`resize`))
       vi.advanceTimersByTime(60)
       await tick()

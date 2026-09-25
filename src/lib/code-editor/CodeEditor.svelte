@@ -24,7 +24,11 @@
   import { create_highlight_client } from './highlight-client'
   import type { HighlightSpansEvent } from './highlight-client'
   import { line_comment_token } from './languages'
-  import { iterate_editor_matches, replace_editor_matches } from './search'
+  import {
+    iterate_editor_matches,
+    replace_editor_matches,
+    update_editor_matches,
+  } from './search'
   import type { EditorMatch } from './search'
   import { render_tokens, type RenderedToken } from './tokens'
   import { resolve_editor_backend, to_error } from './types'
@@ -108,8 +112,18 @@
   let composition_seq = 0
   let composition_range: EditorSelection | null = null
   let unregister_escape: (() => void) | undefined
-  type InputSnapshot = EditorSelection & { input_type: string; value_length: number }
+  type InputSnapshot = EditorSelection & {
+    input_type: string
+    value_length: number
+    event: InputEvent
+  }
   let before_snapshot: InputSnapshot | null = null
+  // A listener after ours can cancel beforeinput, and then no input event consumes the
+  // snapshot. Drop it once seen so selection sync and input refreshes resume.
+  const input_pending = (): boolean => {
+    if (before_snapshot?.event.defaultPrevented) before_snapshot = null
+    return before_snapshot !== null
+  }
   let active_client: ReturnType<typeof create_highlight_client> | null = null
   // Plain Map, not SvelteMap: the LRU touch on every render pass made reactive entries
   // rebuild `visible_rows` and reconcile the DOM twice. `token_revision` sequences reads.
@@ -128,8 +142,8 @@
   )
   const show_line_numbers = $derived(options.line_numbers ?? true)
   const editing_disabled = $derived(read_only || !doc_info?.editable)
-  const search_result = $derived.by(() => {
-    void model_revision
+  type SearchResult = { matches: EditorMatch[]; truncated: boolean; revision: number }
+  const search_all = (): SearchResult => {
     const matches: EditorMatch[] = []
     let truncated = false
     if (search_panel === `find`) {
@@ -141,8 +155,33 @@
         matches.push(match)
       }
     }
-    return { matches, truncated }
-  })
+    return { matches, truncated, revision: model.revision }
+  }
+  // Rescanned in full when the panel, query, options or model change. Transactions patch
+  // it near their edits instead (`patch_search`), so typing never rescans the document.
+  let search_result = $derived.by(search_all)
+  const patch_search = ({ base_revision, revision, edits }: EditorTransaction): void => {
+    const current = search_result
+    if (current.revision === revision) return
+    // A capped list lacks the matches beyond it, so only a rescan can refill it.
+    if (current.truncated || current.revision !== base_revision) {
+      search_result = search_all()
+      return
+    }
+    const matches = update_editor_matches(
+      model,
+      search_query,
+      current.matches,
+      edits,
+      search_options,
+    )
+    const truncated = matches.length > SEARCH_MATCH_LIMIT
+    search_result = {
+      matches: truncated ? matches.slice(0, SEARCH_MATCH_LIMIT) : matches,
+      truncated,
+      revision,
+    }
+  }
   const search_matches = $derived(search_result.matches)
   const current_match = $derived(
     search_matches.findIndex(
@@ -323,7 +362,7 @@
   // the document deliberately expands this window so native copy/cut and AT keep working.
   const refresh_input = (reveal = false): void => {
     const area = textarea
-    if (!area || composing || before_snapshot) return
+    if (!area || composing || input_pending()) return
     if (reveal) reveal_selection()
     const window = visible_line_window(
       scroll_top,
@@ -399,6 +438,7 @@
         // the rope; bumping on bare selection changes re-read every row on each caret move.
         model_revision += 1
         invalidate_tokens(active_model, update.transaction)
+        if (search_panel === `find`) patch_search(update.transaction)
         active.apply_transaction(update.transaction)
       }
       if (!local_model_update) refresh_input(true)
@@ -539,7 +579,7 @@
   }
   const sync_selection = (): void => {
     const area = textarea
-    if (!area || local_model_update || refreshing_input || before_snapshot) return
+    if (!area || local_model_update || refreshing_input || input_pending()) return
     update_locally(() => model.set_selection(selection_of(area)))
   }
   const on_before_input = (event: InputEvent): void => {
@@ -558,11 +598,22 @@
     }
     const composition =
       event.inputType.includes(`Composition`) || composing ? composition_range : null
-    before_snapshot = {
+    const snapshot = {
       ...(composition ?? selection_of(area)),
       input_type: event.inputType,
       value_length: area.value.length,
+      event,
     }
+    before_snapshot = snapshot
+    // Browsers dispatch input in the same task as its beforeinput, but a no-op deletion
+    // (Backspace at offset 0, Delete at the end) fires beforeinput alone. Drop a snapshot
+    // still unconsumed afterwards so it stops blocking selection sync, and catch up on the
+    // input refreshes that model updates skipped meanwhile.
+    setTimeout(() => {
+      if (before_snapshot !== snapshot) return
+      before_snapshot = null
+      refresh_input()
+    }, 0)
   }
   type InputShape = `replace` | `backward` | `forward` | `around`
   const INPUT_TYPES: Record<InputShape, string> = {
@@ -718,14 +769,15 @@
     const save_error_handler = on_error
     const saving_model = model
     if (!save_handler || editing_disabled || saving || !info) return false
-    const saving_revision = saving_model.revision
+    // The written text's history state: undoing back to it after mid-save edits is clean.
+    const saving_state = saving_model.checkpoint()
     saving = true
     try {
       await save_handler(saving_model.disk_text(), {
         ...info,
         line_count: saving_model.line_count,
       })
-      if (saving_model.revision === saving_revision) saving_model.mark_saved()
+      saving_model.mark_saved(saving_state)
       if (model === saving_model) error_message = null
       return true
     } catch (error) {

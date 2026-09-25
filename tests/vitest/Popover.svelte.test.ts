@@ -1,25 +1,30 @@
 import type { ComponentProps } from 'svelte'
-import { mount, tick, unmount } from 'svelte'
+import { tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
-import { create_element, doc_query, mock_rect, pointer_event } from './index'
+import {
+  create_element,
+  doc_query,
+  mock_rect,
+  render,
+  pointer_event,
+  press_escape,
+} from './index'
 import TestPopover from './TestPopover.svelte'
 
 describe(`Popover`, () => {
   type PopoverProps = Omit<ComponentProps<typeof Popover>, `children`>
-  // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
-  // so unmount for real between cases
-  const mounted: Record<string, unknown>[] = []
-  const unmount_all = () => Promise.all(mounted.splice(0).map((app) => unmount(app)))
   // hover/focus open and close on timers
   beforeEach(() => void vi.useFakeTimers())
-  afterEach(async () => {
-    await unmount_all()
-    vi.useRealTimers()
-  })
+  afterEach(() => void vi.useRealTimers())
+  // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
+  // so unmount for real between cases
+  let unmount_popover = async (): Promise<void> => {
+    throw new Error(`Popover test app was not mounted`)
+  }
   const mount_popover = (extra: Partial<PopoverProps> = {}) => {
     const props = $state({ ...extra })
-    mounted.push(mount(TestPopover, { target: document.body, props }))
+    unmount_popover = render(TestPopover, props)
     return props
   }
   const trigger = () => doc_query<HTMLButtonElement>(`[data-testid="popover-trigger"]`)
@@ -32,8 +37,6 @@ describe(`Popover`, () => {
     press(target)
     target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
   }
-  const press_escape = () =>
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }))
   const escape_native_popover = () => {
     press_escape()
     doc_query(`.popover`).hidePopover()
@@ -331,7 +334,7 @@ describe(`Popover`, () => {
     const pending_timer = set_timeout.mock.results.at(-1)?.value as unknown
     expect(pending_timer).toBeDefined()
 
-    await unmount_all()
+    await unmount_popover()
     expect(clear_timeout).toHaveBeenCalledWith(pending_timer)
   })
 

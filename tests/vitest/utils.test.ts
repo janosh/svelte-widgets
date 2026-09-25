@@ -3,6 +3,7 @@ import {
   chain_handlers,
   cmd_action_matches,
   create_cmd_action_filter,
+  create_term_matcher,
   compute_position,
   event_to_combo,
   format_cmd_metadata,
@@ -17,6 +18,7 @@ import {
   is_editable_event_target,
   is_modifier_chord,
   is_object,
+  make_change_detector,
   matches_shortcut,
   normalize_combo,
   observe_subtree,
@@ -384,6 +386,35 @@ describe(`is_object`, () => {
     [() => {}, false],
   ])(`is_object(%j) returns %s`, (input, expected) => {
     expect(is_object(input)).toBe(expected)
+  })
+})
+
+describe(`make_change_detector`, () => {
+  const shared = { key: 1 }
+  test.each([
+    [`first call never counts`, [1], [false]],
+    [`repeats are unchanged`, [1, 1, 1], [false, false, false]],
+    [`each differing value counts`, [1, 2, 2, 3, 1], [false, true, false, true, true]],
+    [
+      `compares by identity, not structure`,
+      [shared, shared, { key: 1 }],
+      [false, false, true],
+    ],
+    [
+      `undefined is a real first value`,
+      [undefined, undefined, null],
+      [false, false, true],
+    ],
+    [`NaN never equals itself`, [Number.NaN, Number.NaN], [false, true]],
+  ])(`%s`, (_desc, values, expected) => {
+    const changed = make_change_detector()
+    expect(values.map(changed)).toEqual(expected)
+  })
+
+  test(`detectors keep independent history`, () => {
+    const [first, second] = [make_change_detector(), make_change_detector()]
+    first(`a`)
+    expect([first(`b`), second(`b`)]).toEqual([true, false])
   })
 })
 
@@ -786,6 +817,42 @@ describe(`format_cmd_metadata`, () => {
     [undefined, ``],
   ])(`%j -> %j`, (metadata, expected) => {
     expect(format_cmd_metadata(metadata)).toBe(expected)
+  })
+})
+
+describe(`create_term_matcher`, () => {
+  test.each([
+    // every whitespace-separated term must appear, in any order and case
+    [`Data Sets`, `sets data`, {}, true],
+    [`Data Sets`, `data  missing`, {}, false],
+    [`anything`, `   `, {}, true],
+    [`toggle theme`, `tgtm`, {}, false],
+    // a plain term ignores diacritics (NFC or NFD text); an accented term requires them
+    [`Café au lait`, `cafe`, {}, true],
+    // an accented fuzzy term can't borrow its mark from a later letter
+    [`cafe á`, `café`, { fuzzy: true }, false],
+    // dakuten and Indic vowel signs change the letter, so they are not ignored
+    [`が`, `か`, {}, false],
+    [`किम`, `कम`, {}, false],
+    // NFC can't compose the nukta, so a hit must not stop before it (exact or fuzzy)
+    [`क़`, `क`, {}, false],
+    [`क़`, `क`, { fuzzy: true }, false],
+    [`क़क`, `क`, {}, true],
+    [`क़`, `क़`, { fuzzy: true }, true],
+    [`Cafe\u0301 au lait`, `cafe`, {}, true],
+    [`Crème Brûlée`, `brulee creme`, {}, true],
+    [`cafe au lait`, `café`, {}, false],
+    [`Cafe\u0301`, `café`, {}, true],
+    [`crème brulee`, `crème brûlée`, {}, false],
+    [`résumé`, `rsm`, { fuzzy: true }, true],
+    // final sigma folds to medial
+    [`ΟΔΟΣ`, `οδοσ`, {}, true],
+    // split: false (MultiSelect options) matches the whole query, whitespace collapsed
+    [`Crème  Brûlée`, `creme b`, { split: false }, true],
+    [`Data Sets`, `sets data`, { split: false }, false],
+    [`Crème\tBrûlée`, `cm  bl`, { fuzzy: true, split: false }, true],
+  ])(`%j matches %j (%j) -> %s`, (text, query, options, expected) => {
+    expect(create_term_matcher(query, options)(text)).toBe(expected)
   })
 })
 

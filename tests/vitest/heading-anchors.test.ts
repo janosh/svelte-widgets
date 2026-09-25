@@ -6,10 +6,10 @@ import {
 } from '$lib/heading-anchors'
 import Heading from '$lib/Heading.svelte'
 import { Check } from '$lib/icons'
-import { createRawSnippet, flushSync, mount, unmount } from 'svelte'
+import { createRawSnippet } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
-import { describe, expect, it, onTestFinished } from 'vitest'
-import { doc_query } from './index'
+import { describe, expect, it } from 'vitest'
+import { doc_query, next_task, render } from './index'
 
 describe(`slugify_heading`, () => {
   // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
@@ -38,16 +38,12 @@ describe(`Heading`, () => {
   it.each([1, 2, 6] as const)(
     `renders an explicit h%i with one encoded anchor`,
     (level) => {
-      const component = mount(Heading, {
-        target: document.body,
-        props: {
-          id: `a&b%20c`,
-          level,
-          icon: level === 2 ? Check : undefined,
-          children: createRawSnippet(() => ({ render: () => `<span>Diatomics</span>` })),
-        },
+      render(Heading, {
+        id: `a&b%20c`,
+        level,
+        icon: level === 2 ? Check : undefined,
+        children: createRawSnippet(() => ({ render: () => `<span>Diatomics</span>` })),
       })
-      onTestFinished(() => unmount(component))
       const heading = doc_query(`h${level}`)
       expect(heading.id).toBe(`a&b%20c`)
       expect(heading.textContent).toBe(`Diatomics`)
@@ -62,16 +58,10 @@ describe(`Heading`, () => {
     },
   )
   it(`supports link-free headings and rejects missing identity`, () => {
-    const component = mount(Heading, {
-      target: document.body,
-      props: { id: `title`, link: false, icon: Check },
-    })
-    onTestFinished(() => unmount(component))
+    render(Heading, { id: `title`, link: false, icon: Check })
     expect(doc_query(`h2`).querySelector(`a`)).toBeNull()
     expect(doc_query(`h2 > svg`).getAttribute(`aria-hidden`)).toBe(`true`)
-    expect(() =>
-      flushSync(() => mount(Heading, { target: document.body, props: { id: ` ` } })),
-    ).toThrow(`Heading requires a nonempty id`)
+    expect(() => render(Heading, { id: ` ` })).toThrow(`Heading requires a nonempty id`)
   })
 })
 
@@ -83,7 +73,6 @@ describe(`heading_anchors attachment`, () => {
     return doc_query(`main`)
   }
   const anchor_selector = `a[aria-hidden="true"]`
-  const tick = () => new Promise((resolve) => void setTimeout(resolve, 0))
 
   it(`keeps managed anchors unique and synced without rewriting consumer links`, async () => {
     const container = create_container(
@@ -97,7 +86,7 @@ describe(`heading_anchors attachment`, () => {
     expect(container.querySelector(`h1 a`)).toBe(original_anchor)
     managed_heading.id = `renamed%20&`
     consumer_heading.id = `changed`
-    await tick()
+    await next_task()
 
     expect(
       [...container.querySelectorAll(anchor_selector)].map((anchor) =>
@@ -158,7 +147,7 @@ describe(`heading_anchors attachment`, () => {
     container.append(wrapper)
     // the anchor must arrive via the observer callback, not synchronously
     expect(container.querySelector(anchor_selector)).toBeNull()
-    await tick()
+    await next_task()
     expect(container.querySelector(`h3 ${anchor_selector}`)?.getAttribute(`href`)).toBe(
       `#dynamic`,
     )
@@ -172,7 +161,7 @@ describe(`heading_anchors attachment`, () => {
     const before_cleanup = document.createElement(`h2`)
     before_cleanup.id = `before`
     container.append(before_cleanup)
-    await tick()
+    await next_task()
     expect(before_cleanup.querySelector(anchor_selector)).not.toBeNull()
 
     cleanup()
@@ -180,7 +169,7 @@ describe(`heading_anchors attachment`, () => {
     const heading = document.createElement(`h2`)
     heading.id = `after`
     container.append(heading)
-    await tick()
+    await next_task()
     expect(heading.querySelector(anchor_selector)).toBeNull()
   })
 

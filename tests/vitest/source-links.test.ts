@@ -3,11 +3,10 @@ import source_links, {
   repository_url,
   SOURCE_SYMBOLS_MODULE_ID,
 } from '$lib/source-links/vite-plugin'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vitest'
-import { create_element } from './index'
+import { create_element, temp_dir } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
 const load_symbols = async (root?: string): Promise<SourceSymbols> => {
@@ -45,8 +44,7 @@ describe(`source_links vite plugin`, () => {
   })
 
   it(`keeps overloads in one file, dropping cross-file duplicates and non-source files`, async () => {
-    const root = mkdtempSync(join(tmpdir(), `source-links-`))
-    onTestFinished(() => rmSync(root, { recursive: true, force: true }))
+    const root = await temp_dir(`source-links-`)
     mkdirSync(join(root, `src/lib/nested`), { recursive: true })
     for (const [path, content] of Object.entries({
       'package.json': JSON.stringify({

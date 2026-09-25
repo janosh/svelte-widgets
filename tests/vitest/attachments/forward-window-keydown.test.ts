@@ -1,11 +1,8 @@
 import { forward_window_keydown } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { create_element, press_key as dispatch_key } from '../index'
 
 describe(`forward_window_keydown`, () => {
-  const cleanups: (() => void)[] = []
-  afterEach(() => cleanups.splice(0).forEach((cleanup) => cleanup()))
-
   const attach = (
     handled = true,
     options: { enabled?: boolean } = {},
@@ -15,7 +12,7 @@ describe(`forward_window_keydown`, () => {
     if (initially_hovered) vi.spyOn(node, `matches`).mockReturnValue(true)
     const handle = vi.fn(() => handled)
     const cleanup = forward_window_keydown({ handle, ...options })(node)
-    if (cleanup) cleanups.push(cleanup)
+    if (cleanup) onTestFinished(cleanup)
     return { node, handle, cleanup }
   }
 

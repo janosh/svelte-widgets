@@ -171,16 +171,12 @@ test(`SplitPane example sizes panes and restores keyboard collapse`, async ({ pa
   await divider.focus()
   await page.keyboard.press(`ArrowRight`)
   await expect(demo.locator(`> p`)).toHaveText(`Sidebar: 45%`)
-  const expanded_width = await first_pane.evaluate(
-    (element) => element.getBoundingClientRect().width,
-  )
+  const expanded_width = await width_of(first_pane)
   expect(expanded_width).toBeGreaterThan(0)
   await page.keyboard.press(`Enter`)
   await expect(first_pane).toHaveCSS(`width`, `0px`)
   await page.keyboard.press(`Enter`)
-  expect(
-    await first_pane.evaluate((element) => element.getBoundingClientRect().width),
-  ).toBe(expanded_width)
+  expect(await width_of(first_pane)).toBe(expanded_width)
 })
 
 test(`VirtualList example jumps without mounting every row and resets filtered scrolling`, async ({

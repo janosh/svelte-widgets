@@ -1,11 +1,11 @@
 import type { Builder } from '@sveltejs/kit'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import * as pagefind from 'pagefind'
 import { expect, test, vi } from 'vitest'
 import { prepare_page, site_adapter } from '../../scripts/site-content.ts'
 import { assert_valid_content, validate_content } from '$lib/markdown/content'
+import { temp_dir } from './index'
 import { compile_source, render_source } from './markdown-helpers'
 
 vi.mock(`@sveltejs/adapter-static`, () => ({ default: () => ({ adapt: vi.fn() }) }))
@@ -108,7 +108,7 @@ test(`enriches metadata and indexes scientific targets once without changing hyd
 test.each([``, `/docs`])(
   `build integration resolves grouped, nested and parameterized routes with base %j`,
   async (base) => {
-    const directory = await mkdtemp(`${tmpdir()}/widgets-site-`)
+    const directory = await temp_dir(`widgets-site-`)
     const previous = process.cwd()
     const index = {
       addHTMLFile: vi.fn().mockResolvedValue({ errors: [] }),
@@ -173,7 +173,6 @@ test.each([``, `/docs`])(
       expect(index.writeFiles).toHaveBeenCalledTimes(1)
     } finally {
       process.chdir(previous)
-      await rm(directory, { recursive: true })
     }
   },
 )

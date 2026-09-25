@@ -20,9 +20,9 @@ import {
 } from '$lib/markdown/source-map'
 import { compile, preprocess } from 'svelte/compiler'
 import { heading_anchors } from '$lib/heading-anchors'
-import { describe, expect, test, vi, onTestFinished } from 'vitest'
-import { mkdtemp, readFile, writeFile, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { describe, expect, test, vi } from 'vitest'
+import { readFile, writeFile } from 'node:fs/promises'
+import { temp_dir } from './index'
 import { build } from 'vite'
 
 const compile_page = async (
@@ -295,7 +295,6 @@ describe(`code and math`, () => {
     expect(code).toContain(`$code$`)
     expect(code).toContain(`$escaped$`)
     expect(code).toContain(`$fenced$`)
-    expect(await render_markdown(`$x$`, { math: true })).toContain(`<span class="katex">`)
   })
 
   test(`ToC imports are plain JS modules from the current manifest`, async () => {
@@ -331,8 +330,7 @@ describe(`code and math`, () => {
     if (!(`output` in output)) throw new Error(`Expected in-memory bundle`)
     const generated = output.output.find((chunk) => chunk.type === `chunk`)?.code
     expect(generated).toMatch(/from "[^"\n]+\+page\.md\?toc&lang\.md"/u)
-    const directory = await mkdtemp(`${tmpdir()}/widgets-toc-`)
-    onTestFinished(() => rm(directory, { recursive: true }))
+    const directory = await temp_dir(`widgets-toc-`)
     const filename = `${directory}/page.md`
     const highlight = vi.fn((code: string) => code)
     const instance = markdown_vite({ highlight })

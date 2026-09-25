@@ -5,8 +5,9 @@ import {
   stat_delta_label,
   type StatItem,
 } from '$lib/stats'
-import { mount, tick, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
+import { tick, type ComponentProps } from 'svelte'
+import { expect, test, vi } from 'vitest'
+import { render } from './index'
 
 test.each([
   [`ready`, `ready`],
@@ -57,9 +58,7 @@ test(`renders stats, units, hints and delta directions with reactive custom form
     class: `custom`,
     'aria-label': `Summary`,
   })
-  const component = mount(StatGrid, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-  await tick()
+  render(StatGrid, props)
   expect(
     document.querySelector(`#stats.stat-tiles.custom`)?.getAttribute(`aria-label`),
   ).toBe(`Summary`)

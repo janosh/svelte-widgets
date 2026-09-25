@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Option, OptionStyle } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { get_label } from '$lib/utils'
-import { doc_query, type Test2WayBindProps } from './index'
+import {
+  doc_query,
+  drag_event,
+  press_key,
+  stub_css_highlights,
+  type Test2WayBindProps,
+} from './index'
 import Test2WayBind from './Test2WayBind.svelte'
 import TestMultiSelectSnippets from './TestMultiSelectSnippets.svelte'
 import {
@@ -372,8 +378,6 @@ describe(`selected_display=input`, () => {
     mode: `single` as const,
     selected_display: `input`,
   } satisfies Pick<MultiSelectProps, `mode` | `selected_display`>
-  const press = (key: string) =>
-    new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
 
   const option_items = (): HTMLLIElement[] => [
     ...document.querySelectorAll<HTMLLIElement>(`ul.options > li:not(.user-msg)`),
@@ -485,7 +489,7 @@ describe(`selected_display=input`, () => {
       `ArrowDown`,
       async (input: HTMLInputElement) => {
         input.focus()
-        input.dispatchEvent(press(`ArrowDown`))
+        press_key(input, `ArrowDown`)
         await tick()
       },
     ],
@@ -606,19 +610,19 @@ describe(`selected_display=input`, () => {
     const select = mount_input_display({ options: [`Red`, `Green`], open: true })
     const input = get_input()
 
-    input.dispatchEvent(press(`ArrowDown`))
+    press_key(input, `ArrowDown`)
     await tick()
     const active_id = input.getAttribute(`aria-activedescendant`)
     expect(active_id).toBeTypeOf(`string`)
     expect(document.querySelector(`#${active_id}`)).toBeInstanceOf(HTMLLIElement)
 
-    input.dispatchEvent(press(`Enter`))
+    press_key(input, `Enter`)
     await tick()
     expect(input.value).toBe(`Red`)
     expect(select.value).toBe(`Red`)
     expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(0)
 
-    input.dispatchEvent(press(`Escape`))
+    press_key(input, `Escape`)
     await tick()
     expect(input.value).toBe(`Red`)
     expect(input.getAttribute(`aria-expanded`)).toBe(`false`)
@@ -629,9 +633,7 @@ describe(`selected_display=input`, () => {
     await tick()
     const input = get_input()
 
-    const backspace = press(`Backspace`)
-    input.dispatchEvent(backspace)
-    expect(backspace.defaultPrevented).toBe(false)
+    expect(press_key(input, `Backspace`).defaultPrevented).toBe(false)
 
     await type_search_text(`Re`, input)
 
@@ -699,7 +701,7 @@ describe(`selected_display=input`, () => {
     await type_search_text(`Durian`, input)
     expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
 
-    input.dispatchEvent(press(`Enter`))
+    press_key(input, `Enter`)
     await tick()
 
     expect(input.value).toBe(`Durian`)
@@ -1131,34 +1133,19 @@ test.each([
     false,
   ],
 ] as const)(`%s`, async (_desc, extra_props, expect_highlight) => {
-  const highlights = { get: vi.fn(), set: vi.fn(), delete: vi.fn() }
-  try {
-    // happy-dom lacks the CSS Custom Highlight API; the registry spies carry the assertions
-    vi.stubGlobal(`CSS`, { highlights })
-    vi.stubGlobal(
-      `Highlight`,
-      class MockHighlight {
-        ranges: Range[]
-        constructor(...ranges: Range[]) {
-          this.ranges = ranges
-        }
-      },
-    )
-    mount_multiselect({ open: true, options: [`Alpha`, `Beta`], ...extra_props })
+  const { set_spy, delete_spy } = stub_css_highlights()
+  mount_multiselect({ open: true, options: [`Alpha`, `Beta`], ...extra_props })
 
-    if (`selected_display` in extra_props) {
-      doc_query(`ul.options > li`).click()
-      await tick()
-      expect(get_input().value).toBe(`Alpha`)
-    } else await type_search_text(`Al`)
+  if (`selected_display` in extra_props) {
+    doc_query(`ul.options > li`).click()
+    await tick()
+    expect(get_input().value).toBe(`Alpha`)
+  } else await type_search_text(`Al`)
 
-    if (expect_highlight) expect(highlights.set).toHaveBeenCalled()
-    else {
-      expect(highlights.set).not.toHaveBeenCalled()
-      expect(highlights.delete).not.toHaveBeenCalled()
-    }
-  } finally {
-    vi.unstubAllGlobals()
+  if (expect_highlight) expect(set_spy).toHaveBeenCalled()
+  else {
+    expect(set_spy).not.toHaveBeenCalled()
+    expect(delete_spy).not.toHaveBeenCalled()
   }
 })
 
@@ -1641,31 +1628,14 @@ test(`remove all button does not remove items when min_select constraint would b
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Red`)
 })
 
-class DataTransfer {
-  data: Record<string, string> = {}
-  setData(type: string, val: string) {
-    this.data[type] = val
-  }
-  getData(type: string) {
-    return this.data[type]
-  }
-}
-
-class DragEvent extends MouseEvent {
-  constructor(type: string, props: Record<string, unknown>) {
-    super(type, props)
-    Object.assign(this, props)
-  }
-}
-
 // simulate a real chip drag: dragstart on the source li, then drop on the target
 async function drag_chip(source_idx: number, target_idx: number) {
-  const data_transfer = new DataTransfer()
+  const transfer = new DataTransfer()
   doc_query(`ul.selected li:nth-child(${source_idx + 1})`).dispatchEvent(
-    new DragEvent(`dragstart`, { dataTransfer: data_transfer }),
+    drag_event(`dragstart`, transfer),
   )
   doc_query(`ul.selected li:nth-child(${target_idx + 1})`).dispatchEvent(
-    new DragEvent(`drop`, { dataTransfer: data_transfer }),
+    drag_event(`drop`, transfer),
   )
   await tick()
 }
@@ -1703,12 +1673,12 @@ test(`canceled drag clears the active drop-target highlight`, async () => {
   mount_multiselect({ options, value: options })
 
   const li = doc_query(`ul.selected li`)
-  li.dispatchEvent(new DragEvent(`dragenter`, {}))
+  li.dispatchEvent(drag_event(`dragenter`, new DataTransfer()))
   await tick()
   expect(li.classList.contains(`active`)).toBe(true)
 
   // user cancels the drag (Escape / drop outside list) -> dragend fires without drop
-  li.dispatchEvent(new DragEvent(`dragend`, {}))
+  li.dispatchEvent(drag_event(`dragend`, new DataTransfer()))
   await tick()
   expect(li.classList.contains(`active`)).toBe(false)
 })
@@ -3582,11 +3552,9 @@ test.each([
     on_reorder: onreorder_spy,
   })
 
-  const data_transfer = new DataTransfer()
-  data_transfer.setData(`text/plain`, drag_data)
-  doc_query(`ul.selected li:nth-child(2)`).dispatchEvent(
-    new DragEvent(`drop`, { dataTransfer: data_transfer }),
-  )
+  const transfer = new DataTransfer()
+  transfer.setData(`text/plain`, drag_data)
+  doc_query(`ul.selected li:nth-child(2)`).dispatchEvent(drag_event(`drop`, transfer))
   await tick()
 
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`1 2 3`)
@@ -3907,8 +3875,12 @@ describe(`CSS static analysis`, () => {
   )
   const css =
     /<style>(?<style>[\s\S]*?)<\/style>/u.exec(component_source)?.groups?.style ?? ``
-  const get_css_block = (pattern: RegExp) => pattern.exec(css)?.groups?.block ?? ``
-  const options_block = get_css_block(/:where\(ul\.options\)\s*\{(?<block>[\s\S]*?)\}/u)
+  // body of the rule whose selector list is exactly `selector`
+  const css_block = (selector: string) => {
+    const escaped = selector.replaceAll(/[.*+?^${}()|[\]\\]/gu, `\\$&`)
+    const pattern = new RegExp(`${escaped}\\s*\\{(?<block>[^}]*)\\}`, `u`)
+    return pattern.exec(css)?.groups?.block ?? ``
+  }
 
   const props = [
     `--sms-border`,
@@ -3931,64 +3903,60 @@ describe(`CSS static analysis`, () => {
     )
   })
 
-  test(`::highlight is global and uses light-dark()`, () => {
-    expect(css).toMatch(
-      /:global\(::highlight\(sms-search-matches\)\)\s*\{[^}]*light-dark\(/u,
-    )
-  })
-
   test(`--sms-active-color fallbacks use light-dark()`, () => {
     expect(
       css.match(/--sms-active-color,\s*light-dark\(/gu)?.length,
     ).toBeGreaterThanOrEqual(2)
   })
 
-  test(`default-icon buttons enforce circle via min-height: 0 + overflow: hidden`, () => {
-    const default_icon_block = get_css_block(
-      /:is\(div\.multiselect button\.default-icon\)\s*\{(?<block>[\s\S]*?)\}/u,
-    )
-    expect(default_icon_block).toMatch(/min-height:\s*0/u)
-    expect(default_icon_block).toMatch(/overflow:\s*hidden/u)
-  })
-
-  test(`options dropdown border and bg use light-dark defaults`, () => {
-    expect(options_block).toMatch(/--sms-options-border,\s*1px solid light-dark\(/u)
-    expect(options_block).toMatch(
-      /border-width:\s*var\(--sms-options-border-width,\s*1px\)/u,
-    )
-    expect(options_block).toMatch(/--sms-options-bg,\s*light-dark\(#fcfcfc/u)
-  })
-
   // every text-bearing surface must pair its light-dark() background with a light-dark() text
   // default, else a page that never declares color-scheme renders white-on-white
-  test.each([
-    [`div.multiselect root`, /:where\(div\.multiselect\)\s*\{(?<block>[\s\S]*?)\}/u],
+  const text_color = /color:\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)/u
+  test.each<[string, string, RegExp[]]>([
     [
-      `input`,
-      /:where\(div\.multiselect > ul\.selected > input\)\s*\{(?<block>[\s\S]*?)\}/u,
+      `::highlight is global and uses light-dark()`,
+      `:global(::highlight(sms-search-matches))`,
+      [/light-dark\(/u],
     ],
-    [`ul.options dropdown`, /:where\(ul\.options\)\s*\{(?<block>[\s\S]*?)\}/u],
-  ])(`%s pairs text color with a light-dark() default`, (_desc, pattern) => {
-    expect(get_css_block(pattern)).toMatch(
-      /color:\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)/u,
-    )
-  })
-
-  test(`selected option text color chain ends in a light-dark() default`, () => {
-    const selected_block = get_css_block(
-      /:where\(div\.multiselect > ul\.selected > li\)\s*\{(?<block>[\s\S]*?)\}/u,
-    )
-    expect(selected_block).toMatch(
-      /color:\s*var\(--sms-selected-text-color,\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)\)/u,
-    )
-  })
-
-  test(`custom-snippet remove-all overrides circular defaults`, () => {
-    const custom_remove_all = get_css_block(
-      /:is\(div\.multiselect button\.remove-all:not\(\.default-icon\)\)\s*\{(?<block>[\s\S]*?)\}/u,
-    )
-    expect(custom_remove_all).toMatch(/border-radius:\s*3pt/u)
-    expect(custom_remove_all).toMatch(/aspect-ratio:\s*auto/u)
-    expect(custom_remove_all).toMatch(/padding:\s*0 2pt/u)
+    [
+      `default-icon buttons stay circular`,
+      `:is(div.multiselect button.default-icon)`,
+      [/min-height:\s*0/u, /overflow:\s*hidden/u],
+    ],
+    [
+      `options dropdown pairs text color with light-dark border and bg defaults`,
+      `:where(ul.options)`,
+      [
+        /--sms-options-border,\s*1px solid light-dark\(/u,
+        /border-width:\s*var\(--sms-options-border-width,\s*1px\)/u,
+        /--sms-options-bg,\s*light-dark\(#fcfcfc/u,
+        text_color,
+      ],
+    ],
+    [
+      `root pairs text color with a light-dark() default`,
+      `:where(div.multiselect)`,
+      [text_color],
+    ],
+    [
+      `input pairs text color with a light-dark() default`,
+      `:where(div.multiselect > ul.selected > input)`,
+      [text_color],
+    ],
+    [
+      `selected option text color chain ends in a light-dark() default`,
+      `:where(div.multiselect > ul.selected > li)`,
+      [
+        /color:\s*var\(--sms-selected-text-color,\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)\)/u,
+      ],
+    ],
+    [
+      `custom-snippet remove-all overrides circular defaults`,
+      `:is(div.multiselect button.remove-all:not(.default-icon))`,
+      [/border-radius:\s*3pt/u, /aspect-ratio:\s*auto/u, /padding:\s*0 2pt/u],
+    ],
+  ])(`%s`, (_desc, selector, patterns) => {
+    const block = css_block(selector)
+    for (const pattern of patterns) expect(block).toMatch(pattern)
   })
 })
