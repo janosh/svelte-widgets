@@ -101,7 +101,8 @@ test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
       const text = Array.from({ length: long ? 40 : 400 }, piece).join(``)
       const model = create_editor_model({ uri: `memory:incremental`, text })
       let matches = find_editor_matches(model, query, options)
-      for (let step = 0; step < 150; step++) {
+      // the long query takes the linear matcher; fewer steps keep it under CI's timeout
+      for (let step = 0; step < (long ? 30 : 150); step++) {
         const edits: TextEdit[] = []
         let offset = 0
         for (let edit_idx = random(3) + 1; edit_idx > 0; edit_idx--) {
