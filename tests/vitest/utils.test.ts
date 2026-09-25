@@ -845,6 +845,12 @@ describe(`create_term_matcher`, () => {
     [`Cafe\u0301`, `café`, {}, true],
     [`crème brulee`, `crème brûlée`, {}, false],
     [`résumé`, `rsm`, { fuzzy: true }, true],
+    // final sigma folds to medial
+    [`ΟΔΟΣ`, `οδοσ`, {}, true],
+    // split: false (MultiSelect options) matches the whole query, whitespace collapsed
+    [`Crème  Brûlée`, `creme b`, { split: false }, true],
+    [`Data Sets`, `sets data`, { split: false }, false],
+    [`Crème\tBrûlée`, `cm  bl`, { fuzzy: true, split: false }, true],
   ])(`%j matches %j (%j) -> %s`, (text, query, options, expected) => {
     expect(create_term_matcher(query, options)(text)).toBe(expected)
   })

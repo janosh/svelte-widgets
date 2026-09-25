@@ -1,7 +1,8 @@
 // Combining diacritical marks (accents, umlauts, cedillas) that plain-letter queries ignore.
 // Narrower than \p{M}, which also covers marks that change the letter itself, like Japanese
 // dakuten (か vs が) or Indic vowel signs.
-export const DIACRITIC = /[̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯]/u
+export const DIACRITIC =
+  /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/u
 export const DIACRITICS = new RegExp(DIACRITIC.source, `gu`)
 const COMBINING_MARK = /\p{M}/u
 // True when a hit ending at `after` would stop before a mark that belongs to its last letter

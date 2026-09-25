@@ -5,7 +5,9 @@ import TestDialog from './TestDialog.svelte'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
-  let unmount_dialog = async () => {}
+  let unmount_dialog = async (): Promise<void> => {
+    throw new Error(`Dialog test app was not mounted`)
+  }
   const mount_dialog = (extra: Partial<DialogProps> = {}) => {
     const props = $state({ ...extra })
     unmount_dialog = render(TestDialog, props)

@@ -505,8 +505,9 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [`fuzzy group-name match`, `Pythn`, {}, [`Django`, `Flask`]],
+    [`fuzzy group-name match`, `Pythn`, {}, [`Django`, `Flask`, `Crème`]],
     [`substring match with fuzzy=false`, `script`, { fuzzy: false }, [`React`, `Vue`]],
+    [`an accent-free query`, `creme`, { fuzzy: false }, [`Crème`]],
   ] as const)(
     `search_matches_groups shows options for %s`,
     async (_desc, search_text, extra_props, expected_labels) => {
@@ -515,6 +516,7 @@ describe(`option grouping feature`, () => {
         { label: `Vue`, group: `JavaScript` },
         { label: `Django`, group: `Python` },
         { label: `Flask`, group: `Python` },
+        { label: `Crème`, group: `Python` },
       ]
 
       await mount_grouped({

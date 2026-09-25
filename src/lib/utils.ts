@@ -585,14 +585,13 @@ const strip_diacritics = (text: string): string =>
 // Splits query into whitespace terms once; the returned predicate is true when every term
 // occurs in text (as an ordered subsequence with fuzzy), ignoring case. Like search_text, a
 // term without diacritics ignores them (`cafe` matches `café`) while an accented term
-// requires them. A blank query matches everything.
+// requires them. A blank query matches everything. `split: false` keeps the query as one
+// term, collapsing whitespace runs in query and text to single spaces (MultiSelect options).
 export function create_term_matcher(
   query: string,
-  { fuzzy = false }: { fuzzy?: boolean } = {},
+  { fuzzy = false, split = true }: { fuzzy?: boolean; split?: boolean } = {},
 ): (text: string) => boolean {
-  const terms = query
-    .trim()
-    .split(/\s+/)
+  const terms = (split ? query.trim().split(/\s+/) : [query.replaceAll(/\s+/g, ` `)])
     .filter(Boolean)
     .map((term) => {
       const folded = fold_case(term)
@@ -622,6 +621,7 @@ export function create_term_matcher(
     return true
   }
   return (text) => {
+    if (!split) text = text.replaceAll(/\s+/g, ` `)
     // ASCII has no case expansion or diacritics to fold
     if (!NON_ASCII.test(text)) {
       const lower = text.toLowerCase()

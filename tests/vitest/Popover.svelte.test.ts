@@ -19,7 +19,9 @@ describe(`Popover`, () => {
   afterEach(() => void vi.useRealTimers())
   // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
   // so unmount for real between cases
-  let unmount_popover = async () => {}
+  let unmount_popover = async (): Promise<void> => {
+    throw new Error(`Popover test app was not mounted`)
+  }
   const mount_popover = (extra: Partial<PopoverProps> = {}) => {
     const props = $state({ ...extra })
     unmount_popover = render(TestPopover, props)

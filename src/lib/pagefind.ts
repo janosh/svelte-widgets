@@ -67,7 +67,8 @@ const page_title_from_url = (url: string): string => {
 const decode_segment = (segment: string): string => {
   try {
     return decodeURIComponent(segment)
-  } catch {
+  } catch (error) {
+    if (!(error instanceof URIError)) throw error
     return segment
   }
 }
