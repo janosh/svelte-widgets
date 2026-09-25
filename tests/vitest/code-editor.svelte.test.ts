@@ -496,16 +496,26 @@ test(`typing with the find panel open patches matches near the edit`, async () =
   expect(model.selection).toEqual({ anchor: caret, head: caret + 10 })
 })
 
-test(`a beforeinput canceled by another listener does not block selection sync`, async () => {
-  const { model, textarea } = await mount_editor()
-  const cancel = (event: Event): void => event.preventDefault()
-  document.addEventListener(`beforeinput`, cancel)
-  onTestFinished(() => document.removeEventListener(`beforeinput`, cancel))
-  expect(before_input(textarea, `insertText`).defaultPrevented).toBe(true)
-  textarea.setSelectionRange(2, 4)
-  textarea.dispatchEvent(new Event(`select`))
-  expect(model.selection).toEqual({ anchor: 2, head: 4 })
-})
+test.each([`canceled by another listener`, `not followed by input`] as const)(
+  `a beforeinput %s does not block selection sync`,
+  async (mode) => {
+    const { model, textarea } = await mount_editor()
+    if (mode === `canceled by another listener`) {
+      const cancel = (event: Event): void => event.preventDefault()
+      document.addEventListener(`beforeinput`, cancel)
+      onTestFinished(() => document.removeEventListener(`beforeinput`, cancel))
+      expect(before_input(textarea, `insertText`).defaultPrevented).toBe(true)
+    } else {
+      // a no-op Backspace at offset 0: the browser fires beforeinput but no input
+      textarea.setSelectionRange(0, 0)
+      expect(before_input(textarea, `deleteContentBackward`).defaultPrevented).toBe(false)
+      await new Promise((resolve) => void setTimeout(resolve, 0))
+    }
+    textarea.setSelectionRange(2, 4)
+    textarea.dispatchEvent(new Event(`select`))
+    expect(model.selection).toEqual({ anchor: 2, head: 4 })
+  },
+)
 
 test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
   `%s restores the model value`,

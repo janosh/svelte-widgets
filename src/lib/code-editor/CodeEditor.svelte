@@ -598,12 +598,19 @@
     }
     const composition =
       event.inputType.includes(`Composition`) || composing ? composition_range : null
-    before_snapshot = {
+    const snapshot = {
       ...(composition ?? selection_of(area)),
       input_type: event.inputType,
       value_length: area.value.length,
       event,
     }
+    before_snapshot = snapshot
+    // Browsers dispatch input in the same task as its beforeinput, but a no-op deletion
+    // (Backspace at offset 0, Delete at the end) fires beforeinput alone. Drop a snapshot
+    // still unconsumed afterwards so it stops blocking selection sync and input refreshes.
+    setTimeout(() => {
+      if (before_snapshot === snapshot) before_snapshot = null
+    }, 0)
   }
   type InputShape = `replace` | `backward` | `forward` | `around`
   const INPUT_TYPES: Record<InputShape, string> = {

@@ -60,9 +60,6 @@ export interface EditorModel {
   readonly line_count: number
   readonly selection: EditorSelection
   readonly dirty: boolean
-  // Identifies the current text's history state: undo/redo back to a text restores its
-  // id, while every new edit gets a fresh one. `dirty` is `state_id !== saved state id`.
-  readonly state_id: number
   readonly eol: Eol
   readonly had_bom: boolean
   slice: (from?: number, to?: number) => string
@@ -74,11 +71,13 @@ export interface EditorModel {
   set_selection: (selection: EditorSelection) => void
   undo: () => boolean
   redo: () => boolean
-  // Ends the current undo group so the next edit starts a new one, and returns `state_id`.
+  // Ends the current undo group so the next edit starts a new one, and returns the id of
+  // the current text's history state: undo/redo back to that text restores the id, while
+  // every new edit gets a fresh one.
   // Call it when an async save starts: typing during the save would otherwise merge into
   // the saved text's group, leaving that text unreachable by undo.
   checkpoint: () => number
-  // Records `state_id` (default: the current one) as the text on disk, e.g. the id
+  // Records `state_id` (default: the current text's) as the text on disk, e.g. the id
   // `checkpoint()` returned when an asynchronous save started, even if edits landed meanwhile.
   mark_saved: (state_id?: number) => void
   subscribe: (listener: (update: EditorUpdate) => void) => () => void

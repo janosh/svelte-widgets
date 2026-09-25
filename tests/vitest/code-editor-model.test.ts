@@ -5,6 +5,7 @@ import {
   replace_editor_matches,
   update_editor_matches,
   type EditorSearchOptions,
+  type EditorSearchRange,
 } from '$lib/code-editor/search'
 import type { EditorModel, TextEdit } from '$lib/code-editor/types'
 import { expect, test, vi } from 'vitest'
@@ -85,7 +86,7 @@ test.each(option_grid)(
   },
 )
 test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
-  `property: incremental match updates equal a full rescan for %j`,
+  `property: incremental match updates equal a full rescan for %#`,
   (query) => {
     let rng_state = 20_260_924
     const random = (bound: number): number => {
@@ -95,7 +96,8 @@ test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
     const long = query.length > 1024
     const pieces = long
       ? [`a`.repeat(1030), `A`, ` `, `b`]
-      : [`a`, `b`, `A`, ` `, `\n`, `😀`, `_`]
+      : // runs of `a` make an edit shift the pairing of repeated matches past its reach
+        [`a`, `aaaa`, `b`, `A`, ` `, `\n`, `😀`, `_`]
     const piece = () => pieces[random(pieces.length)]
     for (const options of option_grid) {
       const text = Array.from({ length: long ? 40 : 400 }, piece).join(``)
@@ -126,6 +128,23 @@ test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
         expect(matches).toEqual(find_editor_matches(model, query, options))
       }
     }
+  },
+)
+test.each([
+  // re-pairing a repeated run keeps scanning past the edit's reach
+  [`a`.repeat(10), `aa`, {}, { from: 0, to: 1, insert: `` }, `0-2 2-4 4-6 6-8`],
+  // swapping the low half of 𝛁 (non-word) for 𝛀's (a letter) voids the whole word before it
+  [`a\u{1D6C1}`, `a`, { whole_word: true }, { from: 2, to: 3, insert: `\uDEC0` }, ``],
+] satisfies [string, string, EditorSearchOptions, TextEdit, string][])(
+  `incremental update %#: %j for %j with %j after %j`,
+  (text, query, options, edit, expected) => {
+    const model = create_editor_model({ uri: `memory:incremental-edge`, text })
+    const matches = find_editor_matches(model, query, options)
+    const { edits } = model.transact([edit])
+    const ranges = update_editor_matches(model, query, matches, edits, options).map(
+      ({ from, to }) => `${from}-${to}`,
+    )
+    expect(ranges.join(` `)).toBe(expected)
   },
 )
 test(`an edit rescans only its neighborhood of a large document`, () => {
@@ -372,7 +391,7 @@ test(`mark_saved accepts the checkpoint id of text written before later edits`, 
   const model = create_editor_model({ uri: `memory:state-id`, text: `a` })
   type_text(model, `b`, 0)
   const written = model.checkpoint()
-  expect(written).toBe(model.state_id)
+  expect(model.checkpoint()).toBe(written)
   // within the typing merge interval: without the checkpoint `c` would join `b`'s group
   type_text(model, `c`, 100)
   const updates = vi.fn()
@@ -380,14 +399,17 @@ test(`mark_saved accepts the checkpoint id of text written before later edits`, 
   model.mark_saved(written)
   // Still dirty, so listeners hear nothing until undo reaches the written text.
   expect([model.dirty, updates.mock.calls.length]).toEqual([true, 0])
-  expect([model.undo(), model.text(), model.dirty, model.state_id]).toEqual([
+  // Saving an older id leaves the current typing group open: `d` still joins `c`.
+  type_text(model, `d`, 200)
+  expect([model.undo(), model.text(), model.dirty, model.checkpoint()]).toEqual([
     true,
     `ab`,
     false,
     written,
   ])
-  expect([model.redo(), model.dirty]).toEqual([true, true])
-  for (const invalid of [-1, 0.5, model.state_id + 1])
+  expect([model.redo(), model.text(), model.dirty]).toEqual([true, `abcd`, true])
+  const latest = model.checkpoint()
+  for (const invalid of [-1, 0.5, latest + 1])
     expect(() => model.mark_saved(invalid)).toThrow(`Invalid state_id=${invalid}`)
 })
 test(`history barriers and unrecorded edits cannot replay stale state`, () => {
@@ -594,12 +616,22 @@ test.each([
   )
 })
 
-test.each([0, 1, 5])(
-  `a scan range starting %i past the end yields nothing`,
-  (overshoot) => {
-    const model = create_editor_model({ uri: `memory:range-end`, text: `aa😀a` })
-    expect([
-      ...iterate_editor_matches(model, `a`, {}, { from: model.length + overshoot }),
-    ]).toEqual([])
+const long_query = `a`.repeat(1030)
+test.each([
+  [`aa😀a`, `a`, { from: 5 }, ``],
+  [`aa😀a`, `a`, { from: 6 }, ``],
+  [`aa😀a`, `a`, { from: 10 }, ``],
+  // a start inside a surrogate pair backs up to the pair's high half
+  [`ab😀c`, `😀`, { from: 3 }, `2-4`],
+  [`abab`, `ab`, { from: 1, to: 3 }, `2-4`],
+  [long_query.repeat(2), long_query, { to: 1030 }, `0-1030`],
+] satisfies [string, string, EditorSearchRange, string][])(
+  `scan range %#: matches of %j starting in %j`,
+  (text, query, range, expected) => {
+    const model = create_editor_model({ uri: `memory:range`, text })
+    const ranges = [...iterate_editor_matches(model, query, {}, range)].map(
+      ({ from, to }) => `${from}-${to}`,
+    )
+    expect(ranges.join(` `)).toBe(expected)
   },
 )
