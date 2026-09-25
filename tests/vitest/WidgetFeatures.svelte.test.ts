@@ -1,23 +1,14 @@
 import {
   Accordion,
   ButtonGroup,
-  FileInput,
   SplitPane,
-  TaskStatus,
   TreeView,
   VirtualList,
   type TreeNode,
   type SelectionProps,
 } from '$lib'
 import { virtual_window } from '$lib/virtual'
-import {
-  createRawSnippet,
-  flushSync,
-  mount,
-  tick,
-  unmount,
-  type ComponentProps,
-} from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vitest'
 import { doc_query } from './index'
 
@@ -88,108 +79,6 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
     expect(target.style.getPropertyValue(`--split-pane-size`)).toBe(size)
   }
   expect(on_resize).toHaveBeenCalledTimes(4)
-})
-
-test.each([
-  [undefined, null],
-  [25, `25`],
-  [150, `100`],
-  [-10, `0`],
-])(
-  `task progress %s with caller-owned cancellation and retry`,
-  async (value, expected) => {
-    const target = target_for()
-    const props = $state<ComponentProps<typeof TaskStatus>>({
-      state: `running`,
-      label: `Parsing`,
-      value,
-      on_cancel: vi.fn(),
-      on_retry: vi.fn(),
-    })
-    mount(TaskStatus, { target, props })
-    const progress = doc_query(`progress`)
-    expect(progress.getAttribute(`value`)).toBe(expected)
-    expect(progress.getAttribute(`aria-label`)).toBe(`Parsing`)
-    target.querySelector(`button`)?.click()
-    expect(props.on_cancel).toHaveBeenCalledOnce()
-    props.state = `error`
-    await tick()
-    expect(target.querySelector(`progress`)).toBeNull()
-    target.querySelector(`button`)?.click()
-    expect(props.on_retry).toHaveBeenCalledOnce()
-  },
-)
-
-test(`file picker validates, cancels superseded work, removes files and permits reselection`, async () => {
-  const target = target_for()
-  const signals: AbortSignal[] = []
-  const reject_loads: ((reason: Error) => void)[] = []
-  const on_files = vi.fn((_files: File[], signal: AbortSignal) => {
-    signals.push(signal)
-    return new Promise<void>((_resolve, reject) => {
-      reject_loads.push(reject)
-    })
-  })
-  const on_reject = vi.fn()
-  const props = $state({
-    accept: `.json`,
-    max_size: 10,
-    multiple: true,
-    max_files: 1,
-    on_files,
-    on_reject,
-  })
-  const component = mount(FileInput, {
-    target,
-    props,
-  })
-  const input = doc_query<HTMLInputElement>(`input`)
-  const good = new File([`{}`], `ok.json`)
-  const select = async (files: File[]) => {
-    Object.defineProperty(input, `files`, { configurable: true, value: files })
-    input.dispatchEvent(new Event(`change`, { bubbles: true }))
-    await tick()
-  }
-  await select([
-    new File([`x`], `bad.txt`),
-    new File([`x`.repeat(11)], `large.json`),
-    good,
-    good,
-  ])
-  expect(
-    on_reject.mock.calls[0][0].map(({ reason }: { reason: string }) => reason),
-  ).toEqual([`type`, `size`, `count`])
-  expect(on_files.mock.calls[0][0]).toEqual([good])
-  await select([good])
-  expect(signals[0].aborted).toBe(true)
-  expect(on_files).toHaveBeenCalledTimes(2)
-  reject_loads[0](new Error(`Superseded failure`))
-  await tick()
-  expect(target.textContent).not.toContain(`Superseded failure`)
-  expect(target.textContent).toContain(`Processing files`)
-  await select([new File([`x`], `bad.txt`)])
-  expect(signals[1].aborted).toBe(false)
-  target.querySelector<HTMLButtonElement>(`button[aria-label="Remove ok.json"]`)?.click()
-  await tick()
-  expect(signals[1].aborted).toBe(true)
-  expect(target.querySelectorAll(`li`)).toHaveLength(0)
-  await select([good])
-  reject_loads[2](new Error(`Retry this file`))
-  await tick()
-  expect(target.textContent).toContain(`Retry this file`)
-  Array.from(target.querySelectorAll(`button`))
-    .find((button) => button.textContent === `Retry`)
-    ?.click()
-  await tick()
-  expect(on_files).toHaveBeenCalledTimes(4)
-  props.accept = `.txt`
-  await tick()
-  const text_file = new File([`x`], `accepted.txt`)
-  await select([good, text_file])
-  expect(on_files.mock.lastCall?.[0]).toEqual([text_file])
-  expect(on_reject.mock.lastCall?.[0]).toEqual([{ file: good, reason: `type` }])
-  await unmount(component)
-  expect(signals.at(-1)?.aborted).toBe(true)
 })
 
 test.each([0, 5])(

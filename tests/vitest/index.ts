@@ -1,4 +1,5 @@
 import type { MultiSelectProps } from '$lib'
+import { flushSync, mount, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vitest'
 
 export const create_element = (
@@ -148,4 +149,14 @@ export type Test2WayBindProps = MultiSelectProps & {
   onOptionsChanged?: (data: MultiSelectProps[`options`]) => unknown
   onSearchTextChanged?: (data: MultiSelectProps[`search_text`]) => unknown
   onValueChanged?: (data: MultiSelectProps[`value`]) => unknown
+}
+
+// mounts into the body, flushes, and unmounts when the test finishes
+export const render = <Props extends Record<string, unknown>>(
+  component: Component<Props>,
+  props: Props,
+) => {
+  const instance = mount(component, { target: document.body, props })
+  onTestFinished(() => unmount(instance))
+  flushSync()
 }
