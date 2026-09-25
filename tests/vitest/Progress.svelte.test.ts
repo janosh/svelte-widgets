@@ -1,12 +1,10 @@
 import { Progress } from '$lib'
-import { flushSync, mount, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test } from 'vitest'
-import { doc_query } from './index'
+import { flushSync, mount, type ComponentProps } from 'svelte'
+import { expect, test } from 'vitest'
+import { doc_query, render } from './index'
 
-const render = (props: ComponentProps<typeof Progress>) => {
-  const component = mount(Progress, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-  flushSync()
+const render_progress = (props: ComponentProps<typeof Progress>) => {
+  render(Progress, props)
   return doc_query<HTMLProgressElement>(`progress`)
 }
 
@@ -17,7 +15,7 @@ test.each([
   [`clamped to 0`, -5, 100, `0`],
   [`on a custom max`, 3, 4, `3`],
 ] as const)(`value is %s`, (_desc, value, max, expected) => {
-  const progress = render({ value, max })
+  const progress = render_progress({ value, max })
   expect(progress.getAttribute(`value`)).toBe(expected)
   expect(progress.getAttribute(`max`)).toBe(String(max))
 })
@@ -27,7 +25,7 @@ test.each([
   [{ label: `Upload` }, `Upload`],
   [{ label: `Upload`, 'aria-label': `Uploading report` }, `Uploading report`],
 ] as const)(`props %j give aria-label %s and forward rest props`, (props, expected) => {
-  const progress = render({ ...props, id: `bar`, class: `caller-class` })
+  const progress = render_progress({ ...props, id: `bar`, class: `caller-class` })
   expect(progress.getAttribute(`aria-label`)).toBe(expected)
   expect(progress.id).toBe(`bar`)
   expect(progress.classList.contains(`caller-class`)).toBe(true)
@@ -42,10 +40,8 @@ test.each([
   [`value=NaN`, { value: Number.NaN }],
   [`value=Infinity`, { value: Infinity }],
 ])(`rejects %s with a clear error`, (_desc, props) => {
-  const target = document.createElement(`div`)
-  onTestFinished(() => target.remove())
   expect(() => {
-    mount(Progress, { target, props })
+    mount(Progress, { target: document.body, props })
     flushSync()
   }).toThrow(`Progress requires finite value and positive max`)
 })

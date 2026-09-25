@@ -17,9 +17,9 @@ import type {
   ToastQueue,
   ToastRequest,
 } from '$lib/toast-queue.svelte.ts'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, escape_key } from './index'
+import { doc_query, escape_key, press_key, render as mount_body } from './index'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -485,18 +485,16 @@ describe(`ToastStore`, () => {
 })
 
 describe(`<Toast />`, () => {
-  const mounted: Record<string, unknown>[] = []
   const stores: ToastStore<string>[] = []
   const helper_nodes: Element[] = []
   afterEach(() => {
-    for (const app of mounted.splice(0)) void unmount(app)
     for (const store of stores.splice(0)) store.destroy()
     for (const node of helper_nodes.splice(0)) node.remove()
     vi.useRealTimers()
   })
 
   const track = <Priority extends string>(store: ToastStore<Priority>, props = {}) => {
-    mounted.push(mount(Toast, { target: document.body, props: { ...props, store } }))
+    mount_body(Toast, { ...props, store })
     stores.push(store)
     return store
   }
@@ -506,10 +504,7 @@ describe(`<Toast />`, () => {
   }
   const polite = () => doc_query(`[aria-live="polite"]`)
   const assertive = () => doc_query(`[aria-live="assertive"]`)
-  const press_focus_hotkey = () =>
-    document.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `t`, altKey: true, bubbles: true }),
-    )
+  const press_focus_hotkey = () => press_key(document, `t`, { altKey: true })
 
   test(`both live regions are mounted before any toast exists`, () => {
     render()
@@ -821,7 +816,7 @@ describe(`<Toast />`, () => {
     fake_clock()
     const store = new ToastStore()
     const props = $state({ store, pause_on_hover: false })
-    mounted.push(mount(Toast, { target: document.body, props }))
+    mount_body(Toast, props)
     stores.push(store)
     store.show(`a`, { duration_ms: 1000 })
     await tick()

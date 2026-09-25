@@ -1,6 +1,6 @@
 import type { TooltipOptions } from '$lib/attachments'
 import { register_escape_layer, tooltip } from '$lib/attachments'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   create_element,
   doc_query,
@@ -8,23 +8,14 @@ import {
   hover as pointer_over,
   mock_rect,
   pointer_event,
-  stub_prop,
+  stub_props,
 } from '../index'
 
 describe(`tooltip manager`, () => {
-  const cleanups: (() => void)[] = []
-
   beforeEach(() => {
     vi.useFakeTimers()
-    cleanups.push(
-      stub_prop(globalThis, `innerWidth`, 1000),
-      stub_prop(globalThis, `innerHeight`, 800),
-    )
-  })
-
-  afterEach(() => {
-    for (const cleanup of cleanups.splice(0).toReversed()) cleanup()
-    vi.useRealTimers()
+    onTestFinished(() => void vi.useRealTimers()) // registered first, so it runs last
+    stub_props(globalThis, { innerWidth: 1000, innerHeight: 800 })
   })
 
   const attach_tooltip = (
@@ -39,7 +30,7 @@ describe(`tooltip manager`, () => {
     options.close_delay_ms ??= 0
     const cleanup = tooltip(options)(element)
     if (!cleanup) throw new Error(`tooltip did not return cleanup`)
-    cleanups.push(cleanup)
+    onTestFinished(cleanup)
     return cleanup
   }
 
@@ -274,7 +265,7 @@ describe(`tooltip manager`, () => {
     const on_open_change = vi.fn()
     // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
     const surrounding_layer = vi.fn(() => true)
-    cleanups.push(register_escape_layer(surrounding_layer))
+    onTestFinished(register_escape_layer(surrounding_layer))
     const element = create_element(`button`)
     attach_tooltip(element, {
       trigger: `focus`,
@@ -453,7 +444,9 @@ describe(`tooltip manager`, () => {
   ])(`%s`, (_desc, { bg, page_scheme, style }, scheme) => {
     if (page_scheme) {
       document.body.style.colorScheme = page_scheme
-      cleanups.push(() => document.body.style.removeProperty(`color-scheme`))
+      onTestFinished(() => {
+        document.body.style.removeProperty(`color-scheme`)
+      })
     }
     const { element } = register_tooltip(`Themed`, style ? { style } : {})
     if (bg) element.style.setProperty(`--tooltip-bg`, bg)
@@ -640,11 +633,11 @@ describe(`tooltip manager`, () => {
         throw new DOMException(`Popover is not open`, `InvalidStateError`)
       popover_open = false
     })
-    cleanups.push(
-      stub_prop(HTMLElement.prototype, `popover`, null),
-      stub_prop(HTMLElement.prototype, `showPopover`, show_popover),
-      stub_prop(HTMLElement.prototype, `hidePopover`, hide_popover),
-    )
+    stub_props(HTMLElement.prototype, {
+      popover: null,
+      showPopover: show_popover,
+      hidePopover: hide_popover,
+    })
     const { element, tooltip_el } = show_tooltip({ strategy: `top-layer` })
     const native_matches = tooltip_el.matches.bind(tooltip_el)
     vi.spyOn(tooltip_el, `matches`).mockImplementation((selector) =>
@@ -667,7 +660,7 @@ describe(`tooltip manager`, () => {
   })
 
   it(`falls back to absolute positioning without the Popover API`, () => {
-    cleanups.push(stub_prop(HTMLElement.prototype, `showPopover`, undefined))
+    stub_props(HTMLElement.prototype, { showPopover: undefined })
     const { element, tooltip_el } = show_tooltip({ strategy: `top-layer` })
     expect(tooltip_el.hasAttribute(`popover`)).toBe(false)
     expect(tooltip_el.style.position).toBe(`absolute`)
@@ -677,11 +670,11 @@ describe(`tooltip manager`, () => {
 
   it(`propagates a top-layer Popover API failure`, () => {
     const show_error = new Error(`showPopover failed`)
-    cleanups.push(
-      stub_prop(HTMLElement.prototype, `showPopover`, () => {
+    stub_props(HTMLElement.prototype, {
+      showPopover: () => {
         throw show_error
-      }),
-    )
+      },
+    })
     const { element } = register_tooltip(`Top layer`, { strategy: `top-layer` })
     expect(() => pointer_over(element)).toThrow(show_error)
   })

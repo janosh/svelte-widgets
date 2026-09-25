@@ -2,13 +2,11 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '$lib'
 import { to_json } from '$lib/json-tree/utils'
-import { doc_query } from './index'
+import { doc_query, press_key, render } from './index'
 import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, onTestFinished, test, vi } from 'vitest'
 
-const keydown = (key: string, init: KeyboardEventInit = {}) =>
-  new KeyboardEvent(`keydown`, { key, bubbles: true, ...init })
 const mouse = (type: string, init: MouseEventInit = {}) =>
   new MouseEvent(type, { bubbles: true, ...init })
 const mock_clipboard_write = (error?: Error) => {
@@ -16,11 +14,7 @@ const mock_clipboard_write = (error?: Error) => {
   return error ? mock.mockRejectedValue(error) : mock.mockResolvedValue(undefined)
 }
 
-const mount_tree = (props: ComponentProps<typeof JsonTree>): void => {
-  const component = mount(JsonTree, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-  flushSync()
-}
+const mount_tree = (props: ComponentProps<typeof JsonTree>) => render(JsonTree, props)
 
 const click_and_tick = async (element: Element | null | undefined): Promise<void> => {
   if (!(element instanceof HTMLElement)) throw new Error(`element not found`)
@@ -30,7 +24,17 @@ const click_and_tick = async (element: Element | null | undefined): Promise<void
 }
 
 const fire = (target: Element | null | undefined, event: Event): void => {
-  target?.dispatchEvent(event)
+  if (!target) throw new Error(`no target for ${event.type}`)
+  target.dispatchEvent(event)
+  flushSync()
+}
+const press = (
+  target: Element | null | undefined,
+  key: string,
+  init: KeyboardEventInit = {},
+): void => {
+  if (!target) throw new Error(`no target for key ${key}`)
+  press_key(target, key, init)
   flushSync()
 }
 
@@ -120,7 +124,7 @@ describe(`rendering`, () => {
       expect(Boolean(document.querySelector(`.context-menu`))).toBe(
         ui.node_actions !== false,
       )
-      fire(tree(), keydown(`Escape`))
+      press(tree(), `Escape`)
       await click_and_tick(nested?.querySelector(`.collapse-toggle`))
       expect(nested?.getAttribute(`aria-expanded`)).toBe(`true`)
       expect(nested?.querySelector(`.json-value.string`)?.textContent?.trim()).toBe(
@@ -429,8 +433,7 @@ describe(`folding`, () => {
   })
 
   it(`preserves search state and prunes invalid collapsed paths on value replacement`, async () => {
-    mount(JsonTreeReplacementHarness, { target: document.body })
-    flushSync()
+    render(JsonTreeReplacementHarness, {})
     const collapsed_count = () => doc_query(`[data-testid="collapsed-count"]`).textContent
     await type_search(`findme`, `1 of 1`)
     const search_input = doc_query<HTMLInputElement>(`.search-input`)
@@ -460,8 +463,7 @@ describe(`folding`, () => {
   it(`un-flashes a changed value even when a setting is toggled mid-flash`, async () => {
     vi.useFakeTimers()
     onTestFinished(() => void vi.useRealTimers())
-    mount(JsonTreeReplacementHarness, { target: document.body })
-    flushSync()
+    render(JsonTreeReplacementHarness, {})
     const flashing = () => document.querySelector(`.json-value.changed`)
     await click_and_tick(doc_query(`[data-testid="mutate-leaf"]`))
     expect(flashing()).not.toBeNull()
@@ -618,28 +620,29 @@ describe(`search`, () => {
     expect(doc_query(`.current-match`).dataset.path).toBe(`bat`)
 
     const input = doc_query<HTMLInputElement>(`.search-input`)
-    fire(input, keydown(`Escape`))
+    press(input, `Escape`)
     await tick()
     expect(input.value).toBe(``)
     expect(document.querySelector(`.match-nav`)).toBeNull()
     expect(document.querySelector(`.current-match`)).toBeNull()
   })
 
+  const key_targets = { tree, input: () => doc_query(`.search-input`) }
   it.each([
     [`F3`, false, `tree`, `2 of 3`],
     [`F3`, true, `tree`, `3 of 3`],
     [`Enter`, false, `input`, `2 of 3`],
     [`Enter`, true, `input`, `3 of 3`],
-  ])(`%s (shift=%s) on the %s steps matches`, async (key, shiftKey, target, expected) => {
-    mount_tree({ value: { bar: 1, baz: 2, bat: 3 }, default_fold_level: 5 })
-    await type_search(`ba`, `1 of 3`)
-    fire(
-      target === `tree` ? tree() : doc_query(`.search-input`),
-      keydown(key, { shiftKey }),
-    )
-    await tick()
-    expect(match_count()).toBe(expected)
-  })
+  ] as const)(
+    `%s (shift=%s) on the %s steps matches`,
+    async (key, shiftKey, target, expected) => {
+      mount_tree({ value: { bar: 1, baz: 2, bat: 3 }, default_fold_level: 5 })
+      await type_search(`ba`, `1 of 3`)
+      press(key_targets[target](), key, { shiftKey })
+      await tick()
+      expect(match_count()).toBe(expected)
+    },
+  )
 
   it(`expands collapsed ancestors to reveal matches and re-reveals them on navigation`, async () => {
     const scroll_into_view = vi.fn()
@@ -658,7 +661,7 @@ describe(`search`, () => {
     // Collapsing a match's ancestor hides it; stepping to it expands the ancestor again
     await click_and_tick(node_at(`other`)?.querySelector(`.collapse-toggle`))
     expect(node_at(`other.target`)).toBeNull()
-    fire(tree(), keydown(`F3`))
+    press(tree(), `F3`)
     await tick()
     expect(match_count()).toBe(`2 of 2`)
     expect(node_at(`other.target`)?.classList.contains(`current-match`)).toBe(true)
@@ -674,15 +677,15 @@ describe(`search`, () => {
     const input = doc_query<HTMLInputElement>(`.search-input`)
     input.focus()
     for (const key of [`ArrowLeft`, `ArrowRight`, `ArrowDown`, `ArrowUp`]) {
-      fire(input, keydown(key))
+      press(input, key)
       expect(document.activeElement).toBe(input)
     }
-    fire(input, keydown(`c`, { ctrlKey: true }))
+    press(input, `c`, { ctrlKey: true })
     await tick()
     expect(write_text).not.toHaveBeenCalled()
     // F3 stays global, so it still steps matches while the box has focus
     await type_search(`ba`, `1 of 3`)
-    fire(input, keydown(`F3`))
+    press(input, `F3`)
     await tick()
     expect(match_count()).toBe(`2 of 3`)
   })
@@ -699,17 +702,17 @@ describe(`keyboard navigation and selection`, () => {
     })
     const focused_path = () =>
       document.querySelector<HTMLElement>(`.json-node.focused`)?.dataset.path
-    fire(tree(), keydown(`ArrowDown`))
+    press(tree(), `ArrowDown`)
     expect(focused_path()).toBe(``)
     expect(on_select).toHaveBeenLastCalledWith(``, { a: { b: 1 }, c: 2 })
-    for (const _ of [1, 2, 3, 4]) fire(tree(), keydown(`ArrowDown`))
+    for (const _ of [1, 2, 3, 4]) press(tree(), `ArrowDown`)
     expect(focused_path()).toBe(`c`)
     expect(on_select).toHaveBeenLastCalledWith(`c`, 2)
     await tick()
     expect(doc_query(`.path-breadcrumb`).textContent?.trim()).toBe(`c`)
     expect(document.activeElement).toBe(node_at(`c`))
-    fire(tree(), keydown(`ArrowUp`))
-    fire(tree(), keydown(`ArrowUp`))
+    press(tree(), `ArrowUp`)
+    press(tree(), `ArrowUp`)
     expect(focused_path()).toBe(`a`)
     expect(on_select).toHaveBeenLastCalledWith(`a`, { b: 1 })
   })
@@ -737,22 +740,22 @@ describe(`keyboard navigation and selection`, () => {
       ui: { header: false },
       default_fold_level: 5,
     })
-    fire(tree(), keydown(`ArrowDown`))
-    fire(tree(), keydown(`ArrowDown`))
+    press(tree(), `ArrowDown`)
+    press(tree(), `ArrowDown`)
     const leaf = node_at(`key`)
     expect(leaf?.classList.contains(`focused`)).toBe(true)
-    fire(leaf, keydown(`Enter`))
+    press(leaf, `Enter`)
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`42`))
 
-    fire(tree(), keydown(`ArrowDown`))
+    press(tree(), `ArrowDown`)
     const container = node_at(`obj`)
-    fire(container, keydown(`ArrowLeft`))
+    press(container, `ArrowLeft`)
     expect(container?.getAttribute(`aria-expanded`)).toBe(`false`)
-    fire(container, keydown(`ArrowRight`))
+    press(container, `ArrowRight`)
     expect(container?.getAttribute(`aria-expanded`)).toBe(`true`)
-    fire(container, keydown(` `))
+    press(container, ` `)
     expect(container?.getAttribute(`aria-expanded`)).toBe(`false`)
-    fire(container, keydown(`c`, { ctrlKey: true }))
+    press(container, `c`, { ctrlKey: true })
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`{\n  "a": 1\n}`))
   })
 
@@ -776,10 +779,10 @@ describe(`keyboard navigation and selection`, () => {
     fire(node_at(`c`), mouse(`click`, { metaKey: true }))
     expect(selected()).toEqual([`b`, `d`])
 
-    fire(tree(), keydown(`c`, { ctrlKey: true }))
+    press(tree(), `c`, { ctrlKey: true })
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`2\n4`))
 
-    fire(tree(), keydown(`Escape`))
+    press(tree(), `Escape`)
     expect(selected()).toEqual([])
   })
 })
@@ -810,7 +813,7 @@ describe(`context menu and pinning`, () => {
     expect(menu.textContent).toContain(`Copy value`)
     expect(menu.textContent).toContain(`Copy path`)
     expect(menu.textContent).not.toContain(`children`)
-    fire(tree(), keydown(`Escape`))
+    press(tree(), `Escape`)
     await tick()
     expect(document.querySelector(`.context-menu`)).toBeNull()
   })
@@ -938,16 +941,16 @@ describe(`inline editing`, () => {
       input.value = `42`
       fire(input, new Event(`input`, { bubbles: true }))
       for (const key of [`Enter`, `Escape`]) {
-        fire(input, keydown(key, { isComposing: true }))
+        press(input, key, { isComposing: true })
         expect(document.querySelector(`.edit-input`)).toBe(input)
         expect(on_change).not.toHaveBeenCalled()
       }
-      fire(input, keydown(`Enter`))
+      press(input, `Enter`)
       expect(on_change).toHaveBeenCalledWith(`n`, 42, original)
 
       fire(node_at(`s`)?.querySelector(`.json-value`), mouse(`dblclick`))
       await tick()
-      fire(doc_query(`.edit-input`), keydown(`Escape`))
+      press(doc_query(`.edit-input`), `Escape`)
       expect(document.querySelector(`.edit-input`)).toBeNull()
       expect(on_change).toHaveBeenCalledTimes(1)
     },
@@ -969,11 +972,7 @@ describe(`inline editing`, () => {
   test(`a value update inside the click-to-copy delay does not cancel the pending copy`, async () => {
     mock_clipboard_write()
     const on_copy = vi.fn()
-    mount(JsonTreeReplacementHarness, {
-      target: document.body,
-      props: { editable: true, on_change: vi.fn(), on_copy },
-    })
-    flushSync()
+    render(JsonTreeReplacementHarness, { editable: true, on_change: vi.fn(), on_copy })
     fire(node_at(`nested.findme`)?.querySelector(`.json-value`), mouse(`click`))
     // live data: the leaf re-renders with a new value before the 250 ms copy delay elapses
     await click_and_tick(doc_query(`[data-testid="replace-json"]`))

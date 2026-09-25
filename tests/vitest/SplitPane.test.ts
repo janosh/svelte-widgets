@@ -1,11 +1,9 @@
 import PaneDivider from '$lib/SplitPane.svelte'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
+import { pointer_event } from './index'
 
 let notify_resize = () => {}
-
-const pointer_event = (type: string, init: PointerEventInit = {}): PointerEvent =>
-  new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, ...init })
 
 type PixelClamps = {
   min_px?: number
@@ -90,13 +88,15 @@ test.each([
     // no pixel clamps: the announced range is the bare ratio range
     expect(divider.getAttribute(`aria-valuemin`)).toBe(`15`)
     expect(divider.getAttribute(`aria-valuemax`)).toBe(`85`)
-    divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 7 }))
-    divider.dispatchEvent(pointer_event(`pointermove`, { ...position, pointerId: 7 }))
+    divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerId: 7 }))
+    divider.dispatchEvent(
+      pointer_event(`pointermove`, 0, 0, { ...position, pointerId: 7 }),
+    )
 
     // The split changes before pointerup, rather than snapping on release.
     expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`75%`)
-    divider.dispatchEvent(pointer_event(`pointerup`, { pointerId: 7 }))
-    divider.dispatchEvent(pointer_event(`pointermove`, { pointerId: 7 }))
+    divider.dispatchEvent(pointer_event(`pointerup`, 0, 0, { pointerId: 7 }))
+    divider.dispatchEvent(pointer_event(`pointermove`, 0, 0, { pointerId: 7 }))
     expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`75%`)
   },
 )
@@ -125,19 +125,19 @@ test.each([
 
 test(`an active drag ignores other pointers and ends on lost capture`, () => {
   const { divider, parent } = mount_divider()
-  divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 7 }))
-  divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 8 }))
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 400, pointerId: 8 }))
+  divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerId: 7 }))
+  divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerId: 8 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 400, 0, { pointerId: 8 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`50%`)
 
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 400, pointerId: 7 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 400, 0, { pointerId: 7 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`75%`)
-  divider.dispatchEvent(pointer_event(`lostpointercapture`, { pointerId: 7 }))
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 200, pointerId: 7 }))
+  divider.dispatchEvent(pointer_event(`lostpointercapture`, 0, 0, { pointerId: 7 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 200, 0, { pointerId: 7 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`75%`)
 
-  divider.dispatchEvent(pointer_event(`pointerdown`, { button: 1, pointerId: 9 }))
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 200, pointerId: 9 }))
+  divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { button: 1, pointerId: 9 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 200, 0, { pointerId: 9 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`75%`)
 })
 
@@ -160,12 +160,14 @@ test.each([
     expect(divider.getAttribute(`aria-valuemin`)).toBe(`${Math.min(low_pct, high_pct)}`)
     expect(divider.getAttribute(`aria-valuemax`)).toBe(`${Math.max(low_pct, high_pct)}`)
     const axis = orientation === `horizontal` ? `clientX` : `clientY`
-    divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 4 }))
+    divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerId: 4 }))
     for (const [coord, pct] of [
       [low, low_pct],
       [high, high_pct],
     ]) {
-      divider.dispatchEvent(pointer_event(`pointermove`, { [axis]: coord, pointerId: 4 }))
+      divider.dispatchEvent(
+        pointer_event(`pointermove`, 0, 0, { [axis]: coord, pointerId: 4 }),
+      )
       expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`${pct}%`)
     }
   },
@@ -197,17 +199,17 @@ test(`pixel-mode drags move the first pane in px and bind the clamped value back
   const bound = bound_first_px(320, { min_px: 150, second_min_px: 200 })
   const { divider, parent } = mount_divider({ clamps: bound, width: 1000 })
   const measure = vi.spyOn(parent, `getBoundingClientRect`)
-  divider.dispatchEvent(pointer_event(`pointerdown`, { pointerId: 2 }))
+  divider.dispatchEvent(pointer_event(`pointerdown`, 0, 0, { pointerId: 2 }))
   // container starts at x=100: pointer at 600 puts the divider 500 px in
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 600, pointerId: 2 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 600, 0, { pointerId: 2 }))
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`500px`)
   expect(bound.first_px).toBe(500)
   // past the second pane's floor clamps to 800 px; below the first pane's floor to 150 px
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 1500, pointerId: 2 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 1500, 0, { pointerId: 2 }))
   expect(bound.first_px).toBe(800)
-  divider.dispatchEvent(pointer_event(`pointermove`, { clientX: 120, pointerId: 2 }))
+  divider.dispatchEvent(pointer_event(`pointermove`, 120, 0, { pointerId: 2 }))
   expect(bound.first_px).toBe(150)
-  divider.dispatchEvent(pointer_event(`pointerup`, { pointerId: 2 }))
+  divider.dispatchEvent(pointer_event(`pointerup`, 0, 0, { pointerId: 2 }))
   // one layout read per move (the container is measured once, not once per clamp)
   expect(measure).toHaveBeenCalledTimes(3)
 })

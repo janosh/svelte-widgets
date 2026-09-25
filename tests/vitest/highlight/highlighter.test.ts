@@ -138,19 +138,16 @@ describe(`create_highlighter`, () => {
     expect(await custom.highlight(`\\emph{hi}`, `tex`)).toContain(`<span class="pl-`)
   })
 
-  test(`render_block wraps a ready instance's output synchronously`, async () => {
+  test(`registers only the grammars it was given, caches and renders synchronously`, async () => {
     const instance = await custom.ready()
+    expect(await custom.ready()).toBe(instance)
+    // render_block wraps a ready instance's output without awaiting
     expect(render_block(instance, `#let x = 1`, `TYP`)).toBe(
       `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
     )
     expect(render_block(instance, `<a>{x}</a>`, `py`)).toBe(
       `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
     )
-  })
-
-  test(`registers only the grammars it was given and caches the instance`, async () => {
-    const instance = await custom.ready()
-    expect(await custom.ready()).toBe(instance)
     expect(await create_highlighter([grammar_typst]).ready()).not.toBe(instance)
     expect(instance.flagToScope(`typ`)).toBe(`source.typst`)
     for (const flag of [`py`, `ts`, `svelte`]) {

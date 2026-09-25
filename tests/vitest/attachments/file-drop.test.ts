@@ -1,6 +1,6 @@
 import { file_drop, type FileDropOptions } from '$lib/attachments'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, data_transfer, drag_event } from '../index'
+import { create_element, data_transfer, drag_event, next_task } from '../index'
 
 describe(`file_drop`, () => {
   const attach_file_drop = (
@@ -15,7 +15,6 @@ describe(`file_drop`, () => {
   const files_of = (...names: string[]) => data_transfer(names.map((name) => file(name)))
   const drop = (node: HTMLElement, transfer: DataTransfer) =>
     node.dispatchEvent(drag_event(`drop`, transfer))
-  const flush_tasks = () => new Promise<void>((resolve) => void setTimeout(resolve, 0))
   const pending_until_aborted = (signal: AbortSignal) =>
     new Promise<void>((_resolve, reject) => {
       signal.addEventListener(
@@ -105,7 +104,7 @@ describe(`file_drop`, () => {
     const { node } = attach_file_drop({ accept: `image/*`, on_files })
 
     drop(node, data_transfer(files))
-    await flush_tasks()
+    await next_task()
     expect(
       on_files.mock.calls.map(([accepted]) => accepted.map(({ name }) => name)),
     ).toEqual(expected_calls)
@@ -125,11 +124,11 @@ describe(`file_drop`, () => {
     expect(on_files.mock.calls[0][0].map(({ name }) => name)).toEqual([`second.txt`])
 
     first.resolve()
-    await flush_tasks()
+    await next_task()
     expect(on_files).toHaveBeenCalledOnce()
 
     drop(node, files_of(`rejected.png`))
-    await flush_tasks()
+    await next_task()
     expect(aborted_calls(on_files)).toEqual([false])
 
     drop(node, files_of(`third.txt`))
@@ -140,7 +139,7 @@ describe(`file_drop`, () => {
     drop(node, after_cleanup.transfer)
     cleanup?.()
     after_cleanup.resolve()
-    await flush_tasks()
+    await next_task()
     expect(aborted_calls(on_files)).toEqual([true, true])
     expect(on_error).not.toHaveBeenCalled()
   })
@@ -159,7 +158,7 @@ describe(`file_drop`, () => {
     drop(attached.node, files_of(`first.txt`))
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
     drop(attached.node, files_of(`second.txt`))
-    await flush_tasks()
+    await next_task()
     expect(on_files).toHaveBeenCalledOnce()
   })
 

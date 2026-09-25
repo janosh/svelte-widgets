@@ -3,7 +3,14 @@ import type { CmdAction, CmdSection } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, escape_key, mock_rect, stub_prop } from './index'
+import {
+  doc_query,
+  escape_key,
+  mock_rect,
+  next_task,
+  press_key,
+  stub_prop,
+} from './index'
 import TestActionMenu from './TestActionMenu.svelte'
 
 describe(`ActionMenu`, () => {
@@ -35,9 +42,7 @@ describe(`ActionMenu`, () => {
     return event
   }
   const flush_context_open = async () => {
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, 0)
-    })
+    await next_task()
     await tick()
   }
   // opens a menu by right-clicking the page, returning the contextmenu event
@@ -57,10 +62,7 @@ describe(`ActionMenu`, () => {
   // `role^=` catches both the plain menuitem and the menuitemradio a section renders
   const items = () =>
     Array.from(document.querySelectorAll<HTMLButtonElement>(`[role^=menuitem]`))
-  const press = (key: string) =>
-    document.activeElement?.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
-    )
+  const press = (key: string) => press_key(document.activeElement ?? document.body, key)
 
   test(`a right-click opens the menu at the pointer, replacing the native one`, async () => {
     const ontoggle = vi.fn()
@@ -198,9 +200,7 @@ describe(`ActionMenu`, () => {
       const menu_el = doc_query(`menu[role="menu"]`)
       ;(document.activeElement as HTMLElement | null)?.blur()
 
-      menu_el.dispatchEvent(
-        new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
-      )
+      press_key(menu_el, key)
       await tick()
 
       expect(document.activeElement).toBe(items()[expected_idx])

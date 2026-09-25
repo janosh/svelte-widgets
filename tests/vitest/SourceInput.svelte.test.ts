@@ -1,19 +1,15 @@
 import SourceInput from '$site/SourceInput.svelte'
 import { default_highlighter } from '$lib/highlight'
-import { mount, tick, unmount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { tick } from 'svelte'
+import { expect, test, vi } from 'vitest'
+import { doc_query, render } from './index'
 
 test(`source input highlights edits without changing the editable text and synchronizes scrolling`, async () => {
-  const component = mount(SourceInput, {
-    target: document.body,
-    props: {
-      value: `const count: number = 1`,
-      language: `ts`,
-      label: `Example source`,
-    },
+  render(SourceInput, {
+    value: `const count: number = 1`,
+    language: `ts`,
+    label: `Example source`,
   })
-  onTestFinished(() => unmount(component))
   const input = doc_query<HTMLTextAreaElement>(`textarea`)
   const preview = doc_query(`.preview`)
   await default_highlighter.ready()

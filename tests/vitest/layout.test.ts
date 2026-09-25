@@ -2,7 +2,7 @@ import { repository } from '$root/package.json'
 import Layout from '$root/src/routes/+layout.svelte'
 import { mount, tick, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 // explicit type or the inferred `id: string` rejects the 404 case's null below
 const mocks = vi.hoisted<{ page: { route: { id: string | null }; url: URL } }>(() => ({
@@ -17,15 +17,10 @@ vi.mock(`$app/paths`, () => ({
 }))
 vi.mock(`$app/state`, () => ({ page: mocks.page }))
 
-const mount_layout = () => {
-  const app = mount(Layout, { target: document.body })
-  onTestFinished(() => unmount(app))
-}
-
 const edit_href = (route_id: string | null, pathname: string) => {
   mocks.page.route.id = route_id
   mocks.page.url = new URL(`https://x.co${pathname}`)
-  mount_layout()
+  render(Layout, {})
   return doc_query<HTMLAnchorElement>(`footer a[href*="/blob/-/"]`).getAttribute(`href`)
 }
 

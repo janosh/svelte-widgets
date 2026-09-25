@@ -10,13 +10,12 @@ import {
   submit_prompt,
 } from '$lib/dialogs.svelte'
 import { afterEach, expect, test } from 'vitest'
-import { track } from './index'
+import { next_task, track } from './index'
 
 afterEach(dismiss_all_dialogs)
 
 // An answer can take several microtask hops to reach track (`ask_confirm` awaits
-// `request_choice` before mapping the id to a boolean). A macrotask drains them all.
-const flush = () => new Promise((resolve) => void setTimeout(resolve, 0))
+// `request_choice` before mapping the id to a boolean); next_task drains them all.
 
 const yes_no: DialogChoice<`yes` | `no`>[] = [
   { id: `no`, label: `No` },
@@ -36,13 +35,13 @@ test(`request_choice queues a request and resolves it with the answer`, async ()
     dismiss_id: `no`,
     choices: yes_no,
   })
-  await flush()
+  await next_task()
   expect(answer.settled).toBe(false) // nothing resolves until someone answers
 
   expect(() => answer_dialog(`maybe`)).toThrow(`Unknown dialog answer "maybe"`)
   expect(dialog_queue).toHaveLength(1)
   answer_dialog(`yes`)
-  await flush()
+  await next_task()
   expect([answer.settled, answer.value]).toEqual([true, `yes`])
   expect(dialog_queue).toHaveLength(0)
 })
@@ -54,13 +53,13 @@ test(`a single answer resolves only the request it was given for`, async () => {
   expect(dialog_queue.map((request) => request.title)).toEqual([`One`, `Two`])
 
   answer_dialog(`yes`)
-  await flush()
+  await next_task()
   expect([first.settled, first.value]).toEqual([true, `yes`])
   expect(second.settled).toBe(false)
   expect(dialog_queue.map((request) => request.title)).toEqual([`Two`])
 
   answer_dialog(`no`)
-  await flush()
+  await next_task()
   expect([second.settled, second.value]).toEqual([true, `no`])
 })
 
@@ -70,7 +69,7 @@ test(`dismiss_all_dialogs settles every request with its own dismiss id`, async 
   const prompt = track(ask_prompt(`Name?`, `Profile`))
 
   dismiss_all_dialogs()
-  await flush()
+  await next_task()
   expect([first.settled, first.value]).toEqual([true, `no`])
   expect([second.settled, second.value]).toEqual([true, `yes`])
   expect([prompt.settled, prompt.value]).toEqual([true, null])
@@ -87,7 +86,7 @@ test.each([
   async (answer_id, expected, args) => {
     const [body, title, confirm_label, cancel_label] = args
     const confirmed = track(ask_confirm(body, title, confirm_label, cancel_label))
-    await flush()
+    await next_task()
 
     expect(dialog_queue[0]).toMatchObject({
       dismiss_id: `cancel`, // Escape must never mean yes
@@ -98,7 +97,7 @@ test.each([
     })
 
     answer_dialog(answer_id)
-    await flush()
+    await next_task()
     expect([confirmed.settled, confirmed.value]).toEqual([true, expected])
   },
 )
@@ -126,12 +125,12 @@ test(`ask_prompt validates before resolving and keeps its typed options`, async 
 
   const message = `A name is required`
   expect(submit_prompt(`   `)).toEqual({ status: `invalid`, message })
-  await flush()
+  await next_task()
   expect(prompted.settled).toBe(false)
   expect(dialog_queue[0]).toBe(request)
 
   expect(submit_prompt(`widgets`)).toEqual({ status: `submitted` })
-  await flush()
+  await next_task()
   expect([prompted.settled, prompted.value]).toEqual([true, `widgets`])
   expect(dialog_queue).toHaveLength(0)
   expect(submit_prompt(`late`)).toEqual({ status: `no_prompt` })
@@ -139,7 +138,7 @@ test(`ask_prompt validates before resolving and keeps its typed options`, async 
   // an empty validation message counts as valid
   const optional = track(ask_prompt(`Optional`, `Prompt`, { validate: () => `` }))
   expect(submit_prompt(`accepted`)).toEqual({ status: `submitted` })
-  await flush()
+  await next_task()
   expect([optional.settled, optional.value]).toEqual([true, `accepted`])
 })
 
@@ -149,17 +148,17 @@ test(`prompts ignore choice answers and dismiss to null ahead of the next choice
 
   // a choice answer must not submit the prompt at the queue head
   answer_dialog(`unexpected`)
-  await flush()
+  await next_task()
   expect(prompt.settled).toBe(false)
   expect(dialog_queue[0]?.kind).toBe(`prompt`)
 
   dismiss_dialog()
-  await flush()
+  await next_task()
   expect([prompt.settled, prompt.value]).toEqual([true, null])
   expect(choice.settled).toBe(false)
   expect(dialog_queue[0]?.kind).toBe(`choice`)
 
   answer_dialog(`yes`)
-  await flush()
+  await next_task()
   expect([choice.settled, choice.value]).toEqual([true, `yes`])
 })

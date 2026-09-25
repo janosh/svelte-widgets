@@ -8,7 +8,14 @@ import {
 } from '$lib/range-slider'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, mock_rect, pointer_event, press_key } from './index'
+import {
+  doc_query,
+  fire_input,
+  mock_rect,
+  render,
+  pointer_event,
+  press_key,
+} from './index'
 
 type Props = ComponentProps<typeof RangeSlider>
 const setup = (props: Props = {}) => {
@@ -36,16 +43,9 @@ const setup = (props: Props = {}) => {
 }
 const announced = (thumbs: HTMLButtonElement[]) =>
   thumbs.map((thumb) => Number(thumb.getAttribute(`aria-valuenow`)))
-const edit = async (input: HTMLInputElement, text: string, final = true) => {
-  input.value = text
-  input.dispatchEvent(new Event(`input`, { bubbles: true }))
-  if (final) input.dispatchEvent(new Event(`change`, { bubbles: true }))
-  await tick()
-}
 
 test(`demo renders highlighted usage, the props table and superscript pressure labels`, () => {
-  const component = mount(RangeSliderDemo, { target: document.body })
-  onTestFinished(() => unmount(component))
+  render(RangeSliderDemo, {})
   const usage = doc_query(`[aria-label="RangeSlider usage"]`)
   expect(usage.querySelector(`.pl-k`)?.textContent).toBe(`import`)
   expect(doc_query(`table`).textContent).toContain(`Bindable [lower, upper] pair.`)
@@ -201,7 +201,7 @@ describe(`logarithmic RangeSlider`, () => {
   ] as const)(`numeric draft %s commits %s in real units`, async (text, expected) => {
     const on_commit = vi.fn()
     const { inputs, thumbs } = setup({ ...log_props, value: [0.1, 10], on_commit })
-    await edit(inputs[0], text)
+    await fire_input(inputs[0], text, `input`, `change`)
     expect(announced(thumbs)).toEqual([expected, 10])
     expect(inputs[0].valueAsNumber).toBe(expected)
     expect(on_commit).toHaveBeenCalledTimes(expected === 0.1 ? 0 : 1)
@@ -322,7 +322,7 @@ describe(`RangeSlider`, () => {
   )
   test.each<[string, (controls: ReturnType<typeof setup>) => unknown]>([
     [`keyboard`, ({ thumbs }) => press_key(thumbs[0], `ArrowUp`)],
-    [`number`, ({ inputs }) => edit(inputs[0], `40`)],
+    [`number`, ({ inputs }) => fire_input(inputs[0], `40`, `input`, `change`)],
     [
       `pointer`,
       ({ pointer }) => [`pointerdown`, `pointerup`].map((type) => pointer(type, 40)),
@@ -358,7 +358,7 @@ describe(`RangeSlider`, () => {
       expect(press_key(thumbs[0], `ArrowRight`, modifiers).defaultPrevented).toBe(false)
       await tick()
       expect(announced(thumbs)).toEqual([20, 80])
-      await edit(inputs[0], `43`, false)
+      await fire_input(inputs[0], `43`, `input`)
       expect(press_key(inputs[0], `ArrowUp`, modifiers).defaultPrevented).toBe(false)
       await tick()
       expect(inputs[0].value).toBe(`43`)
@@ -375,7 +375,7 @@ describe(`RangeSlider`, () => {
       await tick()
       const input = form.querySelector(`input`)
       if (!input) throw new Error(`Missing numeric field`)
-      await edit(input, `43`, false)
+      await fire_input(input, `43`, `input`)
       if (prevented) form.addEventListener(`reset`, (event) => event.preventDefault())
       // happy-dom resets controls before dispatch and ignores preventDefault. Exercise
       // cancellation directly here; real native reset is covered in Playwright.
@@ -557,7 +557,7 @@ describe(`RangeSlider`, () => {
     async (draft, action, expected) => {
       const on_commit = vi.fn()
       const { inputs, thumbs } = setup({ value: [20, 80], step: 5, on_commit })
-      await edit(inputs[0], draft, false)
+      await fire_input(inputs[0], draft, `input`)
       expect(announced(thumbs)).toEqual([20, 80])
       if (action === `blur`) inputs[0].dispatchEvent(new Event(`blur`))
       else press_key(inputs[0], action)
@@ -576,12 +576,12 @@ describe(`RangeSlider`, () => {
       on_commit: vi.fn(),
     })
     const { inputs, thumbs } = setup(props)
-    await edit(inputs[0], `0.34`, false)
+    await fire_input(inputs[0], `0.34`, `input`)
     expect(press_key(inputs[0], `Enter`).defaultPrevented).toBe(true)
     inputs[0].dispatchEvent(new Event(`blur`))
     await tick()
     expect(props.on_commit).toHaveBeenCalledExactlyOnceWith([0.3, 0.8])
-    await edit(inputs[0], `0.7`, false)
+    await fire_input(inputs[0], `0.7`, `input`)
     press_key(inputs[0], `Escape`)
     await tick()
     expect(inputs[0].value).toBe(`0.3`)
@@ -669,7 +669,7 @@ describe(`RangeSlider`, () => {
     expect([...thumbs, ...inputs].every((input) => input.disabled)).toBe(true)
     pointer(`pointerdown`, 40)
     press_key(thumbs[0], `ArrowRight`)
-    await edit(inputs[0], `50`)
+    await fire_input(inputs[0], `50`, `input`, `change`)
     expect(announced(thumbs)).toEqual([20, 80])
     props.disabled = false
     await tick()

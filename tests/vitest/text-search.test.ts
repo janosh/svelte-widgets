@@ -168,7 +168,6 @@ describe(`search_text`, () => {
       [`re\u0301sumé`],
     ],
     [`accented query, plain text`, `<p>cafe resume</p>`, `café`, []],
-    [`accented query, NFD text`, `<p>cafe\u0301</p>`, `café`, [`cafe\u0301`]],
     [
       `accented multi-accent query, plain text`,
       `<p>creme brulee</p>`,

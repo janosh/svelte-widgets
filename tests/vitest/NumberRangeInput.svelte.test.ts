@@ -8,7 +8,7 @@ import {
   type ComponentProps,
 } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, hover, press_key } from './index'
+import { doc_query, fire_input, hover, press_key } from './index'
 
 const label_snippet = createRawSnippet(() => ({
   render: () => `<span>Atom radius</span>`,
@@ -30,17 +30,6 @@ const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
   if (!number || !range) throw new Error(`NumberRangeInput did not render both inputs`)
   return { target, inputs, number, range }
 }
-// Optionally set a field's text, then dispatch bubbling events and flush.
-const fire = async (
-  input: HTMLInputElement,
-  text: string | undefined,
-  ...events: string[]
-) => {
-  if (text !== undefined) input.value = text
-  for (const type of events) input.dispatchEvent(new Event(type, { bubbles: true }))
-  await tick()
-}
-
 describe(`NumberRangeInput`, () => {
   test(`shows the description only while hovering the label text`, async () => {
     vi.useFakeTimers()
@@ -75,11 +64,11 @@ describe(`NumberRangeInput`, () => {
     expect(number.valueAsNumber).toBe(0.5)
     expect(range.valueAsNumber).toBe(0.5)
 
-    await fire(number, `0.8`, `input`)
+    await fire_input(number, `0.8`, `input`)
     expect(props.value).toBe(0.8)
     expect(range.valueAsNumber).toBe(0.8)
 
-    await fire(range, `0.3`, `input`)
+    await fire_input(range, `0.3`, `input`)
     expect(props.value).toBe(0.3)
     expect(number.valueAsNumber).toBe(0.3)
   })
@@ -169,16 +158,16 @@ describe(`logarithmic NumberRangeInput`, () => {
           range.getAttribute(attr),
         ),
       ).toEqual([`0.001`, `1000`, `1`])
-      await fire(range, `2`, `input`)
+      await fire_input(range, `2`, `input`)
       expect(props.value).toBe(commit === `input` ? 100 : 1)
       expect(range.getAttribute(`aria-valuenow`)).toBe(`100`)
-      await fire(range, undefined, `change`)
+      await fire_input(range, undefined, `change`)
       expect(number.valueAsNumber).toBe(100)
       expect(on_commit).toHaveBeenCalledExactlyOnceWith(100)
 
-      await fire(number, `2.5`, `input`)
+      await fire_input(number, `2.5`, `input`)
       expect(props.value).toBe(commit === `input` ? 2.5 : 100)
-      await fire(number, undefined, `change`)
+      await fire_input(number, undefined, `change`)
       expect(props.value).toBe(2.5)
       expect(range.valueAsNumber).toBe(Math.log10(2.5))
       expect(number.checkValidity()).toBe(true)
@@ -216,10 +205,10 @@ describe(`logarithmic NumberRangeInput`, () => {
       props.value = 2.5
       await tick()
       expect(range.valueAsNumber).toBe(Math.log10(2.5))
-      await fire(range, `0.43`, `input`)
+      await fire_input(range, `0.43`, `input`)
       expect(range.valueAsNumber).toBe(Math.log10(10 ** coordinate))
       expect(props.value).toBe(commit === `input` ? 10 ** coordinate : 2.5)
-      await fire(range, undefined, `change`)
+      await fire_input(range, undefined, `change`)
       expect([number.valueAsNumber, props.value]).toEqual([
         10 ** coordinate,
         10 ** coordinate,
@@ -251,7 +240,7 @@ describe(`logarithmic NumberRangeInput`, () => {
   test.each([`0`, `-1`, `0.0001`, `1001`])(`rejects typed value %s`, async (text) => {
     const on_commit = vi.fn()
     const { number } = mount_range({ ...log_props, on_commit })
-    await fire(number, text, `input`, `change`)
+    await fire_input(number, text, `input`, `change`)
     expect(number.valueAsNumber).toBe(1)
     expect(on_commit).not.toHaveBeenCalled()
   })
@@ -341,7 +330,7 @@ describe(`logarithmic NumberRangeInput`, () => {
       empty: `undefined` as const,
     })
     const { number, range } = mount_range(props)
-    await fire(number, ``, `change`)
+    await fire_input(number, ``, `change`)
     expect(props.value).toBeUndefined()
     expect(range.valueAsNumber).toBe(-3)
     press_key(range, `ArrowRight`)
@@ -367,10 +356,10 @@ test.each([
     on_commit: (value: number | undefined) => updates.push(value),
   })
   const { number, range } = mount_range(props)
-  await fire(number, draft, `input`)
+  await fire_input(number, draft, `input`)
   expect(props.value).toBe(expected)
   expect(range.valueAsNumber).toBe(expected ?? named_props.min)
-  await fire(number, undefined, `change`)
+  await fire_input(number, undefined, `change`)
   const final = commit === `change` ? 0.8 : expected
   expect(props.value).toBe(final)
   expect(number.value).toBe(final === undefined ? `` : String(final))

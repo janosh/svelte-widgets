@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
+import { doc_query, press_key } from './index'
 import {
   focus_input,
   fresh_key,
@@ -435,12 +435,8 @@ describe(`keyboard shortcuts`, () => {
 
     const input = get_input()
     input.focus()
-    const event = new KeyboardEvent(`keydown`, {
-      ...key_event,
-      bubbles: true,
-      cancelable: true,
-    })
-    input.dispatchEvent(event)
+    const { key, ...modifiers } = key_event
+    const event = press_key(input, key, modifiers)
     await tick()
 
     return { props, input, event }

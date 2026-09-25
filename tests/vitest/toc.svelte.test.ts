@@ -4,7 +4,7 @@ import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '$lib/types
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, next_task, press_key } from './index'
 
 type TocProps = ComponentProps<typeof Toc>
 
@@ -184,18 +184,13 @@ describe(`Toc`, () => {
         const control = doc_query(`[data-toc-footer] ${selector}`)
         control.focus()
         for (const key of [`Enter`, ` `, `Tab`, `ArrowDown`]) {
-          const event = new KeyboardEvent(`keydown`, {
-            key,
-            bubbles: true,
-            cancelable: true,
-          })
-          control.dispatchEvent(event)
+          const event = press_key(control, key)
           expect(event.defaultPrevented).toBe(false)
         }
       }
       if (width < 1000) {
         expect(doc_query(`aside.toc > button`).getAttribute(`aria-expanded`)).toBe(`true`)
-        globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape` }))
+        press_key(globalThis, `Escape`)
         await tick()
         expect(doc_query(`aside.toc > button`).getAttribute(`aria-expanded`)).toBe(
           `false`,
@@ -373,7 +368,7 @@ describe(`Toc`, () => {
     mounted_components.push(mount(Toc, { target: document.body }))
     await tick()
     document.body.insertAdjacentHTML(`afterbegin`, `<h2 id="later">Later</h2>`)
-    await new Promise((resolve) => void setTimeout(resolve, 0))
+    await next_task()
     expect(toc_texts()).toEqual([`Heading 1`])
   })
 
@@ -455,19 +450,12 @@ describe(`Toc`, () => {
         const buttons =
           document.querySelectorAll<HTMLButtonElement>(`aside.toc li > button`)
         buttons[0].focus()
-        buttons[0].dispatchEvent(
-          new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-        )
+        press_key(buttons[0], `ArrowDown`)
         await tick()
 
         expect(document.activeElement).toBe(buttons[1])
 
-        const enter_event = new KeyboardEvent(`keydown`, {
-          key: `Enter`,
-          bubbles: true,
-          cancelable: true,
-        })
-        buttons[1].dispatchEvent(enter_event)
+        const enter_event = press_key(buttons[1], `Enter`)
 
         expect(enter_event.defaultPrevented).toBe(false)
         expect(scroll_into_view_mock).not.toHaveBeenCalled()
@@ -491,12 +479,7 @@ describe(`Toc`, () => {
 
     const field = doc_query<HTMLInputElement>(`aside.toc li > input.filter`)
     field.focus()
-    const event = new KeyboardEvent(`keydown`, {
-      key: `ArrowDown`,
-      bubbles: true,
-      cancelable: true,
-    })
-    field.dispatchEvent(event)
+    const event = press_key(field, `ArrowDown`)
     await tick()
 
     expect(event.defaultPrevented).toBe(false)
@@ -642,13 +625,13 @@ describe(`Toc`, () => {
       expect.objectContaining({ desktop: false, open: true, trigger: `button` }),
     )
 
-    globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape` }))
+    press_key(globalThis, `Escape`)
     await tick()
     on_open_change.mockClear()
 
     // Same-tick open changes should emit each internal trigger separately.
     doc_query(`aside.toc button`).click()
-    globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Escape` }))
+    press_key(globalThis, `Escape`)
     await tick()
 
     expect(on_open_change).toHaveBeenCalledTimes(2)
@@ -733,7 +716,7 @@ describe(`Toc`, () => {
     }
 
     for (const key of keys) {
-      globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key }))
+      press_key(globalThis, key)
       await tick()
     }
 
@@ -758,9 +741,7 @@ describe(`Toc`, () => {
 
       doc_query(`aside.toc > nav > ol > li.active > a`).focus()
       // dispatch on the focused li (bubbles) to mirror real keyboard usage
-      document.activeElement?.dispatchEvent(
-        new KeyboardEvent(`keydown`, { key: `ArrowDown`, bubbles: true }),
-      )
+      press_key(document.activeElement ?? document.body, `ArrowDown`)
       await tick()
 
       // selection AND DOM focus move together; otherwise the focused li's own keydown
@@ -772,12 +753,7 @@ describe(`Toc`, () => {
       // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
       const link = doc_query<HTMLAnchorElement>(`aside.toc > nav > ol > li.active > a`)
       const click = vi.spyOn(link, `click`)
-      const activation = new KeyboardEvent(`keydown`, {
-        key,
-        bubbles: true,
-        cancelable: true,
-      })
-      link.dispatchEvent(activation)
+      const activation = press_key(link, key)
       expect(activation.defaultPrevented).toBe(key === ` `)
       if (key === `Enter`) {
         expect(click).not.toHaveBeenCalled()
@@ -830,7 +806,7 @@ describe(`Toc`, () => {
 
       // keys act on the active item, the last heading in happy-dom; a click picks the first
       if (key === null) doc_query(`aside.toc ol li`).click()
-      else globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key }))
+      else press_key(globalThis, key)
 
       expect(scroll_into_view_mock).toHaveBeenCalledWith({
         behavior: expected_behavior,
@@ -861,8 +837,7 @@ describe(`Toc`, () => {
     on_open_change.mockClear()
 
     if (trigger === `tab`) doc_query(`aside.toc > nav > ol > li.active > a`).focus()
-    const key_event = new KeyboardEvent(`keydown`, { key, cancelable: true })
-    globalThis.dispatchEvent(key_event)
+    const key_event = press_key(globalThis, key)
     await tick()
 
     // Tab must stay un-prevented so focus still leaves the ToC
@@ -886,8 +861,7 @@ describe(`Toc`, () => {
     const active_before = doc_query(`aside.toc li.active`)
     if (focused) doc_query(`aside.toc li.active > a`).focus()
     const query_spy = vi.spyOn(document, `querySelectorAll`)
-    const key_event = new KeyboardEvent(`keydown`, { key, cancelable: true })
-    globalThis.dispatchEvent(key_event)
+    const key_event = press_key(globalThis, key)
     await tick()
     expect(query_spy).not.toHaveBeenCalled()
     expect(key_event.defaultPrevented).toBe(false)

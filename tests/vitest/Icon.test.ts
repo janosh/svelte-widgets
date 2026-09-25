@@ -5,7 +5,7 @@ import { escape_template_literal } from '$root/scripts/generate-icons'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 test.each([
   [`plain`, `plain`],
@@ -105,10 +105,7 @@ describe(`Icon`, () => {
       role: `presentation`, // beats the component's own role="img"
       'data-name': `disabled-icon`,
     } as const
-    mount(Icon, {
-      target: document.body,
-      props: { icon: icons.Check, class: `custom-class`, ...rest_props },
-    })
+    render(Icon, { icon: icons.Check, class: `custom-class`, ...rest_props })
 
     const svg = doc_query<SVGSVGElement>(`svg`)
     for (const [attr, value] of Object.entries(rest_props)) {
@@ -120,7 +117,7 @@ describe(`Icon`, () => {
 
   // `auto` preserves non-square viewBoxes; --icon-size opts into a square.
   test(`sizes off --icon-size, defaulting height to auto`, () => {
-    mount(Icon, { target: document.body, props: { icon: icons.Check } })
+    render(Icon, { icon: icons.Check })
     const unsized = getComputedStyle(doc_query<SVGSVGElement>(`svg`))
     expect([unsized.width, unsized.height]).toEqual([`16px`, `auto`])
 
@@ -134,7 +131,7 @@ describe(`Icon`, () => {
 
   // For an app's own chrome glyphs, which do not belong in the shared set
   test(`renders a caller-supplied path, and never injects markup through it`, () => {
-    mount(Icon, { target: document.body, props: { path: `M5 5`, viewBox: `0 0 10 10` } })
+    render(Icon, { path: `M5 5`, viewBox: `0 0 10 10` })
     const plain = doc_query<SVGSVGElement>(`svg`)
     expect(plain.querySelector(`path`)?.getAttribute(`d`)).toBe(`M5 5`)
     expect(plain.getAttribute(`viewBox`)).toBe(`0 0 10 10`)
@@ -142,7 +139,7 @@ describe(`Icon`, () => {
     // {@html} is reserved for icons, so a caller's path lands escaped in `d`
     document.body.innerHTML = ``
     const injection = `<circle cx="12" r="10" />`
-    mount(Icon, { target: document.body, props: { path: injection, stroke: `red` } })
+    render(Icon, { path: injection, stroke: `red` })
     const svg = doc_query<SVGSVGElement>(`svg`)
     expect(svg.querySelector(`circle`)).toBeNull()
     expect(svg.querySelector(`path`)?.getAttribute(`d`)).toBe(injection)
@@ -163,7 +160,7 @@ describe(`icon catalog page`, () => {
     const { default: IconsPage } = await import(
       `$root/src/routes/(demos)/(display)/icons/+page.svelte`
     )
-    mount(IconsPage, { target: document.body })
+    render(IconsPage, {})
     const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
 
     copy_button.click()

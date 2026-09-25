@@ -1,7 +1,7 @@
 import CodeExample from '$lib/CodeExample.svelte'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 const [id, src] = [`uniq-id`, `some code`]
 
@@ -17,7 +17,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
     button_props,
     example: createRawSnippet(() => ({ render: () => `<button>Demo action</button>` })),
   }
-  mount(CodeExample, { target: document.body, props })
+  render(CodeExample, props)
 
   // collapsible defaults code_above to true, which orders the <pre> above the example
   expect(doc_query(`div.code-example#${id}`).classList.contains(`code-above`)).toBe(true)
@@ -46,14 +46,11 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
 })
 
 test(`forwards host attributes when metadata does not override the ID`, () => {
-  mount(CodeExample, {
-    target: document.body,
-    props: {
-      id: `host-id`,
-      class: `host-class`,
-      style: `max-width: 40rem`,
-      'data-testid': `example`,
-    },
+  render(CodeExample, {
+    id: `host-id`,
+    class: `host-class`,
+    style: `max-width: 40rem`,
+    'data-testid': `example`,
   })
   const host = doc_query(`div.code-example`)
   expect([host.id, host.classList.contains(`host-class`), host.style.maxWidth]).toEqual([
@@ -86,7 +83,7 @@ test.each([
     // repl and github icons at the same URL. `title` stays overridable by design.
     const link_props = { class: `consumer-link` }
     Reflect.set(link_props, `href`, `/hijacked`)
-    mount(CodeExample, { target: document.body, props: { meta, src, link_props } })
+    render(CodeExample, { meta, src, link_props })
     const link = (title: string) =>
       doc_query<HTMLAnchorElement>(`nav a[title="${title}"]`)
 
@@ -99,9 +96,10 @@ test.each([
 )
 
 test(`labels prop overrides toggle text, omitted keys keep their default`, async () => {
-  mount(CodeExample, {
-    target: document.body,
-    props: { src, meta: { collapsible: true }, labels: { show_code: `Code zeigen` } },
+  render(CodeExample, {
+    src,
+    meta: { collapsible: true },
+    labels: { show_code: `Code zeigen` },
   })
   const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
   expect(toggle_button.textContent?.trim()).toBe(`Code zeigen`)
@@ -112,10 +110,7 @@ test(`labels prop overrides toggle text, omitted keys keep their default`, async
 })
 
 test(`meta.lang renders an out-of-flow language label`, () => {
-  mount(CodeExample, {
-    target: document.body,
-    props: { src, meta: { lang: `typescript` } },
-  })
+  render(CodeExample, { src, meta: { lang: `typescript` } })
   const label = doc_query(`.lang-label`)
   expect(label.textContent).toBe(`typescript`)
   // pre is white-space: pre, so an in-flow label shifts the first code line right.

@@ -1,7 +1,7 @@
 import type { FocusTrapOptions } from '$lib/attachments'
 import { focus_trap } from '$lib/attachments'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, press_key as dispatch_key } from '../index'
+import { create_element, press_key as dispatch_key, press_escape } from '../index'
 
 describe(`focus_trap`, () => {
   const make_surface = (count = 3) => {
@@ -13,7 +13,6 @@ describe(`focus_trap`, () => {
 
   // returned so callers can assert whether the key was swallowed
   const press_tab = (shiftKey = false) => dispatch_key(document, `Tab`, { shiftKey })
-  const press_escape = () => dispatch_key(document, `Escape`)
 
   // focus lands outside, then the microtask a recapture would schedule gets to run
   const focus_out_to = async (target: HTMLElement) => {

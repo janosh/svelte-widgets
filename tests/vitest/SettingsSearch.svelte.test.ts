@@ -2,14 +2,10 @@ import { SettingsSearch } from '$lib'
 import type { SettingsSearchLabels } from '$lib/labels'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, escape_key } from './index'
+import { type_search_text } from './MultiSelect.test-utils'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 
-const set_query = async (input: HTMLInputElement, query: string): Promise<void> => {
-  input.value = query
-  input.dispatchEvent(new Event(`input`, { bubbles: true }))
-  await tick()
-}
 const setting_row = (key: string) => doc_query(`[data-key="${key}"]`)
 // Filtering marks its own attribute, so `hidden` stays whatever the caller set it to
 const filtered_out = (element: Element) => element.hasAttribute(`data-search-hidden`)
@@ -63,7 +59,7 @@ describe(`SettingsSearch`, () => {
     [`neither end of a nesting`, `sphere`, { rotation: true, rotation_x: true }],
   ])(`matches %s (query=%j)`, async (_, query, expected) => {
     const { input, appearance, camera } = await mounted_search()
-    await set_query(input, query)
+    await type_search_text(query, input)
     const groups: Record<string, Element> = { appearance, camera }
     const actual = Object.keys(expected).map((name) => [
       name,
@@ -74,10 +70,10 @@ describe(`SettingsSearch`, () => {
 
   test(`reuses its search index and refreshes changed text, metadata and rows`, async () => {
     const { input } = await mounted_search()
-    await set_query(input, `radius`)
+    await type_search_text(`radius`, input)
     const root = doc_query(`.settings-rows`)
     const discover = vi.spyOn(root, `querySelectorAll`)
-    await set_query(input, `damping`)
+    await type_search_text(`damping`, input)
     expect(discover).not.toHaveBeenCalled()
     discover.mockRestore()
 
@@ -108,13 +104,11 @@ describe(`SettingsSearch`, () => {
     expect(camera.open).toBe(false)
     expect(color_scheme.hidden).toBe(true)
 
-    await set_query(input, `damping`)
+    await type_search_text(`damping`, input)
     expect(filtered_out(appearance)).toBe(true)
     expect(camera.open).toBe(true)
 
-    input.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true, cancelable: true }),
-    )
+    input.dispatchEvent(escape_key())
     await tick()
 
     expect(input.value).toBe(``)
@@ -133,11 +127,11 @@ describe(`SettingsSearch`, () => {
     appearance.dispatchEvent(new Event(`toggle`))
     camera.dispatchEvent(new Event(`toggle`))
 
-    await set_query(input, `damping`)
+    await type_search_text(`damping`, input)
     expect(filtered_out(appearance)).toBe(true)
     expect(camera.open).toBe(true)
 
-    await set_query(input, ``)
+    await type_search_text(``, input)
     expect(appearance.open).toBe(false)
     expect(camera.open).toBe(true)
   })
@@ -159,14 +153,14 @@ describe(`SettingsSearch`, () => {
     expect(zoom_speed.hidden).toBe(true)
 
     // ...nor may a match drag it back into view
-    await set_query(input, `zoom speed`)
+    await type_search_text(`zoom speed`, input)
     expect(zoom_speed.hidden).toBe(true)
     expect(filtered_out(camera)).toBe(true)
     expect(document.querySelector(`[role="status"]`)?.textContent).toContain(
       `No settings match`,
     )
 
-    await set_query(input, ``)
+    await type_search_text(``, input)
     expect(zoom_speed?.hidden).toBe(true)
   })
 
@@ -175,7 +169,7 @@ describe(`SettingsSearch`, () => {
     const segments = doc_query(`section.grid > label:not([data-key])`)
     const surface_quality = doc_query(`section.grid > .setting:not([data-key])`)
 
-    await set_query(input, `sphere`)
+    await type_search_text(`sphere`, input)
     expect(filtered_out(segments)).toBe(false)
     expect(filtered_out(surface_quality)).toBe(true)
     expect(filtered_out(appearance)).toBe(false)
@@ -183,18 +177,18 @@ describe(`SettingsSearch`, () => {
 
     // search opens the collapsed Camera section; typing on must not drop that state, not
     // an instant, which is what re-running the whole attachment per keystroke did
-    await set_query(input, `damping`)
+    await type_search_text(`damping`, input)
     expect(camera.open).toBe(true)
     const open_writes: boolean[] = []
     const observer = new MutationObserver(() => open_writes.push(camera.open))
     observer.observe(camera, { attributes: true, attributeFilter: [`open`] })
-    await set_query(input, `damping `)
+    await type_search_text(`damping `, input)
     observer.disconnect()
     expect(open_writes).toEqual([])
     expect(camera.open).toBe(true)
     expect(filtered_out(segments)).toBe(true)
 
-    await set_query(input, ``)
+    await type_search_text(``, input)
     expect(camera.open).toBe(false)
     expect(filtered_out(segments)).toBe(false)
   })
@@ -210,12 +204,10 @@ describe(`SettingsSearch`, () => {
     expect(document.activeElement).toBe(input)
     expect(input.getAttribute(`aria-label`)).toBe(`Search settings`)
 
-    await set_query(input, `damping`)
+    await type_search_text(`damping`, input)
     expect(filtered_out(setting_row(`zoom_speed`))).toBe(true)
 
-    input.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true, cancelable: true }),
-    )
+    input.dispatchEvent(escape_key())
     await tick()
     expect(document.querySelector(`input[type="search"]`)).toBeNull()
     expect(document.activeElement).toBe(doc_query(`.open-search`))
@@ -229,7 +221,7 @@ describe(`SettingsSearch`, () => {
       name: `opened by the trigger and cleared by typing`,
       initial_query: ``,
       open: async () => doc_query<HTMLButtonElement>(`.open-search`).click(),
-      clear: (input: HTMLInputElement) => set_query(input, ``),
+      clear: (input: HTMLInputElement) => type_search_text(``, input),
     },
     {
       // a query the user never typed: a restored session, or a deep link
@@ -243,7 +235,7 @@ describe(`SettingsSearch`, () => {
     await open()
     await tick()
     const input = doc_query<HTMLInputElement>(`input[type="search"]`)
-    await set_query(input, `radius`)
+    await type_search_text(`radius`, input)
 
     await clear(input)
     await tick()
@@ -256,7 +248,7 @@ describe(`SettingsSearch`, () => {
 
   test(`shows a status message for no matches and offers a clear button`, async () => {
     const { input, appearance, camera } = await mounted_search()
-    await set_query(input, `unobtainium`)
+    await type_search_text(`unobtainium`, input)
 
     expect(filtered_out(appearance)).toBe(true)
     expect(filtered_out(camera)).toBe(true)

@@ -1,6 +1,6 @@
 import { auto_update_position } from '$lib/attachments'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, stub_prop } from '../index'
+import { create_element, stub_props } from '../index'
 
 it(`auto_update_position coalesces observed changes and cleans up`, () => {
   let run_frame: FrameRequestCallback = () => undefined
@@ -22,9 +22,9 @@ it(`auto_update_position coalesces observed changes and cleans up`, () => {
     observe = observe
     disconnect = disconnect
   }
-  onTestFinished(stub_prop(globalThis, `ResizeObserver`, MockResizeObserver))
+  stub_props(globalThis, { ResizeObserver: MockResizeObserver })
   const [anchor, floating] = [create_element(), create_element()]
-  onTestFinished(stub_prop(floating, `ownerDocument`, { defaultView: animation_host }))
+  stub_props(floating, { ownerDocument: { defaultView: animation_host } })
   const update = vi.fn()
 
   const cleanup = auto_update_position(anchor, floating, update)

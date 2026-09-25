@@ -1,6 +1,6 @@
-import { mount, tick, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test } from 'vitest'
-import { doc_query } from './index'
+import { tick, type ComponentProps } from 'svelte'
+import { expect, test } from 'vitest'
+import { doc_query, render } from './index'
 import TestSheet from './TestSheet.svelte'
 
 test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {
@@ -10,8 +10,7 @@ test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async
     closedby: `none`,
     side: `left`,
   })
-  const app = mount(TestSheet, { target: document.body, props })
-  onTestFinished(() => unmount(app))
+  render(TestSheet, props)
 
   doc_query<HTMLButtonElement>(`[data-testid="sheet-trigger"]`).click()
   await tick()

@@ -3,7 +3,7 @@ import type { NavRoute, NavLink } from '$lib/types'
 import { type ComponentProps, createRawSnippet, mount, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, next_task, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Nav`, () => {
@@ -60,10 +60,8 @@ describe(`Nav`, () => {
     el?.dispatchEvent(new MouseEvent(`click`, { bubbles: true, cancelable: true }))
     return tick()
   }
-  const keydown = (key: string, target: EventTarget = globalThis) =>
-    target.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
   const escape = async () => {
-    keydown(`Escape`)
+    press_key(globalThis, `Escape`)
     await tick()
   }
   const pointer_event = (element: Element, type: string, pointer_type = `mouse`) =>
@@ -88,8 +86,6 @@ describe(`Nav`, () => {
     await tick()
     outside.remove()
   }
-  // flush a macrotask (focus moves inside setTimeout(..., 0) in the component)
-  const next_task = () => new Promise((resolve) => void setTimeout(resolve, 0))
   const set_window_width = (width: number) =>
     Object.defineProperty(globalThis, `innerWidth`, { value: width, writable: true })
   afterEach(() => set_window_width(1024)) // reset any per-test viewport override
@@ -136,7 +132,7 @@ describe(`Nav`, () => {
     await click(button)
     expect(button.getAttribute(`aria-expanded`)).toBe(`true`)
     expect(menu.classList.contains(`open`)).toBe(true)
-    keydown(`Escape`, menu)
+    press_key(menu, `Escape`)
     await tick()
     expect(button.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(menu.classList.contains(`open`)).toBe(false)
@@ -384,16 +380,16 @@ describe(`Nav`, () => {
     const second_links = links_of(second_nav)
     const second_toggle = second_nav.querySelector<HTMLElement>(`[data-dropdown-toggle]`)
     assert(second_toggle)
-    keydown(`Enter`, second_toggle)
+    press_key(second_toggle, `Enter`)
     await next_task()
     // opening focuses the first submenu link of *this* nav, not the first one in the document
     expect(document.activeElement).toBe(second_links[0])
     expect(first_links).not.toContain(document.activeElement)
     // arrows step within this nav's submenu only
-    keydown(`ArrowDown`, second_links[0])
+    press_key(second_links[0], `ArrowDown`)
     expect(document.activeElement).toBe(second_links[1])
     // and Escape hands focus back to this nav's toggle, not the first nav's
-    keydown(`Escape`, second_links[1])
+    press_key(second_links[1], `Escape`)
     await next_task()
     expect(document.activeElement).toBe(second_toggle)
   })
@@ -409,7 +405,7 @@ describe(`Nav`, () => {
     })
     // Enter/Space share a branch; ArrowDown opens when closed — both focus the first item
     for (const open_key of [`Enter`, `ArrowDown`]) {
-      keydown(open_key, toggle_button)
+      press_key(toggle_button, open_key)
       await next_task() // wait for DOM focus
       expect(is_visible(menu)).toBe(true)
       expect(toggle_button.getAttribute(`aria-expanded`)).toBe(`true`)
@@ -420,31 +416,31 @@ describe(`Nav`, () => {
       await tick()
       expect(is_visible(menu)).toBe(true)
       expect(document.activeElement).toBe(menu.querySelector(`a`))
-      keydown(`Escape`)
+      press_key(globalThis, `Escape`)
     }
     // Arrow navigation: keys land on whichever element has focus, links included
     const [item1, item2] = Array.from(menu.querySelectorAll(`a`))
-    keydown(`Enter`, toggle_button)
+    press_key(toggle_button, `Enter`)
     await next_task()
     expect(document.activeElement).toBe(item1)
-    keydown(`ArrowDown`, item1)
+    press_key(item1, `ArrowDown`)
     expect(document.activeElement).toBe(item2)
-    keydown(`ArrowDown`, item2)
+    press_key(item2, `ArrowDown`)
     expect(document.activeElement).toBe(item1) // wraps
-    keydown(`ArrowUp`, item1)
+    press_key(item1, `ArrowUp`)
     expect(document.activeElement).toBe(item2)
-    keydown(`Home`, item2)
+    press_key(item2, `Home`)
     expect(document.activeElement).toBe(item1)
     // Escape from item returns focus to toggle button
-    keydown(`Escape`, item1)
+    press_key(item1, `Escape`)
     await next_task()
     expect(is_visible(menu)).toBe(false)
     expect(document.activeElement).toBe(toggle_button)
     // consumer handler still sees every key that landed on a link
     expect(link_props.onkeydown).toHaveBeenCalledTimes(5)
     // Closing before the scheduled focus runs must not focus a now-hidden child.
-    keydown(`Enter`, toggle_button)
-    keydown(`Escape`, toggle_button)
+    press_key(toggle_button, `Enter`)
+    press_key(toggle_button, `Escape`)
     await next_task()
     expect(is_visible(menu)).toBe(false)
     expect(document.activeElement).toBe(toggle_button)
@@ -959,7 +955,7 @@ describe(`Nav`, () => {
         await tick()
         await open_dropdown(dropdown, interaction)
         expect(is_visible(dropdown_menu)).toBe(true)
-        keydown(`ArrowDown`, toggle)
+        press_key(toggle, `ArrowDown`)
         await tick()
         pointer_event(dropdown, `pointerleave`)
         await tick()
@@ -976,9 +972,9 @@ describe(`Nav`, () => {
         const links = [...dropdown_menu.querySelectorAll(`a`)]
         expect(links).toHaveLength(2)
         links[0].focus()
-        keydown(`Tab`, links[0])
+        press_key(links[0], `Tab`)
         expect(document.activeElement).toBe(links[1])
-        keydown(`Tab`, links[1])
+        press_key(links[1], `Tab`)
         expect(document.activeElement).toBe(links[0])
         await tick()
         pointer_event(dropdown, `pointerleave`)

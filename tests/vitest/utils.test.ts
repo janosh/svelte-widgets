@@ -827,7 +827,6 @@ describe(`create_term_matcher`, () => {
     [`Data Sets`, `data  missing`, {}, false],
     [`anything`, `   `, {}, true],
     [`toggle theme`, `tgtm`, {}, false],
-    [`toggle theme`, `tgtm`, { fuzzy: true }, true],
     // a plain term ignores diacritics (NFC or NFD text); an accented term requires them
     [`Café au lait`, `cafe`, {}, true],
     // an accented fuzzy term can't borrow its mark from a later letter

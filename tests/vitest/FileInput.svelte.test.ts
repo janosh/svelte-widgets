@@ -1,32 +1,16 @@
 import { FileInput } from '$lib'
+import { createRawSnippet, flushSync, mount, tick, type ComponentProps } from 'svelte'
+import { expect, test, vi } from 'vitest'
 import {
-  createRawSnippet,
-  flushSync,
-  mount,
-  tick,
-  unmount,
-  type ComponentProps,
-} from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+  data_transfer,
+  doc_query,
+  drag_event,
+  next_task,
+  render as mount_body,
+} from './index'
 
-const target_for = () => {
-  const target = document.createElement(`div`)
-  document.body.append(target)
-  onTestFinished(() => target.remove())
-  return target
-}
 const render = (props: ComponentProps<typeof FileInput>) => {
-  const target = target_for()
-  const component = mount(FileInput, { target, props })
-  let mounted = true
-  // tests that check teardown call it themselves; the finish hook then skips it
-  const destroy = async () => {
-    if (!mounted) return
-    mounted = false
-    await unmount(component)
-  }
-  onTestFinished(destroy)
+  const destroy = mount_body(FileInput, props)
   flushSync()
   const input = doc_query<HTMLInputElement>(`input[type="file"]`)
   const select = async (files: File[]) => {
@@ -34,18 +18,12 @@ const render = (props: ComponentProps<typeof FileInput>) => {
     input.dispatchEvent(new Event(`change`, { bubbles: true }))
     await tick()
   }
-  return { target, input, select, destroy }
+  return { target: document.body, input, select, destroy }
 }
-// happy-dom has no DragEvent dataTransfer, so drops carry a hand-rolled one
 const drop = async (items: object[], files: File[] = []) => {
-  const event = new Event(`drop`, { bubbles: true, cancelable: true })
-  const data_transfer = { types: [`Files`], files, items }
-  Object.defineProperty(event, `dataTransfer`, { value: data_transfer })
-  doc_query(`.file-input`).dispatchEvent(event)
-  // file expansion is async
-  await new Promise((resolve) => {
-    setTimeout(resolve, 0)
-  })
+  const transfer = data_transfer(files, items as DataTransferItem[])
+  doc_query(`.file-input`).dispatchEvent(drag_event(`drop`, transfer))
+  await next_task() // file expansion is async
   await tick()
 }
 const json = (name = `ok.json`, size = 2) => new File([`x`.repeat(size)], name)
@@ -227,9 +205,8 @@ test.each([
   [`zero max_files`, { max_files: 0 }],
   [`fractional max_files`, { max_files: 1.5 }],
 ])(`rejects %s`, (_desc, props) => {
-  const target = target_for()
   expect(() => {
-    mount(FileInput, { target, props })
+    mount(FileInput, { target: document.body, props })
     flushSync()
   }).toThrow(`FileInput requires max_size >= 0 and max_files >= 1`)
 })

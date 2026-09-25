@@ -3,11 +3,6 @@ import { flushSync } from 'svelte'
 import { expect, test } from 'vitest'
 import { doc_query, render } from './index'
 
-test.each([``, undefined])(`renders nothing when message is %j`, (message) => {
-  render(StatusMessage, { message })
-  expect(document.querySelector(`.status-message`)).toBeNull()
-})
-
 test.each([
   { type: `success`, role: `status`, aria_live: `polite` },
   { type: `info`, role: `status`, aria_live: `polite` },

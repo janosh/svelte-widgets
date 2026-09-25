@@ -1,25 +1,15 @@
-import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { create_element, doc_query, pointer_event } from './index'
+import { tick, type ComponentProps } from 'svelte'
+import { describe, expect, test, vi } from 'vitest'
+import { create_element, doc_query, render, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
-  const mounted: Record<string, unknown>[] = []
-
-  afterEach(async () => {
-    await Promise.all(mounted.splice(0).map((app) => unmount(app)))
-  })
-
+  let unmount_dialog = async () => {}
   const mount_dialog = (extra: Partial<DialogProps> = {}) => {
     const props = $state({ ...extra })
-    mounted.push(mount(TestDialog, { target: document.body, props }))
+    unmount_dialog = render(TestDialog, props)
     return props
-  }
-  const unmount_dialog = async () => {
-    const app = mounted.pop()
-    if (!app) throw new Error(`Dialog test app was not mounted`)
-    await unmount(app)
   }
   const item = (test_id: string) =>
     doc_query<HTMLButtonElement>(`[data-testid="${test_id}"]`)

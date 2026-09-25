@@ -8,9 +8,9 @@ import {
   type SelectionProps,
 } from '$lib'
 import { virtual_window } from '$lib/virtual'
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, press_key } from './index'
 
 const target_for = () => {
   const target = document.createElement(`div`)
@@ -18,10 +18,19 @@ const target_for = () => {
   onTestFinished(() => target.remove())
   return target
 }
-const fire_key = (target: Element, key: string, options: KeyboardEventInit = {}) =>
-  target.dispatchEvent(
-    new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true, ...options }),
-  )
+// mounts into a fresh target that is unmounted and removed when the test finishes
+const mount_in_target = <
+  Props extends Record<string, unknown>,
+  Exports extends Record<string, unknown>,
+>(
+  component: Component<Props, Exports>,
+  props: Props,
+) => {
+  const target = target_for()
+  const instance = mount(component, { target, props })
+  onTestFinished(() => unmount(instance))
+  return { target, instance }
+}
 
 test.each([
   [
@@ -59,13 +68,12 @@ test.each([
 })
 
 test(`split collapse restores size and Home/End respect bounds`, async () => {
-  const target = target_for()
   const on_resize = vi.fn()
-  const component = mount(SplitPane, {
-    target,
-    props: { collapsible: true, ratio: 0.4, on_resize },
+  const { target } = mount_in_target(SplitPane, {
+    collapsible: true,
+    ratio: 0.4,
+    on_resize,
   })
-  onTestFinished(() => unmount(component))
   flushSync()
   const separator = doc_query(`[role="separator"]`)
   for (const [key, size] of [
@@ -74,7 +82,7 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
     [`End`, `85%`],
     [`Home`, `15%`],
   ]) {
-    fire_key(separator, key)
+    press_key(separator, key)
     await tick()
     expect(target.style.getPropertyValue(`--split-pane-size`)).toBe(size)
   }
@@ -84,26 +92,21 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
 test.each([0, 5])(
   `virtual list scrolls to an unmounted row with overscan=%s`,
   async (overscan) => {
-    const target = target_for()
     const children = createRawSnippet<[unknown, number]>((item) => ({
       render: () => `<span>${item()}</span>`,
     }))
     const key = vi.fn(Number)
     let items = $state(Array.from({ length: 10000 }, (_value, idx) => idx))
-    const component = mount(VirtualList, {
-      target,
-      props: {
-        get items() {
-          return items
-        },
-        item_size: 20,
-        initial_count: 10,
-        key,
-        overscan,
-        children,
+    const { target, instance: component } = mount_in_target(VirtualList, {
+      get items() {
+        return items
       },
+      item_size: 20,
+      initial_count: 10,
+      key,
+      overscan,
+      children,
     })
-    onTestFinished(() => unmount(component))
     flushSync()
     expect(target.querySelectorAll(`[data-index]`)).toHaveLength(10)
     expect(key.mock.calls.length).toBeLessThan(100)
@@ -144,7 +147,6 @@ test.each([
 ])(
   `tree lazy expansion, navigation, selection and disabled branches (initial=%s, multiple=%s)`,
   async (initial, multiple) => {
-    const target = target_for()
     const load = vi.fn(async () => [{ id: `child`, label: `Child` }])
     const nodes: TreeNode[] = [
       { id: `root`, label: `Root`, load },
@@ -159,24 +161,23 @@ test.each([
       on_change,
       expanded: new Set(initial ? [`root`] : []),
     })
-    const component = mount(TreeView, { target, props })
-    onTestFinished(() => unmount(component))
+    const { target } = mount_in_target(TreeView, props)
     const root = doc_query(`[data-tree-id="root"]`)
     expect(root.getAttribute(`aria-label`)).toBe(`Root`)
     root.focus()
-    if (!initial) fire_key(root, `Enter`)
+    if (!initial) press_key(root, `Enter`)
     await tick()
     await tick()
     expect(load).toHaveBeenCalledOnce()
     expect(target.querySelectorAll(`[role="treeitem"]`)).toHaveLength(3)
-    fire_key(root, `ArrowRight`)
+    press_key(root, `ArrowRight`)
     await tick()
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(`child`)
-    fire_key(doc_query(`[role="treeitem"]:focus`), `Enter`)
+    press_key(doc_query(`[role="treeitem"]:focus`), `Enter`)
     expect(on_select).toHaveBeenCalledWith({ id: `child`, label: `Child` })
-    fire_key(doc_query(`[role="treeitem"]:focus`), `ArrowLeft`)
+    press_key(doc_query(`[role="treeitem"]:focus`), `ArrowLeft`)
     await tick()
-    fire_key(root, `ArrowLeft`)
+    press_key(root, `ArrowLeft`)
     await tick()
     expect(target.querySelectorAll(`[role="treeitem"]`)).toHaveLength(2)
     for (const [key, expanded] of [
@@ -185,7 +186,7 @@ test.each([
       [`Enter`, true],
       [`Enter`, false],
     ] as const) {
-      fire_key(root, key)
+      press_key(root, key)
       await tick()
       expect(root.getAttribute(`aria-expanded`)).toBe(String(expanded))
       expect(document.activeElement).toBe(root)
@@ -203,11 +204,11 @@ test.each([
       [`End`, `last`],
       [`Home`, `root`],
     ]) {
-      fire_key(doc_query(`[role="treeitem"]:focus`), key)
+      press_key(doc_query(`[role="treeitem"]:focus`), key)
       await tick()
       expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(id)
     }
-    fire_key(root, ` `)
+    press_key(root, ` `)
     await tick()
     expect(root.getAttribute(`aria-selected`)).toBe(`true`)
     expect(root.getAttribute(`aria-expanded`)).toBe(`false`)
@@ -216,7 +217,7 @@ test.each([
     for (const expanded of [false, true]) {
       props.expanded = new Set(expanded ? [`root`] : [])
       await tick()
-      fire_key(root, `Enter`)
+      press_key(root, `Enter`)
       await tick()
       expect(root.getAttribute(`aria-expanded`)).toBe(String(expanded))
       expect(document.activeElement).toBe(root)
@@ -269,7 +270,6 @@ test.each([false, true])(
 test.each([`ctrlKey`, `metaKey`] as const)(
   `tree multiple selection supports %s toggles and visible ranges`,
   async (modifier) => {
-    const target = target_for()
     const on_change = vi.fn()
     const props = $state({
       mode: `multiple` as const,
@@ -289,8 +289,7 @@ test.each([`ctrlKey`, `metaKey`] as const)(
       value: [`alpha`],
       on_change,
     })
-    const component = mount(TreeView, { target, props })
-    onTestFinished(() => unmount(component))
+    const { target } = mount_in_target(TreeView, props)
     const row = (id: string) => doc_query(`[data-tree-id="${id}"]`)
     expect(row(`alpha`).tabIndex).toBe(0)
     const selected = () =>
@@ -334,7 +333,7 @@ test.each([`ctrlKey`, `metaKey`] as const)(
     // Caller-owned selection remains writable after interactions.
     props.value = [`alpha`]
     await tick()
-    fire_key(row(`delta`), `a`, { [modifier]: true })
+    press_key(row(`delta`), `a`, { [modifier]: true })
     await tick()
     expect(selected()).toEqual([`folder`, `delta`])
     expect(on_change).toHaveBeenLastCalledWith([`alpha`, `folder`, `delta`])
@@ -342,21 +341,16 @@ test.each([`ctrlKey`, `metaKey`] as const)(
 )
 
 test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
-  const target = target_for()
   const on_change = vi.fn()
-  const component = mount(TreeView, {
-    target,
-    props: {
-      mode: `multiple` as const,
-      nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
-        id: label,
-        label,
-        disabled: label === `Disabled`,
-      })),
-      on_change,
-    },
+  mount_in_target(TreeView, {
+    mode: `multiple` as const,
+    nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
+      id: label,
+      label,
+      disabled: label === `Disabled`,
+    })),
+    on_change,
   })
-  onTestFinished(() => unmount(component))
   doc_query(`[data-tree-id="Alpha"]`).focus()
   for (const [key, options, focused, selected] of [
     [`ArrowDown`, { shiftKey: true }, `Disabled`, [`Alpha`]],
@@ -369,21 +363,14 @@ test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves sele
     [`Home`, { shiftKey: true }, `Alpha`, [`Alpha`, `Beta`, `Gamma`]],
     [`Enter`, {}, `Alpha`, [`Alpha`]],
   ] as const) {
-    fire_key(doc_query(`[role="treeitem"]:focus`), key, options)
+    press_key(doc_query(`[role="treeitem"]:focus`), key, options)
     await tick()
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(focused)
     expect(on_change).toHaveBeenLastCalledWith(selected)
   }
   const input = document.createElement(`input`)
   doc_query(`[data-tree-id="Alpha"]`).append(input)
-  const select_all = new KeyboardEvent(`keydown`, {
-    key: `a`,
-    ctrlKey: true,
-    bubbles: true,
-    cancelable: true,
-  })
   const calls = on_change.mock.calls.length
-  input.dispatchEvent(select_all)
-  expect(select_all.defaultPrevented).toBe(false)
+  expect(press_key(input, `a`, { ctrlKey: true }).defaultPrevented).toBe(false)
   expect(on_change).toHaveBeenCalledTimes(calls)
 })

@@ -1,12 +1,22 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Locator, type Page } from '@playwright/test'
+
+// Opens the basic demo once its backend has opened the document for editing.
+const open_editor = async (page: Page) => {
+  await page.goto(`/code-editor`)
+  const demo = page.locator(`#code-editor-basic`)
+  const code_editor = demo.locator(`.code-editor`)
+  const area = code_editor.locator(`textarea`)
+  await expect(code_editor).toHaveAttribute(`aria-busy`, `false`)
+  await expect(area).toBeEditable()
+  return { demo, code_editor, area }
+}
+const caret = (area: Locator): Promise<number> =>
+  area.evaluate((node: HTMLTextAreaElement) => node.selectionStart)
 
 test(`CodeEditor tools reveal on hover and focus without taking space from code`, async ({
   page,
 }) => {
-  await page.goto(`/code-editor`)
-  const demo = page.locator(`#code-editor-basic`)
-  const code_editor = demo.locator(`.code-editor`)
-  await expect(code_editor.locator(`textarea`)).toBeEditable()
+  const { demo, code_editor } = await open_editor(page)
   const find_button = code_editor.getByRole(`button`, { name: `Find`, exact: true })
   const panel = code_editor.getByRole(`search`)
   const body = code_editor.locator(`.editor-body`)
@@ -74,11 +84,7 @@ test(`CodeEditor tools reveal on hover and focus without taking space from code`
 test(`CodeEditor search replaces undoably and navigates offscreen document lines`, async ({
   page,
 }) => {
-  await page.goto(`/code-editor`)
-  const demo = page.locator(`#code-editor-basic`)
-  const code_editor = demo.locator(`.code-editor`)
-  const editor = code_editor.locator(`textarea`)
-  await expect(editor).toBeEditable()
+  const { demo, code_editor, area: editor } = await open_editor(page)
   const original = await editor.inputValue()
   await editor.focus()
   await page.keyboard.press(`ControlOrMeta+f`)
@@ -121,11 +127,7 @@ test(`CodeEditor search replaces undoably and navigates offscreen document lines
 test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async ({
   page,
 }) => {
-  await page.goto(`/code-editor`)
-  const code_editor = page.locator(`#code-editor-basic .code-editor`)
-  const editor = page.locator(`#code-editor-basic textarea`)
-  await expect(editor).toBeEditable()
-  await expect(code_editor).toHaveAttribute(`aria-busy`, `false`)
+  const { code_editor, area: editor } = await open_editor(page)
   await editor.focus()
 
   await page.keyboard.press(`Tab`)
@@ -234,12 +236,7 @@ for (const text of [
   test(`CodeEditor vertical navigation matches native grapheme layout: ${JSON.stringify(text)}`, async ({
     page,
   }) => {
-    await page.goto(`/code-editor`)
-    const area = page.locator(`#code-editor-basic textarea`)
-    await expect(page.locator(`#code-editor-basic .code-editor`)).toHaveAttribute(
-      `aria-busy`,
-      `false`,
-    )
+    const { area } = await open_editor(page)
     await area.focus()
     await page.keyboard.press(`ControlOrMeta+a`)
     await page.keyboard.insertText(text)
@@ -256,7 +253,7 @@ for (const text of [
       }
     })
     await page.keyboard.press(`ArrowDown`)
-    const actual = await area.evaluate((node: HTMLTextAreaElement) => node.selectionStart)
+    const actual = await caret(area)
     await page.setContent(`<textarea></textarea>`)
     const native = page.locator(`textarea`)
     await native.fill(text)
@@ -269,21 +266,14 @@ for (const text of [
     )
     await native.focus()
     await page.keyboard.press(`ArrowDown`)
-    expect(actual).toBe(
-      await native.evaluate((node: HTMLTextAreaElement) => node.selectionStart),
-    )
+    expect(actual).toBe(await caret(native))
   })
 }
 
 test(`CodeEditor mouse selection keeps its anchor while scrolling beyond the input window`, async ({
   page,
 }) => {
-  await page.goto(`/code-editor`)
-  const area = page.locator(`#code-editor-basic textarea`)
-  await expect(page.locator(`#code-editor-basic .code-editor`)).toHaveAttribute(
-    `aria-busy`,
-    `false`,
-  )
+  const { area } = await open_editor(page)
   await page.locator(`#code-editor-basic [data-load-large]`).click()
   await expect.poll(() => area.inputValue()).toContain(`line 100000`)
   await area.focus()
@@ -295,7 +285,7 @@ test(`CodeEditor mouse selection keeps its anchor while scrolling beyond the inp
   await page.mouse.move(box.x + 12, box.y + 10)
   await page.mouse.down()
   await page.mouse.move(box.x + 50, box.y + box.height - 10, { steps: 10 })
-  const anchor = await area.evaluate((node: HTMLTextAreaElement) => node.selectionStart)
+  const anchor = await caret(area)
   const selected_end = await area.evaluate(
     (node: HTMLTextAreaElement) => node.selectionEnd,
   )
@@ -330,10 +320,7 @@ for (const [text, direction] of [
   test(`CodeEditor uses native bidi caret geometry for ${direction} ${text}`, async ({
     page,
   }) => {
-    await page.goto(`/code-editor`)
-    const editor = page.locator(`#code-editor-basic .code-editor`)
-    const area = page.locator(`#code-editor-basic textarea`)
-    await expect(editor).toHaveAttribute(`aria-busy`, `false`)
+    const { code_editor: editor, area } = await open_editor(page)
     await editor.evaluate((node, dir) => node.setAttribute(`dir`, dir), direction)
     const document_text = `${text}\n12345678901234567890`
     await area.focus()
@@ -357,7 +344,7 @@ for (const [text, direction] of [
     const actual: number[] = []
     for (const position of positions) {
       await area.click({ position: { x: position, y: 10 } })
-      actual.push(await area.evaluate((node: HTMLTextAreaElement) => node.selectionStart))
+      actual.push(await caret(area))
     }
     // An interior caret needs the whole source line's bidi/shaping context.
     await area.evaluate((node: HTMLTextAreaElement) => {
@@ -365,9 +352,7 @@ for (const [text, direction] of [
       node.dispatchEvent(new Event(`select`))
     })
     await page.keyboard.press(`ArrowDown`)
-    const actual_vertical = await area.evaluate(
-      (node: HTMLTextAreaElement) => node.selectionStart,
-    )
+    const actual_vertical = await caret(area)
     await page.setContent(`<textarea spellcheck="false" wrap="off"></textarea>`)
     const native = page.locator(`textarea`)
     await native.fill(document_text)
@@ -377,15 +362,11 @@ for (const [text, direction] of [
     const expected: number[] = []
     for (const position of positions) {
       await native.click({ position: { x: position, y: 10 } })
-      expected.push(
-        await native.evaluate((node: HTMLTextAreaElement) => node.selectionStart),
-      )
+      expected.push(await caret(native))
     }
     await native.evaluate((node: HTMLTextAreaElement) => node.setSelectionRange(4, 4))
     await page.keyboard.press(`ArrowDown`)
     expect(actual).toEqual(expected)
-    expect(actual_vertical).toBe(
-      await native.evaluate((node: HTMLTextAreaElement) => node.selectionStart),
-    )
+    expect(actual_vertical).toBe(await caret(native))
   })
 }

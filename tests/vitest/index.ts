@@ -1,6 +1,8 @@
 import type { MultiSelectProps } from '$lib'
-import { flushSync, mount, unmount, type Component } from 'svelte'
+import { flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 
 export const create_element = (
   tag = `div`,
@@ -152,11 +154,46 @@ export type Test2WayBindProps = MultiSelectProps & {
 }
 
 // mounts into the body, flushes, and unmounts when the test finishes
-export const render = <Props extends Record<string, unknown>>(
+export const render = <Props extends object>(
   component: Component<Props>,
   props: Props,
-) => {
+): (() => Promise<void>) => {
   const instance = mount(component, { target: document.body, props })
-  onTestFinished(() => unmount(instance))
+  let unmounted: Promise<void> | undefined
+  // safe to call early (teardown tests); the finish hook then skips it
+  const unmount_once = () => (unmounted ??= unmount(instance))
+  onTestFinished(unmount_once)
   flushSync()
+  return unmount_once
+}
+
+// resolves after one macrotask, for work a component defers with setTimeout(..., 0)
+export const next_task = () => new Promise<void>((resolve) => void setTimeout(resolve, 0))
+
+// Escape on the document, where the shared escape layer stack listens
+export const press_escape = (init: KeyboardEventInit = {}) =>
+  press_key(document, `Escape`, init)
+
+// fresh directory under the OS temp dir, removed when the test finishes
+export const temp_dir = async (prefix: string): Promise<string> => {
+  const directory = await mkdtemp(`${tmpdir()}/${prefix}`)
+  onTestFinished(() => rm(directory, { recursive: true, force: true }))
+  return directory
+}
+
+// optionally sets an input's text, dispatches each bubbling event type in order, then flushes
+export const fire_input = async (
+  input: HTMLInputElement,
+  text: string | undefined,
+  ...events: string[]
+): Promise<void> => {
+  if (text !== undefined) input.value = text
+  for (const type of events) input.dispatchEvent(new Event(type, { bubbles: true }))
+  await tick()
+}
+
+// stub_prop for several props at once, each undone (newest first) when the test finishes
+export const stub_props = (target: object, props: Record<string, unknown>) => {
+  for (const [prop, value] of Object.entries(props))
+    onTestFinished(stub_prop(target, prop, value))
 }
