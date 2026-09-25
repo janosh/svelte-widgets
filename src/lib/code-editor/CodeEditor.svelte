@@ -607,9 +607,12 @@
     before_snapshot = snapshot
     // Browsers dispatch input in the same task as its beforeinput, but a no-op deletion
     // (Backspace at offset 0, Delete at the end) fires beforeinput alone. Drop a snapshot
-    // still unconsumed afterwards so it stops blocking selection sync and input refreshes.
+    // still unconsumed afterwards so it stops blocking selection sync, and catch up on the
+    // input refreshes that model updates skipped meanwhile.
     setTimeout(() => {
-      if (before_snapshot === snapshot) before_snapshot = null
+      if (before_snapshot !== snapshot) return
+      before_snapshot = null
+      refresh_input()
     }, 0)
   }
   type InputShape = `replace` | `backward` | `forward` | `around`

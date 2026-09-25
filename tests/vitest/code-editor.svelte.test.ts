@@ -497,7 +497,7 @@ test(`typing with the find panel open patches matches near the edit`, async () =
 })
 
 test.each([`canceled by another listener`, `not followed by input`] as const)(
-  `a beforeinput %s does not block selection sync`,
+  `a beforeinput %s does not block selection sync or input refreshes`,
   async (mode) => {
     const { model, textarea } = await mount_editor()
     if (mode === `canceled by another listener`) {
@@ -509,8 +509,11 @@ test.each([`canceled by another listener`, `not followed by input`] as const)(
       // a no-op Backspace at offset 0: the browser fires beforeinput but no input
       textarea.setSelectionRange(0, 0)
       expect(before_input(textarea, `deleteContentBackward`).defaultPrevented).toBe(false)
-      await new Promise((resolve) => void setTimeout(resolve, 0))
     }
+    // an external edit while the snapshot is pending still reaches the textarea
+    model.transact([{ from: 0, to: 0, insert: `// ` }])
+    await new Promise((resolve) => void setTimeout(resolve, 0))
+    expect(textarea.value.startsWith(`// ${DEMO_TEXT.slice(0, 5)}`)).toBe(true)
     textarea.setSelectionRange(2, 4)
     textarea.dispatchEvent(new Event(`select`))
     expect(model.selection).toEqual({ anchor: 2, head: 4 })
