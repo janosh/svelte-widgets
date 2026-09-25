@@ -478,6 +478,9 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
     get dirty() {
       return state !== saved_state
     },
+    get state_id() {
+      return state
+    },
     eol,
     had_bom,
     slice: (from = 0, to = rope_length(root)) => {
@@ -534,11 +537,17 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
       trim_history()
       return true
     },
-    mark_saved: () => {
+    checkpoint: () => {
       break_history_group()
-      if (saved_state === state) return
-      saved_state = state
-      notify()
+      return state
+    },
+    mark_saved: (state_id = state) => {
+      if (!Number.isInteger(state_id) || state_id < 0 || state_id > next_state)
+        throw new Error(`Invalid state_id=${state_id}; latest state is ${next_state}`)
+      break_history_group()
+      const was_dirty = state !== saved_state
+      saved_state = state_id
+      if ((state !== saved_state) !== was_dirty) notify()
     },
     subscribe: (listener) => {
       const subscription = (update: EditorUpdate): void => listener(update)

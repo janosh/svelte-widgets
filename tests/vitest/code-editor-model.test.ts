@@ -3,6 +3,7 @@ import {
   find_editor_matches,
   iterate_editor_matches,
   replace_editor_matches,
+  update_editor_matches,
   type EditorSearchOptions,
 } from '$lib/code-editor/search'
 import type { EditorModel, TextEdit } from '$lib/code-editor/types'
@@ -83,6 +84,65 @@ test.each(option_grid)(
     }
   },
 )
+test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
+  `property: incremental match updates equal a full rescan for %j`,
+  (query) => {
+    let rng_state = 20_260_924
+    const random = (bound: number): number => {
+      rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
+      return rng_state % bound
+    }
+    const long = query.length > 1024
+    const pieces = long
+      ? [`a`.repeat(1030), `A`, ` `, `b`]
+      : [`a`, `b`, `A`, ` `, `\n`, `😀`, `_`]
+    const piece = () => pieces[random(pieces.length)]
+    for (const options of option_grid) {
+      const text = Array.from({ length: long ? 40 : 400 }, piece).join(``)
+      const model = create_editor_model({ uri: `memory:incremental`, text })
+      let matches = find_editor_matches(model, query, options)
+      for (let step = 0; step < 150; step++) {
+        const edits: TextEdit[] = []
+        let offset = 0
+        for (let edit_idx = random(3) + 1; edit_idx > 0; edit_idx--) {
+          const from = offset + random(Math.max(1, (model.length - offset) >> 1))
+          if (from > model.length) break
+          const to = Math.min(model.length, from + random(6))
+          const insert = Array.from({ length: random(3) }, piece).join(``)
+          edits.push({ from, to, insert })
+          offset = from + insert.length
+        }
+        // Keep edits valid in the sequential coordinates each one leaves behind.
+        let length = model.length
+        const valid = edits.filter(({ from, to, insert }) => {
+          if (to > length) return false
+          length += insert.length - (to - from)
+          return true
+        })
+        if (valid.length === 0) continue
+        model.transact(valid, { add_to_history: false })
+        matches = update_editor_matches(model, query, matches, valid, options)
+        expect(matches).toEqual(find_editor_matches(model, query, options))
+      }
+    }
+  },
+)
+test(`an edit rescans only its neighborhood of a large document`, () => {
+  const text = `foo bar baz\n`.repeat(200_000)
+  const model = create_editor_model({ uri: `memory:incremental-large`, text })
+  const matches = find_editor_matches(model, `bar`)
+  const from = model.line(100_000).from
+  const transaction = model.transact([{ from, to: from, insert: `bar ` }])
+  const slice_spy = vi.spyOn(model, `slice`)
+  const updated = update_editor_matches(model, `bar`, matches, transaction.edits)
+  const sliced = slice_spy.mock.calls.reduce(
+    (total, [start = 0, end = model.length]) => total + end - start,
+    0,
+  )
+  expect(sliced).toBeLessThan(100)
+  expect(updated).toHaveLength(200_001)
+  expect(updated[100_000]).toEqual({ from, to: from + 3 })
+})
 test(`long literal queries verify overlapping candidates without RegExp size limits`, () => {
   const query = `${`😀x`.repeat(15_000)}end`
   const text = `😀x${query} ${query}`
@@ -306,6 +366,28 @@ test(`typing groups, saved checkpoints, redo invalidation, and history limits co
   model.transact([{ from: 0, to: 1, insert: `A` }], { source: `command` })
   expect(model.redo()).toBe(false)
   expect(model.text()).toBe(`Abcxy`)
+})
+test(`mark_saved accepts the checkpoint id of text written before later edits`, () => {
+  const model = create_editor_model({ uri: `memory:state-id`, text: `a` })
+  type_text(model, `b`, 0)
+  const written = model.checkpoint()
+  expect(written).toBe(model.state_id)
+  // within the typing merge interval: without the checkpoint `c` would join `b`'s group
+  type_text(model, `c`, 100)
+  const updates = vi.fn()
+  model.subscribe(updates)
+  model.mark_saved(written)
+  // Still dirty, so listeners hear nothing until undo reaches the written text.
+  expect([model.dirty, updates.mock.calls.length]).toEqual([true, 0])
+  expect([model.undo(), model.text(), model.dirty, model.state_id]).toEqual([
+    true,
+    `ab`,
+    false,
+    written,
+  ])
+  expect([model.redo(), model.dirty]).toEqual([true, true])
+  for (const invalid of [-1, 0.5, model.state_id + 1])
+    expect(() => model.mark_saved(invalid)).toThrow(`Invalid state_id=${invalid}`)
 })
 test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   const model = create_editor_model({ uri: `memory:barriers`, text: `` })

@@ -448,6 +448,65 @@ test(`save preserves disk format, external transactions sync, and model replacem
   )
 })
 
+test(`undoing mid-save edits back to the written text reads clean`, async () => {
+  const pending = Promise.withResolvers<undefined>()
+  const on_save = vi.fn(() => pending.promise)
+  const { instance, model, textarea } = await mount_editor(undefined, { on_save })
+  emit_input(textarea, `insertText`, 0, 0, `!`)
+  const save = instance.save()
+  // typed, so it would merge into the `!` undo group without the save's checkpoint
+  emit_input(textarea, `insertText`, 1, 1, `?`)
+  pending.resolve(undefined)
+  await expect(save).resolves.toBe(true)
+  expect(on_save).toHaveBeenCalledWith(`!${DEMO_TEXT}`, expect.anything())
+  expect(model.dirty).toBe(true)
+  expect([model.undo(), model.text(), model.dirty]).toEqual([
+    true,
+    `!${DEMO_TEXT}`,
+    false,
+  ])
+  expect([model.undo(), model.dirty]).toEqual([true, true])
+})
+
+test(`typing with the find panel open patches matches near the edit`, async () => {
+  const model = create_editor_model({
+    uri: `memory:find-typing`,
+    text: numbered_lines(100_000),
+  })
+  // Spied before mounting: the component reads the model through its props proxy.
+  const slice_spy = vi.spyOn(model, `slice`)
+  const { instance } = await mount_editor(model)
+  await instance.open_search()
+  await fill_search(`line 9`)
+  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 5000+ (first 5000 shown)`)
+  await fill_search(`line 99999`)
+  slice_spy.mockClear()
+  const caret = model.line(50_000).from
+  model.transact([{ from: caret, to: caret, insert: `line 99999 ` }])
+  await flush_async()
+  const sliced = slice_spy.mock.calls.reduce(
+    (total, [start = 0, end = model.length]) => total + end - start,
+    0,
+  )
+  // A rescan would read all ~1 MB; the patch reads the edit's neighborhood plus rows.
+  expect(sliced).toBeLessThan(20_000)
+  // The selected match shifted past the new one, and navigation wraps onto it.
+  expect(doc_query(`[role="status"]`).textContent).toBe(`2 of 2`)
+  expect(instance.find_next()).toBe(true)
+  expect(model.selection).toEqual({ anchor: caret, head: caret + 10 })
+})
+
+test(`a beforeinput canceled by another listener does not block selection sync`, async () => {
+  const { model, textarea } = await mount_editor()
+  const cancel = (event: Event): void => event.preventDefault()
+  document.addEventListener(`beforeinput`, cancel)
+  onTestFinished(() => document.removeEventListener(`beforeinput`, cancel))
+  expect(before_input(textarea, `insertText`).defaultPrevented).toBe(true)
+  textarea.setSelectionRange(2, 4)
+  textarea.dispatchEvent(new Event(`select`))
+  expect(model.selection).toEqual({ anchor: 2, head: 4 })
+})
+
 test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
   `%s restores the model value`,
   async (mode) => {
