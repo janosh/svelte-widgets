@@ -2,7 +2,7 @@ import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import type { Option } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
-import { get_input, mount_multiselect } from './MultiSelect.test-utils'
+import { get_input, mount_multiselect, type_search_text } from './MultiSelect.test-utils'
 
 function make_paste_event(text: string): ClipboardEvent {
   const data_transfer = new DataTransfer()
@@ -70,10 +70,13 @@ describe(`parse_paste`, () => {
     expect(onpaste).toHaveReturnedWith(get_input())
     expect(on_parsed_paste).not.toHaveBeenCalled()
     expect(props.value).toEqual([])
+    await type_search_text(`typed later`)
 
     creation.resolve(undefined)
     await completed.promise
     expect(props.value).toEqual([`alpha`, `beta`])
+    // typed while creation was pending, so neither add nor paste may clear it
+    expect(get_input().value).toBe(`typed later`)
     expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
       added: [`alpha`, `beta`],
       rejected: [],

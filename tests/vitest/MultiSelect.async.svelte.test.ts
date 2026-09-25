@@ -955,6 +955,37 @@ describe(`async on_create`, () => {
     expect(input.getAttribute(`aria-busy`)).toBeNull()
   })
 
+  test.each<[string, MultiSelectProps, unknown]>([
+    [`list`, { options: [`foo`], value: [] }, [`first`]],
+    // the visible text is the selection there, so the new draft also leaves it unselected
+    [
+      `input`,
+      { options: [`foo`], value: null, mode: `single`, selected_display: `input` },
+      null,
+    ],
+  ])(
+    `%s display: text typed while async create is pending survives the resolve`,
+    async (_display, display_props, expected_value) => {
+      const { promise, resolve } = Promise.withResolvers<OncreateResult>()
+      const props = $state<MultiSelectProps>({
+        ...display_props,
+        allow_user_options: true,
+        on_create: () => promise,
+      })
+      mount_multiselect(props)
+
+      const input = await submit_create(`first`)
+      await type_search_text(`second draft`, input)
+
+      resolve(undefined)
+      await promise
+      await tick()
+
+      expect(props.value).toEqual(expected_value)
+      expect(input.value).toBe(`second draft`)
+    },
+  )
+
   test(`double Enter while async create is pending adds only one option`, async () => {
     const { promise, resolve } = Promise.withResolvers<OncreateResult>()
     const on_create = vi.fn(() => promise)
