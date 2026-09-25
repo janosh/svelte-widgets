@@ -1,5 +1,6 @@
 import type { CmdAction, Option } from './types'
 import { is_active_element } from './attachments/shared'
+import { DIACRITIC, DIACRITICS } from './internal/diacritics'
 
 let uuid_counter = 0
 
@@ -26,6 +27,18 @@ export const is_object = (val: unknown): val is Record<string, unknown> =>
 
 export const clamp = (value: number, min: number, max: number): number =>
   Math.min(Math.max(value, min), max)
+
+// Returns a detector reporting whether each value differs (===) from the previous call's.
+// The first call only records its value and returns false; NaN always counts as changed.
+export const make_change_detector = (): ((value: unknown) => boolean) => {
+  const unset = Symbol(`unset`)
+  let previous: unknown = unset
+  return (value: unknown) => {
+    const changed = previous !== unset && value !== previous
+    previous = value
+    return changed
+  }
+}
 
 export const clamp_integer = (
   value: number,
@@ -561,29 +574,76 @@ export const cmd_action_matches = (
   fuzzy = true,
 ): boolean => create_cmd_action_filter(search, fuzzy)(action)
 
+const NON_ASCII = /\P{ASCII}/u
+// lowercase with final sigma as medial
+const fold_case = (text: string): string => text.toLowerCase().replaceAll(`ς`, `σ`)
+// Both forms compare composed (NFC), so a decomposed mark can neither come from another
+// letter nor let か match the start of が.
+const strip_diacritics = (text: string): string =>
+  text.normalize(`NFD`).replace(DIACRITICS, ``).normalize(`NFC`)
+
+// Splits query into whitespace terms once; the returned predicate is true when every term
+// occurs in text (as an ordered subsequence with fuzzy), ignoring case. Like search_text, a
+// term without diacritics ignores them (`cafe` matches `café`) while an accented term
+// requires them. A blank query matches everything.
+export function create_term_matcher(
+  query: string,
+  { fuzzy = false }: { fuzzy?: boolean } = {},
+): (text: string) => boolean {
+  const terms = query
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((term) => {
+      const folded = fold_case(term)
+      const keep_marks = DIACRITIC.test(folded.normalize(`NFD`))
+      return {
+        term: keep_marks ? folded.normalize(`NFC`) : strip_diacritics(folded),
+        keep_marks,
+      }
+    })
+  const occurs = (term: string, text: string): boolean =>
+    fuzzy ? fuzzy_match(term, text) : text.includes(term)
+  return (text) => {
+    // ASCII has no case expansion or diacritics to fold
+    if (!NON_ASCII.test(text)) {
+      const lower = text.toLowerCase()
+      return terms.every(({ term }) => occurs(term, lower))
+    }
+    const folded = fold_case(text)
+    let marked: string | undefined
+    let plain: string | undefined
+    return terms.every(({ term, keep_marks }) =>
+      occurs(
+        term,
+        keep_marks
+          ? (marked ??= folded.normalize(`NFC`))
+          : (plain ??= strip_diacritics(folded)),
+      ),
+    )
+  }
+}
+
 // Prepare query terms once for a batch; action fields remain live between calls.
 export function create_cmd_action_filter(
   search: string,
   fuzzy = true,
 ): (action: CmdAction) => boolean {
-  const terms = search.trim().toLowerCase().split(/\s+/).filter(Boolean)
-  return (action) => {
-    const searchable_text = [
-      action.label,
-      action.description,
-      action.badge,
-      action.group,
-      action.shortcut,
-      action.keywords?.join(` `),
-      format_cmd_metadata(action.metadata),
-    ]
-      .filter(Boolean)
-      .join(` `)
-      .toLowerCase()
-    return terms.every((term) =>
-      fuzzy ? fuzzy_match(term, searchable_text) : searchable_text.includes(term),
+  const matches = create_term_matcher(search, { fuzzy })
+  return (action) =>
+    matches(
+      [
+        action.label,
+        action.description,
+        action.badge,
+        action.group,
+        action.shortcut,
+        action.keywords?.join(` `),
+        format_cmd_metadata(action.metadata),
+      ]
+        .filter(Boolean)
+        .join(` `),
     )
-  }
 }
 
 // Coalesces subtree mutations (including ones `refresh` causes) into one refresh per

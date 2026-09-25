@@ -60,7 +60,16 @@ const page_title_from_url = (url: string): string => {
     .replace(/\/+$/, ``)
   if (!path) return `Home`
   const final_segment = path.slice(path.lastIndexOf(`/`) + 1)
-  return slug_to_title(decodeURIComponent(final_segment))
+  return slug_to_title(decode_segment(final_segment))
+}
+
+// a stray `%` (e.g. `100%-coverage`) is not an escape; keep the raw segment
+const decode_segment = (segment: string): string => {
+  try {
+    return decodeURIComponent(segment)
+  } catch {
+    return segment
+  }
 }
 
 const load_pagefind_actions = async (

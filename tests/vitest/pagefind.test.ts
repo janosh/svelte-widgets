@@ -232,3 +232,18 @@ test.each([0, 10_000])(
     expect(data).toHaveBeenCalledOnce()
   },
 )
+
+test.each([
+  [`/guides/r%C3%A9sum%C3%A9-tips/`, `Résumé Tips`],
+  // a malformed escape keeps the raw segment instead of failing the whole result
+  [`/guides/100%-coverage/`, `100% Coverage`],
+])(`titles %s from its URL as %s`, async (url, expected) => {
+  const data = async () => ({ url, plain_excerpt: `x`, meta: {}, sub_results: [] })
+  const search = async () => ({ results: [{ id: url, data }] })
+  const load = create_pagefind_loader(`unused`, () => ({
+    load_pagefind: async () => ({ search }),
+  }))
+  const { options, error } = await load({ search: `x`, offset: 0, limit: 1 })
+  expect(error).toBeUndefined()
+  expect(options.map(({ label }) => label)).toEqual([expected])
+})

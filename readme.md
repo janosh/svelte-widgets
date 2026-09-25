@@ -180,7 +180,12 @@ import {
   sortable,
   tooltip,
 } from 'svelte-widgets/attachments'
-import { compute_position, fuzzy_match, get_label } from 'svelte-widgets/utils'
+import {
+  compute_position,
+  fuzzy_match,
+  get_label,
+  make_change_detector, // (value) => true when it differs (===) from the previous call's
+} from 'svelte-widgets/utils'
 import { heading_anchors } from 'svelte-widgets/heading-anchors'
 ```
 
@@ -220,7 +225,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | [`/text-search`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/text-search.ts)                           | Text ranges, highlighting and search-jump helpers                                 |
 | [`/theme`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/theme.svelte.ts)                                | Headless light/dark/system state                                                  |
 | [`/toast-queue`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/toast-queue.svelte.ts)                    | Toast reducer and reactive store                                                  |
-| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Positioning, fuzzy matching, hotkeys and general helpers                          |
+| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Positioning, fuzzy and term matching (`create_term_matcher`), hotkeys, helpers    |
 | [`/virtual`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/virtual.ts)                                   | Visible-window calculation for fixed-size items                                   |
 | [`/vite-config`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/vite-config.ts)                           | This repository's Vite Plus configuration helper                                  |
 | [`/assets`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/assets.ts)                                     | Svelte preprocessor for relative media, responsive images and downloads           |
