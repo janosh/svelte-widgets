@@ -1,5 +1,5 @@
 // Find across DOM node boundaries by matching concatenated text within block elements.
-import { DIACRITIC } from './internal/diacritics'
+import { DIACRITIC, splits_letter } from './internal/diacritics'
 
 // Block elements define match segments regardless of nested inline markup.
 export const DEFAULT_SEGMENT_SELECTOR =
@@ -200,28 +200,38 @@ const range_for_match = (
 const match_bounds = (text: string, query: string, fuzzy: boolean): MatchBounds[] => {
   const matches: MatchBounds[] = []
   if (!fuzzy) {
-    for (
-      let idx = text.indexOf(query);
-      idx >= 0;
-      idx = text.indexOf(query, idx + query.length)
-    )
-      matches.push({ start: idx, end: idx + query.length })
+    for (let idx = text.indexOf(query); idx >= 0;) {
+      if (splits_letter(text, idx + query.length)) idx = text.indexOf(query, idx + 1)
+      else {
+        matches.push({ start: idx, end: idx + query.length })
+        idx = text.indexOf(query, idx + query.length)
+      }
+    }
     return matches
   }
   const query_chars = Array.from(query)
+  // each matched char must be a whole letter, not the base of a marked one
+  const valid_at = (position: number, char_idx: number) =>
+    !splits_letter(
+      text,
+      position + query_chars[char_idx].length,
+      query_chars[char_idx + 1],
+    )
   for (let search_from = 0; search_from < text.length;) {
     let end = search_from
-    for (const query_char of query_chars) {
-      const position = text.indexOf(query_char, end)
+    for (const [char_idx, query_char] of query_chars.entries()) {
+      let position = text.indexOf(query_char, end)
+      while (position !== -1 && !valid_at(position, char_idx))
+        position = text.indexOf(query_char, position + 1)
       if (position === -1) return matches
       end = position + query_char.length
     }
     let start = end
-    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--)
-      start = text.lastIndexOf(
-        query_chars[char_idx],
-        start - query_chars[char_idx].length,
-      )
+    for (let char_idx = query_chars.length - 1; char_idx >= 0; char_idx--) {
+      const query_char = query_chars[char_idx]
+      start = text.lastIndexOf(query_char, start - query_char.length)
+      while (!valid_at(start, char_idx)) start = text.lastIndexOf(query_char, start - 1)
+    }
     matches.push({ start, end })
     search_from = end
   }
@@ -242,8 +252,6 @@ const source_bounds = (
   }
   return { start: source_start, end: source_end }
 }
-
-const COMBINING_MARK = /\p{M}/u
 
 // Drops diacritics so a query typed without them matches accented text. Each
 // mark's source end folds into the preceding base unit, so a hit ending on `e` of `e\u0301`
@@ -313,8 +321,6 @@ export const search_text = (
   for (const segment of text_segments(root, node_filter, segment_selector)) {
     const { text, offsets } = normalize_cached(segment.text, keep_marks)
     for (const { start, end } of match_bounds(text, normalized_query, fuzzy)) {
-      // a mark right after the hit belongs to its last letter (か is not が), so skip it
-      if (!fuzzy && COMBINING_MARK.test(text[end] ?? ``)) continue
       const source = source_bounds(offsets, start, end)
       matches.push({
         element: segment.element,

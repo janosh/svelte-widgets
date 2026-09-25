@@ -848,7 +848,7 @@
     }
     // Text typed while an async on_create was pending is the newer intent. In input
     // display the visible text is the selection, so a changed draft also skips selecting.
-    const draft_changed = !from_paste && search_text !== submitted_search
+    const draft_changed = search_text !== submitted_search
     if (input_display && draft_changed) return
     if (input_display) search_text = label_of(option_to_add)
     else if (reset_filter_on_add && !from_paste && !draft_changed) search_text = ``

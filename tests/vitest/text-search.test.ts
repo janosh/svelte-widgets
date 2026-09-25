@@ -273,6 +273,10 @@ describe(`search_text`, () => {
     const root = render(`<p>a----abc a-b-c</p><p>x<b>y</b>z</p>`)
     expect(ranges_of(root, `abc`).map(String)).toEqual([`abc`])
     expect(ranges_of(root, `abc`, { fuzzy: true }).map(String)).toEqual([`abc`, `a-b-c`])
+    // a fuzzy char can't be the base of a marked letter (か is not が)
+    expect(
+      ranges_of(render(`<p>がき かき</p>`), `かき`, { fuzzy: true }).map(String),
+    ).toEqual([`かき`])
     // fuzzy spans run on the same segments, so they cross inline markup too
     expect(ranges_of(root, `xz`, { fuzzy: true }).map(String)).toEqual([`xyz`])
   })

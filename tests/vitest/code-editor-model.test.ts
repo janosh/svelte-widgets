@@ -593,3 +593,13 @@ test.each([
     expected_eol === `lf` ? normalized : normalized.replaceAll(`\n`, `\r\n`),
   )
 })
+
+test.each([0, 1, 5])(
+  `a scan range starting %i past the end yields nothing`,
+  (overshoot) => {
+    const model = create_editor_model({ uri: `memory:range-end`, text: `aa😀a` })
+    expect([
+      ...iterate_editor_matches(model, `a`, {}, { from: model.length + overshoot }),
+    ]).toEqual([])
+  },
+)

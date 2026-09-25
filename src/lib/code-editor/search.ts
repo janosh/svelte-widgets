@@ -19,6 +19,7 @@ export function* iterate_editor_matches(
   const window_size = 32 * 1024
   const limit = Math.min(model.length, range.to ?? model.length)
   let start = Math.max(0, range.from ?? 0)
+  if (start >= limit) return
   // Never begin inside a surrogate pair; a match found from its high half starts earlier.
   if (start > 0 && (model.slice(start - 1, start + 1).codePointAt(0) ?? 0) > 0xffff)
     start -= 1

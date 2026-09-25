@@ -1,6 +1,6 @@
 import type { CmdAction, Option } from './types'
 import { is_active_element } from './attachments/shared'
-import { DIACRITIC, DIACRITICS } from './internal/diacritics'
+import { DIACRITIC, DIACRITICS, splits_letter } from './internal/diacritics'
 
 let uuid_counter = 0
 
@@ -597,26 +597,43 @@ export function create_term_matcher(
     .map((term) => {
       const folded = fold_case(term)
       const keep_marks = DIACRITIC.test(folded.normalize(`NFD`))
-      return {
-        term: keep_marks ? folded.normalize(`NFC`) : strip_diacritics(folded),
-        keep_marks,
-      }
+      const normalized = keep_marks ? folded.normalize(`NFC`) : strip_diacritics(folded)
+      return { term: normalized, chars: Array.from(normalized), keep_marks }
     })
-  const occurs = (term: string, text: string): boolean =>
-    fuzzy ? fuzzy_match(term, text) : text.includes(term)
+  // A hit may not stop before a mark NFC couldn't compose, which belongs to its letter
+  // (क vs क़); fuzzy hits apply that to every matched char.
+  const occurs = ({ term, chars }: (typeof terms)[number], text: string): boolean => {
+    if (!fuzzy) {
+      for (let idx = text.indexOf(term); idx >= 0; idx = text.indexOf(term, idx + 1))
+        if (!splits_letter(text, idx + term.length)) return true
+      return false
+    }
+    let offset = 0
+    for (const [char_idx, char] of chars.entries()) {
+      let position = text.indexOf(char, offset)
+      while (
+        position !== -1 &&
+        splits_letter(text, position + char.length, chars[char_idx + 1])
+      )
+        position = text.indexOf(char, position + 1)
+      if (position === -1) return false
+      offset = position + char.length
+    }
+    return true
+  }
   return (text) => {
     // ASCII has no case expansion or diacritics to fold
     if (!NON_ASCII.test(text)) {
       const lower = text.toLowerCase()
-      return terms.every(({ term }) => occurs(term, lower))
+      return terms.every((term) => occurs(term, lower))
     }
     const folded = fold_case(text)
     let marked: string | undefined
     let plain: string | undefined
-    return terms.every(({ term, keep_marks }) =>
+    return terms.every((term) =>
       occurs(
         term,
-        keep_marks
+        term.keep_marks
           ? (marked ??= folded.normalize(`NFC`))
           : (plain ??= strip_diacritics(folded)),
       ),
