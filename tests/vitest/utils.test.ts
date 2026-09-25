@@ -835,6 +835,11 @@ describe(`create_term_matcher`, () => {
     // dakuten and Indic vowel signs change the letter, so they are not ignored
     [`が`, `か`, {}, false],
     [`किम`, `कम`, {}, false],
+    // NFC can't compose the nukta, so a hit must not stop before it (exact or fuzzy)
+    [`क़`, `क`, {}, false],
+    [`क़`, `क`, { fuzzy: true }, false],
+    [`क़क`, `क`, {}, true],
+    [`क़`, `क़`, { fuzzy: true }, true],
     [`Cafe\u0301 au lait`, `cafe`, {}, true],
     [`Crème Brûlée`, `brulee creme`, {}, true],
     [`cafe au lait`, `café`, {}, false],
