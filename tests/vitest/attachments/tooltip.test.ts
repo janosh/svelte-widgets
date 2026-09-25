@@ -8,6 +8,7 @@ import {
   hover as pointer_over,
   mock_rect,
   pointer_event,
+  press_escape,
   stub_props,
 } from '../index'
 
@@ -278,7 +279,7 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.querySelector(`button, a, input, [tabindex]`)).toBeNull()
     expect(tooltip_el.hasAttribute(`tabindex`)).toBe(false)
 
-    document.dispatchEvent(escape_key())
+    press_escape()
     expect(tooltip_el.hidden).toBe(true)
     expect(document.activeElement).toBe(element)
 
@@ -290,7 +291,7 @@ describe(`tooltip manager`, () => {
     ])
 
     // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.
-    document.dispatchEvent(escape_key())
+    press_escape()
     expect(surrounding_layer).toHaveBeenCalledOnce()
   })
 
@@ -645,7 +646,7 @@ describe(`tooltip manager`, () => {
     )
 
     expect(show_popover).toHaveBeenCalledWith({ source: element })
-    document.dispatchEvent(escape_key())
+    press_escape()
     expect(hide_popover).toHaveBeenCalledOnce()
     expect([tooltip_el.hidden, tooltip_el.style.display]).toEqual([true, `none`])
 

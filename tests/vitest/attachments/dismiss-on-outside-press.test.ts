@@ -1,6 +1,6 @@
 import { dismiss_on_outside_press } from '$lib/attachments'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, escape_key } from '../index'
+import { create_element, press_escape } from '../index'
 
 describe(`dismiss_on_outside_press`, () => {
   const press = (target: Element) =>
@@ -45,7 +45,7 @@ describe(`dismiss_on_outside_press`, () => {
     focusable.focus()
 
     const { callback } = listen({ inside: [`.header-menu-root`], escape: true })
-    document.dispatchEvent(escape_key())
+    press_escape()
 
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback.mock.calls[0][0]).toMatchObject({ focus_inside: true, via: `escape` })

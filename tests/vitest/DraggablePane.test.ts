@@ -5,11 +5,11 @@ import { createRawSnippet, tick } from 'svelte'
 import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 import {
   doc_query,
-  escape_key,
   hover,
   mock_rect,
-  render,
   pointer_event,
+  press_escape,
+  render,
   stub_props,
 } from './index'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
@@ -85,7 +85,6 @@ describe(`DraggablePane`, () => {
       new PointerEvent(`pointerup`, { bubbles: true, isPrimary: true }),
     )
   // returns false once a handler cancels the key, i.e. the pane swallowed it
-  const escape = () => document.dispatchEvent(escape_key())
   const is_open = (pane: HTMLElement) => pane.style.display === `grid`
 
   // the press-move-release both attachments listen for: the pane (resize) or handle (drag)
@@ -235,7 +234,7 @@ describe(`DraggablePane`, () => {
     expect(is_open(pane)).toBe(true)
     expect(on_close).not.toHaveBeenCalled()
 
-    escape()
+    press_escape()
     await tick()
     expect(is_open(pane)).toBe(false)
     expect(on_close).toHaveBeenCalledWith({ via: `escape` })
@@ -248,7 +247,7 @@ describe(`DraggablePane`, () => {
     field.focus()
     expect(document.activeElement).toBe(field)
 
-    escape()
+    press_escape()
     await tick()
     expect(document.activeElement).toBe(toggle)
   })
@@ -257,7 +256,7 @@ describe(`DraggablePane`, () => {
     const on_close = vi.fn()
     await setup({ on_close })
 
-    const reached_the_page = escape()
+    const reached_the_page = !press_escape().defaultPrevented
     await tick()
 
     expect(on_close).not.toHaveBeenCalled()

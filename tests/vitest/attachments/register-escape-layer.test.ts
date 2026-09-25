@@ -1,6 +1,11 @@
 import { register_escape_layer } from '$lib/attachments'
 import { expect, it, onTestFinished, vi } from 'vitest'
-import { create_element, escape_key, press_key as dispatch_key } from '../index'
+import {
+  create_element,
+  escape_key,
+  press_escape,
+  press_key as dispatch_key,
+} from '../index'
 
 it(`register_escape_layer skips handled Escape and captures through stopped propagation`, () => {
   const layer = vi.fn()
@@ -18,6 +23,6 @@ it(`register_escape_layer skips handled Escape and captures through stopped prop
   const event = dispatch_key(child, `Escape`)
 
   unregister()
-  document.dispatchEvent(escape_key())
+  press_escape()
   expect(layer).toHaveBeenCalledExactlyOnceWith(event)
 })
