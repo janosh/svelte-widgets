@@ -47,6 +47,7 @@
     height,
     ...rest
   }: Omit<HTMLAttributes<HTMLDivElement>, `children`> & {
+    // FLIP animations; ignored when virtualize is true
     animate?: boolean
     order?: MasonryOrder
     calc_cols?: (masonry_width: number, min_col_width: number, gap: number) => number
@@ -366,8 +367,9 @@
       style:padding-top={can_virtualize ? `${pad_top}px` : undefined}
       style:padding-bottom={can_virtualize ? `${pad_bottom}px` : undefined}
     >
-      <!-- FLIP animations don't work well with virtualization -->
-      {#if animate && !can_virtualize}
+      <!-- FLIP animations don't work well with virtualization. Branch on the prop, not on
+      can_virtualize: that flips once the height is measured and would remount every card. -->
+      {#if animate && !virtualize}
         {#each visible_items as { id, idx, item } (id)}
           <div
             {@attach measure_height(id)}

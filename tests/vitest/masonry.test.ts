@@ -2,6 +2,7 @@ import { Masonry } from '$lib'
 import { order_options as ALL_ORDER_MODES } from '$lib/utils'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query } from './index'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
@@ -626,6 +627,33 @@ describe(`Masonry virtualization`, () => {
 
     // clientHeight=0 means unmeasured, so virtualization is deferred
     expect(item_els()).toHaveLength(100)
+  })
+
+  test(`measuring a string height starts virtualizing without remounting cards`, async () => {
+    let container_height = 0
+    vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockImplementation(
+      function (this: HTMLElement) {
+        return this.classList.contains(`masonry`) ? container_height : 0
+      },
+    )
+    mount_masonry({
+      items: make_items(100),
+      virtualize: true,
+      animate: true,
+      height: `300px`,
+      calc_cols: () => 2,
+      get_estimated_height: () => 100,
+    })
+    expect(item_els()).toHaveLength(100) // unmeasured, so every card renders
+    const first_card = item_els()[0]
+    const container = doc_query(`.masonry`)
+    const notify = resize_observers.get(container)
+    if (!notify) throw new Error(`Missing resize observer for the masonry container`)
+    container_height = 300
+    notify([mock_resize_entry(container)], {} as ResizeObserver)
+    await tick()
+    expect(item_els().length).toBeLessThan(100) // now windowed
+    expect(item_els()[0]).toBe(first_card) // same node: the render branch didn't swap
   })
 
   test(`virtualize=false skips padding and overflow styles`, () => {
