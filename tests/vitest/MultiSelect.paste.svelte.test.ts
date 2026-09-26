@@ -119,8 +119,7 @@ describe(`parse_paste`, () => {
         paste_text,
       )
       expect(on_add).toHaveBeenCalledTimes(2)
-      expect(on_parsed_paste).toHaveBeenCalledTimes(1)
-      expect(on_parsed_paste).toHaveBeenCalledWith(
+      expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ added: [`alpha`, `beta`], rejected: [``] }),
       )
     },
@@ -246,8 +245,9 @@ describe(`parse_paste`, () => {
         paste_text,
       )
       expect(on_add).toHaveBeenCalledTimes(expected_adds)
-      expect(on_duplicate).toHaveBeenCalledTimes(1)
-      expect(on_duplicate).toHaveBeenCalledWith(expect.objectContaining({ option: `a` }))
+      expect(on_duplicate).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ option: `a` }),
+      )
       expect(props.value).toEqual(expected_selected)
     },
   )
@@ -258,8 +258,7 @@ describe(`parse_paste`, () => {
       `existing1,brand_new,existing2`,
     )
     expect(on_add).toHaveBeenCalledTimes(3)
-    expect(on_create).toHaveBeenCalledTimes(1)
-    expect(on_create).toHaveBeenCalledWith({ option: `brand_new` })
+    expect(on_create).toHaveBeenCalledExactlyOnceWith({ option: `brand_new` })
     expect(props.value).toEqual([`existing1`, `brand_new`, `existing2`])
   })
 

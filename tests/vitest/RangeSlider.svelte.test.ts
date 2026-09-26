@@ -6,7 +6,7 @@ import {
   step_range_value,
   validate_range,
 } from '$lib/range-slider'
-import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
+import { mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import {
   doc_query,
@@ -19,9 +19,7 @@ import {
 
 type Props = ComponentProps<typeof RangeSlider>
 const setup = (props: Props = {}) => {
-  const component = mount(RangeSlider, { target: document.body, props })
-  flushSync()
-  onTestFinished(() => unmount(component))
+  render(RangeSlider, props)
   const thumbs = [...document.querySelectorAll<HTMLButtonElement>(`[role=slider]`)]
   const inputs = [...document.querySelectorAll<HTMLInputElement>(`input[type=number]`)]
   const rail = doc_query(`.rail`)

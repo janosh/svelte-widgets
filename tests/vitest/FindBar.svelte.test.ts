@@ -1,4 +1,8 @@
-import { create_find_state, type FindOptions } from '$lib/find-in-page.svelte'
+import {
+  create_find_state,
+  type FindOptions,
+  type FindState,
+} from '$lib/find-in-page.svelte'
 import FindBar from '$lib/FindBar.svelte'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
@@ -93,10 +97,8 @@ describe(`FindBar`, () => {
     await type_query(`omega`)
 
     expect(status()).toBe(`No matches`)
-    expect([nav_button(`Previous`).disabled, nav_button(`Next`).disabled]).toEqual([
-      true,
-      true,
-    ])
+    for (const name of [`Previous`, `Next`] as const)
+      expect(nav_button(name).disabled).toBe(true)
   })
 
   test(`the close button and Escape close the bar, Escape without reaching the page`, () => {
@@ -191,11 +193,7 @@ describe(`create_find_state`, () => {
     const root = render_root(html)
     return { root, find: create_find_state(() => options) }
   }
-  const run_search = (
-    root: Element,
-    find: ReturnType<typeof create_find_state>,
-    query: string,
-  ) => {
+  const run_search = (root: Element, find: FindState, query: string) => {
     find.query = query
     find.refresh(root)
   }
@@ -278,9 +276,7 @@ describe(`create_find_state`, () => {
 
   test(`observe re-searches after the DOM settles and jumps to a first match`, async () => {
     vi.useFakeTimers()
-    onTestFinished(() => {
-      vi.useRealTimers()
-    })
+    onTestFinished(() => void vi.useRealTimers())
     const { root, find } = setup(`<p>nothing here</p>`)
     run_search(root, find, `late`)
     expect(find.matches).toEqual([])

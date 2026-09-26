@@ -1,5 +1,5 @@
 import Confetti from '$site/Confetti.svelte'
-import { mount } from 'svelte'
+import { mount, unmount } from 'svelte'
 import { afterEach, expect, test, vi } from 'vitest'
 
 afterEach(() => vi.useRealTimers())
@@ -8,7 +8,7 @@ const spans = () => [...document.querySelectorAll<HTMLSpanElement>(`div > span`)
 const span_tops = () => spans().map((span) => span.style.top)
 
 test(`renders n_items spans and reuses DOM nodes across animation frames`, async () => {
-  mount(Confetti, { target: document.body, props: { n_items: 5, speed: 5 } })
+  const app = mount(Confetti, { target: document.body, props: { n_items: 5, speed: 5 } })
 
   const initial_spans = spans()
   expect(initial_spans).toHaveLength(5)
@@ -26,6 +26,10 @@ test(`renders n_items spans and reuses DOM nodes across animation frames`, async
   const after = spans()
   expect(after).toHaveLength(5)
   after.forEach((span, idx) => expect(span).toBe(initial_spans[idx]))
+  // unmounting cancels the pending frame, so the detached spans stop moving
+  const cancel = vi.spyOn(globalThis, `cancelAnimationFrame`)
+  await unmount(app, { outro: false })
+  expect(cancel).toHaveBeenCalledOnce()
 })
 
 test(`freeze stops the animation`, async () => {

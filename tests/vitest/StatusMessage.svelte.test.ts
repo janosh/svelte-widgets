@@ -1,5 +1,5 @@
 import { StatusMessage } from '$lib'
-import { flushSync } from 'svelte'
+import { flushSync, type ComponentProps } from 'svelte'
 import { expect, test } from 'vitest'
 import { doc_query, render } from './index'
 
@@ -29,24 +29,18 @@ test.each([
 )
 
 test(`dismissible button clears the bound message`, () => {
-  let message = $state<string | undefined>(`Test message`)
-  render(StatusMessage, {
-    get message() {
-      return message
-    },
-    set message(new_message) {
-      message = new_message
-    },
+  const props = $state<ComponentProps<typeof StatusMessage>>({
+    message: `Test message`,
     dismissible: true,
     dismiss_label: `Close status`,
   })
+  render(StatusMessage, props)
   const button = doc_query(`.status-message button[aria-label="Close status"]`)
   expect(button.textContent?.trim()).toBe(`✕`)
   expect(button.getAttribute(`type`)).toBe(`button`)
-  const current_message = () => message
   button.click()
   flushSync()
-  expect(current_message()).toBeUndefined()
+  expect(props.message).toBeUndefined()
   expect(document.querySelector(`.status-message`)).toBeNull()
 })
 

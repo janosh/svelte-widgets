@@ -85,7 +85,12 @@ interface MountOptions {
   rejects_with?: unknown
   no_backend?: boolean
   labels?: Partial<DiffViewLabels>
+  // replaces the backend that resolves `result` (or rejects with `rejects_with`)
+  diff_text?: (args: DiffTextArgs) => Promise<DiffResult>
+  // selector awaited after mounting, e.g. a busy view while a diff is pending
+  ready?: string
 }
+const BUSY = `.diff-view[aria-busy='true']`
 
 const flush_async = async (
   ready_selector = `.diff-view[aria-busy='false']`,
@@ -105,32 +110,33 @@ const mount_diff = async (
     no_backend = false,
     rejects_with,
     options = DEFAULT_OPTIONS,
+    diff_text = vi.fn(async (_args: DiffTextArgs) => {
+      // oxlint-disable-next-line typescript/only-throw-error
+      if (rejects_with !== undefined) throw rejects_with
+      return result
+    }),
+    ready,
     ...rest
   }: MountOptions = {},
 ) => {
-  const diff_text = vi.fn(async (_args: DiffTextArgs) => {
-    // oxlint-disable-next-line typescript/only-throw-error
-    if (rejects_with !== undefined) throw rejects_with
-    return result
-  })
   if (use_default_backend) {
     set_diff_backend({ diff_text })
     onTestFinished(() => {
       set_diff_backend(null)
     })
   }
-  const props = {
+  const props = $state({
     old_text: ``,
     new_text: ``,
     filename: `main.rs`,
     options,
     ...(use_default_backend || no_backend ? {} : { backend: { diff_text } }),
     ...rest,
-  }
+  })
   const instance = mount(DiffView, { target: document.body, props })
   onTestFinished(() => unmount(instance))
-  await flush_async()
-  return diff_text
+  await flush_async(ready)
+  return { diff_text, props }
 }
 
 const text_of = (element: Element | null): string => element?.textContent ?? ``
@@ -404,16 +410,12 @@ describe(`states and backend wiring`, () => {
       (_args: DiffTextArgs) =>
         new Promise<DiffResult>((resolve) => void resolvers.push(resolve)),
     )
-    const props = $state({
+    const { props } = await mount_diff(diff_result(), {
       old_text: `a`,
       new_text: `stale`,
-      filename: `main.rs`,
-      options: DEFAULT_OPTIONS,
-      backend: { diff_text },
+      diff_text,
+      ready: BUSY,
     })
-    const instance = mount(DiffView, { target: document.body, props })
-    onTestFinished(() => unmount(instance))
-    await flush_async(`.diff-view[aria-busy='true']`)
 
     props.new_text = `fresh`
     flushSync()
@@ -441,22 +443,17 @@ describe(`states and backend wiring`, () => {
       .fn<(args: DiffTextArgs) => Promise<DiffResult>>()
       .mockResolvedValueOnce(first)
       .mockReturnValue(pending.promise)
-    const props = $state({
+    const { props } = await mount_diff(first, {
       old_text: `kept\nold`,
       new_text: `kept\nnew`,
-      filename: `main.rs`,
-      options: DEFAULT_OPTIONS,
-      backend: { diff_text },
+      diff_text,
     })
-    const instance = mount(DiffView, { target: document.body, props })
-    onTestFinished(() => unmount(instance))
-    await flush_async()
     await click(query_element(`.diff-gap`))
     expect(code_texts()).toEqual([`kept`, `kept`, `old`, `new`])
 
     props.old_text = `edited\nold`
     props.new_text = `edited\nnew`
-    await flush_async(`.diff-view[aria-busy='true']`)
+    await flush_async(BUSY)
     expect(diff_text).toHaveBeenCalledTimes(2)
     expect(code_texts()).toEqual([`kept`, `kept`, `old`, `new`])
   })
@@ -475,7 +472,7 @@ describe(`states and backend wiring`, () => {
         on_error,
       },
     })
-    await flush_async(`.diff-view[aria-busy='true']`)
+    await flush_async(BUSY)
 
     await unmount(instance)
     request.reject(new Error(`late failure`))
@@ -485,7 +482,7 @@ describe(`states and backend wiring`, () => {
   })
 
   test(`uses the registered backend and forwards diff arguments once`, async () => {
-    const diff_text = await mount_diff(
+    const { diff_text } = await mount_diff(
       diff_result({ old_line_count: 1, new_line_count: 1 }),
       {
         old_text: `left`,

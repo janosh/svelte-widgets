@@ -23,9 +23,7 @@ const mounted_search = async () => {
   const [appearance, camera] = [
     ...document.querySelectorAll<HTMLDetailsElement>(`details.settings-group`),
   ]
-  if (!appearance || !camera) {
-    throw new Error(`Settings search harness failed to mount`)
-  }
+  if (!appearance || !camera) throw new Error(`Settings search harness failed to mount`)
   return { input, appearance, camera }
 }
 

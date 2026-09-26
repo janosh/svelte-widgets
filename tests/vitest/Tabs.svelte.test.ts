@@ -21,6 +21,9 @@ describe(`Tabs`, () => {
   const tabs = () => [
     ...document.querySelectorAll<HTMLButtonElement>(`button[role="tab"]`),
   ]
+  // [aria-selected, tabIndex] per tab
+  const tab_states = () =>
+    tabs().map((tab) => [tab.getAttribute(`aria-selected`), tab.tabIndex])
   const panels = () => [...document.querySelectorAll<HTMLDivElement>(`[role="tabpanel"]`)]
 
   test.each([
@@ -32,11 +35,7 @@ describe(`Tabs`, () => {
     await tick()
 
     expect(props.value).toBe(`overview`)
-    expect(tabs().map((tab) => tab.getAttribute(`aria-selected`))).toEqual([
-      `true`,
-      `false`,
-      `false`,
-    ])
+    expect(tab_states().map(([selected]) => selected)).toEqual([`true`, `false`, `false`])
     expect(on_change).not.toHaveBeenCalled()
   })
 
@@ -94,9 +93,7 @@ describe(`Tabs`, () => {
     props.value = `overview`
     await tick()
     expect(tabs().map((tab) => tab.id)).toEqual(initial_ids)
-    expect(
-      tabs().map((tab) => [tab.getAttribute(`aria-selected`), tab.tabIndex]),
-    ).toEqual([
+    expect(tab_states()).toEqual([
       [`true`, 0],
       [`false`, -1],
       [`false`, -1],
@@ -165,9 +162,7 @@ describe(`Tabs`, () => {
     await tick()
     expect(document.activeElement).toBe(tabs()[2])
     expect(props.value).toBe(`overview`)
-    expect(
-      tabs().map((tab) => [tab.getAttribute(`aria-selected`), tab.tabIndex]),
-    ).toEqual([
+    expect(tab_states()).toEqual([
       [`true`, -1],
       [`false`, -1],
       [`false`, 0],

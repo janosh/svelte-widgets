@@ -1,6 +1,9 @@
 import { create_roving_focus, ROVING_ATTR } from '$lib/roving-focus.svelte'
 import { flushSync } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
+import { press_key } from './index'
+
+const prevent_default = (event: Event) => event.preventDefault()
 
 const setup = (
   svg = false,
@@ -45,20 +48,10 @@ const setup = (
     }),
   )
   flushSync()
-  const press = (
-    target: Element,
-    key: string,
-    init: KeyboardEventInit = {},
-    prevented = false,
-  ) => {
-    const event = new KeyboardEvent(`keydown`, {
-      key,
-      bubbles: true,
-      cancelable: true,
-      ...init,
-    })
-    if (prevented) event.preventDefault()
-    target.dispatchEvent(event)
+  // a target listener runs before the container's, as an earlier handler's would
+  const press = (target: Element, key: string, init = {}, prevented = false) => {
+    if (prevented) target.addEventListener(`keydown`, prevent_default, { once: true })
+    const event = press_key(target, key, init)
     flushSync()
     return { handled, prevented: event.defaultPrevented }
   }

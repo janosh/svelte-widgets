@@ -1,6 +1,6 @@
 import { create_canvas_surface } from '$lib/canvas.svelte'
 import { flushSync } from 'svelte'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { beforeEach, expect, onTestFinished, test, vi } from 'vitest'
 
 const frames = new Map<number, FrameRequestCallback>()
 const observers: {
@@ -9,12 +9,13 @@ const observers: {
   disconnect: ReturnType<typeof vi.fn>
 }[] = []
 const media_queries: EventTarget[] = []
-const cleanups: (() => void)[] = []
 
 beforeEach(() => {
   frames.clear()
   observers.length = 0
   media_queries.length = 0
+  // registered first, so it runs after each test's surface cleanup
+  onTestFinished(() => void vi.unstubAllGlobals())
   let next_frame = 0
   vi.stubGlobal(`devicePixelRatio`, 1)
   vi.stubGlobal(`requestAnimationFrame`, (callback: FrameRequestCallback) => {
@@ -40,10 +41,6 @@ beforeEach(() => {
       return query
     }),
   )
-})
-afterEach(() => {
-  for (const cleanup of cleanups.splice(0)) cleanup()
-  vi.unstubAllGlobals()
 })
 
 const paint = () => {
@@ -114,7 +111,7 @@ const setup = (width = 400, height = 300, padding = ``) => {
       draw_overlay,
     })
   })
-  cleanups.push(cleanup)
+  onTestFinished(cleanup)
   flushSync()
   if (!surface) throw new Error(`Canvas surface was not initialized`)
   return { parent, base, overlay, surface, draw, draw_overlay, cleanup, state }

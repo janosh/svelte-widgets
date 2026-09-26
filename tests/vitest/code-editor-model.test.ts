@@ -8,7 +8,23 @@ import {
   type EditorSearchRange,
 } from '$lib/code-editor/search'
 import type { EditorModel, TextEdit } from '$lib/code-editor/types'
-import { expect, test, vi } from 'vitest'
+import { expect, test, vi, type MockInstance } from 'vitest'
+
+const model_of = (text: string, history_limit_chars?: number): EditorModel =>
+  create_editor_model({ uri: `memory:test`, text, history_limit_chars })
+const ranges_of = (matches: Iterable<{ from: number; to: number }>): string =>
+  Array.from(matches, ({ from, to }) => `${from}-${to}`).join(` `)
+// Lengths of the ranges a spied `model.slice(from = 0, to = length)` read
+const sliced_lengths = (spy: MockInstance<EditorModel[`slice`]>, length: number) =>
+  spy.mock.calls.map(([from = 0, to = length]) => to - from)
+// Deterministic LCG so property tests replay the same edits on every run
+const seeded_random = (seed: number) => {
+  let rng_state = seed
+  return (bound: number): number => {
+    rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
+    return bound <= 0 ? 0 : rng_state % bound
+  }
+}
 
 const type_text = (
   model: EditorModel,
@@ -46,11 +62,8 @@ test.each([
 ] satisfies [string, string, EditorSearchOptions, string][])(
   `literal model search: %j for %j with %j`,
   (text, query, options, expected) => {
-    const model = create_editor_model({ uri: `memory:search`, text })
-    const ranges = find_editor_matches(model, query, options).map(
-      ({ from, to }) => `${from}-${to}`,
-    )
-    expect(ranges.join(` `)).toBe(expected)
+    const matches = find_editor_matches(model_of(text), query, options)
+    expect(ranges_of(matches)).toBe(expected)
   },
 )
 // Whole-string RegExp oracle for chunked model search.
@@ -77,7 +90,7 @@ test.each(option_grid)(
   (options) => {
     for (let padding = 0; padding < 12; padding++) {
       const text = `${` `.repeat(32 * 1024 - padding)}😀foo𐐀 foo_bar\nFOO😀 foo\n${`x`.repeat(70_000)} foo\uD800`
-      const model = create_editor_model({ uri: `memory:search-chunks`, text })
+      const model = model_of(text)
       for (const query of [`foo`, `😀foo`, `FOO😀 foo`, `foo\n`, `𐐨`, `\uD800`])
         expect(find_editor_matches(model, query, options)).toEqual(
           regex_matches(text, query, options),
@@ -88,11 +101,7 @@ test.each(option_grid)(
 test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
   `property: incremental match updates equal a full rescan for %#`,
   (query) => {
-    let rng_state = 20_260_924
-    const random = (bound: number): number => {
-      rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
-      return rng_state % bound
-    }
+    const random = seeded_random(20_260_924)
     const long = query.length > 1024
     const pieces = long
       ? [`a`.repeat(1030), `A`, ` `, `b`]
@@ -101,7 +110,7 @@ test.each([`ab`, `aa`, `a😀`, `\na`, `A`.repeat(1030)])(
     const piece = () => pieces[random(pieces.length)]
     for (const options of option_grid) {
       const text = Array.from({ length: long ? 40 : 400 }, piece).join(``)
-      const model = create_editor_model({ uri: `memory:incremental`, text })
+      const model = model_of(text)
       let matches = find_editor_matches(model, query, options)
       // the long query takes the linear matcher; fewer steps keep it under CI's timeout
       for (let step = 0; step < (long ? 30 : 150); step++) {
@@ -138,35 +147,31 @@ test.each([
 ] satisfies [string, string, EditorSearchOptions, TextEdit, string][])(
   `incremental update %#: %j for %j with %j after %j`,
   (text, query, options, edit, expected) => {
-    const model = create_editor_model({ uri: `memory:incremental-edge`, text })
+    const model = model_of(text)
     const matches = find_editor_matches(model, query, options)
     const { edits } = model.transact([edit])
-    const ranges = update_editor_matches(model, query, matches, edits, options).map(
-      ({ from, to }) => `${from}-${to}`,
+    expect(ranges_of(update_editor_matches(model, query, matches, edits, options))).toBe(
+      expected,
     )
-    expect(ranges.join(` `)).toBe(expected)
   },
 )
 test(`an edit rescans only its neighborhood of a large document`, () => {
   const text = `foo bar baz\n`.repeat(200_000)
-  const model = create_editor_model({ uri: `memory:incremental-large`, text })
+  const model = model_of(text)
   const matches = find_editor_matches(model, `bar`)
   const from = model.line(100_000).from
   const transaction = model.transact([{ from, to: from, insert: `bar ` }])
   const slice_spy = vi.spyOn(model, `slice`)
   const updated = update_editor_matches(model, `bar`, matches, transaction.edits)
-  const sliced = slice_spy.mock.calls.reduce(
-    (total, [start = 0, end = model.length]) => total + end - start,
-    0,
-  )
-  expect(sliced).toBeLessThan(100)
+  const sliced = sliced_lengths(slice_spy, model.length)
+  expect(sliced.reduce((total, length) => total + length, 0)).toBeLessThan(100)
   expect(updated).toHaveLength(200_001)
   expect(updated[100_000]).toEqual({ from, to: from + 3 })
 })
 test(`long literal queries verify overlapping candidates without RegExp size limits`, () => {
   const query = `${`😀x`.repeat(15_000)}end`
   const text = `😀x${query} ${query}`
-  const model = create_editor_model({ uri: `memory:long-query`, text })
+  const model = model_of(text)
   const from = 3
   expect(find_editor_matches(model, query)).toEqual([
     { from, to: from + query.length },
@@ -178,7 +183,7 @@ test.each([3, 1026])(
   (length) => {
     const query = length === 3 ? `foo` : `😀${`a`.repeat(length - 2)}`
     const text = `${`${query} `.repeat(6000)}${`tail `.repeat(20_000)}`
-    const model = create_editor_model({ uri: `memory:lazy-search`, text })
+    const model = model_of(text)
     const slice_spy = vi.spyOn(model, `slice`)
     const iterator = iterate_editor_matches(model, query)
     expect(slice_spy).not.toHaveBeenCalled()
@@ -214,17 +219,15 @@ test.each([1023, 1024, 1025])(
     const query = `😀${`a`.repeat(length - 4)}𐐨`
     for (const padding of [0, 1, 2, 3]) {
       const text = `${` `.repeat(32 * 1024 - padding)}x${query} ${query.toUpperCase()} ${query}`
-      const model = create_editor_model({ uri: `memory:search-threshold`, text })
+      const model = model_of(text)
       for (const options of option_grid) {
         const slice_spy = vi.spyOn(model, `slice`)
         expect(find_editor_matches(model, query, options)).toEqual(
           regex_matches(text, query, options),
         )
-        expect(
-          Math.max(
-            ...slice_spy.mock.calls.map(([from = 0, to = model.length]) => to - from),
-          ),
-        ).toBeLessThanOrEqual(32 * 1024 + (length <= 1024 ? length + 4 : 3))
+        expect(Math.max(...sliced_lengths(slice_spy, model.length))).toBeLessThanOrEqual(
+          32 * 1024 + (length <= 1024 ? length + 4 : 3),
+        )
         slice_spy.mockRestore()
       }
     }
@@ -235,7 +238,7 @@ test.each([-1, 0, 1])(
   (offset) => {
     const query = `a`.repeat(1025)
     const text = `${` `.repeat(32 * 1024 - query.length + offset)}${query}𐐀 ${query}😀`
-    const model = create_editor_model({ uri: `memory:search-word-boundary`, text })
+    const model = model_of(text)
     const from = 32 * 1024 + offset + 3
     expect(find_editor_matches(model, query, { whole_word: true })).toEqual([
       { from, to: from + query.length },
@@ -252,7 +255,7 @@ test.each([`late`, `middle`, `match`, `whole_word`] as const)(
           ? `${`a`.repeat(15_000)}b${`a`.repeat(5000)}`
           : `${`a`.repeat(20_000)}b`
     const text = `${`a`.repeat(100_000)}${position === `match` ? `b` : ``}`
-    const model = create_editor_model({ uri: `memory:repetitive-search`, text })
+    const model = model_of(text)
     const slice_spy = vi.spyOn(model, `slice`)
     const regex_test = RegExp.prototype.test
     let comparisons = 0
@@ -286,22 +289,20 @@ test(`search reaches 100k offscreen lines without flattening the model`, () => {
     { length: 100_000 },
     (_unused, line_idx) => `😀 line ${line_idx + 1}`,
   ).join(`\n`)
-  const model = create_editor_model({ uri: `memory:search-large`, text })
+  const model = model_of(text)
   const text_spy = vi.spyOn(model, `text`)
   const slice_spy = vi.spyOn(model, `slice`)
   const query = `line 99999`
   const from = model.line(99_998).from + 3
   expect(find_editor_matches(model, query)).toEqual([{ from, to: from + query.length }])
   expect(text_spy).not.toHaveBeenCalled()
-  expect(
-    Math.max(
-      ...slice_spy.mock.calls.map(([start = 0, end = model.length]) => end - start),
-    ),
-  ).toBeLessThanOrEqual(32 * 1024 + query.length + 4)
+  expect(Math.max(...sliced_lengths(slice_spy, model.length))).toBeLessThanOrEqual(
+    32 * 1024 + query.length + 4,
+  )
 })
 test(`replace all uses literal text and one undoable transaction with mapped selections`, () => {
   const text = `😀foo foo_bar Foo\nfoo`
-  const model = create_editor_model({ uri: `memory:replace`, text })
+  const model = model_of(text)
   const selection = { anchor: model.length, head: 2 }
   model.set_selection(selection)
   const updates = vi.fn()
@@ -319,10 +320,7 @@ test(`replace all uses literal text and one undoable transaction with mapped sel
   expect(model.revision).toBe(revision)
 })
 test(`normalizes disk text and indexes lines with UTF-16 offsets`, () => {
-  const model = create_editor_model({
-    uri: `file:///demo.ts`,
-    text: `\uFEFFa😀\r\nb\r\n`,
-  })
+  const model = model_of(`\uFEFFa😀\r\nb\r\n`)
   expect([
     model.text(),
     model.disk_text(),
@@ -339,7 +337,7 @@ test(`normalizes disk text and indexes lines with UTF-16 offsets`, () => {
 })
 test(`transactions span rope chunks and map inverse edits exactly`, () => {
   const chunk = `x`.repeat(32 * 1024)
-  const model = create_editor_model({ uri: `memory:test`, text: `${chunk}\nend` })
+  const model = model_of(`${chunk}\nend`)
   const selection = { anchor: chunk.length + 4, head: chunk.length + 4 }
   const updates: unknown[] = []
   const listener = (update: unknown): void => void updates.push(update)
@@ -368,11 +366,7 @@ test(`transactions span rope chunks and map inverse edits exactly`, () => {
   expect(updates).toHaveLength(4)
 })
 test(`typing groups, saved checkpoints, redo invalidation, and history limits compose`, () => {
-  const model = create_editor_model({
-    uri: `memory:history`,
-    text: `abc`,
-    history_limit_chars: 2,
-  })
+  const model = model_of(`abc`, 2)
   type_text(model, `x`, 0)
   type_text(model, `y`, 100)
   expect([model.undo(), model.text()]).toEqual([true, `abc`])
@@ -388,7 +382,7 @@ test(`typing groups, saved checkpoints, redo invalidation, and history limits co
   expect(model.text()).toBe(`Abcxy`)
 })
 test(`mark_saved accepts the checkpoint id of text written before later edits`, () => {
-  const model = create_editor_model({ uri: `memory:state-id`, text: `a` })
+  const model = model_of(`a`)
   type_text(model, `b`, 0)
   const written = model.checkpoint()
   expect(model.checkpoint()).toBe(written)
@@ -413,7 +407,7 @@ test(`mark_saved accepts the checkpoint id of text written before later edits`, 
     expect(() => model.mark_saved(invalid)).toThrow(`Invalid state_id=${invalid}`)
 })
 test(`history barriers and unrecorded edits cannot replay stale state`, () => {
-  const model = create_editor_model({ uri: `memory:barriers`, text: `` })
+  const model = model_of(``)
   type_text(model, `a`, 0)
   model.undo()
   model.redo()
@@ -429,7 +423,7 @@ test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   type_text(model, `y`, 1, ``)
   type_text(model, `z`, 2, ``)
   expect([model.undo(), model.text()]).toEqual([true, `x`])
-  const backward = create_editor_model({ uri: `memory:timestamp`, text: `` })
+  const backward = model_of(``)
   type_text(backward, `a`, 10_000)
   type_text(backward, `b`, 0)
   expect([backward.undo(), backward.text()]).toEqual([true, `a`])
@@ -438,7 +432,7 @@ test.each([
   [`backspace`, [2, 1]],
   [`delete`, [0, 0]],
 ])(`%s groups replay as one update`, (key, starts) => {
-  const model = create_editor_model({ uri: `memory:${key}`, text: `abc` })
+  const model = model_of(`abc`)
   for (const [edit_idx, from] of starts.entries())
     model.transact([{ from, to: from + 1, insert: `` }], {
       selection: { anchor: from, head: from },
@@ -450,7 +444,7 @@ test.each([
   expect([model.undo(), model.text(), updates.length]).toEqual([true, `abc`, 1])
 })
 test(`composition replacement retains the pre-composition undo text`, () => {
-  const model = create_editor_model({ uri: `memory:composition`, text: `selected` })
+  const model = model_of(`selected`)
   model.transact([{ from: 0, to: 8, insert: `λ` }], {
     history_group: `composition-1`,
     timestamp: 0,
@@ -467,7 +461,7 @@ test(`composition replacement retains the pre-composition undo text`, () => {
   ])
 })
 test(`a large typing group undoes in one immutable transaction`, () => {
-  const model = create_editor_model({ uri: `memory:group`, text: `` })
+  const model = model_of(``)
   for (let offset = 0; offset < 1000; offset++) type_text(model, `x`, offset)
   const updates: unknown[] = []
   model.subscribe((update) => updates.push(update))
@@ -491,12 +485,12 @@ test.each([
   [`carriage return`, [{ from: 0, to: 0, insert: `\r` }]],
   [`CRLF`, [{ from: 0, to: 0, insert: `\r\n` }]],
 ] satisfies [string, TextEdit[]][])('rejects %s', (_label, edits) => {
-  const model = create_editor_model({ uri: `memory:invalid`, text: `abc` })
+  const model = model_of(`abc`)
   expect(() => model.transact(edits)).toThrow(/Invalid edit/u)
   expect(model.text()).toBe(`abc`)
 })
 test(`omitted selections map through sequential edits`, () => {
-  const model = create_editor_model({ uri: `memory:map`, text: `abcdef` })
+  const model = model_of(`abcdef`)
   model.set_selection({ anchor: 1, head: 5 })
   model.transact([
     { from: 0, to: 2, insert: `XYZ` },
@@ -507,7 +501,7 @@ test(`omitted selections map through sequential edits`, () => {
   expect(model.selection).toEqual({ anchor: 0, head: 0 })
 })
 test(`invalid resulting selections leave the model unchanged`, () => {
-  const model = create_editor_model({ uri: `memory:invalid-selection`, text: `abc` })
+  const model = model_of(`abc`)
   expect(() =>
     model.transact([{ from: 0, to: 1, insert: `` }], {
       selection: { anchor: 3, head: 3 },
@@ -525,13 +519,9 @@ test(`invalid resulting selections leave the model unchanged`, () => {
 test.each([1, 6000])(
   `property: random edits, lines, undo, and redo match a string oracle (%i initial lines)`,
   (initial_lines) => {
-    let rng_state = 20_260_819
-    const random = (bound: number): number => {
-      rng_state = (Math.imul(rng_state, 1664525) + 1013904223) >>> 0
-      return bound <= 0 ? 0 : rng_state % bound
-    }
+    const random = seeded_random(20_260_819)
     let expected = `${`line😀\n`.repeat(initial_lines)}end`
-    const model = create_editor_model({ uri: `memory:property`, text: expected })
+    const model = model_of(expected)
     const states = [expected]
     for (let step_idx = 0; step_idx < 400; step_idx++) {
       const bound_a = random(expected.length + 1)
@@ -566,7 +556,7 @@ test.skipIf(!process.env.RUN_LARGE_EDITOR_TESTS)(
     const line = `${`x`.repeat(99)}\n`
     const started = performance.now()
     const text = `${line.repeat(999_999)}${`x`.repeat(99)}`
-    const model = create_editor_model({ uri: `memory:large`, text })
+    const model = model_of(text)
     expect(model.line_count).toBe(1_000_000)
     const build_ms = performance.now() - started
     const edit_started = performance.now()
@@ -608,7 +598,7 @@ test.each([
   [`bare CR can outweigh CRLF`, `a\rb\rc\rd\r\ne\r\n`, `lf`],
   [`empty text stays lf`, ``, `lf`],
 ])(`%s`, (_case, text, expected_eol) => {
-  const model = create_editor_model({ uri: `memory:eol`, text })
+  const model = model_of(text)
   expect(model.eol).toBe(expected_eol)
   const normalized = text.replaceAll(/\r\n?/g, `\n`)
   expect(model.disk_text()).toBe(
@@ -628,10 +618,7 @@ test.each([
 ] satisfies [string, string, EditorSearchRange, string][])(
   `scan range %#: matches of %j starting in %j`,
   (text, query, range, expected) => {
-    const model = create_editor_model({ uri: `memory:range`, text })
-    const ranges = [...iterate_editor_matches(model, query, {}, range)].map(
-      ({ from, to }) => `${from}-${to}`,
-    )
-    expect(ranges.join(` `)).toBe(expected)
+    const matches = iterate_editor_matches(model_of(text), query, {}, range)
+    expect(ranges_of(matches)).toBe(expected)
   },
 )

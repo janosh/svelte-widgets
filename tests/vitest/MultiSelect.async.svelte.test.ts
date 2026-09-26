@@ -1,21 +1,23 @@
 import { createRawSnippet, flushSync, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Option } from '$lib'
-import type { LoadOptionsParams, LoadOptionsResult, MultiSelectProps } from '$lib/types'
+import type {
+  LoadOptionsConfig,
+  LoadOptionsParams,
+  LoadOptionsResult,
+  MultiSelectProps,
+} from '$lib/types'
 import { get_label } from '$lib/utils'
 import { doc_query } from './index'
 import {
   fresh_key,
   get_input,
   mount_multiselect,
+  press_keys,
   type_search_text,
   unmount_component,
 } from './MultiSelect.test-utils'
 
-afterEach(() => {
-  vi.useRealTimers()
-  vi.restoreAllMocks()
-})
 const mock_console_error = () =>
   vi.spyOn(console, `error`).mockImplementation(() => undefined)
 
@@ -38,10 +40,7 @@ function deferred_load() {
 async function mount_deferred_open() {
   const load = deferred_load()
   vi.useFakeTimers()
-  mount_multiselect({
-    load_options: { fetch: load.fn, debounce_ms: 10 },
-    open: true,
-  })
+  mount_multiselect({ load_options: { fetch: load.fn, debounce_ms: 10 }, open: true })
   await vi.runAllTimersAsync()
   return load
 }
@@ -56,6 +55,19 @@ describe(`load_options feature`, () => {
 
   async function flush_ticks(count = 4) {
     for (let idx = 0; idx < count; idx++) await tick()
+  }
+
+  // mounts with 5-item batches into a 400px-tall dropdown whose content is scroll_height tall
+  async function mount_autofill(
+    fetch: LoadOptionsConfig<string>[`fetch`],
+    scroll_height: number,
+  ) {
+    mount_multiselect({ load_options: { fetch, batch_size: 5 }, open: true })
+    await tick()
+    const ul = doc_query(`ul.options`)
+    vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
+    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(scroll_height)
+    return ul
   }
 
   function mock_scroll_near_bottom(ul: Element) {
@@ -181,17 +193,8 @@ describe(`load_options feature`, () => {
   // https://github.com/janosh/svelte-widgets/issues/412
   test(`auto-fills when small batch_size doesn't overflow dropdown`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({
-      load_options: { fetch: load_options, batch_size: 5 },
-      open: true,
-    })
-    await tick()
+    await mount_autofill(load_options, 100) // a rendered list that does not overflow
     expect(load_options).toHaveBeenCalledTimes(1)
-
-    // a rendered list that does not overflow
-    const ul = doc_query(`ul.options`)
-    vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
-    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
 
     resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
     await flush_ticks()
@@ -204,17 +207,9 @@ describe(`load_options feature`, () => {
 
   test(`auto-fill stops when list becomes scrollable`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({
-      load_options: { fetch: load_options, batch_size: 5 },
-      open: true,
-    })
-    await tick()
-    expect(load_options).toHaveBeenCalledTimes(1)
-
     // Mock overflow BEFORE resolving so auto-fill sees the list as scrollable
-    const ul = doc_query(`ul.options`)
-    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(500)
-    vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
+    await mount_autofill(load_options, 500)
+    expect(load_options).toHaveBeenCalledTimes(1)
 
     resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
     await flush_ticks()
@@ -244,8 +239,7 @@ describe(`load_options feature`, () => {
     await tick()
     expect(load_options).toHaveBeenCalledTimes(2) // pagination now in flight
 
-    const input = get_input()
-    await type_search_text(`zz`, input)
+    await type_search_text(`zz`)
     await vi.runAllTimersAsync()
 
     expect(load_options.mock.calls[1][0].signal?.aborted).toBe(true)
@@ -259,15 +253,7 @@ describe(`load_options feature`, () => {
       offsets.push(offset)
       return { options: [] as string[], has_more: true }
     })
-    mount_multiselect({
-      load_options: { fetch: load_options, batch_size: 5 },
-      open: true,
-    })
-    await tick()
-
-    const ul = doc_query(`ul.options`)
-    vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
-    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
+    await mount_autofill(load_options, 100)
     await flush_ticks(10)
 
     expect(offsets).toEqual([0])
@@ -277,8 +263,7 @@ describe(`load_options feature`, () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
 
-    const input = get_input()
-    await type_search_text(`xyz`, input)
+    await type_search_text(`xyz`)
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(2)
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
@@ -394,16 +379,8 @@ describe(`load_options feature`, () => {
 
   test(`scroll after auto-fill cap resets counter and allows more loading`, async () => {
     const { fn: load_options, resolvers } = deferred_load()
-    mount_multiselect({
-      load_options: { fetch: load_options, batch_size: 5 },
-      open: true,
-    })
-    await tick()
+    const ul = await mount_autofill(load_options, 100)
     expect(load_options).toHaveBeenCalledTimes(1)
-
-    const ul = doc_query(`ul.options`)
-    vi.spyOn(ul, `clientHeight`, `get`).mockReturnValue(400)
-    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(100)
 
     // resolve batches until the auto-fill cap is reached
     for (let idx = 0; idx < 20; idx++) {
@@ -441,8 +418,7 @@ describe(`load_options feature`, () => {
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
     // close while the first fetch is still pending: it is aborted and loading clears
-    input.dispatchEvent(fresh_key(`Escape`))
-    await tick()
+    await press_keys(input, `Escape`)
     expect(input.getAttribute(`aria-busy`)).toBeNull()
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
@@ -473,8 +449,7 @@ describe(`load_options feature`, () => {
       expect(load_options).toHaveBeenCalledTimes(1)
 
       // new search while the first fetch is pending
-      const input = get_input()
-      await type_search_text(`test`, input)
+      const input = await type_search_text(`test`)
       await vi.runAllTimersAsync()
       expect(load_options).toHaveBeenCalledTimes(2)
       expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
@@ -515,8 +490,7 @@ describe(`load_options feature`, () => {
     })
 
     // with on_open=false, typing is what triggers the initial load
-    const input = get_input()
-    await type_search_text(`q`, input)
+    const input = await type_search_text(`q`)
     await vi.runAllTimersAsync()
     expect(load_options).toHaveBeenCalledTimes(1)
 
@@ -560,8 +534,7 @@ describe(`load_options feature`, () => {
       await vi.runAllTimersAsync()
       expect(load_options).toHaveBeenCalledTimes(1)
 
-      const input = get_input()
-      await type_search_text(`b`, input)
+      const input = await type_search_text(`b`)
       await type_search_text(`a`, input)
       await vi.advanceTimersByTimeAsync(99)
       expect(load_options).toHaveBeenCalledOnce()
@@ -629,8 +602,7 @@ test.each([
     resolvers[0]({ options: [...initial_options], has_more: false })
     await vi.runAllTimersAsync()
 
-    const input = get_input()
-    await type_search_text(search, input)
+    await type_search_text(search)
     await vi.runAllTimersAsync()
     expect(fetch_fn.mock.calls.length).toBeGreaterThanOrEqual(2)
 
@@ -701,8 +673,7 @@ describe(`load_options_pending`, () => {
 
       expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-      input.dispatchEvent(fresh_key(`Enter`))
-      await tick()
+      await press_keys(input, `Enter`)
       expect(oncreate_spy).not.toHaveBeenCalled()
       expect(document.querySelector(`.user-msg`)).toBeNull()
 
@@ -715,8 +686,7 @@ describe(`load_options_pending`, () => {
         `Create this option`,
       )
 
-      input.dispatchEvent(fresh_key(`Enter`))
-      await tick()
+      await press_keys(input, `Enter`)
       expect(oncreate_spy).toHaveBeenCalledTimes(1)
     },
   )
@@ -736,8 +706,7 @@ describe(`load_options_pending`, () => {
     })
     await vi.runAllTimersAsync()
 
-    const input = get_input()
-    await type_search_text(`NewThing`, input)
+    const input = await type_search_text(`NewThing`)
     await vi.runAllTimersAsync()
 
     expect(input.getAttribute(`aria-busy`)).toBeNull()
@@ -753,23 +722,18 @@ describe(`load_options_pending`, () => {
   test(`late fetch response after close does not corrupt next open`, async () => {
     const { fn: fetch_fn, resolvers: fetch_resolvers } = deferred_load()
 
-    mount_multiselect({
-      load_options: { fetch: fetch_fn, debounce_ms: 0 },
-      open: true,
-    })
+    mount_multiselect({ load_options: { fetch: fetch_fn, debounce_ms: 0 }, open: true })
     await vi.runAllTimersAsync()
     fetch_resolvers[0]({ options: [`Apple`], has_more: false })
     await vi.runAllTimersAsync()
     expect(fetch_fn).toHaveBeenCalledTimes(1)
 
     // Type to trigger a second fetch, then close before it resolves
-    const input = get_input()
-    await type_search_text(`Rust`, input)
+    const input = await type_search_text(`Rust`)
     await vi.runAllTimersAsync()
     expect(fetch_fn).toHaveBeenCalledTimes(2)
 
-    input.dispatchEvent(fresh_key(`Escape`))
-    await tick()
+    await press_keys(input, `Escape`)
 
     // the late resolve after close must be discarded
     fetch_resolvers[1]({ options: [`Rust Lang`], has_more: false })
@@ -791,54 +755,65 @@ describe(`load_options_pending`, () => {
 describe(`async on_create`, () => {
   type OncreateResult = false | Option | undefined
 
+  // mounts with allow_user_options and the given on_create, returning the reactive props
+  const mount_create = (
+    on_create: MultiSelectProps[`on_create`],
+    extra: MultiSelectProps & { mode?: `multiple` } = {},
+  ) => {
+    const props = $state<MultiSelectProps>({
+      options: [`foo`],
+      value: [],
+      allow_user_options: true,
+      on_create,
+      ...extra,
+    })
+    mount_multiselect(props)
+    return props
+  }
+  // resolves a pending on_create promise and flushes the resulting add
+  const settle = async (
+    { promise, resolve }: PromiseWithResolvers<OncreateResult>,
+    value: OncreateResult,
+  ) => {
+    resolve(value)
+    await promise
+    await tick()
+  }
+
   const submit_create = async (text: string) => {
     const input = await type_search_text(text)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_keys(input, `Enter`)
     return input
   }
 
   test(`resolving undefined adds typed option after resolve, spinner shown only while pending`, async () => {
-    const { promise, resolve } = Promise.withResolvers<OncreateResult>()
-    const on_create = vi.fn(() => promise)
+    const pending = Promise.withResolvers<OncreateResult>()
+    const on_create = vi.fn(() => pending.promise)
     const on_add = vi.fn()
     const spinner = createRawSnippet(() => ({
       render: () => `<span class="custom-spinner">creating</span>`,
     }))
-    const props = $state<MultiSelectProps>({
-      options: [`foo`, `bar`],
-      value: [],
-      allow_user_options: true,
-      on_create,
-      on_add,
-      spinner,
-    })
-    mount_multiselect(props)
+    const props = mount_create(on_create, { on_add, spinner })
 
     const input = await type_search_text(`new async option`)
     expect(document.querySelector(`.custom-spinner`)).toBeNull()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
 
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_keys(input, `Enter`)
 
-    expect(on_create).toHaveBeenCalledTimes(1)
-    expect(on_create).toHaveBeenCalledWith({ option: `new async option` })
+    expect(on_create).toHaveBeenCalledExactlyOnceWith({ option: `new async option` })
     // while the promise is pending: spinner visible, input busy, nothing added yet
     expect(doc_query(`.custom-spinner`).textContent).toBe(`creating`)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
     expect(props.value).toEqual([])
     expect(on_add).not.toHaveBeenCalled()
 
-    resolve(undefined)
-    await promise
-    await tick()
+    await settle(pending, undefined)
 
     expect(document.querySelector(`.custom-spinner`)).toBeNull()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
     expect(props.value).toEqual([`new async option`])
-    expect(on_add).toHaveBeenCalledTimes(1)
-    expect(on_add).toHaveBeenCalledWith({
+    expect(on_add).toHaveBeenCalledExactlyOnceWith({
       option: `new async option`,
       selected: [`new async option`],
     })
@@ -851,22 +826,12 @@ describe(`async on_create`, () => {
     `resolving %s`,
     async (_label, resolved_value, expected_selected, expected_onadd_calls) => {
       const console_error = mock_console_error()
-      const { promise, resolve } = Promise.withResolvers<OncreateResult>()
+      const pending = Promise.withResolvers<OncreateResult>()
       const on_add = vi.fn()
-      const props = $state<MultiSelectProps>({
-        options: [`foo`, `bar`],
-        value: [],
-        allow_user_options: true,
-        on_create: () => promise,
-        on_add,
-      })
-      mount_multiselect(props)
+      const props = mount_create(() => pending.promise, { on_add })
 
       await submit_create(`fresh-opt`)
-
-      resolve(resolved_value)
-      await promise
-      await tick()
+      await settle(pending, resolved_value)
 
       expect(props.value).toEqual(expected_selected)
       expect(on_add).toHaveBeenCalledTimes(expected_onadd_calls)
@@ -882,14 +847,7 @@ describe(`async on_create`, () => {
       // oxlint-disable-next-line unicorn/no-thenable -- deliberately testing thenable handling
       then: (resolve: (value: OncreateResult) => void) => resolve(`from-thenable`),
     }
-    const props = $state<MultiSelectProps>({
-      options: [`foo`],
-      value: [],
-      allow_user_options: true,
-      on_create: () => thenable as unknown as OncreateResult,
-      on_add,
-    })
-    mount_multiselect(props)
+    const props = mount_create(() => thenable as unknown as OncreateResult, { on_add })
 
     await submit_create(`typed-text`)
     await tick() // extra microtask hop for the thenable resolution
@@ -902,16 +860,10 @@ describe(`async on_create`, () => {
     const console_error = mock_console_error()
     const on_add = vi.fn()
     const sync_error = new Error(`validation blew up`)
-    const props = $state<MultiSelectProps>({
-      options: [`foo`],
-      value: [],
-      allow_user_options: true,
-      on_create: () => {
-        throw sync_error
-      },
-      on_add,
-    })
-    mount_multiselect(props)
+    const on_create = () => {
+      throw sync_error
+    }
+    const props = mount_create(on_create, { on_add })
 
     await submit_create(`doomed-opt`)
 
@@ -927,14 +879,7 @@ describe(`async on_create`, () => {
     const console_error = mock_console_error()
     const { promise, reject } = Promise.withResolvers<OncreateResult>()
     const on_add = vi.fn()
-    const props = $state<MultiSelectProps>({
-      options: [`foo`],
-      value: [],
-      allow_user_options: true,
-      on_create: () => promise,
-      on_add,
-    })
-    mount_multiselect(props)
+    const props = mount_create(() => promise, { on_add })
 
     const input = await submit_create(`doomed-opt`)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
@@ -946,8 +891,7 @@ describe(`async on_create`, () => {
 
     expect(props.value).toEqual([])
     expect(on_add).not.toHaveBeenCalled()
-    expect(console_error).toHaveBeenCalledTimes(1)
-    expect(console_error).toHaveBeenCalledWith(
+    expect(console_error).toHaveBeenCalledExactlyOnceWith(
       `MultiSelect: on_create promise rejected:`,
       rejection,
     )
@@ -966,20 +910,17 @@ describe(`async on_create`, () => {
   ])(
     `%s display: text typed while async create is pending survives the resolve`,
     async (_display, display_props, expected_value) => {
-      const { promise, resolve } = Promise.withResolvers<OncreateResult>()
+      const pending = Promise.withResolvers<OncreateResult>()
       const props = $state<MultiSelectProps>({
         ...display_props,
         allow_user_options: true,
-        on_create: () => promise,
+        on_create: () => pending.promise,
       })
       mount_multiselect(props)
 
       const input = await submit_create(`first`)
       await type_search_text(`second draft`, input)
-
-      resolve(undefined)
-      await promise
-      await tick()
+      await settle(pending, undefined)
 
       expect(props.value).toEqual(expected_value)
       expect(input.value).toBe(`second draft`)
@@ -987,25 +928,14 @@ describe(`async on_create`, () => {
   )
 
   test(`double Enter while async create is pending adds only one option`, async () => {
-    const { promise, resolve } = Promise.withResolvers<OncreateResult>()
-    const on_create = vi.fn(() => promise)
-    const props = $state<MultiSelectProps>({
-      options: [`foo`],
-      value: [],
-      allow_user_options: true,
-      on_create,
-    })
-    mount_multiselect(props)
+    const pending = Promise.withResolvers<OncreateResult>()
+    const on_create = vi.fn(() => pending.promise)
+    const props = mount_create(on_create)
 
     const input = await submit_create(`only-once`)
-    input.dispatchEvent(fresh_key(`Enter`)) // second Enter while first create pending
-    await tick()
-
+    await press_keys(input, `Enter`) // second Enter while first create pending
     expect(on_create).toHaveBeenCalledTimes(1)
-
-    resolve(undefined)
-    await promise
-    await tick()
+    await settle(pending, undefined)
 
     expect(props.value).toEqual([`only-once`])
   })
@@ -1023,14 +953,7 @@ describe(`async on_create`, () => {
   ])(
     `sync on_create regression: %s`,
     async (_label, on_create, expected_selected, selected = []) => {
-      const props = $state<MultiSelectProps>({
-        options: [`foo`],
-        value: selected,
-        allow_user_options: true,
-        on_create,
-      })
-      mount_multiselect(props)
-
+      const props = mount_create(on_create, { value: selected })
       await submit_create(`sync-opt`)
 
       expect(props.value).toEqual(expected_selected)

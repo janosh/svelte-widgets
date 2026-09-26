@@ -449,8 +449,7 @@ describe(`get_ancestor_paths`, () => {
     ],
     [`data.json`, `data.json`, []],
   ])(`get_ancestor_paths(%p, %p) = %p`, (path, root_label, expected) => {
-    const result = get_ancestor_paths(path, root_label)
-    expect(result).toEqual(expected)
+    expect(get_ancestor_paths(path, root_label)).toEqual(expected)
   })
 })
 

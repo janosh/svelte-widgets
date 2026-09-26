@@ -1,18 +1,16 @@
 import { FileDetails } from '$lib'
 import { default_highlighter } from '$lib/highlight'
 import type { ComponentProps } from 'svelte'
-import { flushSync, mount, tick, unmount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { flushSync, tick } from 'svelte'
+import { expect, test, vi } from 'vitest'
+import { doc_query, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const all_text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
-const mount_files = (props: ComponentProps<typeof FileDetails> = {}) => {
-  const component = mount(FileDetails, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-}
+const mount_files = (props: ComponentProps<typeof FileDetails> = {}) =>
+  render(FileDetails, props)
 
 test.each<[string, string, string, string?]>([
   // inferred from title extension via the alias map
@@ -276,11 +274,7 @@ test(`single file omits toggle-all button and forwards details toggle event`, ()
 
 test(`title snippet renders title content (incl. empty titles) and receives index`, () => {
   const files = [`first.ts`, `second.py`, ``].map((title) => ({ title, content: `x` }))
-  const component = mount(TestSnippetHarness, {
-    target: document.body,
-    props: { component: `file-details`, files },
-  })
-  onTestFinished(() => unmount(component))
+  render(TestSnippetHarness, { component: `file-details`, files })
   const titles = [...document.querySelectorAll<HTMLElement>(`[data-testid="file-title"]`)]
   expect(titles.map((node) => [node.textContent, node.dataset.idx])).toEqual([
     [`first.ts`, `0`],

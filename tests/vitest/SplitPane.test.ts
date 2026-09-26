@@ -1,7 +1,7 @@
 import PaneDivider from '$lib/SplitPane.svelte'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
-import { pointer_event } from './index'
+import { create_element, pointer_event } from './index'
 
 let notify_resize = () => {}
 
@@ -27,10 +27,8 @@ const mount_divider = ({
   clamps = {},
   width = 400,
 }: DividerOptions = {}) => {
-  const parent = document.createElement(`div`)
+  const parent = create_element(`div`, { direction })
   parent.dir = direction
-  parent.style.direction = direction
-  document.body.append(parent)
   parent.getBoundingClientRect = () =>
     DOMRect.fromRect({
       x: 100,

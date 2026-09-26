@@ -1,7 +1,7 @@
 import { ActionButton, type ActionState } from '$lib'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { afterEach, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const labels = {
@@ -21,10 +21,7 @@ const flush_action = async (): Promise<void> => {
 const mount_action_button = (
   props: Partial<ComponentProps<typeof ActionButton>>,
 ): HTMLButtonElement => {
-  mount(ActionButton, {
-    target: document.body,
-    props: { action: () => `saved`, labels, reset_ms: 0, ...props },
-  })
+  render(ActionButton, { action: () => `saved`, labels, reset_ms: 0, ...props })
   return doc_query(`[data-sms-action]`)
 }
 
@@ -149,18 +146,13 @@ test(`keeps success state when its success callback throws`, async () => {
 
 test(`does not schedule a reset after its success callback unmounts it`, async () => {
   vi.useFakeTimers()
-  type MountedActionButton = Parameters<typeof unmount>[0]
-  let component: MountedActionButton | undefined
-  component = mount(ActionButton, {
+  const component: ReturnType<typeof mount> = mount(ActionButton, {
     target: document.body,
     props: {
       action: () => `saved`,
       labels,
       reset_ms: 100,
-      on_success: async () => {
-        if (!component) throw new Error(`ActionButton component was not mounted`)
-        await unmount(component)
-      },
+      on_success: () => unmount(component),
     },
   })
 
@@ -171,13 +163,10 @@ test(`does not schedule a reset after its success callback unmounts it`, async (
 })
 
 test(`children receive the generic action result`, async () => {
-  mount(TestSnippetHarness, {
-    target: document.body,
-    props: {
-      component: `action-button`,
-      action: () => `saved-result`,
-      reset_ms: 0,
-    },
+  render(TestSnippetHarness, {
+    component: `action-button`,
+    action: () => `saved-result`,
+    reset_ms: 0,
   })
   const button = doc_query<HTMLButtonElement>(`[data-sms-action]`)
 

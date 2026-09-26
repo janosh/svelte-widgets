@@ -1,14 +1,7 @@
 import { NumberRangeInput } from '$lib'
-import {
-  createRawSnippet,
-  flushSync,
-  mount,
-  tick,
-  unmount,
-  type ComponentProps,
-} from 'svelte'
+import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, fire_input, hover, press_key } from './index'
+import { doc_query, fire_input, hover, press_key, render } from './index'
 
 const label_snippet = createRawSnippet(() => ({
   render: () => `<span>Atom radius</span>`,
@@ -23,26 +16,19 @@ const named_props = {
 }
 
 const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
-  const target = document.createElement(`div`)
-  mount(NumberRangeInput, { target, props })
-  const inputs = [...target.querySelectorAll<HTMLInputElement>(`input`)]
+  render(NumberRangeInput, props)
+  const inputs = [...document.querySelectorAll<HTMLInputElement>(`input`)]
   const [number, range] = inputs
   if (!number || !range) throw new Error(`NumberRangeInput did not render both inputs`)
-  return { target, inputs, number, range }
+  return { inputs, number, range }
 }
 describe(`NumberRangeInput`, () => {
   test(`shows the description only while hovering the label text`, async () => {
     vi.useFakeTimers()
-    const component = mount(NumberRangeInput, {
-      target: document.body,
-      props: { ...named_props, children: label_snippet },
-    })
-    onTestFinished(async () => {
-      await unmount(component)
-      vi.useRealTimers()
-    })
+    onTestFinished(() => void vi.useRealTimers())
+    const { inputs } = mount_range({ ...named_props, children: label_snippet })
     await tick()
-    for (const input of document.querySelectorAll(`input`)) {
+    for (const input of inputs) {
       hover(input)
       await vi.advanceTimersByTimeAsync(150)
       expect(document.querySelector(`.custom-tooltip`)).toBeNull()
@@ -93,14 +79,14 @@ describe(`NumberRangeInput`, () => {
   test.each([0.25, `any`] as const)(
     `forwards explicit bounds and setting metadata with step=%s`,
     (step_size) => {
-      const { target, inputs } = mount_range({
+      const { inputs } = mount_range({
         value: 0.5,
         min: 0.25,
         max: 1.25,
         step: step_size,
         'data-key': `radius`,
       })
-      expect(target.querySelector(`label`)?.dataset.key).toBe(`radius`)
+      expect(doc_query(`label`).dataset.key).toBe(`radius`)
       expect(inputs.map(({ min, max, step }) => ({ min, max, step }))).toEqual([
         { min: `0.25`, max: `1.25`, step: String(step_size) },
         { min: `0.25`, max: `1.25`, step: String(step_size) },
@@ -130,10 +116,9 @@ describe(`NumberRangeInput`, () => {
     [`step`, -0.1],
   ])(`rejects invalid %s=%s`, (prop, value) => {
     const props = { ...named_props, [String(prop)]: value }
-    expect(() => {
-      mount_range(props)
-      flushSync()
-    }).toThrow(`NumberRangeInput needs finite min <= max and positive step or "any"`)
+    expect(() => mount_range(props)).toThrow(
+      `NumberRangeInput needs finite min <= max and positive step or "any"`,
+    )
   })
 })
 
@@ -255,10 +240,9 @@ describe(`logarithmic NumberRangeInput`, () => {
     { value: 1001 },
     { min: Number.MIN_VALUE, step: 0.1 },
   ])(`rejects invalid logarithmic configuration %j`, (overrides) => {
-    expect(() => {
-      mount_range({ ...log_props, ...overrides })
-      flushSync()
-    }).toThrow(/Logarithmic range|logarithmic value|logarithmic step/)
+    expect(() => mount_range({ ...log_props, ...overrides })).toThrow(
+      /Logarithmic range|logarithmic value|logarithmic step/,
+    )
   })
 
   test(`preserves caller key cancellation and formatted announcements`, () => {

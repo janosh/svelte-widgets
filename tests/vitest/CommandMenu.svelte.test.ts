@@ -94,33 +94,13 @@ test.each([`Escape`, `x`])(
 )
 
 test.each([
-  {
-    close_keys: [`Escape`],
-    closedby: undefined,
-    default_prevented: false,
-    effective_closedby: `any`,
-  },
-  {
-    close_keys: [`q`],
-    closedby: undefined,
-    default_prevented: true,
-    effective_closedby: `none`,
-  },
-  {
-    close_keys: [`Escape`],
-    closedby: `none` as const,
-    default_prevented: true,
-    effective_closedby: `none`,
-  },
-  {
-    close_keys: [`q`],
-    closedby: `closerequest` as const,
-    default_prevented: false,
-    effective_closedby: `closerequest`,
-  },
+  [[`Escape`], undefined, false, `any`],
+  [[`q`], undefined, true, `none`],
+  [[`Escape`], `none` as const, true, `none`],
+  [[`q`], `closerequest` as const, false, `closerequest`],
 ])(
-  `dialog cancel with close_keys=$close_keys prevents default: $default_prevented`,
-  async ({ close_keys, closedby, default_prevented, effective_closedby }) => {
+  `dialog cancel with close_keys=%j closedby=%s prevents default: %s`,
+  async (close_keys, closedby, default_prevented, effective_closedby) => {
     const oncancel = vi.fn()
     mount_menu({
       open: true,
@@ -892,6 +872,11 @@ const shortcut_kbd_parts = () =>
     (kbd) => kbd.textContent,
   )
 
+const abc_actions = () =>
+  [`alpha`, `beta`, `gamma`].map((label) => ({ id: label, label, action: vi.fn() }))
+const stored_recents = (key: string): unknown =>
+  JSON.parse(localStorage.getItem(key) ?? `[]`)
+
 const press_ctrl_shift = (key: string) =>
   globalThis.dispatchEvent(
     new KeyboardEvent(`keydown`, { key, ctrlKey: true, shiftKey: true }),
@@ -936,6 +921,9 @@ async function search_pagefind(query: string): Promise<void> {
 
 describe(`PageSearch`, () => {
   const base_props = { open: true, fade_duration_ms: 0, debounce_ms: 0 }
+  // copies props, so tests that mutate them mount their own $state object instead
+  const mount_page_search = (props: ComponentProps<typeof PageSearch>) =>
+    mount(PageSearch, { target: document.body, props: { ...base_props, ...props } })
   const make_pagefind_response = (title: string) => ({
     results: [
       {
@@ -1039,13 +1027,7 @@ describe(`PageSearch`, () => {
       .fn()
       .mockReturnValueOnce(requests[0].promise)
       .mockReturnValueOnce(requests[1].promise)
-    mount(PageSearch, {
-      target: document.body,
-      props: {
-        ...base_props,
-        load_pagefind: async () => ({ search }),
-      },
-    })
+    mount_page_search({ load_pagefind: async () => ({ search }) })
 
     await search_pagefind(`alpha`)
     await search_pagefind(` alpha `)
@@ -1073,16 +1055,12 @@ describe(`PageSearch`, () => {
       const load_pagefind = vi.fn().mockResolvedValue({ search })
       const failing_call = { load: load_pagefind, search, result: result_data }[failure]
       failing_call.mockReturnValueOnce(request.promise)
-      mount(PageSearch, {
-        target: document.body,
-        props: {
-          ...base_props,
-          fallback_actions: [
-            { id: `Fallback`, label: `Fallback`, action: vi.fn() },
-            { id: `Other`, label: `Other`, action: vi.fn() },
-          ],
-          load_pagefind,
-        },
+      mount_page_search({
+        fallback_actions: [
+          { id: `Fallback`, label: `Fallback`, action: vi.fn() },
+          { id: `Other`, label: `Other`, action: vi.fn() },
+        ],
+        load_pagefind,
       })
 
       await search_pagefind(`fallback`)
@@ -1194,30 +1172,21 @@ describe(`PageSearch`, () => {
 
   test(`keeps matching fallback actions locally when the index has no matches`, async () => {
     const fallback_actions = [
-      {
-        id: `API reference`,
-        label: `API reference`,
-        description: `All exported props`,
-        badge: `Docs`,
-        metadata: `Library`,
-        keywords: [`schema`],
+      [`API reference`, `All exported props`, `Docs`, `Library`, `schema`],
+      [`Styling guide`, `CSS custom properties`, `Guide`, `Visual`, `theme`],
+    ].map(([label, description, badge, metadata, keyword]) => {
+      return {
+        id: label,
+        label,
+        description,
+        badge,
+        metadata,
+        keywords: [keyword],
         action: vi.fn(),
-      },
-      {
-        id: `Styling guide`,
-        label: `Styling guide`,
-        description: `CSS custom properties`,
-        badge: `Guide`,
-        metadata: `Visual`,
-        keywords: [`theme`],
-        action: vi.fn(),
-      },
-    ]
-    const load_pagefind = vi.fn(async () => ({ search: async () => ({ results: [] }) }))
-    mount(PageSearch, {
-      target: document.body,
-      props: { ...base_props, fallback_actions, load_pagefind },
+      }
     })
+    const load_pagefind = vi.fn(async () => ({ search: async () => ({ results: [] }) }))
+    mount_page_search({ fallback_actions, load_pagefind })
 
     await vi.runAllTimersAsync()
     expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(2)
@@ -1263,10 +1232,7 @@ describe(`PageSearch`, () => {
       .mockRejectedValueOnce(new Error(`Fragment unavailable`))
       .mockRejectedValueOnce(new Error(`Fragment unavailable`))
     const search = vi.fn(async () => ({ results }))
-    mount(PageSearch, {
-      target: document.body,
-      props: { ...base_props, batch_size: 2, load_pagefind: async () => ({ search }) },
-    })
+    mount_page_search({ batch_size: 2, load_pagefind: async () => ({ search }) })
     const labels = () =>
       Array.from(document.querySelectorAll(`.cmd-label`), (label) =>
         label.childNodes[0]?.textContent?.trim(),
@@ -1330,13 +1296,7 @@ test.each([
   }
   const spy = vi.fn()
   const actions = [
-    {
-      id: `save`,
-      label: `save`,
-      action: spy,
-      shortcut: `ctrl+shift+s`,
-      disabled,
-    },
+    { id: `save`, label: `save`, action: spy, shortcut: `ctrl+shift+s`, disabled },
   ]
   const on_execute = vi.fn()
   mount_menu({ actions, open, global_shortcuts, on_execute })
@@ -1374,9 +1334,7 @@ test.each([`n`, `shift+n`])(
   `global shortcut %s fires only outside editable targets`,
   (shortcut) => {
     const action = vi.fn()
-    mount_menu({
-      actions: [{ id: `new note`, label: `new note`, action, shortcut }],
-    })
+    mount_menu({ actions: [{ id: `new note`, label: `new note`, action, shortcut }] })
     const press = (tag: string) => {
       const target = document.createElement(tag)
       document.body.append(target)
@@ -1417,16 +1375,8 @@ test(`global shortcuts skip disabled duplicate bindings`, async () => {
 test(`recent_actions_key ranks, persists, and reloads recently triggered actions`, async () => {
   const [storage_key, next_storage_key] = [`test-cmd-recents`, `test-cmd-recents-next`]
   localStorage.setItem(next_storage_key, JSON.stringify([`beta`]))
-  const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
-    id: label,
-    label,
-    action: vi.fn(),
-  }))
-  const props = $state({
-    open: true,
-    actions,
-    recent_actions_key: storage_key,
-  })
+  const actions = abc_actions()
+  const props = $state({ open: true, actions, recent_actions_key: storage_key })
   mount_menu(props)
   await tick()
 
@@ -1434,16 +1384,12 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
   expect(option_labels()).toEqual([`alpha`, `beta`, `gamma`])
 
   // trigger gamma via keyboard (ArrowDown x2 + Enter)
-  const input_el = menu_input()
-  for (let idx = 0; idx < 2; idx++) {
-    press_key(input_el, `ArrowDown`)
-  }
-  press_key(input_el, `Enter`)
+  for (const key of [`ArrowDown`, `ArrowDown`, `Enter`]) press_key(menu_input(), key)
   await tick()
 
   expect(actions[2].action).toHaveBeenCalledExactlyOnceWith(`gamma`)
   expect(props.open).toBe(false)
-  expect(JSON.parse(localStorage.getItem(storage_key) ?? `[]`)).toEqual([`gamma`])
+  expect(stored_recents(storage_key)).toEqual([`gamma`])
 
   // reopen: gamma now ranks first, rest keep original order
   props.open = true
@@ -1472,23 +1418,13 @@ test(`recent_actions_key uses action ids for duplicate labels`, async () => {
   await tick()
 
   expect(actions[0].action).toHaveBeenCalledExactlyOnceWith(`save`)
-  expect(JSON.parse(localStorage.getItem(storage_key) ?? `[]`)).toEqual([`mixed`])
+  expect(stored_recents(storage_key)).toEqual([`mixed`])
 })
 
 // pre-existing recents-storage contents -> dropdown order on initial open
 test.each([
-  [
-    `valid recents rank first`,
-    JSON.stringify([`beta`, `gamma`]),
-    [`beta`, `gamma`, `alpha`],
-    undefined,
-  ],
-  [
-    `max_recent limits stored recents`,
-    JSON.stringify([`beta`, `gamma`]),
-    [`beta`, `alpha`, `gamma`],
-    1,
-  ],
+  [`valid recents rank first`, `["beta","gamma"]`, [`beta`, `gamma`, `alpha`], undefined],
+  [`max_recent limits stored recents`, `["beta","gamma"]`, [`beta`, `alpha`, `gamma`], 1],
   // stale persisted ids must not occupy low ranks, else a real recent (rank 4 here)
   // sorts after non-recents (default rank 3)
   [
@@ -1497,28 +1433,18 @@ test.each([
     [`gamma`, `alpha`, `beta`],
     undefined,
   ],
-  [
-    `unparsable JSON is ignored`,
-    `not valid json{{{`,
-    [`alpha`, `beta`, `gamma`],
-    undefined,
-  ],
+  [`invalid JSON is ignored`, `not json{{{`, [`alpha`, `beta`, `gamma`], undefined],
   [`non-string entries are ignored`, `[1,2,3]`, [`alpha`, `beta`, `gamma`], undefined],
 ])(
   `recents storage on initial open: %s`,
   async (_desc, stored, expected_order, max_recent) => {
     const storage_key = `test-cmd-stored-recents`
     localStorage.setItem(storage_key, stored)
-    const actions = [`alpha`, `beta`, `gamma`].map((label) => ({
-      id: label,
-      label,
-      action: vi.fn(),
-    }))
     // flushSync so render errors from bad storage data fail this test, not the suite
     flushSync(() => {
       mount_menu({
         open: true,
-        actions,
+        actions: abc_actions(),
         recent_actions_key: storage_key,
         max_recent,
       })
@@ -1556,17 +1482,12 @@ test.each([
   `global shortcut recents persistence: $desc`,
   async ({ actions, max_recent, keys, expected }) => {
     const storage_key = `test-cmd-recents-${expected.join(`-`)}`
-    mount_menu({
-      actions,
-      open: false,
-      recent_actions_key: storage_key,
-      max_recent,
-    })
+    mount_menu({ actions, open: false, recent_actions_key: storage_key, max_recent })
     await tick()
 
     for (const key of keys) press_ctrl_shift(key)
     await tick()
 
-    expect(JSON.parse(localStorage.getItem(storage_key) ?? `[]`)).toEqual(expected)
+    expect(stored_recents(storage_key)).toEqual(expected)
   },
 )

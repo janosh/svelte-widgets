@@ -1,5 +1,4 @@
-import type { ComponentProps } from 'svelte'
-import { tick } from 'svelte'
+import { tick, type ComponentProps } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
 import {
@@ -19,9 +18,7 @@ describe(`Popover`, () => {
   afterEach(() => void vi.useRealTimers())
   // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
   // so unmount for real between cases
-  let unmount_popover = async (): Promise<void> => {
-    throw new Error(`Popover test app was not mounted`)
-  }
+  let unmount_popover: () => Promise<void>
   const mount_popover = (extra: Partial<PopoverProps> = {}) => {
     const props = $state({ ...extra })
     unmount_popover = render(TestPopover, props)
@@ -105,7 +102,6 @@ describe(`Popover`, () => {
     mount_popover({ on_close })
     // closed popovers register no document-wide close trackers
     expect(added.mock.calls.map(([type]) => type)).not.toContain(`keydown`)
-    added.mockRestore()
     await click_trigger()
 
     escape_native_popover()

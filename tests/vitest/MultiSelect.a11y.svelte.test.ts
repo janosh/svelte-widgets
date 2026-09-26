@@ -3,10 +3,12 @@ import { describe, expect, test } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import {
+  click,
   focus_input,
   fresh_key,
   get_input,
   mount_multiselect,
+  press_keys,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -64,8 +66,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull() // nothing active yet
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
 
     const active_id = input.getAttribute(`aria-activedescendant`)
     expect(active_id).toBeTypeOf(`string`)
@@ -102,8 +103,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const listbox_id = doc_query(`ul.options`).id
     expect(listbox_id).toMatch(expected_id)
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
     expect(doc_query(`ul.options`).id).toBe(listbox_id)
     expect(input.getAttribute(`aria-controls`)).toBe(listbox_id)
     expect(input.getAttribute(`aria-activedescendant`)).toContain(
@@ -150,8 +150,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     expect(selected_chip.getAttribute(`role`)).toBeNull()
     expect(selected_chip.getAttribute(`aria-selected`)).toBeNull()
 
-    doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
-    await tick()
+    await click(`ul.selected button.remove`)
     expect(live_region.textContent).toContain(`removed`)
   })
 })
@@ -165,8 +164,7 @@ async function setup_user_message(search_text = `Purple`) {
     open: true,
   })
   mount_multiselect(props)
-  const input = get_input()
-  await type_search_text(search_text, input)
+  const input = await type_search_text(search_text)
 
   return { input, props, user_msg: doc_query(`ul.options li.user-msg`) }
 }
@@ -185,8 +183,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
     expect(user_msg.classList.contains(`active`)).toBe(expected_active)
   }
 
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
 
   expect(input.getAttribute(`aria-activedescendant`)).toBe(user_msg.id)
   expect(user_msg.classList.contains(`active`)).toBe(true)
@@ -203,12 +200,10 @@ test(`user message exposes active descendant and toggles active class`, async ()
 
 test(`clearing search_text while create-option message is active drops aria-activedescendant`, async () => {
   mount_multiselect({ options: [`foo`], allow_user_options: true })
-  const input = get_input()
-  await type_search_text(`xyz`, input)
+  const input = await type_search_text(`xyz`)
 
   // no options match 'xyz' -> ArrowDown activates the create-option message
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.user-msg`).classList.contains(`active`)).toBe(true)
   expect(input.getAttribute(`aria-activedescendant`)).toContain(`user-msg`)
 

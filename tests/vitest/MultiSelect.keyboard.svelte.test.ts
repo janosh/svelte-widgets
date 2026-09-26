@@ -3,37 +3,30 @@ import { describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query, press_key } from './index'
 import {
+  click,
   focus_input,
   fresh_key,
   get_input,
   mount_multiselect,
   normalized_text,
+  press_keys,
   type_search_text,
 } from './MultiSelect.test-utils'
 
 // https://github.com/janosh/svelte-widgets/issues/111
 // https://github.com/janosh/svelte-widgets/issues/112
 test(`can select 1st and last option with arrow and enter key`, async () => {
-  const props = $state<MultiSelectProps>({
-    open: true,
-    options: [1, 2, 3],
-    value: [],
-  })
+  const props = $state<MultiSelectProps>({ open: true, options: [1, 2, 3], value: [] })
   mount_multiselect(props)
 
   const input = get_input()
 
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `Enter`)
   expect(props.value).toEqual([1])
 
-  input.dispatchEvent(fresh_key(`ArrowUp`))
-  await tick()
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `ArrowUp`, `Enter`)
   expect(props.value).toEqual([1, 3])
 })
 
@@ -46,8 +39,7 @@ test(`arrow keys traverse matching options and the create-option row in both dir
     open: true,
   })
 
-  const input = get_input()
-  await type_search_text(`ba`, input)
+  const input = await type_search_text(`ba`)
   expect(normalized_text(doc_query(`ul.options`))).toBe(`bar baz ${create_msg}`)
 
   await focus_input()
@@ -61,8 +53,7 @@ test(`arrow keys traverse matching options and the create-option row in both dir
     [`ArrowUp`, `bar`],
   ] as const
   for (const [idx, [key, expected]] of steps.entries()) {
-    input.dispatchEvent(fresh_key(key))
-    await tick()
+    await press_keys(input, key)
     const active = doc_query(`ul.options li.active`)
     expect(active.textContent, `step ${idx}: ${key}`).toContain(expected)
   }
@@ -87,17 +78,13 @@ test.each([
     })
     const input = get_input()
 
-    input.dispatchEvent(fresh_key(key_name))
-    await tick()
+    await press_keys(input, key_name)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(label)
   },
 )
 
 test(`option row Enter key selects option`, async () => {
-  const props = $state<MultiSelectProps>({
-    options: [`Red`, `Blue`],
-    value: [],
-  })
+  const props = $state<MultiSelectProps>({ options: [`Red`, `Blue`], value: [] })
   mount_multiselect(props)
 
   doc_query(`ul.options li`).dispatchEvent(fresh_key(`Enter`))
@@ -118,13 +105,11 @@ test(`Enter on a closed dropdown reopens it instead of selecting the auto-active
   const input = await focus_input()
   expect(props.active_index).toBe(0)
 
-  input.dispatchEvent(fresh_key(`Escape`))
-  await tick()
+  await press_keys(input, `Escape`)
   expect(props.open).toBe(false)
   expect(props.active_index).toBeNull() // nothing active while collapsed
 
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `Enter`)
   expect(props.value).toEqual([])
   expect(props.open).toBe(true)
   expect(props.active_index).toBe(0)
@@ -138,8 +123,7 @@ test(`closes dropdown on tab out and blur to external element`, async () => {
   const input = await focus_input()
   expect(document.querySelector(`ul.options.hidden`)).toBeNull()
 
-  input.dispatchEvent(fresh_key(`Tab`))
-  await tick()
+  await press_keys(input, `Tab`)
   expect(doc_query(`ul.options.hidden`)).toBeInstanceOf(HTMLUListElement)
   expect(on_close).toHaveBeenCalledTimes(1)
 
@@ -163,14 +147,9 @@ test(`Enter key deselection preserves search_text (matching mouse behavior)`, as
     keep_selected_in_dropdown: `plain`, // Allow clicking on selected options to toggle them
   })
 
-  const input = get_input()
-  await type_search_text(`1`, input)
+  const input = await type_search_text(`1`)
 
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
-
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `ArrowDown`, `Enter`)
 
   expect(input.value).toBe(`1`)
 
@@ -190,8 +169,7 @@ test.each([null, `custom add option message`])(
 
     const input = get_input()
     input.focus()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
 
     const user_msg_li = document.querySelector<HTMLLIElement>(`ul.options li.user-msg`)
     if (!user_msg_li) throw new Error(`li.user-msg should exist`)
@@ -310,8 +288,7 @@ describe(`arrow key navigation between selected items`, () => {
     for (let step = 0; step < n_left; step++) input.dispatchEvent(press(`ArrowLeft`))
     await tick()
     expect(highlighted()).toHaveLength(1)
-    doc_query(selector).click()
-    await tick()
+    await click(selector)
     expect(highlighted()).toHaveLength(0)
   })
 
@@ -378,10 +355,7 @@ describe(`arrow key navigation between selected items`, () => {
     [`shrink clamps highlighted_idx`, [`Red`, `Green`], 1],
     [`clear nullifies highlighted_idx`, [], null],
   ])(`external selected %s`, async (_name, next_selected, expected_idx) => {
-    const props = $state<MultiSelectProps>({
-      options,
-      value: [`Red`, `Green`, `Blue`],
-    })
+    const props = $state<MultiSelectProps>({ options, value: [`Red`, `Green`, `Blue`] })
     mount_multiselect(props)
     const input = get_input()
     // highlight idx 2 (Blue)
@@ -683,28 +657,20 @@ describe(`keyboard shortcuts`, () => {
 })
 
 test(`falsy option values (0, '') are navigable and selectable via keyboard`, async () => {
-  const props = $state<MultiSelectProps>({
-    options: [0, 1, 2],
-    value: [],
-  })
+  const props = $state<MultiSelectProps>({ options: [0, 1, 2], value: [] })
   mount_multiselect(props)
   const input = get_input()
 
   // ArrowDown activates option 0 (previously reset to null because !0 is truthy)
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`0`)
 
   // navigation continues past the falsy option instead of being stuck on it
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
 
   // Enter selects option 0 (previously fell through the `if (active_option)` check)
-  input.dispatchEvent(fresh_key(`ArrowUp`))
-  await tick()
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `ArrowUp`, `Enter`)
   expect(props.value).toEqual([0])
 })
 
@@ -715,8 +681,7 @@ test(`keyboard navigation respects max_options: arrow keys wrap within rendered 
   // 3 ArrowDowns: a -> b -> wrap back to a (previously walked into hidden options c/d/e)
   const expected_active = [`a`, `b`, `a`]
   for (const expected of expected_active) {
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(expected)
     // aria-activedescendant must reference an element that exists in the DOM
     const active_id = input.getAttribute(`aria-activedescendant`)
@@ -726,15 +691,11 @@ test(`keyboard navigation respects max_options: arrow keys wrap within rendered 
 })
 
 test(`IME composition guard: Enter during composition is ignored`, async () => {
-  const props = $state<MultiSelectProps>({
-    options: [`foo`, `bar`],
-    value: [],
-  })
+  const props = $state<MultiSelectProps>({ options: [`foo`, `bar`], value: [] })
   mount_multiselect(props)
   const input = get_input()
 
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_keys(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`foo`)
 
   // Enter mid-composition (confirming CJK text) must not select the active option
@@ -745,8 +706,7 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   expect(props.value).toEqual([])
 
   // same keystroke outside composition selects normally
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_keys(input, `Enter`)
   expect(props.value).toEqual([`foo`])
 })
 

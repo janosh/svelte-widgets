@@ -4,32 +4,21 @@ import { expect, test } from 'vitest'
 // h2, h3, h4, h4, h3, h4, h2, h3
 const nested_levels = [2, 3, 4, 4, 3, 4, 2, 3]
 
+// expected visibility is a 0/1 mask over the levels
 test.each([
   [`empty`, [], -1, 6, []],
-  [`skipped levels`, [2, 4, 3, 5, 2, 6], 3, 4, [true, true, true, true, true, true]],
+  [`skipped levels`, [2, 4, 3, 5, 2, 6], 3, 4, [1, 1, 1, 1, 1, 1]],
   // Toc reaches this via headings.indexOf(active_heading) === -1: collapsing is on but
   // no heading is active, so only the top-level ones stay visible
-  [
-    `active heading not found`,
-    nested_levels,
-    -1,
-    3,
-    [true, false, false, false, false, false, true, false],
-  ],
-  [`inactive`, nested_levels, null, 6, nested_levels.map(() => true)],
-  [`active h4`, nested_levels, 2, 6, [true, true, true, true, true, false, true, false]],
-  [
-    `h3 threshold`,
-    nested_levels,
-    0,
-    3,
-    [true, true, true, true, true, true, true, false],
-  ],
+  [`active heading not found`, nested_levels, -1, 3, [1, 0, 0, 0, 0, 0, 1, 0]],
+  [`inactive`, nested_levels, null, 6, [1, 1, 1, 1, 1, 1, 1, 1]],
+  [`active h4`, nested_levels, 2, 6, [1, 1, 1, 1, 1, 0, 1, 0]],
+  [`h3 threshold`, nested_levels, 0, 3, [1, 1, 1, 1, 1, 1, 1, 0]],
 ] as const)(
   `get_heading_visibility %s keeps expected headings visible`,
-  (_, levels, active_idx, collapse_threshold, expected) => {
+  (_, levels, active_idx, collapse_threshold, visible_mask) => {
     expect(get_heading_visibility(levels, active_idx, collapse_threshold)).toEqual(
-      expected,
+      visible_mask.map(Boolean),
     )
   },
 )

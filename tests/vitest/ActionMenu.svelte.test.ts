@@ -1,14 +1,16 @@
 import { ActionMenu } from '$lib'
 import type { CmdAction, CmdSection } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { createRawSnippet, flushSync, tick } from 'svelte'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
 import {
   doc_query,
   escape_key,
   mock_rect,
   next_task,
+  pointer_event,
   press_key,
+  render,
   stub_prop,
 } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
@@ -22,22 +24,15 @@ describe(`ActionMenu`, () => {
     { id: `Copy`, label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { id: `Delete`, label: `Delete`, action: vi.fn(), disabled: true },
   ]
-  // svelte:body listeners outlive innerHTML = '', so unmount or old menus keep answering
-  const mounted: Record<string, unknown>[] = []
-  afterEach(() => mounted.splice(0).forEach((app) => void unmount(app)))
-  // returns the reactive props, so a test can drive `at` the way a consumer would
+  // returns the reactive props (render unmounts at test end: svelte:body listeners outlive
+  // innerHTML = '', so old menus would keep answering), so a test can drive `at` the way a consumer would
   const mount_menu = (actions: MenuEntries, extra: MenuProps = {}) => {
     const props: MenuProps & { actions: MenuEntries } = $state({ actions, ...extra })
-    mounted.push(mount(ActionMenu, { target: document.body, props }))
+    render(ActionMenu, props)
     return props
   }
   const right_click = (target: EventTarget, clientX = 120, clientY = 240) => {
-    const event = new MouseEvent(`contextmenu`, {
-      bubbles: true,
-      cancelable: true,
-      clientX,
-      clientY,
-    })
+    const event = pointer_event(`contextmenu`, clientX, clientY, { cancelable: true })
     target.dispatchEvent(event)
     return event
   }
@@ -147,12 +142,8 @@ describe(`ActionMenu`, () => {
   })
 
   test(`a trigger snippet toggles an anchored dropdown and restores focus`, async () => {
-    const props = $state({
-      actions: make_actions(),
-      open: false,
-      match_width: true,
-    })
-    mounted.push(mount(TestActionMenu, { target: document.body, props }))
+    const props = $state({ actions: make_actions(), open: false, match_width: true })
+    render(TestActionMenu, props)
     const anchor = doc_query(`[data-testid="action-menu-anchor"]`)
     const trigger = doc_query<HTMLButtonElement>(`[data-testid="action-menu-trigger"]`)
     mock_rect(anchor, { left: 40, top: 60, width: 80, height: 20 })

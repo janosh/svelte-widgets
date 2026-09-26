@@ -1,23 +1,13 @@
 import { SettingsSection } from '$lib'
-import {
-  createRawSnippet,
-  flushSync,
-  mount,
-  tick,
-  unmount,
-  type ComponentProps,
-} from 'svelte'
-import { describe, expect, onTestFinished, test } from 'vitest'
-import { doc_query } from './index'
+import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
+import { describe, expect, test } from 'vitest'
+import { doc_query, render } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
 
 const snippet = (content: string) => createRawSnippet(() => ({ render: () => content }))
 type SettingValues = Record<string, unknown>
-const mount_section = (props: ComponentProps<typeof SettingsSection>) => {
-  const component = mount(SettingsSection, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-  return component
-}
+const mount_section = (props: ComponentProps<typeof SettingsSection>) =>
+  render(SettingsSection, props)
 const click_and_tick = async (
   selector: string,
   root: ParentNode | null = document,
@@ -157,36 +147,21 @@ describe(`SettingsSection`, () => {
     expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
   })
 
-  test.each([
-    {
-      name: `existing key`,
-      label: `Radius`,
-      initial: { radius: 1, palette: `warm` },
-      change: { radius: 2 },
-      key: `radius`,
-      reference_value: 1,
-      reference_present: true,
-    },
-    {
-      name: `new key`,
-      label: `Temporary`,
-      initial: { radius: 1 },
-      change: { temporary: undefined },
-      key: `temporary`,
-      reference_value: undefined,
-      reference_present: false,
-    },
-    {
-      name: `underscored key`,
-      label: `Same size`,
-      initial: { same_size_atoms: false },
-      change: { same_size_atoms: true },
-      key: `same_size_atoms`,
-      reference_value: false,
-      reference_present: true,
-    },
-  ])(`resets $name to its mounted state`, async (test_case) => {
-    const { initial, change, key, label, reference_value, reference_present } = test_case
+  test.each<[string, string, SettingValues, SettingValues]>([
+    [`existing key`, `Radius`, { radius: 1, palette: `warm` }, { radius: 2 }],
+    [`new key`, `Temporary`, { radius: 1 }, { temporary: undefined }],
+    [
+      `underscored key`,
+      `Same size`,
+      { same_size_atoms: false },
+      { same_size_atoms: true },
+    ],
+  ])(`resets %s to its mounted state`, async (_, label, initial, change) => {
+    const [key] = Object.keys(change)
+    const [reference_value, reference_present] = [
+      initial[key],
+      Object.hasOwn(initial, key),
+    ]
     const tracked = mount_tracked_section(
       initial,
       `<div>
@@ -398,8 +373,7 @@ describe(`SettingsSection`, () => {
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {
-    const component = mount(SettingsSectionRerenderHarness, { target: document.body })
-    onTestFinished(() => unmount(component))
+    render(SettingsSectionRerenderHarness, {})
     await tick()
 
     const settings_row = (): HTMLElement | null =>

@@ -3,9 +3,9 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
 import { doc_query } from './index'
 import {
-  fresh_key,
   get_input,
   mount_multiselect,
+  press_keys,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -149,8 +149,7 @@ describe(`virtual_list`, () => {
     const input = get_input()
     const n_presses = 25 // active_index 24 lies past the initial window end of 19
     for (let press_idx = 0; press_idx < n_presses; press_idx++) {
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
+      await press_keys(input, `ArrowDown`)
     }
     await tick() // flush the async scroll adjustment in handle_arrow_navigation
 
@@ -166,8 +165,7 @@ describe(`virtual_list`, () => {
   test(`fuzzy search filtering still works in virtual mode`, async () => {
     mount_multiselect(virtual_props)
 
-    const input = get_input()
-    await type_search_text(`999`, input)
+    const input = await type_search_text(`999`)
 
     const rendered = get_rendered_options()
     expect(rendered).toHaveLength(1)
@@ -218,14 +216,12 @@ describe(`virtual_list`, () => {
     // first ArrowDown activates flat idx 0, whose ROW is 1 (group 0's header is row 0) —
     // auto-scroll must use the row offset, not the flat index (which would scroll to 0)
     const input = get_input()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
     expect(ul_options.scrollTop).toBe(item_height) // row 1 (header row 0 above it)
 
     // 11 more presses reach flat idx 11 ("option 6", row 13), still inside the window
     for (let press = 0; press < 11; press++) {
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
+      await press_keys(input, `ArrowDown`)
     }
     const active = doc_query(`ul.options li.active`)
     expect(active.textContent?.trim()).toBe(`option 6`)

@@ -5,8 +5,8 @@ import { doc_query } from './index'
 import {
   focus_input,
   fresh_key,
-  get_input,
   mount_multiselect,
+  press_keys,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -107,14 +107,12 @@ describe(`option grouping feature`, () => {
     const input = await focus_input()
 
     // the second press steps over the Genre header between the ungrouped option and Rock
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(
       `Ungrouped Option`,
     )
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`Rock`)
   })
 
@@ -157,10 +155,7 @@ describe(`option grouping feature`, () => {
 
   test(`group_select_all buttons select groups by click and keyboard`, async () => {
     const onselectAll_spy = vi.fn()
-    await mount_grouped({
-      group_select_all: true,
-      on_select_all: onselectAll_spy,
-    })
+    await mount_grouped({ group_select_all: true, on_select_all: onselectAll_spy })
 
     const select_all_buttons = document.querySelectorAll(
       `ul.options > li.group-header button.group-select-all`,
@@ -544,8 +539,7 @@ describe(`option grouping feature`, () => {
     expect(group_expanded(genre_header)).toBe(`false`)
 
     const input = await focus_input()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_keys(input, `ArrowDown`)
 
     expect(group_expanded(genre_header)).toBe(`true`)
   })
@@ -694,8 +688,7 @@ test.each([`Fruits`, ``])(
       search_expands_collapsed_groups: true,
       collapsed_groups: new Set([group]),
     })
-    const input = get_input()
-    await type_search_text(`a`, input)
+    const input = await type_search_text(`a`)
     expect(group_expanded(group)).toBe(`true`)
 
     // manual collapse mid-search must stick (previously insta-re-expanded)

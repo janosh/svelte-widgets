@@ -23,6 +23,8 @@ describe(`Accordion`, () => {
     ...document.querySelectorAll<HTMLButtonElement>(`button.accordion-trigger`),
   ]
   const panels = () => [...document.querySelectorAll<HTMLDivElement>(`[role="region"]`)]
+  const expanded = () =>
+    triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))
   const click_trigger = async (trigger_idx: number) => {
     triggers()[trigger_idx].click()
     await tick()
@@ -55,9 +57,7 @@ describe(`Accordion`, () => {
     props.value = `alpha`
     await tick()
     expect(trigger_nodes.map((trigger) => trigger.id)).toEqual(initial_ids)
-    expect(trigger_nodes.map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual(
-      [`true`, `false`, `false`],
-    )
+    expect(expanded()).toEqual([`true`, `false`, `false`])
   })
 
   test(`single mode controls one open item and honors collapsible`, async () => {
@@ -106,11 +106,7 @@ describe(`Accordion`, () => {
 
     await click_trigger(2)
     expect(props.value).toEqual([`alpha`, `gamma`])
-    expect(triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual([
-      `true`,
-      `false`,
-      `true`,
-    ])
+    expect(expanded()).toEqual([`true`, `false`, `true`])
     expect(on_change).toHaveBeenLastCalledWith([`alpha`, `gamma`])
 
     await click_trigger(0)
@@ -144,11 +140,7 @@ describe(`Accordion`, () => {
       expect(event.defaultPrevented).toBe(true)
       expect(document.activeElement).toBe(triggers()[expected_idx])
     }
-    expect(triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual([
-      `true`,
-      `false`,
-      `false`,
-    ])
+    expect(expanded()).toEqual([`true`, `false`, `false`])
 
     const left = press_key(document.activeElement ?? document.body, `ArrowLeft`)
     expect(left.defaultPrevented).toBe(false)

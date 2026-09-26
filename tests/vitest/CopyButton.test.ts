@@ -2,7 +2,7 @@ import { CopyButton } from '$lib'
 import { Alert, Check, Copy } from '$lib/icons'
 import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
-import { mount, tick } from 'svelte'
+import { tick } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { doc_query, render, press_key } from './index'
@@ -121,10 +121,7 @@ test.each([
 test.each([true, false])(
   `custom children snippet renders and receives disabled=%s`,
   (disabled) => {
-    mount(TestSnippetHarness, {
-      target: document.body,
-      props: { component: `copy-button`, content: `test`, disabled },
-    })
+    render(TestSnippetHarness, { component: `copy-button`, content: `test`, disabled })
     const copy_button = doc_query(`[data-sms-copy]`)
     expect(copy_button.querySelector(`[data-sms-action-content] svg`)).toBeNull()
     const snippet = copy_button.querySelector<HTMLElement>(`[data-testid="copy-snippet"]`)
@@ -152,20 +149,17 @@ test.each([`success`, `error`] as const)(
     const on_copy_success = vi.fn((_content: string) => {
       throw new Error(`analytics hook blew up`)
     })
-    const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
+    vi.spyOn(console, `error`).mockImplementation(() => void 0)
     const copy_error = new Error(`clipboard failed`)
     const pending = Promise.withResolvers<undefined>()
     mock_write_text.mockReturnValue(pending.promise)
-    mount(CopyButton, {
-      target: document.body,
-      props: {
-        get content() {
-          return content_proxy.current
-        },
-        on_copy_success,
-        on_copy_error,
-        onclick,
+    render(CopyButton, {
+      get content() {
+        return content_proxy.current
       },
+      on_copy_success,
+      on_copy_error,
+      onclick,
     })
     const copy_button = doc_query(`[data-sms-copy]`)
     await click_copy_button(copy_button)
@@ -183,7 +177,6 @@ test.each([`success`, `error`] as const)(
     )
     expect(copy_button.dataset.state).toBe(state)
     expect(onclick).toHaveBeenCalledOnce()
-    console_error_spy.mockRestore()
   },
 )
 
@@ -243,20 +236,17 @@ type CopyState = `ready` | `success` | `error`
 const mount_bound_copy_button = () => {
   const state_store = writable<CopyState>(`ready`)
   const state_proxy = fromStore(state_store)
-  mount(CopyButton, {
-    target: document.body,
-    props: {
-      content: `bound content`,
-      as: `div`,
-      labels: default_labels,
-      icons: default_icons,
-      reset_ms: 0,
-      get state() {
-        return state_proxy.current
-      },
-      set state(new_state: CopyState) {
-        state_store.set(new_state)
-      },
+  render(CopyButton, {
+    content: `bound content`,
+    as: `div`,
+    labels: default_labels,
+    icons: default_icons,
+    reset_ms: 0,
+    get state() {
+      return state_proxy.current
+    },
+    set state(new_state: CopyState) {
+      state_store.set(new_state)
     },
   })
   return { copy_button: doc_query(`[data-sms-copy]`), state_store }
@@ -268,7 +258,7 @@ test.each([
 ] as const)(
   `bound state: click propagates %s outward, external writes update rendering`,
   async (expected_state, rejection, icon) => {
-    const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
+    vi.spyOn(console, `error`).mockImplementation(() => void 0)
     if (rejection) mock_write_text.mockRejectedValue(rejection)
 
     const { copy_button, state_store } = mount_bound_copy_button()
@@ -280,8 +270,6 @@ test.each([
     state_store.set(`ready`)
     await tick()
     expect(icon_path(copy_button)).toBe(Copy.d)
-
-    console_error_spy.mockRestore()
   },
 )
 

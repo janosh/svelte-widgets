@@ -1,7 +1,7 @@
 import { Masonry } from '$lib'
 import { order_options as ALL_ORDER_MODES } from '$lib/utils'
 import { type ComponentProps, mount, tick } from 'svelte'
-import { beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
@@ -75,7 +75,6 @@ globalThis.ResizeObserver = class ResizeObserver implements ResizeObserver {
 }
 
 beforeEach(() => {
-  document.body.innerHTML = ``
   resize_observers.clear()
   mock_height = 100
 })
@@ -278,12 +277,10 @@ describe(`Masonry`, () => {
   test(`binds div and masonry_height`, async () => {
     let bound_div: HTMLDivElement | undefined
     let bound_height = 0
-    const height_spy = vi
-      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
-      .mockImplementation(function (this: HTMLElement) {
-        return this.classList.contains(`masonry`) ? 250 : 0
-      })
-    onTestFinished(() => height_spy.mockRestore())
+    const fake_height = function (this: HTMLElement) {
+      return this.classList.contains(`masonry`) ? 250 : 0
+    }
+    vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockImplementation(fake_height)
     mount_masonry({
       items: [1, 2],
       get div() {
@@ -619,10 +616,7 @@ describe(`Masonry virtualization`, () => {
   })
 
   test(`defers virtualization until masonry_height is measured for string heights`, () => {
-    const height_spy = vi
-      .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
-      .mockReturnValue(0)
-    onTestFinished(() => height_spy.mockRestore())
+    vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockReturnValue(0)
     mount_masonry({
       items: make_items(100),
       virtualize: true,

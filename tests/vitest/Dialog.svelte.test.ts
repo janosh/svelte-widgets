@@ -2,12 +2,11 @@ import { tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import { create_element, doc_query, render, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
+import { focusable } from '$lib/dialog'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
-  let unmount_dialog = async (): Promise<void> => {
-    throw new Error(`Dialog test app was not mounted`)
-  }
+  let unmount_dialog: () => Promise<void>
   const mount_dialog = (extra: Partial<DialogProps> = {}) => {
     const props = $state({ ...extra })
     unmount_dialog = render(TestDialog, props)
@@ -199,6 +198,31 @@ describe(`Dialog`, () => {
     expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `escape` })
   })
 
+  test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {
+    const props = mount_dialog({
+      open: false,
+      sheet: true,
+      class: `consumer-class`,
+      closedby: `none`,
+      side: `left`,
+    })
+    trigger().click()
+    await tick()
+
+    const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
+    expect(dialog.classList.contains(`consumer-class`)).toBe(true)
+    expect([dialog.getAttribute(`closedby`), dialog.dataset.side]).toEqual([
+      `none`,
+      `left`,
+    ])
+    expect(dialog.getAttribute(`aria-labelledby`)).toBe(`test-dialog-title`)
+    expect(item(`dialog-footer`).textContent).toBe(`Changes are local`)
+
+    item(`dialog-action`).click()
+    await tick()
+    expect([props.open, document.querySelector(`dialog.sheet`)]).toEqual([false, null])
+  })
+
   test(`unmounting an open dialog restores focus without reporting a close`, async () => {
     const on_close = vi.fn()
     const focus_origin = create_element(`button`)
@@ -212,4 +236,18 @@ describe(`Dialog`, () => {
     expect(on_close).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(focus_origin)
   })
+})
+
+test.each([
+  [`an HTML element`, () => document.createElement(`button`), true],
+  [
+    `an SVG element`,
+    () => document.createElementNS(`http://www.w3.org/2000/svg`, `circle`),
+    true,
+  ],
+  [`a text node`, () => document.createTextNode(`x`), false],
+  [`null`, () => null, false],
+])(`focusable returns %s only when it can take focus`, (_desc, make, can_focus) => {
+  const target = make()
+  expect(focusable(target)).toBe(can_focus ? target : null)
 })

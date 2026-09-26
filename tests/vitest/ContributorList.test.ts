@@ -4,18 +4,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, hover } from './index'
 
 describe(`ContributorList`, () => {
-  const contributors = [
-    {
-      login: `janosh`,
-      avatar_url: `https://avatars.gh/1`,
-      html_url: `https://gh/janosh`,
-    },
-    {
-      login: `octocat`,
-      avatar_url: `https://avatars.gh/2`,
-      html_url: `https://gh/octocat`,
-    },
-  ]
+  const contributors = [`janosh`, `octocat`].map((login, idx) => ({
+    login,
+    avatar_url: `https://avatars.gh/${idx + 1}`,
+    html_url: `https://gh/${login}`,
+  }))
   // attachments are applied in an effect, so the tooltip isn't live until a flush
   const mount_list = async (
     props: Partial<ComponentProps<typeof ContributorList>> = {},

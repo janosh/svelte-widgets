@@ -1,33 +1,31 @@
 import { ClickFeedback, DragOverlay } from '$lib'
 import { flushSync } from 'svelte'
-import { describe, expect, test } from 'vitest'
+import { expect, test } from 'vitest'
 import { doc_query, render } from './index'
 
-describe(`DragOverlay`, () => {
-  test(`renders only when visible, with its default/custom messages and forwarded style`, () => {
-    const props = $state({
-      visible: false,
-      message: undefined as string | undefined,
-      style: `z-index: 1`,
-      class: `caller-class`,
-    })
-    render(DragOverlay, props)
-    expect(document.querySelector(`.drag-overlay`)).toBeNull()
-
-    props.visible = true
-    flushSync()
-    const overlay = doc_query(`.drag-overlay.caller-class`)
-    expect(overlay.textContent).toContain(`Drop file to load`)
-
-    props.message = `Drop it`
-    flushSync()
-    expect(overlay.style.zIndex).toBe(`1`)
-    expect(overlay.textContent).toContain(`Drop it`)
-    expect(overlay.querySelector(`svg`)?.getAttribute(`aria-hidden`)).toBe(`true`)
-    props.visible = false
-    flushSync()
-    expect(document.querySelector(`.drag-overlay`)).toBeNull()
+test(`DragOverlay renders only when visible, with its default/custom messages and forwarded style`, () => {
+  const props = $state({
+    visible: false,
+    message: undefined as string | undefined,
+    style: `z-index: 1`,
+    class: `caller-class`,
   })
+  render(DragOverlay, props)
+  expect(document.querySelector(`.drag-overlay`)).toBeNull()
+
+  props.visible = true
+  flushSync()
+  const overlay = doc_query(`.drag-overlay.caller-class`)
+  expect(overlay.textContent).toContain(`Drop file to load`)
+
+  props.message = `Drop it`
+  flushSync()
+  expect(overlay.style.zIndex).toBe(`1`)
+  expect(overlay.textContent).toContain(`Drop it`)
+  expect(overlay.querySelector(`svg`)?.getAttribute(`aria-hidden`)).toBe(`true`)
+  props.visible = false
+  flushSync()
+  expect(document.querySelector(`.drag-overlay`)).toBeNull()
 })
 
 test('ClickFeedback follows visibility and viewport position', () => {

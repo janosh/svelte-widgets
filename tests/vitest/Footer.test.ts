@@ -61,10 +61,7 @@ describe(`Footer`, () => {
     const item = createRawSnippet<[{ link: FooterLink }]>((get_params) => ({
       render: () => `<a href="${get_params().link.href}" data-custom>custom</a>`,
     }))
-    mount_footer({
-      links: [{ href: `/issues`, label: `Issues`, icon: GitHub }],
-      item,
-    })
+    mount_footer({ links: [{ href: `/issues`, label: `Issues`, icon: GitHub }], item })
 
     expect(anchors().map((anchor) => anchor.textContent)).toEqual([`custom`])
     expect(doc_query(`footer nav a`).hasAttribute(`data-custom`)).toBe(true)

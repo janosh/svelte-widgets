@@ -1,12 +1,11 @@
 import { TaskStatus } from '$lib'
-import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { createRawSnippet, tick, type ComponentProps } from 'svelte'
+import { expect, test, vi } from 'vitest'
+import { doc_query, render } from './index'
 
 type Props = ComponentProps<typeof TaskStatus>
 const render_task = (props: Props) => {
-  const component = mount(TaskStatus, { target: document.body, props })
-  onTestFinished(() => unmount(component))
+  render(TaskStatus, props)
   return doc_query(`.task-status`)
 }
 const button_texts = (root: Element) =>

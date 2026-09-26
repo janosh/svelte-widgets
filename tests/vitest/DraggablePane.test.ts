@@ -2,8 +2,9 @@ import DraggablePane from '$lib/DraggablePane.svelte'
 import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 import {
+  create_element,
   doc_query,
   hover,
   mock_rect,
@@ -58,9 +59,8 @@ describe(`DraggablePane`, () => {
   }
 
   // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
-  const mock_viewport = (inner_width = 1000, inner_height = 500) => {
+  const mock_viewport = (inner_width = 1000, inner_height = 500) =>
     stub_props(globalThis, { innerWidth: inner_width, innerHeight: inner_height })
-  }
 
   // for the tests that need no geometry mocked before the pane opens
   const open_pane = async (props: PaneProps = {}) => {
@@ -147,8 +147,7 @@ describe(`DraggablePane`, () => {
 
   // dismiss_on undefined leaves the pane's own default in force, which is what pins it
   const mount_toggles = async (dismiss_on?: `press` | `release`, open = false) => {
-    const props = { dismiss_on, open }
-    render(TestPaneExternalToggles, props)
+    render(TestPaneExternalToggles, { dismiss_on, open })
     await tick()
     return {
       pane: doc_query<HTMLDivElement>(`.draggable-pane`),
@@ -210,9 +209,7 @@ describe(`DraggablePane`, () => {
   test.each([`press`, `release`] as const)(
     `inside spares an outside control's press and click, dismiss_on=%s`,
     async (dismiss_on) => {
-      const control = document.createElement(`button`)
-      document.body.append(control)
-      onTestFinished(() => control.remove())
+      const control = create_element(`button`)
       const { pane } = await open_pane({ inside: [control], dismiss_on })
 
       press_release(control)
@@ -294,8 +291,7 @@ describe(`DraggablePane`, () => {
   ] as const)(
     `absolute positioning aligns %s against the pane's offsetParent`,
     async (align, left) => {
-      const ancestor = document.createElement(`div`)
-      document.body.append(ancestor)
+      const ancestor = create_element()
       mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
       const { toggle, pane } = await setup({ align })
       stub_props(pane, { offsetParent: ancestor })
@@ -327,8 +323,7 @@ describe(`DraggablePane`, () => {
   })
 
   test(`reset returns a dragged pane to its anchor and hides the controls`, async () => {
-    const ancestor = document.createElement(`div`)
-    document.body.append(ancestor)
+    const ancestor = create_element()
     mock_rect(ancestor, { left: 0, top: 0, width: 800, height: 600 })
     const { toggle, pane } = await setup()
     stub_props(toggle, { offsetParent: ancestor })

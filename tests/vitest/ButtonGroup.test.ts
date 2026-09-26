@@ -14,8 +14,7 @@ describe(`ButtonGroup`, () => {
   afterEach(() => void vi.useRealTimers())
 
   const mount_group = (props: Props) => {
-    const full_props = props as ComponentProps<typeof ButtonGroup>
-    render(ButtonGroup, full_props)
+    render(ButtonGroup, props as ComponentProps<typeof ButtonGroup>)
     // `[data-value]` so an option_suffix rendering its own button doesn't join the list
     return [
       ...document.querySelectorAll<HTMLButtonElement>(`.options button[data-value]`),
@@ -35,12 +34,6 @@ describe(`ButtonGroup`, () => {
   ]
   // happy-dom drops nested CSS; inspect source for the styling contract.
   const styles = button_group_source.slice(button_group_source.indexOf(`<style>`))
-  const remove_button = createRawSnippet<[{ option: { value: string } }]>(
-    (get_params) => ({
-      render: () =>
-        `<button type="button" data-remove="${get_params().option.value}">x</button>`,
-    }),
-  )
   const info_link = createRawSnippet<[{ option: { value: string }; selected: boolean }]>(
     (get_params) => ({
       render: () => {
@@ -399,7 +392,12 @@ describe(`ButtonGroup`, () => {
   // A broad button selector would incorrectly include suffix buttons in navigation.
   test(`suffix buttons stay out of arrow key navigation`, async () => {
     const on_change = vi.fn()
-    const option_suffix = remove_button
+    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
+      (get_params) => ({
+        render: () =>
+          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
+      }),
+    )
     const buttons = mount_group({
       options: letters,
       value: `alpha`,

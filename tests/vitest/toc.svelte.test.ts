@@ -2,19 +2,13 @@ import Toc from '$lib/Toc.svelte'
 import Heading from '$lib/Heading.svelte'
 import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
-import { afterEach, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, next_task, press_key } from './index'
+import { createRawSnippet, flushSync, tick } from 'svelte'
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, next_task, press_key, render } from './index'
 
 type TocProps = ComponentProps<typeof Toc>
 
-const mounted_components: Record<string, unknown>[] = []
-
-const mount_toc = (props: TocProps = {}) => {
-  mounted_components.push(
-    mount(Toc, { target: document.body, props: { dynamic: true, ...props } }),
-  )
-}
+const mount_toc = (props: TocProps = {}) => render(Toc, { dynamic: true, ...props })
 
 const set_body = (html: string) => {
   document.body.innerHTML = html
@@ -110,14 +104,6 @@ const find_matching_css_selector = (style_text: string, declaration_pattern: Reg
   throw new Error(`No CSS block matched ${declaration_pattern}`)
 }
 
-beforeAll(() => {
-  // Mock enough of the animate API for Svelte transitions.
-  Object.defineProperty(Element.prototype, `animate`, {
-    configurable: true,
-    value: vi.fn<() => { cancel: () => void }>(() => ({ cancel: vi.fn<() => void>() })),
-  })
-})
-
 // happy-dom drops declarations whose value holds a var() with a fallback, which is how Toc
 // expresses indent and font size, so record the cssText Svelte writes and assert on that
 const style_prototype = Object.getPrototypeOf(document.createElement(`div`).style)
@@ -148,11 +134,6 @@ const written_style_values = (property: string) =>
     .flatMap((css_text) => css_text.split(`;`))
     .map((declaration) => declaration.trim())
     .filter((declaration) => declaration.startsWith(`${property}:`))
-
-afterEach(async () => {
-  await Promise.all(mounted_components.splice(0).map((component) => unmount(component)))
-  vi.restoreAllMocks()
-})
 
 describe(`Toc`, () => {
   test.each([390, 1200])(
@@ -345,7 +326,7 @@ describe(`Toc`, () => {
       level: 2,
       link: true,
     })
-    mounted_components.push(mount(Heading, { target: document.body, props }))
+    render(Heading, props)
     await tick()
     const heading = doc_query(`h2`)
     expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#initial`)
@@ -365,7 +346,7 @@ describe(`Toc`, () => {
 
   test(`DOM observation is opt-in`, async () => {
     set_headings(1)
-    mounted_components.push(mount(Toc, { target: document.body }))
+    render(Toc, {})
     await tick()
     document.body.insertAdjacentHTML(`afterbegin`, `<h2 id="later">Later</h2>`)
     await next_task()
@@ -708,7 +689,7 @@ describe(`Toc`, () => {
       active_toc_li: null,
       toc_items: [],
     })
-    mounted_components.push(mount(Toc, { target: document.body, props }))
+    render(Toc, props)
     await tick()
     if (removed_id) {
       doc_query(`#${removed_id}`).remove()
@@ -877,10 +858,10 @@ describe(`Toc`, () => {
     expect(toc_texts()).toEqual([`Initial Heading`])
     const stale_item = doc_query(`aside.toc ol li`)
 
-    const new_heading = document.createElement(`h3`)
-    new_heading.id = `added-heading`
-    new_heading.textContent = `Added Heading`
-    doc_query(`#content`).append(new_heading)
+    doc_query(`#content`).insertAdjacentHTML(
+      `beforeend`,
+      `<h3 id="added-heading">Added Heading</h3>`,
+    )
     await tick()
     expect(toc_texts()).toEqual([`Initial Heading`, `Added Heading`])
 
@@ -935,43 +916,32 @@ describe(`Toc`, () => {
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Beta`)
 
     // appending a real heading changes the set, so the rebuild runs and active updates
-    const new_heading = document.createElement(`h2`)
-    new_heading.id = `c`
-    new_heading.textContent = `Gamma`
-    document.body.append(new_heading)
+    document.body.insertAdjacentHTML(`beforeend`, `<h2 id="c">Gamma</h2>`)
     await tick()
     expect(query_spy).toHaveBeenCalled()
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Gamma`)
     query_spy.mockRestore()
   })
 
-  test.each([`characterData`, `childList`])(
-    `heading %s edits update the ToC`,
-    async (kind) => {
-      set_body(`<h2 id="a">Original</h2>`)
-      mount_toc()
-      await tick()
-      expect(doc_query(`aside.toc li`).textContent.trim()).toBe(`Original`)
-
-      const heading = doc_query(`#a`)
-      if (kind === `characterData`) (heading.firstChild as Text).data = `Changed`
-      else heading.textContent = `Changed`
-      await tick()
-      expect(doc_query(`aside.toc li`).textContent.trim()).toBe(`Changed`)
-    },
-  )
-
-  test(`heading id attribute changes update link targets`, async () => {
-    set_body(`<h2 id="old">Title</h2>`)
+  test.each([
+    [
+      `characterData`,
+      (heading: HTMLElement) => ((heading.firstChild as Text).data = `New`),
+    ],
+    [`childList`, (heading: HTMLElement) => (heading.textContent = `New`)],
+    [`id attribute`, (heading: HTMLElement) => (heading.id = `new`)],
+  ])(`heading %s edits update the ToC`, async (kind, edit) => {
+    set_body(`<h2 id="old">Old</h2>`)
     mount_toc()
     await tick()
+    expect(toc_texts()).toEqual([`Old`])
 
-    expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#old`)
-
-    doc_query(`body > h2`).id = `new`
+    edit(doc_query(`body > h2`))
     await tick()
-
-    expect(doc_query(`aside.toc li > a`).getAttribute(`href`)).toBe(`#new`)
+    const link = doc_query(`aside.toc li > a`)
+    const renamed = kind === `id attribute`
+    expect(link.textContent.trim()).toBe(renamed ? `Old` : `New`)
+    expect(link.getAttribute(`href`)).toBe(renamed ? `#new` : `#old`)
   })
 
   test(`selector-driven attribute changes update heading membership`, async () => {
@@ -1109,13 +1079,16 @@ describe(`hide_on_intersect`, () => {
   const over_toc = { top: 150, bottom: 250, left: 0, right: 1200 }
 
   // parks the ToC top-right so only a banner's vertical extent decides overlap
-  const setup_banners = async (
-    target: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hide_on_intersect`],
-    {
-      window_width = 1200,
-      b2_rect = over_toc,
-    }: { window_width?: number; b2_rect?: Partial<DOMRect> } = {},
-  ) => {
+  type BannerOptions = {
+    target?: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hide_on_intersect`]
+    window_width?: number
+    b2_rect?: Partial<DOMRect>
+  }
+  const setup_banners = async ({
+    target = () => `.banner`,
+    window_width = 1200,
+    b2_rect = over_toc,
+  }: BannerOptions = {}) => {
     set_body(
       `<h2>Heading 1</h2><div class="banner" id="b1">B1</div><div class="banner" id="b2">B2</div>`,
     )
@@ -1134,36 +1107,20 @@ describe(`hide_on_intersect`, () => {
 
   const is_intersecting = (aside: HTMLElement) => aside.classList.contains(`intersecting`)
 
-  type IntersectCase = {
-    desc: string
-    target?: (b1: HTMLElement, b2: HTMLElement) => TocProps[`hide_on_intersect`]
-    window_width?: number
-    b2_rect?: Partial<DOMRect>
-    expected: boolean
-  }
-
-  test.each<IntersectCase>([
-    { desc: `hides the ToC when a banner overlaps it`, expected: true },
-    {
-      desc: `keeps the ToC when no banner overlaps`,
-      b2_rect: clear_of_toc,
-      expected: false,
-    },
-    { desc: `ignores overlap on mobile`, window_width: 600, expected: false },
-    {
-      desc: `accepts an HTMLElement array`,
-      target: (b1, b2) => [b1, b2],
-      expected: true,
-    },
-    { desc: `ignores a selector matching nothing`, target: () => `.x`, expected: false },
-  ])(`$desc`, async ({ target = () => `.banner`, expected, window_width, b2_rect }) => {
-    const { aside } = await setup_banners(target, { window_width, b2_rect })
+  test.each<[string, boolean, BannerOptions]>([
+    [`hides the ToC when a banner overlaps it`, true, {}],
+    [`keeps the ToC when no banner overlaps`, false, { b2_rect: clear_of_toc }],
+    [`ignores overlap on mobile`, false, { window_width: 600 }],
+    [`accepts an HTMLElement array`, true, { target: (b1, b2) => [b1, b2] }],
+    [`ignores a selector matching nothing`, false, { target: () => `.x` }],
+  ])(`%s`, async (_, expected, options) => {
+    const { aside } = await setup_banners(options)
     await scroll()
     expect(is_intersecting(aside)).toBe(expected)
   })
 
   test(`re-shows the ToC once the overlap ends`, async () => {
-    const { aside, b2 } = await setup_banners(() => `.banner`)
+    const { aside, b2 } = await setup_banners()
     await scroll()
     expect(is_intersecting(aside)).toBe(true)
     // opacity: 0 alone leaves the links tabbable, so the subtree must be inert while hidden
@@ -1326,44 +1283,28 @@ describe(`Element Prop Bags`, () => {
   })
 
   test.each([
-    {
-      rule_name: `aside base rule`,
-      declaration_pattern: /box-sizing: border-box;/,
-      expects_where: true,
-    },
-    {
-      rule_name: `nav base rule`,
-      declaration_pattern: /overflow: var\(--toc-overflow, auto\);/,
-      expects_where: true,
-    },
-    {
-      rule_name: `list item base rule`,
-      declaration_pattern: /color: var\(--toc-li-color\);/,
-      expects_where: true,
-    },
-    {
-      rule_name: `open button base rule`,
-      declaration_pattern: /bottom: var\(--toc-mobile-btn-bottom, 0\);/,
-      expects_where: true,
-    },
-    {
-      // https://github.com/janosh/svelte-toc/issues/71
-      rule_name: `ordered list structural rule`,
-      declaration_pattern: /list-style: var\(--toc-ol-list-style, none\);/,
-      expects_where: false,
-      selector_pattern: /aside\.toc.*> nav.*> ol/,
-    },
-    {
-      // under `:where()` a host `button { padding }` reset outweighed this and resized the
-      // hit target, leaving the toggle a different size from Nav's burger
-      rule_name: `open button box rule`,
-      declaration_pattern: /padding-block: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
-      expects_where: false,
-      selector_pattern: /aside\.toc.*> button/,
-    },
+    [`aside base rule`, /box-sizing: border-box;/, true],
+    [`nav base rule`, /overflow: var\(--toc-overflow, auto\);/, true],
+    [`list item base rule`, /color: var\(--toc-li-color\);/, true],
+    [`open button base rule`, /bottom: var\(--toc-mobile-btn-bottom, 0\);/, true],
+    // https://github.com/janosh/svelte-toc/issues/71
+    [
+      `ordered list structural rule`,
+      /list-style: var\(--toc-ol-list-style, none\);/,
+      false,
+      /aside\.toc.*> nav.*> ol/,
+    ],
+    // under `:where()` a host `button { padding }` reset outweighed this and resized the
+    // hit target, leaving the toggle a different size from Nav's burger
+    [
+      `open button box rule`,
+      /padding-block: var\(--toc-mobile-btn-padding, [\d.]+rem\);/,
+      false,
+      /aside\.toc.*> button/,
+    ],
   ])(
-    `uses expected selector specificity for $rule_name`,
-    async ({ declaration_pattern, expects_where, selector_pattern = /.*/ }) => {
+    `uses expected selector specificity for %s`,
+    async (_, declaration_pattern, expects_where, selector_pattern = /.*/) => {
       set_body(`<h2>Heading 1</h2><h3>Heading 2</h3>`)
 
       mount_toc()
@@ -1380,49 +1321,25 @@ describe(`Element Prop Bags`, () => {
 })
 
 describe(`collapse_subheadings`, () => {
+  // expected_collapsed is a 0/1 mask over the 8 nested headings in document order
   test.each([
-    // [description, mode, active_id, expected_collapsed_states]
-    [`collapse disabled`, false, `detail-1-2-1`, Array.from({ length: 8 }, () => false)],
+    [`collapse disabled`, false, `detail-1-2-1`, [0, 0, 0, 0, 0, 0, 0, 0]],
+    [`full nesting with h2 active`, true, `section-1`, [0, 0, 1, 1, 0, 1, 0, 1]],
+    [`full nesting with h3 active`, true, `sub-1-1`, [0, 0, 0, 0, 0, 1, 0, 1]],
+    [`full nesting with h4 active`, true, `detail-1-1-1`, [0, 0, 0, 0, 0, 1, 0, 1]],
+    // deep active under a second-position parent: a preceding uncle's subtree
+    // (detail-1-1-*) must stay collapsed, exercising the ancestor-chain walk
     [
-      `full nesting with h2 active`,
-      true,
-      `section-1`,
-      [false, false, true, true, false, true, false, true],
-    ],
-    [
-      `full nesting with h3 active`,
-      true,
-      `sub-1-1`,
-      [false, false, false, false, false, true, false, true],
-    ],
-    [
-      `full nesting with h4 active`,
-      true,
-      `detail-1-1-1`,
-      [false, false, false, false, false, true, false, true],
-    ],
-    [
-      // deep active under a second-position parent: a preceding uncle's subtree
-      // (detail-1-1-*) must stay collapsed, exercising the ancestor-chain walk
-      `full nesting with deep active under second h3`,
+      `full nesting, active h4 under second h3`,
       true,
       `detail-1-2-1`,
-      [false, false, true, true, false, false, false, true],
+      [0, 0, 1, 1, 0, 0, 0, 1],
     ],
-    [
-      // the top level never collapses; everything under the unrelated Section 1 does
-      `full nesting with the trailing h3 active`,
-      true,
-      `sub-2-1`,
-      [false, true, true, true, true, true, false, false],
-    ],
-    [
-      `h3 threshold with h2 active`,
-      `h3`,
-      `section-1`,
-      [false, false, false, false, false, false, false, true],
-    ],
-  ] as const)(`%s`, async (_, mode, active_id, expected) => {
+    // the top level never collapses; everything under the unrelated Section 1 does
+    [`full nesting, trailing h3 active`, true, `sub-2-1`, [0, 1, 1, 1, 1, 1, 0, 0]],
+    [`h3 threshold with h2 active`, `h3`, `section-1`, [0, 0, 0, 0, 0, 0, 0, 1]],
+  ] as const)(`%s`, async (_, mode, active_id, collapsed_mask) => {
+    const expected = collapsed_mask.map(Boolean)
     setup_nested_headings()
     mock_active_heading(active_id)
     mount_toc({ collapse_subheadings: mode })
@@ -1453,8 +1370,7 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
     style.setProperty(`scroll-behavior`, `auto`, `important`)
     try {
       set_headings(2)
-      mount_toc()
-      mount_toc({ scroll_behavior: `auto` })
+      const unmounts = [mount_toc(), mount_toc({ scroll_behavior: `auto` })]
       await tick()
       const panels = document.querySelectorAll(`aside.toc`)
       for (const link of panels[0].querySelectorAll<HTMLAnchorElement>(`li > a`))
@@ -1468,9 +1384,9 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
       else if (completion === `timeout`) await vi.advanceTimersByTimeAsync(1000)
       else {
         const idx = completion === `older unmount` ? 0 : 1
-        await unmount(mounted_components.splice(idx, 1)[0])
+        await unmounts[idx]()
         expect(style.scrollBehavior).toBe(idx === 0 ? `auto` : `smooth`)
-        await unmount(mounted_components.splice(0, 1)[0])
+        await unmounts[1 - idx]()
       }
       expect(style.scrollBehavior).toBe(`auto`)
       expect(style.getPropertyPriority(`scroll-behavior`)).toBe(`important`)

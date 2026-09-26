@@ -28,17 +28,6 @@ const range_bounds = (range: Range): [string, number, string, number] => [
 ]
 
 describe(`search_text`, () => {
-  it(`matches a query straddling inline element boundaries`, () => {
-    const root = render(`<p>Hello <b>wo</b>rld</p>`)
-
-    const matches = search_text(root, `world`)
-    const ranges = matches.map((match) => match.range)
-
-    expect(ranges).toHaveLength(1)
-    expect(range_bounds(ranges[0])).toEqual([`wo`, 0, `rld`, 3])
-    expect(matches[0].element).toBe(doc_query(`p`))
-  })
-
   it.each([
     [`<li>ab<p>c<b>d</b></p></li>`, `cd`, `p`],
     [`<li>ab<p>cd</p>ef</li>`, `ef`, `li`],
@@ -53,6 +42,7 @@ describe(`search_text`, () => {
   )
 
   it.each([
+    [`an empty query`, `<p>content</p>`, ``, 0],
     // matches crossing inline markup
     [`nested inline children`, `<p><em><b>fo</b></em><i>o</i>d</p>`, `food`, 1],
     [`inline wrappers without a block ancestor`, `<div>fo<b>o</b></div>`, `foo`, 1],
@@ -103,11 +93,15 @@ describe(`search_text`, () => {
     if (root) expect(search_text(root, `secret`)).toEqual([])
   })
 
-  it(`returns nothing for an empty query`, () => {
-    expect(search_text(render(`<p>content</p>`), ``)).toEqual([])
-  })
-
   it.each([
+    // endpoints of a query straddling inline element boundaries
+    [`inline markup`, `<p>Hello <b>wo</b>rld</p>`, `world`, [`wo`, 0, `rld`, 3]],
+    [
+      `decomposed accents across text nodes`,
+      `<p>sant<b>e</b>\u0301</p>`,
+      `sant\u00E9`,
+      [`sant`, 0, `\u0301`, 1],
+    ],
     // offsets computed on normalized text must land on the original characters:
     // decomposition/lowercasing expand a char, and 😀 spans two UTF-16 units
     [`length-changing lowercase`, `<p>İİİab</p>`, `ab`, [`İİİab`, 3, `İİİab`, 5]],
@@ -190,16 +184,6 @@ describe(`search_text`, () => {
 
     expect(range_bounds(range)).toEqual([source, start, source, 3])
     expect(range.toString()).toBe(source.slice(start))
-  })
-
-  it(`canonically matches decomposed accents across text nodes`, () => {
-    const prefix = `\u0063\u0061\u0066`
-    const root = render(`<p>${prefix}<b>e</b>\u0301</p>`)
-
-    const ranges = ranges_of(root, `\u0063\u0061\u0066\u00E9`)
-
-    expect(ranges).toHaveLength(1)
-    expect(range_bounds(ranges[0])).toEqual([prefix, 0, `\u0301`, 1])
   })
 
   it.each([
@@ -297,13 +281,7 @@ describe(`highlight_ranges`, () => {
   let registry: Map<string, unknown>
   let set_spy: ReturnType<typeof vi.fn>
   let delete_spy: ReturnType<typeof vi.fn>
-
-  beforeEach(() => {
-    const stub = stub_css_highlights()
-    registry = stub.registry
-    set_spy = stub.set_spy
-    delete_spy = stub.delete_spy
-  })
+  beforeEach(() => void ({ registry, set_spy, delete_spy } = stub_css_highlights()))
 
   const installed_ranges = (css_class = `text-search-match`): Range[] => {
     const highlight = registry.get(css_class)

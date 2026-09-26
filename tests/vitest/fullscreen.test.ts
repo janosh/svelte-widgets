@@ -4,14 +4,13 @@ import * as icons from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { assert, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
 // document-wide element like a browser does, so the per-wrapper keying lives in the source.
 let fullscreen_element: Element | null = null
 let request_calls: Element[] = []
-const mounted: Record<string, unknown>[] = []
 
 // browsers fire fullscreenchange once the request settles, so dispatch off a microtask
 const set_fullscreen_element = (element: Element | null): Promise<void> => {
@@ -41,14 +40,11 @@ beforeEach(() => {
     return set_fullscreen_element(this)
   })
   document.exitFullscreen = vi.fn(() => set_fullscreen_element(null))
-})
-
-afterEach(() => {
-  // clearing document.body does not undo a button's fullscreenchange subscription
-  for (const component of mounted.splice(0)) void unmount(component)
-  Reflect.deleteProperty(document, `fullscreenElement`)
-  Reflect.deleteProperty(Element.prototype, `requestFullscreen`)
-  Reflect.deleteProperty(document, `exitFullscreen`)
+  onTestFinished(() => {
+    Reflect.deleteProperty(document, `fullscreenElement`)
+    Reflect.deleteProperty(Element.prototype, `requestFullscreen`)
+    Reflect.deleteProperty(document, `exitFullscreen`)
+  })
 })
 
 type ButtonProps = Partial<ComponentProps<typeof FullscreenButton>>
@@ -73,7 +69,8 @@ const mount_button = (props: ButtonProps = {}) => {
       ...props,
     },
   })
-  mounted.push(component)
+  // clearing document.body does not undo a button's fullscreenchange subscription
+  onTestFinished(() => unmount(component))
   const button = wrapper.querySelector(`button`)
   assert(button !== null, `FullscreenButton rendered no button`)
   return { wrapper, flag, button, component }

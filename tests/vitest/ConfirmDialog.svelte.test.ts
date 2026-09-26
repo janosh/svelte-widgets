@@ -7,6 +7,7 @@ import { afterEach, expect, test, vi } from 'vitest'
 import {
   create_element,
   doc_query,
+  fire_input,
   render as mount_body,
   next_task,
   pointer_event,
@@ -65,10 +66,6 @@ const submit_form = () =>
   doc_query<HTMLFormElement>(`dialog form`).dispatchEvent(
     new SubmitEvent(`submit`, { bubbles: true, cancelable: true }),
   )
-const type_into = (input: HTMLInputElement, value: string) => {
-  input.value = value
-  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
-}
 const heading = () => doc_query(`dialog h2`).textContent
 
 test(`shows the queued question, closes once drained and ignores a stale close`, async () => {
@@ -163,7 +160,7 @@ test(`prompt validation stays open, reports the error, then resolves the value`,
   expect(doc_query(`dialog label span`).textContent).toBe(`Workspace name`)
   expect(buttons().map((btn) => btn.textContent?.trim())).toEqual([`Cancel`, `Create`])
 
-  type_into(input, ` `)
+  await fire_input(input, ` `, `input`)
   submit_form()
   await flush()
   expect(answer.settled).toBe(false)
@@ -173,8 +170,7 @@ test(`prompt validation stays open, reports the error, then resolves the value`,
   expect(input.getAttribute(`aria-invalid`)).toBe(`true`)
   expect(input.getAttribute(`aria-describedby`)).toBe(`consumer-hint ${alert.id}`)
 
-  type_into(input, `widgets`)
-  await tick()
+  await fire_input(input, `widgets`, `input`)
   expect(document.querySelector(`[role="alert"]`)).toBeNull()
   expect(input.getAttribute(`aria-invalid`)).toBeNull()
   expect(input.getAttribute(`aria-describedby`)).toBe(`consumer-hint`)
