@@ -112,15 +112,10 @@ for (const name of [
   `@wooorm/starry-night`,
   `katex`,
 ]) {
-  const {
-    version,
-    bundledVersions,
-  }: { version: string; bundledVersions?: Record<string, string> } = JSON.parse(
+  const { version }: { version: string } = JSON.parse(
     await readFile(resolve(root, `node_modules`, name, `package.json`), `utf8`),
   )
-  // vite is aliased to vite-plus-core, which records the upstream vite it wraps; consumers
-  // install plain vite, so the smoke test does too
-  packages.push(`${name}@${bundledVersions?.[name] ?? version}`)
+  packages.push(`${name}@${version}`)
 }
 await writeFile(resolve(consumer, `package.json`), `{"private":true,"type":"module"}`)
 run(`npm`, [
