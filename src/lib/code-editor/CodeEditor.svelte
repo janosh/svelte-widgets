@@ -52,9 +52,18 @@
   const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
   const words = new Intl.Segmenter(undefined, { granularity: `word` })
   // Text metrics a hidden measuring line copies from the textarea
-  const MEASURED_STYLES =
-    `font-family font-size font-style font-weight font-variant-ligatures
-    line-height letter-spacing word-spacing tab-size direction`.split(/\s+/)
+  const MEASURED_STYLES = [
+    `font-family`,
+    `font-size`,
+    `font-style`,
+    `font-weight`,
+    `font-variant-ligatures`,
+    `line-height`,
+    `letter-spacing`,
+    `word-spacing`,
+    `tab-size`,
+    `direction`,
+  ]
   let {
     model,
     options = {},
@@ -361,7 +370,14 @@
     const area = textarea
     if (!area || composing || input_pending()) return
     if (reveal) reveal_selection()
-    const window = { ...window_lines }
+    // read the model directly: window_lines' line_count only refreshes on a revision bump
+    const window = visible_line_window(
+      scroll_top,
+      viewport_height,
+      line_height,
+      model.line_count,
+      OVERSCAN_ROWS,
+    )
     const [from, to] = ordered(model.selection)
     if (from !== to || reveal) {
       window.start = Math.min(window.start, model.line_at(from).line_idx)
@@ -651,7 +667,7 @@
       to = window_to - suffix_length
     }
     if (from === to && shape === `around`) {
-      from = Math.min(next_selection.anchor, next_selection.head)
+      ;[from] = ordered(next_selection)
       to = from - delta
     } else if (from === to && shape !== `replace`) {
       if (delta > 0)

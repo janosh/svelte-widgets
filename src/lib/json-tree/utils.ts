@@ -396,7 +396,8 @@ export function compute_diff(
       old_type === new_type &&
       (old_type === `date`
         ? Object.is((old_val as Date).getTime(), (new_val as Date).getTime())
-        : values_equal(old_val, new_val) || String(old_val) === String(new_val))
+        : // primitives compare by value; other leaves (regexps, errors, symbols) by string form
+          values_equal(old_val, new_val) || String(old_val) === String(new_val))
     if (!equal)
       result.set(current_path, {
         status: `changed`,

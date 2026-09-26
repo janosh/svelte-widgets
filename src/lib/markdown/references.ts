@@ -4,7 +4,7 @@ import {
   type Tokens,
   type TokenizerAndRendererExtension,
 } from 'marked'
-import { escape_html_text } from '../highlight/hast.ts'
+import { escape_attribute, escape_braces } from '../highlight/hast.ts'
 import { decode_entities } from '../heading-anchors.ts'
 import type { ContentManifestDraft, TokenSource } from './content.ts'
 import { DiagnosticError, type SourceRange } from './diagnostics.ts'
@@ -53,11 +53,6 @@ const navigation_label = (resolved: Target): string => {
     ? `${resolved.number} · ${label}`
     : `${resolved.kind === `figure` ? `Figure` : `Equation`} ${resolved.number}`
 }
-export const escape_braces = (text: string): string =>
-  text.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
-// Safe in quoted attributes and inert in Svelte markup
-export const escape_attribute = (text: string): string =>
-  escape_braces(escape_html_text(text).replaceAll(`"`, `&quot;`))
 const citation_url = (citation: Citation): string | undefined =>
   citation.url ??
   (citation.doi === undefined ? undefined : `https://doi.org/${citation.doi}`)

@@ -13,7 +13,13 @@ export const chain_handlers =
 export function get_uuid(): string {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   const hex = (Date.now().toString(16) + (uuid_counter++).toString(16)).padStart(32, `0`)
-  return hex.replaceAll(/(?<=^.{8}|^.{12}|^.{16}|^.{20})/gu, `-`) // 8-4-4-4-12
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20),
+  ].join(`-`)
 }
 
 export const is_object = (val: unknown): val is Record<string, unknown> =>
@@ -70,8 +76,8 @@ export function get_style(
   option: Option,
   key: `selected` | `option` | null | undefined = null,
 ) {
-  if (key !== null && key !== `selected` && key !== `option`)
-    throw new TypeError(`MultiSelect: invalid key=${String(key)} for get_style`)
+  if (key !== null && !is_style_key(key))
+    throw new TypeError(`MultiSelect: invalid key=${key} for get_style`)
   if (!is_object(option) || !option.style) return ``
   const { style } = option
   // partial style objects are fine; unknown keys are not

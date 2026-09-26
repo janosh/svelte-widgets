@@ -13,8 +13,12 @@
     [`stiffness`, 0.05, 0.01, 0.5, 0.01],
     [`damping`, 0.1, 0.01, 1, 0.01],
   ] as const
-  const params = $state<Record<string, number>>(
-    Object.fromEntries(sliders.map(([param, initial]) => [param, initial])),
+  // keyed by the slider names, so a typo like params.agle fails type-checking
+  const params = $state(
+    Object.fromEntries(sliders.map(([param, initial]) => [param, initial])) as Record<
+      (typeof sliders)[number][0],
+      number
+    >,
   )
 </script>
 

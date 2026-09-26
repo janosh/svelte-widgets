@@ -1,10 +1,5 @@
 import { example_key, fence_info, is_markdown_file, type ExampleOptions } from './meta.ts'
-import {
-  escape_attribute,
-  escape_braces,
-  scientific_references,
-  type ReferenceOptions,
-} from './references.ts'
+import { scientific_references, type ReferenceOptions } from './references.ts'
 import { CORE_SCHEMA, load, YAMLException } from 'js-yaml'
 import {
   Marked,
@@ -17,7 +12,7 @@ import {
 import type { KatexOptions } from 'katex'
 
 import type { PreprocessorGroup } from 'svelte/compiler'
-import { escape_html_text } from '../highlight/hast.ts'
+import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
 import { heading_anchor_html, has_heading_anchor } from '../heading-anchors.ts'
 import {

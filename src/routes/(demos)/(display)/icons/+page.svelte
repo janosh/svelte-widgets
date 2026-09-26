@@ -26,8 +26,9 @@
   }
 
   const needle = $derived(query.trim())
+  const lower_needle = $derived(needle.toLowerCase())
   const matches = $derived(
-    catalog.filter(([name]) => name.toLowerCase().includes(needle.toLowerCase())),
+    catalog.filter(([name]) => name.toLowerCase().includes(lower_needle)),
   )
 
   const usage = `<script>

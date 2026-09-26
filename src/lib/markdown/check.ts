@@ -5,7 +5,7 @@ import type * as TypeScript from 'typescript'
 import type { MarkdownDocument } from './index.ts'
 import {
   diagnostic_result,
-  error_diagnostics,
+  make_diagnostic,
   source_locator,
   type Diagnostic,
   type DiagnosticResult,
@@ -73,10 +73,10 @@ function project_config(compiler: typeof TypeScript, path: string) {
   errors.push(...(parsed?.errors ?? []))
   const diagnostics = errors
     .filter(({ code }) => code !== 18002 && code !== 18003)
-    .flatMap(({ code, messageText, file, start = 0, length = 0 }) =>
-      error_diagnostics(
-        compiler.flattenDiagnosticMessageText(messageText, `\n`),
+    .map(({ code, messageText, file, start = 0, length = 0 }) =>
+      make_diagnostic(
         `TS${code}`,
+        compiler.flattenDiagnosticMessageText(messageText, `\n`),
         source_locator(file?.text ?? ``, file?.fileName ?? path)(start, start + length),
       ),
     )
@@ -305,9 +305,7 @@ export async function check_examples(
         )
       } else {
         const locate = source_locator(source?.text ?? ``, source?.fileName ?? filename)
-        diagnostics.push(
-          ...error_diagnostics(text, code, locate(offset, offset + length)),
-        )
+        diagnostics.push(make_diagnostic(code, text, locate(offset, offset + length)))
       }
     }
     host.getSourceFile = (path, language_version, on_error) => {
@@ -379,9 +377,9 @@ export async function check_examples(
           const source = host.readFile(component_filename)
           if (source === undefined) {
             diagnostics.push(
-              ...error_diagnostics(
-                `Cannot read imported Svelte component: ${component_filename}`,
+              make_diagnostic(
                 `import`,
+                `Cannot read imported Svelte component: ${component_filename}`,
                 source_locator(``, component_filename)(0),
               ),
             )

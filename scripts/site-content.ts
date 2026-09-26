@@ -75,13 +75,17 @@ export function prepare_page(
   let metadata_html = ``
   for (const key of [`title`, `description`, `categories`]) {
     const value = authored?.metadata[key]
-    if (typeof value === `string`) meta[key] = value
-    else if (Array.isArray(value) && value.every((item) => typeof item === `string`))
-      meta[key] = value.join(`, `)
-    else continue
+    const content =
+      typeof value === `string`
+        ? value
+        : Array.isArray(value) && value.every((item) => typeof item === `string`)
+          ? value.join(`, `)
+          : undefined
+    if (content === undefined) continue
+    meta[key] = content
     const element = document.createElement(`meta`)
     element.setAttribute(`data-pagefind-meta`, `${key}[content]`)
-    element.setAttribute(`content`, meta[key])
+    element.setAttribute(`content`, content)
     metadata_html += element.outerHTML
     document.head.append(element)
   }

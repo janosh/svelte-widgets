@@ -55,10 +55,10 @@
   const is_selected = $derived(ctx.selected_paths.has(path))
   const diff_status = $derived(ctx.diff_map?.get(path)?.status ?? null)
 
-  // Row controls stop the click so ancestor rows don't re-focus/select themselves
-  const stopped = (action: () => void) => (event: MouseEvent) => {
+  // Row handlers stop propagation so ancestor rows don't re-focus, select or toggle themselves
+  const stopped = (action: (event: MouseEvent) => void) => (event: MouseEvent) => {
     event.stopPropagation()
-    action()
+    action(event)
   }
 
   function toggle_collapse(event?: MouseEvent) {
@@ -186,8 +186,7 @@
           },
         ]}
         tabindex="-1"
-        onclick={(event) => {
-          event.stopPropagation()
+        onclick={stopped((event) => {
           if (event.ctrlKey || event.metaKey) {
             ctx.toggle_select(path, event.shiftKey)
           } else if (event.shiftKey) {
@@ -197,7 +196,7 @@
           } else {
             ctx.copy_value(path, value, event)
           }
-        }}
+        })}
         onauxclick={copy_path_on_middle_click}
       >
         {#if typeof node_key === `number` && ctx.settings.show_array_indices}

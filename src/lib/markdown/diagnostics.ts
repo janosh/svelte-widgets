@@ -88,6 +88,17 @@ export const source_locator = (source: string, filename: string) => {
   })
 }
 
+export const make_diagnostic = (
+  code: string,
+  message: string,
+  range: SourceRange,
+): Diagnostic => ({
+  code,
+  severity: `error`,
+  message,
+  range,
+})
+
 export function error_diagnostics(
   error: unknown,
   code: string,
@@ -95,11 +106,6 @@ export function error_diagnostics(
 ): Diagnostic[] {
   if (error instanceof DiagnosticError) return error.diagnostics
   return [
-    {
-      code,
-      severity: `error`,
-      message: error instanceof Error ? error.message : String(error),
-      range,
-    },
+    make_diagnostic(code, error instanceof Error ? error.message : String(error), range),
   ]
 }
