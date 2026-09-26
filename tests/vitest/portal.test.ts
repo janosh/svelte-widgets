@@ -1,6 +1,6 @@
 import { portal_action } from '$lib/portal'
 import { tick } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 // `active` holds params that portal an open dropdown under `target`
 const create_fixture = (in_shadow_root = false) => {

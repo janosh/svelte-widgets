@@ -3,7 +3,7 @@ import { DemoNav } from '$site'
 import CategoryOverview from '$site/CategoryOverview.svelte'
 import Home from '../../src/routes/+page.svelte'
 import { mount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import {
   demo_labels,
   demo_nav_routes,

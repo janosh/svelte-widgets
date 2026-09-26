@@ -6,7 +6,7 @@ import {
   type StatItem,
 } from '$lib/stats'
 import { tick, type ComponentProps } from 'svelte'
-import { expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vite-plus/test'
 import { render } from './index'
 
 test.each([

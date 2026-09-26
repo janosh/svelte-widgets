@@ -1,20 +1,26 @@
 <script lang="ts">
   import Dialog from '$lib/Dialog.svelte'
+  import Sheet from '$lib/Sheet.svelte'
   import type { ComponentProps } from 'svelte'
 
+  // Compile-time coverage: Dialog and Sheet accept native dialog attributes while their
+  // parameterized children snippet remains a snippet rather than HTMLAttributes.children.
   let {
     open = $bindable(false),
     nested = false,
     on_nested_close,
+    sheet = false,
     ...props
-  }: Omit<ComponentProps<typeof Dialog>, `children`> & {
+  }: Omit<ComponentProps<typeof Sheet>, `children`> & {
     nested?: boolean
     on_nested_close?: ComponentProps<typeof Dialog>[`on_close`]
+    sheet?: boolean // render through Sheet, which must forward everything to Dialog
   } = $props()
   let surface = $state<HTMLDialogElement | null>(null)
+  const Surface = $derived(sheet ? Sheet : Dialog)
 </script>
 
-<Dialog {...props} bind:open bind:surface aria-labelledby="test-dialog-title">
+<Surface {...props} bind:open bind:surface aria-labelledby="test-dialog-title">
   {#snippet trigger(trigger_props)}
     <button data-testid="dialog-trigger" {...trigger_props}>Open dialog</button>
   {/snippet}
@@ -35,5 +41,5 @@
   {#snippet footer()}
     <small data-testid="dialog-footer">Changes are local</small>
   {/snippet}
-</Dialog>
+</Surface>
 <output data-testid="bound-surface">{surface?.id ?? ``}</output>

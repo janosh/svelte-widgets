@@ -1,7 +1,7 @@
 import CodeBlock from '$lib/CodeBlock.svelte'
 import type { CodeHighlight, CodeHighlighter } from '$lib/code-block'
 import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vitest'
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'
 
 const mount_block = (props: ComponentProps<typeof CodeBlock>) => {

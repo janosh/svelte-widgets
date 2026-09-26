@@ -4,7 +4,7 @@ import {
   render_source as render_markdown,
 } from './markdown-helpers'
 import { compile } from 'svelte/compiler'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 const has_math = (html: string) => html.includes(`katex-html`)
 

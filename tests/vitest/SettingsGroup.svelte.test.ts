@@ -1,6 +1,6 @@
 import { SettingsGroup } from '$lib'
 import { createRawSnippet, mount, tick } from 'svelte'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 import { doc_query } from './index'
 
 const children = createRawSnippet(() => ({ render: () => `<p>Controls</p>` }))

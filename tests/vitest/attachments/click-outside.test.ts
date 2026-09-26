@@ -1,5 +1,5 @@
 import { click_outside } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, press_escape, stub_props } from '../index'
 
 describe(`click_outside`, () => {
@@ -62,11 +62,9 @@ describe(`click_outside`, () => {
   })
 
   it(`dispatches a custom event without a callback`, () => {
-    const element = create_element()
+    const { element } = attach_outside({ callback: undefined })
     const listener = vi.fn()
     element.addEventListener(`dismiss`, listener)
-    const cleanup = click_outside({})(element)
-    if (cleanup) onTestFinished(cleanup)
     dispatch_press(create_element())
     expect(listener).toHaveBeenCalled()
   })

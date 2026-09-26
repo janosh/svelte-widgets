@@ -57,8 +57,4 @@
 </style>
 ```
 
-Use `css_class` to select a custom `::highlight()` rule, `duration_ms` to remove matches
-automatically, and `on_highlight` for optional range-based effects.
-`scroll_to_match` scrolls the first match smoothly into view by default; set it to `false`
-to keep the viewport fixed or pass custom `ScrollIntoViewOptions`. `on_highlight` still
-receives ranges without the CSS Highlight API and reruns when observed content changes.
+Use `css_class` to select a custom `::highlight()` rule, `duration_ms` to remove matches automatically, and `on_highlight` for optional range-based effects. `scroll_to_match` scrolls the first match smoothly into view by default; set it to `false` to keep the viewport fixed or pass custom `ScrollIntoViewOptions`. `on_highlight` still receives ranges without the CSS Highlight API and reruns when observed content changes.

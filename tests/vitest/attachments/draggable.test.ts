@@ -1,5 +1,5 @@
 import { draggable, type DraggableOptions } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, pointer_event } from '../index'
 
 describe(`draggable`, () => {
@@ -209,7 +209,6 @@ describe(`draggable`, () => {
 
   it(`warns and returns undefined for a missing handle selector`, () => {
     const warn_spy = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    onTestFinished(() => warn_spy.mockRestore())
 
     expect(
       draggable({ handle_selector: `.nonexistent` })(create_element()),

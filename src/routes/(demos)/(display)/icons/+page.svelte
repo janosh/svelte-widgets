@@ -26,11 +26,10 @@
   }
 
   const needle = $derived(query.trim())
-  const matches = $derived.by(() => {
-    const lower = needle.toLowerCase()
-    if (!lower) return catalog
-    return catalog.filter(([name]) => name.toLowerCase().includes(lower))
-  })
+  const lower_needle = $derived(needle.toLowerCase())
+  const matches = $derived(
+    catalog.filter(([name]) => name.toLowerCase().includes(lower_needle)),
+  )
 
   const usage = `<script>
   import { Icon } from 'svelte-widgets'

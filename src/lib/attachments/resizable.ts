@@ -31,11 +31,8 @@ export interface ResizableOptions {
 // scrollable node scrolls the handles out of view.
 export const resizable =
   (options: ResizableOptions = {}): Attachment =>
-  (element: Element): (() => void) | undefined => {
-    if (options.disabled) return undefined
-
-    if (!(element instanceof HTMLElement)) return undefined
-    const node = element
+  (node: Element): (() => void) | undefined => {
+    if (options.disabled || !(node instanceof HTMLElement)) return undefined
     const {
       edges = [`right`, `bottom`],
       min_width = 50,
@@ -199,7 +196,7 @@ export const resizable =
       return dimensions
     }
 
-    function on_pointerdown(event: PointerEvent, grab: Grab) {
+    const on_pointerdown = (event: PointerEvent, grab: Grab) => {
       // bars a second primary mid-resize (mouse while a touch is down)
       if (is_resizing || !is_primary_press(event)) return
       is_resizing = true
@@ -231,7 +228,7 @@ export const resizable =
       )
     }
 
-    function on_pointerup(event: PointerEvent) {
+    const on_pointerup = (event: PointerEvent) => {
       if (!is_resizing) return
       restore_user_select?.()
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })

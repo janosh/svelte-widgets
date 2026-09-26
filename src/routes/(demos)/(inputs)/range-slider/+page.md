@@ -17,7 +17,6 @@
     currency: `USD`,
     maximumFractionDigits: 0,
   })
-  const money = (value: number): string => currency.format(value)
   const percent = (value: number): string => `${Math.round(value * 100)}%`
   const format_pressure = (value: number): string => {
     const exponent = String(Math.round(Math.log10(value))).replace(/./g, (digit) =>
@@ -48,7 +47,7 @@ Select an interval by dragging the handles, clicking the track, using the keyboa
       max={500}
       step={10}
       bind:value={price}
-      format_value={money}
+      format_value={currency.format}
       disabled={locked}
       tick_position={side_ticks ? `sides` : `below`}
       {tick_count}

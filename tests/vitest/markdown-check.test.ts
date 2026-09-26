@@ -9,7 +9,7 @@ import {
   type CheckOptions,
 } from '$lib/markdown/check'
 import { assert_ok, create_markdown, DiagnosticError } from '$lib/markdown'
-import { describe, expect, onTestFinished, test, vi } from 'vitest'
+import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 const filename = resolve(`tests/checked-examples.md`)
 const fence = (language: string, code: string, info = `check`) =>

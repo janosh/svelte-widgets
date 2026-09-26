@@ -1,5 +1,5 @@
 import { file_drop, type FileDropOptions } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, data_transfer, drag_event, next_task } from '../index'
 
 describe(`file_drop`, () => {

@@ -1,6 +1,6 @@
 import { parse_yaml, stringify_yaml, yaml_plugin, type YamlOptions } from '$lib/yaml'
 import { YAML11_SCHEMA } from 'js-yaml'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 
 const import_yaml = async (
   source: string,

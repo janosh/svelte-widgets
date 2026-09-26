@@ -137,9 +137,7 @@
     class:editable={is_editable}
     onclick={handle_click}
     ondblclick={start_edit}
-    oncontextmenu={(event) => {
-      ctx.show_context_menu(event, path, value, false, false)
-    }}
+    oncontextmenu={(event) => ctx.show_context_menu(event, path, value, false, false)}
     onkeydown={(event) => {
       if (event.key === `Enter` || event.key === ` `) {
         event.preventDefault()
@@ -275,7 +273,6 @@
   }
   .edit-input {
     font: inherit;
-    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
     padding: 0 2px;
     border: 1px solid var(--jt-edit-border, light-dark(#4a90d9, #4a90d9));
     border-radius: 2px;

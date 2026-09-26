@@ -5,6 +5,8 @@ import type * as TypeScript from 'typescript'
 import type { MarkdownDocument } from './index.ts'
 import {
   diagnostic_result,
+  error_message,
+  make_diagnostic,
   source_locator,
   type Diagnostic,
   type DiagnosticResult,
@@ -38,9 +40,6 @@ export type CheckOptions = {
 export type CheckSummary = { checked: number; asserted: number }
 export type CheckResult = DiagnosticResult<CheckSummary> & { value: CheckSummary }
 
-const message = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
-
 const error_location = (error: unknown, key: 'start' | 'end' = 'start') => {
   if (typeof error !== `object` || error === null) return undefined
   const start: unknown = Reflect.get(error, key)
@@ -72,18 +71,13 @@ function project_config(compiler: typeof TypeScript, path: string) {
   errors.push(...(parsed?.errors ?? []))
   const diagnostics = errors
     .filter(({ code }) => code !== 18002 && code !== 18003)
-    .map((diagnostic): Diagnostic => {
-      const offset = diagnostic.start ?? 0
-      return {
-        code: `TS${diagnostic.code}`,
-        severity: `error`,
-        message: compiler.flattenDiagnosticMessageText(diagnostic.messageText, `\n`),
-        range: source_locator(
-          diagnostic.file?.text ?? ``,
-          diagnostic.file?.fileName ?? path,
-        )(offset, offset + (diagnostic.length ?? 0)),
-      }
-    })
+    .map(({ code, messageText, file, start = 0, length = 0 }) =>
+      make_diagnostic(
+        `TS${code}`,
+        compiler.flattenDiagnosticMessageText(messageText, `\n`),
+        source_locator(file?.text ?? ``, file?.fileName ?? path)(start, start + length),
+      ),
+    )
   return { options: parsed?.options ?? {}, diagnostics }
 }
 
@@ -92,14 +86,14 @@ function project_config(compiler: typeof TypeScript, path: string) {
 const ts_path = (path: string): string => path.replaceAll(`\\`, `/`)
 
 type CheckedSource = Pick<ContentFence, 'code' | 'range' | 'line_positions'>
+type CheckedFile = { fence: CheckedSource; code: string; mappings?: DecodedSourceMap }
 
 const source_position = (
   fence: CheckedSource,
   location?: { line: number; column: number },
 ): SourcePosition => {
-  if (!location) return fence.range.start
-  const start = fence.line_positions[location.line]
-  if (!start) return fence.range.start
+  const start = location && fence.line_positions[location.line]
+  if (!location || !start) return fence.range.start
   return {
     ...start,
     column: start.column + location.column,
@@ -135,17 +129,24 @@ export async function check_examples(
             : fence.range.end,
       },
       code,
-      message: message(error),
+      message: error_message(error),
       severity,
     })
   }
-  const report_compile_error = (fence: CheckedSource, error: unknown) =>
+  // Reports a compiler error or warning at the start/end locations it carries
+  const report_located = (
+    fence: CheckedSource,
+    code: string,
+    error: unknown,
+    text: unknown = error,
+    severity: 'error' | 'warning' = `error`,
+  ) =>
     report(
       fence,
-      `compile`,
-      error,
+      code,
+      text,
       error_location(error),
-      `error`,
+      severity,
       error_location(error, `end`),
     )
   const filename = resolve(
@@ -153,14 +154,7 @@ export async function check_examples(
   )
   const root = dirname(filename)
   const require_tool = createRequire(`${root}/package.json`)
-  const files = new Map<
-    string,
-    {
-      fence: CheckedSource
-      code: string
-      mappings?: DecodedSourceMap
-    }
-  >()
+  const files = new Map<string, CheckedFile>()
   const shims = new Set<string>()
   let compiler = options.typescript
   let svelte_checker = options.svelte_typechecker
@@ -220,14 +214,7 @@ export async function check_examples(
           generate: false,
         })
         for (const warning of result.warnings)
-          report(
-            fence,
-            warning.code,
-            warning.message,
-            error_location(warning),
-            `warning`,
-            error_location(warning, `end`),
-          )
+          report_located(fence, warning.code, warning, warning.message, `warning`)
       }
       if (component && options.typecheck === false) continue
       if (!compiler) {
@@ -247,7 +234,7 @@ export async function check_examples(
       if (component) transform_component(fence, example_filename)
       else files.set(example_filename, { fence, code: fence.code })
     } catch (error) {
-      report_compile_error(fence, error)
+      report_located(fence, `compile`, error)
     }
   }
   if (compiler && files.size) {
@@ -315,15 +302,8 @@ export async function check_examples(
           authored(offset + length),
         )
       } else {
-        diagnostics.push({
-          range: source_locator(source?.text ?? ``, source?.fileName ?? filename)(
-            offset,
-            offset + length,
-          ),
-          severity: `error`,
-          code,
-          message: text,
-        })
+        const locate = source_locator(source?.text ?? ``, source?.fileName ?? filename)
+        diagnostics.push(make_diagnostic(code, text, locate(offset, offset + length)))
       }
     }
     host.getSourceFile = (path, language_version, on_error) => {
@@ -332,7 +312,7 @@ export async function check_examples(
       try {
         source_text = entry?.code ?? host.readFile(path)
       } catch (error) {
-        on_error?.(message(error))
+        on_error?.(error_message(error))
         return undefined
       }
       if (source_text === undefined) return undefined
@@ -394,12 +374,13 @@ export async function check_examples(
         if (!files.has(virtual_filename)) {
           const source = host.readFile(component_filename)
           if (source === undefined) {
-            diagnostics.push({
-              range: source_locator(``, component_filename)(0),
-              severity: `error`,
-              code: `import`,
-              message: `Cannot read imported Svelte component: ${component_filename}`,
-            })
+            diagnostics.push(
+              make_diagnostic(
+                `import`,
+                `Cannot read imported Svelte component: ${component_filename}`,
+                source_locator(``, component_filename)(0),
+              ),
+            )
             return { resolvedModule: undefined }
           }
           const locate = source_locator(source, component_filename)
@@ -418,7 +399,7 @@ export async function check_examples(
             compile(source, { filename: component_filename, generate: false })
             transform_component(imported_fence, component_filename)
           } catch (error) {
-            report_compile_error(imported_fence, error)
+            report_located(imported_fence, `compile`, error)
             return { resolvedModule: undefined }
           }
         }
@@ -460,7 +441,7 @@ export async function check_examples(
           await run(fence)
           asserted++
         } catch (error) {
-          report(fence, `assertion`, `${assertion}: ${message(error)}`)
+          report(fence, `assertion`, `${assertion}: ${error_message(error)}`)
         }
       }
     }

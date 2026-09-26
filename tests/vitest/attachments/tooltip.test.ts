@@ -1,6 +1,6 @@
 import type { TooltipOptions } from '$lib/attachments'
 import { register_escape_layer, tooltip } from '$lib/attachments'
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
   doc_query,
@@ -116,6 +116,40 @@ describe(`tooltip manager`, () => {
       [true, `pointer`],
       [false, `visibility`],
     ])
+  })
+
+  it.each([
+    [`repeated text`, `Save`, null, false],
+    [`different text`, `Save the file`, null, true],
+    [`repeated text truncated in a child`, `Save`, 200, true],
+  ])(`only shows a tooltip for %s`, (_case, title, child_scroll_width, shows) => {
+    const element = create_element(`button`)
+    const label = document.createElement(`span`)
+    label.textContent = `Save`
+    element.append(` `, label, ` `)
+    element.title = title
+    if (child_scroll_width !== null) {
+      Object.defineProperty(label, `scrollWidth`, { value: child_scroll_width })
+    }
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
+    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
+  })
+
+  it.each([
+    [`an icon-only button`, `button`, ``, true],
+    [`a button showing its own text`, `button`, `require forces`, false],
+    [`a checkbox`, `input`, ``, false],
+  ])(`reads aria-label as tooltip text only for %s`, (_case, tag, text, shows) => {
+    const element = create_element(tag)
+    if (element instanceof HTMLInputElement) element.type = `checkbox`
+    element.textContent = text
+    element.setAttribute(`aria-label`, `Remove require forces filter`)
+    attach_tooltip(element)
+    pointer_over(element)
+    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
+    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
   })
 
   it.each([`manual`, `bogus`])(

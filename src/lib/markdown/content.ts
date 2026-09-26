@@ -394,8 +394,8 @@ export function content_manifest(
       }
       if (token.type === `list`) visit((token as Tokens.List).items, mapped)
       else if (token.type === `table`) {
-        const table = token as Tokens.Table
-        const cells = [...table.header, ...table.rows.flat()]
+        const { header, rows } = token as Tokens.Table
+        const cells = [...header, ...rows.flat()]
         for (const cell of cells) prose.push(inline_text(cell.tokens))
         visit(
           cells.flatMap((cell) => cell.tokens),
@@ -417,18 +417,15 @@ export function content_manifest(
     manifest.headings.push({ ...content, id })
     if (insertion !== undefined || link_insertion !== undefined) {
       const edits = html_edits.get(token) ?? []
+      const insert = (start: number, text: string) =>
+        edits.push({ start, end: start, text })
       if (insertion !== undefined)
-        edits.push({
-          start: insertion,
-          end: insertion,
-          text: ` id="${id.replaceAll(`&`, `&amp;`).replaceAll(`"`, `&quot;`)}"`,
-        })
+        insert(
+          insertion,
+          ` id="${id.replaceAll(`&`, `&amp;`).replaceAll(`"`, `&quot;`)}"`,
+        )
       if (link_insertion !== undefined && heading_link)
-        edits.push({
-          start: link_insertion,
-          end: link_insertion,
-          text: heading_link(id),
-        })
+        insert(link_insertion, heading_link(id))
       html_edits.set(token, edits)
     } else if (token.type === `heading`) heading_ids.set(token, id)
     if (heading.id === undefined) manifest.anchors.push({ id, range: heading.range })

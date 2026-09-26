@@ -96,6 +96,24 @@ for (const width of [390, 1440]) {
     const list_height = await figure_list.evaluate(
       (node) => node.getBoundingClientRect().height,
     )
+    // The 180 ms slide can end, and Svelte drop the list, before a poll on a busy runner
+    // sees it, so pause the closing animation as soon as Svelte starts it.
+    await page.evaluate(() => {
+      const { animate } = Element.prototype
+      Element.prototype.animate = function (
+        this: Element,
+        ...args: Parameters<Element[`animate`]>
+      ) {
+        const animation = animate.apply(this, args)
+        // Svelte first runs a zero-length placeholder, then the actual slide
+        const duration = Number(animation.effect?.getTiming().duration)
+        if (duration > 0 && this.matches(`[aria-label="Figures"] ul`)) {
+          animation.pause()
+          Element.prototype.animate = animate
+        }
+        return animation
+      }
+    })
     await figure_toggle.focus()
     await page.keyboard.press(`Enter`)
     await expect(figure_toggle).toHaveAttribute(`aria-expanded`, `false`)
@@ -106,7 +124,6 @@ for (const width of [390, 1440]) {
           ?.getAnimations()
           .find((entry) => Number(entry.effect?.getTiming().duration) > 0)
         if (!node || !animation) return false
-        animation.pause()
         animation.currentTime = 90
         return node.getBoundingClientRect().height
       })

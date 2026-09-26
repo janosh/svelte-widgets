@@ -1,5 +1,5 @@
 import { get_html_sort_value, sortable, type SortableOptions } from '$lib/attachments'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { create_element, press_key } from '../index'
 
 describe(`get_html_sort_value`, () => {

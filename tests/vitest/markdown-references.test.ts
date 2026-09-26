@@ -4,7 +4,7 @@ import {
   render_source as render_markdown,
 } from './markdown-helpers'
 import { compile } from 'svelte/compiler'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 
 const bibliography = {
   doe2020: {

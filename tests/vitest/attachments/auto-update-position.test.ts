@@ -1,5 +1,5 @@
 import { auto_update_position } from '$lib/attachments'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, stub_props } from '../index'
 
 it(`auto_update_position coalesces observed changes and cleans up`, () => {

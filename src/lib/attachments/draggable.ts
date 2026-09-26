@@ -15,10 +15,9 @@ export interface DraggableOptions {
 
 export const draggable =
   (options: DraggableOptions = {}): Attachment =>
-  (element: Element): (() => void) | undefined => {
+  (node: Element): (() => void) | undefined => {
     const { handle_selector, axis = `both`, bounds } = options
-    if (options.disabled || !(element instanceof HTMLElement)) return undefined
-    const node = element
+    if (options.disabled || !(node instanceof HTMLElement)) return undefined
     const [move_x, move_y] = [axis !== `y`, axis !== `x`]
 
     let dragging = false
@@ -35,17 +34,15 @@ export const draggable =
     let limits = unbounded
     const initial = { left: 0, top: 0 }
 
-    const found = handle_selector
+    const drag_handle = handle_selector
       ? node.querySelector<HTMLElement>(handle_selector)
       : node
-    if (!found) {
+    if (!drag_handle) {
       console.warn(`Draggable: handle not found with selector "${handle_selector}"`)
       return undefined
     }
-    // Aliased so the narrowing survives into the hoisted handlers below
-    const drag_handle = found
 
-    function on_pointerdown(event: PointerEvent) {
+    const on_pointerdown = (event: PointerEvent) => {
       // `dragging` bars a second primary pointer mid-drag (mouse while a touch is down),
       // which would strand the first follower's listeners past cleanup
       if (dragging || !is_primary_press(event)) return
@@ -119,7 +116,7 @@ export const draggable =
       )
     }
 
-    function on_pointermove(event: PointerEvent) {
+    const on_pointermove = (event: PointerEvent) => {
       if (!dragging) return
       if (move_x) {
         const delta_x = clamp(event.clientX - start.x, limits.min_x, limits.max_x)
@@ -132,7 +129,7 @@ export const draggable =
       options.on_drag?.(event)
     }
 
-    function on_pointerup(event: PointerEvent) {
+    const on_pointerup = (event: PointerEvent) => {
       if (!dragging) return
       dragging = false
       event.stopPropagation()

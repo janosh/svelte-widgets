@@ -272,7 +272,16 @@ export const enqueue_toast = <Priority extends string>(
 ): EnqueueToastTransition<Priority> => {
   const expired_transition = expire_toasts(queue, now_ms)
   queue = expired_transition.queue
-  const effects = [...expired_transition.effects]
+  const finish = (
+    transition: ToastQueueTransition<Priority>,
+    toast_id: string,
+    deduplicated: boolean,
+  ): EnqueueToastTransition<Priority> => ({
+    queue: transition.queue,
+    effects: [...expired_transition.effects, ...transition.effects],
+    toast_id,
+    deduplicated,
+  })
   const priority = request.priority ?? queue.default_priority
   // rank eagerly: a lone toast is promoted uncompared, hiding an unknown priority until
   // a second toast arrives
@@ -319,12 +328,7 @@ export const enqueue_toast = <Priority extends string>(
       )
       transition = rebalance_queue({ ...queue, pending }, now_ms)
     }
-    return {
-      queue: transition.queue,
-      effects: [...effects, ...transition.effects],
-      toast_id: existing.id,
-      deduplicated: true,
-    }
+    return finish(transition, existing.id, true)
   }
 
   const toast: ToastItem<Priority> = {
@@ -346,12 +350,7 @@ export const enqueue_toast = <Priority extends string>(
   )
     ? { queue: { ...queue, next_id }, effects: [{ reason: `timeout`, toast }] }
     : rebalance_queue({ ...queue, next_id, pending: [...queue.pending, toast] }, now_ms)
-  return {
-    queue: transition.queue,
-    effects: [...effects, ...transition.effects],
-    toast_id: toast.id,
-    deduplicated: false,
-  }
+  return finish(transition, toast.id, false)
 }
 
 export const dismiss_toast = <Priority extends string>(

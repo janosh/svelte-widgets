@@ -1,5 +1,5 @@
 import { draggable, resizable, type ResizableOptions } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
   mock_rect,
@@ -423,7 +423,6 @@ describe(`resizable`, () => {
   ] as const)(`attaches nothing when %s`, (_desc, options, n_warnings) => {
     const element = create_box()
     const warn = vi.spyOn(console, `warn`).mockImplementation(() => undefined)
-    onTestFinished(() => warn.mockRestore())
 
     expect(resizable(options)(element)).toBeUndefined()
     expect(warn.mock.calls.flat()).toEqual(

@@ -5,7 +5,7 @@ import {
   url_with_params,
   valid_query_param,
 } from '$lib/url-params'
-import { expect, expectTypeOf, test, vi } from 'vitest'
+import { expect, expectTypeOf, test, vi } from 'vite-plus/test'
 
 test.each([
   [``, false, false],

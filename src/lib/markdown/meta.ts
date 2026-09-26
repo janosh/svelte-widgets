@@ -120,6 +120,9 @@ export function parse_meta(source: string): Record<string, unknown> {
   return result
 }
 
+export const is_markdown_file = (extensions: string[] | undefined, filename: string) =>
+  (extensions ?? [`.md`, `.svx`]).some((extension) => filename.endsWith(extension))
+
 // Deterministic module names, independent of a fence's position. This is an identity
 // hash, not a security primitive; the compiler checks collisions before emitting imports.
 export function example_key(source: string): string {

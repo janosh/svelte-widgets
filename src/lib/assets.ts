@@ -113,19 +113,13 @@ export function asset_imports(): PreprocessorGroup {
         const suffix = suffix_start < 0 ? `` : url.slice(suffix_start)
         // Appending a query or fragment to an inlined data URL corrupts its payload.
         const specifier = `${/^\.{1,2}\//u.test(path) ? path : `./${path}`}?url${suffix ? `&no-inline` : ``}`
-        let name = imports.get(specifier)
-        if (!name) {
-          name = `${prefix}${imports.size}`
-          imports.set(specifier, name)
-        }
+        const name = imports.get(specifier) ?? `${prefix}${imports.size}`
+        imports.set(specifier, name)
         return suffix ? `${name} + ${script_json(suffix)}` : name
       }
       const visit = (value: unknown): void => {
         if (!value || typeof value !== `object`) return
-        if (Array.isArray(value)) {
-          value.forEach(visit)
-          return
-        }
+        if (Array.isArray(value)) return value.forEach(visit)
         if (`type` in value && value.type === `RegularElement`) {
           const node = value as AST.RegularElement
           const attributes = node.attributes.filter(
@@ -172,9 +166,8 @@ export function asset_imports(): PreprocessorGroup {
               })
           }
         }
-        for (const [key, child] of Object.entries(value)) {
+        for (const [key, child] of Object.entries(value))
           if (![`attributes`, `expression`, `name_loc`, `loc`].includes(key)) visit(child)
-        }
       }
       visit(tree.fragment)
       if (!edits.length) return { code: content }

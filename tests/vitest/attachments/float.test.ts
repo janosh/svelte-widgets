@@ -1,5 +1,5 @@
 import { float } from '$lib/attachments'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { create_element, mock_rect, stub_props } from '../index'
 
 describe(`float`, () => {

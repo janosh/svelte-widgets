@@ -8,7 +8,7 @@ import Heading from '$lib/Heading.svelte'
 import { Check } from '$lib/icons'
 import { createRawSnippet } from 'svelte'
 import { SvelteSet } from 'svelte/reactivity'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 import { doc_query, next_task, render } from './index'
 
 describe(`slugify_heading`, () => {
@@ -123,7 +123,7 @@ describe(`heading_anchors attachment`, () => {
       `<h2>2024 Roadmap</h2><h3>2024 Roadmap</h3>`,
       [`2024-roadmap`, `2024-roadmap-1`],
     ],
-    // guards get_default_headings ordering: the direct child must be processed first, so
+    // guards default heading ordering: the direct child must be processed first, so
     // the duplicate suffix lands on the later sibling's grandchild
     [
       `direct child before a later sibling's grandchild`,

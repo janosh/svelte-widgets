@@ -1,5 +1,5 @@
 import { draw_markup_strokes, object_fit_contain_box } from '$lib/image-markup'
-import { expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vite-plus/test'
 
 test.each([
   [200, 100, 100, 100, { x: 0, y: 25, width: 100, height: 50, scale: 0.5 }],

@@ -131,8 +131,7 @@
 
   // load persisted recents (client-only since $effect doesn't run during SSR)
   $effect(() => {
-    if (!recent_actions) return
-    recent_action_ids = recent_actions.load()
+    if (recent_actions) recent_action_ids = recent_actions.load()
   })
 
   // recently triggered actions first (most recent on top), rest keep original order
@@ -160,9 +159,7 @@
   })
   $effect(() => {
     if (!open) return
-    if (dialog && !dialog.open) {
-      dialog.showModal()
-    }
+    if (dialog && !dialog.open) dialog.showModal()
     if (input && document.activeElement !== input) input.focus()
   })
 

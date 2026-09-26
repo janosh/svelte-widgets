@@ -250,8 +250,7 @@ export const merge_defaults = <Defaults extends object>(
 ): Defaults => {
   if (!overrides) return defaults
   const merged = { ...defaults }
-  for (const [key, value] of Object.entries(overrides)) {
+  for (const [key, value] of Object.entries(overrides))
     if (value !== undefined) Reflect.set(merged, key, value)
-  }
   return merged
 }

@@ -1,7 +1,7 @@
 import { mkdtempDisposable, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 import { finalize_package, rewrite_imports } from '../../scripts/finalize-package.ts'
 
 test.each([`'`, `"`, `\``])(`rewrites dynamic imports quoted with %s only`, (quote) => {

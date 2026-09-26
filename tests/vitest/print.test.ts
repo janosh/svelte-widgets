@@ -1,5 +1,5 @@
 import { format_print_filename, print_page } from '$lib/print'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
 
 // happy-dom has no window.print and never fires afterprint, so print is spied and the
 // event dispatched by hand.
@@ -13,7 +13,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   after_print() // the dialog always closes eventually
-  vi.useRealTimers() // the watchdog cases opt into fake ones
   vi.unstubAllGlobals()
   document.title = original_title
 })
@@ -64,7 +63,6 @@ test(`without a filename the title is left alone`, () => {
     expect.any(Function),
     expect.anything(),
   )
-  add_listener.mockRestore()
 })
 
 // a print() that throws never fires afterprint, so nothing else would undo the swap

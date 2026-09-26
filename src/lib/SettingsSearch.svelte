@@ -107,10 +107,7 @@
       index ??= {
         containers: Array.from(
           root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR),
-          (node) => ({
-            node,
-            text: title_of(node).toLocaleLowerCase(),
-          }),
+          (node) => ({ node, text: title_of(node).toLocaleLowerCase() }),
         ),
         rows: Array.from(root.querySelectorAll<HTMLElement>(ROW_SELECTOR), (node) => ({
           node,

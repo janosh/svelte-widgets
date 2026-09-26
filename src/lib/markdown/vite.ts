@@ -8,11 +8,17 @@ import {
   type MarkdownEngine,
   type MarkdownResult,
 } from './index.ts'
+import { is_markdown_file } from './meta.ts'
 import { source_map } from './source-map.ts'
 import type { ContentManifest } from './content.ts'
 
 const TOC_MODULE_PREFIX = `\0widgets-toc:`
 const MODULE_ID = /\.widgets-example-[a-f\d]+-[a-f\d]+-\d+\.svelte(?:\?|$)/u
+
+const drop_examples = (modules: Map<string, string>, filename: string): void => {
+  for (const id of modules.keys())
+    if (id.startsWith(`${filename}.widgets-`)) modules.delete(id)
+}
 
 export type MarkdownViteOptions = {
   // Bounded per-integration LRU cache; 0 disables it. In-flight requests are shared.
@@ -81,10 +87,7 @@ export function markdown_vite(
   const files = new Map<string, { content: string; result?: Promise<MarkdownResult> }>()
   const modules = new Map<string, string>()
   const loaded_sources = new Map<object, Map<string, string>>()
-  const is_markdown = (filename: string) =>
-    (options.extensions ?? [`.md`, `.svx`]).some((extension) =>
-      filename.endsWith(extension),
-    )
+  const is_markdown = (filename: string) => is_markdown_file(options.extensions, filename)
   const compile_file = (content: string, filename: string): Promise<MarkdownResult> => {
     const cached = files.get(filename)
     if (cached?.content === content && cached.result) return cached.result
@@ -96,8 +99,7 @@ export function markdown_vite(
         // A slower obsolete compilation must not overwrite a newer edit's examples.
         if (files.get(filename)?.result !== result) return compiled
         settings.on_manifest?.(compiled.manifest)
-        for (const id of modules.keys())
-          if (id.startsWith(`${filename}.widgets-`)) modules.delete(id)
+        drop_examples(modules, filename)
         for (const example of compiled.examples) modules.set(example.id, example.source)
         return compiled
       })
@@ -216,11 +218,8 @@ export function markdown_vite(
         if (change.event !== `delete`) return
         const filename = id.replaceAll(`\\`, `/`)
         files.delete(filename)
-        for (const example of modules.keys())
-          if (example.startsWith(`${filename}.widgets-`)) modules.delete(example)
-        for (const loaded of loaded_sources.values())
-          for (const module of loaded.keys())
-            if (module.startsWith(`${filename}.widgets-`)) loaded.delete(module)
+        drop_examples(modules, filename)
+        for (const loaded of loaded_sources.values()) drop_examples(loaded, filename)
       },
       closeBundle() {
         files.clear()

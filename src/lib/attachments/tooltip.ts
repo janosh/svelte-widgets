@@ -2,7 +2,7 @@ import type { Attachment } from 'svelte/attachments'
 import type { Placement } from '../utils'
 import { clamp, compute_position, get_uuid } from '../utils'
 import { auto_update_position } from './float'
-import { css_px, register_escape_layer } from './shared'
+import { claim_escape, css_px } from './shared'
 
 export type TooltipTrigger = `hover-focus` | `hover` | `focus`
 export type TooltipWrap = `balance` | `normal` | `nowrap`
@@ -143,6 +143,22 @@ const first_nonempty = (...values: (string | null | undefined)[]): string | null
   values.find(
     (value): value is string => typeof value === `string` && value.length > 0,
   ) ?? null
+
+// A tooltip repeating its trigger's text adds nothing, unless the trigger or a descendant
+// overflows (ellipsis, clipping), where it reveals the hidden part
+const collapse_ws = (text: string | null) => text?.replaceAll(/\s+/g, ` `).trim() ?? ``
+// aria-label names a control for assistive tech. As tooltip text it only helps an icon-only
+// trigger: one showing its own text, or a checkbox/radio beside its label, already says it
+const aria_label_tooltip = (trigger: HTMLElement): string | null =>
+  trigger.textContent?.trim() ||
+  trigger.matches(`input:is([type=checkbox], [type=radio])`)
+    ? null
+    : trigger.getAttribute(`aria-label`)
+const repeats_visible_text = (trigger: HTMLElement, content: string): boolean =>
+  collapse_ws(content) === collapse_ws(trigger.textContent) &&
+  ![trigger, ...trigger.querySelectorAll<HTMLElement>(`*`)].some(
+    (el) => el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight,
+  )
 
 const add_description = (element: Element, id: string): void => {
   const tokens = described_by_tokens(element)
@@ -336,10 +352,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (content !== undefined) {
       return first_nonempty(typeof content === `function` ? content(trigger) : content)
     }
-    const title = remember_and_strip_title(registration, trigger)
     return first_nonempty(
-      title,
-      trigger.getAttribute(`aria-label`),
+      remember_and_strip_title(registration, trigger),
+      aria_label_tooltip(trigger),
       trigger.getAttribute(`data-title`),
     )
   }
@@ -426,17 +441,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   const render_active_content = (): boolean => {
     if (!active) return false
     const content = resolve_content(active.registration, active.trigger)
-    if (!content) return false
+    if (!content || repeats_visible_text(active.trigger, content)) return false
     content_el.textContent = content
     return true
   }
 
   const position_active = (): void => {
     if (!active?.open) return
-    if (!is_trigger_visible(active.trigger)) {
-      hide_active(`visibility`)
-      return
-    }
+    if (!is_trigger_visible(active.trigger)) return hide_active(`visibility`)
     const { options } = active.registration
     const boundary = resolve_boundary(options, doc)
     const viewport_padding = options.viewport_padding ?? 8
@@ -455,10 +467,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       trigger_rect.left >= boundary.right ||
       trigger_rect.bottom <= boundary.top ||
       trigger_rect.top >= boundary.bottom
-    if (has_area && off_screen) {
-      hide_active(`visibility`)
-      return
-    }
+    if (has_area && off_screen) return hide_active(`visibility`)
     const tooltip_rect = surface.getBoundingClientRect()
     // only placement and offset differ from compute_position's defaults
     const { top, left, placement } = compute_position(trigger_rect, tooltip_rect, {
@@ -543,8 +552,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
         console.error(
           `tooltip title could not be stripped from <${observed.trigger.tagName.toLowerCase()}>`,
         )
-        hide_active(`visibility`, { notify: false })
-        return
+        return hide_active(`visibility`, { notify: false })
       }
       changed_attributes.push(...also_changed)
     }
@@ -552,10 +560,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       TOOLTIP_CONTENT_ATTRIBUTES.includes(attribute),
     )
     const { options } = observed.registration
-    if (content_changed && options.content === undefined && !render_active_content()) {
-      hide_active(`visibility`)
-      return
-    }
+    if (content_changed && options.content === undefined && !render_active_content())
+      return hide_active(`visibility`)
     apply_surface_context(observed.trigger, options)
     position_active()
   })
@@ -589,10 +595,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     const opening = active
     const { options } = opening.registration
     apply_surface_context(opening.trigger, options)
-    if (!render_active_content()) {
-      hide_surface()
-      return
-    }
+    if (!render_active_content()) return hide_surface()
     mount_surface(opening.trigger, options)
     add_description(opening.trigger, surface.id)
     opening.open = true
@@ -604,13 +607,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     removal_observer.observe(doc.body, { childList: true, subtree: true })
     stop_open_effects = [
       auto_update_position(opening.trigger, surface, position_active),
-      register_escape_layer((event) => {
-        if (!active?.open) return false
-        event.preventDefault()
-        event.stopPropagation()
-        hide_active(`escape`, { keep_active: true })
-        return true
-      }),
+      claim_escape(() => hide_active(`escape`, { keep_active: true })),
     ]
     // before positioning, which may hide again and must report a close that follows an
     // open rather than one out of nowhere
@@ -697,8 +694,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (reason === `pointer` && entered && surface.contains(entered)) {
       active.pointer_trigger = false
       active.pointer_surface = true
-      clear_close_timeout()
-      return
+      return clear_close_timeout()
     }
     if (reason === `pointer`) active.pointer_trigger = false
     else active.focus = false
@@ -733,12 +729,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     }
   }
 
-  return {
-    register,
-    enter_pointer,
-    leave_trigger,
-    enter_focus,
-  }
+  return { register, enter_pointer, leave_trigger, enter_focus }
 }
 
 const tooltip_managers = new WeakMap<

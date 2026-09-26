@@ -149,10 +149,7 @@ With `bind:this={editor}`, use `editor.open_search(replace = false)`, `editor.fi
 
 ## <Icon icon={ContentDuplicate} class="heading-icon" aria-hidden="true" /> `DiffView`
 
-`DiffView` renders side-by-side or unified diffs from a host-supplied `DiffBackend`. The
-package owns virtualization, gap expansion, layout switching and accessible line
-structure; the backend owns language detection and diff generation, so it can run in a
-worker, native process, WASM module or server route.
+`DiffView` renders side-by-side or unified diffs from a host-supplied `DiffBackend`. The package owns virtualization, gap expansion, layout switching and accessible line structure; the backend owns language detection and diff generation, so it can run in a worker, native process, WASM module or server route.
 
 Import the shared stylesheet once wherever the component is used:
 
@@ -162,8 +159,7 @@ import type { DiffBackend } from 'svelte-widgets/code-editor'
 import 'svelte-widgets/code-editor/editor.css'
 ```
 
-Pass `backend` to an individual view, as below, or call `set_diff_backend()` once during
-app startup.
+Pass `backend` to an individual view, as below, or call `set_diff_backend()` once during app startup.
 
 ```svelte example id="diff-view-basic"
 <script lang="ts">
@@ -289,6 +285,4 @@ app startup.
 />
 ```
 
-The demo backend returns a fixed `DiffResult` to keep the browser bundle dependency-free.
-A production backend receives `old_text`, `new_text`, `filename` and `context_lines` through
-`diff_text()` and can return syntax spans for token coloring and intra-line emphasis.
+The demo backend returns a fixed `DiffResult` to keep the browser bundle dependency-free. A production backend receives `old_text`, `new_text`, `filename` and `context_lines` through `diff_text()` and can return syntax spans for token coloring and intra-line emphasis.

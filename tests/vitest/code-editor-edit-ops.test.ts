@@ -9,7 +9,7 @@ import {
   visible_line_window,
 } from '$lib/code-editor'
 import type { EditorState, RangeEdit } from '$lib/code-editor'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 
 const state = (
   text: string,

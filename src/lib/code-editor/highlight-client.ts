@@ -66,6 +66,16 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     })
     return pump_promise
   }
+  const check_revision = (kind: string, expected: number, applied: number): void => {
+    if (applied !== expected)
+      throw new Error(
+        `Backend ${kind} revision mismatch: expected ${expected}, received ${applied}`,
+      )
+  }
+  const clear_highlight_timer = (): void => {
+    if (highlight_timer !== null) clearTimeout(highlight_timer)
+    highlight_timer = null
+  }
   const closed_error = (): Error =>
     new Error(`Editor document ${doc_id} was closed before the request ran`)
   const enqueue = (task: QueuedTask): void => {
@@ -103,13 +113,8 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     const task: QueuedTask = {
       kind: `resync`,
       run: async () => {
-        const { revision } = args
         try {
-          const applied = await backend.set_text(args)
-          if (applied !== revision)
-            throw new Error(
-              `Backend resync revision mismatch: expected ${revision}, received ${applied}`,
-            )
+          check_revision(`resync`, args.revision, await backend.set_text(args))
           backend_synced = true
         } catch (error) {
           report(error)
@@ -133,11 +138,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
       kind: `edit`,
       run: async () => {
         try {
-          const applied = await backend.apply_edits(args)
-          if (applied !== transaction.revision)
-            throw new Error(
-              `Backend edit revision mismatch: expected ${transaction.revision}, received ${applied}`,
-            )
+          check_revision(`edit`, transaction.revision, await backend.apply_edits(args))
         } catch {
           void enqueue_resync()
         }
@@ -180,7 +181,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     if (disposed) return
     pending_window = { start_line, end_line }
     cancel_highlight()
-    if (highlight_timer !== null) clearTimeout(highlight_timer)
+    clear_highlight_timer()
     highlight_timer = setTimeout(() => {
       highlight_timer = null
       void run_highlight()
@@ -209,8 +210,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   const close = (): Promise<void> =>
     (close_promise ??= (async () => {
       disposed = true
-      if (highlight_timer !== null) clearTimeout(highlight_timer)
-      highlight_timer = null
+      clear_highlight_timer()
       pending_window = null
       cancel_highlight()
       for (const task of queue.splice(queue_head)) task.abort?.(closed_error())
@@ -218,11 +218,5 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
       await cancellation
       await backend.close_doc({ doc_id })
     })())
-  return {
-    open,
-    apply_transaction,
-    request_highlight,
-    close,
-    settled,
-  }
+  return { open, apply_transaction, request_highlight, close, settled }
 }

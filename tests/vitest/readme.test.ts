@@ -5,7 +5,7 @@ import { heading_text } from '$lib/heading-anchors'
 import { exports as pkg_exports } from '$root/package.json'
 import readme from '$root/readme.md?raw'
 import markdown_guide from '$lib/markdown/readme.md?raw'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 
 const pages: Record<string, string> = import.meta.glob(
   `../../src/routes/**/+page.{md,svelte}`,

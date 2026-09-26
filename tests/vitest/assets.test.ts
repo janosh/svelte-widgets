@@ -5,7 +5,7 @@ import { compile, parse, preprocess } from 'svelte/compiler'
 import { writeFile } from 'node:fs/promises'
 import { temp_dir } from './index'
 import { build } from 'vite'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 
 const transform = async (content: string) => {
   const result = await preprocess(content, asset_imports(), {

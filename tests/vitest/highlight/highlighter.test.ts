@@ -6,7 +6,7 @@ import { resolve as resolve_path } from 'node:path'
 import { gzipSync } from 'node:zlib'
 import { build } from 'vite'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
-import { assert, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { assert, describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 test.each([
   [`default_highlighter`, 350_000],

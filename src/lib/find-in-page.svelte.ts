@@ -55,12 +55,11 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
     current_idx = ((idx % count) + count) % count
     const match = occurrences[current_idx]?.element
     // Open collapsed <details> ancestors so the match can scroll into view.
-    let collapsed = match?.closest<HTMLDetailsElement>(`details:not([open])`) ?? null
-    while (collapsed) {
-      collapsed.open = true
-      collapsed =
-        collapsed.parentElement?.closest<HTMLDetailsElement>(`details:not([open])`) ??
-        null
+    // An opened <details> no longer matches, so closest() moves on to its ancestors.
+    let details = match?.closest<HTMLDetailsElement>(`details:not([open])`)
+    while (details) {
+      details.open = true
+      details = details.closest<HTMLDetailsElement>(`details:not([open])`)
     }
     jump.start(match ?? null)
   }

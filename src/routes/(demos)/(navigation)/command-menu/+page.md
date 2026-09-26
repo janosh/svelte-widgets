@@ -27,8 +27,7 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
 
 ## `PageSearch`
 
-[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages.
-`fallback_actions` are matched locally on every keystroke, so known routes show up without waiting on the index. Failed index, search, or result downloads show a Retry button. Successful results remain visible, including those from a partially failed batch; Retry downloads only failed results and restores their search order. Install `pagefind` as a development dependency, then index the rendered site after the application build. Run this script before previewing or deploying:
+[`PageSearch`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/PageSearch.svelte) wraps [`CommandMenu`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/CommandMenu.svelte) with full-text search over statically generated pages. `fallback_actions` are matched locally on every keystroke, so known routes show up without waiting on the index. Failed index, search, or result downloads show a Retry button. Successful results remain visible, including those from a partially failed batch; Retry downloads only failed results and restores their search order. Install `pagefind` as a development dependency, then index the rendered site after the application build. Run this script before previewing or deploying:
 
 ```json
 {
@@ -66,9 +65,7 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
 <p>Open the documentation search with <kbd>cmd/ctrl+j</kbd>.</p>
 ```
 
-The `navigate` callback receives the selected result's `query`, `label`, and `description`
-as its second argument. A persistent layout can carry the query across client-side
-navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/attachments/highlight-matches.ts) to the destination content:
+The `navigate` callback receives the selected result's `query`, `label`, and `description` as its second argument. A persistent layout can carry the query across client-side navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widgets/blob/-/src/lib/attachments/highlight-matches.ts) to the destination content:
 
 ```svelte
 <script lang="ts">
@@ -105,17 +102,11 @@ navigation and apply [`highlight_matches`](https://github.com/janosh/svelte-widg
 </style>
 ```
 
-See the [`highlight_matches` attachments demo](attachments/highlight-matches) for options and effects.
-Stemmed Pagefind results may have no exact substring.
+See the [`highlight_matches` attachments demo](attachments/highlight-matches) for options and effects. Stemmed Pagefind results may have no exact substring.
 
 ## Shortcuts, Descriptions & Recent Actions
 
-Actions can carry a `description`, `metadata`, `badge`, `keywords`, `shortcut`, and
-`disabled` state. The default filter searches all visible fields plus `keywords` and
-supports multiple terms. Shortcuts render as <kbd>⌘</kbd>-style key hints and trigger
-globally while the menu is closed unless `global_shortcuts={false}`. Pass
-`recent_actions_key` to persist triggered actions to `localStorage` and rank them first
-when the menu reopens.
+Actions can carry a `description`, `metadata`, `badge`, `keywords`, `shortcut`, and `disabled` state. The default filter searches all visible fields plus `keywords` and supports multiple terms. Shortcuts render as <kbd>⌘</kbd>-style key hints and trigger globally while the menu is closed unless `global_shortcuts={false}`. Pass `recent_actions_key` to persist triggered actions to `localStorage` and rank them first when the menu reopens.
 
 ```svelte example id="command-menu-shortcuts"
 <script lang="ts">

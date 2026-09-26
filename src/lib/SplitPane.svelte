@@ -145,8 +145,7 @@
   }
 
   const stop_resize = (event: PointerEvent): void => {
-    if (active_pointer !== event.pointerId) return
-    active_pointer = undefined
+    if (active_pointer === event.pointerId) active_pointer = undefined
   }
 
   const resize_from_keyboard = (event: KeyboardEvent): void => {
@@ -155,14 +154,11 @@
       event.preventDefault()
       collapsed = !collapsed
       update_parent(collapsed ? `0px` : format_size(safe_size))
-      notify_resize()
-      return
+      return notify_resize()
     }
     if (event.key === `Home` || event.key === `End`) {
       event.preventDefault()
-      const idx = event.key === `Home` ? 0 : 1
-      apply_size(size_bounds[idx])
-      return
+      return apply_size(size_bounds[event.key === `Home` ? 0 : 1])
     }
     const horizontal_keys = is_right_to_left()
       ? [`ArrowRight`, `ArrowLeft`]

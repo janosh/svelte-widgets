@@ -36,9 +36,7 @@ The site table of contents uses the Markdown manifest. The example scopes its on
 
 ### Collapsing
 
-`collapse_subheadings` takes `true` to fold everything below the top level, or a heading
-tag to pick the level to fold from — `h3` keeps `h2` entries expanded and hides the rest
-until their section is active.
+`collapse_subheadings` takes `true` to fold everything below the top level, or a heading tag to pick the level to fold from — `h3` keeps `h2` entries expanded and hides the rest until their section is active.
 
 ```svelte
 <Toc collapse_subheadings="h3" />
@@ -46,6 +44,4 @@ until their section is active.
 
 ### Styling
 
-Every element has a prop bag (`aside_props`, `nav_props`, `title_props`, `ol_props`,
-`li_props`, `open_button_props`) whose attributes are spread onto that element, and the base
-rules use `:where()` so a single class of your own outranks them without `!important`.
+Every element has a prop bag (`aside_props`, `nav_props`, `title_props`, `ol_props`, `li_props`, `open_button_props`) whose attributes are spread onto that element, and the base rules use `:where()` so a single class of your own outranks them without `!important`.

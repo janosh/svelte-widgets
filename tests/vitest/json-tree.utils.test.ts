@@ -22,7 +22,7 @@ import {
   to_json,
   values_equal,
 } from '$lib/json-tree/utils'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 it.each([
   [null, `null`, 0, false],
@@ -449,8 +449,7 @@ describe(`get_ancestor_paths`, () => {
     ],
     [`data.json`, `data.json`, []],
   ])(`get_ancestor_paths(%p, %p) = %p`, (path, root_label, expected) => {
-    const result = get_ancestor_paths(path, root_label)
-    expect(result).toEqual(expected)
+    expect(get_ancestor_paths(path, root_label)).toEqual(expected)
   })
 })
 

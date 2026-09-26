@@ -63,20 +63,16 @@ const files_from_entry = async (
   budget: { remaining: number },
   depth = 0,
 ): Promise<File[]> => {
-  if (is_file_entry(entry)) {
-    return [await new Promise<File>(entry.file.bind(entry))]
-  }
+  if (is_file_entry(entry)) return [await new Promise<File>(entry.file.bind(entry))]
   if (!is_directory_entry(entry)) return []
-  if (depth >= MAX_DEPTH) {
+  if (depth >= MAX_DEPTH)
     throw new Error(
       `Dropped directory ${entry.fullPath} nests deeper than ${MAX_DEPTH} levels`,
     )
-  }
-  if (--budget.remaining < 0) {
+  if (--budget.remaining < 0)
     throw new Error(
       `Dropped tree expands past ${MAX_DIRS} directories at ${entry.fullPath}`,
     )
-  }
   const entries = await read_all_entries(entry.createReader())
   return (
     await Promise.all(entries.map((child) => files_from_entry(child, budget, depth + 1)))

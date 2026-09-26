@@ -1,5 +1,5 @@
 import { escape_html_text, hast_to_html, type HastNode } from '$lib/highlight/hast'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 
 describe(`escape_html_text`, () => {
   test.each([

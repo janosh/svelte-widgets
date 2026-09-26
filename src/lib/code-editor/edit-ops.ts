@@ -21,18 +21,6 @@ const clamp_selection = (state: EditorState): [number, number] => {
   const start = clamp_integer(state.selection_start, 0, limit)
   return [start, clamp_integer(state.selection_end, start, limit)]
 }
-const touched_line_range = (
-  model: EditorModel,
-  sel_start: number,
-  sel_end: number,
-): [number, number] => {
-  const block_start = model.line_at(sel_start).from
-  const effective_end =
-    sel_end > sel_start && model.slice(sel_end - 1, sel_end) === `\n`
-      ? sel_end - 1
-      : sel_end
-  return [block_start, model.line_at(effective_end).to]
-}
 // Everything trimStart() would take except line terminators, so the commented-ness test and
 // the width uncommenting slices off agree. With only [ \t], an exotic indent (non-breaking
 // space, form feed) shifted the slice into the token and left half of it behind.
@@ -57,8 +45,15 @@ const rewrite_block = (
   make_rewrite: (lines: string[]) => ((line: string) => string) | null,
 ): RangeEdit | null => {
   const [sel_start, sel_end] = clamp_selection(state)
-  const [block_start, block_end] = touched_line_range(state.model, sel_start, sel_end)
-  const lines = state.model.slice(block_start, block_end).split(`\n`)
+  const { model } = state
+  const block_start = model.line_at(sel_start).from
+  // A selection ending at a line start leaves that line untouched.
+  const effective_end =
+    sel_end > sel_start && model.slice(sel_end - 1, sel_end) === `\n`
+      ? sel_end - 1
+      : sel_end
+  const block_end = model.line_at(effective_end).to
+  const lines = model.slice(block_start, block_end).split(`\n`)
   const rewrite_line = make_rewrite(lines)
   if (!rewrite_line) return null
   let total_delta = 0
@@ -95,10 +90,8 @@ const rewrite_block = (
 export const indent_selection: BlockCommand = (state, indent) => {
   const [sel_start, sel_end] = clamp_selection(state)
   if (indent === ``) return null
-  if (sel_start === sel_end) {
-    const caret = sel_start + indent.length
-    return range_edit(sel_start, sel_start, indent, caret)
-  }
+  if (sel_start === sel_end)
+    return range_edit(sel_start, sel_start, indent, sel_start + indent.length)
   return rewrite_block(state, () => (line) => (line === `` ? line : indent + line))
 }
 const dedent_width = (line: string, indent: string): number => {

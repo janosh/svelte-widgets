@@ -1,6 +1,6 @@
 import type { MultiSelectProps } from '$lib'
 import { flushSync, mount, tick, unmount, type Component } from 'svelte'
-import { assert, onTestFinished, vi } from 'vitest'
+import { assert, onTestFinished, vi } from 'vite-plus/test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 
@@ -20,6 +20,17 @@ export function doc_query<T extends Element = HTMLElement>(selector: string): T 
   const node = document.querySelector<T>(selector)
   assert(node !== null, `No element found for selector: ${selector}`)
   return node
+}
+
+// Clicks an element (or the first match of a selector), then flushes the resulting update
+export async function click(target: Element | string | null | undefined): Promise<void> {
+  const element = typeof target === `string` ? doc_query(target) : target
+  assert(
+    element instanceof HTMLElement,
+    `click target is not an HTMLElement: ${element?.nodeName}`,
+  )
+  element.click()
+  await tick()
 }
 
 // Shadows a prototype getter with an own value property; returns the undo callers must

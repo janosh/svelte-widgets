@@ -1,5 +1,5 @@
 import { mount, tick, unmount, type Component, type MountOptions } from 'svelte'
-import { afterEach, onTestFinished } from 'vitest'
+import { afterEach, onTestFinished } from 'vite-plus/test'
 
 import { MultiSelect } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
@@ -32,6 +32,17 @@ export const mount_multiselect = (
 export const fresh_mousemove = () => new MouseEvent(`mousemove`, { bubbles: true })
 export const fresh_key = (key: string) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true })
+
+// presses each key in order as a fresh keydown, flushing after every press
+export async function press_sequence(
+  target: EventTarget,
+  ...keys: string[]
+): Promise<void> {
+  for (const key of keys) {
+    target.dispatchEvent(fresh_key(key))
+    await tick()
+  }
+}
 
 const console_methods = { error: console.error, warn: console.warn }
 

@@ -284,10 +284,7 @@
         <div
           class={[
             `dropdown`,
-            {
-              active: is_active(route),
-              'align-right': route.align === `right`,
-            },
+            { active: is_active(route), 'align-right': route.align === `right` },
           ]}
           data-href={route.href}
           data-dropdown-index={route_idx}

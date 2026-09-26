@@ -39,17 +39,12 @@
 
   let result = $derived<Result | undefined>(undefined)
   let error = $derived<unknown>(undefined)
-  let reset_timeout: ReturnType<typeof setTimeout> | null = null
+  let reset_timeout: ReturnType<typeof setTimeout> | undefined
   let destroyed = false
   const action_disabled = $derived(disabled || state === `pending`)
   const msg = $derived(merge_defaults(ACTION_BUTTON_LABELS, labels))
   const current_text = $derived(msg[state])
   const current_icon = $derived(icons?.[state])
-
-  const clear_reset_timeout = (): void => {
-    if (reset_timeout !== null) clearTimeout(reset_timeout)
-    reset_timeout = null
-  }
 
   const invoke_callback = async (
     callback_name: string,
@@ -69,12 +64,12 @@
 
   onDestroy(() => {
     destroyed = true
-    clear_reset_timeout()
+    clearTimeout(reset_timeout)
   })
 
   async function run_action(): Promise<void> {
     if (action_disabled) return
-    clear_reset_timeout()
+    clearTimeout(reset_timeout)
     result = undefined
     error = undefined
     set_state(`pending`)
@@ -94,7 +89,6 @@
     }
     if (destroyed || reset_ms <= 0) return
     reset_timeout = setTimeout(() => {
-      reset_timeout = null
       if (destroyed) return
       // Snippets get `result`/`error` alongside `state`, so leaving them populated kept a
       // `{#if error}` branch rendering a failure after the button had returned to idle.

@@ -9,7 +9,7 @@ import {
   assert_valid_content,
 } from '$lib/markdown'
 import { compile_source as compile_markdown } from './markdown-helpers'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 
 const document_manifest = async (source: string, filename = `/guide.md`) =>
   (await compile_markdown(source, { filename })).manifest

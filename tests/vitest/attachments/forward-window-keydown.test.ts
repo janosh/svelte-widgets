@@ -1,5 +1,5 @@
 import { forward_window_keydown } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key as dispatch_key } from '../index'
 
 describe(`forward_window_keydown`, () => {

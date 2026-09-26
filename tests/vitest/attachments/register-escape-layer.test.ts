@@ -1,5 +1,5 @@
 import { register_escape_layer } from '$lib/attachments'
-import { expect, it, onTestFinished, vi } from 'vitest'
+import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
   escape_key,

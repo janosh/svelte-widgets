@@ -2,7 +2,6 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from './Icon.svelte'
   import Heading from './Heading.svelte'
-
   import { ChevronRight, type IconData } from './icons'
   import type { Subpage } from './types'
 

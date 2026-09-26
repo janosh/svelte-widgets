@@ -1,18 +1,10 @@
 ## Fullscreen
 
-`FullscreenButton` and the headless `sync_fullscreen` keep a bindable `fullscreen` flag and
-the browser's fullscreen state in agreement. The flag is the single source of truth: click
-the button, flip the flag yourself, or press <kbd>Esc</kbd> — all three end up in the same
-place.
+`FullscreenButton` and the headless `sync_fullscreen` keep a bindable `fullscreen` flag and the browser's fullscreen state in agreement. The flag is the single source of truth: click the button, flip the flag yourself, or press <kbd>Esc</kbd> — all three end up in the same place.
 
-The important part is that the sync is **keyed to one wrapper element**. Two viewers on a
-page each own their own flag, so sending one fullscreen leaves the other's flag alone. Read
-the flag off `document.fullscreenElement` alone and you get the opposite: every flag flips,
-and every flipped flag fires its own `requestFullscreen`.
+The important part is that the sync is **keyed to one wrapper element**. Two viewers on a page each own their own flag, so sending one fullscreen leaves the other's flag alone. Read the flag off `document.fullscreenElement` alone and you get the opposite: every flag flips, and every flipped flag fires its own `requestFullscreen`.
 
-A fullscreened element inherits nothing from the page and would otherwise render on black,
-so entering fullscreen also paints the page background onto a CSS variable
-(`--fullscreen-bg` by default, renameable via `bg_css_var`).
+A fullscreened element inherits nothing from the page and would otherwise render on black, so entering fullscreen also paints the page background onto a CSS variable (`--fullscreen-bg` by default, renameable via `bg_css_var`).
 
 ### Two independent wrappers
 
@@ -70,9 +62,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 ### Driving the flag from elsewhere
 
-`bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave
-fullscreen without touching the button. Omit `wrapper` and the button becomes a plain
-toggle for the flag, for consumers that call the Fullscreen API themselves.
+`bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave fullscreen without touching the button. Omit `wrapper` and the button becomes a plain toggle for the flag, for consumers that call the Fullscreen API themselves.
 
 ```svelte example id="fullscreen-bound"
 <script lang="ts">
@@ -123,8 +113,7 @@ toggle for the flag, for consumers that call the Fullscreen API themselves.
 
 ### `sync_fullscreen`
 
-The button is a thin wrapper over `sync_fullscreen`, which any component can call during
-init to get the same two-way sync without the button's markup:
+The button is a thin wrapper over `sync_fullscreen`, which any component can call during init to get the same two-way sync without the button's markup:
 
 ```ts
 sync_fullscreen({
@@ -135,5 +124,4 @@ sync_fullscreen({
 })
 ```
 
-`get_page_background()` is exported alongside it. It returns the first opaque background
-among `body` and `html`, falling back to `prefers-color-scheme`.
+`get_page_background()` is exported alongside it. It returns the first opaque background among `body` and `html`, falling back to `prefers-color-scheme`.

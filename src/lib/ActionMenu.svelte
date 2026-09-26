@@ -3,6 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction, CmdSection } from './types'
+  import { focusable } from './dialog'
   import { validate_cmd_actions } from './internal/command'
   import { chain_handlers, format_shortcut, type Placement, step_focus } from './utils'
 
@@ -112,9 +113,7 @@
   // of only empty sections stays externally controllable.
   const all_empty = $derived(flat_actions.length === 0)
   const remember_focus_origin = (target: unknown = document.activeElement) => {
-    if (focus_origin) return
-    if (target instanceof HTMLElement || target instanceof SVGElement)
-      focus_origin = target
+    focus_origin ??= focusable(target)
   }
   const restore_focus = (closing_menu: HTMLMenuElement) => {
     const active = document.activeElement

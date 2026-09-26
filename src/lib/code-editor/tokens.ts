@@ -29,9 +29,8 @@ export const decode_spans = (spans: SpanList, line_length: number): DecodedSpan[
   const decoded: DecodedSpan[] = []
   let start = clamp_integer(spans[0], 0, length)
   // paint a prefix the first span skips as Plain rather than lose those characters
-  if (start > 0) {
+  if (start > 0)
     decoded.push({ start: 0, end: start, class_name: PLAIN, emphasized: false })
-  }
   for (let pair_idx = 0; pair_idx < pair_count; pair_idx++) {
     const end =
       pair_idx + 1 < pair_count

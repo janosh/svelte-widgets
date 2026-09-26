@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, vi } from 'vitest'
+import { beforeAll, beforeEach, vi } from 'vite-plus/test'
 
 const open_popovers = new WeakSet<HTMLElement>()
 const native_matches = Element.prototype.matches
@@ -42,6 +42,7 @@ Object.defineProperty(globalThis, `localStorage`, {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers() // tests opting into fake timers need no restore of their own
   document.body.innerHTML = ``
   localStorage.clear()
 })

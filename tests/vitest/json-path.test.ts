@@ -1,6 +1,6 @@
 // Unit tests for the dotted/bracketed JSON path codec
 import { build_path, format_path, parse_path, resolve_path } from '$lib/json-tree/path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'vite-plus/test'
 
 describe(`format_path`, () => {
   it.each([

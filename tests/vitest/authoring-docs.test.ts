@@ -1,5 +1,5 @@
 import { load } from '../../src/routes/(demos)/(authoring)/authoring/+page.server'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 import { checked_examples } from '../../src/routes/(demos)/(authoring)/authoring/examples'
 
 // Five real compiler runs need the same budget as the checker integration tests.

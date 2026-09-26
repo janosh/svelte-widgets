@@ -45,9 +45,6 @@
     }
   }
   @keyframes click-fade {
-    from {
-      opacity: 1;
-    }
     to {
       opacity: 0;
     }

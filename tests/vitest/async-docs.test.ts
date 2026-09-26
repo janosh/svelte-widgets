@@ -3,7 +3,7 @@ import { fail } from '@sveltejs/kit'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'
 import { ModuleKind, transpileModule } from 'typescript'
-import { describe, expect, test, vi } from 'vitest'
+import { describe, expect, test, vi } from 'vite-plus/test'
 
 const input_docs = `${import.meta.dirname}/../../src/routes/(demos)/(inputs)/(multiselect)`
 const async_docs = readFileSync(`${input_docs}/infinite-scroll/+page.md`, `utf8`)

@@ -5,7 +5,7 @@ import source_links, {
 } from '$lib/source-links/vite-plugin'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { describe, expect, it, onTestFinished } from 'vitest'
+import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { create_element, temp_dir } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module

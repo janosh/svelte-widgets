@@ -1,6 +1,6 @@
 import { Progress } from '$lib'
-import { flushSync, mount, type ComponentProps } from 'svelte'
-import { expect, test } from 'vitest'
+import type { ComponentProps } from 'svelte'
+import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'
 
 const render_progress = (props: ComponentProps<typeof Progress>) => {
@@ -40,8 +40,7 @@ test.each([
   [`value=NaN`, { value: Number.NaN }],
   [`value=Infinity`, { value: Infinity }],
 ])(`rejects %s with a clear error`, (_desc, props) => {
-  expect(() => {
-    mount(Progress, { target: document.body, props })
-    flushSync()
-  }).toThrow(`Progress requires finite value and positive max`)
+  expect(() => render(Progress, props)).toThrow(
+    `Progress requires finite value and positive max`,
+  )
 })

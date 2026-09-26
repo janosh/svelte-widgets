@@ -30,19 +30,15 @@ function find_svelte_expression_end(str: string, start: number): number {
 
 // Remove expressions while respecting their JS strings.
 function strip_svelte_expressions(str: string): string {
-  if (!str.includes(`{`)) return str
   let result = ``
-  for (let idx = 0; idx < str.length; idx++) {
-    const char = str[idx]
-    if (char !== `{`) {
-      result += char
-      continue
-    }
-    const expression_end = find_svelte_expression_end(str, idx)
+  let cursor = 0
+  for (let start = str.indexOf(`{`); start !== -1; start = str.indexOf(`{`, cursor)) {
+    result += str.slice(cursor, start)
+    const expression_end = find_svelte_expression_end(str, start)
     if (expression_end === -1) return result
-    idx = expression_end
+    cursor = expression_end + 1
   }
-  return result
+  return result + str.slice(cursor)
 }
 
 const NAMED_ENTITIES: Record<string, string> = {
@@ -174,23 +170,21 @@ function add_anchor_to_heading(
 
 const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagName)
 
-const get_default_headings = (node: Element): Element[] =>
-  [...node.children].flatMap((child) => [child, ...child.children].filter(is_heading))
-
 // adds anchor links to headings within a container
 export const heading_anchors =
   (options: HeadingAnchorsOptions = {}) =>
   (node: Element): (() => void) => {
+    const { selector } = options
     const icon_svg = options.icon_svg ?? link_svg
-    const selector = options.selector
-    const get_headings = selector
-      ? () => Array.from(node.querySelectorAll(selector))
-      : () => get_default_headings(node)
     const add_anchors = () => {
       const get_used_ids = document_used_ids()
-      for (const heading of get_headings()) {
+      const headings = selector
+        ? node.querySelectorAll(selector)
+        : [...node.children].flatMap((child) =>
+            [child, ...child.children].filter(is_heading),
+          )
+      for (const heading of headings)
         add_anchor_to_heading(heading, get_used_ids, icon_svg)
-      }
     }
     add_anchors()
 

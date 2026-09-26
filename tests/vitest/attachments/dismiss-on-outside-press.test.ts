@@ -1,5 +1,5 @@
 import { dismiss_on_outside_press } from '$lib/attachments'
-import { describe, expect, it, onTestFinished, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_escape } from '../index'
 
 describe(`dismiss_on_outside_press`, () => {

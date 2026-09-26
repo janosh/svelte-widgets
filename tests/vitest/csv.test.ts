@@ -1,5 +1,5 @@
 import { escape_csv_field, rows_to_csv } from '$lib/csv'
-import { describe, expect, test } from 'vitest'
+import { describe, expect, test } from 'vite-plus/test'
 
 describe(`rows_to_csv`, () => {
   test(`explicit readonly columns preserve sparse fields and empty export headers`, () => {
