@@ -3,7 +3,7 @@
   import { asset } from '$app/paths'
   import { page } from '$app/state'
   import { CopyButton, GitHubCorner, PageSearch, Toc } from '$lib'
-  import { slug_to_title } from '$lib/utils'
+  import { observe_subtree, slug_to_title } from '$lib/utils'
   import { flash_toc_target } from '$lib/toc-utils'
   import { highlight_matches } from '$lib/attachments'
   import { repository } from '$root/package.json'
@@ -57,14 +57,7 @@
       )
     }
     update()
-    const observer = new MutationObserver(update)
-    observer.observe(node, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: [`id`, `data-reference-label`],
-    })
-    return () => observer.disconnect()
+    return observe_subtree(node, [`id`, `data-reference-label`], update)
   }
 
   const actions = demo_pages.map((route) => ({

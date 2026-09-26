@@ -67,11 +67,7 @@ Disabled rows can receive focus but cannot be selected or expanded, and ranges s
   label="Files for batch actions"
 />
 <p>Selected: {selected_ids.join(`, `) || `None`}</p>
-<button
-  onclick={() => {
-    selected_ids = []
-  }}>Clear selection</button
->
+<button onclick={() => (selected_ids = [])}>Clear selection</button>
 ```
 
 ### <Icon icon={Refresh} class="heading-icon" aria-hidden="true" /> Lazy branches, failure and retry

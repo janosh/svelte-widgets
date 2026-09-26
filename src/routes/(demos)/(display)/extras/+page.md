@@ -16,8 +16,7 @@ the package root:
 
 ### `Toggle`
 
-A checkbox styled as a switch. `checked` is bindable and the children snippet receives it,
-so the label can react to the state. Everything else spreads onto the wrapping `<label>`.
+A checkbox styled as a switch. `checked` is bindable and the children snippet receives it, so the label can react to the state. Everything else spreads onto the wrapping `<label>`.
 
 ```svelte example id="toggle-demo"
 <script lang="ts">
@@ -62,8 +61,7 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 
 ### `Icon`
 
-Renders one glyph from the bundled icon set at `1em` square, inheriting `currentColor`.
-Pass the glyph value (`<Icon icon={Info} />`), not a name.
+Renders one glyph from the bundled icon set at `1em` square, inheriting `currentColor`. Pass the glyph value (`<Icon icon={Info} />`), not a name.
 
 ```svelte example id="icon-demo"
 <script lang="ts">
@@ -115,8 +113,7 @@ Pass the glyph value (`<Icon icon={Info} />`), not a name.
 
 ### `CircleSpinner`
 
-A dependency-free loading indicator. `size`, `color` and `duration` are plain CSS strings,
-so any unit works.
+A dependency-free loading indicator. `size`, `color` and `duration` are plain CSS strings, so any unit works.
 
 ```svelte example id="spinner-demo"
 <script lang="ts">
