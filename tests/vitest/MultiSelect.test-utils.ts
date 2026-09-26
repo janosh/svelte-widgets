@@ -1,5 +1,5 @@
 import { mount, tick, unmount, type Component, type MountOptions } from 'svelte'
-import { afterEach, onTestFinished, vi } from 'vitest'
+import { afterEach, onTestFinished } from 'vitest'
 
 import { MultiSelect } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
@@ -33,14 +33,11 @@ export const fresh_mousemove = () => new MouseEvent(`mousemove`, { bubbles: true
 export const fresh_key = (key: string) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true })
 
-// clicks the element matching selector, then flushes the resulting update
-export async function click(selector: string): Promise<void> {
-  doc_query(selector).click()
-  await tick()
-}
-
 // presses each key in order as a fresh keydown, flushing after every press
-export async function press_keys(target: EventTarget, ...keys: string[]): Promise<void> {
+export async function press_sequence(
+  target: EventTarget,
+  ...keys: string[]
+): Promise<void> {
   for (const key of keys) {
     target.dispatchEvent(fresh_key(key))
     await tick()
@@ -55,7 +52,6 @@ export const normalized_text = (element: Element) =>
 afterEach(async () => {
   await Promise.all([...mounted_components].map(unmount_component))
   Object.assign(console, console_methods)
-  vi.useRealTimers() // tests opting into fake timers need no try/finally of their own
 })
 
 // the visible search input; the hidden form-control input carries no autocomplete attr

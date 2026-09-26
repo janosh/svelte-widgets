@@ -2,7 +2,7 @@ import DraggablePane from '$lib/DraggablePane.svelte'
 import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import {
   create_element,
   doc_query,
@@ -24,8 +24,6 @@ const mock_pane_rect = (pane: HTMLElement, left = 0, top = 0) =>
 const default_max_width = `min(450px, calc(100vw - 16px))`
 
 describe(`DraggablePane`, () => {
-  afterEach(() => void vi.useRealTimers())
-
   // raw snippets render once, so this captures the payload; the reactive half is
   // asserted through the DOM below
   let last_pane_state: Record<string, unknown> = {}

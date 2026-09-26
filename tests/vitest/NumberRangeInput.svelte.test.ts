@@ -1,6 +1,6 @@
 import { NumberRangeInput } from '$lib'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { doc_query, fire_input, hover, press_key, render } from './index'
 
 const label_snippet = createRawSnippet(() => ({
@@ -25,7 +25,6 @@ const mount_range = (props: ComponentProps<typeof NumberRangeInput>) => {
 describe(`NumberRangeInput`, () => {
   test(`shows the description only while hovering the label text`, async () => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers())
     const { inputs } = mount_range({ ...named_props, children: label_snippet })
     await tick()
     for (const input of inputs) {

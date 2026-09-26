@@ -4,7 +4,7 @@ import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
 import { tick } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
-import { afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import { doc_query, render, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
@@ -70,8 +70,6 @@ beforeEach(() => {
   mock_write_text.mockReset()
   mock_write_text.mockResolvedValue(undefined)
 })
-
-afterEach(() => vi.useRealTimers())
 
 test.each([`Enter`, ` `, `Escape`, `a`])(`handles %j key`, (key) => {
   const activates = key === `Enter` || key === ` `

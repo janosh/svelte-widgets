@@ -8,7 +8,7 @@ import {
   observe_text_mutations,
   search_text,
 } from '$lib/text-search'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { doc_query, stub_css_highlights } from './index'
 
 const render = (html: string): HTMLElement => {
@@ -281,7 +281,9 @@ describe(`highlight_ranges`, () => {
   let registry: Map<string, unknown>
   let set_spy: ReturnType<typeof vi.fn>
   let delete_spy: ReturnType<typeof vi.fn>
-  beforeEach(() => void ({ registry, set_spy, delete_spy } = stub_css_highlights()))
+  beforeEach(() => {
+    ;({ registry, set_spy, delete_spy } = stub_css_highlights())
+  })
 
   const installed_ranges = (css_class = `text-search-match`): Range[] => {
     const highlight = registry.get(css_class)
@@ -422,7 +424,6 @@ describe(`highlight_ranges`, () => {
 // two share a clock and are exercised together
 describe(`observe_text_mutations and create_burst_debounce`, () => {
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
 
   // happy-dom delivers mutation records in a microtask that fake timers ignore, so the
   // async advance is needed to run both observer and debounce
@@ -501,7 +502,6 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
 
 describe(`create_search_jump`, () => {
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
 
   it(`marks and scrolls the target, then clears itself`, () => {
     const root = render(`<p>first</p><p>second</p>`)

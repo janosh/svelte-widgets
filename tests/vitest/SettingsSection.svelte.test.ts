@@ -1,22 +1,13 @@
 import { SettingsSection } from '$lib'
 import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vitest'
-import { doc_query, render } from './index'
+import { click, doc_query, render } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
 
 const snippet = (content: string) => createRawSnippet(() => ({ render: () => content }))
 type SettingValues = Record<string, unknown>
 const mount_section = (props: ComponentProps<typeof SettingsSection>) =>
   render(SettingsSection, props)
-const click_and_tick = async (
-  selector: string,
-  root: ParentNode | null = document,
-): Promise<void> => {
-  const button = root?.querySelector<HTMLButtonElement>(selector)
-  if (!button) throw new Error(`Missing button: ${selector}`)
-  button.click()
-  await tick()
-}
 
 // A section whose caller writes reference values back, the way a real settings pane does
 const mount_tracked_section = (
@@ -117,7 +108,7 @@ describe(`SettingsSection`, () => {
     })
     await tick()
     expect(document.querySelector(`.setting-reset-button`)).not.toBeNull()
-    await click_and_tick(`.settings-section-heading .reset-button`)
+    await click(`.settings-section-heading .reset-button`)
     expect(calls).toEqual([`section`])
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
@@ -135,7 +126,7 @@ describe(`SettingsSection`, () => {
 
     expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(2)
     doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
-    await click_and_tick(`.settings-section-heading .reset-button`)
+    await click(`.settings-section-heading .reset-button`)
 
     expect(tracked.values).toEqual({ radius: 1 })
     expect(tracked.reset_calls).toEqual([
@@ -183,7 +174,7 @@ describe(`SettingsSection`, () => {
     expect(
       document.querySelector(`.setting-reset-button svg`)?.getAttribute(`viewBox`),
     ).toBe(`0 0 32 32`)
-    await click_and_tick(`[data-key="${key}"] .setting-reset-button`)
+    await click(`[data-key="${key}"] .setting-reset-button`)
 
     expect(tracked.reset_calls).toEqual([[key, reference_value, reference_present]])
     expect(Object.hasOwn(tracked.values, key)).toBe(reference_present)
@@ -220,7 +211,7 @@ describe(`SettingsSection`, () => {
         ?.getAttribute(`data-description`),
     ).toBe(`Motion inertia after releasing the pointer`)
 
-    await click_and_tick(`.description-toggle`)
+    await click(`.description-toggle`)
     expect(toggle?.getAttribute(`aria-expanded`)).toBe(`true`)
     expect(
       [...document.querySelectorAll(`.settings-row-description`)].map(
@@ -228,7 +219,7 @@ describe(`SettingsSection`, () => {
       ),
     ).toEqual([`Pointer rotation speed`, `Motion inertia after releasing the pointer`])
 
-    await click_and_tick(`.description-toggle`)
+    await click(`.description-toggle`)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
 
     // Cleaning up a keyed wrapper must leave nested rows' generated labels intact too.
@@ -265,7 +256,7 @@ describe(`SettingsSection`, () => {
       `Erklären`,
       `Show descriptions for atoms`,
     ])
-    await click_and_tick(`.description-toggle`)
+    await click(`.description-toggle`)
     expect(explain.getAttribute(`aria-label`)).toBe(`Hide descriptions for atoms`)
 
     const reset = doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`)
@@ -390,7 +381,7 @@ describe(`SettingsSection`, () => {
     const palette_description = doc_query(
       `[data-key="palette"] .settings-row-description`,
     )
-    await click_and_tick(`[data-testid="change-radius"]`)
+    await click(`[data-testid="change-radius"]`)
     expect(document.querySelector(`[data-key="palette"] .settings-row-description`)).toBe(
       palette_description,
     )
@@ -400,37 +391,37 @@ describe(`SettingsSection`, () => {
     )
 
     const previous_input = settings_row()?.querySelector(`input`)
-    await click_and_tick(`[data-testid="replace-input"]`)
+    await click(`[data-testid="replace-input"]`)
     expect(settings_row()?.querySelector(`input`)).not.toBe(previous_input)
     expect(settings_row()?.querySelector(`input`)?.getAttribute(`aria-label`)).toBe(
       `Radius`,
     )
     expect_single_enhancement()
 
-    await click_and_tick(`[data-testid="change-key"]`)
+    await click(`[data-testid="change-key"]`)
     expect(settings_row()?.dataset.key).toBe(`diameter`)
     expect(
       settings_row()?.querySelector(`.setting-reset-button`)?.getAttribute(`aria-label`),
     ).toBe(`Reset Radius to default`)
-    await click_and_tick(`.setting-reset-button`, settings_row())
+    await click(settings_row()?.querySelector(`.setting-reset-button`))
     expect(settings_row()?.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).not.toBeNull()
 
-    await click_and_tick(`[data-testid="change-key"]`)
+    await click(`[data-testid="change-key"]`)
     expect_single_enhancement()
 
     const previous_row = settings_row()
-    await click_and_tick(`[data-testid="replace-radius"]`)
+    await click(`[data-testid="replace-radius"]`)
     expect(settings_row()).not.toBe(previous_row)
     expect(settings_row()?.dataset.generation).toBe(`1`)
     expect_single_enhancement()
 
-    await click_and_tick(`[data-testid="toggle-radius"]`)
+    await click(`[data-testid="toggle-radius"]`)
     expect(settings_row()).toBeNull()
-    await click_and_tick(`[data-testid="toggle-radius"]`)
+    await click(`[data-testid="toggle-radius"]`)
     expect_single_enhancement()
 
-    await click_and_tick(`.setting-reset-button`, settings_row())
+    await click(settings_row()?.querySelector(`.setting-reset-button`))
     expect(settings_row()?.querySelector(`.setting-reset-button`)).toBeNull()
     expect(settings_row()?.querySelectorAll(`.settings-row-description`)).toHaveLength(1)
     expect(document.querySelector(`.reset-button`)).toBeNull()

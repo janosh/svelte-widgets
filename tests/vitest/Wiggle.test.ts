@@ -1,11 +1,10 @@
 import { Wiggle } from '$lib'
 import type { ComponentProps } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, render } from './index'
 
 describe(`Wiggle`, () => {
   beforeEach(vi.useFakeTimers)
-  afterEach(() => vi.useRealTimers())
 
   const get_span = () => doc_query<HTMLSpanElement>(`span`)
 

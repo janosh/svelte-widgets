@@ -930,7 +930,6 @@ describe(`Nav`, () => {
   })
   describe(`tooltips`, () => {
     beforeEach(() => vi.useFakeTimers())
-    afterEach(() => vi.useRealTimers())
     const open_tooltip = async (selector: string): Promise<void> => {
       await tick()
       doc_query(selector).dispatchEvent(

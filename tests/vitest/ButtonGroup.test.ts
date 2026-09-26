@@ -4,14 +4,12 @@ import button_group_source from '$lib/ButtonGroup.svelte?raw'
 import type { ButtonGroupOption } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import { doc_query, hover as dispatch_hover, render, press_key } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
   type Option = ButtonGroupOption
-
-  afterEach(() => void vi.useRealTimers())
 
   const mount_group = (props: Props) => {
     render(ButtonGroup, props as ComponentProps<typeof ButtonGroup>)

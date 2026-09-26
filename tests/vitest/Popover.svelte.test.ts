@@ -1,5 +1,5 @@
 import { tick, type ComponentProps } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
 import {
   create_element,
@@ -15,7 +15,6 @@ describe(`Popover`, () => {
   type PopoverProps = Omit<ComponentProps<typeof Popover>, `children`>
   // hover/focus open and close on timers
   beforeEach(() => void vi.useFakeTimers())
-  afterEach(() => void vi.useRealTimers())
   // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
   // so unmount for real between cases
   let unmount_popover: () => Promise<void>

@@ -1,6 +1,6 @@
 import { create_clipboard_feedback } from '$lib/clipboard.svelte'
 import { flushSync } from 'svelte'
-import { afterAll, afterEach, beforeEach, expect, test, vi } from 'vitest'
+import { afterAll, beforeEach, expect, test, vi } from 'vitest'
 
 // happy-dom has no navigator.clipboard, so writeText is a spy. Timers are faked to keep
 // the feedback window assertions exact rather than sleeping through them.
@@ -12,7 +12,6 @@ beforeEach(() => {
   write_text.mockResolvedValue(undefined)
   vi.useFakeTimers()
 })
-afterEach(() => vi.useRealTimers())
 // the stub is file-wide, so it can only go once every test is done
 afterAll(() => vi.unstubAllGlobals())
 

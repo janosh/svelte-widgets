@@ -1,15 +1,14 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query, press_key } from './index'
+import { click, doc_query, press_key } from './index'
 import {
-  click,
   focus_input,
   fresh_key,
   get_input,
   mount_multiselect,
   normalized_text,
-  press_keys,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -21,12 +20,12 @@ test(`can select 1st and last option with arrow and enter key`, async () => {
 
   const input = get_input()
 
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
-  await press_keys(input, `Enter`)
+  await press_sequence(input, `Enter`)
   expect(props.value).toEqual([1])
 
-  await press_keys(input, `ArrowUp`, `Enter`)
+  await press_sequence(input, `ArrowUp`, `Enter`)
   expect(props.value).toEqual([1, 3])
 })
 
@@ -53,7 +52,7 @@ test(`arrow keys traverse matching options and the create-option row in both dir
     [`ArrowUp`, `bar`],
   ] as const
   for (const [idx, [key, expected]] of steps.entries()) {
-    await press_keys(input, key)
+    await press_sequence(input, key)
     const active = doc_query(`ul.options li.active`)
     expect(active.textContent, `step ${idx}: ${key}`).toContain(expected)
   }
@@ -78,7 +77,7 @@ test.each([
     })
     const input = get_input()
 
-    await press_keys(input, key_name)
+    await press_sequence(input, key_name)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(label)
   },
 )
@@ -105,11 +104,11 @@ test(`Enter on a closed dropdown reopens it instead of selecting the auto-active
   const input = await focus_input()
   expect(props.active_index).toBe(0)
 
-  await press_keys(input, `Escape`)
+  await press_sequence(input, `Escape`)
   expect(props.open).toBe(false)
   expect(props.active_index).toBeNull() // nothing active while collapsed
 
-  await press_keys(input, `Enter`)
+  await press_sequence(input, `Enter`)
   expect(props.value).toEqual([])
   expect(props.open).toBe(true)
   expect(props.active_index).toBe(0)
@@ -123,7 +122,7 @@ test(`closes dropdown on tab out and blur to external element`, async () => {
   const input = await focus_input()
   expect(document.querySelector(`ul.options.hidden`)).toBeNull()
 
-  await press_keys(input, `Tab`)
+  await press_sequence(input, `Tab`)
   expect(doc_query(`ul.options.hidden`)).toBeInstanceOf(HTMLUListElement)
   expect(on_close).toHaveBeenCalledTimes(1)
 
@@ -149,7 +148,7 @@ test(`Enter key deselection preserves search_text (matching mouse behavior)`, as
 
   const input = await type_search_text(`1`)
 
-  await press_keys(input, `ArrowDown`, `Enter`)
+  await press_sequence(input, `ArrowDown`, `Enter`)
 
   expect(input.value).toBe(`1`)
 
@@ -169,7 +168,7 @@ test.each([null, `custom add option message`])(
 
     const input = get_input()
     input.focus()
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
 
     const user_msg_li = document.querySelector<HTMLLIElement>(`ul.options li.user-msg`)
     if (!user_msg_li) throw new Error(`li.user-msg should exist`)
@@ -662,15 +661,15 @@ test(`falsy option values (0, '') are navigable and selectable via keyboard`, as
   const input = get_input()
 
   // ArrowDown activates option 0 (previously reset to null because !0 is truthy)
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`0`)
 
   // navigation continues past the falsy option instead of being stuck on it
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`1`)
 
   // Enter selects option 0 (previously fell through the `if (active_option)` check)
-  await press_keys(input, `ArrowUp`, `Enter`)
+  await press_sequence(input, `ArrowUp`, `Enter`)
   expect(props.value).toEqual([0])
 })
 
@@ -681,7 +680,7 @@ test(`keyboard navigation respects max_options: arrow keys wrap within rendered 
   // 3 ArrowDowns: a -> b -> wrap back to a (previously walked into hidden options c/d/e)
   const expected_active = [`a`, `b`, `a`]
   for (const expected of expected_active) {
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(expected)
     // aria-activedescendant must reference an element that exists in the DOM
     const active_id = input.getAttribute(`aria-activedescendant`)
@@ -695,7 +694,7 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   mount_multiselect(props)
   const input = get_input()
 
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`foo`)
 
   // Enter mid-composition (confirming CJK text) must not select the active option
@@ -706,7 +705,7 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   expect(props.value).toEqual([])
 
   // same keystroke outside composition selects normally
-  await press_keys(input, `Enter`)
+  await press_sequence(input, `Enter`)
   expect(props.value).toEqual([`foo`])
 })
 

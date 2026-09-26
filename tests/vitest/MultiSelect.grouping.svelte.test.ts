@@ -6,7 +6,7 @@ import {
   focus_input,
   fresh_key,
   mount_multiselect,
-  press_keys,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -107,12 +107,12 @@ describe(`option grouping feature`, () => {
     const input = await focus_input()
 
     // the second press steps over the Genre header between the ungrouped option and Rock
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(
       `Ungrouped Option`,
     )
 
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(doc_query(`ul.options > li.active`).textContent?.trim()).toBe(`Rock`)
   })
 
@@ -539,7 +539,7 @@ describe(`option grouping feature`, () => {
     expect(group_expanded(genre_header)).toBe(`false`)
 
     const input = await focus_input()
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
 
     expect(group_expanded(genre_header)).toBe(`true`)
   })

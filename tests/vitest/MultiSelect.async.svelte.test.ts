@@ -13,7 +13,7 @@ import {
   fresh_key,
   get_input,
   mount_multiselect,
-  press_keys,
+  press_sequence,
   type_search_text,
   unmount_component,
 } from './MultiSelect.test-utils'
@@ -418,7 +418,7 @@ describe(`load_options feature`, () => {
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
     // close while the first fetch is still pending: it is aborted and loading clears
-    await press_keys(input, `Escape`)
+    await press_sequence(input, `Escape`)
     expect(input.getAttribute(`aria-busy`)).toBeNull()
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
@@ -673,7 +673,7 @@ describe(`load_options_pending`, () => {
 
       expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
-      await press_keys(input, `Enter`)
+      await press_sequence(input, `Enter`)
       expect(oncreate_spy).not.toHaveBeenCalled()
       expect(document.querySelector(`.user-msg`)).toBeNull()
 
@@ -686,7 +686,7 @@ describe(`load_options_pending`, () => {
         `Create this option`,
       )
 
-      await press_keys(input, `Enter`)
+      await press_sequence(input, `Enter`)
       expect(oncreate_spy).toHaveBeenCalledTimes(1)
     },
   )
@@ -733,7 +733,7 @@ describe(`load_options_pending`, () => {
     await vi.runAllTimersAsync()
     expect(fetch_fn).toHaveBeenCalledTimes(2)
 
-    await press_keys(input, `Escape`)
+    await press_sequence(input, `Escape`)
 
     // the late resolve after close must be discarded
     fetch_resolvers[1]({ options: [`Rust Lang`], has_more: false })
@@ -782,7 +782,7 @@ describe(`async on_create`, () => {
 
   const submit_create = async (text: string) => {
     const input = await type_search_text(text)
-    await press_keys(input, `Enter`)
+    await press_sequence(input, `Enter`)
     return input
   }
 
@@ -799,7 +799,7 @@ describe(`async on_create`, () => {
     expect(document.querySelector(`.custom-spinner`)).toBeNull()
     expect(input.getAttribute(`aria-busy`)).toBeNull()
 
-    await press_keys(input, `Enter`)
+    await press_sequence(input, `Enter`)
 
     expect(on_create).toHaveBeenCalledExactlyOnceWith({ option: `new async option` })
     // while the promise is pending: spinner visible, input busy, nothing added yet
@@ -933,7 +933,7 @@ describe(`async on_create`, () => {
     const props = mount_create(on_create)
 
     const input = await submit_create(`only-once`)
-    await press_keys(input, `Enter`) // second Enter while first create pending
+    await press_sequence(input, `Enter`) // second Enter while first create pending
     expect(on_create).toHaveBeenCalledTimes(1)
     await settle(pending, undefined)
 

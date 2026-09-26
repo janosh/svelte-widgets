@@ -2,7 +2,7 @@ import { CommandMenu, PageSearch } from '$lib'
 import type { CmdAction, LoadOptionsParams } from '$lib/types'
 import { MULTI_SELECT_LABELS } from '$lib/labels'
 import { type ComponentProps, flushSync, mount, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
+import { beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
 import { doc_query, press_key } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 
@@ -99,7 +99,7 @@ test.each([
   [[`Escape`], `none` as const, true, `none`],
   [[`q`], `closerequest` as const, false, `closerequest`],
 ])(
-  `dialog cancel with close_keys=%j closedby=%s prevents default: %s`,
+  `dialog cancel with close_keys=%j closedby=%s prevents default: %s, effective closedby %s`,
   async (close_keys, closedby, default_prevented, effective_closedby) => {
     const oncancel = vi.fn()
     mount_menu({
@@ -939,7 +939,6 @@ describe(`PageSearch`, () => {
   })
 
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
 
   test(`paginates section results and navigates with current URL settings`, async () => {
     const strip_html_suffix = true

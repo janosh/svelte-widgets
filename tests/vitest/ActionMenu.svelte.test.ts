@@ -24,8 +24,9 @@ describe(`ActionMenu`, () => {
     { id: `Copy`, label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { id: `Delete`, label: `Delete`, action: vi.fn(), disabled: true },
   ]
-  // returns the reactive props (render unmounts at test end: svelte:body listeners outlive
-  // innerHTML = '', so old menus would keep answering), so a test can drive `at` the way a consumer would
+  // Returns the reactive props so a test can drive `at` the way a consumer would.
+  // render unmounts at test end: svelte:body listeners outlive innerHTML = '', so old menus
+  // would keep answering
   const mount_menu = (actions: MenuEntries, extra: MenuProps = {}) => {
     const props: MenuProps & { actions: MenuEntries } = $state({ actions, ...extra })
     render(ActionMenu, props)

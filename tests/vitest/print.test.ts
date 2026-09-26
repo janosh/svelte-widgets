@@ -13,7 +13,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   after_print() // the dialog always closes eventually
-  vi.useRealTimers() // the watchdog cases opt into fake ones
   vi.unstubAllGlobals()
   document.title = original_title
 })

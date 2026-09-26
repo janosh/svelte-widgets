@@ -49,7 +49,12 @@ const setup = (
   )
   flushSync()
   // a target listener runs before the container's, as an earlier handler's would
-  const press = (target: Element, key: string, init = {}, prevented = false) => {
+  const press = (
+    target: Element,
+    key: string,
+    init: KeyboardEventInit = {},
+    prevented = false,
+  ) => {
     if (prevented) target.addEventListener(`keydown`, prevent_default, { once: true })
     const event = press_key(target, key, init)
     flushSync()

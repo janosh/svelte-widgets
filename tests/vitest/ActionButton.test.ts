@@ -1,6 +1,6 @@
 import { ActionButton, type ActionState } from '$lib'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { afterEach, expect, test, vi } from 'vitest'
+import { expect, test, vi } from 'vitest'
 import { doc_query, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
@@ -10,8 +10,6 @@ const labels = {
   success: `Saved`,
   error: `Failed`,
 } satisfies Record<ActionState, string>
-
-afterEach(() => vi.useRealTimers())
 
 const flush_action = async (): Promise<void> => {
   await Promise.resolve()

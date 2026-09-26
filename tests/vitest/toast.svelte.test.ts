@@ -39,7 +39,6 @@ const messages = (toasts: readonly ToastItem<string>[]) =>
 const fake_clock = () => {
   vi.useFakeTimers()
   vi.setSystemTime(0)
-  onTestFinished(() => void vi.useRealTimers())
 }
 // destroys the store when the test finishes, so no timer outlives it
 const track = <Priority extends string>(store: ToastStore<Priority>) => {

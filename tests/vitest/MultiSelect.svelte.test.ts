@@ -5,6 +5,7 @@ import type { Option, OptionStyle } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { get_label } from '$lib/utils'
 import {
+  click,
   doc_query,
   drag_event,
   press_key,
@@ -15,7 +16,6 @@ import {
 import Test2WayBind from './Test2WayBind.svelte'
 import TestMultiSelectSnippets from './TestMultiSelectSnippets.svelte'
 import {
-  click,
   focus_input,
   fresh_key,
   fresh_mousemove,
@@ -24,7 +24,7 @@ import {
   mount_component as mount,
   mount_multiselect,
   normalized_text,
-  press_keys,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -1332,7 +1332,7 @@ test.each([
     if (method === `click`) {
       doc_query<HTMLLIElement>(`ul.options li`).click()
     } else {
-      await press_keys(input, `ArrowDown`)
+      await press_sequence(input, `ArrowDown`)
       input.dispatchEvent(fresh_key(`Enter`))
     }
     await tick()
@@ -1371,7 +1371,7 @@ test.each<{
 
     const input = await type_search_text(search_text)
 
-    await press_keys(input, `ArrowDown`, `Enter`)
+    await press_sequence(input, `ArrowDown`, `Enter`)
 
     expect(input.value).toBe(search_text)
     expect(document.querySelectorAll(`ul.selected li`)).toHaveLength(
@@ -1538,7 +1538,7 @@ test(`remove all button does not remove items when min_select constraint would b
   const input = get_input()
   input.focus()
 
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
 
   // Red is already selected so it is filtered out of the dropdown: this Enter adds
   // Green, pushing selected past min_select and bringing the remove-all button back
@@ -1843,7 +1843,7 @@ test(`on_open and on_close fire once per transition with the triggering event`, 
   input.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
   await tick()
   expect(open_spy).toHaveBeenCalledOnce()
-  await press_keys(input, `Escape`)
+  await press_sequence(input, `Escape`)
   expect(close_spy).toHaveBeenCalledOnce()
   expect(close_spy.mock.calls[0][0].event).toBeInstanceOf(KeyboardEvent)
 
@@ -1998,7 +1998,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       ]) {
         const option = option_by_label(label)
         if (interaction === `keyboard`) {
-          await press_keys(input, `ArrowDown`)
+          await press_sequence(input, `ArrowDown`)
           input.dispatchEvent(fresh_key(`Enter`))
         } else click_keep_selected_option(option, mode)
         await tick()
@@ -2119,7 +2119,7 @@ test(`empty duplicate_option_msg leaves no phantom navigable row`, async () => {
   mount_multiselect({ options: [`ab`, `abc`], value: [`ab`], duplicate_option_msg: `` })
   const input = await type_search_text(`ab`)
   input.dispatchEvent(fresh_key(`ArrowDown`))
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   // 'abc' at index 0 is the only match, so the second ArrowDown has nowhere to go;
   // without the fix it lands on the blank row and points at an unrendered element
   const active_id = input.getAttribute(`aria-activedescendant`) ?? ``
@@ -2243,7 +2243,7 @@ test.each([
   {
     reopen_method: `ArrowDown`,
     reopen_action: async (input_el: HTMLInputElement) => {
-      await press_keys(input_el, `ArrowDown`)
+      await press_sequence(input_el, `ArrowDown`)
       return doc_query(`ul.options > li.active`).textContent?.trim()
     },
     expected_option: `Solid`,
@@ -2256,7 +2256,7 @@ test.each([
     const input_el = get_input()
     const dropdown = doc_query(`ul.options`)
     input_el.focus()
-    await press_keys(input_el, `ArrowDown`, `Enter`)
+    await press_sequence(input_el, `ArrowDown`, `Enter`)
 
     expect(document.activeElement).toBe(input_el)
     expect(dropdown.classList).toContain(`hidden`)
@@ -2275,11 +2275,11 @@ test(`close_dropdown_on_select='retain-focus' clears active create message after
   const dropdown = doc_query(`ul.options`)
   input_el.focus()
   await type_search_text(`app`, input_el)
-  await press_keys(input_el, `ArrowDown`, `ArrowDown`)
+  await press_sequence(input_el, `ArrowDown`, `ArrowDown`)
 
   expect(doc_query(`ul.options li.user-msg`).classList).toContain(`active`)
 
-  await press_keys(input_el, `Enter`)
+  await press_sequence(input_el, `Enter`)
 
   expect(dropdown.classList).toContain(`hidden`)
   expect(document.activeElement).toBe(input_el)
@@ -2299,7 +2299,7 @@ test(`close_dropdown_on_select='retain-focus' restores input focus after keyboar
   const dropdown = doc_query(`ul.options`)
   const select_all_el = doc_query(`ul.options > li.select-all`)
   select_all_el.focus()
-  await press_keys(select_all_el, `Enter`)
+  await press_sequence(select_all_el, `Enter`)
 
   expect(dropdown.classList).toContain(`hidden`)
   expect(document.activeElement).toBe(input_el)
@@ -3016,7 +3016,7 @@ describe(`on_duplicate event`, () => {
       await type_search_text(typed_value, input)
 
       // fresh Enter per case: defaultPrevented persists across re-dispatch
-      await press_keys(input, `Enter`)
+      await press_sequence(input, `Enter`)
 
       expect(onduplicate_spy).toHaveBeenCalledExactlyOnceWith({ option: typed_value })
     },
@@ -3039,7 +3039,7 @@ describe(`on_duplicate event`, () => {
 
     // "1" is a duplicate and max_select is already reached
     await type_search_text(`1`, input)
-    await press_keys(input, `Enter`)
+    await press_sequence(input, `Enter`)
 
     expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
     expect(onduplicate_spy).toHaveBeenCalledTimes(1)
@@ -3130,7 +3130,7 @@ describe(`on_activate event`, () => {
 
     await type_search_text(`new option`, input)
 
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
 
     expect(onactivate_spy).not.toHaveBeenCalled()
   })
@@ -3149,13 +3149,13 @@ describe(`on_activate event`, () => {
     const input = await focus_input()
 
     // sets active_index = 0
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(onactivate_spy).toHaveBeenCalledExactlyOnceWith({ option: 1, index: 0 })
 
     // filters every option away
     await type_search_text(`xyz`, input)
 
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
 
     expect(onactivate_spy).toHaveBeenCalledTimes(1)
   })
@@ -3219,7 +3219,7 @@ describe(`duplicates prop variants`, () => {
     const input = await focus_input()
 
     await type_search_text(typed, input)
-    await press_keys(input, `Enter`)
+    await press_sequence(input, `Enter`)
 
     if (expect_blocked) {
       expect(onduplicate_spy).toHaveBeenCalledTimes(1)
@@ -3296,10 +3296,10 @@ test(`dropdown has no li children when all user-created options are selected`, a
   })
 
   const input = await type_search_text(`tag1`)
-  await press_keys(input, `Enter`)
+  await press_sequence(input, `Enter`)
 
   await type_search_text(`tag2`, input)
-  await press_keys(input, `Enter`)
+  await press_sequence(input, `Enter`)
 
   input.focus()
   await tick()
@@ -3432,7 +3432,7 @@ describe(`max_visible_chips`, () => {
 
     // ArrowLeft highlights the LAST selected chip (idx 4), which is hidden
     const input = get_input()
-    await press_keys(input, `ArrowLeft`)
+    await press_sequence(input, `ArrowLeft`)
 
     expect(chips()).toHaveLength(5)
     expect(chips().at(-1)?.classList.contains(`highlighted`)).toBe(true)

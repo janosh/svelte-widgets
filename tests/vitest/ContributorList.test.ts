@@ -1,6 +1,6 @@
 import ContributorList from '$lib/ContributorList.svelte'
 import { type ComponentProps, mount, tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import { doc_query, hover } from './index'
 
 describe(`ContributorList`, () => {
@@ -17,7 +17,6 @@ describe(`ContributorList`, () => {
     await tick()
   }
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
 
   test(`renders one linked avatar per contributor`, async () => {
     await mount_list()

@@ -1,8 +1,6 @@
 import Confetti from '$site/Confetti.svelte'
 import { mount, unmount } from 'svelte'
-import { afterEach, expect, test, vi } from 'vitest'
-
-afterEach(() => vi.useRealTimers())
+import { expect, test, vi } from 'vitest'
 
 const spans = () => [...document.querySelectorAll<HTMLSpanElement>(`div > span`)]
 const span_tops = () => spans().map((span) => span.style.top)

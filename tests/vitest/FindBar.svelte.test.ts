@@ -276,7 +276,6 @@ describe(`create_find_state`, () => {
 
   test(`observe re-searches after the DOM settles and jumps to a first match`, async () => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers())
     const { root, find } = setup(`<p>nothing here</p>`)
     run_search(root, find, `late`)
     expect(find.matches).toEqual([])

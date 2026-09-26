@@ -1,14 +1,13 @@
 import { tick } from 'svelte'
 import { describe, expect, test } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 import {
-  click,
   focus_input,
   fresh_key,
   get_input,
   mount_multiselect,
-  press_keys,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -66,7 +65,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull() // nothing active yet
 
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
 
     const active_id = input.getAttribute(`aria-activedescendant`)
     expect(active_id).toBeTypeOf(`string`)
@@ -103,7 +102,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const listbox_id = doc_query(`ul.options`).id
     expect(listbox_id).toMatch(expected_id)
 
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(doc_query(`ul.options`).id).toBe(listbox_id)
     expect(input.getAttribute(`aria-controls`)).toBe(listbox_id)
     expect(input.getAttribute(`aria-activedescendant`)).toContain(
@@ -183,7 +182,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
     expect(user_msg.classList.contains(`active`)).toBe(expected_active)
   }
 
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
 
   expect(input.getAttribute(`aria-activedescendant`)).toBe(user_msg.id)
   expect(user_msg.classList.contains(`active`)).toBe(true)
@@ -203,7 +202,7 @@ test(`clearing search_text while create-option message is active drops aria-acti
   const input = await type_search_text(`xyz`)
 
   // no options match 'xyz' -> ArrowDown activates the create-option message
-  await press_keys(input, `ArrowDown`)
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.user-msg`).classList.contains(`active`)).toBe(true)
   expect(input.getAttribute(`aria-activedescendant`)).toContain(`user-msg`)
 

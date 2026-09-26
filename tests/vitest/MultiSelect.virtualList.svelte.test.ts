@@ -5,7 +5,7 @@ import { doc_query } from './index'
 import {
   get_input,
   mount_multiselect,
-  press_keys,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -149,7 +149,7 @@ describe(`virtual_list`, () => {
     const input = get_input()
     const n_presses = 25 // active_index 24 lies past the initial window end of 19
     for (let press_idx = 0; press_idx < n_presses; press_idx++) {
-      await press_keys(input, `ArrowDown`)
+      await press_sequence(input, `ArrowDown`)
     }
     await tick() // flush the async scroll adjustment in handle_arrow_navigation
 
@@ -216,12 +216,12 @@ describe(`virtual_list`, () => {
     // first ArrowDown activates flat idx 0, whose ROW is 1 (group 0's header is row 0) —
     // auto-scroll must use the row offset, not the flat index (which would scroll to 0)
     const input = get_input()
-    await press_keys(input, `ArrowDown`)
+    await press_sequence(input, `ArrowDown`)
     expect(ul_options.scrollTop).toBe(item_height) // row 1 (header row 0 above it)
 
     // 11 more presses reach flat idx 11 ("option 6", row 13), still inside the window
     for (let press = 0; press < 11; press++) {
-      await press_keys(input, `ArrowDown`)
+      await press_sequence(input, `ArrowDown`)
     }
     const active = doc_query(`ul.options li.active`)
     expect(active.textContent?.trim()).toBe(`option 6`)

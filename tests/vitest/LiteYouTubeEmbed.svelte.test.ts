@@ -1,7 +1,7 @@
 import LiteYouTubeEmbed from '$lib/LiteYouTubeEmbed.svelte'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { afterAll, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 
 // happy-dom navigates an iframe's src for real, so intercept every request locally
 // instead of hitting youtube.com, recording what was asked for
@@ -31,10 +31,6 @@ const mount_embed = async (
   return state_props
 }
 const iframes = () => document.querySelectorAll(`iframe`)
-const click = async (selector = `button.play-btn`) => {
-  doc_query(selector).click()
-  await tick()
-}
 const poster_urls = () => [
   doc_query(`picture source`).getAttribute(`srcset`),
   doc_query(`img.poster`).getAttribute(`src`),
@@ -73,7 +69,7 @@ test(`builds both poster sources and the labels from video_id`, async () => {
   expect(doc_query<HTMLImageElement>(`img.poster`).alt).toBe(``)
   expect(doc_query(`button.play-btn`).getAttribute(`aria-label`)).toBe(`Watch the talk`)
 
-  await click()
+  await click(`button.play-btn`)
   expect(doc_query(`iframe`).getAttribute(`title`)).toBe(`Talk player`)
 
   props.video_id = `a b/c`
@@ -109,13 +105,13 @@ test.each([
   ],
 ])(`iframe src: %s`, async (_desc, props, expected_src) => {
   await mount_embed(props)
-  await click()
+  await click(`button.play-btn`)
   expect(doc_query(`iframe`).getAttribute(`src`)).toBe(expected_src)
 })
 
 test(`a new video_id tears the player back down to the poster`, async () => {
   const props = await mount_embed({ video_id: `first` })
-  await click()
+  await click(`button.play-btn`)
   expect(iframes()).toHaveLength(1)
 
   fetched.length = 0
@@ -157,7 +153,7 @@ test(`forwards host and nested props and makes the active play button inert`, as
     play.hasAttribute(`inert`),
   ]).toEqual([`button`, `opacity: 0.9;`, `Go`, `Play`, false])
 
-  await click()
+  await click(`button.play-btn`)
   expect(wrapper.classList.contains(`activated`)).toBe(true)
   expect(play.hasAttribute(`inert`)).toBe(true)
   const iframe = doc_query(`iframe`)
