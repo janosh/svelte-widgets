@@ -146,11 +146,10 @@
   aria-expanded={expandable ? !is_collapsed : undefined}
   aria-selected={is_selected}
   tabindex={is_focused ? 0 : -1}
-  onclick={(event) => {
-    event.stopPropagation() // ancestors would otherwise re-focus/select themselves
+  onclick={stopped((event) => {
     if (event.ctrlKey || event.metaKey) ctx.toggle_select(path, event.shiftKey)
     else ctx.set_focused(path)
-  }}
+  })}
   onauxclick={copy_path_on_middle_click}
   oncontextmenu={(event) =>
     ctx.show_context_menu(event, path, value, expandable, is_collapsed)}
@@ -187,15 +186,10 @@
         ]}
         tabindex="-1"
         onclick={stopped((event) => {
-          if (event.ctrlKey || event.metaKey) {
-            ctx.toggle_select(path, event.shiftKey)
-          } else if (event.shiftKey) {
-            ctx.copy_path(path, event)
-          } else if (expandable && is_collapsed) {
-            ctx.toggle_collapse(path, true)
-          } else {
-            ctx.copy_value(path, value, event)
-          }
+          if (event.ctrlKey || event.metaKey) ctx.toggle_select(path, event.shiftKey)
+          else if (event.shiftKey) ctx.copy_path(path, event)
+          else if (expandable && is_collapsed) ctx.toggle_collapse(path, true)
+          else ctx.copy_value(path, value, event)
         })}
         onauxclick={copy_path_on_middle_click}
       >

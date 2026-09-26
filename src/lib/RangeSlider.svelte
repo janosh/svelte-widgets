@@ -9,6 +9,8 @@
     type RangeScale,
     type RangeValue,
   } from './range-slider'
+  import { is_primary_press } from './attachments/shared'
+  import { clamp } from './utils'
 
   let {
     min = 0,
@@ -118,7 +120,7 @@
       )
       accepted = domain.from_position(coordinate)
     }
-    accepted = Math.max(floor, Math.min(ceiling, accepted))
+    accepted = clamp(accepted, floor, ceiling)
     if (accepted === values[thumb]) return
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
@@ -155,7 +157,7 @@
     let next: number
     if (typeof action === `string`) next = bounds(thumb)[action === `min` ? 0 : 1]
     else {
-      const bounded = Math.max(min, Math.min(max, baseline))
+      const bounded = clamp(baseline, min, max)
       next = domain.from_position(
         step_range_coordinate(bounded, domain, step, Math.sign(action), Math.abs(action)),
       )
@@ -173,10 +175,7 @@
   }
   const move_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
-    if (is_disabled()) {
-      stop_pointer(event)
-      return
-    }
+    if (is_disabled()) return stop_pointer(event)
     const next = pointer_value(event)
     if (next === undefined) return
     // Coincident handles separate in the direction of the gesture, so neither gets
@@ -191,13 +190,7 @@
     if (next_value) gesture.latest = next_value
   }
   const start_pointer = (event: PointerEvent): void => {
-    if (
-      is_disabled() ||
-      drag ||
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      !event.isPrimary
-    )
+    if (is_disabled() || drag || event.defaultPrevented || !is_primary_press(event))
       return
     const next = pointer_value(event)
     if (next === undefined || !rail) return
@@ -221,19 +214,18 @@
     rail.setPointerCapture(event.pointerId)
     if (!on_handle) move_pointer(event)
   }
-  const end_drag = (gesture: NonNullable<typeof drag>) => {
+  const end_drag = (pointer_id: number) => {
     drag = undefined
-    const { pointer_id } = gesture
     if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
   }
   const stop_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
-    const { start, latest } = drag
-    end_drag(drag)
+    const { start, latest, pointer_id } = drag
+    end_drag(pointer_id)
     if (latest && (start[0] !== values[0] || start[1] !== values[1])) commit_value(latest)
   }
   $effect(() => {
-    if (disabled && drag) end_drag(drag)
+    if (disabled && drag) end_drag(drag.pointer_id)
   })
 </script>
 

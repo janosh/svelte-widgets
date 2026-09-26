@@ -7,7 +7,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from '../Icon.svelte'
   import { Hash, TextSearch } from '../icons'
-  import { css_px, register_escape_layer } from '../attachments/shared'
+  import { claim_escape, css_px } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp, clamp_integer } from '../utils'
   import {
@@ -509,16 +509,9 @@
     // Untracked: it writes `overlay_width`, and reading that back re-ran this whole effect.
     untrack(measure_overlay_width)
   })
-  // Escape is fully consumed here, never reaching outer layers such as a host dialog.
-  const escape_layer = (handler: () => void): (() => void) =>
-    register_escape_layer((event) => {
-      event.preventDefault()
-      event.stopPropagation()
-      handler()
-      return true
-    })
   const on_focus = (): void => {
-    unregister_escape ??= escape_layer(() => {
+    // Escape is fully consumed here, never reaching outer layers such as a host dialog.
+    unregister_escape ??= claim_escape(() => {
       if (search_panel) close_search()
       else tab_moves_focus = true
     })
@@ -528,7 +521,7 @@
     let release: (() => void) | undefined
     const activate = (): void => {
       release?.()
-      release = escape_layer(close_search)
+      release = claim_escape(close_search)
     }
     const deactivate = (event: FocusEvent): void => {
       if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget))
@@ -667,7 +660,7 @@
       to = window_to - suffix_length
     }
     if (from === to && shape === `around`) {
-      ;[from] = ordered(next_selection)
+      from = ordered(next_selection)[0]
       to = from - delta
     } else if (from === to && shape !== `replace`) {
       if (delta > 0)

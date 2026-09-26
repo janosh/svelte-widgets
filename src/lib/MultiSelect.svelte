@@ -1313,29 +1313,25 @@
     event: Event,
   ) {
     event.stopPropagation()
-    if (all_selected) {
-      // never drop below min_select, matching remove_all and per-chip removal
-      const keys_to_remove = new Set(selectable.map((opt) => key(opt)))
-      const identities_to_remove = duplicates === true ? count_options(selectable) : null
-      const max_removals =
-        min_select === null ? Infinity : Math.max(0, selected.length - min_select)
-      const removed: Option[] = []
-      const kept: Option[] = []
-      for (const opt of selected) {
-        const matches =
-          duplicates === true
-            ? (identities_to_remove?.get(key(opt))?.has(utils.get_label(opt)) ?? false)
-            : keys_to_remove.has(key(opt))
-        if (matches && removed.length < max_removals) {
-          removed.push(opt)
-        } else kept.push(opt)
-      }
-      if (removed.length === 0) return
-      clear_validity()
-      commit_bulk_removal(kept, removed)
-      return
+    if (!all_selected) return batch_add_options(selectable, event)
+    // never drop below min_select, matching remove_all and per-chip removal
+    const keys_to_remove = new Set(selectable.map((opt) => key(opt)))
+    const identities_to_remove = duplicates === true ? count_options(selectable) : null
+    const max_removals =
+      min_select === null ? Infinity : Math.max(0, selected.length - min_select)
+    const removed: Option[] = []
+    const kept: Option[] = []
+    for (const opt of selected) {
+      const matches =
+        duplicates === true
+          ? (identities_to_remove?.get(key(opt))?.has(utils.get_label(opt)) ?? false)
+          : keys_to_remove.has(key(opt))
+      if (matches && removed.length < max_removals) removed.push(opt)
+      else kept.push(opt)
     }
-    batch_add_options(selectable, event)
+    if (removed.length === 0) return
+    clear_validity()
+    commit_bulk_removal(kept, removed)
   }
 
   const is_non_empty_option = (

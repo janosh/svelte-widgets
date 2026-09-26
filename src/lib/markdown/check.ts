@@ -5,6 +5,7 @@ import type * as TypeScript from 'typescript'
 import type { MarkdownDocument } from './index.ts'
 import {
   diagnostic_result,
+  error_message,
   make_diagnostic,
   source_locator,
   type Diagnostic,
@@ -38,9 +39,6 @@ export type CheckOptions = {
 }
 export type CheckSummary = { checked: number; asserted: number }
 export type CheckResult = DiagnosticResult<CheckSummary> & { value: CheckSummary }
-
-const message = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error)
 
 const error_location = (error: unknown, key: 'start' | 'end' = 'start') => {
   if (typeof error !== `object` || error === null) return undefined
@@ -131,7 +129,7 @@ export async function check_examples(
             : fence.range.end,
       },
       code,
-      message: message(error),
+      message: error_message(error),
       severity,
     })
   }
@@ -314,7 +312,7 @@ export async function check_examples(
       try {
         source_text = entry?.code ?? host.readFile(path)
       } catch (error) {
-        on_error?.(message(error))
+        on_error?.(error_message(error))
         return undefined
       }
       if (source_text === undefined) return undefined
@@ -443,7 +441,7 @@ export async function check_examples(
           await run(fence)
           asserted++
         } catch (error) {
-          report(fence, `assertion`, `${assertion}: ${message(error)}`)
+          report(fence, `assertion`, `${assertion}: ${error_message(error)}`)
         }
       }
     }

@@ -503,8 +503,6 @@
     if (event_targets_custom_interactive(event)) return
     if (event instanceof MouseEvent && is_modified_click(event)) return
     if (event instanceof KeyboardEvent && !is_activation_key(event.key)) return
-    const idx = heading_index(node)
-    if (idx === -1) return
     const link =
       event.target instanceof Element
         ? event.target.closest<HTMLAnchorElement>(`a[href]`)
@@ -526,7 +524,7 @@
         document.createElement(`a`)
       const temporary = !anchor.parentElement
       if (temporary) {
-        anchor.href = href_for_id(heading_data[idx]?.id) ?? `#`
+        anchor.href = href_for_id(id) ?? `#`
         event.currentTarget.append(anchor)
       }
       forwarding_navigation = true

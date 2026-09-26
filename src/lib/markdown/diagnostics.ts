@@ -92,12 +92,10 @@ export const make_diagnostic = (
   code: string,
   message: string,
   range: SourceRange,
-): Diagnostic => ({
-  code,
-  severity: `error`,
-  message,
-  range,
-})
+): Diagnostic => ({ code, severity: `error`, message, range })
+
+export const error_message = (error: unknown): string =>
+  error instanceof Error ? error.message : String(error)
 
 export function error_diagnostics(
   error: unknown,
@@ -105,7 +103,5 @@ export function error_diagnostics(
   range: SourceRange,
 ): Diagnostic[] {
   if (error instanceof DiagnosticError) return error.diagnostics
-  return [
-    make_diagnostic(code, error instanceof Error ? error.message : String(error), range),
-  ]
+  return [make_diagnostic(code, error_message(error), range)]
 }
