@@ -11,18 +11,12 @@ export const object_fit_contain_box = (
   box_width: number,
   box_height: number,
 ): { x: number; y: number; width: number; height: number; scale: number } => {
-  if (
-    [natural_width, natural_height, box_width, box_height].some(
-      (value) => !Number.isFinite(value) || value < 0,
-    )
-  ) {
+  const dimensions = [natural_width, natural_height, box_width, box_height]
+  if (dimensions.some((value) => !Number.isFinite(value) || value < 0))
     throw new RangeError(
       `Image and box dimensions must be finite and non-negative: ${natural_width}×${natural_height} in ${box_width}×${box_height}`,
     )
-  }
-  if (natural_width <= 0 || natural_height <= 0 || box_width <= 0 || box_height <= 0) {
-    return { x: 0, y: 0, width: 0, height: 0, scale: 0 }
-  }
+  if (dimensions.includes(0)) return { x: 0, y: 0, width: 0, height: 0, scale: 0 }
   const scale = Math.min(box_width / natural_width, box_height / natural_height)
   const width = natural_width * scale
   const height = natural_height * scale

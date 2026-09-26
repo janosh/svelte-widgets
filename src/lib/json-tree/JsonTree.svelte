@@ -155,9 +155,8 @@
       new Set(sorted_matches.flatMap((path) => get_ancestor_paths(path, root_path))),
       () => false,
     )
-    if (current_match_index < 0 || current_match_index >= sorted_matches.length) {
+    if (current_match_index < 0 || current_match_index >= sorted_matches.length)
       current_match_index = 0
-    }
     await reveal_current_match()
   }
 

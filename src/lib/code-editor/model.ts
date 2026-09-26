@@ -413,12 +413,10 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
     const timestamp = options.timestamp ?? performance.now()
     if (add_to_history && !Number.isFinite(timestamp))
       throw new Error(`Invalid history timestamp=${timestamp}`)
-    const source = options.source ?? `external`
-    const next_selection = options.selection ?? map_selection(selection, edits)
     const { transaction, record, cost } = apply(
       edits,
-      next_selection,
-      source,
+      options.selection ?? map_selection(selection, edits),
+      options.source ?? `external`,
       add_to_history,
     )
     if (add_to_history) {

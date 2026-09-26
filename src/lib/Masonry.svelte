@@ -101,7 +101,6 @@
     const id = get_id(item)
     const existing = item_records.get(id)
     if (existing?.item === item && existing.idx === idx) return existing
-
     const record = { id, idx, item }
     item_records.set(id, record)
     return record
@@ -284,13 +283,12 @@
     typeof height === `number` ? height : masonry_height || 400,
   )
 
-  // same height as a CSS value; strings like `80vh` pass through
-  let css_height = $derived(
-    typeof height === `number` ? `${height}px` : (height ?? `400px`),
-  )
-  // Emitted after any consumer style so virtualization keeps the sizing it depends on
+  // Emitted after any consumer style so virtualization keeps the sizing it depends on.
+  // Strings like `80vh` pass through as the CSS height.
   let virtual_style = $derived(
-    virtualize ? `overflow-y: auto; height: ${css_height};` : ``,
+    virtualize
+      ? `overflow-y: auto; height: ${typeof height === `number` ? `${height}px` : (height ?? `400px`)};`
+      : ``,
   )
 
   // wait for a real container height, else CSS units like `80vh` flicker
@@ -330,9 +328,6 @@
       }
     }),
   )
-
-  // FLIP animations don't work well with virtualization
-  let effective_animate = $derived(animate && !can_virtualize)
 </script>
 
 <!-- container queries in <head> hide excess SSR columns -->
@@ -371,7 +366,8 @@
       style:padding-top={can_virtualize ? `${pad_top}px` : undefined}
       style:padding-bottom={can_virtualize ? `${pad_bottom}px` : undefined}
     >
-      {#if effective_animate}
+      <!-- FLIP animations don't work well with virtualization -->
+      {#if animate && !can_virtualize}
         {#each visible_items as { id, idx, item } (id)}
           <div
             {@attach measure_height(id)}

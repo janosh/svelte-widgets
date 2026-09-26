@@ -270,8 +270,7 @@
 
   let restore_scroll_behavior: (() => void) | undefined
 
-  function activate_heading(node: HTMLHeadingElement, idx = heading_index(node)) {
-    if (idx === -1) return
+  function activate_heading(node: HTMLHeadingElement) {
     active_heading = node
     scroll_target = node
     prev_scroll_target_distance = Infinity
@@ -359,16 +358,12 @@
     // guards the async MutationObserver callback firing after document teardown
     if (typeof document === `undefined`) return
 
-    const queried_headings = query_toc_headings()
-    const heading_entries: { data: TocHeadingData; heading: HTMLHeadingElement }[] = []
-    for (const heading of queried_headings) {
+    const heading_entries = query_toc_headings().flatMap((heading) => {
       const heading_meta = get_heading_data(heading)
-      if (heading_meta === null) continue
-      heading_entries.push({
-        data: { ...heading_meta, id: heading.id },
-        heading,
-      })
-    }
+      return heading_meta === null
+        ? []
+        : [{ data: { ...heading_meta, id: heading.id }, heading }]
+    })
 
     // untrack: this writes the very state it would otherwise depend on
     untrack(() => {
@@ -482,7 +477,11 @@
     }
 
     const toc = aside.getBoundingClientRect()
-    is_overlapping_hide_target = hide_on_intersect_elements().some((element) => {
+    const targets =
+      typeof hide_on_intersect === `string`
+        ? Array.from(document.querySelectorAll<HTMLElement>(hide_on_intersect))
+        : hide_on_intersect
+    is_overlapping_hide_target = targets.some((element) => {
       const rect = element.getBoundingClientRect()
       return !(
         toc.right < rect.left ||
@@ -493,26 +492,17 @@
     })
   }
 
-  function hide_on_intersect_elements() {
-    if (!hide_on_intersect) return []
-    if (typeof hide_on_intersect !== `string`) return hide_on_intersect
-    return Array.from(document.querySelectorAll<HTMLElement>(hide_on_intersect))
-  }
-
   let forwarding_navigation = false
   // click/key handler on ToC items: scrolls to the heading
   const li_click_key_handler = (id: string) => (event: LiEvent) => {
     const node = headings.find((heading) => heading.id === id)
-    if (!node) return
-    if (forwarding_navigation) return
+    if (!node || forwarding_navigation) return
     if (event instanceof KeyboardEvent) li_props.onkeydown?.(event)
     else li_props.onclick?.(event)
     if (event.defaultPrevented) return
     if (event_targets_custom_interactive(event)) return
     if (event instanceof MouseEvent && is_modified_click(event)) return
-    if (event instanceof KeyboardEvent && !is_activation_key(event.key)) {
-      return
-    }
+    if (event instanceof KeyboardEvent && !is_activation_key(event.key)) return
     const idx = heading_index(node)
     if (idx === -1) return
     const link =
@@ -525,7 +515,7 @@
       link.click() // Space activates that same anchor, preserving inherited options
       return
     }
-    activate_heading(node, idx)
+    activate_heading(node)
     if (!link) {
       event.preventDefault()
       // Reuse the real link; plain snippets need a temporary child to inherit li_props.
@@ -593,9 +583,7 @@
       if (toc_has_focus) set_open(false, `tab`)
       return
     }
-    if (is_activation_key(event.key) && focus_is_in_custom_interactive_toc_item()) {
-      return
-    }
+    if (is_activation_key(event.key) && focus_is_in_custom_interactive_toc_item()) return
     if (event.key === `Escape`) {
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
@@ -640,8 +628,7 @@
 
   function on_scroll() {
     page_has_scrolled = true
-    set_active_heading()
-    check_toc_overlap()
+    on_resize()
   }
 
   function on_scrollend() {
@@ -748,8 +735,6 @@
           {@const item_tabindex = collapsed ? -1 : 0}
           {@const use_fallback_toc_item =
             toc_item && toc_item_has_interactive[idx] === false}
-          {@const item_margin_left = `calc(${indent} * var(--toc-indent-per-level, 1em))`}
-          {@const item_font_size = `max(var(--toc-li-font-size-min, 2ex), calc(var(--toc-li-font-size-base, 3ex) - ${indent} * var(--toc-li-font-size-step, 0.1ex)))`}
           <!-- svelte-ignore a11y_no_noninteractive_tabindex - fallback for custom toc_item snippets without their own focusable element -->
           <li
             {...li_props}
@@ -760,8 +745,8 @@
             bind:this={toc_items[idx]}
             role={use_fallback_toc_item ? `link` : undefined}
             tabindex={use_fallback_toc_item ? item_tabindex : undefined}
-            style:margin-left={item_margin_left}
-            style:font-size={item_font_size}
+            style:margin-left={`calc(${indent} * var(--toc-indent-per-level, 1em))`}
+            style:font-size={`max(var(--toc-li-font-size-min, 2ex), calc(var(--toc-li-font-size-base, 3ex) - ${indent} * var(--toc-li-font-size-step, 0.1ex)))`}
             onclick={li_click_key_handler(heading.id)}
             onkeydown={li_click_key_handler(heading.id)}
           >
@@ -1014,7 +999,6 @@
     max-width: var(--toc-desktop-max-width);
     top: var(--toc-desktop-sticky-top, 2em);
   }
-
   aside.toc.desktop > nav {
     margin: var(--toc-desktop-nav-margin);
   }

@@ -149,13 +149,8 @@ const normalize_with_offsets = (source: string): NormalizedText => {
       in_whitespace = false
       // Readers treat final and medial sigma as equivalent.
       const normalized_char = char.toLowerCase().replaceAll(`ς`, `σ`).normalize(`NFD`)
-      for (const normalized_code_point of normalized_char) {
-        tokens.push({
-          char: normalized_code_point,
-          start: source_idx,
-          end: next_idx,
-        })
-      }
+      for (const code_point of normalized_char)
+        tokens.push({ char: code_point, start: source_idx, end: next_idx })
     }
     source_idx = next_idx
   }
@@ -265,12 +260,8 @@ const strip_marks = ({ text, offsets }: NormalizedText): NormalizedText => {
     const bounds = offsets[unit_idx]
     unit_idx += char.length
     if (DIACRITIC.test(char)) {
-      const previous = stripped_offsets.at(-1)
-      if (previous)
-        stripped_offsets[stripped_offsets.length - 1] = {
-          start: previous.start,
-          end: Math.max(previous.end, bounds.end),
-        }
+      const last = stripped_offsets.pop()
+      if (last) stripped_offsets.push({ ...last, end: Math.max(last.end, bounds.end) })
       continue
     }
     stripped += char
@@ -297,8 +288,7 @@ const normalize_cached = (source: string, keep_marks: boolean): NormalizedText =
     const oldest = normalize_cache.keys().next().value
     if (oldest !== undefined) normalize_cache.delete(oldest)
   }
-  if (keep_marks) return cached.marked
-  return (cached.stripped ??= strip_marks(cached.marked))
+  return keep_marks ? cached.marked : (cached.stripped ??= strip_marks(cached.marked))
 }
 
 // every occurrence of query under root, case- and whitespace-insensitively
@@ -350,17 +340,13 @@ export const sync_owned_highlight = (
   owner: symbol,
   ranges?: readonly Range[],
 ): void => {
-  let classes = owned_highlights.get(registry)
-  if (!classes) {
-    if (!ranges) return
-    classes = new Map()
-    owned_highlights.set(registry, classes)
-  }
+  const classes = owned_highlights.get(registry) ?? new Map<string, OwnedHighlight>()
   let highlight_entry = classes.get(css_class)
   if (!highlight_entry) {
     if (!ranges) return
     highlight_entry = { owners: new Map(), previous: registry.get(css_class) }
     classes.set(css_class, highlight_entry)
+    owned_highlights.set(registry, classes)
   }
   if (ranges) highlight_entry.owners.set(owner, ranges)
   else highlight_entry.owners.delete(owner)

@@ -165,22 +165,20 @@ export interface EditorBackend {
 export interface DiffBackend {
   diff_text: (args: DiffTextArgs) => Promise<DiffResult>
 }
-const backend_registry = <Backend>(backend_name: string, setter_name: string) => {
+const backend_registry = <Backend>(kind: `Editor` | `Diff`) => {
   let default_backend: Backend | null = null
   const set_backend = (backend: Backend | null): void => void (default_backend = backend)
   const resolve_backend = (override?: Backend): Backend => {
     const backend = override ?? default_backend
     if (!backend)
       throw new Error(
-        `No ${backend_name} available: pass a \`backend\` prop or call ${setter_name}() once at startup`,
+        `No ${kind}Backend available: pass a \`backend\` prop or call set_${kind.toLowerCase()}_backend() once at startup`,
       )
     return backend
   }
   return [set_backend, resolve_backend] as const
 }
 export const [set_editor_backend, resolve_editor_backend] =
-  backend_registry<EditorBackend>(`EditorBackend`, `set_editor_backend`)
-export const [set_diff_backend, resolve_diff_backend] = backend_registry<DiffBackend>(
-  `DiffBackend`,
-  `set_diff_backend`,
-)
+  backend_registry<EditorBackend>(`Editor`)
+export const [set_diff_backend, resolve_diff_backend] =
+  backend_registry<DiffBackend>(`Diff`)

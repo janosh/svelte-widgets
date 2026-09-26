@@ -109,20 +109,16 @@
   const update = (thumb: 0 | 1, next: number, snap = true): RangeValue | undefined => {
     const [floor, ceiling] = bounds(thumb)
     let accepted = next
-    if (next <= floor) accepted = floor
-    else if (next >= ceiling) accepted = ceiling
-    else {
-      if (snap) {
-        const coordinate = snap_range_value(
-          domain.to_position(next),
-          domain.min,
-          domain.max,
-          step,
-        )
-        accepted = domain.from_position(coordinate)
-      }
-      accepted = Math.max(floor, Math.min(ceiling, accepted))
+    if (snap && next > floor && next < ceiling) {
+      const coordinate = snap_range_value(
+        domain.to_position(next),
+        domain.min,
+        domain.max,
+        step,
+      )
+      accepted = domain.from_position(coordinate)
     }
+    accepted = Math.max(floor, Math.min(ceiling, accepted))
     if (accepted === values[thumb]) return
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
@@ -225,19 +221,19 @@
     rail.setPointerCapture(event.pointerId)
     if (!on_handle) move_pointer(event)
   }
+  const end_drag = (gesture: NonNullable<typeof drag>) => {
+    drag = undefined
+    const { pointer_id } = gesture
+    if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
+  }
   const stop_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
-    const { start, latest, pointer_id } = drag
-    drag = undefined
-    if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
+    const { start, latest } = drag
+    end_drag(drag)
     if (latest && (start[0] !== values[0] || start[1] !== values[1])) commit_value(latest)
   }
   $effect(() => {
-    if (disabled && drag) {
-      const { pointer_id } = drag
-      drag = undefined
-      if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
-    }
+    if (disabled && drag) end_drag(drag)
   })
 </script>
 

@@ -9,7 +9,7 @@
   import { Hash, TextSearch } from '../icons'
   import { css_px, register_escape_layer } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
-  import { clamp_integer } from '../utils'
+  import { clamp, clamp_integer } from '../utils'
   import {
     auto_close_pair,
     auto_indent_newline,
@@ -51,6 +51,10 @@
   const SEARCH_MATCH_LIMIT = 5000
   const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
   const words = new Intl.Segmenter(undefined, { granularity: `word` })
+  // Text metrics a hidden measuring line copies from the textarea
+  const MEASURED_STYLES =
+    `font-family font-size font-style font-weight font-variant-ligatures
+    line-height letter-spacing word-spacing tab-size direction`.split(/\s+/)
   let {
     model,
     options = {},
@@ -94,8 +98,8 @@
   let overlay_width = $state(0)
   let caret_line = $state(0)
   let search_panel = $state<`find` | `line` | null>(null)
-  let search_input = $state<HTMLInputElement>()
-  let line_input = $state<HTMLInputElement>()
+  // The find query or line number field, whichever panel is open
+  let panel_input = $state<HTMLInputElement>()
   let search_query = $state(``)
   let replacement = $state(``)
   let show_replace = $state(false)
@@ -142,6 +146,8 @@
   )
   const show_line_numbers = $derived(options.line_numbers ?? true)
   const editing_disabled = $derived(read_only || !doc_info?.editable)
+  const ordered = ({ anchor, head }: EditorSelection): [number, number] =>
+    anchor <= head ? [anchor, head] : [head, anchor]
   type SearchResult = { matches: EditorMatch[]; truncated: boolean; revision: number }
   const search_all = (): SearchResult => {
     const matches: EditorMatch[] = []
@@ -183,13 +189,10 @@
     }
   }
   const search_matches = $derived(search_result.matches)
-  const current_match = $derived(
-    search_matches.findIndex(
-      ({ from, to }) =>
-        from === Math.min(current_selection.anchor, current_selection.head) &&
-        to === Math.max(current_selection.anchor, current_selection.head),
-    ),
-  )
+  const current_match = $derived.by(() => {
+    const [from, to] = ordered(current_selection)
+    return search_matches.findIndex((match) => match.from === from && match.to === to)
+  })
   const report_error = (error: unknown): void => {
     const message = to_error(error).message
     error_message = message
@@ -321,7 +324,6 @@
     })
   })
   const total_height = $derived(line_count * line_height)
-  const gutter_digits = $derived(String(line_count).length)
   const dom_selection = ({
     selectionStart: start,
     selectionEnd: end,
@@ -333,13 +335,8 @@
     { anchor, head }: EditorSelection,
   ): void => {
     const direction = anchor > head ? `backward` : `forward`
-    const start = Math.max(
-      0,
-      Math.min(area.value.length, Math.min(anchor, head) - input_from),
-    )
-    const end = Math.max(
-      0,
-      Math.min(area.value.length, Math.max(anchor, head) - input_from),
+    const [start, end] = ordered({ anchor, head }).map((offset) =>
+      clamp(offset - input_from, 0, area.value.length),
     )
     if (
       area.selectionStart !== start ||
@@ -364,23 +361,11 @@
     const area = textarea
     if (!area || composing || input_pending()) return
     if (reveal) reveal_selection()
-    const window = visible_line_window(
-      scroll_top,
-      viewport_height,
-      line_height,
-      model.line_count,
-      OVERSCAN_ROWS,
-    )
-    const { anchor, head } = model.selection
-    if (anchor !== head || reveal) {
-      window.start = Math.min(
-        window.start,
-        model.line_at(Math.min(anchor, head)).line_idx,
-      )
-      window.end = Math.max(
-        window.end,
-        model.line_at(Math.max(anchor, head)).line_idx + 1,
-      )
+    const window = { ...window_lines }
+    const [from, to] = ordered(model.selection)
+    if (from !== to || reveal) {
+      window.start = Math.min(window.start, model.line_at(from).line_idx)
+      window.end = Math.max(window.end, model.line_at(to).line_idx + 1)
     }
     input_from = model.line(window.start).from
     input_to = window.end < model.line_count ? model.line(window.end).from : model.length
@@ -508,16 +493,18 @@
     // Untracked: it writes `overlay_width`, and reading that back re-ran this whole effect.
     untrack(measure_overlay_width)
   })
-  const on_focus = (): void => {
-    unregister_escape ??= register_escape_layer((event) => {
+  // Escape is fully consumed here, never reaching outer layers such as a host dialog.
+  const escape_layer = (handler: () => void): (() => void) =>
+    register_escape_layer((event) => {
       event.preventDefault()
       event.stopPropagation()
-      if (search_panel) {
-        close_search()
-        return true
-      }
-      tab_moves_focus = true
+      handler()
       return true
+    })
+  const on_focus = (): void => {
+    unregister_escape ??= escape_layer(() => {
+      if (search_panel) close_search()
+      else tab_moves_focus = true
     })
   }
   // Register above the editor/outer dialog while search controls own focus.
@@ -525,12 +512,7 @@
     let release: (() => void) | undefined
     const activate = (): void => {
       release?.()
-      release = register_escape_layer((event) => {
-        event.preventDefault()
-        event.stopPropagation()
-        close_search()
-        return true
-      })
+      release = escape_layer(close_search)
     }
     const deactivate = (event: FocusEvent): void => {
       if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget))
@@ -559,10 +541,10 @@
     preserve_clamped = true,
   ): EditorSelection => {
     const { anchor, head } = dom_selection(area)
+    const [from, to] = ordered(model.selection)
     if (
       preserve_clamped &&
-      (Math.min(model.selection.anchor, model.selection.head) < input_from ||
-        Math.max(model.selection.anchor, model.selection.head) > input_to) &&
+      (from < input_from || to > input_to) &&
       rendered_selection?.anchor === anchor &&
       rendered_selection.head === head
     )
@@ -637,8 +619,7 @@
       throw new Error(
         `Editor input length mismatch: textarea=${before.value_length}, window=${input_to - input_from}`,
       )
-    let from = Math.min(before.anchor, before.head)
-    let to = Math.max(before.anchor, before.head)
+    let [from, to] = ordered(before)
     const delta = next_value.length - before.value_length
     if (before.input_type === `insertReplacementText` && from === to) {
       const window_from = Math.max(input_from, from - CONTEXT_CHECK_CHARS)
@@ -749,9 +730,7 @@
     refresh_input(true)
   }
   const on_scroll = (): void => {
-    const port = scrollport
-    if (!port) return
-    scroll_top = port.scrollTop
+    if (scrollport) scroll_top = scrollport.scrollTop
   }
   const on_composition_start = (): void => {
     composing = true
@@ -819,25 +798,10 @@
     const style = getComputedStyle(area)
     const element = area.ownerDocument.createElement(`div`)
     element.dataset.editorMeasure = ``
-    Object.assign(element.style, {
-      position: `fixed`,
-      top: `0`,
-      left: `0`,
-      zIndex: `2147483647`,
-      opacity: `0`,
-      width: `${area.clientWidth - css_px(style.paddingLeft) - css_px(style.paddingRight)}px`,
-      fontFamily: style.fontFamily,
-      fontSize: style.fontSize,
-      fontStyle: style.fontStyle,
-      fontWeight: style.fontWeight,
-      fontVariantLigatures: style.fontVariantLigatures,
-      lineHeight: style.lineHeight,
-      letterSpacing: style.letterSpacing,
-      wordSpacing: style.wordSpacing,
-      tabSize: style.tabSize,
-      whiteSpace: `pre`,
-      direction: style.direction,
-    })
+    element.style.cssText = `position: fixed; top: 0; left: 0; z-index: 2147483647; opacity: 0; white-space: pre`
+    element.style.width = `${area.clientWidth - css_px(style.paddingLeft) - css_px(style.paddingRight)}px`
+    for (const name of MEASURED_STYLES)
+      element.style.setProperty(name, style.getPropertyValue(name))
     const node = area.ownerDocument.createTextNode(text || `\u200B`)
     element.append(node)
     area.ownerDocument.body.append(element)
@@ -915,12 +879,10 @@
     const area = textarea
     if (!port || !area) return model.selection.head
     const box = port.getBoundingClientRect()
-    const line_idx = Math.max(
+    const line_idx = clamp(
+      Math.floor((client_y - box.top + port.scrollTop) / line_height),
       0,
-      Math.min(
-        model.line_count - 1,
-        Math.floor((client_y - box.top + port.scrollTop) / line_height),
-      ),
+      model.line_count - 1,
     )
     const line = model.line(line_idx)
     const column =
@@ -938,18 +900,14 @@
     const selection = pointer_selection
     if (!port || !selection) return
     const box = port.getBoundingClientRect()
-    const outside =
-      selection.client_y < box.top
-        ? selection.client_y - box.top
-        : Math.max(0, selection.client_y - box.bottom)
-    const outside_x =
-      selection.client_x < box.left
-        ? selection.client_x - box.left
-        : Math.max(0, selection.client_x - box.right)
-    if (outside_x)
-      port.scrollLeft += Math.sign(outside_x) * Math.min(Math.abs(outside_x), 60)
+    // Signed distance past the viewport along one axis, 0 while inside it
+    const past = (value: number, min: number, max: number): number =>
+      value < min ? value - min : Math.max(0, value - max)
+    const outside = past(selection.client_y, box.top, box.bottom)
+    const outside_x = past(selection.client_x, box.left, box.right)
+    if (outside_x) port.scrollLeft += clamp(outside_x, -60, 60)
     if (outside) {
-      port.scrollTop += Math.sign(outside) * Math.min(Math.abs(outside), line_height * 3)
+      port.scrollTop += clamp(outside, -3 * line_height, 3 * line_height)
       scroll_top = port.scrollTop
     }
     const head = pointer_offset(selection.client_x, selection.client_y)
@@ -994,12 +952,11 @@
       return
     }
     const word = words.segment(line.text).containing(offset - line.from)
-    if (word) {
+    if (word)
       model.set_selection({
         anchor: line.from + word.index,
         head: line.from + word.index + word.segment.length,
       })
-    }
   }
   const select_match = (match: EditorMatch | undefined): boolean => {
     if (!match) return false
@@ -1007,7 +964,7 @@
     return true
   }
   const select_nearest_match = (): void => {
-    const from = Math.min(model.selection.anchor, model.selection.head)
+    const [from] = ordered(model.selection)
     select_match(search_matches.find((match) => match.from >= from) ?? search_matches[0])
   }
   const close_search = (): void => {
@@ -1015,27 +972,27 @@
     textarea?.focus({ preventScroll: true })
     refresh_input(true)
   }
+  const focus_panel_input = async (): Promise<void> => {
+    await tick()
+    panel_input?.focus()
+    panel_input?.select()
+  }
   export const open_search = async (replace = false): Promise<void> => {
     if (document.activeElement === textarea) sync_selection()
-    const { anchor, head } = model.selection
-    if (anchor !== head)
-      search_query = model.slice(Math.min(anchor, head), Math.max(anchor, head))
+    const [from, to] = ordered(model.selection)
+    if (from !== to) search_query = model.slice(from, to)
     search_panel = `find`
     show_replace = replace && !editing_disabled
-    await tick()
-    search_input?.focus()
-    search_input?.select()
+    await focus_panel_input()
     select_nearest_match()
   }
   export const find_next = (direction: 1 | -1 = 1): boolean => {
     search_panel = `find`
-    const { anchor, head } = model.selection
+    const [start, end] = ordered(model.selection)
     const match =
       direction === 1
-        ? (search_matches.find(({ from }) => from >= Math.max(anchor, head)) ??
-          search_matches[0])
-        : (search_matches.findLast(({ to }) => to <= Math.min(anchor, head)) ??
-          search_matches.at(-1))
+        ? (search_matches.find(({ from }) => from >= end) ?? search_matches[0])
+        : (search_matches.findLast(({ to }) => to <= start) ?? search_matches.at(-1))
     return select_match(match)
   }
   export const replace_current = (): boolean => {
@@ -1074,9 +1031,7 @@
   const open_line_search = async (): Promise<void> => {
     target_line = model.line_at(model.selection.head).line_idx + 1
     search_panel = `line`
-    await tick()
-    line_input?.focus()
-    line_input?.select()
+    await focus_panel_input()
   }
   const on_search_enter =
     (action: (event: KeyboardEvent) => unknown) =>
@@ -1107,12 +1062,10 @@
     const area = textarea
     if (!area || event.isComposing) return
     if (handle_search_shortcut(event)) return
-    if (editing_disabled && event.key === `Tab`) return
-    if (event.key === `Tab` && tab_moves_focus) {
-      tab_moves_focus = false
-      return
-    }
+    const release_focus = tab_moves_focus
     tab_moves_focus = false
+    // Leave Tab native (moving focus) when it cannot indent or follows Escape.
+    if (event.key === `Tab` && (editing_disabled || release_focus)) return
     const command_modifier = event.metaKey || event.ctrlKey
     const lower_key = event.key.toLowerCase()
     const vertical =
@@ -1180,12 +1133,8 @@
       void save()
       return
     }
-    const { anchor, head } = selection_of(area)
-    const state: EditorState = {
-      model,
-      selection_start: Math.min(anchor, head),
-      selection_end: Math.max(anchor, head),
-    }
+    const [selection_start, selection_end] = ordered(selection_of(area))
+    const state: EditorState = { model, selection_start, selection_end }
     if (event.key === `Tab`) {
       event.preventDefault() // a no-op dedent must not move focus
       apply_command(
@@ -1241,7 +1190,7 @@
             type="search"
             aria-label={msg.find}
             placeholder={msg.find}
-            bind:this={search_input}
+            bind:this={panel_input}
             value={search_query}
             oninput={(event) => {
               search_query = event.currentTarget.value
@@ -1272,7 +1221,7 @@
             max={line_count}
             required
             aria-label={msg.line_number}
-            bind:this={line_input}
+            bind:this={panel_input}
             bind:value={target_line}
             onkeydown={on_search_enter(() => go_to_line(target_line))}
           />
@@ -1341,7 +1290,11 @@
   {/if}
   <div class="editor-body">
     {#if show_line_numbers}
-      <div class="gutter" aria-hidden="true" style:width={`${gutter_digits + 1}ch`}>
+      <div
+        class="gutter"
+        aria-hidden="true"
+        style:width={`${String(line_count).length + 1}ch`}
+      >
         <div
           class="layer"
           style:height={`${total_height}px`}
@@ -1367,6 +1320,7 @@
     >
       <div
         class="scroll-space"
+        style:pointer-events="none"
         aria-hidden="true"
         style:height={`${total_height}px`}
         style:width={`${overlay_width}px`}
@@ -1536,9 +1490,6 @@
     min-width: 0;
     overflow: auto;
     overflow-anchor: none;
-  }
-  .scroll-space {
-    pointer-events: none;
   }
   .layer,
   .gutter,

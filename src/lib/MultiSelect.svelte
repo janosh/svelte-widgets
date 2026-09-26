@@ -326,16 +326,14 @@
       utils.has_group(opt) &&
       option_matches(opt.group, search, fuzzy))
 
+  const local_matches = $derived(
+    options.filter((opt) => matches_search(opt, effective_filter_text)),
+  )
   // `options` and `load_options` compose: local options are filtered client-side and lead
   // the list (no debounce, no request) while remote batches append behind them
-  let effective_options = $derived.by(() => {
-    const local_options = options
-    if (!loader.config) return local_options
-    const local_matches = local_options.filter((opt) =>
-      matches_search(opt, effective_filter_text),
-    )
-    return [...local_matches, ...loader.options]
-  })
+  const effective_options = $derived(
+    loader.config ? [...local_matches, ...loader.options] : options,
+  )
   let form_value = $derived.by(() => {
     // input mode deliberately submits the visible text, committed or draft: the free-text
     // combobox contract, pinned by tests
@@ -582,12 +580,8 @@
   let is_user_message_active = $state(false)
 
   // when loading remotely effective_options is already filtered (locals by matches_search,
-  // batches by the server), so only the static list needs filtering here
-  const searched_options = $derived(
-    load_options
-      ? effective_options
-      : effective_options.filter((opt) => matches_search(opt, effective_filter_text)),
-  )
+  // batches by the server)
+  const searched_options = $derived(loader.config ? effective_options : local_matches)
 
   // Only read the selection when it filters rows, so toggling options in keep-selected mode
   // doesn't rebuild every group and row.
@@ -703,6 +697,10 @@
   // again after an async on_create resolves.
   const at_max_capacity = () =>
     max_select !== null && mode !== `single` && selected.length >= max_select
+  const reject_at_max = (attempted_option: Option) => {
+    should_wiggle = true
+    if (max_select !== null) on_max_reached?.({ selected, max_select, attempted_option })
+  }
 
   // merges a per-option style with the matching li*Style prop
   const merge_styles = (
@@ -784,11 +782,7 @@
       (check_label && is_label_selected(label_of(option_to_add)))
     const is_duplicate = is_dupe()
     const max_reached = at_max_capacity()
-    // events for blocked adds (the redundant null check narrows max_select for TS)
-    if (max_reached && max_select !== null) {
-      should_wiggle = true
-      on_max_reached?.({ selected, max_select, attempted_option: option_to_add })
-    }
+    if (max_reached) reject_at_max(option_to_add)
     if (is_duplicate && duplicates !== true) on_duplicate?.({ option: option_to_add })
 
     if (max_reached || (duplicates !== true && is_duplicate)) return
@@ -1204,10 +1198,15 @@
     const removed_options = selected.slice(keep_count)
     if (removed_options.length === 0) return
 
-    set_selection(selected.slice(0, keep_count))
     search_text = `` // always clear: reset_filter_on_add only governs adds
-    announce(msg.options_removed(removed_options.length))
-    on_remove_all?.({ options: removed_options })
+    commit_bulk_removal(selected.slice(0, keep_count), removed_options)
+  }
+
+  // shared by remove_all and deselecting a whole group
+  function commit_bulk_removal(kept: Option[], removed: Option[]) {
+    set_selection(kept)
+    announce(msg.options_removed(removed.length))
+    on_remove_all?.({ options: removed })
     on_change?.({ options: selected, type: `remove_all` })
   }
 
@@ -1222,14 +1221,7 @@
       handle_dropdown_after_select(event)
       announce(msg.options_selected(added.length))
     }
-    if (added.length < unselected.length && max_select !== null) {
-      should_wiggle = true
-      on_max_reached?.({
-        selected,
-        max_select,
-        attempted_option: unselected[added.length],
-      })
-    }
+    if (added.length < unselected.length) reject_at_max(unselected[added.length])
     return added
   }
 
@@ -1338,11 +1330,8 @@
         } else kept.push(opt)
       }
       if (removed.length === 0) return
-      set_selection(kept)
       clear_validity()
-      announce(msg.options_removed(removed.length))
-      on_remove_all?.({ options: removed })
-      on_change?.({ options: selected, type: `remove_all` })
+      commit_bulk_removal(kept, removed)
       return
     }
     batch_add_options(selectable, event)
@@ -1445,9 +1434,9 @@
     if (start_idx !== drag_start_idx || start_idx >= selected.length) return
     drag_start_idx = null
     const previous = [...selected]
-    const new_selected = [...selected]
-    const [moved_option] = new_selected.splice(start_idx, 1)
-    new_selected.splice(target_idx, 0, moved_option)
+    const new_selected = previous
+      .toSpliced(start_idx, 1)
+      .toSpliced(target_idx, 0, previous[start_idx])
     set_selection(new_selected)
     drag_idx = null
     highlighted_idx = null
@@ -1566,10 +1555,9 @@
         rejected.push(parsed_option)
         continue
       }
-      if (at_max_capacity() && max_select !== null) {
+      if (at_max_capacity()) {
         overflow.push(parsed_option, ...parsed.slice(idx + 1))
-        should_wiggle = true
-        on_max_reached?.({ selected, max_select, attempted_option: parsed_option })
+        reject_at_max(parsed_option)
         break
       }
       const before = selected.length
@@ -1601,12 +1589,6 @@
     void required // register as dependency
     form_input?.setCustomValidity(``)
   })
-
-  function handle_options_scroll(event: Event) {
-    if (!(event.target instanceof HTMLElement)) return
-    options_scroll_top = event.target.scrollTop
-    loader.on_scroll(event)
-  }
 </script>
 
 {#snippet render_label(opt: Option, idx: number, type: `selected` | `option`)}
@@ -1854,7 +1836,10 @@
       bind:this={options_list_el}
       bind:clientHeight={options_client_height}
       style={ul_options_style}
-      onscroll={handle_options_scroll}
+      onscroll={(event) => {
+        options_scroll_top = event.currentTarget.scrollTop
+        loader.on_scroll(event)
+      }}
       onmousedown={prevent_retain_focus_blur}
     >
       {#if select_all_option && effective_options.length > 0 && multi_select}
@@ -2099,7 +2084,6 @@
     white-space: nowrap;
     border: 0;
   }
-
   /* :where() so user class props (outer_div_class, ul_selected_class, li_selected_class) win
      https://github.com/janosh/svelte-widgets/issues/380 */
   :where(div.multiselect) {
@@ -2135,7 +2119,6 @@
     background: var(--sms-disabled-bg, light-dark(lightgray, #444));
     cursor: not-allowed;
   }
-
   :where(div.multiselect > ul.selected) {
     display: flex;
     flex: 1;
@@ -2218,7 +2201,6 @@
       light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.2))
     );
   }
-
   :is(div.multiselect input) {
     margin: auto 0; /* CSS reset */
     padding: 0; /* CSS reset */
@@ -2240,14 +2222,12 @@
     width: 100%;
     min-width: 0;
   }
-
   /* with the placeholder hidden the input must not pad out div.multiselect's width */
   :where(
     div.multiselect:not(.input-display) > ul.selected > input:not(:placeholder-shown)
   ) {
     min-width: 1px; /* Minimal width to remain interactive */
   }
-
   /* not wrapped in :is(): browser defaults then outweigh it on specificity */
   div.multiselect > ul.selected > input::placeholder {
     padding-inline-start: 5pt;
@@ -2264,7 +2244,6 @@
     opacity: 0;
     pointer-events: none;
   }
-
   /* :where() so class props (ul_options_class, li_option_class, li_user_msg_class) win */
   :where(ul.options) {
     list-style: none;

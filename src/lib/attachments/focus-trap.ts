@@ -1,7 +1,7 @@
 import {
+  claim_escape,
   composed_parent,
   is_focus_available,
-  register_escape_layer,
   register_trap_layer,
 } from './shared'
 
@@ -219,15 +219,7 @@ export const focus_trap =
     }
 
     const unregister = register_trap_layer(on_tab)
-    // Swallowing the key is the same bargain dismiss_on_outside_press strikes above
-    const unregister_escape = on_escape
-      ? register_escape_layer((event) => {
-          event.preventDefault()
-          event.stopPropagation()
-          on_escape(event)
-          return true
-        })
-      : undefined
+    const unregister_escape = on_escape ? claim_escape(on_escape) : undefined
 
     return () => {
       trap_active = false

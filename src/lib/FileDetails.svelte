@@ -60,11 +60,8 @@
   })
 
   function toggle_all() {
-    const should_close = detail_elements.some((node) => node?.open)
-    for (const node of detail_elements) {
-      if (!node) continue
-      node.open = !should_close
-    }
+    const open = !detail_elements.some((node) => node?.open)
+    for (const node of detail_elements) if (node) node.open = open
     sync_has_open_details()
   }
 

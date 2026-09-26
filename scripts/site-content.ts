@@ -41,22 +41,17 @@ export function prepare_page(
     attributes: string[],
     authored_links = authored?.links,
   ) =>
-    [...document.querySelectorAll(selector)].flatMap((element) => {
-      if (element.closest(`[data-content-ignore]`)) return []
-      return attributes.flatMap((attribute) => {
-        const value = element.getAttribute(attribute)
-        if (value === null) return []
-        return [
-          {
-            url: value,
-            text: element.textContent,
-            range:
-              authored_links?.find((link) => link.url === value)?.range ??
-              range(attribute, value),
-          },
-        ]
-      })
-    })
+    [...document.querySelectorAll(selector)]
+      .filter((element) => !element.closest(`[data-content-ignore]`))
+      .flatMap((element) =>
+        attributes.flatMap((attribute) => {
+          const value = element.getAttribute(attribute)
+          if (value === null) return []
+          const authored_range = authored_links?.find((link) => link.url === value)?.range
+          const at = authored_range ?? range(attribute, value)
+          return [{ url: value, text: element.textContent, range: at }]
+        }),
+      )
   const manifest: ContentManifest = {
     filename: decodeURIComponent(url),
     metadata: authored?.metadata ?? {},
@@ -77,17 +72,16 @@ export function prepare_page(
     ],
   }
   const meta: Record<string, string> = {}
+  let metadata_html = ``
   for (const key of [`title`, `description`, `categories`]) {
     const value = authored?.metadata[key]
     if (typeof value === `string`) meta[key] = value
     else if (Array.isArray(value) && value.every((item) => typeof item === `string`))
       meta[key] = value.join(`, `)
-  }
-  let metadata_html = ``
-  for (const [key, value] of Object.entries(meta)) {
+    else continue
     const element = document.createElement(`meta`)
     element.setAttribute(`data-pagefind-meta`, `${key}[content]`)
-    element.setAttribute(`content`, value)
+    element.setAttribute(`content`, meta[key])
     metadata_html += element.outerHTML
     document.head.append(element)
   }

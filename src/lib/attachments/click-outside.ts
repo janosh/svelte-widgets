@@ -1,4 +1,4 @@
-import { is_primary_press, register_escape_layer } from './shared'
+import { claim_escape, is_primary_press } from './shared'
 
 export type DismissDetail = {
   // lets an Escape dismissal hand focus back to the trigger rather than strand it
@@ -144,15 +144,6 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
     dismiss({ focus_inside: false, via: `pointer`, event })
   }
 
-  const on_escape = (event: KeyboardEvent) => {
-    // Safe to swallow: only the innermost layer gets here, so no outer surface waits on it.
-    // Canceling the default keeps a wrapping native <dialog> open until a second Escape.
-    event.preventDefault()
-    event.stopPropagation()
-    dismiss({ focus_inside: focus_is_inside(), via: `escape`, event })
-    return true
-  }
-
   const wait_for_release = dismiss_on === `release`
   const listeners = new AbortController()
   const capture = { capture: true, signal: listeners.signal }
@@ -162,7 +153,11 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
     document.addEventListener(`pointerdown`, remember_press, capture)
     document.addEventListener(`pointercancel`, forget_press, capture)
   }
-  const unregister_escape = escape ? register_escape_layer(on_escape) : undefined
+  const unregister_escape = escape
+    ? claim_escape((event) =>
+        dismiss({ focus_inside: focus_is_inside(), via: `escape`, event }),
+      )
+    : undefined
 
   return () => {
     listeners.abort()

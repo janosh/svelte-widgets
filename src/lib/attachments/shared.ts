@@ -71,11 +71,10 @@ export const follow_pointer = (
     globalThis.addEventListener(type, on_pointer, { signal })
   }
   target.addEventListener(`lostpointercapture`, on_pointer, { signal })
-  const stop = () => {
+  return () => {
     abort_controller.abort() // before release, or lostpointercapture re-enters on_end
     if (target.hasPointerCapture(pointer_id)) target.releasePointerCapture(pointer_id)
   }
-  return stop
 }
 
 // Offer keys newest-first until a layer handles them. Capture runs before descendant handlers.
@@ -105,6 +104,17 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
 export const register_escape_layer = key_layer_stack(
   (event) => event.key === `Escape` && !event.isComposing,
 )
+
+// An Escape layer that always consumes the key. Safe to swallow: only the innermost layer
+// gets here, so no outer surface waits on it. Canceling the default keeps a wrapping native
+// <dialog> open until a second Escape.
+export const claim_escape = (handler: (event: KeyboardEvent) => void) =>
+  register_escape_layer((event) => {
+    event.preventDefault()
+    event.stopPropagation()
+    handler(event)
+    return true
+  })
 
 // isComposing for the same reason the Escape layer above filters it: Tab cycles IME
 // candidates mid-composition, and swallowing it there eats the user's word choice

@@ -45,27 +45,23 @@
     max-height: 100vh;
     &[data-side='right'],
     &[data-side='left'] {
-      top: 0;
-      bottom: 0;
       width: var(--sheet-size, min(24rem, 100vw));
-    }
-    &[data-side='right'] {
-      right: 0;
-    }
-    &[data-side='left'] {
-      left: 0;
     }
     &[data-side='top'],
     &[data-side='bottom'] {
-      right: 0;
-      left: 0;
       height: var(--sheet-size, min(20rem, 100vh));
     }
+    &[data-side='right'] {
+      inset: 0 0 0 auto;
+    }
+    &[data-side='left'] {
+      inset: 0 auto 0 0;
+    }
     &[data-side='top'] {
-      top: 0;
+      inset: 0 0 auto;
     }
     &[data-side='bottom'] {
-      bottom: 0;
+      inset: auto 0 0;
     }
   }
 </style>

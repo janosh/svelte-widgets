@@ -3,6 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
+  import { focusable } from './dialog'
   import { chain_handlers, type Placement } from './utils'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
@@ -79,8 +80,6 @@
   let trigger_focus = $state<HTMLElement | SVGElement | null>(null)
   let next_trigger_focus: HTMLElement | SVGElement | null = null
   let native_close_via: `pointer` | `escape` = `pointer`
-  const focus_target = (target: EventTarget | null) =>
-    target instanceof HTMLElement || target instanceof SVGElement ? target : null
 
   const clear_close_timeout = () => {
     clearTimeout(close_timeout)
@@ -153,7 +152,7 @@
     open_timeout = setTimeout(() => {
       open_timeout = undefined
       if (trigger_mode === scheduled_mode) {
-        next_trigger_focus = focus_target(target)
+        next_trigger_focus = focusable(target)
         open = true
       }
     }, open_delay_ms)
@@ -199,7 +198,7 @@
   const toggle_from_click = (event: MouseEvent) => {
     if (open) return close(`trigger`)
     clear_timeouts()
-    next_trigger_focus = focus_target(event.currentTarget)
+    next_trigger_focus = focusable(event.currentTarget)
     open = true
   }
 

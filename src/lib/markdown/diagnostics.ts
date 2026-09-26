@@ -58,12 +58,12 @@ export const diagnostic_result = <Value>(
     ? { ok: false, diagnostics }
     : { ok: true, value, diagnostics }
 
-export const source_locator = (source: string, filename: string) => {
+// Zero-based line and column of an offset in source
+export const line_index = (source: string) => {
   const starts = [0]
   for (let offset = 0; offset < source.length; offset++)
     if (source[offset] === `\n`) starts.push(offset + 1)
-  const position = (offset: number): SourcePosition => {
-    offset = Math.max(0, Math.min(offset, source.length))
+  return (offset: number): { line: number; column: number } => {
     let low = 0
     let high = starts.length
     while (low + 1 < high) {
@@ -71,7 +71,16 @@ export const source_locator = (source: string, filename: string) => {
       if (starts[middle] <= offset) low = middle
       else high = middle
     }
-    return { filename, offset, line: low + 1, column: offset - starts[low] + 1 }
+    return { line: low, column: offset - starts[low] }
+  }
+}
+
+export const source_locator = (source: string, filename: string) => {
+  const locate = line_index(source)
+  const position = (offset: number): SourcePosition => {
+    offset = Math.max(0, Math.min(offset, source.length))
+    const { line, column } = locate(offset)
+    return { filename, offset, line: line + 1, column: column + 1 }
   }
   return (start: number, end = start): SourceRange => ({
     start: position(start),

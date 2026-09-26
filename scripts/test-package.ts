@@ -23,28 +23,13 @@ await cp(resolve(root, `tests/package-smoke`), consumer, { recursive: true })
 
 // Bundle actual copied demos, not hand-maintained approximations that can drift from docs.
 // These exercise root exports, types, attachments, stateful utilities, and editor CSS.
-const demo_ids = new Set([
-  `multiselect-form-data`,
-  `languages-2`,
-  `custom-sort`,
-  `attachments-tooltip-styling`,
-  `attachments-tooltip-placement`,
-  `settings-section`,
-  `number-range-input`,
-  `nav-links`,
-  `nav-items`,
-  `nav-controlled`,
-  `action-menu-basic`,
-  `prev-next-demo`,
-  `button-group-single`,
-  `button-group-multi`,
-  `patterns-accordion`,
-  `patterns-dialog`,
-  `tree-view-basic`,
-  `tree-view-multiple`,
-  `toast-actions`,
-  `code-editor-basic`,
-])
+const demo_ids = new Set(
+  `multiselect-form-data languages-2 custom-sort attachments-tooltip-styling
+attachments-tooltip-placement settings-section number-range-input nav-links
+nav-items nav-controlled action-menu-basic prev-next-demo button-group-single
+button-group-multi patterns-accordion patterns-dialog tree-view-basic
+tree-view-multiple toast-actions code-editor-basic`.split(/\s+/u),
+)
 const demo_components: string[] = []
 const { create_markdown } = await import(`../dist/markdown/index.js`)
 const engine = create_markdown({ math: true, references: true, examples: {} })
@@ -62,16 +47,14 @@ for (const entry of await readdir(resolve(root, `src/routes/(demos)`), {
     )
   for (const fence of parsed.value.manifest.fences) {
     if (!fence.settings.example) continue
-    if (/\bdemo-box\b/u.test(fence.code)) {
+    if (/\bdemo-box\b/u.test(fence.code))
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} depends on site-only frame styling`,
       )
-    }
-    if (/from\s+['"]\$(?:lib|site|root)(?:\/|['"])/u.test(fence.code)) {
+    if (/from\s+['"]\$(?:lib|site|root)(?:\/|['"])/u.test(fence.code))
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} uses a private repository import`,
       )
-    }
     const { id } = fence.settings
     if (!id || !demo_ids.delete(id)) continue
     const component = `Demo${demo_components.length}`

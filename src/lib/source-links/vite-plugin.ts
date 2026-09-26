@@ -22,11 +22,10 @@ const EXPORT_DEFINITION_RE =
 export const repository_url = (repository: unknown): string => {
   const raw =
     typeof repository === `string` ? repository : (repository as { url?: unknown })?.url
-  if (typeof raw !== `string` || !raw) {
+  if (typeof raw !== `string` || !raw)
     throw new Error(
       `package.json needs a "repository" so source links know where to point`,
     )
-  }
   if (/^[\w.-]+\/[\w.-]+$/.test(raw)) return `https://github.com/${raw}`
   return raw
     .replace(/^git\+/, ``)

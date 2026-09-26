@@ -55,15 +55,15 @@
   const is_selected = $derived(ctx.selected_paths.has(path))
   const diff_status = $derived(ctx.diff_map?.get(path)?.status ?? null)
 
+  // Row controls stop the click so ancestor rows don't re-focus/select themselves
+  const stopped = (action: () => void) => (event: MouseEvent) => {
+    event.stopPropagation()
+    action()
+  }
+
   function toggle_collapse(event?: MouseEvent) {
     event?.stopPropagation()
     if (expandable) ctx.toggle_collapse(path, is_collapsed)
-  }
-
-  // Double-click toggles the whole subtree (collapsed expands all, and vice versa)
-  function toggle_collapse_recursive(event: MouseEvent) {
-    event.stopPropagation()
-    if (expandable) ctx.toggle_collapse_recursive(path, !is_collapsed)
   }
 
   const children = $derived(expandable ? get_children(value, ctx.settings.sort_keys) : [])
@@ -133,15 +133,12 @@
 </script>
 
 <div
-  class="json-node"
+  class={[`json-node`, diff_status && `diff-${diff_status}`]}
   class:collapsed={is_collapsed}
   class:expandable
   class:focused={is_focused}
   class:selected={is_selected}
   class:current-match={is_current_match}
-  class:diff-added={diff_status === `added`}
-  class:diff-removed={diff_status === `removed`}
-  class:diff-changed={diff_status === `changed`}
   class:sticky-header={is_sticky}
   style:--jt-sticky-depth={is_sticky ? depth : undefined}
   data-path={path}
@@ -155,10 +152,12 @@
     else ctx.set_focused(path)
   }}
   onauxclick={copy_path_on_middle_click}
-  oncontextmenu={(event) => {
-    ctx.show_context_menu(event, path, value, expandable, is_collapsed)
-  }}
-  ondblclick={toggle_collapse_recursive}
+  oncontextmenu={(event) =>
+    ctx.show_context_menu(event, path, value, expandable, is_collapsed)}
+  ondblclick={stopped(() => {
+    // Double-click toggles the whole subtree (collapsed expands all, and vice versa)
+    if (expandable) ctx.toggle_collapse_recursive(path, !is_collapsed)
+  })}
   onkeydown={handle_keydown}
 >
   <span class="node-content">
@@ -226,10 +225,7 @@
           class="collapse-level-btn"
           title="Collapse children to this level"
           tabindex="-1"
-          onclick={(event) => {
-            event.stopPropagation()
-            ctx.collapse_children_only(path)
-          }}
+          onclick={stopped(() => ctx.collapse_children_only(path))}
         >
           ⊟
         </button>
@@ -258,20 +254,14 @@
         <div class="more-children">
           <button
             type="button"
-            onclick={(event) => {
-              event.stopPropagation()
-              shown_count = revealed_count + CHILD_PAGE_SIZE
-            }}
+            onclick={stopped(() => (shown_count = revealed_count + CHILD_PAGE_SIZE))}
           >
             Show {Math.min(CHILD_PAGE_SIZE, hidden_count)} more
           </button>
           {#if hidden_count > CHILD_PAGE_SIZE}
             <button
               type="button"
-              onclick={(event) => {
-                event.stopPropagation()
-                shown_count = children.length
-              }}
+              onclick={stopped(() => (shown_count = children.length))}
             >
               Show all {children.length}
             </button>
@@ -316,9 +306,6 @@
     font-size: var(--jt-font-size, 13px);
     line-height: var(--jt-line-height, 1.5);
     outline: none;
-    &:focus {
-      outline: none;
-    }
     &.focused > .node-content {
       background: var(--jt-focus-bg, light-dark(#e3f2fd, #0d3a58));
       border-radius: 2px;
@@ -336,13 +323,18 @@
         light-dark(rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.2))
       );
     }
-    &.diff-removed > .node-content {
+    &:is(.diff-removed, .ghost) > .node-content {
       background: var(
         --jt-diff-removed,
         light-dark(rgba(244, 67, 54, 0.12), rgba(244, 67, 54, 0.18))
       );
       text-decoration: line-through;
+    }
+    &.diff-removed > .node-content {
       opacity: 0.7;
+    }
+    &.ghost {
+      opacity: 0.5;
     }
     &.diff-changed > .node-content {
       background: var(
@@ -367,13 +359,6 @@
     gap: 2px;
     padding: 1px 2px;
     border-radius: 2px;
-  }
-  .ghost .node-content {
-    background: var(
-      --jt-diff-removed,
-      light-dark(rgba(244, 67, 54, 0.12), rgba(244, 67, 54, 0.18))
-    );
-    text-decoration: line-through;
   }
   .collapse-toggle {
     display: inline-flex;
@@ -482,8 +467,5 @@
       opacity: 1;
       color: light-dark(#000, #fff);
     }
-  }
-  .ghost {
-    opacity: 0.5;
   }
 </style>

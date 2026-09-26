@@ -63,15 +63,11 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
   // (`fo<b>o</b>`) and fold case, Unicode normalization and whitespace the same way
   const find_ranges = (): Range[] => {
     if (!fuzzy) return search_text(node, query, { node_filter }).map(({ range }) => range)
-    const tree_walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_TEXT, {
+    const walker = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_TEXT, {
       acceptNode: node_filter,
     })
     const ranges: Range[] = []
-    for (
-      let text_node = tree_walker.nextNode();
-      text_node;
-      text_node = tree_walker.nextNode()
-    )
+    for (let text_node = walker.nextNode(); text_node; text_node = walker.nextNode())
       if (text_node instanceof Text) ranges.push(...fuzzy_ranges(text_node))
     return ranges
   }

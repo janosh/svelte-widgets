@@ -126,12 +126,7 @@
   // `options.context_lines` inside it re-ran the whole diff on any other field change.
   const context_lines = $derived(options.context_lines)
   $effect(() => {
-    void load_diff({
-      old_text,
-      new_text,
-      filename,
-      context_lines,
-    })
+    void load_diff({ old_text, new_text, filename, context_lines })
     return () => void load_generation++
   })
 
@@ -209,11 +204,10 @@
     // Solo has no old column to mark, and the side it would mark is empty anyway.
     if (current_layout !== `solo` && !result.old_ends_with_newline) missing.push(`old`)
     if (!result.new_ends_with_newline) missing.push(`new`)
-    if (missing.length === 0) return rows
     // Only side-by-side has two columns to mark at once.
-    if (current_layout !== `side-by-side`) {
+    if (current_layout !== `side-by-side`)
       for (const side of missing) rows.push({ kind: `no_newline`, sides: [side] })
-    } else rows.push({ kind: `no_newline`, sides: missing })
+    else if (missing.length > 0) rows.push({ kind: `no_newline`, sides: missing })
     return rows
   }
 

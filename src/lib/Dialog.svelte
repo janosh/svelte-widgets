@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
   import {
+    focusable,
     is_dialog_backdrop_event,
     restore_dialog_focus,
     type DialogCloseVia,
@@ -57,9 +58,7 @@
   })
   $effect(() => {
     if (!open || !surface || surface.open) return
-    const active_element = document.activeElement
-    if (active_element instanceof HTMLElement || active_element instanceof SVGElement)
-      focus_origin = active_element
+    focus_origin = focusable(document.activeElement) ?? focus_origin
     // Native modal stacking makes only the innermost nested dialog interactive and gives
     // Escape to that dialog before its ancestors.
     surface.showModal()

@@ -13,7 +13,7 @@
     dismiss_dialog,
     submit_prompt,
   } from './dialogs.svelte'
-  import { restore_dialog_focus } from './dialog'
+  import { focusable, restore_dialog_focus } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element
@@ -71,9 +71,7 @@
       return
     }
     if (!dialog.open) {
-      const active = document.activeElement
-      if (active instanceof HTMLElement || active instanceof SVGElement)
-        focus_origin = active
+      focus_origin = focusable(document.activeElement) ?? focus_origin
       dialog.showModal()
     }
     const selector = request.kind === `prompt` ? `input` : `.actions button`

@@ -1,5 +1,10 @@
-import { example_key, fence_info, type ExampleOptions } from './meta.ts'
-import { scientific_references, type ReferenceOptions } from './references.ts'
+import { example_key, fence_info, is_markdown_file, type ExampleOptions } from './meta.ts'
+import {
+  escape_attribute,
+  escape_braces,
+  scientific_references,
+  type ReferenceOptions,
+} from './references.ts'
 import { CORE_SCHEMA, load, YAMLException } from 'js-yaml'
 import {
   Marked,
@@ -31,6 +36,7 @@ import {
   source_locator,
   freeze_data,
   type DeepReadonly,
+  type Diagnostic,
   type DiagnosticResult,
 } from './diagnostics.ts'
 import type * as Katex from 'katex'
@@ -149,8 +155,6 @@ const copy_options = <Value>(
   return copy as Value
 }
 
-const escape_braces = (text: string): string =>
-  text.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
 const smart_quotes = (text: string): string =>
   text
     .replaceAll(`...`, `…`)
@@ -286,6 +290,14 @@ async function prepare_document(
     }
     return result
   }
+  // Marked URI-encodes braces. Preserve authored Svelte URL expressions instead.
+  const with_url = (result: string, token: Tokens.Link | Tokens.Image, attr: string) =>
+    syntax && token.href.includes(`{`)
+      ? result.replace(
+          new RegExp(`${attr}="[^"]*"`, `u`),
+          () => `${attr}="${url_attribute(token)}"`,
+        )
+      : result
   const html = (text: string): string => (syntax ? `{@html ${script_json(text)}}` : text)
   const render_math = options.math
     ? (tex: string, displayMode: boolean) =>
@@ -306,32 +318,30 @@ async function prepare_document(
     : undefined
   const extensions: TokenizerAndRendererExtension[] = []
   if (syntax) {
-    const read = (text: string) => syntax.read_expression(text) ?? syntax.read_tag(text)
+    const svelte_extension = (
+      level: 'block' | 'inline',
+      start: RegExp,
+      guard?: RegExp,
+    ): TokenizerAndRendererExtension => ({
+      name: `svelte_${level}`,
+      level,
+      start: (text) => text.search(start),
+      tokenizer(text) {
+        const raw =
+          guard && !guard.test(text)
+            ? undefined
+            : (syntax.read_expression(text) ?? syntax.read_tag(text))
+        return raw ? { type: `svelte_${level}`, raw, text: retain(raw) } : undefined
+      },
+      renderer: (token) => String(token.text),
+    })
     extensions.push(
-      {
-        name: `svelte_block`,
-        level: `block`,
-        start: (text) => text.search(/\n(?=\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u),
-        tokenizer(text) {
-          if (!/^(?:\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u.test(text))
-            return undefined
-          const raw = read(text)
-          if (raw) return { type: `svelte_block`, raw, text: retain(raw) }
-          return undefined
-        },
-        renderer: (token) => String(token.text),
-      },
-      {
-        name: `svelte_inline`,
-        level: `inline`,
-        start: (text) => text.search(/[<{]/u),
-        tokenizer(text) {
-          const raw = read(text)
-          if (raw) return { type: `svelte_inline`, raw, text: retain(raw) }
-          return undefined
-        },
-        renderer: (token) => String(token.text),
-      },
+      svelte_extension(
+        `block`,
+        /\n(?=\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u,
+        /^(?:\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u,
+      ),
+      svelte_extension(`inline`, /[<{]/u),
     )
   }
   if (render_math) {
@@ -343,13 +353,7 @@ async function prepare_document(
         tokenizer(text) {
           const match =
             /^ {0,3}\$\$[ \t]*\n(?<tex>[\s\S]*?)\n {0,3}\$\$[ \t]*(?:\n|$)/u.exec(text)
-          if (match)
-            return {
-              type: `math_block`,
-              raw: match[0],
-              tex: match[1],
-            }
-          return undefined
+          return match ? { type: `math_block`, raw: match[0], tex: match[1] } : undefined
         },
         renderer: (token) => `${render_math(String(token.tex), true)}\n`,
       },
@@ -363,14 +367,14 @@ async function prepare_document(
           const inline =
             /^\$(?![\s${])(?<tex>(?:\\.|[^\\\n$])+?)(?<![\s\\])\$(?![\d$])/u.exec(text)
           const match = display ?? inline
-          if (match)
-            return {
-              type: `math_inline`,
-              raw: match[0],
-              tex: match[1],
-              display: Boolean(display),
-            }
-          return undefined
+          return match
+            ? {
+                type: `math_inline`,
+                raw: match[0],
+                tex: match[1],
+                display: Boolean(display),
+              }
+            : undefined
         },
         renderer: (token) => render_math(String(token.tex), Boolean(token.display)),
       },
@@ -406,15 +410,10 @@ async function prepare_document(
         return retain(mapped.code, mapped.spans)
       },
       link(token) {
-        const result = Renderer.prototype.link.call(this, token)
-        if (!syntax || !token.href.includes(`{`)) return result
-        // Marked URI-encodes braces. Preserve authored Svelte URL expressions instead.
-        return result.replace(/href="[^"]*"/u, () => `href="${url_attribute(token)}"`)
+        return with_url(Renderer.prototype.link.call(this, token), token, `href`)
       },
       image(token) {
-        const result = Renderer.prototype.image.call(this, token)
-        if (!syntax || !token.href.includes(`{`)) return result
-        return result.replace(/src="[^"]*"/u, () => `src="${url_attribute(token)}"`)
+        return with_url(Renderer.prototype.image.call(this, token), token, `src`)
       },
       code(token) {
         return code_html.get(token) ?? ``
@@ -514,12 +513,11 @@ async function prepare_document(
         let alias = wrappers.get(key)
         if (alias === undefined) {
           alias = `WidgetsExampleWrapper${wrappers.size}`
-          if (typeof wrapper === `string`)
-            imports.push(`import ${alias} from ${script_json(wrapper)};\n`)
-          else
-            imports.push(
-              `import { ${wrapper[1]} as ${alias} } from ${script_json(wrapper[0])};\n`,
-            )
+          const [path, binding] =
+            typeof wrapper === `string`
+              ? [wrapper, alias]
+              : [wrapper[0], `{ ${wrapper[1]} as ${alias} }`]
+          imports.push(`import ${binding} from ${script_json(path)};\n`)
           wrappers.set(key, alias)
         }
         wrapper_alias = alias
@@ -546,12 +544,9 @@ async function prepare_document(
           ? await options.highlight(display_code, language)
           : escape_html_text(display_code)
         if (!live) {
-          const language_class = escape_braces(
-            escape_html_text(language).replaceAll(`"`, `&quot;`),
-          )
           code_html.set(
             token,
-            `<pre class="highlight${language ? ` highlight-${language_class}` : ``}"><code>${html(`${highlighted}\n`)}</code></pre>\n`,
+            `<pre class="highlight${language ? ` highlight-${escape_attribute(language)}` : ``}"><code>${html(`${highlighted}\n`)}</code></pre>\n`,
           )
           return undefined
         }
@@ -638,14 +633,7 @@ export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
         )
         return diagnostic_result(document, [])
       } catch (error) {
-        return {
-          ok: false,
-          diagnostics: error_diagnostics(
-            error,
-            `markdown`,
-            source_locator(source, filename)(0, source.length),
-          ),
-        }
+        return failure(error, `markdown`, source, filename, source.length)
       }
     },
     async render(source, input) {
@@ -661,46 +649,40 @@ export const compile_markdown = <Metadata extends Record<string, unknown>>(
 ): Promise<DiagnosticResult<MarkdownResult<Metadata>>> =>
   emit_document(document, `svelte`)
 
+const failure = (
+  error: unknown,
+  code: string,
+  source: string,
+  filename: string,
+  end = 0,
+): { ok: false; diagnostics: Diagnostic[] } => ({
+  ok: false,
+  diagnostics: error_diagnostics(error, code, source_locator(source, filename)(0, end)),
+})
+
 async function emit_document<Metadata extends Record<string, unknown>>(
   document: MarkdownDocument<Metadata>,
   dialect: MarkdownDocument['dialect'],
 ): Promise<DiagnosticResult<MarkdownResult<Metadata>>> {
+  const { source, filename, metadata, manifest } = document
   if (document.dialect !== dialect)
-    return {
-      ok: false,
-      diagnostics: error_diagnostics(
-        new Error(
-          dialect === `svelte`
-            ? `Svelte compilation requires a Svelte document`
-            : `HTML rendering requires a Markdown document`,
-        ),
-        `dialect`,
-        source_locator(document.source, document.filename)(0),
+    return failure(
+      new Error(
+        dialect === `svelte`
+          ? `Svelte compilation requires a Svelte document`
+          : `HTML rendering requires a Markdown document`,
       ),
-    }
+      `dialect`,
+      source,
+      filename,
+    )
   const emit = prepared_documents.get(document)
   if (!emit) throw new Error(`Document was not created by create_markdown().parse()`)
   try {
-    const prepared = await emit()
-    return diagnostic_result(
-      freeze_data({
-        code: prepared.code,
-        metadata: document.metadata,
-        examples: prepared.examples,
-        manifest: document.manifest,
-        map: prepared.map,
-      }),
-      [],
-    )
+    const { code, examples, map } = await emit()
+    return diagnostic_result(freeze_data({ code, metadata, examples, manifest, map }), [])
   } catch (error) {
-    return {
-      ok: false,
-      diagnostics: error_diagnostics(
-        error,
-        `render`,
-        source_locator(document.source, document.filename)(0, document.source.length),
-      ),
-    }
+    return failure(error, `render`, source, filename, source.length)
   }
 }
 export async function render_markdown(
@@ -714,12 +696,7 @@ export function markdown(engine: MarkdownEngine): PreprocessorGroup {
   return {
     name: `widgets-markdown`,
     async markup({ content, filename }) {
-      if (
-        !filename ||
-        !(engine.options.extensions ?? [`.md`, `.svx`]).some((extension) =>
-          filename.endsWith(extension),
-        )
-      )
+      if (!filename || !is_markdown_file(engine.options.extensions, filename))
         return undefined
       const document = assert_ok(await engine.parse(content, { filename }))
       const result = assert_ok(await compile_markdown(document))

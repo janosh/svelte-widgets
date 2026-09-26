@@ -53,11 +53,11 @@ const navigation_label = (resolved: Target): string => {
     ? `${resolved.number} · ${label}`
     : `${resolved.kind === `figure` ? `Figure` : `Equation`} ${resolved.number}`
 }
-const escape = (text: string): string =>
-  escape_html_text(text)
-    .replaceAll(`"`, `&quot;`)
-    .replaceAll(`{`, `&#123;`)
-    .replaceAll(`}`, `&#125;`)
+export const escape_braces = (text: string): string =>
+  text.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
+// Safe in quoted attributes and inert in Svelte markup
+export const escape_attribute = (text: string): string =>
+  escape_braces(escape_html_text(text).replaceAll(`"`, `&quot;`))
 const citation_url = (citation: Citation): string | undefined =>
   citation.url ??
   (citation.doi === undefined ? undefined : `https://doi.org/${citation.doi}`)
@@ -101,14 +101,14 @@ export function scientific_references(
   )
   const link = (key: string): string => {
     const resolved = targets.get(key)
-    if (!resolved) return escape(key)
+    if (!resolved) return escape_attribute(key)
     const label =
       resolved.kind === `equation`
         ? `Equation (${resolved.number})`
         : resolved.kind === `figure`
           ? `Figure ${resolved.number}`
           : `[${resolved.number}]`
-    return `<a class="reference reference-${resolved.kind}" href="#${escape(resolved.target)}">${label}</a>`
+    return `<a class="reference reference-${resolved.kind}" href="#${escape_attribute(resolved.target)}">${label}</a>`
   }
   const extensions: TokenizerAndRendererExtension[] = [
     {
@@ -124,7 +124,7 @@ export function scientific_references(
         const reference = token as ReferenceToken
         const resolved = targets.get(reference.key ?? ``)
         if (!resolved || !render_math) return ``
-        return `<div class="equation" id="${escape(resolved.target)}" data-reference-label="${escape(navigation_label(resolved))}">${render_math(reference.tex ?? ``)}<a class="equation-number" href="#${escape(resolved.target)}" aria-label="Equation ${resolved.number}">(${resolved.number})</a></div>\n`
+        return `<div class="equation" id="${escape_attribute(resolved.target)}" data-reference-label="${escape_attribute(navigation_label(resolved))}">${render_math(reference.tex ?? ``)}<a class="equation-number" href="#${escape_attribute(resolved.target)}" aria-label="Equation ${resolved.number}">(${resolved.number})</a></div>\n`
       },
     },
     {
@@ -155,9 +155,9 @@ export function scientific_references(
           tokens: [text],
         })
         const caption = Renderer.prototype.text.call(this.parser.renderer, text)
-        return `<figure id="${escape(resolved.target)}" data-reference-label="${escape(navigation_label(resolved))}">${image}<figcaption><a href="#${escape(resolved.target)}">Figure ${resolved.number}.</a> ${caption}</figcaption></figure>\n`
-          .replaceAll(`{`, `&#123;`)
-          .replaceAll(`}`, `&#125;`)
+        return escape_braces(
+          `<figure id="${escape_attribute(resolved.target)}" data-reference-label="${escape_attribute(navigation_label(resolved))}">${image}<figcaption><a href="#${escape_attribute(resolved.target)}">Figure ${resolved.number}.</a> ${caption}</figcaption></figure>\n`,
+        )
       },
     },
     {
@@ -167,13 +167,13 @@ export function scientific_references(
       tokenizer(text) {
         if (this.lexer.state.inRawBlock || this.lexer.state.inLink) return undefined
         const match = citation_pattern.exec(text)
-        if (match)
-          return {
-            type: `reference_use`,
-            raw: match[0],
-            keys: match[1].split(/[ \t]*;[ \t]*@/u),
-          }
-        return undefined
+        return match
+          ? {
+              type: `reference_use`,
+              raw: match[0],
+              keys: match[1].split(/[ \t]*;[ \t]*@/u),
+            }
+          : undefined
       },
       renderer: (token) => ((token as ReferenceToken).keys ?? []).map(link).join(`, `),
     },
@@ -292,18 +292,20 @@ export function scientific_references(
           }
         }
         const title = url
-          ? `<a href="${escape(url)}">${escape(citation.title)}</a>`
-          : escape(citation.title)
+          ? `<a href="${escape_attribute(url)}">${escape_attribute(citation.title)}</a>`
+          : escape_attribute(citation.title)
         const authors = citation.authors?.length
-          ? `${escape(citation.authors.join(`, `))}. `
+          ? `${escape_attribute(citation.authors.join(`, `))}. `
           : ``
         const year =
-          citation.year === undefined ? `` : ` (${escape(String(citation.year))})`
-        return `<li id="${escape(resolved.target)}" value="${resolved.number}">${authors}${title}${year}.</li>`
+          citation.year === undefined
+            ? ``
+            : ` (${escape_attribute(String(citation.year))})`
+        return `<li id="${escape_attribute(resolved.target)}" value="${resolved.number}">${authors}${title}${year}.</li>`
       })
       .join(`\n`)
     if (entries)
-      bibliography_html = `<section class="bibliography" aria-labelledby="bibliography"><h2 id="bibliography">${escape(options.bibliography_title ?? `References`)}</h2><ol>${entries}</ol></section>\n`
+      bibliography_html = `<section class="bibliography" aria-labelledby="bibliography"><h2 id="bibliography">${escape_attribute(options.bibliography_title ?? `References`)}</h2><ol>${entries}</ol></section>\n`
   }
 
   const update_manifest = (
@@ -335,11 +337,7 @@ export function scientific_references(
         const citation = options.bibliography?.[resolved.key]
         const url = citation && citation_url(citation)
         if (url)
-          manifest.links.push({
-            url,
-            text: citation?.title ?? resolved.key,
-            range,
-          })
+          manifest.links.push({ url, text: citation?.title ?? resolved.key, range })
       }
     }
     const bibliography_source = bibliography_token ?? cited[0]?.token
@@ -366,15 +364,10 @@ export function scientific_references(
       for (const key of token.keys ?? []) {
         const resolved = targets.get(key)
         if (!resolved) continue
+        const { kind, number, target } = resolved
         const range = at(token)
-        manifest.references.push({
-          key,
-          kind: resolved.kind,
-          number: resolved.number,
-          target: resolved.target,
-          range,
-        })
-        manifest.links.push({ url: `#${resolved.target}`, text: key, range })
+        manifest.references.push({ key, kind, number, target, range })
+        manifest.links.push({ url: `#${target}`, text: key, range })
       }
     if (issues.length)
       throw new DiagnosticError(
