@@ -13,7 +13,6 @@ beforeEach(() => {
 })
 afterEach(() => {
   after_print() // the dialog always closes eventually
-  vi.useRealTimers() // the watchdog cases opt into fake ones
   vi.unstubAllGlobals()
   document.title = original_title
 })
@@ -64,7 +63,6 @@ test(`without a filename the title is left alone`, () => {
     expect.any(Function),
     expect.anything(),
   )
-  add_listener.mockRestore()
 })
 
 // a print() that throws never fires afterprint, so nothing else would undo the swap

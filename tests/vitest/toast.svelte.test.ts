@@ -12,14 +12,13 @@ import {
 import type {
   ToastCloseHandler,
   ToastItem,
-  ToastLifecycleEffect,
   ToastPriority,
   ToastQueue,
   ToastRequest,
 } from '$lib/toast-queue.svelte.ts'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, escape_key, press_key, render as mount_body } from './index'
+import { describe, expect, onTestFinished, test, vi } from 'vitest'
+import { click, doc_query, escape_key, press_key, render as mount_body } from './index'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -40,6 +39,11 @@ const messages = (toasts: readonly ToastItem<string>[]) =>
 const fake_clock = () => {
   vi.useFakeTimers()
   vi.setSystemTime(0)
+}
+// destroys the store when the test finishes, so no timer outlives it
+const track = <Priority extends string>(store: ToastStore<Priority>) => {
+  onTestFinished(() => store.destroy())
+  return store
 }
 
 describe(`toast queue reducer`, () => {
@@ -101,48 +105,38 @@ describe(`toast queue reducer`, () => {
     )
   })
 
-  describe(`overflow`, () => {
+  test.each([
+    // [description, pending actions, dropped, kept]
+    [
+      `drops the newest when none carry an action`,
+      [false, false, false, false],
+      [`p3`],
+      [`p0`, `p1`, `p2`],
+    ],
+    [
+      // the genuine skip-past-actions case: findLastIndex has to walk back to p0
+      `drops the only actionless toast, wherever it sits`,
+      [false, true, true, true],
+      [`p0`],
+      [`p1`, `p2`, `p3`],
+    ],
+    [
+      `overflows nothing when every pending toast has an action`,
+      [true, true, true, true],
+      [],
+      [`p0`, `p1`, `p2`, `p3`],
+    ],
+  ] as const)(`overflow %s`, (_desc, has_action, dropped, kept) => {
     // 1 active + 4 pending with max_pending 3, so exactly one toast has to go
-    const overflow_case = (has_action: readonly boolean[]) => {
-      let queue = create_toast_queue()
-      let effects: readonly ToastLifecycleEffect[] = []
-      queue = add(queue, `active`).queue
-      for (const [idx, action] of has_action.entries()) {
-        const transition = add(queue, `p${idx}`, action ? { action: undo } : {})
-        queue = transition.queue
-        effects = transition.effects
-      }
-      return { queue, effects }
+    let transition = add(create_toast_queue(), `active`)
+    for (const [idx, action] of has_action.entries()) {
+      transition = add(transition.queue, `p${idx}`, action ? { action: undo } : {})
     }
+    const { queue, effects } = transition
 
-    test.each([
-      // [description, pending actions, dropped, kept]
-      [
-        `drops the newest when none carry an action`,
-        [false, false, false, false],
-        [`p3`],
-        [`p0`, `p1`, `p2`],
-      ],
-      [
-        // the genuine skip-past-actions case: findLastIndex has to walk back to p0
-        `drops the only actionless toast, wherever it sits`,
-        [false, true, true, true],
-        [`p0`],
-        [`p1`, `p2`, `p3`],
-      ],
-      [
-        `overflows nothing when every pending toast has an action`,
-        [true, true, true, true],
-        [],
-        [`p0`, `p1`, `p2`, `p3`],
-      ],
-    ] as const)(`%s`, (_desc, has_action, dropped, kept) => {
-      const { queue, effects } = overflow_case(has_action)
-
-      expect(effects.map((effect) => effect.toast.message)).toEqual(dropped)
-      expect(effects.every((effect) => effect.reason === `overflow`)).toBe(true)
-      expect(messages(queue.pending)).toEqual(kept)
-    })
+    expect(effects.map((effect) => effect.toast.message)).toEqual(dropped)
+    expect(effects.every((effect) => effect.reason === `overflow`)).toBe(true)
+    expect(messages(queue.pending)).toEqual(kept)
   })
 
   describe(`dedupe`, () => {
@@ -330,16 +324,6 @@ describe(`toast queue reducer`, () => {
 })
 
 describe(`ToastStore`, () => {
-  const stores: ToastStore<string>[] = []
-  const track = <Priority extends string>(created: ToastStore<Priority>) => (
-    stores.push(created),
-    created
-  )
-  afterEach(() => {
-    for (const created of stores.splice(0)) created.destroy()
-    vi.useRealTimers()
-  })
-
   test(`show returns an id and exposes active_toast, pending and items`, () => {
     const store = track(new ToastStore())
     const first_id = store.show(`a`)
@@ -485,22 +469,12 @@ describe(`ToastStore`, () => {
 })
 
 describe(`<Toast />`, () => {
-  const stores: ToastStore<string>[] = []
-  const helper_nodes: Element[] = []
-  afterEach(() => {
-    for (const store of stores.splice(0)) store.destroy()
-    for (const node of helper_nodes.splice(0)) node.remove()
-    vi.useRealTimers()
-  })
-
-  const track = <Priority extends string>(store: ToastStore<Priority>, props = {}) => {
-    mount_body(Toast, { ...props, store })
-    stores.push(store)
+  const render = <Priority extends string>(
+    props: Record<string, unknown> & { store?: ToastStore<Priority> } = {},
+  ) => {
+    const { store = new ToastStore<Priority>(), ...rest } = props
+    mount_body(Toast, { ...rest, store: track(store) })
     return store
-  }
-  const render = (props: Record<string, unknown> = {}) => {
-    const { store, ...rest } = props
-    return track((store as ToastStore | undefined) ?? new ToastStore(), rest)
   }
   const polite = () => doc_query(`[aria-live="polite"]`)
   const assertive = () => doc_query(`[aria-live="assertive"]`)
@@ -532,7 +506,7 @@ describe(`<Toast />`, () => {
   ] as const)(
     `a %s toast renders into the %s region`,
     async (priority, region, options) => {
-      const store = track(new ToastStore<string>(options))
+      const store = render({ store: new ToastStore<string>(options) })
       store.show(`hello`, { priority })
       await tick()
 
@@ -607,8 +581,7 @@ describe(`<Toast />`, () => {
 
     const button = doc_query<HTMLButtonElement>(`.toast-dismiss`)
     button.focus()
-    button.click()
-    await tick()
+    await click(button)
     expect(store.active_toast?.message).toBe(`b`)
     expect(document.activeElement).toBe(document.body)
 
@@ -752,20 +725,19 @@ describe(`<Toast />`, () => {
   // every exit unmounts the button holding focus, so each must restore the origin rather
   // than drop focus on <body> — unless the user already moved, when restoring would yank.
   // Only the action button may run the action.
-  test.each<[string, (store: ToastStore) => void, boolean?]>([
+  test.each<[string, (store: ToastStore<string>) => void, boolean?]>([
     [`the action button`, () => doc_query<HTMLButtonElement>(`.toast-action`).click()],
     [`the dismiss button`, () => doc_query<HTMLButtonElement>(`.toast-dismiss`).click()],
     [`Escape`, () => doc_query(`.toast-dismiss`).dispatchEvent(escape_key())],
     // no click to hang the restore off: the queue empties from under the toast
-    [`a store-driven clear`, (store: ToastStore) => store.clear()],
-    [`a clear after the user tabbed away`, (store: ToastStore) => store.clear(), true],
+    [`a store-driven clear`, (store) => store.clear()],
+    [`a clear after the user tabbed away`, (store) => store.clear(), true],
   ])(
     `%s closes the toast and leaves focus where the user expects it`,
     async (label, close, moved_on) => {
       const opener = document.createElement(`button`)
       const elsewhere = document.createElement(`button`)
       document.body.append(opener, elsewhere)
-      helper_nodes.push(opener, elsewhere)
       const store = render()
       const on_click = vi.fn()
       store.show(`a`, { action: { label: `Undo`, on_click } })
@@ -810,14 +782,13 @@ describe(`<Toast />`, () => {
     },
   )
 
-  // Reactive props rather than `track`: the pointer is already inside the stack when the
+  // Reactive props rather than `render`: the pointer is already inside the stack when the
   // flag flips, so the pause has to come from the prop change and not a fresh pointerenter
   test(`flipping pause_on_hover acts on an already-hovered stack`, async () => {
     fake_clock()
-    const store = new ToastStore()
+    const store = track(new ToastStore())
     const props = $state({ store, pause_on_hover: false })
     mount_body(Toast, props)
-    stores.push(store)
     store.show(`a`, { duration_ms: 1000 })
     await tick()
     vi.advanceTimersByTime(400)

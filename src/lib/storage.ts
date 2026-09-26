@@ -62,9 +62,8 @@ type RecentListConfig<T> = {
 // Persisted MRU list deduped by key_of. Methods take/return lists; callers own state.
 export const create_recent_list = <T>(config: RecentListConfig<T>) => {
   const { storage_key, max_items, key_of, is_valid } = config
-  if (!Number.isInteger(max_items) || max_items < 0) {
+  if (!Number.isInteger(max_items) || max_items < 0)
     throw new RangeError(`max_items must be a non-negative integer, got ${max_items}`)
-  }
   const persist = (items: T[]): T[] => {
     storage_set_json(storage_key, items)
     return items

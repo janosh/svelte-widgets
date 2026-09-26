@@ -1,12 +1,13 @@
 import { tick } from 'svelte'
 import { describe, expect, test } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 import {
   focus_input,
   fresh_key,
   get_input,
   mount_multiselect,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -51,10 +52,8 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     const input = await focus_input()
 
-    const options = document.querySelectorAll<HTMLLIElement>(
-      `ul.options > li[role="option"]`,
-    )
-    const ids = [...options].map((opt) => opt.id)
+    const options = [...document.querySelectorAll(`ul.options > li[role="option"]`)]
+    const ids = options.map((opt) => opt.id)
     expect(ids.every(Boolean)).toBe(true)
     expect(new Set(ids).size).toBe(3) // one id per option, none shared
     options.forEach((option, idx) => {
@@ -64,8 +63,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     expect(input.getAttribute(`aria-activedescendant`)).toBeNull() // nothing active yet
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(input, `ArrowDown`)
 
     const active_id = input.getAttribute(`aria-activedescendant`)
     expect(active_id).toBeTypeOf(`string`)
@@ -83,10 +81,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     mount_a11y()
 
     const input = await focus_input()
-
-    if (filter) {
-      await type_search_text(filter, input)
-    }
+    if (filter) await type_search_text(filter, input)
 
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.getAttribute(`aria-atomic`)).toBe(`true`)
@@ -102,8 +97,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const listbox_id = doc_query(`ul.options`).id
     expect(listbox_id).toMatch(expected_id)
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(input, `ArrowDown`)
     expect(doc_query(`ul.options`).id).toBe(listbox_id)
     expect(input.getAttribute(`aria-controls`)).toBe(listbox_id)
     expect(input.getAttribute(`aria-activedescendant`)).toContain(
@@ -114,8 +108,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
   test(`aria-label can be passed via rest props for accessible name`, () => {
     mount_multiselect({ options: [`foo`, `bar`], [`aria-label`]: `Select your favorite` })
 
-    const input = get_input()
-    expect(input.getAttribute(`aria-label`)).toBe(`Select your favorite`)
+    expect(get_input().getAttribute(`aria-label`)).toBe(`Select your favorite`)
   })
 
   test(`aria-busy reflects loading state`, async () => {
@@ -139,9 +132,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     await focus_input()
 
-    const option = doc_query<HTMLLIElement>(`ul.options > li[role="option"]`)
-    option.click()
-    await tick()
+    await click(`ul.options > li[role="option"]`)
 
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.textContent).toContain(`selected`)
@@ -150,8 +141,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     expect(selected_chip.getAttribute(`role`)).toBeNull()
     expect(selected_chip.getAttribute(`aria-selected`)).toBeNull()
 
-    doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
-    await tick()
+    await click(`ul.selected button.remove`)
     expect(live_region.textContent).toContain(`removed`)
   })
 })
@@ -165,8 +155,7 @@ async function setup_user_message(search_text = `Purple`) {
     open: true,
   })
   mount_multiselect(props)
-  const input = get_input()
-  await type_search_text(search_text, input)
+  const input = await type_search_text(search_text)
 
   return { input, props, user_msg: doc_query(`ul.options li.user-msg`) }
 }
@@ -185,8 +174,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
     expect(user_msg.classList.contains(`active`)).toBe(expected_active)
   }
 
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_sequence(input, `ArrowDown`)
 
   expect(input.getAttribute(`aria-activedescendant`)).toBe(user_msg.id)
   expect(user_msg.classList.contains(`active`)).toBe(true)
@@ -203,12 +191,10 @@ test(`user message exposes active descendant and toggles active class`, async ()
 
 test(`clearing search_text while create-option message is active drops aria-activedescendant`, async () => {
   mount_multiselect({ options: [`foo`], allow_user_options: true })
-  const input = get_input()
-  await type_search_text(`xyz`, input)
+  const input = await type_search_text(`xyz`)
 
   // no options match 'xyz' -> ArrowDown activates the create-option message
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_sequence(input, `ArrowDown`)
   expect(doc_query(`ul.options > li.user-msg`).classList.contains(`active`)).toBe(true)
   expect(input.getAttribute(`aria-activedescendant`)).toContain(`user-msg`)
 

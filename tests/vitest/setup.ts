@@ -42,6 +42,7 @@ Object.defineProperty(globalThis, `localStorage`, {
 
 beforeEach(() => {
   vi.restoreAllMocks()
+  vi.useRealTimers() // tests opting into fake timers need no restore of their own
   document.body.innerHTML = ``
   localStorage.clear()
 })

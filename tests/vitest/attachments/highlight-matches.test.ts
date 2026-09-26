@@ -1,5 +1,5 @@
 import { highlight_matches } from '$lib/attachments'
-import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { stub_css_highlights } from '../index'
 
 describe(`highlight_matches`, () => {
@@ -182,7 +182,6 @@ describe(`highlight_matches`, () => {
   // flush the MutationObserver microtask before advancing timers, or the burst never arms
   it(`debounced observation coalesces a burst and cleanup drops a pending re-run`, async () => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers())
     const on_highlight = vi.fn()
     const attach = () =>
       highlight_matches({
@@ -211,7 +210,6 @@ describe(`highlight_matches`, () => {
 
   it(`duration_ms removes the highlight on its own`, () => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers())
     node.textContent = `PageSearch result`
     highlight_matches({ query: `PageSearch`, duration_ms: 50 })(node)
     expect(ranges()).toHaveLength(1)

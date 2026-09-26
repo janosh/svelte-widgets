@@ -32,7 +32,7 @@ describe(`storage_get/set/remove`, () => {
         throw new DOMException(`QuotaExceededError`)
       })
       expect(run()).toBe(expected)
-      spy.mockRestore()
+      spy.mockRestore() // restoreAllMocks misses spies on happy-dom's Storage proxy
     },
   )
 
@@ -64,17 +64,15 @@ describe(`storage_get/set/remove`, () => {
   })
 })
 
-describe(`storage_get_size`, () => {
-  test.each([
-    [`a valid size`, JSON.stringify({ w: 320, h: 240 }), { w: 320, h: 240 }],
-    [`a non-finite extent`, JSON.stringify({ w: null, h: 240 }), null],
-    [`a missing extent`, JSON.stringify({ w: 320 }), null],
-    [`a non-object payload`, `42`, null],
-    [`nothing stored`, null, null],
-  ])(`reads back %s`, (_case, stored, expected) => {
-    if (stored !== null) localStorage.setItem(`test.size`, stored)
-    expect(storage_get_size(`test.size`)).toEqual(expected)
-  })
+test.each([
+  [`a valid size`, JSON.stringify({ w: 320, h: 240 }), { w: 320, h: 240 }],
+  [`a non-finite extent`, JSON.stringify({ w: null, h: 240 }), null],
+  [`a missing extent`, JSON.stringify({ w: 320 }), null],
+  [`a non-object payload`, `42`, null],
+  [`nothing stored`, null, null],
+])(`storage_get_size reads back %s`, (_case, stored, expected) => {
+  if (stored !== null) localStorage.setItem(`test.size`, stored)
+  expect(storage_get_size(`test.size`)).toEqual(expected)
 })
 
 describe(`create_recent_list`, () => {
@@ -161,15 +159,13 @@ describe(`create_recent_list`, () => {
   })
 })
 
-describe(`persisted_choice`, () => {
-  test.each([
-    [`stored valid option`, `treemap`, `treemap`],
-    [`stored stale/garbage option`, `piechart`, `sunburst`],
-    [`nothing stored`, null, `sunburst`],
-  ])(`%s`, (_case, stored, expected) => {
-    if (stored !== null) localStorage.setItem(`test.choice`, stored)
-    expect(persisted_choice(`test.choice`, [`sunburst`, `treemap`], `sunburst`)).toBe(
-      expected,
-    )
-  })
+test.each([
+  [`stored valid option`, `treemap`, `treemap`],
+  [`stored stale/garbage option`, `piechart`, `sunburst`],
+  [`nothing stored`, null, `sunburst`],
+])(`persisted_choice with %s`, (_case, stored, expected) => {
+  if (stored !== null) localStorage.setItem(`test.choice`, stored)
+  expect(persisted_choice(`test.choice`, [`sunburst`, `treemap`], `sunburst`)).toBe(
+    expected,
+  )
 })

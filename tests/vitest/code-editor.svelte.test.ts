@@ -4,6 +4,7 @@ import { create_editor_model } from '$lib/code-editor/model'
 import type {
   ApplyEditsArgs,
   EditorBackend,
+  EditorModel,
   HighlightLinesArgs,
   OpenDocArgs,
 } from '$lib/code-editor/types'
@@ -50,6 +51,15 @@ const create_backend = (line_spans: () => number[] = () => []) => {
 }
 const numbered_lines = (count: number): string =>
   Array.from({ length: count }, (_unused, line_idx) => `line ${line_idx}`).join(`\n`)
+const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
+const status_text = () => doc_query(`[role="status"]`).textContent
+// happy-dom clamps scrollTop to its zero layout height unless a test stubs it
+const scroll_viewport = (top: number): HTMLDivElement => {
+  const scrollport = doc_query<HTMLDivElement>(`.content`)
+  scrollport.scrollTop = top
+  scrollport.dispatchEvent(new Event(`scroll`))
+  return scrollport
+}
 const flush_async = async (): Promise<void> => {
   await tick()
   await Promise.resolve()
@@ -81,17 +91,20 @@ const emit_input = (
   area.dispatchEvent(new InputEvent(`input`, { inputType: input_type, bubbles: true }))
 }
 type EditorProps = ComponentProps<typeof CodeEditor>
+// Plain text mounts a fresh `demo.ts` model, which enables `//` line comments.
 const mount_editor = async (
-  model = create_editor_model({ uri: `demo.ts`, text: DEMO_TEXT }),
+  source: string | EditorModel = DEMO_TEXT,
   overrides: Partial<EditorProps> = {},
 ) => {
+  const model =
+    typeof source === `string`
+      ? create_editor_model({ uri: `demo.ts`, text: source })
+      : source
   // happy-dom has no text layout. Browser tests compare actual native bidi/font
   // geometry; unit tests emulate fixed-width grapheme cells and two-column tabs.
   const cells = (text: string): number => {
     let width = 0
-    for (const { segment } of new Intl.Segmenter(undefined, {
-      granularity: `grapheme`,
-    }).segment(text))
+    for (const { segment } of graphemes.segment(text))
       width +=
         segment === `\t`
           ? 2 - (width % 2)
@@ -122,9 +135,7 @@ const mount_editor = async (
       if (!node) return null
       let offset = 0
       let width = 0
-      for (const { segment } of new Intl.Segmenter(undefined, {
-        granularity: `grapheme`,
-      }).segment(node.textContent ?? ``)) {
+      for (const { segment } of graphemes.segment(node.textContent ?? ``)) {
         const next_width = cells(
           (node.textContent ?? ``).slice(0, offset + segment.length),
         )
@@ -154,9 +165,7 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
   const lines = Array.from({ length: 2000 }, (_unused, line_idx) =>
     [0, 999, 1999].includes(line_idx) ? `😀foo ${line_idx}` : `line ${line_idx}`,
   )
-  const { model, textarea, props } = await mount_editor(
-    create_editor_model({ uri: `large.ts`, text: lines.join(`\n`) }),
-  )
+  const { model, textarea, props } = await mount_editor(lines.join(`\n`))
   const parent_escape = vi.fn(() => true)
   onTestFinished(register_escape_layer(parent_escape))
   textarea.focus()
@@ -164,7 +173,7 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
   await flush_async()
   const input = await fill_search(`foo`)
   expect(document.activeElement).toBe(input)
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  expect(status_text()).toBe(`1 of 3`)
   expect(model.selection).toEqual({ anchor: 2, head: 5 })
   expect(doc_query(`.editor-search-match`).textContent).toBe(`foo`)
   expect(press_key(input, `Enter`, { isComposing: true }).defaultPrevented).toBe(false)
@@ -194,13 +203,13 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
   }
   model.transact([{ from: 2, to: 5, insert: `bar` }])
   await flush_async()
-  expect(doc_query(`[role="status"]`).textContent).toBe(`0 of 2`)
+  expect(status_text()).toBe(`0 of 2`)
   model.undo()
   await flush_async()
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  expect(status_text()).toBe(`1 of 3`)
   props.model = create_editor_model({ uri: `other.ts`, text: `foo` })
   await flush_async()
-  expect(doc_query(`[role="status"]`).textContent).toBe(`0 of 1`)
+  expect(status_text()).toBe(`0 of 1`)
   press_key(input, `Enter`)
   await flush_async()
   expect(props.model.selection).toEqual({ anchor: 0, head: 3 })
@@ -212,21 +221,19 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
 })
 test(`replace controls honor case, words, history, backend updates, and read-only changes`, async () => {
   const original = `foo foo_bar FOO`
-  const { instance, model, textarea, recorder, props } = await mount_editor(
-    create_editor_model({ uri: `replace.ts`, text: original }),
-  )
+  const { instance, model, textarea, recorder, props } = await mount_editor(original)
   textarea.focus()
   press_key(textarea, `h`, { ctrlKey: true })
   await flush_async()
   await fill_search(`foo`)
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 3`)
+  expect(status_text()).toBe(`1 of 3`)
   const checkboxes = document.querySelectorAll<HTMLInputElement>(`input[type="checkbox"]`)
   checkboxes[0].click()
   await flush_async()
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 2`)
+  expect(status_text()).toBe(`1 of 2`)
   checkboxes[1].click()
   await flush_async()
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 1`)
+  expect(status_text()).toBe(`1 of 1`)
   const replacement = await fill_search(`bar$&`, `Replacement`)
   expect(press_key(replacement, `Enter`, { isComposing: true }).defaultPrevented).toBe(
     false,
@@ -235,7 +242,7 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
   press_key(replacement, `Enter`)
   await flush_async()
   expect(model.text()).toBe(`bar$& foo_bar FOO`)
-  expect(doc_query(`[role="status"]`).textContent).toBe(`No matches`)
+  expect(status_text()).toBe(`No matches`)
   expect(model.undo()).toBe(true)
   checkboxes[0].click()
   await flush_async()
@@ -248,7 +255,7 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
   expect(model.undo()).toBe(true)
   await flush_async()
   expect(model.text()).toBe(original)
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 2`)
+  expect(status_text()).toBe(`1 of 2`)
   props.read_only = true
   await flush_async()
   expect(document.querySelector(`input[aria-label="Replacement"]`)).toBeNull()
@@ -261,9 +268,7 @@ test.each([5000, 5001])(
   `live search caps navigation and reports truncation without limiting replace all (%s matches)`,
   async (count) => {
     const original = `foo\n`.repeat(count)
-    const { instance, model, recorder } = await mount_editor(
-      create_editor_model({ uri: `many-matches.ts`, text: original }),
-    )
+    const { instance, model, recorder } = await mount_editor(original)
     await instance.open_search(true)
     await fill_search(`foo`)
     const status = doc_query(`[role="status"]`)
@@ -294,9 +299,7 @@ test.each([5000, 5001])(
   },
 )
 test(`go-to-line uses validated gutter numbers and reveals a bounded input window`, async () => {
-  const { model, instance, textarea } = await mount_editor(
-    create_editor_model({ uri: `lines.ts`, text: `line\n`.repeat(2000) }),
-  )
+  const { model, instance, textarea } = await mount_editor(`line\n`.repeat(2000))
   for (const invalid of [0, -1, 1.5, Infinity, NaN, 2002])
     expect(instance.go_to_line(invalid)).toBe(false)
   expect(model.selection).toEqual({ anchor: 0, head: 0 })
@@ -478,7 +481,7 @@ test(`typing with the find panel open patches matches near the edit`, async () =
   const { instance } = await mount_editor(model)
   await instance.open_search()
   await fill_search(`line 9`)
-  expect(doc_query(`[role="status"]`).textContent).toBe(`1 of 5000+ (first 5000 shown)`)
+  expect(status_text()).toBe(`1 of 5000+ (first 5000 shown)`)
   await fill_search(`line 99999`)
   slice_spy.mockClear()
   const caret = model.line(50_000).from
@@ -491,7 +494,7 @@ test(`typing with the find panel open patches matches near the edit`, async () =
   // A rescan would read all ~1 MB; the patch reads the edit's neighborhood plus rows.
   expect(sliced).toBeLessThan(20_000)
   // The selected match shifted past the new one, and navigation wraps onto it.
-  expect(doc_query(`[role="status"]`).textContent).toBe(`2 of 2`)
+  expect(status_text()).toBe(`2 of 2`)
   expect(instance.find_next()).toBe(true)
   expect(model.selection).toEqual({ anchor: caret, head: caret + 10 })
 })
@@ -594,8 +597,7 @@ test.each([
 ] as const)(
   `%s derives one bounded transaction`,
   async (input_type, selection_start, selection_end, insert, from, to, expected) => {
-    const model = create_editor_model({ uri: `memory:input`, text: `abc` })
-    const { textarea } = await mount_editor(model)
+    const { model, textarea } = await mount_editor(`abc`)
     emit_input(textarea, input_type, selection_start, selection_end, insert, from, to)
     expect(model.text()).toBe(expected)
   },
@@ -610,9 +612,8 @@ test.each([
   `replacement at input %s with %i characters respects context bounds`,
   async (edge, length) => {
     const text = `${`a`.repeat(80)}\n`.repeat(400)
-    const model = create_editor_model({ uri: `memory:replacement`, text })
     const on_error = vi.fn()
-    const { textarea, recorder } = await mount_editor(model, { on_error })
+    const { model, textarea, recorder } = await mount_editor(text, { on_error })
     const selection = model.line(100).from + 40
     model.set_selection({ anchor: selection, head: selection })
     await tick()
@@ -653,11 +654,9 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
   let packed_class = 6 // keyword
   const recorder = create_backend(() => [0, packed_class])
   const { highlight_lines } = recorder
-  const model = create_editor_model({
-    uri: `memory:invalidate`,
-    text: `alpha\nbeta\ngamma`,
+  const { model } = await mount_editor(`alpha\nbeta\ngamma`, {
+    backend: recorder.backend,
   })
-  await mount_editor(model, { backend: recorder.backend })
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalled())
   await flush_async()
   const line_classes = () =>
@@ -721,18 +720,16 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
   const recorder = create_backend(() => [0, 6])
   const { highlight_lines } = recorder
   highlight_lines.mockResolvedValueOnce(Array.from({ length: 2048 }, () => [0, 6]))
-  const model = create_editor_model({ uri: `memory:tokens`, text: numbered_lines(2050) })
-  await mount_editor(model, { backend: recorder.backend })
+  const { model } = await mount_editor(numbered_lines(2050), {
+    backend: recorder.backend,
+  })
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledOnce())
   await flush_async()
   model.set_selection({ anchor: 1, head: 1 })
   await flush_async()
-  const scrollport = doc_query<HTMLDivElement>(`.content`)
-  scrollport.scrollTop = 2049 * 20
-  scrollport.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(2049 * 20)
   await vi.waitFor(() => expect(highlight_lines).toHaveBeenCalledTimes(2))
-  scrollport.scrollTop = 0
-  scrollport.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(0)
   await tick()
   expect(highlight_lines).toHaveBeenCalledTimes(2)
   expect(doc_query(`.token-layer .line span`).classList.contains(`tok-keyword`)).toBe(
@@ -741,17 +738,11 @@ test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async
 })
 
 test(`viewport input maps edits, IME, external updates, and history to document offsets`, async () => {
-  const model = create_editor_model({
-    uri: `memory:large-input`,
-    text: numbered_lines(100_000),
-  })
-  const { textarea } = await mount_editor(model)
-  const scrollport = doc_query<HTMLDivElement>(`.content`)
+  const { model, textarea } = await mount_editor(numbered_lines(100_000))
   const text_spy = vi.spyOn(model, `text`)
   const slice_spy = vi.spyOn(model, `slice`)
   const offset = () => Number(textarea.dataset.inputFrom)
-  scrollport.scrollTop = 50_000 * 20
-  scrollport.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(50_000 * 20)
   await tick()
   expect(offset()).toBeGreaterThan(0)
   expect(textarea.value.split(`\n`).length).toBeLessThan(30)
@@ -773,8 +764,7 @@ test(`viewport input maps edits, IME, external updates, and history to document 
     caret + 1 - offset(),
     `λ`,
   )
-  scrollport.scrollTop = 60_000 * 20
-  scrollport.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(60_000 * 20)
   await tick()
   expect(offset()).toBe(composition_offset)
   emit_input(
@@ -802,11 +792,7 @@ test(`viewport input maps edits, IME, external updates, and history to document 
 })
 
 test(`document navigation and backward selections expand and release the input window`, async () => {
-  const model = create_editor_model({
-    uri: `memory:navigation`,
-    text: `abcdefghij\n`.repeat(200),
-  })
-  const { textarea, props } = await mount_editor(model)
+  const { model, textarea, props } = await mount_editor(`abcdefghij\n`.repeat(200))
   press_key(textarea, `End`, { ctrlKey: true })
   await tick()
   expect(model.selection).toEqual({ anchor: model.length, head: model.length })
@@ -842,8 +828,7 @@ test.each([
 ] as const)(
   `%s reaches the document boundary from offset %s`,
   async (key, start, head) => {
-    const model = create_editor_model({ uri: `memory:boundary`, text: `abcd\nefgh` })
-    const { textarea } = await mount_editor(model)
+    const { model, textarea } = await mount_editor(`abcd\nefgh`)
     for (const shift_key of [false, true]) {
       model.set_selection({ anchor: start, head: start })
       press_key(textarea, key, { shiftKey: shift_key })
@@ -853,11 +838,7 @@ test.each([
 )
 
 test(`vertical navigation keeps a preferred column and respects external selections`, async () => {
-  const model = create_editor_model({
-    uri: `memory:columns`,
-    text: `abcdefghij\nx\nabcdefghij\nA🧪B`,
-  })
-  const { textarea } = await mount_editor(model)
+  const { model, textarea } = await mount_editor(`abcdefghij\nx\nabcdefghij\nA🧪B`)
   model.set_selection({ anchor: 8, head: 8 })
   press_key(textarea, `ArrowDown`)
   expect(model.selection.head).toBe(12)
@@ -888,8 +869,7 @@ test.each([
 ])(
   `vertical movement follows tab stops and grapheme widths in %j`,
   async (text, start, expected) => {
-    const model = create_editor_model({ uri: `memory:columns`, text })
-    const { textarea } = await mount_editor(model)
+    const { model, textarea } = await mount_editor(text)
     model.set_selection({ anchor: start, head: start })
     press_key(textarea, `ArrowDown`)
     expect(model.selection.head).toBe(expected)
@@ -897,13 +877,11 @@ test.each([
 )
 
 test(`mouse selection retains its anchor and supports word and line selection`, async () => {
-  const model = create_editor_model({ uri: `memory:pointer`, text: `alpha\nbeta\ngamma` })
-  const { textarea } = await mount_editor(model)
+  const { model, textarea } = await mount_editor(`alpha\nbeta\ngamma`)
   const port = doc_query<HTMLDivElement>(`.content`)
   vi.spyOn(port, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 100, 60))
   Object.defineProperty(port, `clientHeight`, { value: 60 })
-  port.scrollTop = 0
-  port.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(0)
   textarea.style.paddingLeft = `8px`
   textarea.setPointerCapture = vi.fn()
   textarea.dispatchEvent(
@@ -937,8 +915,7 @@ test(`mouse selection retains its anchor and supports word and line selection`, 
 })
 
 test(`host selection changes reveal both horizontal edges`, async () => {
-  const model = create_editor_model({ uri: `memory:horizontal`, text: `a`.repeat(1000) })
-  const { textarea } = await mount_editor(model)
+  const { model, textarea } = await mount_editor(`a`.repeat(1000))
   const port = doc_query<HTMLDivElement>(`.content`)
   Object.defineProperties(port, {
     clientWidth: { value: 300 },

@@ -1,33 +1,19 @@
 import { PrevNext } from '$lib'
-import { createRawSnippet, mount, type ComponentProps, unmount } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { createRawSnippet, type ComponentProps } from 'svelte'
+import { describe, expect, test, vi } from 'vitest'
+import { render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const items = [`page1`, `page2`, `page3`, `page4`].map((href) => ({ href, label: href }))
 
 describe(`PrevNext`, () => {
-  let target: HTMLElement
   const link_hrefs = () =>
-    [...target.querySelectorAll(`a`)].map((link) => link.getAttribute(`href`))
-  const mounted: Record<string, unknown>[] = []
-  const mount_prev_next = (props: ComponentProps<typeof PrevNext>) => {
-    mounted.push(mount(PrevNext, { target, props }))
-  }
-  const mount_snippet_harness = (props: ComponentProps<typeof TestSnippetHarness>) => {
-    mounted.push(mount(TestSnippetHarness, { target, props }))
-  }
+    [...document.querySelectorAll(`a`)].map((link) => link.getAttribute(`href`))
+  const mount_prev_next = (props: ComponentProps<typeof PrevNext>) =>
+    render(PrevNext, props)
   const child_snippets = () => [
-    ...target.querySelectorAll<HTMLElement>(`[data-testid="prevnext-child"]`),
+    ...document.querySelectorAll<HTMLElement>(`[data-testid="prevnext-child"]`),
   ]
-
-  beforeEach(() => {
-    target = document.body
-  })
-
-  afterEach(() => {
-    for (const instance of mounted) void unmount(instance)
-    mounted.length = 0
-  })
 
   test.each<[string, Omit<ComponentProps<typeof PrevNext>, `current`>, number]>([
     [`fewer items than the default min_items`, { items: items.slice(0, 2) }, 0],
@@ -35,7 +21,7 @@ describe(`PrevNext`, () => {
     [`exactly min_items`, { items: items.slice(0, 2), min_items: 2 }, 2],
   ])(`min_items gate: %s renders %d links`, (_desc, props, expected_links) => {
     mount_prev_next({ ...props, current: `page1` })
-    expect(target.querySelectorAll(`a`)).toHaveLength(expected_links)
+    expect(document.querySelectorAll(`a`)).toHaveLength(expected_links)
   })
 
   test.each([
@@ -52,10 +38,10 @@ describe(`PrevNext`, () => {
     [`empty`, { prev: ``, next: `` }, []],
   ] as const)(`%s labels`, (_label, labels, expected_labels) => {
     mount_prev_next({ items, current: `page2`, labels })
-    expect([...target.querySelectorAll(`span`)].map((span) => span.textContent)).toEqual(
-      expected_labels,
-    )
-    expect(target.querySelectorAll(`a`)).toHaveLength(2)
+    expect(
+      [...document.querySelectorAll(`span`)].map((span) => span.textContent),
+    ).toEqual(expected_labels)
+    expect(document.querySelectorAll(`a`)).toHaveLength(2)
   })
 
   test(`leaves global arrow shortcuts to the app and forwards local DOM events`, () => {
@@ -69,13 +55,11 @@ describe(`PrevNext`, () => {
     }
     expect(onkeyup).not.toHaveBeenCalled()
     const event = new KeyboardEvent(`keyup`, { key: `ArrowRight`, bubbles: true })
-    target.querySelector(`a`)?.dispatchEvent(event)
+    document.querySelector(`a`)?.dispatchEvent(event)
     expect(onkeyup).toHaveBeenCalledExactlyOnceWith(event)
     expect(link_hrefs()).toEqual([`page1`, `page3`])
-    for (const spy of [replace_state, push_state, scroll_to]) {
+    for (const spy of [replace_state, push_state, scroll_to])
       expect(spy).not.toHaveBeenCalled()
-      spy.mockRestore()
-    }
   })
 
   test.each([
@@ -87,7 +71,7 @@ describe(`PrevNext`, () => {
   ])(`only the next link is end-aligned %s`, (_desc, between) => {
     mount_prev_next({ items, current: `page2`, between })
     // positional nth-child(2) styling landed on the between content instead
-    const aligns = [...target.querySelectorAll(`.prev-next > *`)].map(
+    const aligns = [...document.querySelectorAll(`.prev-next > *`)].map(
       (element) => getComputedStyle(element).textAlign,
     )
     expect(aligns.at(-1)).toBe(`end`)
@@ -96,9 +80,9 @@ describe(`PrevNext`, () => {
 
   test(`custom wrapper preserves its class`, () => {
     mount_prev_next({ items, current: `page2`, as: `div`, class: `custom` })
-    expect(target.querySelector(`div.prev-next`)).toBeInstanceOf(HTMLDivElement)
-    expect(target.querySelector(`nav`)).toBeNull()
-    expect(target.querySelector(`div.prev-next.custom`)).not.toBeNull()
+    expect(document.querySelector(`div.prev-next`)).toBeInstanceOf(HTMLDivElement)
+    expect(document.querySelector(`nav`)).toBeNull()
+    expect(document.querySelector(`div.prev-next.custom`)).not.toBeNull()
     expect(link_hrefs()).toEqual([`page1`, `page3`]) // links still render inside the div
   })
 
@@ -107,7 +91,7 @@ describe(`PrevNext`, () => {
     mount_prev_next({ items: pages, current: `/page/2` })
     expect(link_hrefs()).toEqual([`/page/1`, `/page/3`])
     expect(
-      [...target.querySelectorAll(`a`)].map((link) => link.textContent?.trim()),
+      [...document.querySelectorAll(`a`)].map((link) => link.textContent?.trim()),
     ).toEqual([`P1`, `P3`])
   })
 
@@ -116,7 +100,7 @@ describe(`PrevNext`, () => {
     [`page1`, `0`],
   ])(`children snippet receives kind, index and total (current=%s)`, (current, index) => {
     const component = `prev-next-children`
-    mount_snippet_harness({ component, items, current })
+    render(TestSnippetHarness, { component, items, current })
 
     expect(
       child_snippets().map((snippet) => [
@@ -131,7 +115,7 @@ describe(`PrevNext`, () => {
     expect(child_snippets().map((snippet) => snippet.textContent?.trim())).toEqual(
       current === `page2` ? [`page1`, `page3`] : [`page4`, `page2`],
     )
-    expect(target.querySelector(`[data-testid="prevnext-between"]`)?.textContent).toBe(
+    expect(document.querySelector(`[data-testid="prevnext-between"]`)?.textContent).toBe(
       `between`,
     )
   })
@@ -141,7 +125,7 @@ describe(`PrevNext`, () => {
       `current="missing" is absent`,
     )
     mount_prev_next({ items: [], current: `missing` })
-    expect(target.querySelector(`nav`)).toBeNull()
+    expect(document.querySelector(`nav`)).toBeNull()
   })
 
   test(`item attributes override shared link_props`, () => {
@@ -160,7 +144,7 @@ describe(`PrevNext`, () => {
       link_props,
     })
 
-    const link_attrs = [...target.querySelectorAll(`a`)].map((link) => [
+    const link_attrs = [...document.querySelectorAll(`a`)].map((link) => [
       link.classList.contains(`custom-class`),
       link.getAttribute(`data-testid`),
       link.getAttribute(`target`),
@@ -168,9 +152,9 @@ describe(`PrevNext`, () => {
     ])
     const expected = [true, `nav-link`, `_blank`, `hover`]
     expect(link_attrs).toEqual([[true, `nav-link`, `_self`, `hover`], expected])
-    expect([target.querySelector(`a`)?.rel, target.querySelector(`a`)?.title]).toEqual([
-      `author`,
-      `First page`,
-    ])
+    expect([
+      document.querySelector(`a`)?.rel,
+      document.querySelector(`a`)?.title,
+    ]).toEqual([`author`, `First page`])
   })
 })

@@ -10,11 +10,10 @@ import {
 import { virtual_window } from '$lib/virtual'
 import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vitest'
-import { doc_query, press_key } from './index'
+import { click, create_element, doc_query, press_key } from './index'
 
 const target_for = () => {
-  const target = document.createElement(`div`)
-  document.body.append(target)
+  const target = create_element()
   onTestFinished(() => target.remove())
   return target
 }
@@ -36,26 +35,17 @@ test.each([
   [
     `Accordion`,
     (props: SelectionProps) =>
-      mount(Accordion, {
-        target: target_for(),
-        props: { items: [{ value: `alpha` }], ...props },
-      }),
+      mount_in_target(Accordion, { items: [{ value: `alpha` }], ...props }),
   ],
   [
     `ButtonGroup`,
     (props: SelectionProps) =>
-      mount(ButtonGroup, {
-        target: target_for(),
-        props: { options: [`alpha`], ...props },
-      }),
+      mount_in_target(ButtonGroup, { options: [`alpha`], ...props }),
   ],
   [
     `TreeView`,
     (props: SelectionProps) =>
-      mount(TreeView, {
-        target: target_for(),
-        props: { nodes: [{ id: `alpha`, label: `Alpha` }], ...props },
-      }),
+      mount_in_target(TreeView, { nodes: [{ id: `alpha`, label: `Alpha` }], ...props }),
   ],
 ] as const)(`%s rejects a selection with the wrong mode`, (_name, mount_selection) => {
   for (const props of [
@@ -318,14 +308,12 @@ test.each([`ctrlKey`, `metaKey`] as const)(
       expect(on_change).toHaveBeenLastCalledWith(expected)
     }
     const calls = on_change.mock.calls.length
-    row(`disabled`).click()
-    await tick()
+    await click(row(`disabled`))
     expect(on_change).toHaveBeenCalledTimes(calls)
     expect(row(`disabled`).hasAttribute(`aria-selected`)).toBe(false)
 
     // Collapsing keeps hidden selections; ranges only include rows still visible.
-    doc_query<HTMLButtonElement>(`button[aria-label="Collapse Folder"]`).click()
-    await tick()
+    await click(`button[aria-label="Collapse Folder"]`)
     expect(selected()).toEqual([])
     row(`delta`).dispatchEvent(new MouseEvent(`click`, { bubbles: true, shiftKey: true }))
     await tick()

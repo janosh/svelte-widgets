@@ -1,12 +1,10 @@
 import { Wiggle } from '$lib'
 import type { ComponentProps } from 'svelte'
-import { mount, unmount } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, render } from './index'
 
 describe(`Wiggle`, () => {
   beforeEach(vi.useFakeTimers)
-  afterEach(() => vi.useRealTimers())
 
   const get_span = () => doc_query<HTMLSpanElement>(`span`)
 
@@ -27,7 +25,7 @@ describe(`Wiggle`, () => {
       },
       ...extra_props,
     }
-    return { state, on_reset, component: mount(Wiggle, { target: document.body, props }) }
+    return { state, on_reset, unmount: render(Wiggle, props) }
   }
 
   test.each([0, 200, 500])(
@@ -47,10 +45,7 @@ describe(`Wiggle`, () => {
 
   test(`custom animation props produce matching transform values`, () => {
     const props = { wiggle: true, angle: 15, scale: 1.1, dx: 5, dy: 3, duration_ms: 150 }
-    mount(Wiggle, {
-      target: document.body,
-      props: { ...props, spring_options: { stiffness: 0.08, damping: 0.15 } },
-    })
+    render(Wiggle, { ...props, spring_options: { stiffness: 0.08, damping: 0.15 } })
     const transform = get_span().style.transform.replaceAll(/\s+/gu, ` `).trim()
     expect(transform).toBe(`rotate(15deg) scale(1.1) translate(5px, 3px)`)
   })
@@ -64,9 +59,9 @@ describe(`Wiggle`, () => {
   })
 
   test(`clears pending reset timer on unmount instead of writing to destroyed state`, () => {
-    const { state, component } = mount_bindable_wiggle(true, { duration_ms: 200 })
+    const { state, unmount } = mount_bindable_wiggle(true, { duration_ms: 200 })
 
-    void unmount(component)
+    void unmount()
     vi.advanceTimersByTime(500)
     expect(state.wiggle).toBe(true) // timer was canceled, no write-after-destroy
   })

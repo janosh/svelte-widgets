@@ -180,11 +180,7 @@
     pane.style.width = ``
     pane.style.height = ``
     const { left, top } = anchor_position()
-    Object.assign(pane.style, {
-      left: `${left}px`,
-      top: `${top}px`,
-      right: `auto`,
-    })
+    Object.assign(pane.style, { left: `${left}px`, top: `${top}px`, right: `auto` })
     if (position === `fixed`) {
       const available = globalThis.innerHeight - top - viewport_margin_px
       pane.style.setProperty(`--pane-viewport-clamp`, `${Math.max(0, available)}px`)

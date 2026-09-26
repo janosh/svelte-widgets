@@ -2,8 +2,10 @@ import DraggablePane from '$lib/DraggablePane.svelte'
 import pane_source from '$lib/DraggablePane.svelte?raw'
 import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { describe, expect, test, vi } from 'vitest'
 import {
+  click,
+  create_element,
   doc_query,
   hover,
   mock_rect,
@@ -23,8 +25,6 @@ const mock_pane_rect = (pane: HTMLElement, left = 0, top = 0) =>
 const default_max_width = `min(450px, calc(100vw - 16px))`
 
 describe(`DraggablePane`, () => {
-  afterEach(() => void vi.useRealTimers())
-
   // raw snippets render once, so this captures the payload; the reactive half is
   // asserted through the DOM below
   let last_pane_state: Record<string, unknown> = {}
@@ -58,15 +58,13 @@ describe(`DraggablePane`, () => {
   }
 
   // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
-  const mock_viewport = (inner_width = 1000, inner_height = 500) => {
+  const mock_viewport = (inner_width = 1000, inner_height = 500) =>
     stub_props(globalThis, { innerWidth: inner_width, innerHeight: inner_height })
-  }
 
   // for the tests that need no geometry mocked before the pane opens
   const open_pane = async (props: PaneProps = {}) => {
     const refs = await setup(props)
-    refs.toggle.click()
-    await tick()
+    await click(refs.toggle)
     return refs
   }
 
@@ -116,15 +114,13 @@ describe(`DraggablePane`, () => {
     expect(is_open(pane)).toBe(false)
     expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
     expect(is_open(pane)).toBe(true)
     expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
     // closed_icon is Expand, open_icon is Cross — different paths, so the swap shows
     const open_path = doc_query(`button.pane-toggle path`).getAttribute(`d`)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
     expect(is_open(pane)).toBe(false)
     expect(doc_query(`button.pane-toggle path`).getAttribute(`d`)).not.toBe(open_path)
   })
@@ -147,8 +143,7 @@ describe(`DraggablePane`, () => {
 
   // dismiss_on undefined leaves the pane's own default in force, which is what pins it
   const mount_toggles = async (dismiss_on?: `press` | `release`, open = false) => {
-    const props = { dismiss_on, open }
-    render(TestPaneExternalToggles, props)
+    render(TestPaneExternalToggles, { dismiss_on, open })
     await tick()
     return {
       pane: doc_query<HTMLDivElement>(`.draggable-pane`),
@@ -171,8 +166,7 @@ describe(`DraggablePane`, () => {
 
       press(checkbox)
       await tick() // the flush a browser gets between pointerdown and click
-      checkbox.click() // UA activation: flips checked, then fires click and change
-      await tick()
+      await click(checkbox) // UA activation: flips checked, then fires click and change
 
       expect(is_open(pane)).toBe(reopens)
       expect(checkbox.checked).toBe(reopens)
@@ -210,9 +204,7 @@ describe(`DraggablePane`, () => {
   test.each([`press`, `release`] as const)(
     `inside spares an outside control's press and click, dismiss_on=%s`,
     async (dismiss_on) => {
-      const control = document.createElement(`button`)
-      document.body.append(control)
-      onTestFinished(() => control.remove())
+      const control = create_element(`button`)
       const { pane } = await open_pane({ inside: [control], dismiss_on })
 
       press_release(control)
@@ -277,8 +269,7 @@ describe(`DraggablePane`, () => {
     mock_rect(toggle, { ...rect, width: 20, height: 20 })
     mock_pane_rect(pane)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
 
     expect(pane.style.left).toBe(left)
     expect(pane.style.top).toBe(top)
@@ -294,16 +285,14 @@ describe(`DraggablePane`, () => {
   ] as const)(
     `absolute positioning aligns %s against the pane's offsetParent`,
     async (align, left) => {
-      const ancestor = document.createElement(`div`)
-      document.body.append(ancestor)
+      const ancestor = create_element()
       mock_rect(ancestor, { left: 100, top: 50, width: 800, height: 600 })
       const { toggle, pane } = await setup({ align })
       stub_props(pane, { offsetParent: ancestor })
       mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
       mock_pane_rect(pane)
 
-      toggle.click()
-      await tick()
+      await click(toggle)
 
       expect(pane.style.left).toBe(`${left}px`)
       expect(pane.style.top).toBe(`275px`) // 320 - 50 + 5
@@ -319,24 +308,21 @@ describe(`DraggablePane`, () => {
     mock_rect(toggle, { left: 700, top: 300, width: 20, height: 20 })
     mock_pane_rect(pane)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
 
     expect(pane.style.left).toBe(`305px`) // 720 - 450 + 5 + 30
     expect(pane.style.top).toBe(`385px`) // 320 + 5 + 60
   })
 
   test(`reset returns a dragged pane to its anchor and hides the controls`, async () => {
-    const ancestor = document.createElement(`div`)
-    document.body.append(ancestor)
+    const ancestor = create_element()
     mock_rect(ancestor, { left: 0, top: 0, width: 800, height: 600 })
     const { toggle, pane } = await setup()
     stub_props(toggle, { offsetParent: ancestor })
     mock_rect(toggle, { left: 500, top: 100, width: 20, height: 20 })
     mock_pane_rect(pane, 75, 125)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
     const anchored = { left: pane.style.left, top: pane.style.top }
     expect(anchored).toEqual({ left: `75px`, top: `125px` })
     expect(document.querySelector(`.reset-button`)).toBeNull()
@@ -348,8 +334,7 @@ describe(`DraggablePane`, () => {
       top: `165px`,
     })
 
-    doc_query<HTMLButtonElement>(`.reset-button`).click()
-    await tick()
+    await click(`.reset-button`)
 
     expect({ left: pane.style.left, top: pane.style.top }).toEqual(anchored)
     // the controls hide again, which is the pane reporting has_been_dragged = false
@@ -514,8 +499,7 @@ describe(`DraggablePane`, () => {
     expect(pane.style.height).toBe(`850px`)
     expect(pane.style.maxWidth).toBe(`calc(100vw - 16px)`)
 
-    doc_query<HTMLButtonElement>(`.reset-button`).click()
-    await tick()
+    await click(`.reset-button`)
     expect(pane.style.width).toBe(``)
     expect(pane.style.height).toBe(``)
     expect(pane.style.maxWidth).toBe(default_max_width)
@@ -578,8 +562,7 @@ describe(`DraggablePane`, () => {
     expect(is_open(pane)).toBe(true)
     expect(on_close).not.toHaveBeenCalled()
 
-    toggle.click()
-    await tick()
+    await click(toggle)
     expect(is_open(pane)).toBe(false)
     expect(on_close).toHaveBeenCalledWith({ via: `toggle` })
   })
@@ -608,11 +591,9 @@ describe(`DraggablePane`, () => {
       const { toggle, pane } = await setup({ position })
       // a closed pane has nothing to reanchor, so it must not listen for viewport resizes
       expect(window_listeners.mock.calls.map(([type]) => type)).not.toContain(`resize`)
-      window_listeners.mockRestore()
       mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
       mock_pane_rect(pane)
-      toggle.click()
-      await tick()
+      await click(toggle)
       expect(pane.style.left).toBe(`175px`)
       expect(observe.mock.calls).toEqual([
         [pane, { box: `border-box` }],
@@ -679,8 +660,7 @@ describe(`DraggablePane`, () => {
     )
 
     // The spread precedes the component's onclick, so chaining must preserve the caller's handler.
-    toggle.click()
-    await tick()
+    await click(toggle)
     expect(onclick).toHaveBeenCalledOnce()
     expect(pane.style.display).toBe(`grid`) // The component's handler still opened it.
   })

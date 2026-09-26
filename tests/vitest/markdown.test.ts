@@ -291,10 +291,8 @@ describe(`code and math`, () => {
       '<script>const currency = "$5 and $10"</script>\n\n$x^2$\n\n$$\nx+y\n$$\n\n`$code$` \\$escaped$ <span title="$attribute$">text</span>\n\n```txt\n$fenced$\n```'
     const { code } = await compile_page(source, { math: true })
     expect(code.match(/class=\\"katex\\"/gu)).toHaveLength(2)
-    expect(code).toContain(`$attribute$`)
-    expect(code).toContain(`$code$`)
-    expect(code).toContain(`$escaped$`)
-    expect(code).toContain(`$fenced$`)
+    for (const literal of [`$attribute$`, `$code$`, `$escaped$`, `$fenced$`])
+      expect(code).toContain(literal)
   })
 
   test(`ToC imports are plain JS modules from the current manifest`, async () => {

@@ -1,7 +1,6 @@
 import { CircleSpinner } from '$lib'
-import { mount } from 'svelte'
 import { expect, test } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 test.each([
   [`defaults`, {}, `1em`, `cornflowerblue`, `1.5s`],
@@ -15,10 +14,7 @@ test.each([
 ] as const)(
   `CircleSpinner renders %s and forwards rest props`,
   (_label, props, size, color, duration) => {
-    mount(CircleSpinner, {
-      target: document.body,
-      props: { ...props, style: `margin: 0`, class: `in-button` },
-    })
+    render(CircleSpinner, { ...props, style: `margin: 0`, class: `in-button` })
 
     const div = doc_query(`.circle-spinner.in-button`)
     expect(div.style.width).toBe(size)

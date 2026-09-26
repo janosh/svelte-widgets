@@ -33,6 +33,17 @@ export const fresh_mousemove = () => new MouseEvent(`mousemove`, { bubbles: true
 export const fresh_key = (key: string) =>
   new KeyboardEvent(`keydown`, { key, bubbles: true })
 
+// presses each key in order as a fresh keydown, flushing after every press
+export async function press_sequence(
+  target: EventTarget,
+  ...keys: string[]
+): Promise<void> {
+  for (const key of keys) {
+    target.dispatchEvent(fresh_key(key))
+    await tick()
+  }
+}
+
 const console_methods = { error: console.error, warn: console.warn }
 
 export const normalized_text = (element: Element) =>

@@ -18,7 +18,7 @@ export function get_uuid(): string {
     hex.slice(8, 12),
     hex.slice(12, 16),
     hex.slice(16, 20),
-    hex.slice(20, 32),
+    hex.slice(20),
   ].join(`-`)
 }
 
@@ -59,11 +59,10 @@ export const has_group = <T extends Option>(opt: T): opt is T & { group: string 
 // Label of an object option, or the primitive option stringified
 export const get_label = (opt: Option) => {
   if (!is_object(opt)) return `${opt}`
-  if (opt.label === undefined) {
+  if (opt.label === undefined)
     throw new TypeError(
       `MultiSelect: option object must have a label key, got ${JSON.stringify(opt)}`,
     )
-  }
   return opt.label
 }
 
@@ -71,34 +70,24 @@ export const get_label = (opt: Option) => {
 export const get_option_key = (opt: Option): unknown =>
   is_object(opt) ? (opt.value ?? get_label(opt)) : opt
 
+const is_style_key = (name: string): boolean => name === `option` || name === `selected`
 // CSS from an option's style (string or {option, selected}); non-empty result ends in `;`
 export function get_style(
   option: Option,
   key: `selected` | `option` | null | undefined = null,
 ) {
-  let css_str = ``
-  if (key !== null && key !== `selected` && key !== `option`) {
-    throw new TypeError(`MultiSelect: invalid key=${String(key)} for get_style`)
-  }
-  if (!is_object(option) || !option.style) return css_str
+  if (key !== null && !is_style_key(key))
+    throw new TypeError(`MultiSelect: invalid key=${key} for get_style`)
+  if (!is_object(option) || !option.style) return ``
   const { style } = option
-  if (typeof style === `string`) css_str = style
-  else {
-    // partial style objects are fine; unknown keys are not
-    if (
-      Object.keys(style).some(
-        (style_key) => style_key !== `option` && style_key !== `selected`,
-      )
-    ) {
-      throw new TypeError(
-        `MultiSelect: option style may only contain "option" and "selected" keys`,
-      )
-    }
-    if (key) css_str = style[key] ?? ``
-  }
+  // partial style objects are fine; unknown keys are not
+  if (typeof style !== `string` && Object.keys(style).some((name) => !is_style_key(name)))
+    throw new TypeError(
+      `MultiSelect: option style may only contain "option" and "selected" keys`,
+    )
+  const css_str = typeof style === `string` ? style : ((key && style[key]) ?? ``)
   const trimmed = css_str.trim()
-  if (trimmed && !trimmed.endsWith(`;`)) css_str += `;`
-  return css_str
+  return trimmed && !trimmed.endsWith(`;`) ? `${css_str};` : css_str
 }
 
 // === Floating geometry ===
@@ -187,9 +176,8 @@ export function compute_position(
     if (flip === false) return [requested]
     if (!explicit_order) return FLIP_ORDER[requested]
     // a named placement stays first choice, its fallbacks queue up behind it
-    if (fallback_placements && placement !== `auto`) {
+    if (fallback_placements && placement !== `auto`)
       return [requested, ...explicit_order.filter((side) => side !== requested)]
-    }
     return explicit_order
   }
 
@@ -228,8 +216,8 @@ export function compute_position(
 // === Keyboard shortcuts ===
 
 // `mod` is Cmd on Apple keyboards and Ctrl everywhere else, so one binding covers both
-const is_apple_platform = (): boolean =>
-  /mac|iphone|ipad|ipod/iu.test(globalThis.navigator?.userAgent ?? ``)
+const primary_modifier = (): `meta` | `ctrl` =>
+  /mac|iphone|ipad|ipod/iu.test(globalThis.navigator?.userAgent ?? ``) ? `meta` : `ctrl`
 
 // `,`, `+` and space are spelled out so a combo can always be split on `+`;
 // matching needs the literal `event.key` back
@@ -239,16 +227,6 @@ const KEY_TOKENS = new Map([
   [` `, `space`],
 ])
 const TOKEN_KEYS = new Map([...KEY_TOKENS].map(([key, token]) => [token, key]))
-
-function split_shortcut(shortcut: string): string[] {
-  const parts = shortcut
-    .toLowerCase()
-    .split(`+`)
-    .map((part) => part.trim())
-
-  if (parts.at(-1) === `` && parts.at(-2) === ``) parts.splice(-2, 2, `+`)
-  return parts
-}
 
 export function parse_shortcut(shortcut: string): {
   key: string
@@ -400,7 +378,6 @@ const MODIFIER_ALIASES = new Map([
   [`control`, `ctrl`],
   [`option`, `alt`],
 ])
-const canonical_modifier = (part: string): string => MODIFIER_ALIASES.get(part) ?? part
 
 // `event.key` values that are a modifier in their own right, never a combo's key
 const MODIFIER_EVENT_KEYS = new Set(
@@ -422,7 +399,7 @@ export function event_to_combo(
     alt: event.altKey,
     shift: event.shiftKey,
   }
-  const primary = is_apple_platform() ? `meta` : `ctrl`
+  const primary = primary_modifier()
   if (mod && held[primary]) {
     held[primary] = false
     held.mod = true
@@ -433,9 +410,15 @@ export function event_to_combo(
 
 // Parsing, formatting, matching and conflict detection all use this grammar.
 function shortcut_parts(combo: string, resolve_mod = false): string[] | null {
-  const primary = is_apple_platform() ? `meta` : `ctrl`
-  const parts = split_shortcut(combo).map((part) => {
-    const name = canonical_modifier(part)
+  const primary = primary_modifier()
+  const segments = combo
+    .toLowerCase()
+    .split(`+`)
+    .map((part) => part.trim())
+  // a trailing `++` is the plus key itself
+  if (segments.at(-1) === `` && segments.at(-2) === ``) segments.splice(-2, 2, `+`)
+  const parts = segments.map((part) => {
+    const name = MODIFIER_ALIASES.get(part) ?? part
     return resolve_mod && name === `mod` ? primary : name
   })
   if (parts.includes(``)) return null
@@ -507,16 +490,23 @@ export function sanitize_shortcut_overrides(
 const HAS_COLLAPSIBLE_WHITESPACE = /\s\s|[^\S ]/u
 const HAS_NON_PLAIN_WHITESPACE = /[^\S ]/u
 
+// Lowercase both; collapse runs in the search and map every target whitespace char to a
+// space, which keeps target indices aligned with the lowercased target.
+const fuzzy_fold = (search_text: string, target_text: string): [string, string] => {
+  let search = search_text.toLowerCase()
+  if (HAS_COLLAPSIBLE_WHITESPACE.test(search)) search = search.replaceAll(/\s+/gu, ` `)
+  let target = target_text.toLowerCase()
+  if (HAS_NON_PLAIN_WHITESPACE.test(target)) target = target.replaceAll(/\s/gu, ` `)
+  return [search, target]
+}
+
 // Case-insensitive subsequence match: indices in target_text where search_text's chars
 // appear in order, or null if any is missing. An empty search matches with no indices.
 export function fuzzy_match_indices(
   search_text: string,
   target_text: string,
 ): number[] | null {
-  // collapse runs in the search; map every whitespace char in the target to a space
-  let search = search_text.toLowerCase()
-  if (HAS_COLLAPSIBLE_WHITESPACE.test(search)) search = search.replaceAll(/\s+/gu, ` `)
-  let target = target_text.toLowerCase()
+  const [search, target] = fuzzy_fold(search_text, target_text)
   let target_offsets: number[] | undefined
   if (target.length !== target_text.length) {
     target_offsets = []
@@ -531,7 +521,6 @@ export function fuzzy_match_indices(
       source_offset += character.length
     }
   }
-  if (HAS_NON_PLAIN_WHITESPACE.test(target)) target = target.replaceAll(/\s/gu, ` `)
 
   // greedy leftmost match; pos only moves forward, so scanning stays linear
   const indices: number[] = []
@@ -540,9 +529,8 @@ export function fuzzy_match_indices(
   for (const character of search) {
     pos = target.indexOf(character, pos + 1)
     if (pos === -1) return null
-    for (let unit_idx = 0; unit_idx < character.length; unit_idx++) {
+    for (let unit_idx = 0; unit_idx < character.length; unit_idx++)
       indices.push(target_offsets?.[pos + unit_idx] ?? pos + unit_idx)
-    }
     pos += character.length - 1
   }
   return indices
@@ -552,10 +540,7 @@ export function fuzzy_match_indices(
 export function fuzzy_match(search_text: string, target_text: string): boolean {
   // Filtering needs no source offsets or highlighted indices, even when case folding
   // expands a character. Only the rendering helper pays for those allocations.
-  let search = search_text.toLowerCase()
-  if (HAS_COLLAPSIBLE_WHITESPACE.test(search)) search = search.replaceAll(/\s+/gu, ` `)
-  let target = target_text.toLowerCase()
-  if (HAS_NON_PLAIN_WHITESPACE.test(target)) target = target.replaceAll(/\s/gu, ` `)
+  const [search, target] = fuzzy_fold(search_text, target_text)
   let offset = 0
   for (const character of search) {
     offset = target.indexOf(character, offset)

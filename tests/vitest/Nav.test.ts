@@ -1,9 +1,9 @@
 import { Nav } from '$lib'
 import type { NavRoute, NavLink } from '$lib/types'
-import { type ComponentProps, createRawSnippet, mount, tick } from 'svelte'
+import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, next_task, press_key } from './index'
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, next_task, press_key, render, stub_props } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Nav`, () => {
@@ -46,16 +46,8 @@ describe(`Nav`, () => {
       ],
     },
   ]
-  const one_child_route: NavRoute[] = [
-    {
-      href: `/p`,
-      label: `p`,
-      children: [{ href: `/p/1`, label: `1` }],
-    },
-  ]
   const two_child_props = { routes: two_child_route }
-  const mount_nav = (props: ComponentProps<typeof Nav>) =>
-    mount(Nav, { target: document.body, props })
+  const mount_nav = (props: ComponentProps<typeof Nav>) => render(Nav, props)
   const click = (el?: Element | null) => {
     el?.dispatchEvent(new MouseEvent(`click`, { bubbles: true, cancelable: true }))
     return tick()
@@ -86,9 +78,9 @@ describe(`Nav`, () => {
     await tick()
     outside.remove()
   }
+  // undone when the test finishes
   const set_window_width = (width: number) =>
-    Object.defineProperty(globalThis, `innerWidth`, { value: width, writable: true })
-  afterEach(() => set_window_width(1024)) // reset any per-test viewport override
+    stub_props(globalThis, { innerWidth: width })
   const is_visible = (element: Element) => element.classList.contains(`visible`)
   const query_dropdown_elements = () => {
     const dropdown = doc_query(`.dropdown`)
@@ -245,19 +237,17 @@ describe(`Nav`, () => {
     [`/some-page-v2`, `/some-page`, null], // must not match via startsWith alone
     [`/some-page`, `/some-page-v2`, null],
   ])(`aria-current: pathname=%s link=%s -> %s`, (pathname, link_href, expected) => {
-    mount_nav({
-      routes: [{ href: link_href, label: link_href }],
-      pathname,
-    })
+    mount_nav({ routes: [{ href: link_href, label: link_href }], pathname })
     expect(doc_query(`a[href="${link_href}"]`).getAttribute(`aria-current`)).toBe(
       expected,
     )
   })
   test(`click outside closes burger menu and dropdowns, inside click does not`, async () => {
+    const { dropdown_menu, toggle } = mount_dropdown()
+    // spied after mount, so the tooltip layer's own document listener is not counted
     const add_listener = vi.spyOn(document, `addEventListener`)
     const press_listeners = () =>
       add_listener.mock.calls.filter(([type]) => type === `pointerdown`).length
-    const { dropdown_menu, toggle } = mount_dropdown()
     const burger_button = doc_query(`.burger`)
     // nothing open means no listener: it does a layout read on every press on the page
     expect(press_listeners()).toBe(0)
@@ -282,15 +272,7 @@ describe(`Nav`, () => {
     expect(is_visible(dropdown_menu)).toBe(false)
   })
   test(`parent link and toggle button work independently`, async () => {
-    const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-      routes: [
-        {
-          href: `/p`,
-          label: `p`,
-          children: [{ href: `/p/c`, label: `c` }],
-        },
-      ],
-    })
+    const { dropdown, dropdown_menu, toggle } = mount_dropdown()
     const parent_link = dropdown.querySelector<HTMLElement>(`div:first-child > a`)
     await click(parent_link)
     expect(is_visible(dropdown_menu)).toBe(false)
@@ -307,52 +289,25 @@ describe(`Nav`, () => {
       )
     },
   )
-  test.each<[string, NavRoute[], string, string | null, string, string[]]>([
-    // [description, routes, expected trigger tag, expected href, expected label, expected children]
-    [
-      `not a link when parent page does not exist`,
-      [
+  test.each([
+    [`not a link when parent page does not exist`, undefined, `SPAN`],
+    [`a link when parent page exists`, `/docs`, `A`],
+  ])(`dropdown trigger is %s`, (_desc, href, tag) => {
+    const children = [`/docs/intro`, `/docs/api`]
+    mount_nav({
+      routes: [
         {
-          label: `how to`,
-          class: `trigger-class`,
-          children: [
-            { href: `/how-to/guide-1`, label: `guide 1` },
-            { href: `/how-to/guide-2`, label: `guide 2` },
-          ],
-        },
-      ],
-      `SPAN`,
-      null,
-      `how to`,
-      [`/how-to/guide-1`, `/how-to/guide-2`],
-    ],
-    [
-      `a link when parent page exists`,
-      [
-        {
-          href: `/docs`,
+          ...(href && { href }),
           label: `docs`,
           class: `trigger-class`,
-          children: [
-            { href: `/docs/intro`, label: `intro` },
-            { href: `/docs/api`, label: `api` },
-          ],
+          children: children.map((child) => ({ href: child, label: child })),
         },
       ],
-      `A`,
-      `/docs`,
-      `docs`,
-      [`/docs/intro`, `/docs/api`],
-    ],
-  ])(`dropdown trigger is %s`, (_desc, routes, tag, href, label, children) => {
-    mount_nav({ routes })
-    const dropdown = doc_query(`.dropdown`)
-    const selector = tag === `A` ? `div:first-child > a` : `div:first-child > span`
-    const trigger = dropdown.querySelector(selector)
-    assert(trigger !== null, `No dropdown trigger found`)
+    })
+    const trigger = doc_query(`.dropdown > div:first-child > :first-child`)
     expect(trigger.tagName).toBe(tag)
-    expect(trigger.getAttribute(`href`)).toBe(href)
-    expect(trigger.textContent?.trim()).toBe(label)
+    expect(trigger.getAttribute(`href`)).toBe(href ?? null)
+    expect(trigger.textContent?.trim()).toBe(`docs`)
     expect(trigger.classList.contains(`trigger-class`)).toBe(true)
     const menu_links = Array.from(
       doc_query(`.dropdown [data-submenu]`).querySelectorAll(`a`),
@@ -399,10 +354,7 @@ describe(`Nav`, () => {
       dropdown,
       dropdown_menu: menu,
       toggle: toggle_button,
-    } = mount_dropdown({
-      routes: two_child_route,
-      link_props,
-    })
+    } = mount_dropdown({ routes: two_child_route, link_props })
     // Enter/Space share a branch; ArrowDown opens when closed — both focus the first item
     for (const open_key of [`Enter`, `ArrowDown`]) {
       press_key(toggle_button, open_key)
@@ -446,13 +398,7 @@ describe(`Nav`, () => {
     expect(document.activeElement).toBe(toggle_button)
   })
   test(`focus alone neither opens nor closes a dropdown`, async () => {
-    const {
-      dropdown,
-      dropdown_menu: menu,
-      toggle,
-    } = mount_dropdown({
-      routes: one_child_route,
-    })
+    const { dropdown, dropdown_menu: menu, toggle } = mount_dropdown()
     focus_in(dropdown) // tabbing through the nav must not pop panels open
     await tick()
     expect(is_visible(menu)).toBe(false)
@@ -482,9 +428,7 @@ describe(`Nav`, () => {
   test.each([false, true])(
     `custom item content retains link attributes and navigation cancellation=%s`,
     async (cancelled) => {
-      const item = createRawSnippet(() => ({
-        render: () => `<code>Custom</code>`,
-      }))
+      const item = createRawSnippet(() => ({ render: () => `<code>Custom</code>` }))
       const on_navigate = vi.fn(() => (cancelled ? false : undefined))
       mount_nav({
         routes: default_routes,
@@ -513,17 +457,14 @@ describe(`Nav`, () => {
   )
 
   test(`item and children snippets receive route and menu state`, async () => {
-    mount(TestSnippetHarness, {
-      target: document.body,
-      props: {
-        component: `nav`,
-        routes: [
-          default_routes[0],
-          { label: `More`, children: [default_routes[1]] },
-          default_routes[2],
-        ],
-        pathname: `/about`,
-      },
+    render(TestSnippetHarness, {
+      component: `nav`,
+      routes: [
+        default_routes[0],
+        { label: `More`, children: [default_routes[1]] },
+        default_routes[2],
+      ],
+      pathname: `/about`,
     })
     const items = [...document.querySelectorAll<HTMLElement>(`[data-testid="nav-item"]`)]
     expect(
@@ -552,28 +493,19 @@ describe(`Nav`, () => {
     expect(doc_query(`.burger`).getAttribute(`aria-expanded`)).toBe(`true`)
   })
   test.each<[string, ComponentProps<typeof Nav>[`labels`], string]>([
-    [`the default toggle name`, undefined, `Toggle docs submenu`],
+    [`the default toggle name`, undefined, `Toggle parent submenu`],
     [
       `a labels override`,
       { toggle_submenu: (route_label: string) => `${route_label} aufklappen` },
-      `docs aufklappen`,
+      `parent aufklappen`,
     ],
   ])(
     `dropdown accessibility uses native navigation links and labeled toggles, with %s`,
     (_case, labels, toggle_label) => {
-      const { dropdown, dropdown_menu, toggle } = mount_dropdown({
-        routes: [
-          {
-            href: `/docs`,
-            label: `docs`,
-            children: [{ href: `/docs/intro`, label: `intro` }],
-          },
-        ],
-        labels,
-      })
+      const { dropdown, dropdown_menu, toggle } = mount_dropdown({ labels })
       const links = [...dropdown_menu.querySelectorAll(`a`)]
       // Children explicitly name the submenu destinations.
-      expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/docs/intro`])
+      expect(links.map((link) => link.getAttribute(`href`))).toEqual([`/parent/child`])
       // native <a>/<nav> semantics, no explicit ARIA roles anywhere
       const roles = [dropdown, dropdown_menu, ...links].map((el) =>
         el.getAttribute(`role`),
@@ -658,10 +590,7 @@ describe(`Nav`, () => {
     })
     test(`separator after dropdown`, () => {
       const routes: NavRoute[] = [
-        {
-          children: [{ href: `/docs/intro`, label: `intro` }],
-          label: `docs`,
-        },
+        { children: [{ href: `/docs/intro`, label: `intro` }], label: `docs` },
         { separator: true },
         { href: `/contact`, label: `contact` },
       ]
@@ -678,14 +607,7 @@ describe(`Nav`, () => {
   describe(`callbacks`, () => {
     test(`on_navigate called with href, event, and route`, async () => {
       const on_navigate = vi.fn()
-      const routes = [
-        {
-          href: `/home`,
-          icon: `gear`,
-          count: 42,
-          label: `home`,
-        },
-      ]
+      const routes = [{ href: `/home`, icon: `gear`, count: 42, label: `home` }]
       mount_nav({ routes, on_navigate })
       await click(doc_query(`a`))
       expect(on_navigate).toHaveBeenCalledWith(
@@ -754,10 +676,8 @@ describe(`Nav`, () => {
       await tick()
       const burger = doc_query(`.burger`)
       await click(burger)
-      await tick()
       expect(on_open).toHaveBeenCalledTimes(1)
       await click(burger)
-      await tick()
       expect(on_close).toHaveBeenCalledTimes(1)
     })
     // No per-cause on_close test: one $effect watches is_open go true->false, covered above.
@@ -782,9 +702,7 @@ describe(`Nav`, () => {
       },
     )
     test(`re-evaluates mobile mode when the window resizes`, async () => {
-      mount_nav({
-        routes: [{ href: `/home`, label: `home` }],
-      })
+      mount_nav({ routes: [{ href: `/home`, label: `home` }] })
       await tick()
       set_window_width(500)
       globalThis.dispatchEvent(new Event(`resize`))
@@ -855,13 +773,7 @@ describe(`Nav`, () => {
           label: `Page ${idx}`,
         }))
         const { dropdown_menu } = mount_dropdown({
-          routes: [
-            {
-              href: `/docs`,
-              label: `docs`,
-              children: [...children],
-            },
-          ],
+          routes: [{ href: `/docs`, label: `docs`, children }],
           dropdown_column_threshold: threshold,
         })
         await tick()
@@ -1000,23 +912,12 @@ describe(`Nav`, () => {
   describe(`non-serializable route properties`, () => {
     const circular_route: NavRoute = { href: `/circular`, label: `circular` }
     circular_route.self = circular_route
-    test.each<[string, NavLink[]]>([
-      [
-        `BigInt`,
-        [
-          { href: `/a`, custom_id: BigInt(123), label: `a` },
-          { href: `/b`, label: `b` },
-        ],
-      ],
-      [
-        `function`,
-        [
-          { href: `/a`, on_custom: () => {}, label: `a` },
-          { href: `/b`, label: `b` },
-        ],
-      ],
-      [`circular reference`, [circular_route, { href: `/b`, label: `b` }]],
-    ])(`handles routes with %s properties without crashing`, (_desc, routes) => {
+    test.each<[string, NavLink]>([
+      [`BigInt`, { href: `/a`, custom_id: BigInt(123), label: `a` }],
+      [`function`, { href: `/a`, on_custom: () => {}, label: `a` }],
+      [`circular reference`, circular_route],
+    ])(`handles routes with %s properties without crashing`, (_desc, exotic_route) => {
+      const routes = [exotic_route, { href: `/b`, label: `b` }]
       expect(() => mount_nav({ routes })).not.toThrow()
       // hrefs, not just a count: an exotic prop must not derail label/href parsing
       expect(
@@ -1026,7 +927,6 @@ describe(`Nav`, () => {
   })
   describe(`tooltips`, () => {
     beforeEach(() => vi.useFakeTimers())
-    afterEach(() => vi.useRealTimers())
     const open_tooltip = async (selector: string): Promise<void> => {
       await tick()
       doc_query(selector).dispatchEvent(

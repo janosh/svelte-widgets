@@ -1,8 +1,6 @@
 ## Settings
 
-Four components for building a settings panel out of plain markup. They coordinate through
-the DOM rather than a shared store, so rows stay ordinary `<label>`s and the pane keeps
-owning its own state:
+Four components for building a settings panel out of plain markup. They coordinate through the DOM rather than a shared store, so rows stay ordinary `<label>`s and the pane keeps owning its own state:
 
 ```svelte
 <script>
@@ -19,15 +17,9 @@ A row opts into per-row reset and filtering by carrying `data-key`. Direct `labe
 
 ### `SettingsSearch`
 
-Filters the rows below it as you type, hiding sections and groups that hold no match and
-expanding the groups that do. Clearing the query puts every group back the way the user
-left it. A row matches on its own text, its `data-label` and `data-description`, or on the
-title of any section or group above it — so typing a heading name reveals what it holds.
+Filters the rows below it as you type, hiding sections and groups that hold no match and expanding the groups that do. Clearing the query puts every group back the way the user left it. A row matches on its own text, its `data-label` and `data-description`, or on the title of any section or group above it — so typing a heading name reveals what it holds.
 
-`trigger` picks the chrome. The default `inline` keeps a labeled field in flow; `icon`
-parks a magnifier in the pane's top-right corner and expands it in place on click, for
-panes with no room to spare. Escape clears the query and, in `icon` mode, collapses the
-field and returns focus to the magnifier.
+`trigger` picks the chrome. The default `inline` keeps a labeled field in flow; `icon` parks a magnifier in the pane's top-right corner and expands it in place on click, for panes with no room to spare. Escape clears the query and, in `icon` mode, collapses the field and returns focus to the magnifier.
 
 ```svelte example id="settings-search"
 <script lang="ts">
@@ -96,10 +88,7 @@ field and returns focus to the magnifier.
 </div>
 ```
 
-Try `camera` to match a group by its title alone, or `inertia` to match a row by its
-description. The component never writes `hidden` — it marks filtered rows with
-`data-search-hidden`, so a row the surrounding app hides stays hidden and clearing the
-query does not drag it back into view.
+Try `camera` to match a group by its title alone, or `inertia` to match a row by its description. The component never writes `hidden` — it marks filtered rows with `data-search-hidden`, so a row the surrounding app hides stays hidden and clearing the query does not drag it back into view.
 
 ### `SettingsSection`
 
@@ -107,8 +96,7 @@ A titled region that displays reset controls for caller-supplied `changed_keys`.
 
 Each keyed row supplies its description through `data-description`, used by both Explain and SettingsSearch. Bind that attribute directly to a schema description when needed.
 
-`layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so
-controls line up down the section instead of starting wherever each label ends.
+`layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so controls line up down the section instead of starting wherever each label ends.
 
 ```svelte example id="settings-section"
 <script lang="ts">
@@ -150,9 +138,7 @@ controls line up down the section instead of starting wherever each label ends.
 
 ### `SettingsGroup`
 
-A `<details>` one level above `SettingsSection`, for panes with more sections than fit on
-screen. `open` is bindable and `subtitle` shows a short hint — a count, or the active mode
-— that stays readable while collapsed.
+A `<details>` one level above `SettingsSection`, for panes with more sections than fit on screen. `open` is bindable and `subtitle` shows a short hint — a count, or the active mode — that stays readable while collapsed.
 
 ```svelte example id="settings-group"
 <script lang="ts">

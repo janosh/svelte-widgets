@@ -1,8 +1,7 @@
 import { Toggle } from '$lib'
 import type { ComponentProps } from 'svelte'
-import { mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query, press_key } from './index'
+import { click, doc_query, press_key, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Toggle`, () => {
@@ -17,7 +16,7 @@ describe(`Toggle`, () => {
     extra_props: Partial<ComponentProps<typeof Toggle>> = {},
   ) => {
     const props = $state({ checked, ...extra_props })
-    mount(Toggle, { target: document.body, props })
+    render(Toggle, props)
     return () => [get_input().checked, props.checked]
   }
 
@@ -56,7 +55,7 @@ describe(`Toggle`, () => {
   })
 
   test.each([`A`, `Escape`, `Tab`, `Space`])(`doesn't toggle on %s key`, (key) => {
-    mount(Toggle, { target: document.body })
+    render(Toggle, {})
     keydown(key)
     expect(get_input().checked).toBe(false)
   })
@@ -77,10 +76,7 @@ describe(`Toggle`, () => {
     // must still not swap the element out or detach bind:checked
     Reflect.set(input_props, `type`, `radio`)
     Reflect.set(input_props, `checked`, true)
-    mount(Toggle, {
-      target: document.body,
-      props: { class: `custom-class`, style: `margin: 10px;`, input_props },
-    })
+    render(Toggle, { class: `custom-class`, style: `margin: 10px;`, input_props })
     expect(doc_query(`label`).classList.contains(`custom-class`)).toBe(true)
     expect(doc_query(`label`).getAttribute(`style`)).toBe(`margin: 10px;`)
     expect(doc_query(`input`).getAttribute(`style`)).toBe(`width: 20px;`)
@@ -91,22 +87,18 @@ describe(`Toggle`, () => {
   // onchange/onclick forwarding is pinned by the Enter test
   test(`forwards other input_props handlers like onblur`, () => {
     const onblur = vi.fn()
-    mount(Toggle, { target: document.body, props: { input_props: { onblur } } })
+    render(Toggle, { input_props: { onblur } })
     get_input().dispatchEvent(new FocusEvent(`blur`))
     expect(onblur).toHaveBeenCalledOnce()
   })
 
   test(`children snippet receives checked state and updates on toggle`, async () => {
-    mount(TestSnippetHarness, {
-      target: document.body,
-      props: { component: `toggle`, checked: false },
-    })
+    render(TestSnippetHarness, { component: `toggle`, checked: false })
 
     const snippet = doc_query(`[data-testid="toggle-snippet"]`)
     expect(snippet.dataset.checked).toBe(`false`)
 
-    get_input().click()
-    await tick()
+    await click(get_input())
     expect(snippet.dataset.checked).toBe(`true`)
   })
 })

@@ -1,11 +1,11 @@
 import { tick } from 'svelte'
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 import {
-  fresh_key,
   get_input,
   mount_multiselect,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -134,8 +134,7 @@ describe(`virtual_list`, () => {
     const props = $state<MultiSelectProps>({ ...virtual_props, value: [] })
     mount_multiselect(props)
 
-    get_rendered_options()[0].click()
-    await tick()
+    await click(get_rendered_options()[0])
 
     expect(props.value).toEqual([`option 0`])
     expect(doc_query(`ul.selected > li`).textContent?.trim()).toContain(`option 0`)
@@ -146,12 +145,11 @@ describe(`virtual_list`, () => {
     mount_multiselect({ ...virtual_props, select_all_option: true })
     const scroll_into_view = vi.spyOn(HTMLElement.prototype, `scrollIntoView`)
 
-    const input = get_input()
     const n_presses = 25 // active_index 24 lies past the initial window end of 19
-    for (let press_idx = 0; press_idx < n_presses; press_idx++) {
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
-    }
+    await press_sequence(
+      get_input(),
+      ...Array.from({ length: n_presses }, () => `ArrowDown`),
+    )
     await tick() // flush the async scroll adjustment in handle_arrow_navigation
 
     expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(
@@ -160,14 +158,12 @@ describe(`virtual_list`, () => {
     expect(get_rendered_options()[0]?.textContent?.trim()).not.toBe(`option 0`)
     expect(get_rendered_options().length).toBeLessThan(50)
     expect(scroll_into_view.mock.contexts.at(-1)).toBe(doc_query(`ul.options li.active`))
-    scroll_into_view.mockRestore()
   })
 
   test(`fuzzy search filtering still works in virtual mode`, async () => {
     mount_multiselect(virtual_props)
 
-    const input = get_input()
-    await type_search_text(`999`, input)
+    const input = await type_search_text(`999`)
 
     const rendered = get_rendered_options()
     expect(rendered).toHaveLength(1)
@@ -218,17 +214,12 @@ describe(`virtual_list`, () => {
     // first ArrowDown activates flat idx 0, whose ROW is 1 (group 0's header is row 0) —
     // auto-scroll must use the row offset, not the flat index (which would scroll to 0)
     const input = get_input()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(input, `ArrowDown`)
     expect(ul_options.scrollTop).toBe(item_height) // row 1 (header row 0 above it)
 
     // 11 more presses reach flat idx 11 ("option 6", row 13), still inside the window
-    for (let press = 0; press < 11; press++) {
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
-    }
-    const active = doc_query(`ul.options li.active`)
-    expect(active.textContent?.trim()).toBe(`option 6`)
+    await press_sequence(input, ...Array.from({ length: 11 }, () => `ArrowDown`))
+    expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(`option 6`)
   })
 
   test(`rejects virtual grouped lists with sticky headers`, () => {

@@ -1,10 +1,10 @@
 import Accordion from '$lib/Accordion.svelte'
 import type { AccordionItem } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import TestNestedAccordion from './TestNestedAccordion.svelte'
-import { press_key } from './index'
+import { click, press_key, render } from './index'
 
 describe(`Accordion`, () => {
   const items = [
@@ -16,17 +16,16 @@ describe(`Accordion`, () => {
 
   const mount_accordion = (extra: Partial<Props> = {}) => {
     const props = $state({ items, ...extra } as Props)
-    mount(Accordion, { target: document.body, props })
+    render(Accordion, props)
     return props
   }
   const triggers = () => [
     ...document.querySelectorAll<HTMLButtonElement>(`button.accordion-trigger`),
   ]
   const panels = () => [...document.querySelectorAll<HTMLDivElement>(`[role="region"]`)]
-  const click_trigger = async (trigger_idx: number) => {
-    triggers()[trigger_idx].click()
-    await tick()
-  }
+  const expanded = () =>
+    triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))
+  const click_trigger = (trigger_idx: number) => click(triggers()[trigger_idx])
 
   test(`renders heading buttons linked to labeled regions`, async () => {
     const props = mount_accordion({ value: `gamma`, heading_level: 4 })
@@ -55,9 +54,7 @@ describe(`Accordion`, () => {
     props.value = `alpha`
     await tick()
     expect(trigger_nodes.map((trigger) => trigger.id)).toEqual(initial_ids)
-    expect(trigger_nodes.map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual(
-      [`true`, `false`, `false`],
-    )
+    expect(expanded()).toEqual([`true`, `false`, `false`])
   })
 
   test(`single mode controls one open item and honors collapsible`, async () => {
@@ -106,11 +103,7 @@ describe(`Accordion`, () => {
 
     await click_trigger(2)
     expect(props.value).toEqual([`alpha`, `gamma`])
-    expect(triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual([
-      `true`,
-      `false`,
-      `true`,
-    ])
+    expect(expanded()).toEqual([`true`, `false`, `true`])
     expect(on_change).toHaveBeenLastCalledWith([`alpha`, `gamma`])
 
     await click_trigger(0)
@@ -144,11 +137,7 @@ describe(`Accordion`, () => {
       expect(event.defaultPrevented).toBe(true)
       expect(document.activeElement).toBe(triggers()[expected_idx])
     }
-    expect(triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))).toEqual([
-      `true`,
-      `false`,
-      `false`,
-    ])
+    expect(expanded()).toEqual([`true`, `false`, `false`])
 
     const left = press_key(document.activeElement ?? document.body, `ArrowLeft`)
     expect(left.defaultPrevented).toBe(false)
@@ -156,7 +145,7 @@ describe(`Accordion`, () => {
   })
 
   test(`nested accordions keep arrow navigation within the owning root`, () => {
-    mount(TestNestedAccordion, { target: document.body })
+    render(TestNestedAccordion, {})
     const inner_root = document.querySelectorAll(`.accordion`)[1]
     const inner_triggers = [
       ...inner_root.querySelectorAll<HTMLButtonElement>(`button.accordion-trigger`),

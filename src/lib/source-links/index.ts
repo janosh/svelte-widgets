@@ -39,9 +39,8 @@ export function create_source_links(
     // Components are referred to by bare name far more often than by file name
     if (basename.endsWith(`.svelte`)) register(basename.slice(0, -`.svelte`.length), path)
   }
-  for (const [name, location] of Object.entries(symbols)) {
+  for (const [name, location] of Object.entries(symbols))
     if (!location_by_name.has(name)) location_by_name.set(name, location)
-  }
 
   const source_location = (name: string): string | undefined => {
     const mention = name.trim()

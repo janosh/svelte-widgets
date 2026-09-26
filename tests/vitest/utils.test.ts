@@ -29,8 +29,8 @@ import {
   slug_to_title,
   step_focus,
 } from '$lib/utils'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, stub_prop } from './index'
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, stub_props } from './index'
 
 // RFC 4122 v4 pins the version/variant nibbles; the timestamp+counter fallback used when
 // crypto is unavailable only guarantees the generic UUID shape
@@ -139,8 +139,6 @@ describe(`get_style`, () => {
 const [mac, linux] = [`Macintosh; Intel Mac OS X 10_15`, `X11; Linux x86_64`]
 
 describe(`keyboard shortcut parsing`, () => {
-  afterEach(() => Reflect.deleteProperty(globalThis.navigator, `userAgent`))
-
   test.each([
     [`+`, { key: `+`, ctrl: false, shift: false, alt: false, meta: false }],
     [`ctrl++`, { key: `+`, ctrl: true, shift: false, alt: false, meta: false }],
@@ -166,7 +164,7 @@ describe(`keyboard shortcut parsing`, () => {
     [mac, { meta: true, ctrl: false }],
     [linux, { meta: false, ctrl: true }],
   ])(`parse_shortcut resolves mod per platform (%s)`, (user_agent, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent)
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     expect(parse_shortcut(`mod+shift+k`)).toEqual({
       key: `k`,
       shift: true,
@@ -226,7 +224,6 @@ describe(`keyboard shortcut parsing`, () => {
 })
 
 describe(`shortcut rebinding`, () => {
-  afterEach(() => Reflect.deleteProperty(globalThis.navigator, `userAgent`))
   const keydown = (init: KeyboardEventInit) => new KeyboardEvent(`keydown`, init)
 
   // Here meta is literal; mod is the platform's primary modifier.
@@ -249,7 +246,7 @@ describe(`shortcut rebinding`, () => {
     [linux, { key: `__proto__` }, `__proto__`],
     [linux, { key: `Escape` }, `escape`], // bare keys are combos too
   ])(`event_to_combo on %s`, (user_agent, init, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent)
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     const event = keydown(init)
     const combo = event_to_combo(event)
     expect(combo).toBe(expected)
@@ -371,22 +368,20 @@ describe(`shortcut rebinding`, () => {
       [linux, `ctrl+x`, {}],
       [linux, `meta+x`, { copy: `meta+x` }],
     ])(`on %s an override of %j resolves against mod defaults`, (ua, combo, expected) => {
-      stub_prop(globalThis.navigator, `userAgent`, ua)
+      stub_props(globalThis.navigator, { userAgent: ua })
       expect(sanitize_shortcut_overrides({ copy: combo }, defaults)).toEqual(expected)
     })
   })
 })
 
-describe(`is_object`, () => {
-  test.each([
-    [{ key: `value` }, true],
-    [[], true], // arrays are objects in JS
-    [null, false],
-    [`string`, false],
-    [() => {}, false],
-  ])(`is_object(%j) returns %s`, (input, expected) => {
-    expect(is_object(input)).toBe(expected)
-  })
+test.each([
+  [{ key: `value` }, true],
+  [[], true], // arrays are objects in JS
+  [null, false],
+  [`string`, false],
+  [() => {}, false],
+])(`is_object(%j) returns %s`, (input, expected) => {
+  expect(is_object(input)).toBe(expected)
 })
 
 describe(`make_change_detector`, () => {
@@ -418,51 +413,40 @@ describe(`make_change_detector`, () => {
   })
 })
 
-describe(`has_group`, () => {
-  test.each([
-    [{ label: `Test`, group: `Group1` }, true],
-    [{ label: `Test`, group: `` }, true], // empty string is still a string
-    [{ label: `Test` }, false],
-    [{ label: `Test`, group: null }, false],
-    [{ label: `Test`, group: 123 }, false], // group must be string
-    [`plain string`, false],
-  ])(`has_group(%j) returns %s`, (input, expected) => {
-    // @ts-expect-error testing runtime behavior with non-Option types
-    expect(has_group(input)).toBe(expected)
-  })
+test.each([
+  [{ label: `Test`, group: `Group1` }, true],
+  [{ label: `Test`, group: `` }, true], // empty string is still a string
+  [{ label: `Test` }, false],
+  [{ label: `Test`, group: null }, false],
+  [{ label: `Test`, group: 123 }, false], // group must be string
+  [`plain string`, false],
+])(`has_group(%j) returns %s`, (input, expected) => {
+  // @ts-expect-error testing runtime behavior with non-Option types
+  expect(has_group(input)).toBe(expected)
 })
 
-describe(`get_option_key`, () => {
-  const [first_value, second_value] = [{ id: 1 }, { id: 2 }]
-  test.each<[Option, unknown]>([
-    [{ label: `Apple`, value: 1 }, 1],
-    [{ label: `Apple` }, `Apple`], // no value → label
-    [{ label: `Apple`, value: undefined }, `Apple`],
-    [{ label: `Apple`, value: null }, `Apple`],
-    // falsy but defined values are kept (?? only)
-    [{ label: `Apple`, value: 0 }, 0],
-    [{ label: `Apple`, value: `` }, ``],
-    [{ label: `Apple`, value: false }, false],
-    [`Apple`, `Apple`], // primitive option is its own key
-    [0, 0],
-    [{ label: `Item`, value: first_value }, first_value],
-    [{ label: `Item`, value: second_value }, second_value],
-  ])(`get_option_key(%j) returns %j`, (input, expected) => {
-    // Keys are the actual objects, not stringified
-    expect(get_option_key(input)).toBe(expected)
-  })
+const [first_value, second_value] = [{ id: 1 }, { id: 2 }]
+test.each<[Option, unknown]>([
+  [{ label: `Apple`, value: 1 }, 1],
+  [{ label: `Apple` }, `Apple`], // no value → label
+  [{ label: `Apple`, value: undefined }, `Apple`],
+  [{ label: `Apple`, value: null }, `Apple`],
+  // falsy but defined values are kept (?? only)
+  [{ label: `Apple`, value: 0 }, 0],
+  [{ label: `Apple`, value: `` }, ``],
+  [{ label: `Apple`, value: false }, false],
+  [`Apple`, `Apple`], // primitive option is its own key
+  [0, 0],
+  [{ label: `Item`, value: first_value }, first_value],
+  [{ label: `Item`, value: second_value }, second_value],
+])(`get_option_key(%j) returns %j`, (input, expected) => {
+  // Keys are the actual objects, not stringified
+  expect(get_option_key(input)).toBe(expected)
 })
 
 describe(`compute_position`, () => {
-  const viewport_cleanups: (() => void)[] = []
   const viewport = (width: number, height: number) =>
-    viewport_cleanups.push(
-      stub_prop(globalThis, `innerWidth`, width),
-      stub_prop(globalThis, `innerHeight`, height),
-    )
-  afterEach(() => {
-    for (const cleanup of viewport_cleanups.splice(0).toReversed()) cleanup()
-  })
+    stub_props(globalThis, { innerWidth: width, innerHeight: height })
   const rect = (top: number, height: number, left = 100, width = 200) => ({
     top,
     left,
@@ -714,53 +698,51 @@ describe(`chain_handlers`, () => {
   })
 })
 
-describe(`fuzzy_match_indices`, () => {
-  // Indices must stay offsets into the original target even when matching runs against
-  // a whitespace-normalized copy (highlight spans depend on that).
-  test.each([
-    [`abc`, `abc`, [0, 1, 2]],
-    [`ac`, `abc`, [0, 2]], // subsequence, not substring
-    [`tageoo`, `tasks/geo-opt`, [0, 1, 6, 7, 8, 10]],
-    [`AB`, `ab`, [0, 1]], // case-insensitive both ways
-    [`ab`, `AB`, [0, 1]],
-    [`ba`, `abc`, null], // order matters
-    [`abcd`, `abc`, null],
-    [``, `abc`, []], // empty search matches with no indices
-    [``, ``, []],
-    [`a`, ``, null],
-    [`aa`, `aba`, [0, 2]], // repeats consume distinct positions
-    [`aa`, `ab`, null],
-    [`hello`, `h-e-l-l-o`, [0, 2, 4, 6, 8]],
-    [`hello`, `h-e-l-o`, null],
-    [`abc`, `a-b-c`, [0, 2, 4]],
-    [`aaa`, `banana`, [1, 3, 5]],
-    [`aaaa`, `banana`, null],
-    [`test`, `testing`, [0, 1, 2, 3]],
-    [`test`, `best`, null],
-    [`@`, `@user`, [0]],
-    [`#`, `#hashtag`, [0]],
-    [`/`, `path/to/file`, [4]],
-    [`123`, `abc123def`, [3, 4, 5]],
-    [`ñ`, `niño`, [2]],
-    [`x`, `İx`, [1]], // lowercasing İ grows to i + combining dot; x stays at source 1
-    [`ΟΣ`, `İΟΣ`, [1, 2]], // preserve context-sensitive final sigma after expansion
-    [`😀x`, `😁😀x`, [2, 3, 4]], // never borrow another emoji's leading surrogate
-    [`😀`, `\u{1F601}\u{1FA00}`, null], // matching halves exist, but no whole emoji does
-    [`😀`, `İ😀`, [1, 2]], // offsets remain UTF-16 units after a case expansion
-    [`i\u0307`, `İ`, [0, 0]], // a boolean match must preserve case-fold expansion too
-    [`😀😀`, `😀`, null], // each whole code point must consume a distinct occurrence
-    [`中文`, `中文测试`, [0, 1]],
-    [`a  b`, `a b`, [0, 1, 2]], // a run in the search collapses to a single space
-    [`a b`, `a\tb`, [0, 1, 2]], // any target whitespace reads as a plain space
-    [`a\tb`, `a b`, [0, 1, 2]], // ...and so does any search whitespace
-    [`a b`, `a  b`, [0, 1, 3]], // target runs are not collapsed, so `b` stays at 3
-    [`a b`, `a\u00A0b`, [0, 1, 2]],
-    [`a b c`, `a\t\nb  c`, [0, 1, 3, 4, 6]],
-    [`form submit`, `form\n submit`, [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11]],
-  ])(`(%j, %j)`, (search, target, expected) => {
-    expect(fuzzy_match_indices(search, target)).toEqual(expected)
-    expect(fuzzy_match(search, target)).toBe(expected !== null)
-  })
+// Indices must stay offsets into the original target even when matching runs against
+// a whitespace-normalized copy (highlight spans depend on that).
+test.each([
+  [`abc`, `abc`, [0, 1, 2]],
+  [`ac`, `abc`, [0, 2]], // subsequence, not substring
+  [`tageoo`, `tasks/geo-opt`, [0, 1, 6, 7, 8, 10]],
+  [`AB`, `ab`, [0, 1]], // case-insensitive both ways
+  [`ab`, `AB`, [0, 1]],
+  [`ba`, `abc`, null], // order matters
+  [`abcd`, `abc`, null],
+  [``, `abc`, []], // empty search matches with no indices
+  [``, ``, []],
+  [`a`, ``, null],
+  [`aa`, `aba`, [0, 2]], // repeats consume distinct positions
+  [`aa`, `ab`, null],
+  [`hello`, `h-e-l-l-o`, [0, 2, 4, 6, 8]],
+  [`hello`, `h-e-l-o`, null],
+  [`abc`, `a-b-c`, [0, 2, 4]],
+  [`aaa`, `banana`, [1, 3, 5]],
+  [`aaaa`, `banana`, null],
+  [`test`, `testing`, [0, 1, 2, 3]],
+  [`test`, `best`, null],
+  [`@`, `@user`, [0]],
+  [`#`, `#hashtag`, [0]],
+  [`/`, `path/to/file`, [4]],
+  [`123`, `abc123def`, [3, 4, 5]],
+  [`ñ`, `niño`, [2]],
+  [`x`, `İx`, [1]], // lowercasing İ grows to i + combining dot; x stays at source 1
+  [`ΟΣ`, `İΟΣ`, [1, 2]], // preserve context-sensitive final sigma after expansion
+  [`😀x`, `😁😀x`, [2, 3, 4]], // never borrow another emoji's leading surrogate
+  [`😀`, `\u{1F601}\u{1FA00}`, null], // matching halves exist, but no whole emoji does
+  [`😀`, `İ😀`, [1, 2]], // offsets remain UTF-16 units after a case expansion
+  [`i\u0307`, `İ`, [0, 0]], // a boolean match must preserve case-fold expansion too
+  [`😀😀`, `😀`, null], // each whole code point must consume a distinct occurrence
+  [`中文`, `中文测试`, [0, 1]],
+  [`a  b`, `a b`, [0, 1, 2]], // a run in the search collapses to a single space
+  [`a b`, `a\tb`, [0, 1, 2]], // any target whitespace reads as a plain space
+  [`a\tb`, `a b`, [0, 1, 2]], // ...and so does any search whitespace
+  [`a b`, `a  b`, [0, 1, 3]], // target runs are not collapsed, so `b` stays at 3
+  [`a b`, `a\u00A0b`, [0, 1, 2]],
+  [`a b c`, `a\t\nb  c`, [0, 1, 3, 4, 6]],
+  [`form submit`, `form\n submit`, [0, 1, 2, 3, 4, 6, 7, 8, 9, 10, 11]],
+])(`fuzzy_match_indices(%j, %j)`, (search, target, expected) => {
+  expect(fuzzy_match_indices(search, target)).toEqual(expected)
+  expect(fuzzy_match(search, target)).toBe(expected !== null)
 })
 
 describe(`is_editable_event_target`, () => {
@@ -795,65 +777,59 @@ describe(`is_editable_event_target`, () => {
   })
 })
 
-describe(`is_modifier_chord`, () => {
-  // Shift is excluded on purpose: it types capitals, so `shift+a` is still typing
-  test.each([
-    [{ altKey: true }, true],
-    [{ ctrlKey: true }, true],
-    [{ metaKey: true }, true],
-    [{ shiftKey: true }, false],
-    [{}, false],
-    [{ shiftKey: true, ctrlKey: true }, true],
-  ])(`%j -> %s`, (init, expected) => {
-    expect(is_modifier_chord(new KeyboardEvent(`keydown`, init))).toBe(expected)
-  })
+// Shift is excluded on purpose: it types capitals, so `shift+a` is still typing
+test.each([
+  [{ altKey: true }, true],
+  [{ ctrlKey: true }, true],
+  [{ metaKey: true }, true],
+  [{ shiftKey: true }, false],
+  [{}, false],
+  [{ shiftKey: true, ctrlKey: true }, true],
+])(`is_modifier_chord(%j) -> %s`, (init, expected) => {
+  expect(is_modifier_chord(new KeyboardEvent(`keydown`, init))).toBe(expected)
 })
 
-describe(`format_cmd_metadata`, () => {
-  test.each([
-    [[`a`, `b`], `a · b`],
-    [[], ``],
-    [`plain`, `plain`],
-    [undefined, ``],
-  ])(`%j -> %j`, (metadata, expected) => {
-    expect(format_cmd_metadata(metadata)).toBe(expected)
-  })
+test.each([
+  [[`a`, `b`], `a · b`],
+  [[], ``],
+  [`plain`, `plain`],
+  [undefined, ``],
+])(`format_cmd_metadata(%j) -> %j`, (metadata, expected) => {
+  expect(format_cmd_metadata(metadata)).toBe(expected)
 })
 
-describe(`create_term_matcher`, () => {
-  test.each([
-    // every whitespace-separated term must appear, in any order and case
-    [`Data Sets`, `sets data`, {}, true],
-    [`Data Sets`, `data  missing`, {}, false],
-    [`anything`, `   `, {}, true],
-    [`toggle theme`, `tgtm`, {}, false],
-    // a plain term ignores diacritics (NFC or NFD text); an accented term requires them
-    [`Café au lait`, `cafe`, {}, true],
-    // an accented fuzzy term can't borrow its mark from a later letter
-    [`cafe á`, `café`, { fuzzy: true }, false],
-    // dakuten and Indic vowel signs change the letter, so they are not ignored
-    [`が`, `か`, {}, false],
-    [`किम`, `कम`, {}, false],
-    // NFC can't compose the nukta, so a hit must not stop before it (exact or fuzzy)
-    [`क़`, `क`, {}, false],
-    [`क़`, `क`, { fuzzy: true }, false],
-    [`क़क`, `क`, {}, true],
-    [`क़`, `क़`, { fuzzy: true }, true],
-    [`Cafe\u0301 au lait`, `cafe`, {}, true],
-    [`Crème Brûlée`, `brulee creme`, {}, true],
-    [`cafe au lait`, `café`, {}, false],
-    [`Cafe\u0301`, `café`, {}, true],
-    [`crème brulee`, `crème brûlée`, {}, false],
-    [`résumé`, `rsm`, { fuzzy: true }, true],
-    // final sigma folds to medial
-    [`ΟΔΟΣ`, `οδοσ`, {}, true],
-    // split: false (MultiSelect options) matches the whole query, whitespace collapsed
-    [`Crème  Brûlée`, `creme b`, { split: false }, true],
-    [`Data Sets`, `sets data`, { split: false }, false],
-    [`Crème\tBrûlée`, `cm  bl`, { fuzzy: true, split: false }, true],
-  ])(`%j matches %j (%j) -> %s`, (text, query, options, expected) => {
-    expect(create_term_matcher(query, options)(text)).toBe(expected)
-  })
+test.each([
+  // every whitespace-separated term must appear, in any order and case
+  [`Data Sets`, `sets data`, {}, true],
+  [`Data Sets`, `data  missing`, {}, false],
+  [`anything`, `   `, {}, true],
+  [`toggle theme`, `tgtm`, {}, false],
+  // a plain term ignores diacritics (NFC or NFD text); an accented term requires them
+  [`Café au lait`, `cafe`, {}, true],
+  // an accented fuzzy term can't borrow its mark from a later letter
+  [`cafe á`, `café`, { fuzzy: true }, false],
+  // dakuten and Indic vowel signs change the letter, so they are not ignored
+  [`が`, `か`, {}, false],
+  [`किम`, `कम`, {}, false],
+  // NFC can't compose the nukta, so a hit must not stop before it (exact or fuzzy)
+  [`क़`, `क`, {}, false],
+  [`क़`, `क`, { fuzzy: true }, false],
+  [`क़क`, `क`, {}, true],
+  [`क़`, `क़`, { fuzzy: true }, true],
+  [`Cafe\u0301 au lait`, `cafe`, {}, true],
+  [`Crème Brûlée`, `brulee creme`, {}, true],
+  [`cafe au lait`, `café`, {}, false],
+  [`Cafe\u0301`, `café`, {}, true],
+  [`crème brulee`, `crème brûlée`, {}, false],
+  [`résumé`, `rsm`, { fuzzy: true }, true],
+  // final sigma folds to medial
+  [`ΟΔΟΣ`, `οδοσ`, {}, true],
+  // split: false (MultiSelect options) matches the whole query, whitespace collapsed
+  [`Crème  Brûlée`, `creme b`, { split: false }, true],
+  [`Data Sets`, `sets data`, { split: false }, false],
+  [`Crème\tBrûlée`, `cm  bl`, { fuzzy: true, split: false }, true],
+])(`create_term_matcher: %j matches %j (%j) -> %s`, (text, query, options, expected) => {
+  expect(create_term_matcher(query, options)(text)).toBe(expected)
 })
 
 describe(`create_cmd_action_filter`, () => {

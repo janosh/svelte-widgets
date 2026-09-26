@@ -1,19 +1,14 @@
 ## ButtonGroup
 
-The n-way sibling of [`Toggle`](extras#toggle): a row of buttons over a fixed set of
-options, either as a segmented control (pick one) or a filter row (pick any).
+The n-way sibling of [`Toggle`](extras#toggle): a row of buttons over a fixed set of options, either as a segmented control (pick one) or a filter row (pick any).
 
 Pass an array of strings or objects with a required `value` and optional `label`, `tooltip`, `icon`, `disabled`, and `loading` fields.
 
 ### Single select
 
-`mode` defaults to `"single"`, so the group is a `radiogroup` of `role="radio"`
-buttons: one tab stop for the whole group, arrow keys walk it (wrapping at both ends,
-skipping disabled options) and carry the selection with focus, Home and End jump to
-either end.
+`mode` defaults to `"single"`, so the group is a `radiogroup` of `role="radio"` buttons: one tab stop for the whole group, arrow keys walk it (wrapping at both ends, skipping disabled options) and carry the selection with focus, Home and End jump to either end.
 
-`sort_order` is opt-in — leave it `null` (the default) and no arrow renders.
-Style the arrow with `sort_button_props` (it sits outside the radiogroup, so host `style` does not reach it).
+`sort_order` is opt-in — leave it `null` (the default) and no arrow renders. Style the arrow with `sort_button_props` (it sits outside the radiogroup, so host `style` does not reach it).
 
 ```svelte example id="button-group-single"
 <script lang="ts">
@@ -49,13 +44,9 @@ Style the arrow with `sort_button_props` (it sits outside the radiogroup, so hos
 
 ### Multi-select
 
-`mode="multiple"` swaps the semantics rather than just the bookkeeping: the container becomes
-a plain `group` of independent toggle buttons carrying `aria-pressed`, each its own tab
-stop, since there is nothing mutually exclusive left for a radio group to announce.
-`value` is an array here.
+`mode="multiple"` swaps the semantics rather than just the bookkeeping: the container becomes a plain `group` of independent toggle buttons carrying `aria-pressed`, each its own tab stop, since there is nothing mutually exclusive left for a radio group to announce. `value` is an array here.
 
-The `option` snippet replaces a button's contents, `on_change` fires with the new
-selection, and every color is a `--btn-group-*` custom property.
+The `option` snippet replaces a button's contents, `on_change` fires with the new selection, and every color is a `--btn-group-*` custom property.
 
 ```svelte example id="button-group-multi"
 <script lang="ts">
@@ -90,36 +81,16 @@ selection, and every color is a `--btn-group-*` custom property.
 <p>filters: {active.length ? active.join(`, `) : `none`}</p>
 ```
 
-`option_suffix` renders as a **sibling** instead, wrapped with the button in a `.option`
-span, as shown by the counts above. Prefer non-interactive suffixes in single-select
-`radiogroup` mode; a focusable suffix adds a non-radio tab stop.
-Without `option_suffix`, buttons remain direct `.options` children, preserving
-`.options > button` selectors.
+`option_suffix` renders as a **sibling** instead, wrapped with the button in a `.option` span, as shown by the counts above. Prefer non-interactive suffixes in single-select `radiogroup` mode; a focusable suffix adds a non-radio tab stop. Without `option_suffix`, buttons remain direct `.options` children, preserving `.options > button` selectors.
 
 ### Styling
 
-Everything themable hangs off `--btn-group-*`: `display`, `gap`, `padding`, `bg`,
-`border`, `radius` and `justify-content` on the container, and `btn-padding`,
-`btn-radius`, `btn-bg`, `btn-color`, `btn-border`, `btn-gap`, `btn-cursor`,
-`btn-transition`, `btn-hover-bg`, `btn-hover-color`, `btn-hover-transform`,
-`btn-active-bg`, `btn-active-color`, `btn-active-border-color`, `btn-disabled-opacity`,
-`btn-font-family`, `btn-font-size` on the buttons. When `option_suffix` wraps an option,
-`--btn-group-option-btn-padding-right` (default `0.5ex`) tightens the button's right
-padding so the suffix sits in that gap. The component lays its buttons out in a wrapping
-flex row and takes no position of its own, so placing it is the call site's job. Pass
-`style` (or any other host attribute) through `...rest` on the root.
+Everything themable hangs off `--btn-group-*`: `display`, `gap`, `padding`, `bg`, `border`, `radius` and `justify-content` on the container, and `btn-padding`, `btn-radius`, `btn-bg`, `btn-color`, `btn-border`, `btn-gap`, `btn-cursor`, `btn-transition`, `btn-hover-bg`, `btn-hover-color`, `btn-hover-transform`, `btn-active-bg`, `btn-active-color`, `btn-active-border-color`, `btn-disabled-opacity`, `btn-font-family`, `btn-font-size` on the buttons. When `option_suffix` wraps an option, `--btn-group-option-btn-padding-right` (default `0.5ex`) tightens the button's right padding so the suffix sits in that gap. The component lays its buttons out in a wrapping flex row and takes no position of its own, so placing it is the call site's job. Pass `style` (or any other host attribute) through `...rest` on the root.
 
-Two only pay off together: a hover lift needs `btn-hover-transform` _and_
-`btn-transition`, since neither animates alone. `btn-hover-color` falls back to
-`btn-color`, so setting only the resting color keeps it through hover.
+Two only pay off together: a hover lift needs `btn-hover-transform` _and_ `btn-transition`, since neither animates alone. `btn-hover-color` falls back to `btn-color`, so setting only the resting color keeps it through hover.
 
-Font size needs no property of its own — the buttons resolve theirs to `inherit`, so
-`style="font-size: 1.2em"` on the group reaches them. Weight and style are the exception:
-they are declared nowhere, so your own `button {}` rule still wins, which also puts them
-out of reach of inheritance, since the user-agent `button` rule sets them directly. Style
-the buttons from your own stylesheet to change either.
+Font size needs no property of its own — the buttons resolve theirs to `inherit`, so `style="font-size: 1.2em"` on the group reaches them. Weight and style are the exception: they are declared nowhere, so your own `button {}` rule still wins, which also puts them out of reach of inheritance, since the user-agent `button` rule sets them directly. Style the buttons from your own stylesheet to change either.
 
-The root is a `<div>`. Pass `as="span"` where a div would be invalid, such as inside a
-heading or a paragraph.
+The root is a `<div>`. Pass `as="span"` where a div would be invalid, such as inside a heading or a paragraph.
 
 Per-option tooltips come from each option's `tooltip` field. `tooltip_options` forwards everything else to the [`tooltip`](attachments/tooltip) attachment. Tooltips render plain text. Use `Popover` for formatted content or interactive controls.

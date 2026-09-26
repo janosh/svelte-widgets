@@ -3,11 +3,23 @@
   import Wiggle from 'svelte-widgets/Wiggle.svelte'
 
   let wiggle = $state(false)
-  let angle = $state(20)
-  let scale = $state(1.2)
-  let [dx, dy] = $state([10, 10])
-  let duration_ms = $state(200)
-  let [stiffness, damping] = $state([0.05, 0.1])
+  // [param, initial, min, max, step]; fractional steps show two decimals
+  const sliders = [
+    [`angle`, 20, 0, 45, 1],
+    [`scale`, 1.2, 1, 2, 0.05],
+    [`dx`, 10, 0, 50, 1],
+    [`dy`, 10, 0, 50, 1],
+    [`duration_ms`, 200, 50, 1000, 50],
+    [`stiffness`, 0.05, 0.01, 0.5, 0.01],
+    [`damping`, 0.1, 0.01, 1, 0.01],
+  ] as const
+  // keyed by the slider names, so a typo like params.agle fails type-checking
+  const params = $state(
+    Object.fromEntries(sliders.map(([param, initial]) => [param, initial])) as Record<
+      (typeof sliders)[number][0],
+      number
+    >,
+  )
 </script>
 
 <Heading level={2} id="wiggle">Wiggle</Heading>
@@ -23,12 +35,12 @@
 <button type="button" class="demo" onclick={() => (wiggle = true)}>
   <Wiggle
     bind:wiggle
-    {angle}
-    {scale}
-    {dx}
-    {dy}
-    {duration_ms}
-    spring_options={{ stiffness, damping }}
+    angle={params.angle}
+    scale={params.scale}
+    dx={params.dx}
+    dy={params.dy}
+    duration_ms={params.duration_ms}
+    spring_options={{ stiffness: params.stiffness, damping: params.damping }}
     style="display: inline-block; padding: 0.5em 1em; background: var(--surface); border-radius: 6pt"
   >
     🎯 Click to wiggle!
@@ -36,34 +48,12 @@
 </button>
 
 <div class="controls">
-  <label>
-    angle: {angle}
-    <input type="range" min="0" max="45" step="1" bind:value={angle} />
-  </label>
-  <label>
-    scale: {scale.toFixed(2)}
-    <input type="range" min="1" max="2" step="0.05" bind:value={scale} />
-  </label>
-  <label>
-    dx: {dx}
-    <input type="range" min="0" max="50" step="1" bind:value={dx} />
-  </label>
-  <label>
-    dy: {dy}
-    <input type="range" min="0" max="50" step="1" bind:value={dy} />
-  </label>
-  <label>
-    duration_ms: {duration_ms}
-    <input type="range" min="50" max="1000" step="50" bind:value={duration_ms} />
-  </label>
-  <label>
-    stiffness: {stiffness.toFixed(2)}
-    <input type="range" min="0.01" max="0.5" step="0.01" bind:value={stiffness} />
-  </label>
-  <label>
-    damping: {damping.toFixed(2)}
-    <input type="range" min="0.01" max="1" step="0.01" bind:value={damping} />
-  </label>
+  {#each sliders as [param, , min, max, step] (param)}
+    <label>
+      {param}: {step < 1 ? params[param].toFixed(2) : params[param]}
+      <input type="range" {min} {max} {step} bind:value={params[param]} />
+    </label>
+  {/each}
 </div>
 
 <style>

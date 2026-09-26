@@ -4,18 +4,15 @@ import button_group_source from '$lib/ButtonGroup.svelte?raw'
 import type { ButtonGroupOption } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
-import { afterEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, hover as dispatch_hover, render, press_key } from './index'
+import { describe, expect, test, vi } from 'vitest'
+import { click, doc_query, hover as dispatch_hover, render, press_key } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
   type Option = ButtonGroupOption
 
-  afterEach(() => void vi.useRealTimers())
-
   const mount_group = (props: Props) => {
-    const full_props = props as ComponentProps<typeof ButtonGroup>
-    render(ButtonGroup, full_props)
+    render(ButtonGroup, props as ComponentProps<typeof ButtonGroup>)
     // `[data-value]` so an option_suffix rendering its own button doesn't join the list
     return [
       ...document.querySelectorAll<HTMLButtonElement>(`.options button[data-value]`),
@@ -35,12 +32,6 @@ describe(`ButtonGroup`, () => {
   ]
   // happy-dom drops nested CSS; inspect source for the styling contract.
   const styles = button_group_source.slice(button_group_source.indexOf(`<style>`))
-  const remove_button = createRawSnippet<[{ option: { value: string } }]>(
-    (get_params) => ({
-      render: () =>
-        `<button type="button" data-remove="${get_params().option.value}">x</button>`,
-    }),
-  )
   const info_link = createRawSnippet<[{ option: { value: string }; selected: boolean }]>(
     (get_params) => ({
       render: () => {
@@ -113,13 +104,11 @@ describe(`ButtonGroup`, () => {
     const on_change = vi.fn()
     const buttons = mount_group({ options: letters, value: `alpha`, on_change })
 
-    buttons[2].click()
-    await tick()
+    await click(buttons[2])
     expect(on_change.mock.calls).toEqual([[`gamma`]])
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
 
-    buttons[2].click() // re-picking the checked radio is a no-op, not a deselect
-    await tick()
+    await click(buttons[2]) // re-picking the checked radio is a no-op, not a deselect
     expect(on_change).toHaveBeenCalledOnce()
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
   })
@@ -129,14 +118,11 @@ describe(`ButtonGroup`, () => {
     const buttons = mount_group({ options: letters, mode: `multiple`, on_change })
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `false`])
 
-    buttons[0].click()
-    await tick()
-    buttons[2].click()
-    await tick()
+    await click(buttons[0])
+    await click(buttons[2])
     expect(buttons.map(checked_state)).toEqual([`true`, `false`, `true`])
 
-    buttons[0].click() // second press removes it, leaving the other selection alone
-    await tick()
+    await click(buttons[0]) // second press removes it, leaving the other selection alone
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
     expect(on_change.mock.calls).toEqual([[[`alpha`]], [[`alpha`, `gamma`]], [[`gamma`]]])
 
@@ -196,8 +182,7 @@ describe(`ButtonGroup`, () => {
     ]
     const buttons = mount_group({ options, value: `alpha`, on_change })
     expect(buttons.map((button) => button.disabled)).toEqual([false, true, false])
-    buttons[1].click()
-    await tick()
+    await click(buttons[1])
     expect(on_change).not.toHaveBeenCalled()
     expect(buttons.map(checked_state)).toEqual([`true`, `false`, `false`])
 
@@ -282,13 +267,11 @@ describe(`ButtonGroup`, () => {
     expect(arrow.getAttribute(`style`)).toBe(`font-size: 1.2em;`)
     expect(arrow.type).toBe(`button`)
 
-    arrow.click()
-    await tick()
+    await click(arrow)
     expect(arrow_state()).toEqual([`↓`, descending])
     expect(onclick).toHaveBeenCalledOnce()
 
-    arrow.click()
-    await tick()
+    await click(arrow)
     expect(arrow_state()).toEqual([`↑`, ascending])
     expect(onclick).toHaveBeenCalledTimes(2)
   })
@@ -399,7 +382,12 @@ describe(`ButtonGroup`, () => {
   // A broad button selector would incorrectly include suffix buttons in navigation.
   test(`suffix buttons stay out of arrow key navigation`, async () => {
     const on_change = vi.fn()
-    const option_suffix = remove_button
+    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
+      (get_params) => ({
+        render: () =>
+          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
+      }),
+    )
     const buttons = mount_group({
       options: letters,
       value: `alpha`,

@@ -1,7 +1,7 @@
 import { ActionButton, type ActionState } from '$lib'
-import { mount, tick, type ComponentProps, unmount } from 'svelte'
-import { afterEach, expect, test, vi } from 'vitest'
-import { doc_query } from './index'
+import { tick, type ComponentProps } from 'svelte'
+import { expect, test, vi } from 'vitest'
+import { click, doc_query, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const labels = {
@@ -11,8 +11,6 @@ const labels = {
   error: `Failed`,
 } satisfies Record<ActionState, string>
 
-afterEach(() => vi.useRealTimers())
-
 const flush_action = async (): Promise<void> => {
   await Promise.resolve()
   await tick()
@@ -21,10 +19,7 @@ const flush_action = async (): Promise<void> => {
 const mount_action_button = (
   props: Partial<ComponentProps<typeof ActionButton>>,
 ): HTMLButtonElement => {
-  mount(ActionButton, {
-    target: document.body,
-    props: { action: () => `saved`, labels, reset_ms: 0, ...props },
-  })
+  render(ActionButton, { action: () => `saved`, labels, reset_ms: 0, ...props })
   return doc_query(`[data-sms-action]`)
 }
 
@@ -48,18 +43,12 @@ test(`reserves width and renders every state label as text`, () => {
 
 test(`blocks duplicate actions while pending and resets after success`, async () => {
   vi.useFakeTimers()
-  let resolve_action: ((result: string) => void) | undefined
-  const action = vi.fn(
-    () =>
-      new Promise<string>((resolve) => {
-        resolve_action = resolve
-      }),
-  )
+  const pending = Promise.withResolvers<string>()
+  const action = vi.fn(() => pending.promise)
   const on_success = vi.fn()
   const button = mount_action_button({ action, reset_ms: 100, on_success })
 
-  button.click()
-  await tick()
+  await click(button)
   expect(button.dataset.state).toBe(`pending`)
   expect(button.disabled).toBe(true)
   expect(button.getAttribute(`aria-busy`)).toBe(`true`)
@@ -68,8 +57,7 @@ test(`blocks duplicate actions while pending and resets after success`, async ()
   button.click()
   expect(action).toHaveBeenCalledOnce()
 
-  if (!resolve_action) throw new Error(`Action promise resolver was not initialized`)
-  resolve_action(`saved-result`)
+  pending.resolve(`saved-result`)
   await flush_action()
   expect(button.dataset.state).toBe(`success`)
   expect(button.disabled).toBe(false)
@@ -82,16 +70,16 @@ test(`blocks duplicate actions while pending and resets after success`, async ()
   expect(button.dataset.state).toBe(`ready`)
 })
 
-const click = () => new MouseEvent(`click`, { bubbles: true, cancelable: true })
+const mouse_click = () => new MouseEvent(`click`, { bubbles: true, cancelable: true })
 const keydown = (key: string) => () =>
   new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true })
 
 // custom elements never follow href; disabled ones also swallow consumer handlers
 test.each([
-  [`click`, click, true, [0, 0]],
+  [`click`, mouse_click, true, [0, 0]],
   [`Enter`, keydown(`Enter`), true, [0, 0]],
   [`Space`, keydown(` `), true, [0, 0]],
-  [`click`, click, false, [1, 0]],
+  [`click`, mouse_click, false, [1, 0]],
   [`Enter`, keydown(`Enter`), false, [0, 1]],
 ] as const)(
   `custom element %s with disabled=%s`,
@@ -149,19 +137,11 @@ test(`keeps success state when its success callback throws`, async () => {
 
 test(`does not schedule a reset after its success callback unmounts it`, async () => {
   vi.useFakeTimers()
-  type MountedActionButton = Parameters<typeof unmount>[0]
-  let component: MountedActionButton | undefined
-  component = mount(ActionButton, {
-    target: document.body,
-    props: {
-      action: () => `saved`,
-      labels,
-      reset_ms: 100,
-      on_success: async () => {
-        if (!component) throw new Error(`ActionButton component was not mounted`)
-        await unmount(component)
-      },
-    },
+  const unmount_button: () => Promise<void> = render(ActionButton, {
+    action: () => `saved`,
+    labels,
+    reset_ms: 100,
+    on_success: () => unmount_button(),
   })
 
   doc_query<HTMLButtonElement>(`[data-sms-action]`).click()
@@ -171,13 +151,10 @@ test(`does not schedule a reset after its success callback unmounts it`, async (
 })
 
 test(`children receive the generic action result`, async () => {
-  mount(TestSnippetHarness, {
-    target: document.body,
-    props: {
-      component: `action-button`,
-      action: () => `saved-result`,
-      reset_ms: 0,
-    },
+  render(TestSnippetHarness, {
+    component: `action-button`,
+    action: () => `saved-result`,
+    reset_ms: 0,
   })
   const button = doc_query<HTMLButtonElement>(`[data-sms-action]`)
 

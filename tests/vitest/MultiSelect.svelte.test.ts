@@ -1,14 +1,17 @@
 import { readFileSync } from 'node:fs'
-import { tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { tick, type ComponentProps } from 'svelte'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type { Option, OptionStyle } from '$lib'
 import type { MultiSelectProps } from '$lib/types'
 import { get_label } from '$lib/utils'
 import {
+  click,
+  create_element,
   doc_query,
   drag_event,
   press_key,
   stub_css_highlights,
+  stub_props,
   type Test2WayBindProps,
 } from './index'
 import Test2WayBind from './Test2WayBind.svelte'
@@ -22,8 +25,14 @@ import {
   mount_component as mount,
   mount_multiselect,
   normalized_text,
+  press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
+
+const mount_snippets = (props: ComponentProps<typeof TestMultiSelectSnippets>) =>
+  mount(TestMultiSelectSnippets, { target: document.body, props })
+const mount_2way = (props: Test2WayBindProps) =>
+  mount(Test2WayBind, { target: document.body, props })
 
 test(`2-way binding preserves a valid initial auto-active index`, async () => {
   const props = $state<MultiSelectProps>({
@@ -94,38 +103,24 @@ test(`default_disabled_title and custom per-option disabled titles are applied c
 })
 
 test(`applies DOM attributes to input node`, () => {
-  const search_text = `1`
-  const id = `fancy-id`
-  const autocomplete = `on`
-  const name = `fancy-name`
-  const placeholder = `fancy placeholder`
-  const inputmode = `tel`
-  const pattern = `(reg)[ex]`
+  // key order matches the DOM readback below
+  const attrs = {
+    search_text: `1`,
+    id: `fancy-id`,
+    autocomplete: `on`,
+    placeholder: `fancy placeholder`,
+    name: `fancy-name`,
+    inputmode: `tel`,
+    pattern: `(reg)[ex]`,
+  } as const
+  mount_multiselect({ options: [1, 2, 3], ...attrs })
 
-  mount_multiselect({
-    options: [1, 2, 3],
-    search_text,
-    id,
-    autocomplete,
-    placeholder,
-    name,
-    inputmode,
-    pattern,
-  })
-
-  const lis = document.querySelectorAll(`ul.options > li`)
-  const input = get_input()
-  const form_input = doc_query<HTMLInputElement>(`input.form-control`)
-
-  expect(lis).toHaveLength(1)
-
-  expect(input?.value).toBe(search_text)
-  expect(input?.id).toBe(id)
-  expect(input?.autocomplete).toBe(autocomplete)
-  expect(input?.placeholder).toBe(placeholder)
-  expect(form_input?.name).toBe(name)
-  expect(input?.inputMode).toBe(inputmode)
-  expect(input?.pattern).toBe(pattern)
+  expect(document.querySelectorAll(`ul.options > li`)).toHaveLength(1)
+  const { value, id, autocomplete, placeholder, inputMode, pattern } = get_input()
+  const { name } = doc_query<HTMLInputElement>(`input.form-control`)
+  expect([value, id, autocomplete, placeholder, name, inputMode, pattern]).toEqual(
+    Object.values(attrs),
+  )
 })
 
 // https://github.com/janosh/svelte-widgets/issues/354
@@ -141,8 +136,7 @@ test.each([
     const input = get_input()
     expect(input.placeholder).toBe(`Pick a number`)
 
-    doc_query(`ul.options li`).click()
-    await tick()
+    await click(`ul.options li`)
 
     expect(input.placeholder).toBe(expected_after)
   },
@@ -186,39 +180,23 @@ test(`applies custom classes for styling through CSS frameworks`, async () => {
   }
 })
 
-describe(`bubbles <input> node DOM events`, () => {
-  const default_options = [1, 2, 3]
+test.each([
+  // click, keyup and mouse events are covered by the handler-forwarding table below
+  [`blur`, FocusEvent],
+  [`focus`, FocusEvent],
+  [`keydown`, KeyboardEvent],
+])(`bubbles <input> node "%s" event`, async (name, event_class) => {
+  const spy = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], [`on${name}`]: spy })
 
-  test.each([
-    // click, keyup and mouse events are covered by the handler-forwarding table below
-    [`blur`, new FocusEvent(`blur`, { bubbles: true })],
-    [`focus`, new FocusEvent(`focus`, { bubbles: true })],
-    [`keydown`, fresh_key(`Enter`)],
-  ])(`bubbles <input> node "%s" event`, async (name, event) => {
-    const spy = vi.fn()
-
-    mount_multiselect({
-      options: default_options,
-      [`on${name}`]: spy,
-    })
-
-    const input = get_input()
-
-    if (name === `focus`) {
-      input.focus()
-    } else if (name === `blur`) {
-      input.focus() // it has to have focus before it can lose it
-      input.blur()
-    } else {
-      input.focus()
-      input.dispatchEvent(event)
-    }
-    await tick()
-    expect(spy, `event type '${name}'`).toHaveBeenCalledTimes(1)
-    expect(spy, `event type '${name}'`).toHaveBeenCalledWith(
-      expect.any(event.constructor),
-    )
-  })
+  const input = get_input()
+  input.focus() // blur needs focus before it can lose it
+  if (name === `blur`) input.blur()
+  else if (name === `keydown`) input.dispatchEvent(fresh_key(`Enter`))
+  await tick()
+  expect(spy, `event type '${name}'`).toHaveBeenCalledExactlyOnceWith(
+    expect.any(event_class),
+  )
 })
 
 test.each([`single`, `multiple`] as const)(
@@ -228,7 +206,7 @@ test.each([`single`, `multiple`] as const)(
       mode === `single`
         ? { options: [0, 1, 2], mode, value: 0 }
         : { options: [0, 1, 2], mode, value: [0, 1] }
-    const select = mount(Test2WayBind, { target: document.body, props })
+    const select = mount_2way(props)
     expect(select.value).toEqual(props.value)
     select.value = mode === `single` ? 2 : [2]
     await tick()
@@ -299,18 +277,13 @@ test(`multiple mode with a one-item limit supports the select-all shortcut`, asy
   mount_multiselect(props)
   await tick()
   expect(document.querySelector(`li.select-all`)).not.toBeNull()
-  get_input().dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `a`, ctrlKey: true, bubbles: true }),
-  )
+  press_key(get_input(), `a`, { ctrlKey: true })
   await tick()
   expect(props.value).toEqual([`Alpha`])
 })
 
 test.each([0, ``])(`single mode preserves falsy value %j`, (value) => {
-  const select = mount(Test2WayBind, {
-    target: document.body,
-    props: { options: [value, `other`], mode: `single` as const, value },
-  })
+  const select = mount_2way({ options: [value, `other`], mode: `single`, value })
   expect(select.value).toBe(value)
 })
 
@@ -418,8 +391,7 @@ describe(`selected_display=input`, () => {
     async ({ options, expected, expected_value }) => {
       const select = mount_input_display({ options, close_dropdown_on_select: false })
 
-      doc_query(`ul.options > li`).click()
-      await tick()
+      await click(`ul.options > li`)
 
       const input = get_input()
       expect(input.value).toBe(expected)
@@ -476,32 +448,22 @@ describe(`selected_display=input`, () => {
     expect(select.value).toBeNull()
   })
 
-  const reopen_cases: [string, (input: HTMLInputElement) => Promise<void>][] = [
+  test.each<[string, (input: HTMLInputElement) => Promise<unknown>]>([
     [`caret click`, click_expand_icon],
-    [
-      `input focus`,
-      async (input: HTMLInputElement) => {
-        input.focus()
-        await tick()
-      },
-    ],
+    [`input focus`, focus_input],
     [
       `ArrowDown`,
-      async (input: HTMLInputElement) => {
+      async (input) => {
         input.focus()
-        press_key(input, `ArrowDown`)
-        await tick()
+        await press_sequence(input, `ArrowDown`)
       },
     ],
-  ]
-
-  test.each(reopen_cases)(
+  ])(
     `reopening after commit via %s shows all options with selected option marked`,
     async (_, reopen) => {
       mount_input_display({ options: color_options })
 
-      option_by_label(`Red`).click()
-      await tick()
+      await click(option_by_label(`Red`))
 
       const input = get_input()
       expect(input.value).toBe(`Red`)
@@ -525,8 +487,7 @@ describe(`selected_display=input`, () => {
     )
     await tick()
 
-    option_by_label(`Green`).click()
-    await tick()
+    await click(option_by_label(`Green`))
 
     expect(get_input().value).toBe(`Green`)
     expect(select.value).toBe(`Green`)
@@ -598,8 +559,7 @@ describe(`selected_display=input`, () => {
     expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
     expect(select.value).toBeNull()
 
-    option_by_label(`Green`).click()
-    await tick()
+    await click(option_by_label(`Green`))
 
     expect(input.value).toBe(`Green`)
     expect(select.search_text).toBe(`Green`)
@@ -663,8 +623,7 @@ describe(`selected_display=input`, () => {
     expect(new FormData(form).get(`color`)).toBe(`custom color`)
 
     await type_search_text(``, input)
-    doc_query(`ul.options > li`).click()
-    await tick()
+    await click(`ul.options > li`)
     expect(new FormData(form).get(`color`)).toBe(`Red`)
   })
 
@@ -696,9 +655,7 @@ describe(`selected_display=input`, () => {
       create_option_msg: null,
       no_matching_options_msg: ``,
     })
-    const input = get_input()
-
-    await type_search_text(`Durian`, input)
+    const input = await type_search_text(`Durian`)
     expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
 
     press_key(input, `Enter`)
@@ -718,8 +675,7 @@ describe(`selected_display=input`, () => {
     })
     await tick()
 
-    doc_query(`ul.options > li.selected`).click()
-    await tick()
+    await click(`ul.options > li.selected`)
 
     expect(select.value).toBe(`Red`)
     expect(get_input().value).toBe(`Red`)
@@ -727,31 +683,27 @@ describe(`selected_display=input`, () => {
 
   test(`load_options searches empty for committed text and the draft once edited`, async () => {
     vi.useFakeTimers()
-    try {
-      const fetch_fn = vi.fn(() =>
-        Promise.resolve({ options: [`Alpha`, `Beta`], has_more: false }),
-      )
-      mount_multiselect({
-        ...input_display_props,
-        value: `Alpha`,
-        load_options: { fetch: fetch_fn, debounce_ms: 0 },
-      })
-      const input = get_input()
+    const fetch_fn = vi.fn(() =>
+      Promise.resolve({ options: [`Alpha`, `Beta`], has_more: false }),
+    )
+    mount_multiselect({
+      ...input_display_props,
+      value: `Alpha`,
+      load_options: { fetch: fetch_fn, debounce_ms: 0 },
+    })
+    const input = get_input()
 
-      input.focus()
-      await vi.runAllTimersAsync()
-      expect(fetch_fn).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ search: ``, offset: 0, limit: 50 }),
-      )
+    input.focus()
+    await vi.runAllTimersAsync()
+    expect(fetch_fn).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ search: ``, offset: 0, limit: 50 }),
+    )
 
-      await type_search_text(`Al`, input)
-      await vi.runAllTimersAsync()
-      expect(fetch_fn).toHaveBeenLastCalledWith(
-        expect.objectContaining({ search: `Al`, offset: 0, limit: 50 }),
-      )
-    } finally {
-      vi.useRealTimers()
-    }
+    await type_search_text(`Al`, input)
+    await vi.runAllTimersAsync()
+    expect(fetch_fn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: `Al`, offset: 0, limit: 50 }),
+    )
   })
 })
 
@@ -781,8 +733,7 @@ test.each([
   expect(form.checkValidity()).toBe(false)
 
   for (const _ of options) {
-    doc_query(`ul.options li`).click()
-    await tick()
+    await click(`ul.options li`)
   }
   expect(form.checkValidity()).toBe(true)
   // parse rather than compare the JSON text, which is brittle to key order and spacing
@@ -803,8 +754,7 @@ test(`form_serialize customizes chip-mode form values`, async () => {
     form,
   )
   for (const _ of options) {
-    doc_query(`ul.options li`).click()
-    await tick()
+    await click(`ul.options li`)
   }
   expect(new FormData(form).get(`choices`)).toBe(`Red|Green`)
 })
@@ -832,9 +782,7 @@ test(`invalid=true gives top-level div class 'invalid' and input attribute of 'a
   const multiselect = doc_query(`div.multiselect`)
   expect(multiselect.classList.contains(`invalid`)).toBe(true)
 
-  const option_li = doc_query<HTMLLIElement>(`ul.options > li`)
-  option_li.click()
-  await tick()
+  await click(`ul.options > li`)
 
   expect(input.getAttribute(`aria-invalid`)).toBeNull()
   expect(multiselect.classList.contains(`invalid`)).toBe(false)
@@ -848,14 +796,11 @@ test(`option labels render markup as text`, () => {
 })
 
 test(`children snippet receives type='selected' for pills and type='option' for dropdown items`, () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: {
-      snippet_variant: `children`,
-      options: [`Red`, `Green`, `Blue`],
-      value: [`Red`],
-      open: true,
-    },
+  mount_snippets({
+    snippet_variant: `children`,
+    options: [`Red`, `Green`, `Blue`],
+    value: [`Red`],
+    open: true,
   })
 
   const selected_span = doc_query(`ul.selected [data-testid="multiselect-child"]`)
@@ -873,60 +818,46 @@ test(`children snippet receives type='selected' for pills and type='option' for 
 })
 
 test(`option snippet receives selected, active, and disabled booleans`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: {
-      snippet_variant: `option`,
-      options: [
-        { label: `Enabled`, value: 1 },
-        { label: `Disabled`, value: 2, disabled: true },
-      ],
-      value: [{ label: `Enabled`, value: 1 }],
-      keep_selected_in_dropdown: `plain`,
-      open: true,
-    },
+  mount_snippets({
+    snippet_variant: `option`,
+    options: [
+      { label: `Enabled`, value: 1 },
+      { label: `Disabled`, value: 2, disabled: true },
+    ],
+    value: [{ label: `Enabled`, value: 1 }],
+    keep_selected_in_dropdown: `plain`,
+    open: true,
   })
 
-  const option_spans = [
-    ...document.querySelectorAll<HTMLElement>(
-      `ul.options [data-testid="multiselect-option"]`,
-    ),
-  ]
-  expect(option_spans).toHaveLength(2)
-
+  // [selected, disabled, active] per rendered option snippet
+  const option_states = () =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        `ul.options [data-testid="multiselect-option"]`,
+      ),
+    ].map(({ dataset }) => [dataset.selected, dataset.disabled, dataset.active])
   // keep_selected_in_dropdown is why an already-selected option still shows in the list
-  expect(option_spans[0].dataset.selected).toBe(`true`)
-  expect(option_spans[0].dataset.disabled).toBe(`false`)
-  expect(option_spans[0].dataset.active).toBe(`false`)
+  expect(option_states()).toEqual([
+    [`true`, `false`, `false`],
+    [`false`, `true`, `false`],
+  ])
 
-  expect(option_spans[1].dataset.selected).toBe(`false`)
-  expect(option_spans[1].dataset.disabled).toBe(`true`)
-  expect(option_spans[1].dataset.active).toBe(`false`)
-
-  doc_query(`ul.options > li`).dispatchEvent(
-    new MouseEvent(`mousemove`, { bubbles: true }),
-  )
+  doc_query(`ul.options > li`).dispatchEvent(fresh_mousemove())
   await tick()
-  const updated_spans = [
-    ...document.querySelectorAll<HTMLElement>(
-      `ul.options [data-testid="multiselect-option"]`,
-    ),
-  ]
-  expect(updated_spans[0].dataset.active).toBe(`true`)
-  expect(updated_spans[1].dataset.active).toBe(`false`)
+  expect(option_states()).toEqual([
+    [`true`, `false`, `true`],
+    [`false`, `true`, `false`],
+  ])
 })
 
 test(`expand_icon snippet receives open and disabled, open toggles when dropdown opens`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [1, 2, 3], disabled: true },
-  })
+  mount_snippets({ options: [1, 2, 3], disabled: true })
   const disabled_expand = doc_query(`.expand-snippet`)
   expect(disabled_expand.dataset.disabled).toBe(`true`)
   expect(disabled_expand.dataset.open).toBe(`false`)
 
   document.body.innerHTML = ``
-  mount(TestMultiSelectSnippets, { target: document.body, props: { options: [1, 2, 3] } })
+  mount_snippets({ options: [1, 2, 3] })
   const expand = doc_query(`.expand-snippet`)
   expect(expand.dataset.open).toBe(`false`)
 
@@ -949,10 +880,7 @@ test.each([undefined, `left`, `right`] as const)(
 
 test(`expand_icon_position=none suppresses default and custom expand icons`, () => {
   mount_multiselect({ options: [1, 2, 3], expand_icon_position: `none` })
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [1, 2, 3], expand_icon_position: `none` },
-  })
+  mount_snippets({ options: [1, 2, 3], expand_icon_position: `none` })
   expect(document.querySelector(`.expand-icon`)).toBeNull()
   expect(document.querySelector(`.expand-snippet`)).toBeNull()
 })
@@ -977,54 +905,40 @@ test(`expand icon click toggles dropdown in chips mode`, async () => {
 })
 
 test(`remove_icon snippet receives option for per-item and is_remove_all flag`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [1, 2, 3], value: [1, 2] },
-  })
+  mount_snippets({ options: [1, 2, 3], value: [1, 2] })
   await tick()
 
   const remove_spans = [...document.querySelectorAll<HTMLElement>(`.remove-snippet`)]
-  expect(remove_spans).toHaveLength(3)
-
-  // first 2 are per-option removes
-  expect(remove_spans[0].dataset.isRemoveAll).toBe(`false`)
-  expect(remove_spans[0].dataset.option).toBe(`1`)
-  expect(remove_spans[1].dataset.isRemoveAll).toBe(`false`)
-  expect(remove_spans[1].dataset.option).toBe(`2`)
-  // last is the remove-all button
-  expect(remove_spans[2].dataset.isRemoveAll).toBe(`true`)
-  expect(remove_spans[2].dataset.option).toBeUndefined()
+  // per-option removes first, then the remove-all button
+  expect(
+    remove_spans.map(({ dataset }) => [dataset.isRemoveAll, dataset.option]),
+  ).toEqual([
+    [`false`, `1`],
+    [`false`, `2`],
+    [`true`, undefined],
+  ])
   expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(0)
 })
 
 test(`before_input and after_input snippets receive search_text and flank the input`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [1, 2, 3] },
-  })
+  mount_snippets({ options: [1, 2, 3] })
 
-  const before_input = doc_query(`.before-input-snippet`)
-  const after_input = doc_query(`.after-input-snippet`)
-  expect(before_input.dataset.searchText).toBe(``)
-  expect(after_input.dataset.searchText).toBe(``)
+  const search_texts = () =>
+    [`.before-input-snippet`, `.after-input-snippet`].map(
+      (selector) => doc_query(selector).dataset.searchText,
+    )
+  expect(search_texts()).toEqual([``, ``])
 
   const input = get_input()
-  expect(before_input.nextElementSibling).toBe(input)
-  expect(input.nextElementSibling).toBe(after_input)
+  expect(doc_query(`.before-input-snippet`).nextElementSibling).toBe(input)
+  expect(input.nextElementSibling).toBe(doc_query(`.after-input-snippet`))
 
   await type_search_text(`test`, input)
-
-  const before_input_after = doc_query(`.before-input-snippet`)
-  const after_input_after = doc_query(`.after-input-snippet`)
-  expect(before_input_after.dataset.searchText).toBe(`test`)
-  expect(after_input_after.dataset.searchText).toBe(`test`)
+  expect(search_texts()).toEqual([`test`, `test`])
 })
 
 test(`selected_item snippet receives selected option and index`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [`red`, `blue`], value: [`red`, `blue`] },
-  })
+  mount_snippets({ options: [`red`, `blue`], value: [`red`, `blue`] })
   await tick()
 
   const selected_items = [
@@ -1035,13 +949,9 @@ test(`selected_item snippet receives selected option and index`, async () => {
 })
 
 test(`user_msg snippet receives search text, message type, and message`, async () => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [`red`], allow_user_options: true, open: true },
-  })
+  mount_snippets({ options: [`red`], allow_user_options: true, open: true })
 
-  const input = get_input()
-  await type_search_text(`purple`, input)
+  await type_search_text(`purple`)
 
   const user_msg = doc_query(`.user-msg-snippet`)
   expect(user_msg.dataset.searchText).toBe(`purple`)
@@ -1053,23 +963,14 @@ test.each([
   [`spinner`, { loading: true }, `.spinner-snippet`, `loading`],
   [`disabled_icon`, { disabled: true }, `.disabled-icon-snippet`, `disabled`],
 ])(`%s snippet replaces default icon`, (_label, props, selector, text) => {
-  mount(TestMultiSelectSnippets, {
-    target: document.body,
-    props: { options: [1, 2, 3], ...props },
-  })
+  mount_snippets({ options: [1, 2, 3], ...props })
 
   expect(doc_query(selector).textContent).toBe(text)
 })
 
 test(`filters dropdown to show only matching options when entering text`, async () => {
-  const options = [`foo`, `bar`, `baz`]
-
-  mount_multiselect({ options })
-
-  const input = get_input()
-
-  await type_search_text(`ba`, input)
-
+  mount_multiselect({ options: [`foo`, `bar`, `baz`] })
+  await type_search_text(`ba`)
   expect(normalized_text(doc_query(`ul.options`))).toBe(`bar baz`)
 })
 
@@ -1087,8 +988,7 @@ test(`filter_func controls rendered options and matching_options`, async () => {
   })
   mount_multiselect(props)
 
-  const input = get_input()
-  await type_search_text(`al`, input)
+  await type_search_text(`al`)
 
   expect(props.matching_options).toEqual([options[0], options[2]])
   expect(normalized_text(doc_query(`ul.options`))).toBe(`Alpha Algae`)
@@ -1137,8 +1037,7 @@ test.each([
   mount_multiselect({ open: true, options: [`Alpha`, `Beta`], ...extra_props })
 
   if (`selected_display` in extra_props) {
-    doc_query(`ul.options > li`).click()
-    await tick()
+    await click(`ul.options > li`)
     expect(get_input().value).toBe(`Alpha`)
   } else await type_search_text(`Al`)
 
@@ -1152,35 +1051,18 @@ test.each([
 test.each([undefined, `Custom no options message`])(
   `shows no_matching_options_msg when no options match search_text`,
   async (no_matching_options_msg) => {
-    const change_events: unknown[] = []
+    const on_change = vi.fn()
+    mount_multiselect({ options: [1, 2, 3], no_matching_options_msg, on_change })
 
-    mount(Test2WayBind, {
-      target: document.body,
-      props: {
-        options: [1, 2, 3],
-        no_matching_options_msg,
-        on_change: (data: Parameters<NonNullable<MultiSelectProps[`on_change`]>>[0]) => {
-          change_events.push(data)
-          const { option: _option, type: _type } = data
-        },
-      },
-    })
-
-    const input = get_input()
-
-    await type_search_text(`4`, input)
+    await type_search_text(`4`)
 
     const expected_msg = no_matching_options_msg ?? `No matching options`
-
-    const dropdown = doc_query(`ul.options`)
-    expect(dropdown.textContent?.trim()).toBe(expected_msg)
-
+    expect(doc_query(`ul.options`).textContent?.trim()).toBe(expected_msg)
     const no_match_li = doc_query(`ul.options li.user-msg`)
-    expect(no_match_li).toBeInstanceOf(HTMLLIElement)
     expect(no_match_li.textContent?.trim()).toBe(expected_msg)
 
-    no_match_li.click() // the message row is not an option, so it must not select
-    expect(change_events).toEqual([])
+    await click(no_match_li) // the message row is not an option, so it must not select
+    expect(on_change).not.toHaveBeenCalled()
   },
 )
 
@@ -1193,20 +1075,12 @@ test.each([
 ])(`single remove button removes 1 selected option`, async (options_set) => {
   mount_multiselect({ options: options_set, value: [...options_set] })
 
-  const option_to_remove = options_set[0]
-  const initial_selected_count = options_set.length
+  await click(`ul.selected button[title='Remove ${get_label(options_set[0])}']`)
 
-  const button_selector = `ul.selected button[title='Remove ${get_label(
-    option_to_remove,
-  )}']`
-  doc_query<HTMLButtonElement>(button_selector).click()
-  await tick()
-
-  const selected_ul = doc_query(`ul.selected`)
-  const remaining_labels = options_set.slice(1).map(get_label).join(` `).trim()
-  expect(selected_ul.textContent?.trim()).toBe(remaining_labels)
+  const remaining_labels = options_set.slice(1).map(get_label).join(` `)
+  expect(doc_query(`ul.selected`).textContent?.trim()).toBe(remaining_labels)
   expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(
-    initial_selected_count - 1,
+    options_set.length - 1,
   )
 })
 
@@ -1227,8 +1101,7 @@ test(`remove all button removes all selected options and is visible only if more
     ),
   ).toEqual([`Drop 1`, `Drop 2`, `Drop 3`])
 
-  doc_query<HTMLButtonElement>(`button[title='Clear']`).click()
-  await tick()
+  await click(`button[title='Clear']`)
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(``)
   document.body.innerHTML = `` // Clean up for next mount
 
@@ -1258,8 +1131,7 @@ test(`can't select disabled options`, async () => {
     const li_to_click = [
       ...document.querySelectorAll<HTMLLIElement>(`ul.options > li`),
     ].find((li) => li.textContent?.trim() === String(option_object.label))
-    li_to_click?.click()
-    await tick()
+    await click(li_to_click)
   }
 
   const selected_ul = doc_query(`ul.selected`)
@@ -1268,11 +1140,7 @@ test(`can't select disabled options`, async () => {
 })
 
 test(`auto_scroll scopes active option lookup to current instance`, async () => {
-  const [first_target, second_target] = [
-    document.createElement(`div`),
-    document.createElement(`div`),
-  ]
-  document.body.append(first_target, second_target)
+  const [first_target, second_target] = [create_element(), create_element()]
   mount_multiselect({ options: [`first`], open: true, active_index: 0 }, first_target)
   mount_multiselect({ options: [`second`], open: true }, second_target)
   const [first_active, second_option] = [
@@ -1362,13 +1230,9 @@ describe.each([
         value: selected,
       })
 
-      const input = get_input()
-
       // typing the selected value triggers the duplicate/create check
-      await type_search_text(`${selected[0]}`, input)
-
-      const dropdown = doc_query(`ul.options`)
-      expect(normalized_text(dropdown)).toBe(expected_text)
+      await type_search_text(`${selected[0]}`)
+      expect(normalized_text(doc_query(`ul.options`))).toBe(expected_text)
     })
   },
 )
@@ -1387,17 +1251,10 @@ test.each([
       close_dropdown_on_select: false,
     })
 
-    const input = get_input()
-    await type_search_text(`1`, input)
+    const input = await type_search_text(`1`)
 
-    if (method === `click`) {
-      doc_query<HTMLLIElement>(`ul.options li`).click()
-    } else {
-      input.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
-      input.dispatchEvent(fresh_key(`Enter`))
-    }
-    await tick()
+    if (method === `click`) await click(`ul.options li`)
+    else await press_sequence(input, `ArrowDown`, `Enter`)
 
     expect(input.value).toBe(expected)
   },
@@ -1431,13 +1288,9 @@ test.each<{
       ...props,
     })
 
-    const input = get_input()
-    await type_search_text(search_text, input)
+    const input = await type_search_text(search_text)
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_sequence(input, `ArrowDown`, `Enter`)
 
     expect(input.value).toBe(search_text)
     expect(document.querySelectorAll(`ul.selected li`)).toHaveLength(
@@ -1453,26 +1306,17 @@ test.each([
 ])(
   `1-way (outward) binding of value works when max_select=%s, expected value=%s`,
   async (max_select, expected) => {
-    let value: Option | Option[] | undefined
-
-    mount(Test2WayBind, {
-      target: document.body,
-      props: {
-        options: [1, 2, 3],
-        ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
-        onValueChanged: (data: Option | Option[] | null | undefined) =>
-          (value = data ?? undefined),
-      },
+    const on_value_changed = vi.fn()
+    mount_2way({
+      options: [1, 2, 3],
+      ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
+      onValueChanged: on_value_changed,
     })
 
     // internal changes bind outward
-    for (const _ of [1, 2]) {
-      const li = doc_query(`ul.options li`)
-      li.click()
-      await tick()
-    }
+    for (const _ of [1, 2]) await click(`ul.options li`)
 
-    expect(value).toEqual(expected)
+    expect(on_value_changed).toHaveBeenLastCalledWith(expected)
   },
 )
 
@@ -1501,17 +1345,12 @@ test(`can remove user-created selected option which is not in dropdown list`, as
   // dropdown list, and remove() must still delete them
   mount_multiselect({ options: [`1`, `2`, `3`], allow_user_options: true })
 
-  const input = get_input()
-  await type_search_text(`foo`, input)
+  await type_search_text(`foo`)
 
-  const li = doc_query(`ul.options li[title='Create this option...']`)
-  li.click()
-  await tick()
+  await click(`ul.options li[title='Create this option...']`)
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`foo`)
 
-  const li_selected = doc_query(`ul.selected li button[title*='Remove']`)
-  li_selected.click()
-  await tick()
+  await click(`ul.selected li button[title*='Remove']`)
 
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(``)
 })
@@ -1549,33 +1388,29 @@ test.each([
   async ({ props, search = `    `, double_enter = false, hide_dropdown = false }) => {
     const uses_timers = `load_options` in props
     if (uses_timers) vi.useFakeTimers()
-    try {
-      const onadd_spy = vi.fn()
-      mount_multiselect({ ...props, on_add: onadd_spy, open: true })
-      if (uses_timers) await vi.runAllTimersAsync()
+    const onadd_spy = vi.fn()
+    mount_multiselect({ ...props, on_add: onadd_spy, open: true })
+    if (uses_timers) await vi.runAllTimersAsync()
 
-      const input = get_input()
-      input.focus()
-      await type_search_text(search, input)
-      if (uses_timers) await vi.runAllTimersAsync()
+    const input = get_input()
+    input.focus()
+    await type_search_text(search, input)
+    if (uses_timers) await vi.runAllTimersAsync()
 
-      if (hide_dropdown) {
-        expect(document.querySelector(`ul.options`)).toBeNull()
-      }
-
-      input.dispatchEvent(fresh_key(`Enter`))
-      if (uses_timers) await vi.runAllTimersAsync()
-      else await tick()
-      if (double_enter) {
-        input.dispatchEvent(fresh_key(`Enter`))
-        await vi.runAllTimersAsync()
-      }
-
-      expect(onadd_spy).not.toHaveBeenCalled()
-      expect(document.querySelectorAll(`ul.selected li`)).toHaveLength(0)
-    } finally {
-      if (uses_timers) vi.useRealTimers()
+    if (hide_dropdown) {
+      expect(document.querySelector(`ul.options`)).toBeNull()
     }
+
+    input.dispatchEvent(fresh_key(`Enter`))
+    if (uses_timers) await vi.runAllTimersAsync()
+    else await tick()
+    if (double_enter) {
+      input.dispatchEvent(fresh_key(`Enter`))
+      await vi.runAllTimersAsync()
+    }
+
+    expect(onadd_spy).not.toHaveBeenCalled()
+    expect(document.querySelectorAll(`ul.selected li`)).toHaveLength(0)
   },
 )
 
@@ -1603,26 +1438,18 @@ test(`remove all button does not remove items when min_select constraint would b
 
   mount_multiselect({ options, value: selected, min_select, max_select })
 
-  const remove_all_button = document.querySelector(`button.remove-all`)
-  expect(remove_all_button).toBeNull()
+  expect(document.querySelector(`button.remove-all`)).toBeNull()
 
   const input = get_input()
   input.focus()
-
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
-
   // Red is already selected so it is filtered out of the dropdown: this Enter adds
   // Green, pushing selected past min_select and bringing the remove-all button back
-  const enter_event = fresh_key(`Enter`)
-  input.dispatchEvent(enter_event)
-  await tick()
+  await press_sequence(input, `ArrowDown`, `Enter`)
 
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Red Green`)
 
   // doc_query throws if the button is still hidden, so this is the visibility assertion
-  doc_query(`button.remove-all`).click()
-  await tick()
+  await click(`button.remove-all`)
 
   // min_select=1 keeps the first item
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Red`)
@@ -1655,10 +1482,14 @@ test(`dragging selected options across each other reorders them and fires on_reo
 
   await drag_chip(1, 0)
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`2 1 3`)
-  expect(onreorder_spy).toHaveBeenCalledTimes(1)
-  expect(onreorder_spy).toHaveBeenCalledWith({ options: [2, 1, 3], previous: [1, 2, 3] })
-  expect(onchange_spy).toHaveBeenCalledTimes(1)
-  expect(onchange_spy).toHaveBeenCalledWith({ options: [2, 1, 3], type: `reorder` })
+  expect(onreorder_spy).toHaveBeenCalledExactlyOnceWith({
+    options: [2, 1, 3],
+    previous: [1, 2, 3],
+  })
+  expect(onchange_spy).toHaveBeenCalledExactlyOnceWith({
+    options: [2, 1, 3],
+    type: `reorder`,
+  })
 
   await drag_chip(0, 1)
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`1 2 3`)
@@ -1753,10 +1584,8 @@ test.each([
 )
 
 async function create_user_option(search_text: string): Promise<void> {
-  const input = get_input()
-  await type_search_text(search_text, input)
-  doc_query(`ul.options li.user-msg`).click()
-  await tick()
+  await type_search_text(search_text)
+  await click(`ul.options li.user-msg`)
 }
 
 test.each([
@@ -1781,12 +1610,12 @@ test.each([
 
     await create_user_option(search_text)
 
-    expect(oncreate_spy).toHaveBeenCalledTimes(1)
-    expect(oncreate_spy).toHaveBeenCalledWith({ option: expected_created_option })
+    expect(oncreate_spy).toHaveBeenCalledExactlyOnceWith({
+      option: expected_created_option,
+    })
 
     // a user-created option fires on_add as well, not just on_create
-    expect(onadd_spy).toHaveBeenCalledTimes(1)
-    expect(onadd_spy).toHaveBeenCalledWith({
+    expect(onadd_spy).toHaveBeenCalledExactlyOnceWith({
       option: expected_created_option,
       selected: [expected_created_option],
     })
@@ -1828,17 +1657,14 @@ test(`allow_user_options=append keeps created options selectable after removal`,
   expect(props.options).toEqual([`a`, `b`, `foobar`])
   expect(props.value).toEqual([`foobar`])
 
-  doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
-  await tick()
+  await click(`ul.selected button.remove`)
   expect(props.value).toEqual([])
 
-  const input = get_input()
-  await type_search_text(`foobar`, input)
+  await type_search_text(`foobar`)
 
   const appended_option = doc_query(`ul.options > li:not(.user-msg)`)
   expect(appended_option.textContent?.trim()).toBe(`foobar`)
-  appended_option.click()
-  await tick()
+  await click(appended_option)
   expect(props.value).toEqual([`foobar`])
 })
 
@@ -1870,19 +1696,16 @@ test(`on_add selected accumulates and on_remove selected reflects removal`, asyn
   mount_multiselect({ options: [1, 2, 3], on_add: onadd_spy, on_remove: onremove_spy })
 
   const input = await focus_input()
-  doc_query(`ul.options li`).click()
-  await tick()
+  await click(`ul.options li`)
   expect(onadd_spy).toHaveBeenLastCalledWith({ option: 1, selected: [1] })
 
   input.focus()
   await tick()
-  doc_query(`ul.options li`).click()
-  await tick()
+  await click(`ul.options li`)
   expect(onadd_spy).toHaveBeenLastCalledWith({ option: 2, selected: [1, 2] })
 
   doc_query(`ul.selected button.remove`).click()
-  expect(onremove_spy).toHaveBeenCalledTimes(1)
-  expect(onremove_spy).toHaveBeenLastCalledWith({ option: 1, selected: [2] })
+  expect(onremove_spy).toHaveBeenCalledExactlyOnceWith({ option: 1, selected: [2] })
 })
 
 test(`on_add selected reflects replacement when max_select=1`, async () => {
@@ -1895,8 +1718,7 @@ test(`on_add selected reflects replacement when max_select=1`, async () => {
   })
 
   await focus_input()
-  doc_query(`ul.options li`).click()
-  await tick()
+  await click(`ul.options li`)
 
   expect(onadd_spy).toHaveBeenCalledWith({ option: 2, selected: [2] })
 })
@@ -1907,8 +1729,7 @@ test(`on_open and on_close fire once per transition with the triggering event`, 
   mount_multiselect({ options: [1, 2, 3], on_open: open_spy, on_close: close_spy })
 
   // still closed, so an outside click must not fire
-  document.body.click()
-  await tick()
+  await click(document.body)
   expect(close_spy).not.toHaveBeenCalled()
 
   const input = await focus_input()
@@ -1919,14 +1740,12 @@ test(`on_open and on_close fire once per transition with the triggering event`, 
   input.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
   await tick()
   expect(open_spy).toHaveBeenCalledOnce()
-  input.dispatchEvent(fresh_key(`Escape`))
-  await tick()
+  await press_sequence(input, `Escape`)
   expect(close_spy).toHaveBeenCalledOnce()
   expect(close_spy.mock.calls[0][0].event).toBeInstanceOf(KeyboardEvent)
 
   // closed again, so no extra fire
-  document.body.click()
-  await tick()
+  await click(document.body)
   expect(close_spy).toHaveBeenCalledOnce()
 })
 
@@ -1956,14 +1775,10 @@ describe(`keep_selected_in_dropdown feature`, () => {
   const option_by_label = (label: string): HTMLElement | undefined =>
     option_items().find((option_item) => option_item.textContent?.includes(label))
 
-  function click_keep_selected_option(
+  const click_keep_selected_option = (
     option: HTMLElement | undefined,
     mode: KeepSelectedMode,
-  ): void {
-    if (mode === `checkboxes`)
-      option?.querySelector<HTMLElement>(`.option-checkbox`)?.click()
-    else option?.click()
-  }
+  ) => click(mode === `checkboxes` ? option?.querySelector(`.option-checkbox`) : option)
 
   test.each(
     keep_selected_modes.flatMap((mode) =>
@@ -1984,32 +1799,22 @@ describe(`keep_selected_in_dropdown feature`, () => {
 
       await focus_input()
 
-      const dropdown_options = option_items()
-      expect(dropdown_options).toHaveLength(3)
-
-      const apple_option = option_by_label(`Apple`)
-      expect(apple_option?.classList.contains(`selected`)).toBe(true)
-
-      if (mode === `checkboxes`) {
-        const checkbox = apple_option?.querySelector<HTMLInputElement>(`.option-checkbox`)
-        expect(checkbox?.checked).toBe(true)
-      }
-
-      const other_options = dropdown_options.filter(
-        (option_item) => !option_item.textContent?.includes(`Apple`),
-      )
-      other_options.forEach((option) => {
-        expect(option.classList.contains(`selected`)).toBe(false)
-        if (mode === `checkboxes`) {
-          const checkbox = option.querySelector<HTMLInputElement>(`.option-checkbox`)
-          expect(checkbox?.checked).toBe(false)
-        }
-      })
-      const banana_option = option_by_label(`Banana`)
+      // [selected class, checkbox state] per row; plain mode renders no checkbox
+      const box = (checked: boolean) => (mode === `checkboxes` ? checked : undefined)
+      expect(
+        option_items().map((li) => [
+          li.classList.contains(`selected`),
+          li.querySelector<HTMLInputElement>(`.option-checkbox`)?.checked,
+        ]),
+      ).toEqual([
+        [true, box(true)],
+        [false, box(false)],
+        [false, box(false)],
+      ])
+      const [apple_option, banana_option] = [`Apple`, `Banana`].map(option_by_label)
       const { matching_options } = props
       for (const selected_after_click of [true, false]) {
-        click_keep_selected_option(banana_option, mode)
-        await tick()
+        await click_keep_selected_option(banana_option, mode)
         expect(apple_option?.classList.contains(`selected`)).toBe(true)
         expect(banana_option?.classList.contains(`selected`)).toBe(selected_after_click)
       }
@@ -2045,8 +1850,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       const checkbox = option?.querySelector<HTMLInputElement>(`.option-checkbox`)
       expect(checkbox?.checked).toBe(expected_checked)
 
-      click_keep_selected_option(option, `checkboxes`)
-      await tick()
+      await click_keep_selected_option(option, `checkboxes`)
 
       // the refusal held, so the box must still show the unchanged selection
       expect(checkbox?.checked).toBe(expected_checked)
@@ -2074,12 +1878,8 @@ describe(`keep_selected_in_dropdown feature`, () => {
         [`Banana`, `add`],
       ]) {
         const option = option_by_label(label)
-        if (interaction === `keyboard`) {
-          input.dispatchEvent(fresh_key(`ArrowDown`))
-          await tick()
-          input.dispatchEvent(fresh_key(`Enter`))
-        } else click_keep_selected_option(option, mode)
-        await tick()
+        if (interaction === `keyboard`) await press_sequence(input, `ArrowDown`, `Enter`)
+        else await click_keep_selected_option(option, mode)
         expect(on_change).toHaveBeenLastCalledWith({ option: label, type })
         expect(option?.classList.contains(`selected`)).toBe(type === `add`)
       }
@@ -2100,15 +1900,12 @@ describe(`keep_selected_in_dropdown feature`, () => {
 
       // removing Apple is allowed, Banana remains
       const apple_option = option_by_label(`Apple`)
-      click_keep_selected_option(apple_option, mode)
-      await tick()
-
+      await click_keep_selected_option(apple_option, mode)
       expect(apple_option?.classList.contains(`selected`)).toBe(false)
 
       // removing Banana too is blocked by min_select=1
       const banana_option = option_by_label(`Banana`)
-      click_keep_selected_option(banana_option, mode)
-      await tick()
+      await click_keep_selected_option(banana_option, mode)
       expect(banana_option?.classList.contains(`selected`)).toBe(true)
     },
   )
@@ -2187,24 +1984,17 @@ test.each([
     [prop_name]: prop_value,
   })
 
-  const input = get_input()
-  await type_search_text(is_dupe_test ? `foo` : `nonexistent`, input)
+  await type_search_text(is_dupe_test ? `foo` : `nonexistent`)
 
   expect(document.querySelector(`.user-msg`)).toBeNull()
 })
 
 test(`empty duplicate_option_msg leaves no phantom navigable row`, async () => {
   // a blank message renders nothing, so it must not stay navigable either
-  mount_multiselect({
-    options: [`ab`, `abc`],
-    value: [`ab`],
-    duplicate_option_msg: ``,
-  })
-  const input = get_input()
-  await type_search_text(`ab`, input)
+  mount_multiselect({ options: [`ab`, `abc`], value: [`ab`], duplicate_option_msg: `` })
+  const input = await type_search_text(`ab`)
   input.dispatchEvent(fresh_key(`ArrowDown`))
-  input.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_sequence(input, `ArrowDown`)
   // 'abc' at index 0 is the only match, so the second ArrowDown has nowhere to go;
   // without the fix it lands on the blank row and points at an unrendered element
   const active_id = input.getAttribute(`aria-activedescendant`) ?? ``
@@ -2220,9 +2010,7 @@ test.each([[0], [1], [5], [undefined]])(
     mount_multiselect({ options, max_options })
 
     expect(document.querySelectorAll(`ul.options li`)).toHaveLength(
-      max_options === null || max_options === undefined
-        ? options.length
-        : Math.min(options.length, max_options),
+      Math.min(options.length, max_options ?? Infinity),
     )
   },
 )
@@ -2269,9 +2057,7 @@ test.each([
   const css_str = `font-weight: bold; color: red;`
   mount_multiselect({ options: [1, 2, 3], [prop]: css_str, value: [1] })
 
-  const err_msg = `${prop} (${css_selector})`
-  const elem = doc_query(css_selector)
-  expect(elem?.style.cssText, err_msg).toContain(css_str)
+  expect(doc_query(css_selector).style.cssText, prop).toContain(css_str)
 })
 
 test.each([
@@ -2282,78 +2068,36 @@ test.each([
   ({ prop, css_selector }) => {
     mount_multiselect({ options: [1, 2, 3], value: [1] })
 
-    const elem = doc_query(css_selector)
-
-    const err_msg = `style attribute should be absent when '${prop}' not passed, but hasAttribute('style') is ${elem.hasAttribute(
-      `style`,
-    )}`
-    expect(elem.hasAttribute(`style`), err_msg).toBe(false)
+    expect(doc_query(css_selector).hasAttribute(`style`), prop).toBe(false)
   },
 )
 
-test.each([true, false, `if-mobile`, `retain-focus`] as const)(
-  `close_dropdown_on_select=%s controls input focus and dropdown closing`,
-  async (close_dropdown_on_select) => {
-    const original_inner_width = globalThis.innerWidth
-    try {
-      globalThis.innerWidth = 600 // simulate mobile
-      const select = mount(Test2WayBind, {
-        target: document.body,
-        props: { options: [1, 2, 3], close_dropdown_on_select, open: true },
-      })
+// the default breakpoint is 800px, so 600 is mobile and 800 already counts as desktop
+test.each([
+  [true, 600, true],
+  [false, 600, false],
+  [`if-mobile`, 600, true],
+  [`if-mobile`, 800, false],
+  [`if-mobile`, 1024, false],
+  [`retain-focus`, 600, true],
+] as const)(
+  `close_dropdown_on_select=%s at %ipx wide closes the dropdown: %s`,
+  async (close_dropdown_on_select, innerWidth, should_be_closed) => {
+    stub_props(globalThis, { innerWidth })
+    mount_multiselect({ options: [1, 2, 3], close_dropdown_on_select, open: true })
+    const input = get_input()
+    if (close_dropdown_on_select === `retain-focus`) input.focus()
 
-      const input_el = get_input()
-      if (close_dropdown_on_select === `retain-focus`) input_el.focus()
+    doc_query(`ul.options > li`).click()
+    await tick() // let happy-dom settle document.activeElement after add()'s input.focus()
 
-      const first_option = doc_query(`ul.options > li`)
-      first_option.click()
-      await tick() // let happy-dom settle document.activeElement after add()'s input.focus()
-
-      const is_desktop = globalThis.innerWidth > select.breakpoint
-      const should_be_closed =
-        close_dropdown_on_select === true ||
-        close_dropdown_on_select === `retain-focus` ||
-        (close_dropdown_on_select === `if-mobile` && !is_desktop)
-
-      const selected_items = document.querySelectorAll(`ul.selected > li`)
-      expect(selected_items).toHaveLength(1)
-
-      const dropdown = doc_query(`ul.options`)
-      const state = JSON.stringify({
-        is_desktop,
-        should_be_closed,
-        close_dropdown_on_select,
-        breakpoint: select.breakpoint,
-      })
-
-      expect(dropdown.classList.contains(`hidden`), state).toBe(should_be_closed)
-      // focus tracking is reliable only for the close path in happy-dom
-      if (close_dropdown_on_select === `retain-focus`) {
-        expect(document.activeElement).toBe(input_el)
-      } else if (should_be_closed) {
-        expect(document.activeElement).not.toBe(input_el)
-      } else {
-        expect([input_el, document.body]).toContain(document.activeElement)
-      }
-
-      if (close_dropdown_on_select === `if-mobile`) {
-        globalThis.innerWidth = 400
-        globalThis.dispatchEvent(new Event(`resize`))
-        expect(globalThis.innerWidth).toBeLessThan(select.breakpoint)
-
-        const another_option = doc_query(`ul.options li:not(.selected)`)
-        expect(
-          another_option,
-          `Could not find another option to test mobile selection behavior`,
-        ).toBeInstanceOf(HTMLElement)
-        another_option?.click()
-        await tick()
-        expect(dropdown.classList).toContain(`hidden`)
-        expect(document.activeElement).not.toBe(input_el)
-      }
-    } finally {
-      globalThis.innerWidth = original_inner_width
-    }
+    expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(1)
+    expect(doc_query(`ul.options`).classList.contains(`hidden`)).toBe(should_be_closed)
+    // focus tracking is reliable only for the close path in happy-dom
+    if (close_dropdown_on_select === `retain-focus`)
+      expect(document.activeElement).toBe(input)
+    else if (should_be_closed) expect(document.activeElement).not.toBe(input)
+    else expect([input, document.body]).toContain(document.activeElement)
   },
 )
 
@@ -2372,8 +2116,7 @@ test.each([
   {
     reopen_method: `ArrowDown`,
     reopen_action: async (input_el: HTMLInputElement) => {
-      input_el.dispatchEvent(fresh_key(`ArrowDown`))
-      await tick()
+      await press_sequence(input_el, `ArrowDown`)
       return doc_query(`ul.options > li.active`).textContent?.trim()
     },
     expected_option: `Solid`,
@@ -2386,10 +2129,7 @@ test.each([
     const input_el = get_input()
     const dropdown = doc_query(`ul.options`)
     input_el.focus()
-    input_el.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-    input_el.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_sequence(input_el, `ArrowDown`, `Enter`)
 
     expect(document.activeElement).toBe(input_el)
     expect(dropdown.classList).toContain(`hidden`)
@@ -2402,24 +2142,17 @@ test.each([
 )
 
 test(`close_dropdown_on_select='retain-focus' clears active create message after creating an option`, async () => {
-  mount_retain_focus({
-    options: [`apple`, `banana`, `cherry`],
-    allow_user_options: true,
-  })
+  mount_retain_focus({ options: [`apple`, `banana`, `cherry`], allow_user_options: true })
 
   const input_el = get_input()
   const dropdown = doc_query(`ul.options`)
   input_el.focus()
   await type_search_text(`app`, input_el)
-  input_el.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
-  input_el.dispatchEvent(fresh_key(`ArrowDown`))
-  await tick()
+  await press_sequence(input_el, `ArrowDown`, `ArrowDown`)
 
   expect(doc_query(`ul.options li.user-msg`).classList).toContain(`active`)
 
-  input_el.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_sequence(input_el, `Enter`)
 
   expect(dropdown.classList).toContain(`hidden`)
   expect(document.activeElement).toBe(input_el)
@@ -2433,17 +2166,13 @@ test(`close_dropdown_on_select='retain-focus' clears active create message after
 })
 
 test(`close_dropdown_on_select='retain-focus' restores input focus after keyboard select all`, async () => {
-  mount_retain_focus({
-    options: [`Apple`, `Banana`],
-    select_all_option: true,
-  })
+  mount_retain_focus({ options: [`Apple`, `Banana`], select_all_option: true })
 
   const input_el = get_input()
   const dropdown = doc_query(`ul.options`)
   const select_all_el = doc_query(`ul.options > li.select-all`)
   select_all_el.focus()
-  select_all_el.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_sequence(select_all_el, `Enter`)
 
   expect(dropdown.classList).toContain(`hidden`)
   expect(document.activeElement).toBe(input_el)
@@ -2497,8 +2226,7 @@ test(`close_dropdown_on_select='retain-focus' works correctly with max_select`, 
   // the second selection reaches max_select, which must not steal focus either
   input_el.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
   await tick()
-  doc_query(`ul.options > li`).click()
-  await tick()
+  await click(`ul.options > li`)
 
   expect(document.activeElement).toBe(input_el)
   expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(2)
@@ -2507,9 +2235,7 @@ test(`close_dropdown_on_select='retain-focus' works correctly with max_select`, 
 test(`Escape and Tab still blur input even with close_dropdown_on_select='retain-focus'`, async () => {
   mount_retain_focus({ options: [1, 2, 3] })
 
-  const input_el = get_input()
-  input_el.focus()
-  await tick()
+  const input_el = await focus_input()
 
   // retain-focus applies to selection, not keyboard closing, so Escape blurs
   input_el.dispatchEvent(fresh_key(`Escape`))
@@ -2545,8 +2271,7 @@ describe(`create_option_msg as function`, () => {
       },
     })
 
-    const input = get_input()
-    await type_search_text(search, input)
+    await type_search_text(search)
 
     expect(doc_query(`ul.options li.user-msg`).textContent?.trim()).toBe(
       `Create '${search}'`,
@@ -2572,8 +2297,7 @@ describe(`create_option_msg as function`, () => {
         no_matching_options_msg: `No matches`,
       })
 
-      const input = get_input()
-      await type_search_text(`bar`, input)
+      await type_search_text(`bar`)
 
       expect(doc_query(`ul.options li.user-msg`).textContent?.trim()).toBe(expected_text)
     },
@@ -2590,8 +2314,7 @@ describe(`select_all_option feature`, () => {
     `shows correct label when select_all_option=%s`,
     async (select_all_option, expected_label) => {
       mount_multiselect({ options, select_all_option })
-      get_input().click()
-      await tick()
+      await click(get_input())
       expect(doc_query(`ul.options > li.select-all`).textContent?.trim()).toBe(
         expected_label,
       )
@@ -2603,8 +2326,7 @@ describe(`select_all_option feature`, () => {
     [{ select_all_option: true, mode: `single` as const }],
   ])(`hidden when props=%j`, async (props) => {
     mount_multiselect({ options, ...props })
-    get_input().click()
-    await tick()
+    await click(get_input())
     expect(document.querySelector(`ul.options > li.select-all`)).toBeNull()
   })
 
@@ -2621,12 +2343,10 @@ describe(`select_all_option feature`, () => {
       on_select_all: onselectAll_spy,
       on_change: onchange_spy,
     })
-    get_input().click()
-    await tick()
+    await click(get_input())
     const select_all = doc_query(`ul.options > li.select-all`)
     expect(select_all.getAttribute(`aria-selected`)).toBe(`false`)
-    select_all.click()
-    await tick()
+    await click(select_all)
     expect(select_all.getAttribute(`aria-selected`)).toBe(`true`)
     expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`Apple Banana Cherry Date`)
     expect(onselectAll_spy).toHaveBeenCalledWith({ options, scope })
@@ -2647,8 +2367,7 @@ describe(`select_all_option feature`, () => {
       max_select: 2,
       on_max_reached,
     })
-    doc_query(`ul.options > li.select-all`).click()
-    await tick()
+    await click(`ul.options > li.select-all`)
     expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`A C`)
     expect(on_max_reached).toHaveBeenCalledExactlyOnceWith({
       selected: [options_mixed[0], options_mixed[2]],
@@ -2669,13 +2388,10 @@ describe(`select_all_option feature`, () => {
     })
     const input = get_input()
     input.focus()
-    input.dispatchEvent(
-      new KeyboardEvent(`keydown`, { key: `a`, ctrlKey: true, bubbles: true }),
-    )
+    press_key(input, `a`, { ctrlKey: true })
     await tick()
 
-    expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
-    expect(onmaxreached_spy).toHaveBeenCalledWith({
+    expect(onmaxreached_spy).toHaveBeenCalledExactlyOnceWith({
       selected: [`a`, `b`],
       max_select: 2,
       attempted_option: `c`,
@@ -2697,8 +2413,7 @@ describe(`select_all_option feature`, () => {
       select_all_option: true,
       select_all_disabled_title: title_prop,
     })
-    get_input().click()
-    await tick()
+    await click(get_input())
     expect(doc_query(`ul.options > li.select-all`).title).toBe(expected_title)
   })
 
@@ -2712,12 +2427,16 @@ describe(`select_all_option feature`, () => {
       const input = get_input()
       input.click()
       await type_search_text(`a`, input)
-      doc_query(`ul.options > li.select-all`).click()
-      await tick()
+      await click(`ul.options > li.select-all`)
       expect(input.value).toBe(expected)
     },
   )
 
+  const remote_matching = {
+    open: true,
+    select_all_scope: `matching`,
+    load_options: async () => ({ options: [`a`], has_more: false }),
+  } satisfies MultiSelectProps
   test.each<[string, MultiSelectProps, boolean, string]>([
     [
       `all selected`,
@@ -2782,11 +2501,7 @@ describe(`select_all_option feature`, () => {
     ],
     [
       `matching scope with load_options`,
-      {
-        open: true,
-        select_all_scope: `matching`,
-        load_options: async () => ({ options: [`a`], has_more: false }),
-      },
+      remote_matching,
       true,
       `Matching select-all is only available with local options`,
     ],
@@ -2794,21 +2509,14 @@ describe(`select_all_option feature`, () => {
     // first, so neither `null` nor a replacement string could take effect.
     [
       `matching scope, title suppressed with null`,
-      {
-        open: true,
-        select_all_scope: `matching`,
-        load_options: async () => ({ options: [`a`], has_more: false }),
-        select_all_disabled_title: null,
-      },
+      { ...remote_matching, select_all_disabled_title: null },
       true,
       ``,
     ],
     [
       `matching scope, title replaced by the caller`,
       {
-        open: true,
-        select_all_scope: `matching`,
-        load_options: async () => ({ options: [`a`], has_more: false }),
+        ...remote_matching,
         select_all_disabled_title: `Not available while loading remotely`,
       },
       true,
@@ -2819,9 +2527,7 @@ describe(`select_all_option feature`, () => {
     [
       `matching scope, callback wraps the default it replaces`,
       {
-        open: true,
-        select_all_scope: `matching`,
-        load_options: async () => ({ options: [`a`], has_more: false }),
+        ...remote_matching,
         select_all_disabled_title: ({ matching_scope_unavailable, default_title }) =>
           `${matching_scope_unavailable}: ${default_title}`,
       },
@@ -2865,11 +2571,9 @@ describe(`select_all_option feature`, () => {
       on_select_all: onselectAll_spy,
     })
     mount_multiselect(props)
-    get_input().click()
-    await tick()
+    await click(get_input())
 
-    doc_query(`ul.options > li.select-all`).click()
-    await tick()
+    await click(`ul.options > li.select-all`)
 
     expect(onselectAll_spy).not.toHaveBeenCalled()
     expect(props.value).toEqual([`a`, `b`])
@@ -2973,10 +2677,8 @@ describe(`binding update event count`, () => {
     await tick()
     expect(onchange_spy).toHaveBeenCalledTimes(0)
 
-    doc_query(`ul.options li`).click()
-    await tick()
-    expect(onchange_spy).toHaveBeenCalledTimes(1)
-    expect(onchange_spy).toHaveBeenCalledWith({ option: 1, type: `add` })
+    await click(`ul.options li`)
+    expect(onchange_spy).toHaveBeenCalledExactlyOnceWith({ option: 1, type: `add` })
     expect(native_change).not.toHaveBeenCalled()
 
     const event = new Event(`change`, { bubbles: true })
@@ -2989,15 +2691,11 @@ describe(`binding update event count`, () => {
     `%s value binding updates once on mount and once per selection`,
     async (mode) => {
       const spy = vi.fn()
-      mount(Test2WayBind, {
-        target: document.body,
-        props: { options: [1, 2, 3], mode, onValueChanged: spy },
-      })
+      mount_2way({ options: [1, 2, 3], mode, onValueChanged: spy })
       await tick()
       expect(spy).toHaveBeenCalledExactlyOnceWith(mode === `single` ? null : [])
       spy.mockClear()
-      doc_query(`ul.options li`).click()
-      await tick()
+      await click(`ul.options li`)
       expect(spy).toHaveBeenCalledExactlyOnceWith(mode === `single` ? 1 : [1])
     },
   )
@@ -3005,7 +2703,6 @@ describe(`binding update event count`, () => {
 
 describe(`on_search event`, () => {
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
 
   test(`fires debounced when search text changes (including clearing), not on mount`, async () => {
     const onsearch_spy = vi.fn()
@@ -3023,8 +2720,7 @@ describe(`on_search event`, () => {
     // past the 150ms debounce
     await vi.advanceTimersByTimeAsync(200)
 
-    expect(onsearch_spy).toHaveBeenCalledTimes(1)
-    expect(onsearch_spy).toHaveBeenCalledWith({
+    expect(onsearch_spy).toHaveBeenCalledExactlyOnceWith({
       search_text: `1`,
       matching_options: [1, 10],
     })
@@ -3060,8 +2756,7 @@ describe(`on_search event`, () => {
 
     await vi.advanceTimersByTimeAsync(200)
 
-    expect(onsearch_spy).toHaveBeenCalledTimes(1)
-    expect(onsearch_spy).toHaveBeenCalledWith({
+    expect(onsearch_spy).toHaveBeenCalledExactlyOnceWith({
       search_text: `ap`,
       matching_options: [`apple`, `apricot`],
     })
@@ -3074,37 +2769,13 @@ describe(`on_max_reached event`, () => {
     { label: `Banana`, value: 2 },
     { label: `Cherry`, value: 3 },
   ]
-  test.each<{
-    desc: string
-    options: Option[]
-    value: Option[]
-    trigger: `click` | `keyboard`
-    attempted: Option
-  }>([
-    {
-      desc: `click, primitives`,
-      options: [1, 2, 3, 4],
-      value: [1, 2],
-      trigger: `click`,
-      attempted: 3,
-    },
-    {
-      desc: `keyboard Enter, primitives`,
-      options: [1, 2, 3, 4],
-      value: [1, 2],
-      trigger: `keyboard`,
-      attempted: 3,
-    },
-    {
-      desc: `click, object options`,
-      options: object_opts,
-      value: [object_opts[0], object_opts[1]],
-      trigger: `click`,
-      attempted: object_opts[2],
-    },
+  test.each<[`click` | `keyboard`, Option[], Option[], Option]>([
+    [`click`, [1, 2, 3, 4], [1, 2], 3],
+    [`keyboard`, [1, 2, 3, 4], [1, 2], 3],
+    [`click`, object_opts, object_opts.slice(0, 2), object_opts[2]],
   ])(
-    `fires when adding beyond max_select ($desc)`,
-    async ({ options, value: selected, trigger, attempted }) => {
+    `fires when adding beyond max_select via %s with options=%j`,
+    async (trigger, options, selected, attempted) => {
       const onmaxreached_spy = vi.fn()
       mount_multiselect({
         options,
@@ -3121,8 +2792,7 @@ describe(`on_max_reached event`, () => {
       } else doc_query(`ul.options li:nth-child(1)`).click()
       await tick()
 
-      expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
-      expect(onmaxreached_spy).toHaveBeenCalledWith({
+      expect(onmaxreached_spy).toHaveBeenCalledExactlyOnceWith({
         selected,
         max_select: 2,
         attempted_option: attempted,
@@ -3145,8 +2815,7 @@ describe(`on_max_reached event`, () => {
 
     await focus_input()
 
-    doc_query(`ul.options li:nth-child(1)`).click()
-    await tick()
+    await click(`ul.options li:nth-child(1)`)
 
     expect(onmaxreached_spy).not.toHaveBeenCalled()
   })
@@ -3168,50 +2837,30 @@ describe(`on_duplicate event`, () => {
 
     await focus_input()
 
-    doc_query(`ul.options li:nth-child(1)`).click()
-    await tick()
+    await click(`ul.options li:nth-child(1)`)
 
     expect(onduplicate_spy).not.toHaveBeenCalled()
   })
 
   // detection is label-based, so typing "Apple" hits a selected {label: "Apple", value: 1}
   // even though the keys differ — otherwise the UX is confusing
-  test.each<{
-    desc: string
-    options: Option[]
-    value: Option[]
-    typed_value: string
-    expected: { option: unknown }
-  }>([
-    {
-      // user typed "1" stays a string (get_label stringifies primitives), so numeric
-      // coercion doesn't apply and detection is label-based
-      desc: `numeric options coerced to string`,
-      options: [1, 2, 3],
-      value: [1],
-      typed_value: `1`,
-      expected: { option: `1` },
-    },
-    {
-      desc: `string options`,
-      options: [`apple`, `banana`, `cherry`],
-      value: [`apple`],
-      typed_value: `apple`,
-      expected: { option: `apple` },
-    },
-    {
-      desc: `object options (label match)`,
-      options: [
+  test.each<[string, Option[], Option[], string]>([
+    // user typed "1" stays a string (get_label stringifies primitives), so numeric
+    // coercion doesn't apply and detection is label-based
+    [`numeric options coerced to string`, [1, 2, 3], [1], `1`],
+    [`string options`, [`apple`, `banana`, `cherry`], [`apple`], `apple`],
+    [
+      `object options (label match)`,
+      [
         { label: `Apple`, value: 1 },
         { label: `Banana`, value: 2 },
       ],
-      value: [{ label: `Apple`, value: 1 }],
-      typed_value: `Apple`,
-      expected: { option: `Apple` },
-    },
+      [{ label: `Apple`, value: 1 }],
+      `Apple`,
+    ],
   ])(
-    `fires with $desc via allow_user_options`,
-    async ({ options, value: selected, typed_value, expected }) => {
+    `fires with %s via allow_user_options`,
+    async (_desc, options, selected, typed_value) => {
       const onduplicate_spy = vi.fn()
 
       mount_multiselect({
@@ -3227,11 +2876,9 @@ describe(`on_duplicate event`, () => {
       await type_search_text(typed_value, input)
 
       // fresh Enter per case: defaultPrevented persists across re-dispatch
-      input.dispatchEvent(fresh_key(`Enter`))
-      await tick()
+      await press_sequence(input, `Enter`)
 
-      expect(onduplicate_spy).toHaveBeenCalledTimes(1)
-      expect(onduplicate_spy).toHaveBeenCalledWith(expected)
+      expect(onduplicate_spy).toHaveBeenCalledExactlyOnceWith({ option: typed_value })
     },
   )
 
@@ -3252,8 +2899,7 @@ describe(`on_duplicate event`, () => {
 
     // "1" is a duplicate and max_select is already reached
     await type_search_text(`1`, input)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_sequence(input, `Enter`)
 
     expect(onmaxreached_spy).toHaveBeenCalledTimes(1)
     expect(onduplicate_spy).toHaveBeenCalledTimes(1)
@@ -3276,11 +2922,9 @@ describe(`on_activate event`, () => {
 
     const input = await focus_input()
 
-    input.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
-    await tick()
+    await press_sequence(input, key)
 
-    expect(onactivate_spy).toHaveBeenCalledTimes(1)
-    expect(onactivate_spy).toHaveBeenCalledWith(expected)
+    expect(onactivate_spy).toHaveBeenCalledExactlyOnceWith(expected)
   })
 
   test(`pointer and focus activation do not fire on_activate`, async () => {
@@ -3288,10 +2932,7 @@ describe(`on_activate event`, () => {
 
     mount_multiselect({ options: [1, 2, 3], on_activate: onactivate_spy, open: true })
 
-    await focus_input()
-
-    get_input().dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(await focus_input(), `ArrowDown`)
     onactivate_spy.mockClear()
 
     const option3 = doc_query(`ul.options li:nth-child(3)`)
@@ -3318,19 +2959,28 @@ describe(`on_activate event`, () => {
 
     const input = await focus_input()
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    for (const key of [`ArrowDown`, `ArrowDown`, `ArrowDown`, `ArrowDown`]) {
+      input.dispatchEvent(fresh_key(key))
+      await tick()
+    }
 
     expect(onactivate_spy).toHaveBeenCalledTimes(4)
     expect(onactivate_spy).toHaveBeenNthCalledWith(3, { option: 3, index: 2 })
     expect(onactivate_spy).toHaveBeenNthCalledWith(4, { option: 1, index: 0 })
+  })
+
+  test(`back-to-back keys each report their own option despite the auto-scroll tick`, async () => {
+    const onactivate_spy = vi.fn()
+    mount_multiselect({ options: [1, 2, 3], on_activate: onactivate_spy, open: true })
+    const input = await focus_input()
+    // no tick between presses, as with key repeat outpacing Svelte's flush
+    input.dispatchEvent(fresh_key(`ArrowDown`))
+    input.dispatchEvent(fresh_key(`ArrowDown`))
+    await tick()
+    expect(onactivate_spy.mock.calls).toEqual([
+      [{ option: 1, index: 0 }],
+      [{ option: 2, index: 1 }],
+    ])
   })
 
   test(`does not fire when toggling user message with no matching options`, async () => {
@@ -3350,8 +3000,7 @@ describe(`on_activate event`, () => {
 
     await type_search_text(`new option`, input)
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(input, `ArrowDown`)
 
     expect(onactivate_spy).not.toHaveBeenCalled()
   })
@@ -3370,16 +3019,13 @@ describe(`on_activate event`, () => {
     const input = await focus_input()
 
     // sets active_index = 0
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
-    expect(onactivate_spy).toHaveBeenCalledTimes(1)
-    expect(onactivate_spy).toHaveBeenCalledWith({ option: 1, index: 0 })
+    await press_sequence(input, `ArrowDown`)
+    expect(onactivate_spy).toHaveBeenCalledExactlyOnceWith({ option: 1, index: 0 })
 
     // filters every option away
     await type_search_text(`xyz`, input)
 
-    input.dispatchEvent(fresh_key(`ArrowDown`))
-    await tick()
+    await press_sequence(input, `ArrowDown`)
 
     expect(onactivate_spy).toHaveBeenCalledTimes(1)
   })
@@ -3399,15 +3045,9 @@ describe(`case-variant labels (issue #391)`, () => {
 
     // duplicate keys in the keyed {#each} used to crash here
     expect(document.querySelectorAll(`ul.options > li`)).toHaveLength(3)
-    for (const li of document.querySelectorAll(`ul.options > li`)) {
-      if (li instanceof HTMLElement) li.click()
-      await tick()
-    }
+    for (const li of document.querySelectorAll(`ul.options > li`)) await click(li)
 
-    expect(props.value).toHaveLength(3)
-    expect(
-      (Array.isArray(props.value) ? props.value : []).map((opt) => get_label(opt)),
-    ).toEqual([`pd`, `PD`, `Pd`])
+    expect(props.value).toEqual(object_options)
   })
 })
 
@@ -3443,8 +3083,7 @@ describe(`duplicates prop variants`, () => {
     const input = await focus_input()
 
     await type_search_text(typed, input)
-    input.dispatchEvent(fresh_key(`Enter`))
-    await tick()
+    await press_sequence(input, `Enter`)
 
     if (expect_blocked) {
       expect(onduplicate_spy).toHaveBeenCalledTimes(1)
@@ -3496,8 +3135,7 @@ describe(`duplicates prop variants`, () => {
     expect(visible_options).toHaveLength(2)
     expect(document.querySelectorAll(`ul.options > li.selected`)).toHaveLength(0)
     // a different value, so this must add rather than register a duplicate
-    if (visible_options[0] instanceof HTMLElement) visible_options[0].click()
-    await tick()
+    await click(visible_options[0])
 
     expect(onduplicate_spy).not.toHaveBeenCalled()
     expect(onadd_spy).toHaveBeenCalledTimes(1)
@@ -3505,8 +3143,7 @@ describe(`duplicates prop variants`, () => {
     document.body.innerHTML = ``
     mount_multiselect({ options, value: [options[0]], duplicates: `case-insensitive` })
 
-    get_input().focus()
-    await tick()
+    await focus_input()
 
     expect(
       document.querySelectorAll(`ul.options > li.selected[title="Already selected"]`),
@@ -3521,19 +3158,15 @@ test(`dropdown has no li children when all user-created options are selected`, a
     create_option_msg: null,
   })
 
-  const input = get_input()
-  await type_search_text(`tag1`, input)
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  const input = await type_search_text(`tag1`)
+  await press_sequence(input, `Enter`)
 
   await type_search_text(`tag2`, input)
-  input.dispatchEvent(fresh_key(`Enter`))
-  await tick()
+  await press_sequence(input, `Enter`)
 
   input.focus()
   await tick()
-  const items = document.querySelectorAll(`ul.options > li`)
-  expect(items).toHaveLength(0)
+  expect(document.querySelectorAll(`ul.options > li`)).toHaveLength(0)
 })
 
 // drag-drop must reject foreign/invalid drag data (previously corrupted selected)
@@ -3546,11 +3179,7 @@ test.each([
   [`valid-looking numeric text without dragstart`, `0`],
 ])(`drop with foreign/invalid drag data (%s) is a no-op`, async (_desc, drag_data) => {
   const onreorder_spy = vi.fn()
-  mount_multiselect({
-    options: [1, 2, 3],
-    value: [1, 2, 3],
-    on_reorder: onreorder_spy,
-  })
+  mount_multiselect({ options: [1, 2, 3], value: [1, 2, 3], on_reorder: onreorder_spy })
 
   const transfer = new DataTransfer()
   transfer.setData(`text/plain`, drag_data)
@@ -3609,18 +3238,13 @@ describe(`duplicate entries in options array`, () => {
       `3`,
     ])
 
-    // hovering the first duplicate activates only that row
-    option_lis[0].dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
-    await tick()
-    const active = [...document.querySelectorAll(`ul.options > li.active`)]
-    expect(active).toHaveLength(1)
-    expect(active[0].id.endsWith(`-opt-0`)).toBe(true)
-
-    option_lis[1].dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
-    await tick()
-    const second_active = [...document.querySelectorAll(`ul.options > li.active`)]
-    expect(second_active).toHaveLength(1)
-    expect(second_active[0].id.endsWith(`-opt-1`)).toBe(true)
+    // hovering either duplicate activates only that row
+    for (const idx of [0, 1]) {
+      option_lis[idx].dispatchEvent(fresh_mousemove())
+      await tick()
+      const active = [...document.querySelectorAll(`ul.options > li.active`)]
+      expect(active.map((li) => li.id.split(`-opt-`)[1])).toEqual([`${idx}`])
+    }
   })
 })
 
@@ -3636,25 +3260,19 @@ describe(`max_visible_chips`, () => {
   ])(
     `max_visible_chips=%i collapses overflow into a %s toggle that expands and collapses`,
     async (max_visible_chips, toggle_label) => {
-      mount_multiselect({
-        options,
-        value: [...options],
-        max_visible_chips,
-      })
+      mount_multiselect({ options, value: [...options], max_visible_chips })
 
       expect(chips()).toHaveLength(max_visible_chips)
       const toggle = doc_query<HTMLButtonElement>(`li.more-chip button.more-chips`)
       expect(toggle.textContent?.trim()).toBe(toggle_label)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
 
-      toggle.click()
-      await tick()
+      await click(toggle)
       expect(chips()).toHaveLength(5)
       expect(toggle.textContent?.trim()).toBe(`show less`)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
 
-      toggle.click()
-      await tick()
+      await click(toggle)
       expect(chips()).toHaveLength(max_visible_chips)
     },
   )
@@ -3673,17 +3291,14 @@ describe(`max_visible_chips`, () => {
     expect(chips()).toHaveLength(2)
 
     // ArrowLeft highlights the LAST selected chip (idx 4), which is hidden
-    const input = get_input()
-    input.dispatchEvent(fresh_key(`ArrowLeft`))
-    await tick()
+    await press_sequence(get_input(), `ArrowLeft`)
 
     expect(chips()).toHaveLength(5)
     expect(chips().at(-1)?.classList.contains(`highlighted`)).toBe(true)
 
     // "show less" must stick: collapsing clears the beyond-limit highlight, else
     // the auto-expand effect would instantly re-expand
-    doc_query<HTMLButtonElement>(`li.more-chip button.more-chips`).click()
-    await tick()
+    await click(`li.more-chip button.more-chips`)
     expect(chips()).toHaveLength(2)
   })
 })
@@ -3703,8 +3318,7 @@ describe(`labels`, () => {
     const toggle = doc_query<HTMLButtonElement>(`li.more-chip button.more-chips`)
     expect(toggle.textContent?.trim()).toBe(`noch 2`)
 
-    toggle.click()
-    await tick()
+    await click(toggle)
     expect(toggle.textContent?.trim()).toBe(`show less`)
   })
 
@@ -3778,13 +3392,11 @@ describe(`labels`, () => {
     })
     await focus_input()
 
-    doc_query<HTMLLIElement>(`ul.options > li[role="option"]`).click()
-    await tick()
+    await click(`ul.options > li[role="option"]`)
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.textContent?.trim()).toBe(`a gewählt`)
 
-    doc_query<HTMLButtonElement>(`ul.selected button.remove`).click()
-    await tick()
+    await click(`ul.selected button.remove`)
     expect(live_region.textContent?.trim()).toBe(`a removed`)
   })
 
@@ -3795,8 +3407,7 @@ describe(`labels`, () => {
       labels: { options_removed: (count) => `${count} entfernt` },
     })
 
-    doc_query<HTMLButtonElement>(`button.remove-all`).click()
-    await tick()
+    await click(`button.remove-all`)
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.textContent?.trim()).toBe(`3 entfernt`)
   })
@@ -3831,8 +3442,7 @@ describe(`labels`, () => {
 
 test(`whitespace-only search shows all options instead of a blank dropdown`, async () => {
   mount_multiselect({ options: [1, 2, 3], open: true })
-  const input = get_input()
-  await type_search_text(`  `, input)
+  await type_search_text(`  `)
 
   expect(document.querySelectorAll(`ul.options li[role='option']`)).toHaveLength(3)
   expect(document.querySelector(`ul.options li.user-msg`)).toBeNull()
@@ -3849,19 +3459,17 @@ test(`sort_selected orders chips before clearing the accepted search`, async () 
     search_seen_by_comparator = props.search_text
     return `${get_label(opt_2)}`.localeCompare(`${get_label(opt_1)}`)
   }
-  mount(Test2WayBind, { target: document.body, props })
+  mount_2way(props)
 
   for (const label of [`a`, `c`]) {
     const li = [
       ...document.querySelectorAll<HTMLLIElement>(`ul.options li[role='option']`),
     ].find((el) => el.textContent?.trim() === label)
-    li?.click()
-    await tick()
+    await click(li)
   }
   props.search_text = `b`
   await tick()
-  doc_query<HTMLLIElement>(`ul.options li[role='option']`).click()
-  await tick()
+  await click(`ul.options li[role='option']`)
 
   expect(search_seen_by_comparator).toBe(`b`)
   expect(props.search_text).toBe(``)

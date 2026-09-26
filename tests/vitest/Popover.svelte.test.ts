@@ -1,8 +1,8 @@
-import type { ComponentProps } from 'svelte'
-import { tick } from 'svelte'
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
+import { tick, type ComponentProps } from 'svelte'
+import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
 import {
+  click,
   create_element,
   doc_query,
   mock_rect,
@@ -16,12 +16,9 @@ describe(`Popover`, () => {
   type PopoverProps = Omit<ComponentProps<typeof Popover>, `children`>
   // hover/focus open and close on timers
   beforeEach(() => void vi.useFakeTimers())
-  afterEach(() => void vi.useRealTimers())
   // click_outside and focus_trap leave document listeners that outlive innerHTML = '',
   // so unmount for real between cases
-  let unmount_popover = async (): Promise<void> => {
-    throw new Error(`Popover test app was not mounted`)
-  }
+  let unmount_popover: () => Promise<void>
   const mount_popover = (extra: Partial<PopoverProps> = {}) => {
     const props = $state({ ...extra })
     unmount_popover = render(TestPopover, props)
@@ -41,10 +38,7 @@ describe(`Popover`, () => {
     press_escape()
     doc_query(`.popover`).hidePopover()
   }
-  const click_trigger = async () => {
-    trigger().click()
-    await tick()
-  }
+  const click_trigger = () => click(trigger())
   const mouse_enter = (target: EventTarget = trigger()) =>
     target.dispatchEvent(new MouseEvent(`mouseenter`))
   const mouse_leave = (target: EventTarget = trigger()) =>
@@ -105,7 +99,6 @@ describe(`Popover`, () => {
     mount_popover({ on_close })
     // closed popovers register no document-wide close trackers
     expect(added.mock.calls.map(([type]) => type)).not.toContain(`keydown`)
-    added.mockRestore()
     await click_trigger()
 
     escape_native_popover()

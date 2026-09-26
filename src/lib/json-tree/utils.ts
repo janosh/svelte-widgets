@@ -2,6 +2,7 @@ import { build_path, parse_path } from './path'
 import type { DiffEntry, JsonValueType } from './types'
 
 type JsonChild = { key: string | number; value: unknown }
+type NodeKey = JsonChild[`key`] | null
 
 // Circular-safe JSON.stringify that keeps Maps, Sets, Errors and RegExps readable instead of
 // emitting `{}` for them at any depth
@@ -46,20 +47,9 @@ export function get_value_type(value: unknown): JsonValueType {
 }
 
 // Container types whose children render as nodes
+const EXPANDABLE_TYPES = new Set<JsonValueType>([`object`, `array`, `map`, `set`])
 export const is_expandable_type = (value_type: JsonValueType): boolean =>
-  value_type === `object` ||
-  value_type === `array` ||
-  value_type === `map` ||
-  value_type === `set`
-
-// Scalars compared by value
-const is_primitive_type = (value_type: JsonValueType): boolean =>
-  value_type === `string` ||
-  value_type === `number` ||
-  value_type === `boolean` ||
-  value_type === `null` ||
-  value_type === `undefined` ||
-  value_type === `bigint`
+  EXPANDABLE_TYPES.has(value_type)
 
 export const is_expandable = (value: unknown): boolean =>
   is_expandable_type(get_value_type(value))
@@ -164,19 +154,14 @@ export function format_preview(value: unknown, max_length: number = 50): string 
     const str = value as string
     return str.length > max_length ? `"${str.slice(0, max_length)}..."` : `"${str}"`
   }
-  if (type === `function`) {
+  if (type === `function`)
     return `ƒ ${(value as (...args: unknown[]) => unknown).name || `anonymous`}()`
-  }
   return format_special_value(value, type) ?? String(value)
 }
 
 // Case-insensitive match of query against a node's key or its displayed leaf text. Paths
 // are not matched: every descendant of a matching key (and of the root label) would match.
-export function matches_search(
-  key: string | number | null,
-  value: unknown,
-  query: string,
-): boolean {
+export function matches_search(key: NodeKey, value: unknown, query: string): boolean {
   if (!query) return false
   const lower_query = query.toLowerCase()
   if (key !== null && String(key).toLowerCase().includes(lower_query)) return true
@@ -192,27 +177,15 @@ function walk_tree(
   value: unknown,
   current_path: string,
   sort_keys: boolean,
-  visit: (
-    value: unknown,
-    path: string,
-    key: string | number | null,
-    depth: number,
-  ) => boolean,
+  visit: (value: unknown, path: string, key: NodeKey, depth: number) => boolean,
 ): void {
   const seen = new WeakSet<object>()
-  const recurse = (
-    val: unknown,
-    path: string,
-    key: string | number | null,
-    depth: number,
-  ) => {
-    if (!visit(val, path, key, depth)) return
-    if (!is_expandable(val)) return
-    if (seen.has(val as object)) return
+  const recurse = (val: unknown, path: string, key: NodeKey, depth: number) => {
+    if (!visit(val, path, key, depth) || !is_expandable(val) || seen.has(val as object))
+      return
     seen.add(val as object)
-    for (const child of get_children(val, sort_keys)) {
+    for (const child of get_children(val, sort_keys))
       recurse(child.value, build_path(path, child.key), child.key, depth + 1)
-    }
     seen.delete(val as object)
   }
   recurse(value, current_path, null, 0)
@@ -360,13 +333,10 @@ export function estimate_byte_size(
   if (type === `boolean`) return value ? 4 : 5
   if (type === `number` || type === `bigint`) return String(value).length
   if (type === `string`) return (value as string).length + 2
-  if (type === `symbol`) return (value as symbol).toString().length
   if (type === `function`) return 20
   if (type === `date`) return 24
-  if (type === `regexp`) return (value as RegExp).toString().length
-  if (type === `error`) {
-    return `${(value as Error).name}: ${(value as Error).message}`.length
-  }
+  if (type === `symbol` || type === `regexp` || type === `error`)
+    return String(format_special_value(value, type)).length
   // Collections: 2 bracket bytes plus each child with a per-entry overhead (object keys
   // `"key": `, Map keys a flat 10, array/Set separators 1)
   const child_size = (val: unknown) =>
@@ -426,9 +396,8 @@ export function compute_diff(
       old_type === new_type &&
       (old_type === `date`
         ? Object.is((old_val as Date).getTime(), (new_val as Date).getTime())
-        : is_primitive_type(old_type)
-          ? values_equal(old_val, new_val)
-          : String(old_val) === String(new_val))
+        : // primitives compare by value; other leaves (regexps, errors, symbols) by string form
+          values_equal(old_val, new_val) || String(old_val) === String(new_val))
     if (!equal)
       result.set(current_path, {
         status: `changed`,
@@ -446,12 +415,9 @@ export function compute_diff(
 
   // Objects diff by key; arrays, Maps and Sets diff by index (Map entries wrapped as
   // { key, value }, matching how get_children renders them)
-  const old_children = new Map(
-    get_children(old_val).map(({ key, value }) => [key, value]),
-  )
-  const new_children = new Map(
-    get_children(new_val).map(({ key, value }) => [key, value]),
-  )
+  const child_map = (val: unknown) =>
+    new Map(get_children(val).map(({ key, value }) => [key, value]))
+  const [old_children, new_children] = [child_map(old_val), child_map(new_val)]
   for (const key of new Set([...old_children.keys(), ...new_children.keys()])) {
     const child_path = build_path(current_path, key)
     const existed = old_children.has(key)

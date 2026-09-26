@@ -25,6 +25,13 @@ const serialize_children = (children: HastNode[] | undefined): string => {
   return html
 }
 
+// Braces open Svelte expressions, so HTML headed for Markdown/Svelte markup escapes them
+export const escape_braces = (text: string): string =>
+  text.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
+// Safe in quoted attributes and inert in Svelte markup
+export const escape_attribute = (text: string): string =>
+  escape_braces(escape_html_text(text).replaceAll(`"`, `&quot;`))
+
 export const hast_to_html = (node: HastNode): string => {
   if (node.type === `text`) return escape_html_text(node.value ?? ``)
   if (node.type === `root`) return serialize_children(node.children)

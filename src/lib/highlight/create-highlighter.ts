@@ -1,6 +1,6 @@
 // Lazy starry-night factory; custom grammars do not load the default grammar bundle.
 import type { Grammar } from '@wooorm/starry-night'
-import { type HastNode, escape_html_text, hast_to_html } from './hast.ts'
+import { type HastNode, escape_braces, escape_html_text, hast_to_html } from './hast.ts'
 
 export type { Grammar } from '@wooorm/starry-night'
 
@@ -33,9 +33,6 @@ const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNigh
   return create_starry_night(grammars)
 }
 
-const escape_svelte = (html: string): string =>
-  html.replaceAll(`{`, `&#123;`).replaceAll(`}`, `&#125;`)
-
 // Falls back to plain escaped code for a missing or unsupported language. Braces are escaped
 // on both paths: this HTML lands in Markdown/Svelte markup, where a stray `{` opens an
 // expression.
@@ -45,7 +42,7 @@ const render_html = (
   lang: string | null | undefined,
 ): string => {
   const scope = lang ? instance.flagToScope(lang) : undefined
-  return escape_svelte(
+  return escape_braces(
     scope ? hast_to_html(instance.highlight(code, scope)) : escape_html_text(code),
   )
 }

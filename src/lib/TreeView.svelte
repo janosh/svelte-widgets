@@ -29,6 +29,8 @@
   let selection_anchor: string | undefined
   const node_elements = new Map<string, HTMLElement>()
   const range_keys = new Set([`ArrowDown`, `ArrowUp`, `Home`, `End`])
+  // keys that still act while Ctrl/Cmd is held
+  const chord_keys = new Set([...range_keys, ` `, `Enter`])
   const branches = new SvelteMap<TreeNode, AbortController | readonly TreeNode[]>()
   let error = $state(``)
   $effect(() => {
@@ -76,9 +78,7 @@
   const rows = $derived(tree.rows)
   // Bindable initial expansion can request children before the first interaction.
   $effect(() => {
-    for (const { node } of rows) {
-      if (expanded.has(node.id)) void expand(node)
-    }
+    for (const { node } of rows) if (expanded.has(node.id)) void expand(node)
   })
   const is_selected = (node: TreeNode): boolean | undefined =>
     node.disabled ? undefined : selected_ids.has(node.id)
@@ -137,12 +137,9 @@
       const start = tree.indices.get(selection_anchor ?? active_id ?? node.id) ?? end
       if (start === undefined || end === undefined) return
       selection_anchor = rows[start].node.id
-      for (const { node: entry } of rows.slice(
-        Math.min(start, end),
-        Math.max(start, end) + 1,
-      )) {
+      const [from, to] = start < end ? [start, end] : [end, start]
+      for (const { node: entry } of rows.slice(from, to + 1))
         if (!entry.disabled) ids.add(entry.id)
-      }
     } else {
       selection_anchor = node.id
       if (toggle && ids.has(node.id)) ids.delete(node.id)
@@ -162,13 +159,7 @@
       event.preventDefault()
       return
     }
-    if (
-      toggle &&
-      !range_keys.has(event.key) &&
-      event.key !== ` ` &&
-      event.key !== `Enter`
-    )
-      return
+    if (toggle && !chord_keys.has(event.key)) return
     const idx = active_id === undefined ? -1 : (tree.indices.get(active_id) ?? -1)
     const row = rows[idx]
     if (!row) return
@@ -232,9 +223,7 @@
         aria-busy={branches.get(node) instanceof AbortController}
         tabindex={active_id === node.id ? 0 : -1}
         style:padding-inline-start={`${(depth - 1) * 1.25}em`}
-        onfocus={() => {
-          focused = node.id
-        }}
+        onfocus={() => (focused = node.id)}
         onpointerdown={(event) => {
           // Pointer default focus runs before click; retain the prior row for a first range.
           if (multiple && event.shiftKey && selection_anchor === undefined)

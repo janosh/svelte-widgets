@@ -62,16 +62,14 @@ for (const entry of await readdir(resolve(root, `src/routes/(demos)`), {
     )
   for (const fence of parsed.value.manifest.fences) {
     if (!fence.settings.example) continue
-    if (/\bdemo-box\b/u.test(fence.code)) {
+    if (/\bdemo-box\b/u.test(fence.code))
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} depends on site-only frame styling`,
       )
-    }
-    if (/from\s+['"]\$(?:lib|site|root)(?:\/|['"])/u.test(fence.code)) {
+    if (/from\s+['"]\$(?:lib|site|root)(?:\/|['"])/u.test(fence.code))
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} uses a private repository import`,
       )
-    }
     const { id } = fence.settings
     if (!id || !demo_ids.delete(id)) continue
     const component = `Demo${demo_components.length}`
@@ -112,15 +110,10 @@ for (const name of [
   `@wooorm/starry-night`,
   `katex`,
 ]) {
-  const {
-    version,
-    bundledVersions,
-  }: { version: string; bundledVersions?: Record<string, string> } = JSON.parse(
+  const { version }: { version: string } = JSON.parse(
     await readFile(resolve(root, `node_modules`, name, `package.json`), `utf8`),
   )
-  // vite is aliased to vite-plus-core, which records the upstream vite it wraps; consumers
-  // install plain vite, so the smoke test does too
-  packages.push(`${name}@${bundledVersions?.[name] ?? version}`)
+  packages.push(`${name}@${version}`)
 }
 await writeFile(resolve(consumer, `package.json`), `{"private":true,"type":"module"}`)
 run(`npm`, [

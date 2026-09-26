@@ -1,11 +1,9 @@
 import type { ContrastOptions } from '$lib/attachments'
 import { contrast_color, get_bg_color, pick_contrast_color } from '$lib/attachments'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { create_element } from '../index'
 
 describe(`contrast_color`, () => {
-  afterEach(() => vi.restoreAllMocks())
-
   // pins a luminance without exposing it: thresholds just below/above read `over`/`under`
   const luminance_brackets = (bg_color: string, expected: number, tolerance: number) => {
     const probe = (luminance_threshold: number) =>

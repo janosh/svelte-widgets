@@ -1,15 +1,19 @@
 import { ActionMenu } from '$lib'
 import type { CmdAction, CmdSection } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
-import { afterEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { createRawSnippet, flushSync, tick } from 'svelte'
+import { describe, expect, test, vi } from 'vitest'
 import {
+  click,
+  create_element,
   doc_query,
   escape_key,
   mock_rect,
   next_task,
+  pointer_event,
   press_key,
-  stub_prop,
+  render,
+  stub_props,
 } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
 
@@ -22,22 +26,16 @@ describe(`ActionMenu`, () => {
     { id: `Copy`, label: `Copy`, action: vi.fn(), shortcut: `mod+c` },
     { id: `Delete`, label: `Delete`, action: vi.fn(), disabled: true },
   ]
-  // svelte:body listeners outlive innerHTML = '', so unmount or old menus keep answering
-  const mounted: Record<string, unknown>[] = []
-  afterEach(() => mounted.splice(0).forEach((app) => void unmount(app)))
-  // returns the reactive props, so a test can drive `at` the way a consumer would
+  // Returns the reactive props so a test can drive `at` the way a consumer would.
+  // render unmounts at test end: svelte:body listeners outlive innerHTML = '', so old menus
+  // would keep answering
   const mount_menu = (actions: MenuEntries, extra: MenuProps = {}) => {
     const props: MenuProps & { actions: MenuEntries } = $state({ actions, ...extra })
-    mounted.push(mount(ActionMenu, { target: document.body, props }))
+    render(ActionMenu, props)
     return props
   }
   const right_click = (target: EventTarget, clientX = 120, clientY = 240) => {
-    const event = new MouseEvent(`contextmenu`, {
-      bubbles: true,
-      cancelable: true,
-      clientX,
-      clientY,
-    })
+    const event = pointer_event(`contextmenu`, clientX, clientY, { cancelable: true })
     target.dispatchEvent(event)
     return event
   }
@@ -138,7 +136,7 @@ describe(`ActionMenu`, () => {
     [`Macintosh; Intel Mac OS X 10_15`, [`⌘`, `C`]],
     [`X11; Linux x86_64`, [`Ctrl`, `C`]],
   ])(`renders mod as the platform's key (%s)`, async (user_agent, expected) => {
-    onTestFinished(stub_prop(globalThis.navigator, `userAgent`, user_agent))
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     await open_menu()
 
     expect([...items()[0].querySelectorAll(`kbd`)].map((key) => key.textContent)).toEqual(
@@ -147,12 +145,8 @@ describe(`ActionMenu`, () => {
   })
 
   test(`a trigger snippet toggles an anchored dropdown and restores focus`, async () => {
-    const props = $state({
-      actions: make_actions(),
-      open: false,
-      match_width: true,
-    })
-    mounted.push(mount(TestActionMenu, { target: document.body, props }))
+    const props = $state({ actions: make_actions(), open: false, match_width: true })
+    render(TestActionMenu, props)
     const anchor = doc_query(`[data-testid="action-menu-anchor"]`)
     const trigger = doc_query<HTMLButtonElement>(`[data-testid="action-menu-trigger"]`)
     mock_rect(anchor, { left: 40, top: 60, width: 80, height: 20 })
@@ -160,8 +154,7 @@ describe(`ActionMenu`, () => {
     expect(trigger.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(trigger.getAttribute(`aria-controls`)).toBeNull()
     trigger.dispatchEvent(outside_press())
-    trigger.click()
-    await tick()
+    await click(trigger)
 
     const surface = doc_query<HTMLMenuElement>(`menu[role="menu"]`)
     expect(props.open).toBe(true)
@@ -176,8 +169,7 @@ describe(`ActionMenu`, () => {
     ]).toEqual([`40px`, `84px`, `80px`, `80px`, `border-box`])
     expect(document.activeElement).toBe(items()[0])
 
-    items()[0].click()
-    await tick()
+    await click(items()[0])
     expect(props.open).toBe(false)
     expect(menu()).toBeNull()
     expect(trigger.getAttribute(`aria-expanded`)).toBe(`false`)
@@ -212,14 +204,12 @@ describe(`ActionMenu`, () => {
     const on_execute = vi.fn()
     await open_menu(actions, { on_execute })
 
-    items()[1].click() // disabled
-    await tick()
+    await click(items()[1]) // disabled
     expect(actions[1].action).not.toHaveBeenCalled()
     expect(on_execute).not.toHaveBeenCalled()
     expect(menu()).not.toBeNull()
 
-    items()[0].click()
-    await tick()
+    await click(items()[0])
     expect(actions[0].action).toHaveBeenCalledWith(`Copy`)
     expect(on_execute).toHaveBeenCalledWith({ action: actions[0], section: undefined })
     expect(menu()).toBeNull()
@@ -244,8 +234,7 @@ describe(`ActionMenu`, () => {
   })
 
   test(`dismiss preserves consumer-provided inside regions`, async () => {
-    const inside = document.createElement(`button`)
-    document.body.append(inside)
+    const inside = create_element(`button`)
     await open_menu(make_actions(), { dismiss: { inside: [inside] } })
     expect(doc_query(`menu`).getAttribute(`popover`)).toBe(`manual`)
 
@@ -417,8 +406,7 @@ describe(`ActionMenu`, () => {
       const on_execute = vi.fn()
       await open_menu(sections, { on_execute })
 
-      items()[1].click()
-      await tick()
+      await click(items()[1])
       expect(sections[0].actions[1].action).toHaveBeenCalledWith(`Double`)
       expect(on_execute).toHaveBeenCalledWith({
         action: sections[0].actions[1],

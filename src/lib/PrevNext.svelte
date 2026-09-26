@@ -5,11 +5,6 @@
   import { merge_defaults, PREV_NEXT_LABELS, type PrevNextLabels } from './labels'
 
   type SnippetProps = { item: Item; index: number; total: number }
-  type NavEntry = {
-    kind: `prev` | `next`
-    item: Item | undefined
-    title: string
-  }
 
   let {
     items,
@@ -33,7 +28,6 @@
   } = $props()
 
   const msg = $derived(merge_defaults(PREV_NEXT_LABELS, labels))
-  // Calculate prev/next items with wraparound
   const index = $derived.by(() => {
     const idx = items.findIndex(({ href }) => href === current)
     if (idx === -1 && items.length)
@@ -41,11 +35,10 @@
     return idx
   })
   const total = $derived(items.length)
-  const prev = $derived(items[index - 1] ?? items.at(-1))
-  const next = $derived(items[index + 1] ?? items[0])
-  let nav_entries: NavEntry[] = $derived([
-    { kind: `prev`, item: prev, title: msg.prev },
-    { kind: `next`, item: next, title: msg.next },
+  // prev/next wrap around the ends
+  const nav_entries = $derived([
+    { kind: `prev` as const, item: items[index - 1] ?? items.at(-1), title: msg.prev },
+    { kind: `next` as const, item: items[index + 1] ?? items[0], title: msg.next },
   ])
 </script>
 

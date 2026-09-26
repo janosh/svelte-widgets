@@ -1,7 +1,8 @@
 import { FileInput } from '$lib'
-import { createRawSnippet, flushSync, mount, tick, type ComponentProps } from 'svelte'
+import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vitest'
 import {
+  click,
   data_transfer,
   doc_query,
   drag_event,
@@ -11,7 +12,6 @@ import {
 
 const render = (props: ComponentProps<typeof FileInput>) => {
   const destroy = mount_body(FileInput, props)
-  flushSync()
   const input = doc_query<HTMLInputElement>(`input[type="file"]`)
   const select = async (files: File[]) => {
     Object.defineProperty(input, `files`, { configurable: true, value: files })
@@ -67,8 +67,7 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   expect(target.textContent).toContain(`Processing files`)
   await select([new File([`x`], `bad.txt`)])
   expect(signals[1].aborted).toBe(false)
-  target.querySelector<HTMLButtonElement>(`button[aria-label="Remove ok.json"]`)?.click()
-  await tick()
+  await click(`button[aria-label="Remove ok.json"]`)
   expect(signals[1].aborted).toBe(true)
   expect(target.querySelectorAll(`li`)).toHaveLength(0)
   await select([good])
@@ -170,8 +169,7 @@ test(`remove_label names each remove button and removal reports the file`, async
   })
   const [first, second] = [json(`a.json`), json(`b.json`)]
   await select([first, second])
-  target.querySelector<HTMLButtonElement>(`button[aria-label="Drop a.json"]`)?.click()
-  await tick()
+  await click(`button[aria-label="Drop a.json"]`)
   expect(on_remove).toHaveBeenCalledExactlyOnceWith(first)
   expect(
     [...target.querySelectorAll(`li`)].map((li) => li.firstChild?.textContent?.trim()),
@@ -205,8 +203,7 @@ test.each([
   [`zero max_files`, { max_files: 0 }],
   [`fractional max_files`, { max_files: 1.5 }],
 ])(`rejects %s`, (_desc, props) => {
-  expect(() => {
-    mount(FileInput, { target: document.body, props })
-    flushSync()
-  }).toThrow(`FileInput requires max_size >= 0 and max_files >= 1`)
+  expect(() => mount_body(FileInput, props)).toThrow(
+    `FileInput requires max_size >= 0 and max_files >= 1`,
+  )
 })

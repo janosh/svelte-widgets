@@ -1,14 +1,14 @@
 import Footer from '$lib/Footer.svelte'
 import { GitHub } from '$lib/icons'
 import type { FooterLink } from '$lib/types'
-import { type ComponentProps, createRawSnippet, mount, unmount } from 'svelte'
+import { type ComponentProps, createRawSnippet } from 'svelte'
 import { describe, expect, test } from 'vitest'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 describe(`Footer`, () => {
   const raw = (html: string) => createRawSnippet(() => ({ render: () => html }))
   const mount_footer = (props: ComponentProps<typeof Footer> = {}) =>
-    mount(Footer, { target: document.body, props })
+    render(Footer, props)
   const anchors = () =>
     Array.from(document.querySelectorAll<HTMLAnchorElement>(`footer nav a`))
 
@@ -20,7 +20,7 @@ describe(`Footer`, () => {
       { href: `https://x.org`, label: `Docs`, target: `_blank`, rel: `noopener` },
       { href: `/rss.xml`, label: `RSS`, title: `New releases` },
     ]
-    const component = mount_footer({ links })
+    const unmount_footer = mount_footer({ links })
     expect(
       anchors().map((anchor) => [
         anchor.getAttribute(`href`),
@@ -38,7 +38,7 @@ describe(`Footer`, () => {
       [`/rss.xml`, `RSS`, false, null, null, `New releases`],
     ])
 
-    await unmount(component)
+    await unmount_footer()
     mount_footer()
     expect(document.querySelector(`footer`)).not.toBeNull()
     expect(document.querySelector(`footer nav`)).toBeNull()
@@ -61,10 +61,7 @@ describe(`Footer`, () => {
     const item = createRawSnippet<[{ link: FooterLink }]>((get_params) => ({
       render: () => `<a href="${get_params().link.href}" data-custom>custom</a>`,
     }))
-    mount_footer({
-      links: [{ href: `/issues`, label: `Issues`, icon: GitHub }],
-      item,
-    })
+    mount_footer({ links: [{ href: `/issues`, label: `Issues`, icon: GitHub }], item })
 
     expect(anchors().map((anchor) => anchor.textContent)).toEqual([`custom`])
     expect(doc_query(`footer nav a`).hasAttribute(`data-custom`)).toBe(true)

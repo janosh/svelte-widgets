@@ -38,6 +38,10 @@ export const is_dialog_backdrop_event = (
   )
 }
 
+// only these two element types expose focus()
+export const focusable = (target: unknown): HTMLElement | SVGElement | null =>
+  target instanceof HTMLElement || target instanceof SVGElement ? target : null
+
 export const restore_dialog_focus = (
   surface: HTMLDialogElement | null,
   focus_origin: HTMLElement | SVGElement | null,

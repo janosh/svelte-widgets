@@ -4,14 +4,14 @@ import * as icons from '$lib/icons'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { assert, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { click, create_element } from './index'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
 // document-wide element like a browser does, so the per-wrapper keying lives in the source.
 let fullscreen_element: Element | null = null
 let request_calls: Element[] = []
-const mounted: Record<string, unknown>[] = []
 
 // browsers fire fullscreenchange once the request settles, so dispatch off a microtask
 const set_fullscreen_element = (element: Element | null): Promise<void> => {
@@ -41,14 +41,11 @@ beforeEach(() => {
     return set_fullscreen_element(this)
   })
   document.exitFullscreen = vi.fn(() => set_fullscreen_element(null))
-})
-
-afterEach(() => {
-  // clearing document.body does not undo a button's fullscreenchange subscription
-  for (const component of mounted.splice(0)) void unmount(component)
-  Reflect.deleteProperty(document, `fullscreenElement`)
-  Reflect.deleteProperty(Element.prototype, `requestFullscreen`)
-  Reflect.deleteProperty(document, `exitFullscreen`)
+  onTestFinished(() => {
+    Reflect.deleteProperty(document, `fullscreenElement`)
+    Reflect.deleteProperty(Element.prototype, `requestFullscreen`)
+    Reflect.deleteProperty(document, `exitFullscreen`)
+  })
 })
 
 type ButtonProps = Partial<ComponentProps<typeof FullscreenButton>>
@@ -56,8 +53,7 @@ type ButtonProps = Partial<ComponentProps<typeof FullscreenButton>>
 // this file isn't compiled by the Svelte plugin so $state is unavailable - a
 // getter/setter pair backed by fromStore mimics a parent's bind:fullscreen
 const mount_button = (props: ButtonProps = {}) => {
-  const wrapper = document.createElement(`div`)
-  document.body.append(wrapper)
+  const wrapper = create_element()
   const flag = writable(false)
   const flag_proxy = fromStore(flag)
   const component = mount(FullscreenButton, {
@@ -73,16 +69,15 @@ const mount_button = (props: ButtonProps = {}) => {
       ...props,
     },
   })
-  mounted.push(component)
+  // clearing document.body does not undo a button's fullscreenchange subscription
+  onTestFinished(() => unmount(component))
   const button = wrapper.querySelector(`button`)
   assert(button !== null, `FullscreenButton rendered no button`)
   return { wrapper, flag, button, component }
 }
 
 const outsider_goes_fullscreen = async (): Promise<void> => {
-  const outsider = document.createElement(`div`)
-  document.body.append(outsider)
-  await set_fullscreen_element(outsider)
+  await set_fullscreen_element(create_element())
   await settle()
 }
 
@@ -166,10 +161,8 @@ describe(`flag <-> browser sync`, () => {
     )
     const { button, flag } = mount_button()
 
-    button.click()
-    await tick()
-    button.click()
-    await tick()
+    await click(button)
+    await click(button)
 
     entry_request.resolve(undefined)
     await settle()
@@ -192,10 +185,8 @@ describe(`flag <-> browser sync`, () => {
       request.promise.then(() => set_fullscreen_element(null)),
     )
 
-    button.click()
-    await tick()
-    button.click()
-    await tick()
+    await click(button)
+    await click(button)
 
     request.resolve(undefined)
     await settle()
@@ -272,8 +263,7 @@ describe(`flag <-> browser sync`, () => {
     const exit_request = Promise.withResolvers<undefined>()
     document.exitFullscreen = vi.fn(() => exit_request.promise.then(() => undefined))
 
-    button.click()
-    await tick()
+    await click(button)
     expect(document.exitFullscreen).toHaveBeenCalledOnce()
 
     await set_fullscreen_element(null)

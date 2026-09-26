@@ -9,6 +9,8 @@
     type RangeScale,
     type RangeValue,
   } from './range-slider'
+  import { is_primary_press } from './attachments/shared'
+  import { clamp } from './utils'
 
   let {
     min = 0,
@@ -109,20 +111,16 @@
   const update = (thumb: 0 | 1, next: number, snap = true): RangeValue | undefined => {
     const [floor, ceiling] = bounds(thumb)
     let accepted = next
-    if (next <= floor) accepted = floor
-    else if (next >= ceiling) accepted = ceiling
-    else {
-      if (snap) {
-        const coordinate = snap_range_value(
-          domain.to_position(next),
-          domain.min,
-          domain.max,
-          step,
-        )
-        accepted = domain.from_position(coordinate)
-      }
-      accepted = Math.max(floor, Math.min(ceiling, accepted))
+    if (snap && next > floor && next < ceiling) {
+      const coordinate = snap_range_value(
+        domain.to_position(next),
+        domain.min,
+        domain.max,
+        step,
+      )
+      accepted = domain.from_position(coordinate)
     }
+    accepted = clamp(accepted, floor, ceiling)
     if (accepted === values[thumb]) return
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
@@ -159,7 +157,7 @@
     let next: number
     if (typeof action === `string`) next = bounds(thumb)[action === `min` ? 0 : 1]
     else {
-      const bounded = Math.max(min, Math.min(max, baseline))
+      const bounded = clamp(baseline, min, max)
       next = domain.from_position(
         step_range_coordinate(bounded, domain, step, Math.sign(action), Math.abs(action)),
       )
@@ -177,10 +175,7 @@
   }
   const move_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
-    if (is_disabled()) {
-      stop_pointer(event)
-      return
-    }
+    if (is_disabled()) return stop_pointer(event)
     const next = pointer_value(event)
     if (next === undefined) return
     // Coincident handles separate in the direction of the gesture, so neither gets
@@ -195,13 +190,7 @@
     if (next_value) gesture.latest = next_value
   }
   const start_pointer = (event: PointerEvent): void => {
-    if (
-      is_disabled() ||
-      drag ||
-      event.defaultPrevented ||
-      event.button !== 0 ||
-      !event.isPrimary
-    )
+    if (is_disabled() || drag || event.defaultPrevented || !is_primary_press(event))
       return
     const next = pointer_value(event)
     if (next === undefined || !rail) return
@@ -225,19 +214,18 @@
     rail.setPointerCapture(event.pointerId)
     if (!on_handle) move_pointer(event)
   }
+  const end_drag = (pointer_id: number) => {
+    drag = undefined
+    if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
+  }
   const stop_pointer = (event: PointerEvent): void => {
     if (!drag || drag.pointer_id !== event.pointerId) return
     const { start, latest, pointer_id } = drag
-    drag = undefined
-    if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
+    end_drag(pointer_id)
     if (latest && (start[0] !== values[0] || start[1] !== values[1])) commit_value(latest)
   }
   $effect(() => {
-    if (disabled && drag) {
-      const { pointer_id } = drag
-      drag = undefined
-      if (rail?.hasPointerCapture(pointer_id)) rail.releasePointerCapture(pointer_id)
-    }
+    if (disabled && drag) end_drag(drag.pointer_id)
   })
 </script>
 

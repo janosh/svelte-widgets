@@ -1,3 +1,5 @@
+import { line_index } from './diagnostics.ts'
+
 export type SourceMap = {
   version: 3
   sources: string[]
@@ -61,9 +63,7 @@ export function source_map(
 ): SourceMap {
   const ordered_spans = spans.toSorted((left, right) => left.generated - right.generated)
   let span_idx = 0
-  const lines = [0]
-  for (let idx = 0; idx < source.length; idx++)
-    if (source[idx] === `\n`) lines.push(idx + 1)
+  const locate = line_index(source)
   let previous_line = 0
   let previous_column = 0
   let generated_column = 0
@@ -81,17 +81,10 @@ export function source_map(
     const offset =
       span && idx >= span.generated ? span.original + idx - span.generated : undefined
     if (offset !== undefined) {
-      let low = 0
-      let high = lines.length
-      while (low + 1 < high) {
-        const middle = (low + high) >>> 1
-        if (lines[middle] <= offset) low = middle
-        else high = middle
-      }
-      const column = offset - lines[low]
-      mappings += `${has_segment ? `,` : ``}${encode_vlq(generated_column - previous_generated)}A${encode_vlq(low - previous_line)}${encode_vlq(column - previous_column)}`
+      const { line, column } = locate(offset)
+      mappings += `${has_segment ? `,` : ``}${encode_vlq(generated_column - previous_generated)}A${encode_vlq(line - previous_line)}${encode_vlq(column - previous_column)}`
       previous_generated = generated_column
-      previous_line = low
+      previous_line = line
       previous_column = column
       has_segment = true
       mapped = true

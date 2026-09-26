@@ -209,7 +209,6 @@ describe(`draggable`, () => {
 
   it(`warns and returns undefined for a missing handle selector`, () => {
     const warn_spy = vi.spyOn(console, `warn`).mockImplementation(() => {})
-    onTestFinished(() => warn_spy.mockRestore())
 
     expect(
       draggable({ handle_selector: `.nonexistent` })(create_element()),
