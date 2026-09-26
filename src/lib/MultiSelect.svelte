@@ -1052,6 +1052,12 @@
       ? null
       : (navigable_options[active_index] ?? null)
 
+    // keyboard navigation only, not mouse hover. Runs before the auto-scroll tick,
+    // during which a repeated key press would already have moved the active option.
+    on_activate?.({ option: active_option, index: active_index })
+    if (event?.shiftKey && range_select && active_option)
+      handle_option_interact(active_option, event, active_index)
+
     if (auto_scroll) {
       if (
         virtual_window &&
@@ -1077,11 +1083,6 @@
       await tick()
       options_list_el?.querySelector(`li.active`)?.scrollIntoView({ block: `nearest` })
     }
-
-    // keyboard navigation only, not mouse hover
-    on_activate?.({ option: active_option, index: active_index })
-    if (event?.shiftKey && range_select && active_option)
-      handle_option_interact(active_option, event, active_index)
   }
 
   // keydown on the search input; option/header rows use if_enter_or_space instead

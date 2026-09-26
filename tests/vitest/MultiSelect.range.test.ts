@@ -158,6 +158,20 @@ test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async
   })
 })
 
+test(`back-to-back Shift+Arrows extend the range one option per press`, async () => {
+  const onrange_select = mount_range({ options: alpha_options, open: true })
+  press(`ArrowDown`) // active: Alpha
+  await tick()
+  // no tick between presses, so the auto-scroll tick of the first is still pending
+  press(`ArrowDown`, { shiftKey: true })
+  press(`ArrowDown`, { shiftKey: true })
+  await tick()
+  expect(onrange_select.mock.calls.map(([{ added }]) => added)).toEqual([
+    [`Alpha`, `Beta`],
+    [`Gamma`],
+  ])
+})
+
 test(`Shift-click is an ordinary click while range_select is off`, async () => {
   const onrange_select = mount_range({
     options: alpha_options,

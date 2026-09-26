@@ -2206,10 +2206,18 @@ test.each([
   },
 )
 
-test.each([true, false, `if-mobile`, `retain-focus`] as const)(
-  `close_dropdown_on_select=%s controls input focus and dropdown closing`,
-  async (close_dropdown_on_select) => {
-    stub_props(globalThis, { innerWidth: 600 }) // below the default 800px breakpoint
+// the default breakpoint is 800px, so 600 is mobile and 800 already counts as desktop
+test.each([
+  [true, 600, true],
+  [false, 600, false],
+  [`if-mobile`, 600, true],
+  [`if-mobile`, 800, false],
+  [`if-mobile`, 1024, false],
+  [`retain-focus`, 600, true],
+] as const)(
+  `close_dropdown_on_select=%s at %ipx wide closes the dropdown: %s`,
+  async (close_dropdown_on_select, innerWidth, should_be_closed) => {
+    stub_props(globalThis, { innerWidth })
     mount_multiselect({ options: [1, 2, 3], close_dropdown_on_select, open: true })
     const input = get_input()
     if (close_dropdown_on_select === `retain-focus`) input.focus()
@@ -2217,7 +2225,6 @@ test.each([true, false, `if-mobile`, `retain-focus`] as const)(
     doc_query(`ul.options > li`).click()
     await tick() // let happy-dom settle document.activeElement after add()'s input.focus()
 
-    const should_be_closed = close_dropdown_on_select !== false
     expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(1)
     expect(doc_query(`ul.options`).classList.contains(`hidden`)).toBe(should_be_closed)
     // focus tracking is reliable only for the close path in happy-dom
@@ -3111,6 +3118,20 @@ describe(`on_activate event`, () => {
     expect(onactivate_spy).toHaveBeenCalledTimes(4)
     expect(onactivate_spy).toHaveBeenNthCalledWith(3, { option: 3, index: 2 })
     expect(onactivate_spy).toHaveBeenNthCalledWith(4, { option: 1, index: 0 })
+  })
+
+  test(`back-to-back keys each report their own option despite the auto-scroll tick`, async () => {
+    const onactivate_spy = vi.fn()
+    mount_multiselect({ options: [1, 2, 3], on_activate: onactivate_spy, open: true })
+    const input = await focus_input()
+    // no tick between presses, as with key repeat outpacing Svelte's flush
+    input.dispatchEvent(fresh_key(`ArrowDown`))
+    input.dispatchEvent(fresh_key(`ArrowDown`))
+    await tick()
+    expect(onactivate_spy.mock.calls).toEqual([
+      [{ option: 1, index: 0 }],
+      [{ option: 2, index: 1 }],
+    ])
   })
 
   test(`does not fire when toggling user message with no matching options`, async () => {
