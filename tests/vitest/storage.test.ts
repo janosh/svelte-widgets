@@ -32,7 +32,7 @@ describe(`storage_get/set/remove`, () => {
         throw new DOMException(`QuotaExceededError`)
       })
       expect(run()).toBe(expected)
-      spy.mockRestore()
+      spy.mockRestore() // restoreAllMocks misses spies on happy-dom's Storage proxy
     },
   )
 

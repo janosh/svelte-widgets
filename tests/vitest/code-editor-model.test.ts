@@ -266,14 +266,10 @@ test.each([`late`, `middle`, `match`, `whole_word`] as const)(
       comparisons += 1
       return regex_test.call(this, value)
     })
-    let matches: ReturnType<typeof find_editor_matches>
-    try {
-      matches = find_editor_matches(model, query, {
-        whole_word: position === `whole_word`,
-      })
-    } finally {
-      spy.mockRestore()
-    }
+    const matches = find_editor_matches(model, query, {
+      whole_word: position === `whole_word`,
+    })
+    spy.mockRestore() // before asserting, so matcher internals cannot add to the count
     expect(matches).toEqual(position === `match` ? [{ from: 80_000, to: 100_001 }] : [])
     // Matching and prefix preprocessing visit each input position a bounded number of times.
     // Counting engine calls catches repeated chunk verification without a timing limit.

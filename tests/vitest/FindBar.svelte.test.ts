@@ -7,7 +7,7 @@ import FindBar from '$lib/FindBar.svelte'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, press_key, stub_css_highlights } from './index'
+import { click, doc_query, fire_input, press_key, stub_css_highlights } from './index'
 
 type Props = ComponentProps<typeof FindBar>
 
@@ -23,12 +23,8 @@ const mount_bar = (html: string, extra: Partial<Props> = {}) => {
     target: doc_query(`#bar`),
     props: { root, on_close, ...extra },
   })
-  let is_mounted = true
-  const unmount_bar = async (): Promise<void> => {
-    if (!is_mounted) return
-    is_mounted = false
-    await unmount(bar)
-  }
+  let unmounted: Promise<void> | undefined
+  const unmount_bar = () => (unmounted ??= unmount(bar))
   onTestFinished(unmount_bar)
   return { bar, root, on_close, unmount_bar }
 }
@@ -40,10 +36,7 @@ const nav_button = (name: `Previous` | `Next`) =>
 
 // Use a real input event so FindBar's async path runs.
 const type_query = async (query: string) => {
-  const element = input()
-  element.value = query
-  element.dispatchEvent(new Event(`input`, { bubbles: true }))
-  await tick()
+  await fire_input(input(), query, `input`)
   await tick()
 }
 
@@ -71,18 +64,15 @@ describe(`FindBar`, () => {
     expect(status()).toBe(`1 of 3`)
     expect(jumped()).toBe(`alpha`)
 
-    nav_button(`Next`).click()
-    await tick()
+    await click(nav_button(`Next`))
     expect(status()).toBe(`2 of 3`)
     expect(jumped()).toBe(`beta alpha alpha`)
 
     for (const expected_status of [`3 of 3`, `1 of 3`]) {
-      nav_button(`Next`).click()
-      await tick()
+      await click(nav_button(`Next`))
       expect(status()).toBe(expected_status)
     }
-    nav_button(`Previous`).click()
-    await tick()
+    await click(nav_button(`Previous`))
     expect(status()).toBe(`3 of 3`)
     press_key(input(), `Enter`)
     await tick()

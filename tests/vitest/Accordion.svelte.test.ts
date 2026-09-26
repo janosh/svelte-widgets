@@ -1,10 +1,10 @@
 import Accordion from '$lib/Accordion.svelte'
 import type { AccordionItem } from '$lib/types'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import TestNestedAccordion from './TestNestedAccordion.svelte'
-import { press_key } from './index'
+import { click, press_key, render } from './index'
 
 describe(`Accordion`, () => {
   const items = [
@@ -16,7 +16,7 @@ describe(`Accordion`, () => {
 
   const mount_accordion = (extra: Partial<Props> = {}) => {
     const props = $state({ items, ...extra } as Props)
-    mount(Accordion, { target: document.body, props })
+    render(Accordion, props)
     return props
   }
   const triggers = () => [
@@ -25,10 +25,7 @@ describe(`Accordion`, () => {
   const panels = () => [...document.querySelectorAll<HTMLDivElement>(`[role="region"]`)]
   const expanded = () =>
     triggers().map((trigger) => trigger.getAttribute(`aria-expanded`))
-  const click_trigger = async (trigger_idx: number) => {
-    triggers()[trigger_idx].click()
-    await tick()
-  }
+  const click_trigger = (trigger_idx: number) => click(triggers()[trigger_idx])
 
   test(`renders heading buttons linked to labeled regions`, async () => {
     const props = mount_accordion({ value: `gamma`, heading_level: 4 })
@@ -148,7 +145,7 @@ describe(`Accordion`, () => {
   })
 
   test(`nested accordions keep arrow navigation within the owning root`, () => {
-    mount(TestNestedAccordion, { target: document.body })
+    render(TestNestedAccordion, {})
     const inner_root = document.querySelectorAll(`.accordion`)[1]
     const inner_triggers = [
       ...inner_root.querySelectorAll<HTMLButtonElement>(`button.accordion-trigger`),

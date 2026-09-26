@@ -1,9 +1,9 @@
 import { Nav } from '$lib'
 import type { NavRoute, NavLink } from '$lib/types'
-import { type ComponentProps, createRawSnippet, mount, tick } from 'svelte'
+import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, next_task, press_key } from './index'
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, next_task, press_key, render, stub_props } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Nav`, () => {
@@ -47,8 +47,7 @@ describe(`Nav`, () => {
     },
   ]
   const two_child_props = { routes: two_child_route }
-  const mount_nav = (props: ComponentProps<typeof Nav>) =>
-    mount(Nav, { target: document.body, props })
+  const mount_nav = (props: ComponentProps<typeof Nav>) => render(Nav, props)
   const click = (el?: Element | null) => {
     el?.dispatchEvent(new MouseEvent(`click`, { bubbles: true, cancelable: true }))
     return tick()
@@ -79,9 +78,9 @@ describe(`Nav`, () => {
     await tick()
     outside.remove()
   }
+  // undone when the test finishes
   const set_window_width = (width: number) =>
-    Object.defineProperty(globalThis, `innerWidth`, { value: width, writable: true })
-  afterEach(() => set_window_width(1024)) // reset any per-test viewport override
+    stub_props(globalThis, { innerWidth: width })
   const is_visible = (element: Element) => element.classList.contains(`visible`)
   const query_dropdown_elements = () => {
     const dropdown = doc_query(`.dropdown`)
@@ -244,10 +243,11 @@ describe(`Nav`, () => {
     )
   })
   test(`click outside closes burger menu and dropdowns, inside click does not`, async () => {
+    const { dropdown_menu, toggle } = mount_dropdown()
+    // spied after mount, so the tooltip layer's own document listener is not counted
     const add_listener = vi.spyOn(document, `addEventListener`)
     const press_listeners = () =>
       add_listener.mock.calls.filter(([type]) => type === `pointerdown`).length
-    const { dropdown_menu, toggle } = mount_dropdown()
     const burger_button = doc_query(`.burger`)
     // nothing open means no listener: it does a layout read on every press on the page
     expect(press_listeners()).toBe(0)
@@ -457,17 +457,14 @@ describe(`Nav`, () => {
   )
 
   test(`item and children snippets receive route and menu state`, async () => {
-    mount(TestSnippetHarness, {
-      target: document.body,
-      props: {
-        component: `nav`,
-        routes: [
-          default_routes[0],
-          { label: `More`, children: [default_routes[1]] },
-          default_routes[2],
-        ],
-        pathname: `/about`,
-      },
+    render(TestSnippetHarness, {
+      component: `nav`,
+      routes: [
+        default_routes[0],
+        { label: `More`, children: [default_routes[1]] },
+        default_routes[2],
+      ],
+      pathname: `/about`,
     })
     const items = [...document.querySelectorAll<HTMLElement>(`[data-testid="nav-item"]`)]
     expect(

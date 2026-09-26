@@ -18,7 +18,7 @@ import type {
 } from '$lib/toast-queue.svelte.ts'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query, escape_key, press_key, render as mount_body } from './index'
+import { click, doc_query, escape_key, press_key, render as mount_body } from './index'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -581,8 +581,7 @@ describe(`<Toast />`, () => {
 
     const button = doc_query<HTMLButtonElement>(`.toast-dismiss`)
     button.focus()
-    button.click()
-    await tick()
+    await click(button)
     expect(store.active_toast?.message).toBe(`b`)
     expect(document.activeElement).toBe(document.body)
 

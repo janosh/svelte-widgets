@@ -2,6 +2,7 @@ import { tick, type ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vitest'
 import type Popover from '$lib/Popover.svelte'
 import {
+  click,
   create_element,
   doc_query,
   mock_rect,
@@ -37,10 +38,7 @@ describe(`Popover`, () => {
     press_escape()
     doc_query(`.popover`).hidePopover()
   }
-  const click_trigger = async () => {
-    trigger().click()
-    await tick()
-  }
+  const click_trigger = () => click(trigger())
   const mouse_enter = (target: EventTarget = trigger()) =>
     target.dispatchEvent(new MouseEvent(`mouseenter`))
   const mouse_leave = (target: EventTarget = trigger()) =>

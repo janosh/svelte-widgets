@@ -28,9 +28,8 @@ async function paste_into(extra_props: MultiSelectProps, paste_text: string) {
     ...extra_props,
   })
   mount_multiselect(props)
-  const input = get_input()
   const event = make_paste_event(paste_text)
-  input.dispatchEvent(event)
+  get_input().dispatchEvent(event)
   // no macrotask wait: handle_paste only awaits add() when an async on_create suspends
   await tick()
   return { ...spies, props, event }
@@ -43,9 +42,7 @@ describe(`parse_paste`, () => {
       `alpha,beta`,
     )
     expect(event.defaultPrevented).toBe(true)
-    expect(on_add).toHaveBeenCalledTimes(2)
-    expect(on_add).toHaveBeenCalledWith(expect.objectContaining({ option: `alpha` }))
-    expect(on_add).toHaveBeenCalledWith(expect.objectContaining({ option: `beta` }))
+    expect(on_add.mock.calls.map(([{ option }]) => option)).toEqual([`alpha`, `beta`])
     expect(onpaste).toHaveBeenCalledExactlyOnceWith(event)
     expect(onpaste).toHaveReturnedWith(get_input())
   })

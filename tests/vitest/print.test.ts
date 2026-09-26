@@ -63,7 +63,6 @@ test(`without a filename the title is left alone`, () => {
     expect.any(Function),
     expect.anything(),
   )
-  add_listener.mockRestore()
 })
 
 // a print() that throws never fires afterprint, so nothing else would undo the swap

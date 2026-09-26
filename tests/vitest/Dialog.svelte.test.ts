@@ -1,6 +1,6 @@
 import { tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { create_element, doc_query, render, pointer_event } from './index'
+import { click, create_element, doc_query, render, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
 import { focusable } from '$lib/dialog'
 
@@ -43,8 +43,7 @@ describe(`Dialog`, () => {
     expect(trigger().getAttribute(`aria-expanded`)).toBe(`false`)
     expect(trigger().getAttribute(`aria-controls`)).toBeNull()
 
-    trigger().click()
-    await tick()
+    await click(trigger())
 
     const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
     expect(show_modal).toHaveBeenCalledOnce()
@@ -71,8 +70,7 @@ describe(`Dialog`, () => {
       const on_close = vi.fn()
       mount_dialog({ closedby, on_close })
       trigger().focus()
-      trigger().click()
-      await tick()
+      await click(trigger())
 
       const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
       press_dialog_at(dialog, 50, 50) // a press inside the box never dismisses
@@ -104,8 +102,7 @@ describe(`Dialog`, () => {
     trigger().focus()
     await reopen()
 
-    item(`dialog-action`).click()
-    await tick()
+    await click(item(`dialog-action`))
     expect([props.open, surface(), on_close.mock.calls]).toEqual([
       false,
       null,
@@ -160,8 +157,7 @@ describe(`Dialog`, () => {
     await tick()
     expect(surface()?.open).toBe(true)
     // the ignored dismissal must not leave its reason behind for the next close
-    item(`dialog-action`).click()
-    await tick()
+    await click(item(`dialog-action`))
     expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `close` })
   })
 
@@ -170,13 +166,11 @@ describe(`Dialog`, () => {
     const on_nested_close = vi.fn()
     mount_dialog({ nested: true, on_close, on_nested_close })
     trigger().focus()
-    trigger().click()
-    await tick()
+    await click(trigger())
 
     const nested_trigger = item(`nested-trigger`)
     nested_trigger.focus()
-    nested_trigger.click()
-    await tick()
+    await click(nested_trigger)
 
     const dialogs = [...document.querySelectorAll<HTMLDialogElement>(`dialog.dialog`)]
     expect(dialogs).toHaveLength(2)
@@ -206,8 +200,7 @@ describe(`Dialog`, () => {
       closedby: `none`,
       side: `left`,
     })
-    trigger().click()
-    await tick()
+    await click(trigger())
 
     const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
     expect(dialog.classList.contains(`consumer-class`)).toBe(true)
@@ -218,8 +211,7 @@ describe(`Dialog`, () => {
     expect(dialog.getAttribute(`aria-labelledby`)).toBe(`test-dialog-title`)
     expect(item(`dialog-footer`).textContent).toBe(`Changes are local`)
 
-    item(`dialog-action`).click()
-    await tick()
+    await click(item(`dialog-action`))
     expect([props.open, document.querySelector(`dialog.sheet`)]).toEqual([false, null])
   })
 

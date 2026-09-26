@@ -8,7 +8,7 @@ import type {
   MultiSelectProps,
 } from '$lib/types'
 import { get_label } from '$lib/utils'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 import {
   fresh_key,
   get_input,
@@ -349,8 +349,7 @@ describe(`load_options feature`, () => {
       await tick()
       expect(load_options).toHaveBeenCalledTimes(request_idx + 1)
 
-      retry.click()
-      await tick()
+      await click(retry)
       expect(props.load_error).toBeNull()
       expect(load_options).toHaveBeenLastCalledWith(
         expect.objectContaining({
@@ -395,9 +394,7 @@ describe(`load_options feature`, () => {
     expect(load_options).toHaveBeenCalledTimes(capped_count)
 
     // a user scroll resets the auto-fill counter
-    vi.spyOn(ul, `scrollHeight`, `get`).mockReturnValue(500)
-    vi.spyOn(ul, `scrollTop`, `get`).mockReturnValue(250)
-    ul.dispatchEvent(new Event(`scroll`))
+    mock_scroll_near_bottom(ul)
     await tick()
     expect(load_options).toHaveBeenCalledTimes(capped_count + 1)
 
@@ -631,10 +628,7 @@ describe(`load_options_pending`, () => {
 
     // typing while the first fetch is still awaiting: pre-fix each keystroke re-entered the
     // first-load branch and fired another immediate load, instead of routing to the debounce
-    const input = get_input()
-    for (const value of [`a`, `ab`]) {
-      await type_search_text(value, input)
-    }
+    for (const text of [`a`, `ab`]) await type_search_text(text)
     expect(fetch_fn).toHaveBeenCalledTimes(1) // no extra immediate fetches while debouncing
 
     await vi.advanceTimersByTimeAsync(200)

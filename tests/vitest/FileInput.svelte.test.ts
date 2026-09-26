@@ -2,6 +2,7 @@ import { FileInput } from '$lib'
 import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vitest'
 import {
+  click,
   data_transfer,
   doc_query,
   drag_event,
@@ -66,8 +67,7 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   expect(target.textContent).toContain(`Processing files`)
   await select([new File([`x`], `bad.txt`)])
   expect(signals[1].aborted).toBe(false)
-  target.querySelector<HTMLButtonElement>(`button[aria-label="Remove ok.json"]`)?.click()
-  await tick()
+  await click(`button[aria-label="Remove ok.json"]`)
   expect(signals[1].aborted).toBe(true)
   expect(target.querySelectorAll(`li`)).toHaveLength(0)
   await select([good])
@@ -169,8 +169,7 @@ test(`remove_label names each remove button and removal reports the file`, async
   })
   const [first, second] = [json(`a.json`), json(`b.json`)]
   await select([first, second])
-  target.querySelector<HTMLButtonElement>(`button[aria-label="Drop a.json"]`)?.click()
-  await tick()
+  await click(`button[aria-label="Drop a.json"]`)
   expect(on_remove).toHaveBeenCalledExactlyOnceWith(first)
   expect(
     [...target.querySelectorAll(`li`)].map((li) => li.firstChild?.textContent?.trim()),

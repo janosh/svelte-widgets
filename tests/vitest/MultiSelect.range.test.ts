@@ -1,8 +1,12 @@
 import { tick } from 'svelte'
 import { expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
-import { mount_multiselect } from './MultiSelect.test-utils'
+import { click, doc_query } from './index'
+import {
+  fresh_mousemove,
+  mount_multiselect,
+  type_search_text,
+} from './MultiSelect.test-utils'
 
 const alpha_options = [`Alpha`, `Beta`, `Gamma`, `Delta`]
 const dup_options = [
@@ -33,10 +37,11 @@ const mount_range = (props: MultiSelectProps) => {
 }
 
 // takes a row directly when duplicate labels make a lookup by label ambiguous
-const shift_click = (row: string | HTMLLIElement | undefined): void => {
+const shift_click = async (row: string | HTMLLIElement | undefined): Promise<void> => {
   const target = typeof row === `string` ? option_row(row) : row
   if (!target) throw new Error(`Missing row to shift-click`)
   target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, shiftKey: true }))
+  await tick()
 }
 
 const combobox = () => doc_query<HTMLInputElement>(`input[role="combobox"]`)
@@ -45,10 +50,8 @@ const press = (key: string, init: KeyboardEventInit = {}) =>
   combobox().dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true, ...init }))
 
 const select_range = async (anchor: string, target: string): Promise<void> => {
-  option_row(anchor).click()
-  await tick()
-  shift_click(target)
-  await tick()
+  await click(option_row(anchor))
+  await shift_click(target)
 }
 
 test(`backward range selects upward from the anchor`, async () => {
@@ -76,10 +79,8 @@ test.each([
   async (_label, options, extra_props, shift_idx) => {
     const onrange_select = mount_range({ options, open: true, ...extra_props })
 
-    option_rows()[1]?.click()
-    await tick()
-    shift_click(option_rows()[shift_idx])
-    await tick()
+    await click(option_rows()[1])
+    await shift_click(option_rows()[shift_idx])
 
     // toEqual not toBe: $bindable re-proxies options, so nothing is reference-identical
     const { added, to } = onrange_select.mock.calls[0][0]
@@ -95,9 +96,8 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
     on_add,
   })
 
-  option_row(`Alpha`).click()
-  await tick()
-  option_row(`Gamma`).dispatchEvent(new MouseEvent(`mousemove`, { bubbles: true }))
+  await click(option_row(`Alpha`))
+  option_row(`Gamma`).dispatchEvent(fresh_mousemove())
   await tick()
   press(`Enter`, { shiftKey: true })
   await tick()
@@ -211,15 +211,10 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
   const on_add = vi.fn()
   const onrange_select = mount_range({ options: [`Anchor`, `Target`], on_add })
 
-  option_row(`Anchor`).click()
-  await tick()
+  await click(option_row(`Anchor`))
   on_add.mockClear()
-  const input = combobox()
-  input.value = `Target`
-  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
-  await tick()
-  shift_click(`Target`)
-  await tick()
+  await type_search_text(`Target`, combobox())
+  await shift_click(`Target`)
 
   expect(onrange_select).not.toHaveBeenCalled()
   expect(on_add).toHaveBeenCalledExactlyOnceWith({
@@ -241,8 +236,7 @@ test(`an identical repeat announcement still replaces the live region node`, asy
   expect(live.textContent?.trim()).toBe(`1 option selected`)
   const first = text_node()
 
-  shift_click(`C`)
-  await tick()
+  await shift_click(`C`)
   expect(live.textContent?.trim()).toBe(`1 option selected`)
 
   expect(first).toBeDefined()

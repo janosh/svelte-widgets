@@ -3,7 +3,7 @@ import type { TabItem } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { press_key } from './index'
+import { click, press_key } from './index'
 
 describe(`Tabs`, () => {
   const items = [
@@ -108,8 +108,7 @@ describe(`Tabs`, () => {
     expect(props.value).toBe(`overview`)
     expect(on_change).not.toHaveBeenCalled()
 
-    tabs()[2].click()
-    await tick()
+    await click(tabs()[2])
     expect(props.value).toBe(`details`)
     expect(on_change).toHaveBeenCalledExactlyOnceWith(`details`)
     expect(panels().map((panel) => panel.hidden)).toEqual([true, true, false])
@@ -168,14 +167,12 @@ describe(`Tabs`, () => {
       [`false`, 0],
     ])
 
-    tabs()[2].click()
-    await tick()
+    await click(tabs()[2])
     expect(props.value).toBe(`details`)
     expect(on_change).toHaveBeenLastCalledWith(`details`)
 
     press_key(tabs()[2], `ArrowLeft`)
-    tabs()[0].click()
-    await tick()
+    await click(tabs()[0])
     expect(props.value).toBe(`overview`)
     expect(on_change).toHaveBeenLastCalledWith(`overview`)
 

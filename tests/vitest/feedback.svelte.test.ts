@@ -28,27 +28,27 @@ test(`DragOverlay renders only when visible, with its default/custom messages an
   expect(document.querySelector(`.drag-overlay`)).toBeNull()
 })
 
-test('ClickFeedback follows visibility and viewport position', () => {
+test(`ClickFeedback follows visibility and viewport position`, () => {
   const props = $state({ visible: false, position: { x: 12, y: 34 } })
   render(ClickFeedback, props)
-  expect(document.querySelector('.click-feedback')).toBeNull()
+  expect(document.querySelector(`.click-feedback`)).toBeNull()
   props.visible = true
   flushSync()
-  const feedback = doc_query('.click-feedback')
+  const feedback = doc_query(`.click-feedback`)
   expect([
     feedback.style.left,
     feedback.style.top,
-    feedback.getAttribute('aria-hidden'),
-  ]).toEqual(['12px', '34px', 'true'])
+    feedback.getAttribute(`aria-hidden`),
+  ]).toEqual([`12px`, `34px`, `true`])
   props.position = { x: 56, y: 78 }
   flushSync()
   const next = doc_query(`.click-feedback`)
   expect(next).not.toBe(feedback)
-  expect([next.style.left, next.style.top]).toEqual(['56px', '78px'])
+  expect([next.style.left, next.style.top]).toEqual([`56px`, `78px`])
   props.position = { x: 56, y: 78 }
   flushSync()
   expect(doc_query(`.click-feedback`)).not.toBe(next)
   props.visible = false
   flushSync()
-  expect(document.querySelector('.click-feedback')).toBeNull()
+  expect(document.querySelector(`.click-feedback`)).toBeNull()
 })

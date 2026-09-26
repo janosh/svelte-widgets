@@ -320,8 +320,7 @@ describe(`SettingsSection`, () => {
     button.focus()
     expect(document.activeElement).toBe(button)
 
-    button.click()
-    await tick()
+    await click(button)
 
     expect(tracked.values.radius).toBe(1)
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()

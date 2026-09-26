@@ -2,8 +2,8 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '$lib'
 import { to_json } from '$lib/json-tree/utils'
-import { click, doc_query, press_key, render } from './index'
-import { type ComponentProps, flushSync, mount, tick, unmount } from 'svelte'
+import { click, doc_query, fire_input, press_key, render } from './index'
+import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vitest'
 
@@ -49,9 +49,7 @@ const control_group = (idx: number) =>
 const match_count = () => document.querySelector(`.match-count`)?.textContent ?? ``
 // Type into the search box and wait for the debounced (150 ms) search to report `expected`
 async function type_search(query: string, expected: string): Promise<void> {
-  const input = doc_query<HTMLInputElement>(`.search-input`)
-  input.value = query
-  fire(input, new Event(`input`, { bubbles: true }))
+  await fire_input(doc_query<HTMLInputElement>(`.search-input`), query, `input`)
   await vi.waitFor(() => expect(match_count()).toBe(expected))
   await tick()
 }
@@ -200,7 +198,7 @@ describe(`rendering`, () => {
     mount_expanded({ value: { long: `a`.repeat(300) }, max_string_length: 50 })
     const value_el = doc_query(`.json-value`)
     expect(value_el.textContent).toContain(`"${`a`.repeat(50)}..."`)
-    await click(document.querySelector(`.expand-btn`))
+    await click(`.expand-btn`)
     expect(value_el.textContent).toContain(`"${`a`.repeat(300)}"`)
   })
 
@@ -287,7 +285,7 @@ describe(`folding`, () => {
     // the last rendered child is not the container's last, so it keeps its comma
     expect(node_at(`key99`)?.querySelector(`.comma`)).not.toBeNull()
 
-    await click(document.querySelector(`.more-children button`))
+    await click(`.more-children button`)
     expect(rendered_children()).toBe(200)
     expect(more_labels()).toEqual([`Show 100 more`, `Show all 350`])
 
@@ -320,12 +318,12 @@ describe(`folding`, () => {
     mount_expanded({ value: { nested: { deep: 42 } }, default_fold_level: 1 })
     expect(node_at(`nested.deep`)).toBeNull()
     expect(doc_query(`.node-key`).classList.contains(`collapsed`)).toBe(true) // ▸ hint
-    await click(doc_query(`.node-key`))
+    await click(`.node-key`)
     expect(node_at(`nested.deep`)).toBeInstanceOf(HTMLElement)
     expect(doc_query(`.node-key`).classList.contains(`collapsed`)).toBe(false) // ⧉ hint
     expect(write_text).not.toHaveBeenCalled()
 
-    await click(doc_query(`.node-key`))
+    await click(`.node-key`)
     expect(write_text).toHaveBeenCalledWith(`{\n  "deep": 42\n}`)
   })
 
@@ -402,13 +400,13 @@ describe(`folding`, () => {
     const search_input = doc_query<HTMLInputElement>(`.search-input`)
     expect(search_input.value).toBe(`findme`)
 
-    await click(doc_query(`[data-testid="replace-json"]`))
+    await click(`[data-testid="replace-json"]`)
     expect(search_input.value).toBe(`findme`)
     expect(document.querySelector(`.json-value.changed`)).toBeNull()
 
     await click(node_at(`nested`)?.querySelector(`.collapse-toggle`))
     expect(collapsed_count()).toBe(`1`)
-    await click(doc_query(`[data-testid="replace-flat-json"]`))
+    await click(`[data-testid="replace-flat-json"]`)
     expect(collapsed_count()).toBe(`0`)
   })
 
@@ -427,7 +425,7 @@ describe(`folding`, () => {
     vi.useFakeTimers()
     render(JsonTreeReplacementHarness, {})
     const flashing = () => document.querySelector(`.json-value.changed`)
-    await click(doc_query(`[data-testid="mutate-leaf"]`))
+    await click(`[data-testid="mutate-leaf"]`)
     expect(flashing()).not.toBeNull()
     vi.advanceTimersByTime(500)
     await click(control_group(0)[0]) // T: show data types
@@ -744,7 +742,7 @@ describe(`context menu and pinning`, () => {
     expect(menu.textContent).toContain(`Collapse all children`)
     expect(menu.textContent).toContain(`Pin this path`)
     expect([menu.style.left, menu.style.top]).toEqual([`0px`, `0px`])
-    await click(doc_query(`.context-menu-backdrop`))
+    await click(`.context-menu-backdrop`)
     expect(document.querySelector(`.context-menu`)).toBeNull()
 
     menu = await open_menu(doc_query(`.json-value`))
@@ -863,8 +861,7 @@ describe(`inline editing`, () => {
       fire(node_at(`n`)?.querySelector(`.json-value`), mouse(`dblclick`))
       await tick()
       const input = doc_query<HTMLInputElement>(`.edit-input`)
-      input.value = `42`
-      fire(input, new Event(`input`, { bubbles: true }))
+      await fire_input(input, `42`, `input`)
       for (const key of [`Enter`, `Escape`]) {
         press(input, key, { isComposing: true })
         expect(document.querySelector(`.edit-input`)).toBe(input)
@@ -900,7 +897,7 @@ describe(`inline editing`, () => {
     render(JsonTreeReplacementHarness, { editable: true, on_change: vi.fn(), on_copy })
     fire(node_at(`nested.findme`)?.querySelector(`.json-value`), mouse(`click`))
     // live data: the leaf re-renders with a new value before the 250 ms copy delay elapses
-    await click(doc_query(`[data-testid="replace-json"]`))
+    await click(`[data-testid="replace-json"]`)
     await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`nested.findme`, `new`))
   })
 })
@@ -909,20 +906,14 @@ describe(`unmount`, () => {
   test(`pending search debounce and copy feedback timers are cleared`, async () => {
     vi.useFakeTimers()
     mock_clipboard_write()
-    const component = mount(JsonTree, {
-      target: document.body,
-      props: { value: { a: 1 } },
-    })
-    flushSync()
-    const input = doc_query<HTMLInputElement>(`.search-input`)
-    input.value = `a`
-    fire(input, new Event(`input`, { bubbles: true }))
+    const unmount_tree = mount_tree({ value: { a: 1 } })
+    await fire_input(doc_query<HTMLInputElement>(`.search-input`), `a`, `input`)
     control_group(2)[0].click()
     await vi.advanceTimersByTimeAsync(0) // let the clipboard promise resolve and arm the timer
     flushSync()
     expect(doc_query(`.copy-feedback`).textContent).toBe(`Copied!`)
     expect(vi.getTimerCount()).toBe(2)
-    await unmount(component)
+    await unmount_tree()
     expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -1,7 +1,7 @@
 import PaneDivider from '$lib/SplitPane.svelte'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vitest'
-import { create_element, pointer_event } from './index'
+import { create_element, pointer_event, press_key } from './index'
 
 let notify_resize = () => {}
 
@@ -108,11 +108,7 @@ test.each([
   `%s keyboard resizing clamps`,
   (_name, orientation, direction, key, ratio, repeats, expected) => {
     const { divider, parent } = mount_divider({ orientation, direction, ratio })
-    for (let repeat = 0; repeat < repeats; repeat++) {
-      divider.dispatchEvent(
-        new KeyboardEvent(`keydown`, { key, bubbles: true, cancelable: true }),
-      )
-    }
+    for (let repeat = 0; repeat < repeats; repeat++) press_key(divider, key)
     flushSync()
     const split_percentage = parent.style.getPropertyValue(`--split-pane-size`)
     expect(split_percentage.endsWith(`%`)).toBe(true)
@@ -216,8 +212,7 @@ test(`pixel-mode drags move the first pane in px and bind the clamped value back
 test(`pixel-mode keyboard resizing steps in px within the clamps`, () => {
   const clamps = { first_px: 320, min_px: 150, second_min_px: 200 }
   const { divider, parent } = mount_divider({ clamps, width: 1000 })
-  const press = (key: string) =>
-    divider.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
+  const press = (key: string) => press_key(divider, key)
   press(`ArrowLeft`)
   expect(parent.style.getPropertyValue(`--split-pane-size`)).toBe(`270px`)
   for (let repeat = 0; repeat < 4; repeat++) press(`ArrowLeft`)

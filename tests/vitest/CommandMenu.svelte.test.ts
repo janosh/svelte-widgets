@@ -1,24 +1,23 @@
 import { CommandMenu, PageSearch } from '$lib'
 import type { CmdAction, LoadOptionsParams } from '$lib/types'
 import { MULTI_SELECT_LABELS } from '$lib/labels'
-import { type ComponentProps, flushSync, mount, tick } from 'svelte'
+import { type ComponentProps, flushSync, tick } from 'svelte'
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from 'vitest'
-import { doc_query, press_key } from './index'
+import { click, create_element, doc_query, press_key, render } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 
-const mock_actions = [
-  { id: `action 1`, label: `action 1`, action: vi.fn() },
-  { id: `action 2`, label: `action 2`, action: vi.fn() },
-  { id: `action 3`, label: `action 3`, action: vi.fn() },
-]
+const make_actions = (...labels: string[]) =>
+  labels.map((label) => ({ id: label, label, action: vi.fn() }))
+const mock_actions = make_actions(`action 1`, `action 2`, `action 3`)
 
 const menu_input = () => doc_query<HTMLInputElement>(`dialog input[autocomplete]`)
 
 // fades off unless a test is about them, so the dialog opens and closes synchronously.
-// Set on the caller's object: tests mutate the mounted $state proxy, which copying severs
+// Set on the caller's object: tests mutate the mounted $state proxy, which copying severs.
+// render unmounts at test end, else stale menus keep answering global shortcuts
 const mount_menu = (props: ComponentProps<typeof CommandMenu>) => {
   props.fade_duration_ms ??= 0
-  return mount(CommandMenu, { target: document.body, props })
+  return render(CommandMenu, props)
 }
 
 const type_search = (text: string) => type_search_text(text, menu_input())
@@ -158,10 +157,7 @@ test(`handles action selection and execution`, async () => {
   mount_menu(props)
   await tick()
 
-  const input_el = menu_input()
-
-  press_key(input_el, `ArrowDown`)
-  press_key(input_el, `Enter`)
+  for (const key of [`ArrowDown`, `Enter`]) press_key(menu_input(), key)
 
   expect(actions_with_spies[1].action).toHaveBeenCalledExactlyOnceWith(`action 2`)
   expect(actions_with_spies[0].action).not.toHaveBeenCalled()
@@ -272,32 +268,28 @@ test.each([0, 50])(
   `controlled close fires native onclose once (fade_duration_ms=%i)`,
   async (fade_duration_ms) => {
     vi.useFakeTimers()
-    try {
-      const onclose = vi.fn()
-      const dialog_close = vi.spyOn(HTMLDialogElement.prototype, `close`)
-      const props = $state({
-        open: true,
-        actions: mock_actions,
-        fade_duration_ms,
-        dialog_props: { onclose },
-      })
-      mount_menu(props)
-      await tick()
+    const onclose = vi.fn()
+    const dialog_close = vi.spyOn(HTMLDialogElement.prototype, `close`)
+    const props = $state({
+      open: true,
+      actions: mock_actions,
+      fade_duration_ms,
+      dialog_props: { onclose },
+    })
+    mount_menu(props)
+    await tick()
 
-      const dialog = doc_query<HTMLDialogElement>(`dialog`)
-      props.open = false
-      await tick()
+    const dialog = doc_query<HTMLDialogElement>(`dialog`)
+    props.open = false
+    await tick()
 
-      expect(dialog.open).toBe(false)
-      expect(dialog_close).toHaveBeenCalled()
-      expect(onclose).toHaveBeenCalledOnce()
-      if (fade_duration_ms === 0) expect(document.querySelector(`dialog`)).toBeNull()
-      await vi.runAllTimersAsync()
-      await tick()
-      expect(onclose).toHaveBeenCalledOnce()
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(dialog.open).toBe(false)
+    expect(dialog_close).toHaveBeenCalled()
+    expect(onclose).toHaveBeenCalledOnce()
+    if (fade_duration_ms === 0) expect(document.querySelector(`dialog`)).toBeNull()
+    await vi.runAllTimersAsync()
+    await tick()
+    expect(onclose).toHaveBeenCalledOnce()
   },
 )
 
@@ -414,7 +406,7 @@ test.each([
 test(`remains open when trigger keys are pressed while already open`, async () => {
   const props = $state({ open: true, actions: mock_actions })
   mount_menu(props)
-  globalThis.dispatchEvent(new KeyboardEvent(`keydown`, { key: `k`, metaKey: true }))
+  press_key(globalThis, `k`, { metaKey: true })
   await tick()
   expect(props.open).toBe(true)
   expect(document.querySelector(`dialog`)).toBeInstanceOf(HTMLDialogElement)
@@ -438,11 +430,7 @@ test.each([
   [false, `cr`, [`create user`]],
   [false, `cu`, [`No matching commands`]], // not a substring
 ])(`filtering with fuzzy=%s: %j -> %j`, async (fuzzy, search, expected) => {
-  const actions = [
-    { id: `create user`, label: `create user`, action: vi.fn() },
-    { id: `delete file`, label: `delete file`, action: vi.fn() },
-    { id: `update config`, label: `update config`, action: vi.fn() },
-  ]
+  const actions = make_actions(`create user`, `delete file`, `update config`)
   const on_search = vi.fn()
   const props = $state({ open: true, actions, fuzzy, on_search })
   mount_menu(props)
@@ -544,8 +532,7 @@ test(`selects the first enabled action and preserves pointer selection across gr
   expect([...document.querySelectorAll(`li.group-header`)]).toEqual(
     group_headers.slice(0, 1),
   )
-  doc_query<HTMLButtonElement>(`li.group-header button`).click()
-  await tick()
+  await click(`li.group-header button`)
   expect(option_labels()).toEqual([`Disabled`])
   expect(props.active_index).toBeNull()
   expect(document.querySelector(`li.group-header`)).toBe(group_headers[0])
@@ -596,8 +583,7 @@ test.each([`search`, `keyboard`])(
       collapsed: false,
     })
     expect(on_expand_all).not.toHaveBeenCalled()
-    doc_query<HTMLButtonElement>(`li.group-header button`).click()
-    await tick()
+    await click(`li.group-header button`)
     expect(props.collapsed_groups?.has(``)).toBe(true)
     await search_and_navigate(`apple`)
     expect([...(props.collapsed_groups ?? [])]).toEqual([`Animals`])
@@ -848,8 +834,7 @@ test.each(
     const retry_button = doc_query<HTMLButtonElement>(`[role='alert'] + button`)
     expect(retry_button.textContent).toBe(labels?.retry ?? MULTI_SELECT_LABELS.retry)
     retry_button.focus()
-    retry_button.click()
-    await tick()
+    await click(retry_button)
     expect(document.activeElement).toBe(menu_input())
     await vi.waitFor(() => expect(option_labels()).toContain(`Retry result`))
     expect(fetch).toHaveBeenLastCalledWith(
@@ -872,15 +857,11 @@ const shortcut_kbd_parts = () =>
     (kbd) => kbd.textContent,
   )
 
-const abc_actions = () =>
-  [`alpha`, `beta`, `gamma`].map((label) => ({ id: label, label, action: vi.fn() }))
 const stored_recents = (key: string): unknown =>
   JSON.parse(localStorage.getItem(key) ?? `[]`)
 
 const press_ctrl_shift = (key: string) =>
-  globalThis.dispatchEvent(
-    new KeyboardEvent(`keydown`, { key, ctrlKey: true, shiftKey: true }),
-  )
+  press_key(globalThis, key, { ctrlKey: true, shiftKey: true })
 
 test(`renders and searches action descriptions, metadata, badges, and keywords`, async () => {
   const actions = [
@@ -923,7 +904,7 @@ describe(`PageSearch`, () => {
   const base_props = { open: true, fade_duration_ms: 0, debounce_ms: 0 }
   // copies props, so tests that mutate them mount their own $state object instead
   const mount_page_search = (props: ComponentProps<typeof PageSearch>) =>
-    mount(PageSearch, { target: document.body, props: { ...base_props, ...props } })
+    render(PageSearch, { ...base_props, ...props })
   const make_pagefind_response = (title: string) => ({
     results: [
       {
@@ -983,7 +964,7 @@ describe(`PageSearch`, () => {
       active_option: null,
       outer_div: null,
     })
-    mount(PageSearch, { target: document.body, props })
+    render(PageSearch, props)
 
     await search_pagefind(`binary`)
 
@@ -1004,8 +985,7 @@ describe(`PageSearch`, () => {
       `Phase diagrams › Temperature composition Interactive <temperature> composition diagram`,
     ])
 
-    options[1].click()
-    await tick()
+    await click(options[1])
 
     expect(navigate).toHaveBeenCalledExactlyOnceWith(expected_url, {
       query: `binary`,
@@ -1055,10 +1035,7 @@ describe(`PageSearch`, () => {
       const failing_call = { load: load_pagefind, search, result: result_data }[failure]
       failing_call.mockReturnValueOnce(request.promise)
       mount_page_search({
-        fallback_actions: [
-          { id: `Fallback`, label: `Fallback`, action: vi.fn() },
-          { id: `Other`, label: `Other`, action: vi.fn() },
-        ],
+        fallback_actions: make_actions(`Fallback`, `Other`),
         load_pagefind,
       })
 
@@ -1092,7 +1069,7 @@ describe(`PageSearch`, () => {
       strip_html_suffix: false,
       transform_url: (url: string) => `/old${url}`,
     })
-    mount(PageSearch, { target: document.body, props })
+    render(PageSearch, props)
 
     await search_pagefind(`fresh`)
     props.navigate = second_navigate
@@ -1120,7 +1097,7 @@ describe(`PageSearch`, () => {
       pagefind_key: `stale`,
       load_pagefind: async () => ({ search: () => stale_response.promise }),
     })
-    mount(PageSearch, { target: document.body, props })
+    render(PageSearch, props)
 
     await search_pagefind(`same query`)
     props.pagefind_key = `fresh`
@@ -1154,7 +1131,7 @@ describe(`PageSearch`, () => {
         pagefind_key: `alpha`,
         load_pagefind: load_alpha,
       })
-      mount(PageSearch, { target: document.body, props })
+      render(PageSearch, props)
 
       await search_pagefind(`first`)
       expect(doc_query(`.cmd-label`).textContent).toContain(`Alpha`)
@@ -1173,17 +1150,15 @@ describe(`PageSearch`, () => {
     const fallback_actions = [
       [`API reference`, `All exported props`, `Docs`, `Library`, `schema`],
       [`Styling guide`, `CSS custom properties`, `Guide`, `Visual`, `theme`],
-    ].map(([label, description, badge, metadata, keyword]) => {
-      return {
-        id: label,
-        label,
-        description,
-        badge,
-        metadata,
-        keywords: [keyword],
-        action: vi.fn(),
-      }
-    })
+    ].map(([label, description, badge, metadata, keyword]) => ({
+      id: label,
+      label,
+      description,
+      badge,
+      metadata,
+      keywords: [keyword],
+      action: vi.fn(),
+    }))
     const load_pagefind = vi.fn(async () => ({ search: async () => ({ results: [] }) }))
     mount_page_search({ fallback_actions, load_pagefind })
 
@@ -1317,9 +1292,8 @@ test(`global shortcuts ignore events consumed by editable controls`, () => {
   mount_menu({
     actions: [{ id: `save`, label: `save`, action, shortcut: `ctrl+shift+s` }],
   })
-  const textarea = document.createElement(`textarea`)
+  const textarea = create_element(`textarea`)
   textarea.addEventListener(`keydown`, (event) => event.preventDefault())
-  document.body.append(textarea)
 
   press_key(textarea, `s`, { ctrlKey: true, shiftKey: true })
 
@@ -1334,12 +1308,9 @@ test.each([`n`, `shift+n`])(
   (shortcut) => {
     const action = vi.fn()
     mount_menu({ actions: [{ id: `new note`, label: `new note`, action, shortcut }] })
-    const press = (tag: string) => {
-      const target = document.createElement(tag)
-      document.body.append(target)
-      return press_key(target, `n`, { shiftKey: shortcut.startsWith(`shift`) })
+    const press = (tag: string) =>
+      press_key(create_element(tag), `n`, { shiftKey: shortcut.startsWith(`shift`) })
         .defaultPrevented
-    }
 
     expect(press(`textarea`)).toBe(false)
     expect(action).not.toHaveBeenCalled()
@@ -1374,7 +1345,7 @@ test(`global shortcuts skip disabled duplicate bindings`, async () => {
 test(`recent_actions_key ranks, persists, and reloads recently triggered actions`, async () => {
   const [storage_key, next_storage_key] = [`test-cmd-recents`, `test-cmd-recents-next`]
   localStorage.setItem(next_storage_key, JSON.stringify([`beta`]))
-  const actions = abc_actions()
+  const actions = make_actions(`alpha`, `beta`, `gamma`)
   const props = $state({ open: true, actions, recent_actions_key: storage_key })
   mount_menu(props)
   await tick()
@@ -1443,7 +1414,7 @@ test.each([
     flushSync(() => {
       mount_menu({
         open: true,
-        actions: abc_actions(),
+        actions: make_actions(`alpha`, `beta`, `gamma`),
         recent_actions_key: storage_key,
         max_recent,
       })

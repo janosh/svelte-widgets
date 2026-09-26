@@ -29,8 +29,8 @@ import {
   slug_to_title,
   step_focus,
 } from '$lib/utils'
-import { afterEach, assert, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, stub_prop } from './index'
+import { assert, beforeEach, describe, expect, test, vi } from 'vitest'
+import { doc_query, stub_props } from './index'
 
 // RFC 4122 v4 pins the version/variant nibbles; the timestamp+counter fallback used when
 // crypto is unavailable only guarantees the generic UUID shape
@@ -139,8 +139,6 @@ describe(`get_style`, () => {
 const [mac, linux] = [`Macintosh; Intel Mac OS X 10_15`, `X11; Linux x86_64`]
 
 describe(`keyboard shortcut parsing`, () => {
-  afterEach(() => Reflect.deleteProperty(globalThis.navigator, `userAgent`))
-
   test.each([
     [`+`, { key: `+`, ctrl: false, shift: false, alt: false, meta: false }],
     [`ctrl++`, { key: `+`, ctrl: true, shift: false, alt: false, meta: false }],
@@ -166,7 +164,7 @@ describe(`keyboard shortcut parsing`, () => {
     [mac, { meta: true, ctrl: false }],
     [linux, { meta: false, ctrl: true }],
   ])(`parse_shortcut resolves mod per platform (%s)`, (user_agent, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent)
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     expect(parse_shortcut(`mod+shift+k`)).toEqual({
       key: `k`,
       shift: true,
@@ -226,7 +224,6 @@ describe(`keyboard shortcut parsing`, () => {
 })
 
 describe(`shortcut rebinding`, () => {
-  afterEach(() => Reflect.deleteProperty(globalThis.navigator, `userAgent`))
   const keydown = (init: KeyboardEventInit) => new KeyboardEvent(`keydown`, init)
 
   // Here meta is literal; mod is the platform's primary modifier.
@@ -249,7 +246,7 @@ describe(`shortcut rebinding`, () => {
     [linux, { key: `__proto__` }, `__proto__`],
     [linux, { key: `Escape` }, `escape`], // bare keys are combos too
   ])(`event_to_combo on %s`, (user_agent, init, expected) => {
-    stub_prop(globalThis.navigator, `userAgent`, user_agent)
+    stub_props(globalThis.navigator, { userAgent: user_agent })
     const event = keydown(init)
     const combo = event_to_combo(event)
     expect(combo).toBe(expected)
@@ -371,7 +368,7 @@ describe(`shortcut rebinding`, () => {
       [linux, `ctrl+x`, {}],
       [linux, `meta+x`, { copy: `meta+x` }],
     ])(`on %s an override of %j resolves against mod defaults`, (ua, combo, expected) => {
-      stub_prop(globalThis.navigator, `userAgent`, ua)
+      stub_props(globalThis.navigator, { userAgent: ua })
       expect(sanitize_shortcut_overrides({ copy: combo }, defaults)).toEqual(expected)
     })
   })
@@ -448,15 +445,8 @@ test.each<[Option, unknown]>([
 })
 
 describe(`compute_position`, () => {
-  const viewport_cleanups: (() => void)[] = []
   const viewport = (width: number, height: number) =>
-    viewport_cleanups.push(
-      stub_prop(globalThis, `innerWidth`, width),
-      stub_prop(globalThis, `innerHeight`, height),
-    )
-  afterEach(() => {
-    for (const cleanup of viewport_cleanups.splice(0).toReversed()) cleanup()
-  })
+    stub_props(globalThis, { innerWidth: width, innerHeight: height })
   const rect = (top: number, height: number, left = 100, width = 200) => ({
     top,
     left,

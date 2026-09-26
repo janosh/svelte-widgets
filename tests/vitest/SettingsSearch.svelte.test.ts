@@ -2,7 +2,7 @@ import { SettingsSearch } from '$lib'
 import type { SettingsSearchLabels } from '$lib/labels'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query, escape_key } from './index'
+import { click, doc_query, escape_key } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 
@@ -73,7 +73,6 @@ describe(`SettingsSearch`, () => {
     const discover = vi.spyOn(root, `querySelectorAll`)
     await type_search_text(`damping`, input)
     expect(discover).not.toHaveBeenCalled()
-    discover.mockRestore()
 
     const row = setting_row(`atom_radius`)
     row.textContent = `Damping range`
@@ -85,10 +84,9 @@ describe(`SettingsSearch`, () => {
 
     const added = document.createElement(`div`)
     added.textContent = `Other curve`
-    const rediscover = vi.spyOn(root, `querySelectorAll`)
+    discover.mockClear()
     row.parentElement?.append(added)
-    await vi.waitFor(() => expect(rediscover).toHaveBeenCalled())
-    rediscover.mockRestore()
+    await vi.waitFor(() => expect(discover).toHaveBeenCalled())
     added.className = `setting`
     await vi.waitFor(() => expect(filtered_out(added)).toBe(true))
     added.textContent = `Damping curve`
@@ -139,8 +137,7 @@ describe(`SettingsSearch`, () => {
     const zoom_speed = setting_row(`zoom_speed`)
     expect(zoom_speed.hidden).toBe(false)
 
-    doc_query<HTMLButtonElement>(`[data-testid="hide-zoom-speed"]`).click()
-    await tick()
+    await click(`[data-testid="hide-zoom-speed"]`)
     expect(zoom_speed.hidden).toBe(true)
 
     // An idle (empty-query) refresh must not replay a stale baseline back over the caller
@@ -196,8 +193,7 @@ describe(`SettingsSearch`, () => {
     await mount_harness({ trigger: `icon` })
     expect(document.querySelector(`input[type="search"]`)).toBeNull()
 
-    doc_query<HTMLButtonElement>(`.open-search`).click()
-    await tick()
+    await click(`.open-search`)
     const input = doc_query<HTMLInputElement>(`input[type="search"]`)
     expect(document.activeElement).toBe(input)
     expect(input.getAttribute(`aria-label`)).toBe(`Search settings`)
@@ -218,7 +214,7 @@ describe(`SettingsSearch`, () => {
     {
       name: `opened by the trigger and cleared by typing`,
       initial_query: ``,
-      open: async () => doc_query<HTMLButtonElement>(`.open-search`).click(),
+      open: () => click(`.open-search`),
       clear: (input: HTMLInputElement) => type_search_text(``, input),
     },
     {
@@ -226,7 +222,7 @@ describe(`SettingsSearch`, () => {
       name: `opened by an initial query and cleared by the button`,
       initial_query: `radius`,
       open: async () => {},
-      clear: async () => doc_query<HTMLButtonElement>(`.clear-search`).click(),
+      clear: () => click(`.clear-search`),
     },
   ])(`trigger="icon" stays open when $name`, async ({ initial_query, open, clear }) => {
     await mount_harness({ trigger: `icon`, initial_query })
@@ -253,8 +249,7 @@ describe(`SettingsSearch`, () => {
     const status = doc_query(`[role="status"]`)
     expect(status.textContent).toContain(`No settings match “unobtainium”.`)
 
-    doc_query<HTMLButtonElement>(`.clear-search`).click()
-    await tick()
+    await click(`.clear-search`)
     expect(input.value).toBe(``)
     // the button unmounts on clear, so focus has to land back in the field
     expect(document.activeElement).toBe(input)

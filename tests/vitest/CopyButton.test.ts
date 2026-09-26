@@ -5,7 +5,7 @@ import type { ComponentProps } from 'svelte'
 import { tick } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import { beforeEach, expect, test, vi } from 'vitest'
-import { doc_query, render, press_key } from './index'
+import { click, doc_query, render, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const mock_write_text = vi.fn()
@@ -22,11 +22,6 @@ const mount_copy_button = (props: Partial<ComponentProps<typeof CopyButton>> = {
     ...props,
   })
   return { unmount_button, copy_button: doc_query(`[data-sms-copy]`) }
-}
-
-const click_copy_button = async (copy_button: HTMLElement): Promise<void> => {
-  copy_button.click()
-  await tick()
 }
 
 const create_pre_with_code = (
@@ -133,7 +128,7 @@ test.each([
   [`empty content`, { content: `` }],
 ] as const)(`%s blocks copy and preserves ready state`, async (_label, props) => {
   const { copy_button } = mount_copy_button(props)
-  await click_copy_button(copy_button)
+  await click(copy_button)
   expect(mock_write_text).not.toHaveBeenCalled()
   expect(copy_text(copy_button)).toContain(`ready`)
 })
@@ -160,7 +155,7 @@ test.each([`success`, `error`] as const)(
       onclick,
     })
     const copy_button = doc_query(`[data-sms-copy]`)
-    await click_copy_button(copy_button)
+    await click(copy_button)
     content_proxy.current = `changed while copying`
     if (state === `success`) pending.resolve(undefined)
     else pending.reject(copy_error)
@@ -186,7 +181,7 @@ test.each([
 ] as const)(`%s: success -> %s`, async (_desc, reset_ms, hold_ms, final_state) => {
   vi.useFakeTimers()
   const { copy_button } = mount_copy_button({ reset_ms })
-  await click_copy_button(copy_button)
+  await click(copy_button)
 
   await vi.advanceTimersByTimeAsync(hold_ms - 1)
   expect(copy_text(copy_button)).toContain(`success`)
@@ -198,11 +193,11 @@ test.each([
 test(`second click clears previous reset timer`, async () => {
   vi.useFakeTimers()
   const { copy_button } = mount_copy_button({ reset_ms: 100 })
-  await click_copy_button(copy_button)
+  await click(copy_button)
   expect(copy_text(copy_button)).toContain(`success`)
 
   await vi.advanceTimersByTimeAsync(50)
-  await click_copy_button(copy_button)
+  await click(copy_button)
 
   await vi.advanceTimersByTimeAsync(60)
   expect(copy_text(copy_button)).toContain(`success`)
@@ -216,7 +211,7 @@ test(`unmount clears outstanding reset timer`, async () => {
   const set_timeout_spy = vi.spyOn(globalThis, `setTimeout`)
   const clear_timeout_spy = vi.spyOn(globalThis, `clearTimeout`)
   const { unmount_button, copy_button } = mount_copy_button({ reset_ms: 100 })
-  await click_copy_button(copy_button)
+  await click(copy_button)
   // pick the reset timer out of any others Svelte scheduled
   const reset_idx = set_timeout_spy.mock.calls.findIndex((call) => call[1] === 100)
   expect(reset_idx).not.toBe(-1)
@@ -260,7 +255,7 @@ test.each([
     if (rejection) mock_write_text.mockRejectedValue(rejection)
 
     const { copy_button, state_store } = mount_bound_copy_button()
-    await click_copy_button(copy_button)
+    await click(copy_button)
     expect(get(state_store)).toBe(expected_state)
     expect(icon_path(copy_button)).toBe(icon.d)
 
@@ -288,18 +283,18 @@ test(`global_selector remounts buttons when callbacks or disabled change`, async
     },
   })
 
-  await click_copy_button(get_single_mounted_button(pre))
+  await click(get_single_mounted_button(pre))
   expect(on_success_initial.mock.calls).toEqual([[`selector content`]])
 
   callback.current = on_success_next
   await tick()
-  await click_copy_button(get_single_mounted_button(pre))
+  await click(get_single_mounted_button(pre))
   expect(on_success_next.mock.calls).toEqual([[`selector content`]])
   expect(on_success_initial).toHaveBeenCalledOnce()
 
   disabled.current = true
   await tick()
-  await click_copy_button(get_single_mounted_button(pre))
+  await click(get_single_mounted_button(pre))
   expect(get_single_mounted_button(pre).disabled).toBe(true)
   expect(mock_write_text).toHaveBeenCalledTimes(2)
 })
@@ -326,7 +321,7 @@ test.each([`replace`, `edit`] as const)(
     else if (code.firstChild) code.firstChild.nodeValue = `after`
     await flush_rescan()
 
-    await click_copy_button(get_single_mounted_button(pre))
+    await click(get_single_mounted_button(pre))
     expect(mock_write_text).toHaveBeenCalledWith(`after`)
   },
 )
@@ -383,7 +378,7 @@ test(`partial labels retain the exported icon-only success default`, async () =>
   const { copy_button } = mount_copy_button({ labels: { ready: `Kopieren` } })
   expect(copy_text(copy_button).trim()).toBe(`Kopieren`)
 
-  await click_copy_button(copy_button)
+  await click(copy_button)
   expect(copy_button.dataset.state).toBe(`success`)
   expect(copy_text(copy_button).trim()).toBe(``)
   expect(icon_path(copy_button)).toBe(Check.d)

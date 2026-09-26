@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
 import type { MultiSelectProps } from '$lib/types'
-import { doc_query } from './index'
+import { click, doc_query } from './index'
 import {
   focus_input,
   fresh_key,
@@ -68,11 +68,7 @@ describe(`option grouping feature`, () => {
     expect(header_names()).toEqual([`Genre`, `Key`])
     expect(option_items()).toHaveLength(6)
 
-    const rock_option = Array.from(option_items()).find(
-      (item) => item.textContent?.trim() === `Rock`,
-    )
-    rock_option?.click()
-    await tick()
+    await click([...option_items()].find((item) => item.textContent?.trim() === `Rock`))
     expect(on_change).toHaveBeenCalledWith({
       option: { label: `Rock`, group: `Genre` },
       type: `add`,
@@ -117,12 +113,12 @@ describe(`option grouping feature`, () => {
   })
 
   test.each([
-    [`click`, (header: HTMLElement) => header.click()],
+    [`click`, (header: HTMLElement) => click(header)],
     [
       // a real <button> now, so Enter/Space activate it natively (no keydown handler)
       `keyboard activation of the toggle button`,
       (header: HTMLElement) =>
-        header.querySelector<HTMLButtonElement>(`button.group-collapse-toggle`)?.click(),
+        click(header.querySelector(`button.group-collapse-toggle`)),
     ],
   ])(`collapsible_groups toggles group visibility via %s`, async (_via, toggle) => {
     const on_group_toggle = vi.fn()
@@ -134,8 +130,7 @@ describe(`option grouping feature`, () => {
     const count_options = () => option_items().length
     const initial_count = count_options()
 
-    toggle(genre_header)
-    await tick()
+    await toggle(genre_header)
     expect(count_options()).toBeLessThan(initial_count)
     expect(group_expanded(genre_header)).toBe(`false`)
     expect(on_group_toggle).toHaveBeenNthCalledWith(1, {
@@ -143,8 +138,7 @@ describe(`option grouping feature`, () => {
       collapsed: true,
     })
 
-    toggle(genre_header)
-    await tick()
+    await toggle(genre_header)
     expect(count_options()).toBe(initial_count)
     expect(group_expanded(genre_header)).toBe(`true`)
     expect(on_group_toggle).toHaveBeenNthCalledWith(2, {
@@ -162,8 +156,7 @@ describe(`option grouping feature`, () => {
     )
     expect(select_all_buttons).toHaveLength(2) // One for each group
 
-    group_select_all_btn(`Genre`)?.click()
-    await tick()
+    await click(group_select_all_btn(`Genre`))
 
     expect(onselectAll_spy).toHaveBeenCalledTimes(1)
     expect(onselectAll_spy.mock.calls[0][0].options).toEqual(genre_options)
@@ -189,10 +182,7 @@ describe(`option grouping feature`, () => {
       )
       expect(select_all_buttons).toHaveLength(expected_buttons)
 
-      if (expected_buttons > 0) {
-        group_select_all_btn(`Genre`)?.click()
-        await tick()
-      }
+      if (expected_buttons > 0) await click(group_select_all_btn(`Genre`))
       expect(document.querySelectorAll(`ul.selected > li`)).toHaveLength(
         expected_selected,
       )
@@ -258,14 +248,8 @@ describe(`option grouping feature`, () => {
         on_select_all: onselectAll_spy,
       })
 
-      find_group_header(collapsed_group).click()
-      await tick()
-
-      const select_all_li = document.querySelector<HTMLElement>(
-        `ul.options > li.select-all`,
-      )
-      select_all_li?.click()
-      await tick()
+      await click(find_group_header(collapsed_group))
+      await click(`ul.options > li.select-all`)
 
       expect(onselectAll_spy).toHaveBeenCalledTimes(1)
       const selected = onselectAll_spy.mock.calls[0][0].options
@@ -291,8 +275,7 @@ describe(`option grouping feature`, () => {
       on_select_all: onselectAll_spy,
     })
 
-    group_select_all_btn(`Test`)?.click()
-    await tick()
+    await click(group_select_all_btn(`Test`))
 
     expect(onselectAll_spy).toHaveBeenCalledTimes(1)
     expect(onselectAll_spy.mock.calls[0][0].options).toEqual([
@@ -310,14 +293,10 @@ describe(`option grouping feature`, () => {
     })
 
     const genre_header = find_group_header(`Genre`)
-    genre_header.click()
-    await tick()
+    await click(genre_header)
     expect(group_expanded(genre_header)).toBe(`false`)
 
-    const select_all_btn = group_select_all_btn(`Genre`)
-    expect(select_all_btn).toBeInstanceOf(HTMLButtonElement)
-    select_all_btn?.click()
-    await tick()
+    await click(group_select_all_btn(`Genre`))
 
     expect(onselectAll_spy).toHaveBeenCalledTimes(1)
     expect(onselectAll_spy.mock.calls[0][0].options).toEqual(genre_options)
@@ -487,8 +466,7 @@ describe(`option grouping feature`, () => {
     const select_btn = selector.includes(`group`)
       ? find_group_header(`TestGroup`).querySelector(selector)
       : document.querySelector(selector)
-    if (select_btn instanceof HTMLElement) select_btn.click()
-    await tick()
+    await click(select_btn)
 
     expect(onselectAll_spy).toHaveBeenCalledTimes(1)
     const selected = onselectAll_spy.mock.calls[0][0].options
@@ -534,8 +512,7 @@ describe(`option grouping feature`, () => {
     })
 
     const genre_header = find_group_header(`Genre`)
-    genre_header.click()
-    await tick()
+    await click(genre_header)
     expect(group_expanded(genre_header)).toBe(`false`)
 
     const input = await focus_input()
@@ -594,14 +571,12 @@ describe(`option grouping feature`, () => {
 
       expect(select_btn?.textContent?.trim()).toBe(`Select all`)
 
-      select_btn?.click()
-      await tick()
+      await click(select_btn)
 
       expect(select_btn?.textContent?.trim()).toBe(`Deselect all`)
       expect(select_btn?.classList.contains(`deselect`)).toBe(true)
 
-      select_btn?.click()
-      await tick()
+      await click(select_btn)
 
       expect(onremoveAll_spy).toHaveBeenCalledTimes(1)
       expect(onremoveAll_spy.mock.calls[0][0].options).toEqual(genre_options)
@@ -617,8 +592,7 @@ describe(`option grouping feature`, () => {
       )
       expect(key_option).toBeDefined()
       for (const expanded of [false, true]) {
-        find_group_header(`Genre`).click()
-        await tick()
+        await click(find_group_header(`Genre`))
         expect(group_expanded(`Genre`)).toBe(String(expanded))
         expect(
           [...option_items()].find((item) => item.textContent?.trim() === `C Major`),
@@ -643,8 +617,7 @@ test(`group deselect-all keeps at least min_select options selected`, async () =
 
   const deselect_btn = group_select_all_btn(`Genre`)
   expect(deselect_btn?.textContent?.trim()).toBe(`Deselect all`)
-  deselect_btn?.click()
-  await tick()
+  await click(deselect_btn)
 
   // previously dropped to 0 selected, violating min_select=2
   expect(props.value).toHaveLength(2)
@@ -692,8 +665,7 @@ test.each([`Fruits`, ``])(
     expect(group_expanded(group)).toBe(`true`)
 
     // manual collapse mid-search must stick (previously insta-re-expanded)
-    find_group_header(group).click()
-    await tick()
+    await click(find_group_header(group))
     expect(group_expanded(group)).toBe(`false`)
 
     // a NEW search re-expands

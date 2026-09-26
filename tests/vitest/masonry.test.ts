@@ -81,8 +81,7 @@ beforeEach(() => {
 })
 
 const scroll_to = async (scroll_top: number) => {
-  const masonry = masonry_el()
-  if (!masonry) throw new Error(`masonry div not found`)
+  const masonry = doc_query(`div.masonry`)
   Object.defineProperty(masonry, `scrollTop`, { value: scroll_top, configurable: true })
   masonry.dispatchEvent(new Event(`scroll`))
   await new Promise(requestAnimationFrame)

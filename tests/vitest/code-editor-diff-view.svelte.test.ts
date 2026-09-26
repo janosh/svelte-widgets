@@ -17,9 +17,9 @@ import type {
   TokenClassName,
 } from '$lib/code-editor'
 import type { DiffViewLabels } from '$lib/labels'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vitest'
-import { doc_query as query_element } from './index'
+import { doc_query as query_element, render } from './index'
 
 const DEFAULT_OPTIONS: DiffViewOptions = {
   font_size: 13,
@@ -133,10 +133,9 @@ const mount_diff = async (
     ...(use_default_backend || no_backend ? {} : { backend: { diff_text } }),
     ...rest,
   })
-  const instance = mount(DiffView, { target: document.body, props })
-  onTestFinished(() => unmount(instance))
+  const unmount_diff = render(DiffView, props)
   await flush_async(ready)
-  return { diff_text, props }
+  return { diff_text, props, unmount_diff }
 }
 
 const text_of = (element: Element | null): string => element?.textContent ?? ``
@@ -461,20 +460,15 @@ describe(`states and backend wiring`, () => {
   test(`a pending diff cannot report an error after unmount`, async () => {
     const request = Promise.withResolvers<DiffResult>()
     const on_error = vi.fn()
-    const instance = mount(DiffView, {
-      target: document.body,
-      props: {
-        old_text: `a`,
-        new_text: `b`,
-        filename: `main.rs`,
-        options: DEFAULT_OPTIONS,
-        backend: { diff_text: () => request.promise },
-        on_error,
-      },
+    const { unmount_diff } = await mount_diff(diff_result(), {
+      old_text: `a`,
+      new_text: `b`,
+      diff_text: () => request.promise,
+      on_error,
+      ready: BUSY,
     })
-    await flush_async(BUSY)
 
-    await unmount(instance)
+    await unmount_diff()
     request.reject(new Error(`late failure`))
     await Promise.resolve()
 

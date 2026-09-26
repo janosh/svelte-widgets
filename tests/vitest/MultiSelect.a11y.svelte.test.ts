@@ -52,10 +52,8 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     const input = await focus_input()
 
-    const options = document.querySelectorAll<HTMLLIElement>(
-      `ul.options > li[role="option"]`,
-    )
-    const ids = [...options].map((opt) => opt.id)
+    const options = [...document.querySelectorAll(`ul.options > li[role="option"]`)]
+    const ids = options.map((opt) => opt.id)
     expect(ids.every(Boolean)).toBe(true)
     expect(new Set(ids).size).toBe(3) // one id per option, none shared
     options.forEach((option, idx) => {
@@ -83,10 +81,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     mount_a11y()
 
     const input = await focus_input()
-
-    if (filter) {
-      await type_search_text(filter, input)
-    }
+    if (filter) await type_search_text(filter, input)
 
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.getAttribute(`aria-atomic`)).toBe(`true`)
@@ -113,8 +108,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
   test(`aria-label can be passed via rest props for accessible name`, () => {
     mount_multiselect({ options: [`foo`, `bar`], [`aria-label`]: `Select your favorite` })
 
-    const input = get_input()
-    expect(input.getAttribute(`aria-label`)).toBe(`Select your favorite`)
+    expect(get_input().getAttribute(`aria-label`)).toBe(`Select your favorite`)
   })
 
   test(`aria-busy reflects loading state`, async () => {
@@ -138,9 +132,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     await focus_input()
 
-    const option = doc_query<HTMLLIElement>(`ul.options > li[role="option"]`)
-    option.click()
-    await tick()
+    await click(`ul.options > li[role="option"]`)
 
     const live_region = doc_query(`.sr-only[aria-live="polite"]`)
     expect(live_region.textContent).toContain(`selected`)

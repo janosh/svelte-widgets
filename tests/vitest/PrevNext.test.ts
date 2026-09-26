@@ -58,10 +58,8 @@ describe(`PrevNext`, () => {
     document.querySelector(`a`)?.dispatchEvent(event)
     expect(onkeyup).toHaveBeenCalledExactlyOnceWith(event)
     expect(link_hrefs()).toEqual([`page1`, `page3`])
-    for (const spy of [replace_state, push_state, scroll_to]) {
+    for (const spy of [replace_state, push_state, scroll_to])
       expect(spy).not.toHaveBeenCalled()
-      spy.mockRestore()
-    }
   })
 
   test.each([

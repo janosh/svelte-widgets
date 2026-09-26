@@ -4,7 +4,7 @@ import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '$lib/types
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
-import { doc_query, next_task, press_key, render } from './index'
+import { click, doc_query, next_task, press_key, render } from './index'
 
 type TocProps = ComponentProps<typeof Toc>
 
@@ -156,10 +156,7 @@ describe(`Toc`, () => {
       expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
         expect.stringContaining(`Showing table of contents.`),
       )
-      if (width < 1000) {
-        doc_query(`aside.toc > button`).click()
-        await tick()
-      }
+      if (width < 1000) await click(`aside.toc > button`)
       expect(toc_texts()).toEqual([])
       for (const selector of [`summary`, `a`]) {
         const control = doc_query(`[data-toc-footer] ${selector}`)
@@ -469,26 +466,22 @@ describe(`Toc`, () => {
 
   test(`flash_clicked_headings_for_ms removes the clicked-heading class`, async () => {
     vi.useFakeTimers()
-    try {
-      set_body(`<h2 id="intro">Intro</h2>`)
+    set_body(`<h2 id="intro">Intro</h2>`)
 
-      mount_toc({ flash_clicked_headings_for_ms: 10 })
-      await tick()
+    mount_toc({ flash_clicked_headings_for_ms: 10 })
+    await tick()
 
-      const heading = doc_query(`#intro`)
-      doc_query(`aside.toc li`).click()
-      expect(heading.classList.contains(`toc-clicked`)).toBe(true)
-      expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(`10ms`)
-      vi.advanceTimersByTime(5)
-      doc_query(`aside.toc li`).click()
-      vi.advanceTimersByTime(5)
-      expect(heading.classList.contains(`toc-clicked`)).toBe(true)
-      vi.advanceTimersByTime(5)
-      expect(heading.classList.contains(`toc-clicked`)).toBe(false)
-      expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(``)
-    } finally {
-      vi.useRealTimers()
-    }
+    const heading = doc_query(`#intro`)
+    doc_query(`aside.toc li`).click()
+    expect(heading.classList.contains(`toc-clicked`)).toBe(true)
+    expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(`10ms`)
+    vi.advanceTimersByTime(5)
+    doc_query(`aside.toc li`).click()
+    vi.advanceTimersByTime(5)
+    expect(heading.classList.contains(`toc-clicked`)).toBe(true)
+    vi.advanceTimersByTime(5)
+    expect(heading.classList.contains(`toc-clicked`)).toBe(false)
+    expect(heading.style.getPropertyValue(`--toc-flash-duration`)).toBe(``)
   })
 
   test.each([
@@ -598,8 +591,7 @@ describe(`Toc`, () => {
 
     set_window_width(600)
     await tick()
-    doc_query(`aside.toc button`).click()
-    await tick()
+    await click(`aside.toc button`)
 
     expect(on_open_change).toHaveBeenCalledTimes(2)
     expect(on_open_change).toHaveBeenCalledWith(
@@ -639,8 +631,7 @@ describe(`Toc`, () => {
       )
     expect(shown_icons()).toEqual([true, false]) // [closed, open]
 
-    doc_query(`aside.toc button`).click()
-    await tick()
+    await click(`aside.toc button`)
 
     expect(document.querySelector(`aside.toc > nav`)).not.toBeNull()
     expect(shown_icons()).toEqual([false, true])
@@ -733,14 +724,14 @@ describe(`Toc`, () => {
 
       // Enter activates the arrow-selected Heading 2, not the originally-focused Heading 1
       const link = doc_query<HTMLAnchorElement>(`aside.toc > nav > ol > li.active > a`)
-      const click = vi.spyOn(link, `click`)
+      const click_spy = vi.spyOn(link, `click`)
       const activation = press_key(link, key)
       expect(activation.defaultPrevented).toBe(key === ` `)
       if (key === `Enter`) {
-        expect(click).not.toHaveBeenCalled()
+        expect(click_spy).not.toHaveBeenCalled()
         link.click() // happy-dom does not dispatch the browser's default Enter click
       }
-      expect(click).toHaveBeenCalledOnce()
+      expect(click_spy).toHaveBeenCalledOnce()
       expect(doc_query(`aside.toc > nav > ol > li.active`).textContent).toBe(`Heading 2`)
       expect(replace_mock).not.toHaveBeenCalled()
     },
@@ -920,7 +911,6 @@ describe(`Toc`, () => {
     await tick()
     expect(query_spy).toHaveBeenCalled()
     expect(doc_query(`aside.toc li.active`).textContent.trim()).toBe(`Gamma`)
-    query_spy.mockRestore()
   })
 
   test.each([
@@ -995,25 +985,20 @@ describe(`Toc`, () => {
       [`the fallback timeout`, () => vi.advanceTimersByTime(1000)],
     ])(`%s releases scroll_target back to scroll detection`, async (_, release) => {
       vi.useFakeTimers() // keeps the fallback dormant unless a case advances it
-      try {
-        mount_toc({ open: true })
-        await tick()
-        expect(active_text()).toBe(`Heading 3`)
+      mount_toc({ open: true })
+      await tick()
+      expect(active_text()).toBe(`Heading 3`)
 
-        doc_query(`aside.toc ol li`).click()
-        await tick()
-        // the clicked heading goes active at once and survives intermediate scrolls
-        expect(active_text()).toBe(`Heading 1`)
-        expect(scroll_mock).toHaveBeenCalledOnce()
-        await scroll()
-        expect(active_text()).toBe(`Heading 1`)
+      await click(`aside.toc ol li`)
+      // the clicked heading goes active at once and survives intermediate scrolls
+      expect(active_text()).toBe(`Heading 1`)
+      expect(scroll_mock).toHaveBeenCalledOnce()
+      await scroll()
+      expect(active_text()).toBe(`Heading 1`)
 
-        release()
-        await scroll()
-        expect(active_text()).toBe(`Heading 3`)
-      } finally {
-        vi.useRealTimers()
-      }
+      release()
+      await scroll()
+      expect(active_text()).toBe(`Heading 3`)
     })
 
     // a distance to the target that grows past the 50px threshold reads as the user
@@ -1030,8 +1015,7 @@ describe(`Toc`, () => {
         dom_rect({ top: mock_top }),
       )
 
-      doc_query(`aside.toc ol li`).click()
-      await tick()
+      await click(`aside.toc ol li`)
       expect(active_text()).toBe(`Heading 1`)
 
       for (const top of tops) {
@@ -1045,8 +1029,7 @@ describe(`Toc`, () => {
       mount_toc({ open: true })
       await tick()
 
-      doc_query(`aside.toc ol li`).click()
-      await tick()
+      await click(`aside.toc ol li`)
       expect(active_text()).toBe(`Heading 1`)
 
       doc_query(`#heading-1`).remove()
@@ -1392,7 +1375,6 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
       expect(style.getPropertyPriority(`scroll-behavior`)).toBe(`important`)
     } finally {
       style.removeProperty(`scroll-behavior`)
-      vi.useRealTimers()
     }
   },
 )

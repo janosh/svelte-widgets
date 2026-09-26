@@ -5,7 +5,7 @@ import type { ButtonGroupOption } from '$lib/types'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query, hover as dispatch_hover, render, press_key } from './index'
+import { click, doc_query, hover as dispatch_hover, render, press_key } from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
@@ -104,13 +104,11 @@ describe(`ButtonGroup`, () => {
     const on_change = vi.fn()
     const buttons = mount_group({ options: letters, value: `alpha`, on_change })
 
-    buttons[2].click()
-    await tick()
+    await click(buttons[2])
     expect(on_change.mock.calls).toEqual([[`gamma`]])
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
 
-    buttons[2].click() // re-picking the checked radio is a no-op, not a deselect
-    await tick()
+    await click(buttons[2]) // re-picking the checked radio is a no-op, not a deselect
     expect(on_change).toHaveBeenCalledOnce()
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
   })
@@ -120,14 +118,11 @@ describe(`ButtonGroup`, () => {
     const buttons = mount_group({ options: letters, mode: `multiple`, on_change })
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `false`])
 
-    buttons[0].click()
-    await tick()
-    buttons[2].click()
-    await tick()
+    await click(buttons[0])
+    await click(buttons[2])
     expect(buttons.map(checked_state)).toEqual([`true`, `false`, `true`])
 
-    buttons[0].click() // second press removes it, leaving the other selection alone
-    await tick()
+    await click(buttons[0]) // second press removes it, leaving the other selection alone
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
     expect(on_change.mock.calls).toEqual([[[`alpha`]], [[`alpha`, `gamma`]], [[`gamma`]]])
 
@@ -187,8 +182,7 @@ describe(`ButtonGroup`, () => {
     ]
     const buttons = mount_group({ options, value: `alpha`, on_change })
     expect(buttons.map((button) => button.disabled)).toEqual([false, true, false])
-    buttons[1].click()
-    await tick()
+    await click(buttons[1])
     expect(on_change).not.toHaveBeenCalled()
     expect(buttons.map(checked_state)).toEqual([`true`, `false`, `false`])
 
@@ -273,13 +267,11 @@ describe(`ButtonGroup`, () => {
     expect(arrow.getAttribute(`style`)).toBe(`font-size: 1.2em;`)
     expect(arrow.type).toBe(`button`)
 
-    arrow.click()
-    await tick()
+    await click(arrow)
     expect(arrow_state()).toEqual([`↓`, descending])
     expect(onclick).toHaveBeenCalledOnce()
 
-    arrow.click()
-    await tick()
+    await click(arrow)
     expect(arrow_state()).toEqual([`↑`, ascending])
     expect(onclick).toHaveBeenCalledTimes(2)
   })

@@ -5,6 +5,7 @@ import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick, unmount } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, onTestFinished, test, vi } from 'vitest'
+import { click, create_element } from './index'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
@@ -52,8 +53,7 @@ type ButtonProps = Partial<ComponentProps<typeof FullscreenButton>>
 // this file isn't compiled by the Svelte plugin so $state is unavailable - a
 // getter/setter pair backed by fromStore mimics a parent's bind:fullscreen
 const mount_button = (props: ButtonProps = {}) => {
-  const wrapper = document.createElement(`div`)
-  document.body.append(wrapper)
+  const wrapper = create_element()
   const flag = writable(false)
   const flag_proxy = fromStore(flag)
   const component = mount(FullscreenButton, {
@@ -77,9 +77,7 @@ const mount_button = (props: ButtonProps = {}) => {
 }
 
 const outsider_goes_fullscreen = async (): Promise<void> => {
-  const outsider = document.createElement(`div`)
-  document.body.append(outsider)
-  await set_fullscreen_element(outsider)
+  await set_fullscreen_element(create_element())
   await settle()
 }
 
@@ -163,10 +161,8 @@ describe(`flag <-> browser sync`, () => {
     )
     const { button, flag } = mount_button()
 
-    button.click()
-    await tick()
-    button.click()
-    await tick()
+    await click(button)
+    await click(button)
 
     entry_request.resolve(undefined)
     await settle()
@@ -189,10 +185,8 @@ describe(`flag <-> browser sync`, () => {
       request.promise.then(() => set_fullscreen_element(null)),
     )
 
-    button.click()
-    await tick()
-    button.click()
-    await tick()
+    await click(button)
+    await click(button)
 
     request.resolve(undefined)
     await settle()
@@ -269,8 +263,7 @@ describe(`flag <-> browser sync`, () => {
     const exit_request = Promise.withResolvers<undefined>()
     document.exitFullscreen = vi.fn(() => exit_request.promise.then(() => undefined))
 
-    button.click()
-    await tick()
+    await click(button)
     expect(document.exitFullscreen).toHaveBeenCalledOnce()
 
     await set_fullscreen_element(null)

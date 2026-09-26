@@ -1,8 +1,7 @@
 import { Toggle } from '$lib'
 import type { ComponentProps } from 'svelte'
-import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vitest'
-import { doc_query, press_key, render } from './index'
+import { click, doc_query, press_key, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Toggle`, () => {
@@ -99,8 +98,7 @@ describe(`Toggle`, () => {
     const snippet = doc_query(`[data-testid="toggle-snippet"]`)
     expect(snippet.dataset.checked).toBe(`false`)
 
-    get_input().click()
-    await tick()
+    await click(get_input())
     expect(snippet.dataset.checked).toBe(`true`)
   })
 })
