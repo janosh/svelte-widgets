@@ -9,8 +9,7 @@ import {
   type TokenizerAndRendererExtension,
   type TokenizerStartFunction,
 } from 'marked'
-import type { KatexOptions } from 'katex'
-
+import type * as Katex from 'katex'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
@@ -34,7 +33,6 @@ import {
   type Diagnostic,
   type DiagnosticResult,
 } from './diagnostics.ts'
-import type * as Katex from 'katex'
 import {
   content_manifest,
   type ContentManifest,
@@ -79,7 +77,7 @@ export type MarkdownOptions = {
   heading_links?: boolean | { icon_svg?: string }
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
-  math?: boolean | KatexOptions
+  math?: boolean | Katex.KatexOptions
   references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
@@ -219,10 +217,7 @@ async function prepare_document(
   let body = source
   let metadata: Record<string, unknown> | undefined
   try {
-    const parsed =
-      options.frontmatter === false
-        ? { body: source, metadata: undefined }
-        : frontmatter(source)
+    const parsed = options.frontmatter === false ? { body: source } : frontmatter(source)
     body = parsed.body
     metadata = options.validate_frontmatter
       ? serialize_metadata(
@@ -239,7 +234,7 @@ async function prepare_document(
       error_diagnostics(
         error,
         `frontmatter`,
-        locate(offset, mark ? offset + 1 : source.length - (body ?? source).length),
+        locate(offset, mark ? offset + 1 : source.length - body.length),
       ),
     )
   }
@@ -620,13 +615,10 @@ export function create_markdown(options: MarkdownOptions = {}): MarkdownEngine {
     options,
     async parse(source, { filename = `document.md`, dialect = `svelte` } = {}) {
       try {
-        const document = await prepare_document(
-          source,
-          copy_options(options),
-          filename,
-          dialect,
+        return diagnostic_result(
+          await prepare_document(source, copy_options(options), filename, dialect),
+          [],
         )
-        return diagnostic_result(document, [])
       } catch (error) {
         return failure(error, `markdown`, source, filename, source.length)
       }

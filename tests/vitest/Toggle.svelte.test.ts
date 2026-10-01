@@ -70,8 +70,9 @@ describe(`Toggle`, () => {
     expect(state()).toEqual([false, false])
   })
 
-  test(`applies custom class and styles, keeps input_props off owned attrs`, () => {
-    const input_props = { style: `width: 20px;` }
+  // onchange/onclick forwarding is pinned by the Enter test
+  test(`applies custom class and styles, forwards input_props except owned attrs`, () => {
+    const input_props = { style: `width: 20px;`, onblur: vi.fn() }
     // `type` and `checked` are Omit'd from the prop type; a JS consumer bypassing that
     // must still not swap the element out or detach bind:checked
     Reflect.set(input_props, `type`, `radio`)
@@ -82,14 +83,8 @@ describe(`Toggle`, () => {
     expect(doc_query(`input`).getAttribute(`style`)).toBe(`width: 20px;`)
     expect(get_input().type).toBe(`checkbox`)
     expect(get_input().checked).toBe(false)
-  })
-
-  // onchange/onclick forwarding is pinned by the Enter test
-  test(`forwards other input_props handlers like onblur`, () => {
-    const onblur = vi.fn()
-    render(Toggle, { input_props: { onblur } })
     get_input().dispatchEvent(new FocusEvent(`blur`))
-    expect(onblur).toHaveBeenCalledOnce()
+    expect(input_props.onblur).toHaveBeenCalledOnce()
   })
 
   test(`children snippet receives checked state and updates on toggle`, async () => {

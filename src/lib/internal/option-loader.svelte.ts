@@ -26,12 +26,12 @@ export function create_option_loader<T extends Option>(get: {
     )
     return () => clearTimeout(timer)
   })
-  const load_options = $derived(get.config())
   const effective_filter_text = $derived(get.query())
   const open = $derived(get.open())
   const options_list_el = $derived(get.element())
   // normalizes the function-or-config-object prop into one shape
   const load_options_config = $derived.by(() => {
+    const load_options = get.config()
     if (!load_options) return null
     const load_config: LoadOptionsConfig<T> =
       typeof load_options === `function` ? { fetch: load_options } : load_options
@@ -65,6 +65,12 @@ export function create_option_loader<T extends Option>(get: {
     load_request_id++
     load_abort_controller?.abort()
     loader.loading = false
+  }
+  function reset_loaded_batch() {
+    cancel_in_flight_load()
+    loader.options = []
+    loader.has_more = true
+    loader.error = null
   }
 
   // captures `search` at call time. reset=true bypasses the loading mutex so a new search
@@ -125,25 +131,19 @@ export function create_option_loader<T extends Option>(get: {
     // auto-fill: a batch that doesn't overflow the dropdown yields no scrollbar, so onscroll
     // can never fire — keep loading until scrollable or done. An empty batch stops it, since
     // the next request would be identical (and it keeps offset=0 meaning "reset").
+    const live_list = () =>
+      request_id === load_request_id && open ? options_list_el : undefined
     if (
-      request_id !== load_request_id ||
       batch_length <= 0 ||
       loader.error ||
       !loader.has_more ||
-      !open ||
-      !options_list_el ||
-      auto_fill_count >= MAX_AUTO_FILL_ROUNDS
+      auto_fill_count >= MAX_AUTO_FILL_ROUNDS ||
+      !live_list()
     )
       return
     await tick()
-    if (
-      request_id !== load_request_id ||
-      !open ||
-      !options_list_el ||
-      options_list_el.clientHeight <= 0 ||
-      options_list_el.scrollHeight > options_list_el.clientHeight
-    )
-      return
+    const list = live_list()
+    if (!list || list.clientHeight <= 0 || list.scrollHeight > list.clientHeight) return
     auto_fill_count++
     void load_dynamic_options(false)
   }
@@ -159,17 +159,10 @@ export function create_option_loader<T extends Option>(get: {
     }
     const fetch_changed = config.fetch !== previous_load_options_fetch
     previous_load_options_fetch = config.fetch
-
-    const clear_loaded_batch = () => {
-      loader.options = []
-      loader.has_more = true
-      loader.error = null
-    }
     // Reset when closed or when the loader changes under the current query.
     if (!open || fetch_changed) {
-      cancel_in_flight_load()
+      reset_loaded_batch()
       loader.last_search = null
-      clear_loaded_batch()
     }
     if (!open) return undefined
 
@@ -191,11 +184,8 @@ export function create_option_loader<T extends Option>(get: {
           loader.loading || loader.options.length > 0 || !loader.has_more || loader.error,
       )
     if (is_first_load ? !search : unchanged_search) return undefined
-    if (!is_first_load) {
-      // abort the superseded fetch and clear stale results now, then debounce the new search
-      cancel_in_flight_load()
-      clear_loaded_batch()
-    }
+    // abort the superseded fetch and clear stale results now, then debounce the new search
+    if (!is_first_load) reset_loaded_batch()
     const debounce_timer = setTimeout(
       () => void load_dynamic_options(true),
       config.debounce_ms,

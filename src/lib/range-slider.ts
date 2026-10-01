@@ -1,3 +1,5 @@
+import { clamp } from './utils'
+
 export type RangeValue = [number, number]
 export type RangeScale = 'linear' | 'log'
 
@@ -18,14 +20,11 @@ export const create_range_scale = (min: number, max: number, scale: RangeScale) 
       `Logarithmic range needs finite 0 < min < max with distinct logarithms; got min=${min}, max=${max}`,
     )
   }
-  const from_position = (position: number): number =>
-    position <= floor
-      ? min
-      : position >= ceiling
-        ? max
-        : scale === `log`
-          ? 10 ** position
-          : position
+  const from_position = (position: number): number => {
+    if (position <= floor) return min
+    if (position >= ceiling) return max
+    return scale === `log` ? 10 ** position : position
+  }
   const validate_step = (step: number, component = `RangeSlider`): void => {
     const magnitude = Math.max(Math.abs(floor), Math.abs(ceiling), ceiling - floor)
     // Include the span: min + index * step can lose increments in either intermediate.
@@ -63,15 +62,9 @@ export const range_key_action = (
   event: KeyboardEvent,
   horizontal: -1 | 0 | 1,
 ): number | `min` | `max` | undefined => {
-  if (
-    event.defaultPrevented ||
-    event.isComposing ||
-    event.altKey ||
-    event.ctrlKey ||
-    event.metaKey
-  )
+  const { key, shiftKey, altKey, ctrlKey, metaKey } = event
+  if (event.defaultPrevented || event.isComposing || altKey || ctrlKey || metaKey)
     return undefined
-  const { key, shiftKey: shift } = event
   if (horizontal && key === `Home`) return `min`
   if (horizontal && key === `End`) return `max`
   let direction = 0
@@ -79,7 +72,7 @@ export const range_key_action = (
   else if (key === `ArrowDown` || key === `PageDown`) direction = -1
   else if (key === `ArrowRight`) direction = horizontal
   else if (key === `ArrowLeft`) direction = -horizontal
-  if (direction) return direction * (key.startsWith(`Page`) || shift ? 10 : 1)
+  if (direction) return direction * (key.startsWith(`Page`) || shiftKey ? 10 : 1)
   return undefined
 }
 
@@ -112,8 +105,11 @@ export const snap_range_value = (
     const candidate = grid_value(neighbor, min, step)
     if (Math.abs(candidate - value) < Math.abs(rounded - value)) rounded = candidate
   }
-  const nearest = Math.abs(max - value) < Math.abs(rounded - value) ? max : rounded
-  return Math.max(min, Math.min(max, nearest))
+  return clamp(
+    Math.abs(max - value) < Math.abs(rounded - value) ? max : rounded,
+    min,
+    max,
+  )
 }
 
 // Walk adjacent grid points rather than subtracting from an off-grid endpoint or draft.
@@ -129,8 +125,7 @@ export const step_range_value = (
   const nearest = grid_value(index, min, step)
   const offset = direction * (stride - (direction * (nearest - value) > 0 ? 1 : 0))
   let next_index = index + offset
-  const bounded_value = (): number =>
-    Math.max(min, Math.min(max, grid_value(next_index, min, step)))
+  const bounded_value = (): number => clamp(grid_value(next_index, min, step), min, max)
   let next = bounded_value()
   const limit = direction > 0 ? max : min
   // At large offsets adjacent grid indices can round to the same number. A keyboard
@@ -142,15 +137,16 @@ export const step_range_value = (
   return next
 }
 
-// log10(10 ** coordinate) can land beside its original grid point. Recognize that
-// point by exact reconstruction so an arrow cannot stop on the same real value.
+// Move by signed grid steps (a range_key_action count). log10(10 ** coordinate) can land
+// beside its original grid point. Recognize that point by exact reconstruction so an
+// arrow cannot stop on the same real value.
 export const step_range_coordinate = (
   value: number,
   domain: ReturnType<typeof create_range_scale>,
   step: number,
-  direction: number,
-  stride: number,
+  steps: number,
 ): number => {
+  const [direction, stride] = [Math.sign(steps), Math.abs(steps)]
   const coordinate = domain.to_position(value)
   const snapped = snap_range_value(coordinate, domain.min, domain.max, step)
   const baseline = domain.from_position(snapped) === value ? snapped : coordinate
@@ -170,9 +166,8 @@ export const validate_range = (
   max: number,
   step: number,
   scale: RangeScale = `linear`,
-  component = `RangeSlider`,
 ): void => {
-  create_range_scale(min, max, scale).validate_step(step, component)
+  create_range_scale(min, max, scale).validate_step(step)
   if (
     value.length !== 2 ||
     !value.every(Number.isFinite) ||

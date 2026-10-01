@@ -76,8 +76,7 @@ test(`DemoNav lists components while recipes remain in the complete searchable c
   expect(expected_pages).toEqual(
     expect.arrayContaining([`/multiselect`, `/ui`, `/range-select`]),
   )
-  expect(new Set(demo_pages)).toEqual(new Set(expected_pages))
-  expect(demo_pages).toHaveLength(expected_pages.length)
+  expect(demo_pages.toSorted()).toEqual(expected_pages.toSorted())
   expect(new Set(multiselect_recipes)).toEqual(
     new Set(
       page_files

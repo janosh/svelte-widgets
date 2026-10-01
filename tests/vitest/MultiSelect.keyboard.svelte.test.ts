@@ -206,6 +206,8 @@ describe(`arrow key navigation between selected items`, () => {
     await tick()
     expect(is_highlighted(0)).toBe(true)
     expect(is_highlighted(1)).toBe(false)
+    // a highlighted pill is not a listbox option, so it gets no aria-activedescendant
+    expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
 
     input.dispatchEvent(press(`ArrowRight`)) // idx 1
     input.dispatchEvent(press(`ArrowRight`)) // idx 2
@@ -229,10 +231,7 @@ describe(`arrow key navigation between selected items`, () => {
   test(`Backspace without highlight removes last item`, async () => {
     const input = setup()
     await press_sequence(input, `Backspace`)
-    const text = doc_query(`ul.selected`).textContent?.trim()
-    expect(text).toContain(`Red`)
-    expect(text).toContain(`Green`)
-    expect(text).not.toContain(`Blue`)
+    expect(normalized_text(doc_query(`ul.selected`))).toBe(`Red Green`)
   })
 
   test(`Backspace on single highlighted item clears highlight`, async () => {
@@ -292,9 +291,7 @@ describe(`arrow key navigation between selected items`, () => {
     input.dispatchEvent(press(`ArrowLeft`)) // idx 2 (second Red)
     input.dispatchEvent(press(`Backspace`))
     await tick()
-    expect(selected_items()).toHaveLength(2)
-    expect(selected_items()[0]?.textContent).toContain(`Red`)
-    expect(selected_items()[1]?.textContent).toContain(`Blue`)
+    expect(normalized_text(doc_query(`ul.selected`))).toBe(`Red Blue`)
   })
 
   test(`chip remove button removes the clicked occurrence with duplicates`, async () => {
@@ -341,14 +338,6 @@ describe(`arrow key navigation between selected items`, () => {
     expect(selected_items()).toHaveLength(next_selected.length)
     if (expected_idx === null) expect(highlighted()).toHaveLength(0)
     else expect(is_highlighted(expected_idx)).toBe(true)
-  })
-
-  test(`highlighted pill does not set aria-activedescendant`, async () => {
-    const input = setup()
-    expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
-    await press_sequence(input, `ArrowLeft`)
-    expect(highlighted()).toHaveLength(1)
-    expect(input.getAttribute(`aria-activedescendant`)).toBeNull()
   })
 })
 
@@ -399,8 +388,13 @@ describe(`keyboard shortcuts`, () => {
   })
 
   test.each([
-    [`ctrl+backspace (default)`, `X11; Linux x86_64`, {}, { ctrlKey: true }],
-    [`meta+backspace (default)`, `Macintosh; Intel Mac OS X`, {}, { metaKey: true }],
+    [`ctrl+backspace (default)`, `X11; Linux x86_64`, undefined, { ctrlKey: true }],
+    [
+      `meta+backspace (default)`,
+      `Macintosh; Intel Mac OS X`,
+      undefined,
+      { metaKey: true },
+    ],
     [
       `meta+backspace (explicit)`,
       `X11; Linux x86_64`,
@@ -409,15 +403,10 @@ describe(`keyboard shortcuts`, () => {
     ],
   ])(
     `%s clears all selected options and prevents default`,
-    async (_label, user_agent, shortcut_override, modifiers) => {
+    async (_label, user_agent, shortcuts, modifiers) => {
       vi.spyOn(navigator, `userAgent`, `get`).mockReturnValue(user_agent)
       const { props, event } = await test_shortcut(
-        {
-          value: [`a`, `b`],
-          ...(Object.keys(shortcut_override).length > 0
-            ? { shortcuts: shortcut_override }
-            : {}),
-        },
+        { value: [`a`, `b`], shortcuts },
         { key: `Backspace`, ...modifiers },
       )
       expect(props.value).toEqual([])
@@ -595,20 +584,7 @@ describe(`keyboard shortcuts`, () => {
   ] as const)(
     `shortcut precedence: %s`,
     async (_desc, shortcuts, extra_props, key, expected_open, expected_selected) => {
-      const props = $state<MultiSelectProps>({
-        options: [`a`, `b`, `c`],
-        shortcuts,
-        value: [],
-        ...extra_props,
-      })
-
-      mount_multiselect(props)
-      await tick()
-
-      const input = await focus_input()
-
-      await press_sequence(input, key)
-
+      const { props } = await test_shortcut({ shortcuts, ...extra_props }, { key })
       expect(props.open).toBe(expected_open)
       expect(props.value).toEqual(expected_selected)
     },

@@ -12,20 +12,6 @@
       .toSorted()
 </script>
 
-{#snippet language_option(option: string, idx?: number, style?: string)}
-  {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
-    <img
-      src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
-      alt={option}
-      style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
-      onerror={(event) => (event.currentTarget.hidden = true)}
-    />
-    {option}
-  </span>
-{/snippet}
-
 <MultiSelect
   options={languages}
   max_select={5}
@@ -33,7 +19,16 @@
   value={['Python', 'TypeScript', 'Julia']}
 >
   {#snippet children({ option })}
-    {@render language_option(option)}
+    {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
+    <span style="display: inline-flex; align-items: center; gap: 5pt">
+      <img
+        src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
+        alt={option}
+        style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
+        onerror={(event) => (event.currentTarget.hidden = true)}
+      />
+      {option}
+    </span>
   {/snippet}
   {#snippet expand_icon({ open, disabled })}
     <Icon icon={open ? Collapse : Expand} style={disabled ? `opacity: 0.5` : null} />
@@ -64,15 +59,11 @@ This example also moves the expand icon to the right side of the input via `expa
     `JavaScript TypeScript CoffeeScript Python Ruby C C# C++ Go Swift Java Rust Kotlin Haskell Scala Clojure Erlang Elixir F# Dart Elm Julia Lua R OCaml Perl PHP`
       .split(` `)
       .toSorted()
-
-  // local state synchronized with the component through bind:open
-  let open = $state(false)
 </script>
 
-{#snippet language_option(option: string, idx?: number, style?: string)}
+{#snippet language_option(option: string, style = ``)}
   {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
+  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style}`}>
     <img
       src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
       alt={option}
@@ -89,21 +80,20 @@ This example also moves the expand icon to the right side of the input via `expa
   placeholder="What languages do you know?"
   value={[`Python`, `TypeScript`, `Julia`]}
   expand_icon_position="right"
-  bind:open
 >
   {#snippet selected_item({ option })}
     {@render language_option(option)}
   {/snippet}
   {#snippet option({ option, selected })}
-    {@render language_option(option, undefined, selected ? `opacity: 0.6` : ``)}
+    {@render language_option(option, selected ? `opacity: 0.6` : ``)}
   {/snippet}
-  {#snippet expand_icon({ open: expandOpen, disabled })}
+  {#snippet expand_icon({ open, disabled })}
     <button type="button" {disabled}>
-      <Icon icon={expandOpen ? Collapse : Expand} />
+      <Icon icon={open ? Collapse : Expand} />
     </button>
   {/snippet}
-  {#snippet remove_icon({ option: opt, is_remove_all })}
-    <span style="width: 2ex" title={is_remove_all ? `Remove all` : `Remove ${opt}`}
+  {#snippet remove_icon({ option, is_remove_all })}
+    <span style="width: 2ex" title={is_remove_all ? `Remove all` : `Remove ${option}`}
       >✕</span
     >
   {/snippet}

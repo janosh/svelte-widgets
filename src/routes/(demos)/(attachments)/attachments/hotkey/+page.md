@@ -1,8 +1,6 @@
 ## `hotkey`
 
-Declarative keybindings over the same matcher `CommandMenu` uses. `mod` is Cmd on Apple
-keyboards and Ctrl elsewhere. Bare keys stay out of the way while you type in a field;
-chords always fire.
+Declarative keybindings over the same matcher `CommandMenu` uses. `mod` is Cmd on Apple keyboards and Ctrl elsewhere. Bare keys stay out of the way while you type in a field; chords always fire.
 
 ```svelte example id="attachments-hotkey"
 <script lang="ts">
@@ -28,5 +26,4 @@ chords always fire.
 </ol>
 ```
 
-Pass `global: false` (the default) to scope a binding to the node it is attached to, so
-a shortcut dies with the surface that owns it.
+Pass `global: false` (the default) to scope a binding to the node it is attached to, so a shortcut dies with the surface that owns it.

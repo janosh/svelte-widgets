@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
   import type { CmdAction, CmdSection } from './types'
-  import { focusable } from './dialog'
+  import { focusable } from './attachments/shared'
   import { validate_cmd_actions } from './internal/command'
   import { chain_handlers, format_shortcut, type Placement, step_focus } from './utils'
 

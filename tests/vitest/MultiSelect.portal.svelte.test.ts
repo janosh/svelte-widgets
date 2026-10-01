@@ -1,8 +1,8 @@
 import { tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps, PortalParams } from '$lib/types'
-import { doc_query } from './index'
-import { mount_multiselect, unmount_component } from './MultiSelect.test-utils'
+import { create_element, doc_query } from './index'
+import { mount_multiselect } from './MultiSelect.test-utils'
 
 describe(`portal placement`, () => {
   afterEach(() => vi.unstubAllGlobals()) // don't leak innerHeight overrides to other tests
@@ -224,28 +224,17 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
 // click_outside gets `inside: [options_list_el]`, undefined until bind:this lands — the
 // attachment must re-run on that reactive read or pressing the list would close it
 test(`press on the portalled dropdown does not close it`, async () => {
-  const props = $state<MultiSelectProps>({
-    options: [1, 2, 3],
-    open: true,
-    portal: { active: true },
-  })
-  // unmount for real: clearing innerHTML would leave the document press listener
-  const app = mount_multiselect(props)
+  mount_multiselect({ options: [1, 2, 3], open: true, portal: { active: true } })
   await tick()
+  const press_is_open = async (target: Element) => {
+    target.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
+    await tick()
+    return doc_query(`div.multiselect`).classList.contains(`open`)
+  }
 
-  const portalled = doc_query<HTMLUListElement>(`body > ul.options`)
-  portalled.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
-  await tick()
-  expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(true)
-
+  expect(await press_is_open(doc_query(`body > ul.options`))).toBe(true)
   // control: a press with no relation to the component does close it
-  const outside = document.createElement(`div`)
-  document.body.append(outside)
-  outside.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
-  await tick()
-  expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(false)
-  outside.remove()
-  await unmount_component(app)
+  expect(await press_is_open(create_element())).toBe(false)
 })
 
 // Portalled blur must not close (issue #335); in-place skips blur (it closes on its own).
@@ -255,19 +244,12 @@ test.each([
 ] as const)(
   `dismiss_on='release' keeps a %s dropdown open until click`,
   async (_label, extra) => {
-    const props = $state<MultiSelectProps>({
-      options: [1, 2, 3],
-      dismiss_on: `release`,
-      open: true,
-      ...extra,
-    })
-    const app = mount_multiselect(props)
+    mount_multiselect({ options: [1, 2, 3], dismiss_on: `release`, open: true, ...extra })
     await tick()
     const is_open = () => doc_query(`div.multiselect`).classList.contains(`open`)
     expect(is_open()).toBe(true)
 
-    const outside = document.createElement(`button`)
-    document.body.append(outside)
+    const outside = create_element(`button`)
     outside.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
     if (`portal` in extra) {
       doc_query(`input[autocomplete]`).dispatchEvent(
@@ -280,7 +262,5 @@ test.each([
     outside.dispatchEvent(new PointerEvent(`click`, { bubbles: true, detail: 1 }))
     await tick()
     expect(is_open()).toBe(false)
-    outside.remove()
-    await unmount_component(app)
   },
 )

@@ -38,10 +38,7 @@ test(`array cloning infinite loop prevention (issue #309)`, async ({ page }) => 
   const status = page.locator(`#store-binding-status`)
   await expect(status.locator(`text=✅ Fixed`)).toBeVisible()
   await expect(status.locator(`text=⚠️ Regression`)).not.toBeVisible()
-
-  const count_text = await status.textContent()
-  const count = Math.trunc(Number(count_text?.match(/\d+/u)?.[0] ?? `0`))
-  expect(count).toBeLessThan(10)
+  await expect(status).toContainText(/Modified: \d times/u) // fewer than 10 updates
 })
 
 test.describe(`input`, () => {
@@ -136,8 +133,7 @@ test.describe(`multiselect`, () => {
       first_option?.dispatchEvent(new MouseEvent(`mouseover`, { bubbles: true }))
     })
 
-    const active_after_synthetic_hover = await active_option.textContent()
-    expect(active_after_synthetic_hover?.trim()).toBe(foods[2])
+    await expect(active_option).toHaveText(foods[2])
 
     await page.locator(`#foods ul.options > li`).nth(4).hover()
 
@@ -248,53 +244,31 @@ test.describe(`portal feature`, () => {
 
   test(`dropdowns in modal render in body when portal is active`, async ({ page }) => {
     const modal_content = await open_portal_modal(page)
-    const languages_input = modal_content.locator(
-      `div.multiselect input[placeholder='Choose languages...']`,
-    )
-    await languages_input.click()
+    const open_dropdown = page.locator(`body > ul.options:not(.hidden)`)
+    for (const [placeholder, label] of [
+      [`Choose languages...`, languages[0]],
+      [`Choose octicons...`, octicons[0]],
+    ]) {
+      const multiselect = modal_content.locator(
+        `div.multiselect:has(input[placeholder='${placeholder}'])`,
+      )
+      await multiselect.locator(`input[placeholder='${placeholder}']`).click()
 
-    const portalled_languages_options = portalled_options(page, languages[0])
-    await expect(portalled_languages_options).toBeVisible()
-    await expect(
-      modal_content
-        .locator(`div.multiselect:has(input[placeholder='Choose languages...'])`)
-        .locator(`> ul.options`),
-    ).not.toBeAttached()
+      const portalled = portalled_options(page, label)
+      await expect(portalled).toBeVisible()
+      await expect(multiselect.locator(`> ul.options`)).not.toBeAttached()
 
-    await portalled_languages_options
-      .getByRole(`option`, { name: languages[0], exact: true })
-      .click()
-    await expect(portalled_languages_options).toBeVisible()
-    await expect(
-      modal_content.getByRole(`button`, { name: `Remove ${languages[0]}` }),
-    ).toBeVisible()
+      await portalled.getByRole(`option`, { name: label, exact: true }).click()
+      // clicks inside the portalled list must not count as clicks outside the component
+      await expect(open_dropdown).toBeVisible()
+      await expect(
+        modal_content.getByRole(`button`, { name: `Remove ${label}` }),
+      ).toBeVisible()
 
-    await page.keyboard.press(`Escape`)
-    await expect(portalled_languages_options).toBeHidden()
-    await expect(modal_content).toBeVisible()
-
-    const octicons_input = modal_content.locator(
-      `div.multiselect input[placeholder='Choose octicons...']`,
-    )
-    await octicons_input.click()
-
-    const portalled_octicons_options = portalled_options(page, octicons[0])
-    await expect(portalled_octicons_options).toBeVisible()
-    await expect(
-      modal_content
-        .locator(`div.multiselect:has(input[placeholder='Choose octicons...'])`)
-        .locator(`> ul.options`),
-    ).not.toBeAttached()
-
-    await portalled_octicons_options
-      .getByRole(`option`, { name: octicons[0], exact: true })
-      .click()
-    await expect(portalled_octicons_options).toBeHidden()
-    await expect(
-      modal_content.getByRole(`button`, { name: `Remove ${octicons[0]}` }),
-    ).toBeVisible()
-
-    await page.keyboard.press(`Escape`)
+      await page.keyboard.press(`Escape`)
+      await expect(open_dropdown).toBeHidden()
+      await expect(modal_content).toBeVisible()
+    }
     await page.getByRole(`button`, { name: `Close Modal` }).click()
     await expect(modal_content).toBeHidden()
   })
@@ -324,8 +298,9 @@ test.describe(`portal feature`, () => {
     const portalled_languages_options = portalled_options(page, languages[0])
     await expect(portalled_languages_options).toBeVisible()
 
-    const assert_aligned = async () => {
-      const metrics_handle = await page.waitForFunction((input_selector) => {
+    // resolves only once the portalled dropdown is aligned with its trigger
+    const assert_aligned = () =>
+      page.waitForFunction((input_selector) => {
         const input = document.querySelector<HTMLInputElement>(
           `div.modal-content.modal ${input_selector}`,
         )
@@ -337,30 +312,20 @@ test.describe(`portal feature`, () => {
 
         const wrapper_rect = wrapper.getBoundingClientRect()
         const dropdown_rect = dropdown.getBoundingClientRect()
-        const left_delta = Math.abs(dropdown_rect.left - wrapper_rect.left)
         // auto placement may flip the dropdown above the trigger, so measure the gap on
         // whichever edge the portal chose
         const top_delta =
           dropdown.dataset.placement === `top`
             ? Math.abs(wrapper_rect.top - dropdown_rect.bottom)
             : Math.abs(dropdown_rect.top - wrapper_rect.bottom)
-        const width_delta = Math.abs(dropdown_rect.width - wrapper_rect.width)
-        const aligned =
-          left_delta <= 2 &&
+        return (
+          Math.abs(dropdown_rect.left - wrapper_rect.left) <= 2 &&
           top_delta <= 10 &&
-          width_delta <= 2 &&
+          Math.abs(dropdown_rect.width - wrapper_rect.width) <= 2 &&
           dropdown_rect.top >= 0 &&
           dropdown_rect.right <= globalThis.innerWidth + 1
-        return aligned ? [left_delta, top_delta, width_delta] : false
+        )
       }, languages_input_selector)
-      const metrics = await metrics_handle.jsonValue()
-      if (metrics === false) throw new Error(`portal dropdown alignment timed out`)
-      const [left_delta, top_delta, width_delta] = metrics
-
-      expect(left_delta).toBeLessThanOrEqual(2)
-      expect(top_delta).toBeLessThanOrEqual(10)
-      expect(width_delta).toBeLessThanOrEqual(2)
-    }
 
     await assert_aligned()
 
@@ -399,28 +364,25 @@ test.describe(`virtual_list`, () => {
     })
   }
 
-  test(`renders only a small window of the 2000-option list`, async ({ page }) => {
+  test(`renders a small window of the 2000-option list and re-windows it on scroll`, async ({
+    page,
+  }) => {
     await goto_virtual_list(page)
+    const options_list = page.locator(`.virtual ul.options`)
+    // spacers keep scrollHeight at the full 2000 * 30px list height
+    const expect_full_scroll_height = async () => {
+      const scroll_height = await options_list.evaluate((ul_el) => ul_el.scrollHeight)
+      expect(Math.abs(scroll_height - total_options * item_height)).toBeLessThanOrEqual(
+        100,
+      )
+    }
 
     await expect(rendered_options(page).first()).toHaveText(`Option 0`)
     const option_count = await rendered_options(page).count()
     expect(option_count).toBeGreaterThan(5)
     expect(option_count).toBeLessThan(100)
-
-    // spacers keep scrollHeight at the full 2000 * 30px list height
     await expect(spacers(page)).toHaveCount(2)
-    const scroll_height = await page
-      .locator(`.virtual ul.options`)
-      .evaluate((ul_el) => ul_el.scrollHeight)
-    expect(Math.abs(scroll_height - total_options * item_height)).toBeLessThanOrEqual(100)
-  })
-
-  test(`scrolling to the middle re-windows options and adjusts spacers`, async ({
-    page,
-  }) => {
-    await goto_virtual_list(page)
-    const options_list = page.locator(`.virtual ul.options`)
-    await expect(rendered_options(page).first()).toHaveText(`Option 0`)
+    await expect_full_scroll_height()
 
     const target_scroll = 15_000 // row 500 of 2000
     await options_list.evaluate(
@@ -440,12 +402,8 @@ test.describe(`virtual_list`, () => {
     expect(top_spacer_height).toBe(490 * item_height)
     expect(bottom_spacer_height).toBeGreaterThan(40_000)
 
-    const { scroll_height, scroll_top } = await options_list.evaluate((ul_el) => ({
-      scroll_height: ul_el.scrollHeight,
-      scroll_top: ul_el.scrollTop,
-    }))
-    expect(scroll_top).toBe(target_scroll)
-    expect(Math.abs(scroll_height - total_options * item_height)).toBeLessThanOrEqual(100)
+    expect(await options_list.evaluate((ul_el) => ul_el.scrollTop)).toBe(target_scroll)
+    await expect_full_scroll_height()
   })
 
   test(`ArrowDown navigation keeps the active option rendered and visible`, async ({
@@ -480,16 +438,17 @@ test.describe(`virtual_list`, () => {
 
 // `auto` placement flips the dropdown above the input when it would overflow the viewport
 // bottom. In the /portal modal's short viewport, the lower (octicons) input has more space above.
-test.describe(`portal placement auto-flip`, () => {
-  const open_dropdown_at_viewport_height = async (
-    page: Page,
-    height: number,
-    placeholder: string,
-    pin_modal_to_bottom = false,
-  ): Promise<{ dropdown: Locator; input: Locator }> => {
+// oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
+for (const [height, placeholder, placement] of [
+  [500, `Choose octicons...`, `top`],
+  [900, `Choose languages...`, `bottom`],
+] as const) {
+  test(`portal auto placement opens ${placeholder} dropdown at the ${placement} in a ${height}px viewport`, async ({
+    page,
+  }) => {
     await page.setViewportSize({ width: 800, height })
     const modal_content = await open_portal_modal(page)
-    if (pin_modal_to_bottom) {
+    if (placement === `top`) {
       // the centered modal never leaves enough room above AND too little below, so pin it to
       // the viewport bottom to make the flip geometry deterministic
       await page.evaluate(() => {
@@ -499,87 +458,44 @@ test.describe(`portal placement auto-flip`, () => {
       })
     }
     const input = modal_content.locator(`input[placeholder='${placeholder}']`)
-
     const dropdown = page.locator(`body > ul.options:not(.hidden)`)
     await expect(async () => {
       await input.click()
       await expect(dropdown).toBeVisible({ timeout: 1000 })
     }).toPass()
-    return { dropdown, input }
-  }
-
-  test(`input near viewport bottom flips dropdown above the input`, async ({ page }) => {
-    const { dropdown, input } = await open_dropdown_at_viewport_height(
-      page,
-      500,
-      `Choose octicons...`,
-      true,
-    )
-    await expect(dropdown).toHaveAttribute(`data-placement`, `top`)
+    await expect(dropdown).toHaveAttribute(`data-placement`, placement)
 
     const [dropdown_box, input_box] = [
       await dropdown.boundingBox(),
       await input.boundingBox(),
     ]
     if (!dropdown_box || !input_box) throw new Error(`missing bounding box`)
-    expect(dropdown_box.y + dropdown_box.height).toBeLessThanOrEqual(input_box.y + 1)
+    if (placement === `top`)
+      expect(dropdown_box.y + dropdown_box.height).toBeLessThanOrEqual(input_box.y + 1)
+    else expect(dropdown_box.y).toBeGreaterThanOrEqual(input_box.y + input_box.height - 1)
   })
-
-  test(`input with ample space below keeps dropdown below the input`, async ({
-    page,
-  }) => {
-    const { dropdown, input } = await open_dropdown_at_viewport_height(
-      page,
-      900,
-      `Choose languages...`,
-    )
-    await expect(dropdown).toHaveAttribute(`data-placement`, `bottom`)
-
-    const [dropdown_box, input_box] = [
-      await dropdown.boundingBox(),
-      await input.boundingBox(),
-    ]
-    if (!dropdown_box || !input_box) throw new Error(`missing bounding box`)
-    expect(dropdown_box.y).toBeGreaterThanOrEqual(input_box.y + input_box.height - 1)
-  })
-})
+}
 
 test(`input width minimizes when options are selected`, async ({ page }) => {
   await page.goto(`/ui`, { waitUntil: `networkidle` })
   const input = page.locator(`#foods input[autocomplete]`)
-
-  const init_input_width = await input.evaluate(
-    (element) => getComputedStyle(element).minWidth,
-  )
-  expect(init_input_width).toBe(`32px`)
+  await expect(input).toHaveCSS(`min-width`, `32px`)
 
   await input.click()
   await page.click(`text=🍌 Banana`)
-
-  const input_width_w_selected = await input.evaluate(
-    (element) => getComputedStyle(element).minWidth,
-  )
-  expect(input_width_w_selected).toBe(`1px`)
+  await expect(input).toHaveCSS(`min-width`, `1px`)
 
   await page.click(`button[title='Remove 🍌 Banana']`)
-  const input_width_w_no_selected = await input.evaluate(
-    (element) => getComputedStyle(element).minWidth,
-  )
-  expect(input_width_w_no_selected).toBe(init_input_width)
+  await expect(input).toHaveCSS(`min-width`, `32px`)
 })
 
 // Issue #380: CSS class specificity - user classes should override component defaults
 // https://github.com/janosh/svelte-widgets/issues/380
 test(`component buttons are styled correctly with border: none`, async ({ page }) => {
   await page.goto(`/css-classes`, { waitUntil: `networkidle` })
-
   const button = page.locator(`ul.selected > li button`).first()
   await expect(button).toBeVisible()
-
-  const border_style = await button.evaluate(
-    (element) => getComputedStyle(element).borderStyle,
-  )
-  expect(border_style).toBe(`none`)
+  await expect(button).toHaveCSS(`border-style`, `none`)
 })
 
 // The component pairs a light-dark() text-color default with its light-dark() backgrounds so

@@ -65,6 +65,13 @@ export async function focus_input(): Promise<HTMLInputElement> {
   return input
 }
 
+// the dropdown toggles on mouseup, not click
+export async function mouseup(target: string | Element): Promise<void> {
+  const element = typeof target === `string` ? doc_query(target) : target
+  element.dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
+  await tick()
+}
+
 export async function type_search_text(
   search_text: string,
   input = get_input(),

@@ -15,7 +15,6 @@ import {
 describe(`tooltip manager`, () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers()) // registered first, so it runs last
     stub_props(globalThis, { innerWidth: 1000, innerHeight: 800 })
   })
 
@@ -133,8 +132,7 @@ describe(`tooltip manager`, () => {
     }
     attach_tooltip(element)
     pointer_over(element)
-    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
-    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
+    expect(visible_text() !== null).toBe(shows)
   })
 
   it.each([
@@ -148,8 +146,20 @@ describe(`tooltip manager`, () => {
     element.setAttribute(`aria-label`, `Remove require forces filter`)
     attach_tooltip(element)
     pointer_over(element)
-    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
-    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
+    expect(visible_text() !== null).toBe(shows)
+  })
+
+  it(`a focus-only tooltip leaves hovers to an enclosing hover tooltip`, () => {
+    const outer = create_element()
+    const inner = document.createElement(`button`)
+    outer.append(inner)
+    attach_tooltip(outer, { content: `Outer`, trigger: `hover` })
+    attach_tooltip(inner, { content: `Inner`, trigger: `focus` })
+    pointer_over(inner)
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Outer`)
+    pointer_out(inner)
+    focus_in(inner)
+    expect(doc_query(`.tooltip-content`).textContent).toBe(`Inner`)
   })
 
   it.each([`manual`, `bogus`])(

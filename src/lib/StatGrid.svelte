@@ -22,12 +22,11 @@
           >{/if}
       </span>
       {#if item.delta !== undefined}
+        {@const finite = Number.isFinite(item.delta)}
         <span
-          class="stat-delta"
-          class:up={Number.isFinite(item.delta) && item.delta > 0}
-          class:down={Number.isFinite(item.delta) && item.delta < 0}
-          class:positive={Number.isFinite(item.delta) && item.delta_tone === `positive`}
-          class:negative={Number.isFinite(item.delta) && item.delta_tone === `negative`}
+          class={[`stat-delta`, finite && item.delta_tone]}
+          class:up={finite && item.delta > 0}
+          class:down={finite && item.delta < 0}
           role="img"
           aria-label={stat_delta_label(item.delta)}
         >

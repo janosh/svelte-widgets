@@ -269,22 +269,7 @@ By default, options load when the dropdown opens. Set `on_open: false` to disabl
 
 ## Props Reference
 
-The `load_options` prop accepts either a function (simple) or an object (with config):
-
-```typescript
-// Function shorthand
-load_options={myFetchFn}
-
-// With config: object with fetch + options
-load_options={{ fetch: myFetchFn, debounce_ms: 500, batch_size: 20, on_open: false }}
-```
-
-| Config Key    | Type      | Default | Description                                 |
-| ------------- | --------- | ------- | ------------------------------------------- |
-| `fetch`       | `fn`      | —       | Async function to load options (required)   |
-| `debounce_ms` | `number`  | `300`   | Debounce delay for search queries           |
-| `batch_size`  | `number`  | `50`    | Number of options to load per batch         |
-| `on_open`     | `boolean` | `true`  | Whether to load options when dropdown opens |
+`load_options` accepts either a function or a `{ fetch, debounce_ms, batch_size, on_open }` config object; see [Advanced Props](multiselect#advanced-props) for the config defaults.
 
 ### LoadOptions Parameters
 

@@ -1,9 +1,5 @@
 import { expect, test } from '@playwright/test'
 
-test.use({ baseURL: `http://localhost:3005` })
-
-const SOURCE = `https://github.com/janosh/svelte-widgets/blob/`
-
 test(`inline code mentions of components link to their source, on load and after navigation`, async ({
   page,
 }) => {
@@ -16,18 +12,11 @@ test(`inline code mentions of components link to their source, on load and after
     `https://api.github.com/repos/janosh/svelte-widgets/contributors*`,
     (route) =>
       route.fulfill({
-        json: [
-          {
-            login: `contributor`,
-            html_url: `https://github.com/contributor`,
-            avatar_url: ``,
-          },
-          {
-            login: `automation[bot]`,
-            html_url: `https://github.com/bot`,
-            avatar_url: ``,
-          },
-        ],
+        json: [`contributor`, `automation[bot]`].map((login) => ({
+          login,
+          html_url: `https://github.com/${login}`,
+          avatar_url: ``,
+        })),
       }),
   )
   await page.goto(`/`)
@@ -45,10 +34,9 @@ test(`inline code mentions of components link to their source, on load and after
   const multi_select = page.locator(`code > a`, { hasText: `MultiSelect` }).first()
   await expect(multi_select).toHaveAttribute(
     `href`,
-    /^.*\/blob\/[0-9a-f]{40}\/src\/lib\/MultiSelect\.svelte$/,
+    /^https:\/\/github\.com\/janosh\/svelte-widgets\/blob\/[0-9a-f]{40}\/src\/lib\/MultiSelect\.svelte$/,
   )
   await expect(multi_select).toHaveAttribute(`target`, `_blank`)
-  expect(await multi_select.getAttribute(`href`)).toContain(SOURCE)
   // code inside pre blocks and existing links stays untouched
   expect(await page.locator(`pre code a`).count()).toBe(0)
   expect(await page.locator(`a code a`).count()).toBe(0)

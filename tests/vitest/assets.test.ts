@@ -149,17 +149,10 @@ describe(`asset imports`, () => {
     const source = `<img src="./image.png">\n<p>Retained text</p>`
     const { code, map } = await transform(source)
     const before_text = code.slice(0, code.indexOf(`Retained text`)).split(`\n`)
-    expect(map).toBeDefined()
-    if (
-      !map ||
-      typeof map !== `object` ||
-      !(`mappings` in map) ||
-      typeof map.mappings !== `string`
-    )
-      throw new Error(`Expected asset source map`)
+    expect(map).toMatchObject({ mappings: expect.any(String) })
     expect(
       original_position(
-        decode_source_map(map.mappings),
+        decode_source_map((map as { mappings: string }).mappings),
         before_text.length - 1,
         before_text.at(-1)?.length ?? 0,
       ),

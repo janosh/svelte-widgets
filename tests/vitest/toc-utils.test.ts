@@ -1,7 +1,6 @@
 import { get_heading_visibility } from '$lib/toc-utils'
 import { expect, test } from 'vite-plus/test'
 
-// h2, h3, h4, h4, h3, h4, h2, h3
 const nested_levels = [2, 3, 4, 4, 3, 4, 2, 3]
 
 // expected visibility is a 0/1 mask over the levels

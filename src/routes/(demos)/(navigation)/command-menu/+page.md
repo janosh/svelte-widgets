@@ -6,7 +6,7 @@ It executes one command at a time and closes, without retaining a selection. Sel
 
 Search, grouping, loading, and styling props share `OptionListProps` with [MultiSelect](multiselect). The `labels` prop accepts `loading_more`, `loading_failed`, `retry`, and `group` overrides to localize status messages and group buttons. `placeholder`, `no_matching_options_msg`, and `default_disabled_title` control their respective text separately.
 
-```svelte example id="disabled-input-title"
+```svelte example id="command-menu-basic"
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'

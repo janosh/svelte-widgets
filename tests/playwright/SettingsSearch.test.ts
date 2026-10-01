@@ -47,7 +47,8 @@ test(`the corner trigger expands into the content flow`, async ({ page }) => {
   expect((await box_of(group)).y).toBeGreaterThan(group_before.y)
 })
 
-test(`filtering matches rows and group titles, then Escape restores focus and rows`, async ({
+// which rows match is unit-tested; this pins the CSS that hides and reveals them
+test(`filtering hides rows and groups, then Escape restores focus and rows`, async ({
   page,
 }) => {
   const { trigger, field, color_row, radius_row, zoom_row, camera } =
@@ -64,13 +65,10 @@ test(`filtering matches rows and group titles, then Escape restores focus and ro
 
   // no row says "camera"; only the group heading does, and matching it opens the group
   await field.fill(`camera`)
-
   await expect(camera).toBeVisible()
-  await expect(color_row).toBeHidden()
   await expect(zoom_row).toBeVisible()
-
-  await field.fill(`radius`)
   await expect(color_row).toBeHidden()
+
   await page.keyboard.press(`Escape`)
   await expect(field).toHaveCount(0)
   await expect(trigger).toBeFocused()

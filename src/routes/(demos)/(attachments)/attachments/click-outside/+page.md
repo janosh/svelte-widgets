@@ -63,28 +63,8 @@
 </style>
 ```
 
-Dismissal happens on `pointerdown`, not `click`, so a right-click or a press the OS
-turns into a window drag still closes the surface. Presses that land in a scrollbar
-gutter are ignored, so reaching for the scrollbar does not close what you are
-scrolling toward. A surface floating over something draggable can pass
-`dismiss_on: 'release'` to wait for the click instead, so starting a pan behind it
-does not make it vanish mid-drag, and a right-click leaves it standing. `release` is
-also what lets an outside `<input type="checkbox" bind:checked={open}>` close the
-surface: dismissing on the press writes `checked=false` back to the DOM before the
-click, whose pre-click activation flips it to true again for the binding to commit,
-reopening what the user just closed. Both modes dismiss from the capture phase, ahead of
-the pressed element's own handlers, so a control that toggles the surface from its own
-click handler belongs in `inside` — as does an outside trigger that opens on
-`pointerdown`, whose own click would otherwise dismiss under `release`.
+Dismissal happens on `pointerdown`, not `click`, so a right-click or a press the OS turns into a window drag still closes the surface. Presses that land in a scrollbar gutter are ignored, so reaching for the scrollbar does not close what you are scrolling toward. A surface floating over something draggable can pass `dismiss_on: 'release'` to wait for the click instead, so starting a pan behind it does not make it vanish mid-drag, and a right-click leaves it standing. `release` is also what lets an outside `<input type="checkbox" bind:checked={open}>` close the surface: dismissing on the press writes `checked=false` back to the DOM before the click, whose pre-click activation flips it to true again for the binding to commit, reopening what the user just closed. Both modes dismiss from the capture phase, ahead of the pressed element's own handlers, so a control that toggles the surface from its own click handler belongs in `inside` — as does an outside trigger that opens on `pointerdown`, whose own click would otherwise dismiss under `release`.
 
-Pass `inside` for regions that count as inside though they sit outside the node:
-elements for portalled content the node no longer contains, selectors for triggers.
-`scope` confines the selector entries to one subtree when several instances of a
-component share trigger selectors, and `escape: true` also dismisses on Escape. Escape
-dismisses one surface at a time — the most recently attached one — so a dropdown
-inside a modal closes the dropdown and leaves the modal standing.
+Pass `inside` for regions that count as inside though they sit outside the node: elements for portalled content the node no longer contains, selectors for triggers. `scope` confines the selector entries to one subtree when several instances of a component share trigger selectors, and `escape: true` also dismisses on Escape. Escape dismisses one surface at a time — the most recently attached one — so a dropdown inside a modal closes the dropdown and leaves the modal standing.
 
-`callback` receives `(node, config, detail)` and the node also fires a `dismiss`
-event carrying the same `detail` of `{ focus_inside, via, event }`. `focus_inside`
-tells an Escape handler whether to move focus back to the trigger, and `event` is the
-press or keydown behind the dismissal, to forward to your own close handler.
+`callback` receives `(node, config, detail)` and the node also fires a `dismiss` event carrying the same `detail` of `{ focus_inside, via, event }`. `focus_inside` tells an Escape handler whether to move focus back to the trigger, and `event` is the press or keydown behind the dismissal, to forward to your own close handler.

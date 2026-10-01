@@ -186,40 +186,33 @@
   }
   const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
     if (`selected` in rest) invalid_config(`use value instead of selected`)
-    if (max_select !== null && !is_integer_at_least(max_select, 1)) {
+    if (max_select !== null && !is_integer_at_least(max_select, 1))
       invalid_config(`max_select must be null or a positive integer, got ${max_select}`)
-    }
     if (mode !== `single` && mode !== `multiple`) invalid_config(`unknown mode ${mode}`)
-    if (mode === `single` ? Array.isArray(value) : !Array.isArray(value)) {
+    if (mode === `single` ? Array.isArray(value) : !Array.isArray(value))
       invalid_config(
         `value must be ${mode === `single` ? `an option or null` : `an array`} in ${mode} mode`,
       )
-    }
     if (mode === `single` && selection_limit !== null)
       invalid_config(`max_select is only available in multiple mode`)
-    if (max_select && typeof required === `number` && required > max_select) {
+    if (max_select && typeof required === `number` && required > max_select)
       invalid_config(
         `max_select=${max_select} < required=${required}, which makes valid form submission impossible`,
       )
-    }
-    if (sort_selected && selected_options_draggable) {
+    if (sort_selected && selected_options_draggable)
       invalid_config(
         `sort_selected cannot be combined with selected_options_draggable because sorting would overwrite the user's order`,
       )
-    }
-    if (selected_display === `input` && mode !== `single`) {
+    if (selected_display === `input` && mode !== `single`)
       invalid_config(`selected_display="input" requires mode="single"`)
-    }
-    if (allow_user_options && !create_option_msg && create_option_msg !== null) {
+    if (allow_user_options && !create_option_msg && create_option_msg !== null)
       invalid_config(
         `allow_user_options=${allow_user_options} requires a non-empty create_option_msg or explicit null, got ${create_option_msg}`,
       )
-    }
-    if (max_visible_chips !== null && !is_integer_at_least(max_visible_chips, 0)) {
+    if (max_visible_chips !== null && !is_integer_at_least(max_visible_chips, 0))
       invalid_config(
         `max_visible_chips must be null or a non-negative integer, got ${max_visible_chips}`,
       )
-    }
     validate_option_list_config(
       {
         max_options,
@@ -301,7 +294,6 @@
 
   // === Derived collections and indexing ===
   let has_search_text = $derived(search_text.trim().length > 0)
-  // cached to avoid repeated .map() calls
   let selected_labels = $derived(selected.map((opt) => utils.get_label(opt)))
   let input_committed_label = $derived(
     input_display && selected[0] !== undefined ? label_of(selected[0]) : null,
@@ -637,15 +629,13 @@
                 Object.is(candidate, previous_option) && !is_disabled(candidate),
             )
       if (preserved_idx === -1) {
+        // fall back to the key, but only when it identifies exactly one row
         const active_key = key(previous_option)
-        for (const [candidate_idx, candidate] of rendered_options.entries()) {
-          if (key(candidate) !== active_key || is_disabled(candidate)) continue
-          if (preserved_idx !== -1) {
-            preserved_idx = -1
-            break
-          }
-          preserved_idx = candidate_idx
-        }
+        const [key_match, ...other_matches] = rendered_options.flatMap(
+          (candidate, idx) =>
+            key(candidate) === active_key && !is_disabled(candidate) ? [idx] : [],
+        )
+        if (key_match !== undefined && !other_matches.length) preserved_idx = key_match
       }
       active_index = preserved_idx === -1 ? null : preserved_idx
     }
@@ -739,6 +729,19 @@
   // true while an async on_create callback is pending, blocks further create attempts
   let creating_option = $state(false)
 
+  // Typed or pasted text naming an option by its label stands for that option, e.g.
+  // { label: 2 } for "2". Keys can't match text: they may be values or non-strings.
+  const option_named = (text: string) =>
+    effective_options.find(
+      (option_item) => norm_label(label_of(option_item)) === norm_label(text),
+    )
+  // text naming a disabled option adds nothing; text naming no option becomes a user option
+  const add_typed_text = (event: Event) => {
+    const match = option_named(search_text)
+    if (match === undefined || !is_disabled(match))
+      void add(match ?? (search_text as Option), event)
+  }
+
   function add(option_to_add: Option, event: Event, from_paste = false) {
     event.stopPropagation()
     if (!is_non_empty_option(option_to_add)) {
@@ -759,18 +762,16 @@
     // an async on_create lets the user keep typing, so only a draft still equal to the
     // submitted text is consumed. Pastes never consume it: handle_paste clears it once.
     const submitted_search = search_text
-    if (
-      !isNaN(Number(option_to_add)) &&
-      (typeof option_to_add !== `string` || option_to_add.trim().length > 0) &&
-      typeof selected_labels[0] === `number`
-    ) {
-      option_to_add = Number(option_to_add) as Option
-    }
 
     // dupe check by key, not reference: Svelte proxies break identity. The label check adds
     // user-typed options, or all of them when duplicates='case-insensitive'.
     const option_key = key(option_to_add)
-    const is_from_options = effective_options.some((opt) => key(opt) === option_key)
+    // text (typed or pasted) never stands for an object option through its key
+    const is_from_options = effective_options.some(
+      (opt) =>
+        key(opt) === option_key &&
+        utils.is_object(opt) === utils.is_object(option_to_add),
+    )
     const is_user_option =
       !is_from_options &&
       [true, `append`].includes(allow_user_options) &&
@@ -778,29 +779,26 @@
     const check_label = duplicates === `case-insensitive` || !is_from_options
     // closure so the guard can be re-evaluated after an async on_create resolves
     const is_dupe = () =>
-      selected_keys_set.has(key(option_to_add)) ||
-      (check_label && is_label_selected(label_of(option_to_add)))
+      duplicates !== true &&
+      (selected_keys_set.has(key(option_to_add)) ||
+        (check_label && is_label_selected(label_of(option_to_add))))
     const is_duplicate = is_dupe()
     const max_reached = at_max_capacity()
     if (max_reached) reject_at_max(option_to_add)
-    if (is_duplicate && duplicates !== true) on_duplicate?.({ option: option_to_add })
-
-    if (max_reached || (duplicates !== true && is_duplicate)) return
+    if (is_duplicate) on_duplicate?.({ option: option_to_add })
+    if (max_reached || is_duplicate) return
     // This also prevents adding the same custom option twice in append mode.
     if (is_user_option) {
       if (!(from_paste && typeof option_to_add === `object`)) {
         const label_text = from_paste ? label_of(option_to_add) : search_text
-        if (typeof effective_options[0] === `object`) {
-          option_to_add = { label: label_text } as Option
-        } else if (
-          [`number`, `undefined`].includes(typeof effective_options[0]) &&
-          label_text.trim().length > 0 &&
-          !isNaN(Number(label_text))
-        ) {
-          option_to_add = Number(label_text) as Option
-        } else {
-          option_to_add = label_text as Option
-        }
+        const option_type = typeof effective_options[0]
+        option_to_add = (
+          option_type === `object`
+            ? { label: label_text }
+            : [`number`, `undefined`].includes(option_type) && is_numeric(label_text)
+              ? Number(label_text)
+              : label_text
+        ) as Option
       }
       // Fire on_create — return false to reject, return Option to transform
       if (creating_option) return // an async on_create is already pending
@@ -828,9 +826,7 @@
       if (oncreate_result === false) return
       if (is_non_empty_option(oncreate_result)) option_to_add = oncreate_result
       // Transformations and consumer callbacks can change identity or selection synchronously too.
-      if (at_max_capacity() || (is_dupe() && duplicates !== true)) {
-        return
-      }
+      if (at_max_capacity() || is_dupe()) return
     }
 
     // Finish fallible consumer sorting before mutating editor state.
@@ -947,9 +943,8 @@
     active_index = null
     is_user_message_active = false
     on_close?.({ event })
-    const active_element = document.activeElement
-    const focus_changed_by_onclose = active_element !== focus_before_onclose
-    if (retain_focus && !focus_changed_by_onclose) {
+    // skip when on_close moved focus itself
+    if (retain_focus && document.activeElement === focus_before_onclose) {
       focus_input_without_open()
       tick().then(() => focus_input_without_open(true))
     }
@@ -1154,7 +1149,7 @@
         if (is_disabled(active_option)) return
         handle_option_interact(active_option, event, active_index)
       } else if (allow_user_options && has_search_text && !load_options_pending) {
-        add(search_text as Option, event)
+        add_typed_text(event)
       } else {
         // no active option and no search text: the dropdown is closed, so Enter opens it
         open_dropdown(event)
@@ -1336,8 +1331,11 @@
 
   const is_non_empty_option = (
     candidate: Option | null | undefined,
-  ): candidate is Option =>
-    candidate !== null && candidate !== undefined && candidate !== ``
+  ): candidate is Option => candidate != null && candidate !== ``
+  // numbers and number-like strings, excluding the blank strings Number() maps to 0
+  const is_numeric = (candidate: unknown): boolean =>
+    !isNaN(Number(candidate)) &&
+    (typeof candidate !== `string` || candidate.trim() !== ``)
 
   const if_enter_or_space =
     (handler: (event: KeyboardEvent) => void) => (event: KeyboardEvent) => {
@@ -1466,9 +1464,7 @@
 
   // Clear the committed input-mode selection while preserving search_text as a draft
   function clear_input_committed_selection() {
-    const option_removed = selected[0]
-    if (option_removed === undefined) return
-    commit_removal([], option_removed)
+    if (selected[0] !== undefined) commit_removal([], selected[0])
   }
 
   // clears before the value change so the input_committed_label → search_text sync effect
@@ -1548,7 +1544,10 @@
       // `text.split(',')` yields an empty entry for a trailing separator, and `add` throws
       // on those: the rejection would stop the loop, drop every later entry and skip
       // `on_parsed_paste`. Count them as rejected and carry on.
-      if (!is_non_empty_option(parsed_option)) {
+      const match = utils.is_object(parsed_option)
+        ? undefined
+        : option_named(`${parsed_option}`)
+      if (!is_non_empty_option(parsed_option) || (match && is_disabled(match))) {
         rejected.push(parsed_option)
         continue
       }
@@ -1561,7 +1560,7 @@
       const before_first = mode === `single` ? selected[0] : undefined
       // add() only suspends on a pending async on_create (creating_option is set
       // synchronously), so awaiting just then keeps on_parsed_paste in the paste's own task
-      const add_result = add(parsed_option, event, true)
+      const add_result = add(match ?? parsed_option, event, true)
       if (creating_option) await add_result
       if (
         selected.length > before ||
@@ -2005,11 +2004,11 @@
           {/if}
         {/snippet}
       </OptionRows>
-      {#if user_message && user_message.msg}
+      {#if user_message}
         {@const { type: msg_type, msg: user_msg_text } = user_message}
         {@const can_add_user_option = msg_type === `create`}
         {@const handle_create = (event: Event) =>
-          can_add_user_option && add(search_text as Option, event)}
+          can_add_user_option && add_typed_text(event)}
         <li
           id={user_message_id}
           onclick={handle_create}

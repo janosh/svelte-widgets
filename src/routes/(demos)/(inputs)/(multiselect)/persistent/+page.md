@@ -31,27 +31,23 @@ This example shows how to combine MultiSelect with `sessionStorage` to persist t
   })
 </script>
 
-{#snippet language_option(option: string, idx?: number, style?: string)}
-  {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
-    <img
-      src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
-      alt={option}
-      style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
-      onerror={(event) => (event.currentTarget.hidden = true)}
-    />
-    {option}
-  </span>
-{/snippet}
-
 <MultiSelect
   options={languages}
   placeholder="What languages do you know?"
   bind:value={selected}
 >
   {#snippet children({ idx, option })}
-    {@render language_option(option, idx)}
+    {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
+    <span style="display: inline-flex; align-items: center; gap: 5pt">
+      <strong>{idx + 1}</strong>
+      <img
+        src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
+        alt={option}
+        style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
+        onerror={(event) => (event.currentTarget.hidden = true)}
+      />
+      {option}
+    </span>
   {/snippet}
 </MultiSelect>
 ```

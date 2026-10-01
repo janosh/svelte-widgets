@@ -10,14 +10,13 @@ export function read_expression(source: string): string | undefined {
   if (closing) return closing[0]
   const block = /^\{#(?<block>if|each|await|key|snippet)\b/u.exec(source)?.[1]
   const branch = /^\{:(?<branch>else|then|catch)\b/u.exec(source)?.[1]
-  const prefix = branch === `else` ? `{#if true}` : branch ? `{#await promise}` : ``
-  const suffix = block
-    ? `{/${block}}`
+  const [prefix, suffix] = block
+    ? [``, `{/${block}}`]
     : branch === `else`
-      ? `{/if}`
+      ? [`{#if true}`, `{/if}`]
       : branch
-        ? `{/await}`
-        : ``
+        ? [`{#await promise}`, `{/await}`]
+        : [``, ``]
   let end = source.indexOf(`}`)
   let last_error: unknown
   while (end !== -1) {

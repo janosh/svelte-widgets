@@ -42,22 +42,27 @@ test.each([`running`, `error`, `cancelled`] as const)(
 )
 
 // value clamping belongs to Progress and is tested there
-test(`forwards progress and runs caller-owned cancellation and retry under custom labels`, async () => {
+test(`forwards progress, children and attributes, and runs cancel/retry under custom labels`, async () => {
   const props = $state<Props>({
     state: `running`,
     label: `Parsing`,
-    value: 25,
+    value: 3,
+    max: 7,
+    children: createRawSnippet(() => ({ render: () => `<em>3 of 7 files</em>` })),
+    class: `caller-class`,
+    id: `task`,
     on_cancel: vi.fn(),
     on_retry: vi.fn(),
     cancel_label: `Stop`,
     retry_label: `Again`,
   })
   const root = render_task(props)
+  expect([root.id, root.classList.contains(`caller-class`)]).toEqual([`task`, true])
+  expect(root.querySelector(`em`)?.textContent).toBe(`3 of 7 files`)
   const progress = doc_query(`progress`)
-  expect([progress.getAttribute(`value`), progress.getAttribute(`aria-label`)]).toEqual([
-    `25`,
-    `Parsing`,
-  ])
+  expect(
+    [`value`, `max`, `aria-label`].map((attr) => progress.getAttribute(attr)),
+  ).toEqual([`3`, `7`, `Parsing`])
   expect(button_texts(root)).toEqual([`Stop`])
   root.querySelector(`button`)?.click()
   expect(props.on_cancel).toHaveBeenCalledOnce()
@@ -67,21 +72,4 @@ test(`forwards progress and runs caller-owned cancellation and retry under custo
   expect(button_texts(root)).toEqual([`Again`])
   root.querySelector(`button`)?.click()
   expect(props.on_retry).toHaveBeenCalledOnce()
-})
-
-test(`children, max and forwarded attributes`, () => {
-  const children = createRawSnippet(() => ({ render: () => `<em>3 of 7 files</em>` }))
-  const root = render_task({
-    state: `running`,
-    label: `Parsing`,
-    value: 3,
-    max: 7,
-    children,
-    class: `caller-class`,
-    id: `task`,
-  })
-  expect(root.querySelector(`em`)?.textContent).toBe(`3 of 7 files`)
-  expect(root.classList.contains(`caller-class`)).toBe(true)
-  expect(root.id).toBe(`task`)
-  expect(doc_query(`progress`).getAttribute(`max`)).toBe(`7`)
 })

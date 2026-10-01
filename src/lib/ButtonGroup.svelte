@@ -4,7 +4,7 @@
   import { selection_values } from './internal/selection'
   import { chain_handlers, step_focus } from './utils'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
-  import { tooltip, type TooltipOptions } from './attachments/index'
+  import { tooltip, type TooltipOptions, type TooltipTrigger } from './attachments/index'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { merge_defaults, BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
@@ -85,8 +85,7 @@
     ;(on_change as ((value: Value | Value[] | null) => void) | undefined)?.(value)
   }
 
-  function handle_keydown(event: KeyboardEvent) {
-    if (!(event.currentTarget instanceof HTMLElement)) return
+  function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
     // `[data-value]` excludes option_suffix buttons, which would desync focus from the
     // option it is meant to select
     const selector = `button[data-value]:not(:disabled)`
@@ -96,6 +95,11 @@
     // read off the button so DOM order and the option list can't drift apart.
     if (!multiple && next_value !== undefined) select(next_value as Value)
   }
+
+  // With option_suffix, the pill takes hover (so the suffix keeps the tooltip) and the button
+  // focus, where its aria-describedby reaches assistive tech
+  const option_tooltip = (opt: ButtonGroupOption<Value>, trigger?: TooltipTrigger) =>
+    tooltip({ ...tooltip_options, content: opt.tooltip, ...(trigger && { trigger }) })
 </script>
 
 {#snippet option_button(opt: ButtonGroupOption<Value>, is_selected: boolean)}
@@ -109,7 +113,7 @@
     aria-busy={opt.loading || undefined}
     data-value={opt.value}
     onclick={() => select(opt.value)}
-    {@attach tooltip({ ...tooltip_options, content: opt.tooltip })}
+    {@attach option_tooltip(opt, option_suffix ? `focus` : undefined)}
   >
     {#if option}
       {@render option({ option: opt, selected: is_selected })}
@@ -140,7 +144,7 @@
       {@const is_selected = selected_set.has(opt.value)}
       {#if option_suffix}
         <!-- opt-in: the extra level breaks consumers' `.options > button` selectors -->
-        <span class="option">
+        <span class="option" {@attach option_tooltip(opt, `hover`)}>
           {@render option_button(opt, is_selected)}
           {@render option_suffix({ option: opt, selected: is_selected })}
         </span>

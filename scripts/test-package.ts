@@ -26,7 +26,7 @@ await cp(resolve(root, `tests/package-smoke`), consumer, { recursive: true })
 const demo_ids = new Set([
   `multiselect-form-data`,
   `languages-2`,
-  `custom-sort`,
+  `sort-selected`,
   `attachments-tooltip-styling`,
   `attachments-tooltip-placement`,
   `settings-section`,

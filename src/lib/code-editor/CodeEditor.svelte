@@ -20,7 +20,7 @@
     toggle_line_comment,
     visible_line_window,
   } from './edit-ops'
-  import type { EditorState, RangeEdit } from './edit-ops'
+  import type { EditorState, LineWindow, RangeEdit } from './edit-ops'
   import { create_highlight_client } from './highlight-client'
   import type { HighlightSpansEvent } from './highlight-client'
   import { line_comment_token } from './languages'
@@ -141,7 +141,8 @@
   // Plain Map, not SvelteMap: the LRU touch on every render pass made reactive entries
   // rebuild `visible_rows` and reconcile the DOM twice. `token_revision` sequences reads.
   // Stale entries (at or after an edit) keep painting until fresh spans replace them.
-  const token_cache = new Map<number, { spans: SpanList; fresh: boolean }>()
+  type TokenEntry = { spans: SpanList; fresh: boolean }
+  const token_cache = new Map<number, TokenEntry>()
   // Line count the cached indices refer to, so an edit can shift entries below it.
   let cached_line_count = 0
   const font_size = $derived(editor_font_size(Number(options.font_size)))
@@ -158,44 +159,36 @@
   const ordered = ({ anchor, head }: EditorSelection): [number, number] =>
     anchor <= head ? [anchor, head] : [head, anchor]
   type SearchResult = { matches: EditorMatch[]; truncated: boolean; revision: number }
+  // Keeps at most SEARCH_MATCH_LIMIT matches; collecting one more marks the list truncated
+  const capped = (matches: EditorMatch[], revision: number): SearchResult => {
+    const truncated = matches.length > SEARCH_MATCH_LIMIT
+    return {
+      matches: truncated ? matches.slice(0, SEARCH_MATCH_LIMIT) : matches,
+      truncated,
+      revision,
+    }
+  }
   const search_all = (): SearchResult => {
     const matches: EditorMatch[] = []
-    let truncated = false
-    if (search_panel === `find`) {
-      for (const match of iterate_editor_matches(model, search_query, search_options)) {
-        if (matches.length === SEARCH_MATCH_LIMIT) {
-          truncated = true
-          break
-        }
-        matches.push(match)
-      }
-    }
-    return { matches, truncated, revision: model.revision }
+    if (search_panel === `find`)
+      for (const match of iterate_editor_matches(model, search_query, search_options))
+        if (matches.push(match) > SEARCH_MATCH_LIMIT) break
+    return capped(matches, model.revision)
   }
   // Rescanned in full when the panel, query, options or model change. Transactions patch
   // it near their edits instead (`patch_search`), so typing never rescans the document.
   let search_result = $derived.by(search_all)
   const patch_search = ({ base_revision, revision, edits }: EditorTransaction): void => {
-    const current = search_result
-    if (current.revision === revision) return
+    const { matches, truncated, revision: scanned_revision } = search_result
+    if (scanned_revision === revision) return
     // A capped list lacks the matches beyond it, so only a rescan can refill it.
-    if (current.truncated || current.revision !== base_revision) {
-      search_result = search_all()
-      return
-    }
-    const matches = update_editor_matches(
-      model,
-      search_query,
-      current.matches,
-      edits,
-      search_options,
-    )
-    const truncated = matches.length > SEARCH_MATCH_LIMIT
-    search_result = {
-      matches: truncated ? matches.slice(0, SEARCH_MATCH_LIMIT) : matches,
-      truncated,
-      revision,
-    }
+    search_result =
+      truncated || scanned_revision !== base_revision
+        ? search_all()
+        : capped(
+            update_editor_matches(model, search_query, matches, edits, search_options),
+            revision,
+          )
   }
   const search_matches = $derived(search_result.matches)
   const current_match = $derived.by(() => {
@@ -207,17 +200,17 @@
     error_message = message
     on_error?.(message)
   }
+  // Re-inserting moves a line to the most recently used end of the cache
+  const touch = (line_idx: number, entry: TokenEntry): void => {
+    token_cache.delete(line_idx)
+    token_cache.set(line_idx, entry)
+  }
   const touch_tokens = (start: number, end: number): boolean => {
     let complete = true
     for (let line_idx = start; line_idx < end; line_idx++) {
       const cached = token_cache.get(line_idx)
-      if (!cached) {
-        complete = false
-        continue
-      }
-      complete &&= cached.fresh
-      token_cache.delete(line_idx)
-      token_cache.set(line_idx, cached)
+      complete &&= cached?.fresh === true
+      if (cached) touch(line_idx, cached)
     }
     return complete
   }
@@ -250,14 +243,10 @@
   }
   const receive_spans = ({ start_line, revision, spans }: HighlightSpansEvent): void => {
     if (revision !== model.revision) return
-    for (const [offset, line_spans] of spans.entries()) {
-      const line_idx = start_line + offset
-      token_cache.delete(line_idx)
-      token_cache.set(line_idx, { spans: line_spans, fresh: true })
-    }
-    while (token_cache.size > TOKEN_CACHE_LINES) {
-      const oldest = token_cache.keys().next().value
-      if (oldest === undefined) break
+    for (const [offset, line_spans] of spans.entries())
+      touch(start_line + offset, { spans: line_spans, fresh: true })
+    for (const oldest of token_cache.keys()) {
+      if (token_cache.size <= TOKEN_CACHE_LINES) break
       token_cache.delete(oldest)
     }
     token_revision += 1
@@ -266,15 +255,9 @@
     void model_revision
     return model.line_count
   })
-  const window_lines = $derived(
-    visible_line_window(
-      scroll_top,
-      viewport_height,
-      line_height,
-      line_count,
-      OVERSCAN_ROWS,
-    ),
-  )
+  const line_window = (count: number): LineWindow =>
+    visible_line_window(scroll_top, viewport_height, line_height, count, OVERSCAN_ROWS)
+  const window_lines = $derived(line_window(line_count))
   const search_tokens = (tokens: RenderedToken[], line_from: number): RenderedToken[] => {
     if (search_matches.length === 0) return tokens
     let low = 0
@@ -371,13 +354,7 @@
     if (!area || composing || input_pending()) return
     if (reveal) reveal_selection()
     // read the model directly: window_lines' line_count only refreshes on a revision bump
-    const window = visible_line_window(
-      scroll_top,
-      viewport_height,
-      line_height,
-      model.line_count,
-      OVERSCAN_ROWS,
-    )
+    const window = line_window(model.line_count)
     const [from, to] = ordered(model.selection)
     if (from !== to || reveal) {
       window.start = Math.min(window.start, model.line_at(from).line_idx)
@@ -1150,18 +1127,12 @@
         event,
         (event.shiftKey ? dedent_selection : indent_selection)(state, indent),
       )
-      return
-    }
-    if (event.key === `Enter` && !command_modifier && !event.altKey) {
+    } else if (event.key === `Enter` && !command_modifier && !event.altKey)
       apply_command(event, auto_indent_newline(state, indent))
-      return
-    }
-    if (event.key === `/` && command_modifier && comment_token) {
+    else if (event.key === `/` && command_modifier && comment_token)
       apply_command(event, toggle_line_comment(state, comment_token))
-      return
-    }
-    if (command_modifier || event.altKey) return
-    apply_command(event, auto_close_pair(state, event.key), `input`)
+    else if (!command_modifier && !event.altKey)
+      apply_command(event, auto_close_pair(state, event.key), `input`)
   }
   export const focus = (): void => textarea?.focus()
   export const undo = (): boolean => model.undo()

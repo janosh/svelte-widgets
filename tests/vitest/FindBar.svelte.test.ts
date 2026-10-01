@@ -133,45 +133,33 @@ describe(`FindBar`, () => {
       },
     })
 
-    const step_titles = [
-      ...document.querySelectorAll(`.find-bar button:not(.find-close)`),
-    ].map((btn) => btn.getAttribute(`title`))
-
-    // one find_in override moves both the placeholder and the region label
+    // one find_in override moves both the placeholder and the input label
     expect(input().placeholder).toBe(`Suchen in x…`)
     expect(input().getAttribute(`aria-label`)).toBe(`Suchen in x`)
-    expect(doc_query(`.find-close`).getAttribute(`aria-label`)).toBe(`x-Suche schließen`)
-    // omitted keys keep the defaults
-    expect(step_titles).toEqual([
-      `Previous match (Shift+Enter)`,
-      `Nächster Treffer (Enter)`,
+    // omitted keys (prev_match, close_shortcut) keep the defaults
+    const buttons = [...document.querySelectorAll(`.find-bar button`)].map((btn) => [
+      btn.getAttribute(`aria-label`),
+      btn.getAttribute(`title`),
     ])
-    expect(doc_query(`.find-close`).getAttribute(`title`)).toBe(`Close (Escape)`)
+    expect(buttons).toEqual([
+      [`Previous match`, `Previous match (Shift+Enter)`],
+      [`Nächster Treffer`, `Nächster Treffer (Enter)`],
+      [`x-Suche schließen`, `Close (Escape)`],
+    ])
   })
 
-  // Fixture: plain, aria-hidden, sr-only, and .skip; also_ignore extends defaults.
+  // aria-hidden and .sr-only are never findable; also_ignore adds to them and
+  // only_within scopes the search without lifting them inside the scope
   test.each([
-    [`nothing extra`, undefined, `1 of 2`],
-    [`also_ignore`, `.skip`, `1 of 1`],
-  ])(`skips the never-findable selectors plus %s`, async (_case, also_ignore, count) => {
+    [{}, `1 of 3`],
+    [{ also_ignore: `.skip` }, `1 of 2`],
+    [{ only_within: `.content` }, `1 of 2`],
+    [{ only_within: `.content`, also_ignore: `.skip` }, `1 of 1`],
+  ])(`counts findable hits with %j`, async (options, count) => {
     mount_bar(
-      `<p>alpha</p><p aria-hidden="true">alpha</p><p class="sr-only">alpha</p>` +
-        `<p class="skip">alpha</p>`,
-      { also_ignore },
-    )
-    await type_query(`alpha`)
-    expect(status()).toBe(count)
-  })
-
-  // only_within scopes search; always-excluded selectors still apply inside.
-  test.each([
-    [`without only_within`, undefined, `1 of 3`],
-    [`with only_within`, `.content`, `1 of 1`],
-  ])(`%s`, async (_case, only_within, count) => {
-    mount_bar(
-      `<div class="content"><p>alpha</p><p aria-hidden="true">alpha</p></div>` +
-        `<nav><p>alpha</p></nav><footer><p>alpha</p></footer>`,
-      { only_within },
+      `<div class="content"><p>alpha</p><p aria-hidden="true">alpha</p>` +
+        `<p class="sr-only">alpha</p><p class="skip">alpha</p></div><nav><p>alpha</p></nav>`,
+      options,
     )
     await type_query(`alpha`)
     expect(status()).toBe(count)

@@ -83,7 +83,7 @@
   }
 </script>
 
-{#if files?.length > 1}
+{#if files.length > 1}
   <button
     title={toggle_all_btn_title}
     {...button_props}
@@ -104,10 +104,7 @@
       <details
         bind:this={detail_elements[idx]}
         {...details_props}
-        ontoggle={(event) => {
-          sync_has_open_details()
-          details_props?.ontoggle?.(event)
-        }}
+        ontoggle={chain_handlers(sync_has_open_details, details_props?.ontoggle)}
       >
         {#if title || title_snippet}
           <summary>

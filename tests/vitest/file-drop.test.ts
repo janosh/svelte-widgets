@@ -59,46 +59,25 @@ const drop = (entries: (FileSystemEntry | null)[], files: File[] = []): DataTran
 const names = (files: File[]) => files.map((file) => file.name)
 
 test.each([
-  [`case-insensitive extension`, new File([``], `REPORT.PDF`), `.pdf`, true],
-  [
-    `exact MIME type`,
-    new File([``], `renamed.bin`, { type: `application/pdf` }),
-    `application/pdf`,
-    true,
-  ],
-  [
-    `MIME wildcard`,
-    new File([``], `photo.unknown`, { type: `image/avif` }),
-    `image/*`,
-    true,
-  ],
-  [
-    `comma-separated alternatives`,
-    new File([``], `notes.txt`, { type: `text/plain` }),
-    `.md, text/plain`,
-    true,
-  ],
-  [`empty accept`, new File([``], `anything.bin`), ``, true],
-  [
-    `non-matching MIME and extension`,
-    new File([``], `data.json`, { type: `application/json` }),
-    `.txt,image/*`,
-    false,
-  ],
-] as const)(`accept matching supports %s`, (_description, file, accept, expected) => {
+  [`REPORT.PDF`, ``, `.pdf`, true], // extensions are case-insensitive
+  [`renamed.bin`, `application/pdf`, `application/pdf`, true],
+  [`photo.unknown`, `image/avif`, `image/*`, true],
+  [`notes.txt`, `text/plain`, `.md, text/plain`, true],
+  [`anything.bin`, ``, ``, true], // empty accept means no restriction
+  [`data.json`, `application/json`, `.txt,image/*`, false],
+] as const)(`%s (%j) vs accept=%j matches: %s`, (name, type, accept, expected) => {
+  const file = new File([``], name, { type })
   expect(file_matches_accept(file, accept)).toBe(expected)
   expect(create_file_accept_filter(accept)(file)).toBe(expected)
 })
 
 test(`accept filtering happens before the multiple limit`, () => {
-  const files = [
-    new File([``], `skip.txt`, { type: `text/plain` }),
-    new File([``], `first.png`, { type: `image/png` }),
-    new File([``], `second.png`, { type: `image/png` }),
-  ]
+  const files = [`skip.txt`, `first.png`, `second.png`].map(
+    (name) => new File([``], name),
+  )
 
-  expect(names(filter_accepted_files(files, `image/*`))).toEqual([`first.png`])
-  expect(names(filter_accepted_files(files, `image/*`, true))).toEqual([
+  expect(names(filter_accepted_files(files, `.png`))).toEqual([`first.png`])
+  expect(names(filter_accepted_files(files, `.png`, true))).toEqual([
     `first.png`,
     `second.png`,
   ])
@@ -234,14 +213,10 @@ test(`entries are read in parallel rather than one after another`, async () => {
     })
 
   vi.useFakeTimers()
-  try {
-    const pending = files_from_data_transfer(
-      drop([slow_entry(`slow.txt`, 50), slow_entry(`fast.txt`, 1)]),
-    )
-    expect(started).toEqual([`slow.txt`, `fast.txt`]) // both in flight before either lands
-    await vi.advanceTimersByTimeAsync(50)
-    expect(names(await pending)).toEqual([`slow.txt`, `fast.txt`]) // order still preserved
-  } finally {
-    vi.useRealTimers()
-  }
+  const pending = files_from_data_transfer(
+    drop([slow_entry(`slow.txt`, 50), slow_entry(`fast.txt`, 1)]),
+  )
+  expect(started).toEqual([`slow.txt`, `fast.txt`]) // both in flight before either lands
+  await vi.advanceTimersByTimeAsync(50)
+  expect(names(await pending)).toEqual([`slow.txt`, `fast.txt`]) // order still preserved
 })

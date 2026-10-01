@@ -51,6 +51,7 @@ describe(`focus_trap`, () => {
       <input type="radio" name="choice"><input id="checked" type="radio" name="choice" checked>
       <form><input type="radio" name="choice"><input id="form-checked" type="radio" name="choice" checked></form>
       <form><input type="radio" name="choice"><input type="radio" name="choice" checked disabled></form>
+      <form id="owner"><input type="radio" name="choice"></form><input id="attr-owned" type="radio" name="choice" form="owner" checked>
       <details id="details" tabindex="0"><summary id="summary"></summary><button></button></details>
       <fieldset disabled><legend><button id="legend"></button></legend><button></button></fieldset>
       <div hidden><button></button></div>
@@ -59,7 +60,7 @@ describe(`focus_trap`, () => {
     `
     attach_trap(surface)
 
-    const expected_order = `three plain checked form-checked details summary legend visible one`
+    const expected_order = `three plain checked form-checked attr-owned details summary legend visible one`
     for (const id of expected_order.split(` `)) {
       press_tab()
       expect(document.activeElement).toBe(surface.querySelector(`#${id}`))

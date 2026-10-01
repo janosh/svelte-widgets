@@ -1,6 +1,14 @@
-import { expect, test } from '@playwright/test'
+import { expect, test, type Page } from '@playwright/test'
 
-test.use({ baseURL: `http://localhost:3005` })
+// .click() races a decorative overlay for the press, and the burger's hit area is not what
+// these tests are about
+const open_mobile_nav = async (page: Page, path = `/nav`, width = 420) => {
+  await page.setViewportSize({ width, height: 800 })
+  await page.goto(path, { waitUntil: `networkidle` })
+  const burger = page.locator(`nav.mobile button.burger`).first()
+  await burger.evaluate((element: HTMLElement) => element.click())
+  return burger
+}
 
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
 for (const route of [`/`, `/range-slider`, `/markdown`]) {
@@ -342,15 +350,8 @@ test.describe(`Nav dropdown`, () => {
     test(`the ${mobile ? `mobile ` : ``}caret recolors under the pointer`, async ({
       page,
     }) => {
-      if (mobile) await page.setViewportSize({ width: 420, height: 800 })
-      await page.goto(`/nav`, { waitUntil: `networkidle` })
-      if (mobile) {
-        await page
-          .locator(`nav.mobile button.burger`)
-          .first()
-          .evaluate((element: HTMLElement) => element.click())
-      }
-
+      if (mobile) await open_mobile_nav(page)
+      else await page.goto(`/nav`, { waitUntil: `networkidle` })
       const caret = page
         .locator(`${mobile ? `nav.mobile ` : ``}.dropdown [data-dropdown-toggle]`)
         .first()
@@ -440,15 +441,7 @@ test.describe(`Nav dropdown`, () => {
 // The pill is painted on `.menu > span` but its `flex: 1` link fills only the content box, so
 // without the link stretching over the span's padding that padding is a dead band.
 test(`the whole painted mobile row is part of its link's hit area`, async ({ page }) => {
-  await page.setViewportSize({ width: 420, height: 800 })
-  await page.goto(`/nav`, { waitUntil: `networkidle` })
-
-  // .click() races a decorative overlay for the press, and the burger's hit area is not what
-  // this test is about
-  await page
-    .locator(`nav.mobile button.burger`)
-    .first()
-    .evaluate((element: HTMLElement) => element.click())
+  await open_mobile_nav(page)
   const row = page
     .locator(`nav.mobile .menu > span`)
     .filter({ has: page.locator(`a`) })
@@ -495,13 +488,7 @@ test(`the whole painted mobile row is part of its link's hit area`, async ({ pag
 test(`expanded submenu rows are compact and share one continuous guide line`, async ({
   page,
 }) => {
-  await page.setViewportSize({ width: 420, height: 800 })
-  await page.goto(`/nav`, { waitUntil: `networkidle` })
-  await page
-    .locator(`nav.mobile button.burger`)
-    .first()
-    .evaluate((element: HTMLElement) => element.click())
-
+  await open_mobile_nav(page)
   const dropdown = page.locator(`nav.mobile .dropdown`).first()
   const parent_row = dropdown.locator(`> div:first-child`)
   const caret = parent_row.locator(`> button`)
@@ -541,9 +528,9 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
   const link_boxes = await links.evaluateAll((els) =>
     els.map((el) => el.getBoundingClientRect().toJSON()),
   )
-  const wrapper = await dropdown
-    .locator(`.submenu-inner`)
-    .evaluate((el) => el.getBoundingClientRect().toJSON())
+  const wrapper = await wrapper_locator.evaluate((el) =>
+    el.getBoundingClientRect().toJSON(),
+  )
   if (!parent_box) throw new Error(`Missing mobile dropdown row geometry`)
   expect(wrapper.x - parent_box.x, `submenu guide is too deeply indented`).toBeCloseTo(
     8,
@@ -616,10 +603,7 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
 // which drifted as the button grew: it covered the burger's bottom 2px and started 8px to its
 // left. Both now derive from --nav-burger-inset and the button's own box.
 test(`the mobile menu clears the burger and shares its left edge`, async ({ page }) => {
-  await page.setViewportSize({ width: 614, height: 900 })
-  await page.goto(`/`, { waitUntil: `networkidle` })
-  const burger = page.locator(`nav.mobile button.burger`).first()
-  await burger.evaluate((el: HTMLElement) => el.click())
+  const burger = await open_mobile_nav(page, `/`, 614)
   const menu = page.locator(`nav.mobile .menu`).first()
   await expect(menu).toBeVisible()
 

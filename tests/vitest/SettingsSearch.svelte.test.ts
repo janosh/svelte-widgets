@@ -20,10 +20,7 @@ const mount_harness = async (
 const mounted_search = async () => {
   await mount_harness()
   const input = doc_query<HTMLInputElement>(`input[type="search"]`)
-  const [appearance, camera] = [
-    ...document.querySelectorAll<HTMLDetailsElement>(`details.settings-group`),
-  ]
-  if (!appearance || !camera) throw new Error(`Settings search harness failed to mount`)
+  const [appearance, camera] = document.querySelectorAll<HTMLDetailsElement>(`details`)
   return { input, appearance, camera }
 }
 
@@ -66,6 +63,13 @@ describe(`SettingsSearch`, () => {
     expect(Object.fromEntries(actual)).toEqual(expected)
   })
 
+  test(`a matching group title opens its collapsed group`, async () => {
+    const { input, camera } = await mounted_search()
+    expect(camera.open).toBe(false)
+    await type_search_text(`camera`, input)
+    expect(camera.open).toBe(true)
+  })
+
   test(`reuses its search index and refreshes changed text, metadata and rows`, async () => {
     const { input } = await mounted_search()
     await type_search_text(`radius`, input)
@@ -93,44 +97,32 @@ describe(`SettingsSearch`, () => {
     await vi.waitFor(() => expect(filtered_out(added)).toBe(false))
   })
 
-  test(`Escape clears filtering and restores each group's prior open state`, async () => {
-    const { input, appearance, camera } = await mounted_search()
-    const color_scheme = setting_row(`color_scheme`)
-    expect(appearance.open).toBe(true)
-    expect(camera.open).toBe(false)
-    expect(color_scheme.hidden).toBe(true)
+  // the harness mounts Appearance open and Camera closed; the second case flips both first
+  test.each([
+    [true, false],
+    [false, true],
+  ])(
+    `Escape clears filtering and restores open state (appearance=%s, camera=%s)`,
+    async (appearance_open, camera_open) => {
+      const { input, appearance, camera } = await mounted_search()
+      appearance.open = appearance_open
+      camera.open = camera_open
+      for (const group of [appearance, camera]) group.dispatchEvent(new Event(`toggle`))
 
-    await type_search_text(`damping`, input)
-    expect(filtered_out(appearance)).toBe(true)
-    expect(camera.open).toBe(true)
+      await type_search_text(`damping`, input)
+      expect([filtered_out(appearance), camera.open]).toEqual([true, true])
 
-    input.dispatchEvent(escape_key())
-    await tick()
-
-    expect(input.value).toBe(``)
-    expect(filtered_out(appearance)).toBe(false)
-    expect(appearance.open).toBe(true)
-    expect(filtered_out(camera)).toBe(false)
-    expect(camera.open).toBe(false)
-    expect(color_scheme.hidden).toBe(true)
-    expect(document.querySelectorAll(`[data-key][hidden]`)).toHaveLength(1)
-  })
-
-  test(`restores group choices made before search starts`, async () => {
-    const { input, appearance, camera } = await mounted_search()
-    appearance.open = false
-    camera.open = true
-    appearance.dispatchEvent(new Event(`toggle`))
-    camera.dispatchEvent(new Event(`toggle`))
-
-    await type_search_text(`damping`, input)
-    expect(filtered_out(appearance)).toBe(true)
-    expect(camera.open).toBe(true)
-
-    await type_search_text(``, input)
-    expect(appearance.open).toBe(false)
-    expect(camera.open).toBe(true)
-  })
+      input.dispatchEvent(escape_key())
+      await tick()
+      expect(input.value).toBe(``)
+      expect([appearance, camera].map(filtered_out)).toEqual([false, false])
+      expect([appearance.open, camera.open]).toEqual([appearance_open, camera_open])
+      // the caller-hidden color scheme row is never unhidden
+      expect([...document.querySelectorAll(`[hidden]`)]).toEqual([
+        setting_row(`color_scheme`),
+      ])
+    },
+  )
 
   test(`leaves rows the caller hides after mount alone`, async () => {
     const { input, camera } = await mounted_search()
@@ -141,9 +133,7 @@ describe(`SettingsSearch`, () => {
     expect(zoom_speed.hidden).toBe(true)
 
     // An idle (empty-query) refresh must not replay a stale baseline back over the caller
-    document
-      .querySelector(`[data-key="rotation_damping"]`)
-      ?.append(document.createComment(``))
+    setting_row(`rotation_damping`).append(document.createComment(``))
     await new Promise((resolve) => void queueMicrotask(() => resolve(null)))
     expect(zoom_speed.hidden).toBe(true)
 
@@ -151,12 +141,10 @@ describe(`SettingsSearch`, () => {
     await type_search_text(`zoom speed`, input)
     expect(zoom_speed.hidden).toBe(true)
     expect(filtered_out(camera)).toBe(true)
-    expect(document.querySelector(`[role="status"]`)?.textContent).toContain(
-      `No settings match`,
-    )
+    expect(doc_query(`[role="status"]`).textContent).toContain(`No settings match`)
 
     await type_search_text(``, input)
-    expect(zoom_speed?.hidden).toBe(true)
+    expect(zoom_speed.hidden).toBe(true)
   })
 
   test(`matches section rows without data-key and keeps forced groups open across queries`, async () => {
@@ -165,10 +153,8 @@ describe(`SettingsSearch`, () => {
     const surface_quality = doc_query(`section.grid > .setting:not([data-key])`)
 
     await type_search_text(`sphere`, input)
-    expect(filtered_out(segments)).toBe(false)
-    expect(filtered_out(surface_quality)).toBe(true)
-    expect(filtered_out(appearance)).toBe(false)
-    expect(filtered_out(setting_row(`atom_radius`))).toBe(true)
+    const nodes = [segments, surface_quality, appearance, setting_row(`atom_radius`)]
+    expect(nodes.map(filtered_out)).toEqual([false, true, false, true])
 
     // search opens the collapsed Camera section; typing on must not drop that state, not
     // an instant, which is what re-running the whole attachment per keystroke did
@@ -179,13 +165,10 @@ describe(`SettingsSearch`, () => {
     observer.observe(camera, { attributes: true, attributeFilter: [`open`] })
     await type_search_text(`damping `, input)
     observer.disconnect()
-    expect(open_writes).toEqual([])
-    expect(camera.open).toBe(true)
-    expect(filtered_out(segments)).toBe(true)
+    expect([open_writes, camera.open, filtered_out(segments)]).toEqual([[], true, true])
 
     await type_search_text(``, input)
-    expect(camera.open).toBe(false)
-    expect(filtered_out(segments)).toBe(false)
+    expect([camera.open, filtered_out(segments)]).toEqual([false, false])
   })
 
   // A pane with no room for a standing field parks a magnifier in the corner instead
@@ -244,8 +227,7 @@ describe(`SettingsSearch`, () => {
     const { input, appearance, camera } = await mounted_search()
     await type_search_text(`unobtainium`, input)
 
-    expect(filtered_out(appearance)).toBe(true)
-    expect(filtered_out(camera)).toBe(true)
+    expect([appearance, camera].map(filtered_out)).toEqual([true, true])
     const status = doc_query(`[role="status"]`)
     expect(status.textContent).toContain(`No settings match “unobtainium”.`)
 

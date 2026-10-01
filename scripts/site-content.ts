@@ -74,14 +74,10 @@ export function prepare_page(
   const meta: Record<string, string> = {}
   let metadata_html = ``
   for (const key of [`title`, `description`, `categories`]) {
-    const value = authored?.metadata[key]
-    const content =
-      typeof value === `string`
-        ? value
-        : Array.isArray(value) && value.every((item) => typeof item === `string`)
-          ? value.join(`, `)
-          : undefined
-    if (content === undefined) continue
+    // Strings and string lists (categories) become one comma-separated meta value.
+    const values = [authored?.metadata[key]].flat()
+    if (!values.every((item) => typeof item === `string`)) continue
+    const content = values.join(`, `)
     meta[key] = content
     const element = document.createElement(`meta`)
     element.setAttribute(`data-pagefind-meta`, `${key}[content]`)

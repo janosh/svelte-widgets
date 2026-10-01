@@ -96,16 +96,6 @@ const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
   right: [`left`, 225],
 }
 
-// The two corners flanking each arrow side, cross-axis order. Arrow tracks the edge it
-// hangs off (here and for its border below), which only a consumer stylesheet can make
-// differ from a fixed side: every --tooltip-* shorthand sets all four alike.
-const SIDE_CORNERS: Record<Placement, readonly [string, string]> = {
-  top: [`top-left`, `top-right`],
-  bottom: [`bottom-left`, `bottom-right`],
-  left: [`top-left`, `bottom-left`],
-  right: [`top-right`, `bottom-right`],
-}
-
 const handled_tooltip_events = new WeakSet<Event>()
 
 const is_transparent = (color: string): boolean =>
@@ -208,10 +198,15 @@ const sync_arrow_styles = (
   const anchor_center = vertical
     ? (trigger_rect.left + trigger_rect.right) / 2 - left
     : (trigger_rect.top + trigger_rect.bottom) / 2 - top
-  // clamp keeps the tip off a curve, so it measures the near corners
+  // clamp keeps the tip off a curve, so it measures the two corners flanking the side the
+  // arrow hangs off, in cross-axis order. Arrow tracks that edge (here and for its border
+  // below), which only a consumer stylesheet can make differ from a fixed side: every
+  // --tooltip-* shorthand sets all four alike.
   const corner_radius = (corner: string) =>
     css_px_or(styles.getPropertyValue(`border-${corner}-radius`), 0)
-  const [start_corner, end_corner] = SIDE_CORNERS[inset_side]
+  const [start_corner, end_corner] = vertical
+    ? [`${inset_side}-left`, `${inset_side}-right`]
+    : [`top-${inset_side}`, `bottom-${inset_side}`]
   const min_center = arrow_px + corner_radius(start_corner)
   const max_center = dimension - arrow_px - corner_radius(end_corner)
   const cross_axis_center =
@@ -304,10 +299,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     clearTimeout(open_timeout)
     open_timeout = undefined
   }
-  const clear_close_timeout = () => {
-    clearTimeout(close_timeout)
-    close_timeout = undefined
-  }
+  // unlike open_timeout (read by `??=`), nothing reads close_timeout, so it needs no reset
+  const clear_close_timeout = () => clearTimeout(close_timeout)
 
   const track_input = (event: PointerEvent | KeyboardEvent) => {
     last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
@@ -802,19 +795,24 @@ export const tooltip =
     const manager = get_tooltip_manager(node.ownerDocument)
     const unregister = manager.register(registration)
 
-    // nested tooltip containers both see the event; the innermost to claim it wins
-    const claim = (event: Event): HTMLElement | null => {
-      if (handled_tooltip_events.has(event)) return null
+    // nested tooltip containers both see the event; the innermost to claim it wins, and
+    // only claims kinds its trigger accepts, so a focus-only one leaves hovers to its parent
+    const claim = (event: Event, kind: `hover` | `focus`): HTMLElement | null => {
+      if (
+        handled_tooltip_events.has(event) ||
+        !accepts_tooltip_trigger(registration.options, kind)
+      )
+        return null
       const trigger = registration_target(registration, event.target)
       if (trigger) handled_tooltip_events.add(event)
       return trigger
     }
     const on_pointer_over = (event: PointerEvent) => {
-      const trigger = claim(event)
+      const trigger = claim(event, `hover`)
       if (trigger) manager.enter_pointer(registration, trigger, event.pointerType)
     }
     const on_focus_in = (event: FocusEvent) => {
-      const trigger = claim(event)
+      const trigger = claim(event, `focus`)
       if (trigger) manager.enter_focus(registration, trigger)
     }
     const leave = (reason: `pointer` | `focus`) => (event: PointerEvent | FocusEvent) =>

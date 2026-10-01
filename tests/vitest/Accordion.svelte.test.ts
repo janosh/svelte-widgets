@@ -153,7 +153,9 @@ describe(`Accordion`, () => {
 
     inner_triggers[0].focus()
     press_key(inner_triggers[0], `ArrowDown`)
-
+    expect(document.activeElement).toBe(inner_triggers[1])
+    // keys from panel content, here the inner root itself, are not trigger navigation
+    expect(press_key(inner_root, `ArrowDown`).defaultPrevented).toBe(false)
     expect(document.activeElement).toBe(inner_triggers[1])
   })
 

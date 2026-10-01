@@ -88,6 +88,7 @@
   const unique_id = $props.id()
   const msg = $derived(merge_defaults(MULTI_SELECT_LABELS, labels))
   const base_id = $derived(id ?? `options-${unique_id}`)
+  const group_id = (group: string) => `${base_id}-group-${encodeURIComponent(group)}`
   const query = $derived(search_text.trim() ? search_text : ``)
   let list = $state<HTMLUListElement>()
   let scroll_top = $state(0)
@@ -154,21 +155,16 @@
     const requested_option = active_option
     const option_changed =
       requested_option !== null && requested_option !== previous_option
-    const items_changed =
-      previous_options && items !== previous_options && previous_key !== undefined
+    // previous_key is only set once a run has recorded previous_options
+    const items_changed = items !== previous_options && previous_key !== undefined
     if (active_index === previous_index && (option_changed || items_changed)) {
       const active_key = option_changed ? key(requested_option) : previous_key
       const found = items.findIndex((item) => key(item) === active_key)
       active_index = found === -1 ? null : found
     }
-    if (
-      active_index === null ||
-      active_index < 0 ||
-      active_index >= items.length ||
-      option_disabled(items[active_index])
-    ) {
+    const current = active_index === null ? undefined : items[active_index]
+    if (current === undefined || option_disabled(current))
       active_index = auto_active_first_option ? next_option_index(items, null, 1) : null
-    }
     active_option = active_index === null ? null : items[active_index]
     previous_option = active_option
     previous_index = active_index
@@ -310,7 +306,7 @@
             style:height={row_height}
             style:box-sizing={row_height && `border-box`}
           >
-            <span id="{base_id}-group-{encodeURIComponent(row.group)}">
+            <span id={group_id(row.group)}>
               {#if group_header}{@render group_header({
                   group: row.group,
                   options: row.options,
@@ -331,9 +327,7 @@
             role="option"
             aria-selected="false"
             aria-disabled={disabled_option || undefined}
-            aria-describedby={row.group === null
-              ? undefined
-              : `${base_id}-group-${encodeURIComponent(row.group)}`}
+            aria-describedby={row.group === null ? undefined : group_id(row.group)}
             aria-posinset={row.flat_idx + 1}
             aria-setsize={visible_options.length}
             class={[

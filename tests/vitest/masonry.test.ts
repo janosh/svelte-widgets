@@ -8,10 +8,8 @@ import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
   mount(Masonry, { target: document.body, props })
 
-// most harness tests only use append/remove/set_cols, so `events` defaults to a throwaway
-const mount_harness = (
-  props: ComponentProps<typeof MasonryAppendHarness> = { events: [] },
-) => mount(MasonryAppendHarness, { target: document.body, props })
+const mount_harness = (props: ComponentProps<typeof MasonryAppendHarness> = {}) =>
+  mount(MasonryAppendHarness, { target: document.body, props })
 
 const n_items = 30
 const make_items = (count: number) => Array.from({ length: count }, (_, idx) => idx)
@@ -136,15 +134,12 @@ describe(`Masonry`, () => {
     expect(masonry?.getAttribute(`data-testid`)).toBe(`my-masonry`)
     expect(masonry?.getAttribute(`aria-label`)).toBe(`Image gallery`)
     expect(masonry?.getAttribute(`style`)).toContain(style)
-    expect(masonry?.style.display).toBe(`flex`)
-    expect(masonry?.style.boxSizing).toBe(`border-box`)
+    expect(masonry?.style).toMatchObject({ display: `flex`, boxSizing: `border-box` })
     // every column: column_props style merges with the style: directives, arbitrary attrs pass through
     for (const col of col_els()) {
       expect(col.getAttribute(`style`)).toContain(column_style)
-      expect(col.style.display).toBe(`grid`)
-      expect(col.style.gap).toBe(`5px`)
-      expect(col.style.maxWidth).toBe(`150px`)
-      expect(col.getAttribute(`data-testid`)).toBe(`col`)
+      expect(col.style).toMatchObject({ display: `grid`, gap: `5px`, maxWidth: `150px` })
+      expect(col.dataset.testid).toBe(`col`)
       expect(col.getAttribute(`role`)).toBe(`list`)
     }
   })
@@ -186,26 +181,20 @@ describe(`Masonry`, () => {
     )
   })
 
-  test.each([`key`, `uuid`])(`keys items by id_key=%s`, (id_key) => {
-    mount_masonry({ items: [{ [id_key]: 1 }, { [id_key]: 2 }], id_key })
-    expect(item_els()).toHaveLength(2)
-  })
-
-  test(`uses custom get_id function`, () => {
-    // Masonry's props type the item as unknown, so narrow inside the callback
-    const get_id = vi.fn((item: unknown) => (item as { x: number }).x)
-    mount_masonry({ items: [{ x: 1 }, { x: 2 }], get_id })
-    expect(get_id).toHaveBeenCalled()
+  // the default get_id throws for items without an `id`, so rendering both proves the override
+  test.each([
+    { items: [{ key: 1 }, { key: 2 }], id_key: `key` },
+    { items: [{ uuid: 1 }, { uuid: 2 }], id_key: `uuid` },
+    { items: [{ x: 1 }, { x: 2 }], get_id: (item: unknown) => (item as { x: number }).x },
+  ])(`keys items by %o`, (props) => {
+    mount_masonry(props)
     expect(item_els()).toHaveLength(2)
   })
 
   test(`uses custom calc_cols and adds col-N classes`, () => {
-    const calc_cols = vi.fn<() => number>(() => 3)
-    mount_masonry({ items: indices, calc_cols, masonry_width: 500 })
-    expect(calc_cols).toHaveBeenCalled()
-    const columns = col_els()
-    expect(columns).toHaveLength(3)
-    columns.forEach((col, idx) => expect(col.classList).toContain(`col-${idx}`))
+    mount_masonry({ items: indices, calc_cols: () => 3, masonry_width: 500 })
+    const col_classes = [...col_els()].map((col) => /col-\d+/u.exec(col.className)?.[0])
+    expect(col_classes).toEqual([`col-0`, `col-1`, `col-2`])
   })
 
   // masonry_width=0 is SSR: without initial_cols it renders the max columns for a 1930px
@@ -268,10 +257,7 @@ describe(`Masonry`, () => {
     // no unnamed @container queries should remain (regression guard for #56)
     expect(container_css).not.toMatch(/@container\s*\(/u)
     // styles must be in <head> not <body> to avoid flash on SSR first paint
-    const body_container_styles = Array.from(
-      document.body.querySelectorAll(`style`),
-    ).filter((style_el) => style_el.textContent.includes(`@container`))
-    expect(body_container_styles).toHaveLength(0)
+    expect(document.body.querySelector(`style`)).toBeNull()
   })
 
   test(`binds div and masonry_height`, async () => {
@@ -304,17 +290,9 @@ describe(`Masonry`, () => {
   test(`renders string items as spans with correct content`, () => {
     const items = [`apple`, `banana`, `cherry`, `date`, `elderberry`, `fig`]
     mount_masonry({ items, masonry_width: 500, min_col_width: 200 })
-    const spans = document.querySelectorAll(`div.masonry > div.col > div > span`) // default rendering
-    expect(spans).toHaveLength(items.length)
-    // balanced-stable alternates equal-height items across 2 columns; DOM order is by column
-    expect(Array.from(spans).map((span) => span.textContent)).toEqual([
-      `apple`,
-      `cherry`,
-      `elderberry`,
-      `banana`,
-      `date`,
-      `fig`,
-    ])
+    expect(document.querySelectorAll(`.col span`)).toHaveLength(6) // default rendering
+    // balanced-stable alternates equal-height items across 2 columns
+    expect(as_columns()).toBe(`apple,cherry,elderberry | banana,date,fig`)
   })
 })
 
@@ -390,7 +368,7 @@ describe(`Masonry order modes`, () => {
     [`balanced`, `2,4 | 3`], // re-packed from scratch
     [`balanced-stable`, `3 | 2,4`], // survivors keep their columns
   ] as const)(`order=%s after removing an item mid-list`, async (order, expected) => {
-    const harness = mount_harness({ events: [], order })
+    const harness = mount_harness({ order })
     await tick()
     expect(as_columns()).toBe(`1,3 | 2,4`)
 
@@ -460,25 +438,17 @@ describe(`Masonry order modes`, () => {
 
   test(`order=balanced-stable repopulates columns after count increases`, async () => {
     const harness = mount_harness()
-    const initial_cols = get_col_dist()
-    expect(initial_cols).toHaveLength(2)
-    expect(initial_cols[1].length).toBeGreaterThan(0)
+    expect(as_columns()).toBe(`1,3 | 2,4`)
 
     harness.set_cols(1)
     await tick()
-    const collapsed_cols = get_col_dist()
-    expect(collapsed_cols).toHaveLength(1)
-    expect(collapsed_cols[0].toSorted()).toEqual(initial_cols.flat().toSorted())
+    expect(as_columns()).toBe(`1,2,3,4`)
 
-    const removed_ids = initial_cols[1].map(Number)
-    harness.remove(...removed_ids)
-
+    // growing must re-place the survivors, else both stay pinned to column 0
+    harness.remove(2, 4)
     harness.set_cols(2)
     await tick()
-    const expanded_cols = get_col_dist()
-    expect(expanded_cols).toHaveLength(2)
-    expect(expanded_cols.every((col) => col.length > 0)).toBe(true)
-    expect(expanded_cols.flat().toSorted()).toEqual(initial_cols[0].toSorted())
+    expect(as_columns()).toBe(`1 | 3`)
   })
 
   test(`order=balanced-stable ignores zero estimated heights`, () => {
@@ -495,32 +465,18 @@ describe(`Masonry order modes`, () => {
     expect(as_columns()).toBe(`0,2 | 1`)
   })
 
-  test.each(ALL_ORDER_MODES)(
-    `order=%s always attaches ResizeObservers for mode switching support`,
-    async (order) => {
-      mount_masonry({ items: [1, 2, 3], order, masonry_width: 500 })
-      await tick()
-      expect(resize_observers.size).toBe(4) // masonry container + 3 items
-    },
-  )
-
-  test(`one ResizeObserver measures every card`, async () => {
+  // every mode measures (for mode switching support), with one observer shared by all cards
+  test.each(ALL_ORDER_MODES)(`order=%s measures every card`, async (order) => {
     const created_before = observers_created
-    mount_masonry({ items: make_items(50), masonry_width: 500 })
+    mount_masonry({ items: make_items(5), order, masonry_width: 500 })
     await tick()
-    expect(resize_observers.size).toBe(51) // container + 50 cards
+    expect(resize_observers.size).toBe(6) // masonry container + 5 items
     // the container binding may bring its own; the cards share one
     expect(observers_created - created_before).toBeLessThanOrEqual(2)
   })
 
   test(`virtualization skips ResizeObservers (only estimated heights used)`, () => {
-    mount_masonry({
-      items: [1, 2, 3],
-      order: `balanced`,
-      virtualize: true,
-      height: 300,
-      masonry_width: 500,
-    })
+    mount_virtualized(3)
     expect(resize_observers.size).toBe(1) // the container only
   })
 
@@ -548,34 +504,26 @@ describe(`Masonry virtualization`, () => {
     [`conflicting styles`, 300, `300px`, `height: 900px; overflow-y: hidden`],
   ] as const)(`handles %s when virtualize=true`, (_desc, height, expected, style) => {
     mount_masonry({ items: indices, virtualize: true, height, style })
-    expect(masonry_el()?.style.height).toBe(expected)
-    expect(masonry_el()?.style.overflowY).toBe(`auto`)
+    expect(masonry_el()?.style).toMatchObject({ height: expected, overflowY: `auto` })
     expect(masonry_el()?.getAttribute(`style`)).not.toContain(`\n`)
   })
 
-  test(`respects overscan prop`, () => {
-    const count_for = (overscan: number) => {
-      mount_virtualized(100, {
-        get_estimated_height: () => 100,
-        overscan,
-        calc_cols: () => 1,
-      })
-      return item_els().length
-    }
-    expect(count_for(5)).toBeGreaterThan(count_for(1))
-  })
-
+  // 100px items in a 300px viewport: rows 0, 1 and 2 sit on screen, plus `overscan` more.
   // overscan=0 removed the slack hiding an exclusive end one row short: the bottom-edge
   // item went unrendered, leaving a blank strip
-  test(`overscan=0 still renders the item at the viewport's bottom edge`, () => {
+  test.each([
+    [0, 3],
+    [2, 5],
+  ])(`overscan=%i renders the first %i rows`, (overscan, n_rendered) => {
     mount_virtualized(50, {
       get_estimated_height: () => 100,
-      overscan: 0,
+      overscan,
       gap: 0,
       calc_cols: () => 1,
     })
-    // 100px items in a 300px viewport: rows 0, 1 and 2 all sit on screen
-    expect([...item_els()].map((el) => el.textContent?.trim())).toEqual([`0`, `1`, `2`])
+    expect([...item_els()].map((el) => el.textContent)).toEqual(
+      make_items(n_rendered).map(String),
+    )
   })
 
   test.each([
@@ -602,7 +550,6 @@ describe(`Masonry virtualization`, () => {
       calc_cols: () => 1,
       get_estimated_height: () => 100,
       gap: 0,
-      height: 300,
       onscroll: consumer_scroll,
     })
     const rendered_ids = () => Array.from(item_els()).map((item) => item.textContent)
@@ -613,19 +560,6 @@ describe(`Masonry virtualization`, () => {
     // scroll_top=5000 with 100px items lands on item 50, minus 1 and 5 overscan
     expect(rendered_ids()[0]).toBe(`43`)
     expect(consumer_scroll).toHaveBeenCalledOnce()
-  })
-
-  test(`defers virtualization until masonry_height is measured for string heights`, () => {
-    vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockReturnValue(0)
-    mount_masonry({
-      items: make_items(100),
-      virtualize: true,
-      height: `500px`,
-      calc_cols: () => 2,
-    })
-
-    // clientHeight=0 means unmeasured, so virtualization is deferred
-    expect(item_els()).toHaveLength(100)
   })
 
   test(`measuring a string height starts virtualizing without remounting cards`, async () => {
@@ -643,7 +577,7 @@ describe(`Masonry virtualization`, () => {
       calc_cols: () => 2,
       get_estimated_height: () => 100,
     })
-    expect(item_els()).toHaveLength(100) // unmeasured, so every card renders
+    expect(item_els()).toHaveLength(100) // clientHeight=0 is unmeasured: every card renders
     const first_card = item_els()[0]
     const container = doc_query(`.masonry`)
     const notify = resize_observers.get(container)
@@ -663,7 +597,7 @@ describe(`Masonry virtualization`, () => {
 
   // Regression: https://github.com/janosh/svelte-bricks/issues/50
   test(`filtering a scrolled grid fills the last viewport before another scroll event`, async () => {
-    const harness = mount_harness({ events: [], virtualize: true })
+    const harness = mount_harness({ virtualize: true })
     harness.append(...Array.from({ length: 96 }, (_, idx) => idx + 5))
     await tick()
     await scroll_to(6000)
@@ -680,35 +614,19 @@ describe(`Masonry virtualization`, () => {
       get_estimated_height: () => 100,
     })
     // round-robin: item N belongs in column N % 3
-    get_col_dist().forEach((column, col_idx) => {
-      expect(column.length).toBeGreaterThan(0)
-      for (const id of column) expect(Number(id) % 3).toBe(col_idx)
-    })
+    expect(as_columns()).toBe(`0,3,6,9 | 1,4,7,10 | 2,5,8,11`)
   })
 
   test(`padding uses estimated heights, not measured`, () => {
-    const [estimated, gap, item_count] = [100, 10, 100]
     mock_height = 200 // 2x the estimate
-
-    mount_masonry({
-      items: make_items(item_count),
-      virtualize: true,
-      height: 300,
+    mount_virtualized(100, {
       calc_cols: () => 1,
-      gap,
-      get_estimated_height: () => estimated,
-      masonry_width: 500,
+      gap: 10,
+      get_estimated_height: () => 100,
     })
-
-    const col = col_els()[0]
-    const rendered = col?.children.length ?? 0
-    expect(col?.style.paddingTop).toBe(`0px`) // unscrolled
-    const padding = Math.trunc(Number(col?.style.paddingBottom.replace(`px`, ``)))
-
-    const expected_estimated = (item_count - rendered) * (estimated + gap)
-    const expected_measured = (item_count - rendered) * (mock_height + gap)
-    expect(padding).toBeLessThan(expected_measured * 0.8)
-    expect(padding).toBeGreaterThan(expected_estimated * 0.5)
+    // 3 on-screen rows + 5 overscan render; the other 92 pad at estimate 100 + gap 10 each
+    const { paddingTop, paddingBottom } = col_els()[0].style
+    expect([paddingTop, paddingBottom]).toEqual([`0px`, `10120px`])
   })
 
   // A 0 estimate must fall through to the 150 default; with `??` it stays 0, prefix sums

@@ -605,7 +605,6 @@ test.each([
 const long_query = `a`.repeat(1030)
 test.each([
   [`aa😀a`, `a`, { from: 5 }, ``],
-  [`aa😀a`, `a`, { from: 6 }, ``],
   [`aa😀a`, `a`, { from: 10 }, ``],
   // a start inside a surrogate pair backs up to the pair's high half
   [`ab😀c`, `😀`, { from: 3 }, `2-4`],

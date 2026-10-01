@@ -209,7 +209,6 @@ describe(`checked Markdown examples`, () => {
     await writeFile(resolve(directory, `broken.ts`), `export const count: number = "bad"`)
     const dependency_error = await check(
       fence(`ts`, `import { count } from "./broken"; console.log(count)`),
-      {},
     )
     expect(diagnostics_at_start(dependency_error)).toMatchObject([
       {

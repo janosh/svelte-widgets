@@ -20,27 +20,23 @@
       number
     >,
   )
+  const { stiffness, damping, ...motion } = $derived(params)
 </script>
 
 <Heading level={2} id="wiggle">Wiggle</Heading>
 
 <p>
-  Wraps its children in a spring-animated wrapper that shakes once whenever <code
-    >wiggle</code
-  >
-  flips to <code>true</code> and resets itself when the spring settles. Bind
-  <code>wiggle</code> to trigger it from anywhere. Drag the sliders to tune the motion.
+  Wraps its children in a spring-animated span that shakes once whenever
+  <code>wiggle</code> flips to <code>true</code>, then resets it after
+  <code>duration_ms</code>. Bind <code>wiggle</code> to trigger it from anywhere. Drag the sliders
+  to tune the motion.
 </p>
 
 <button type="button" class="demo" onclick={() => (wiggle = true)}>
   <Wiggle
     bind:wiggle
-    angle={params.angle}
-    scale={params.scale}
-    dx={params.dx}
-    dy={params.dy}
-    duration_ms={params.duration_ms}
-    spring_options={{ stiffness: params.stiffness, damping: params.damping }}
+    {...motion}
+    spring_options={{ stiffness, damping }}
     style="display: inline-block; padding: 0.5em 1em; background: var(--surface); border-radius: 6pt"
   >
     🎯 Click to wiggle!

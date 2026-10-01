@@ -135,9 +135,21 @@ describe(`ButtonGroup`, () => {
     expect(on_change).toHaveBeenCalledTimes(3)
   })
 
-  test(`arrow keys move focus and the selection with it, wrapping both ends`, async () => {
+  // Suffix buttons must stay out of navigation, which a broad button selector would include.
+  test(`arrow keys move focus and the selection with it, wrapping both ends past suffix buttons`, async () => {
     const on_change = vi.fn()
-    const buttons = mount_group({ options: letters, value: `alpha`, on_change })
+    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
+      (get_params) => ({
+        render: () =>
+          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
+      }),
+    )
+    const buttons = mount_group({
+      options: letters,
+      value: `alpha`,
+      on_change,
+      option_suffix,
+    })
     buttons[0].focus()
 
     const walk: [string, number][] = [
@@ -324,20 +336,37 @@ describe(`ButtonGroup`, () => {
     ])
   })
 
-  test(`per-option tooltips always render plain text`, async () => {
-    vi.useFakeTimers()
-    const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
-    const buttons = mount_group({ options })
-    await tick()
+  const count_suffix = createRawSnippet(() => ({
+    render: () => `<span class="count">3</span>`,
+  }))
+  test.each([
+    [`a button`, undefined],
+    [`an option_suffix pill`, count_suffix],
+  ])(
+    `per-option tooltips on %s show plain text on hover and focus`,
+    async (_case, option_suffix) => {
+      vi.useFakeTimers()
+      const options: Option[] = [{ value: `a`, tooltip: `<b>bold</b>` }, { value: `b` }]
+      const [button_a, button_b] = mount_group({ options, option_suffix })
+      await tick()
 
-    dispatch_hover(buttons[1])
-    vi.runAllTimers()
-    expect(document.querySelector(`.tooltip-content`)).toBeNull()
+      dispatch_hover(button_b)
+      vi.runAllTimers()
+      expect(document.querySelector(`.tooltip-content`)).toBeNull()
 
-    dispatch_hover(buttons[0])
-    vi.runAllTimers()
-    expect(doc_query(`.tooltip-content`).innerHTML).toBe(`&lt;b&gt;bold&lt;/b&gt;`)
-  })
+      // a pill takes hover, so its suffix keeps the tooltip
+      for (const target of option_suffix ? [button_a, doc_query(`.count`)] : [button_a]) {
+        dispatch_hover(target)
+        vi.runAllTimers()
+        expect(doc_query(`.tooltip-content`).innerHTML).toBe(`&lt;b&gt;bold&lt;/b&gt;`)
+      }
+
+      button_a.focus()
+      vi.runAllTimers()
+      const described_by = button_a.getAttribute(`aria-describedby`) ?? ``
+      expect(doc_query(`[id="${described_by}"]`).textContent).toContain(`<b>bold</b>`)
+    },
+  )
 
   // Phrasing content requires both wrappers to avoid block elements.
   test.each([
@@ -378,34 +407,6 @@ describe(`ButtonGroup`, () => {
       ).toEqual(links)
     },
   )
-
-  // A broad button selector would incorrectly include suffix buttons in navigation.
-  test(`suffix buttons stay out of arrow key navigation`, async () => {
-    const on_change = vi.fn()
-    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
-      (get_params) => ({
-        render: () =>
-          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
-      }),
-    )
-    const buttons = mount_group({
-      options: letters,
-      value: `alpha`,
-      on_change,
-      option_suffix,
-    })
-    buttons[0].focus()
-
-    press(`ArrowRight`)
-    await tick()
-    expect(document.activeElement).toBe(buttons[1])
-    expect(buttons.map(checked_state)).toEqual([`false`, `true`, `false`])
-
-    press(`End`)
-    await tick()
-    expect(document.activeElement).toBe(buttons[2])
-    expect(on_change.mock.calls.flat()).toEqual([`beta`, `gamma`])
-  })
 
   // Pin the public CSS hooks to catch accidental removals or undocumented additions.
   test(`exposes exactly the documented custom properties`, () => {

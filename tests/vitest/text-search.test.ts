@@ -1,5 +1,5 @@
 import { highlight_matches } from '$lib/attachments'
-import type { HighlightRangesOptions } from '$lib/text-search'
+import type { HighlightRangesOptions, TextMutationOptions } from '$lib/text-search'
 import {
   create_burst_debounce,
   create_search_jump,
@@ -8,7 +8,7 @@ import {
   observe_text_mutations,
   search_text,
 } from '$lib/text-search'
-import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { doc_query, stub_css_highlights } from './index'
 
 const render = (html: string): HTMLElement => {
@@ -88,9 +88,8 @@ describe(`search_text`, () => {
     `<div hidden><span>secret</span></div>`,
     `<select><option>secret</option></select>`,
   ])(`excludes a search root within %s`, (html) => {
-    const root = render(html).querySelector(`span, option`)
-    expect(root).not.toBeNull()
-    if (root) expect(search_text(root, `secret`)).toEqual([])
+    render(html)
+    expect(search_text(doc_query(`span, option`), `secret`)).toEqual([])
   })
 
   it.each([
@@ -135,9 +134,7 @@ describe(`search_text`, () => {
     [`final sigma`, `<p>ΟΔΟΣ</p>`, `οδοσ`, [`ΟΔΟΣ`, 0, `ΟΔΟΣ`, 4]],
     [`medial sigma query`, `<p>ΟΔΟΣ</p>`, `οδος`, [`ΟΔΟΣ`, 0, `ΟΔΟΣ`, 4]],
   ])(`maps offsets back through %s`, (_desc, html, query, expected) => {
-    const [range, ...rest] = ranges_of(render(html), query)
-    expect(rest).toEqual([])
-    expect(range_bounds(range)).toEqual(expected)
+    expect(ranges_of(render(html), query).map(range_bounds)).toEqual([expected])
   })
 
   // A query without diacritics ignores them; one with diacritics requires them. Ranges
@@ -180,39 +177,33 @@ describe(`search_text`, () => {
     [`only reordered marks`, `\u0301\u0328`, 1],
   ])(`maps %s across canonically reordered combining marks`, (_desc, query, start) => {
     const source = `q\u0301\u0328`
-    const [range] = ranges_of(render(`<p>${source}</p>`), query)
-
-    expect(range_bounds(range)).toEqual([source, start, source, 3])
-    expect(range.toString()).toBe(source.slice(start))
+    expect(ranges_of(render(`<p>${source}</p>`), query).map(range_bounds)).toEqual([
+      [source, start, source, 3],
+    ])
   })
 
   it.each([
-    [`source-formatted markup`, `form submit`, [`form\n  `, 0, `submit`, 6]],
-    [`a padded query`, `  Form   Submit  `, [`form\n  `, 0, `submit`, 6]],
-  ])(`collapses whitespace runs in %s`, (_desc, query, expected) => {
+    [`source-formatted markup`, `form submit`],
+    [`a padded query`, `  Form   Submit  `],
+  ])(`collapses whitespace runs in %s`, (_desc, query) => {
     const root = render(`<p>form\n  <b>submit</b></p>`)
-
-    const ranges = ranges_of(root, query)
-
-    expect(ranges).toHaveLength(1)
-    expect(range_bounds(ranges[0])).toEqual(expected)
+    expect(ranges_of(root, query).map(range_bounds)).toEqual([
+      [`form\n  `, 0, `submit`, 6],
+    ])
   })
 
   it(`reports every non-overlapping hit`, () => {
     const root = render(`<p>aaaa</p><p>aa</p>`)
-    const [first_paragraph, second_paragraph] = root.querySelectorAll(`p`)
-
-    const matches = search_text(root, `aa`)
-
-    expect(matches.map(({ range }) => [range.startOffset, range.endOffset])).toEqual([
-      [0, 2],
-      [2, 4],
-      [0, 2],
+    const [first, second] = root.querySelectorAll(`p`)
+    const hits = search_text(root, `aa`).map(({ element, range }) => [
+      element,
+      range.startOffset,
+      range.endOffset,
     ])
-    expect(matches.map((match) => match.element)).toEqual([
-      first_paragraph,
-      first_paragraph,
-      second_paragraph,
+    expect(hits).toEqual([
+      [first, 0, 2],
+      [first, 2, 4],
+      [second, 0, 2],
     ])
   })
 
@@ -223,9 +214,7 @@ describe(`search_text`, () => {
     const root = render(`<p>${texts.map((text) => `<b>${text}</b>`).join(``)}</p>`)
 
     // `ba` straddles every boundary between consecutive nodes and nowhere else
-    const ranges = ranges_of(root, `ba`)
-
-    expect(ranges.map(range_bounds)).toEqual(
+    expect(ranges_of(root, `ba`).map(range_bounds)).toEqual(
       texts.slice(0, -1).map((text, idx) => [text, text.length - 1, texts[idx + 1], 1]),
     )
   })
@@ -267,11 +256,8 @@ describe(`search_text`, () => {
 
   it(`creates ranges from the root's own document`, () => {
     const other_doc = document.implementation.createHTMLDocument(`other`)
-    other_doc.body.innerHTML = `<main><p>Hello <b>wo</b>rld</p></main>`
-    const root = other_doc.body.firstElementChild
-    if (!root) throw new Error(`fixture has no root element`)
-
-    const ranges = ranges_of(root, `world`)
+    other_doc.body.innerHTML = `<p>Hello <b>wo</b>rld</p>`
+    const ranges = ranges_of(other_doc.body, `world`)
     expect(ranges).toHaveLength(1)
     expect(ranges[0].startContainer.ownerDocument).toBe(other_doc)
   })
@@ -290,8 +276,7 @@ describe(`highlight_ranges`, () => {
     if (!(highlight instanceof globalThis.Highlight)) {
       throw new Error(`no highlight installed for ${css_class}, got ${highlight}`)
     }
-    const { ranges } = highlight as unknown as { ranges: Range[] }
-    return ranges
+    return (highlight as unknown as { ranges: Range[] }).ranges
   }
 
   const search = (html: string, query: string): Range[] => ranges_of(render(html), query)
@@ -431,38 +416,34 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
     node.append(document.createElement(`span`))
     await vi.advanceTimersByTimeAsync(advance_ms)
   }
-
-  it(`collapses a burst of mutations into one call`, async () => {
+  const observe = (options: TextMutationOptions) => {
     const root = render(`<p>content</p>`)
     const on_mutation = vi.fn()
-    const stop = observe_text_mutations(root, on_mutation, { debounce_ms: 50 })
+    const stop = observe_text_mutations(root, on_mutation, options)
+    onTestFinished(stop)
+    return { root, on_mutation, stop }
+  }
+
+  it(`collapses a burst of mutations into one call`, async () => {
+    const { root, on_mutation } = observe({ debounce_ms: 50 })
 
     for (let idx = 0; idx < 3; idx++) await mutate(root, 20)
     expect(on_mutation).not.toHaveBeenCalled()
 
     await vi.advanceTimersByTimeAsync(50)
     expect(on_mutation).toHaveBeenCalledTimes(1)
-    stop()
   })
 
   it(`fires at the max wait ceiling during a sustained burst`, async () => {
-    const root = render(`<p>content</p>`)
-    const on_mutation = vi.fn()
-    const stop = observe_text_mutations(root, on_mutation, {
-      debounce_ms: 50,
-      max_wait_ms: 120,
-    })
+    const { root, on_mutation } = observe({ debounce_ms: 50, max_wait_ms: 120 })
 
     // without the max_wait ceiling these 6 x 20 ms steps would keep resetting the debounce
     for (let idx = 0; idx < 6; idx++) await mutate(root, 20)
     expect(on_mutation).toHaveBeenCalledTimes(1)
-    stop()
   })
 
   it(`stops observing and cancels a pending call after cleanup`, async () => {
-    const root = render(`<p>content</p>`)
-    const on_mutation = vi.fn()
-    const stop = observe_text_mutations(root, on_mutation, { debounce_ms: 50 })
+    const { root, on_mutation, stop } = observe({ debounce_ms: 50 })
 
     await mutate(root, 10)
     stop()
@@ -503,16 +484,21 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
 describe(`create_search_jump`, () => {
   beforeEach(() => vi.useFakeTimers())
 
+  // stubs scrollIntoView on each top-level element so its calls can be asserted
+  const render_spied = (html: string) =>
+    Array.from(render(html).children, (element) =>
+      Object.assign(element, { scrollIntoView: vi.fn() }),
+    )
+  const marked = (class_name = `search-match-jump`) =>
+    Array.from(document.querySelectorAll(`.${class_name}`), (node) => node.textContent)
+
   it(`marks and scrolls the target, then clears itself`, () => {
-    const root = render(`<p>first</p><p>second</p>`)
-    const [first, second] = Array.from(root.querySelectorAll(`p`))
-    first.scrollIntoView = vi.fn()
-    second.scrollIntoView = vi.fn()
+    const [first, second] = render_spied(`<p>first</p><p>second</p>`)
     const on_clear = vi.fn()
     const jump = create_search_jump({ duration_ms: 500, on_clear })
 
     jump.start(first)
-    expect(first.classList.contains(`search-match-jump`)).toBe(true)
+    expect(marked()).toEqual([`first`])
     expect(first.scrollIntoView).toHaveBeenCalledExactlyOnceWith({
       block: `center`,
       inline: `nearest`,
@@ -520,63 +506,53 @@ describe(`create_search_jump`, () => {
 
     // a second jump unmarks the previous element without reporting a clear
     jump.start(second)
-    expect(first.classList.contains(`search-match-jump`)).toBe(false)
-    expect(second.classList.contains(`search-match-jump`)).toBe(true)
+    expect(marked()).toEqual([`second`])
     expect(on_clear).not.toHaveBeenCalled()
 
     vi.advanceTimersByTime(500)
-    expect(second.classList.contains(`search-match-jump`)).toBe(false)
+    expect(marked()).toEqual([])
     expect(on_clear).toHaveBeenCalledTimes(1)
   })
 
   it(`clear() always notifies, removes the mark early, and cancels the timeout`, () => {
-    const root = render(`<p>first</p>`)
-    const paragraph = doc_query(`p`)
-    paragraph.scrollIntoView = vi.fn()
+    const [paragraph] = render_spied(`<p>first</p>`)
     const on_clear = vi.fn()
     const jump = create_search_jump({ class_name: `flash`, on_clear })
 
     jump.clear()
     expect(on_clear).toHaveBeenCalledOnce()
     jump.start(paragraph)
+    expect(marked(`flash`)).toEqual([`first`])
     jump.clear()
-    expect(paragraph.classList.contains(`flash`)).toBe(false)
+    expect(marked(`flash`)).toEqual([])
     expect(on_clear).toHaveBeenCalledTimes(2)
 
     vi.advanceTimersByTime(5000)
     expect(on_clear).toHaveBeenCalledTimes(2)
-    expect(root.querySelector(`.flash`)).toBeNull()
   })
 
   it.each([
     [`a separate scroll target`, true, false],
     [`scrolling disabled`, false, true],
   ])(`supports %s`, (_desc, use_scroll_target, disable_scroll) => {
-    render(`<p id="match">first</p><section id="wrapper"></section>`)
-    const [match, wrapper] = [doc_query(`#match`), doc_query(`#wrapper`)]
-    match.scrollIntoView = vi.fn()
-    wrapper.scrollIntoView = vi.fn()
-    const jump = create_search_jump()
+    const [match, wrapper] = render_spied(`<p>first</p><section></section>`)
 
-    jump.start(match, {
+    create_search_jump().start(match, {
       scroll_target: use_scroll_target ? wrapper : undefined,
       scroll: disable_scroll ? false : { block: `start` },
     })
 
     // the class always lands on the match, never on the scroll target
-    expect(match.classList.contains(`search-match-jump`)).toBe(true)
-    expect(wrapper.classList.contains(`search-match-jump`)).toBe(false)
+    expect(marked()).toEqual([`first`])
     expect(match.scrollIntoView).not.toHaveBeenCalled()
     expect(wrapper.scrollIntoView).toHaveBeenCalledTimes(use_scroll_target ? 1 : 0)
   })
 
   it(`tolerates a null element`, () => {
     const on_clear = vi.fn()
-    const jump = create_search_jump({ on_clear })
-
-    jump.start(null)
+    create_search_jump({ on_clear }).start(null)
     vi.advanceTimersByTime(2000)
-    expect(document.querySelector(`.search-match-jump`)).toBeNull()
+    expect(marked()).toEqual([])
     expect(on_clear).toHaveBeenCalledOnce() // a jump to nothing still ends like any other
   })
 })

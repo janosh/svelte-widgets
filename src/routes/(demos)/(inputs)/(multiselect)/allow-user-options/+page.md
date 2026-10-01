@@ -57,20 +57,6 @@
   let selected_append: string[] = $state(['Haskell', 'TypeScript'])
 </script>
 
-{#snippet language_option(option: string, idx?: number, style?: string)}
-  {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
-    <img
-      src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
-      alt={option}
-      style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
-      onerror={(event) => (event.currentTarget.hidden = true)}
-    />
-    {option}
-  </span>
-{/snippet}
-
 <MultiSelect
   options={languages}
   allow_user_options="append"
@@ -79,7 +65,16 @@
     `Add '${search_text}' (${options.length} languages available)`}
 >
   {#snippet children({ option })}
-    {@render language_option(option)}
+    {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
+    <span style="display: inline-flex; align-items: center; gap: 5pt">
+      <img
+        src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
+        alt={option}
+        style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
+        onerror={(event) => (event.currentTarget.hidden = true)}
+      />
+      {option}
+    </span>
   {/snippet}
 </MultiSelect>
 
@@ -97,7 +92,7 @@ You can start with no options and let users populate MultiSelect from scratch. I
   let selected: string[] = $state([])
 </script>
 
-{#if selected?.length > 0}
+{#if selected.length > 0}
   <pre><code>selected = {JSON.stringify(selected)}</code></pre>
 {/if}
 

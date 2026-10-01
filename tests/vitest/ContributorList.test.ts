@@ -1,7 +1,7 @@
 import ContributorList from '$lib/ContributorList.svelte'
-import { type ComponentProps, mount, tick } from 'svelte'
+import type { ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, hover } from './index'
+import { doc_query, hover, render } from './index'
 
 describe(`ContributorList`, () => {
   const contributors = [`janosh`, `octocat`].map((login, idx) => ({
@@ -9,17 +9,12 @@ describe(`ContributorList`, () => {
     avatar_url: `https://avatars.gh/${idx + 1}`,
     html_url: `https://gh/${login}`,
   }))
-  // attachments are applied in an effect, so the tooltip isn't live until a flush
-  const mount_list = async (
-    props: Partial<ComponentProps<typeof ContributorList>> = {},
-  ) => {
-    mount(ContributorList, { target: document.body, props: { contributors, ...props } })
-    await tick()
-  }
+  const mount_list = (props: Partial<ComponentProps<typeof ContributorList>> = {}) =>
+    render(ContributorList, { contributors, ...props })
   beforeEach(() => vi.useFakeTimers())
 
-  test(`renders one linked avatar per contributor`, async () => {
-    await mount_list()
+  test(`renders one linked avatar per contributor`, () => {
+    mount_list()
 
     const links = Array.from(document.querySelectorAll<HTMLAnchorElement>(`ul li a`))
     const avatars = Array.from(document.querySelectorAll<HTMLImageElement>(`ul li img`))
@@ -40,8 +35,8 @@ describe(`ContributorList`, () => {
     expect([alt, width, height, loading]).toEqual([``, 60, 60, `lazy`])
   })
 
-  test(`hovering an avatar shows its login with tooltip_options applied`, async () => {
-    await mount_list({ tooltip_options: { show_arrow: false, style: `color: teal` } })
+  test(`hovering an avatar shows its login with tooltip_options applied`, () => {
+    mount_list({ tooltip_options: { show_arrow: false, style: `color: teal` } })
     expect(document.querySelector(`.custom-tooltip`)).toBeNull()
 
     hover(doc_query(`ul li:last-child a`))
@@ -52,8 +47,8 @@ describe(`ContributorList`, () => {
   })
 
   // sizing only the width would leave the 60px height attribute, i.e. an oval avatar
-  test(`--contributor-avatar-size drives both avatar dimensions`, async () => {
-    await mount_list({ style: `--contributor-avatar-size: 40px` })
+  test(`--contributor-avatar-size drives both avatar dimensions`, () => {
+    mount_list({ style: `--contributor-avatar-size: 40px` })
 
     const { width, height, borderRadius } = getComputedStyle(doc_query(`ul li img`))
     expect([width, height, borderRadius]).toEqual([`40px`, `40px`, `50%`])

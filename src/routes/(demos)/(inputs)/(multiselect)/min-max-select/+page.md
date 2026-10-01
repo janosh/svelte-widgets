@@ -14,20 +14,6 @@
   let max_msg: string | null = $state(null)
 </script>
 
-{#snippet language_option(option: string, idx?: number, style?: string)}
-  {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
-  <span style={`display: inline-flex; align-items: center; gap: 5pt; ${style ?? ``}`}>
-    {#if idx !== undefined}<strong>{idx + 1}</strong>{/if}
-    <img
-      src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
-      alt={option}
-      style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
-      onerror={(event) => (event.currentTarget.hidden = true)}
-    />
-    {option}
-  </span>
-{/snippet}
-
 <MultiSelect
   options={languages}
   max_select={5}
@@ -37,7 +23,16 @@
   on_max_reached={() => (max_msg = `Maximum of 5 reached!`)}
 >
   {#snippet children({ option })}
-    {@render language_option(option)}
+    {@const language = option.toLowerCase().replaceAll(`+`, `plus`).replace(`#`, `sharp`)}
+    <span style="display: inline-flex; align-items: center; gap: 5pt">
+      <img
+        src={`https://cdn.jsdelivr.net/gh/devicons/devicon/icons/${language}/${language}-original.svg`}
+        alt={option}
+        style={`height: 20px; ${option === `Rust` ? `filter: invert(1)` : ``}`}
+        onerror={(event) => (event.currentTarget.hidden = true)}
+      />
+      {option}
+    </span>
   {/snippet}
 </MultiSelect>
 
@@ -108,15 +103,7 @@ Use `select_all_option` to add a "Select all" button at the top of the dropdown.
 <script lang="ts">
   import { MultiSelect } from 'svelte-widgets'
 
-  const fruits: string[] = [
-    `Apple`,
-    `Banana`,
-    `Cherry`,
-    `Date`,
-    `Elderberry`,
-    `Fig`,
-    `Grape`,
-  ]
+  const fruits: string[] = `Apple Banana Cherry Date Elderberry Fig Grape`.split(` `)
   let selected: string[] = $state([])
 </script>
 
@@ -204,17 +191,9 @@ Use `mode="single"` with a scalar `value` to initialize single selection. String
   import { MultiSelect } from 'svelte-widgets'
   import type { ObjectOption } from 'svelte-widgets'
 
-  const red_pill = `🔴 Red Pill`
-  const blue_pill = `🔵 Blue Pill`
   const options: ObjectOption[] = [
-    {
-      label: red_pill,
-      value: `red pill`,
-    },
-    {
-      label: blue_pill,
-      value: `blue pill`,
-    },
+    { label: `🔴 Red Pill`, value: `red pill` },
+    { label: `🔵 Blue Pill`, value: `blue pill` },
   ]
 
   let value: ObjectOption | null = $state(options[0])

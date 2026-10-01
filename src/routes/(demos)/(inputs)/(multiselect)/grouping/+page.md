@@ -287,32 +287,4 @@ Use the `group_header` snippet for complete control over header rendering:
 
 ## Props Reference
 
-| Prop                                | Type                              | Default   | Description                              |
-| ----------------------------------- | --------------------------------- | --------- | ---------------------------------------- |
-| `collapsible_groups`                | `boolean`                         | `false`   | Enable click-to-collapse groups          |
-| `collapsed_groups`                  | `Set<string>`                     | `new Set` | Bindable set of collapsed group names    |
-| `group_select_all`                  | `boolean`                         | `false`   | Add select/deselect all button per group |
-| `ungrouped_position`                | `'first' \| 'last'`               | `'first'` | Where to render ungrouped options        |
-| `group_sort_order`                  | `'none' \| 'asc' \| 'desc' \| fn` | `'none'`  | Sort groups alphabetically or custom     |
-| `search_expands_collapsed_groups`   | `boolean`                         | `false`   | Auto-expand when search matches          |
-| `search_matches_groups`             | `boolean`                         | `false`   | Include group name in search matching    |
-| `keyboard_expands_collapsed_groups` | `boolean`                         | `false`   | Auto-expand on arrow key navigation      |
-| `sticky_group_headers`              | `boolean`                         | `false`   | Keep headers visible when scrolling      |
-| `li_group_header_class`             | `string`                          | `''`      | CSS class for group header `<li>`        |
-| `li_group_header_style`             | `string \| null`                  | `null`    | Inline style for group headers           |
-| `group_header`                      | `Snippet`                         | —         | Custom group header rendering            |
-| `collapse_all_groups`               | `() => void`                      | —         | Bindable function to collapse all        |
-| `expand_all_groups`                 | `() => void`                      | —         | Bindable function to expand all          |
-| `on_group_toggle`                   | `fn`                              | —         | Callback when group toggled              |
-
-### CSS Variables
-
-| Variable                         | Default                  | Description      |
-| -------------------------------- | ------------------------ | ---------------- |
-| `--sms-group-header-font-weight` | `600`                    | Font weight      |
-| `--sms-group-header-font-size`   | `0.9em`                  | Font size        |
-| `--sms-group-header-color`       | `light-dark(#666, #aaa)` | Text color       |
-| `--sms-group-header-bg`          | `transparent`            | Background       |
-| `--sms-group-header-padding`     | `2pt 1ex`                | Padding          |
-| `--sms-group-header-hover-bg`    | `light-dark(...)`        | Hover background |
-| `--sms-group-item-padding-left`  | `1.5ex`                  | Option indent    |
+See [Grouping Props](multiselect#grouping-props) for every grouping prop and callback, and [CSS variables](multiselect#with-css-variables) for the `--sms-group-*` styling hooks.

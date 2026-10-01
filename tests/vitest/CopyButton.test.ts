@@ -3,7 +3,7 @@ import { Alert, Check, Copy } from '$lib/icons'
 import { COPY_BUTTON_LABELS } from '$lib/labels'
 import type { ComponentProps } from 'svelte'
 import { tick } from 'svelte'
-import { fromStore, get, writable } from 'svelte/store'
+import { fromStore, writable } from 'svelte/store'
 import { beforeEach, expect, test, vi } from 'vite-plus/test'
 import { click, doc_query, render, press_key } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
@@ -224,27 +224,6 @@ test(`unmount clears outstanding reset timer`, async () => {
 
 // $state is unavailable here (file isn't Svelte-compiled), so a fromStore getter/setter
 // pair stands in for a parent's bind:state
-type CopyState = `ready` | `success` | `error`
-
-const mount_bound_copy_button = () => {
-  const state_store = writable<CopyState>(`ready`)
-  const state_proxy = fromStore(state_store)
-  render(CopyButton, {
-    content: `bound content`,
-    as: `div`,
-    labels: default_labels,
-    icons: default_icons,
-    reset_ms: 0,
-    get state() {
-      return state_proxy.current
-    },
-    set state(new_state: CopyState) {
-      state_store.set(new_state)
-    },
-  })
-  return { copy_button: doc_query(`[data-sms-copy]`), state_store }
-}
-
 test.each([
   [`success`, null, Check],
   [`error`, new Error(`clipboard failed`), Alert],
@@ -253,14 +232,24 @@ test.each([
   async (expected_state, rejection, icon) => {
     vi.spyOn(console, `error`).mockImplementation(() => void 0)
     if (rejection) mock_write_text.mockRejectedValue(rejection)
-
-    const { copy_button, state_store } = mount_bound_copy_button()
+    const bound = fromStore(writable<`ready` | `success` | `error`>(`ready`))
+    render(CopyButton, {
+      content: `bound content`,
+      reset_ms: 0,
+      get state() {
+        return bound.current
+      },
+      set state(new_state) {
+        bound.current = new_state
+      },
+    })
+    const copy_button = doc_query(`[data-sms-copy]`)
     await click(copy_button)
-    expect(get(state_store)).toBe(expected_state)
+    expect(bound.current).toBe(expected_state)
     expect(icon_path(copy_button)).toBe(icon.d)
 
     // external write back to idle flows into the component and restores the Copy icon
-    state_store.set(`ready`)
+    bound.current = `ready`
     await tick()
     expect(icon_path(copy_button)).toBe(Copy.d)
   },

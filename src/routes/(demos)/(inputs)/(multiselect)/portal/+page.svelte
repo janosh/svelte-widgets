@@ -1,7 +1,6 @@
 <script lang="ts">
   import Heading from '$lib/Heading.svelte'
   import { MultiSelect } from 'svelte-widgets'
-  import { get_label } from 'svelte-widgets/utils'
   import { languages, octicons } from '$site/options'
 
   let open_modal = $state(false)
@@ -86,8 +85,8 @@
         portal={{ active: true }}
         placeholder="Choose octicons..."
       />
-      <p>Selected Languages: {selected_languages.map(get_label).join(`, `) || `None`}</p>
-      <p>Selected Octicons: {selected_octicons.map(get_label).join(`, `) || `None`}</p>
+      <p>Selected Languages: {selected_languages.join(`, `) || `None`}</p>
+      <p>Selected Octicons: {selected_octicons.join(`, `) || `None`}</p>
       <button onclick={close_modal}>Close Modal</button>
     </div>
   </div>

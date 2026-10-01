@@ -1,13 +1,8 @@
 ## Masonry
 
-A masonry grid that balances items across as many columns as the container can fit. It
-measures each item, so rows of uneven height pack tightly instead of leaving the gaps a
-plain CSS grid would.
+A masonry grid that balances items across as many columns as the container can fit. It measures each item, so rows of uneven height pack tightly instead of leaving the gaps a plain CSS grid would.
 
-`order` decides how items land in columns. `balanced-stable` (the default) sends each new
-item to the shortest column and never moves one that is already placed, which is what you
-want for feeds that append. `balanced` re-packs everything on every change for the
-tightest result, at the cost of items jumping around.
+`order` decides how items land in columns. `balanced-stable` (the default) sends each new item to the shortest column and never moves one that is already placed, which is what you want for feeds that append. `balanced` re-packs everything on every change for the tightest result, at the cost of items jumping around.
 
 ```svelte example id="masonry-basic"
 <script lang="ts">
@@ -49,8 +44,7 @@ tightest result, at the cost of items jumping around.
 
 ### Virtualization
 
-Set `virtualize` with a `height` to render only the items near the viewport. Useful past a
-few hundred items, where the DOM node count starts to cost more than the measuring does.
+Set `virtualize` with a `height` to render only the items near the viewport. Useful past a few hundred items, where the DOM node count starts to cost more than the measuring does.
 
 ```svelte example id="masonry-virtualized"
 <script lang="ts">
@@ -104,7 +98,4 @@ few hundred items, where the DOM node count starts to cost more than the measuri
 </Masonry>
 ```
 
-Two things change while virtualizing, because off-screen items are never measured:
-`order` is forced to `row-first`, and the FLIP animation is switched off. Scroll position
-is driven entirely by `get_estimated_height` (default 150px), so the closer that is to your
-real item heights, the better the scrollbar behaves.
+Two things change while virtualizing, because off-screen items are never measured: `order` is forced to `row-first`, and the FLIP animation is switched off. Scroll position is driven entirely by `get_estimated_height` (default 150px), so the closer that is to your real item heights, the better the scrollbar behaves.

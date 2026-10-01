@@ -51,6 +51,8 @@
     children?: Snippet
     labels?: Partial<NumberRangeInputLabels>
   } & Omit<HTMLAttributes<HTMLLabelElement>, `title`> = $props()
+  const domain = $derived(create_range_scale(min, max, scale))
+  const log_step = $derived(step === `any` ? (domain.max - domain.min) / 100 : step)
   // A range input with invalid min/max silently defaults to 0-100 while the number input stays
   // unbounded, so one slider touch clamps and writes back a value the caller never limited.
   $effect(() => {
@@ -64,10 +66,6 @@
         `NumberRangeInput needs finite min <= max and positive step or "any", got min=${min}, max=${max}, step=${step}`,
       )
     }
-  })
-  const domain = $derived(create_range_scale(min, max, scale))
-  const log_step = $derived(step === `any` ? (domain.max - domain.min) / 100 : step)
-  $effect(() => {
     if (scale !== `log`) return
     domain.validate_step(log_step, `NumberRangeInput`)
     if (value !== undefined && (!Number.isFinite(value) || value < min || value > max)) {
@@ -141,13 +139,7 @@
             ? input.valueAsNumber
             : (value ?? min)
       const bounded = Math.max(min, Math.min(max, baseline))
-      next = step_range_coordinate(
-        bounded,
-        domain,
-        log_step,
-        Math.sign(action),
-        Math.abs(action),
-      )
+      next = step_range_coordinate(bounded, domain, log_step, action)
     }
     event.preventDefault()
     input.value = String(input.type === `range` ? next : domain.from_position(next))

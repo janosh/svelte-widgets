@@ -254,26 +254,6 @@
   )
   const ghost_map = $derived(diff_map ? build_ghost_map(diff_map, root_label) : new Map())
 
-  function show_context_menu(
-    event: MouseEvent,
-    path: string,
-    ctx_value: unknown,
-    expandable: boolean,
-    is_collapsed: boolean,
-  ): void {
-    if (ui.node_actions === false) return
-    event.preventDefault()
-    event.stopPropagation() // ancestors would otherwise re-target the menu to themselves
-    context_menu_state = {
-      x: event.clientX,
-      y: event.clientY,
-      path,
-      value: ctx_value,
-      expandable,
-      is_collapsed,
-    }
-  }
-
   function toggle_pin(path: string): void {
     if (!pinned_paths.delete(path)) pinned_paths.add(path)
   }
@@ -368,7 +348,19 @@
     copy_value: (path, val, event) =>
       copy_to_clipboard(path, serialize_for_copy(val), event),
     copy_path: (path, event) => copy_to_clipboard(path, path, event),
-    show_context_menu,
+    show_context_menu: (event, path, ctx_value, expandable, is_collapsed) => {
+      if (ui.node_actions === false) return
+      event.preventDefault()
+      event.stopPropagation() // ancestors would otherwise re-target the menu to themselves
+      context_menu_state = {
+        x: event.clientX,
+        y: event.clientY,
+        path,
+        value: ctx_value,
+        expandable,
+        is_collapsed,
+      }
+    },
     get on_change() {
       return on_change
     },

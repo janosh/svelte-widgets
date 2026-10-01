@@ -48,22 +48,18 @@ const finite_rgba = (rgb: Triple, alpha: number): Rgba | null => {
   return parsed.every(Number.isFinite) ? parsed : null
 }
 
-const HUE_PER_UNIT: Record<string, number> = {
-  deg: 1,
-  grad: 0.9,
-  rad: 180 / Math.PI,
-  turn: 360,
-}
-// longest suffix first, so `grad` is never read as the `rad` it ends with (declaration
-// order would work too, until someone alphabetizes the object)
-const HUE_UNITS = Object.keys(HUE_PER_UNIT).toSorted(
-  (one, two) => two.length - one.length,
-)
+// degrees per hue unit; `grad` comes first so it is never read as the `rad` it ends with
+const HUE_UNITS = [
+  [`grad`, 0.9],
+  [`turn`, 360],
+  [`deg`, 1],
+  [`rad`, 180 / Math.PI],
+] as const
 const parse_hue = (token: string): number => {
   const lower = token.toLowerCase()
-  const unit = HUE_UNITS.find((suffix) => lower.endsWith(suffix))
-  const value = parse_component(unit ? lower.slice(0, -unit.length) : lower, 360)
-  return value * (unit ? HUE_PER_UNIT[unit] : 1)
+  const [unit = ``, degrees = 1] =
+    HUE_UNITS.find(([suffix]) => lower.endsWith(suffix)) ?? []
+  return parse_component(lower.slice(0, lower.length - unit.length), 360) * degrees
 }
 
 // Sign-preserving, so an out-of-gamut channel keeps its order instead of folding

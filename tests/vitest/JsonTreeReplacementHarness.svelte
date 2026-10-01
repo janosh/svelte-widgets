@@ -7,34 +7,19 @@
   let rest: Partial<ComponentProps<typeof JsonTree>> = $props()
 
   let value = $state<Record<string, Record<string, string>>>({
-    nested: {
-      stale: `old`,
-      findme: `old`,
-    },
+    nested: { stale: `old`, findme: `old` },
   })
   let collapsed_paths = $state(new SvelteSet<string>())
+  // Buttons the tests click by data-testid
+  const actions: Record<string, () => void> = {
+    'replace-json': () => (value = { nested: { fresh: `new`, findme: `new` } }),
+    'replace-flat-json': () => (value = { other: { fresh: `new` } }),
+    'mutate-leaf': () => (value.nested.findme = `mutated`),
+  }
 </script>
 
-<button
-  type="button"
-  data-testid="replace-json"
-  onclick={() => (value = { nested: { fresh: `new`, findme: `new` } })}
->
-  Replace JSON
-</button>
-<button
-  type="button"
-  data-testid="replace-flat-json"
-  onclick={() => (value = { other: { fresh: `new` } })}
->
-  Replace Flat JSON
-</button>
-<button
-  type="button"
-  data-testid="mutate-leaf"
-  onclick={() => (value.nested.findme = `mutated`)}
->
-  Mutate Leaf
-</button>
+{#each Object.entries(actions) as [testid, onclick] (testid)}
+  <button type="button" data-testid={testid} {onclick}>{testid}</button>
+{/each}
 <span data-testid="collapsed-count">{collapsed_paths.size}</span>
 <JsonTree {...rest} {value} bind:collapsed_paths default_fold_level={5} />

@@ -19,11 +19,10 @@ export function get_page_background(
   fallback_light = `#ffffff`,
 ): string {
   if (typeof document === `undefined`) return ``
-  const page_bg = get_bg_color(document.body)
-  if (page_bg) return page_bg
-  return matchMedia(`(prefers-color-scheme: dark)`).matches
-    ? fallback_dark
-    : fallback_light
+  return (
+    get_bg_color(document.body) ||
+    (matchMedia(`(prefers-color-scheme: dark)`).matches ? fallback_dark : fallback_light)
+  )
 }
 
 // Two-way sync between a bindable `fullscreen` flag and the browser's fullscreen state,
@@ -34,9 +33,8 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
   function reconcile(wrapper: HTMLElement): void {
     if (options.get_wrapper() !== wrapper) return
     const entering = options.get_fullscreen()
-    if (entering !== (document.fullscreenElement === wrapper)) {
+    if (entering !== (document.fullscreenElement === wrapper))
       void request_fullscreen(wrapper, entering)
-    }
   }
 
   async function request_fullscreen(
@@ -88,14 +86,10 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
       const is_fullscreen = document.fullscreenElement === wrapper
       const request_settling =
         pending_request?.wrapper === wrapper && pending_request.entering === is_fullscreen
-      if (request_settling) {
-        pending_request = null
-        if (is_fullscreen !== options.get_fullscreen()) {
-          reconcile(wrapper)
-          return
-        }
-      }
+      if (request_settling) pending_request = null
       if (is_fullscreen === options.get_fullscreen()) return
+      // the flag moved on while our own request was in flight: follow the flag
+      if (request_settling) return reconcile(wrapper)
       options.set_fullscreen(is_fullscreen)
       options.on_change?.(is_fullscreen)
     }

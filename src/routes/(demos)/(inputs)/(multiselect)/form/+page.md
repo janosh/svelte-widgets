@@ -12,24 +12,16 @@ This example shows the JavaScript way of handling MultiSelect fields in form sub
       ` `,
     )
 
-  async function handle_submit(event: SubmitEvent): Promise<void> {
+  let form_data: FormData | undefined = $state()
+  // the key under which selected options are stored in FormData
+  const name = 'martian-flag'
+
+  function handle_submit(event: SubmitEvent): void {
     event.preventDefault()
     // use bind:this={form} or event.target as arg to new FormData()
     form_data = new FormData(event.target as HTMLFormElement)
   }
-  let form_data: FormData | undefined
-  // the key under which selected options are stored in FormData
-  const name = 'martian-flag'
 </script>
-
-{#snippet color_option(option: string, idx?: number)}
-  <span style="display: inline-flex; align-items: center; gap: 5pt">
-    {#if idx !== undefined}{idx + 1}{/if}
-    <span style={`background: ${option}; width: 1em; height: 1em; border-radius: 2pt`}
-    ></span>
-    {option}
-  </span>
-{/snippet}
 
 <form onsubmit={handle_submit}>
   <label for="colors">
@@ -43,7 +35,12 @@ This example shows the JavaScript way of handling MultiSelect fields in form sub
     required={2}
   >
     {#snippet children({ idx, option })}
-      {@render color_option(option, idx)}
+      <span style="display: inline-flex; align-items: center; gap: 5pt">
+        {idx + 1}
+        <span style={`background: ${option}; width: 1em; height: 1em; border-radius: 2pt`}
+        ></span>
+        {option}
+      </span>
     {/snippet}
   </MultiSelect>
   <button>Submit</button>

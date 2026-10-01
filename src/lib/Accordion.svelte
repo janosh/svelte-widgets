@@ -48,21 +48,14 @@
   }
 
   function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
-    const root = event.currentTarget
-    const { target } = event
-    // A nested accordion's own root claims its triggers, so the outer root ignores them.
-    if (
-      !(target instanceof HTMLButtonElement) ||
-      !target.classList.contains(`accordion-trigger`) ||
-      target.closest(`.accordion`) !== root
-    )
-      return
+    // Only this root's own triggers navigate: keys from panel content and from a nested
+    // accordion's triggers (claimed by that inner root) are ignored.
     const buttons = [
-      ...root.querySelectorAll<HTMLButtonElement>(
+      ...event.currentTarget.querySelectorAll<HTMLButtonElement>(
         `:scope > .accordion-item > .accordion-heading > button.accordion-trigger:not(:disabled)`,
       ),
     ]
-    step_focus(event, buttons)
+    if (buttons.some((button) => button === event.target)) step_focus(event, buttons)
   }
 </script>
 

@@ -12,13 +12,7 @@ export const TOAST_PRIORITIES = [
 
 export type ToastPriority = (typeof TOAST_PRIORITIES)[number]
 export type ToastLifecycleReason = `action` | `dismiss` | `overflow` | `timeout`
-export type ToastPosition =
-  | `top-left`
-  | `top-center`
-  | `top-right`
-  | `bottom-left`
-  | `bottom-center`
-  | `bottom-right`
+export type ToastPosition = `${`top` | `bottom`}-${`left` | `center` | `right`}`
 
 // Rank is array position: later priorities preempt earlier ones. The ladder is per queue
 // and everything here is generic over it, so consumers can name their own tiers. Throws

@@ -116,12 +116,10 @@
       event.preventDefault()
       if (expandable) toggle_collapse()
       else ctx.copy_value(path, value)
-    } else if (event.key === `ArrowRight`) {
+    } else if (event.key === `ArrowRight` || event.key === `ArrowLeft`) {
       event.preventDefault()
-      if (expandable && is_collapsed) toggle_collapse()
-    } else if (event.key === `ArrowLeft`) {
-      event.preventDefault()
-      if (expandable && !is_collapsed) toggle_collapse()
+      // Right unfolds a collapsed node, Left folds an expanded one
+      if (expandable && is_collapsed === (event.key === `ArrowRight`)) toggle_collapse()
     } else if (event.key.toLowerCase() === `c` && (event.ctrlKey || event.metaKey)) {
       // When nodes are selected, let the tree-level handler do bulk copy
       if (ctx.selected_paths.size) return

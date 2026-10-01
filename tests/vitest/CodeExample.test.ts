@@ -38,8 +38,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   toggle_button.click()
   await tick()
 
-  const { overflowX, overflowY } = getComputedStyle(doc_query(`pre.open`))
-  expect([overflowX, overflowY]).toEqual([`auto`, `auto`])
+  expect(getComputedStyle(doc_query(`pre.open`)).overflow).toBe(`auto`)
   expect(doc_query(`pre.open > code`).textContent).toBe(src)
   expect(toggle_label()).toBe(`Close`)
   expect(onclick).toHaveBeenCalledOnce()

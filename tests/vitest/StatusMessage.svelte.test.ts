@@ -28,33 +28,30 @@ test.each([
   },
 )
 
-test(`dismissible button clears the bound message`, () => {
+test(`follows message and label updates, and dismissing clears the bound message`, () => {
   const props = $state<ComponentProps<typeof StatusMessage>>({
-    message: `Test message`,
+    message: `Saving`,
     dismissible: true,
-    dismiss_label: `Close status`,
   })
   render(StatusMessage, props)
-  const button = doc_query(`.status-message button[aria-label="Close status"]`)
-  expect(button.textContent?.trim()).toBe(`✕`)
-  expect(button.getAttribute(`type`)).toBe(`button`)
+  const button = doc_query(`.status-message button[aria-label="Dismiss message"]`)
+  expect([button.textContent?.trim(), button.getAttribute(`type`)]).toEqual([
+    `✕`,
+    `button`,
+  ])
+  props.message = `Saved`
+  props.dismiss_label = `Close status`
+  flushSync()
+  expect(doc_query(`.status-message`).textContent).toContain(`Saved`)
+  expect(button.getAttribute(`aria-label`)).toBe(`Close status`)
   button.click()
   flushSync()
   expect(props.message).toBeUndefined()
   expect(document.querySelector(`.status-message`)).toBeNull()
-})
-
-test(`follows message updates and defaults the dismiss label`, () => {
-  const props = $state({ message: `Saving`, dismissible: true })
-  render(StatusMessage, props)
-  const message_div = doc_query(`.status-message`)
-  expect(message_div.querySelector(`button`)?.getAttribute(`aria-label`)).toBe(
-    `Dismiss message`,
-  )
-  props.message = `Saved`
+  props.message = `Back`
   flushSync()
-  expect(message_div.textContent).toContain(`Saved`)
-  props.message = ``
+  expect(document.querySelector(`.status-message`)).not.toBeNull()
+  props.message = `` // an empty message hides it too
   flushSync()
   expect(document.querySelector(`.status-message`)).toBeNull()
 })

@@ -1,6 +1,7 @@
 import {
   claim_escape,
   composed_parent,
+  focusable,
   is_focus_available,
   register_trap_layer,
 } from './shared'
@@ -42,19 +43,15 @@ export const tabbable_selector = [
   `[tabindex]`,
 ].join(`,`)
 
-// Selector matches can include SVG anchors; only these two element types expose focus().
-const is_focusable = (element: unknown): element is HTMLElement | SVGElement =>
-  element instanceof HTMLElement || element instanceof SVGElement
-
 const candidate_tab_index = (element: Element) =>
   Number(element.getAttribute(`tabindex`) ?? 0)
 const candidate_order = (element: Element) =>
   candidate_tab_index(element) || Number.MAX_SAFE_INTEGER
 
-const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement => {
-  if (!is_focusable(element) || candidate_tab_index(element) < 0) return false
-  return is_focus_available(element)
-}
+const is_tab_candidate = (element: Element): element is HTMLElement | SVGElement =>
+  focusable(element) !== null &&
+  candidate_tab_index(element) >= 0 &&
+  is_focus_available(element)
 
 const is_named_radio = (element: Element): element is HTMLInputElement =>
   element instanceof HTMLInputElement && element.type === `radio` && Boolean(element.name)
@@ -76,27 +73,21 @@ const get_tab_candidates = (roots: Element[]): (HTMLElement | SVGElement)[] => {
   const candidate_set = new Set<Element>()
   for (const root of roots) collect_tab_candidates(root, candidate_set)
   const candidates = [...candidate_set]
-  // Radio groups are scoped by DOM root, form owner and name. Index checked peers once,
-  // including disabled peers, which still exclude unchecked radios from the tab order.
-  const checked_radios = new Map<
-    Node,
-    Map<HTMLFormElement | null, Map<string, HTMLInputElement>>
-  >()
+  // Radio groups are scoped by name and form owner, formless ones by DOM root (a form
+  // owner always shares its radios' root). Index checked peers once, including disabled
+  // peers, which still exclude unchecked radios from the tab order.
+  const group_of = (radio: HTMLInputElement): Node => radio.form ?? radio.getRootNode()
+  const checked_radios = new Map<Node, Map<string, HTMLInputElement>>()
   for (const element of candidates) {
     if (!is_named_radio(element) || !element.checked) continue
-    const root = element.getRootNode()
-    let forms = checked_radios.get(root)
-    if (!forms) checked_radios.set(root, (forms = new Map()))
-    let names = forms.get(element.form)
-    if (!names) forms.set(element.form, (names = new Map()))
+    const group = group_of(element)
+    let names = checked_radios.get(group)
+    if (!names) checked_radios.set(group, (names = new Map()))
     if (!names.has(element.name)) names.set(element.name, element)
   }
   const tabbable = candidates.filter((element): element is HTMLElement | SVGElement => {
     if (is_named_radio(element)) {
-      const checked_peer = checked_radios
-        .get(element.getRootNode())
-        ?.get(element.form)
-        ?.get(element.name)
+      const checked_peer = checked_radios.get(group_of(element))?.get(element.name)
       if (checked_peer && checked_peer !== element) return false
     }
     return is_tab_candidate(element)
@@ -115,10 +106,6 @@ const composed_contains = (container: Element, target: Element): boolean => {
   let current: Element | null = target
   while (current && current !== container) current = composed_parent(current)
   return current === container
-}
-
-const focus_element = (element: Element | null | undefined) => {
-  if (is_focusable(element)) element.focus()
 }
 
 // Keep Tab inside a surface and hand focus back when it closes.
@@ -175,7 +162,7 @@ export const focus_trap =
         root_el.setAttribute(`tabindex`, `-1`)
         tabindex_added_to.push(root_el)
       }
-      focus_element(target)
+      focusable(target)?.focus()
     }
 
     const on_focusin = (event: FocusEvent) => {
@@ -231,6 +218,6 @@ export const focus_trap =
       if (restore === false) return
       // Preserve a deliberate focus move outside the trap.
       if (!holds_focus() && document.activeElement !== document.body) return
-      focus_element(restore ?? focus_origin)
+      focusable(restore ?? focus_origin)?.focus()
     }
   }

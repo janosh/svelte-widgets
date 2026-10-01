@@ -41,6 +41,8 @@ const setup = (props: Props = {}) => {
 }
 const announced = (thumbs: HTMLButtonElement[]) =>
   thumbs.map((thumb) => Number(thumb.getAttribute(`aria-valuenow`)))
+const log_props = { min: 0.001, max: 1000, step: 1, scale: `log` } as const
+const decades = { ...log_props, value: [0.1, 10] } satisfies Props
 
 test(`demo renders highlighted usage, the props table and superscript pressure labels`, () => {
   render(RangeSliderDemo, {})
@@ -156,9 +158,8 @@ describe(`range arithmetic`, () => {
 })
 
 describe(`logarithmic RangeSlider`, () => {
-  const log_props = { min: 0.001, max: 1000, step: 1, scale: `log` } as const
   test(`positions thumbs and ticks geometrically while exposing real values`, () => {
-    const { thumbs, inputs } = setup({ ...log_props, value: [0.1, 10], tick_count: 7 })
+    const { thumbs, inputs } = setup({ ...decades, tick_count: 7 })
     expect(announced(thumbs)).toEqual([0.1, 10])
     expect(inputs.map((input) => input.valueAsNumber)).toEqual([0.1, 10])
     for (const [idx, expected] of [100 / 3, 200 / 3].entries()) {
@@ -173,39 +174,6 @@ describe(`logarithmic RangeSlider`, () => {
     ).toEqual([`0.01`, `0.1`, `1`, `10`, `100`])
     expect(thumbs[0].getAttribute(`aria-valuemin`)).toBe(`0.001`)
     expect(thumbs[1].getAttribute(`aria-valuemax`)).toBe(`1000`)
-  })
-  test.each([
-    [0, `ArrowUp`, [1, 10]],
-    [1, `ArrowDown`, [0.1, 1]],
-    [0, `Home`, [0.001, 10]],
-    [1, `End`, [0.1, 1000]],
-    [0, `PageUp`, [10, 10]],
-    [1, `PageDown`, [0.1, 0.1]],
-  ] as const)(`thumb %s %s commits %j`, async (thumb, key, expected) => {
-    const on_commit = vi.fn()
-    const { thumbs } = setup({ ...log_props, value: [0.1, 10], on_commit })
-    press_key(thumbs[thumb], key)
-    await tick()
-    expect(announced(thumbs)).toEqual(expected)
-    expect(on_commit).toHaveBeenCalledExactlyOnceWith(expected)
-  })
-  test.each([
-    [`0`, 0.1],
-    [`-1`, 0.1],
-    [`0.0001`, 0.001],
-    [`0.3`, 0.1],
-    [`0.4`, 1],
-    [`100`, 10],
-  ] as const)(`numeric draft %s commits %s in real units`, async (text, expected) => {
-    const on_commit = vi.fn()
-    const { inputs, thumbs } = setup({ ...log_props, value: [0.1, 10], on_commit })
-    await fire_input(inputs[0], text, `input`, `change`)
-    expect(announced(thumbs)).toEqual([expected, 10])
-    expect(inputs[0].valueAsNumber).toBe(expected)
-    expect(on_commit).toHaveBeenCalledTimes(expected === 0.1 ? 0 : 1)
-    press_key(inputs[0], `ArrowUp`)
-    await tick()
-    expect(inputs[0].valueAsNumber).toBe(Math.min(10, expected * 10))
   })
   test(`pointer picking, grab offsets and commits use logarithmic distances`, async () => {
     const on_commit = vi.fn()
@@ -241,50 +209,33 @@ describe(`logarithmic RangeSlider`, () => {
   ])(`rejects invalid logarithmic domain [%s, %s] at step %s`, (min, max, step, msg) => {
     expect(() => setup({ min, max, step, scale: `log` })).toThrow(msg)
   })
-  test.each([-1, 1])(
-    `log grid traversal never stalls in direction %s`,
-    async (direction) => {
-      const { thumbs } = setup({ min: 0.003, max: 3, step: 0.3, scale: `log` })
-      const thumb = direction > 0 ? thumbs[0] : thumbs[1]
-      const limit = direction > 0 ? 3 : 0.003
-      let previous = direction > 0 ? 0.003 : 3
-      for (let idx = 0; idx < 10; idx++) {
-        press_key(thumb, direction > 0 ? `ArrowUp` : `ArrowDown`)
-        await tick()
-        const current = Number(thumb.getAttribute(`aria-valuenow`))
-        expect(direction * (current - previous)).toBeGreaterThan(0)
-        previous = current
-      }
-      expect(previous).toBe(limit)
-    },
-  )
-  test.each([
-    [1, 0.5000014999272548],
-    [-1, 0.5000019999040063],
-  ])(`tiny log steps advance off-grid value %s / %s`, async (direction, initial) => {
+  const coarse = { min: 0.003, max: 3, step: 0.3 }
+  const tiny = { min: 0.5, max: 0.50005, step: 1.3368417291558519e-16 }
+  test.each<[Props, 0 | 1, number?]>([
+    // ten 0.3-decade steps land exactly on the far bound
+    [coarse, 0, 3],
+    [coarse, 1, 0.003],
+    // tiny exponent steps still advance off-grid values
+    [{ ...tiny, value: [0.5000014999272548, 0.50005] }, 0],
+    [{ ...tiny, value: [0.5, 0.5000019999040063] }, 1],
+  ])(`log keys never stall from %j moving thumb %s`, async (props, active, limit) => {
     const on_commit = vi.fn()
-    const value: RangeValue = direction > 0 ? [initial, 0.50005] : [0.5, initial]
-    const { thumbs, inputs } = setup({
-      min: 0.5,
-      max: 0.50005,
-      step: 1.3368417291558519e-16,
-      scale: `log`,
-      value,
-      on_commit,
-    })
-    const active = direction > 0 ? 0 : 1
-    let previous = initial
+    const { thumbs, inputs } = setup({ ...props, scale: `log`, on_commit })
+    const direction = active === 0 ? 1 : -1
+    const initial = announced(thumbs)
+    let previous = initial[active]
     for (let idx = 0; idx < 10; idx++) {
       press_key(thumbs[active], direction > 0 ? `ArrowUp` : `ArrowDown`)
       await tick()
       const current = announced(thumbs)
       expect(direction * (current[active] - previous)).toBeGreaterThan(0)
-      expect(current[1 - active]).toBe(value[1 - active])
+      expect(current[1 - active]).toBe(initial[1 - active])
       expect(inputs[active].valueAsNumber).toBe(current[active])
       expect(on_commit).toHaveBeenLastCalledWith(current)
       previous = current[active]
     }
     expect(on_commit).toHaveBeenCalledTimes(10)
+    if (limit !== undefined) expect(previous).toBe(limit)
   })
 })
 
@@ -383,19 +334,6 @@ describe(`RangeSlider`, () => {
       expect(input.value).toBe(prevented ? `43` : `20`)
     },
   )
-  test.each([
-    [[0, 10], 1, `ArrowLeft`, [0, 9]],
-    [[0, 9], 1, `ArrowRight`, [0, 10]],
-    [[2, 8], 1, `Home`, [2, 2]],
-    [[2, 8], 0, `End`, [8, 8]],
-    [[2, 8], 0, `ArrowUp`, [3, 8]],
-    [[2, 8], 1, `ArrowDown`, [2, 6]],
-  ] as const)(`off-grid pair %j: thumb %s / %s`, async (value, thumb, key, expected) => {
-    const { thumbs } = setup({ value: [...value], min: 0, max: 10, step: 3 })
-    press_key(thumbs[thumb], key)
-    await tick()
-    expect(announced(thumbs)).toEqual(expected)
-  })
   test(`supported off-grid values remain valid native form fields`, () => {
     const { inputs, rail } = setup({ value: [2, 10], min: 0, max: 10, step: 3 })
     const form = document.createElement(`form`)
@@ -484,32 +422,51 @@ describe(`RangeSlider`, () => {
       `Range Maximum`,
     ])
   })
-  test.each([
-    [0, `ArrowRight`, {}, [21, 80]],
-    [0, `ArrowDown`, {}, [19, 80]],
-    [1, `ArrowUp`, {}, [20, 81]],
-    [1, `ArrowLeft`, {}, [20, 79]],
-    [0, `Home`, {}, [0, 80]],
-    [0, `End`, {}, [80, 80]],
-    [1, `Home`, {}, [20, 20]],
-    [1, `End`, {}, [20, 100]],
-    [0, `PageUp`, {}, [30, 80]],
-    [1, `PageDown`, {}, [20, 70]],
-    [0, `ArrowRight`, { shiftKey: true }, [30, 80]],
-  ] as const)(`thumb %s handles %s (%j)`, async (thumb, key, modifiers, expected) => {
-    const props = $state<Props>({
-      value: [20, 80],
-      on_input: vi.fn(),
-      on_commit: vi.fn(),
-    })
-    const { thumbs } = setup(props)
-    expect(press_key(thumbs[thumb], key, modifiers).defaultPrevented).toBe(true)
-    await tick()
-    expect(props.value).toEqual(expected)
-    expect(announced(thumbs)).toEqual(expected)
-    expect(props.on_input).toHaveBeenCalledExactlyOnceWith(expected)
-    expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(expected)
-  })
+  const off_grid = { max: 10, step: 3 }
+  test.each<[Props, 0 | 1, string, RangeValue, KeyboardEventInit?]>([
+    [{}, 0, `ArrowRight`, [21, 80]],
+    [{}, 0, `ArrowDown`, [19, 80]],
+    [{}, 1, `ArrowUp`, [20, 81]],
+    [{}, 1, `ArrowLeft`, [20, 79]],
+    [{}, 0, `Home`, [0, 80]],
+    [{}, 0, `End`, [80, 80]],
+    [{}, 1, `Home`, [20, 20]],
+    [{}, 1, `End`, [20, 100]],
+    [{}, 0, `PageUp`, [30, 80]],
+    [{}, 1, `PageDown`, [20, 70]],
+    [{}, 0, `ArrowRight`, [30, 80], { shiftKey: true }],
+    // off-grid values step to adjacent grid points, and max stays reachable
+    [{ ...off_grid, value: [0, 10] }, 1, `ArrowLeft`, [0, 9]],
+    [{ ...off_grid, value: [0, 9] }, 1, `ArrowRight`, [0, 10]],
+    [{ ...off_grid, value: [2, 8] }, 1, `Home`, [2, 2]],
+    [{ ...off_grid, value: [2, 8] }, 0, `End`, [8, 8]],
+    [{ ...off_grid, value: [2, 8] }, 0, `ArrowUp`, [3, 8]],
+    [{ ...off_grid, value: [2, 8] }, 1, `ArrowDown`, [2, 6]],
+    // logarithmic steps move whole decades in real units
+    [decades, 0, `ArrowUp`, [1, 10]],
+    [decades, 1, `ArrowDown`, [0.1, 1]],
+    [decades, 0, `Home`, [0.001, 10]],
+    [decades, 1, `End`, [0.1, 1000]],
+    [decades, 0, `PageUp`, [10, 10]],
+    [decades, 1, `PageDown`, [0.1, 0.1]],
+  ])(
+    `%j: thumb %s %s settles at %j`,
+    async (overrides, thumb, key, expected, modifiers) => {
+      const props = $state<Props>({
+        value: [20, 80],
+        ...overrides,
+        on_input: vi.fn(),
+        on_commit: vi.fn(),
+      })
+      const { thumbs } = setup(props)
+      expect(press_key(thumbs[thumb], key, modifiers).defaultPrevented).toBe(true)
+      await tick()
+      expect(props.value).toEqual(expected)
+      expect(announced(thumbs)).toEqual(expected)
+      expect(props.on_input).toHaveBeenCalledExactlyOnceWith(expected)
+      expect(props.on_commit).toHaveBeenCalledExactlyOnceWith(expected)
+    },
+  )
   test(`ignores claimed and unrelated keys, and emits nothing at a bound`, async () => {
     const on_commit = vi.fn()
     const { thumbs } = setup({ value: [0, 100], on_commit })
@@ -540,7 +497,7 @@ describe(`RangeSlider`, () => {
     await tick()
     expect(announced(thumbs)).toEqual([21, 90])
   })
-  test.each([
+  test.each<[string, string, number, Props?]>([
     [`43`, `blur`, 45],
     [`-100`, `blur`, 0],
     [`100`, `blur`, 80],
@@ -550,19 +507,29 @@ describe(`RangeSlider`, () => {
     [`43`, `ArrowDown`, 40],
     [`40`, `ArrowUp`, 45],
     [``, `ArrowUp`, 25],
+    // logarithmic drafts snap to decades; zero and negative drafts are discarded
+    [`0`, `change`, 0.1, decades],
+    [`-1`, `change`, 0.1, decades],
+    [`0.0001`, `change`, 0.001, decades],
+    [`0.3`, `change`, 0.1, decades],
+    [`0.4`, `change`, 1, decades],
+    [`100`, `change`, 10, decades],
+    [`0.0001`, `ArrowUp`, 0.01, decades],
+    [``, `ArrowUp`, 1, decades],
   ])(
     `numeric draft %j on %s settles at %s without crossing`,
-    async (draft, action, expected) => {
+    async (draft, action, expected, overrides = { step: 5 }) => {
       const on_commit = vi.fn()
-      const { inputs, thumbs } = setup({ value: [20, 80], step: 5, on_commit })
+      const { inputs, thumbs } = setup({ value: [20, 80], ...overrides, on_commit })
+      const initial = announced(thumbs)
       await fire_input(inputs[0], draft, `input`)
-      expect(announced(thumbs)).toEqual([20, 80])
-      if (action === `blur`) inputs[0].dispatchEvent(new Event(`blur`))
-      else press_key(inputs[0], action)
+      expect(announced(thumbs)).toEqual(initial)
+      if (action.startsWith(`Arrow`)) press_key(inputs[0], action)
+      else await fire_input(inputs[0], undefined, action)
       await tick()
-      expect(announced(thumbs)).toEqual([expected, 80])
+      expect(announced(thumbs)).toEqual([expected, initial[1]])
       expect(inputs[0].valueAsNumber).toBe(expected)
-      expect(on_commit).toHaveBeenCalledTimes(expected === 20 ? 0 : 1)
+      expect(on_commit).toHaveBeenCalledTimes(expected === initial[0] ? 0 : 1)
     },
   )
   test(`Enter commits once, Escape discards, and numeric arrows use the configured step`, async () => {
@@ -583,6 +550,9 @@ describe(`RangeSlider`, () => {
     press_key(inputs[0], `Escape`)
     await tick()
     expect(inputs[0].value).toBe(`0.3`)
+    // Left/Right and Home/End stay native text-editing keys in number fields
+    for (const key of [`Home`, `End`, `ArrowLeft`, `ArrowRight`])
+      expect(press_key(inputs[0], key).defaultPrevented, key).toBe(false)
     press_key(inputs[0], `ArrowUp`)
     await tick()
     expect(announced(thumbs)).toEqual([0.4, 0.8])

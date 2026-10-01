@@ -38,6 +38,11 @@
   let controller = $state.raw<AbortController>()
   let error = $state(``)
   let rejected = $state<FileRejection[]>([])
+  const rejection_messages: Record<FileRejection['reason'], string> = {
+    type: `File type not accepted`,
+    size: `File too large`,
+    count: `Too many files`,
+  }
   const cancel = () => {
     const previous = controller
     controller = undefined
@@ -100,9 +105,7 @@
     multiple: true,
     disabled,
     on_files: receive,
-    on_error: (cause) => {
-      error = String(cause)
-    },
+    on_error: (cause) => (error = String(cause)),
   })}
 >
   <label
@@ -139,14 +142,8 @@
     </ul>
   {/if}
   <div role="status">
-    {#each rejected as rejection, idx (idx)}
-      <div>
-        {rejection.file.name}: {rejection.reason === `type`
-          ? `File type not accepted`
-          : rejection.reason === `size`
-            ? `File too large`
-            : `Too many files`}
-      </div>
+    {#each rejected as { file, reason }, idx (idx)}
+      <div>{file.name}: {rejection_messages[reason]}</div>
     {/each}
   </div>
   {#if controller || error}<TaskStatus

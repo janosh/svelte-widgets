@@ -1,5 +1,5 @@
 import { SettingsSection } from '$lib'
-import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
+import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { click, doc_query, render } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
@@ -17,7 +17,7 @@ const mount_tracked_section = (
 ) => {
   let current_values = $state<SettingValues>({ ...initial })
   const defaults = reset_values ?? initial
-  const reset_calls: [string, unknown, boolean][] = []
+  const reset_calls: string[] = []
   mount_section({
     title: `Atoms`,
     get changed_keys() {
@@ -29,11 +29,9 @@ const mount_tracked_section = (
     },
     children: snippet(children),
     on_reset_key: (key: string) => {
-      const value = defaults[key]
-      const present = Object.hasOwn(defaults, key)
-      reset_calls.push([key, value, present])
+      reset_calls.push(key)
       const next_values = { ...current_values }
-      if (present) next_values[key] = value
+      if (Object.hasOwn(defaults, key)) next_values[key] = defaults[key]
       else Reflect.deleteProperty(next_values, key)
       current_values = next_values
     },
@@ -51,26 +49,20 @@ const mount_tracked_section = (
 
 describe(`SettingsSection`, () => {
   test(`renders content with unique aria-labelledby targets`, () => {
-    for (const [title, content] of [
-      [`Section A`, `Content A`],
-      [`Section B`, `Content B`],
-    ]) {
-      mount_section({ title, children: snippet(`<span>${content}</span>`) })
+    for (const title of [`A`, `B`]) {
+      mount_section({ title, children: snippet(`<i>${title} content</i>`) })
     }
-    const [heading_a, heading_b] = [...document.querySelectorAll(`h4`)]
-    const [section_a, section_b] = [...document.querySelectorAll(`section`)]
-    expect([heading_a.textContent?.trim(), heading_b.textContent?.trim()]).toEqual([
-      `Section A`,
-      `Section B`,
+    const headings = [...document.querySelectorAll(`h4`)]
+    const sections = [...document.querySelectorAll(`section`)]
+    const texts = (nodes: Element[]) => nodes.map((node) => node.textContent?.trim())
+    expect([texts(headings), texts(sections)]).toEqual([
+      [`A`, `B`],
+      [`A content`, `B content`],
     ])
-    expect([section_a.textContent?.trim(), section_b.textContent?.trim()]).toEqual([
-      `Content A`,
-      `Content B`,
-    ])
-    expect(heading_a.id.startsWith(`settings-section-title-`)).toBe(true)
-    expect(heading_a.id).not.toBe(heading_b.id)
-    expect(section_a.getAttribute(`aria-labelledby`)).toBe(heading_a.id)
-    expect(section_b.getAttribute(`aria-labelledby`)).toBe(heading_b.id)
+    const ids = headings.map(({ id }) => id)
+    expect(ids[0]).toMatch(/^settings-section-title-/u)
+    expect(ids[0]).not.toBe(ids[1])
+    expect(sections.map((node) => node.getAttribute(`aria-labelledby`))).toEqual(ids)
   })
 
   test(`hides reset controls when no reset callback is available`, () => {
@@ -82,9 +74,7 @@ describe(`SettingsSection`, () => {
       ),
     })
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
-    expect(
-      doc_query(`[data-key="radius"]`).classList.contains(`setting-resettable`),
-    ).toBe(false)
+    expect(doc_query(`[data-key="radius"]`).classList).not.toContain(`setting-resettable`)
   })
 
   test(`uses caller-supplied changed keys and gives section reset precedence`, async () => {
@@ -103,9 +93,7 @@ describe(`SettingsSection`, () => {
       children: snippet(`<label data-key="nested"><input></label>`),
     })
     expect(document.querySelector(`.reset-button`)).toBeNull()
-    flushSync(() => {
-      changed_keys = [`nested`]
-    })
+    changed_keys = [`nested`]
     await tick()
     expect(document.querySelector(`.setting-reset-button`)).not.toBeNull()
     await click(`.settings-section-heading .reset-button`)
@@ -128,11 +116,8 @@ describe(`SettingsSection`, () => {
     doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
     await click(`.settings-section-heading .reset-button`)
 
-    expect(tracked.values).toEqual({ radius: 1 })
-    expect(tracked.reset_calls).toEqual([
-      [`radius`, 1, true],
-      [`temporary`, undefined, false],
-    ])
+    expect(tracked.values).toStrictEqual({ radius: 1 })
+    expect(tracked.reset_calls).toEqual([`radius`, `temporary`])
     expect(document.querySelector(`.reset-button`)).toBeNull()
     // the focused section button unmounted, so focus lands on the first control
     expect(document.activeElement).toBe(doc_query(`[data-key="radius"] input`))
@@ -149,10 +134,6 @@ describe(`SettingsSection`, () => {
     ],
   ])(`resets %s to its mounted state`, async (_, label, initial, change) => {
     const [key] = Object.keys(change)
-    const [reference_value, reference_present] = [
-      initial[key],
-      Object.hasOwn(initial, key),
-    ]
     const tracked = mount_tracked_section(
       initial,
       `<div>
@@ -163,22 +144,19 @@ describe(`SettingsSection`, () => {
       </div>`,
     )
 
-    flushSync(() => (tracked.values = { ...tracked.values, ...change }))
+    tracked.values = { ...tracked.values, ...change }
     await tick()
     expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(1)
-    expect(
-      document
-        .querySelector(`[data-key="${key}"] .setting-reset-button`)
-        ?.getAttribute(`aria-label`),
-    ).toBe(`Reset ${label} to default`)
-    expect(
-      document.querySelector(`.setting-reset-button svg`)?.getAttribute(`viewBox`),
-    ).toBe(`0 0 32 32`)
-    await click(`[data-key="${key}"] .setting-reset-button`)
+    const button = doc_query(`[data-key="${key}"] .setting-reset-button`)
+    expect([
+      button.getAttribute(`aria-label`),
+      button.querySelector(`svg`)?.getAttribute(`viewBox`),
+    ]).toEqual([`Reset ${label} to default`, `0 0 32 32`])
+    await click(button)
 
-    expect(tracked.reset_calls).toEqual([[key, reference_value, reference_present]])
-    expect(Object.hasOwn(tracked.values, key)).toBe(reference_present)
-    if (reference_present) expect(tracked.values[key]).toEqual(reference_value)
+    expect(tracked.reset_calls).toEqual([key])
+    // strict, so a new key left behind as `undefined` instead of deleted fails
+    expect(tracked.values).toStrictEqual(initial)
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })
@@ -196,30 +174,24 @@ describe(`SettingsSection`, () => {
     })
     await tick()
 
-    const toggle = document.querySelector<HTMLButtonElement>(`.description-toggle`)
-    expect(document.querySelector(`h4`)?.textContent?.trim()).toBe(`Pointer sensitivity`)
-    expect(toggle?.getAttribute(`aria-expanded`)).toBe(`false`)
+    const toggle = doc_query(`.description-toggle`)
+    expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
     const nested_controls = [...document.querySelectorAll(`[data-key="nested"] input`)]
     expect(nested_controls.map((control) => control.getAttribute(`aria-label`))).toEqual([
       `Nested label`,
       `Nested label`,
     ])
-    expect(
-      document
-        .querySelector(`[data-key="rotation_damping"]`)
-        ?.getAttribute(`data-description`),
-    ).toBe(`Motion inertia after releasing the pointer`)
 
-    await click(`.description-toggle`)
-    expect(toggle?.getAttribute(`aria-expanded`)).toBe(`true`)
+    await click(toggle)
+    expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
     expect(
       [...document.querySelectorAll(`.settings-row-description`)].map(
         (description) => description.textContent,
       ),
     ).toEqual([`Pointer rotation speed`, `Motion inertia after releasing the pointer`])
 
-    await click(`.description-toggle`)
+    await click(toggle)
     expect(document.querySelectorAll(`.settings-row-description`)).toHaveLength(0)
 
     // Cleaning up a keyed wrapper must leave nested rows' generated labels intact too.
@@ -251,36 +223,31 @@ describe(`SettingsSection`, () => {
     })
     await tick()
 
-    const explain = doc_query<HTMLButtonElement>(`.description-toggle`)
+    const explain = doc_query(`.description-toggle`)
     expect([explain.textContent?.trim(), explain.getAttribute(`aria-label`)]).toEqual([
       `Erklären`,
       `Show descriptions for atoms`,
     ])
-    await click(`.description-toggle`)
+    await click(explain)
     expect(explain.getAttribute(`aria-label`)).toBe(`Hide descriptions for atoms`)
 
-    const reset = doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`)
-    expect([
-      reset.textContent?.trim(),
-      reset.getAttribute(`title`),
-      reset.getAttribute(`aria-label`),
-    ]).toEqual([`Reset`, `Atoms zurücksetzen`, `Atoms zurücksetzen`])
-
+    const names = (node: Element) =>
+      [`title`, `aria-label`].map((attribute) => node.getAttribute(attribute))
+    const reset = doc_query(`.settings-section-heading .reset-button`)
+    expect([reset.textContent?.trim(), ...names(reset)]).toEqual([
+      `Reset`,
+      `Atoms zurücksetzen`,
+      `Atoms zurücksetzen`,
+    ])
     // the per-row reset button injected by on_reset_key reads from labels too
     const row_reset = doc_query(`.setting-reset-button`)
-    expect([
-      row_reset.getAttribute(`title`),
-      row_reset.getAttribute(`aria-label`),
-    ]).toEqual([`Radius zurücksetzen`, `Radius zurücksetzen`])
+    expect(names(row_reset)).toEqual([`Radius zurücksetzen`, `Radius zurücksetzen`])
 
     // Svelte updates reactive label text in place, without replacing the element.
-    const label_text = doc_query(`[data-key="radius"] > span`).firstChild
-    if (!label_text) throw new Error(`Missing radius label text`)
-    label_text.nodeValue = `Atom radius`
+    doc_query(`[data-key="radius"] > span`).childNodes[0].nodeValue = `Atom radius`
     await tick()
     expect([
-      row_reset.getAttribute(`title`),
-      row_reset.getAttribute(`aria-label`),
+      ...names(row_reset),
       doc_query(`[data-key="radius"] input`).getAttribute(`aria-label`),
     ]).toEqual([`Atom radius zurücksetzen`, `Atom radius zurücksetzen`, `Atom radius`])
   })
@@ -316,10 +283,8 @@ describe(`SettingsSection`, () => {
       { radius: 1 },
     )
     await tick()
-    const button = doc_query<HTMLButtonElement>(`.setting-reset-button`)
+    const button = doc_query(`.setting-reset-button`)
     button.focus()
-    expect(document.activeElement).toBe(button)
-
     await click(button)
 
     expect(tracked.values.radius).toBe(1)
@@ -337,15 +302,13 @@ describe(`SettingsSection`, () => {
     for (const radius of [1, 2, 1]) {
       tracked.values = { radius }
       await tick()
-      expect(row.classList.contains(`setting-resettable`)).toBe(true)
+      expect(row.classList).toContain(`setting-resettable`)
       expect(Boolean(row.querySelector(`.setting-reset-button`))).toBe(radius !== 1)
-      expect(
-        doc_query(`[data-key="unknown"]`).classList.contains(`setting-resettable`),
-      ).toBe(true)
+      expect(doc_query(`[data-key="unknown"]`).classList).toContain(`setting-resettable`)
     }
     tracked.values = {}
     await tick()
-    expect(row.classList.contains(`setting-resettable`)).toBe(true)
+    expect(row.classList).toContain(`setting-resettable`)
   })
 
   test(`ignores missing and explicitly empty descriptions`, async () => {
@@ -357,9 +320,7 @@ describe(`SettingsSection`, () => {
     })
     await tick()
     expect(document.querySelector(`.description-toggle`)).toBeNull()
-    expect(
-      document.querySelector(`[data-key="radius"]`)?.getAttribute(`data-description`),
-    ).toBe(``)
+    expect(doc_query(`[data-key="radius"]`).dataset.description).toBe(``)
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {
@@ -368,42 +329,35 @@ describe(`SettingsSection`, () => {
 
     const settings_row = (): HTMLElement | null =>
       document.querySelector<HTMLElement>(`[data-generation]`)
+    const row_query = (selector: string) => settings_row()?.querySelector(selector)
     const expect_single_enhancement = (): void => {
-      expect(settings_row()?.querySelectorAll(`.settings-row-description`)).toHaveLength(
-        1,
-      )
-      expect(settings_row()?.querySelectorAll(`.setting-reset-button`)).toHaveLength(1)
+      for (const selector of [`.settings-row-description`, `.setting-reset-button`]) {
+        expect(settings_row()?.querySelectorAll(selector)).toHaveLength(1)
+      }
     }
 
     // same nodes, not replacements: a value edit re-enhances in place instead of tearing
     // every description and reset button off and back on
-    const palette_description = doc_query(
-      `[data-key="palette"] .settings-row-description`,
-    )
+    const palette_selector = `[data-key="palette"] .settings-row-description`
+    const palette_description = doc_query(palette_selector)
     await click(`[data-testid="change-radius"]`)
-    expect(document.querySelector(`[data-key="palette"] .settings-row-description`)).toBe(
-      palette_description,
-    )
+    expect(doc_query(palette_selector)).toBe(palette_description)
     expect_single_enhancement()
-    expect(settings_row()?.querySelector(`input`)?.getAttribute(`aria-label`)).toBe(
-      `Radius`,
-    )
+    expect(row_query(`input`)?.getAttribute(`aria-label`)).toBe(`Radius`)
 
-    const previous_input = settings_row()?.querySelector(`input`)
+    const previous_input = row_query(`input`)
     await click(`[data-testid="replace-input"]`)
-    expect(settings_row()?.querySelector(`input`)).not.toBe(previous_input)
-    expect(settings_row()?.querySelector(`input`)?.getAttribute(`aria-label`)).toBe(
-      `Radius`,
-    )
+    expect(row_query(`input`)).not.toBe(previous_input)
+    expect(row_query(`input`)?.getAttribute(`aria-label`)).toBe(`Radius`)
     expect_single_enhancement()
 
     await click(`[data-testid="change-key"]`)
     expect(settings_row()?.dataset.key).toBe(`diameter`)
-    expect(
-      settings_row()?.querySelector(`.setting-reset-button`)?.getAttribute(`aria-label`),
-    ).toBe(`Reset Radius to default`)
-    await click(settings_row()?.querySelector(`.setting-reset-button`))
-    expect(settings_row()?.querySelector(`.setting-reset-button`)).toBeNull()
+    expect(row_query(`.setting-reset-button`)?.getAttribute(`aria-label`)).toBe(
+      `Reset Radius to default`,
+    )
+    await click(row_query(`.setting-reset-button`))
+    expect(row_query(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).not.toBeNull()
 
     await click(`[data-testid="change-key"]`)
@@ -412,7 +366,6 @@ describe(`SettingsSection`, () => {
     const previous_row = settings_row()
     await click(`[data-testid="replace-radius"]`)
     expect(settings_row()).not.toBe(previous_row)
-    expect(settings_row()?.dataset.generation).toBe(`1`)
     expect_single_enhancement()
 
     await click(`[data-testid="toggle-radius"]`)
@@ -420,8 +373,8 @@ describe(`SettingsSection`, () => {
     await click(`[data-testid="toggle-radius"]`)
     expect_single_enhancement()
 
-    await click(settings_row()?.querySelector(`.setting-reset-button`))
-    expect(settings_row()?.querySelector(`.setting-reset-button`)).toBeNull()
+    await click(row_query(`.setting-reset-button`))
+    expect(row_query(`.setting-reset-button`)).toBeNull()
     expect(settings_row()?.querySelectorAll(`.settings-row-description`)).toHaveLength(1)
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })

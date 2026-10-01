@@ -26,9 +26,8 @@
   let title = $derived(msg.switch_to(msg[next_mode]))
 
   onMount(() => {
-    const stop_watching = watch_theme()
     is_hydrated = true
-    return stop_watching
+    return watch_theme()
   })
 </script>
 

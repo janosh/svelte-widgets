@@ -87,20 +87,24 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 
 ### Content sources
 
-Attach `tooltip()` once to a container and every descendant carrying `title`, `aria-label` or `data-title` gets its own tooltip — including elements rendered later, since one delegated listener pair covers the whole subtree. The original `title` is stripped while the tooltip owns it, so the native yellow box never doubles up, and restored on teardown. `delegate` narrows delegation to a selector and `content(trigger)` derives the text per element.
+Attach `tooltip()` once to a container and every descendant carrying `title`, `data-title` or, if icon-only, `aria-label` gets its own tooltip — including elements rendered later, since one delegated listener pair covers the whole subtree. The original `title` is stripped while the tooltip owns it, so the native yellow box never doubles up, and restored on teardown. `delegate` narrows delegation to a selector and `content(trigger)` derives the text per element.
 
 ```svelte example id="attachments-tooltip-content"
 <script lang="ts">
+  import { Icon } from 'svelte-widgets'
   import { tooltip } from 'svelte-widgets/attachments'
+  import { Info } from 'svelte-widgets/icons'
 
   const all_planets = [`Mercury`, `Venus`, `Earth`, `Mars`, `Jupiter`, `Saturn`]
   let shown = $state(3)
 </script>
 
-<!-- One attachment, three content sources, no per-button wiring -->
+<!-- One attachment, three content sources; aria-label only feeds icon-only triggers -->
 <div style="display: flex; gap: 1em; flex-wrap: wrap" {@attach tooltip()}>
   <button title="Read from the title attribute">title</button>
-  <button aria-label="Read from aria-label">aria-label</button>
+  <button aria-label="Read from aria-label"
+    ><Icon icon={Info} aria-hidden="true" /></button
+  >
   <button data-title="Read from data-title">data-title</button>
 </div>
 

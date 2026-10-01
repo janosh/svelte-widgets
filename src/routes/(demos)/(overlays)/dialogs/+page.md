@@ -4,19 +4,12 @@ A promise-based prompt queue and three headless DOM helpers that go with it.
 
 ### `request_choice` and `ConfirmDialog`
 
-`request_choice(message, title, choices, dismiss_id)` returns a promise that resolves to
-the id of the choice the user picked, so asking a question reads like a function call
-instead of a callback dance. Mount one `ConfirmDialog` high in the tree and any code
-below it can ask.
+`request_choice(message, title, choices, dismiss_id)` returns a promise that resolves to the id of the choice the user picked, so asking a question reads like a function call instead of a callback dance. Mount one `ConfirmDialog` high in the tree and any code below it can ask.
 
 Two details carry their weight:
 
-- **Requests queue rather than overlap.** Two prompts racing in one modal would leave the
-  second answered by a click meant for the first, so only the head of the queue is on
-  screen and the buttons are rebuilt between questions. Press _Ask both at once_ below and
-  answer fast to see the second question survive a double-click.
-- **`dismiss_id` decides what Escape means.** A dismissal resolves with that id, never with
-  the accented choice, so a stray keypress is never read as consent.
+- **Requests queue rather than overlap.** Two prompts racing in one modal would leave the second answered by a click meant for the first, so only the head of the queue is on screen and the buttons are rebuilt between questions. Press _Ask both at once_ below and answer fast to see the second question survive a double-click.
+- **`dismiss_id` decides what Escape means.** A dismissal resolves with that id, never with the accented choice, so a stray keypress is never read as consent.
 
 Choices are arbitrary in number. `ask_confirm(body, title, confirm_label = 'OK')` is the two-button shorthand and resolves to a boolean. A body can be text or a trusted Svelte snippet. `ask_prompt(body, title, options)` adds a text field, returns `string | null` and keeps the dialog open when its validator returns an error message. Configure the shared prompt field with `input_props` on `ConfirmDialog`; these attributes apply to every prompt, request-specific placeholders win when set, and `oninput` chains so validation still clears.
 
@@ -124,9 +117,7 @@ This replaces `print_element(node, options)`. The `node` argument and `single_pa
 
 ### `create_clipboard_feedback`
 
-Reactive "recently copied" state keyed by string, for UIs that render their own copy
-affordances and only need the state `CopyButton` keeps internally. Each key runs its own
-timer, and re-copying a key restarts that timer so the checkmark cannot blink out early.
+Reactive "recently copied" state keyed by string, for UIs that render their own copy affordances and only need the state `CopyButton` keeps internally. Each key runs its own timer, and re-copying a key restarts that timer so the checkmark cannot blink out early.
 
 ```svelte example id="clipboard-feedback-demo"
 <script lang="ts">
@@ -174,13 +165,7 @@ timer, and re-copying a key restarts that timer so the checkmark cannot blink ou
 
 ### `files_from_data_transfer`
 
-`DataTransfer.files` stops at the top level: drop a directory and it reports a single
-zero-byte file named after the directory. This walks the drop with `webkitGetAsEntry`
-instead, expanding directories depth-first (draining `readEntries`, which hands back at
-most 100 children per call), and falls back to the flat file list when the entry API
-yields nothing. It rejects rather than returning a partial list when a tree nests past 32
-levels or expands past 20 000 directories — the entry API resolves symlinks, so a link to
-an ancestor would otherwise recurse without end — which is why the handler below catches.
+`DataTransfer.files` stops at the top level: drop a directory and it reports a single zero-byte file named after the directory. This walks the drop with `webkitGetAsEntry` instead, expanding directories depth-first (draining `readEntries`, which hands back at most 100 children per call), and falls back to the flat file list when the entry API yields nothing. It rejects rather than returning a partial list when a tree nests past 32 levels or expands past 20 000 directories — the entry API resolves symlinks, so a link to an ancestor would otherwise recurse without end — which is why the handler below catches.
 
 ```svelte example id="file-drop-demo"
 <script lang="ts">

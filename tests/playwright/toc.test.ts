@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 
-test.use({ baseURL: `http://localhost:3005`, viewport: { width: 390, height: 780 } })
+test.use({ viewport: { width: 390, height: 780 } })
 test.beforeEach(({ page }) => page.goto(`/extras`, { waitUntil: `networkidle` }))
 
 // The title's rule cancels the panel's inline padding, a custom property that substitutes as

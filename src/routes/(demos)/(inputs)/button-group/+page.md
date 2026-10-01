@@ -81,7 +81,7 @@ The `option` snippet replaces a button's contents, `on_change` fires with the ne
 <p>filters: {active.length ? active.join(`, `) : `none`}</p>
 ```
 
-`option_suffix` renders as a **sibling** instead, wrapped with the button in a `.option` span, as shown by the counts above. Prefer non-interactive suffixes in single-select `radiogroup` mode; a focusable suffix adds a non-radio tab stop. Without `option_suffix`, buttons remain direct `.options` children, preserving `.options > button` selectors.
+`option_suffix` renders as a **sibling** instead, wrapped with the button in a `.option` span, as shown by the counts above. Prefer non-interactive suffixes in single-select `radiogroup` mode; a focusable suffix adds a non-radio tab stop. An option's `tooltip` then shows on hover anywhere in the pill, suffix included, and on focus of its button. Without `option_suffix`, buttons remain direct `.options` children, preserving `.options > button` selectors.
 
 ### Styling
 

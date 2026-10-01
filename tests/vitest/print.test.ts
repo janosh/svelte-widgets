@@ -23,22 +23,27 @@ test(`format_print_filename appends the date, zero-padded`, () => {
   expect(format_print_filename(`cv`, new Date(2026, 11, 31))).toBe(`cv-2026-12-31`)
 })
 
-test.each([undefined, `App Renamed`])(
-  `afterprint preserves app title %s`,
-  (app_title) => {
-    document.title = `Some Page`
-    print_page({ filename: `janosh-cv-2026-07-27` })
+// headless and embedded webviews return from print() without ever firing afterprint, so a
+// watchdog must restore the title and re-enable later filename swaps too
+test.each([
+  [`afterprint`, undefined],
+  [`afterprint`, `App Renamed`],
+  [`watchdog`, undefined],
+  [`watchdog`, `App Renamed`],
+])(`%s preserves app title %s`, (trigger, app_title) => {
+  vi.useFakeTimers()
+  document.title = `Docs`
+  print_page({ filename: `docs-print` })
+  expect(document.title).toBe(`docs-print`) // browsers suggest it as the PDF name
+  expect(print_spy).toHaveBeenCalledTimes(1)
 
-    expect(document.title).toBe(`janosh-cv-2026-07-27`) // browsers suggest it as the PDF name
-    expect(print_spy).toHaveBeenCalledTimes(1)
-
-    if (app_title) document.title = app_title
-    after_print()
-    expect(document.title).toBe(app_title ?? `Some Page`)
-    print_page({ filename: `later-print` })
-    expect(document.title).toBe(`later-print`)
-  },
-)
+  if (app_title) document.title = app_title
+  if (trigger === `watchdog`) vi.advanceTimersByTime(60_000)
+  else after_print()
+  expect(document.title).toBe(app_title ?? `Docs`)
+  print_page({ filename: `later-print` })
+  expect(document.title).toBe(`later-print`)
+})
 
 // afterprint lands a turn late; the second print must not capture the swapped title.
 test(`overlapping prints restore the title the first one found`, () => {
@@ -88,23 +93,6 @@ test(`a second cleanup leaves a title the app set in the meantime alone`, () => 
 
   expect(() => print_page({ filename: `docs-print` })).toThrow(`print blocked`)
   expect(document.title).toBe(`App Renamed`)
-})
-
-// headless and embedded webviews return from print() without ever firing afterprint,
-// leaving the title swapped and later filename swaps disabled
-test.each([undefined, `App Renamed`])(`watchdog preserves app title %s`, (app_title) => {
-  vi.useFakeTimers()
-  document.title = `Docs`
-  print_page({ filename: `docs-print` })
-  expect(document.title).toBe(`docs-print`)
-
-  if (app_title) document.title = app_title
-  vi.advanceTimersByTime(60_000)
-
-  expect(document.title).toBe(app_title ?? `Docs`)
-  // the swap flag reset too, so a later print still gets its filename
-  print_page({ filename: `later-print` })
-  expect(document.title).toBe(`later-print`)
 })
 
 test(`a completed print disarms its watchdog before the next print`, () => {

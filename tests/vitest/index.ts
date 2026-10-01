@@ -168,8 +168,9 @@ export type Test2WayBindProps = MultiSelectProps & {
 export const render = <Props extends object>(
   component: Component<Props>,
   props: Props,
+  target: Element = document.body,
 ): (() => Promise<void>) => {
-  const instance = mount(component, { target: document.body, props })
+  const instance = mount(component, { target, props })
   let unmounted: Promise<void> | undefined
   // safe to call early (teardown tests); the finish hook then skips it
   const unmount_once = () => (unmounted ??= unmount(instance))
