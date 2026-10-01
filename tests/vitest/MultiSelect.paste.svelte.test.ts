@@ -47,6 +47,20 @@ describe(`parse_paste`, () => {
     expect(onpaste).toHaveReturnedWith(get_input())
   })
 
+  test(`pasted text naming an option selects it, and naming a disabled one is rejected`, async () => {
+    const options = [{ label: 1 }, { label: 2 }, { label: `off`, disabled: true }]
+    const { props, on_create, on_parsed_paste } = await paste_into(
+      { options, value: [], allow_user_options: `append` },
+      `2,off`,
+    )
+    expect(props.value).toEqual([options[1]])
+    expect(props.options).toEqual(options)
+    expect(on_create).not.toHaveBeenCalled()
+    expect(on_parsed_paste).toHaveBeenCalledWith(
+      expect.objectContaining({ added: [`2`], rejected: [`off`] }),
+    )
+  })
+
   test(`input display keeps a draft typed while pasted creation is pending`, async () => {
     const creation = Promise.withResolvers<undefined>()
     const completed = Promise.withResolvers<undefined>()
@@ -184,29 +198,27 @@ describe(`parse_paste`, () => {
     expect(props.search_text).toBe(``)
   })
 
+  // the first overflowing option is the one reported to on_max_reached
   test.each([
-    [`already at max`, [`a`, `b`], 2, `c`, 0, 1, `c`],
-    [`exceeds max mid-paste`, [`a`, `b`], 3, `c,d,e`, 1, 1, `d`],
+    [`already at max`, [`a`, `b`], 2, `c`, [], [`c`]],
+    [`exceeds max mid-paste`, [`a`], 3, `b,c,d,e`, [`b`, `c`], [`d`, `e`]],
   ])(
     `max_select: %s`,
-    async (
-      _label,
-      selected,
-      max_select,
-      paste_text,
-      expected_adds,
-      expected_max,
-      attempted,
-    ) => {
-      const { on_add, on_max_reached } = await paste_into(
+    async (_label, selected, max_select, raw_text, added, overflow) => {
+      const { on_add, on_max_reached, on_parsed_paste } = await paste_into(
         { options: [`a`, `b`, `c`, `d`, `e`], value: selected, max_select },
-        paste_text,
+        raw_text,
       )
-      expect(on_add).toHaveBeenCalledTimes(expected_adds)
-      expect(on_max_reached).toHaveBeenCalledTimes(expected_max)
-      expect(on_max_reached).toHaveBeenCalledWith(
-        expect.objectContaining({ max_select, attempted_option: attempted }),
+      expect(on_add).toHaveBeenCalledTimes(added.length)
+      expect(on_max_reached).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ max_select, attempted_option: overflow[0] }),
       )
+      expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
+        added,
+        rejected: [],
+        overflow,
+        raw_text,
+      })
     },
   )
 
@@ -279,18 +291,5 @@ describe(`parse_paste`, () => {
     expect(on_parsed_paste).toHaveBeenCalledWith(
       expect.objectContaining({ added: [`valid`, `also_ok`], rejected: [`ab`, `x`] }),
     )
-  })
-
-  test(`on_parsed_paste summarizes added and overflow options beyond max_select`, async () => {
-    const { on_parsed_paste } = await paste_into(
-      { options: [`a`, `b`, `c`, `d`, `e`], value: [`a`], max_select: 3 },
-      `b,c,d,e`,
-    )
-    expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
-      added: [`b`, `c`],
-      rejected: [],
-      overflow: [`d`, `e`],
-      raw_text: `b,c,d,e`,
-    })
   })
 })
