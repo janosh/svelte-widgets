@@ -53,7 +53,6 @@ const numbered_lines = (count: number): string =>
   Array.from({ length: count }, (_unused, line_idx) => `line ${line_idx}`).join(`\n`)
 const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
 const status_text = () => doc_query(`[role="status"]`).textContent
-// happy-dom clamps scrollTop to its zero layout height unless a test stubs it
 const scroll_viewport = (top: number): HTMLDivElement => {
   const scrollport = doc_query<HTMLDivElement>(`.content`)
   scrollport.scrollTop = top
@@ -701,16 +700,7 @@ test(`a scroll that widens the overlay measures and refreshes the input once`, a
     return this === textarea ? ++width_reads && 640 : 0
   }
   vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(scroll_width)
-  // happy-dom clamps scrollTop to its zero layout height
-  const scrollport = doc_query<HTMLDivElement>(`.content`)
-  let scroll_top = 0
-  Object.defineProperty(scrollport, `scrollTop`, {
-    configurable: true,
-    get: () => scroll_top,
-    set: (value: number) => void (scroll_top = value),
-  })
-  scroll_top = 40
-  scrollport.dispatchEvent(new Event(`scroll`))
+  scroll_viewport(40)
   await flush_async()
   expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`640px`)
   expect(width_reads).toBe(1)

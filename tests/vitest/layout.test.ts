@@ -1,8 +1,8 @@
 import { repository } from '$root/package.json'
 import Layout from '$root/src/routes/+layout.svelte'
-import { mount, tick, unmount } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { tick } from 'svelte'
+import { expect, test, vi } from 'vite-plus/test'
+import { doc_query, fire_input, press_key, render } from './index'
 
 // explicit type or the inferred `id: string` rejects the 404 case's null below
 const mocks = vi.hoisted<{ page: { route: { id: string | null }; url: URL } }>(() => ({
@@ -17,11 +17,10 @@ vi.mock(`$app/paths`, () => ({
 }))
 vi.mock(`$app/state`, () => ({ page: mocks.page }))
 
-const edit_href = (route_id: string | null, pathname: string) => {
+const render_layout = (route_id: string | null, pathname: string) => {
   mocks.page.route.id = route_id
   mocks.page.url = new URL(`https://x.co${pathname}`)
   render(Layout, {})
-  return doc_query<HTMLAnchorElement>(`footer a[href*="/blob/-/"]`).getAttribute(`href`)
 }
 
 test.each([
@@ -36,27 +35,18 @@ test.each([
   // A 404 has no route id, so it must not fall into the landing-page entry.
   [null, `/no-such-page`, `src/routes`],
 ])(`footer edit link for route %s points at %s`, (route_id, pathname, source) => {
-  expect(edit_href(route_id, pathname)).toBe(`${repository}/blob/-/${source}`)
+  render_layout(route_id, pathname)
+  expect(doc_query(`footer a[href*="/blob/-/"]`).getAttribute(`href`)).toBe(
+    `${repository}/blob/-/${source}`,
+  )
 })
 
 test(`command search includes custom demo labels`, async () => {
-  mocks.page.route.id = `/`
-  mocks.page.url = new URL(`https://x.co/`)
-  const app = mount(Layout, { target: document.body })
-  onTestFinished(async () => {
-    await unmount(app, { outro: false })
-    document.body.replaceChildren()
-  })
-
-  window.dispatchEvent(
-    new KeyboardEvent(`keydown`, { key: `k`, metaKey: true, bubbles: true }),
-  )
+  render_layout(`/`, `/`)
+  press_key(window, `k`, { metaKey: true })
   await tick()
-
   const input = doc_query<HTMLInputElement>(`input[aria-label="Site search"]`)
-  input.value = `diffview`
-  input.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
-  await tick()
+  await fire_input(input, `diffview`, `input`)
 
   const labels = Array.from(document.querySelectorAll(`li[role="option"]`), (option) =>
     option.textContent?.trim(),

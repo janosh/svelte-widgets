@@ -4,6 +4,10 @@ export const composed_parent = (element: Element): Element | null => {
   return root instanceof ShadowRoot ? root.host : null
 }
 
+// only these two element types expose focus(); selector matches can include SVG anchors
+export const focusable = (target: unknown): HTMLElement | SVGElement | null =>
+  target instanceof HTMLElement || target instanceof SVGElement ? target : null
+
 export const is_active_element = (element: Element): boolean => {
   const root = element.getRootNode()
   return `activeElement` in root && root.activeElement === element

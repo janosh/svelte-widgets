@@ -27,9 +27,7 @@ Keeps Tab inside a surface and hands the keyboard back when it closes — the ot
 {/if}
 ```
 
-`initial` picks the entry point (an element, a selector, or `false` to leave focus
-alone) and `restore` the exit point, defaulting to whatever held focus when the trap
-went up. `include` extends the trap over portalled parts of the same surface.
+`initial` picks the entry point (an element, a selector, or `false` to leave focus alone) and `restore` the exit point, defaulting to whatever held focus when the trap went up. `include` extends the trap over portalled parts of the same surface.
 
 Open shadow roots participate in the trap; closed roots need their own trap or a focusable host.
 

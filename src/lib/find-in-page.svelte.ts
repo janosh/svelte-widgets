@@ -30,16 +30,11 @@ export type FindOptions = {
 export const create_find_state = (get_options: () => FindOptions = () => ({})) => {
   const make_node_filter = () => {
     const { only_within, also_ignore } = get_options()
-    const selector = also_ignore
-      ? `${IGNORED_SELECTOR}, ${also_ignore}`
-      : IGNORED_SELECTOR
-    return (node: Node): number => {
-      const parent = node.parentElement
-      if (only_within && !parent?.closest(only_within)) return NodeFilter.FILTER_REJECT
-      return parent?.closest(selector)
+    const selector = [IGNORED_SELECTOR, also_ignore].filter(Boolean).join(`, `)
+    return ({ parentElement: parent }: Node): number =>
+      (only_within && !parent?.closest(only_within)) || parent?.closest(selector)
         ? NodeFilter.FILTER_REJECT
         : NodeFilter.FILTER_ACCEPT
-    }
   }
 
   let query = $state(``)

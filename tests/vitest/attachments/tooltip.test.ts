@@ -15,7 +15,6 @@ import {
 describe(`tooltip manager`, () => {
   beforeEach(() => {
     vi.useFakeTimers()
-    onTestFinished(() => void vi.useRealTimers()) // registered first, so it runs last
     stub_props(globalThis, { innerWidth: 1000, innerHeight: 800 })
   })
 
@@ -133,8 +132,7 @@ describe(`tooltip manager`, () => {
     }
     attach_tooltip(element)
     pointer_over(element)
-    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
-    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
+    expect(visible_text() !== null).toBe(shows)
   })
 
   it.each([
@@ -148,8 +146,7 @@ describe(`tooltip manager`, () => {
     element.setAttribute(`aria-label`, `Remove require forces filter`)
     attach_tooltip(element)
     pointer_over(element)
-    const tooltip_el = document.querySelector<HTMLElement>(`.custom-tooltip`)
-    expect(Boolean(tooltip_el && !tooltip_el.hidden)).toBe(shows)
+    expect(visible_text() !== null).toBe(shows)
   })
 
   it.each([`manual`, `bogus`])(

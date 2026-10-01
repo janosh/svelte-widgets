@@ -16,7 +16,7 @@ beforeEach(() => {
 afterEach(() => void vi.unstubAllGlobals())
 
 const mount_theme_toggle = async (props: ComponentProps<typeof ThemeToggle> = {}) => {
-  render(ThemeToggle, { ...props })
+  render(ThemeToggle, props)
   await tick()
   return doc_query<HTMLButtonElement>(`button`)
 }
@@ -27,13 +27,6 @@ const applied_theme = () => [
 ]
 
 const rendered_icon_path = () => doc_query(`button svg path`).getAttribute(`d`)
-
-const disable_storage = () => {
-  const throw_disabled = () => {
-    throw new DOMException(`storage disabled`)
-  }
-  vi.stubGlobal(`localStorage`, { getItem: throw_disabled, setItem: throw_disabled })
-}
 
 test(`initial render stays hidden until hydration`, async () => {
   localStorage.setItem(`theme`, `dark`)
@@ -74,7 +67,10 @@ test.each([
 
 // Storage failure is expected (for example private mode) and must not log errors.
 test(`without storage, mount keeps an externally applied theme and clicks still work`, async () => {
-  disable_storage()
+  const throw_disabled = () => {
+    throw new DOMException(`storage disabled`)
+  }
+  vi.stubGlobal(`localStorage`, { getItem: throw_disabled, setItem: throw_disabled })
   const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
   apply_theme_mode(`dark`)
 

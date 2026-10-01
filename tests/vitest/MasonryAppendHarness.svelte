@@ -2,11 +2,12 @@
   import { Masonry, type MasonryOrder } from '$lib'
   import AppendRenderProbe from './AppendRenderProbe.svelte'
 
+  // most tests only drive append/remove/set_cols, so `events` defaults to a throwaway
   let {
-    events,
+    events = [],
     order = `balanced-stable`,
     virtualize = false,
-  }: { events: number[]; order?: MasonryOrder; virtualize?: boolean } = $props()
+  }: { events?: number[]; order?: MasonryOrder; virtualize?: boolean } = $props()
 
   let items = $state([{ id: 1 }, { id: 2 }, { id: 3 }, { id: 4 }])
   let n_cols = $state(2)

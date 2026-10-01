@@ -231,21 +231,13 @@ describe(`Markdown content manifests`, () => {
       `<div id="duplicate"></div>\n<div id="duplicate"></div>\n<div id="duplicate"></div>\n\n[Lost](#absent) [Missing](missing.md) [Invalid](./%zz)\n\n![Absent](missing.png)`,
     )
     const diagnostics = validate_content([broken], { assets: [] })
-    expect(diagnostics.map(({ message }) => message)).toEqual([
-      `Duplicate anchor #duplicate`,
-      `Duplicate anchor #duplicate`,
-      `Missing fragment #absent in /guide.md`,
-      `Missing document /missing.md`,
-      `Invalid URL "./%zz"`,
-      `Missing asset /missing.png`,
-    ])
-    expect(diagnostics.map(({ code }) => code)).toEqual([
-      `duplicate_anchor`,
-      `duplicate_anchor`,
-      `missing_fragment`,
-      `missing_document`,
-      `invalid_url`,
-      `missing_asset`,
+    expect(diagnostics.map(({ code, message }) => [code, message])).toEqual([
+      [`duplicate_anchor`, `Duplicate anchor #duplicate`],
+      [`duplicate_anchor`, `Duplicate anchor #duplicate`],
+      [`missing_fragment`, `Missing fragment #absent in /guide.md`],
+      [`missing_document`, `Missing document /missing.md`],
+      [`invalid_url`, `Invalid URL "./%zz"`],
+      [`missing_asset`, `Missing asset /missing.png`],
     ])
     expect(diagnostics.slice(0, 2)).toMatchObject(
       broken.anchors.slice(1).map(({ range }) => ({

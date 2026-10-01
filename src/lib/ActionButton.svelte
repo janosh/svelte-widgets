@@ -109,6 +109,11 @@
   }
 </script>
 
+{#snippet body(icon: IconData | undefined, text: string)}
+  {#if icon}<Icon {icon} />{/if}
+  {#if text}<span>{text}</span>{/if}
+{/snippet}
+
 <svelte:element
   this={as}
   role="button"
@@ -138,17 +143,12 @@
         error,
       })}
     {:else}
-      {#if current_icon}<Icon icon={current_icon} />{/if}
-      {#if current_text}<span>{current_text}</span>{/if}
+      {@render body(current_icon, current_text)}
     {/if}
   </span>
   <span data-sms-action-width="" aria-hidden="true">
     {#each ACTION_STATES as ghost_state}
-      {@const ghost_icon = icons?.[ghost_state]}
-      <span>
-        {#if ghost_icon}<Icon icon={ghost_icon} />{/if}
-        {#if msg[ghost_state]}<span>{msg[ghost_state]}</span>{/if}
-      </span>
+      <span>{@render body(icons?.[ghost_state], msg[ghost_state])}</span>
     {/each}
   </span>
 </svelte:element>

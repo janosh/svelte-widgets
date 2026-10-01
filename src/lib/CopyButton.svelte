@@ -48,7 +48,6 @@
     children?: Snippet<[ActionButtonContent<State> & { icon: IconData }]>
   } = $props()
 
-  const copy_button_selector = `[data-sms-copy]`
   const msg = $derived(merge_defaults(COPY_BUTTON_LABELS, labels))
   const icon_set = $derived(merge_defaults(DEFAULT_ICONS, icons))
   // CopyButton has no pending visual of its own: it keeps showing the current copy state
@@ -80,7 +79,7 @@
         const pre = code.parentElement
         // Any existing copy button wins, including one from a second global instance:
         // replacing it would have both instances swap buttons in an endless observer loop.
-        if (!pre || pre.querySelector(copy_button_selector)) continue
+        if (!pre || pre.querySelector(`[data-sms-copy]`)) continue
         if (skip_sel && pre.querySelector(skip_sel)) continue
 
         const props = $state({

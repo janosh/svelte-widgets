@@ -26,7 +26,7 @@
 <SettingsSearch {trigger} bind:query>
   <!-- Keyed content outside settings sections must remain visible while filtering. -->
   <div data-key="chart-legend">Unrelated chart legend</div>
-  <SettingsGroup title="Appearance" class="appearance-group" bind:open={appearance_open}>
+  <SettingsGroup title="Appearance" bind:open={appearance_open}>
     <SettingsSection title="Atoms" layout="grid">
       <label
         data-key="atom_radius"

@@ -1,4 +1,4 @@
-import type { GroupedOptions, Option, OptionListProps } from '../types'
+import type { GroupedOptions, LoadOptionsConfig, Option, OptionListProps } from '../types'
 import { create_term_matcher, get_label, has_group, is_object } from '../utils'
 import { virtual_window } from '../virtual'
 
@@ -22,27 +22,22 @@ export function group_options<T extends Option>(
     ungrouped: `first` | `last`
   },
 ): GroupedOptions<T>[] {
-  const grouped = Map.groupBy(options, (option) =>
-    has_group(option) ? option.group : null,
-  )
-  const groups = [...grouped].filter(([group]) => group !== null)
-  if (config.sort !== `none`)
-    groups.sort(([left], [right]) => {
-      if (left === null || right === null) return 0
-      return typeof config.sort === `function`
-        ? config.sort(left, right)
-        : left.localeCompare(right) * (config.sort === `desc` ? -1 : 1)
+  const { collapsed, sort } = config
+  const ungrouped_order = config.ungrouped === `first` ? -1 : 1
+  // The sort is stable, so `none` keeps named groups in first-occurrence order.
+  return [...Map.groupBy(options, (option) => (has_group(option) ? option.group : null))]
+    .toSorted(([left], [right]) => {
+      if (left === null) return ungrouped_order
+      if (right === null) return -ungrouped_order
+      if (sort === `none`) return 0
+      if (typeof sort === `function`) return sort(left, right)
+      return left.localeCompare(right) * (sort === `desc` ? -1 : 1)
     })
-  const ungrouped = grouped.get(null)
-  if (ungrouped) {
-    if (config.ungrouped === `first`) groups.unshift([null, ungrouped])
-    else groups.push([null, ungrouped])
-  }
-  return groups.map(([group, items]) => ({
-    group,
-    options: items,
-    collapsed: group !== null && config.collapsed.has(group),
-  }))
+    .map(([group, items]) => ({
+      group,
+      options: items,
+      collapsed: group !== null && collapsed.has(group),
+    }))
 }
 
 // Keyboard order: every option outside collapsed groups.
@@ -154,44 +149,29 @@ export function validate_option_list_config(
   > & { has_grouped_options: boolean },
   component = `OptionList`,
 ): void {
-  const invalid_config = (message: string): never => {
-    throw new TypeError(`${component}: ${message}`)
-  }
-  if (max_options != null && !is_integer_at_least(max_options, 0)) {
-    invalid_config(
+  const { batch_size, debounce_ms }: Partial<LoadOptionsConfig> =
+    load_options && typeof load_options === `object` ? load_options : {}
+  const { item_height, overscan } = typeof virtual_list === `object` ? virtual_list : {}
+  const problem = [
+    max_options != null &&
+      !is_integer_at_least(max_options, 0) &&
       `max_options must be null, undefined, or a non-negative integer, got ${max_options}`,
-    )
-  }
-  if (load_options && typeof load_options === `object`) {
-    const { batch_size, debounce_ms } = load_options
-    if (batch_size !== undefined && !is_integer_at_least(batch_size, 1)) {
-      invalid_config(
-        `load_options.batch_size must be a positive integer, got ${batch_size}`,
-      )
-    }
-    if (debounce_ms !== undefined && (!Number.isFinite(debounce_ms) || debounce_ms < 0)) {
-      invalid_config(
-        `load_options.debounce_ms must be finite and non-negative, got ${debounce_ms}`,
-      )
-    }
-  }
-  if (typeof virtual_list === `object`) {
-    const { item_height, overscan } = virtual_list
-    if (
-      item_height !== undefined &&
-      (!Number.isFinite(item_height) || item_height <= 0)
-    ) {
-      invalid_config(`virtual_list.item_height must be positive, got ${item_height}`)
-    }
-    if (overscan !== undefined && !is_integer_at_least(overscan, 0)) {
-      invalid_config(
-        `virtual_list.overscan must be a non-negative integer, got ${overscan}`,
-      )
-    }
-  }
-  if (virtual_list && sticky_group_headers && has_grouped_options) {
-    invalid_config(
+    batch_size !== undefined &&
+      !is_integer_at_least(batch_size, 1) &&
+      `load_options.batch_size must be a positive integer, got ${batch_size}`,
+    debounce_ms !== undefined &&
+      (!Number.isFinite(debounce_ms) || debounce_ms < 0) &&
+      `load_options.debounce_ms must be finite and non-negative, got ${debounce_ms}`,
+    item_height !== undefined &&
+      (!Number.isFinite(item_height) || item_height <= 0) &&
+      `virtual_list.item_height must be positive, got ${item_height}`,
+    overscan !== undefined &&
+      !is_integer_at_least(overscan, 0) &&
+      `virtual_list.overscan must be a non-negative integer, got ${overscan}`,
+    virtual_list &&
+      sticky_group_headers &&
+      has_grouped_options &&
       `virtual_list cannot be combined with sticky_group_headers for grouped options`,
-    )
-  }
+  ].find((check) => typeof check === `string`)
+  if (problem) throw new TypeError(`${component}: ${problem}`)
 }

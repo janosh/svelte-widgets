@@ -40,15 +40,9 @@ export function parse_path(path: string): (string | number)[] {
 
     if (path[pos] === `"`) {
       const json_start = pos
-      let escaped = false
-      pos++
-      while (pos < path.length) {
-        const quote_char = path[pos]
-        if (escaped) escaped = false
-        else if (quote_char === `\\`) escaped = true
-        else if (quote_char === `"`) break
-        pos++
-      }
+      // Advance to the closing quote, skipping each backslash-escaped character
+      for (pos++; pos < path.length && path[pos] !== `"`; pos++)
+        if (path[pos] === `\\`) pos++
       if (pos >= path.length) {
         segments.push(path.slice(json_start + 1))
         break

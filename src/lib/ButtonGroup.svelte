@@ -85,8 +85,7 @@
     ;(on_change as ((value: Value | Value[] | null) => void) | undefined)?.(value)
   }
 
-  function handle_keydown(event: KeyboardEvent) {
-    if (!(event.currentTarget instanceof HTMLElement)) return
+  function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
     // `[data-value]` excludes option_suffix buttons, which would desync focus from the
     // option it is meant to select
     const selector = `button[data-value]:not(:disabled)`

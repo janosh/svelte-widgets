@@ -12,6 +12,11 @@ const open_editor = async (page: Page) => {
 }
 const caret = (area: Locator): Promise<number> =>
   area.evaluate((node: HTMLTextAreaElement) => node.selectionStart)
+const selection_end = (area: Locator): Promise<number> =>
+  area.evaluate((node: HTMLTextAreaElement) => node.selectionEnd)
+// The native input holds only the viewport's lines, not the whole document
+const input_line_count = async (area: Locator): Promise<number> =>
+  (await area.inputValue()).split(`\n`).length
 
 test(`CodeEditor tools reveal on hover and focus without taking space from code`, async ({
   page,
@@ -111,7 +116,7 @@ test(`CodeEditor search replaces undoably and navigates offscreen document lines
   await query.fill(`line 99999`)
   await expect(code_editor.getByRole(`status`)).toHaveText(`1 of 1`)
   await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`99999`)
-  expect((await editor.inputValue()).split(`\n`).length).toBeLessThan(50)
+  expect(await input_line_count(editor)).toBeLessThan(50)
   await query.press(`Escape`)
   await expect(code_editor.getByRole(`search`)).toHaveCount(0)
   await expect(editor).toBeFocused()
@@ -127,7 +132,7 @@ test(`CodeEditor search replaces undoably and navigates offscreen document lines
 test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async ({
   page,
 }) => {
-  const { code_editor, area: editor } = await open_editor(page)
+  const { demo, code_editor, area: editor } = await open_editor(page)
   await editor.focus()
 
   await page.keyboard.press(`Tab`)
@@ -137,7 +142,7 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
   await page.keyboard.press(`Tab`)
   await expect(editor).not.toBeFocused()
 
-  const token_layer = page.locator(`#code-editor-basic .token-layer`)
+  const token_layer = code_editor.locator(`.token-layer`)
   const layer_width = () =>
     token_layer.evaluate((node) => Number(node.style.minWidth.replace(`px`, ``)))
   const wide_width = await layer_width()
@@ -145,16 +150,15 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
   await code_editor.evaluate((node) => (node.style.width = `300px`))
   await expect.poll(layer_width).toBeLessThan(wide_width)
 
-  const scrollport = page.locator(`#code-editor-basic .content`)
+  const scrollport = code_editor.locator(`.content`)
+  const scroll_left = () => scrollport.evaluate((node) => node.scrollLeft)
   await editor.focus()
   await page.keyboard.press(`ControlOrMeta+a`)
   await page.keyboard.insertText(`a`.repeat(300))
   await page.keyboard.press(`Home`)
-  await expect.poll(() => scrollport.evaluate((node) => node.scrollLeft)).toBe(0)
+  await expect.poll(scroll_left).toBe(0)
   await page.keyboard.press(`End`)
-  await expect
-    .poll(() => scrollport.evaluate((node) => node.scrollLeft))
-    .toBeGreaterThan(1800)
+  await expect.poll(scroll_left).toBeGreaterThan(1800)
   await expect
     .poll(() =>
       scrollport.evaluate(
@@ -163,36 +167,28 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
     )
     .toBeLessThanOrEqual(8)
   await page.keyboard.press(`Home`)
-  await expect.poll(() => scrollport.evaluate((node) => node.scrollLeft)).toBe(0)
+  await expect.poll(scroll_left).toBe(0)
   await page.keyboard.insertText(`b`.repeat(100))
-  await expect
-    .poll(() => scrollport.evaluate((node) => node.scrollLeft))
-    .toBeGreaterThan(400)
+  await expect.poll(scroll_left).toBeGreaterThan(400)
   await page.keyboard.press(`Home`)
-  await expect.poll(() => scrollport.evaluate((node) => node.scrollLeft)).toBe(0)
+  await expect.poll(scroll_left).toBe(0)
 
-  await page.locator(`#code-editor-basic [data-load-large]`).click()
-  await expect(page.locator(`#code-editor-basic [data-load-large]`)).toBeEnabled()
+  await demo.locator(`[data-load-large]`).click()
+  await expect(demo.locator(`[data-load-large]`)).toBeEnabled()
   await expect
     .poll(() =>
       editor.evaluate((area: HTMLTextAreaElement) => area.value.endsWith(`line 100000`)),
     )
     .toBe(true)
-  expect(
-    await editor.evaluate((area: HTMLTextAreaElement) => area.value.split(`\n`).length),
-  ).toBeLessThan(50)
-  const visible_row_count = await page
-    .locator(`#code-editor-basic .token-layer .line`)
-    .count()
+  expect(await input_line_count(editor)).toBeLessThan(50)
+  const visible_row_count = await code_editor.locator(`.token-layer .line`).count()
   expect(visible_row_count).toBeGreaterThan(0)
   expect(visible_row_count).toBeLessThan(50)
   await editor.focus()
   await page.keyboard.press(`Control+End`)
-  await expect(page.locator(`#code-editor-basic .gutter-line`).last()).toHaveText(
-    `100000`,
-  )
-  const gutter_side_gap_difference = await page
-    .locator(`#code-editor-basic .gutter`)
+  await expect(code_editor.locator(`.gutter-line`).last()).toHaveText(`100000`)
+  const gutter_side_gap_difference = await code_editor
+    .locator(`.gutter`)
     .evaluate((gutter) => {
       const widest_number = gutter.querySelector(`.gutter-line:last-child`)
       if (!(widest_number instanceof HTMLElement))
@@ -214,13 +210,11 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
   await expect.poll(ends_with_bang).toBe(false)
   // Cross multiple input-window boundaries while retaining the caret column.
   for (let count = 0; count < 40; count++) await page.keyboard.press(`ArrowUp`)
-  await expect(page.locator(`#code-editor-basic .gutter-line.active`)).toHaveText(`99960`)
+  await expect(code_editor.locator(`.gutter-line.active`)).toHaveText(`99960`)
   await page.keyboard.press(`Home`)
   await page.keyboard.type(`viewport!`)
   await expect.poll(() => editor.inputValue()).toContain(`viewport!line 99960`)
-  expect(
-    await editor.evaluate((area: HTMLTextAreaElement) => area.value.split(`\n`).length),
-  ).toBeLessThan(50)
+  expect(await input_line_count(editor)).toBeLessThan(50)
   await page.keyboard.press(`ControlOrMeta+z`)
   await expect.poll(() => editor.inputValue()).not.toContain(`viewport!`)
 })
@@ -273,12 +267,12 @@ for (const text of [
 test(`CodeEditor mouse selection keeps its anchor while scrolling beyond the input window`, async ({
   page,
 }) => {
-  const { area } = await open_editor(page)
-  await page.locator(`#code-editor-basic [data-load-large]`).click()
+  const { demo, code_editor, area } = await open_editor(page)
+  await demo.locator(`[data-load-large]`).click()
   await expect.poll(() => area.inputValue()).toContain(`line 100000`)
   await area.focus()
   await page.keyboard.press(`Control+Home`)
-  const port = page.locator(`#code-editor-basic .content`)
+  const port = code_editor.locator(`.content`)
   await port.scrollIntoViewIfNeeded()
   const box = await port.boundingBox()
   if (!box) throw new Error(`Editor scroll viewport has no bounding box`)
@@ -286,9 +280,7 @@ test(`CodeEditor mouse selection keeps its anchor while scrolling beyond the inp
   await page.mouse.down()
   await page.mouse.move(box.x + 50, box.y + box.height - 10, { steps: 10 })
   const anchor = await caret(area)
-  const selected_end = await area.evaluate(
-    (node: HTMLTextAreaElement) => node.selectionEnd,
-  )
+  const selected_end = await selection_end(area)
   expect(selected_end).toBeGreaterThan(anchor)
   await page.mouse.move(box.x + 50, box.y + box.height + 50, { steps: 10 })
   await expect.poll(() => port.evaluate((node) => node.scrollTop)).toBeGreaterThan(500)
@@ -298,9 +290,7 @@ test(`CodeEditor mouse selection keeps its anchor while scrolling beyond the inp
       (node: HTMLTextAreaElement) => Number(node.dataset.inputFrom) + node.selectionStart,
     ),
   ).toBe(anchor)
-  expect(
-    await area.evaluate((node: HTMLTextAreaElement) => node.selectionEnd),
-  ).toBeGreaterThan(selected_end)
+  expect(await selection_end(area)).toBeGreaterThan(selected_end)
   await page.keyboard.press(`Control+Home`)
   await area.dblclick({ position: { x: 20, y: 10 } })
   expect(

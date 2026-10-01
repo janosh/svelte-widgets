@@ -110,17 +110,13 @@
   }
   const update = (thumb: 0 | 1, next: number, snap = true): RangeValue | undefined => {
     const [floor, ceiling] = bounds(thumb)
-    let accepted = next
-    if (snap && next > floor && next < ceiling) {
-      const coordinate = snap_range_value(
-        domain.to_position(next),
-        domain.min,
-        domain.max,
-        step,
-      )
-      accepted = domain.from_position(coordinate)
-    }
-    accepted = clamp(accepted, floor, ceiling)
+    const snapped =
+      snap && next > floor && next < ceiling
+        ? domain.from_position(
+            snap_range_value(domain.to_position(next), domain.min, domain.max, step),
+          )
+        : next
+    const accepted = clamp(snapped, floor, ceiling)
     if (accepted === values[thumb]) return
     const next_value: RangeValue =
       thumb === 0 ? [accepted, values[1]] : [values[0], accepted]
@@ -131,36 +127,31 @@
   const commit_value = (next: RangeValue | undefined): void => {
     // A caller can replace the binding synchronously inside on_input. That reset is
     // external state, not a completed user edit, just like a reset between pointer events.
-    if (!is_disabled() && next && next[0] === values[0] && next[1] === values[1]) {
+    if (!is_disabled() && next && next[0] === values[0] && next[1] === values[1])
       on_commit?.([...next])
-    }
   }
   const commit_number = (input: HTMLInputElement, thumb: 0 | 1): void => {
-    if (
-      !is_disabled() &&
-      !input.validity.badInput &&
-      Number.isFinite(input.valueAsNumber) &&
-      (scale !== `log` || input.valueAsNumber > 0)
-    ) {
-      commit_value(update(thumb, input.valueAsNumber))
-    }
+    // Bad input reads as NaN; log fields also discard zero and negative drafts.
+    const typed = input.valueAsNumber
+    if (!is_disabled() && Number.isFinite(typed) && (scale !== `log` || typed > 0))
+      commit_value(update(thumb, typed))
     input.value = discard_drafts()[thumb]
   }
+  // Number fields pass horizontal=0 and step from their draft when it is a number.
   const keydown = (
     event: KeyboardEvent,
     thumb: 0 | 1,
+    horizontal: -1 | 0 | 1 = is_rtl() ? -1 : 1,
     baseline = values[thumb],
   ): void => {
     if (is_disabled()) return
-    const action = range_key_action(event, is_rtl() ? -1 : 1)
+    const action = range_key_action(event, horizontal)
     if (action === undefined) return
     let next: number
     if (typeof action === `string`) next = bounds(thumb)[action === `min` ? 0 : 1]
     else {
-      const bounded = clamp(baseline, min, max)
-      next = domain.from_position(
-        step_range_coordinate(bounded, domain, step, Math.sign(action), Math.abs(action)),
-      )
+      const start = clamp(Number.isFinite(baseline) ? baseline : values[thumb], min, max)
+      next = domain.from_position(step_range_coordinate(start, domain, step, action))
     }
     event.preventDefault()
     commit_value(update(thumb, next, false))
@@ -270,10 +261,8 @@
               value={drafts[thumb]}
               style:width={`${Math.max(3, drafts[thumb].length)}ch`}
               title={names[thumb]}
-              oninput={(event) => {
-                const text = event.currentTarget.value
-                drafts = drafts.map((draft, idx) => (idx === thumb ? text : draft))
-              }}
+              oninput={(event) =>
+                (drafts = drafts.with(thumb, event.currentTarget.value))}
               onchange={(event) => commit_number(event.currentTarget, thumb)}
               onblur={(event) => commit_number(event.currentTarget, thumb)}
               onkeydown={(event) => {
@@ -284,15 +273,8 @@
                 } else if (event.key === `Escape`) {
                   event.preventDefault()
                   discard_drafts()
-                } else if (
-                  [`ArrowUp`, `ArrowDown`, `PageUp`, `PageDown`].includes(event.key)
-                ) {
-                  const draft_value = event.currentTarget.valueAsNumber
-                  keydown(
-                    event,
-                    thumb,
-                    Number.isFinite(draft_value) ? draft_value : values[thumb],
-                  )
+                } else {
+                  keydown(event, thumb, 0, event.currentTarget.valueAsNumber)
                   if (event.defaultPrevented) discard_drafts()
                 }
               }}
@@ -399,9 +381,7 @@
         align-items: center;
         column-gap: 12px;
         padding: 0;
-        .rail {
-          grid-column: 2;
-        }
+        .rail,
         .ticks {
           grid-column: 2;
         }
@@ -454,7 +434,6 @@
       cursor: grab;
       box-shadow: none;
       outline: none;
-      touch-action: none;
       &.active {
         z-index: 1;
       }

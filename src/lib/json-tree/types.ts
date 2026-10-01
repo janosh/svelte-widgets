@@ -1,4 +1,3 @@
-// JSON Tree component types
 import { createContext } from 'svelte'
 import type { GhostEntry } from './utils'
 
@@ -110,12 +109,9 @@ export type CopyEventPosition = { clientX: number; clientY: number }
 export const [get_json_tree_context, set_json_tree_context] =
   createContext<JsonTreeContext>()
 
-// Diff status for comparing two JSON values
-type DiffStatus = `added` | `removed` | `changed`
-
 // Single entry in a diff result (one path that differs between old and new)
 export interface DiffEntry {
-  status: DiffStatus
+  status: `added` | `removed` | `changed`
   path: string
   old_value?: unknown
   new_value?: unknown

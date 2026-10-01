@@ -2,7 +2,7 @@ import FullscreenButton from '$lib/FullscreenButton.svelte'
 import { get_page_background, sync_fullscreen } from '$lib/fullscreen.svelte'
 import * as icons from '$lib/icons'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick, unmount } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { fromStore, get, writable } from 'svelte/store'
 import {
   assert,
@@ -13,7 +13,7 @@ import {
   test,
   vi,
 } from 'vite-plus/test'
-import { click, create_element } from './index'
+import { click, create_element, render } from './index'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
@@ -64,9 +64,9 @@ const mount_button = (props: ButtonProps = {}) => {
   const wrapper = create_element()
   const flag = writable(false)
   const flag_proxy = fromStore(flag)
-  const component = mount(FullscreenButton, {
-    target: wrapper,
-    props: {
+  const unmount_button = render(
+    FullscreenButton,
+    {
       wrapper,
       get fullscreen() {
         return flag_proxy.current
@@ -76,12 +76,11 @@ const mount_button = (props: ButtonProps = {}) => {
       },
       ...props,
     },
-  })
-  // clearing document.body does not undo a button's fullscreenchange subscription
-  onTestFinished(() => unmount(component))
+    wrapper,
+  )
   const button = wrapper.querySelector(`button`)
   assert(button !== null, `FullscreenButton rendered no button`)
-  return { wrapper, flag, button, component }
+  return { wrapper, flag, button, unmount_button }
 }
 
 const outsider_goes_fullscreen = async (): Promise<void> => {
@@ -121,7 +120,7 @@ describe(`per-wrapper isolation`, () => {
 })
 
 describe(`flag <-> browser sync`, () => {
-  test(`click enters, click again exits, and both call the caller's onclick`, async () => {
+  test(`clicks and outside flag writes drive the browser; clicks call onclick`, async () => {
     const onclick = vi.fn()
     const { button, flag, wrapper } = mount_button({ onclick })
 
@@ -141,18 +140,14 @@ describe(`flag <-> browser sync`, () => {
     expect(document.exitFullscreen).toHaveBeenCalledTimes(1)
     expect(document.fullscreenElement).toBeNull()
     expect(icon_path(button)).toBe(icons.Fullscreen.d)
-  })
-
-  test(`setting the flag from outside drives the browser`, async () => {
-    const { flag, wrapper } = mount_button()
 
     flag.set(true)
     await settle()
     expect(document.fullscreenElement).toBe(wrapper)
-
     flag.set(false)
     await settle()
     expect(document.fullscreenElement).toBeNull()
+    expect(onclick).toHaveBeenCalledTimes(2)
   })
 
   test(`canceling a pending entry does not re-enter when the request settles`, async () => {
@@ -205,9 +200,9 @@ describe(`flag <-> browser sync`, () => {
     expect(request_calls).toEqual([wrapper, wrapper])
   })
 
-  test(`Esc-style external exit clears the flag and calls on_change`, async () => {
+  test(`Esc-style external exit clears the flag, calls on_change and allows re-entry`, async () => {
     const on_change = vi.fn()
-    const { button, flag } = mount_button({ on_change })
+    const { button, flag, wrapper } = mount_button({ on_change })
 
     button.click()
     await settle()
@@ -217,50 +212,38 @@ describe(`flag <-> browser sync`, () => {
     await settle()
     expect(get(flag)).toBe(false)
     expect(on_change).toHaveBeenCalledExactlyOnceWith(false)
-  })
-
-  test(`a rejected request reports the error and leaves the browser untouched`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    const on_request_error = vi.fn()
-    const request_error = new Error(`fullscreen denied`)
-    const request = vi.fn(() => Promise.reject(request_error))
-    Element.prototype.requestFullscreen = request
-    const { button, flag } = mount_button({ on_request_error })
-
-    button.click()
+    // the settled entry no longer counts as pending, so the same request goes out again
+    await click(button)
     await settle()
-
-    expect(on_request_error).toHaveBeenCalledExactlyOnceWith(request_error)
-    expect(console_error).toHaveBeenCalledOnce()
-    expect(document.fullscreenElement).toBeNull()
-    // a flag left true would misreport the browser and make the next attempt a no-op
-    expect(get(flag)).toBe(false)
-
-    button.click()
-    await settle()
-    expect(request).toHaveBeenCalledTimes(2)
-  })
-
-  test(`a rejected exit is reported and leaves the browser in fullscreen`, async () => {
-    const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
-    const on_request_error = vi.fn()
-    const { button, flag, wrapper } = mount_button({ on_request_error })
-
-    button.click()
-    await settle()
-    const exit_error = new Error(`exit denied`)
-    document.exitFullscreen = vi.fn(() => Promise.reject(exit_error))
-
-    button.click()
-    await settle()
-
-    expect(console_error).toHaveBeenCalledOnce()
-    expect(on_request_error).toHaveBeenCalledExactlyOnceWith(exit_error)
-    expect(document.exitFullscreen).toHaveBeenCalledOnce()
     expect(document.fullscreenElement).toBe(wrapper)
-    // flag must match the browser or aria-pressed / the next click would lie
-    expect(get(flag)).toBe(true)
   })
+
+  test.each([false, true])(
+    `a rejected request (exit=%s) is reported and leaves the browser untouched`,
+    async (exiting) => {
+      const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
+      const on_request_error = vi.fn()
+      const { button, flag, wrapper } = mount_button({ on_request_error })
+      if (exiting) await click(button)
+      await settle()
+      const error = new Error(`fullscreen denied`)
+      const request = vi.fn(() => Promise.reject(error))
+      if (exiting) document.exitFullscreen = request
+      else Element.prototype.requestFullscreen = request
+
+      await click(button)
+      await settle()
+      expect(on_request_error).toHaveBeenCalledExactlyOnceWith(error)
+      expect(console_error).toHaveBeenCalledOnce()
+      expect(document.fullscreenElement).toBe(exiting ? wrapper : null)
+      // the flag must match the browser, else aria-pressed lies and the retry is a no-op
+      expect(get(flag)).toBe(exiting)
+
+      await click(button)
+      await settle()
+      expect(request).toHaveBeenCalledTimes(2)
+    },
+  )
 
   test(`a stale exit rejection does not re-enter after an external exit`, async () => {
     vi.spyOn(console, `error`).mockImplementation(() => {})
@@ -284,9 +267,9 @@ describe(`flag <-> browser sync`, () => {
   })
 
   test(`unmounting stops tracking fullscreenchange`, async () => {
-    const { component, flag, wrapper } = mount_button()
+    const { unmount_button, flag, wrapper } = mount_button()
 
-    await unmount(component)
+    await unmount_button()
     await set_fullscreen_element(wrapper)
     await settle()
 
@@ -304,15 +287,6 @@ describe(`flag <-> browser sync`, () => {
     // an unowned fullscreen session must not overwrite a flag without an explicit sync request
     await outsider_goes_fullscreen()
     expect(get(flag)).toBe(true)
-  })
-
-  test(`placement=corner is opt-in`, () => {
-    const inline_button = mount_button({ wrapper: undefined }).button
-    const corner_button = mount_button({ wrapper: undefined, placement: `corner` }).button
-
-    expect(
-      [inline_button, corner_button].map((button) => button.classList.contains(`corner`)),
-    ).toEqual([false, true])
   })
 
   test(`sync_fullscreen throws outside an effect context`, () => {
@@ -380,40 +354,45 @@ describe(`button rendering`, () => {
   test.each([
     icons.Check,
     { viewBox: icons.Check.viewBox, markup: `<path d="${icons.Check.d}"/>` },
-  ])(`custom icons, labels and class merge with the defaults`, (enter_icon) => {
-    const { button } = mount_button({
-      // only the `enter` half of each record: `exit` must fall back to the default
-      icons: { enter: enter_icon },
-      labels: { enter: `Grow` },
-      class: `my-btn`,
-      'aria-pressed': true, // spread before the real one, so it loses
-    })
+  ])(
+    `custom icons, labels, class and placement merge with the defaults`,
+    (enter_icon) => {
+      const { button } = mount_button({
+        // only the `enter` half of each record: `exit` must fall back to the default
+        icons: { enter: enter_icon },
+        labels: { enter: `Grow` },
+        class: `my-btn`,
+        placement: `corner`,
+        'aria-pressed': true, // spread before the real one, so it loses
+      })
 
-    expect([...button.classList]).toEqual(
-      expect.arrayContaining([`fullscreen-btn`, `my-btn`]),
-    )
-    expect(button.title).toBe(`Grow`)
-    expect(button.getAttribute(`aria-label`)).toBe(`Grow`)
-    expect(button.getAttribute(`aria-pressed`)).toBe(`false`) // not the consumer's true
-    expect(icon_path(button)).toBe(icons.Check.d)
+      expect([...button.classList]).toEqual(
+        expect.arrayContaining([`fullscreen-btn`, `my-btn`, `corner`]),
+      )
+      expect(button.title).toBe(`Grow`)
+      expect(button.getAttribute(`aria-label`)).toBe(`Grow`)
+      expect(button.getAttribute(`aria-pressed`)).toBe(`false`) // not the consumer's true
+      expect(icon_path(button)).toBe(icons.Check.d)
 
-    // the omitted `exit` half of both records keeps its default
-    const exiting = mount_button({
-      icons: { enter: enter_icon },
-      labels: { enter: `Grow` },
-      wrapper: undefined,
-      fullscreen: true,
-    })
-    expect(exiting.button.title).toBe(`Exit fullscreen`)
-    expect(icon_path(exiting.button)).toBe(icons.ExitFullscreen.d)
+      // the omitted `exit` half of both records keeps its default
+      const exiting = mount_button({
+        icons: { enter: enter_icon },
+        labels: { enter: `Grow` },
+        wrapper: undefined,
+        fullscreen: true,
+      })
+      expect(exiting.button.title).toBe(`Exit fullscreen`)
+      expect(icon_path(exiting.button)).toBe(icons.ExitFullscreen.d)
+      expect(exiting.button.classList.contains(`corner`)).toBe(false) // placement is opt-in
 
-    // an explicitly undefined key must fall back too - a plain spread would render nothing
-    const undefined_key = mount_button({
-      labels: { enter: undefined },
-      wrapper: undefined,
-    })
-    expect(undefined_key.button.title).toBe(`Enter fullscreen`)
-  })
+      // an explicitly undefined key must fall back too - a plain spread would render nothing
+      const undefined_key = mount_button({
+        labels: { enter: undefined },
+        wrapper: undefined,
+      })
+      expect(undefined_key.button.title).toBe(`Enter fullscreen`)
+    },
+  )
 
   // a raw snippet's render() runs once, so each flag value gets its own mount; the
   // reactive path is covered by the icon swap in `click enters, click again exits`

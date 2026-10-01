@@ -117,7 +117,6 @@ export const draggable =
     }
 
     const on_pointermove = (event: PointerEvent) => {
-      if (!dragging) return
       if (move_x) {
         const delta_x = clamp(event.clientX - start.x, limits.min_x, limits.max_x)
         node.style.left = `${initial.left + delta_x}px`
@@ -130,7 +129,6 @@ export const draggable =
     }
 
     const on_pointerup = (event: PointerEvent) => {
-      if (!dragging) return
       dragging = false
       event.stopPropagation()
       restore_user_select?.()
@@ -142,7 +140,7 @@ export const draggable =
     // restore consumer inline styles on teardown rather than blanking them
     const previous_styles = {
       cursor: drag_handle.style.cursor,
-      touch_action: drag_handle.style.touchAction,
+      touchAction: drag_handle.style.touchAction,
     }
     drag_handle.addEventListener(`pointerdown`, on_pointerdown)
     drag_handle.style.cursor = `grab`
@@ -152,7 +150,6 @@ export const draggable =
       stop_pointer_follow?.()
       restore_user_select?.()
       drag_handle.removeEventListener(`pointerdown`, on_pointerdown)
-      drag_handle.style.cursor = previous_styles.cursor
-      drag_handle.style.touchAction = previous_styles.touch_action
+      Object.assign(drag_handle.style, previous_styles)
     }
   }

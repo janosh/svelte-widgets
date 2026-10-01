@@ -42,8 +42,7 @@ subtitle="One behaviour per attachment, added to an element without wrapping it 
 
 ## Quick start
 
-Every attachment is a function you call and spread onto an element. They compose freely,
-so a surface can be positioned, dismissed and trapped at once:
+Every attachment is a function you call and spread onto an element. They compose freely, so a surface can be positioned, dismissed and trapped at once:
 
 ```svelte
 <script lang="ts">
@@ -66,6 +65,4 @@ so a surface can be positioned, dismissed and trapped at once:
 {/if}
 ```
 
-Positioning for `tooltip`, `float` and the portalled dropdown all comes from one
-`compute_position` helper, so a flip near a viewport edge behaves the same wherever it
-happens.
+Positioning for `tooltip`, `float` and the portalled dropdown all comes from one `compute_position` helper, so a flip near a viewport edge behaves the same wherever it happens.

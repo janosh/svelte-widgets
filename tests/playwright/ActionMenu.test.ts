@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
 
+test.beforeEach(({ page }) => page.goto(`/popover`, { waitUntil: `networkidle` }))
+
 test(`native Popover dismissal reports pointer and Escape`, async ({ page }) => {
-  await page.goto(`/popover`, { waitUntil: `networkidle` })
   const demo = page.locator(`#popover-basic`)
   const trigger = demo.getByRole(`button`, { name: `Open popover` })
   const popover = demo.getByRole(`dialog`)
@@ -20,7 +21,6 @@ test(`native Popover dismissal reports pointer and Escape`, async ({ page }) => 
 })
 
 test(`nested Popovers report Escape only for the surface it closes`, async ({ page }) => {
-  await page.goto(`/popover`, { waitUntil: `networkidle` })
   const demo = page.locator(`#popover-basic`)
   const outer = demo.getByRole(`dialog`).first()
   await demo.getByRole(`button`, { name: `Open popover` }).click()
@@ -38,7 +38,6 @@ test(`nested Popovers report Escape only for the surface it closes`, async ({ pa
 })
 
 test(`Tab closes ActionMenu and continues page order`, async ({ page }) => {
-  await page.goto(`/popover`, { waitUntil: `networkidle` })
   const demo = page.locator(`#action-menu-basic`)
   await demo.getByRole(`button`, { name: `Edit actions` }).click()
   await expect(demo.getByRole(`menuitem`, { name: `Cut` })).toBeFocused()
@@ -49,7 +48,6 @@ test(`Tab closes ActionMenu and continues page order`, async ({ page }) => {
 })
 
 test(`right-button press outside dismisses a context ActionMenu`, async ({ page }) => {
-  await page.goto(`/popover`, { waitUntil: `networkidle` })
   const demo = page.locator(`#action-menu-basic`)
   await demo.getByText(`Right-click me`, { exact: true }).click({ button: `right` })
   await expect(demo.getByRole(`menu`)).toBeVisible()

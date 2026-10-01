@@ -85,10 +85,8 @@ const routes = readdirSync(`src/routes`, { recursive: true, encoding: `utf8` })
 
 // eslint-disable-next-line vitest/prefer-each -- Playwright does not provide test.each.
 for (const route of routes) {
-  test(`code fences on ${route} render syntax colors`, async ({ page, baseURL }) => {
-    const response = await page.goto(
-      new URL(route, baseURL ?? `http://localhost:3005`).href,
-    )
+  test(`code fences on ${route} render syntax colors`, async ({ page }) => {
+    const response = await page.goto(route)
     expect(response?.ok(), route).toBe(true)
     await expect
       .poll(() => missing_syntax_colors(page), {

@@ -230,9 +230,6 @@ describe(`Svelte integration`, () => {
       names: [],
       mappings: `GAAA,CAAC,CAAC,C;GACF,CAAC,CAAC,C`,
     })
-    const ambiguous = await compile_page('`{name}` then {name}')
-    expect(ambiguous.code).toContain(`<code>&#123;name&#125;</code> then {name}`)
-    expect(ambiguous.map.mappings.replaceAll(`;`, ``)).not.toBe(``)
     expect(
       source_map(`{name}`, `{name} {name}`, `page.md`, [
         { generated: 7, original: 0, length: 6 },

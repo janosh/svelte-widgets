@@ -15,17 +15,10 @@ const media_attributes: Record<string, string[]> = {
   image: [`href`, `xlink:href`],
   use: [`href`, `xlink:href`],
 }
-const asset_rel = new Set([
-  `stylesheet`,
-  `icon`,
-  `mask-icon`,
-  `apple-touch-icon`,
-  `apple-touch-icon-precomposed`,
-  `apple-touch-startup-image`,
-  `manifest`,
-  `prefetch`,
-  `preload`,
-])
+const asset_rel = new Set(
+  `stylesheet icon mask-icon apple-touch-icon apple-touch-icon-precomposed
+apple-touch-startup-image manifest prefetch preload`.split(/\s+/u),
+)
 const asset_itemprop = new Set(
   `image logo screenshot thumbnailurl contenturl downloadurl duringmedia
 embedurl installurl layoutimage`.split(/\s+/u),
@@ -152,18 +145,13 @@ export function asset_imports(): PreprocessorGroup {
           )
             names = [`content`]
           for (const attribute of attributes) {
-            if (!names.includes(attribute.name)) continue
-            const attribute_value = static_text(attribute)
+            const { name, start, end } = attribute
+            const attribute_value = names.includes(name) && static_text(attribute)
             if (!attribute_value) continue
-            const expression = attribute.name.endsWith(`srcset`)
+            const expression = name.endsWith(`srcset`)
               ? srcset_expression(attribute_value, resolve)
               : resolve(attribute_value)
-            if (expression)
-              edits.push({
-                start: attribute.start,
-                end: attribute.end,
-                text: `${attribute.name}={${expression}}`,
-              })
+            if (expression) edits.push({ start, end, text: `${name}={${expression}}` })
           }
         }
         for (const [key, child] of Object.entries(value))

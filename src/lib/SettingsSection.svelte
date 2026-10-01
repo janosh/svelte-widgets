@@ -175,9 +175,8 @@
         }
         // assigning textContent replaces the node even when unchanged, which would notify
         // the component's subtree observer forever
-        if (description_element.textContent !== description) {
+        if (description_element.textContent !== description)
           description_element.textContent = description
-        }
       }
 
       // Reserve the gutter before the value changes, including during keyboard edits.
@@ -200,10 +199,8 @@
           )
           row.append(reset_button)
         }
-        const reset_label = msg.reset_key(label || key.replaceAll(/[_-]+/gu, ` `))
-        for (const attribute of [`aria-label`, `title`]) {
-          reset_button.setAttribute(attribute, reset_label)
-        }
+        reset_button.title = msg.reset_key(label || key.replaceAll(/[_-]+/gu, ` `))
+        reset_button.setAttribute(`aria-label`, reset_button.title)
       }
       return Boolean(description)
     }

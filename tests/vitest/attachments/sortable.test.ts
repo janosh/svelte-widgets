@@ -44,7 +44,6 @@ describe(`sortable`, () => {
     const table = document.createElement(`table`)
     table.innerHTML = inner_html
     document.body.append(table)
-    onTestFinished(() => table.remove())
     return table
   }
   const click = (header: Element) =>

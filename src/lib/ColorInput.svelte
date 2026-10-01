@@ -46,11 +46,10 @@
   }
   const checked_color = (input: string): string => {
     const normalized = normalize(input)
-    if (!normalized)
-      throw new Error(
-        `ColorInput needs a hex color${alpha ? ` with optional alpha` : ``}, got ${JSON.stringify(input)}`,
-      )
-    return normalized
+    if (normalized) return normalized
+    throw new Error(
+      `ColorInput needs a hex color${alpha ? ` with optional alpha` : ``}, got ${JSON.stringify(input)}`,
+    )
   }
   const color = $derived(checked_color(value))
   const palette = $derived(presets.map(checked_color))
@@ -78,8 +77,7 @@
     }
     // Resolve the bound update before restoring the raw text, so short hex expands
     // in the binding without replacing a six-digit color still being typed.
-    const committed = color
-    draft = final ? committed : next_draft
+    draft = final ? color : next_draft
   }
   const pick = (input: HTMLInputElement, final = false): void =>
     update(`${input.value}${alpha ? preview.slice(7) : ``}`, final)

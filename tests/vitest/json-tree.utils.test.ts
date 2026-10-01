@@ -65,6 +65,7 @@ it.each([
   [undefined, `undefined`],
   [null, `null`],
   [`hello`, `hello`, `"hello"`],
+  [`a`.repeat(100), `a`.repeat(100), `"${`a`.repeat(50)}..."`], // previews truncate at 50
   [42, `42`],
   [true, `true`],
   [false, `false`],
@@ -173,10 +174,6 @@ it(`serializes shared and circular references in objects, Maps and Sets`, () => 
       right: JSON.parse(serialize_for_copy(shared)),
     })
   }
-})
-
-it(`truncates long previews`, () => {
-  expect(format_preview(`a`.repeat(100), 50)).toBe(`"${`a`.repeat(50)}..."`)
 })
 
 it.each([`日本語テキスト`, `🚀 🎨 🔧`, `∑∏∫∂∇`, `First\nSecond\tThird`, ``, `   `])(

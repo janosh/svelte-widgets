@@ -88,16 +88,11 @@ const setup = (width = 400, height = 300, padding = ``) => {
   base.canvas.style.width = `100%`
   overlay.canvas.style.height = `inherit`
   const state = $state<{
-    canvas: HTMLCanvasElement | undefined
-    overlay_canvas: HTMLCanvasElement | undefined
-    height: number | undefined
+    canvas?: HTMLCanvasElement
+    overlay_canvas?: HTMLCanvasElement
+    height?: number
     revision: number
-  }>({
-    canvas: base.canvas,
-    overlay_canvas: overlay.canvas,
-    height: undefined,
-    revision: 0,
-  })
+  }>({ canvas: base.canvas, overlay_canvas: overlay.canvas, revision: 0 })
   const draw = vi.fn()
   const draw_overlay = vi.fn()
   let surface: ReturnType<typeof create_canvas_surface> | undefined

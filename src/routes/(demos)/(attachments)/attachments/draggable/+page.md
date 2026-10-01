@@ -61,7 +61,4 @@
 </style>
 ```
 
-`axis` defaults to `both`; use `x` or `y` to lock movement. `bounds` is sampled when
-dragging starts and clamps the node to its parent's or another element's border box, or
-to a viewport-coordinate `{ top, right, bottom, left }` rectangle. A node larger than
-its bounds pins its top-left edge.
+`axis` defaults to `both`; use `x` or `y` to lock movement. `bounds` is sampled when dragging starts and clamps the node to its parent's or another element's border box, or to a viewport-coordinate `{ top, right, bottom, left }` rectangle. A node larger than its bounds pins its top-left edge.

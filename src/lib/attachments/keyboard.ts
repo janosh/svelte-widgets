@@ -45,8 +45,6 @@ export const forward_window_keydown =
 
     // Hydration can attach after the pointer has already entered the server-rendered node.
     let is_hovered = node.matches(`:hover`)
-    const on_enter = () => (is_hovered = true)
-    const on_leave = () => (is_hovered = false)
     const on_keydown = (event: Event) => {
       if (
         !is_hovered ||
@@ -68,8 +66,8 @@ export const forward_window_keydown =
 
     const listeners = new AbortController()
     const { signal } = listeners
-    node.addEventListener(`pointerenter`, on_enter, { signal })
-    node.addEventListener(`pointerleave`, on_leave, { signal })
+    node.addEventListener(`pointerenter`, () => (is_hovered = true), { signal })
+    node.addEventListener(`pointerleave`, () => (is_hovered = false), { signal })
     globalThis.addEventListener(`keydown`, on_keydown, { signal })
 
     return () => listeners.abort()

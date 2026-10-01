@@ -251,8 +251,7 @@ export function matches_shortcut(
   event: KeyboardEvent,
   shortcut: string | null | undefined,
 ): boolean {
-  if (!shortcut) return false
-  const parsed = parse_shortcut(shortcut)
+  const parsed = shortcut ? parse_shortcut(shortcut) : null
   if (!parsed) return false
   const { key, ctrl, shift, alt, meta } = parsed
   return (
@@ -283,14 +282,11 @@ const key_symbols = new Map([
   [`space`, `␣`],
 ])
 
-export function format_shortcut(shortcut: string): string[] {
-  const parts = shortcut_parts(shortcut, true)
-  if (!parts) throw new TypeError(`Invalid keyboard shortcut: ${shortcut}`)
-  return parts.map(
+export const format_shortcut = (shortcut: string): string[] =>
+  resolved_parts(shortcut).map(
     (part) =>
       key_symbols.get(part) ?? part.replace(/^./u, (first) => first.toUpperCase()),
   )
-}
 
 export type Hotkey = {
   keys: string | string[] // e.g. `mod+k`, `ctrl+shift+p`, `Escape`
@@ -428,6 +424,13 @@ function shortcut_parts(combo: string, resolve_mod = false): string[] | null {
   return [...MODIFIER_ORDER.filter((name) => parts.includes(name)), key]
 }
 
+// shortcut_parts with `mod` resolved, throwing on junk
+function resolved_parts(combo: string): string[] {
+  const parts = shortcut_parts(combo, true)
+  if (!parts) throw new TypeError(`Invalid keyboard shortcut: ${combo}`)
+  return parts
+}
+
 // Canonical form of a hand-written or stored combo; null for junk (no key, several keys,
 // lone modifier). Bare keys like `escape` pass since run_hotkeys accepts them;
 // require_modifier rejects them for rebinding UIs, where they'd swallow ordinary typing.
@@ -442,11 +445,7 @@ export function normalize_combo(
 
 // `mod+k` and the platform's own spelling of that chord are one shortcut and must collide,
 // so conflicts are judged on this resolved form; storage keeps the `mod` spelling.
-const resolve_combo = (combo: string): string => {
-  const parts = shortcut_parts(combo, true)
-  if (!parts) throw new TypeError(`Invalid keyboard shortcut: ${combo}`)
-  return parts.join(`+`)
-}
+const resolve_combo = (combo: string): string => resolved_parts(combo).join(`+`)
 
 // Validate stored `action id -> combo` overrides against defaults, dropping unknown ids,
 // junk combos, ones restating the default, and ones that would shadow another action.
@@ -467,9 +466,8 @@ export function sanitize_shortcut_overrides(
     if (!Object.hasOwn(canonical_defaults, action_id) || typeof combo !== `string`)
       continue
     const normalized = normalize_combo(combo)
-    if (normalized && normalized !== canonical_defaults[action_id]) {
+    if (normalized && normalized !== canonical_defaults[action_id])
       entries.push([action_id, normalized])
-    }
   }
   const overrides = Object.fromEntries(entries)
   // dropping an override reinstates its default, which can collide in turn, so repeat

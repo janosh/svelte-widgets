@@ -13,7 +13,8 @@
     dismiss_dialog,
     submit_prompt,
   } from './dialogs.svelte'
-  import { focusable, restore_dialog_focus } from './dialog'
+  import { focusable } from './attachments/shared'
+  import { restore_dialog_focus } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element

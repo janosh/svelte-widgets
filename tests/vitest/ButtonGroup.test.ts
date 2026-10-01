@@ -135,9 +135,21 @@ describe(`ButtonGroup`, () => {
     expect(on_change).toHaveBeenCalledTimes(3)
   })
 
-  test(`arrow keys move focus and the selection with it, wrapping both ends`, async () => {
+  // Suffix buttons must stay out of navigation, which a broad button selector would include.
+  test(`arrow keys move focus and the selection with it, wrapping both ends past suffix buttons`, async () => {
     const on_change = vi.fn()
-    const buttons = mount_group({ options: letters, value: `alpha`, on_change })
+    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
+      (get_params) => ({
+        render: () =>
+          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
+      }),
+    )
+    const buttons = mount_group({
+      options: letters,
+      value: `alpha`,
+      on_change,
+      option_suffix,
+    })
     buttons[0].focus()
 
     const walk: [string, number][] = [
@@ -378,34 +390,6 @@ describe(`ButtonGroup`, () => {
       ).toEqual(links)
     },
   )
-
-  // A broad button selector would incorrectly include suffix buttons in navigation.
-  test(`suffix buttons stay out of arrow key navigation`, async () => {
-    const on_change = vi.fn()
-    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
-      (get_params) => ({
-        render: () =>
-          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
-      }),
-    )
-    const buttons = mount_group({
-      options: letters,
-      value: `alpha`,
-      on_change,
-      option_suffix,
-    })
-    buttons[0].focus()
-
-    press(`ArrowRight`)
-    await tick()
-    expect(document.activeElement).toBe(buttons[1])
-    expect(buttons.map(checked_state)).toEqual([`false`, `true`, `false`])
-
-    press(`End`)
-    await tick()
-    expect(document.activeElement).toBe(buttons[2])
-    expect(on_change.mock.calls.flat()).toEqual([`beta`, `gamma`])
-  })
 
   // Pin the public CSS hooks to catch accidental removals or undocumented additions.
   test(`exposes exactly the documented custom properties`, () => {

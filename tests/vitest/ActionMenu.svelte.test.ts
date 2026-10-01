@@ -297,35 +297,27 @@ describe(`ActionMenu`, () => {
       ).toThrow(`Duplicate command action id: single`)
     })
 
-    test(`reordering unique-id actions keeps the same button nodes`, async () => {
-      const props = mount_menu([
-        { id: `a`, label: `First`, action: vi.fn() },
-        { id: `b`, label: `Second`, action: vi.fn() },
-      ])
+    // a section title is a heading, not an identity: keyed on title alone duplicate titles
+    // collided and each_key_duplicate took down the whole menu
+    test.each<[string, MenuEntries]>([
+      [
+        `unique-id actions`,
+        [
+          { id: `a`, label: `First`, action: vi.fn() },
+          { id: `b`, label: `Second`, action: vi.fn() },
+        ],
+      ],
+      [
+        `sections with duplicate titles and action labels`,
+        [
+          { title: `Tools`, actions: [{ id: `First`, label: `Run`, action: vi.fn() }] },
+          { title: `Tools`, actions: [{ id: `Second`, label: `Run`, action: vi.fn() }] },
+        ],
+      ],
+    ])(`reordering %s keeps the same button nodes`, async (_desc, actions) => {
+      const props = mount_menu(actions)
       right_click(document.body)
       await flush_context_open()
-      const [first, second] = items()
-      props.actions = [props.actions[1], props.actions[0]]
-      await tick()
-      expect(items()).toEqual([second, first])
-    })
-
-    // a section title is a heading, not an identity: keyed on title alone these collided
-    // and each_key_duplicate took down the whole menu
-    test(`duplicate section titles and action labels preserve nodes across reorders`, async () => {
-      const props = mount_menu([
-        { title: `Tools`, actions: [{ id: `First`, label: `Run`, action: vi.fn() }] },
-        { title: `Tools`, actions: [{ id: `Second`, label: `Run`, action: vi.fn() }] },
-      ])
-      right_click(document.body)
-      await flush_context_open()
-
-      expect(
-        [...document.querySelectorAll(`li[role="group"]`)].map((group) =>
-          group.getAttribute(`aria-label`),
-        ),
-      ).toEqual([`Tools`, `Tools`])
-      expect(items().map((btn) => btn.textContent?.trim())).toEqual([`Run`, `Run`])
       const [first, second] = items()
       props.actions = [props.actions[1], props.actions[0]]
       await tick()

@@ -24,28 +24,25 @@
   )
   const pending = $derived(Boolean(highlight) && output === undefined && !error)
   $effect(() => {
-    const source = code
-    const lang = language
-    const highlighter = highlight
-    const request = new AbortController()
+    // Snapshot the inputs: a late result must be recorded against what it highlighted
+    const [source, lang, highlighter] = [code, language, highlight]
     result = undefined
     error = ``
-    if (highlighter) {
-      void Promise.resolve()
-        .then(() =>
-          request.signal.aborted ? undefined : highlighter(source, lang, request.signal),
-        )
-        .then(
-          (value) => {
-            if (!request.signal.aborted && value !== undefined)
-              result = { code: source, language: lang, value }
-          },
-          (reason: unknown) => {
-            if (!request.signal.aborted)
-              error = reason instanceof Error ? reason.message : String(reason)
-          },
-        )
-    }
+    if (!highlighter) return
+    const request = new AbortController()
+    const { signal } = request
+    void Promise.resolve()
+      .then(() => (signal.aborted ? undefined : highlighter(source, lang, signal)))
+      .then(
+        (value) => {
+          if (!signal.aborted && value !== undefined)
+            result = { code: source, language: lang, value }
+        },
+        (reason: unknown) => {
+          if (!signal.aborted)
+            error = reason instanceof Error ? reason.message : String(reason)
+        },
+      )
     return () => request.abort()
   })
 </script>

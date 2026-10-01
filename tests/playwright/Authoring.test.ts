@@ -14,7 +14,7 @@ test(`standalone example buttons keep their natural width across demos`, async (
   page,
 }) => {
   for (const route of [`/authoring/hot-reload`, `/toast`, `/attachments/tooltip`]) {
-    await page.goto(`http://localhost:3005${route}`, { waitUntil: `networkidle` })
+    await page.goto(route, { waitUntil: `networkidle` })
     const buttons = page.locator(`.code-example > button`)
     expect(
       await buttons.count(),

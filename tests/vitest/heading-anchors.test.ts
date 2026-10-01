@@ -7,7 +7,6 @@ import {
 import Heading from '$lib/Heading.svelte'
 import { Check } from '$lib/icons'
 import { createRawSnippet } from 'svelte'
-import { SvelteSet } from 'svelte/reactivity'
 import { describe, expect, it } from 'vite-plus/test'
 import { doc_query, next_task, render } from './index'
 
@@ -25,12 +24,12 @@ describe(`slugify_heading`, () => {
   })
 
   it(`allocates and reserves suffixed collisions`, () => {
-    const used_ids = new SvelteSet<string>()
+    const used_ids = new Set<string>()
     expect(
       [`foo`, `foo`, `foo-1`].map((base_id) => unique_heading_id(base_id, used_ids)),
     ).toEqual([`foo`, `foo-1`, `foo-1-1`])
     expect([...used_ids]).toEqual([`foo`, `foo-1`, `foo-1-1`])
-    expect(unique_heading_id(``, new SvelteSet([`section`]))).toBe(`section-1`)
+    expect(unique_heading_id(``, new Set([`section`]))).toBe(`section-1`)
   })
 })
 
@@ -66,8 +65,6 @@ describe(`Heading`, () => {
 })
 
 describe(`heading_anchors attachment`, () => {
-  // The opt-in dynamic attachment selects h1-h6 that are
-  // direct or 2nd-level children of the attached node
   const create_container = (html = ``) => {
     document.body.innerHTML = `<main>${html}</main>`
     return doc_query(`main`)
@@ -132,45 +129,26 @@ describe(`heading_anchors attachment`, () => {
     ],
   ])(`auto-generates unique ids: %s`, (_desc, html, expected_ids) => {
     const container = create_container(html)
-    // a throw here fails the test on its own, so no not.toThrow() wrapper needed
     heading_anchors()(container)
     const ids = Array.from(container.querySelectorAll(`h2, h3`)).map((el) => el.id)
     expect(ids).toEqual(expected_ids)
     expect(container.querySelectorAll(anchor_selector)).toHaveLength(expected_ids.length)
   })
 
-  it(`adds anchors to dynamically inserted headings`, async () => {
+  it(`anchors dynamically inserted headings until cleanup`, async () => {
     const container = create_container()
-    heading_anchors()(container)
-    const wrapper = document.createElement(`div`)
-    wrapper.innerHTML = `<h3 id="dynamic">X</h3>`
-    container.append(wrapper)
-    // the anchor must arrive via the observer callback, not synchronously
-    expect(container.querySelector(anchor_selector)).toBeNull()
-    await next_task()
-    expect(container.querySelector(`h3 ${anchor_selector}`)?.getAttribute(`href`)).toBe(
-      `#dynamic`,
-    )
-  })
+    const cleanup = heading_anchors()(container)
+    const insert_heading = async (id: string) => {
+      container.insertAdjacentHTML(`beforeend`, `<div><h3 id="${id}">X</h3></div>`)
+      // the anchor must arrive via the observer callback, not synchronously
+      expect(container.querySelector(`#${id} ${anchor_selector}`)).toBeNull()
+      await next_task()
+      return container.querySelector(`#${id} ${anchor_selector}`)?.getAttribute(`href`)
+    }
 
-  it(`cleanup disconnects observer and stops processing`, async () => {
-    const container = create_container()
-    const cleanup = heading_anchors({ selector: `h2` })(container)
-
-    // prove the observer is live first, else no anchors after cleanup proves nothing
-    const before_cleanup = document.createElement(`h2`)
-    before_cleanup.id = `before`
-    container.append(before_cleanup)
-    await next_task()
-    expect(before_cleanup.querySelector(anchor_selector)).not.toBeNull()
-
+    expect(await insert_heading(`before`)).toBe(`#before`)
     cleanup()
-
-    const heading = document.createElement(`h2`)
-    heading.id = `after`
-    container.append(heading)
-    await next_task()
-    expect(heading.querySelector(anchor_selector)).toBeNull()
+    expect(await insert_heading(`after`)).toBeUndefined()
   })
 
   it(`icon_svg customizes icon, default has aria-label`, () => {
@@ -179,9 +157,7 @@ describe(`heading_anchors attachment`, () => {
       container,
     )
     heading_anchors({ selector: `#t2` })(container)
-    expect(container.querySelector(`#t1 ${anchor_selector} .custom`)).toBeInstanceOf(
-      Element,
-    )
+    expect(container.querySelector(`#t1 ${anchor_selector} .custom`)).not.toBeNull()
     // custom icon replaces the default one rather than being added alongside it
     expect(container.querySelectorAll(`#t1 svg`)).toHaveLength(1)
     expect(container.querySelector(`#t1 svg[aria-label]`)).toBeNull()
@@ -192,7 +168,7 @@ describe(`heading_anchors attachment`, () => {
 
   const deeply_nested = `<div><section><h2 id="deep">X</h2></section></div>`
   it.each<[string, string, string | undefined, string | null]>([
-    // the default selector uses :scope, so it reaches direct children and grandchildren only
+    // the default selector reaches h1-h6 among direct children and grandchildren only
     [`direct child`, `<h2 id="dc">X</h2>`, undefined, `#dc`],
     [`2nd-level (grandchild)`, `<div><h2 id="gc">X</h2></div>`, undefined, `#gc`],
     [`3rd-level (too deep)`, deeply_nested, undefined, null],

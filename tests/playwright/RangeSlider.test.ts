@@ -31,10 +31,8 @@ const drag_to = async (page: Page, thumb: Locator, destination: number) => {
   await page.mouse.up()
 }
 
-test.beforeEach(async ({ page, baseURL }) => {
-  await page.goto(new URL(`/range-slider`, baseURL ?? `http://localhost:3005`).href, {
-    waitUntil: `networkidle`,
-  })
+test.beforeEach(async ({ page }) => {
+  await page.goto(`/range-slider`, { waitUntil: `networkidle` })
   // Wait for hydration rather than mistaking SSR markup for a working control.
   const lower = page.getByRole(`slider`, { name: `Nightly budget From` })
   await expect(async () => {
@@ -60,10 +58,7 @@ test(`mouse dragging captures outside the rail, commits once, and keeps handles 
     `Uneven steps and form reset`,
   ])
   const group = page.getByRole(`group`, { name: `Nightly budget`, exact: true })
-  const [lower, upper] = [
-    group.getByRole(`slider`).nth(0),
-    group.getByRole(`slider`).nth(1),
-  ]
+  const [lower, upper] = [0, 1].map((idx) => group.getByRole(`slider`).nth(idx))
   const rail = await box_of(group.locator(`.rail`))
   const before = Number(
     (await page.locator(`.commit-count`).textContent())?.split(` `)[0],
@@ -84,7 +79,6 @@ test(`mouse dragging captures outside the rail, commits once, and keeps handles 
 
 test(`logarithmic controls keep native keyboard edits and announcements in real units`, async ({
   page,
-  baseURL,
 }) => {
   const group = page.getByRole(`group`, { name: `Pressure window`, exact: true })
   const labels = group.locator(`.limit, .ticks span`)
@@ -118,7 +112,7 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   await input.press(`Enter`)
   await expect(input).toHaveValue(`0.001`)
 
-  await page.goto(new URL(`/settings`, baseURL ?? `http://localhost:3005`).href)
+  await page.goto(`/settings`)
   const number = page.getByRole(`spinbutton`, { name: `Pressure bar` })
   const range = page.getByRole(`slider`, { name: `Pressure in bar` })
   await expect(async () => {
@@ -190,10 +184,7 @@ test(`track clicks, keyboard bounds, focus order, and decimal numeric drafts wor
   page,
 }) => {
   const group = page.getByRole(`group`, { name: `Temperature window`, exact: true })
-  const [lower, upper] = [
-    group.getByRole(`slider`).nth(0),
-    group.getByRole(`slider`).nth(1),
-  ]
+  const [lower, upper] = [0, 1].map((idx) => group.getByRole(`slider`).nth(idx))
   await lower.focus()
   await page.keyboard.press(`Tab`)
   await expect(upper).toBeFocused()

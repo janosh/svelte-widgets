@@ -12,12 +12,7 @@ import {
 
 const category_info: Record<
   string,
-  {
-    title: string
-    description: string
-    detail?: string
-    icon: IconData
-  }
+  { title: string; description: string; detail?: string; icon: IconData }
 > = {
   inputs: {
     title: `Forms and inputs`,

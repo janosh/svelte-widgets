@@ -155,14 +155,10 @@
             container.open = true
             opened_by_search.add(container)
           }
-        } else {
-          const heading = container.previousElementSibling
-          if (
-            heading instanceof HTMLElement &&
-            heading.matches(`.settings-section-heading`)
-          ) {
-            heading.toggleAttribute(HIDDEN_ATTR, !keep)
-          }
+        } else if (
+          container.previousElementSibling?.matches(`.settings-section-heading`)
+        ) {
+          container.previousElementSibling.toggleAttribute(HIDDEN_ATTR, !keep)
         }
       }
 

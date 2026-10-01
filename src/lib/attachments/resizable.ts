@@ -212,8 +212,7 @@ export const resizable =
       stop_pointer_follow = follow_pointer(
         node,
         event.pointerId,
-        (move_event) => {
-          if (!is_resizing) return
+        (move_event) =>
           apply_resize(
             move_event,
             grab,
@@ -222,14 +221,12 @@ export const resizable =
             move_event.clientX - origin.x,
             move_event.clientY - origin.y,
             move_event.shiftKey,
-          )
-        },
+          ),
         on_pointerup,
       )
     }
 
     const on_pointerup = (event: PointerEvent) => {
-      if (!is_resizing) return
       restore_user_select?.()
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })
       stop_pointer_follow?.()

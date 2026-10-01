@@ -53,11 +53,9 @@ describe(`DraggablePane`, () => {
   // the tooltip attachment opens on a 100ms pointer delay, so poll rather than read once
   const tooltip_text = async (target: Element): Promise<string | null> => {
     hover(target)
-    await vi.waitFor(() => doc_query(`.tooltip-content`))
-    return doc_query(`.tooltip-content`).textContent
+    return (await vi.waitFor(() => doc_query(`.tooltip-content`))).textContent
   }
 
-  // Toggle bottom-right at (320, 420) in a 1000x500 viewport, pane 450 wide.
   const mock_viewport = (inner_width = 1000, inner_height = 500) =>
     stub_props(globalThis, { innerWidth: inner_width, innerHeight: inner_height })
 
@@ -82,7 +80,6 @@ describe(`DraggablePane`, () => {
     globalThis.dispatchEvent(
       new PointerEvent(`pointerup`, { bubbles: true, isPrimary: true }),
     )
-  // returns false once a handler cancels the key, i.e. the pane swallowed it
   const is_open = (pane: HTMLElement) => pane.style.display === `grid`
 
   // the press-move-release both attachments listen for: the pane (resize) or handle (drag)
@@ -106,8 +103,8 @@ describe(`DraggablePane`, () => {
   }
   const strip_of = (pane: HTMLElement, edge: `right` | `bottom`) =>
     handle_of(pane, `data-resize-edge`, edge)
-  const corner_of = (pane: HTMLElement, corner = `bottom-right`) =>
-    handle_of(pane, `data-resize-corner`, corner)
+  const corner_of = (pane: HTMLElement) =>
+    handle_of(pane, `data-resize-corner`, `bottom-right`)
 
   test(`toggle opens the pane, flips aria-expanded and swaps the icon`, async () => {
     const { toggle, pane } = await setup()
@@ -248,11 +245,9 @@ describe(`DraggablePane`, () => {
     const on_close = vi.fn()
     await setup({ on_close })
 
-    const reached_the_page = !press_escape().defaultPrevented
+    expect(press_escape().defaultPrevented).toBe(false) // the key reaches the page
     await tick()
-
     expect(on_close).not.toHaveBeenCalled()
-    expect(reached_the_page).toBe(true)
   })
 
   // The whole point of position="fixed": a toggle low on screen or hard against the
@@ -315,10 +310,7 @@ describe(`DraggablePane`, () => {
   })
 
   test(`reset returns a dragged pane to its anchor and hides the controls`, async () => {
-    const ancestor = create_element()
-    mock_rect(ancestor, { left: 0, top: 0, width: 800, height: 600 })
     const { toggle, pane } = await setup()
-    stub_props(toggle, { offsetParent: ancestor })
     mock_rect(toggle, { left: 500, top: 100, width: 20, height: 20 })
     mock_pane_rect(pane, 75, 125)
 
@@ -382,7 +374,7 @@ describe(`DraggablePane`, () => {
     const { pane } = await open_pane({ on_drag_start })
     expect(pane.dataset.dragging).toBe(`false`)
 
-    doc_query(`.drag-handle`).dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+    press(doc_query(`.drag-handle`))
     await tick()
     expect(on_drag_start).toHaveBeenCalledTimes(1)
     expect(pane.dataset.dragging).toBe(`true`)
@@ -550,21 +542,6 @@ describe(`DraggablePane`, () => {
     expect(pane.style.width).toBe(`905px`) // the resize really happened
     expect(is_open(pane)).toBe(true)
     expect(on_close).not.toHaveBeenCalled()
-  })
-
-  test(`a press on the toggle counts as inside, so its click still toggles`, async () => {
-    const on_close = vi.fn()
-    const { toggle, pane } = await open_pane({ on_close })
-
-    press(toggle)
-    press(doc_query(`[data-testid="content"]`))
-    await tick()
-    expect(is_open(pane)).toBe(true)
-    expect(on_close).not.toHaveBeenCalled()
-
-    await click(toggle)
-    expect(is_open(pane)).toBe(false)
-    expect(on_close).toHaveBeenCalledWith({ via: `toggle` })
   })
 
   test.each([

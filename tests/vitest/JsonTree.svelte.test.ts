@@ -694,8 +694,10 @@ describe(`keyboard navigation and selection`, () => {
     press(tree(), `ArrowDown`)
     const container = node_at(`obj`)
     press(container, `ArrowLeft`)
+    press(container, `ArrowLeft`) // no-op on a collapsed node
     expect(container?.getAttribute(`aria-expanded`)).toBe(`false`)
     press(container, `ArrowRight`)
+    press(container, `ArrowRight`) // no-op on an expanded node
     expect(container?.getAttribute(`aria-expanded`)).toBe(`true`)
     press(container, ` `)
     expect(container?.getAttribute(`aria-expanded`)).toBe(`false`)

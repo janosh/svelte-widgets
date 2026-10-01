@@ -4,7 +4,6 @@ import { getIconData, iconToSVG } from '@iconify/utils'
 import type { IconifyJSON } from '@iconify/types'
 import { readFile, writeFile } from 'node:fs/promises'
 import { createRequire } from 'node:module'
-import { pathToFileURL } from 'node:url'
 import * as custom from '../src/lib/icons/custom.ts'
 import { iconify_icons } from './icons-manifest.ts'
 
@@ -99,6 +98,4 @@ export const generate_icons = async (): Promise<void> => {
   )
 }
 
-const entry_path = process.argv[1]
-if (entry_path && import.meta.url === pathToFileURL(entry_path).href)
-  await generate_icons()
+if (import.meta.main) await generate_icons()

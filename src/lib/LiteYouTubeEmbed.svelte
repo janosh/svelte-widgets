@@ -108,8 +108,6 @@
     position: absolute;
     top: 0;
     left: 0;
-  }
-  .lite-youtube > iframe {
     border: 0;
   }
   .poster {

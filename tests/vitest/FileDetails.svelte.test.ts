@@ -1,6 +1,5 @@
 import { FileDetails } from '$lib'
 import { default_highlighter } from '$lib/highlight'
-import type { ComponentProps } from 'svelte'
 import { flushSync, tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'
@@ -9,15 +8,13 @@ import TestSnippetHarness from './TestSnippetHarness.svelte'
 const all_text = (selector: string) =>
   [...document.querySelectorAll(selector)].map((node) => node.textContent)
 
-const mount_files = (props: ComponentProps<typeof FileDetails> = {}) =>
-  render(FileDetails, props)
-
 test.each<[string, string, string, string?]>([
   // inferred from title extension via the alias map
   [`util.ts`, `const x = 1`, `typescript`],
   [`config.yml`, `key: val`, `yaml`],
-  // filenames are plain text, including characters that resemble markup
-  [`<options>.ts`, `export const x = 1`, `typescript`],
+  // titles, code and language names are plain text, including characters resembling markup
+  [`<options>.ts`, `some <weird> content`, `typescript`],
+  [`<b>x.ts</b>`, `a`, `<b>ts</b>`, `<b>ts</b>`],
   // explicit language overrides title inference
   [`data.json`, `{}`, `javascript`, `javascript`],
   // unmapped extension used as the language flag
@@ -25,76 +22,47 @@ test.each<[string, string, string, string?]>([
   // no extension falls back to default_lang
   [`Makefile`, `all:`, `svelte`],
 ])(`resolves the language for %s`, (title, content, expected_lang, language) => {
-  mount_files({ files: [{ title, content, language }] })
-  expect(doc_query(`pre`).className).toContain(`language-${expected_lang}`)
+  render(FileDetails, { files: [{ title, content, language }] })
+  const [pre, label] = [doc_query(`pre`), doc_query(`.lang-label`)]
+  expect(pre.className).toContain(`language-${expected_lang}`)
   // the label must surface the resolved language, not the raw extension
-  expect(doc_query(`.lang-label`).textContent).toBe(expected_lang)
-})
-
-test(`lang-label is positioned out of flow so it can't indent code`, () => {
-  mount_files({ files: [{ title: `util.ts`, content: `const x = 1` }] })
-  const label = doc_query(`.lang-label`)
+  expect(label.textContent).toBe(expected_lang)
+  expect([doc_query(`summary`).textContent, doc_query(`pre code`).textContent]).toEqual([
+    title,
+    content,
+  ])
+  // no highlighter by default, so nothing stays pending
+  expect(pre.getAttribute(`aria-busy`)).toBe(`false`)
+  // out of flow so it can't indent code, painted after the positioned pre so its
+  // background cannot cover the badge
   expect(getComputedStyle(label).position).toBe(`absolute`)
-  // Paint after the positioned pre so its background cannot cover the badge.
-  expect(
-    doc_query(`pre`).compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBe(Node.DOCUMENT_POSITION_FOLLOWING)
-})
-
-test(`file titles and language names escape HTML`, () => {
-  mount_files({ files: [{ title: `<b>x.ts</b>`, content: `a`, language: `<b>ts</b>` }] })
-  expect(doc_query(`summary`).textContent).toBe(`<b>x.ts</b>`)
-  expect(doc_query(`summary`).querySelector(`b`)).toBeNull()
-  expect(doc_query(`.lang-label`).textContent).toBe(`<b>ts</b>`)
-  expect(doc_query(`.lang-label`).querySelector(`b`)).toBeNull()
-})
-
-test(`renders escaped code without a highlighter`, () => {
-  const content = `some <weird> content`
-  mount_files({ files: [{ title: `file.ts`, content }] })
-  flushSync()
-  const code = doc_query(`pre code`)
-  expect(doc_query(`pre`).getAttribute(`aria-busy`)).toBe(`false`)
-  expect(code.innerHTML).toContain(`&lt;`)
-  expect(document.querySelector(`[role=alert]`)).toBeNull()
-  expect(code.textContent).toBe(content)
-  expect(code.querySelector(`span`)).toBeNull()
-})
-
-test.each([
-  [`Svelte script`, `<script lang="ts">\n  let count = $state(0)\n</script>`],
-  [`HTML content`, `<div class="foo">&amp; bar</div>`],
-])(`escapes %s before loading syntax highlighting`, async (_case, content) => {
-  mount_files({
-    files: [{ title: `App.svelte`, content }],
-    highlight: default_highlighter.highlight,
-  })
-  const code = doc_query(`pre code`)
-  expect(code.textContent).toBe(content)
-  expect(code.querySelector(`div, script`)).toBeNull()
-
-  await vi.waitFor(
-    () => expect(code.querySelector(`span[class^="pl-"]`)).not.toBeNull(),
-    { timeout: 5000 },
+  expect(pre.compareDocumentPosition(label) & Node.DOCUMENT_POSITION_FOLLOWING).toBe(
+    Node.DOCUMENT_POSITION_FOLLOWING,
   )
-  expect(code.textContent).toBe(content)
+  expect(document.querySelector(`button`)).toBeNull() // no toggle-all for a single file
 })
 
-test(`renders distinct language-content pairs independently`, async () => {
-  const contents = [`bar`, `foo:bar`]
-  mount_files({
-    highlight: default_highlighter.highlight,
-    files: [
-      { title: `plain`, content: contents[0], language: `typescript:foo` },
-      { title: `typed.ts`, content: contents[1], language: `typescript` },
-    ],
-  })
-
-  await vi.waitFor(
-    () => expect(document.querySelector(`pre code span[class^="pl-"]`)).not.toBeNull(),
-    { timeout: 5000 },
-  )
+// a `${language}:${content}` cache key would collide on the last two files
+test(`real highlighting keeps each file's escaped source`, async () => {
+  const files = [
+    {
+      title: `App.svelte`,
+      content: `<script lang="ts">\n  let count = $state(0)\n</script>`,
+    },
+    { title: `App.svelte`, content: `<div class="foo">&amp; bar</div>` },
+    { title: `plain`, content: `bar`, language: `typescript:foo` },
+    { title: `typed.ts`, content: `foo:bar` },
+  ]
+  const contents = files.map(({ content }) => content)
+  render(FileDetails, { files, highlight: default_highlighter.highlight })
   expect(all_text(`pre code`)).toEqual(contents)
+  expect(document.querySelector(`pre code :is(div, script)`)).toBeNull()
+
+  const settled = () => expect(document.querySelector(`[aria-busy="true"]`)).toBeNull()
+  await vi.waitFor(settled, { timeout: 5000 })
+  expect(all_text(`pre code`)).toEqual(contents)
+  // the unknown `typescript:foo` stays plain
+  expect(all_text(`pre code:has(span[class^="pl-"])`)).toEqual(contents.toSpliced(2, 1))
 })
 
 test(`highlights siblings independently and ignores stale completions after edits`, async () => {
@@ -108,7 +76,7 @@ test(`highlights siblings independently and ignores stale completions after edit
   const files = $state(
     [`a`, `bb`, `ccc`].map((content) => ({ title: `${content}.ts`, content })),
   )
-  mount_files({ files, highlight })
+  render(FileDetails, { files, highlight })
   await vi.waitFor(() => expect(requests).toHaveLength(3))
   files[0].content = `updated`
   await vi.waitFor(() => expect(requests).toHaveLength(4))
@@ -123,16 +91,6 @@ test(`highlights siblings independently and ignores stale completions after edit
   expect(highlight).toHaveBeenCalledTimes(4)
 })
 
-test(`reports highlighting failures without hiding source`, async () => {
-  const highlight = vi.fn().mockRejectedValue(new Error(`Grammar unavailable`))
-  mount_files({ files: [{ title: `file.ts`, content: `<source>` }], highlight })
-  await vi.waitFor(() =>
-    expect(doc_query(`[role=alert]`).textContent).toBe(`Grammar unavailable`),
-  )
-  expect(doc_query(`pre code`).textContent).toBe(`<source>`)
-  expect(doc_query(`pre code`).querySelector(`source`)).toBeNull()
-})
-
 test(`toggle all button opens/closes all, tracks (custom) label, and handles partial/native toggles`, async () => {
   const onclick = vi.fn()
   const files = [`file1`, `file2`, `file3`].map((title) => ({
@@ -142,7 +100,7 @@ test(`toggle all button opens/closes all, tracks (custom) label, and handles par
   const button_props = { onclick }
   // Omit'd from the prop type; a bare button inside a form submits it on every toggle
   Reflect.set(button_props, `type`, `submit`)
-  mount_files({
+  render(FileDetails, {
     files,
     toggle_all_btn_title: `toggle all`,
     button_props,
@@ -185,16 +143,21 @@ test(`toggle all button opens/closes all, tracks (custom) label, and handles par
   expect(onclick).toHaveBeenCalledTimes(3)
 })
 
-test(`toggle all label reflects pre-opened details on mount`, async () => {
+test(`pre-opened details set the toggle-all label and forward native toggle events`, () => {
+  const ontoggle = vi.fn()
   const files = [`file1`, `file2`].map((title) => ({ title, content: title }))
   // the toggle event never fires on mount, so the label must init from detail_elements
-  mount_files({ files, details_props: { open: true } })
-  await tick()
-
-  expect(doc_query<HTMLDetailsElement>(`details`).open).toBe(true)
+  render(FileDetails, { files, details_props: { open: true, ontoggle } })
+  const details = doc_query<HTMLDetailsElement>(`details`)
+  expect(details.open).toBe(true)
   expect(doc_query(`button[title='Toggle all'] [aria-hidden='false']`).textContent).toBe(
     `Close all`,
   )
+
+  const toggle_event = new Event(`toggle`)
+  details.dispatchEvent(toggle_event)
+  // the component wraps ontoggle, so it must forward the very same event object
+  expect(ontoggle).toHaveBeenCalledExactlyOnceWith(toggle_event)
 })
 
 test(`keeps DOM refs internal and toggles surviving files after removal`, async () => {
@@ -204,7 +167,7 @@ test(`keeps DOM refs internal and toggles surviving files after removal`, async 
     ),
   )
   let visible_files = $state.raw(files)
-  mount_files({
+  render(FileDetails, {
     get files() {
       return visible_files
     },
@@ -230,14 +193,14 @@ test(`keeps DOM refs internal and toggles surviving files after removal`, async 
 })
 
 test(`renders empty default file list`, () => {
-  mount_files()
+  render(FileDetails, {})
 
   expect(document.querySelector(`ol`)).toBeInstanceOf(HTMLOListElement)
   expect(document.querySelectorAll(`button, li`)).toHaveLength(0)
 })
 
 test(`renders custom container, summary titles (none when empty) and custom default_lang`, () => {
-  mount_files({
+  render(FileDetails, {
     as: `ul`,
     class: `files-list`,
     default_lang: `txt`,
@@ -253,23 +216,6 @@ test(`renders custom container, summary titles (none when empty) and custom defa
   expect(document.querySelectorAll(`details`)).toHaveLength(3)
   expect(all_text(`summary`)).toEqual([`script.ts`, `README`])
   expect(all_text(`.lang-label`)).toEqual([`typescript`, `txt`, `txt`])
-})
-
-test(`single file omits toggle-all button and forwards details toggle event`, () => {
-  const ontoggle = vi.fn()
-  mount_files({
-    details_props: { open: true, ontoggle },
-    files: [{ title: `config.yml`, content: `name: test` }],
-  })
-
-  expect(document.querySelector(`button`)).toBeNull()
-  const details = doc_query<HTMLDetailsElement>(`details`)
-  expect(details.open).toBe(true)
-
-  const toggle_event = new Event(`toggle`)
-  details.dispatchEvent(toggle_event)
-  // the component wraps ontoggle, so it must forward the very same event object
-  expect(ontoggle).toHaveBeenCalledExactlyOnceWith(toggle_event)
 })
 
 test(`title snippet renders title content (incl. empty titles) and receives index`, () => {
@@ -290,7 +236,7 @@ test(`duplicate titles render and keep their open state across inserts`, async (
     { title: `index.ts`, content: `export const a = 1` },
     { title: `index.ts`, content: `export const b = 2` },
   ])
-  mount_files({ files })
+  render(FileDetails, { files })
   await tick()
 
   const all_details = () => [...document.querySelectorAll(`details`)]

@@ -25,7 +25,6 @@
   }>()
   let error = $state(``)
   let working = $state(false)
-  let active = true
   const frame_source = $derived(
     `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src http: https: data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'"><style>${syntax_styles}body{font:16px/1.6 system-ui;margin:1.25rem;color:#223047;background:white}a{color:#3659bd}figure{text-align:center;margin:1.5rem 0}figure img{width:5rem;height:5rem}figcaption{margin-top:.5rem}.equation{display:flex;align-items:center;justify-content:space-between}h2{font-size:1.2rem}</style></head><body>${output?.html ?? ``}</body></html>`,
   )
@@ -91,25 +90,16 @@
           html: assert_ok(await render_markdown(compiled)),
         }
       }
-      if (active) {
-        output = next
-        last_source = content
-      }
+      output = next
+      last_source = content
     } catch (cause) {
-      if (active) {
-        error = cause instanceof Error ? cause.message : String(cause)
-        output = undefined
-      }
+      error = cause instanceof Error ? cause.message : String(cause)
+      output = undefined
     } finally {
-      if (active) working = false
+      working = false
     }
   }
-  onMount(() => {
-    void run()
-    return () => {
-      active = false
-    }
-  })
+  onMount(run)
 </script>
 
 <section class="lab" aria-label={`${title} lab`}>

@@ -139,12 +139,8 @@
   state={task_state}
   label={task_state === `running` ? `Processing files` : `Cancelled`}
   value={35}
-  on_cancel={() => {
-    task_state = `cancelled`
-  }}
-  on_retry={() => {
-    task_state = `running`
-  }}
+  on_cancel={() => (task_state = `cancelled`)}
+  on_retry={() => (task_state = `running`)}
 />
 
 <Heading level={3} id="codeblock-and-statgrid" icon={Braces}

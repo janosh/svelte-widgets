@@ -146,7 +146,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
   })
 })
 
-async function setup_user_message(search_text = `Purple`) {
+test(`user message exposes active descendant and toggles active class`, async () => {
   const props = $state({
     options: [`Red`],
     active_index: null as number | null,
@@ -155,13 +155,8 @@ async function setup_user_message(search_text = `Purple`) {
     open: true,
   })
   mount_multiselect(props)
-  const input = await type_search_text(search_text)
-
-  return { input, props, user_msg: doc_query(`ul.options li.user-msg`) }
-}
-
-test(`user message exposes active descendant and toggles active class`, async () => {
-  const { input, props, user_msg } = await setup_user_message()
+  const input = await type_search_text(`Purple`)
+  const user_msg = doc_query(`ul.options li.user-msg`)
 
   for (const [event_name, expected_active] of [
     [`mousemove`, true],

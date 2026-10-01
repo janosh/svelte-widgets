@@ -43,7 +43,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   let highlight_timer: ReturnType<typeof setTimeout> | null = null
   let pending_window: { start_line: number; end_line: number } | null = null
   let backend_synced = true
-  let active_highlight: { request_id: number; revision: number } | null = null
+  let active_request: number | null = null
   let cancellation: Promise<void> = Promise.resolve()
   let next_request_id = 0
   const report = (error: unknown): void => {
@@ -90,13 +90,11 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     for (let running = pump_promise; running; running = pump_promise) await running
   }
   const cancel_highlight = (): void => {
-    const active = active_highlight
-    active_highlight = null
-    if (!active) return
+    const request_id = active_request
+    active_request = null
+    if (request_id === null) return
     try {
-      const pending = Promise.resolve(
-        backend.cancel_highlight({ doc_id, request_id: active.request_id }),
-      )
+      const pending = Promise.resolve(backend.cancel_highlight({ doc_id, request_id }))
       cancellation = Promise.allSettled([cancellation, pending]).then(() => undefined)
     } catch {
       // Cancellation is best-effort; revision checks still reject the result.
@@ -155,7 +153,7 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
     if (!window) return
     const request_id = ++next_request_id
     const revision = model.revision
-    active_highlight = { request_id, revision }
+    active_request = request_id
     try {
       const spans = await backend.highlight_lines({
         doc_id,
@@ -164,17 +162,12 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
         start_line: window.start_line,
         end_line: window.end_line,
       })
-      const active = active_highlight
-      if (
-        !disposed &&
-        active?.request_id === request_id &&
-        active.revision === model.revision
-      )
+      if (!disposed && active_request === request_id && revision === model.revision)
         on_spans?.({ start_line: window.start_line, revision, spans })
     } catch (error) {
-      if (active_highlight?.request_id === request_id) report(error)
+      if (active_request === request_id) report(error)
     } finally {
-      if (active_highlight?.request_id === request_id) active_highlight = null
+      if (active_request === request_id) active_request = null
     }
   }
   const request_highlight = (start_line: number, end_line: number): void => {

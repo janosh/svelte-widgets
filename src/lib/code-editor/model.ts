@@ -197,8 +197,6 @@ const replace_rope = (
   }
   return merge(merge(before, rope_from(insert)), after)
 }
-const line_start = (root: RopeNode | null, line_idx: number): number =>
-  line_idx === 0 ? 0 : break_offset(root, line_idx - 1) + 1
 interface HistoryRecord {
   forward: readonly TextEdit[]
   inverse: readonly TextEdit[]
@@ -237,19 +235,12 @@ const merge_typed_records = (
   next: HistoryRecord,
   key: string,
 ): boolean => {
+  // History records pair each forward edit with exactly one inverse edit
+  if (previous.forward.length !== 1 || next.forward.length !== 1) return false
   const left = previous.forward[0]
   const right = next.forward[0]
   const left_inverse = previous.inverse[0]
   const right_inverse = next.inverse[0]
-  if (
-    previous.forward.length !== 1 ||
-    next.forward.length !== 1 ||
-    !left ||
-    !right ||
-    !left_inverse ||
-    !right_inverse
-  )
-    return false
   let forward: TextEdit | undefined
   let deleted = ``
   if (
@@ -438,25 +429,22 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
         previous.cost += cost
       } else history.push({ key, timestamp, records: [record], cost })
       history_chars += cost
-      redo_groups = []
       trim_history()
     } else {
       history = []
-      redo_groups = []
       history_chars = 0
     }
+    redo_groups = []
     notify(transaction)
     return transaction
   }
   const replay_group = (group: HistoryGroup, direction: `undo` | `redo`): void => {
-    const records = direction === `undo` ? group.records.toReversed() : group.records
-    for (const record of records) {
-      const edits = direction === `undo` ? record.inverse : record.forward
-      const next_selection =
-        direction === `undo` ? record.selection_before : record.selection
-      const target_state = direction === `undo` ? record.before_state : record.after_state
-      const { transaction } = apply(edits, next_selection, direction, false, target_state)
-      notify(transaction)
+    const undo = direction === `undo`
+    for (const record of undo ? group.records.toReversed() : group.records) {
+      const [edits, next_selection, target_state] = undo
+        ? [record.inverse, record.selection_before, record.before_state]
+        : [record.forward, record.selection, record.after_state]
+      notify(apply(edits, next_selection, direction, false, target_state).transaction)
     }
   }
   const model: EditorModel = {
@@ -491,7 +479,7 @@ export const create_editor_model = (init: EditorModelInit): EditorModel => {
       const line_count = rope_breaks(root) + 1
       if (!Number.isInteger(line_idx) || line_idx < 0 || line_idx >= line_count)
         throw new Error(`Invalid line ${line_idx} for ${line_count} lines`)
-      const from = line_start(root, line_idx)
+      const from = line_idx === 0 ? 0 : break_offset(root, line_idx - 1) + 1
       const to =
         line_idx + 1 < line_count ? break_offset(root, line_idx) : rope_length(root)
       return { line_idx, from, to, text: slice_rope(root, from, to) }

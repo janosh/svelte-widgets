@@ -67,15 +67,13 @@
     action: () => goto(resolve_path(route)),
   }))
   const demo_route = $derived(current_demo_route())
-  const is_home = $derived(page.route.id === `/`)
   const page_title = $derived.by(() => {
     const route_slug = page.url.pathname
       .split(`/`)
       .findLast(Boolean)
       ?.replace(/\.html$/, ``)
-    if (is_home || !route_slug) return `Svelte Widgets`
-    const route = current_demo_route()
-    return route ? demo_title(route) : slug_to_title(route_slug)
+    if (page.route.id === `/` || !route_slug) return `Svelte Widgets`
+    return demo_route ? demo_title(demo_route) : slug_to_title(route_slug)
   })
 
   // source file behind each route, so the footer's edit link hits the page you're on
@@ -95,6 +93,13 @@
     const source = page.route.id ? page_sources[page.route.id] : undefined
     return `${repository}/blob/-/${source ?? `src/routes`}`
   })
+
+  // Modified clicks keep their native new-tab/window behavior.
+  const jump_to_reference = (event: MouseEvent, target: HTMLElement) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return
+    toc_open = false
+    flash_toc_target(target.querySelector(`figcaption`) ?? target)
+  }
 
   afterNavigate(({ type }) => {
     page_search_query = ``
@@ -175,17 +180,7 @@
                   <li>
                     <a
                       href={`#${encodeURIComponent(id)}`}
-                      onclick={(event) => {
-                        if (
-                          event.metaKey ||
-                          event.ctrlKey ||
-                          event.shiftKey ||
-                          event.altKey
-                        )
-                          return
-                        toc_open = false
-                        flash_toc_target(target.querySelector(`figcaption`) ?? target)
-                      }}>{label}</a
+                      onclick={(event) => jump_to_reference(event, target)}>{label}</a
                     >
                   </li>
                 {/each}

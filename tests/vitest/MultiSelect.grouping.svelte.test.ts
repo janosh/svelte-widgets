@@ -147,15 +147,21 @@ describe(`option grouping feature`, () => {
     })
   })
 
-  test(`group_select_all buttons select groups by click and keyboard`, async () => {
+  test(`group_select_all buttons select groups by click, collapsed or not, and keyboard`, async () => {
     const onselectAll_spy = vi.fn()
-    await mount_grouped({ group_select_all: true, on_select_all: onselectAll_spy })
+    await mount_grouped({
+      collapsible_groups: true,
+      group_select_all: true,
+      on_select_all: onselectAll_spy,
+    })
 
     const select_all_buttons = document.querySelectorAll(
       `ul.options > li.group-header button.group-select-all`,
     )
     expect(select_all_buttons).toHaveLength(2) // One for each group
 
+    await click(find_group_header(`Genre`))
+    expect(group_expanded(`Genre`)).toBe(`false`)
     await click(group_select_all_btn(`Genre`))
 
     expect(onselectAll_spy).toHaveBeenCalledTimes(1)
@@ -282,24 +288,6 @@ describe(`option grouping feature`, () => {
       options_with_disabled[0],
       options_with_disabled[2],
     ])
-  })
-
-  test(`group_select_all works on collapsed groups`, async () => {
-    const onselectAll_spy = vi.fn()
-    await mount_grouped({
-      collapsible_groups: true,
-      group_select_all: true,
-      on_select_all: onselectAll_spy,
-    })
-
-    const genre_header = find_group_header(`Genre`)
-    await click(genre_header)
-    expect(group_expanded(genre_header)).toBe(`false`)
-
-    await click(group_select_all_btn(`Genre`))
-
-    expect(onselectAll_spy).toHaveBeenCalledTimes(1)
-    expect(onselectAll_spy.mock.calls[0][0].options).toEqual(genre_options)
   })
 
   // a listbox may only own `option`/`group` children, so the header row is presentational:

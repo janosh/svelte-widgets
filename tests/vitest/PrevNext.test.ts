@@ -1,7 +1,7 @@
 import { PrevNext } from '$lib'
 import { createRawSnippet, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { render } from './index'
+import { doc_query, render } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const items = [`page1`, `page2`, `page3`, `page4`].map((href) => ({ href, label: href }))
@@ -80,9 +80,7 @@ describe(`PrevNext`, () => {
 
   test(`custom wrapper preserves its class`, () => {
     mount_prev_next({ items, current: `page2`, as: `div`, class: `custom` })
-    expect(document.querySelector(`div.prev-next`)).toBeInstanceOf(HTMLDivElement)
-    expect(document.querySelector(`nav`)).toBeNull()
-    expect(document.querySelector(`div.prev-next.custom`)).not.toBeNull()
+    expect(doc_query(`.prev-next.custom`).tagName).toBe(`DIV`)
     expect(link_hrefs()).toEqual([`page1`, `page3`]) // links still render inside the div
   })
 
@@ -96,29 +94,28 @@ describe(`PrevNext`, () => {
   })
 
   test.each([
-    [`page2`, `1`],
-    [`page1`, `0`],
-  ])(`children snippet receives kind, index and total (current=%s)`, (current, index) => {
-    const component = `prev-next-children`
-    render(TestSnippetHarness, { component, items, current })
-
-    expect(
-      child_snippets().map((snippet) => [
-        snippet.dataset.kind,
-        snippet.dataset.index,
-        snippet.dataset.total,
-      ]),
-    ).toEqual([
-      [`prev`, index, `4`],
-      [`next`, index, `4`],
-    ])
-    expect(child_snippets().map((snippet) => snippet.textContent?.trim())).toEqual(
-      current === `page2` ? [`page1`, `page3`] : [`page4`, `page2`],
-    )
-    expect(document.querySelector(`[data-testid="prevnext-between"]`)?.textContent).toBe(
-      `between`,
-    )
-  })
+    [`page2`, `1`, [`page1`, `page3`]],
+    [`page1`, `0`, [`page4`, `page2`]],
+  ])(
+    `children snippet receives kind, index and total (current=%s)`,
+    (current, index, [prev, next]) => {
+      render(TestSnippetHarness, { component: `prev-next-children`, items, current })
+      expect(
+        child_snippets().map(({ dataset, textContent }) => [
+          dataset.kind,
+          dataset.index,
+          dataset.total,
+          textContent?.trim(),
+        ]),
+      ).toEqual([
+        [`prev`, index, `4`, prev],
+        [`next`, index, `4`, next],
+      ])
+      expect(
+        document.querySelector(`[data-testid="prevnext-between"]`)?.textContent,
+      ).toBe(`between`)
+    },
+  )
 
   test(`rejects an unknown current destination but allows empty lists`, () => {
     expect(() => mount_prev_next({ items, current: `missing` })).toThrow(
@@ -146,15 +143,12 @@ describe(`PrevNext`, () => {
 
     const link_attrs = [...document.querySelectorAll(`a`)].map((link) => [
       link.classList.contains(`custom-class`),
-      link.getAttribute(`data-testid`),
-      link.getAttribute(`target`),
+      ...[`data-testid`, `target`, `rel`, `title`].map((name) => link.getAttribute(name)),
       link.getAttribute(`data-sveltekit-preload-data`), // caller-owned router policy
     ])
-    const expected = [true, `nav-link`, `_blank`, `hover`]
-    expect(link_attrs).toEqual([[true, `nav-link`, `_self`, `hover`], expected])
-    expect([
-      document.querySelector(`a`)?.rel,
-      document.querySelector(`a`)?.title,
-    ]).toEqual([`author`, `First page`])
+    expect(link_attrs).toEqual([
+      [true, `nav-link`, `_self`, `author`, `First page`, `hover`],
+      [true, `nav-link`, `_blank`, null, null, `hover`],
+    ])
   })
 })

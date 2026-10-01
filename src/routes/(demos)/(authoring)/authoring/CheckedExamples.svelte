@@ -9,9 +9,7 @@
 
   const { checks }: { checks: PageData['checks'] } = $props()
   let ready = $state(false)
-  onMount(() => {
-    ready = true
-  })
+  onMount(() => (ready = true))
   let selected = $state(0)
   const current = $derived(checks[selected])
   let source = $state(checked_examples[2].code)
@@ -124,8 +122,6 @@ assert_ok(await check_document(document))`}
   }
   select {
     border-bottom: 1px solid light-dark(#b7c1d1, #526078);
-  }
-  select {
     max-width: 28rem;
   }
   select:focus-visible,

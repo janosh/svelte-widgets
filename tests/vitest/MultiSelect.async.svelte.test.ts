@@ -8,11 +8,12 @@ import type {
   MultiSelectProps,
 } from '$lib/types'
 import { get_label } from '$lib/utils'
-import { click, doc_query } from './index'
+import { click, doc_query, next_task } from './index'
 import {
   fresh_key,
   get_input,
   mount_multiselect,
+  mouseup,
   press_sequence,
   type_search_text,
   unmount_component,
@@ -45,9 +46,7 @@ async function mount_deferred_open() {
   return load
 }
 
-function reopen() {
-  doc_query(`div.multiselect`).dispatchEvent(new MouseEvent(`mouseup`, { bubbles: true }))
-}
+const reopen = () => mouseup(`div.multiselect`)
 
 // Dynamic options loading tests (https://github.com/janosh/svelte-widgets/discussions/342)
 describe(`load_options feature`, () => {
@@ -191,29 +190,22 @@ describe(`load_options feature`, () => {
   )
 
   // https://github.com/janosh/svelte-widgets/issues/412
-  test(`auto-fills when small batch_size doesn't overflow dropdown`, async () => {
+  // overflow is mocked before resolving, so auto-fill sees whether the list is scrollable
+  test.each([
+    [`auto-fills a non-overflowing list until has_more=false`, 100, 2],
+    [`does not auto-fill a scrollable list`, 500, 1],
+  ])(`%s`, async (_desc, scroll_height, expected_calls) => {
     const { fn: load_options, resolvers } = deferred_load()
-    await mount_autofill(load_options, 100) // a rendered list that does not overflow
-    expect(load_options).toHaveBeenCalledTimes(1)
+    await mount_autofill(load_options, scroll_height)
+    expect(load_options).toHaveBeenCalledOnce()
 
     resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
     await flush_ticks()
-    expect(load_options).toHaveBeenCalledTimes(2)
+    expect(load_options).toHaveBeenCalledTimes(expected_calls)
 
-    resolvers[1]({ options: mock_data.slice(5, 10), has_more: false })
+    resolvers.at(1)?.({ options: mock_data.slice(5, 10), has_more: false })
     await flush_ticks()
-    expect(load_options).toHaveBeenCalledTimes(2) // has_more=false stops auto-fill
-  })
-
-  test(`auto-fill stops when list becomes scrollable`, async () => {
-    const { fn: load_options, resolvers } = deferred_load()
-    // Mock overflow BEFORE resolving so auto-fill sees the list as scrollable
-    await mount_autofill(load_options, 500)
-    expect(load_options).toHaveBeenCalledTimes(1)
-
-    resolvers[0]({ options: mock_data.slice(0, 5), has_more: true })
-    await flush_ticks()
-    expect(load_options).toHaveBeenCalledTimes(1)
+    expect(load_options).toHaveBeenCalledTimes(expected_calls)
   })
 
   // the unmount abort lives in a teardown-returning $effect that reads like a missing call
@@ -420,8 +412,7 @@ describe(`load_options feature`, () => {
     expect(load_options.mock.calls[0][0].signal?.aborted).toBe(true)
 
     // reopen before the old fetch resolves — the critical timing
-    reopen()
-    await tick()
+    await reopen()
     expect(load_options).toHaveBeenCalledTimes(2)
     expect(input.getAttribute(`aria-busy`)).toBe(`true`)
 
@@ -496,7 +487,7 @@ describe(`load_options feature`, () => {
 
     input.dispatchEvent(fresh_key(`Escape`))
     await vi.runAllTimersAsync()
-    reopen()
+    await reopen()
     await vi.runAllTimersAsync()
 
     await type_search_text(`q`, input)
@@ -734,8 +725,7 @@ describe(`load_options_pending`, () => {
     await vi.runAllTimersAsync()
 
     // reopen takes the is_first_load path, loading immediately
-    reopen()
-    await tick()
+    await reopen()
     // Fresh load fires immediately; stale path would debounce (not yet called)
     expect(fetch_fn).toHaveBeenCalledTimes(3)
     expect(fetch_fn).toHaveBeenLastCalledWith(
@@ -850,48 +840,36 @@ describe(`async on_create`, () => {
     expect(on_add).toHaveBeenCalledTimes(1)
   })
 
-  test(`on_create throwing synchronously adds nothing and logs console.error`, async () => {
-    const console_error = mock_console_error()
-    const on_add = vi.fn()
-    const sync_error = new Error(`validation blew up`)
-    const on_create = () => {
-      throw sync_error
-    }
-    const props = mount_create(on_create, { on_add })
-
-    await submit_create(`doomed-opt`)
-
-    expect(props.value).toEqual([])
-    expect(on_add).not.toHaveBeenCalled()
-    expect(console_error).toHaveBeenCalledWith(
+  test.each([
+    [
+      `throwing synchronously`,
       `MultiSelect: on_create threw:`,
-      sync_error,
-    )
-  })
-
-  test(`rejecting adds nothing and logs console.error`, async () => {
-    const console_error = mock_console_error()
-    const { promise, reject } = Promise.withResolvers<OncreateResult>()
-    const on_add = vi.fn()
-    const props = mount_create(() => promise, { on_add })
-
-    const input = await submit_create(`doomed-opt`)
-    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-
-    const rejection = new Error(`backend validation failed`)
-    reject(rejection)
-    await promise.catch(() => {})
-    await tick()
-
-    expect(props.value).toEqual([])
-    expect(on_add).not.toHaveBeenCalled()
-    expect(console_error).toHaveBeenCalledExactlyOnceWith(
+      (error: Error) => {
+        throw error
+      },
+    ],
+    [
+      `rejecting`,
       `MultiSelect: on_create promise rejected:`,
-      rejection,
-    )
-    // busy state must reset even on rejection
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-  })
+      (error: Error) => Promise.reject(error),
+    ],
+  ])(
+    `on_create %s adds nothing, logs console.error and clears busy`,
+    async (_desc, message, fail) => {
+      const console_error = mock_console_error()
+      const error = new Error(`backend validation failed`)
+      const on_add = vi.fn()
+      const props = mount_create(() => fail(error), { on_add })
+
+      const input = await submit_create(`doomed-opt`)
+      await next_task()
+
+      expect(props.value).toEqual([])
+      expect(on_add).not.toHaveBeenCalled()
+      expect(console_error).toHaveBeenCalledExactlyOnceWith(message, error)
+      expect(input.getAttribute(`aria-busy`)).toBeNull()
+    },
+  )
 
   test.each<[string, MultiSelectProps, unknown]>([
     [`list`, { options: [`foo`], value: [] }, [`first`]],
@@ -940,6 +918,11 @@ describe(`async on_create`, () => {
       `returning an option transforms it`,
       ({ option }) => `${get_label(option)}`.toUpperCase(),
       [`SYNC-OPT`],
+    ],
+    [
+      `returning an object transforms it`,
+      ({ option }) => ({ label: `${get_label(option)}`, validated: true }),
+      [{ label: `sync-opt`, validated: true }],
     ],
     [`returning undefined keeps the original option`, () => undefined, [`sync-opt`]],
     [`returning empty string keeps the original option`, () => ``, [`sync-opt`]],

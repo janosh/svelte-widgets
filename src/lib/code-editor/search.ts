@@ -5,6 +5,9 @@ export type EditorMatch = Pick<TextEdit, `from` | `to`>
 // Restricts a scan to matches starting in [from, to), as if scanning began at `from`.
 export type EditorSearchRange = { from?: number; to?: number }
 type SearchModel = Pick<EditorModel, `slice` | `length`>
+const WORD_CHAR = `[\\p{L}\\p{M}\\p{N}_$]`
+const escape_literal = (text: string): string =>
+  text.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`)
 
 // Literal, non-overlapping UTF-16 ranges, including matches across lines and rope chunks.
 // Yield lazily from bounded windows so callers can stop without scanning the full model.
@@ -26,10 +29,9 @@ export function* iterate_editor_matches(
   // Native literal matching skips quickly over large documents for ordinary queries.
   // Bound the expression size; long queries use the linear matcher below.
   if (query.length <= 1024) {
-    const word_char = `[\\p{L}\\p{M}\\p{N}_$]`
-    const literal = query.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`)
+    const literal = escape_literal(query)
     const pattern = new RegExp(
-      whole_word ? `(?<!${word_char})${literal}(?!${word_char})` : literal,
+      whole_word ? `(?<!${WORD_CHAR})${literal}(?!${WORD_CHAR})` : literal,
       case_sensitive ? `gu` : `giu`,
     )
     let cursor = start
@@ -64,8 +66,7 @@ export function* iterate_editor_matches(
     let pattern = patterns.get(left)
     if (!pattern) {
       // Let the engine perform Unicode simple folding, including sigma and long s.
-      const literal = left.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`)
-      pattern = new RegExp(`^${literal}$`, `iu`)
+      pattern = new RegExp(`^${escape_literal(left)}$`, `iu`)
       patterns.set(left, pattern)
     }
     return pattern.test(right)
@@ -82,7 +83,7 @@ export function* iterate_editor_matches(
   }
   const starts = new Float64Array(characters.length)
   const preceding_words = new Uint8Array(whole_word ? characters.length : 0)
-  const word_char = /^[\p{L}\p{M}\p{N}_$]/u
+  const word_char = new RegExp(`^${WORD_CHAR}`, `u`)
   // A match can start before `limit` and end up to one query length after it.
   const scan_end = Math.min(model.length, limit + query.length)
   // Seed the word check with the code point before a mid-document start.

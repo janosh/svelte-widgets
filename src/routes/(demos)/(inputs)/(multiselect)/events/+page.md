@@ -34,16 +34,11 @@ This demo logs common selection, dropdown, search, activation, and native input 
       ...events.slice(0, 9), // Keep last 10 events
     ]
   }
+  const target_info = (event: Event) => ({
+    type: event.type,
+    target: (event.target as HTMLElement)?.tagName,
+  })
 </script>
-
-{#snippet color_option(option: string, idx?: number)}
-  <span style="display: inline-flex; align-items: center; gap: 5pt">
-    {#if idx !== undefined}{idx + 1}{/if}
-    <span style={`background: ${option}; width: 1em; height: 1em; border-radius: 2pt`}
-    ></span>
-    {option}
-  </span>
-{/snippet}
 
 <div class="demo-grid">
   <section class="demo-section">
@@ -73,31 +68,20 @@ This demo logs common selection, dropdown, search, activation, and native input 
       on_max_reached={(data) => log_event('on_max_reached', data)}
       on_duplicate={(data) => log_event('on_duplicate', data)}
       on_activate={(data) => log_event('on_activate', data)}
-      onblur={(event: FocusEvent) =>
-        log_event('onblur', {
-          type: event.type,
-          target: (event.target as HTMLElement)?.tagName,
-        })}
-      onclick={(event: MouseEvent) =>
-        log_event('onclick', {
-          type: event.type,
-          target: (event.target as HTMLElement)?.tagName,
-        })}
-      onfocus={(event: FocusEvent) =>
-        log_event('onfocus', {
-          type: event.type,
-          target: (event.target as HTMLElement)?.tagName,
-        })}
-      onkeydown={(event: KeyboardEvent) =>
-        log_event('onkeydown', {
-          type: event.type,
-          key: event.key,
-          code: event.code,
-        })}
+      onblur={(event) => log_event('onblur', target_info(event))}
+      onclick={(event) => log_event('onclick', target_info(event))}
+      onfocus={(event) => log_event('onfocus', target_info(event))}
+      onkeydown={({ type, key, code }) => log_event('onkeydown', { type, key, code })}
       bind:value={selected_options}
     >
       {#snippet children({ idx, option })}
-        {@render color_option(option, idx)}
+        <span style="display: inline-flex; align-items: center; gap: 5pt">
+          {idx + 1}
+          <span
+            style={`background: ${option}; width: 1em; height: 1em; border-radius: 2pt`}
+          ></span>
+          {option}
+        </span>
       {/snippet}
     </MultiSelect>
   </section>

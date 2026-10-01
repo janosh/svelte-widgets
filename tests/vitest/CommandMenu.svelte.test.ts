@@ -416,12 +416,8 @@ test(`lets command menu dropdown overflow dialog box`, async () => {
   mount_menu({ open: true, actions: mock_actions })
   await tick()
 
-  const dialog = doc_query<HTMLDialogElement>(`dialog`)
-  const dialog_style = getComputedStyle(dialog)
-  expect(dialog_style.position).toBe(`fixed`)
-  expect(dialog_style.left).toBe(`0px`)
-  expect(dialog_style.right).toBe(`0px`)
-  expect(dialog_style.overflow).toBe(`visible`)
+  const { position, left, right, overflow } = getComputedStyle(doc_query(`dialog`))
+  expect([position, left, right, overflow]).toEqual([`fixed`, `0px`, `0px`, `visible`])
 })
 
 test.each([
@@ -439,12 +435,12 @@ test.each([
 
   await type_search(search)
 
-  const visible_options = document.querySelectorAll(`dialog ul.options li:not(.hidden)`)
-  expect(visible_options).toHaveLength(expected.length)
-
-  expected.forEach((expected_label, idx) => {
-    expect(visible_options[idx].textContent).toContain(expected_label)
-  })
+  expect(
+    Array.from(
+      document.querySelectorAll(`dialog ul.options li:not(.hidden)`),
+      (li) => li.textContent,
+    ),
+  ).toEqual(expected.map((label) => expect.stringContaining(label)))
   await type_search(`delete`)
   expect(doc_query(`dialog ul.options li:not(.hidden)`).textContent).toContain(
     `delete file`,
@@ -883,15 +879,11 @@ test(`renders and searches action descriptions, metadata, badges, and keywords`,
   expect(doc_query(`.cmd-description`).textContent).toBe(`Write buffer to disk`)
   expect(doc_query(`.cmd-metadata`).textContent).toBe(`Workspace · Modified`)
   expect(doc_query(`.cmd-badge`).textContent).toBe(`File`)
-  // action without shortcut renders no kbd
-  const quit_li = Array.from(document.querySelectorAll(`li[role='option']`)).find((li) =>
-    li.textContent?.includes(`quit`),
-  )
-  expect(quit_li?.querySelector(`kbd`)).toBeNull()
+  // only save's shortcut renders kbd, the action without one renders none
+  expect(shortcut_kbd_parts()).toEqual([`Ctrl`, `⇧`, `S`])
 
   await type_search(`workspace persist`)
-  expect(option_labels()).toHaveLength(1)
-  expect(option_labels()[0]).toContain(`save file`)
+  expect(option_labels()).toEqual([expect.stringContaining(`save file`)])
 })
 
 async function search_pagefind(query: string): Promise<void> {
@@ -1168,9 +1160,7 @@ describe(`PageSearch`, () => {
 
     await search_pagefind(`css theme visual guide`)
 
-    const options = document.querySelectorAll(`li[role='option']`)
-    expect(options).toHaveLength(1)
-    expect(options[0].textContent).toContain(`Styling guide`)
+    expect(option_labels()).toEqual([expect.stringContaining(`Styling guide`)])
     expect(load_pagefind).toHaveBeenCalledTimes(1)
 
     await search_pagefind(`api schema library docs`)

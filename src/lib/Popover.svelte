@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
-  import { focusable } from './dialog'
+  import { focusable } from './attachments/shared'
   import { chain_handlers, type Placement } from './utils'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
@@ -69,6 +69,8 @@
 
   const surface_id = $derived(id ?? unique_id)
   const native_dismiss = $derived(escape && dismiss_on === `release`)
+  const click_mode = $derived(trigger_mode === `click`)
+  const hover_mode = $derived(trigger_mode === `hover`)
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   // The `display: contents` wrapper has no box; measuring it would pin every popover to the
   // viewport corner, so anchor to what the snippet rendered.
@@ -81,15 +83,11 @@
   let next_trigger_focus: HTMLElement | SVGElement | null = null
   let native_close_via: `pointer` | `escape` = `pointer`
 
-  const clear_close_timeout = () => {
-    clearTimeout(close_timeout)
-    close_timeout = undefined
-  }
+  const clear_close_timeout = () => clearTimeout(close_timeout)
   // Open and close are tracked separately: a pointer leaving while focus stays inside
   // cancels only the pending close, leaving a pending open to still fire.
   const clear_timeouts = () => {
     clearTimeout(open_timeout)
-    open_timeout = undefined
     clear_close_timeout()
   }
 
@@ -150,7 +148,6 @@
     if (open) return
     const scheduled_mode = trigger_mode
     open_timeout = setTimeout(() => {
-      open_timeout = undefined
       if (trigger_mode === scheduled_mode) {
         next_trigger_focus = focusable(target)
         open = true
@@ -163,18 +160,16 @@
     const scheduled_mode = trigger_mode
     close_timeout = setTimeout(
       () => {
-        close_timeout = undefined
         if (trigger_mode === scheduled_mode) close(`trigger`)
       },
-      close_delay_ms ?? (trigger_mode === `click` ? 0 : 150),
+      close_delay_ms ?? (click_mode ? 0 : 150),
     )
   }
   const contains_interaction_target = (target: EventTarget | null) =>
     target instanceof Node &&
     Boolean(trigger_wrapper?.contains(target) || surface?.contains(target))
   const close_if_interaction_ended = () => {
-    if (focus_inside || (trigger_mode === `hover` && pointer_inside))
-      clear_close_timeout()
+    if (focus_inside || (hover_mode && pointer_inside)) clear_close_timeout()
     else close_after_delay()
   }
   const enter_pointer = (event: MouseEvent) => {
@@ -209,7 +204,7 @@
       'aria-controls': open ? surface_id : undefined,
     }
     // click_outside already treats the trigger as inside, so this can toggle directly.
-    if (trigger_mode === `click`) return { ...aria, onclick: toggle_from_click }
+    if (click_mode) return { ...aria, onclick: toggle_from_click }
     const on_focus = { ...aria, onfocusin: enter_focus, onfocusout: leave_focus }
     if (trigger_mode === `focus`) return on_focus
     // Hover also opens on focus so the same content remains keyboard-reachable.
@@ -247,27 +242,15 @@
     {@attach focus_trap({
       enabled: trap_focus,
       // Hover/focus opening must not steal focus.
-      initial: trigger_mode === `click` ? undefined : false,
+      initial: click_mode ? undefined : false,
       // Return focus to the exact trigger that opened this instance; `false` for one the
       // surface removed. Opened from outside, leave the default (focus before opening).
       restore: trigger_focus?.isConnected === false ? false : trigger_focus || undefined,
     })}
-    onmouseenter={chain_handlers(
-      trigger_mode === `hover` ? enter_pointer : undefined,
-      rest.onmouseenter,
-    )}
-    onmouseleave={chain_handlers(
-      trigger_mode === `hover` ? leave_pointer : undefined,
-      rest.onmouseleave,
-    )}
-    onfocusin={chain_handlers(
-      trigger_mode === `click` ? undefined : enter_focus,
-      rest.onfocusin,
-    )}
-    onfocusout={chain_handlers(
-      trigger_mode === `click` ? undefined : leave_focus,
-      rest.onfocusout,
-    )}
+    onmouseenter={chain_handlers(hover_mode ? enter_pointer : null, rest.onmouseenter)}
+    onmouseleave={chain_handlers(hover_mode ? leave_pointer : null, rest.onmouseleave)}
+    onfocusin={chain_handlers(click_mode ? null : enter_focus, rest.onfocusin)}
+    onfocusout={chain_handlers(click_mode ? null : leave_focus, rest.onfocusout)}
   >
     {@render children()}
   </div>

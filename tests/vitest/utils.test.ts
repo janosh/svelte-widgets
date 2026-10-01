@@ -73,8 +73,7 @@ describe(`get_label`, () => {
     [undefined, `undefined`],
   ])(`handles option %j correctly`, (input, expected) => {
     // @ts-expect-error testing runtime behavior with non-Option types
-    const result = get_label(input)
-    expect(result).toBe(expected)
+    expect(get_label(input)).toBe(expected)
   })
 
   test(`rejects object options without a label`, () => {
@@ -938,11 +937,7 @@ describe(`step_focus`, () => {
     [`modified arrow`, `ArrowDown`, { ctrlKey: true }, false],
   ] as const)(`leaves %s untouched`, (_desc, key, init, prevented) => {
     items[0].focus()
-    const event = new KeyboardEvent(`keydown`, {
-      key,
-      cancelable: true,
-      ...init,
-    })
+    const event = new KeyboardEvent(`keydown`, { key, cancelable: true, ...init })
     if (prevented) event.preventDefault()
     expect(step_focus(event, items)).toBeUndefined()
     expect(document.activeElement).toBe(items[0])

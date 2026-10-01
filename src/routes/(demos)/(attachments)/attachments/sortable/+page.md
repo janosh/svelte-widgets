@@ -4,6 +4,7 @@
 <script lang="ts">
   import { sortable } from 'svelte-widgets/attachments'
 
+  const columns = [`Planet`, `Moons`, `Discovery`, `Notes`]
   const planets = [
     { planet: `Mercury`, moons: 0, discovery: `ancient`, notes: `` },
     { planet: `Venus`, moons: 0, discovery: `ancient`, notes: `Very bright` },
@@ -18,19 +19,13 @@
   <table {@attach sortable()} class="demo-table">
     <thead>
       <tr>
-        <th>Planet</th>
-        <th>Moons</th>
-        <th>Discovery</th>
-        <th>Notes</th>
+        {#each columns as column (column)}<th>{column}</th>{/each}
       </tr>
     </thead>
     <tbody>
-      {#each planets as { planet, moons, discovery, notes }}
+      {#each planets as row (row.planet)}
         <tr>
-          <td>{planet}</td>
-          <td>{moons}</td>
-          <td>{discovery}</td>
-          <td>{notes}</td>
+          {#each Object.values(row) as cell, idx (idx)}<td>{cell}</td>{/each}
         </tr>
       {/each}
     </tbody>

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte'
+  import { focusable } from './attachments/shared'
   import {
-    focusable,
     is_dialog_backdrop_event,
     restore_dialog_focus,
     type DialogCloseVia,

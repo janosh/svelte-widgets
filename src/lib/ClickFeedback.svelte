@@ -34,6 +34,7 @@
     border-radius: 50%;
     display: flex;
     place-content: center;
+    translate: -50% -50%;
     animation: click-success 1.5s ease-out forwards;
     pointer-events: none;
     z-index: 10000;
@@ -41,7 +42,6 @@
   @media (prefers-reduced-motion: reduce) {
     .click-feedback {
       animation-name: click-fade;
-      transform: translate(-50%, -50%);
     }
   }
   @keyframes click-fade {
@@ -51,19 +51,18 @@
   }
   @keyframes click-success {
     0% {
-      transform: translate(-50%, -50%) scale(0);
+      scale: 0;
       opacity: 0;
     }
     20% {
-      transform: translate(-50%, -50%) scale(1.2);
+      scale: 1.2;
       opacity: 1;
     }
     40% {
-      transform: translate(-50%, -50%) scale(1);
+      scale: 1;
       opacity: 1;
     }
     100% {
-      transform: translate(-50%, -50%) scale(1);
       opacity: 0;
     }
   }

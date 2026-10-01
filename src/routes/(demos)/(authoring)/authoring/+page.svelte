@@ -30,19 +30,13 @@
   <a href="#scientific-references">Scientific references</a>
 </nav>
 <ScientificFigures />
-<Heading
-  class="authoring-section-heading"
-  level={2}
-  id="checked-examples"
-  icon={ClipboardCheck}>Checked examples</Heading
+<Heading class="authoring-section-heading" id="checked-examples" icon={ClipboardCheck}
+  >Checked examples</Heading
 >
 <p><a href="{resolve(`/markdown`)}#checked-examples">Read the checking API guide</a>.</p>
 <CheckedExamples checks={data.checks} />
-<Heading
-  class="authoring-section-heading"
-  level={2}
-  id="content-manifests"
-  icon={FileTree}>Content manifests</Heading
+<Heading class="authoring-section-heading" id="content-manifests" icon={FileTree}
+  >Content manifests</Heading
 >
 <p>
   Edit frontmatter, headings, links, or fences, then run the compiler. A title is
@@ -52,11 +46,8 @@
   <a href="{resolve(`/markdown`)}#content-manifests">content manifest API guide</a>.
 </p>
 <MarkdownLab mode="manifest" />
-<Heading
-  class="authoring-section-heading"
-  level={2}
-  id="incremental-compilation"
-  icon={Refresh}>Incremental compilation</Heading
+<Heading class="authoring-section-heading" id="incremental-compilation" icon={Refresh}
+  >Incremental compilation</Heading
 >
 <p>
   Unchanged examples reuse their syntax highlights during development. To try hot reload,
@@ -67,11 +58,8 @@
     >incremental compilation guide</a
   > for module identity and caching behavior.
 </p>
-<Heading
-  class="authoring-section-heading"
-  level={2}
-  id="scientific-references"
-  icon={Flask}>Scientific references</Heading
+<Heading class="authoring-section-heading" id="scientific-references" icon={Flask}
+  >Scientific references</Heading
 >
 <p>
   Figures, equations, and citations share a validated reference graph. Labels can appear
