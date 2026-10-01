@@ -138,7 +138,7 @@
   // target of a programmatic scroll; keeps scroll events from moving active_heading to
   // intermediate headings while a smooth scroll is under way
   let scroll_target: HTMLHeadingElement | null = $state(null)
-  let scroll_target_timeout: ReturnType<typeof setTimeout> | null = null
+  let scroll_target_timeout: ReturnType<typeof setTimeout> | undefined
   // Infinity so the first scroll event always passes the "distance increasing" check
   let prev_scroll_target_distance: number = Infinity
   let last_reported_open: boolean | undefined = undefined
@@ -150,10 +150,7 @@
 
   function clear_scroll_target() {
     restore_scroll_behavior?.()
-    if (scroll_target_timeout) {
-      clearTimeout(scroll_target_timeout)
-      scroll_target_timeout = null
-    }
+    clearTimeout(scroll_target_timeout)
     scroll_target = null
     prev_scroll_target_distance = Infinity
   }
@@ -169,12 +166,12 @@
     currentTarget: EventTarget & HTMLLIElement
   }
 
-  function event_targets_custom_interactive(event: LiEvent) {
-    if (!toc_item || !(event.target instanceof Element)) return false
-    // only bypass scroll-to-heading for an interactive element nested *inside* the li;
-    // the li's own fallback semantics must not count as custom content
-    const interactive = event.target.closest(custom_interactive_selector)
-    return interactive !== null && interactive !== event.currentTarget
+  // an interactive element of a custom toc_item nested *inside* the li; the li's own
+  // fallback semantics must not count as custom content
+  const in_custom_interactive = (element: unknown, li: Element | null | undefined) => {
+    if (!toc_item || !(element instanceof Element) || !li) return false
+    const interactive = element.closest(custom_interactive_selector)
+    return interactive !== null && interactive !== li && li.contains(interactive)
   }
 
   const heading_index = (heading: HTMLHeadingElement) =>
@@ -250,21 +247,6 @@
   const focus_toc_item = (node: HTMLLIElement | null) =>
     (first_custom_interactive(node) ?? node)?.focus({ preventScroll: true })
 
-  function focus_is_in_custom_interactive_toc_item() {
-    if (!toc_item || !(document.activeElement instanceof HTMLElement)) return false
-    const current_toc_li = document.activeElement.closest<HTMLLIElement>(`li`)
-    const interactive = document.activeElement.closest<HTMLElement>(
-      custom_interactive_selector,
-    )
-    return (
-      current_toc_li !== null &&
-      nav?.contains(current_toc_li) === true &&
-      interactive !== null &&
-      interactive !== current_toc_li &&
-      current_toc_li.contains(interactive)
-    )
-  }
-
   const href_for_id = (id: string | undefined) =>
     id ? `#${encodeURIComponent(id)}` : undefined
 
@@ -274,7 +256,7 @@
     active_heading = node
     scroll_target = node
     prev_scroll_target_distance = Infinity
-    if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
+    clearTimeout(scroll_target_timeout)
     scroll_target_timeout = setTimeout(clear_scroll_target, scroll_target_fallback_ms)
     node.scrollIntoView?.({ behavior: scroll_behavior, block: `start` })
 
@@ -307,8 +289,9 @@
     )
   }
 
-  const element_matches_heading_selector = (element: Element | null) =>
-    element !== null && element.closest(heading_selector) !== null
+  const in_heading = (element: Element | null) =>
+    Boolean(element?.closest(heading_selector))
+  const holds_heading = (node: Node) => headings.some((heading) => node.contains(heading))
 
   // only nodes that are or contain a heading can change the result: short-circuiting every
   // childList record to `true` re-queried all headings on any DOM insertion (toast, tooltip,
@@ -317,39 +300,35 @@
     for (const node of nodes) if (node instanceof Element && match(node)) return true
     return false
   }
-  const childlist_touches_headings = (record: MutationRecord): boolean => {
-    const { target } = record
-    // `heading.textContent = '…'` swaps a text node: no Element in either node list, but
-    // the record targets the heading itself
-    if (target instanceof Element && element_matches_heading_selector(target)) return true
-    return (
-      some_element(
-        record.addedNodes,
-        (node) =>
-          node.matches(heading_selector) || Boolean(node.querySelector(heading_selector)),
-      ) ||
-      // a removed node is detached, so `main > h2` can't match it — compare against the
-      // headings currently held instead
-      some_element(record.removedNodes, (node) =>
-        headings.some((heading) => node === heading || node.contains(heading)),
-      )
-    )
-  }
 
   const should_update_for_mutations = (records: MutationRecord[]) =>
-    records.some((record) => {
-      if (record.type === `childList`) return childlist_touches_headings(record)
-      if (record.type === `characterData`) {
-        return element_matches_heading_selector(record.target.parentElement)
+    records.some(({ type, target, addedNodes, removedNodes, attributeName }) => {
+      if (type === `characterData`) return in_heading(target.parentElement)
+      if (!(target instanceof Element)) return false
+      if (type === `childList`) {
+        // `heading.textContent = '…'` swaps a text node: no Element in either node list,
+        // but the record targets the heading itself. A removed node is detached, so
+        // `main > h2` can't match it — compare against the headings currently held instead.
+        return (
+          in_heading(target) ||
+          some_element(
+            addedNodes,
+            (node) =>
+              node.matches(heading_selector) ||
+              node.querySelector(heading_selector) !== null,
+          ) ||
+          some_element(removedNodes, holds_heading)
+        )
       }
-      if (record.type !== `attributes` || !(record.target instanceof Element))
-        return false
-      const target = record.target
-      if (target === document.body) return false
+      // An attribute on a heading or any ancestor, <html> and <body> included, can flip
+      // membership (`.dark h2`, `main.expanded h3`). Re-querying is cheap, as an unchanged set
+      // skips all state updates. `style` is skipped: pages write it per frame, as does this
+      // component's scroll-behavior override.
       return (
-        target.closest(heading_selector) !== null ||
-        target.querySelector(heading_selector) !== null ||
-        headings.some((heading) => target.contains(heading))
+        attributeName !== `style` &&
+        (in_heading(target) ||
+          holds_heading(target) ||
+          target.querySelector(`${heading_selector}, h1, h2, h3, h4, h5, h6`) !== null)
       )
     })
 
@@ -430,6 +409,7 @@
       characterData: true,
       subtree: true,
     })
+    observer.observe(document.documentElement, { attributes: true })
 
     return () => observer.disconnect()
   })
@@ -438,7 +418,7 @@
   // The flash timer only strips a class off a detached node, so it can run.
   $effect(() => () => {
     restore_scroll_behavior?.()
-    if (scroll_target_timeout) clearTimeout(scroll_target_timeout)
+    clearTimeout(scroll_target_timeout)
   })
 
   function set_active_heading() {
@@ -500,7 +480,7 @@
     if (event instanceof KeyboardEvent) li_props.onkeydown?.(event)
     else li_props.onclick?.(event)
     if (event.defaultPrevented) return
-    if (event_targets_custom_interactive(event)) return
+    if (in_custom_interactive(event.target, event.currentTarget)) return
     if (event instanceof MouseEvent && is_modified_click(event)) return
     if (event instanceof KeyboardEvent && !is_activation_key(event.key)) return
     const link =
@@ -581,7 +561,14 @@
       if (toc_has_focus) set_open(false, `tab`)
       return
     }
-    if (is_activation_key(event.key) && focus_is_in_custom_interactive_toc_item()) return
+    const focused = document.activeElement
+    const focused_li = focused?.closest(`li`)
+    if (
+      is_activation_key(event.key) &&
+      nav?.contains(focused_li ?? null) &&
+      in_custom_interactive(focused, focused_li)
+    )
+      return
     if (event.key === `Escape`) {
       // nothing to close on desktop, so leave the key to e.g. an open dialog
       if (!is_open) return
@@ -590,7 +577,6 @@
       return
     }
     // Navigation must not consume keys owned by outside controls; Escape/Tab are handled above.
-    const focused = document.activeElement
     const focus_is_idle =
       !focused || focused === document.body || focused === document.documentElement
     // a text field owns its arrows even when a custom toc_item renders it inside nav
@@ -602,13 +588,9 @@
     event.preventDefault()
     const current_toc_li = toc_li_for(active_heading)
     if (!current_toc_li) return
-    const sibling_prop =
-      event.key === `ArrowDown`
-        ? `nextElementSibling`
-        : event.key === `ArrowUp`
-          ? `previousElementSibling`
-          : null
-    if (sibling_prop) {
+    if (event.key === `ArrowDown` || event.key === `ArrowUp`) {
+      const sibling_prop =
+        event.key === `ArrowDown` ? `nextElementSibling` : `previousElementSibling`
       const next_toc_li =
         visible_toc_sibling(current_toc_li, sibling_prop) ?? current_toc_li
       // move DOM focus along, else the previously focused link's keydown handler hijacks
