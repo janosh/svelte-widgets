@@ -129,3 +129,24 @@ test(`every exported component links to its source in the readme component table
     )
   }
 })
+
+const lib_sources: Record<string, string> = import.meta.glob(
+  `../../src/lib/**/*.{ts,svelte}`,
+  {
+    query: `?raw`,
+    import: `default`,
+    eager: true,
+  },
+)
+test(`source line links land on the symbol they name`, () => {
+  const link_re =
+    /\[`(?<name>[\w$]+)[^\]]*\]\(https:\/\/github\.com\/janosh\/svelte-widgets\/blob\/main\/(?<file>src\/lib\/[^)#]+)#L(?<line>\d+)\)/gu
+  const stale = [readme, markdown_guide]
+    .flatMap((doc) => [...doc.matchAll(link_re)])
+    .flatMap(({ groups: { name = ``, file = ``, line = `` } = {} }) =>
+      lib_sources[`../../${file}`]?.split(`\n`)[Number(line) - 1]?.includes(name)
+        ? []
+        : [`${file}#L${line} (${name})`],
+    )
+  expect(stale).toEqual([])
+})
