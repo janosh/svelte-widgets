@@ -1,5 +1,5 @@
-import { load } from '$root/src/routes/changelog/+page.server'
-import { version } from '$root/package.json'
+import { load } from '#root/src/routes/changelog/+page.server.ts'
+import { version } from '#root/package.json'
 import { expect, test } from 'vite-plus/test'
 
 test(`changelog uses consistent release sections and literal code`, async () => {

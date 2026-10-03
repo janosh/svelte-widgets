@@ -1,5 +1,5 @@
-import { MULTI_SELECT_LABELS, merge_defaults } from '$lib/labels'
-import { MultiSelect } from '$lib'
+import { MULTI_SELECT_LABELS, merge_defaults } from '#lib/labels.ts'
+import { MultiSelect } from '#lib'
 import { tick } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'

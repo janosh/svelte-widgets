@@ -1,4 +1,4 @@
-import { forward_window_keydown } from '$lib/attachments'
+import { forward_window_keydown } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key as dispatch_key } from '../index'
 

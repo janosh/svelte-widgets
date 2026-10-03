@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Popover from '$lib/Popover.svelte'
+  import Popover from '#lib/Popover.svelte'
   import type { ComponentProps } from 'svelte'
 
   // Kept out of TestSnippetHarness: one more branch there makes the discriminated

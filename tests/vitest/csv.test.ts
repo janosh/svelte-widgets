@@ -1,4 +1,4 @@
-import { escape_csv_field, rows_to_csv } from '$lib/csv'
+import { escape_csv_field, rows_to_csv } from '#lib/csv.ts'
 import { describe, expect, test } from 'vite-plus/test'
 
 describe(`rows_to_csv`, () => {

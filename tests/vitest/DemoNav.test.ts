@@ -1,6 +1,5 @@
-import { page } from '$app/state'
-import { DemoNav } from '$site'
-import CategoryOverview from '$site/CategoryOverview.svelte'
+import { DemoNav } from '#site'
+import CategoryOverview from '#site/CategoryOverview.svelte'
 import Home from '../../src/routes/+page.svelte'
 import { mount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -14,9 +13,11 @@ import {
 const base = `/docs`
 const resolver = vi.hoisted(() => ({ relative: false }))
 vi.mock(`$app/paths`, () => ({
-  resolve: (path: string): string => (resolver.relative ? `.${path}` : `/docs${path}`),
+  resolve: (path: string): string => (resolver.relative ? `./${path}` : `/docs/${path}`),
 }))
-vi.mock(`$app/state`, () => ({ page: { url: new URL(`https://example.com/docs/`) } }))
+// Kit types page.url as readonly, so tests swap the whole URL on a hoisted mock
+const page = vi.hoisted(() => ({ url: new URL(`https://example.com/docs/`) }))
+vi.mock(`$app/state`, () => ({ page }))
 
 const page_files = Object.keys(
   import.meta.glob(`../../src/routes/**/+page.{svelte,md}`),
@@ -88,7 +89,7 @@ test(`DemoNav lists components while recipes remain in the complete searchable c
     ),
   )
   expect(multiselect_recipes).toContain(`/events`)
-  const recipe_set = new Set<string>(multiselect_recipes)
+  const recipe_set = new Set(multiselect_recipes)
   expect(hrefs).toEqual(
     new Set([
       `${base}/`,
@@ -161,9 +162,9 @@ test.each([false, true])(
     resolver.relative = relative
     onTestFinished(() => {
       resolver.relative = false
-      page.url.pathname = `${base}/`
+      page.url = new URL(`https://example.com${base}/`)
     })
-    page.url.pathname = `${base}/events`
+    page.url = new URL(`https://example.com${base}/events`)
     mount(DemoNav, { target: document.body })
     expect(
       document

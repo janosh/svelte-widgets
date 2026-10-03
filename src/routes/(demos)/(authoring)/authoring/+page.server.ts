@@ -1,6 +1,6 @@
-import { assert_ok, create_markdown } from '$lib/markdown'
-import { check_document } from '$lib/markdown/check'
-import { default_highlighter } from '$lib/highlight'
+import { assert_ok, create_markdown } from '#lib/markdown/index.ts'
+import { check_document } from '#lib/markdown/check.ts'
+import { default_highlighter } from '#lib/highlight/index.ts'
 import { runInNewContext } from 'node:vm'
 import { as_fence, checked_examples } from './examples'
 

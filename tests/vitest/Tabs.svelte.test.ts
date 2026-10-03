@@ -1,5 +1,5 @@
-import Tabs from '$lib/Tabs.svelte'
-import type { TabItem } from '$lib/types'
+import Tabs from '#lib/Tabs.svelte'
+import type { TabItem } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'

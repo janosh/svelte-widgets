@@ -1,6 +1,6 @@
 import { tick, type ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import type Popover from '$lib/Popover.svelte'
+import type Popover from '#lib/Popover.svelte'
 import {
   click,
   create_element,

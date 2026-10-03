@@ -1,4 +1,8 @@
-import { get_html_sort_value, sortable, type SortableOptions } from '$lib/attachments'
+import {
+  get_html_sort_value,
+  sortable,
+  type SortableOptions,
+} from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished } from 'vite-plus/test'
 import { create_element, press_key } from '../index'
 

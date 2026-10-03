@@ -12,14 +12,14 @@ import {
   compile_markdown as compile_document,
   render_markdown as render_document,
   DiagnosticError,
-} from '$lib/markdown'
+} from '#lib/markdown/index.ts'
 import {
   decode_source_map,
   original_position,
   source_map,
-} from '$lib/markdown/source-map'
+} from '#lib/markdown/source-map.ts'
 import { compile, preprocess } from 'svelte/compiler'
-import { heading_anchors } from '$lib/heading-anchors'
+import { heading_anchors } from '#lib/heading-anchors.ts'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { readFile, writeFile } from 'node:fs/promises'
 import { temp_dir } from './index'

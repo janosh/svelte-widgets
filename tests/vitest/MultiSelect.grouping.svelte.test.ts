@@ -1,6 +1,6 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import type { MultiSelectProps } from '$lib/types'
+import type { MultiSelectProps } from '#lib/types.ts'
 import { click, doc_query } from './index'
 import {
   focus_input,

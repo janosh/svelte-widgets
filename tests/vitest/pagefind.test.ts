@@ -1,4 +1,4 @@
-import { create_pagefind_loader, strip_html_extension } from '$lib/pagefind'
+import { create_pagefind_loader, strip_html_extension } from '#lib/pagefind.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
 test(`retries a failed index download after its caller aborts`, async () => {

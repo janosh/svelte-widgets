@@ -1,4 +1,4 @@
-import { FileInput } from '$lib'
+import { FileInput } from '#lib'
 import { createRawSnippet, flushSync, tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import {

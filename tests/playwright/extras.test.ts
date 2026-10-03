@@ -39,8 +39,10 @@ test(`copy feedback covers the icon name instead of squeezing it`, async ({ page
   // the width sizer only overlays the label while the button keeps ActionButton's grid
   await expect(card).toHaveCSS(`display`, `grid`)
   const label_width = async () => (await card.locator(`code`).boundingBox())?.width ?? 0
+  // the search filters asynchronously, so measure only once the card shows the searched icon
+  await expect(card.locator(`code`)).toContainText(`ChartBellCurveCumulative`)
+  await expect.poll(label_width).toBeGreaterThan(0)
   const before = await label_width()
-  expect(before).toBeGreaterThan(0)
 
   await card.click()
   await expect(card.locator(`small`)).toBeVisible()

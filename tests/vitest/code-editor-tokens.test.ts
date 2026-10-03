@@ -1,5 +1,5 @@
-import { decode_spans, EMPHASIS_BIT, TOKEN_CLASS_NAMES } from '$lib/code-editor'
-import type { DecodedSpan, SpanList } from '$lib/code-editor'
+import { decode_spans, EMPHASIS_BIT, TOKEN_CLASS_NAMES } from '#lib/code-editor/index.ts'
+import type { DecodedSpan, SpanList } from '#lib/code-editor/index.ts'
 import { readFileSync } from 'node:fs'
 import { describe, expect, test } from 'vite-plus/test'
 

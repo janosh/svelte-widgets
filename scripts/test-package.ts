@@ -66,7 +66,7 @@ for (const entry of await readdir(resolve(root, `src/routes/(demos)`), {
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} depends on site-only frame styling`,
       )
-    if (/from\s+['"]\$(?:lib|site|root)(?:\/|['"])/u.test(fence.code))
+    if (/from\s+['"][#$](?:lib|site|root)(?:\/|['"])/u.test(fence.code))
       throw new Error(
         `Demo ${filename}:${fence.range.start.line} uses a private repository import`,
       )

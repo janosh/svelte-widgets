@@ -1,5 +1,5 @@
-import { highlight_matches } from '$lib/attachments'
-import type { HighlightRangesOptions, TextMutationOptions } from '$lib/text-search'
+import { highlight_matches } from '#lib/attachments/index.ts'
+import type { HighlightRangesOptions, TextMutationOptions } from '#lib/text-search.ts'
 import {
   create_burst_debounce,
   create_search_jump,
@@ -7,7 +7,7 @@ import {
   highlight_ranges,
   observe_text_mutations,
   search_text,
-} from '$lib/text-search'
+} from '#lib/text-search.ts'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { doc_query, stub_css_highlights } from './index'
 

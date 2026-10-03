@@ -177,7 +177,12 @@ h1 {
 h1 > .heading-icon {
   margin-inline-end: 0;
 }
+/* longhands: the text-wrap shorthand would also reset an inherited white-space: nowrap */
+:where(p, li, figcaption) {
+  text-wrap-style: pretty;
+}
 :is(h1, h2, h3, h4, h5, h6) {
+  text-wrap-style: balance;
   /* Build-time and dynamic heading links occupy the same space before hover/focus. */
   a[aria-hidden='true'] {
     margin-left: 0.5em;

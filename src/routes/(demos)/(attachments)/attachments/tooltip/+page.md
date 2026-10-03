@@ -1,7 +1,7 @@
 <script lang="ts">
   import { resolve } from '$app/paths'
 
-  const popover_url = resolve(`/popover`)
+  const popover_url = resolve(`popover`)
 </script>
 
 ## `tooltip`

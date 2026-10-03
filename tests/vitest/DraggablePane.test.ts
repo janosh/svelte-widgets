@@ -1,6 +1,6 @@
-import DraggablePane from '$lib/DraggablePane.svelte'
-import pane_source from '$lib/DraggablePane.svelte?raw'
-import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
+import DraggablePane from '#lib/DraggablePane.svelte'
+import pane_source from '#lib/DraggablePane.svelte?raw'
+import demo_page from '#root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import {

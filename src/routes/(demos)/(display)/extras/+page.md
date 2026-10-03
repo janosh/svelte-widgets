@@ -69,7 +69,11 @@ Renders one glyph from the bundled icon set at `1em` square, inheriting `current
   import * as icons from 'svelte-widgets/icons'
   import type { IconData } from 'svelte-widgets/icons'
 
-  const catalog = Object.entries<IconData>(icons)
+  // Vite's dev SSR namespace keeps export order but browsers sort ESM namespace keys, so sort
+  // explicitly or server and client render different icons at each position
+  const catalog = Object.entries<IconData>(icons).toSorted(([name_a], [name_b]) =>
+    name_a < name_b ? -1 : 1,
+  )
   // zero-width spaces let long CamelCase names wrap between words instead of mid-word
   const wrappable = (name: string) => name.replace(/(?<=[a-z\d])(?=[A-Z])/g, `​`)
   let query = $state(``)

@@ -1,4 +1,4 @@
-import { PrevNext } from '$lib'
+import { PrevNext } from '#lib'
 import { createRawSnippet, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

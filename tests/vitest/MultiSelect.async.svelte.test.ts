@@ -1,13 +1,13 @@
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import type { Option } from '$lib'
+import type { Option } from '#lib'
 import type {
   LoadOptionsConfig,
   LoadOptionsParams,
   LoadOptionsResult,
   MultiSelectProps,
-} from '$lib/types'
-import { get_label } from '$lib/utils'
+} from '#lib/types.ts'
+import { get_label } from '#lib/utils.ts'
 import { click, doc_query, next_task } from './index'
 import {
   fresh_key,

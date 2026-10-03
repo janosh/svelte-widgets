@@ -1,5 +1,9 @@
-import type { ContrastOptions } from '$lib/attachments'
-import { contrast_color, get_bg_color, pick_contrast_color } from '$lib/attachments'
+import type { ContrastOptions } from '#lib/attachments/index.ts'
+import {
+  contrast_color,
+  get_bg_color,
+  pick_contrast_color,
+} from '#lib/attachments/index.ts'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { create_element } from '../index'
 

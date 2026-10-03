@@ -1,4 +1,4 @@
-import ContributorList from '$lib/ContributorList.svelte'
+import ContributorList from '#lib/ContributorList.svelte'
 import type { ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, hover, render } from './index'

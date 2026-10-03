@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
-  import Confetti from '$site/Confetti.svelte'
+  import Heading from '#lib/Heading.svelte'
+  import Confetti from '#site/Confetti.svelte'
 
   let n_items = $state(50)
   let freeze = $state(false)

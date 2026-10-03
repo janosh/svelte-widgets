@@ -2,17 +2,17 @@
   import { afterNavigate, goto } from '$app/navigation'
   import { asset } from '$app/paths'
   import { page } from '$app/state'
-  import { CopyButton, GitHubCorner, PageSearch, Toc } from '$lib'
-  import { observe_subtree, slug_to_title } from '$lib/utils'
-  import { flash_toc_target } from '$lib/toc-utils'
-  import { highlight_matches } from '$lib/attachments'
-  import { repository } from '$root/package.json'
-  import { DemoNav, Footer } from '$site'
-  import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
-  import { link_source_mentions } from '$site/source-links'
-  import favicon from '$site/favicon.svg'
-  import type { TocHeadingData } from '$lib/types'
-  import markdown_guide_toc from '$lib/markdown/readme.md?toc'
+  import { CopyButton, GitHubCorner, PageSearch, Toc } from '#lib'
+  import { observe_subtree, slug_to_title } from '#lib/utils.ts'
+  import { flash_toc_target } from '#lib/toc-utils.ts'
+  import { highlight_matches } from '#lib/attachments/index.ts'
+  import { repository } from '#root/package.json'
+  import { DemoNav, Footer } from '#site'
+  import { current_demo_route, resolve_demo_path as resolve_path } from '#site/paths.ts'
+  import { link_source_mentions } from '#site/source-links.ts'
+  import favicon from '#site/favicon.svg'
+  import type { TocHeadingData } from '#lib/types.ts'
+  import markdown_guide_toc from '#lib/markdown/readme.md?toc'
   import type { Snippet } from 'svelte'
   import { slide } from 'svelte/transition'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
@@ -60,6 +60,8 @@
     return observe_subtree(node, [`id`, `data-reference-label`], update)
   }
 
+  // Pagefind writes its bundle after the build, so it isn't a typed static asset
+  const pagefind_path = (asset as (file: string) => string)(`pagefind/pagefind.js`)
   const actions = demo_pages.map((route) => ({
     id: route,
     label: demo_title(route),
@@ -136,7 +138,7 @@
     queueMicrotask(() => (page_search_query = query))
   }}
   strip_html_suffix
-  pagefind_path={asset(`/pagefind/pagefind.js`)}
+  {pagefind_path}
 />
 
 <GitHubCorner href={repository} />

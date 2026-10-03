@@ -48,7 +48,9 @@ for (const width of [390, 1440]) {
   }) => {
     const first_figure = page.locator(`[id="fig:particles"]`)
     const second_equation = page.locator(`[id="eq:hooke"]`)
-    const history_index = () => page.evaluate(() => history.state?.[`sveltekit:history`])
+    // Kit 3 keeps its history index under history.state['sveltekit:metadata']
+    const history_index = () =>
+      page.evaluate(() => history.state?.[`sveltekit:metadata`]?.historyIndex)
     await page.setViewportSize({ width, height: 900 })
     await page.emulateMedia({ colorScheme: `dark` })
     await page.goto(`/authoring#fig%3Aparticles`)

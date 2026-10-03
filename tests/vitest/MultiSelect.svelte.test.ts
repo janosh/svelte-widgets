@@ -1,9 +1,9 @@
 import { readFileSync } from 'node:fs'
 import { tick, type ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import type { Option, OptionStyle } from '$lib'
-import type { MultiSelectProps } from '$lib/types'
-import { get_label } from '$lib/utils'
+import type { Option, OptionStyle } from '#lib'
+import type { MultiSelectProps } from '#lib/types.ts'
+import { get_label } from '#lib/utils.ts'
 import {
   click,
   create_element,

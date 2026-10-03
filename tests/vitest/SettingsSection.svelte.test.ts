@@ -1,4 +1,4 @@
-import { SettingsSection } from '$lib'
+import { SettingsSection } from '#lib'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { click, doc_query, render } from './index'
@@ -159,6 +159,48 @@ describe(`SettingsSection`, () => {
     expect(tracked.values).toStrictEqual(initial)
     expect(document.querySelector(`.setting-reset-button`)).toBeNull()
     expect(document.querySelector(`.reset-button`)).toBeNull()
+  })
+
+  // Row text skips controls (incl. option/textarea text) and descriptions; data-label wins.
+  test.each([
+    [
+      `Atom radius scale`,
+      `<label data-key="k">  Atom\n <b>radius</b>\t scale <input><input></label>`,
+    ],
+    [
+      `Palette`,
+      `<label data-key="k"><span>Palette</span><select><option>Jmol</option></select></label>`,
+    ],
+    [`Notes tail`, `<label data-key="k">Notes<textarea>draft</textarea> tail</label>`],
+    [
+      `Bonds mode`,
+      `<div data-key="k"><span>Bonds <button>?</button></span><button>Go</button> mode</div>`,
+    ],
+    [
+      `Info tip`,
+      `<label data-key="k">Info <span class="tooltip">tip</span><!-- x --><input></label>`,
+    ],
+    [
+      `Custom name`,
+      `<label data-key="k" data-label=" Custom\n name "><span>Ignored</span><input></label>`,
+    ],
+  ])(`derives row label %j`, async (label, html) => {
+    mount_section({
+      title: `Atoms`,
+      changed_keys: [`k`],
+      on_reset_key: () => undefined,
+      descriptions_open: true,
+      children: snippet(
+        html.replace(`data-key="k"`, `data-key="k" data-description="Desc"`),
+      ),
+    })
+    await tick()
+    expect(doc_query(`.settings-row-description`).textContent).toBe(`Desc`)
+    expect(doc_query(`.setting-reset-button`).getAttribute(`aria-label`)).toBe(
+      `Reset ${label} to default`,
+    )
+    const input = document.querySelector(`label[data-key] input`)
+    if (input) expect(input.getAttribute(`aria-label`)).toBe(label)
   })
 
   test(`reveals row descriptions with an accessible section toggle`, async () => {

@@ -1,4 +1,4 @@
-import { ClickFeedback, DragOverlay } from '$lib'
+import { ClickFeedback, DragOverlay } from '#lib'
 import { flushSync } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'

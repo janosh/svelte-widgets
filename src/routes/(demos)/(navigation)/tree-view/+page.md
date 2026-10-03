@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from '$lib/Icon.svelte'
-  import { FileTree, ListChecks, Refresh, BookOpen, Keyboard } from '$lib/icons'
+  import Icon from '#lib/Icon.svelte'
+  import { FileTree, ListChecks, Refresh, BookOpen, Keyboard } from '#lib/icons.ts'
 </script>
 
 ## <Icon icon={FileTree} class="heading-icon" aria-hidden="true" /> TreeView
