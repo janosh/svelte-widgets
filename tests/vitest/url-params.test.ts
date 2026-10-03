@@ -13,7 +13,14 @@ test.each([
   [``, true, true],
   [`flag=0`, true, false],
 ] as const)(`bool_from_param(%s, fallback=%s) is %s`, (query, fallback, expected) => {
-  expect(bool_from_param(new URLSearchParams(query), `flag`, fallback)).toBe(expected)
+  const params = new URLSearchParams(query)
+  expect(bool_from_param(params, `flag`, fallback)).toBe(expected)
+  // read-only views (e.g. SvelteKit's page.url.searchParams) only need get()
+  const read_only = { get: (key: string) => params.get(key) }
+  expect(bool_from_param(read_only, `flag`, fallback)).toBe(expected)
+  expect(valid_query_param(read_only, `flag`, `none`)).toBe(
+    query ? query.slice(5) : `none`,
+  )
 })
 
 test.each([
