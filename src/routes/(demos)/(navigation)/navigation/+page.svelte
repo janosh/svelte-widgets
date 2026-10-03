@@ -1,5 +1,5 @@
 <script lang="ts">
-  import CategoryOverview from '$site/CategoryOverview.svelte'
+  import CategoryOverview from '#site/CategoryOverview.svelte'
 </script>
 
 <CategoryOverview name="navigation" />

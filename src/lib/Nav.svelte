@@ -365,10 +365,10 @@
     --nav-border-radius: 3pt;
     --nav-surface-bg: light-dark(#fafafa, #222226);
     --nav-surface-border: light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
-    --nav-surface-shadow: light-dark(
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      0 4px 12px rgba(0, 0, 0, 0.5)
-    );
+    /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
+    --nav-surface-shadow:
+      0 2px 8px light-dark(rgba(0, 0, 0, 0.15), transparent),
+      0 4px 12px light-dark(transparent, rgba(0, 0, 0, 0.5));
     --nav-link-bg-hover: light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2));
     --nav-dropdown-border-color: color-mix(in srgb, currentColor 30%, transparent 70%);
     /* Shared geometry keeps the mobile panel aligned with its burger button. */

@@ -1,4 +1,4 @@
-import LiteYouTubeEmbed from '$lib/LiteYouTubeEmbed.svelte'
+import LiteYouTubeEmbed from '#lib/LiteYouTubeEmbed.svelte'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { afterAll, expect, test, vi } from 'vite-plus/test'
 import { click, doc_query } from './index'

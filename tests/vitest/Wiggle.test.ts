@@ -1,4 +1,4 @@
-import { Wiggle } from '$lib'
+import { Wiggle } from '#lib'
 import type { ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

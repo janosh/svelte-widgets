@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Dialog from '$lib/Dialog.svelte'
-  import Sheet from '$lib/Sheet.svelte'
+  import Dialog from '#lib/Dialog.svelte'
+  import Sheet from '#lib/Sheet.svelte'
   import type { ComponentProps } from 'svelte'
 
   // Compile-time coverage: Dialog and Sheet accept native dialog attributes while their

@@ -1,5 +1,5 @@
-import { repository } from '$root/package.json'
-import Layout from '$root/src/routes/+layout.svelte'
+import { repository } from '#root/package.json'
+import Layout from '#root/src/routes/+layout.svelte'
 import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, fire_input, press_key, render } from './index'
@@ -9,11 +9,10 @@ const mocks = vi.hoisted<{ page: { route: { id: string | null }; url: URL } }>((
   page: { route: { id: `/` }, url: new URL(`https://x.co/`) },
 }))
 
-vi.mock(`$app/environment`, () => ({ browser: false }))
 vi.mock(`$app/navigation`, () => ({ afterNavigate: () => {}, goto: async () => {} }))
 vi.mock(`$app/paths`, () => ({
-  asset: (path: string) => path,
-  resolve: (path: string) => path,
+  asset: (path: string) => `/${path}`,
+  resolve: (path: string) => `/${path}`,
 }))
 vi.mock(`$app/state`, () => ({ page: mocks.page }))
 

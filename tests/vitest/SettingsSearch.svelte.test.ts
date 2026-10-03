@@ -1,5 +1,5 @@
-import { SettingsSearch } from '$lib'
-import type { SettingsSearchLabels } from '$lib/labels'
+import { SettingsSearch } from '#lib'
+import type { SettingsSearchLabels } from '#lib/labels.ts'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { click, doc_query, escape_key } from './index'

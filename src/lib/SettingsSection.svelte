@@ -80,6 +80,7 @@
 
   const DESCRIPTION_SELECTOR = `:scope > .settings-row-description`
   const RESET_SELECTOR = `:scope > .setting-reset-button`
+  const NON_LABEL_SELECTOR = `input, select, textarea, button, .settings-row-description`
 
   // A <label> only names its first control, so a slider paired with a number input goes
   // unnamed. Recording the generated label lets a later pass rename or revoke it registry-free,
@@ -124,18 +125,23 @@
       }
     }
 
-    // `data-label` short-circuits the clone, which only strips controls and the appended
-    // description out of the row's text.
+    // The row's text minus controls and the appended description, unless `data-label` names
+    // it. Walking text nodes and rejecting those subtrees avoids cloning every row per refresh.
     const label_text = (row: HTMLElement): string => {
       let text = row.dataset.label
       if (text === undefined) {
-        const label_copy = row.cloneNode(true) as HTMLElement
-        for (const control of label_copy.querySelectorAll(
-          `input, select, textarea, button, .settings-row-description`,
-        )) {
-          control.remove()
-        }
-        text = label_copy.textContent ?? ``
+        text = ``
+        const walker = document.createTreeWalker(
+          row,
+          NodeFilter.SHOW_ELEMENT | NodeFilter.SHOW_TEXT,
+          (node) => {
+            if (!(node instanceof Element)) return NodeFilter.FILTER_ACCEPT
+            return node.matches(NON_LABEL_SELECTOR)
+              ? NodeFilter.FILTER_REJECT
+              : NodeFilter.FILTER_SKIP
+          },
+        )
+        while (walker.nextNode()) text += walker.currentNode.nodeValue
       }
       return text.replaceAll(/\s+/gu, ` `).trim()
     }

@@ -21,7 +21,7 @@ import {
   set_at_path,
   to_json,
   values_equal,
-} from '$lib/json-tree/utils'
+} from '#lib/json-tree/utils.ts'
 import { describe, expect, it } from 'vite-plus/test'
 
 it.each([

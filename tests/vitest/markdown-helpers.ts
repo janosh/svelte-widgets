@@ -6,8 +6,8 @@ import {
   markdown,
   type MarkdownOptions,
   type MarkdownFile,
-} from '$lib/markdown'
-import { markdown_vite, type MarkdownViteOptions } from '$lib/markdown/vite'
+} from '#lib/markdown/index.ts'
+import { markdown_vite, type MarkdownViteOptions } from '#lib/markdown/vite.ts'
 import type { Plugin } from 'vite'
 
 export const compile_source = async (

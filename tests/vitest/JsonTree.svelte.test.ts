@@ -1,7 +1,7 @@
 import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
-import { JsonTree } from '$lib'
-import { to_json } from '$lib/json-tree/utils'
+import { JsonTree } from '#lib'
+import { to_json } from '#lib/json-tree/utils.ts'
 import { click, doc_query, fire_input, press_key, render } from './index'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'

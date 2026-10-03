@@ -1,7 +1,7 @@
 <script lang="ts">
   import { SubpageGrid } from 'svelte-widgets'
   import { ListChecks } from 'svelte-widgets/icons'
-  import { demo_card } from '$site/paths'
+  import { demo_card } from '#site/paths.ts'
   import { multiselect_recipes } from '../../..'
 </script>
 

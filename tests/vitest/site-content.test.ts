@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import * as pagefind from 'pagefind'
 import { expect, test, vi } from 'vite-plus/test'
 import { prepare_page, site_adapter } from '../../scripts/site-content.ts'
-import { assert_valid_content, validate_content } from '$lib/markdown/content'
+import { assert_valid_content, validate_content } from '#lib/markdown/content.ts'
 import { temp_dir } from './index'
 import { compile_source, render_source } from './markdown-helpers'
 
@@ -136,7 +136,7 @@ test.each([``, `/docs`])(
         { filename: source },
       )
       const builder = {
-        config: { kit: { paths: { base }, files: { routes: `src/routes` } } },
+        config: { paths: { base } },
         routes: [
           { id: `/(docs)/nested/[slug]`, pattern: /^\/nested\/[^/]+\/?$/u },
           { id: `/(native)/native`, pattern: /^\/native\/?$/u },

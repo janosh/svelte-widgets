@@ -1,13 +1,14 @@
 import { resolve } from '$app/paths'
 import { page } from '$app/state'
 import { demo_descriptions, demo_pages, demo_title } from '../routes/(demos)'
-import type { Subpage } from '$lib/types'
+import type { Subpage } from '#lib/types.ts'
 
 // SvelteKit can resolve links relatively during SSR. Navigation state needs the same
 // absolute pathname on the server and client, including the configured base path.
+// Site routes keep a leading slash; Kit 3 reserves that for route IDs, so strip it.
 const resolve_route = resolve as (path: string) => string
 export const resolve_demo_path = (path: string): string =>
-  new URL(resolve_route(path), page.url).pathname
+  new URL(resolve_route(path.replace(/^\//u, ``)), page.url.href).pathname
 
 export const current_demo_route = () =>
   demo_pages.find((route) => resolve_demo_path(route) === page.url.pathname)

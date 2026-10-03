@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
-  import { FileCode, ClipboardCheck, FileTree, Refresh, Flask } from '$lib/icons'
+  import Heading from '#lib/Heading.svelte'
+  import { FileCode, ClipboardCheck, FileTree, Refresh, Flask } from '#lib/icons.ts'
   import { resolve } from '$app/paths'
-  import favicon from '$site/favicon.svg?no-inline'
+  import favicon from '#site/favicon.svg?no-inline'
   import CheckedExamples from './CheckedExamples.svelte'
   import MarkdownLab from './MarkdownLab.svelte'
   import ScientificFigures from './ScientificFigures.md'
@@ -16,9 +16,9 @@
 >
 <p>Check code examples, inspect content manifests, and edit scientific references.</p>
 <nav aria-label="Authoring guides">
-  <a href={resolve(`/markdown`)}>Markdown API guide</a>
-  <a href={resolve(`/code-editor`)}>CodeEditor / DiffView — edit and compare code</a>
-  <a href={resolve(`/authoring/hot-reload`)}
+  <a href={resolve(`markdown`)}>Markdown API guide</a>
+  <a href={resolve(`code-editor`)}>CodeEditor / DiffView — edit and compare code</a>
+  <a href={resolve(`authoring/hot-reload`)}
     >Live Markdown hot reload — update examples as you write</a
   >
 </nav>
@@ -33,7 +33,7 @@
 <Heading class="authoring-section-heading" id="checked-examples" icon={ClipboardCheck}
   >Checked examples</Heading
 >
-<p><a href="{resolve(`/markdown`)}#checked-examples">Read the checking API guide</a>.</p>
+<p><a href="{resolve(`markdown`)}#checked-examples">Read the checking API guide</a>.</p>
 <CheckedExamples checks={data.checks} />
 <Heading class="authoring-section-heading" id="content-manifests" icon={FileTree}
   >Content manifests</Heading
@@ -43,7 +43,7 @@
   required. The sample inventory contains <code>/next.md#details</code> and
   <code>/plot.svg</code>; try breaking a link or changing the title to a number. Expand
   the tree to inspect source positions, TOC, search records, and checked fences. See the
-  <a href="{resolve(`/markdown`)}#content-manifests">content manifest API guide</a>.
+  <a href="{resolve(`markdown`)}#content-manifests">content manifest API guide</a>.
 </p>
 <MarkdownLab mode="manifest" />
 <Heading class="authoring-section-heading" id="incremental-compilation" icon={Refresh}
@@ -51,11 +51,10 @@
 >
 <p>
   Unchanged examples reuse their syntax highlights during development. To try hot reload,
-  open the <a href={resolve(`/authoring/hot-reload`)}>live Markdown counter</a>, increment
+  open the <a href={resolve(`authoring/hot-reload`)}>live Markdown counter</a>, increment
   it, and edit its source. CSS-only edits preserve the counter; page edits may reset it.
   See the
-  <a href="{resolve(`/markdown`)}#incremental-compilation"
-    >incremental compilation guide</a
+  <a href="{resolve(`markdown`)}#incremental-compilation">incremental compilation guide</a
   > for module identity and caching behavior.
 </p>
 <Heading class="authoring-section-heading" id="scientific-references" icon={Flask}
@@ -64,7 +63,7 @@
 <p>
   Figures, equations, and citations share a validated reference graph. Labels can appear
   after their first reference; numbering and the bibliography follow automatically. See
-  the <a href="{resolve(`/markdown`)}#scientific-references"
+  the <a href="{resolve(`markdown`)}#scientific-references"
     >scientific reference API guide</a
   > for syntax and configuration.
 </p>

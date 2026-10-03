@@ -1,7 +1,7 @@
 <script lang="ts">
   // A real component, because `bind:checked` writing back through a parent's state is the
   // whole mechanism under test — a hand-built checkbox would not exercise it.
-  import DraggablePane from '$lib/DraggablePane.svelte'
+  import DraggablePane from '#lib/DraggablePane.svelte'
 
   let {
     dismiss_on,

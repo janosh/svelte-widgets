@@ -1,8 +1,8 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import { page } from '$app/state'
-  import { homepage, name } from '$root/package.json'
-  import favicon from '$site/favicon.svg'
+  import { homepage, name } from '#root/package.json'
+  import favicon from '#site/favicon.svg'
 
   // undefined until hydration reads navigator.onLine - starting with false would
   // flash the "you're offline" message at online users in the prerendered HTML

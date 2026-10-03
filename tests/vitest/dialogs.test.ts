@@ -1,4 +1,4 @@
-import type { DialogChoice } from '$lib/dialogs.svelte'
+import type { DialogChoice } from '#lib/dialogs.svelte.ts'
 import {
   answer_dialog,
   ask_confirm,
@@ -8,7 +8,7 @@ import {
   dismiss_dialog,
   request_choice,
   submit_prompt,
-} from '$lib/dialogs.svelte'
+} from '#lib/dialogs.svelte.ts'
 import { afterEach, expect, test } from 'vite-plus/test'
 import { next_task, track } from './index'
 

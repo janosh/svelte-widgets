@@ -1,5 +1,5 @@
-import { create_highlighter, default_highlighter } from '$lib/highlight'
-import { render_block } from '$lib/highlight/create-highlighter'
+import { create_highlighter, default_highlighter } from '#lib/highlight/index.ts'
+import { render_block } from '#lib/highlight/create-highlighter.ts'
 import grammar_typst from '@wooorm/starry-night/source.typst'
 import grammar_latex from '@wooorm/starry-night/text.tex.latex'
 import { resolve as resolve_path } from 'node:path'
@@ -159,11 +159,13 @@ describe(`create_highlighter`, () => {
 test.each([
   [
     `default`,
-    async () => (await import(`$lib/highlight/default-highlighter`)).default_highlighter,
+    async () =>
+      (await import(`#lib/highlight/default-highlighter.ts`)).default_highlighter,
   ],
   [
     `custom`,
-    async () => (await import(`$lib/highlight`)).create_highlighter([grammar_typst]),
+    async () =>
+      (await import(`#lib/highlight/index.ts`)).create_highlighter([grammar_typst]),
   ],
 ] as const)(
   `%s highlighter loads lazily and caches a missing peer error`,

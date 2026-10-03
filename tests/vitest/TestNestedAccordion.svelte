@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Accordion from '$lib/Accordion.svelte'
+  import Accordion from '#lib/Accordion.svelte'
 
   const outer_items = [
     { value: `outer-one`, label: `Outer one` },

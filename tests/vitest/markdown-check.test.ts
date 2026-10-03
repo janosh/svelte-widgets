@@ -7,8 +7,8 @@ import {
   check_document,
   type CheckResult,
   type CheckOptions,
-} from '$lib/markdown/check'
-import { assert_ok, create_markdown, DiagnosticError } from '$lib/markdown'
+} from '#lib/markdown/check.ts'
+import { assert_ok, create_markdown, DiagnosticError } from '#lib/markdown/index.ts'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 
 const filename = resolve(`tests/checked-examples.md`)

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import ActionMenu from '$lib/ActionMenu.svelte'
-  import type { CmdAction } from '$lib/types'
+  import ActionMenu from '#lib/ActionMenu.svelte'
+  import type { CmdAction } from '#lib/types.ts'
 
   let {
     actions,

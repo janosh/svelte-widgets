@@ -1,6 +1,6 @@
 <script lang="ts">
   import { JsonTree } from 'svelte-widgets'
-  import SourceInput from '$site/SourceInput.svelte'
+  import SourceInput from '#site/SourceInput.svelte'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import syntax_styles from '@wooorm/starry-night/style/light?raw'
   import type { Diagnostic } from 'svelte-widgets/markdown'

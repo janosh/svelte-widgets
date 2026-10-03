@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { resolve } from '$app/paths'
   import { SubpageGrid } from 'svelte-widgets'
   import { Puzzle } from 'svelte-widgets/icons'
+  import { resolve_demo_path } from '#site/paths.ts'
   import { demo_labels } from '../..'
 
   // keyed by route slug; titles come from demo_labels so they can't drift from the nav
@@ -21,13 +21,10 @@
     'forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
     'file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
   }
-  // resolve's arg type distributes over the Pathname union, so a runtime slug can't match a
-  // single arm; every demo route is param-free
-  const resolve_path = resolve as (path: string) => string
   const subpages = Object.entries(descriptions).map(
     ([slug, description]) => ({
       label: demo_labels[`/attachments/${slug}`] ?? slug,
-      href: resolve_path(`/attachments/${slug}`),
+      href: resolve_demo_path(`/attachments/${slug}`),
       description,
     }),
   )

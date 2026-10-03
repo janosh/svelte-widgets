@@ -1,6 +1,6 @@
-import Toc from '$lib/Toc.svelte'
-import Heading from '$lib/Heading.svelte'
-import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '$lib/types'
+import Toc from '#lib/Toc.svelte'
+import Heading from '#lib/Heading.svelte'
+import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import {

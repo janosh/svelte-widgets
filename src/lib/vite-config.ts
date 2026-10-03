@@ -36,7 +36,7 @@ const error_rules = [
   eslint-plugin-unicorn/prefer-date-now
   eslint-plugin-unicorn/require-number-to-fixed-digits-argument
   eslint-plugin-unicorn/no-useless-promise-resolve-reject
-  eslint-plugin-unicorn/custom-error-definition eslint-plugin-import/no-duplicates
+  eslint-plugin-unicorn/custom-error-definition
   @typescript-eslint/no-non-null-assertion
   @typescript-eslint/prefer-string-starts-ends-with @typescript-eslint/prefer-readonly
   @typescript-eslint/prefer-regexp-exec @typescript-eslint/prefer-find
@@ -158,8 +158,10 @@ const lint: SharedConfig[`lint`] = {
     // zero args; the plain check is what most call sites mean
     'eslint-plugin-vitest/prefer-called-with': `off`,
     // benign barrel cycles (components import from the `index.ts` that re-exports them);
-    // breaking them conflicts with the `$lib/foo` barrel-import convention
+    // breaking them conflicts with importing from `index.ts` barrels
     'eslint-plugin-import/no-cycle': `off`,
+    // `X.svelte?raw` and `X.svelte` are different modules, so importing both is fine
+    'eslint-plugin-import/no-duplicates': [`error`, { considerQueryString: true }],
     // maxArgs 2 because vitest supports expect(actual, message)
     'eslint-plugin-vitest/valid-expect': [`error`, { maxArgs: 2 }],
     // count *assert*/*expect* helpers as assertions so tests delegating to them pass

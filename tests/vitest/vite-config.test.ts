@@ -1,4 +1,4 @@
-import { make_config, type ConfigOverrides } from '$lib/vite-config'
+import { make_config, type ConfigOverrides } from '#lib/vite-config.ts'
 import { expect, test } from 'vite-plus/test'
 
 test(`overrides merge into their section without dropping the rest`, () => {
@@ -32,7 +32,7 @@ test.each([
 // Importing Vite+ types ties this config to one dependency copy and can overflow TS
 // when consumers resolve another, so the public shapes must stay structural.
 test(`config types stay independent of vite-plus`, async () => {
-  const { default: source } = await import(`$lib/vite-config.ts?raw`)
+  const { default: source } = await import(`#lib/vite-config.ts?raw`)
   expect(source).not.toMatch(/from\s+['"`](?:vite-plus|oxlint)/)
 })
 

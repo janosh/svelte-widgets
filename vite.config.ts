@@ -1,4 +1,5 @@
 import { sveltekit } from '@sveltejs/kit/vite'
+import { resolve } from 'node:path'
 import { generate_icons } from './scripts/generate-icons.ts'
 import { site_adapter } from './scripts/site-content.ts'
 import type { ContentManifest } from './src/lib/markdown/content.ts'
@@ -29,30 +30,38 @@ const docs = markdown_vite(
   { on_manifest: (manifest) => manifests.set(manifest.filename, manifest) },
 )
 
-const stateful_aliases: Record<string, string> = {}
+// Demos, tests and docs import the package by name so examples stay copy-pasteable, which
+// subpath imports can't express. Stateful exports point at `.svelte.ts` modules, so their
+// aliases precede the prefix rule. tsconfig.json `paths` mirrors these for TS.
+const self_aliases: { find: string | RegExp; replacement: string }[] = []
 for (const [path, target] of Object.entries(package_json.exports)) {
   if (`default` in target && target.default.endsWith(`.svelte.js`))
-    stateful_aliases[path.replace(`.`, `svelte-widgets`)] = target.default
-      .replace(`./dist/`, `./src/lib/`)
-      .replace(/\.js$/u, `.ts`)
+    self_aliases.push({
+      find: path.replace(`.`, `svelte-widgets`),
+      replacement: resolve(
+        import.meta.dirname,
+        target.default.replace(`./dist/`, `src/lib/`).replace(/\.js$/u, `.ts`),
+      ),
+    })
 }
+self_aliases.push({
+  find: /^svelte-widgets(?=\/|$)/u,
+  replacement: resolve(import.meta.dirname, `src/lib`),
+})
 
-// Inline Kit options configure the docs site. svelte-package uses its defaults;
-// src/lib needs no preprocessing, and the package script removes Markdown guides.
+// svelte-package loads this config too (as `serve`, so only an env var tells them apart).
+// Keep it to plain `.svelte` without site preprocessors so it neither compiles src/lib
+// Markdown guides into dist nor runs docs transforms over library components.
+const packaging = Boolean(process.env.SVELTE_PACKAGE)
+
+// Inline Kit options configure the docs site
 const svelte_config = {
-  extensions: [`.svelte`, `.md`],
+  extensions: packaging ? [`.svelte`] : [`.svelte`, `.md`],
 
-  preprocess: [docs.preprocess, asset_imports()],
+  preprocess: packaging ? [] : [docs.preprocess, asset_imports()],
 
   adapter: site_adapter(manifests),
   paths: { base: base_path },
-
-  alias: {
-    $root: `.`,
-    $site: `./src/site`,
-    ...stateful_aliases,
-    'svelte-widgets': `./src/lib`,
-  },
 
   prerender: {
     handleHttpError: ({ status, referrer, message }) => {
@@ -62,10 +71,25 @@ const svelte_config = {
     },
   },
 
-  vitePlugin: {
-    inspector: true,
-  },
+  inspector: true,
 } satisfies Parameters<typeof sveltekit>[0]
+
+// vite-plugin-svelte inlines all of node_modules/svelte so tests get its browser runtime.
+// The compiler is ~230 stateless ES modules without browser-specific imports, so loading
+// it natively gives identical output while sparing every test file that compiles Markdown
+// or Svelte a module-runner transform and evaluation of the whole compiler.
+const native_svelte_compiler = {
+  name: `test:native-svelte-compiler`,
+  configResolved: {
+    order: `post`,
+    handler({ test }: { test?: { server?: { deps?: { inline?: unknown } } } }) {
+      const inline = test?.server?.deps?.inline
+      if (!Array.isArray(inline) || !inline.includes(`svelte`))
+        throw new Error(`Expected Vitest to inline svelte, got ${String(inline)}`)
+      inline[inline.indexOf(`svelte`)] = /\/node_modules\/svelte(?!\/src\/compiler\/)/u
+    },
+  },
+} as const
 
 export default {
   // shared lint/fmt/build/staged, published as svelte-widgets/vite-config
@@ -77,7 +101,12 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
+  plugins: [
+    sveltekit(svelte_config),
+    docs.plugin,
+    source_links(),
+    ...(process.env.VITEST ? [native_svelte_compiler] : []),
+  ],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],
@@ -97,11 +126,11 @@ export default {
   },
 
   resolve: {
+    alias: self_aliases,
     conditions: process.env.TEST ? [`browser`] : undefined,
   },
 
   server: {
-    fs: { allow: [`.`] }, // $root imports include the repository's Markdown guides
     port: 3000,
   },
 

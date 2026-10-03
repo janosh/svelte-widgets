@@ -1,4 +1,4 @@
-import { Progress } from '$lib'
+import { Progress } from '#lib'
 import type { ComponentProps } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'

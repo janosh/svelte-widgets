@@ -6,8 +6,8 @@ import {
   VirtualList,
   type TreeNode,
   type SelectionProps,
-} from '$lib'
-import { virtual_window } from '$lib/virtual'
+} from '#lib'
+import { virtual_window } from '#lib/virtual.ts'
 import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vite-plus/test'
 import { click, create_element, doc_query, press_key } from './index'

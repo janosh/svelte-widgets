@@ -1,5 +1,5 @@
 import { fail } from '@sveltejs/kit'
-import { colors as allowed_colors } from '$site/options'
+import { colors as allowed_colors } from '#site/options.ts'
 import type { Actions } from './$types'
 
 // Form actions need a server, so the underscore prefix disables this export during static

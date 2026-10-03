@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import type { PageData } from './$types'
-  import SourceInput from '$site/SourceInput.svelte'
+  import SourceInput from '#site/SourceInput.svelte'
   import { CodeBlock } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import { checked_examples } from './examples'

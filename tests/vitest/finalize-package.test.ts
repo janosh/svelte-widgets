@@ -39,6 +39,15 @@ test.each([
   expect(rewrite_imports(expected, filename)).toBe(expected)
 })
 
+test.each([
+  `import icon_data from '#lib/icons.ts'`,
+  `import * as md_utils from '#site/utils.ts'`,
+  `const env = await import('$app/env')`,
+  `export { $lib_value } from '$lib/value'`,
+])(`rejects repo-private import left in dist: %s`, (source) => {
+  expect(() => rewrite_imports(source, `index.js`)).toThrow(`keeps repo-private import`)
+})
+
 test(`finalizes nested package files and removes only Markdown guides`, async () => {
   await using directory = await mkdtempDisposable(`${tmpdir()}/widgets-package-test-`)
   const nested = resolve(directory.path, `nested`)
@@ -54,4 +63,10 @@ test(`finalizes nested package files and removes only Markdown guides`, async ()
   expect(await readFile(resolve(nested, `index.js`), `utf8`)).toBe(
     `export * from './value.js'`,
   )
+})
+
+test(`rejects a guide compiled with the site's Markdown preprocessors`, async () => {
+  await using directory = await mkdtempDisposable(`${tmpdir()}/widgets-package-test-`)
+  await writeFile(resolve(directory.path, `readme.svelte`), `<p>Guide</p>`)
+  await expect(finalize_package(directory.path)).rejects.toThrow(`SVELTE_PACKAGE=1`)
 })

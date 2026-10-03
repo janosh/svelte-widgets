@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import {
     Widgets,
     Tune,
@@ -10,7 +10,7 @@
     Braces,
     MessageText,
     Keyboard,
-  } from '$lib/icons'
+  } from '#lib/icons.ts'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
@@ -59,13 +59,13 @@
 <Heading level={2} id="workbench-widgets" icon={Widgets}>Workbench widgets</Heading>
 <p>
   Compose controls for settings, file loading, pane layouts, and large data explorers.
-  Start with the focused examples and API guides for <a href={resolve(`/tree-view`)}
+  Start with the focused examples and API guides for <a href={resolve(`tree-view`)}
     >TreeView</a
   >,
-  <a href={resolve(`/json-tree`)}>JsonTree</a>,
-  <a href={resolve(`/split-pane`)}>SplitPane</a>,
-  <a href={resolve(`/virtual-list`)}>VirtualList</a>, and
-  <a href={resolve(`/file-input`)}>FileInput</a>. The combined explorer below shares
+  <a href={resolve(`json-tree`)}>JsonTree</a>,
+  <a href={resolve(`split-pane`)}>SplitPane</a>,
+  <a href={resolve(`virtual-list`)}>VirtualList</a>, and
+  <a href={resolve(`file-input`)}>FileInput</a>. The combined explorer below shares
   selection and settings between its panes.
 </p>
 <Heading level={3} id="numberrangeinput" icon={Tune}>NumberRangeInput</Heading>

@@ -1,4 +1,4 @@
-import { get_heading_visibility } from '$lib/toc-utils'
+import { get_heading_visibility } from '#lib/toc-utils.ts'
 import { expect, test } from 'vite-plus/test'
 
 const nested_levels = [2, 3, 4, 4, 3, 4, 2, 3]

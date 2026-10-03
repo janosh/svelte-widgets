@@ -382,9 +382,11 @@ several panes can be renamed via pane_props -->
       1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.15))
     );
     border-radius: var(--pane-border-radius, var(--border-radius, 3pt));
+    /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
     box-shadow: var(
       --pane-box-shadow,
-      light-dark(0 4px 20px -4px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.3))
+      0 4px 20px -4px light-dark(rgba(0, 0, 0, 0.15), transparent),
+      0 8px 16px -4px light-dark(transparent, rgba(0, 0, 0, 0.3))
     );
     z-index: var(--pane-z-index, 10);
     /* position is deliberately not transitioned, which would make dragging sluggish */

@@ -1,16 +1,15 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
-  import type { Pathname } from '$app/types'
-  import { PrevNext } from '$lib'
+  import { PrevNext } from '#lib'
   import type { Snippet } from 'svelte'
-  import { current_demo_route, resolve_demo_path as resolve_path } from '$site/paths'
+  import { current_demo_route, resolve_demo_path as resolve_path } from '#site/paths.ts'
   import { demo_nav_routes, demo_title, multiselect_recipes } from './index'
 
   let { children }: { children?: Snippet<[]> } = $props()
 
   const current = $derived(current_demo_route())
-  const multiselect_pages: Pathname[] = [`/multiselect`, ...multiselect_recipes]
+  const multiselect_pages = [`/multiselect`, ...multiselect_recipes]
   const is_multiselect = $derived(
     current !== undefined && multiselect_pages.includes(current),
   )

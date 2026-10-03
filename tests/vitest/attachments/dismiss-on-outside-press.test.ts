@@ -1,4 +1,4 @@
-import { dismiss_on_outside_press } from '$lib/attachments'
+import { dismiss_on_outside_press } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_escape } from '../index'
 

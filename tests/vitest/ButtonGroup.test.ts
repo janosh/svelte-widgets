@@ -1,7 +1,7 @@
-import ButtonGroup from '$lib/ButtonGroup.svelte'
-import { Check } from '$lib/icons'
-import button_group_source from '$lib/ButtonGroup.svelte?raw'
-import type { ButtonGroupOption } from '$lib/types'
+import ButtonGroup from '#lib/ButtonGroup.svelte'
+import { Check } from '#lib/icons.ts'
+import button_group_source from '#lib/ButtonGroup.svelte?raw'
+import type { ButtonGroupOption } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
@@ -420,7 +420,7 @@ describe(`ButtonGroup`, () => {
       `bg border btn-active-bg btn-active-border-color btn-active-color btn-bg ` +
         `btn-border btn-color btn-cursor btn-disabled-opacity btn-font-family ` +
         `btn-font-size btn-gap btn-hover-bg btn-hover-color btn-hover-transform ` +
-        `btn-padding btn-radius btn-transition display gap justify-content ` +
+        `btn-padding btn-radius btn-transition display flex-wrap gap justify-content ` +
         `option-btn-padding-right padding radius`,
     )
     // hover color chains to the resting one, so setting only that survives hover

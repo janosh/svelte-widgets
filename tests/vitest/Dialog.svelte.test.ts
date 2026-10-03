@@ -2,7 +2,7 @@ import { tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { click, create_element, doc_query, render, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
-import { focusable } from '$lib/attachments/shared'
+import { focusable } from '#lib/attachments/shared.ts'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>

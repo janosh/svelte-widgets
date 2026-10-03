@@ -1,4 +1,5 @@
-// Normalize module specifiers after svelte-package without rewriting strings or comments.
+// Normalize module specifiers after svelte-package without rewriting strings or comments,
+// and fail on repo-private specifiers it left unresolved.
 /// <reference types="node" />
 /// <reference lib="es2023.array" />
 import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
@@ -24,6 +25,10 @@ export const rewrite_imports = (source: string, filename: string): string => {
       ts.forEachChild(node, visit)
       if (!specifier || !ts.isStringLiteralLike(specifier)) return
       const path = specifier.text
+      // svelte-package skips default/namespace imports named with `_` or `$`, e.g.
+      // `import icon_data from '#lib/...'`, which consumers can't resolve
+      if (/^(?:#|\$(?:app|lib|env)\b)/u.test(path))
+        throw new Error(`${filename} keeps repo-private import '${path}' in dist/`)
       if (!path.startsWith(`./`) && !path.startsWith(`../`)) return
       const text = path.endsWith(`.ts`)
         ? `${path.slice(0, -3)}.js`
@@ -66,7 +71,13 @@ export const finalize_package = async (directory: string): Promise<void> => {
   for (const file of await readdir(directory, { recursive: true, withFileTypes: true })) {
     if (!file.isFile()) continue
     const path = resolve(file.parentPath, file.name)
+    // svelte-package copies src/lib Markdown guides verbatim; they're docs, not package code
     if (file.name === `readme.md`) await unlink(path)
+    // a compiled guide means svelte-package loaded the site's `.md` extension and preprocessors
+    else if (file.name === `readme.svelte`)
+      throw new Error(
+        `${path}: run svelte-package via \`npm run package\` (SVELTE_PACKAGE=1)`,
+      )
     else if (/\.(?:js|ts|svelte)$/.test(file.name)) {
       const source = await readFile(path, `utf8`)
       const output = rewrite_imports(source, file.name)

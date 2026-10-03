@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Icon from '$lib/Icon.svelte'
-  import { FileCode, ContentDuplicate } from '$lib/icons'
+  import Icon from '#lib/Icon.svelte'
+  import { FileCode, ContentDuplicate } from '#lib/icons.ts'
 </script>
 
 ## <Icon icon={FileCode} class="heading-icon" aria-hidden="true" /> `CodeEditor`

@@ -1,4 +1,4 @@
-import { hotkey } from '$lib/attachments'
+import { hotkey } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key as keydown, stub_props } from '../index'
 

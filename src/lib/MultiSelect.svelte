@@ -2264,9 +2264,11 @@
     color: var(--sms-text-color, light-dark(#222, #eee));
     max-height: var(--sms-options-max-height, 50vh);
     overscroll-behavior: var(--sms-options-overscroll, none);
+    /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
     box-shadow: var(
       --sms-options-shadow,
-      light-dark(0 0 14pt -3pt rgba(0, 0, 0, 0.2), 0 0 14pt -4pt rgba(0, 0, 0, 0.8))
+      0 0 14pt -3pt light-dark(rgba(0, 0, 0, 0.2), transparent),
+      0 0 14pt -4pt light-dark(transparent, rgba(0, 0, 0, 0.8))
     );
     border: var(--sms-options-border, 1px solid light-dark(lightgray, #555));
     border-width: var(--sms-options-border-width, 1px);
