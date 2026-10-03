@@ -1,4 +1,4 @@
-import { create_canvas_surface } from '$lib/canvas.svelte'
+import { create_canvas_surface } from '#lib/canvas.svelte.ts'
 import { flushSync } from 'svelte'
 import { beforeEach, expect, onTestFinished, test, vi } from 'vite-plus/test'
 

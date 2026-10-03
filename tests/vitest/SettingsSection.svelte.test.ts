@@ -1,4 +1,4 @@
-import { SettingsSection } from '$lib'
+import { SettingsSection } from '#lib'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
 import { click, doc_query, render } from './index'

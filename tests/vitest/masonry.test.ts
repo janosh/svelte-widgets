@@ -1,5 +1,5 @@
-import { Masonry } from '$lib'
-import { order_options as ALL_ORDER_MODES } from '$lib/utils'
+import { Masonry } from '#lib'
+import { order_options as ALL_ORDER_MODES } from '#lib/utils.ts'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query } from './index'

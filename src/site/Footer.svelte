@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { repository } from '$root/package.json'
+  import { repository } from '#root/package.json'
 
   let { edit_href }: { edit_href: string } = $props()
 </script>

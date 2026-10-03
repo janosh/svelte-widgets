@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import MultiSelect from 'svelte-widgets/MultiSelect.svelte'
   import type { SelectAllScope } from 'svelte-widgets'
 

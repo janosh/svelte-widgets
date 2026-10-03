@@ -7,7 +7,7 @@ import {
   content_search_record,
   validate_content,
   assert_valid_content,
-} from '$lib/markdown'
+} from '#lib/markdown/index.ts'
 import { compile_source as compile_markdown } from './markdown-helpers'
 import { describe, expect, test } from 'vite-plus/test'
 

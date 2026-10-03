@@ -1,4 +1,4 @@
-import { create_clipboard_feedback } from '$lib/clipboard.svelte'
+import { create_clipboard_feedback } from '#lib/clipboard.svelte.ts'
 import { flushSync } from 'svelte'
 import { afterAll, beforeEach, expect, test, vi } from 'vite-plus/test'
 

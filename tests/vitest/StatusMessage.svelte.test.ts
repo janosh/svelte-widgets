@@ -1,4 +1,4 @@
-import { StatusMessage } from '$lib'
+import { StatusMessage } from '#lib'
 import { flushSync, type ComponentProps } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'

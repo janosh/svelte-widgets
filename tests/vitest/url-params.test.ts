@@ -4,7 +4,7 @@ import {
   sync_url_params,
   url_with_params,
   valid_query_param,
-} from '$lib/url-params'
+} from '#lib/url-params.ts'
 import { expect, expectTypeOf, test, vi } from 'vite-plus/test'
 
 test.each([

@@ -1,4 +1,4 @@
-import Confetti from '$site/Confetti.svelte'
+import Confetti from '#site/Confetti.svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { render } from './index'
 

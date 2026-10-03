@@ -1,4 +1,4 @@
-import { portal } from '$lib/attachments'
+import { portal } from '#lib/attachments/index.ts'
 import { describe, expect, it } from 'vite-plus/test'
 import { create_element } from '../index'
 

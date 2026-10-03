@@ -1,6 +1,10 @@
-import { create_highlight_client } from '$lib/code-editor/highlight-client'
-import { create_editor_model } from '$lib/code-editor/model'
-import type { ApplyEditsArgs, EditorBackend, SetTextArgs } from '$lib/code-editor/types'
+import { create_highlight_client } from '#lib/code-editor/highlight-client.ts'
+import { create_editor_model } from '#lib/code-editor/model.ts'
+import type {
+  ApplyEditsArgs,
+  EditorBackend,
+  SetTextArgs,
+} from '#lib/code-editor/types.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
 const OPEN_RESULT = { language: `typescript`, highlightable: true, editable: true }

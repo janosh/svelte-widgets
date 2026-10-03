@@ -1,4 +1,4 @@
-import { format_bytes } from '$lib/format'
+import { format_bytes } from '#lib/format.ts'
 import { expect, test } from 'vite-plus/test'
 
 test.each([

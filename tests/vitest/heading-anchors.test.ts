@@ -3,9 +3,9 @@ import {
   heading_anchor_html,
   slugify_heading,
   unique_heading_id,
-} from '$lib/heading-anchors'
-import Heading from '$lib/Heading.svelte'
-import { Check } from '$lib/icons'
+} from '#lib/heading-anchors.ts'
+import Heading from '#lib/Heading.svelte'
+import { Check } from '#lib/icons.ts'
 import { createRawSnippet } from 'svelte'
 import { describe, expect, it } from 'vite-plus/test'
 import { doc_query, next_task, render } from './index'

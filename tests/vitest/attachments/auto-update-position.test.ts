@@ -1,4 +1,4 @@
-import { auto_update_position } from '$lib/attachments'
+import { auto_update_position } from '#lib/attachments/index.ts'
 import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, stub_props } from '../index'
 

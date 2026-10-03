@@ -1,4 +1,4 @@
-import { Spinner } from '$lib'
+import { Spinner } from '#lib'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'
 

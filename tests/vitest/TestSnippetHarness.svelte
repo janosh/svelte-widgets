@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { ActionButton, CopyButton, FileDetails, Nav, PrevNext, Toggle } from '$lib'
+  import { ActionButton, CopyButton, FileDetails, Nav, PrevNext, Toggle } from '#lib'
   import type { ComponentProps } from 'svelte'
 
   type SnippetHarnessProps =

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   // Internal test page for playwright e2e tests (tests/playwright/MultiSelect.test.ts):
   // virtual_list windowing needs real browser layout (happy-dom reports clientHeight 0)
   import { MultiSelect } from 'svelte-widgets'

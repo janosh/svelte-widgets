@@ -1,4 +1,4 @@
-import { float } from '$lib/attachments'
+import { float } from '#lib/attachments/index.ts'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { create_element, mock_rect, stub_props } from '../index'
 

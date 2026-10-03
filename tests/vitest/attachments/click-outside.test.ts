@@ -1,4 +1,4 @@
-import { click_outside } from '$lib/attachments'
+import { click_outside } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, press_escape, stub_props } from '../index'
 

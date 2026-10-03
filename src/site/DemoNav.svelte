@@ -1,6 +1,6 @@
 <script lang="ts">
   import { page } from '$app/state'
-  import { Nav, ThemeToggle } from '$lib'
+  import { Nav, ThemeToggle } from '#lib'
   import type { ComponentProps } from 'svelte'
   import { demo_title, demo_nav_routes, multiselect_recipes } from '../routes/(demos)'
   import { resolve_demo_path as resolve_path } from './paths'

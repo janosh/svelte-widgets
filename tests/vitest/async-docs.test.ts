@@ -1,4 +1,4 @@
-import type { LoadOptionsFn } from '$lib/types'
+import type { LoadOptionsFn } from '#lib/types.ts'
 import { fail } from '@sveltejs/kit'
 import { readFileSync } from 'node:fs'
 import { runInNewContext } from 'node:vm'

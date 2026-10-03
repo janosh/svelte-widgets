@@ -1,4 +1,4 @@
-import { foods, languages, octicons } from '$site/options'
+import { foods, languages, octicons } from '#site/options.ts'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 
 async function open_portal_modal(page: Page): Promise<Locator> {

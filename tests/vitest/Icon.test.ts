@@ -1,7 +1,7 @@
-import { Icon } from '$lib'
-import * as icons from '$lib/icons'
-import type { IconData } from '$lib/icons'
-import { escape_template_literal } from '$root/scripts/generate-icons'
+import { Icon } from '#lib'
+import * as icons from '#lib/icons.ts'
+import type { IconData } from '#lib/icons.ts'
+import { escape_template_literal } from '#root/scripts/generate-icons.ts'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -158,7 +158,7 @@ describe(`icon catalog page`, () => {
     onTestFinished(() => void vi.unstubAllGlobals())
 
     const { default: IconsPage } = await import(
-      `$root/src/routes/(demos)/(display)/icons/+page.svelte`
+      `#root/src/routes/(demos)/(display)/icons/+page.svelte`
     )
     render(IconsPage, {})
     const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
