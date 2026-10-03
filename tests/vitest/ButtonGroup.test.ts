@@ -420,7 +420,7 @@ describe(`ButtonGroup`, () => {
       `bg border btn-active-bg btn-active-border-color btn-active-color btn-bg ` +
         `btn-border btn-color btn-cursor btn-disabled-opacity btn-font-family ` +
         `btn-font-size btn-gap btn-hover-bg btn-hover-color btn-hover-transform ` +
-        `btn-padding btn-radius btn-transition display gap justify-content ` +
+        `btn-padding btn-radius btn-transition display flex-wrap gap justify-content ` +
         `option-btn-padding-right padding radius`,
     )
     // hover color chains to the resting one, so setting only that survives hover
