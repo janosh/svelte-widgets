@@ -111,6 +111,7 @@ export type ResizableLabels = typeof RESIZABLE_LABELS
 
 export const DRAGGABLE_PANE_LABELS = {
   reset_position: `Reset pane position`,
+  pin_pane: `Keep pane open on outside clicks`,
   // close_pane titles both the header's close button and the toggle in its open state
   close_pane: `Close pane`,
   open_pane: `Open pane`,

@@ -1,7 +1,7 @@
-import { Icon } from '$lib'
-import * as icons from '$lib/icons'
-import type { IconData } from '$lib/icons'
-import { escape_template_literal } from '$root/scripts/generate-icons'
+import { Icon } from '#lib'
+import * as icons from '#lib/icons.ts'
+import type { IconData } from '#lib/icons.ts'
+import { escape_template_literal } from '#root/scripts/generate-icons.ts'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -148,6 +148,23 @@ describe(`Icon`, () => {
   })
 })
 
+// Import the catalog page at collection time: its first import compiles the route, which
+// under full-suite load can eat a test's whole timeout. The copy retry flow needs neither
+// all 2000+ tiles nor the usage snippet's highlighting, whose grammar load blocks the
+// event loop, so narrow the catalog and leave the snippet pending (plain code).
+vi.doMock(`svelte-widgets/icons`, () => ({
+  Check: icons.Check,
+  Download: icons.Download,
+}))
+vi.doMock(`svelte-widgets/highlight`, () => ({
+  default_highlighter: { highlight: () => new Promise<string>(() => {}) },
+}))
+const { default: IconsPage } = await import(
+  `#root/src/routes/(demos)/(display)/icons/+page.svelte`
+)
+vi.doUnmock(`svelte-widgets/icons`)
+vi.doUnmock(`svelte-widgets/highlight`)
+
 describe(`icon catalog page`, () => {
   test(`clears a stale copy error before retrying`, async () => {
     const write_text = vi
@@ -157,9 +174,6 @@ describe(`icon catalog page`, () => {
     vi.stubGlobal(`navigator`, { clipboard: { writeText: write_text } })
     onTestFinished(() => void vi.unstubAllGlobals())
 
-    const { default: IconsPage } = await import(
-      `$root/src/routes/(demos)/(display)/icons/+page.svelte`
-    )
     render(IconsPage, {})
     const copy_button = doc_query<HTMLButtonElement>(`ul.grid button`)
 

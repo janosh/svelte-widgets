@@ -1,11 +1,11 @@
-import { RangeSlider, type RangeValue } from '$lib'
+import { RangeSlider, type RangeValue } from '#lib'
 import RangeSliderDemo from '../../src/routes/(demos)/(inputs)/range-slider/+page.md'
 import {
   create_range_scale,
   snap_range_value,
   step_range_value,
   validate_range,
-} from '$lib/range-slider'
+} from '#lib/range-slider.ts'
 import { mount, tick, unmount, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import {

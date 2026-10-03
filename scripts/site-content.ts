@@ -131,7 +131,7 @@ export function site_adapter(manifests: Map<string, ContentManifest>): Adapter {
     ...static_adapter,
     async adapt(builder) {
       await static_adapter.adapt(builder)
-      const { base } = builder.config.kit.paths
+      const { base } = builder.config.paths
       const output = `build`
       const pages = await Promise.all(
         [...builder.prerendered.pages].map(async ([url, { file }]) => {

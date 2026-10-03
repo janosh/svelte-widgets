@@ -1,5 +1,5 @@
-import * as lib from '$lib'
-import * as attachments from '$lib/attachments'
+import * as lib from '#lib'
+import * as attachments from '#lib/attachments/index.ts'
 import { expect, test } from 'vite-plus/test'
 
 test(`src/lib/index.ts does not re-export attachments`, () => {
@@ -12,7 +12,11 @@ test(`src/lib/index.ts does not re-export attachments`, () => {
 test(`src/lib/index.ts re-exports all Svelte components`, () => {
   const components = Object.entries(
     import.meta.glob(
-      [`$lib/*.svelte`, `$lib/code-editor/*.svelte`, `$lib/json-tree/JsonTree.svelte`],
+      [
+        `/src/lib/*.svelte`,
+        `/src/lib/code-editor/*.svelte`,
+        `/src/lib/json-tree/JsonTree.svelte`,
+      ],
       { eager: true, import: `default` },
     ),
   ).map(
@@ -28,7 +32,7 @@ test(`src/lib/index.ts re-exports all Svelte components`, () => {
 // Svelte types `class` as ClassValue, so consumers may pass arrays/objects; interpolating
 // one into a string renders `[object Object]` instead of letting Svelte's clsx resolve it
 test(`no component interpolates a class prop into a class string`, () => {
-  const sources = import.meta.glob<string>(`$lib/**/*.svelte`, {
+  const sources = import.meta.glob<string>(`/src/lib/**/*.svelte`, {
     eager: true,
     query: `?raw`,
     import: `default`,

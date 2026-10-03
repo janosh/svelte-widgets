@@ -1,4 +1,4 @@
-import type { CmdAction, Option, OptionStyle } from '$lib'
+import type { CmdAction, Option, OptionStyle } from '#lib'
 import {
   chain_handlers,
   cmd_action_matches,
@@ -28,7 +28,7 @@ import {
   sanitize_shortcut_overrides,
   slug_to_title,
   step_focus,
-} from '$lib/utils'
+} from '#lib/utils.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, stub_props } from './index'
 

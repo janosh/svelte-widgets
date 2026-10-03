@@ -1,5 +1,5 @@
-import { Nav } from '$lib'
-import type { NavRoute, NavLink } from '$lib/types'
+import { Nav } from '#lib'
+import type { NavRoute, NavLink } from '#lib/types.ts'
 import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'

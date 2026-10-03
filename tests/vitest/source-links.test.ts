@@ -1,8 +1,8 @@
-import { create_source_links, type SourceSymbols } from '$lib/source-links'
+import { create_source_links, type SourceSymbols } from '#lib/source-links/index.ts'
 import source_links, {
   repository_url,
   SOURCE_SYMBOLS_MODULE_ID,
-} from '$lib/source-links/vite-plugin'
+} from '#lib/source-links/vite-plugin.ts'
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vite-plus/test'

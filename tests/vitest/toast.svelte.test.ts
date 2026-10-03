@@ -1,4 +1,4 @@
-import Toast from '$lib/Toast.svelte'
+import Toast from '#lib/Toast.svelte'
 import {
   activate_toast_action,
   create_toast_queue,
@@ -8,14 +8,14 @@ import {
   expire_toasts,
   TOAST_PRIORITIES,
   ToastStore,
-} from '$lib/toast-queue.svelte.ts'
+} from '#lib/toast-queue.svelte.ts'
 import type {
   ToastCloseHandler,
   ToastItem,
   ToastPriority,
   ToastQueue,
   ToastRequest,
-} from '$lib/toast-queue.svelte.ts'
+} from '#lib/toast-queue.svelte.ts'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { click, doc_query, escape_key, press_key, render as mount_body } from './index'

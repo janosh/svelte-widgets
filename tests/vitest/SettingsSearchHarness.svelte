@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SettingsGroup, SettingsSearch, SettingsSection } from '$lib'
+  import { SettingsGroup, SettingsSearch, SettingsSection } from '#lib'
   import { untrack } from 'svelte'
 
   // seeds the field like a restored session or deep link would, and owns `query` so the

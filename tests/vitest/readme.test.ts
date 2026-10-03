@@ -1,10 +1,10 @@
 // These links only resolve after deployment, so the regular link checker cannot check them.
-import * as lib from '$lib'
-import * as utils from '$lib/utils'
-import { heading_text } from '$lib/heading-anchors'
-import { exports as pkg_exports } from '$root/package.json'
-import readme from '$root/readme.md?raw'
-import markdown_guide from '$lib/markdown/readme.md?raw'
+import * as lib from '#lib'
+import * as utils from '#lib/utils.ts'
+import { heading_text } from '#lib/heading-anchors.ts'
+import { exports as pkg_exports } from '#root/package.json'
+import readme from '#root/readme.md?raw'
+import markdown_guide from '#lib/markdown/readme.md?raw'
 import { expect, test } from 'vite-plus/test'
 
 const pages: Record<string, string> = import.meta.glob(

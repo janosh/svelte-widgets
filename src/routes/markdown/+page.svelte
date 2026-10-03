@@ -1,5 +1,5 @@
 <script>
-  import Markdown from '$lib/markdown/readme.md'
+  import Markdown from '#lib/markdown/readme.md'
 </script>
 
 <Markdown />

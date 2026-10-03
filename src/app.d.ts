@@ -6,6 +6,12 @@ declare module '*?toc' {
   export default items
 }
 
+// Frontmatter after validate_frontmatter, loaded without compiling the page.
+declare module '*?metadata' {
+  const metadata: Record<string, unknown>
+  export default metadata
+}
+
 declare module '*.md'
 declare module '*package.json'
 

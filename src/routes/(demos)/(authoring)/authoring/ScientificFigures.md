@@ -1,6 +1,6 @@
 <script>
-  import Icon from '$lib/Icon.svelte'
-  import { Flask } from '$lib/icons'
+  import Icon from '#lib/Icon.svelte'
+  import { Flask } from '#lib/icons.ts'
   import 'katex/dist/katex.min.css'
 </script>
 

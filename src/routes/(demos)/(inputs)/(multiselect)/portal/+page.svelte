@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import { MultiSelect } from 'svelte-widgets'
-  import { languages, octicons } from '$site/options'
+  import { languages, octicons } from '#site/options.ts'
 
   let open_modal = $state(false)
   let selected_languages = $state<string[]>([])

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import JsonTree from '$lib/json-tree/JsonTree.svelte'
+  import JsonTree from '#lib/json-tree/JsonTree.svelte'
   import type { ComponentProps } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
 

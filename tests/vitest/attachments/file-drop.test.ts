@@ -1,4 +1,4 @@
-import { file_drop, type FileDropOptions } from '$lib/attachments'
+import { file_drop, type FileDropOptions } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, data_transfer, drag_event, next_task } from '../index'
 

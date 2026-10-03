@@ -1,4 +1,4 @@
-import type { MultiSelectProps } from '$lib'
+import type { MultiSelectProps } from '#lib'
 import { flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vite-plus/test'
 import { mkdtemp, rm } from 'node:fs/promises'

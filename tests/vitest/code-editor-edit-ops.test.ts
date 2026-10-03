@@ -7,8 +7,8 @@ import {
   indent_selection,
   toggle_line_comment,
   visible_line_window,
-} from '$lib/code-editor'
-import type { EditorState, RangeEdit } from '$lib/code-editor'
+} from '#lib/code-editor/index.ts'
+import type { EditorState, RangeEdit } from '#lib/code-editor/index.ts'
 import { expect, test } from 'vite-plus/test'
 
 const state = (

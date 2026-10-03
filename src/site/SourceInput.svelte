@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { CodeBlock } from '$lib'
-  import { default_highlighter } from '$lib/highlight'
+  import { CodeBlock } from '#lib'
+  import { default_highlighter } from '#lib/highlight/index.ts'
 
   let {
     value = $bindable(``),

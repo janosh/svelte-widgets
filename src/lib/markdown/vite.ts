@@ -5,6 +5,7 @@ import {
   compile_markdown,
   create_markdown,
   assert_ok,
+  type MarkdownDocument,
   type MarkdownEngine,
   type MarkdownResult,
 } from './index.ts'
@@ -12,7 +13,21 @@ import { is_markdown_file } from './meta.ts'
 import { source_map } from './source-map.ts'
 import type { ContentManifest } from './content.ts'
 
-const TOC_MODULE_PREFIX = `\0widgets-toc:`
+// `page.md?toc` and `page.md?metadata` load as JSON modules from a parse, without
+// compiling the page component, so layouts can glob them without bundling every page.
+const QUERY_MODULES = [
+  {
+    query: `toc`,
+    prefix: `\0widgets-toc:`,
+    emit: ({ manifest }: MarkdownDocument) =>
+      manifest.headings.map(({ id, depth, text }) => ({ id, level: depth, title: text })),
+  },
+  {
+    query: `metadata`,
+    prefix: `\0widgets-metadata:`,
+    emit: ({ metadata }: MarkdownDocument) => metadata,
+  },
+]
 const MODULE_ID = /\.widgets-example-[a-f\d]+-[a-f\d]+-\d+\.svelte(?:\?|$)/u
 
 const drop_examples = (modules: Map<string, string>, filename: string): void => {
@@ -124,10 +139,16 @@ export function markdown_vite(
       enforce: `pre`,
       resolveId(id, importer) {
         const [filename, query] = id.split(`?`)
-        if (new URLSearchParams(query).has(`toc`) && is_markdown(filename))
+        const params = new URLSearchParams(query)
+        const queries = QUERY_MODULES.filter((module) => params.has(module.query))
+        if (queries.length && is_markdown(filename)) {
+          if (queries.length > 1)
+            throw new Error(`Import one of ?toc or ?metadata at a time: ${id}`)
+          const [{ prefix }] = queries
           return this.resolve(filename, importer, { skipSelf: true }).then((resolved) =>
-            resolved ? `${TOC_MODULE_PREFIX}${resolved.id}.js` : undefined,
+            resolved ? `${prefix}${resolved.id}.js` : undefined,
           )
+        }
         if (!MODULE_ID.test(id)) return undefined
         const root = this.environment.config.root
           .replaceAll(`\\`, `/`)
@@ -148,15 +169,16 @@ export function markdown_vite(
         return modules.has(`${root}${filename}`) ? `${root}${id}` : id
       },
       load(id) {
-        if (id.startsWith(TOC_MODULE_PREFIX)) {
-          const filename = id.slice(TOC_MODULE_PREFIX.length, -3)
+        const query_module = QUERY_MODULES.find(({ prefix }) => id.startsWith(prefix))
+        if (query_module) {
+          const filename = id.slice(query_module.prefix.length, -3)
           this.addWatchFile(filename)
           return readFile(filename, `utf8`)
             .then((content) => cached_engine.parse(content, { filename }))
             .then(assert_ok)
             .then(
-              ({ manifest }) =>
-                `export default ${JSON.stringify(manifest.headings.map(({ id: heading_id, depth, text }) => ({ id: heading_id, level: depth, title: text })))};`,
+              (document) =>
+                `export default ${JSON.stringify(query_module.emit(document))};`,
             )
         }
         if (!MODULE_ID.test(id) || id.includes(`?`)) return undefined
@@ -179,10 +201,13 @@ export function markdown_vite(
       async hotUpdate(context) {
         const filename = context.file.replaceAll(`\\`, `/`)
         const graph = this.environment.moduleGraph
+        const query_ids = new Set(
+          QUERY_MODULES.map(({ prefix }) => `${prefix}${filename}.js`),
+        )
         if (
           context.type === `delete` ||
           (!files.has(filename) &&
-            !graph.idToModuleMap.has(`${TOC_MODULE_PREFIX}${filename}.js`))
+            ![...query_ids].some((id) => graph.idToModuleMap.has(id)))
         )
           return undefined
         if (files.has(filename)) await compile_file(await context.read(), filename)
@@ -193,7 +218,7 @@ export function markdown_vite(
           context.modules.filter((module) => !MODULE_ID.test(module.id ?? ``)),
         )
         for (const [id, module] of graph.idToModuleMap) {
-          if (id === `${TOC_MODULE_PREFIX}${filename}.js`) {
+          if (query_ids.has(id)) {
             graph.invalidateModule(module, new Set(), context.timestamp)
             affected.add(module)
             continue

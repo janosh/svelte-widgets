@@ -1,5 +1,5 @@
-import type { FocusTrapOptions } from '$lib/attachments'
-import { focus_trap } from '$lib/attachments'
+import type { FocusTrapOptions } from '#lib/attachments/index.ts'
+import { focus_trap } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key as dispatch_key, press_escape } from '../index'
 

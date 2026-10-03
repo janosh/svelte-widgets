@@ -12,14 +12,14 @@ import {
   compile_markdown as compile_document,
   render_markdown as render_document,
   DiagnosticError,
-} from '$lib/markdown'
+} from '#lib/markdown/index.ts'
 import {
   decode_source_map,
   original_position,
   source_map,
-} from '$lib/markdown/source-map'
+} from '#lib/markdown/source-map.ts'
 import { compile, preprocess } from 'svelte/compiler'
-import { heading_anchors } from '$lib/heading-anchors'
+import { heading_anchors } from '#lib/heading-anchors.ts'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { readFile, writeFile } from 'node:fs/promises'
 import { temp_dir } from './index'
@@ -292,7 +292,7 @@ describe(`code and math`, () => {
       expect(code).toContain(literal)
   })
 
-  test(`ToC imports are plain JS modules from the current manifest`, async () => {
+  test(`?toc and ?metadata imports are plain JS modules from the current parse`, async () => {
     // Exercise the production glob parser against the actual consumer: template-valued
     // options are silently ignored by Rolldown, unlike Vite's development transform.
     const layout_file = `${process.cwd()}/src/routes/+layout.svelte`
@@ -337,30 +337,46 @@ describe(`code and math`, () => {
       resolve: vi.fn(async () => ({ id: filename })),
       addWatchFile: vi.fn(),
     }
-    const module_ids = await Promise.all(
-      [`?toc`, `?toc&lang.md`, `?lang.md&toc`].map(async (query) =>
-        resolve_id(context, `./page.md${query}`, undefined, {}),
-      ),
+    const module_ids: string[] = []
+    for (const name of [`toc`, `metadata`]) {
+      const ids = await Promise.all(
+        [`?${name}`, `?${name}&lang.md`, `?lang.md&${name}`].map(async (query) =>
+          resolve_id(context, `./page.md${query}`, undefined, {}),
+        ),
+      )
+      expect(new Set(ids).size).toBe(1)
+      const [module_id] = ids
+      if (typeof module_id !== `string`) throw new Error(`Expected virtual module ID`)
+      expect(module_id).toMatch(/\.js$/u)
+      module_ids.push(module_id)
+      expect(resolve_id(context, `./data.json?${name}`, undefined, {})).toBeUndefined()
+    }
+    expect(new Set(module_ids).size).toBe(2)
+    expect(() => resolve_id(context, `./page.md?toc&metadata`, undefined, {})).toThrow(
+      `Import one of ?toc or ?metadata at a time: ./page.md?toc&metadata`,
     )
-    const [module_id] = module_ids
-    expect(new Set(module_ids).size).toBe(1)
-    expect(typeof module_id).toBe(`string`)
-    if (typeof module_id !== `string`) throw new Error(`Expected virtual module ID`)
-    expect(module_id).toMatch(/\.js$/u)
-    for (const title of [`First`, `Changed`]) {
-      await writeFile(filename, `## ${title}\n\n\`\`\`ts\nconst value = 1\n\`\`\``)
+    const [toc_id, metadata_id] = module_ids
+    const load_json = async (module_id: string): Promise<unknown> => {
       const code = await load(context, module_id)
       if (typeof code !== `string`) throw new Error(`Expected JS module source`)
-      expect(JSON.parse(code.slice(`export default `.length, -1))).toEqual([
+      return JSON.parse(code.slice(`export default `.length, -1))
+    }
+    for (const title of [`First`, `Changed`]) {
+      await writeFile(
+        filename,
+        `---\ntitle: ${title}\n---\n\n## ${title}\n\n\`\`\`ts\nconst value = 1\n\`\`\``,
+      )
+      expect(await load_json(toc_id)).toEqual([
         { id: title.toLowerCase(), level: 2, title },
       ])
+      expect(await load_json(metadata_id)).toEqual({ title })
     }
     expect(context.addWatchFile).toHaveBeenCalledWith(filename)
     expect(highlight).not.toHaveBeenCalled()
     const update = hook(instance.plugin, `hotUpdate`)
-    const toc_module = { id: module_id }
+    const query_modules = module_ids.map((id) => ({ id }))
     const graph = {
-      idToModuleMap: new Map([[module_id, toc_module]]),
+      idToModuleMap: new Map(query_modules.map((module) => [module.id, module])),
       invalidateModule: vi.fn(),
     }
     expect(
@@ -368,9 +384,45 @@ describe(`code and math`, () => {
         { environment: { moduleGraph: graph } },
         { file: filename, type: `update`, modules: [], timestamp: 1 },
       ),
-    ).toEqual([toc_module])
-    expect(graph.invalidateModule).toHaveBeenCalledWith(toc_module, new Set(), 1)
+    ).toEqual(query_modules)
+    for (const module of query_modules)
+      expect(graph.invalidateModule).toHaveBeenCalledWith(module, new Set(), 1)
   })
+
+  test.each([
+    [`no frontmatter`, ``, undefined, {}],
+    [`no frontmatter, validated`, ``, true, { title: `Untitled`, validated: true }],
+    [
+      `frontmatter, validated`,
+      `---\ntitle: Page\n---\n`,
+      true,
+      { title: `Page`, validated: true },
+    ],
+  ])(
+    `?metadata exports the document metadata: %s`,
+    async (_label, header, validate, expected) => {
+      const directory = await temp_dir(`widgets-metadata-`)
+      const filename = `${directory}/page.md`
+      await writeFile(filename, `${header}# Heading\n\nBody`)
+      const instance = markdown_vite({
+        validate_frontmatter: validate
+          ? (metadata) => ({
+              title: typeof metadata.title === `string` ? metadata.title : `Untitled`,
+              validated: true,
+            })
+          : undefined,
+      })
+      const context = { resolve: async () => ({ id: filename }), addWatchFile: vi.fn() }
+      const module_id = await hook(instance.plugin, `resolveId`)(
+        context,
+        `./page.md?metadata`,
+        undefined,
+        {},
+      )
+      const code = await hook(instance.plugin, `load`)(context, module_id)
+      expect(code).toBe(`export default ${JSON.stringify(expected)};`)
+    },
+  )
 
   test.each([undefined, true])(
     `live examples register complete source and respect hide_style=%s`,

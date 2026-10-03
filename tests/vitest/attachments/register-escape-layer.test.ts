@@ -1,4 +1,4 @@
-import { register_escape_layer } from '$lib/attachments'
+import { register_escape_layer } from '#lib/attachments/index.ts'
 import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,

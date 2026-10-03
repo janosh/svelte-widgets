@@ -1,5 +1,5 @@
-import Accordion from '$lib/Accordion.svelte'
-import type { AccordionItem } from '$lib/types'
+import Accordion from '#lib/Accordion.svelte'
+import type { AccordionItem } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'

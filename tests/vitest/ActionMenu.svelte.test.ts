@@ -1,5 +1,5 @@
-import { ActionMenu } from '$lib'
-import type { CmdAction, CmdSection } from '$lib/types'
+import { ActionMenu } from '#lib'
+import type { CmdAction, CmdSection } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'

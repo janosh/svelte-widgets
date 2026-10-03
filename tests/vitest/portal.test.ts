@@ -1,4 +1,4 @@
-import { portal_action } from '$lib/portal'
+import { portal_action } from '#lib/portal.ts'
 import { tick } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 

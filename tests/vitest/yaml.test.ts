@@ -1,4 +1,4 @@
-import { parse_yaml, stringify_yaml, yaml_plugin, type YamlOptions } from '$lib/yaml'
+import { parse_yaml, stringify_yaml, yaml_plugin, type YamlOptions } from '#lib/yaml.ts'
 import { YAML11_SCHEMA } from 'js-yaml'
 import { expect, test } from 'vite-plus/test'
 

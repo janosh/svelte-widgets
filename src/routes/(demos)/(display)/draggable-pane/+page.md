@@ -31,7 +31,7 @@ Use it for anything that hangs off a control in the corner of a widget — expor
 >
   <DraggablePane
     bind:open
-    {persistent}
+    bind:persistent
     {resize}
     on_close={({ via }) => (last_close = via)}
     toggle_props={{ title: `Pane options` }}
@@ -77,7 +77,7 @@ The pane carries `toc-exclude`, so headings in its content stay out of a page's 
 
 ### Persistent panes
 
-`persistent` drops the press-outside dismissal only. Escape still closes the pane, as does the close button that appears on its tab once you move it, so there is always a way out. Escape is layered: a pane opened from inside a dialog closes before the dialog does.
+`persistent` drops only the press-outside dismissal. It is bindable, and the pin button on the pane's tab toggles it. Escape still closes the pane, as does the close button that appears on its tab once you move it, so there is always a way out. Escape is layered: a pane opened from inside a dialog closes before the dialog does.
 
 ### Positioning
 

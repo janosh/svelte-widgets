@@ -1,4 +1,4 @@
-import CodeExample from '$lib/CodeExample.svelte'
+import CodeExample from '#lib/CodeExample.svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

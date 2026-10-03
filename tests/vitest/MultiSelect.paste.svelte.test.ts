@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import type { Option } from '$lib'
-import type { MultiSelectProps } from '$lib/types'
+import type { Option } from '#lib'
+import type { MultiSelectProps } from '#lib/types.ts'
 import { get_input, mount_multiselect, type_search_text } from './MultiSelect.test-utils'
 
 function make_paste_event(text: string): ClipboardEvent {

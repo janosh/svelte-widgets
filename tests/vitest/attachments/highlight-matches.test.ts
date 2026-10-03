@@ -1,4 +1,4 @@
-import { highlight_matches } from '$lib/attachments'
+import { highlight_matches } from '#lib/attachments/index.ts'
 import { beforeEach, describe, expect, it, vi } from 'vite-plus/test'
 import { stub_css_highlights } from '../index'
 

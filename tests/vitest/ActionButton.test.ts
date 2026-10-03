@@ -1,4 +1,4 @@
-import { ActionButton, type ActionState } from '$lib'
+import { ActionButton, type ActionState } from '#lib'
 import { tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { click, doc_query, render } from './index'

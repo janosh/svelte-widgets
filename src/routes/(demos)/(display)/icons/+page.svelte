@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   import { CodeBlock, Icon } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import { create_clipboard_feedback } from 'svelte-widgets/clipboard'

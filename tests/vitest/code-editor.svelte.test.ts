@@ -1,13 +1,13 @@
-import { register_escape_layer } from '$lib/attachments'
-import CodeEditor from '$lib/code-editor/CodeEditor.svelte'
-import { create_editor_model } from '$lib/code-editor/model'
+import { register_escape_layer } from '#lib/attachments/index.ts'
+import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
+import { create_editor_model } from '#lib/code-editor/model.ts'
 import type {
   ApplyEditsArgs,
   EditorBackend,
   EditorModel,
   HighlightLinesArgs,
   OpenDocArgs,
-} from '$lib/code-editor/types'
+} from '#lib/code-editor/types.ts'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, press_key, stub_prop } from './index'

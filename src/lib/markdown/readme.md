@@ -238,3 +238,13 @@ Remove remark plugin registration and the old live-example Vite plugin. Replace 
 ## Table of contents
 
 The Vite integration exposes `import items from "./page.md?toc"`, an array of `{ id, level, title }` from the content manifest. Pass it to `<Toc {items} />` to render navigation during SSR. Without `items`, Toc reads existing heading IDs once at mount. Set `dynamic` explicitly for content whose headings change after mount. Toc never creates IDs. Custom `toc_item` snippets receive heading metadata, so they also render on the server. Invalid selectors and collapse modes throw.
+
+`import metadata from "./page.md?metadata"` exports the page's frontmatter as plain JSON, after `validate_frontmatter` when one is configured, and `{}` for a page without frontmatter. Like `?toc`, it only parses the file: the page component is not compiled or bundled, and edits hot-reload. Layouts, navigation and index pages can read every page's frontmatter at once. Import `?toc` and `?metadata` separately; combining both queries in one import throws.
+
+```ts
+const pages = import.meta.glob<Record<string, unknown>>(`./**/+page.md`, {
+  query: '?metadata',
+  import: 'default',
+  eager: true,
+})
+```

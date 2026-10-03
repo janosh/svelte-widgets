@@ -1,4 +1,4 @@
-import { create_editor_model } from '$lib/code-editor/model'
+import { create_editor_model } from '#lib/code-editor/model.ts'
 import {
   find_editor_matches,
   iterate_editor_matches,
@@ -6,8 +6,8 @@ import {
   update_editor_matches,
   type EditorSearchOptions,
   type EditorSearchRange,
-} from '$lib/code-editor/search'
-import type { EditorModel, TextEdit } from '$lib/code-editor/types'
+} from '#lib/code-editor/search.ts'
+import type { EditorModel, TextEdit } from '#lib/code-editor/types.ts'
 import { expect, test, vi, type MockInstance } from 'vite-plus/test'
 
 const model_of = (text: string, history_limit_chars?: number): EditorModel =>

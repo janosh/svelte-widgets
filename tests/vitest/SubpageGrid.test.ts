@@ -1,11 +1,11 @@
-import { SubpageGrid, type Subpage } from '$lib'
-import { Check, ChevronRight, Copy } from '$lib/icons'
-import MultiSelectPage from '$root/src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md'
+import { SubpageGrid, type Subpage } from '#lib'
+import { Check, ChevronRight, Copy } from '#lib/icons.ts'
+import MultiSelectPage from '#root/src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md'
 import { mount } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 
 // stands in for a configured base path, which is what resolve() prefixes
-vi.mock(`$app/paths`, () => ({ resolve: (path: string) => `/docs${path}` }))
+vi.mock(`$app/paths`, () => ({ resolve: (path: string) => `/docs/${path}` }))
 vi.mock(`$app/state`, () => ({ page: { url: new URL(`https://example.com/docs/`) } }))
 
 test.each([undefined, Check])(

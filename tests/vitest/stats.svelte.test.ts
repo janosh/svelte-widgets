@@ -1,10 +1,10 @@
-import StatGrid from '$lib/StatGrid.svelte'
+import StatGrid from '#lib/StatGrid.svelte'
 import {
   format_stat_delta,
   format_stat_value,
   stat_delta_label,
   type StatItem,
-} from '$lib/stats'
+} from '#lib/stats.ts'
 import { tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { render } from './index'

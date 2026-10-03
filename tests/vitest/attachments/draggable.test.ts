@@ -1,4 +1,4 @@
-import { draggable, type DraggableOptions } from '$lib/attachments'
+import { draggable, type DraggableOptions } from '#lib/attachments/index.ts'
 import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, pointer_event } from '../index'
 

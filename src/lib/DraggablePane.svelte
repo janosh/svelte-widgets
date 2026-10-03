@@ -4,7 +4,7 @@
   import type { ResizableOptions } from './attachments/index'
   import { click_outside, draggable, resizable, tooltip } from './attachments/index'
   import Icon from './Icon.svelte'
-  import { Cross, DragIndicator, Expand, Reset, type IconData } from './icons'
+  import { Cross, DragIndicator, Expand, Pin, Reset, type IconData } from './icons'
   import {
     merge_defaults,
     DRAGGABLE_PANE_LABELS,
@@ -34,7 +34,7 @@
     align = `end`,
     max_width,
     pane_props = {},
-    persistent = false,
+    persistent = $bindable(false),
     // default `release`: outside bind:checked can close; pan-behind does not. See attachments.
     dismiss_on = `release`,
     inside = [],
@@ -64,7 +64,7 @@
     max_width?: string
     // `aria-label` deliberately not omitted: several panes on a page need distinct names
     pane_props?: Omit<HTMLAttributes<HTMLDivElement>, `aria-modal` | `role`>
-    // Only Escape and the close button dismiss — ignore outside presses
+    // Only Escape and the close button dismiss — ignore outside presses. The pane's pin button toggles it.
     persistent?: boolean
     dismiss_on?: `press` | `release`
     // Outside controls that drive `open`; the pane's own toggle is always included. Elements
@@ -317,6 +317,16 @@ several panes can be renamed via pane_props -->
     <span class="drag-handle" aria-hidden="true">
       <Icon icon={DragIndicator} style="width: 100%; height: 100%" />
     </span>
+    <button
+      type="button"
+      class="pin-button"
+      title={msg.pin_pane}
+      aria-label={msg.pin_pane}
+      aria-pressed={persistent}
+      onclick={() => (persistent = !persistent)}
+    >
+      <Icon icon={Pin} style="width: 100%; height: 100%" />
+    </button>
     {#if has_been_dragged}
       <button
         type="button"
@@ -382,9 +392,11 @@ several panes can be renamed via pane_props -->
       1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.15))
     );
     border-radius: var(--pane-border-radius, var(--border-radius, 3pt));
+    /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
     box-shadow: var(
       --pane-box-shadow,
-      light-dark(0 4px 20px -4px rgba(0, 0, 0, 0.15), 0 8px 16px -4px rgba(0, 0, 0, 0.3))
+      0 4px 20px -4px light-dark(rgba(0, 0, 0, 0.15), transparent),
+      0 8px 16px -4px light-dark(transparent, rgba(0, 0, 0, 0.3))
     );
     z-index: var(--pane-z-index, 10);
     /* position is deliberately not transitioned, which would make dragging sluggish */
@@ -440,6 +452,13 @@ several panes can be renamed via pane_props -->
       /* .drag-handle's own cursor is inline, set by `draggable` */
       button {
         cursor: pointer;
+      }
+      button[aria-pressed='true'] {
+        opacity: 1;
+        background-color: color-mix(in srgb, currentColor 20%, transparent);
+        &:hover {
+          background-color: color-mix(in srgb, currentColor 28%, transparent);
+        }
       }
     }
     .resize-grip {

@@ -4,7 +4,7 @@ import {
   EMPHASIS_BIT,
   set_diff_backend,
   TOKEN_CLASS_NAMES,
-} from '$lib/code-editor'
+} from '#lib/code-editor/index.ts'
 import type {
   DiffHunk,
   DiffLine,
@@ -15,8 +15,8 @@ import type {
   RowKind,
   SpanList,
   TokenClassName,
-} from '$lib/code-editor'
-import type { DiffViewLabels } from '$lib/labels'
+} from '#lib/code-editor/index.ts'
+import type { DiffViewLabels } from '#lib/labels.ts'
 import { flushSync } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query as query_element, render } from './index'

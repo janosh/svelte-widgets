@@ -1,4 +1,4 @@
-import { Toggle } from '$lib'
+import { Toggle } from '#lib'
 import type { ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { click, doc_query, press_key, render } from './index'

@@ -1,4 +1,4 @@
-import { create_roving_focus, ROVING_ATTR } from '$lib/roving-focus.svelte'
+import { create_roving_focus, ROVING_ATTR } from '#lib/roving-focus.svelte.ts'
 import { flushSync } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { press_key } from './index'

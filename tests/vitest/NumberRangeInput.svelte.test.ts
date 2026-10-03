@@ -1,4 +1,4 @@
-import { NumberRangeInput } from '$lib'
+import { NumberRangeInput } from '#lib'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, fire_input, hover, press_key, render } from './index'

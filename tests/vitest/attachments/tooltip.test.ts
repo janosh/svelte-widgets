@@ -1,5 +1,5 @@
-import type { TooltipOptions } from '$lib/attachments'
-import { register_escape_layer, tooltip } from '$lib/attachments'
+import type { TooltipOptions } from '#lib/attachments/index.ts'
+import { register_escape_layer, tooltip } from '#lib/attachments/index.ts'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,

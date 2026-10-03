@@ -1,5 +1,5 @@
-import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '$lib'
-import { Monitor, Moon, Sun } from '$lib/icons'
+import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '#lib'
+import { Monitor, Moon, Sun } from '#lib/icons.ts'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { afterEach, beforeEach, expect, test, vi, onTestFinished } from 'vite-plus/test'

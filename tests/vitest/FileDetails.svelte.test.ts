@@ -1,5 +1,5 @@
-import { FileDetails } from '$lib'
-import { default_highlighter } from '$lib/highlight'
+import { FileDetails } from '#lib'
+import { default_highlighter } from '#lib/highlight/index.ts'
 import { flushSync, tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

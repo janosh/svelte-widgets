@@ -1,6 +1,6 @@
-import DraggablePane from '$lib/DraggablePane.svelte'
-import pane_source from '$lib/DraggablePane.svelte?raw'
-import demo_page from '$root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
+import DraggablePane from '#lib/DraggablePane.svelte'
+import pane_source from '#lib/DraggablePane.svelte?raw'
+import demo_page from '#root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import {
@@ -227,6 +227,38 @@ describe(`DraggablePane`, () => {
     await tick()
     expect(is_open(pane)).toBe(false)
     expect(on_close).toHaveBeenCalledWith({ via: `escape` })
+  })
+
+  test(`the pin button toggles persistence: pinned panes survive outside presses`, async () => {
+    const { pane } = await open_pane()
+    const pin = doc_query<HTMLButtonElement>(`.pin-button`)
+    expect([pin.getAttribute(`aria-pressed`), pin.title]).toEqual([
+      `false`,
+      `Keep pane open on outside clicks`,
+    ])
+    await click(pin)
+    expect(pin.getAttribute(`aria-pressed`)).toBe(`true`)
+    press_release(document.body)
+    await tick()
+    expect(is_open(pane)).toBe(true)
+    await click(pin)
+    press_release(document.body)
+    await tick()
+    expect(is_open(pane)).toBe(false)
+  })
+
+  test(`the pin and a parent's bind:persistent stay in sync both ways`, async () => {
+    render(TestPaneExternalToggles, { open: true })
+    await tick()
+    const pin = doc_query<HTMLButtonElement>(`.pin-button`)
+    const parent_box = doc_query<HTMLInputElement>(`[data-testid="persistent"]`)
+    await click(pin)
+    expect([pin.getAttribute(`aria-pressed`), parent_box.checked]).toEqual([`true`, true])
+    await click(parent_box)
+    expect([pin.getAttribute(`aria-pressed`), parent_box.checked]).toEqual([
+      `false`,
+      false,
+    ])
   })
 
   test(`closing hands focus inside the pane back to the toggle`, async () => {

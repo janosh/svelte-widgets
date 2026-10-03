@@ -772,10 +772,10 @@
     /* shared by the mobile panel and its toggle; values match Nav's --nav-surface-* */
     --toc-surface-border: 1px solid
       light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
-    --toc-surface-shadow: light-dark(
-      0 2px 8px rgba(0, 0, 0, 0.15),
-      0 4px 12px rgba(0, 0, 0, 0.5)
-    );
+    /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
+    --toc-surface-shadow:
+      0 2px 8px light-dark(rgba(0, 0, 0, 0.15), transparent),
+      0 4px 12px light-dark(transparent, rgba(0, 0, 0, 0.5));
     box-sizing: border-box;
     height: max-content;
     overflow-wrap: break-word;

@@ -182,7 +182,7 @@
     border-radius: var(--btn-group-radius, 4pt);
     .options {
       display: flex;
-      flex-wrap: wrap;
+      flex-wrap: var(--btn-group-flex-wrap, wrap);
       align-items: center;
       justify-content: var(--btn-group-justify-content, flex-start);
       gap: inherit;

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { MultiSelect } from '$lib'
-  import type { MultiSelectProps } from '$lib/types'
+  import { MultiSelect } from '#lib'
+  import type { MultiSelectProps } from '#lib/types.ts'
   import type { Component } from 'svelte'
 
   import type { Test2WayBindProps } from './index'

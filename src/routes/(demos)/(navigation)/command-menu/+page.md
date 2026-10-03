@@ -10,15 +10,15 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { resolve } from '$app/paths'
-  import type { Pathname } from '$app/types'
   import { CommandMenu } from 'svelte-widgets'
   import { demo_pages } from '../../index'
 
-  const resolve_path = resolve as (path: Pathname) => string
+  // demo routes come from a file glob, so cast resolve to accept plain strings
+  const resolve_path = resolve as (path: string) => string
   const actions = demo_pages.map((route) => ({
     id: route,
     label: route,
-    action: () => goto(resolve_path(route)),
+    action: () => goto(resolve_path(route.slice(1))),
   }))
 </script>
 
@@ -41,15 +41,18 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
 <script lang="ts">
   import { goto } from '$app/navigation'
   import { asset, resolve } from '$app/paths'
-  import type { Pathname } from '$app/types'
   import { PageSearch } from 'svelte-widgets'
   import { demo_pages } from '../../index'
 
-  const resolve_path = resolve as (path: Pathname) => string
+  // demo routes come from a file glob, so cast resolve to accept plain strings
+  const resolve_path = resolve as (path: string) => string
+
+  // Pagefind writes its bundle after the build, so it isn't a typed static asset
+  const pagefind_path = (asset as (file: string) => string)(`pagefind/pagefind.js`)
   const fallback_actions = demo_pages.map((route) => ({
     id: route,
     label: route,
-    action: () => goto(resolve_path(route)),
+    action: () => goto(resolve_path(route.slice(1))),
   }))
 </script>
 
@@ -57,7 +60,7 @@ Search, grouping, loading, and styling props share `OptionListProps` with [Multi
   {fallback_actions}
   navigate={goto}
   strip_html_suffix
-  pagefind_path={asset(`/pagefind/pagefind.js`)}
+  {pagefind_path}
   triggers={[`j`]}
   aria_label="Search documentation"
 />

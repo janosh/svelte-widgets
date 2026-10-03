@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { SettingsSection } from '$lib'
+  import { SettingsSection } from '#lib'
 
   const defaults = { radius: 1, diameter: 2, palette: `warm` }
   let current_values = $state({ ...defaults })

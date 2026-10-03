@@ -1,5 +1,5 @@
-import SourceInput from '$site/SourceInput.svelte'
-import { default_highlighter } from '$lib/highlight'
+import SourceInput from '#site/SourceInput.svelte'
+import { default_highlighter } from '#lib/highlight/index.ts'
 import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

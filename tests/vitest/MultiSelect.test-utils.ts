@@ -1,8 +1,8 @@
 import { mount, tick, unmount, type Component, type MountOptions } from 'svelte'
 import { afterEach, onTestFinished } from 'vite-plus/test'
 
-import { MultiSelect } from '$lib'
-import type { MultiSelectProps } from '$lib/types'
+import { MultiSelect } from '#lib'
+import type { MultiSelectProps } from '#lib/types.ts'
 import { doc_query } from './index'
 
 type MountedComponent = Parameters<typeof unmount>[0]

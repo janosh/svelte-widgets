@@ -1,4 +1,4 @@
-import { validate_content } from '$lib/markdown'
+import { validate_content } from '#lib/markdown/index.ts'
 import {
   compile_source as compile_markdown,
   render_source as render_markdown,

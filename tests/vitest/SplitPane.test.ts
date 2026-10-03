@@ -1,4 +1,4 @@
-import PaneDivider from '$lib/SplitPane.svelte'
+import PaneDivider from '#lib/SplitPane.svelte'
 import { flushSync, mount, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { create_element, pointer_event, press_key } from './index'

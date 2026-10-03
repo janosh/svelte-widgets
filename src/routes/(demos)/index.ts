@@ -1,4 +1,3 @@
-import type { Pathname } from '$app/types'
 import { slug_to_title } from 'svelte-widgets/utils'
 import {
   Compass,
@@ -103,11 +102,11 @@ export const demo_nav_routes = Object.entries(category_info).map(([name, categor
   ...category,
   name,
   label: slug_to_title(name),
-  href: `/${name}` as Pathname,
-  children: [] as Pathname[],
+  href: `/${name}`,
+  children: [] as string[],
 }))
-export const multiselect_recipes: Pathname[] = []
-export const demo_pages: Pathname[] = []
+export const multiselect_recipes: string[] = []
+export const demo_pages: string[] = []
 for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) {
   if (filename.includes(`/(hide)/`)) continue
   const parts = /^\.\/\((?<category>[^)]+)\)\/(?<route>.+)\/\+page\.(?:svelte|md)$/u.exec(
@@ -116,7 +115,7 @@ for (const filename of Object.keys(import.meta.glob(`./**/+page.{svelte,md}`))) 
   const category = demo_nav_routes.find(({ name }) => name === parts?.category)
   if (!parts || !category)
     throw new Error(`Demo page needs a navigation category: ${filename}`)
-  const route = `/${parts.route.replaceAll(/\([^)]+\)\//gu, ``)}` as Pathname
+  const route = `/${parts.route.replaceAll(/\([^)]+\)\//gu, ``)}`
   demo_pages.push(route)
   if (filename.includes(`/(multiselect)/`) && route !== `/multiselect`)
     multiselect_recipes.push(route)

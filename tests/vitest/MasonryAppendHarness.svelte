@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Masonry, type MasonryOrder } from '$lib'
+  import { Masonry, type MasonryOrder } from '#lib'
   import AppendRenderProbe from './AppendRenderProbe.svelte'
 
   // most tests only drive append/remove/set_cols, so `events` defaults to a throwaway

@@ -4,9 +4,11 @@ export type ValidQueryValues<Value extends string> =
   | ReadonlySet<Value>
   | Record<string, unknown>
 type UrlLocation = Pick<URL, `pathname` | `search` | `hash`>
+// Only reads params, so read-only views like SvelteKit's page.url.searchParams work too.
+export type QueryParams = Pick<URLSearchParams, `get`>
 // Boolean flags omit their default and encode the non-default as 0 or 1.
 export const bool_from_param = (
-  params: URLSearchParams,
+  params: QueryParams,
   key: string,
   fallback = false,
 ): boolean => (fallback ? params.get(key) !== `0` : params.get(key) === `1`)
@@ -29,7 +31,7 @@ export function valid_query_param<
   Fallback extends string,
   Values extends ValidQueryValues<string>,
 >(
-  params: URLSearchParams,
+  params: QueryParams,
   key: string,
   fallback: Fallback,
   valid_values: Values,
@@ -39,12 +41,12 @@ export function valid_query_param<
       ? Value
       : `${Extract<keyof Values, string | number>}`)
 export function valid_query_param(
-  params: URLSearchParams,
+  params: QueryParams,
   key: string,
   fallback: string,
 ): string
 export function valid_query_param(
-  params: URLSearchParams,
+  params: QueryParams,
   key: string,
   fallback: string,
   valid_values?: ValidQueryValues<string>,

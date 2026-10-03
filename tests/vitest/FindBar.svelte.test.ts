@@ -2,8 +2,8 @@ import {
   create_find_state,
   type FindOptions,
   type FindState,
-} from '$lib/find-in-page.svelte'
-import FindBar from '$lib/FindBar.svelte'
+} from '#lib/find-in-page.svelte.ts'
+import FindBar from '#lib/FindBar.svelte'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'

@@ -1,4 +1,4 @@
-import { TaskStatus } from '$lib'
+import { TaskStatus } from '#lib'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, render } from './index'

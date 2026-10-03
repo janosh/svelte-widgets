@@ -155,6 +155,8 @@ test(`heading links retain history, smooth scrolling and root styles`, async ({
   await page.evaluate(() =>
     document.documentElement.style.setProperty(`scroll-behavior`, `auto`, `important`),
   )
+  // Kit writes its history metadata on hydration; capturing earlier would record null
+  await expect.poll(() => page.evaluate(() => history.state)).not.toBeNull()
   const original_state = await page.evaluate(() => history.state)
   const hashes: string[] = []
   for (const idx of [1, 2]) {

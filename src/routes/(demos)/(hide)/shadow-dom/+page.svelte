@@ -1,5 +1,5 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
+  import Heading from '#lib/Heading.svelte'
   // Fixture for tests/playwright/CommandMenu.test.ts. happy-dom retargets nothing, so a
   // shadow root is the only place composedPath() and event.target differ.
   import { CommandMenu } from 'svelte-widgets'

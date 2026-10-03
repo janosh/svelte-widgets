@@ -1,4 +1,4 @@
-import { CircleSpinner } from '$lib'
+import { CircleSpinner } from '#lib'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'
 

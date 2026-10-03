@@ -1,9 +1,21 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "extends": "$app/tsconfig",
   "compilerOptions": {
     "strict": true,
-    "resolveJsonModule": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true
-  }
+    // Mirrors the `svelte-widgets` self-import aliases in vite.config.ts. Stateful exports
+    // point at `.svelte.ts` modules that the `svelte-widgets/*` pattern can't reach.
+    "paths": {
+      "svelte-widgets/canvas": ["./src/lib/canvas.svelte.ts"],
+      "svelte-widgets/clipboard": ["./src/lib/clipboard.svelte.ts"],
+      "svelte-widgets/dialogs": ["./src/lib/dialogs.svelte.ts"],
+      "svelte-widgets/find-in-page": ["./src/lib/find-in-page.svelte.ts"],
+      "svelte-widgets/fullscreen": ["./src/lib/fullscreen.svelte.ts"],
+      "svelte-widgets/roving-focus": ["./src/lib/roving-focus.svelte.ts"],
+      "svelte-widgets/theme": ["./src/lib/theme.svelte.ts"],
+      "svelte-widgets/toast-queue": ["./src/lib/toast-queue.svelte.ts"],
+      "svelte-widgets": ["./src/lib"],
+      "svelte-widgets/*": ["./src/lib/*"]
+    }
+  },
+  "include": ["src", "tests", "*"]
 }

@@ -1,10 +1,10 @@
 <script lang="ts">
-  import Heading from '$lib/Heading.svelte'
-  import { ContributorList, CopyButton, Icon, type Contributor } from '$lib'
-  import { BookOpen, NPM, PlayCircle, Widgets } from '$lib/icons'
-  import { repository, version } from '$root/package.json'
-  import { Examples } from '$site'
-  import { resolve_demo_path as resolve_path } from '$site/paths'
+  import Heading from '#lib/Heading.svelte'
+  import { ContributorList, CopyButton, Icon, type Contributor } from '#lib'
+  import { BookOpen, NPM, PlayCircle, Widgets } from '#lib/icons.ts'
+  import { repository, version } from '#root/package.json'
+  import { Examples } from '#site'
+  import { resolve_demo_path as resolve_path } from '#site/paths.ts'
   import { onMount } from 'svelte'
   import { demo_descriptions, demo_nav_routes, demo_title } from './(demos)'
 
