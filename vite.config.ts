@@ -74,6 +74,23 @@ const svelte_config = {
   inspector: true,
 } satisfies Parameters<typeof sveltekit>[0]
 
+// vite-plugin-svelte inlines all of node_modules/svelte so tests get its browser runtime.
+// The compiler is ~230 stateless ES modules without browser-specific imports, so loading
+// it natively gives identical output while sparing every test file that compiles Markdown
+// or Svelte a module-runner transform and evaluation of the whole compiler.
+const native_svelte_compiler = {
+  name: `test:native-svelte-compiler`,
+  configResolved: {
+    order: `post`,
+    handler({ test }: { test?: { server?: { deps?: { inline?: unknown } } } }) {
+      const inline = test?.server?.deps?.inline
+      if (!Array.isArray(inline) || !inline.includes(`svelte`))
+        throw new Error(`Expected Vitest to inline svelte, got ${String(inline)}`)
+      inline[inline.indexOf(`svelte`)] = /\/node_modules\/svelte(?!\/src\/compiler\/)/u
+    },
+  },
+} as const
+
 export default {
   // shared lint/fmt/build/staged, published as svelte-widgets/vite-config
   ...make_config({
@@ -84,7 +101,12 @@ export default {
     },
   }),
 
-  plugins: [sveltekit(svelte_config), docs.plugin, source_links()],
+  plugins: [
+    sveltekit(svelte_config),
+    docs.plugin,
+    source_links(),
+    ...(process.env.VITEST ? [native_svelte_compiler] : []),
+  ],
 
   test: {
     include: [`tests/vitest/**/*.test.ts`],
