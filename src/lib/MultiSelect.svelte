@@ -987,9 +987,12 @@
         return { type: `create`, msg: resolved_create_msg }
       }
       // an empty list gets the message even without a query (e.g. a faceted filter whose
-      // loader returns nothing). matching_options, not navigable_options: matches hidden
-      // in collapsed groups still exist.
-      return !load_error && matching_options.length === 0 && no_matching_options_msg
+      // loader returns nothing), once external `loading` settles too. matching_options, not
+      // navigable_options: matches hidden in collapsed groups still exist.
+      return !load_error &&
+        !loading &&
+        matching_options.length === 0 &&
+        no_matching_options_msg
         ? { type: `no-match`, msg: no_matching_options_msg }
         : null
     },

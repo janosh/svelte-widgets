@@ -1025,6 +1025,7 @@ test.each([
 test.each<[string, MultiSelectProps, string, string | null]>([
   [`unmatched search`, { options: [1, 2, 3] }, `4`, `No matching options`],
   [`no options`, { options: [] }, ``, `No matching options`],
+  [`external loading`, { options: [], loading: true }, ``, null],
   [`all options selected`, { options: [1, 2], value: [1, 2] }, ``, `No matching options`],
   [`freeform input`, { options: [], allow_user_options: true }, ``, null],
   [
