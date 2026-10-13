@@ -437,12 +437,7 @@
   )
   const build_rows = create_option_rows<Option>()
   const render_rows = $derived.by(() =>
-    build_rows(
-      grouped_options,
-      render_key_assigner(),
-      collapsible_groups,
-      visible_navigable_count,
-    ),
+    build_rows(grouped_options, render_key_assigner(), collapsible_groups, max_options),
   )
   // row index per navigable option: keyboard auto-scroll needs row offsets, which diverge
   // from flat option indices once header rows are interleaved

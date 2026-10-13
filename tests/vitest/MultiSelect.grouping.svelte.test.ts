@@ -412,6 +412,9 @@ describe(`option grouping feature`, () => {
     })
 
     expect(option_items()).toHaveLength(1)
+    // collapsed groups after the last visible option keep their headers, else they could
+    // never be expanded again
+    expect(header_names()).toEqual([`Genre`, `Key`])
 
     await type_search_text(search)
 
