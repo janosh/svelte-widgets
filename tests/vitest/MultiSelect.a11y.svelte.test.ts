@@ -220,8 +220,8 @@ describe(`ARIA correctness`, () => {
   })
 
   test(`aria-controls is absent while the listbox is not rendered`, async () => {
-    // An empty options array does not render a listbox.
-    const props = $state<MultiSelectProps>({ options: [] })
+    // no options and no message row to show: nothing to render
+    const props = $state<MultiSelectProps>({ options: [], no_matching_options_msg: `` })
     mount_multiselect(props)
 
     const input = get_input()

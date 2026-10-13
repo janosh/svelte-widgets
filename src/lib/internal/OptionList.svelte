@@ -367,7 +367,7 @@
         {/if}
       {/snippet}
     </OptionRows>
-    {#if !visible_options.length && !loader.loading && !loader.error}<li
+    {#if !matching_options.length && !loader.loading && !loader.error}<li
         class="user-msg"
         role="option"
         aria-selected="false"

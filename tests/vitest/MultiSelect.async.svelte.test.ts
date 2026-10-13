@@ -606,6 +606,20 @@ test.each([
   },
 )
 
+test(`#468: no_matching_options_msg shows on open when an empty query loads nothing`, async () => {
+  vi.useFakeTimers()
+  const { fn: fetch_fn, resolvers } = deferred_load()
+  mount_multiselect({ load_options: { fetch: fetch_fn, debounce_ms: 0 }, open: true })
+  await vi.runAllTimersAsync()
+  expect(document.querySelector(`.user-msg`)).toBeNull() // hidden while loading
+
+  resolvers[0]({ options: [], has_more: false })
+  await vi.runAllTimersAsync()
+  expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
+    `No matching options`,
+  )
+})
+
 // https://github.com/janosh/svelte-widgets/pull/403#issuecomment-4106385445
 describe(`load_options_pending`, () => {
   beforeEach(() => vi.useFakeTimers())

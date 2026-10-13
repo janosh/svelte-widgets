@@ -240,6 +240,13 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
   expect(document.querySelector(`.group-select-all, .select-all`)).toBeNull()
   expect(document.querySelector(`ul.selected > li, input[type='checkbox']`)).toBeNull()
   expect(option_labels()).toEqual([`Existing`, `Other`])
+  // a collapsed group still holds matches, so it must not show the no-match row
+  for (const expanded of [false, true]) {
+    doc_query(`dialog li.group-header button`).click()
+    await tick()
+    expect(option_labels()).toEqual(expanded ? [`Existing`, `Other`] : [])
+    expect(document.querySelector(`dialog li.user-msg`)).toBeNull()
+  }
   await type_search(`custom command`)
   expect(document.querySelector(`dialog li.user-msg`)?.textContent).toContain(
     `No matching commands`,

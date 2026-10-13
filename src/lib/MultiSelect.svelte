@@ -654,15 +654,6 @@
     previous_filter_text = effective_filter_text
   })
 
-  // mirrors the template's render condition: aria-controls must not name a missing id
-  const listbox_rendered = $derived(
-    Boolean(
-      (has_search_text && no_matching_options_msg) ||
-      effective_options.length ||
-      load_options,
-    ),
-  )
-
   // Selected chips are plain list items, so left/right chip highlighting stays visual.
   const user_message_id = $derived(`${base_id}-user-msg`)
   // the header is presentational, so its options cite this id as their description
@@ -984,9 +975,10 @@
 
   const user_message = $derived.by(
     (): { type: `dupe` | `create` | `no-match`; msg: string } | null => {
-      if (!has_search_text || input_text_is_committed || show_all_input_options)
-        return null
-      if (duplicates !== true && is_label_selected(search_text)) {
+      const typed = effective_filter_text !== ``
+      // a freeform input with nothing typed has nothing to match yet, so it stays quiet
+      if (!typed && allow_user_options) return null
+      if (typed && duplicates !== true && is_label_selected(search_text)) {
         // a blank message must not leave a navigable row that blocks the create row
         return duplicate_option_msg ? { type: `dupe`, msg: duplicate_option_msg } : null
       }
@@ -994,12 +986,19 @@
       if (allow_user_options && resolved_create_msg) {
         return { type: `create`, msg: resolved_create_msg }
       }
-      return !load_error && navigable_options.length === 0 && no_matching_options_msg
+      // an empty list gets the message even without a query (e.g. a faceted filter whose
+      // loader returns nothing). matching_options, not navigable_options: matches hidden
+      // in collapsed groups still exist.
+      return !load_error && matching_options.length === 0 && no_matching_options_msg
         ? { type: `no-match`, msg: no_matching_options_msg }
         : null
     },
   )
   const has_user_message = $derived(user_message !== null)
+  // mirrors the template's render condition: aria-controls must not name a missing id
+  const listbox_rendered = $derived(
+    Boolean(user_message || effective_options.length || load_options),
+  )
 
   // === Keyboard and pointer handlers ===
   // navigable_options skips collapsed groups
