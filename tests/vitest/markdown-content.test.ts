@@ -255,7 +255,8 @@ describe(`Markdown content manifests`, () => {
     [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [1, 1, 1]],
-    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [3]],
+    // the tab after 3 spaces expands to column 4, so the line maps to that tab
+    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [4]],
   ])(`maps fence lines in %s`, async (source, lines, columns) => {
     const { fences } = await document_manifest(source)
     expect(fences[0].line_positions.map(({ line }) => line)).toEqual(lines)

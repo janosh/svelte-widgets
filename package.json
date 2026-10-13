@@ -235,7 +235,7 @@
   },
   "dependencies": {
     "js-yaml": "^5.4.2",
-    "marked": "^18.0.14"
+    "marked": "^18.1.1"
   },
   "devDependencies": {
     "@iconify-json/academicons": "^1.2.4",
