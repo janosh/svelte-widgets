@@ -128,9 +128,7 @@
     navigable_options(groups, collapsible_groups).slice(0, max_options ?? undefined),
   )
   const build_rows = create_option_rows<Item>()
-  const rows = $derived(
-    build_rows(groups, key, collapsible_groups, visible_options.length),
-  )
+  const rows = $derived(build_rows(groups, key, collapsible_groups, max_options))
   const validate_config = (has_grouped_options = options.some(has_group)) =>
     validate_option_list_config({
       max_options,
@@ -369,7 +367,7 @@
         {/if}
       {/snippet}
     </OptionRows>
-    {#if !visible_options.length && !loader.loading && !loader.error}<li
+    {#if !matching_options.length && !loader.loading && !loader.error}<li
         class="user-msg"
         role="option"
         aria-selected="false"

@@ -103,7 +103,8 @@
       rest.oncancel?.(event)
       if (event.defaultPrevented) return
       if (closedby === `none`) event.preventDefault()
-      else pending_close_via = `escape`
+      // Chromium 156+ light-dismisses on pointerup via cancel + close, with no click after
+      else pending_close_via = backdrop_press_started ? `pointer` : `escape`
     }}
     onclose={chain_handlers((event) => {
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
@@ -111,6 +112,7 @@
       const was_open = open
       const close_via = pending_close_via ?? `close`
       pending_close_via = null
+      backdrop_press_started = false
       open = false
       // Explicit restoration also covers removed openers and partial DOM implementations.
       restore_dialog_focus(surface, focus_origin)

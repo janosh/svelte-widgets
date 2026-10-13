@@ -1020,23 +1020,39 @@ test.each([
   }
 })
 
-test.each([undefined, `Custom no options message`])(
-  `shows no_matching_options_msg when no options match search_text`,
-  async (no_matching_options_msg) => {
-    const on_change = vi.fn()
-    mount_multiselect({ options: [1, 2, 3], no_matching_options_msg, on_change })
-
-    await type_search_text(`4`)
-
-    const expected_msg = no_matching_options_msg ?? `No matching options`
-    expect(doc_query(`ul.options`).textContent?.trim()).toBe(expected_msg)
-    const no_match_li = doc_query(`ul.options li.user-msg`)
-    expect(no_match_li.textContent?.trim()).toBe(expected_msg)
-
-    await click(no_match_li) // the message row is not an option, so it must not select
-    expect(on_change).not.toHaveBeenCalled()
-  },
-)
+// an empty list shows the message on open without a query (#468), freeform inputs stay
+// quiet, and matches hidden in collapsed groups don't count as "no match"
+test.each<[string, MultiSelectProps, string, string | null]>([
+  [`unmatched search`, { options: [1, 2, 3] }, `4`, `No matching options`],
+  [`no options`, { options: [] }, ``, `No matching options`],
+  [`external loading`, { options: [], loading: true }, ``, null],
+  [`all options selected`, { options: [1, 2], value: [1, 2] }, ``, `No matching options`],
+  [`freeform input`, { options: [], allow_user_options: true }, ``, null],
+  [
+    `matches in collapsed group`,
+    {
+      options: [{ label: `foo`, group: `A` }],
+      collapsible_groups: true,
+      collapsed_groups: new Set([`A`]),
+      search_expands_collapsed_groups: false,
+    },
+    `foo`,
+    null,
+  ],
+])(`no-match row with %s`, async (_name, props, search, expected) => {
+  const on_change = vi.fn()
+  mount_multiselect({ ...props, open: true, on_change })
+  const input = await type_search_text(search)
+  const listbox = document.querySelector(`ul.options`)
+  // aria-controls names the listbox exactly when it renders
+  expect(input.getAttribute(`aria-controls`)).toBe(listbox?.id ?? null)
+  const user_msg = listbox?.querySelector(`li.user-msg`)
+  expect(user_msg?.textContent?.trim() ?? null).toBe(expected)
+  if (!user_msg) return
+  expect(listbox?.textContent?.trim()).toBe(expected) // the message is the only row
+  await click(user_msg) // the message row is not an option, so it must not select
+  expect(on_change).not.toHaveBeenCalled()
+})
 
 test.each([
   [[`foo`, `bar`, `baz`]],

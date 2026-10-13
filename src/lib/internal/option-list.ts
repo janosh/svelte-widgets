@@ -70,14 +70,16 @@ export function create_option_rows<T extends Option>() {
     groups: GroupedOptions<T>[],
     key: (option: T) => unknown,
     collapsible: boolean,
-    limit: number,
+    max_options: number | undefined,
   ): OptionRow<T>[] => {
+    const limit = max_options ?? Infinity
     const rows: OptionRow<T>[] = []
     let flat_idx = 0
     for (const { group, options, collapsed } of groups) {
       const hidden = collapsed && collapsible
       const selectable: T[] = []
-      // Past the max_options limit a header would label an empty section.
+      // Past the max_options limit a header would label an empty section. Collapsed groups
+      // add no visible rows, so headers after them must still compare against the cap.
       if (group !== null && flat_idx < limit) {
         const render_key = header_keys.get(group) ?? Symbol(`sms-header-${group}`)
         header_keys.set(group, render_key)

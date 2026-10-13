@@ -170,6 +170,17 @@
     }
   }
 
+  // Chromium 156+ light-dismisses auto popovers on primary presses only, while a native
+  // context menu closes on any press outside it
+  const close_on_secondary_press = (node: HTMLMenuElement) => {
+    const on_press = (event: PointerEvent) => {
+      const inside = event.target instanceof Node && node.contains(event.target)
+      if (event.button !== 0 && !inside) close()
+    }
+    document.addEventListener(`pointerdown`, on_press, true)
+    return () => document.removeEventListener(`pointerdown`, on_press, true)
+  }
+
   const handle_popover_toggle = (event: ToggleEvent) => {
     if (event.newState === `closed` && anchor) close()
   }
@@ -220,7 +231,7 @@
       strategy,
     })}
     {@attach native_dismiss
-      ? null
+      ? close_on_secondary_press
       : click_outside({
           escape: true,
           ...dismiss,

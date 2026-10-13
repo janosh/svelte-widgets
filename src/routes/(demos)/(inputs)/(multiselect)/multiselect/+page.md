@@ -582,7 +582,7 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    no_matching_options_msg: string = 'No matching options'
    ```
 
-   Message when search yields no results.
+   Message when the search, or an empty query, yields no options (e.g. a faceted filter whose `load_options` returns nothing). With `allow_user_options`, nothing shows until the user types. Set to `''` to never show it.
 
 1. ```ts
    duplicate_option_msg: string = 'This option is already selected'

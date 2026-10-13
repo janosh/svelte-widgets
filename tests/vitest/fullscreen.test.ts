@@ -218,6 +218,30 @@ describe(`flag <-> browser sync`, () => {
     expect(document.fullscreenElement).toBe(wrapper)
   })
 
+  // an exit before the browser reports the entry (Esc within a frame): every change event
+  // then reads "out", which used to strand the entry as pending and skip the next click
+  test(`an entry overtaken by an exit before its event leaves the button working`, async () => {
+    const { button, flag, wrapper } = mount_button()
+    const enter_without_event = (element: Element) => void (fullscreen_element = element)
+    Element.prototype.requestFullscreen = vi.fn(function (this: Element) {
+      request_calls.push(this)
+      enter_without_event(this) // entered, but the fullscreenchange is still to come
+      return Promise.resolve()
+    })
+    await click(button)
+    await settle()
+    fullscreen_element = null // exited before either event was delivered
+    document.dispatchEvent(new Event(`fullscreenchange`)) // the entry's, now reading "out"
+    document.dispatchEvent(new Event(`fullscreenchange`)) // the exit's
+    await settle()
+    expect(get(flag)).toBe(false)
+
+    await click(button)
+    await settle()
+    expect(request_calls).toEqual([wrapper, wrapper])
+    expect(get(flag)).toBe(true)
+  })
+
   test.each([false, true])(
     `a rejected request (exit=%s) is reported and leaves the browser untouched`,
     async (exiting) => {

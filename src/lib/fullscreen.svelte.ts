@@ -84,12 +84,13 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
       // key the flag to this wrapper: a bare document.fullscreenElement check would flip
       // every mounted flag on any fullscreen, each then firing its own requestFullscreen
       const is_fullscreen = document.fullscreenElement === wrapper
-      const request_settling =
-        pending_request?.wrapper === wrapper && pending_request.entering === is_fullscreen
-      if (request_settling) pending_request = null
+      // any change ends our request, landed or overtaken (an exit before the entry's event):
+      // left pending, it would swallow the next same-direction request as a duplicate
+      const own_request = pending_request?.wrapper === wrapper ? pending_request : null
+      if (own_request) pending_request = null
       if (is_fullscreen === options.get_fullscreen()) return
-      // the flag moved on while our own request was in flight: follow the flag
-      if (request_settling) return reconcile(wrapper)
+      // our own request landed but the flag moved on while it was in flight: follow the flag
+      if (own_request?.entering === is_fullscreen) return reconcile(wrapper)
       options.set_fullscreen(is_fullscreen)
       options.on_change?.(is_fullscreen)
     }
