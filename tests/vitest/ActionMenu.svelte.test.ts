@@ -218,14 +218,22 @@ describe(`ActionMenu`, () => {
   // custom dismissal can opt into press timing or leave Escape to the page; native
   // light-dismiss is covered in Playwright rather than emulated in happy-dom
   const outside_press = () => new PointerEvent(`pointerdown`, { bubbles: true })
+  const secondary_press = () =>
+    new PointerEvent(`pointerdown`, { bubbles: true, button: 2 })
   const outside_click = () => new MouseEvent(`click`, { bubbles: true })
   const release: MenuProps = { dismiss: { dismiss_on: `release`, escape: false } }
   test.each([
     [`escape: false leaves Escape to the page`, release, escape_key, false],
     [`dismiss_on: release ignores the press`, release, outside_press, false],
     [`dismiss_on: release waits for the click`, release, outside_click, true],
+    // Chromium 156+ no longer light-dismisses auto popovers on non-primary buttons
+    [`native dismiss closes on a secondary press outside`, {}, secondary_press, true],
+    [`native dismiss leaves primary presses to the browser`, {}, outside_press, false],
   ] as const)(`%s`, async (_desc, extra, make_event, closes) => {
     await open_menu(make_actions(), extra)
+    expect(menu()).not.toBeNull()
+    doc_query(`menu`).dispatchEvent(secondary_press()) // presses inside never dismiss
+    await tick()
     expect(menu()).not.toBeNull()
 
     document.body.dispatchEvent(make_event())

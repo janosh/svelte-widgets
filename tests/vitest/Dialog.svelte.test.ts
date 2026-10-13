@@ -16,11 +16,18 @@ describe(`Dialog`, () => {
     doc_query<HTMLButtonElement>(`[data-testid="${test_id}"]`)
   const trigger = () => item(`dialog-trigger`)
   const surface = () => document.querySelector<HTMLDialogElement>(`dialog.dialog`)
-  // jsdom has no `closedby` light dismiss, so this doubles as the no-support fallback test
-  const press_dialog_at = (dialog: HTMLDialogElement, client_x = 0, client_y = 0) => {
+  const press_backdrop_at = (
+    dialog: HTMLDialogElement,
+    client_x: number,
+    client_y: number,
+  ) => {
     dialog.getBoundingClientRect = () =>
       ({ top: 10, right: 110, bottom: 110, left: 10 }) as DOMRect
     dialog.dispatchEvent(pointer_event(`pointerdown`, client_x, client_y))
+  }
+  // jsdom has no `closedby` light dismiss, so this doubles as the no-support fallback test
+  const press_dialog_at = (dialog: HTMLDialogElement, client_x = 0, client_y = 0) => {
+    press_backdrop_at(dialog, client_x, client_y)
     dialog.dispatchEvent(pointer_event(`click`, client_x, client_y))
   }
   // Escape as the browser drives it: a cancelable cancel event, then close unless prevented
@@ -29,7 +36,12 @@ describe(`Dialog`, () => {
     dialog.dispatchEvent(event)
     if (!event.defaultPrevented) dialog.close()
   }
-  const dismiss = { pointer: press_dialog_at, escape: cancel_dialog }
+  // Chromium 156+ light dismiss: the backdrop press ends in cancel + close, with no click
+  const light_dismiss = (dialog: HTMLDialogElement) => {
+    press_backdrop_at(dialog, 0, 0)
+    cancel_dialog(dialog)
+  }
+  const dismiss = { pointer: press_dialog_at, escape: cancel_dialog, light_dismiss }
 
   test(`trigger opens a native surface with header, footer, attributes and binding`, async () => {
     const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
@@ -61,12 +73,13 @@ describe(`Dialog`, () => {
   })
 
   test.each([
-    [`any`, `escape`],
-    [`any`, `pointer`],
-    [`closerequest`, `escape`],
+    [`any`, `escape`, `escape`],
+    [`any`, `pointer`, `pointer`],
+    [`any`, `light_dismiss`, `pointer`],
+    [`closerequest`, `escape`, `escape`],
   ] as const)(
     `closedby=%s closes on %s with its reason and restores focus`,
-    async (closedby, via) => {
+    async (closedby, dismissal, via) => {
       const on_close = vi.fn()
       mount_dialog({ closedby, on_close })
       trigger().focus()
@@ -76,7 +89,7 @@ describe(`Dialog`, () => {
       press_dialog_at(dialog, 50, 50) // a press inside the box never dismisses
       await tick()
       expect(surface()).toBe(dialog)
-      dismiss[via](dialog)
+      dismiss[dismissal](dialog)
       await tick()
 
       expect(surface()).toBeNull()
