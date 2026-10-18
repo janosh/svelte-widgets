@@ -114,6 +114,12 @@ test.each([
   [`'|`, `'`, null],
   [`|foo`, `)`, null],
   [`[foo] bar`, `(`, null],
+  // astral letters are word characters on either side of the caret
+  [`|𝑥`, `(`, null],
+  [`𝑥|`, `'`, null],
+  [`😀|`, `'`, `😀'|'`],
+  // combining marks continue a word, so decomposed café takes no closing quote
+  [`cafe\u0301|`, `'`, null],
 ])(`auto-close %s + %s`, (marked, typed, expected) => {
   const before = marked_state(marked)
   const edit = auto_close_pair(before, typed)

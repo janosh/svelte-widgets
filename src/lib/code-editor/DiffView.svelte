@@ -6,9 +6,15 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from '../attachments/index'
   import { merge_defaults, DIFF_VIEW_LABELS, type DiffViewLabels } from '../labels'
-  import { editor_line_height, split_text_lines, visible_line_window } from './edit-ops'
+  import {
+    editor_font_size,
+    editor_line_height,
+    split_text_lines,
+    visible_line_window,
+  } from './edit-ops'
   import { render_tokens } from './tokens'
-  import { resolve_diff_backend, to_error } from './types'
+  import { resolve_diff_backend } from './types'
+  import { to_error } from '../utils'
   import type {
     DiffBackend,
     DiffLayout,
@@ -92,15 +98,16 @@
   const expanded_gaps = new SvelteSet<number>()
 
   // Share one integer height with CSS; measuring it back from DOM can drift virtualization.
-  const row_height = $derived(editor_line_height(options.font_size))
+  const font_size = $derived(editor_font_size(options.font_size))
+  const row_height = $derived(editor_line_height(font_size))
 
   let load_generation = 0
 
-  const load_diff = async (args: DiffTextArgs) => {
+  const load_diff = async (args: DiffTextArgs, diff_backend?: DiffBackend) => {
     const generation = ++load_generation
     is_loading = true
     try {
-      const result = await resolve_diff_backend(backend).diff_text(args)
+      const result = await resolve_diff_backend(diff_backend).diff_text(args)
       // A slower earlier request must not overwrite a newer one that already finished.
       if (generation !== load_generation) return
       diff = result
@@ -112,11 +119,8 @@
     } catch (error) {
       if (generation !== load_generation) return
       diff = null
-      // Use the local, not error_message: reading that state inside this $effect would
-      // self-subscribe and double-report synchronous resolver failures.
-      const message = to_error(error).message
-      error_message = message
-      on_error?.(message)
+      error_message = to_error(error).message
+      on_error?.(error_message)
     } finally {
       if (generation === load_generation) is_loading = false
     }
@@ -126,7 +130,11 @@
   // `options.context_lines` inside it re-ran the whole diff on any other field change.
   const context_lines = $derived(options.context_lines)
   $effect(() => {
-    void load_diff({ old_text, new_text, filename, context_lines })
+    const args = { old_text, new_text, filename, context_lines }
+    const diff_backend = backend
+    // Untracked: a synchronous failure runs `on_error`, and host state it reads must not
+    // re-run the diff (a handler appending to a $state array looped forever).
+    untrack(() => void load_diff(args, diff_backend))
     return () => void load_generation++
   })
 
@@ -324,7 +332,7 @@
   {#if sides.includes(side)}
     <span class="code no-newline-note" data-no-newline={side}>{msg.no_newline}</span>
   {:else}
-    <span class="code spacer" data-spacer={side}></span>
+    {@render code_cell(null, ``, side)}
   {/if}
 {/snippet}
 
@@ -332,7 +340,7 @@
   {...rest}
   aria-busy={is_loading}
   class={[`diff-view`, rest.class]}
-  style:--editor-font-size={`${options.font_size}px`}
+  style:--editor-font-size={`${font_size}px`}
   style:--editor-line-height={`${row_height}px`}
   style:--diff-old-gutter={`${String(diff?.old_line_count ?? 1).length + 2}ch`}
   style:--diff-new-gutter={`${String(diff?.new_line_count ?? 1).length + 2}ch`}
@@ -340,7 +348,7 @@
   {#if !single_col}
     <header class="panel-header">
       <div class="panel-summary">
-        <strong class="truncate">{old_label} → {new_label}</strong>
+        <strong>{old_label} → {new_label}</strong>
         <span>
           {#if diff}
             {diff.language}

@@ -4,12 +4,13 @@
 
 <script lang="ts">
   import { onDestroy, tick, untrack } from 'svelte'
+  import { on } from 'svelte/events'
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from '../Icon.svelte'
   import { Hash, TextSearch } from '../icons'
-  import { claim_escape, css_px } from '../attachments/shared'
+  import { claim_escape, claim_escape_while_focused, css_px } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
-  import { clamp, clamp_integer } from '../utils'
+  import { clamp, clamp_integer, lower_bound, to_error } from '../utils'
   import {
     auto_close_pair,
     auto_indent_newline,
@@ -31,7 +32,7 @@
   } from './search'
   import type { EditorMatch } from './search'
   import { render_tokens, type RenderedToken } from './tokens'
-  import { resolve_editor_backend, to_error } from './types'
+  import { resolve_editor_backend } from './types'
   import type {
     CodeEditorOptions,
     EditorBackend,
@@ -222,7 +223,6 @@
     transaction: EditorTransaction,
   ): void => {
     const { edits } = transaction
-    if (edits.length === 0) return
     token_revision += 1
     const line_delta = active_model.line_count - cached_line_count
     cached_line_count = active_model.line_count
@@ -260,14 +260,10 @@
   const window_lines = $derived(line_window(line_count))
   const search_tokens = (tokens: RenderedToken[], line_from: number): RenderedToken[] => {
     if (search_matches.length === 0) return tokens
-    let low = 0
-    let high = search_matches.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (search_matches[middle].to <= line_from) low = middle + 1
-      else high = middle
-    }
-    let match_idx = low
+    let match_idx = lower_bound(
+      search_matches.length,
+      (idx) => search_matches[idx].to > line_from,
+    )
     return tokens.flatMap((token) => {
       const pieces: RenderedToken[] = []
       let start = line_from + token.start
@@ -492,29 +488,6 @@
       if (search_panel) close_search()
       else tab_moves_focus = true
     })
-  }
-  // Register above the editor/outer dialog while search controls own focus.
-  const search_escape = (element: HTMLElement): (() => void) => {
-    let release: (() => void) | undefined
-    const activate = (): void => {
-      release?.()
-      release = claim_escape(close_search)
-    }
-    const deactivate = (event: FocusEvent): void => {
-      if (event.relatedTarget instanceof Node && element.contains(event.relatedTarget))
-        return
-      release?.()
-      release = undefined
-    }
-    element.addEventListener(`focusin`, activate)
-    element.addEventListener(`focusout`, deactivate)
-    element.addEventListener(`keydown`, handle_search_shortcut)
-    return () => {
-      release?.()
-      element.removeEventListener(`focusin`, activate)
-      element.removeEventListener(`focusout`, deactivate)
-      element.removeEventListener(`keydown`, handle_search_shortcut)
-    }
   }
   const on_blur = (): void => {
     unregister_escape?.()
@@ -1153,8 +1126,7 @@
     type="button"
     onclick={() => void open_search()}
     aria-label={msg.find}
-    title={`${msg.find} (Ctrl/Cmd+F)`}
-    ><Icon icon={TextSearch} aria-hidden="true" /></button
+    title={`${msg.find} (Ctrl/Cmd+F)`}><Icon icon={TextSearch} /></button
   >
   {#if search_panel}
     <div
@@ -1162,7 +1134,8 @@
       class:line-search={search_panel === `line`}
       role="search"
       aria-label={search_panel === `find` ? msg.find : msg.go_to_line}
-      {@attach search_escape}
+      {@attach (node) => on(node, `keydown`, handle_search_shortcut)}
+      {@attach claim_escape_while_focused(close_search)}
     >
       <div>
         {#if search_panel === `find`}
@@ -1239,8 +1212,7 @@
             type="button"
             onclick={() => void open_line_search()}
             aria-label={msg.go_to_line}
-            title={`${msg.go_to_line} (Ctrl/Cmd+G)`}
-            ><Icon icon={Hash} aria-hidden="true" /></button
+            title={`${msg.go_to_line} (Ctrl/Cmd+G)`}><Icon icon={Hash} /></button
           >
         </div>
         {#if show_replace && !editing_disabled}

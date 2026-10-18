@@ -33,6 +33,7 @@ export type EditorUpdateSource = `input` | `command` | `external` | `undo` | `re
 export interface EditorTransaction {
   readonly base_revision: number
   readonly revision: number
+  // Never empty: `transact` rejects empty edit lists and consumers read `edits[0]`.
   readonly edits: readonly TextEdit[]
   readonly selection_before: EditorSelection
   readonly selection: EditorSelection
@@ -127,8 +128,6 @@ export interface CodeEditorOptions {
   line_numbers?: boolean
   line_comment?: string | null
 }
-export const to_error = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error))
 export type OpenDocArgs = { doc_id: string; uri: string; revision: number; text: string }
 export interface HighlightLinesArgs {
   doc_id: string

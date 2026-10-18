@@ -1,7 +1,7 @@
 import CodeExample from '#lib/CodeExample.svelte'
-import { createRawSnippet, tick } from 'svelte'
+import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { doc_query, render, raw_snippet } from './index'
 
 const [id, src] = [`uniq-id`, `some code`]
 
@@ -15,7 +15,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
     meta: { collapsible: true, id },
     src,
     button_props,
-    example: createRawSnippet(() => ({ render: () => `<button>Demo action</button>` })),
+    example: raw_snippet(`<button>Demo action</button>`),
   }
   render(CodeExample, props)
 

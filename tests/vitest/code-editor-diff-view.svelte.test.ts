@@ -395,11 +395,15 @@ describe(`states and backend wiring`, () => {
     [`a non-Error rejection`, { rejects_with: `string failure` }, `string failure`],
     [`no backend at all`, { no_backend: true }, `No DiffBackend available`],
   ])(`reports %s inline and through on_error`, async (_case, failure, message) => {
-    const on_error = vi.fn()
-    await mount_diff(diff_result(), { ...failure, on_error })
+    // A handler that reads and writes host state must not re-trigger the diff effect
+    const errors = $state<string[]>([])
+    await mount_diff(diff_result(), {
+      ...failure,
+      on_error: (error) => void errors.push(error),
+    })
 
     expect(query_element(`[role='alert']`).textContent).toContain(message)
-    expect(on_error).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(message))
+    expect(errors).toEqual([expect.stringContaining(message)])
     expect(document.querySelector(`[data-empty]`)).toBeNull()
   })
 
@@ -492,6 +496,20 @@ describe(`states and backend wiring`, () => {
       filename: `main.rs`,
       context_lines: 5,
     })
+  })
+
+  // Invalid sizes fall back to 13px like CodeEditor, keeping font and row height in sync
+  test.each([
+    [16, `16px`, `24px`],
+    [0, `13px`, `20px`],
+    [Number.NaN, `13px`, `20px`],
+  ])(`font_size %s sets font %s and row height %s`, async (font_size, font, row) => {
+    await mount_diff(diff_result(), { options: { ...DEFAULT_OPTIONS, font_size } })
+    const { style } = query_element(`.diff-view`)
+    expect([
+      style.getPropertyValue(`--editor-font-size`),
+      style.getPropertyValue(`--editor-line-height`),
+    ]).toEqual([font, row])
   })
 })
 

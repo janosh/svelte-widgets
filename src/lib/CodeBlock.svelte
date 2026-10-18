@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { CodeHighlight, CodeHighlighter } from './code-block'
+  import { to_error } from './utils'
   import type { HTMLAttributes } from 'svelte/elements'
 
   let {
@@ -39,8 +40,7 @@
             result = { code: source, language: lang, value }
         },
         (reason: unknown) => {
-          if (!signal.aborted)
-            error = reason instanceof Error ? reason.message : String(reason)
+          if (!signal.aborted) error = to_error(reason).message
         },
       )
     return () => request.abort()

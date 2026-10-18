@@ -148,6 +148,10 @@ describe(`create_highlighter`, () => {
     expect(render_block(instance, `<a>{x}</a>`, `py`)).toBe(
       `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
     )
+    // path-like flags resolve by extension, so their class must stay inside the attribute
+    expect(render_block(instance, `#let x = 1`, `{a}"<b>.typ`)).toBe(
+      `<pre class="highlight highlight-&#123;a&#125;&quot;&lt;b&gt;.typ"><code>${typst_html}</code></pre>`,
+    )
     expect(await create_highlighter([grammar_typst]).ready()).not.toBe(instance)
     expect(instance.flagToScope(`typ`)).toBe(`source.typst`)
     for (const flag of [`py`, `ts`, `svelte`]) {
