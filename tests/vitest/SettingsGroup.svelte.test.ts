@@ -1,21 +1,18 @@
 import { SettingsGroup } from '#lib'
-import { mount, tick } from 'svelte'
+import { tick } from 'svelte'
 import { expect, test } from 'vite-plus/test'
-import { doc_query, raw_snippet } from './index'
+import { doc_query, raw_snippet, render } from './index'
 
 const children = raw_snippet(`<p>Controls</p>`)
 
 test(`renders title, subtitle, children and details props`, () => {
-  mount(SettingsGroup, {
-    target: document.body,
-    props: {
-      title: `Appearance`,
-      subtitle: `3 settings`,
-      open: true,
-      id: `appearance`,
-      class: `extra`,
-      children,
-    },
+  render(SettingsGroup, {
+    title: `Appearance`,
+    subtitle: `3 settings`,
+    open: true,
+    id: `appearance`,
+    class: `extra`,
+    children,
   })
   const group = doc_query<HTMLDetailsElement>(`details.settings-group.extra`)
   expect([
@@ -30,7 +27,7 @@ test(`renders title, subtitle, children and details props`, () => {
 
 test(`binds open in both directions and omits unset subtitle`, async () => {
   const props = $state({ title: `Camera`, open: false, children })
-  mount(SettingsGroup, { target: document.body, props })
+  render(SettingsGroup, props)
   const group = doc_query<HTMLDetailsElement>(`details.settings-group`)
   expect(document.querySelector(`.group-subtitle`)).toBeNull()
 

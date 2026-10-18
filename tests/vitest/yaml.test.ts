@@ -1,6 +1,7 @@
 import { parse_yaml, stringify_yaml, yaml_plugin, type YamlOptions } from '#lib/yaml.ts'
 import { YAML11_SCHEMA } from 'js-yaml'
 import { expect, test } from 'vite-plus/test'
+import { import_code } from './index'
 
 const import_yaml = async (
   source: string,
@@ -9,11 +10,7 @@ const import_yaml = async (
 ) => {
   const result = await yaml_plugin(options).transform(source, filename)
   if (!result) throw new Error(`Expected YAML module`)
-  return (
-    await import(
-      /* @vite-ignore */ `data:text/javascript,${encodeURIComponent(result.code)}`
-    )
-  ).default as unknown
+  return (await import_code(result.code)).default
 }
 
 test(`exports core-schema data with dates as strings and literal prototype keys`, async () => {

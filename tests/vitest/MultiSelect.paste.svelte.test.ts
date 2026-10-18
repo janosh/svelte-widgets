@@ -150,65 +150,55 @@ describe(`parse_paste`, () => {
     expect(onpaste).toHaveReturnedWith(get_input())
   })
 
-  test(`object options via allow_user_options`, async () => {
-    const { on_create } = await paste_into(
-      {
-        options: [{ label: `existing` }],
-        allow_user_options: `append`,
-        parse_paste: (text: string) => text.split(`,`).map((str) => str.trim()),
-      },
-      `foo,bar`,
-    )
-    expect(on_create).toHaveBeenCalledTimes(2)
-    expect(on_create).toHaveBeenCalledWith({ option: { label: `foo` } })
-    expect(on_create).toHaveBeenCalledWith({ option: { label: `bar` } })
-  })
-
-  test(`object options preserve extra fields from parse_paste`, async () => {
+  // object option lists turn parsed strings into { label } objects, keeping extra fields
+  test.each([
+    [
+      `wraps parsed strings as labels`,
+      (text: string) => text.split(`,`),
+      [{ label: `alpha` }, { label: `beta` }],
+    ],
+    [
+      `keeps extra fields of parsed objects`,
+      (text: string) => text.split(`,`).map((label, idx) => ({ label, value: idx + 1 })),
+      [
+        { label: `alpha`, value: 1 },
+        { label: `beta`, value: 2 },
+      ],
+    ],
+  ])(`object options: %s`, async (_label, parse_paste, expected) => {
     const { on_create, props } = await paste_into(
       {
         options: [{ label: `existing`, value: 0 }],
         value: [],
         allow_user_options: `append`,
-        parse_paste: (text: string) =>
-          text.split(`,`).map((str, idx) => ({ label: str.trim(), value: idx + 1 })),
+        parse_paste,
       },
       `alpha,beta`,
     )
-    expect(on_create).toHaveBeenCalledWith({ option: { label: `alpha`, value: 1 } })
-    expect(on_create).toHaveBeenCalledWith({ option: { label: `beta`, value: 2 } })
-    expect(props.value).toEqual([
-      { label: `alpha`, value: 1 },
-      { label: `beta`, value: 2 },
-    ])
+    expect(on_create.mock.calls).toEqual(expected.map((option) => [{ option }]))
+    expect(props.value).toEqual(expected)
   })
 
-  test(`clears search_text when max_select blocks some options`, async () => {
-    const { props } = await paste_into(
-      {
-        options: [`a`, `b`, `c`, `d`],
-        value: [`a`, `b`],
-        // non-empty so clearing is observable, else the assertion below is tautological
-        search_text: `partial`,
-        max_select: 3,
-      },
-      `c,d`,
-    )
-    expect(props.value).toEqual([`a`, `b`, `c`])
-    expect(props.search_text).toBe(``)
-  })
-
-  // the first overflowing option is the one reported to on_max_reached
+  // the first overflowing option is the one reported to on_max_reached; search_text starts
+  // non-empty so its reset is observable
   test.each([
     [`already at max`, [`a`, `b`], 2, `c`, [], [`c`]],
+    [`fills the last free slot`, [`a`, `b`], 3, `c,d`, [`c`], [`d`]],
     [`exceeds max mid-paste`, [`a`], 3, `b,c,d,e`, [`b`, `c`], [`d`, `e`]],
   ])(
     `max_select: %s`,
     async (_label, selected, max_select, raw_text, added, overflow) => {
-      const { on_add, on_max_reached, on_parsed_paste } = await paste_into(
-        { options: [`a`, `b`, `c`, `d`, `e`], value: selected, max_select },
+      const { props, on_add, on_max_reached, on_parsed_paste } = await paste_into(
+        {
+          options: [`a`, `b`, `c`, `d`, `e`],
+          value: selected,
+          search_text: `partial`,
+          max_select,
+        },
         raw_text,
       )
+      expect(props.value).toEqual([...selected, ...added])
+      expect(props.search_text).toBe(``)
       expect(on_add).toHaveBeenCalledTimes(added.length)
       expect(on_max_reached).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ max_select, attempted_option: overflow[0] }),

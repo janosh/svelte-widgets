@@ -1,9 +1,9 @@
 import Tabs from '#lib/Tabs.svelte'
 import type { TabItem } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, create_element, press_key } from './index'
+import { click, create_element, press_key, render } from './index'
 
 describe(`Tabs`, () => {
   const items = [
@@ -15,7 +15,7 @@ describe(`Tabs`, () => {
 
   const mount_tabs = (extra: Partial<Props> = {}) => {
     const props: Props = $state({ items, ...extra })
-    mount(Tabs, { target: document.body, props })
+    render(Tabs, props)
     return props
   }
   const tabs = () => [
@@ -29,10 +29,9 @@ describe(`Tabs`, () => {
   test.each([
     [`omitted`, { value: undefined }],
     [`invalid`, { value: `missing` }],
-  ] as const)(`materializes the first enabled value when %s`, async (_case, extra) => {
+  ] as const)(`materializes the first enabled value when %s`, (_case, extra) => {
     const on_change = vi.fn()
     const props = mount_tabs({ ...extra, on_change })
-    await tick()
 
     expect(props.value).toBe(`overview`)
     expect(tab_states().map(([selected]) => selected)).toEqual([`true`, `false`, `false`])

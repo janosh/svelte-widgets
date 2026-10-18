@@ -129,9 +129,8 @@ describe(`contrast_color`, () => {
     middle.append(node)
 
     expect(get_bg_color(node)).toBe(expected_bg)
-    const cleanup = contrast_color()(node)
+    contrast_color()(node)
     expect(node.style.color).toBe(expected_color)
-    cleanup?.()
   })
 
   // the walk stops at the first painted bg - rgb()-only reading skipped wide-gamut ones
@@ -151,9 +150,8 @@ describe(`contrast_color`, () => {
     )
 
     expect(get_bg_color(node)).toBe(painted ? background : ``)
-    const cleanup = contrast_color()(node)
+    contrast_color()(node)
     expect(node.style.color).toBe(expected_color)
-    cleanup?.()
   })
 
   it(`walks out of a shadow root to the painted host`, () => {
@@ -164,35 +162,29 @@ describe(`contrast_color`, () => {
     expect(get_bg_color(node)).toBe(`rgb(10, 10, 10)`)
   })
 
-  it(`bg_color skips the ancestor walk and cleanup restores the inline color`, () => {
-    const node = create_element(`div`, {
-      backgroundColor: `rgb(255, 255, 255)`,
-      color: `rebeccapurple`,
-    })
-
-    const cleanup = contrast_color({ bg_color: `rgb(0, 0, 0)` })(node)
-    expect(node.style.color).toBe(`white`) // the ancestor white would have said black
-
-    cleanup?.()
-    expect(node.style.color).toBe(`rebeccapurple`)
-  })
-
-  // the node's own fill is what bg_color replaces, so only its parent's backdrop shows
+  // the node's own fill is what bg_color replaces, so only its parent's backdrop shows;
+  // cleanup restores the inline color it overwrote
   it.each([
+    [`rgb(0, 0, 0)`, `rgb(255, 255, 255)`, `white`], // opaque: the parent's white is moot
     [`rgba(255, 0, 0, 0.3)`, `rgb(20, 20, 20)`, `white`], // blending over white said black
     [`rgba(255, 0, 0, 0.3)`, `rgb(255, 255, 255)`, `black`],
     [`rgba(255, 0, 0, 0.3)`, `rgba(0, 0, 0, 0)`, `black`], // nothing painted: white page
     [`rgba(0, 0, 0, 0)`, `rgb(20, 20, 20)`, `white`],
   ])(
-    `translucent bg_color %s blends over the parent's %s`,
+    `bg_color %s over the parent's %s picks %s`,
     (bg_color, parent_bg, expected_color) => {
       const parent = create_element(`div`, { backgroundColor: parent_bg })
       const node = document.createElement(`span`)
-      node.style.backgroundColor = `rgb(255, 255, 255)`
+      Object.assign(node.style, {
+        backgroundColor: `rgb(255, 255, 255)`,
+        color: `rebeccapurple`,
+      })
       parent.append(node)
 
-      contrast_color({ bg_color })(node)
+      const cleanup = contrast_color({ bg_color })(node)
       expect(node.style.color).toBe(expected_color)
+      cleanup?.()
+      expect(node.style.color).toBe(`rebeccapurple`)
     },
   )
 })

@@ -1,8 +1,8 @@
 import { DemoNav } from '#site'
 import CategoryOverview from '#site/CategoryOverview.svelte'
 import Home from '../../src/routes/+page.svelte'
-import { mount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { render } from './index'
 import {
   demo_labels,
   demo_nav_routes,
@@ -30,7 +30,7 @@ const route_of = (filename: string) =>
 
 test(`home catalog exposes every main demo and resolves guide links under the base path`, () => {
   vi.spyOn(globalThis, `fetch`).mockResolvedValue(new Response(`[]`))
-  mount(Home, { target: document.body })
+  render(Home, {})
   const sections = [...document.querySelectorAll(`.catalog > section`)]
   expect(sections).toHaveLength(demo_nav_routes.length)
   const titles = [
@@ -72,7 +72,7 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
 })
 
 test(`DemoNav lists components while recipes remain in the complete searchable catalog`, () => {
-  mount(DemoNav, { target: document.body })
+  render(DemoNav, {})
   const hrefs = new Set(
     Array.from(document.querySelectorAll(`nav a`), (link) => link.getAttribute(`href`)),
   )
@@ -147,7 +147,7 @@ test(`DemoNav lists components while recipes remain in the complete searchable c
 test.each([`inputs`, `navigation`, `overlays`, `display`, `attachments`])(
   `%s overview links to its components with descriptions`,
   (name) => {
-    mount(CategoryOverview, { target: document.body, props: { name } })
+    render(CategoryOverview, { name })
     const category = demo_nav_routes.find((entry) => entry.name === name)
     expect(document.querySelector(`h1`)?.textContent).toBe(category?.label)
     const cards = Array.from(document.querySelectorAll(`.card`))
@@ -168,7 +168,7 @@ test.each([false, true])(
       page.url = new URL(`https://example.com${base}/`)
     })
     page.url = new URL(`https://example.com${base}/events`)
-    mount(DemoNav, { target: document.body })
+    render(DemoNav, {})
     expect(
       document
         .querySelector(`a[href="${base}/multiselect"]`)

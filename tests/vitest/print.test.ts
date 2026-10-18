@@ -70,29 +70,26 @@ test(`without a filename the title is left alone`, () => {
   )
 })
 
-// a print() that throws never fires afterprint, so nothing else would undo the swap
-test(`a print that throws still restores the title`, () => {
+// a print() that throws never fires afterprint, so nothing else would undo the swap, and
+// a second cleanup must not clobber a title the app set after the first one ran
+test.each([
+  [`restores the title`, () => {}, `Docs`],
+  [
+    `keeps a title the app set after afterprint`,
+    () => {
+      after_print()
+      document.title = `App Renamed`
+    },
+    `App Renamed`,
+  ],
+])(`a print that throws %s`, (_case, during_print, expected_title) => {
   document.title = `Docs`
-  const print_error = new Error(`print blocked`)
   print_spy.mockImplementationOnce(() => {
-    throw print_error
-  })
-
-  expect(() => print_page({ filename: `docs-print` })).toThrow(print_error)
-
-  expect(document.title).toBe(`Docs`)
-})
-
-test(`a second cleanup leaves a title the app set in the meantime alone`, () => {
-  document.title = `Docs`
-  print_spy.mockImplementationOnce(() => {
-    after_print()
-    document.title = `App Renamed`
+    during_print()
     throw new Error(`print blocked`)
   })
-
   expect(() => print_page({ filename: `docs-print` })).toThrow(`print blocked`)
-  expect(document.title).toBe(`App Renamed`)
+  expect(document.title).toBe(expected_title)
 })
 
 test(`a completed print disarms its watchdog before the next print`, () => {

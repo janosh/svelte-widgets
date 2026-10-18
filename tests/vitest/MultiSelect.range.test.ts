@@ -1,10 +1,15 @@
 import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps } from '#lib/types.ts'
-import { click, doc_query } from './index'
+import { click, press_key } from './index'
 import {
   fresh_mousemove,
+  get_input,
+  live_region,
   mount_multiselect,
+  option_by_label,
+  option_rows,
+  selected_chips,
   type_search_text,
 } from './MultiSelect.test-utils'
 
@@ -20,16 +25,6 @@ const same_options = [
   { label: `Target`, id: 3 },
 ]
 
-const option_rows = (): HTMLLIElement[] => [
-  ...document.querySelectorAll<HTMLLIElement>(`ul.options > li[role="option"]`),
-]
-
-const option_row = (label: string): HTMLLIElement => {
-  const row = option_rows().find((item) => item.textContent?.trim() === label)
-  if (!row) throw new Error(`Option "${label}" not found`)
-  return row
-}
-
 const mount_range = (props: MultiSelectProps) => {
   const on_range_select = vi.fn()
   mount_multiselect({ range_select: true, ...props, on_range_select })
@@ -38,19 +33,17 @@ const mount_range = (props: MultiSelectProps) => {
 
 // takes a row directly when duplicate labels make a lookup by label ambiguous
 const shift_click = async (row: string | HTMLLIElement | undefined): Promise<void> => {
-  const target = typeof row === `string` ? option_row(row) : row
+  const target = typeof row === `string` ? option_by_label(row) : row
   if (!target) throw new Error(`Missing row to shift-click`)
   target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, shiftKey: true }))
   await tick()
 }
 
-const combobox = () => doc_query<HTMLInputElement>(`input[role="combobox"]`)
-const selected_rows = () => document.querySelectorAll(`ul.selected > li`)
 const press = (key: string, init: KeyboardEventInit = {}) =>
-  combobox().dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true, ...init }))
+  press_key(get_input(), key, init)
 
 const select_range = async (anchor: string, target: string): Promise<void> => {
-  await click(option_row(anchor))
+  await click(option_by_label(anchor))
   await shift_click(target)
 }
 
@@ -96,8 +89,8 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
     on_add,
   })
 
-  await click(option_row(`Alpha`))
-  option_row(`Gamma`).dispatchEvent(fresh_mousemove())
+  await click(option_by_label(`Alpha`))
+  option_by_label(`Gamma`).dispatchEvent(fresh_mousemove())
   await tick()
   press(`Enter`, { shiftKey: true })
   await tick()
@@ -108,7 +101,7 @@ test(`Shift+Enter adds one option instead of extending a range`, async () => {
     option: `Gamma`,
     selected: [`Alpha`, `Gamma`],
   })
-  expect(selected_rows()).toHaveLength(2)
+  expect(selected_chips()).toHaveLength(2)
 })
 
 test(`Shift-click adds one visible range without intercepting native undo`, async () => {
@@ -126,9 +119,9 @@ test(`Shift-click adds one visible range without intercepting native undo`, asyn
     to: `Delta`,
     selected: alpha_options,
   })
-  press(`z`, { ctrlKey: true })
+  expect(press(`z`, { ctrlKey: true }).defaultPrevented).toBe(false)
   await tick()
-  expect(selected_rows()).toHaveLength(alpha_options.length)
+  expect(selected_chips()).toHaveLength(alpha_options.length)
 })
 
 test(`Shift+Arrow selects the active range, plain arrows drop the anchor`, async () => {
@@ -182,7 +175,7 @@ test(`Shift-click is an ordinary click while range_select is off`, async () => {
   await select_range(`Alpha`, `Delta`)
 
   expect(onrange_select).not.toHaveBeenCalled()
-  expect(selected_rows()).toHaveLength(2)
+  expect(selected_chips()).toHaveLength(2)
 })
 
 test(`range selection skips disabled rows and obeys max_select`, async () => {
@@ -211,9 +204,9 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
   const on_add = vi.fn()
   const onrange_select = mount_range({ options: [`Anchor`, `Target`], on_add })
 
-  await click(option_row(`Anchor`))
+  await click(option_by_label(`Anchor`))
   on_add.mockClear()
-  await type_search_text(`Target`, combobox())
+  await type_search_text(`Target`)
   await shift_click(`Target`)
 
   expect(onrange_select).not.toHaveBeenCalled()
@@ -227,7 +220,7 @@ test(`an invalidated anchor falls back to one ordinary add`, async () => {
 // region's DOM untouched and screen readers silent on the repeat
 test(`an identical repeat announcement still replaces the live region node`, async () => {
   mount_range({ options: [`A`, `B`, `C`, `D`, `E`], open: true })
-  const live = doc_query(`.sr-only[aria-live="polite"]`)
+  const live = live_region()
   const text_node = () =>
     [...live.childNodes].find((node) => node.nodeType === 3 && node.textContent?.trim())
 

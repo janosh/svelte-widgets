@@ -160,22 +160,12 @@ describe(`Accordion`, () => {
   })
 
   test(`trigger and panel snippets receive item and open state`, () => {
-    const trigger = createRawSnippet<[{ item: AccordionItem; open: boolean }]>(
-      (get_params) => ({
-        render: () => {
-          const { item, open } = get_params()
-          return `<span data-trigger="${item.value}">${item.label}/${open}</span>`
-        },
-      }),
-    )
-    const panel = createRawSnippet<[{ item: AccordionItem; open: boolean }]>(
-      (get_params) => ({
-        render: () => {
-          const { item, open } = get_params()
-          return `<p data-panel="${item.value}">${item.value}/${open}</p>`
-        },
-      }),
-    )
+    const item_snippet = (html: (item: AccordionItem, open: boolean) => string) =>
+      createRawSnippet<[{ item: AccordionItem; open: boolean }]>((get_params) => ({
+        render: () => html(get_params().item, get_params().open),
+      }))
+    const trigger = item_snippet((item, open) => `<span>${item.label}/${open}</span>`)
+    const panel = item_snippet((item, open) => `<p>${item.value}/${open}</p>`)
     mount_accordion({ value: `alpha`, trigger, panel })
 
     expect(triggers().map((trigger_el) => trigger_el.textContent)).toEqual([

@@ -1,14 +1,12 @@
 import CodeBlock from '#lib/CodeBlock.svelte'
 import type { CodeHighlight, CodeHighlighter } from '#lib/code-block.ts'
-import { flushSync, mount, tick, unmount, type ComponentProps } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { doc_query } from './index'
+import { tick, type ComponentProps } from 'svelte'
+import { expect, test, vi } from 'vite-plus/test'
+import { doc_query, render } from './index'
 
 const mount_block = (props: ComponentProps<typeof CodeBlock>) => {
-  const component = mount(CodeBlock, { target: document.body, props })
-  onTestFinished(() => unmount(component))
-  flushSync()
-  return { component, pre: doc_query(`pre`), code: doc_query(`code`) }
+  const unmount_block = render(CodeBlock, props)
+  return { unmount_block, pre: doc_query(`pre`), code: doc_query(`code`) }
 }
 
 test.each([
@@ -53,7 +51,7 @@ test.each([
     return result.promise
   })
   const props = $state({ code: `old`, language: `ts`, highlight })
-  const { component, pre, code } = mount_block(props)
+  const { unmount_block, pre, code } = mount_block(props)
   await vi.waitFor(() => expect(requests).toHaveLength(1))
   if (changed === `code`) props.code = `new`
   else if (changed === `language`) props.language = `js`
@@ -80,7 +78,7 @@ test.each([
 
   props.code = `unmounted`
   await vi.waitFor(() => expect(requests).toHaveLength(3))
-  await unmount(component)
+  await unmount_block()
   expect(requests[2].signal.aborted).toBe(true)
   requests[2].result.reject(new Error(`after unmount`))
   await Promise.resolve()
@@ -137,8 +135,8 @@ test.each([new Error(`bad grammar`), `bad grammar`])(
 
 test(`unmounting before highlighting starts skips the queued work`, async () => {
   const highlight = vi.fn<CodeHighlighter>(() => `highlighted`)
-  const { component } = mount_block({ code: `source`, highlight })
-  await unmount(component)
+  const { unmount_block } = mount_block({ code: `source`, highlight })
+  await unmount_block()
   await Promise.resolve()
   expect(highlight).not.toHaveBeenCalled()
 })

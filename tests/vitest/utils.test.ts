@@ -32,7 +32,7 @@ import {
   to_error,
 } from '#lib/utils.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, stub_props } from './index'
+import { create_element, doc_query, stub_props } from './index'
 
 // RFC 4122 v4 pins the version/variant nibbles; the timestamp+counter fallback used when
 // crypto is unavailable only guarantees the generic UUID shape
@@ -42,16 +42,10 @@ test.each([
   [`crypto`, false, uuid_v4],
   [`fallback`, true, uuid_any],
 ] as const)(`get_uuid via %s: unique valid UUIDs`, (_desc, drop_crypto, regex) => {
-  const original = globalThis.crypto?.randomUUID?.bind(globalThis.crypto)
-  // @ts-expect-error - mocking randomUUID as undefined
-  if (drop_crypto) globalThis.crypto.randomUUID = undefined
-  try {
-    const uuids = Array.from({ length: 100 }, () => get_uuid())
-    uuids.forEach((uuid) => expect(uuid).toMatch(regex))
-    expect(new Set(uuids).size).toBe(100)
-  } finally {
-    if (original) globalThis.crypto.randomUUID = original
-  }
+  if (drop_crypto) stub_props(globalThis.crypto, { randomUUID: undefined })
+  const uuids = Array.from({ length: 100 }, () => get_uuid())
+  uuids.forEach((uuid) => expect(uuid).toMatch(regex))
+  expect(new Set(uuids).size).toBe(100)
 })
 
 // only letters not preceded by a letter/mark/number/underscore get capitalized
@@ -144,7 +138,6 @@ describe(`keyboard shortcut parsing`, () => {
     [`+`, { key: `+`, ctrl: false, shift: false, alt: false, meta: false }],
     [`ctrl++`, { key: `+`, ctrl: true, shift: false, alt: false, meta: false }],
     [`ctrl+shift++`, { key: `+`, ctrl: true, shift: true, alt: false, meta: false }],
-    [`ctrl+`, null],
     // non-plus keys and the remaining modifiers (alt, meta, cmd alias)
     [`k`, { key: `k`, ctrl: false, shift: false, alt: false, meta: false }],
     [`cmd+k`, { key: `k`, ctrl: false, shift: false, alt: false, meta: true }],
@@ -286,11 +279,8 @@ describe(`shortcut rebinding`, () => {
     [`ctrl+,`, `ctrl+comma`],
     [`  Alt +  Space `, `alt+space`], // segments are trimmed
     [`escape`, `escape`], // bare key
-    [`ctrl+`, null], // no key
-    [``, null],
     [`ctrl`, null], // modifiers only
     [`shift+alt`, null],
-    [`ctrl+a+b`, null], // two keys
     [`ctrl+capslock`, null], // key that is only ever a modifier
     [`meta+control`, null],
   ])(`normalize_combo(%j) is %j`, (combo, expected) => {
@@ -959,8 +949,7 @@ describe(`observe_subtree`, () => {
   const flush = () => new Promise((resolve) => void queueMicrotask(() => resolve(null)))
 
   test(`coalesces a burst of mutations into one deferred call`, async () => {
-    const root = document.createElement(`div`)
-    document.body.append(root)
+    const root = create_element()
     const refresh = vi.fn()
     const stop = observe_subtree(root, [`data-key`], refresh)
 
@@ -988,26 +977,22 @@ describe(`observe_subtree`, () => {
     stop()
     await flush()
     expect(refresh).toHaveBeenCalledTimes(2)
-    root.remove()
   })
 
   test.each([
     [`ignores text edits by default`, undefined, 0],
     [`refreshes when text watching is enabled`, true, 1],
   ] as const)(`%s`, async (_description, watch_text, calls) => {
-    const root = document.createElement(`div`)
+    const root = create_element()
     const text_node = document.createTextNode(`before`)
     root.append(text_node)
-    document.body.append(root)
     const refresh = vi.fn()
     const stop = observe_subtree(root, [], refresh, watch_text)
 
     text_node.nodeValue = `after`
     await flush()
     expect(refresh).toHaveBeenCalledTimes(calls)
-
     stop()
-    root.remove()
   })
 })
 

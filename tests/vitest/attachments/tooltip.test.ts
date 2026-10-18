@@ -202,23 +202,28 @@ describe(`tooltip manager`, () => {
     expect(visible_tooltip().textContent).toBe(`Dynamic child`)
   })
 
-  it(`honors explicitly disabled delegation with undefined content`, () => {
+  const markup = `<script>bad()</script><b>Text</b>\nNext`
+  it.each<[string, TooltipOptions, string, string | null]>([
+    [`delegate=false`, { content: undefined, delegate: false }, `title`, null],
+    [
+      `a selector with a per-trigger content factory`,
+      {
+        delegate: `[data-tip]`,
+        content: (trigger) => trigger.getAttribute(`data-tip`) ?? ``,
+      },
+      `data-tip`,
+      markup,
+    ],
+    // markup in a delegated title renders as plain text
+    [`delegate=true`, { delegate: true }, `title`, markup],
+  ])(`delegates through %s`, (_desc, options, attribute, expected) => {
     const root = create_element()
-    const child = append_child(root, `title`, `<b>Untrusted</b>`)
-    attach_tooltip(root, { content: undefined, delegate: false })
-
-    pointer_over(child)
-    expect(document.querySelector(`.tooltip-content`)).toBeNull()
-  })
-
-  it(`supports explicit delegated selectors with per-trigger content factories`, () => {
-    const root = create_element()
-    attach_tooltip(root, {
-      delegate: `[data-tip]`,
-      content: (trigger) => trigger.getAttribute(`data-tip`) ?? ``,
-    })
-    pointer_over(append_child(root, `data-tip`, `Selected child`))
-    expect(doc_query(`.tooltip-content`).textContent).toBe(`Selected child`)
+    attach_tooltip(root, options)
+    pointer_over(append_child(root, attribute, markup))
+    const content_el = document.querySelector(`.tooltip-content`)
+    expect(content_el?.textContent ?? null).toBe(expected) // null: no tooltip node at all
+    expect(visible_text()).toBe(expected)
+    expect(content_el?.childElementCount ?? 0).toBe(0)
   })
 
   it(`defaults to hover-focus and focus ignores pointer delay`, () => {
@@ -419,15 +424,6 @@ describe(`tooltip manager`, () => {
     pointer_out(first)
     pointer_over(second)
     expect(visible_tooltip().textContent).toBe(`Second`)
-  })
-
-  it(`renders delegated title markup as plain text`, () => {
-    const content = `<script>bad()</script><b>Text</b>\nNext`
-    const root = create_element()
-    attach_tooltip(root, { delegate: true })
-    pointer_over(append_child(root, `title`, content))
-    expect(visible_tooltip().textContent).toBe(content)
-    expect(doc_query(`.tooltip-content`).childElementCount).toBe(0)
   })
 
   it.each([

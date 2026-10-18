@@ -7,22 +7,25 @@ async function open_portal_modal(page: Page): Promise<Locator> {
   return page.locator(`div.modal-content.modal`)
 }
 
+const open_portalled = (page: Page): Locator =>
+  page.locator(`body > ul.options:not(.hidden)`)
 const portalled_options = (page: Page, label: string): Locator =>
   page.locator(`body > ul.options:not(.hidden):has(li:has-text("${label}"))`)
+
+// keyboard/scroll handlers only work once hydration installs MultiSelect's input.focus override
+const wait_for_hydration = (page: Page, input_selector: string) =>
+  page.waitForFunction((selector) => {
+    const input_el = document.querySelector<HTMLInputElement>(selector)
+    return input_el && !String(input_el.focus).includes(`[native code]`)
+  }, input_selector)
+
+const store_binding_input = `#store-binding input[placeholder='Select colors...']`
 
 async function goto_persistent(page: Page): Promise<void> {
   await page.goto(`/persistent`)
   await expect(page.locator(`#languages input[autocomplete]`)).toBeVisible()
-  const store_binding_input = page.locator(
-    `#store-binding input[placeholder='Select colors...']`,
-  )
-  await expect(store_binding_input).toBeVisible()
-  await page.waitForFunction(() => {
-    const input_el = document.querySelector<HTMLInputElement>(
-      `#store-binding input[placeholder='Select colors...']`,
-    )
-    return input_el && !String(input_el.focus).includes(`[native code]`)
-  })
+  await expect(page.locator(store_binding_input)).toBeVisible()
+  await wait_for_hydration(page, store_binding_input)
 }
 
 // Issue #309: Array cloning by reactive wrappers (stores, Superforms) caused infinite loops
@@ -30,7 +33,7 @@ async function goto_persistent(page: Page): Promise<void> {
 test(`array cloning infinite loop prevention (issue #309)`, async ({ page }) => {
   await goto_persistent(page)
 
-  const input = page.locator(`#store-binding input[placeholder='Select colors...']`)
+  const input = page.locator(store_binding_input)
   await input.focus()
   await input.press(`ArrowDown`)
   await input.press(`Enter`)
@@ -201,7 +204,7 @@ test.describe(`portal feature`, () => {
     await expect(
       page.locator(`#foods > div.multiselect > ul.options:not(.hidden)`),
     ).toBeVisible()
-    await expect(page.locator(`body > ul.options:not(.hidden)`)).toHaveCount(0)
+    await expect(open_portalled(page)).toHaveCount(0)
   })
 
   test(`mobile touch selection works with portal enabled`, async ({ page }) => {
@@ -244,7 +247,7 @@ test.describe(`portal feature`, () => {
 
   test(`dropdowns in modal render in body when portal is active`, async ({ page }) => {
     const modal_content = await open_portal_modal(page)
-    const open_dropdown = page.locator(`body > ul.options:not(.hidden)`)
+    const open_dropdown = open_portalled(page)
     for (const [placeholder, label] of [
       [`Choose languages...`, languages[0]],
       [`Choose octicons...`, octicons[0]],
@@ -355,13 +358,7 @@ test.describe(`virtual_list`, () => {
   const goto_virtual_list = async (page: Page): Promise<void> => {
     await page.goto(`/multiselect-virtual-list`, { waitUntil: `networkidle` })
     await expect(page.locator(`.virtual ul.options`)).toBeVisible()
-    // scroll + keyboard handlers only work once hydration installs the input.focus override
-    await page.waitForFunction(() => {
-      const input_el = document.querySelector<HTMLInputElement>(
-        `.virtual input[autocomplete]`,
-      )
-      return input_el && !String(input_el.focus).includes(`[native code]`)
-    })
+    await wait_for_hydration(page, `.virtual input[autocomplete]`)
   }
 
   test(`renders a small window of the 2000-option list and re-windows it on scroll`, async ({
@@ -458,7 +455,7 @@ for (const [height, placeholder, placement] of [
       })
     }
     const input = modal_content.locator(`input[placeholder='${placeholder}']`)
-    const dropdown = page.locator(`body > ul.options:not(.hidden)`)
+    const dropdown = open_portalled(page)
     await expect(async () => {
       await input.click()
       await expect(dropdown).toBeVisible({ timeout: 1000 })
@@ -539,8 +536,7 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
     const modal_content = await open_portal_modal(page)
     await modal_content.locator(`input[placeholder='Choose languages...']`).click()
 
-    const dropdown = page.locator(`body > ul.options:not(.hidden)`)
-    await expect(dropdown).toBeVisible()
+    await expect(open_portalled(page)).toBeVisible()
 
     // schemeless dark page: the portalled dropdown inherits color-scheme + color from body
     await page.evaluate(() => {

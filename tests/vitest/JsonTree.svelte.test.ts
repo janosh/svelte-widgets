@@ -2,7 +2,7 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '#lib'
 import { to_json } from '#lib/json-tree/utils.ts'
-import { click, doc_query, fire_input, press_key, render } from './index'
+import { click, doc_query, fire_input, render } from './index'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vite-plus/test'
@@ -28,17 +28,19 @@ const press = (
   target: Element | null | undefined,
   key: string,
   init: KeyboardEventInit = {},
-): void => {
-  if (!target) throw new Error(`no target for key ${key}`)
-  press_key(target, key, init)
-  flushSync()
-}
+): void =>
+  fire(
+    target,
+    new KeyboardEvent(`keydown`, { bubbles: true, cancelable: true, ...init, key }),
+  )
 
 const node_at = (path: string) =>
   document.querySelector<HTMLElement>(`.json-node[data-path="${CSS.escape(path)}"]`)
 const tree = () => doc_query<HTMLDivElement>(`.json-tree`)
 const paths_of = (selector: string) =>
   Array.from(document.querySelectorAll<HTMLElement>(selector), (el) => el.dataset.path)
+const texts = (selector: string, root: ParentNode = document) =>
+  Array.from(root.querySelectorAll(selector), (el) => el.textContent?.trim())
 // Header button groups: [T, #], [expand all, collapse all, 1, 2, 3], [copy, download]
 const control_group = (idx: number) =>
   document
@@ -163,15 +165,14 @@ describe(`rendering`, () => {
       value: { zebra: [1], apple: { a: 1 }, 'key-with-dash': 2 },
       sort_keys: true,
     })
-    const brackets = Array.from(
-      document.querySelectorAll(`.bracket`),
-      (el) => el.textContent,
-    )
-    expect(brackets).toEqual([`{`, `{`, `}`, `[`, `]`, `}`])
-    const keys = Array.from(document.querySelectorAll(`.node-key`), (el) =>
-      el.textContent?.replaceAll(`"`, ``).trim(),
-    )
-    expect(keys).toEqual([`apple`, `a`, `key-with-dash`, `zebra`, `0`])
+    expect(texts(`.bracket`)).toEqual([`{`, `{`, `}`, `[`, `]`, `}`])
+    expect(texts(`.node-key`).map((key) => key?.replaceAll(`"`, ``))).toEqual([
+      `apple`,
+      `a`,
+      `key-with-dash`,
+      `zebra`,
+      `0`,
+    ])
   })
 
   it.each([
@@ -274,10 +275,7 @@ describe(`folding`, () => {
   const rendered_children = () =>
     document.querySelectorAll(`.json-tree-content > .json-node > .children > .json-node`)
       .length
-  const more_labels = () =>
-    [...document.querySelectorAll(`.more-children button`)].map((btn) =>
-      btn.textContent?.trim(),
-    )
+  const more_labels = () => texts(`.more-children button`)
 
   it(`mounts long containers in pages of 100 that grow by a page or to the whole list`, async () => {
     mount_expanded({ value: wide(`v`, 350), auto_fold_objects: Infinity })
@@ -630,9 +628,8 @@ describe(`search`, () => {
     press(input, `Enter`)
     expect(match_count()).toBe(`3 of 4`)
     // typing and deleting within the debounce window keeps the query, so the match stays
-    const search = doc_query<HTMLInputElement>(`.search-input`)
-    await fire_input(search, `ab`, `input`)
-    await fire_input(search, `a`, `input`)
+    await fire_input(input, `ab`, `input`)
+    await fire_input(input, `a`, `input`)
     await new Promise<void>((resolve) => void setTimeout(resolve, 200))
     expect(match_count()).toBe(`3 of 4`)
     await type_search(`ab`, `1 of 3`)
@@ -868,9 +865,7 @@ describe(`context menu and pinning`, () => {
     expect(document.querySelector(`.context-menu`)).toBeNull()
     const panel = doc_query(`.pinned-panel`)
     expect(panel.textContent).toContain(`Pinned (2)`)
-    expect(
-      Array.from(panel.querySelectorAll(`.pinned-value`), (el) => el.textContent),
-    ).toEqual([`1`, `{1 key}`])
+    expect(texts(`.pinned-value`, panel)).toEqual([`1`, `{1 key}`])
     await open_menu(node_at(`a`))
     expect(menu_button(`Unpin this path`)).toBeInstanceOf(HTMLButtonElement)
     await click(menu_button(`Unpin this path`))

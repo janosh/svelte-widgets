@@ -91,7 +91,7 @@ test(`highlights siblings independently and ignores stale completions after edit
   expect(highlight).toHaveBeenCalledTimes(4)
 })
 
-test(`toggle all button opens/closes all, tracks (custom) label, and handles partial/native toggles`, async () => {
+test(`toggle all button opens/closes all, tracks (custom) label, and handles partial/native toggles`, () => {
   const onclick = vi.fn()
   const files = [`file1`, `file2`, `file3`].map((title) => ({
     title,
@@ -106,7 +106,6 @@ test(`toggle all button opens/closes all, tracks (custom) label, and handles par
     button_props,
     labels: { close_all: `Alle schließen` },
   })
-  await tick()
 
   const details = [...document.querySelectorAll(`details`)]
   const btn = doc_query<HTMLButtonElement>(`button[title='toggle all']`)
@@ -172,7 +171,6 @@ test(`keeps DOM refs internal and toggles surviving files after removal`, async 
       return visible_files
     },
   })
-  await tick()
   const original_nodes = [...document.querySelectorAll(`details`)]
   original_nodes[2].open = true
   visible_files = [files[2], files[0]]
@@ -237,7 +235,6 @@ test(`duplicate titles render and keep their open state across inserts`, async (
     { title: `index.ts`, content: `export const b = 2` },
   ])
   render(FileDetails, { files })
-  await tick()
 
   const all_details = () => [...document.querySelectorAll(`details`)]
   const open_states = () => all_details().map((el) => el.open)

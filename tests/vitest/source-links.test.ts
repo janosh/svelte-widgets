@@ -6,7 +6,7 @@ import source_links, {
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vite-plus/test'
-import { create_element, temp_dir } from './index'
+import { create_element, import_code, temp_dir } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
 const load_symbols = async (root?: string): Promise<SourceSymbols> => {
@@ -19,7 +19,7 @@ const load_symbols = async (root?: string): Promise<SourceSymbols> => {
   expect(load(`some-other-module`)).toBeNull()
   const code = load(resolved)
   if (!code) throw new Error(`virtual module not loaded`)
-  return import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+  return import_code(code) as Promise<SourceSymbols>
 }
 
 describe(`source_links vite plugin`, () => {

@@ -41,6 +41,8 @@ ${extra}
 \`\`\`
 `
 
+const write_page = (source: string) => writeFile(`${directory}/Page.md`, source)
+
 // Keep the files, server, and optimizer cache isolated; only dependencies are shared.
 test.beforeAll(async () => {
   directory = await realpath(await mkdtemp(`${tmpdir()}/widgets-browser-`))
@@ -104,29 +106,23 @@ test(`metadata, runnable examples and CSS-only hot updates work in the browser`,
   await page.getByRole(`button`, { name: `View code` }).first().click()
   await expect(page.locator(`#counter code`)).toContainText(`let count = $state(0)`)
 
-  await writeFile(`${directory}/Page.md`, page_source(`blue`))
+  await write_page(page_source(`blue`))
   await expect(counter).toHaveCSS(`color`, `rgb(0, 0, 255)`)
   await expect(counter).toHaveText(`Count: 1`)
 
-  await writeFile(
-    `${directory}/Page.md`,
-    page_source(`blue`, `Markdown fixture`, `**New prose**`),
-  )
+  await write_page(page_source(`blue`, `Markdown fixture`, `**New prose**`))
   await expect(page.locator(`strong`)).toHaveText(`New prose`)
   expect((await server.ssrLoadModule(`/render.js`)).html).toContain(
     `<strong>New prose</strong>`,
   )
-  await writeFile(
-    `${directory}/Page.md`,
-    page_source(`blue`, `Updated title`, `**New prose**`),
-  )
+  await write_page(page_source(`blue`, `Updated title`, `**New prose**`))
   await expect(page.getByRole(`heading`, { name: `Updated title` })).toBeVisible()
   await expect(page.locator(`strong`)).toHaveText(`New prose`)
   const count_before = Number((await counter.textContent())?.split(`: `)[1])
   await counter.click()
   await expect(counter).toHaveText(`Count: ${count_before + 1}`)
   await expect(page.getByText(`Own metadata`, { exact: true })).toBeVisible()
-  await writeFile(`${directory}/Page.md`, `# No examples`)
+  await write_page(`# No examples`)
   await expect(page.getByRole(`heading`, { name: `No examples` })).toBeVisible()
   await expect(counter).toHaveCount(0)
   expect(errors).toEqual([])

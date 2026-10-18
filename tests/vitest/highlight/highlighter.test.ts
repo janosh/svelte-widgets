@@ -127,14 +127,13 @@ describe(`create_highlighter`, () => {
   // Typst and LaTeX are outside the common bundle, mirroring the diagrams docs site
   const custom = create_highlighter([grammar_latex, grammar_typst])
   const typst_html = `<span class="pl-k">#let</span> <span class="pl-smi">x</span> <span class="pl-k">= </span><span class="pl-c1">1</span>`
+  const typst_block = `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`
 
   test(`highlights a language outside the common bundle`, async () => {
     expect((await default_highlighter.ready()).flagToScope(`typ`)).toBeUndefined()
     expect(await custom.highlight(`#let x = 1`, `typ`)).toBe(typst_html)
     expect(await custom.highlight(`#let x = 1`, `TYP`)).toBe(typst_html)
-    expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(
-      `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
-    )
+    expect(await custom.highlight_block(`#let x = 1`, `TYP`)).toBe(typst_block)
     expect(await custom.highlight(`\\emph{hi}`, `tex`)).toContain(`<span class="pl-`)
   })
 
@@ -142,9 +141,7 @@ describe(`create_highlighter`, () => {
     const instance = await custom.ready()
     expect(await custom.ready()).toBe(instance)
     // render_block wraps a ready instance's output without awaiting
-    expect(render_block(instance, `#let x = 1`, `TYP`)).toBe(
-      `<pre class="highlight highlight-typ"><code>${typst_html}</code></pre>`,
-    )
+    expect(render_block(instance, `#let x = 1`, `TYP`)).toBe(typst_block)
     expect(render_block(instance, `<a>{x}</a>`, `py`)).toBe(
       `<pre class="highlight"><code>&lt;a&gt;&#123;x&#125;&lt;/a&gt;</code></pre>`,
     )

@@ -92,6 +92,8 @@ describe(`search_text`, () => {
     expect(search_text(doc_query(`span, option`), `secret`)).toEqual([])
   })
 
+  const marks = `q\u0301\u0328` // canonically reordered combining marks
+  const formatted = `<p>form\n  <b>submit</b></p>`
   it.each([
     // endpoints of a query straddling inline element boundaries
     [`inline markup`, `<p>Hello <b>wo</b>rld</p>`, `world`, [`wo`, 0, `rld`, 3]],
@@ -133,6 +135,11 @@ describe(`search_text`, () => {
     // ΟΔΟΣ lowercases to a final sigma, which readers still search for as σ
     [`final sigma`, `<p>ΟΔΟΣ</p>`, `οδοσ`, [`ΟΔΟΣ`, 0, `ΟΔΟΣ`, 4]],
     [`medial sigma query`, `<p>ΟΔΟΣ</p>`, `οδος`, [`ΟΔΟΣ`, 0, `ΟΔΟΣ`, 4]],
+    [`reordered combining marks`, `<p>${marks}</p>`, marks, [marks, 0, marks, 3]],
+    [`only reordered marks`, `<p>${marks}</p>`, `\u0301\u0328`, [marks, 1, marks, 3]],
+    // whitespace runs collapse in both the source and the query
+    [`source whitespace runs`, formatted, `form submit`, [`form\n  `, 0, `submit`, 6]],
+    [`a padded query`, formatted, `  Form   Submit  `, [`form\n  `, 0, `submit`, 6]],
   ])(`maps offsets back through %s`, (_desc, html, query, expected) => {
     expect(ranges_of(render(html), query).map(range_bounds)).toEqual([expected])
   })
@@ -170,26 +177,6 @@ describe(`search_text`, () => {
     [`plain query keeps other marks`, `<p>がか</p>`, `か`, [`か`]],
   ])(`diacritics: %s`, (_desc, html, query, expected) => {
     expect(ranges_of(render(html), query).map(String)).toEqual(expected)
-  })
-
-  it.each([
-    [`the full run`, `q\u0301\u0328`, 0],
-    [`only reordered marks`, `\u0301\u0328`, 1],
-  ])(`maps %s across canonically reordered combining marks`, (_desc, query, start) => {
-    const source = `q\u0301\u0328`
-    expect(ranges_of(render(`<p>${source}</p>`), query).map(range_bounds)).toEqual([
-      [source, start, source, 3],
-    ])
-  })
-
-  it.each([
-    [`source-formatted markup`, `form submit`],
-    [`a padded query`, `  Form   Submit  `],
-  ])(`collapses whitespace runs in %s`, (_desc, query) => {
-    const root = render(`<p>form\n  <b>submit</b></p>`)
-    expect(ranges_of(root, query).map(range_bounds)).toEqual([
-      [`form\n  `, 0, `submit`, 6],
-    ])
   })
 
   it(`reports every non-overlapping hit`, () => {

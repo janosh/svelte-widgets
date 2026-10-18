@@ -420,8 +420,7 @@ describe(`ToastStore`, () => {
 
     act(store)
 
-    expect(on_close).toHaveBeenCalledOnce()
-    expect(on_close.mock.calls[0][1]).toBe(reason)
+    expect(on_close).toHaveBeenCalledExactlyOnceWith(expect.anything(), reason)
     expect(on_click).toHaveBeenCalledTimes(reason === `action` ? 1 : 0)
   })
 
@@ -703,23 +702,15 @@ describe(`<Toast />`, () => {
     expect(store.active_toast?.message).toBe(`first`)
   })
 
-  test.each([
-    [
-      `moves the keyboard to the toast's first control`,
-      {},
-      { action: { label: `Undo` } },
-    ],
-    // nothing focusable in the card, so the hotkey leaves the keyboard where it is
-    [`is inert when the toast has no controls`, { dismissible: false }, {}],
-  ] as const)(`the focus hotkey %s`, async (_desc, props, request) => {
-    const store = render(props)
-    store.show(`a`, request)
+  // nothing focusable in the card, so the hotkey leaves the keyboard where it is
+  test(`the focus hotkey is inert when the toast has no controls`, async () => {
+    const store = render({ dismissible: false })
+    store.show(`a`)
     await tick()
     const before = document.activeElement
-    const target = document.querySelector(`.toast-action`)
 
     press_focus_hotkey()
-    expect(document.activeElement).toBe(target ?? before)
+    expect(document.activeElement).toBe(before)
   })
 
   // every exit unmounts the button holding focus, so each must restore the origin rather
@@ -742,11 +733,12 @@ describe(`<Toast />`, () => {
       const on_click = vi.fn()
       store.show(`a`, { action: { label: `Undo`, on_click } })
       await tick()
-      expect(doc_query(`.toast-action`).textContent?.trim()).toBe(`Undo`)
+      const action_button = doc_query(`.toast-action`)
+      expect(action_button.textContent?.trim()).toBe(`Undo`)
 
       opener.focus()
-      press_focus_hotkey()
-      expect(document.activeElement).not.toBe(opener)
+      press_focus_hotkey() // moves the keyboard to the toast's first control
+      expect(document.activeElement).toBe(action_button)
       if (moved_on) elsewhere.focus()
 
       close(store)

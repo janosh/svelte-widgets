@@ -6,8 +6,8 @@ import {
   step_range_value,
   validate_range,
 } from '#lib/range-slider.ts'
-import { mount, tick, unmount, type ComponentProps } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { tick, type ComponentProps } from 'svelte'
+import { describe, expect, test, vi } from 'vite-plus/test'
 import {
   doc_query,
   fire_input,
@@ -319,9 +319,7 @@ describe(`RangeSlider`, () => {
     async (prevented) => {
       const form = document.createElement(`form`)
       document.body.append(form)
-      const component = mount(RangeSlider, { target: form, props: { value: [20, 80] } })
-      onTestFinished(() => unmount(component))
-      await tick()
+      render(RangeSlider, { value: [20, 80] }, form)
       const input = form.querySelector(`input`)
       if (!input) throw new Error(`Missing numeric field`)
       await fire_input(input, `43`, `input`)

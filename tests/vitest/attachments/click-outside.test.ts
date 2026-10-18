@@ -247,35 +247,35 @@ describe(`click_outside`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
   })
 
-  it.each([true, false])(`escape reports focus_inside=%s`, (focus_inside) => {
-    const { element, callback } = attach_outside({ escape: true })
-    const focus_target = focus_inside ? element : create_element()
-    const focusable = document.createElement(`button`)
-    focus_target.append(focusable)
-    focusable.focus()
+  // focus lands in a button inside the surface when focus_inside, else outside it
+  it.each<[string, boolean, () => HTMLElement]>([
+    [`inside`, true, create_element],
+    [`outside`, false, create_element],
+    // document.activeElement reports the shadow host, which the surface does not contain,
+    // so only descending the chain finds the focus
+    [
+      `in the surface's shadow tree`,
+      true,
+      () => {
+        const surface = document.createElement(`div`)
+        create_element().attachShadow({ mode: `open` }).append(surface)
+        return surface
+      },
+    ],
+  ])(
+    `escape with focus %s reports focus_inside=%s`,
+    (_desc, focus_inside, make_surface) => {
+      const surface = make_surface()
+      const focusable = document.createElement(`button`)
+      ;(focus_inside ? surface : create_element()).append(focusable)
+      focusable.focus()
 
-    const event = press_escape()
-    expect(callback).toHaveBeenCalledTimes(1)
-    expect(callback.mock.calls[0][2]).toEqual({ focus_inside, via: `escape`, event })
-  })
-
-  // for a surface in a shadow tree, document.activeElement reports the host, which the
-  // surface does not contain, so only descending the chain finds the focus
-  it(`escape sees focus on a node that shares the surface's shadow tree`, () => {
-    const surface = document.createElement(`div`)
-    create_element().attachShadow({ mode: `open` }).append(surface)
-    const focusable = document.createElement(`button`)
-    surface.append(focusable)
-    focusable.focus()
-
-    const { callback } = attach_outside({ escape: true }, surface)
-    const event = press_escape()
-    expect(callback.mock.calls[0][2]).toEqual({
-      focus_inside: true,
-      via: `escape`,
-      event,
-    })
-  })
+      const { callback } = attach_outside({ escape: true }, surface)
+      const event = press_escape()
+      expect(callback).toHaveBeenCalledTimes(1)
+      expect(callback.mock.calls[0][2]).toEqual({ focus_inside, via: `escape`, event })
+    },
+  )
 
   // a drag or resize can release past the surface's edge, where the browser reports the
   // click on a common ancestor. Only a gesture starting and ending outside is a dismissal,

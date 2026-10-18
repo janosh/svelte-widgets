@@ -76,10 +76,9 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   reject_loads[2](new Error(`Retry this file`))
   await tick()
   expect(target.textContent).toContain(`Retry this file`)
-  Array.from(target.querySelectorAll(`button`))
-    .find((button) => button.textContent === `Retry`)
-    ?.click()
-  await tick()
+  await click(
+    [...target.querySelectorAll(`button`)].find((btn) => btn.textContent === `Retry`),
+  )
   expect(on_files).toHaveBeenCalledTimes(4)
   props.accept = `.txt`
   await tick()

@@ -1,7 +1,7 @@
 import { ColorInput } from '#lib'
-import { mount, tick, unmount, type ComponentProps } from 'svelte'
-import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { fire_input, press_key } from './index'
+import { tick, type ComponentProps } from 'svelte'
+import { describe, expect, test, vi } from 'vite-plus/test'
+import { fire_input, press_key, render } from './index'
 
 const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
   const props = $state({
@@ -11,8 +11,7 @@ const mount_color = (options: ComponentProps<typeof ColorInput> = {}) => {
   })
   const target = document.createElement(`form`)
   document.body.append(target)
-  const component = mount(ColorInput, { target, props })
-  onTestFinished(() => unmount(component))
+  render(ColorInput, props, target)
   const input = (type: string): HTMLInputElement => {
     const element = target.querySelector<HTMLInputElement>(`input[type="${type}"]`)
     if (!element) throw new Error(`Missing ${type} input`)

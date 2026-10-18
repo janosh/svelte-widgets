@@ -36,10 +36,7 @@ const nav_button = (name: `Previous` | `Next`) =>
   doc_query<HTMLButtonElement>(`.find-bar button[aria-label="${name} match"]`)
 
 // Use a real input event so FindBar's async path runs.
-const type_query = async (query: string) => {
-  await fire_input(input(), query, `input`)
-  await tick()
-}
+const type_query = (query: string) => fire_input(input(), query, `input`)
 
 const jumped = () => document.querySelector(`.search-match-jump`)?.textContent
 
@@ -315,7 +312,6 @@ describe(`create_find_state`, () => {
     expect(registry.has(`find-match`)).toBe(true)
 
     await unmount_bar()
-    await tick()
     expect(disconnect).toHaveBeenCalled()
     expect(registry.has(`find-match`)).toBe(false)
     expect(root.isConnected).toBe(true) // the searched subtree is left alone

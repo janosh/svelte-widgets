@@ -8,44 +8,31 @@ import {
   type SelectionProps,
 } from '#lib'
 import { virtual_window } from '#lib/virtual.ts'
-import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import { expect, test, vi, onTestFinished } from 'vite-plus/test'
-import { click, create_element, doc_query, press_key } from './index'
+import { click, create_element, doc_query, press_key, render } from './index'
 
+// a fresh target, so queries stay scoped to this test's widget
 const target_for = () => {
   const target = create_element()
   onTestFinished(() => target.remove())
   return target
-}
-// mounts into a fresh target that is unmounted and removed when the test finishes
-const mount_in_target = <
-  Props extends Record<string, unknown>,
-  Exports extends Record<string, unknown>,
->(
-  component: Component<Props, Exports>,
-  props: Props,
-) => {
-  const target = target_for()
-  const instance = mount(component, { target, props })
-  onTestFinished(() => unmount(instance))
-  return { target, instance }
 }
 
 test.each([
   [
     `Accordion`,
     (props: SelectionProps) =>
-      mount_in_target(Accordion, { items: [{ value: `alpha` }], ...props }),
+      render(Accordion, { items: [{ value: `alpha` }], ...props }),
   ],
   [
     `ButtonGroup`,
-    (props: SelectionProps) =>
-      mount_in_target(ButtonGroup, { options: [`alpha`], ...props }),
+    (props: SelectionProps) => render(ButtonGroup, { options: [`alpha`], ...props }),
   ],
   [
     `TreeView`,
     (props: SelectionProps) =>
-      mount_in_target(TreeView, { nodes: [{ id: `alpha`, label: `Alpha` }], ...props }),
+      render(TreeView, { nodes: [{ id: `alpha`, label: `Alpha` }], ...props }),
   ],
 ] as const)(`%s rejects a selection with the wrong mode`, (_name, mount_selection) => {
   for (const props of [
@@ -59,12 +46,8 @@ test.each([
 
 test(`split collapse restores size and Home/End respect bounds`, async () => {
   const on_resize = vi.fn()
-  const { target } = mount_in_target(SplitPane, {
-    collapsible: true,
-    ratio: 0.4,
-    on_resize,
-  })
-  flushSync()
+  const target = target_for()
+  render(SplitPane, { collapsible: true, ratio: 0.4, on_resize }, target)
   const separator = doc_query(`[role="separator"]`)
   for (const [key, size] of [
     [`Enter`, `0px`],
@@ -87,16 +70,22 @@ test.each([0, 5])(
     }))
     const key = vi.fn(Number)
     let items = $state(Array.from({ length: 10000 }, (_value, idx) => idx))
-    const { target, instance: component } = mount_in_target(VirtualList, {
-      get items() {
-        return items
+    const target = target_for()
+    // mounted directly: the test calls the instance's exported scroll_to_index
+    const component = mount(VirtualList, {
+      target,
+      props: {
+        get items() {
+          return items
+        },
+        item_size: 20,
+        initial_count: 10,
+        key,
+        overscan,
+        children,
       },
-      item_size: 20,
-      initial_count: 10,
-      key,
-      overscan,
-      children,
     })
+    onTestFinished(() => unmount(component))
     flushSync()
     expect(target.querySelectorAll(`[data-index]`)).toHaveLength(10)
     expect(key.mock.calls.length).toBeLessThan(100)
@@ -151,7 +140,8 @@ test.each([
       on_change,
       expanded: new Set(initial ? [`root`] : []),
     })
-    const { target } = mount_in_target(TreeView, props)
+    const target = target_for()
+    render(TreeView, props, target)
     const root = doc_query(`[data-tree-id="root"]`)
     expect(root.getAttribute(`aria-label`)).toBe(`Root`)
     root.focus()
@@ -234,8 +224,7 @@ test.each([false, true])(
       nodes: [{ id: `root`, label: `Old`, load }],
       expanded: new Set([`root`]),
     })
-    const component = mount(TreeView, { target, props })
-    flushSync()
+    const unmount_tree = render(TreeView, props, target)
     const root = doc_query(`[data-tree-id="root"]`)
     props.nodes = [{ id: `root`, label: `New`, load }]
     await tick()
@@ -252,7 +241,7 @@ test.each([false, true])(
     expect(root.getAttribute(`aria-busy`)).toBe(`false`)
     props.nodes = [{ id: `root`, label: `Unmounting`, load }]
     await tick()
-    await unmount(component)
+    await unmount_tree()
     expect(requests[2].signal.aborted).toBe(true)
   },
 )
@@ -279,7 +268,8 @@ test.each([`ctrlKey`, `metaKey`] as const)(
       value: [`alpha`],
       on_change,
     })
-    const { target } = mount_in_target(TreeView, props)
+    const target = target_for()
+    render(TreeView, props, target)
     const row = (id: string) => doc_query(`[data-tree-id="${id}"]`)
     expect(row(`alpha`).tabIndex).toBe(0)
     const selected = () =>
@@ -330,7 +320,7 @@ test.each([`ctrlKey`, `metaKey`] as const)(
 
 test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
   const on_change = vi.fn()
-  mount_in_target(TreeView, {
+  render(TreeView, {
     mode: `multiple` as const,
     nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
       id: label,

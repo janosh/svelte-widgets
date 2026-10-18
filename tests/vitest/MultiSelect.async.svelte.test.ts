@@ -10,13 +10,15 @@ import type {
 import { get_label } from '#lib/utils.ts'
 import { click, doc_query, next_task, raw_snippet } from './index'
 import {
-  fresh_key,
   get_input,
   mount_multiselect,
   mouseup,
+  option_rows,
+  option_texts,
   press_sequence,
   type_search_text,
   unmount_component,
+  user_msg_text,
 } from './MultiSelect.test-utils'
 
 const mock_console_error = () =>
@@ -133,15 +135,11 @@ describe(`load_options feature`, () => {
     await vi.runAllTimersAsync()
     await type_search_text(`al`)
 
-    const rendered = () =>
-      [...document.querySelectorAll(`ul.options > li[role='option']`)].map((li) =>
-        li.textContent?.trim(),
-      )
     // no timers advanced and no fetch settled: this row can only be a local option
-    expect(rendered()).toEqual([`Alpha`])
+    expect(option_texts()).toEqual([`Alpha`])
     expect(fetch_fn).toHaveBeenCalledOnce() // just the on-open load, typing still debounced
     await vi.runAllTimersAsync() // debounce elapses, fetch fires but never settles
-    expect(rendered()).toEqual([`Alpha`])
+    expect(option_texts()).toEqual([`Alpha`])
     expect(document.querySelector(`ul.options > li.loading-more`)).toBeInstanceOf(
       HTMLLIElement,
     )
@@ -149,7 +147,7 @@ describe(`load_options feature`, () => {
     resolvers[1]({ options: [`Remote alpha`], has_more: false })
     await vi.runAllTimersAsync()
 
-    expect(rendered()).toEqual([`Alpha`, `Remote alpha`])
+    expect(option_texts()).toEqual([`Alpha`, `Remote alpha`])
     expect(document.querySelector(`ul.options > li.loading-more`)).toBeNull()
   })
 
@@ -189,25 +187,34 @@ describe(`load_options feature`, () => {
     },
   )
 
-  test(`a created option the server echoes back renders once`, async () => {
+  // fake timers + allow_user_options=append, then types `custom` and creates it with Enter
+  async function create_custom_option(
+    load_options: LoadOptionsConfig<string>[`fetch`],
+    extra_props: MultiSelectProps & { mode?: `multiple` } = {},
+  ) {
     vi.useFakeTimers()
-    const server = [`alpha`, `beta`]
-    const load_options = vi.fn(async ({ search }: LoadOptionsParams) => ({
-      options: server.filter((opt) => opt.includes(search)),
-      has_more: false,
-    }))
     const props = $state<MultiSelectProps>({
       load_options,
       open: true,
       value: [],
       allow_user_options: `append`,
+      ...extra_props,
     })
     mount_multiselect(props)
     await vi.runAllTimersAsync()
     const input = await type_search_text(`custom`)
     await vi.runAllTimersAsync()
-    input.dispatchEvent(fresh_key(`Enter`))
+    await press_sequence(input, `Enter`)
     await vi.runAllTimersAsync()
+    return props
+  }
+
+  test(`a created option the server echoes back renders once`, async () => {
+    const server = [`alpha`, `beta`]
+    const props = await create_custom_option(async ({ search }) => ({
+      options: server.filter((opt) => opt.includes(search)),
+      has_more: false,
+    }))
     server.push(`custom`) // e.g. an on_create handler persisted it
     props.value = []
     await type_search_text(`cust`)
@@ -219,24 +226,11 @@ describe(`load_options feature`, () => {
   })
 
   test(`a user option appended under load_options keeps the next page offset`, async () => {
-    vi.useFakeTimers()
     const load_options = vi.fn(async ({ offset, limit }: LoadOptionsParams) => ({
       options: mock_data.slice(offset, offset + limit),
       has_more: true,
     }))
-    const props = $state<MultiSelectProps>({
-      load_options,
-      open: true,
-      value: [],
-      allow_user_options: `append`,
-      reset_filter_on_add: false,
-    })
-    mount_multiselect(props)
-    await vi.runAllTimersAsync()
-    const input = await type_search_text(`custom`)
-    await vi.runAllTimersAsync()
-    input.dispatchEvent(fresh_key(`Enter`))
-    await vi.runAllTimersAsync()
+    const props = await create_custom_option(load_options, { reset_filter_on_add: false })
     expect(props.value).toEqual([`custom`])
 
     mock_scroll_near_bottom(doc_query(`ul.options`))
@@ -383,7 +377,7 @@ describe(`load_options feature`, () => {
           error,
         )
       expect(get_input().getAttribute(`aria-busy`)).toBeNull()
-      expect(document.querySelector(`.user-msg`)).toBeNull()
+      expect(user_msg_text()).toBeUndefined()
       expect(doc_query(`[role="alert"]`).textContent).toBe(`Could not load options`)
       expect(ul.querySelector(`button, [role="alert"]`)).toBeNull()
       const retry = doc_query<HTMLButtonElement>(`[role="alert"] + button`)
@@ -391,9 +385,7 @@ describe(`load_options feature`, () => {
       await tick()
       expect(document.activeElement).toBe(retry)
       expect(ul.classList.contains(`hidden`)).toBe(false)
-      expect(ul.querySelectorAll(`li[role="option"]`)).toHaveLength(
-        visible_options.length,
-      )
+      expect(option_rows()).toHaveLength(visible_options.length)
       mock_scroll_near_bottom(ul)
       await tick()
       expect(load_options).toHaveBeenCalledTimes(request_idx + 1)
@@ -415,11 +407,7 @@ describe(`load_options feature`, () => {
         replace: partial,
       })
       await tick()
-      expect(
-        Array.from(ul.querySelectorAll(`li[role="option"]`), (option) =>
-          option.textContent?.trim(),
-        ),
-      ).toEqual(recovered)
+      expect(option_texts()).toEqual(recovered)
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
       expect(get_input().getAttribute(`aria-busy`)).toBeNull()
     },
@@ -542,7 +530,7 @@ describe(`load_options feature`, () => {
     rejectors[0](new Error(`Server down`))
     await vi.runAllTimersAsync()
 
-    input.dispatchEvent(fresh_key(`Escape`))
+    await press_sequence(input, `Escape`)
     await vi.runAllTimersAsync()
     await reopen()
     await vi.runAllTimersAsync()
@@ -651,14 +639,12 @@ test.each([
     await vi.runAllTimersAsync()
     expect(fetch_fn.mock.calls.length).toBeGreaterThanOrEqual(2)
 
-    const msg_during = document.querySelector(`.user-msg`)?.textContent?.trim()
-    if (while_loading) expect(msg_during).toBe(while_loading)
-    else expect(document.querySelector(`.user-msg`)).toBeNull()
+    expect(user_msg_text()).toBe(while_loading ?? undefined)
 
     if (resolve_with) {
       resolvers[1]({ options: resolve_with, has_more: false })
       await vi.runAllTimersAsync()
-      expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(after_resolve)
+      expect(user_msg_text()).toBe(after_resolve)
     }
   },
 )
@@ -668,13 +654,11 @@ test(`#468: no_matching_options_msg shows on open when an empty query loads noth
   const { fn: fetch_fn, resolvers } = deferred_load()
   mount_multiselect({ load_options: { fetch: fetch_fn, debounce_ms: 0 }, open: true })
   await vi.runAllTimersAsync()
-  expect(document.querySelector(`.user-msg`)).toBeNull() // hidden while loading
+  expect(user_msg_text()).toBeUndefined() // hidden while loading
 
   resolvers[0]({ options: [], has_more: false })
   await vi.runAllTimersAsync()
-  expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
-    `No matching options`,
-  )
+  expect(user_msg_text()).toBe(`No matching options`)
 })
 
 // https://github.com/janosh/svelte-widgets/pull/403#issuecomment-4106385445
@@ -731,16 +715,14 @@ describe(`load_options_pending`, () => {
 
       await press_sequence(input, `Enter`)
       expect(oncreate_spy).not.toHaveBeenCalled()
-      expect(document.querySelector(`.user-msg`)).toBeNull()
+      expect(user_msg_text()).toBeUndefined()
 
       await vi.runAllTimersAsync()
       fetch_resolvers.at(-1)?.({ options: [], has_more: false })
       await vi.runAllTimersAsync()
 
       expect(input.getAttribute(`aria-busy`)).toBeNull()
-      expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
-        `Create this option`,
-      )
+      expect(user_msg_text()).toBe(`Create this option`)
 
       await press_sequence(input, `Enter`)
       expect(oncreate_spy).toHaveBeenCalledTimes(1)
@@ -766,9 +748,7 @@ describe(`load_options_pending`, () => {
     await vi.runAllTimersAsync()
 
     expect(input.getAttribute(`aria-busy`)).toBeNull()
-    expect(document.querySelector(`.user-msg`)?.textContent?.trim()).toBe(
-      `Create this option`,
-    )
+    expect(user_msg_text()).toBe(`Create this option`)
     expect(console_error).toHaveBeenCalledWith(
       `OptionList: load_options error:`,
       expect.any(Error),

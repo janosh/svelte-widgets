@@ -5,7 +5,7 @@ import { escape_template_literal } from '#root/scripts/generate-icons.ts'
 import { readFileSync } from 'node:fs'
 import { mount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { create_element, doc_query, render } from './index'
 
 test.each([
   [`plain`, `plain`],
@@ -136,10 +136,9 @@ describe(`Icon`, () => {
     const unsized = getComputedStyle(doc_query<SVGSVGElement>(`svg`))
     expect([unsized.width, unsized.height]).toEqual([`16px`, `auto`])
 
-    const host = document.createElement(`div`)
+    const host = create_element()
     host.style.setProperty(`--icon-size`, `32px`)
-    document.body.append(host)
-    mount(Icon, { target: host, props: { icon: icons.Check } })
+    render(Icon, { icon: icons.Check }, host)
     const sized = getComputedStyle(doc_query<SVGSVGElement>(`div > svg`))
     expect([sized.width, sized.height]).toEqual([`32px`, `32px`])
   })

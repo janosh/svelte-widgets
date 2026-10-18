@@ -213,3 +213,7 @@ export const stub_props = (target: object, props: Record<string, unknown>) => {
   for (const [prop, value] of Object.entries(props))
     onTestFinished(stub_prop(target, prop, value))
 }
+
+// evaluates generated ES module source (e.g. a plugin's output) via a data: URL import
+export const import_code = (code: string): Promise<Record<string, unknown>> =>
+  import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
