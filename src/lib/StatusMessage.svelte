@@ -41,6 +41,11 @@ unreliable -->
 </div>
 
 <style>
+  /* the always-mounted regions add no box, so empty ones take no flex/grid gap in a parent */
+  [role='status'],
+  [role='alert'] {
+    display: contents;
+  }
   .status-message {
     display: flex;
     align-items: center;

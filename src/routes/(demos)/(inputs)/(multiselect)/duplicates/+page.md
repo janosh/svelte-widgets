@@ -25,7 +25,8 @@
 <fieldset style="border: none; padding: 0; margin: 0">
   <legend>Key</legend>
   <label
-    ><input bind:group={key} type="radio" name="key" value="JSON.stringify" /> JSON.stringify</label
+    ><input bind:group={key} type="radio" name="key" value="JSON.stringify" />
+    JSON.stringify</label
   >
   <label><input bind:group={key} type="radio" name="key" value="===" /> ===</label>
 </fieldset>

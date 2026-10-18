@@ -21,7 +21,6 @@ export function prepare_page(
     settings: {
       enableJavaScriptEvaluation: false,
       disableJavaScriptFileLoading: true,
-      disableCSSFileLoading: true,
     },
   })
   const document = new window.DOMParser().parseFromString(html, `text/html`)
