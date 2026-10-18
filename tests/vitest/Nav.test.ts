@@ -266,6 +266,17 @@ describe(`Nav`, () => {
       ).toEqual(expected)
     },
   )
+  test(`links sharing a page modulo trailing slash get one aria-current`, () => {
+    mount_nav({
+      pathname: `/docs`,
+      routes: [
+        { href: `/docs`, label: `Docs` },
+        { href: `/docs/`, label: `Docs again` },
+      ],
+    })
+    const current = [...document.querySelectorAll(`a[aria-current="page"]`)]
+    expect(current.map((link) => link.textContent?.trim())).toEqual([`Docs`])
+  })
   test(`click outside closes burger menu and dropdowns, inside click does not`, async () => {
     const { submenu, toggle } = mount_dropdown()
     // spied after mount, so the tooltip layer's own document listener is not counted

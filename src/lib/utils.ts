@@ -54,7 +54,8 @@ export const lower_bound = (count: number, is_past: (idx: number) => boolean): n
   let low = 0
   let high = count
   while (low < high) {
-    const middle = (low + high) >>> 1
+    // not `>>> 1`: that wraps for counts past 2^31
+    const middle = low + Math.floor((high - low) / 2)
     if (is_past(middle)) high = middle
     else low = middle + 1
   }

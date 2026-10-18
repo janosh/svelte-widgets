@@ -34,10 +34,11 @@ export const repository_url = (repository: unknown): string => {
     throw new Error(
       `package.json needs a "repository" so source links know where to point`,
     )
-  const prefixed = /^(?<scheme>\w+):(?!\/\/)(?<path>.*)$/u.exec(raw)?.groups
-  if (prefixed || /^[\w.-]+\/[\w.-]+$/u.test(raw)) {
+  const trimmed = raw.replace(/\/+$/u, ``)
+  const prefixed = /^(?<scheme>\w+):(?!\/\/)(?<path>.*)$/u.exec(trimmed)?.groups
+  if (prefixed || /^[\w.-]+\/[\w.-]+$/u.test(trimmed)) {
     const scheme = prefixed?.scheme ?? `github`
-    const path = (prefixed?.path ?? raw).replace(/\.git$/u, ``)
+    const path = (prefixed?.path ?? trimmed).replace(/\.git$/u, ``)
     const host = SHORTHAND_HOSTS.get(scheme)
     // Only GitLab nests projects in subgroups; GitHub and Bitbucket are `owner/repo`
     const path_re =

@@ -90,6 +90,8 @@ export function only_a(value: string | number) { return value }
     [`github:user/repo.git`, `https://github.com/user/repo`],
     [`gitlab:group/sub/repo`, `https://gitlab.com/group/sub/repo`],
     [`bitbucket:user/repo`, `https://bitbucket.org/user/repo`],
+    [`user/repo/`, `https://github.com/user/repo`],
+    [`github:user/repo/`, `https://github.com/user/repo`],
     [`git://github.com/user/repo.git`, `git://github.com/user/repo`],
   ])(`normalizes repository %j to %s`, (repository, expected) => {
     expect(repository_url(repository)).toBe(expected)

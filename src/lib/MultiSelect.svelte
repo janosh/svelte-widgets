@@ -175,9 +175,12 @@
   const selected = $derived<Option[]>(
     Array.isArray(value) ? value : value == null ? [] : [value],
   )
-  // any selection change resolves a prior "required" violation
-  const set_selection = (items: Option[]) => {
+  const write_value = (items: Option[]) => {
     value = mode === `single` ? (items[0] ?? null) : items
+  }
+  // adding or removing resolves a prior "required" violation; reordering (write_value) can't
+  const set_selection = (items: Option[]) => {
+    write_value(items)
     invalid = false
     form_input?.setCustomValidity(``)
   }
@@ -1414,7 +1417,7 @@
     const new_selected = previous
       .toSpliced(start_idx, 1)
       .toSpliced(target_idx, 0, previous[start_idx])
-    set_selection(new_selected)
+    write_value(new_selected)
     drag_idx = null
     highlighted_idx = null
     on_reorder?.({ options: new_selected, previous })

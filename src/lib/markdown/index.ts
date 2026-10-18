@@ -405,12 +405,17 @@ async function prepare_document(
       image(token) {
         // Math in alt text stays as authored TeX (like figure captions) instead of KaTeX
         // HTML. Marked unescapes `\{` in alt text; only retained expressions may stay live.
-        const tokens = token.tokens.map((child) =>
-          child.type === `math_inline`
-            ? { type: `text`, raw: child.raw, text: child.raw }
-            : child,
-        )
-        const text = this.parser.parseInline(tokens, this.parser.textRenderer)
+        // Flatten formatting first: the text renderer prints `*Hi {name}*` from its raw
+        // text, which would bypass the expression placeholders in its child tokens.
+        const flat = (tokens: Token[]): Token[] =>
+          tokens.flatMap((child) =>
+            child.type === `math_inline`
+              ? [{ type: `text`, raw: child.raw, text: child.raw }]
+              : `tokens` in child && child.tokens
+                ? flat(child.tokens)
+                : [child],
+          )
+        const text = this.parser.parseInline(flat(token.tokens), this.parser.textRenderer)
         const alt = syntax ? escape_braces(text) : text
         const image: Tokens.Image = {
           ...token,

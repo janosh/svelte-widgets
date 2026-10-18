@@ -185,24 +185,26 @@
   // Only the most specific matching link is current: a section link like `/docs` stays lit on
   // its subpages, unless the nav also links that subpage (`/docs/api`) itself. Disabled links
   // render as a <span> without aria-current, so they can't claim it either.
-  // Holds the slash-trimmed href, so links compare against it directly.
-  const current_href = $derived.by(() => {
-    let best: string | undefined
+  // Holds the link object, not its href, so two links to the same page (`/docs` and
+  // `/docs/`) can't both be current.
+  const current_link = $derived.by(() => {
+    let best: Route | undefined
+    let best_length = -1
     for (const route of checked_routes) {
       if (route.separator) continue
-      for (const { href, disabled } of [route, ...(route.children ?? [])]) {
+      for (const link of [route, ...(route.children ?? [])]) {
+        const { href, disabled } = link
         if (!href || disabled || !matches_page(href)) continue
-        const trimmed = trim_slash(href)
-        if (best === undefined || trimmed.length > best.length) best = trimmed
+        const length = trim_slash(href).length
+        if (length > best_length) [best, best_length] = [link, length]
       }
     }
     return best
   })
-  const is_current = (path: string | undefined) =>
-    path && trim_slash(path) === current_href ? `page` : undefined
+  const is_current = (route: Route) => (route === current_link ? `page` : undefined)
   const is_active = (route: Route): boolean =>
-    is_current(route.href) === `page` ||
-    Boolean(route.children?.some((child) => is_current(child.href)))
+    route === current_link ||
+    Boolean(route.children?.some((child) => child === current_link))
   const route_tooltip = (route: Route) => {
     if (!route.tooltip) return
     return tooltip({
@@ -240,7 +242,7 @@
       target={route.target ?? link_props?.target}
       rel={route.rel ?? link_props?.rel}
       title={route.title ?? link_props?.title}
-      aria-current={is_current(route.href)}
+      aria-current={is_current(route)}
       class={[route.class, link_props?.class]}
       style={`${link_props?.style ?? ``}; ${route.style ?? ``}`}
       onclick={chain_handlers(

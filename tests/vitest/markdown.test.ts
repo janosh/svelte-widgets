@@ -245,8 +245,8 @@ describe(`Svelte integration`, () => {
     expect(code).toContain(`src="/assets/{name}.png"`)
     expect(code).toContain(`href="{base + '/details'}"`)
     // Escaped braces in alt text stay literal while unescaped ones remain expressions
-    const alt = await compile_page(String.raw`![a \{b\} {c}](/x.png)`)
-    expect(alt.code).toContain(`alt="a &#123;b&#125; {c}"`)
+    const alt = await compile_page(String.raw`![a \{b\} {c} *Hi {name}*](/x.png)`)
+    expect(alt.code).toContain(`alt="a &#123;b&#125; {c} Hi {name}"`)
   })
 
   test.each([

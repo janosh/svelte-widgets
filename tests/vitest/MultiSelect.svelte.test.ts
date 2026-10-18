@@ -756,7 +756,7 @@ test(`toggling required after invalid form submission allows submitting`, async 
   expect(form.checkValidity()).toBe(true)
 })
 
-// any selection change, including removing every chip, clears the invalid state
+// adding or removing (including every chip at once) clears the invalid state
 test.each([`ul.options > li`, `button.remove-all`])(
   `invalid=true sets class 'invalid' and aria-invalid until %s is clicked`,
   async (selector) => {
@@ -1403,6 +1403,12 @@ async function drag_chip(source_idx: number, target_idx: number) {
   )
   await tick()
 }
+
+test(`reordering chips keeps invalid set`, async () => {
+  mount_multiselect({ options: [1, 2, 3], value: [1, 2], invalid: true })
+  await drag_chip(0, 1)
+  expect(get_input().getAttribute(`aria-invalid`)).toBe(`true`)
+})
 
 // https://github.com/janosh/svelte-widgets/issues/176 (reorder)
 // https://github.com/janosh/svelte-widgets/issues/371 (on_reorder/on_change events)
