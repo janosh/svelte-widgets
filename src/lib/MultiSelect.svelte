@@ -25,6 +25,7 @@
     click_outside,
     highlight_matches as attach_highlight_matches,
   } from './attachments/index'
+  import { hold_escape_while_focused } from './attachments/shared'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
@@ -1124,7 +1125,8 @@
     // Keep the dropdown available when tabbing forward to its Retry button.
     if (event.key === `Tab` && load_error && !event.shiftKey) return
     if (event.key === `Escape` || event.key === `Tab`) {
-      // a closed dropdown has nothing to dismiss, so the key belongs to the enclosing pane
+      // a closed dropdown has nothing to dismiss, so the key belongs to the enclosing pane.
+      // While open, the outer div's Escape hold keeps a pane's capture-phase layer off it.
       if (open) event.stopPropagation()
       close_and_clear(event)
     } else if (event.key === `Enter`) {
@@ -1626,6 +1628,7 @@
     dismiss_on,
     callback: (_node, _config, { event }) => close_dropdown(event),
   })}
+  {@attach hold_escape_while_focused(() => open)}
   title={disabled ? disabled_input_title : null}
   data-id={id}
   tabindex="-1"

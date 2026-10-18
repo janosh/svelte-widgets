@@ -9,7 +9,7 @@
     type RangeScale,
     type RangeValue,
   } from './range-slider'
-  import { is_primary_press } from './attachments/shared'
+  import { hold_escape_while_focused, is_primary_press } from './attachments/shared'
   import { clamp } from './utils'
 
   let {
@@ -278,6 +278,9 @@
                   if (event.defaultPrevented) discard_drafts()
                 }
               }}
+              {@attach hold_escape_while_focused(() =>
+                drafts.some((draft, idx) => draft !== String(values[idx])),
+              )}
             />
           {/if}
         </div>

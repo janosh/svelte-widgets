@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
+  import { hold_escape_while_focused } from './attachments/shared'
   import { COLOR_INPUT_LABELS, merge_defaults, type ColorInputLabels } from './labels'
 
   let {
@@ -98,6 +99,10 @@
     } else if (final) draft = color
     if (final) opacity_draft = committed_opacity()
   }
+  // Escape reverts an uncommitted draft; with nothing to revert it is left to a hosting pane
+  const hold_escape = hold_escape_while_focused(
+    () => parsed !== color || opacity_draft.value !== String(get_opacity()),
+  )
   const handle_keydown = (
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
   ): void => {
@@ -146,6 +151,7 @@
       onchange={(event) => update(event.currentTarget.value, true)}
       onblur={(event) => update(event.currentTarget.value, true)}
       onkeydown={handle_keydown}
+      {@attach hold_escape}
     />
     {#if alpha}
       <label class="opacity">
@@ -165,6 +171,7 @@
           onchange={(event) => change_opacity(event.currentTarget, true)}
           onblur={(event) => change_opacity(event.currentTarget, true)}
           onkeydown={handle_keydown}
+          {@attach hold_escape}
         />
         <span aria-hidden="true">%</span>
       </label>

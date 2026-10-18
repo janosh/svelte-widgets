@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
+  import { hold_escape_while_focused } from './attachments/shared'
   import Icon from './Icon.svelte'
   import { Search } from './icons'
   import {
@@ -215,6 +216,7 @@
         {placeholder}
         aria-label={collapsible ? label : undefined}
         onkeydown={handle_keydown}
+        {@attach hold_escape_while_focused(() => Boolean(query) || collapsible)}
         onblur={() => {
           if (collapsible && !query) opened = false
         }}

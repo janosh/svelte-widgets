@@ -1,19 +1,22 @@
 import DraggablePane from '#lib/DraggablePane.svelte'
 import pane_source from '#lib/DraggablePane.svelte?raw'
 import demo_page from '#root/src/routes/(demos)/(display)/draggable-pane/+page.md?raw'
-import { createRawSnippet, tick } from 'svelte'
+import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import {
   click,
   create_element,
   doc_query,
+  fire_input,
   hover,
   mock_rect,
   pointer_event,
   press_escape,
+  press_key,
   render,
   stub_props,
 } from './index'
+import TestPaneEscape from './TestPaneEscape.svelte'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
 
 // Every drag/resize test works against the same 450x300 pane; only the origin varies.
@@ -69,17 +72,16 @@ describe(`DraggablePane`, () => {
   // pointer_event sets isPrimary; a bare PointerEvent reads as a second finger
   const press = (target: EventTarget) =>
     target.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
+  // detail: 1 is a real pointer click; 0 skips the press-started-inside exemption
+  const pointer_click = (target: EventTarget) =>
+    target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
   // dismissal happens on release, so a dismissing gesture needs both halves; kept apart
   // from `press` because several tests assert on a lone pointerdown
   const press_release = (target: EventTarget) => {
     press(target)
-    // detail: 1 is a real pointer click; 0 skips the press-started-inside exemption
-    return target.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
+    pointer_click(target)
   }
-  const release_pointer = () =>
-    globalThis.dispatchEvent(
-      new PointerEvent(`pointerup`, { bubbles: true, isPrimary: true }),
-    )
+  const release_pointer = () => globalThis.dispatchEvent(pointer_event(`pointerup`, 0, 0))
   const is_open = (pane: HTMLElement) => pane.style.display === `grid`
 
   // the press-move-release both attachments listen for: the pane (resize) or handle (drag)
@@ -183,7 +185,7 @@ describe(`DraggablePane`, () => {
       press(trigger)
       await tick()
       expect(is_open(pane)).toBe(true)
-      trigger.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
+      pointer_click(trigger)
       await tick()
       expect(is_open(pane)).toBe(stays_open_after_click)
 
@@ -272,6 +274,85 @@ describe(`DraggablePane`, () => {
     await tick()
     expect(document.activeElement).toBe(toggle)
   })
+
+  // The pane's Escape layer listens in capture phase, so without their own layer these
+  // widgets never saw the key: it closed the whole pane instead of the dropdown or draft.
+  const input = (selector: string) => doc_query<HTMLInputElement>(selector)
+  const type_into = (selector: string, text: string) => async () => {
+    input(selector).focus()
+    await fire_input(input(selector), text, `input`)
+  }
+  type EscapeCase = {
+    name: string
+    widget: ComponentProps<typeof TestPaneEscape>[`widget`]
+    arm: () => Promise<void>
+    dismissed: () => boolean
+  }
+  // a typed draft that Escape reverts to the committed value
+  const draft = (
+    widget: EscapeCase[`widget`],
+    selector: string,
+    text: string,
+    committed: string,
+  ): EscapeCase => ({
+    name: widget,
+    widget,
+    arm: type_into(selector, text),
+    dismissed: () => input(selector).value === committed,
+  })
+  test.each<EscapeCase>([
+    {
+      name: `multiselect`,
+      widget: `multiselect`,
+      arm: type_into(`.multiselect input[autocomplete]`, `a`),
+      dismissed: () => !doc_query(`.multiselect`).classList.contains(`open`),
+    },
+    draft(`color`, `fieldset input[type="text"]`, `#00`, `#ff0000`),
+    draft(`number`, `input[type="number"]`, `15`, `5`), // past max: stays a draft
+    draft(`range`, `.range-slider input[type="number"]`, `4`, `2`),
+    draft(`search`, `.settings-search input`, `row`, ``),
+    {
+      name: `json edit`,
+      widget: `json`,
+      arm: async () => {
+        doc_query(`.json-value.editable`).dispatchEvent(
+          new MouseEvent(`dblclick`, { bubbles: true }),
+        )
+        await tick()
+        input(`.edit-input`).focus()
+      },
+      dismissed: () => !document.querySelector(`.edit-input`),
+    },
+    {
+      name: `json selection`,
+      widget: `json`,
+      arm: async () => {
+        const node = doc_query(`.json-node[data-path="n"]`)
+        node.dispatchEvent(new MouseEvent(`click`, { bubbles: true, ctrlKey: true }))
+        node.focus()
+        await tick()
+      },
+      dismissed: () => !document.querySelector(`.json-node.selected`),
+    },
+  ])(
+    `Escape in a $name dismisses it first, the pane second`,
+    async ({ widget, arm, dismissed }) => {
+      render(TestPaneEscape, { widget })
+      await tick()
+      const pane = doc_query<HTMLDivElement>(`.draggable-pane`)
+      await arm()
+      expect(dismissed()).toBe(false)
+
+      press_key(document.activeElement ?? document.body, `Escape`)
+      await tick()
+      expect(dismissed()).toBe(true)
+      expect(is_open(pane)).toBe(true)
+
+      press_key(document.activeElement ?? document.body, `Escape`)
+      await tick()
+      expect(is_open(pane)).toBe(false)
+    },
+  )
 
   test(`Escape while closed leaves the pane alone and the key to the page`, async () => {
     const on_close = vi.fn()
@@ -568,7 +649,7 @@ describe(`DraggablePane`, () => {
 
     // press the grab strip, drag past the pane, release over the page
     drag(strip_of(pane, `right`), [445, 150], [900, 150])
-    document.body.dispatchEvent(new MouseEvent(`click`, { bubbles: true, detail: 1 }))
+    pointer_click(document.body)
     await tick()
 
     expect(pane.style.width).toBe(`905px`) // the resize really happened

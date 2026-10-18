@@ -1,6 +1,7 @@
 <script lang="ts">
   import { create_flash } from './feedback.svelte'
   import { tick } from 'svelte'
+  import { hold_escape_while_focused } from '../attachments/shared'
   import { get_json_tree_context, type JsonValueType } from './types'
   import {
     format_preview,
@@ -126,6 +127,7 @@
     class={[`edit-input`, value_type]}
     bind:value={edit_text}
     onkeydown={handle_edit_keydown}
+    {@attach hold_escape_while_focused(() => true)}
     onblur={commit_edit}
     style:width="{Math.max(edit_text.length + 2, 6)}ch"
     autofocus
