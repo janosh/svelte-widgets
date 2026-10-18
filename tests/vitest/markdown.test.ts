@@ -244,6 +244,9 @@ describe(`Svelte integration`, () => {
     expect(code).toContain(`href="{paper.URL}"`)
     expect(code).toContain(`src="/assets/{name}.png"`)
     expect(code).toContain(`href="{base + '/details'}"`)
+    // Escaped braces in alt text stay literal while unescaped ones remain expressions
+    const alt = await compile_page(String.raw`![a \{b\} {c}](/x.png)`)
+    expect(alt.code).toContain(`alt="a &#123;b&#125; {c}"`)
   })
 
   test.each([
@@ -291,6 +294,26 @@ describe(`code and math`, () => {
     for (const literal of [`$attribute$`, `$code$`, `$escaped$`, `$fenced$`])
       expect(code).toContain(literal)
   })
+
+  test.each([`markdown`, `svelte`] as const)(
+    `keeps inline math in plain image alt text as authored TeX in the %s dialect`,
+    async (dialect) => {
+      const engine = create_markdown({ math: true })
+      const parsed = assert_ok(
+        await engine.parse(`![area $x^2$ m](/a.png)`, {
+          filename: `/p/page.md`,
+          dialect,
+        }),
+      )
+      const output =
+        dialect === `markdown`
+          ? assert_ok(await render_document(parsed))
+          : assert_ok(await compile_document(parsed)).code
+      if (dialect === `svelte`) compile(output, { generate: false })
+      expect(output).toContain(`alt="area $x^2$ m"`)
+      expect(output).not.toContain(`katex`)
+    },
+  )
 
   test(`?toc and ?metadata imports are plain JS modules from the current parse`, async () => {
     // Exercise the production glob parser against the actual consumer: template-valued

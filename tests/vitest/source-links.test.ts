@@ -83,8 +83,27 @@ export function only_a(value: string | number) { return value }
     [{ url: `git+ssh://git@github.com/user/repo.git` }, `https://github.com/user/repo`],
     [`git@gitlab.com:group/repo.git`, `https://gitlab.com/group/repo`],
     [`user/repo`, `https://github.com/user/repo`],
+    [`github:user/repo`, `https://github.com/user/repo`],
+    [`gitlab:group/repo`, `https://gitlab.com/group/repo`],
+    [`https://github.com/user/repo/`, `https://github.com/user/repo`],
+    [`user/repo.git`, `https://github.com/user/repo`],
+    [`github:user/repo.git`, `https://github.com/user/repo`],
+    [`gitlab:group/sub/repo`, `https://gitlab.com/group/sub/repo`],
+    [`bitbucket:user/repo`, `https://bitbucket.org/user/repo`],
+    [`git://github.com/user/repo.git`, `git://github.com/user/repo`],
   ])(`normalizes repository %j to %s`, (repository, expected) => {
     expect(repository_url(repository)).toBe(expected)
+  })
+
+  it.each([
+    `gist:11081aaa281`,
+    `github:group/sub/repo`,
+    `bitbucket:repo`,
+    `file:../repo`,
+  ])(`rejects unsupported repository shorthand %s`, (repository) => {
+    expect(() => repository_url(repository)).toThrow(
+      `"repository" shorthand "${repository}"`,
+    )
   })
 
   it.each([undefined, ``, { url: 42 }])(

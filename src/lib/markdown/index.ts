@@ -392,7 +392,7 @@ async function prepare_document(
           !has_heading_anchor(restore_text(inner))
             ? heading_anchor_html(id, heading_icon)
             : ``
-        return `<h${token.depth}${id ? ` id="${escape_html_text(id).replaceAll(`"`, `&quot;`)}"` : ``}>${inner}${anchor}</h${token.depth}>\n`
+        return `<h${token.depth}${id ? ` id="${escape_attribute(id)}"` : ``}>${inner}${anchor}</h${token.depth}>\n`
       },
       html(token) {
         if (options.raw_html === `omit`) return ``
@@ -403,7 +403,20 @@ async function prepare_document(
         return with_url(Renderer.prototype.link.call(this, token), token, `href`)
       },
       image(token) {
-        return with_url(Renderer.prototype.image.call(this, token), token, `src`)
+        // Math in alt text stays as authored TeX (like figure captions) instead of KaTeX
+        // HTML. Marked unescapes `\{` in alt text; only retained expressions may stay live.
+        const tokens = token.tokens.map((child) =>
+          child.type === `math_inline`
+            ? { type: `text`, raw: child.raw, text: child.raw }
+            : child,
+        )
+        const text = this.parser.parseInline(tokens, this.parser.textRenderer)
+        const alt = syntax ? escape_braces(text) : text
+        const image: Tokens.Image = {
+          ...token,
+          tokens: [{ type: `text`, raw: alt, text: alt }],
+        }
+        return with_url(Renderer.prototype.image.call(this, image), token, `src`)
       },
       code(token) {
         return code_html.get(token) ?? ``

@@ -24,6 +24,7 @@ import {
   type DeepReadonly,
 } from './diagnostics.ts'
 import type { SourceEdit } from './source-map.ts'
+import { escape_attribute } from '../highlight/hast.ts'
 
 export type { SourcePosition, SourceRange } from './diagnostics.ts'
 export type TokenSource = { range: SourceRange; offsets: number[]; fence?: ContentFence }
@@ -84,6 +85,20 @@ export type FrontmatterValidator = (
 ) => Record<string, unknown>
 
 type MappedText = { text: string; offsets: number[] }
+
+const table_cells = ({ header, rows }: Tokens.Table): Tokens.TableCell[] => [
+  ...header,
+  ...rows.flat(),
+]
+// Nested tokens in document order, including list items and table cells
+export const child_tokens = (token: Token): Token[] =>
+  token.type === `list`
+    ? (token as Tokens.List).items
+    : token.type === `table`
+      ? table_cells(token as Tokens.Table).flatMap((cell) => cell.tokens)
+      : `tokens` in token && Array.isArray(token.tokens)
+        ? token.tokens
+        : []
 
 // Container tokens remove quote/list indentation. Match complete lines within the parent
 // rather than searching the whole document, which confuses repeated code and headings.
@@ -321,7 +336,7 @@ export function content_manifest(
       positions.set(token, token_source)
       if (token.type === `code`) {
         const code = token as Tokens.Code
-        if (/^ {0,3}(?:`{3,}|~{3,})/u.test(code.raw)) {
+        if (code.codeBlockStyle !== `indented`) {
           const first_newline = mapped.text.indexOf(`\n`)
           const code_map = locate(code.text, mapped, first_newline + 1)
           let offset = 0
@@ -371,7 +386,7 @@ export function content_manifest(
         const target = token.type === `link` ? manifest.links : manifest.assets
         target.push({
           url: decode_entities(link.href),
-          text: heading_text(link.text, svelte),
+          text: inline_text(link.tokens),
           range: at,
           ...(svelte && link.href.includes(`{`) ? { dynamic: true as const } : {}),
         })
@@ -382,27 +397,15 @@ export function content_manifest(
         continue
       }
       if (
-        (token.type === `paragraph` || (token.type === `text` && `tokens` in token)) &&
-        `text` in token &&
-        typeof token.text === `string`
-      ) {
-        prose.push(
-          `tokens` in token && Array.isArray(token.tokens)
-            ? inline_text(token.tokens)
-            : heading_text(restore(token.text), svelte),
-        )
-      }
-      if (token.type === `list`) visit((token as Tokens.List).items, mapped)
-      else if (token.type === `table`) {
-        const { header, rows } = token as Tokens.Table
-        const cells = [...header, ...rows.flat()]
-        for (const cell of cells) prose.push(inline_text(cell.tokens))
-        visit(
-          cells.flatMap((cell) => cell.tokens),
-          mapped,
-        )
-      } else if (`tokens` in token && Array.isArray(token.tokens))
-        visit(token.tokens, mapped)
+        (token.type === `paragraph` || token.type === `text`) &&
+        `tokens` in token &&
+        Array.isArray(token.tokens)
+      )
+        prose.push(inline_text(token.tokens))
+      if (token.type === `table`)
+        for (const cell of table_cells(token as Tokens.Table))
+          prose.push(inline_text(cell.tokens))
+      visit(child_tokens(token), mapped)
     }
   }
   visit(tokens, { text: normalized, offsets })
@@ -419,11 +422,7 @@ export function content_manifest(
       const edits = html_edits.get(token) ?? []
       const insert = (start: number, text: string) =>
         edits.push({ start, end: start, text })
-      if (insertion !== undefined)
-        insert(
-          insertion,
-          ` id="${id.replaceAll(`&`, `&amp;`).replaceAll(`"`, `&quot;`)}"`,
-        )
+      if (insertion !== undefined) insert(insertion, ` id="${escape_attribute(id)}"`)
       if (link_insertion !== undefined && heading_link)
         insert(link_insertion, heading_link(id))
       html_edits.set(token, edits)
