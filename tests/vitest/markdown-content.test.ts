@@ -120,6 +120,10 @@ describe(`Markdown content manifests`, () => {
     expect(result.manifest.anchors.map(({ id }) => id)).not.toContain(`fake`)
     expect(result.manifest.links[0].url).toBe(`/docs/{value}`)
     expect(result.manifest.links[0].dynamic).toBe(true)
+    const [escaped] = (await document_manifest(String.raw`[Static](/docs/\{value\})`))
+      .links
+    expect(escaped.url).toBe(`/docs/{value}`)
+    expect(escaped.dynamic).toBeUndefined()
     expect(validate_content([result.manifest])).toEqual([])
     expect(content_search_record(result.manifest).text).toContain(
       `Text with bold and code.`,
@@ -128,6 +132,16 @@ describe(`Markdown content manifests`, () => {
     expect(result.manifest.text.match(/Unique table content/gu)).toHaveLength(1)
     expect(result.code).toContain(`id="hello-world-1"`)
   })
+
+  test.each([`markdown`, `svelte`] as const)(
+    `link and image text resolves escapes and emphasis in the %s dialect`,
+    async (dialect) => {
+      const source = `[a \\*b\\* *c* \\{d\\}](/x)\n\n![a \\*b\\* *c* \\{d\\}](/x.png)`
+      const { manifest } = assert_ok(await create_markdown().parse(source, { dialect }))
+      expect(manifest.links.map(({ text }) => text)).toEqual([`a *b* c {d}`])
+      expect(manifest.assets.map(({ text }) => text)).toEqual([`a *b* c {d}`])
+    },
+  )
 
   test(`plain Markdown keeps literal braces in headings, IDs, links, and search text`, async () => {
     const source = `<h2>Set {x}</h2>\n<h2 id="set{x}">Explicit</h2>\n\n[Jump](#set%7Bx%7D)\n\n<a href="./missing{literal}.md">Broken {link}</a>\n\n[Broken {link}](./missing{literal}.md)\n\n![Plot](./plot{literal}.svg)`

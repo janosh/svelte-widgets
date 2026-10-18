@@ -149,6 +149,16 @@ describe(`Scientific Markdown references`, () => {
     )
     compile(escaped_figure.code, { generate: false })
     expect(escaped_figure.code).toContain(`alt="Literal &#123;value&#125;"`)
+    // Captions are plain alt text: Markdown escapes and emphasis markers do not leak
+    const marked_up = await compile_markdown(
+      String.raw`![A \*b\* *c* \{d\}](./plot.svg){#fig:marked}`,
+      { references: true },
+    )
+    expect(marked_up.code).toContain(
+      `alt="A *b* c &#123;d&#125;"><figcaption><a href="#fig:marked">Figure 1.</a> A *b* c &#123;d&#125;</figcaption>`,
+    )
+    expect(marked_up.manifest.reference_definitions[0].caption).toBe(`A *b* c {d}`)
+    expect(marked_up.manifest.assets[0].text).toBe(`A *b* c {d}`)
     const titled = await compile_markdown(`# Bibliography\n\n[@doe2020]`, {
       references: { bibliography },
     })

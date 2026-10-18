@@ -1,7 +1,6 @@
 import CodeExample from '#lib/CodeExample.svelte'
-import { createRawSnippet, tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { click, doc_query, render, raw_snippet } from './index'
 
 const [id, src] = [`uniq-id`, `some code`]
 
@@ -15,7 +14,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
     meta: { collapsible: true, id },
     src,
     button_props,
-    example: createRawSnippet(() => ({ render: () => `<button>Demo action</button>` })),
+    example: raw_snippet(`<button>Demo action</button>`),
   }
   render(CodeExample, props)
 
@@ -35,8 +34,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   const { maxHeight, overflow } = getComputedStyle(pre_closed)
   expect([maxHeight, overflow]).toEqual([`0`, `hidden`])
 
-  toggle_button.click()
-  await tick()
+  await click(toggle_button)
 
   expect(getComputedStyle(doc_query(`pre.open`)).overflow).toBe(`auto`)
   expect(doc_query(`pre.open > code`).textContent).toBe(src)
@@ -103,8 +101,7 @@ test(`labels prop overrides toggle text, omitted keys keep their default`, async
   const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
   expect(toggle_button.textContent?.trim()).toBe(`Code zeigen`)
 
-  toggle_button.click()
-  await tick()
+  await click(toggle_button)
   expect(toggle_button.textContent?.trim()).toBe(`Close`) // hide_code falls back
 })
 

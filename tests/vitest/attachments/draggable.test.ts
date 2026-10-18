@@ -162,58 +162,49 @@ describe(`draggable`, () => {
     expect(position(element)).toEqual([``, ``])
   })
 
-  // either ends the drag: nothing more arrives for a canceled pointer or one whose capture
-  // went away; `lostpointercapture` fires on the capture target, not window
+  // any ends the drag: nothing more arrives for a released or canceled pointer or one whose
+  // capture went away. All fire on the capture target: `lostpointercapture` is heard there,
+  // the others once they bubble to window.
+  it.each([`pointerup`, `pointercancel`, `lostpointercapture`])(
+    `ignores another pointer and ends on %s`,
+    (end_type) => {
+      const element = create_fixed_box()
+      const on_drag_end = vi.fn()
+      attach_draggable(element, { on_drag_end })
+      const [first, second] = [{ pointerId: 3 }, { pointerId: 2 }]
+
+      element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, first))
+      expect(element.hasPointerCapture(3)).toBe(true)
+
+      move(50, 50, second)
+      globalThis.dispatchEvent(pointer_event(`pointerup`, 50, 50, second))
+      expect(position(element)).toEqual([`10px`, `20px`])
+      expect(on_drag_end).not.toHaveBeenCalled()
+
+      move(15, 25, first)
+      element.dispatchEvent(pointer_event(end_type, 0, 0, first))
+      expect(on_drag_end).toHaveBeenCalledOnce()
+      expect(document.body.style.userSelect).toBe(``)
+      expect(element.hasPointerCapture(3)).toBe(false)
+      move(50, 50, first)
+      expect(position(element)).toEqual([`20px`, `40px`])
+    },
+  )
+
   it.each([
-    [
-      `pointercancel`,
-      (_el: HTMLElement, init: PointerEventInit) =>
-        globalThis.dispatchEvent(pointer_event(`pointercancel`, 0, 0, init)),
-    ],
-    [
-      `lostpointercapture`,
-      (el: HTMLElement, init: PointerEventInit) =>
-        el.dispatchEvent(pointer_event(`lostpointercapture`, 0, 0, init)),
-    ],
-  ])(`ignores another pointer and ends on %s`, (_end_type, dispatch_end) => {
+    [`disabled`, { disabled: true }, 0],
+    [`its handle_selector matches nothing`, { handle_selector: `.nonexistent` }, 1],
+  ])(`attaches nothing when %s`, (_desc, options, n_warnings) => {
     const element = create_fixed_box()
-    const on_drag_end = vi.fn()
-    attach_draggable(element, { on_drag_end })
-    const [first, second] = [{ pointerId: 3 }, { pointerId: 2 }]
-
-    element.dispatchEvent(pointer_event(`pointerdown`, 5, 5, first))
-    expect(element.hasPointerCapture(3)).toBe(true)
-
-    move(50, 50, second)
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 50, 50, second))
-    expect(position(element)).toEqual([`10px`, `20px`])
-    expect(on_drag_end).not.toHaveBeenCalled()
-
-    move(15, 25, first)
-    dispatch_end(element, first)
-    expect(on_drag_end).toHaveBeenCalledOnce()
-    expect(document.body.style.userSelect).toBe(``)
-    expect(element.hasPointerCapture(3)).toBe(false)
-    move(50, 50, first)
-    expect(position(element)).toEqual([`20px`, `40px`])
-  })
-
-  it(`does not set up dragging when disabled`, () => {
-    const element = create_fixed_box()
-    expect(draggable({ disabled: true })(element)).toBeUndefined()
+    const warn = vi.spyOn(console, `warn`).mockImplementation(() => {})
+    expect(draggable(options)(element)).toBeUndefined()
+    expect(warn.mock.calls.flat()).toEqual(
+      Array(n_warnings).fill(expect.stringContaining(`.nonexistent`)),
+    )
     expect(element.style.cursor).toBe(``)
 
     drag(element, [5, 5], [50, 50])
     expect(position(element)).toEqual([``, ``])
-  })
-
-  it(`warns and returns undefined for a missing handle selector`, () => {
-    const warn_spy = vi.spyOn(console, `warn`).mockImplementation(() => {})
-
-    expect(
-      draggable({ handle_selector: `.nonexistent` })(create_element()),
-    ).toBeUndefined()
-    expect(warn_spy).toHaveBeenCalledWith(expect.stringContaining(`.nonexistent`))
   })
 
   it(`drags only when the event originates from handle_selector`, () => {

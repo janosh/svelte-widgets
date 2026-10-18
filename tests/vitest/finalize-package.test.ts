@@ -1,8 +1,7 @@
-import { mkdtempDisposable, mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises'
 import { expect, test } from 'vite-plus/test'
 import { finalize_package, rewrite_imports } from '../../scripts/finalize-package.ts'
+import { temp_dir } from './index'
 
 test.each([`'`, `"`, `\``])(`rewrites dynamic imports quoted with %s only`, (quote) => {
   const source = `const load = () => import(${quote}./factory.ts${quote});
@@ -49,24 +48,22 @@ test.each([
 })
 
 test(`finalizes nested package files and removes only Markdown guides`, async () => {
-  await using directory = await mkdtempDisposable(`${tmpdir()}/widgets-package-test-`)
-  const nested = resolve(directory.path, `nested`)
+  const directory = await temp_dir(`widgets-package-test-`)
+  const nested = `${directory}/nested`
   await mkdir(nested)
   for (const [name, source] of [
     [`index.js`, `export * from './value'`],
     [`readme.md`, `Guide`],
     [`other-readme.md`, `Keep`],
   ])
-    await writeFile(resolve(nested, name), source)
-  await finalize_package(directory.path)
+    await writeFile(`${nested}/${name}`, source)
+  await finalize_package(directory)
   expect((await readdir(nested)).toSorted()).toEqual([`index.js`, `other-readme.md`])
-  expect(await readFile(resolve(nested, `index.js`), `utf8`)).toBe(
-    `export * from './value.js'`,
-  )
+  expect(await readFile(`${nested}/index.js`, `utf8`)).toBe(`export * from './value.js'`)
 })
 
 test(`rejects a guide compiled with the site's Markdown preprocessors`, async () => {
-  await using directory = await mkdtempDisposable(`${tmpdir()}/widgets-package-test-`)
-  await writeFile(resolve(directory.path, `readme.svelte`), `<p>Guide</p>`)
-  await expect(finalize_package(directory.path)).rejects.toThrow(`npm run package`)
+  const directory = await temp_dir(`widgets-package-test-`)
+  await writeFile(`${directory}/readme.svelte`, `<p>Guide</p>`)
+  await expect(finalize_package(directory)).rejects.toThrow(`npm run package`)
 })

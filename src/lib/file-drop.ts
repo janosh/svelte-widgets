@@ -21,9 +21,6 @@ export const create_file_accept_filter = (accept: string): ((file: File) => bool
   }
 }
 
-export const file_matches_accept = (file: File, accept = ``): boolean =>
-  create_file_accept_filter(accept)(file)
-
 // Native picker order: drop disallowed files first, so a single-select consumer gets the
 // first acceptable one rather than being blocked by an unacceptable first item.
 export const filter_accepted_files = (

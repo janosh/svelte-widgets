@@ -5,14 +5,15 @@
   // SVGAttributes, not HTMLAttributes, which rejects the `width`/`height` an <svg> takes.
   // Exactly one of a glyph or an ad-hoc `path` — a bare <Icon /> is a type error. Pass the
   // glyph value, not a name, so the bundler keeps only the icons this call site reaches.
+  // Decorative (hidden from assistive tech) unless named by aria-label, aria-labelledby or
+  // title, which make it an image.
   let {
     icon,
     path,
     viewBox = `0 0 24 24`,
     stroke,
     ...rest
-  }: SVGAttributes<SVGSVGElement> &
-    (
+  }: SVGAttributes<SVGSVGElement> & { title?: string | null } & (
       | { icon: IconData; path?: never; viewBox?: never; stroke?: never }
       | { icon?: never; path: string; viewBox?: string; stroke?: string }
     ) = $props()
@@ -24,10 +25,14 @@
     if (path === undefined) throw new Error(`Icon needs either an icon or a path`)
     return { d: path, viewBox, stroke }
   })
+  const named = $derived(
+    Boolean(rest[`aria-label`] || rest[`aria-labelledby`] || rest.title),
+  )
 </script>
 
 <svg
-  role="img"
+  role={named ? `img` : undefined}
+  aria-hidden={named ? undefined : `true`}
   viewBox={resolved_icon.viewBox}
   fill={resolved_icon.fill ?? (resolved_icon.stroke ? `none` : `currentColor`)}
   stroke={resolved_icon.stroke}

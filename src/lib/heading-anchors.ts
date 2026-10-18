@@ -119,8 +119,10 @@ export function unique_heading_id(base_id: string, used_ids: Set<string>): strin
 const link_svg = `<svg width="16" height="16" viewBox="0 0 16 16" aria-label="Link to heading" role="img"><path d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0z" fill="currentColor"/></svg>`
 
 // Shared HTML for Markdown output and explicit Svelte headings. Encode the fragment as data.
+// The gap from the heading text ships with the markup, so no host stylesheet is needed to keep
+// the icon off the last letter; --heading-anchor-gap tunes it.
 export const heading_anchor_html = (id?: string, icon_markup = link_svg): string =>
-  `<a data-heading-anchor aria-hidden="true"${id ? ` href="#${encodeURIComponent(id)}"` : ``}>${icon_markup}</a>`
+  `<a data-heading-anchor aria-hidden="true" style="padding-inline-start: var(--heading-anchor-gap, 0.3em)"${id ? ` href="#${encodeURIComponent(id)}"` : ``}>${icon_markup}</a>`
 
 export const has_heading_anchor = (inner: string): boolean =>
   [...inner.matchAll(opening_tag_regex)].some(

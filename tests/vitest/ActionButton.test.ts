@@ -97,43 +97,35 @@ test.each([
   },
 )
 
-test(`reports action errors without throwing from the event handler`, async () => {
-  const action_error = new Error(`save failed`)
-  const on_error = vi.fn()
-  const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
-  const button = mount_action_button({
-    action: () => Promise.reject(action_error),
-    on_error,
-  })
-
-  button.click()
-  await flush_action()
-  expect(button.dataset.state).toBe(`error`)
-  expect(action_text(button)).toContain(`Failed`)
-  expect(on_error).toHaveBeenCalledWith(action_error)
-  expect(console_error_spy).toHaveBeenCalledWith(
-    `ActionButton action failed`,
-    action_error,
-  )
-})
-
-test(`keeps success state when its success callback throws`, async () => {
-  const callback_error = new Error(`analytics failed`)
-  const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
-  const button = mount_action_button({
-    on_success: () => {
-      throw callback_error
+// a throwing on_success must not turn the completed action into an error
+const failure = new Error(`failed`)
+test.each([
+  [`action rejects`, { action: () => Promise.reject(failure) }, `error`, `action failed`],
+  [
+    `on_success throws`,
+    {
+      on_success: () => {
+        throw failure
+      },
     },
-  })
+    `success`,
+    `on_success callback failed`,
+  ],
+] as const)(
+  `%s: logs instead of throwing and settles in %s`,
+  async (_desc, props, state, log) => {
+    const on_error = vi.fn()
+    const console_error_spy = vi.spyOn(console, `error`).mockImplementation(() => void 0)
+    const button = mount_action_button({ ...props, on_error })
 
-  button.click()
-  await flush_action()
-  expect(button.dataset.state).toBe(`success`)
-  expect(console_error_spy).toHaveBeenCalledWith(
-    `ActionButton on_success callback failed`,
-    callback_error,
-  )
-})
+    button.click()
+    await flush_action()
+    expect(button.dataset.state).toBe(state)
+    expect(action_text(button)).toContain(labels[state])
+    expect(on_error.mock.calls).toEqual(state === `error` ? [[failure]] : [])
+    expect(console_error_spy).toHaveBeenCalledWith(`ActionButton ${log}`, failure)
+  },
+)
 
 test(`does not schedule a reset after its success callback unmounts it`, async () => {
   vi.useFakeTimers()

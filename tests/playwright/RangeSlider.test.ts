@@ -1,10 +1,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { box_of, center_of, mouse_drag, touch_drag } from './helpers'
 
-const box_of = async (locator: Locator) => {
-  const box = await locator.boundingBox()
-  if (!box) throw new Error(`Missing layout box for ${locator}`)
-  return box
-}
 // Read related boxes in one frame so scrolling cannot skew their relative positions.
 const tick_layout = (group: Locator) =>
   group.locator(`.rail, .limit`).evaluateAll((elements) =>
@@ -24,11 +20,8 @@ const expect_log_position = async (range: Locator, value: number) => {
 }
 const drag_to = async (page: Page, thumb: Locator, destination: number) => {
   await thumb.scrollIntoViewIfNeeded()
-  const box = await box_of(thumb)
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(destination, box.y + box.height / 2, { steps: 8 })
-  await page.mouse.up()
+  const center = await center_of(thumb)
+  await mouse_drag(page, center, [destination - center.x, 0], 8)
 }
 
 test.beforeEach(async ({ page }) => {
@@ -351,17 +344,8 @@ test.describe(`mobile`, () => {
     const handle = await box_of(lower)
     expect(handle.width).toBeGreaterThanOrEqual(44)
     expect(handle.height).toBeGreaterThanOrEqual(44)
-    const session = await page.context().newCDPSession(page)
-    const start = { x: handle.x + handle.width / 2, y: handle.y + handle.height / 2 }
-    await session.send(`Input.dispatchTouchEvent`, {
-      type: `touchStart`,
-      touchPoints: [start],
-    })
-    await session.send(`Input.dispatchTouchEvent`, {
-      type: `touchMove`,
-      touchPoints: [{ x: rail.x + rail.width * 0.4, y: start.y }],
-    })
-    await session.send(`Input.dispatchTouchEvent`, { type: `touchEnd`, touchPoints: [] })
+    const start = await center_of(lower)
+    await touch_drag(page, start, [rail.x + rail.width * 0.4 - start.x, 0])
     await expect(lower).toHaveAttribute(`aria-valuenow`, `200`)
     expect(await has_no_horizontal_overflow(page)).toBe(true)
   })

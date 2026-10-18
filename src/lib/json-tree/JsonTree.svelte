@@ -16,6 +16,7 @@
   import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
   import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'
+  import { hold_escape_while_focused } from '../attachments/shared'
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
   import JsonNode from './JsonNode.svelte'
@@ -34,7 +35,16 @@
     to_json,
   } from './utils'
 
-  const ARROW_KEYS = new Set([`ArrowDown`, `ArrowUp`, `ArrowLeft`, `ArrowRight`])
+  // Focus offset per key (clamped to the rendered nodes); Left/Right only matter while no node
+  // is focused, as the focused node folds/unfolds on them itself
+  const KEY_STEPS = new Map([
+    [`ArrowDown`, 1],
+    [`ArrowUp`, -1],
+    [`ArrowLeft`, 0],
+    [`ArrowRight`, 0],
+    [`Home`, -Infinity],
+    [`End`, Infinity],
+  ])
   const MATCH_NAV = [
     [-1, `Previous match (Shift+F3)`, ArrowUp],
     [1, `Next match (F3)`, ArrowDown],
@@ -122,7 +132,10 @@
     search_input_value = event.currentTarget.value
     clearTimeout(search_debounce_timeout)
     search_debounce_timeout = setTimeout(() => {
+      // typing and deleting within the debounce leaves the query (and the match) as it was
+      if (search_input_value === search_query) return
       search_query = search_input_value
+      current_match_index = -1 // a new query restarts at its first match
       // queueMicrotask lets derived sorted_matches update before expand_to_matches runs
       queueMicrotask(() => expand_to_matches())
     }, 150)
@@ -186,6 +199,7 @@
         force_expanded.add(path)
       }
     }
+    hoist_hidden_focus()
   }
 
   // Expandable paths in the subtree rooted at target_path, target_path first
@@ -209,18 +223,41 @@
     }
     collapsed_paths = new_collapsed
     force_expanded = new_expanded
+    hoist_hidden_focus()
   }
   const expand_all = () => collapse_to_level(Infinity)
   const collapse_all = () => collapse_to_level(0)
 
   function set_focused(path: string | null): void {
+    // a mouse press focuses a node (onfocus) right before its click does: notify once
+    if (path === focused_path) return
     focused_path = path
     if (path !== null) on_select?.(path, value_at(path))
+  }
+
+  // Set when focused_path moves without the user's focus being in the tree content
+  let skip_dom_focus = false
+
+  // Collapsing an ancestor unmounts the focused node, leaving the tree without a tab stop:
+  // hand focus to the outermost collapsed ancestor, and only pull DOM focus along if it
+  // was on a node (not e.g. on the "Collapse all" button)
+  function hoist_hidden_focus(): void {
+    if (focused_path === null || focused_path === root_path) return
+    const ancestors = get_ancestor_paths(focused_path, root_path)
+    if (!root_label) ancestors.unshift(root_path) // an unlabeled root isn't listed
+    const hidden_by = ancestors.find((path) => collapsed_paths.has(path))
+    if (hidden_by === undefined) return
+    skip_dom_focus = !content_element?.contains(document.activeElement)
+    set_focused(hidden_by)
   }
 
   // Move DOM focus to the focused node (one effect for the tree instead of one per node)
   $effect(() => {
     if (focused_path === null || !content_element) return
+    if (skip_dom_focus) {
+      skip_dom_focus = false
+      return
+    }
     content_element
       .querySelector<HTMLElement>(`.json-node[data-path="${CSS.escape(focused_path)}"]`)
       ?.focus()
@@ -390,12 +427,12 @@
       void copy_to_clipboard(`[selection]`, values.join(`\n`))
       return
     }
-    // Any arrow key focuses the first node (index -1 clamps to 0); afterwards Up/Down step
-    // (clamped) and Left/Right are left to the focused node's own fold/unfold handler
-    if (!ARROW_KEYS.has(event.key) || is_modifier_chord(event)) return
+    // Any arrow key focuses the first node (index -1 clamps to 0); afterwards Up/Down/Home/End
+    // move focus and Left/Right are left to the focused node's own fold/unfold handler
+    const step = KEY_STEPS.get(event.key)
+    if (step === undefined || is_modifier_chord(event)) return
     const paths = rendered_paths()
     const current_index = focused_path === null ? -1 : paths.indexOf(focused_path)
-    const step = event.key === `ArrowDown` ? 1 : event.key === `ArrowUp` ? -1 : 0
     if (paths.length === 0 || (current_index !== -1 && step === 0)) return
     event.preventDefault()
     set_focused(paths[clamp(current_index + step, 0, paths.length - 1)])
@@ -451,6 +488,11 @@
   {...rest}
   class={[`json-tree`, rest.class]}
   onkeydown={handle_tree_keydown}
+  {@attach hold_escape_while_focused(
+    (event) =>
+      !is_editable_event_target(event.target) &&
+      (context_menu_state !== null || selected_paths.size > 0),
+  )}
 >
   {#if ui.header !== false}
     <header class="json-tree-header">
@@ -462,6 +504,7 @@
           value={search_input_value}
           oninput={handle_search_input}
           onkeydown={handle_search_keydown}
+          {@attach hold_escape_while_focused(() => search_input_value !== ``)}
           class="search-input"
         />
         {#if search_input_value}

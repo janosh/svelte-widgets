@@ -143,11 +143,15 @@
   role="treeitem"
   aria-expanded={expandable ? !is_collapsed : undefined}
   aria-selected={is_selected}
-  tabindex={is_focused ? 0 : -1}
+  tabindex={is_focused || (depth === 0 && ctx.focused_path === null) ? 0 : -1}
   onclick={stopped((event) => {
     if (event.ctrlKey || event.metaKey) ctx.toggle_select(path, event.shiftKey)
     else ctx.set_focused(path)
   })}
+  onfocus={() => {
+    // tabbing in lands on the root before any node is focused: adopt it so its keys work
+    if (ctx.focused_path === null) ctx.set_focused(path)
+  }}
   onauxclick={copy_path_on_middle_click}
   oncontextmenu={(event) =>
     ctx.show_context_menu(event, path, value, expandable, is_collapsed)}
@@ -162,6 +166,7 @@
       <button
         type="button"
         class="collapse-toggle"
+        tabindex="-1"
         onclick={toggle_collapse}
         aria-label={is_collapsed ? `Expand` : `Collapse`}
       >

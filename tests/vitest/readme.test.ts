@@ -144,9 +144,13 @@ test(`source line links land on the symbol they name`, () => {
   const stale = [readme, markdown_guide]
     .flatMap((doc) => [...doc.matchAll(link_re)])
     .flatMap(({ groups: { name = ``, file = ``, line = `` } = {} }) =>
-      lib_sources[`../../${file}`]?.split(`\n`)[Number(line) - 1]?.includes(name)
+    // Whole identifiers only: `markdown` must not match a `render_markdown` line
+    {
+      // bracket index, not .at(): a #L0 link must not wrap to the file's last line
+      const source_line = lib_sources[`../../${file}`]?.split(`\n`)[Number(line) - 1]
+      return source_line?.split(/[^\w$]+/u).includes(name)
         ? []
-        : [`${file}#L${line} (${name})`],
-    )
+        : [`${file}#L${line} (${name})`]
+    })
   expect(stale).toEqual([])
 })

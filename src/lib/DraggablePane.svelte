@@ -313,39 +313,36 @@ several panes can be renamed via pane_props -->
     },
   })}
 >
-  <div class="control-tab">
-    <span class="drag-handle" aria-hidden="true">
-      <Icon icon={DragIndicator} style="width: 100%; height: 100%" />
-    </span>
+  {#snippet control(
+    name: string,
+    label: string,
+    icon: IconData,
+    onclick: () => void,
+    pressed?: boolean,
+  )}
     <button
       type="button"
-      class="pin-button"
-      title={msg.pin_pane}
-      aria-label={msg.pin_pane}
-      aria-pressed={persistent}
-      onclick={() => (persistent = !persistent)}
+      class="{name}-button"
+      title={label}
+      aria-label={label}
+      aria-pressed={pressed}
+      {onclick}
     >
-      <Icon icon={Pin} style="width: 100%; height: 100%" />
+      <Icon {icon} />
     </button>
+  {/snippet}
+  <div class="control-tab">
+    <span class="drag-handle" aria-hidden="true"><Icon icon={DragIndicator} /></span>
+    {@render control(
+      `pin`,
+      msg.pin_pane,
+      Pin,
+      () => (persistent = !persistent),
+      persistent,
+    )}
     {#if has_been_dragged}
-      <button
-        type="button"
-        class="reset-button"
-        title={msg.reset_position}
-        aria-label={msg.reset_position}
-        onclick={reset_position}
-      >
-        <Icon icon={Reset} style="width: 100%; height: 100%" />
-      </button>
-      <button
-        type="button"
-        class="close-button"
-        title={msg.close_pane}
-        aria-label={msg.close_pane}
-        onclick={() => close_pane(`button`)}
-      >
-        <Icon icon={Cross} style="width: 100%; height: 100%" />
-      </button>
+      {@render control(`reset`, msg.reset_position, Reset, reset_position)}
+      {@render control(`close`, msg.close_pane, Cross, () => close_pane(`button`))}
     {/if}
   </div>
   <div class="pane-content">
@@ -444,6 +441,10 @@ several panes can be renamed via pane_props -->
         border-radius: 3px;
         background: none;
         opacity: 0.5;
+        :global(svg) {
+          width: 100%;
+          height: 100%;
+        }
         &:hover {
           opacity: 0.8;
           background-color: color-mix(in srgb, currentColor 15%, transparent);

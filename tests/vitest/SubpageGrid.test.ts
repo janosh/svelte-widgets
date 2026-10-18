@@ -1,8 +1,8 @@
 import { SubpageGrid, type Subpage } from '#lib'
 import { Check, ChevronRight, Copy } from '#lib/icons.ts'
 import MultiSelectPage from '#root/src/routes/(demos)/(inputs)/(multiselect)/multiselect/+page.md'
-import { mount } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
+import { render } from './index'
 
 // stands in for a configured base path, which is what resolve() prefixes
 vi.mock(`$app/paths`, () => ({ resolve: (path: string) => `/docs/${path}` }))
@@ -23,16 +23,13 @@ test.each([undefined, Check])(
         title: `Open styling`,
       },
     ]
-    mount(SubpageGrid, {
-      target: document.body,
-      props: {
-        title: `Demo`,
-        subtitle: `Demo subtitle`,
-        subpages,
-        fallback_icon,
-        title_icon: fallback_icon,
-        style: `max-width: 40rem`,
-      },
+    render(SubpageGrid, {
+      title: `Demo`,
+      subtitle: `Demo subtitle`,
+      subpages,
+      fallback_icon,
+      title_icon: fallback_icon,
+      style: `max-width: 40rem`,
     })
 
     expect(document.querySelector(`h1`)?.textContent).toBe(`Demo`)
@@ -71,7 +68,7 @@ test.each([undefined, Check])(
 )
 
 test(`overview pages link to base-prefixed sibling routes`, () => {
-  mount(MultiSelectPage, { target: document.body })
+  render(MultiSelectPage, {})
 
   const hrefs = [...document.querySelectorAll(`nav.grid a`)].map((link) =>
     link.getAttribute(`href`),

@@ -1,3 +1,4 @@
+import { lower_bound } from '../utils'
 import type { EditorModel, TextEdit } from './types'
 
 export type EditorSearchOptions = { case_sensitive?: boolean; whole_word?: boolean }
@@ -5,7 +6,8 @@ export type EditorMatch = Pick<TextEdit, `from` | `to`>
 // Restricts a scan to matches starting in [from, to), as if scanning began at `from`.
 export type EditorSearchRange = { from?: number; to?: number }
 type SearchModel = Pick<EditorModel, `slice` | `length`>
-const WORD_CHAR = `[\\p{L}\\p{M}\\p{N}_$]`
+// Shared with edit-ops auto-close: combining marks keep decomposed letters inside a word.
+export const WORD_CHAR = `[\\p{L}\\p{M}\\p{N}_$]`
 const escape_literal = (text: string): string =>
   text.replaceAll(/[.*+?^${}()|[\]\\]/g, `\\$&`)
 
@@ -141,16 +143,7 @@ export const find_editor_matches = (
 const first_index = (
   matches: readonly EditorMatch[],
   after: (match: EditorMatch) => boolean,
-): number => {
-  let low = 0
-  let high = matches.length
-  while (low < high) {
-    const middle = (low + high) >>> 1
-    if (after(matches[middle])) high = middle
-    else low = middle + 1
-  }
-  return low
-}
+): number => lower_bound(matches.length, (idx) => after(matches[idx]))
 
 // Matches of the model after `edits` (sequential, as in EditorTransaction), given the
 // matches of the text before them. Rescans only the edits' reach and reuses the shifted

@@ -1,7 +1,6 @@
 import { GitHubCorner } from '#lib'
-import { mount } from 'svelte'
 import { expect, test } from 'vite-plus/test'
-import { doc_query } from './index'
+import { doc_query, render } from './index'
 
 const default_expected = {
   aria_label: `View code on GitHub`,
@@ -46,7 +45,7 @@ test.each([
   (_label, props, expected_props) => {
     const href = `https://github.com/foo/bar`
     const expected = { ...default_expected, ...expected_props }
-    mount(GitHubCorner, { target: document.body, props: { href, ...props } })
+    render(GitHubCorner, { href, ...props })
     const link = doc_query<HTMLAnchorElement>(`a`)
     expect(link.getAttribute(`href`)).toBe(href)
     expect(link.getAttribute(`aria-label`)).toBe(expected.aria_label)

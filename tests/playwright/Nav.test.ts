@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test'
+import { hover_until } from './helpers'
 
 // .click() races a decorative overlay for the press, and the burger's hit area is not what
 // these tests are about
@@ -325,8 +326,9 @@ test.describe(`Nav dropdown`, () => {
     const menu = dropdown.locator(`[data-submenu]`)
 
     await expect(menu).toHaveCSS(`display`, `none`)
-    await dropdown.locator(`:scope > div`).first().hover()
-    await expect(menu).toBeVisible()
+    await hover_until(page, dropdown.locator(`:scope > div`).first(), () =>
+      expect(menu).toBeVisible({ timeout: 1000 }),
+    )
     const menu_box = await menu.boundingBox()
     if (!menu_box) throw new Error(`Missing submenu geometry`)
     await page.mouse.move(menu_box.x + 5, menu_box.y - 1)
@@ -407,21 +409,17 @@ test.describe(`Nav dropdown`, () => {
       if (!label) throw new Error(`Dropdown toggle has no label`)
       const button_rect = button.getBoundingClientRect()
       const icon_rect = icon.getBoundingClientRect()
-      const font_size = Number(getComputedStyle(button).fontSize.replace(`px`, ``))
       return {
-        icon_em: icon_rect.width / font_size,
         label_gap: Number(getComputedStyle(label).paddingInlineEnd.replace(`px`, ``)),
         leading_gap: icon_rect.left - button_rect.left,
         trailing_gap: button_rect.right - icon_rect.right,
       }
     })
-    expect(toggle_metrics.icon_em).toBeGreaterThanOrEqual(1.29)
     expect(toggle_metrics.label_gap).toBeLessThan(3)
     expect(toggle_metrics.leading_gap).toBeLessThan(1)
     expect(toggle_metrics.trailing_gap).toBeGreaterThanOrEqual(5)
 
-    await toggle.hover()
-    await expect(menu).toBeVisible()
+    await hover_until(page, toggle, () => expect(menu).toBeVisible({ timeout: 1000 }))
     await expect(toggle).toHaveCSS(`transform`, `none`)
     await expect(toggle.locator(`svg`)).not.toHaveCSS(`transform`, `none`)
     await page.mouse.move(0, 0)

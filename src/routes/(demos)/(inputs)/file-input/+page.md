@@ -60,16 +60,16 @@ For uploads, build a `FormData` and pass the signal to `fetch`; throw when `resp
 
 ### Main API
 
-| Prop                                        | Purpose                                                                                      |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `bind:files`                                | Current accepted `File[]`, initially empty.                                                  |
-| `accept`                                    | Comma-separated extensions, MIME types or MIME wildcards. Checked for both picker and drops. |
-| `multiple={false}`, `max_files`, `max_size` | Per-selection count and per-file byte limits. Limits otherwise default to infinity.          |
-| `on_files(files, signal)`                   | Parse or upload accepted files, synchronously or asynchronously.                             |
-| `on_reject(rejections)`                     | Receive `{ file, reason }` entries with reason `type`, `size` or `count`.                    |
-| `on_remove(file)`                           | Observe removal from the default file list.                                                  |
-| `children(files)`                           | Replace the default list with a custom preview; provide your own removal controls if needed. |
-| `label`, `remove_label`, `disabled`         | Picker label, removal button text and disabled state.                                        |
+| Prop                                        | Purpose                                                                                                  |
+| ------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| `bind:files`                                | Current accepted `File[]`, initially empty.                                                              |
+| `accept`                                    | Comma-separated extensions, MIME types or MIME wildcards. Checked for both picker and drops.             |
+| `multiple={false}`, `max_files`, `max_size` | Per-selection count and per-file byte limits. Limits otherwise default to infinity.                      |
+| `on_files(files, signal)`                   | Parse or upload accepted files, synchronously or asynchronously.                                         |
+| `on_reject(rejections)`                     | Called only when files are rejected, with `{ file, reason }` entries (reason `type`, `size` or `count`). |
+| `on_remove(file)`                           | Observe removal from the default file list.                                                              |
+| `children(files)`                           | Replace the default list with a custom preview; provide your own removal controls if needed.             |
+| `label`, `remove_label`, `disabled`         | Picker label, removal button text and disabled state.                                                    |
 
 ### Keyboard and feedback
 

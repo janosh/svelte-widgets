@@ -1,5 +1,6 @@
 import { tick, untrack } from 'svelte'
 import type { LoadOptions, LoadOptionsConfig, Option, OptionListProps } from '../types'
+import { make_change_detector, to_error } from '../utils'
 
 // Owns cancellation, pagination, retry and query scheduling for option-based controls.
 export function create_option_loader<T extends Option>(get: {
@@ -11,15 +12,12 @@ export function create_option_loader<T extends Option>(get: {
   matching_options: () => T[]
   on_search: () => OptionListProps<T>[`on_search`]
 }) {
-  // Notify only after a change, using the latest matches/callback when the timer fires.
-  let search_initialized = false
+  // Notify only after a search change, using the latest matches/callback when the timer
+  // fires. Untracked so swapping the callback can't replay an unchanged search.
+  const search_changed = make_change_detector()
   $effect(() => {
     const search_text = get.search_text()
-    if (!search_initialized) {
-      search_initialized = true
-      return undefined
-    }
-    if (!get.on_search()) return undefined
+    if (!search_changed(search_text) || !untrack(get.on_search)) return undefined
     const timer = setTimeout(
       () => get.on_search()?.({ search_text, matching_options: get.matching_options() }),
       150,
@@ -119,7 +117,7 @@ export function create_option_loader<T extends Option>(get: {
       console.error(`OptionList: load_options error:`, error)
       // a superseded request must not clobber the live request's state
       if (request_id === load_request_id) {
-        loader.error = error instanceof Error ? error : new Error(String(error))
+        loader.error = to_error(error)
       }
     } finally {
       // only the active request may clear loading; a newer reset may have started meanwhile

@@ -95,6 +95,21 @@ export const demo_descriptions: Record<string, string> = {
   '/css-classes': `Class-based styling hooks.`,
   '/snippets': `Custom rendering with snippets.`,
   '/portal': `Portaled dropdown rendering and layering.`,
+  '/authoring/hot-reload': `Edit a live Markdown example and watch it hot reload.`,
+  '/attachments/tooltip': `Top-layer tooltips with automatic placement, delegation and hover/focus interaction.`,
+  '/attachments/draggable': `Pointer dragging with handles, axis locks and position callbacks.`,
+  '/attachments/resizable': `Edge and corner resize handles with keyboard support and size caps.`,
+  '/attachments/sortable': `Click-to-sort table headers with custom comparators and styling.`,
+  '/attachments/highlight-matches': `Mark search matches in text using the CSS Custom Highlight API.`,
+  '/attachments/click-outside': `Dismiss a surface on an outside press or Escape.`,
+  '/attachments/dismiss-on-outside-press': `The imperative form of click_outside, for surfaces built from several elements.`,
+  '/attachments/focus-trap': `Keep Tab inside a surface and hand the keyboard back when it closes.`,
+  '/attachments/hotkey': `Declarative keybindings scoped to a node or the whole page.`,
+  '/attachments/float': `Park an element beside an anchor and keep it there while the page moves.`,
+  '/attachments/portal': `Move existing DOM into another container and restore it on teardown.`,
+  '/attachments/contrast-color': `Pick a readable foreground from the background painted behind an element.`,
+  '/attachments/forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
+  '/attachments/file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
 }
 
 // Source groups determine membership; recipes remain searchable without filling the nav.

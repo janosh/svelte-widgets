@@ -1,7 +1,7 @@
 import { PrevNext } from '#lib'
-import { createRawSnippet, type ComponentProps } from 'svelte'
+import type { ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { doc_query, render, raw_snippet } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 const items = [`page1`, `page2`, `page3`, `page4`].map((href) => ({ href, label: href }))
@@ -64,10 +64,7 @@ describe(`PrevNext`, () => {
 
   test.each([
     [`without between`, undefined],
-    [
-      `with between content`,
-      createRawSnippet(() => ({ render: () => `<span>|</span>` })),
-    ],
+    [`with between content`, raw_snippet(`<span>|</span>`)],
   ])(`only the next link is end-aligned %s`, (_desc, between) => {
     mount_prev_next({ items, current: `page2`, between })
     // positional nth-child(2) styling landed on the between content instead

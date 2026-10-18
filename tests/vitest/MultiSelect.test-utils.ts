@@ -90,3 +90,32 @@ export const make_form = (): HTMLFormElement => {
   onTestFinished(() => form.remove())
   return form
 }
+
+// rendered dropdown option rows: select-all and message rows also carry role=option, so
+// they're excluded (group headers and virtual-list spacers have other roles)
+export const option_rows = (): HTMLLIElement[] => [
+  ...document.querySelectorAll<HTMLLIElement>(
+    `ul.options > li[role="option"]:not(.select-all, .user-msg)`,
+  ),
+]
+export const option_texts = () => option_rows().map((row) => row.textContent?.trim())
+
+export const option_by_label = (label: string): HTMLLIElement => {
+  const row = option_rows().find((item) => item.textContent?.trim() === label)
+  if (!row) throw new Error(`No option row labeled "${label}" in ${option_texts()}`)
+  return row
+}
+
+// trimmed text of the keyboard-active dropdown row
+export const active_text = () => doc_query(`ul.options > li.active`).textContent?.trim()
+
+// trimmed text of the dropdown message row (create/no-match/duplicate), undefined if absent
+export const user_msg_text = () =>
+  document.querySelector(`.user-msg`)?.textContent?.trim()
+
+export const selected_chips = () => document.querySelectorAll(`ul.selected > li`)
+// whitespace-normalized text of all selected chips
+export const selected_text = () => normalized_text(doc_query(`ul.selected`))
+
+// the polite screen-reader announcement region
+export const live_region = () => doc_query(`.sr-only[aria-live="polite"]`)

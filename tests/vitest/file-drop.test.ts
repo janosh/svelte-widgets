@@ -1,7 +1,6 @@
 import {
   files_from_data_transfer,
   create_file_accept_filter,
-  file_matches_accept,
   filter_accepted_files,
 } from '#lib/file-drop.ts'
 import { expect, test, vi } from 'vite-plus/test'
@@ -66,9 +65,7 @@ test.each([
   [`anything.bin`, ``, ``, true], // empty accept means no restriction
   [`data.json`, `application/json`, `.txt,image/*`, false],
 ] as const)(`%s (%j) vs accept=%j matches: %s`, (name, type, accept, expected) => {
-  const file = new File([``], name, { type })
-  expect(file_matches_accept(file, accept)).toBe(expected)
-  expect(create_file_accept_filter(accept)(file)).toBe(expected)
+  expect(create_file_accept_filter(accept)(new File([``], name, { type }))).toBe(expected)
 })
 
 test(`accept filtering happens before the multiple limit`, () => {

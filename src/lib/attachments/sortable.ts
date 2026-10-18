@@ -4,6 +4,30 @@ export const get_html_sort_value = (element: HTMLElement): string =>
   element.textContent ??
   ``
 
+// Visual column of a cell: colspans before it shift every later column, which cellIndex
+// ignores
+const column_start = (cell: HTMLTableCellElement): number => {
+  let start = 0
+  for (let prev = cell.previousElementSibling; prev; prev = prev.previousElementSibling)
+    if (prev instanceof HTMLTableCellElement) start += prev.colSpan
+  return start
+}
+
+// Cell starting at visual `column`, in one pass over the row; undefined when the column
+// falls inside an earlier cell's colspan or past the row's end
+const cell_at = (
+  row: HTMLTableRowElement,
+  column: number,
+): HTMLTableCellElement | undefined => {
+  let start = 0
+  for (const cell of row.cells) {
+    if (start === column) return cell
+    start += cell.colSpan
+    if (start > column) return undefined
+  }
+  return undefined
+}
+
 export interface SortableOptions {
   header_selector?: string
   asc_class?: string
@@ -59,7 +83,7 @@ export const sortable =
     }
 
     headers.forEach((header) => {
-      const idx = header.cellIndex
+      const column = column_start(header)
       const state: HeaderState = {
         header,
         original_style: header.getAttribute(`style`) ?? ``,
@@ -77,8 +101,8 @@ export const sortable =
           reset_header(stored)
           stored.header.style.cursor = `pointer`
         }
-        sort_dir = idx === sort_col_idx ? -sort_dir : 1
-        sort_col_idx = idx
+        sort_dir = column === sort_col_idx ? -sort_dir : 1
+        sort_col_idx = column
         header.classList.add(sort_dir > 0 ? asc_class : desc_class)
         header.setAttribute(`aria-sort`, sort_dir > 0 ? `ascending` : `descending`)
         Object.assign(header.style, sorted_style)
@@ -94,8 +118,9 @@ export const sortable =
         const rows = Array.from(
           table_body.querySelectorAll<HTMLTableRowElement>(`:scope > tr`),
           (row) => {
-            // Missing cells (ragged/colspan rows) sort last. Read each cell once per click.
-            const cell = row.cells[idx]
+            // Missing cells sort last, as do cells spanning in from an earlier column
+            // (placeholder rows). Read each cell once per click.
+            const cell = cell_at(row, column)
             return [row, cell ? get_html_sort_value(cell).trim() : ``] as const
           },
         )

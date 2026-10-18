@@ -124,6 +124,9 @@ describe(`checked Markdown examples`, () => {
     const page_filename = resolve(directory, `page.md`)
     const check = (source: string, options: CheckOptions = {}) =>
       check_source(source, { filename: page_filename, ...options })
+    const alias_options = {
+      compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
+    }
 
     await writeFile(
       resolve(directory, `Counter.svelte`),
@@ -148,18 +151,12 @@ describe(`checked Markdown examples`, () => {
       fence(`ts`, `import Counter from "./Counter.svelte"; console.log(Counter)`),
     )
     expect(imported_by_ts).toMatchObject({ ok: true, diagnostics: [] })
-    const alias = await check(
-      source.replace(`./Counter.svelte`, `$docs/Counter.svelte`),
-      {
-        compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
-      },
-    )
+    const alias_source = source.replace(`./Counter.svelte`, `$docs/Counter.svelte`)
+    const alias = await check(alias_source, alias_options)
     expect(diagnostics_at_start(alias)).toEqual([
       {
         ...diagnostics_at_start(result)[0],
-        offset: source
-          .replace(`./Counter.svelte`, `$docs/Counter.svelte`)
-          .indexOf(`count="wrong"`),
+        offset: alias_source.indexOf(`count="wrong"`),
       },
     ])
     await writeFile(resolve(directory, `Counter.svelte`), `<p>{#if true}`)
@@ -179,9 +176,7 @@ describe(`checked Markdown examples`, () => {
     )
     for (const specifier of [`$docs/Missing.svelte`, `absent-package/Missing.svelte`]) {
       const missing_source = source.replace(`./Counter.svelte`, specifier)
-      const unresolved = await check(missing_source, {
-        compiler_options: { paths: { '$docs/*': [`${directory}/*`] } },
-      })
+      const unresolved = await check(missing_source, alias_options)
       expect(unresolved.ok).toBe(false)
       expect(diagnostics_at_start(unresolved)).toContainEqual(
         expect.objectContaining({

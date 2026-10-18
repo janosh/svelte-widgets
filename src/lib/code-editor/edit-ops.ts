@@ -1,4 +1,5 @@
 import { clamp, clamp_integer } from '../utils'
+import { WORD_CHAR } from './search'
 import type { EditorModel, EditorSelection, TextEdit } from './types'
 
 export type EditorState = {
@@ -128,15 +129,16 @@ type CharMap = Record<string, string | undefined>
 const OPENER_TO_CLOSER: CharMap = { '(': `)`, '[': `]`, '{': `}` }
 export const auto_indent_newline = (state: EditorState, indent: string): RangeEdit => {
   const [sel_start, sel_end] = clamp_selection(state)
-  const before_cursor = state.model.slice(state.model.line_at(sel_start).from, sel_start)
+  const { model } = state
+  const before_cursor = model.slice(model.line_at(sel_start).from, sel_start)
   const base_indent = leading_whitespace(before_cursor)
   const last_char = before_cursor.trimEnd().at(-1) ?? ``
   const closer = OPENER_TO_CLOSER[last_char]
   const inner_indent = closer || last_char === `:` ? base_indent + indent : base_indent
   const closes_pair =
     closer !== undefined &&
-    sel_end < state.model.length &&
-    state.model.slice(sel_end, sel_end + 1) === closer
+    sel_end < model.length &&
+    model.slice(sel_end, sel_end + 1) === closer
   const replacement = closes_pair
     ? `\n${inner_indent}\n${base_indent}`
     : `\n${inner_indent}`
@@ -144,24 +146,27 @@ export const auto_indent_newline = (state: EditorState, indent: string): RangeEd
     sel_start + replacement.length - (closes_pair ? base_indent.length + 1 : 0)
   return range_edit(sel_start, sel_end, replacement, caret)
 }
-const CLOSER_TO_OPENER: CharMap = { ')': `(`, ']': `[`, '}': `{` }
+const CLOSERS = `)]}`
 const QUOTE_CHARS = `\`'"`
-const WORD_CHAR_RE = /[\p{L}\p{N}_$]/u
+const WORD_CHAR_RE = new RegExp(WORD_CHAR, `u`)
 export const auto_close_pair = (state: EditorState, typed: string): RangeEdit | null => {
   if (typed.length !== 1) return null
   const [sel_start, sel_end] = clamp_selection(state)
   if (sel_start !== sel_end) return null
+  // Whole code points, so an astral letter next to the caret counts as a word character
+  const { model } = state
   const next_char =
-    sel_start < state.model.length ? state.model.slice(sel_start, sel_start + 1) : ``
-  const prev_char = sel_start > 0 ? state.model.slice(sel_start - 1, sel_start) : ``
+    Array.from(model.slice(sel_start, Math.min(model.length, sel_start + 2)))[0] ?? ``
+  const prev_char =
+    Array.from(model.slice(Math.max(0, sel_start - 2), sel_start)).at(-1) ?? ``
   const is_quote = QUOTE_CHARS.includes(typed)
   if (is_quote) {
     let escape_start = sel_start
-    while (escape_start > 0 && state.model.slice(escape_start - 1, escape_start) === `\\`)
+    while (escape_start > 0 && model.slice(escape_start - 1, escape_start) === `\\`)
       escape_start--
     if ((sel_start - escape_start) % 2 === 1) return null
   }
-  if (next_char === typed && (CLOSER_TO_OPENER[typed] !== undefined || is_quote))
+  if (next_char === typed && (is_quote || CLOSERS.includes(typed)))
     return range_edit(sel_start, sel_start, ``, sel_start + 1)
   const closer = OPENER_TO_CLOSER[typed] ?? (is_quote ? typed : undefined)
   if (closer === undefined) return null

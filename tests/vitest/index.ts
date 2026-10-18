@@ -1,5 +1,5 @@
 import type { MultiSelectProps } from '#lib'
-import { flushSync, mount, tick, unmount, type Component } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vite-plus/test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -164,6 +164,10 @@ export type Test2WayBindProps = MultiSelectProps & {
   onValueChanged?: (data: MultiSelectProps[`value`]) => unknown
 }
 
+// parameterless snippet rendering fixed HTML, for children/slot-like props
+export const raw_snippet = (html: string) =>
+  createRawSnippet(() => ({ render: () => html }))
+
 // mounts into the body, flushes, and unmounts when the test finishes
 export const render = <Props extends object>(
   component: Component<Props>,
@@ -209,3 +213,7 @@ export const stub_props = (target: object, props: Record<string, unknown>) => {
   for (const [prop, value] of Object.entries(props))
     onTestFinished(stub_prop(target, prop, value))
 }
+
+// evaluates generated ES module source (e.g. a plugin's output) via a data: URL import
+export const import_code = (code: string): Promise<Record<string, unknown>> =>
+  import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)

@@ -1,8 +1,8 @@
 import { SettingsSearch } from '#lib'
 import type { SettingsSearchLabels } from '#lib/labels.ts'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query, escape_key } from './index'
+import { click, doc_query, escape_key, raw_snippet, render } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 import SettingsSearchHarness from './SettingsSearchHarness.svelte'
 
@@ -13,7 +13,7 @@ const filtered_out = (element: Element) => element.hasAttribute(`data-search-hid
 const mount_harness = async (
   props: { trigger?: `inline` | `icon`; initial_query?: string } = {},
 ): Promise<void> => {
-  mount(SettingsSearchHarness, { target: document.body, props })
+  render(SettingsSearchHarness, props)
   await tick()
 }
 
@@ -61,6 +61,20 @@ describe(`SettingsSearch`, () => {
       filtered_out(groups[name] ?? setting_row(name)),
     ])
     expect(Object.fromEntries(actual)).toEqual(expected)
+  })
+
+  // Markup splits words across lines and nodes, and plain queries ignore diacritics as
+  // in FindBar, CommandMenu and MultiSelect
+  test.each([
+    [`Damping\n      range`, `damping range`],
+    [`Résumé  spacing`, `resume spacing`],
+    [`Résumé spacing`, `résumé`],
+  ])(`row text %j matches query %j`, async (text, query) => {
+    const { input } = await mounted_search()
+    const row = setting_row(`atom_radius`)
+    row.textContent = text
+    await type_search_text(query, input)
+    await vi.waitFor(() => expect(filtered_out(row)).toBe(false))
   })
 
   test(`a matching group title opens its collapsed group`, async () => {
@@ -259,13 +273,10 @@ describe(`SettingsSearch`, () => {
       `Nichts zu „radius“ gefunden.`,
     ],
   ])(`labels: %s`, async (_desc, labels, clear_label, status_text) => {
-    mount(SettingsSearch, {
-      target: document.body,
-      props: {
-        query: `radius`,
-        labels,
-        children: createRawSnippet(() => ({ render: () => `<div></div>` })),
-      },
+    render(SettingsSearch, {
+      query: `radius`,
+      labels,
+      children: raw_snippet(`<div></div>`),
     })
     await tick()
     expect(doc_query(`.clear-search`).getAttribute(`aria-label`)).toBe(clear_label)

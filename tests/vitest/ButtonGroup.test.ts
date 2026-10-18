@@ -5,7 +5,14 @@ import type { ButtonGroupOption } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query, hover as dispatch_hover, render, press_key } from './index'
+import {
+  click,
+  doc_query,
+  hover as dispatch_hover,
+  render,
+  press_key,
+  raw_snippet,
+} from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
@@ -22,16 +29,16 @@ describe(`ButtonGroup`, () => {
     buttons.map((button) => button.dataset.value)
   const checked_state = (button: HTMLButtonElement) =>
     button.getAttribute(`aria-checked`) ?? button.getAttribute(`aria-pressed`)
-  const press = (key: string, target: Element | null = document.activeElement) =>
-    target && press_key(target, key)
+  const press = async (key: string, target: Element | null = document.activeElement) => {
+    if (target) press_key(target, key)
+    await tick()
+  }
 
   const letters = [
     { value: `alpha`, label: `Alpha` },
     { value: `beta`, label: `Beta` },
     { value: `gamma`, label: `Gamma` },
   ]
-  // happy-dom drops nested CSS; inspect source for the styling contract.
-  const styles = button_group_source.slice(button_group_source.indexOf(`<style>`))
   const info_link = createRawSnippet<[{ option: { value: string }; selected: boolean }]>(
     (get_params) => ({
       render: () => {
@@ -128,8 +135,7 @@ describe(`ButtonGroup`, () => {
 
     // unlike radios, arrow keys move focus without selecting
     buttons[0].focus()
-    press(`ArrowRight`)
-    await tick()
+    await press(`ArrowRight`)
     expect(document.activeElement).toBe(buttons[1])
     expect(buttons.map(checked_state)).toEqual([`false`, `false`, `true`])
     expect(on_change).toHaveBeenCalledTimes(3)
@@ -162,8 +168,7 @@ describe(`ButtonGroup`, () => {
       [`End`, 2],
     ]
     for (const [key, expected_idx] of walk) {
-      press(key)
-      await tick()
+      await press(key)
       expect(document.activeElement, key).toBe(buttons[expected_idx])
       expect(checked_state(buttons[expected_idx]), key).toBe(`true`)
     }
@@ -180,8 +185,7 @@ describe(`ButtonGroup`, () => {
     const buttons = mount_group({ options: letters })
     ;(document.activeElement as HTMLElement | null)?.blur()
 
-    press(key, doc_query(`.options`))
-    await tick()
+    await press(key, doc_query(`.options`))
     expect(document.activeElement).toBe(buttons[idx])
   })
 
@@ -199,13 +203,11 @@ describe(`ButtonGroup`, () => {
     expect(buttons.map(checked_state)).toEqual([`true`, `false`, `false`])
 
     buttons[0].focus()
-    press(`ArrowRight`)
-    await tick()
+    await press(`ArrowRight`)
     expect(document.activeElement).toBe(buttons[2]) // beta skipped
     expect(checked_state(buttons[2])).toBe(`true`)
 
-    press(`ArrowRight`)
-    await tick()
+    await press(`ArrowRight`)
     expect(document.activeElement).toBe(buttons[0]) // wraps over beta too
     expect(on_change.mock.calls.flat()).toEqual([`gamma`, `alpha`])
   })
@@ -221,8 +223,7 @@ describe(`ButtonGroup`, () => {
     expect(buttons.every((button) => button.disabled)).toBe(true)
     expect(doc_query<HTMLButtonElement>(`.sort-order`).disabled).toBe(true)
 
-    press(`ArrowRight`, doc_query(`.options`))
-    await tick()
+    await press(`ArrowRight`, doc_query(`.options`))
     expect(on_change).not.toHaveBeenCalled()
   })
 
@@ -336,9 +337,7 @@ describe(`ButtonGroup`, () => {
     ])
   })
 
-  const count_suffix = createRawSnippet(() => ({
-    render: () => `<span class="count">3</span>`,
-  }))
+  const count_suffix = raw_snippet(`<span class="count">3</span>`)
   test.each([
     [`a button`, undefined],
     [`an option_suffix pill`, count_suffix],
@@ -410,6 +409,8 @@ describe(`ButtonGroup`, () => {
 
   // Pin the public CSS hooks to catch accidental removals or undocumented additions.
   test(`exposes exactly the documented custom properties`, () => {
+    // happy-dom drops nested CSS; inspect source for the styling contract.
+    const styles = button_group_source.slice(button_group_source.indexOf(`<style>`))
     // font shorthand would override consumer weight/style through higher specificity
     expect(styles).toMatch(/font-family:\s*var\(--btn-group-btn-font-family/u)
     expect(styles).not.toMatch(/[^-]font:/u)

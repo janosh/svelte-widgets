@@ -31,7 +31,7 @@
     <!-- index-prefixed: an href is a destination, so two cards may point at one page -->
     {#each subpages as { label, href, description, icon, target, rel, title: link_title }, idx (`${idx}-${href}`)}
       <a {href} {target} {rel} title={link_title} class="card">
-        <Icon icon={icon ?? fallback_icon} class="icon" aria-hidden="true" />
+        <Icon icon={icon ?? fallback_icon} class="icon" />
         <div>
           <h2>{label}</h2>
           <p>{description}</p>

@@ -1,4 +1,5 @@
 import { clamp } from '../utils'
+import { composed_parent } from './shared'
 
 // Color channels are 0..1 fractions.
 const clamp_unit = (value: number): number => clamp(value, 0, 1)
@@ -261,6 +262,7 @@ const parse_color_function = (name: string, args: string): Rgba | null => {
 
 const parse_color = (color: string): Rgba | null => {
   const trimmed = color.trim()
+  if (trimmed.toLowerCase() === `transparent`) return [0, 0, 0, 0]
   const channels = RGB_COLOR.exec(trimmed)?.groups?.channels
   if (channels) {
     // percentages are legal in channels and alpha (`rgb(50% 0% 0% / 50%)`), even though a
@@ -290,20 +292,6 @@ const parse_color = (color: string): Rgba | null => {
   ]
 }
 
-// Human-perceived brightness on 0..1, from https://stackoverflow.com/a/596243
-const luminance = (color: string): number => {
-  const parsed = parse_color(color)
-  if (!parsed) {
-    throw new Error(
-      `pick_contrast_color: cannot read color \`${color}\`, expected hex, rgb()/rgba(), ` +
-        `hsl()/hwb(), lab()/lch()/oklab()/oklch() or color(); named colors and ` +
-        `color-mix() are not parsed`,
-    )
-  }
-  const [red, green, blue] = parsed
-  return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
-}
-
 // Computed alphas round-trip through 8 bits, so a nominally opaque one can land just shy of 1
 const OPAQUE = 0.999
 
@@ -315,15 +303,34 @@ const composite_color = (top: Rgba, bottom: Rgba): Rgba => {
   return [channel(0), channel(1), channel(2), alpha]
 }
 
+const PAGE_WHITE: Rgba = [255, 255, 255, 1]
+
+// Human-perceived brightness on 0..1, from https://stackoverflow.com/a/596243. A
+// translucent color is judged over white: node-less pick_contrast_color can't know what it
+// sits on, while the contrast_color attachment pre-blends over the node's real backdrop.
+const luminance = (color: string): number => {
+  const parsed = parse_color(color)
+  if (!parsed) {
+    throw new Error(
+      `pick_contrast_color: cannot read color \`${color}\`, expected hex, rgb()/rgba(), ` +
+        `hsl()/hwb(), lab()/lch()/oklab()/oklch(), color() or transparent; named ` +
+        `colors and color-mix() are not parsed`,
+    )
+  }
+  const [red, green, blue] = composite_color(parsed, PAGE_WHITE)
+  return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+}
+
 // The browser reports 8-bit channels; match that rather than emit blend fractions
 const rgb_string = ([red, green, blue]: Rgba): string =>
   `rgb(${Math.round(red)} ${Math.round(green)} ${Math.round(blue)})`
 
 // Effective background behind a node: a translucent ancestor only tints what it sits on,
 // so keep walking and blend. A chain with nothing opaque shows the browser's white canvas.
+// Shadow roots paint nothing, so the walk continues at their host.
 export const get_bg_color = (element: Element | null): string => {
   let composite: Rgba | undefined
-  for (let node = element; node; node = node.parentElement) {
+  for (let node = element; node; node = composed_parent(node)) {
     const bg_color = getComputedStyle(node).backgroundColor
     const layer = parse_color(bg_color)
     if (!layer || layer[3] === 0) continue
@@ -332,7 +339,18 @@ export const get_bg_color = (element: Element | null): string => {
     composite = composite ? composite_color(composite, layer) : layer
     if (composite[3] >= OPAQUE) return rgb_string(composite)
   }
-  return composite ? rgb_string(composite_color(composite, [255, 255, 255, 1])) : ``
+  return composite ? rgb_string(composite_color(composite, PAGE_WHITE)) : ``
+}
+
+// A translucent explicit fill only tints what the node sits on, so blend it over the
+// resolved background behind the node rather than over white (wrong on a dark page)
+const blend_over_backdrop = (bg_color: string, node: Element): string => {
+  const layer = parse_color(bg_color)
+  if (!layer || layer[3] >= OPAQUE) return bg_color // luminance reports unreadable colors
+  const backdrop = get_bg_color(composed_parent(node))
+  const base = backdrop ? parse_color(backdrop) : PAGE_WHITE
+  if (!base) throw new Error(`contrast_color: cannot read backdrop color \`${backdrop}\``)
+  return rgb_string(composite_color(layer, base))
 }
 
 export const pick_contrast_color = (options: ContrastOptions = {}): string => {
@@ -349,7 +367,10 @@ export const contrast_color =
   (node: Element): (() => void) | undefined => {
     if (!(node instanceof HTMLElement)) return undefined
     const previous_color = node.style.color
-    const bg_color = options.bg_color ?? get_bg_color(node)
+    const bg_color =
+      options.bg_color === undefined
+        ? get_bg_color(node)
+        : blend_over_backdrop(options.bg_color, node)
     node.style.color = pick_contrast_color({ ...options, bg_color })
     return () => {
       node.style.color = previous_color

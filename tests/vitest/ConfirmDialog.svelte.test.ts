@@ -1,7 +1,7 @@
 import ConfirmDialog from '#lib/ConfirmDialog.svelte'
 import type { DialogChoice } from '#lib/dialogs.svelte.ts'
 import { ask_prompt, dialog_queue, request_choice } from '#lib/dialogs.svelte.ts'
-import { type ComponentProps, createRawSnippet, tick } from 'svelte'
+import { type ComponentProps, tick } from 'svelte'
 import { render } from 'svelte/server'
 import { afterEach, expect, test, vi } from 'vite-plus/test'
 import {
@@ -12,6 +12,7 @@ import {
   next_task,
   pointer_event,
   track,
+  raw_snippet,
 } from './index'
 
 // happy-dom implements <dialog> (showModal, .open, close, close event) but not Escape
@@ -54,13 +55,13 @@ const ask = (message: string, title: string) =>
 const ask_write = () => ask(`Overwrite?`, `Write files`)
 const ask_name = () => track(ask_prompt(`Name?`, `Profile`))
 
-// happy-dom does no layout, so supply the dialog box before pressing its ::backdrop.
-const press_backdrop = (dialog: HTMLDialogElement) => {
+// happy-dom does no layout, so supply the dialog box before pressing its ::backdrop. It has
+// no native closedby="any" light dismissal either, so this doubles as the no-support test.
+const press_backdrop = (dialog: HTMLDialogElement, press_x = 10, press_y = 10) => {
   dialog.getBoundingClientRect = () =>
     ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
-  dialog.dispatchEvent(pointer_event(`pointerdown`, 10, 10))
+  dialog.dispatchEvent(pointer_event(`pointerdown`, press_x, press_y))
   dialog.dispatchEvent(pointer_event(`click`, 10, 10))
-  dialog.close() // happy-dom does not implement native closedby="any" light dismissal
 }
 const submit_form = () =>
   doc_query<HTMLFormElement>(`dialog form`).dispatchEvent(
@@ -106,9 +107,9 @@ test(`shows the queued question, closes once drained and ignores a stale close`,
 
 test(`renders a typed rich body snippet`, async () => {
   await mount_dialog()
-  const body = createRawSnippet(() => ({
-    render: () => `<strong data-testid="rich-body">Three files will be removed</strong>`,
-  }))
+  const body = raw_snippet(
+    `<strong data-testid="rich-body">Three files will be removed</strong>`,
+  )
   void request_choice(
     { kind: `snippet`, snippet: body },
     `Remove files`,
@@ -234,6 +235,21 @@ test.each([
     expect(dialog.open).toBe(false)
   },
 )
+
+test.each([
+  // e.g. a text selection dragged out of the box
+  [`a press starting inside the box`, {}, 150],
+  [`a backdrop click with closedby=none`, { closedby: `none` as const }, 10],
+])(`%s does not dismiss`, async (_desc, props, press_xy) => {
+  const dialog = await mount_dialog(props)
+  const answer = ask_write()
+  await flush()
+
+  press_backdrop(dialog, press_xy, press_xy)
+  await flush()
+  expect(answer.settled).toBe(false)
+  expect(dialog.open).toBe(true)
+})
 
 // answering removes the focused button, so without a hand-off the next question comes up
 // with the keyboard on <body>, outside the trap

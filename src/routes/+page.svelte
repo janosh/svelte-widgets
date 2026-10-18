@@ -41,7 +41,6 @@
     <div class="getting-started">
       <pre class="language-sh"><Icon
           icon={NPM}
-          aria-hidden="true"
           style="width: 1.5em; flex-shrink: 0; color: #cb3837"
         /><code>{install_command}</code><CopyButton
           content={install_command}
@@ -60,7 +59,7 @@
       <section aria-labelledby={`category-${name}`}>
         <Heading level={3} link={false} id={`category-${name}`}>
           <a href={resolve_path(href)}>
-            <span><Icon {icon} class="heading-icon" aria-hidden="true" />{title}</span>
+            <span><Icon {icon} class="heading-icon" />{title}</span>
             <span aria-hidden="true">↗</span>
           </a>
         </Heading>

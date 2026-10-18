@@ -51,7 +51,7 @@ Every link has `href` and `label`. A group adds `children`, which use the same l
 />
 ```
 
-Pass your router’s pathname as a string; for example, SvelteKit callers can use `pathname={page.url.pathname}`.
+Pass your router’s pathname as a string; for example, SvelteKit callers can use `pathname={page.url.pathname}`. Only the most specific matching link gets `aria-current="page"`: `/docs` stays current on `/docs/intro` unless the nav also links `/docs/intro` itself, and disabled links never claim it.
 
 Route labels are plain text, including markup characters. Use the `item` snippet for formatted content. `disabled` is a boolean; put its explanation in `tooltip`. A tooltip can be text or an options object, merged over `tooltip_options`. Native `target`, `rel`, and `title` work on links and linked group headings. Separators are standalone `{ separator: true }` entries.
 

@@ -1,7 +1,7 @@
 import PaneDivider from '#lib/SplitPane.svelte'
-import { flushSync, mount, unmount } from 'svelte'
+import { flushSync } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { create_element, pointer_event, press_key } from './index'
+import { create_element, pointer_event, press_key, render } from './index'
 
 let notify_resize = () => {}
 
@@ -52,9 +52,7 @@ const mount_divider = ({
     },
   )
   onTestFinished(() => void vi.unstubAllGlobals())
-  const component = mount(PaneDivider, { target: parent, props })
-  onTestFinished(() => unmount(component).finally(() => parent.remove()))
-  flushSync()
+  const unmount_divider = render(PaneDivider, props, parent)
   const divider = parent.querySelector<HTMLElement>(`[role="separator"]`)
   if (!divider) throw new Error(`Missing separator`)
   // one pointer (id 1) unless a test passes its own pointerId
@@ -66,7 +64,7 @@ const mount_divider = ({
     now: divider.getAttribute(`aria-valuenow`),
   })
   const size = () => parent.style.getPropertyValue(`--split-pane-size`)
-  return { divider, parent, pointer, aria, size }
+  return { divider, parent, pointer, aria, size, unmount_divider }
 }
 // A bound first_px readable through a plain accessor (Svelte writes bindable props through the
 // prop descriptor's setter)
@@ -239,4 +237,25 @@ test(`pixel mode re-clamps on container resize without overwriting first_px`, ()
   notify_resize()
   flushSync()
   expect(size()).toBe(`320px`)
+})
+
+// A hidden container measures 0 px, so pixel mode has no upper bound unless max_px gives one:
+// End must not fall through clamp_size's non-finite path to the floor
+test.each([
+  [{ first_px: 320, min_px: 100 }, `320px`, `100px`],
+  [{ first_px: 320, max_px: 500 }, `500px`, `0px`],
+])(`End in an unmeasured %j container shows %s`, (clamps, after_end, after_home) => {
+  const { divider, size } = mount_divider({ clamps, width: 0 })
+  press_key(divider, `End`)
+  expect(size()).toBe(after_end)
+  press_key(divider, `Home`)
+  expect(size()).toBe(after_home)
+})
+
+// The parent outlives the separator, so a leftover size would keep sizing panes for it
+test(`unmounting removes --split-pane-size from the parent`, () => {
+  const { size, unmount_divider } = mount_divider({ ratio: 0.3 })
+  expect(size()).toBe(`30%`)
+  void unmount_divider()
+  expect(size()).toBe(``)
 })

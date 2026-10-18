@@ -1,13 +1,10 @@
 import { SettingsSection } from '#lib'
-import { createRawSnippet, tick, type ComponentProps } from 'svelte'
+import { tick } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
-import { click, doc_query, render } from './index'
+import { click, doc_query, render, raw_snippet } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
 
-const snippet = (content: string) => createRawSnippet(() => ({ render: () => content }))
 type SettingValues = Record<string, unknown>
-const mount_section = (props: ComponentProps<typeof SettingsSection>) =>
-  render(SettingsSection, props)
 
 // A section whose caller writes reference values back, the way a real settings pane does
 const mount_tracked_section = (
@@ -18,7 +15,7 @@ const mount_tracked_section = (
   let current_values = $state<SettingValues>({ ...initial })
   const defaults = reset_values ?? initial
   const reset_calls: string[] = []
-  mount_section({
+  render(SettingsSection, {
     title: `Atoms`,
     get changed_keys() {
       return Object.keys({ ...defaults, ...current_values }).filter(
@@ -27,7 +24,7 @@ const mount_tracked_section = (
           defaults[key] !== current_values[key],
       )
     },
-    children: snippet(children),
+    children: raw_snippet(children),
     on_reset_key: (key: string) => {
       reset_calls.push(key)
       const next_values = { ...current_values }
@@ -50,7 +47,7 @@ const mount_tracked_section = (
 describe(`SettingsSection`, () => {
   test(`renders content with unique aria-labelledby targets`, () => {
     for (const title of [`A`, `B`]) {
-      mount_section({ title, children: snippet(`<i>${title} content</i>`) })
+      render(SettingsSection, { title, children: raw_snippet(`<i>${title} content</i>`) })
     }
     const headings = [...document.querySelectorAll(`h4`)]
     const sections = [...document.querySelectorAll(`section`)]
@@ -66,10 +63,10 @@ describe(`SettingsSection`, () => {
   })
 
   test(`hides reset controls when no reset callback is available`, () => {
-    mount_section({
+    render(SettingsSection, {
       title: `A`,
       changed_keys: [`radius`],
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius" data-description="Size"><input></label>`,
       ),
     })
@@ -80,7 +77,7 @@ describe(`SettingsSection`, () => {
   test(`uses caller-supplied changed keys and gives section reset precedence`, async () => {
     let changed_keys = $state<string[]>([])
     const calls: string[] = []
-    mount_section({
+    render(SettingsSection, {
       title: `Values`,
       get changed_keys() {
         return changed_keys
@@ -90,7 +87,7 @@ describe(`SettingsSection`, () => {
         changed_keys = []
       },
       on_reset_key: (key: string) => calls.push(key),
-      children: snippet(`<label data-key="nested"><input></label>`),
+      children: raw_snippet(`<label data-key="nested"><input></label>`),
     })
     expect(document.querySelector(`.reset-button`)).toBeNull()
     changed_keys = [`nested`]
@@ -110,7 +107,6 @@ describe(`SettingsSection`, () => {
       </div>`,
       { radius: 1 },
     )
-    await tick()
 
     expect(document.querySelectorAll(`.setting-reset-button`)).toHaveLength(2)
     doc_query<HTMLButtonElement>(`.settings-section-heading .reset-button`).focus()
@@ -184,17 +180,16 @@ describe(`SettingsSection`, () => {
       `Custom name`,
       `<label data-key="k" data-label=" Custom\n name "><span>Ignored</span><input></label>`,
     ],
-  ])(`derives row label %j`, async (label, html) => {
-    mount_section({
+  ])(`derives row label %j`, (label, html) => {
+    render(SettingsSection, {
       title: `Atoms`,
       changed_keys: [`k`],
       on_reset_key: () => undefined,
       descriptions_open: true,
-      children: snippet(
+      children: raw_snippet(
         html.replace(`data-key="k"`, `data-key="k" data-description="Desc"`),
       ),
     })
-    await tick()
     expect(doc_query(`.settings-row-description`).textContent).toBe(`Desc`)
     expect(doc_query(`.setting-reset-button`).getAttribute(`aria-label`)).toBe(
       `Reset ${label} to default`,
@@ -204,9 +199,9 @@ describe(`SettingsSection`, () => {
   })
 
   test(`reveals row descriptions with an accessible section toggle`, async () => {
-    mount_section({
+    render(SettingsSection, {
       title: `Pointer sensitivity`,
-      children: snippet(`
+      children: raw_snippet(`
           <div data-key="wrapper">
             <label data-key="rotate_speed" data-description="Pointer rotation speed"><span>Rotate speed</span><input></label>
             <label data-key="rotation_damping" data-description="Motion inertia after releasing the pointer"><span>Damping</span><input></label>
@@ -214,7 +209,6 @@ describe(`SettingsSection`, () => {
           </div>
         `),
     })
-    await tick()
 
     const toggle = doc_query(`.description-toggle`)
     expect(toggle.getAttribute(`aria-expanded`)).toBe(`false`)
@@ -250,7 +244,7 @@ describe(`SettingsSection`, () => {
   // two keys overridden, two omitted, so both halves of the merge run; the interpolating
   // default lowercases the title
   test(`labels reword the heading actions, key by key`, async () => {
-    mount_section({
+    render(SettingsSection, {
       title: `Atoms`,
       changed_keys: [`radius`],
       on_reset_key: () => undefined,
@@ -259,11 +253,10 @@ describe(`SettingsSection`, () => {
         reset_section: (section_title: string) => `${section_title} zurücksetzen`,
         reset_key: (setting_key: string) => `${setting_key} zurücksetzen`,
       },
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input value="2"></label>`,
       ),
     })
-    await tick()
 
     const explain = doc_query(`.description-toggle`)
     expect([explain.textContent?.trim(), explain.getAttribute(`aria-label`)]).toEqual([
@@ -300,15 +293,14 @@ describe(`SettingsSection`, () => {
     [`a mount-time description`, ` data-description="Old text"`],
     [`no description at mount`, ``],
   ])(`follows a caller's later data-description after %s`, async (_, attribute) => {
-    mount_section({
+    render(SettingsSection, {
       title: `Atoms`,
       descriptions_open: true,
       on_reset_key: () => undefined,
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius"${attribute}><span>Radius</span><input></label>`,
       ),
     })
-    await tick()
     doc_query(`[data-key="radius"]`).setAttribute(`data-description`, `New text`)
     await tick()
     expect(doc_query(`[data-key="radius"]`).getAttribute(`data-description`)).toBe(
@@ -324,7 +316,6 @@ describe(`SettingsSection`, () => {
       `<label data-key="radius"><span>Radius</span><input value="2"></label>`,
       { radius: 1 },
     )
-    await tick()
     const button = doc_query(`.setting-reset-button`)
     button.focus()
     await click(button)
@@ -339,7 +330,6 @@ describe(`SettingsSection`, () => {
       { radius: 1 },
       `<div><label data-key="radius"><span>Radius</span><input type="range"></label><label data-key="unknown">Unchanged<input></label></div>`,
     )
-    await tick()
     const row = doc_query(`[data-key="radius"]`)
     for (const radius of [1, 2, 1]) {
       tracked.values = { radius }
@@ -353,21 +343,19 @@ describe(`SettingsSection`, () => {
     expect(row.classList).toContain(`setting-resettable`)
   })
 
-  test(`ignores missing and explicitly empty descriptions`, async () => {
-    mount_section({
+  test(`ignores missing and explicitly empty descriptions`, () => {
+    render(SettingsSection, {
       title: `Atoms`,
-      children: snippet(
+      children: raw_snippet(
         `<div><div data-key="radius" data-description=""></div><div data-key="unrelated"></div></div>`,
       ),
     })
-    await tick()
     expect(document.querySelector(`.description-toggle`)).toBeNull()
     expect(doc_query(`[data-key="radius"]`).dataset.description).toBe(``)
   })
 
   test(`refreshes replaced controls, changed keys, and remounted rows`, async () => {
     render(SettingsSectionRerenderHarness, {})
-    await tick()
 
     const settings_row = (): HTMLElement | null =>
       document.querySelector<HTMLElement>(`[data-generation]`)

@@ -164,38 +164,47 @@ describe(`sortable`, () => {
     expect(sortable_header.classList.contains(`table-sort-asc`)).toBe(true)
   })
 
-  it.each([
-    [`whitespace-only cells as empty`, [`   `, `5`, `1`], [`1`, `5`, ``]],
-    [`natural text ordering`, [`item10`, `item2`, `item1`], [`item1`, `item2`, `item10`]],
+  const one_column = (...cells: string[]) =>
+    `<thead><tr><th>Col</th></tr></thead><tbody>${cells.map((val) => `<tr><td>${val}</td></tr>`).join(``)}</tbody>`
+  // the placeholder row has no cell at index 1
+  const ragged =
+    `<thead><tr><th>Name</th><th>Score</th></tr></thead><tbody>` +
+    `<tr><td colspan="2">No data</td></tr>` +
+    `<tr><td>Alice</td><td>3</td></tr>` +
+    `<tr><td>Bob</td><td>1</td></tr></tbody>`
+  const header_colspan =
+    `<thead><tr><th colspan="2">Name</th><th>Age</th></tr></thead><tbody>` +
+    `<tr><td>Grace</td><td>Hopper</td><td>85</td></tr>` +
+    `<tr><td>Alan</td><td>Turing</td><td>41</td></tr>` +
+    `<tr><td>Ada</td><td>Lovelace</td><td>36</td></tr></tbody>`
+  // sorts by the last header's column, then reads the first column
+  it.each<[string, string, string[], SortableOptions?]>([
+    [`whitespace-only cells as empty`, one_column(`   `, `5`, `1`), [`1`, `5`, ``]],
     [
-      `mixed numeric and text cells`,
-      [`foo`, `10`, `bar`, `2`],
+      `natural text order`,
+      one_column(`item10`, `item2`, `item1`),
+      [`item1`, `item2`, `item10`],
+    ],
+    [
+      `mixed numeric and text`,
+      one_column(`foo`, `10`, `bar`, `2`),
       [`2`, `10`, `bar`, `foo`],
     ],
-  ])(`sorts %s correctly`, (_desc, cells, expected) => {
-    const rows = cells.map((val) => `<tr><td>${val}</td></tr>`).join(``)
-    const table = create_table(
-      `<thead><tr><th>Col</th></tr></thead><tbody>${rows}</tbody>`,
-    )
-    attach_sortable(table)
-    click(headers_of(table)[0])
+    [`missing cells last`, ragged, [`Bob`, `Alice`, `No data`]],
+    [
+      `the matched header's own column`,
+      ragged,
+      [`Bob`, `Alice`, `No data`],
+      { header_selector: `thead th:last-child` },
+    ],
+    [`past a header colspan`, header_colspan, [`Ada`, `Alan`, `Grace`]],
+  ])(`sorts %s`, (_desc, html, expected, options) => {
+    const table = create_table(html)
+    attach_sortable(table, options)
+    const headers = headers_of(table)
+    click(headers[headers.length - 1])
     expect(column_values(table).map((val) => val?.trim())).toEqual(expected)
   })
-
-  it.each([`thead th`, `thead th:last-child`])(
-    `sorts the actual column with %s and keeps missing cells last`,
-    (header_selector) => {
-      const table = create_table(
-        `<thead><tr><th>Name</th><th>Score</th></tr></thead><tbody>` +
-          `<tr><td colspan="2">No data</td></tr>` +
-          `<tr><td>Alice</td><td>3</td></tr>` +
-          `<tr><td>Bob</td><td>1</td></tr></tbody>`,
-      )
-      attach_sortable(table, { header_selector })
-      click(headers_of(table)[1]) // placeholder row has no cell at index 1
-      expect(column_values(table)).toEqual([`Bob`, `Alice`, `No data`])
-    },
-  )
 
   it(`does not re-parent rows of nested tables when sorting`, () => {
     const table = create_table(

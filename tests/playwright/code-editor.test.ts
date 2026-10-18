@@ -14,6 +14,12 @@ const caret = (area: Locator): Promise<number> =>
   area.evaluate((node: HTMLTextAreaElement) => node.selectionStart)
 const selection_end = (area: Locator): Promise<number> =>
   area.evaluate((node: HTMLTextAreaElement) => node.selectionEnd)
+// Replaces the whole document through the focused editor input
+const replace_text = async (area: Locator, text: string): Promise<void> => {
+  await area.focus()
+  await area.page().keyboard.press(`ControlOrMeta+a`)
+  await area.page().keyboard.insertText(text)
+}
 // The native input holds only the viewport's lines, not the whole document
 const input_line_count = async (area: Locator): Promise<number> =>
   (await area.inputValue()).split(`\n`).length
@@ -152,9 +158,7 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
 
   const scrollport = code_editor.locator(`.content`)
   const scroll_left = () => scrollport.evaluate((node) => node.scrollLeft)
-  await editor.focus()
-  await page.keyboard.press(`ControlOrMeta+a`)
-  await page.keyboard.insertText(`a`.repeat(300))
+  await replace_text(editor, `a`.repeat(300))
   await page.keyboard.press(`Home`)
   await expect.poll(scroll_left).toBe(0)
   await page.keyboard.press(`End`)
@@ -231,9 +235,7 @@ for (const text of [
     page,
   }) => {
     const { area } = await open_editor(page)
-    await area.focus()
-    await page.keyboard.press(`ControlOrMeta+a`)
-    await page.keyboard.insertText(text)
+    await replace_text(area, text)
     const start = text.indexOf(`\n`)
     await page.keyboard.press(`Control+Home`)
     await page.keyboard.press(`End`)
@@ -313,9 +315,7 @@ for (const [text, direction] of [
     const { code_editor: editor, area } = await open_editor(page)
     await editor.evaluate((node, dir) => node.setAttribute(`dir`, dir), direction)
     const document_text = `${text}\n12345678901234567890`
-    await area.focus()
-    await page.keyboard.press(`ControlOrMeta+a`)
-    await page.keyboard.insertText(document_text)
+    await replace_text(area, document_text)
     await page.keyboard.press(`Control+Home`)
     const metrics = await area.evaluate((node: HTMLTextAreaElement) => {
       const style = getComputedStyle(node)

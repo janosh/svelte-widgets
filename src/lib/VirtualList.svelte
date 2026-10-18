@@ -1,7 +1,7 @@
 <script lang="ts" generics="Item">
   import { untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { virtual_window } from './virtual'
+  import { reveal_scroll, virtual_window } from './virtual'
 
   let {
     items,
@@ -78,12 +78,7 @@
     if (!Number.isInteger(idx))
       throw new Error(`VirtualList requires an integer index; got ${idx}`)
     const top = Math.max(0, Math.min(items.length - 1, idx)) * item_size
-    set_scroll(
-      Math.max(
-        top + (viewport > 0 ? Math.min(item_size, viewport) - viewport : 0),
-        Math.min(element.scrollTop, top),
-      ),
-    )
+    set_scroll(reveal_scroll(top, item_size, viewport, element.scrollTop))
   }
 </script>
 

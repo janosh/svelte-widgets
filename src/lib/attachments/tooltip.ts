@@ -101,12 +101,6 @@ const handled_tooltip_events = new WeakSet<Event>()
 const is_transparent = (color: string): boolean =>
   [``, `transparent`, `rgba(0, 0, 0, 0)`].includes(color.trim())
 
-// computed length, falling back when the property is unset or not in px
-const css_px_or = (css_length: string, fallback: number): number => {
-  const parsed = css_px(css_length)
-  return Number.isFinite(parsed) ? parsed : fallback
-}
-
 const tooltip_trigger = (options: TooltipOptions): TooltipTrigger =>
   options.trigger ?? `hover-focus`
 const accepts_tooltip_trigger = (
@@ -191,7 +185,7 @@ const sync_arrow_styles = (
   if (!arrow) return
   const styles = getComputedStyle(tooltip_el)
   const background = styles.backgroundColor.trim()
-  const arrow_px = css_px_or(styles.getPropertyValue(`--tooltip-arrow-size`), 6)
+  const arrow_px = css_px(styles.getPropertyValue(`--tooltip-arrow-size`), 6)
   const [inset_side, rotation_deg] = ARROW_PLACEMENT[placement]
   const vertical = placement === `top` || placement === `bottom`
   const dimension = vertical ? tooltip_rect.width : tooltip_rect.height
@@ -203,7 +197,7 @@ const sync_arrow_styles = (
   // below), which only a consumer stylesheet can make differ from a fixed side: every
   // --tooltip-* shorthand sets all four alike.
   const corner_radius = (corner: string) =>
-    css_px_or(styles.getPropertyValue(`border-${corner}-radius`), 0)
+    css_px(styles.getPropertyValue(`border-${corner}-radius`))
   const [start_corner, end_corner] = vertical
     ? [`${inset_side}-left`, `${inset_side}-right`]
     : [`top-${inset_side}`, `bottom-${inset_side}`]
@@ -218,7 +212,7 @@ const sync_arrow_styles = (
   // same measurement zeroed on a see-through color — which is what the arrow draws; a
   // transparent border still takes up layout, so the two differ.
   const layout_border = (side: string) =>
-    css_px_or(styles.getPropertyValue(`border-${side}-width`), 0)
+    css_px(styles.getPropertyValue(`border-${side}-width`))
   // the arrow paints the border of the edge it continues, at that edge's width
   const border_color = styles.getPropertyValue(`border-${inset_side}-color`)
   const border_width = is_transparent(border_color) ? 0 : layout_border(inset_side)
@@ -275,10 +269,10 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (line_widths.length < 2) return
     const styles = getComputedStyle(surface)
     const chrome_width =
-      css_px_or(styles.paddingLeft, 0) +
-      css_px_or(styles.paddingRight, 0) +
-      css_px_or(styles.borderLeftWidth, 0) +
-      css_px_or(styles.borderRightWidth, 0)
+      css_px(styles.paddingLeft) +
+      css_px(styles.paddingRight) +
+      css_px(styles.borderLeftWidth) +
+      css_px(styles.borderRightWidth)
     surface.style.width = `${Math.ceil(Math.max(...line_widths) + chrome_width)}px`
   }
 

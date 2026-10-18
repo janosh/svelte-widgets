@@ -3,10 +3,13 @@ import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps } from '#lib/types.ts'
 import { click, doc_query } from './index'
 import {
+  active_text,
   get_input,
   mount_multiselect,
+  option_rows,
   press_sequence,
   type_search_text,
+  user_msg_text,
 } from './MultiSelect.test-utils'
 
 // Install before the first mount: Svelte shares its dimension observer across bindings.
@@ -52,9 +55,6 @@ describe(`virtual_list`, () => {
     )
   const initial_end = window_end(0, overscan)
 
-  const get_rendered_options = () => [
-    ...document.querySelectorAll<HTMLLIElement>(`ul.options li[role='option']`),
-  ]
   const get_spacers = () => [
     ...document.querySelectorAll<HTMLLIElement>(`ul.options li[aria-hidden='true']`),
   ]
@@ -68,7 +68,7 @@ describe(`virtual_list`, () => {
     (virtual_list, expected_count) => {
       mount_multiselect({ options: virtual_options, open: true, virtual_list })
 
-      expect(get_rendered_options()).toHaveLength(expected_count)
+      expect(option_rows()).toHaveLength(expected_count)
       expect(get_spacers()).toHaveLength(virtual_list ? 2 : 0)
     },
   )
@@ -82,7 +82,7 @@ describe(`virtual_list`, () => {
       `${(n_options - initial_end) * item_height}px`,
     )
     // rows are pinned to item_height, else real layout drifts from the spacer math
-    for (const row of get_rendered_options()) {
+    for (const row of option_rows()) {
       expect([row.style.height, row.style.boxSizing]).toEqual([
         `${item_height}px`,
         `border-box`,
@@ -104,7 +104,7 @@ describe(`virtual_list`, () => {
     await tick()
 
     const expected_start = Math.floor(scroll_top / item_height) - overscan // 15
-    const rendered = get_rendered_options()
+    const rendered = option_rows()
     expect(rendered[0]?.textContent?.trim()).toBe(`option ${expected_start}`)
     expect(rendered).toHaveLength(window_end(scroll_top, overscan) - expected_start)
     expect(get_spacers()[0].style.height).toBe(`${expected_start * item_height}px`)
@@ -125,7 +125,7 @@ describe(`virtual_list`, () => {
       height.mockReturnValue(viewport_height)
       resize?.()
       await tick()
-      expect(get_rendered_options()).toHaveLength(viewport_height / item_height)
+      expect(option_rows()).toHaveLength(viewport_height / item_height)
       expect(list.scrollTop).toBe(0)
     }
   })
@@ -134,7 +134,7 @@ describe(`virtual_list`, () => {
     const props = $state<MultiSelectProps>({ ...virtual_props, value: [] })
     mount_multiselect(props)
 
-    await click(get_rendered_options()[0])
+    await click(option_rows()[0])
 
     expect(props.value).toEqual([`option 0`])
     expect(doc_query(`ul.selected > li`).textContent?.trim()).toContain(`option 0`)
@@ -146,17 +146,12 @@ describe(`virtual_list`, () => {
     const scroll_into_view = vi.spyOn(HTMLElement.prototype, `scrollIntoView`)
 
     const n_presses = 25 // active_index 24 lies past the initial window end of 19
-    await press_sequence(
-      get_input(),
-      ...Array.from({ length: n_presses }, () => `ArrowDown`),
-    )
+    await press_sequence(get_input(), ...Array(n_presses).fill(`ArrowDown`))
     await tick() // flush the async scroll adjustment in handle_arrow_navigation
 
-    expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(
-      `option ${n_presses - 1}`,
-    )
-    expect(get_rendered_options()[0]?.textContent?.trim()).not.toBe(`option 0`)
-    expect(get_rendered_options().length).toBeLessThan(50)
+    expect(active_text()).toBe(`option ${n_presses - 1}`)
+    expect(option_rows()[0]?.textContent?.trim()).not.toBe(`option 0`)
+    expect(option_rows().length).toBeLessThan(50)
     expect(scroll_into_view.mock.contexts.at(-1)).toBe(doc_query(`ul.options li.active`))
   })
 
@@ -165,13 +160,13 @@ describe(`virtual_list`, () => {
 
     const input = await type_search_text(`999`)
 
-    const rendered = get_rendered_options()
+    const rendered = option_rows()
     expect(rendered).toHaveLength(1)
     expect(rendered[0].textContent?.trim()).toBe(`option 999`)
     for (const spacer of get_spacers()) expect(spacer.style.height).toBe(`0px`)
     await type_search_text(`no such option`, input)
     expect(get_spacers()).toHaveLength(0)
-    expect(doc_query(`li.user-msg`).textContent?.trim()).toBe(`No matching options`)
+    expect(user_msg_text()).toBe(`No matching options`)
   })
 
   // options spread over 5 groups (group 0 first with count/5 options, etc.)
@@ -206,7 +201,7 @@ describe(`virtual_list`, () => {
       `group 3`,
     ])
     // first rendered option = flat idx 13 = group 1's 4th option = label "option 16"
-    expect(get_rendered_options()[0].textContent?.trim()).toBe(`option 16`)
+    expect(option_rows()[0].textContent?.trim()).toBe(`option 16`)
     const [top_spacer, bottom_spacer] = get_spacers()
     expect(top_spacer.style.height).toBe(`${15 * item_height}px`) // 15 rows above window
     expect(bottom_spacer.style.height).toBe(`${(55 - 39) * item_height}px`) // 16 below
@@ -218,27 +213,20 @@ describe(`virtual_list`, () => {
     expect(ul_options.scrollTop).toBe(item_height) // row 1 (header row 0 above it)
 
     // 11 more presses reach flat idx 11 ("option 6", row 13), still inside the window
-    await press_sequence(input, ...Array.from({ length: 11 }, () => `ArrowDown`))
-    expect(doc_query(`ul.options li.active`).textContent?.trim()).toBe(`option 6`)
+    await press_sequence(input, ...Array(11).fill(`ArrowDown`))
+    expect(active_text()).toBe(`option 6`)
   })
 
-  test(`rejects virtual grouped lists with sticky headers`, () => {
-    expect(() =>
-      mount_multiselect({
-        options: make_grouped(50),
-        open: true,
-        virtual_list: true,
-        sticky_group_headers: true,
-      }),
-    ).toThrow(`virtual_list cannot be combined with sticky_group_headers`)
-  })
-
-  test.each([
-    [{ item_height: 0 }, `virtual_list.item_height must be positive`],
-    [{ overscan: -1 }, `virtual_list.overscan must be a non-negative integer`],
-    [{ overscan: 1.5 }, `virtual_list.overscan must be a non-negative integer`],
-  ] as const)(`rejects invalid virtual config %j`, (virtual_list, message) => {
-    expect(() => mount_multiselect({ options: virtual_options, virtual_list })).toThrow(
+  test.each<[MultiSelectProps, string]>([
+    [{ virtual_list: { item_height: 0 } }, `virtual_list.item_height must be positive`],
+    [{ virtual_list: { overscan: -1 } }, `virtual_list.overscan must be a non-negative`],
+    [{ virtual_list: { overscan: 1.5 } }, `virtual_list.overscan must be a non-negative`],
+    [
+      { options: make_grouped(50), virtual_list: true, sticky_group_headers: true },
+      `virtual_list cannot be combined with sticky_group_headers`,
+    ],
+  ])(`rejects invalid virtual config %j`, (props, message) => {
+    expect(() => mount_multiselect({ options: virtual_options, ...props })).toThrow(
       message,
     )
   })

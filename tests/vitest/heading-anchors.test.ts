@@ -6,9 +6,8 @@ import {
 } from '#lib/heading-anchors.ts'
 import Heading from '#lib/Heading.svelte'
 import { Check } from '#lib/icons.ts'
-import { createRawSnippet } from 'svelte'
 import { describe, expect, it } from 'vite-plus/test'
-import { doc_query, next_task, render } from './index'
+import { doc_query, next_task, render, raw_snippet } from './index'
 
 describe(`slugify_heading`, () => {
   // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
@@ -41,7 +40,7 @@ describe(`Heading`, () => {
         id: `a&b%20c`,
         level,
         icon: level === 2 ? Check : undefined,
-        children: createRawSnippet(() => ({ render: () => `<span>Diatomics</span>` })),
+        children: raw_snippet(`<span>Diatomics</span>`),
       })
       const heading = doc_query(`h${level}`)
       expect(heading.id).toBe(`a&b%20c`)
@@ -90,6 +89,12 @@ describe(`heading_anchors attachment`, () => {
         anchor.getAttribute(`href`),
       ),
     ).toEqual([`#renamed%2520%26`, `#one`, `#two`, `#custom`])
+    // managed anchors carry their gap from the heading text, consumer links are left alone
+    expect(
+      [...container.querySelectorAll<HTMLElement>(anchor_selector)].map(
+        (anchor) => anchor.style.paddingInlineStart,
+      ),
+    ).toEqual([...Array(3).fill(`var(--heading-anchor-gap, 0.3em)`), ``])
   })
 
   it.each([

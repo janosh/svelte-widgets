@@ -1,8 +1,11 @@
 <script lang="ts">
   import Heading from '#lib/Heading.svelte'
+  import Icon from '#lib/Icon.svelte'
+  import { GitHub } from '#lib/icons.ts'
   import { page } from '$app/state'
-  import { homepage, name } from '#root/package.json'
+  import { bugs, name } from '#root/package.json'
   import favicon from '#site/favicon.svg'
+  import { resolve_demo_path } from '#site/paths.ts'
 
   // undefined until hydration reads navigator.onLine - starting with false would
   // flash the "you're offline" message at online users in the prerendered HTML
@@ -23,20 +26,18 @@
   {#if page.status >= 500}
     <p>
       If page reloading doesn't help, please raise an issue on
-      <a href="{homepage}/issues" target="_blank" rel="noreferrer">GitHub</a>. Thanks! 🙏
+      <a href={bugs} target="_blank" rel="noreferrer">GitHub</a>. Thanks! 🙏
     </p>
   {/if}
 
   {#if online === false}
     Looks like you're offline. If you think your connection is fine, check the
     <a href="https://githubstatus.com">GitHub status page</a>
-    as this site is hosted by &thinsp;<svg>
-      <use href="#octicon-mark-github" />
-    </svg>&thinsp; GitHub Pages.
+    as this site is hosted by &thinsp;<Icon icon={GitHub} />&thinsp; GitHub Pages.
   {/if}
 
   <p>
-    Back to <a href=".">
+    Back to <a href={resolve_demo_path(`/`)}>
       <img src={favicon} alt={name} height="30" />
       landing page
     </a>.

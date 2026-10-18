@@ -84,6 +84,11 @@
     aria-orientation={orientation}
     tabindex="-1"
     onkeydown={handle_keydown}
+    onfocusout={({ currentTarget, relatedTarget }) => {
+      // Tab back into the list lands on the selected tab, not the last one arrowed to
+      if (!(relatedTarget instanceof Node && currentTarget.contains(relatedTarget)))
+        roving_value = selected_value
+    }}
   >
     {#each items as item (item.value)}
       {@const selected = item.value === selected_value}

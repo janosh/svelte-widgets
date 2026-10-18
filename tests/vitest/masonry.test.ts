@@ -86,8 +86,7 @@ const scroll_to = async (scroll_top: number) => {
   await tick()
 }
 
-const mount_virtualized = (count: number, overrides = {}) => {
-  document.body.innerHTML = ``
+const mount_virtualized = (count: number, overrides = {}) =>
   mount_masonry({
     items: make_items(count),
     virtualize: true,
@@ -96,7 +95,6 @@ const mount_virtualized = (count: number, overrides = {}) => {
     masonry_width: 500,
     ...overrides,
   })
-}
 
 describe(`Masonry`, () => {
   test.each([true, false])(`renders items with animate=%s`, (animate) => {
@@ -369,7 +367,6 @@ describe(`Masonry order modes`, () => {
     [`balanced-stable`, `3 | 2,4`], // survivors keep their columns
   ] as const)(`order=%s after removing an item mid-list`, async (order, expected) => {
     const harness = mount_harness({ order })
-    await tick()
     expect(as_columns()).toBe(`1,3 | 2,4`)
 
     harness.remove(1)
@@ -657,7 +654,6 @@ describe(`Masonry live item updates`, () => {
     // item 3 is tall, so the column holding it stays clearly the longest
     mock_height = (el) => (el.textContent === `3` ? 500 : 100)
     const harness = mount_harness()
-    await tick()
     expect(as_columns()).toBe(`1,3 | 2,4`)
 
     harness.remove(1)
@@ -672,7 +668,6 @@ describe(`Masonry live item updates`, () => {
 
   test(`swapping out every item on a live instance renders only the new ones`, async () => {
     const harness = mount_harness()
-    await tick()
 
     harness.remove(1, 2, 3, 4)
     harness.append(10, 11, 12)

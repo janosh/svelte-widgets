@@ -6,7 +6,7 @@ import {
 } from 'marked'
 import { escape_attribute, escape_braces } from '../highlight/hast.ts'
 import { decode_entities } from '../heading-anchors.ts'
-import type { ContentManifestDraft, TokenSource } from './content.ts'
+import { child_tokens, type ContentManifestDraft, type TokenSource } from './content.ts'
 import { DiagnosticError, type SourceRange } from './diagnostics.ts'
 import { parse_meta } from './meta.ts'
 
@@ -40,6 +40,7 @@ type ReferenceToken = Token & {
   keys?: string[]
   tex?: string
   image?: Tokens.Image
+  caption?: string
   meta?: string
 }
 type Target = Omit<ContentReference, 'range'> & {
@@ -57,18 +58,25 @@ const citation_url = (citation: Citation): string | undefined =>
   citation.url ??
   (citation.doi === undefined ? undefined : `https://doi.org/${citation.doi}`)
 const reference_key = `[A-Za-z0-9][A-Za-z0-9_.:-]*`
+// Caption text of an image's alt tokens: Markdown escapes and emphasis resolve to their
+// text, while expressions, math and raw HTML stay as authored (rendered literally).
+const plain_text = (tokens: readonly Token[]): string =>
+  tokens
+    .map((token) =>
+      `tokens` in token && Array.isArray(token.tokens)
+        ? plain_text(token.tokens)
+        : [`text`, `escape`, `codespan`].includes(token.type) && `text` in token
+          ? String(token.text)
+          : token.raw,
+    )
+    .join(``)
 
 // Same document order as Marked's walkTokens, which concatenates callback results per
 // token and so grows quadratically with the number of top-level blocks.
 function walk_tokens(tokens: readonly Token[], visit: (token: Token) => void): void {
   for (const token of tokens) {
     visit(token)
-    if (token.type === `table`) {
-      const { header, rows } = token as Tokens.Table
-      for (const cell of [...header, ...rows.flat()]) walk_tokens(cell.tokens, visit)
-    } else if (token.type === `list`) walk_tokens((token as Tokens.List).items, visit)
-    else if (`tokens` in token && Array.isArray(token.tokens))
-      walk_tokens(token.tokens, visit)
+    walk_tokens(child_tokens(token), visit)
   }
 }
 
@@ -134,24 +142,22 @@ export function scientific_references(
         const image = images[0]
         if (images.length !== 1 || image?.type !== `image`)
           throw new Error(`Labeled figures require one Markdown image: ${source}`)
-        return { type: `reference_figure`, raw: match[0], key, meta, image }
+        const caption = plain_text(image.tokens ?? [])
+        return { type: `reference_figure`, raw: match[0], key, meta, image, caption }
       },
       renderer(token) {
         const reference = token as ReferenceToken
         const resolved = targets.get(reference.key ?? ``)
         if (!resolved || !reference.image) return ``
-        const text: Tokens.Text = {
-          type: `text`,
-          raw: reference.image.text,
-          text: reference.image.text,
-        }
+        const caption = reference.caption ?? ``
+        const text: Tokens.Text = { type: `text`, raw: caption, text: caption }
         const image = Renderer.prototype.image.call(this.parser.renderer, {
           ...reference.image,
           tokens: [text],
         })
-        const caption = Renderer.prototype.text.call(this.parser.renderer, text)
+        const caption_html = Renderer.prototype.text.call(this.parser.renderer, text)
         return escape_braces(
-          `<figure id="${escape_attribute(resolved.target)}" data-reference-label="${escape_attribute(navigation_label(resolved))}">${image}<figcaption><a href="#${escape_attribute(resolved.target)}">Figure ${resolved.number}.</a> ${caption}</figcaption></figure>\n`,
+          `<figure id="${escape_attribute(resolved.target)}" data-reference-label="${escape_attribute(navigation_label(resolved))}">${image}<figcaption><a href="#${escape_attribute(resolved.target)}">Figure ${resolved.number}.</a> ${caption_html}</figcaption></figure>\n`,
         )
       },
     },
@@ -219,9 +225,9 @@ export function scientific_references(
             target: key,
             token,
             ...(label === undefined ? {} : { label }),
-            ...(reference.image
-              ? { caption: decode_entities(reference.image.text) }
-              : {}),
+            ...(reference.caption === undefined
+              ? {}
+              : { caption: decode_entities(reference.caption) }),
           })
         if (kind === `equation` && !render_math)
           issues.push({ token, message: `Labeled equation ${key} requires math: true` })
@@ -325,7 +331,7 @@ export function scientific_references(
       if (reference.image)
         manifest.assets.push({
           url: decode_entities(reference.image.href),
-          text: decode_entities(reference.image.text),
+          text: resolved.caption ?? ``,
           range,
         })
       if (resolved.kind === `citation`) {

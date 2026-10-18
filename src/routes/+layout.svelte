@@ -2,12 +2,13 @@
   import { afterNavigate, goto } from '$app/navigation'
   import { asset } from '$app/paths'
   import { page } from '$app/state'
-  import { CopyButton, GitHubCorner, PageSearch, Toc } from '#lib'
+  import { CopyButton, Footer, GitHubCorner, PageSearch, Toc } from '#lib'
+  import { Edit, Sparkles } from '#lib/icons.ts'
   import { observe_subtree, slug_to_title } from '#lib/utils.ts'
   import { flash_toc_target } from '#lib/toc-utils.ts'
   import { highlight_matches } from '#lib/attachments/index.ts'
   import { repository } from '#root/package.json'
-  import { DemoNav, Footer } from '#site'
+  import { DemoNav } from '#site'
   import { current_demo_route, resolve_demo_path as resolve_path } from '#site/paths.ts'
   import { link_source_mentions } from '#site/source-links.ts'
   import favicon from '#site/favicon.svg'
@@ -208,7 +209,17 @@
   {/key}
 </div>
 
-<Footer {edit_href} />
+<Footer
+  class="site-footer"
+  links={[
+    { href: `${repository}/discussions/200`, label: `Showcase`, icon: Sparkles },
+    { href: edit_href, label: `Edit this page`, icon: Edit },
+  ]}
+>
+  <small title="For keyboard-only site navigation">
+    <kbd>cmd+k</kbd> to open site search.
+  </small>
+</Footer>
 
 <style>
   .reference-navigation {
@@ -233,6 +244,29 @@
       overflow-wrap: anywhere;
       text-wrap: wrap;
       color: inherit;
+    }
+  }
+  :global(footer.site-footer) {
+    --footer-padding: 2em;
+    --footer-nav-margin: 0;
+    --footer-nav-gap: 1em;
+    margin-top: auto;
+    width: calc(100% + 2 * var(--page-pad));
+    position: relative;
+    left: calc(-1 * var(--page-pad));
+    box-sizing: border-box;
+    border-top: 1px solid var(--border);
+    small {
+      margin-top: 1em;
+      display: block;
+      color: var(--text-muted);
+    }
+    kbd {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.1em 0.4em;
+      border-radius: 3pt;
+      font-size: 0.9em;
     }
   }
   :global(::highlight(page-search-match)) {

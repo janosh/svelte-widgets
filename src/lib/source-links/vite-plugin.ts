@@ -16,21 +16,43 @@ const EXPORT_DEFINITION_RE =
   /^export (?:async function|function|abstract class|class|const|let|interface|type|enum) (?<name>[A-Za-z_$][\w$]*)/
 
 // Accepts every package.json `repository` form — URL string or `{ url }` record — and
-// normalizes the ones it knows: `user/repo` shorthand becomes a GitHub https URL, and a
-// `git+` prefix, SSH remote or `.git` suffix is rewritten. Any other URL passes through
-// as-is, `git://` and plain `http://` included.
+// normalizes the ones it knows: `user/repo`, `github:user/repo`, `bitbucket:user/repo`
+// and `gitlab:group/sub/repo` shorthands become https URLs, and a `git+` prefix, SSH
+// remote or `.git`/`/` suffix is rewritten. Other `scheme:` shorthands (e.g. `gist:id`)
+// throw. Any other URL passes through as-is, `git://` and plain `http://` included.
+const SHORTHAND_HOSTS = new Map([
+  [`github`, `github.com`],
+  [`gitlab`, `gitlab.com`],
+  [`bitbucket`, `bitbucket.org`],
+])
 export const repository_url = (repository: unknown): string => {
   const raw =
-    typeof repository === `string` ? repository : (repository as { url?: unknown })?.url
+    typeof repository === `object` && repository !== null && `url` in repository
+      ? repository.url
+      : repository
   if (typeof raw !== `string` || !raw)
     throw new Error(
       `package.json needs a "repository" so source links know where to point`,
     )
-  if (/^[\w.-]+\/[\w.-]+$/.test(raw)) return `https://github.com/${raw}`
+  const trimmed = raw.replace(/\/+$/u, ``)
+  const prefixed = /^(?<scheme>\w+):(?!\/\/)(?<path>.*)$/u.exec(trimmed)?.groups
+  if (prefixed || /^[\w.-]+\/[\w.-]+$/u.test(trimmed)) {
+    const scheme = prefixed?.scheme ?? `github`
+    const path = (prefixed?.path ?? trimmed).replace(/\.git$/u, ``)
+    const host = SHORTHAND_HOSTS.get(scheme)
+    // Only GitLab nests projects in subgroups; GitHub and Bitbucket are `owner/repo`
+    const path_re =
+      scheme === `gitlab` ? /^[\w.-]+(?:\/[\w.-]+)+$/u : /^[\w.-]+\/[\w.-]+$/u
+    if (!host || !path_re.test(path))
+      throw new Error(
+        `Unsupported package.json "repository" shorthand ${JSON.stringify(raw)}: use a URL or github:, gitlab: or bitbucket: owner/repo`,
+      )
+    return `https://${host}/${path}`
+  }
   return raw
     .replace(/^git\+/, ``)
     .replace(/^(?:ssh:\/\/)?git@(?<host>[^/:]+)[/:]/, `https://$<host>/`)
-    .replace(/\.git$/, ``)
+    .replace(/(?:\.git)?\/?$/, ``)
 }
 
 export type SourceLinksPluginOptions = {

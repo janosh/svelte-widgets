@@ -26,8 +26,13 @@ const marked_state = (marked: string): EditorState => {
   const selection_start = marked.indexOf(`[`)
   return state(marked.replaceAll(/[[\]]/g, ``), selection_start, marked.indexOf(`]`) - 1)
 }
-const apply = (before: EditorState, edit: RangeEdit | null): string => {
-  if (!edit) return before.model.text()
+// Applies `command(state, arg)` to a marked document (`|` caret, `[...]` selection) and
+// returns the result in the same notation, or null when the command declines
+type Command = (state: EditorState, arg: string) => RangeEdit | null
+const run = (command: Command, marked: string, arg: string): string | null => {
+  const before = marked_state(marked)
+  const edit = command(before, arg)
+  if (!edit) return null
   const { from, to, insert, anchor, head } = edit
   before.model.transact([{ from, to, insert }], {
     selection: { anchor, head },
@@ -38,13 +43,8 @@ const apply = (before: EditorState, edit: RangeEdit | null): string => {
     ? `${text.slice(0, anchor)}|${text.slice(anchor)}`
     : `${text.slice(0, anchor)}[${text.slice(anchor, head)}]${text.slice(head)}`
 }
-type BlockCommand = (state: EditorState, unit: string) => RangeEdit | null
-const run = (command: BlockCommand, marked: string, unit: string): string => {
-  const before = marked_state(marked)
-  return apply(before, command(before, unit))
-}
 
-test.each<[string, BlockCommand, string, string, string]>([
+test.each<[string, Command, string, string, string]>([
   [`collapsed indent`, indent_selection, `foo |bar`, `  `, `foo   |bar`],
   [`range indent`, indent_selection, `o[ne\nt]wo`, `  `, `  o[ne\n  t]wo`],
   [`blank indent`, indent_selection, `[one\n\ntwo]`, `  `, `[  one\n\n  two]`],
@@ -95,8 +95,7 @@ test.each([
   [`if (x) {|}`, `  `, `if (x) {\n  |\n}`],
   [`  fn() {|}`, `  `, `  fn() {\n    |\n  }`],
 ])(`auto-indent %s`, (marked, indent, expected) => {
-  const before = marked_state(marked)
-  expect(apply(before, auto_indent_newline(before, indent))).toBe(expected)
+  expect(run(auto_indent_newline, marked, indent)).toBe(expected)
 })
 
 test.each([
@@ -114,10 +113,14 @@ test.each([
   [`'|`, `'`, null],
   [`|foo`, `)`, null],
   [`[foo] bar`, `(`, null],
+  // astral letters are word characters on either side of the caret
+  [`|𝑥`, `(`, null],
+  [`𝑥|`, `'`, null],
+  [`😀|`, `'`, `😀'|'`],
+  // combining marks continue a word, so decomposed café takes no closing quote
+  [`cafe\u0301|`, `'`, null],
 ])(`auto-close %s + %s`, (marked, typed, expected) => {
-  const before = marked_state(marked)
-  const edit = auto_close_pair(before, typed)
-  expect(edit ? apply(before, edit) : null).toBe(expected)
+  expect(run(auto_close_pair, marked, typed)).toBe(expected)
 })
 
 test.each([

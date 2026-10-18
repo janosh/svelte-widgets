@@ -13,8 +13,13 @@ export const resolve_demo_path = (path: string): string =>
 export const current_demo_route = () =>
   demo_pages.find((route) => resolve_demo_path(route) === page.url.pathname)
 
+export const demo_link = (route: string) => ({
+  href: resolve_demo_path(route),
+  label: demo_title(route),
+})
+
 export function demo_card(route: string): Subpage {
   const description = demo_descriptions[route]
   if (!description) throw new Error(`Missing demo description: ${route}`)
-  return { label: demo_title(route), href: resolve_demo_path(route), description }
+  return { ...demo_link(route), description }
 }

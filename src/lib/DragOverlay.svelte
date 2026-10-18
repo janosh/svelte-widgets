@@ -15,7 +15,7 @@
 
 {#if visible}
   <div {...rest} class={[`drag-overlay`, rest.class]}>
-    <Icon icon={Info} aria-hidden="true" />
+    <Icon icon={Info} />
     <span>{message}</span>
   </div>
 {/if}

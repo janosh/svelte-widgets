@@ -1,9 +1,20 @@
 import { Nav } from '#lib'
 import type { NavRoute, NavLink } from '#lib/types.ts'
-import { type ComponentProps, createRawSnippet, tick } from 'svelte'
+import { type ComponentProps, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query, next_task, press_key, render, stub_props } from './index'
+import {
+  click,
+  create_element,
+  doc_query,
+  hover,
+  next_task,
+  pointer_event,
+  press_key,
+  render,
+  stub_props,
+  raw_snippet,
+} from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Nav`, () => {
@@ -49,23 +60,23 @@ describe(`Nav`, () => {
   const mount_nav = (props: ComponentProps<typeof Nav>) => render(Nav, props)
   const hrefs = (root: ParentNode = document) =>
     [...root.querySelectorAll(`a`)].map((link) => link.getAttribute(`href`))
-  const pointer_event = (element: Element, type: string, pointer_type = `mouse`) =>
-    element.dispatchEvent(new PointerEvent(type, { pointerType: pointer_type }))
+  // pointerenter/pointerleave do not bubble
+  const pointer = (element: Element, type: string, pointer_type = `mouse`) =>
+    element.dispatchEvent(
+      pointer_event(type, 0, 0, { pointerType: pointer_type, bubbles: false }),
+    )
   const open_dropdown = async (dropdown: Element, interaction: string) => {
     if (interaction === `click`)
       await click(dropdown.querySelector(`[data-dropdown-toggle]`))
     else {
-      pointer_event(dropdown, `pointerenter`)
+      pointer(dropdown, `pointerenter`)
       await tick()
     }
   }
   // the attachment dismisses on the press, not the click
   const click_outside = async () => {
-    const outside = document.createElement(`div`)
-    document.body.append(outside)
-    outside.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
+    create_element().dispatchEvent(pointer_event(`pointerdown`, 0, 0))
     await tick()
-    outside.remove()
   }
   // undone when the test finishes
   const set_window_width = (width: number) =>
@@ -215,11 +226,59 @@ describe(`Nav`, () => {
     [`/home`, `/`, null],
     [`/some-page-v2`, `/some-page`, null], // must not match via startsWith alone
     [`/some-page`, `/some-page-v2`, null],
+    // a trailing slash doesn't change the page, but such hrefs (like a base-path home)
+    // prefix every subpage, so they match exactly
+    [`/docs`, `/docs/`, `page`],
+    [`/docs/`, `/docs`, `page`],
+    [`/docs/intro`, `/docs`, `page`],
+    [`/base/docs`, `/base/`, null],
   ])(`aria-current: pathname=%s link=%s -> %s`, (pathname, link_href, expected) => {
     mount_nav({ routes: [{ href: link_href, label: link_href }], pathname })
     expect(doc_query(`a[href="${link_href}"]`).getAttribute(`aria-current`)).toBe(
       expected,
     )
+  })
+  // sibling submenu links where one prefixes the other: on the longer one's page only it is
+  // current (a section page and its subpage both listed in one dropdown). A disabled subpage
+  // link renders as a <span> without aria-current, so it must not steal it from its section.
+  test.each([
+    [false, [null, `page`]],
+    [true, [`page`, null]],
+  ])(
+    `aria-current marks only the most specific matching link (subpage disabled=%s)`,
+    (disabled, expected) => {
+      mount_nav({
+        pathname: `/table/colors`,
+        routes: [
+          {
+            label: `Elements`,
+            children: [
+              { href: `/table`, label: `Table` },
+              { href: `/table/colors`, label: `Colors`, disabled },
+            ],
+          },
+        ],
+      })
+      const items = [...document.querySelectorAll(`.dropdown :is(a, span.disabled)`)]
+      expect(
+        [`Table`, `Colors`].map((label) =>
+          items
+            .find((item) => item.textContent?.trim() === label)
+            ?.getAttribute(`aria-current`),
+        ),
+      ).toEqual(expected)
+    },
+  )
+  test(`links sharing a page modulo trailing slash get one aria-current`, () => {
+    mount_nav({
+      pathname: `/docs`,
+      routes: [
+        { href: `/docs`, label: `Docs` },
+        { href: `/docs/`, label: `Docs again` },
+      ],
+    })
+    const current = [...document.querySelectorAll(`a[aria-current="page"]`)]
+    expect(current.map((link) => link.textContent?.trim())).toEqual([`Docs`])
   })
   test(`click outside closes burger menu and dropdowns, inside click does not`, async () => {
     const { submenu, toggle } = mount_dropdown()
@@ -295,8 +354,9 @@ describe(`Nav`, () => {
     // dropdown children stay reachable even under a disabled parent
     expect(hrefs(doc_query(`.dropdown [data-submenu]`))).toEqual(children)
   })
+  // only the most specific matching link is current; its group stays active
   test.each([
-    [`/parent/child`, [true, false], [`page`, `page`]],
+    [`/parent/child`, [true, false], [null, `page`]],
     [`/parent`, [true, false], [`page`, null]],
     [`/other`, [false, true], [null, null]],
   ])(
@@ -351,8 +411,8 @@ describe(`Nav`, () => {
       expect(toggle.getAttribute(`aria-expanded`)).toBe(`true`)
       expect(document.activeElement).toBe(submenu.querySelector(`a`))
       // Moving the mouse across a keyboard-opened pane must not dismiss it or move focus.
-      pointer_event(dropdown, `pointerenter`)
-      pointer_event(dropdown, `pointerleave`)
+      pointer(dropdown, `pointerenter`)
+      pointer(dropdown, `pointerleave`)
       await tick()
       expect(is_visible(submenu)).toBe(true)
       expect(document.activeElement).toBe(submenu.querySelector(`a`))
@@ -392,15 +452,13 @@ describe(`Nav`, () => {
     await tick()
     expect(is_visible(submenu)).toBe(false)
     await click(toggle)
-    const external = document.createElement(`button`)
-    document.body.append(external)
+    const external = create_element(`button`)
     // Focus moving within the submenu or onto the page must leave it open.
     for (const relatedTarget of [submenu.querySelector(`a`), external]) {
       dropdown.dispatchEvent(new FocusEvent(`focusout`, { bubbles: true, relatedTarget }))
       await tick()
       expect(is_visible(submenu)).toBe(true)
     }
-    external.remove()
   })
   test.each([false, true])(
     `custom item content retains link attributes and navigation cancellation=%s`,
@@ -408,7 +466,7 @@ describe(`Nav`, () => {
       const on_navigate = vi.fn(() => (cancelled ? false : undefined))
       mount_nav({
         routes: default_routes,
-        item: createRawSnippet(() => ({ render: () => `<code>Custom</code>` })),
+        item: raw_snippet(`<code>Custom</code>`),
         open: true,
         on_navigate,
         link_props: { target: `_blank` },
@@ -675,18 +733,18 @@ describe(`Nav`, () => {
       set_window_width(width)
       const { dropdown, submenu, toggle } = mount_dropdown()
       const initial_focus = document.activeElement
-      pointer_event(dropdown, `pointerenter`, pointer_type)
+      pointer(dropdown, `pointerenter`, pointer_type)
       await tick()
       expect(is_visible(submenu)).toBe(opens)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(String(opens))
       expect(document.activeElement).toBe(initial_focus)
-      pointer_event(dropdown, `pointerleave`, pointer_type)
+      pointer(dropdown, `pointerleave`, pointer_type)
       await tick()
       expect(is_visible(submenu)).toBe(false)
       expect(document.activeElement).toBe(initial_focus)
       await click(toggle)
-      pointer_event(dropdown, `pointerenter`, pointer_type)
-      pointer_event(dropdown, `pointerleave`, pointer_type)
+      pointer(dropdown, `pointerenter`, pointer_type)
+      pointer(dropdown, `pointerleave`, pointer_type)
       await tick()
       expect(is_visible(submenu)).toBe(true)
     })
@@ -756,7 +814,7 @@ describe(`Nav`, () => {
           press_key(second_link, key) // wraps
         }
         expect(document.activeElement).toBe(first_link)
-        pointer_event(dropdown, `pointerleave`)
+        pointer(dropdown, `pointerleave`)
         await tick()
         expect(is_visible(submenu)).toBe(true)
         expect(document.activeElement).toBe(first_link)
@@ -792,9 +850,7 @@ describe(`Nav`, () => {
     beforeEach(() => vi.useFakeTimers())
     const open_tooltip = async (selector: string): Promise<void> => {
       await tick()
-      doc_query(selector).dispatchEvent(
-        new PointerEvent(`pointerover`, { bubbles: true, pointerType: `mouse` }),
-      )
+      hover(doc_query(selector))
       await vi.advanceTimersByTimeAsync(0)
     }
     test.each([false, true])(

@@ -1,5 +1,9 @@
 // Real-browser coverage for tooltip layout, top-layer rendering and live updates.
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import process from 'node:process'
+import { build } from 'vite'
+import type * as ContrastModule from '../../src/lib/attachments/contrast-color'
+import { hover_until } from './helpers'
 
 type TooltipMetrics = {
   border_box_width: number
@@ -52,18 +56,14 @@ const measure_tooltip = (tooltip_el: Locator): Promise<TooltipMetrics> =>
     }
   })
 
-// retry until hydration has attached the delegated pointer listeners
 const hover_tooltip = async (
   page: Page,
   button_name: string,
   content_snippet: string,
 ): Promise<Locator> => {
   const tooltip_el = page.locator(`.custom-tooltip`)
-  await expect(async () => {
-    await page.mouse.move(0, 0) // move off the button so pointerover re-fires
-    await page.getByRole(`button`, { name: button_name, exact: true }).hover()
-    await expect(tooltip_el).toBeVisible({ timeout: 1000 })
-  }).toPass({ timeout: 15_000 })
+  const button = page.getByRole(`button`, { name: button_name, exact: true })
+  await hover_until(page, button, () => expect(tooltip_el).toBeVisible({ timeout: 1000 }))
   await expect(tooltip_el).toContainText(content_snippet)
   await expect(tooltip_el).toHaveCSS(`opacity`, `1`)
   return tooltip_el
@@ -188,13 +188,11 @@ test.describe(`tooltip layout and lifecycle`, () => {
 
       for (const placement of [`top`, `right`, `bottom`, `left`] as const) {
         await demo.getByLabel(`placement`).selectOption(placement)
-        await expect(async () => {
-          await page.mouse.move(0, 0) // move off the button so pointerover re-fires
-          await button.hover()
-          await expect(tooltip_el).toHaveAttribute(`data-placement`, placement, {
+        await hover_until(page, button, () =>
+          expect(tooltip_el).toHaveAttribute(`data-placement`, placement, {
             timeout: 1000,
-          })
-        }).toPass({ timeout: 15_000 })
+          }),
+        )
         await expect(tooltip_el).toHaveCSS(`opacity`, `1`)
 
         const [button_box, arrow_box, surface_box] = await Promise.all([
@@ -240,11 +238,9 @@ test.describe(`tooltip layout and lifecycle`, () => {
     await demo.getByLabel(`placement`).selectOption(`top`)
     await demo.getByLabel(`align`).selectOption(`start`) // pull the tip toward the curve
     const tooltip_el = page.locator(`.custom-tooltip`)
-    await expect(async () => {
-      await page.mouse.move(0, 0) // move off the button so pointerover re-fires
-      await demo.getByRole(`button`, { name: `Hover the target` }).hover()
-      await expect(tooltip_el).toHaveAttribute(`data-placement`, `top`, { timeout: 1000 })
-    }).toPass({ timeout: 15_000 })
+    await hover_until(page, demo.getByRole(`button`, { name: `Hover the target` }), () =>
+      expect(tooltip_el).toHaveAttribute(`data-placement`, `top`, { timeout: 1000 }),
+    )
 
     const arrow = tooltip_el.locator(`.custom-tooltip-arrow`)
     await expect(arrow).toHaveCSS(`border-bottom-color`, `rgb(255, 0, 0)`)
@@ -277,4 +273,49 @@ test.describe(`tooltip layout and lifecycle`, () => {
     expect(Math.abs(metrics.content_width - metrics.text_width)).toBeLessThanOrEqual(3)
     expect_within_viewport(metrics)
   })
+})
+
+// happy-dom leaves assignedSlot unset, so slotted composition needs a real browser. The
+// module is bundled here rather than imported from a route so dev and preview runs match.
+test(`contrast_color walks slotted content through the slot's painted wrapper`, async ({
+  page,
+}) => {
+  const result = await build({
+    configFile: false,
+    logLevel: `silent`,
+    build: {
+      write: false,
+      minify: false,
+      lib: {
+        entry: `${process.cwd()}/src/lib/attachments/contrast-color.ts`,
+        formats: [`iife`],
+        name: `contrast_module`,
+      },
+    },
+  })
+  const [bundle] = Array.isArray(result) ? result : [result]
+  if (!bundle || !(`output` in bundle))
+    throw new Error(`expected one bundle, got watcher`)
+  await page.setContent(`<div id="host" style="background: rgb(250, 250, 250)"></div>`)
+  await page.addScriptTag({ content: bundle.output[0].code })
+  const walked = await page.evaluate(() => {
+    const host = document.querySelector(`#host`)
+    if (!host) throw new Error(`missing #host`)
+    const wrapper = document.createElement(`div`)
+    wrapper.style.background = `rgb(10, 10, 10)`
+    wrapper.append(document.createElement(`slot`))
+    host.attachShadow({ mode: `open` }).append(wrapper)
+    const node = document.createElement(`span`)
+    host.append(node)
+    const { contrast_color, get_bg_color } = (
+      globalThis as unknown as { contrast_module: typeof ContrastModule }
+    ).contrast_module
+    contrast_color()(node)
+    return {
+      slotted: node.assignedSlot?.parentElement === wrapper,
+      bg_color: get_bg_color(node),
+      color: node.style.color,
+    }
+  })
+  expect(walked).toEqual({ slotted: true, bg_color: `rgb(10, 10, 10)`, color: `white` })
 })

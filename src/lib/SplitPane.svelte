@@ -120,7 +120,12 @@
   }
 
   const notify_resize = () => on_resize?.({ ratio, first_px, collapsed })
-  $effect(() => update_parent(pane_size))
+  $effect(() => {
+    const parent = divider?.parentElement
+    parent?.style.setProperty(`--split-pane-size`, pane_size)
+    // a parent that outlives the divider must not keep sizing panes for a gone separator
+    return () => parent?.style.removeProperty(`--split-pane-size`)
+  })
 
   const resize_from_pointer = (event: PointerEvent): void => {
     if (active_pointer !== event.pointerId || !divider?.parentElement) return
@@ -158,7 +163,10 @@
     }
     if (event.key === `Home` || event.key === `End`) {
       event.preventDefault()
-      return apply_size(size_bounds[event.key === `Home` ? 0 : 1])
+      const bound = size_bounds[event.key === `Home` ? 0 : 1]
+      // An unmeasured (e.g. hidden) pixel-mode container has no upper bound to jump to yet
+      if (Number.isFinite(bound)) apply_size(bound)
+      return
     }
     const horizontal_keys = is_right_to_left()
       ? [`ArrowRight`, `ArrowLeft`]

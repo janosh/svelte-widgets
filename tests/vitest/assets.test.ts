@@ -3,14 +3,16 @@ import { create_markdown, markdown } from '#lib/markdown/index.ts'
 import { decode_source_map, original_position } from '#lib/markdown/source-map.ts'
 import { compile, parse, preprocess } from 'svelte/compiler'
 import { writeFile } from 'node:fs/promises'
-import { temp_dir } from './index'
+import { import_code, temp_dir } from './index'
 import { build } from 'vite'
 import { describe, expect, test } from 'vite-plus/test'
 
-const transform = async (content: string) => {
-  const result = await preprocess(content, asset_imports(), {
-    filename: `/src/page.svelte`,
-  })
+// preprocesses (Markdown first for .md files) and checks the output still compiles
+const transform = async (content: string, filename = `/src/page.svelte`) => {
+  const preprocessors = filename.endsWith(`.md`)
+    ? [markdown(create_markdown()), asset_imports()]
+    : asset_imports()
+  const result = await preprocess(content, preprocessors, { filename })
   compile(result.code, { generate: false })
   return result
 }
@@ -160,15 +162,13 @@ describe(`asset imports`, () => {
   })
 
   test(`imports Markdown images and PDF links after Markdown compilation`, async () => {
-    const result = await preprocess(
+    const { code } = await transform(
       `![Figure](./figure.png)\n\n[Notes](./notes.pdf#page=2)`,
-      [markdown(create_markdown()), asset_imports()],
-      { filename: `/src/page.md` },
+      `/src/page.md`,
     )
-    compile(result.code, { generate: false })
-    expect(result.code).toContain(`from "./figure.png?url"`)
-    expect(result.code).toContain(`from "./notes.pdf?url&no-inline"`)
-    expect(result.code).toContain(`href={__widget_asset_1 + "#page=2"}`)
+    expect(code).toContain(`from "./figure.png?url"`)
+    expect(code).toContain(`from "./notes.pdf?url&no-inline"`)
+    expect(code).toContain(`href={__widget_asset_1 + "#page=2"}`)
   })
 
   test(`resolves supported filenames and rejects encoded URL delimiters`, async () => {
@@ -186,11 +186,7 @@ describe(`asset imports`, () => {
       `<img src="./image-%25FF.svg">`,
     ].join(`\n`)
     await writeFile(`${directory}/image-%FF.svg`, svg)
-    const { code } = await preprocess(
-      source,
-      [markdown(create_markdown()), asset_imports()],
-      { filename: `${directory}/page.md` },
-    )
+    const { code } = await transform(source, `${directory}/page.md`)
     const script = parse(code, { modern: true }).instance
     if (!script) throw new Error(`Missing asset imports`)
     const declarations = code
@@ -210,12 +206,7 @@ describe(`asset imports`, () => {
     if (!Array.isArray(bundle)) throw new Error(`Expected Vite library output`)
     const chunk = bundle[0].output.find((output) => output.type === `chunk`)
     if (!chunk) throw new Error(`Missing bundled asset module`)
-    const urls = (
-      await import(
-        /* @vite-ignore */ `data:text/javascript,${encodeURIComponent(chunk.code)}`
-      )
-    ).default as unknown
-    expect(urls).toEqual(
+    expect((await import_code(chunk.code)).default).toEqual(
       [...filenames, `image-%FF.svg`].map(() =>
         expect.stringMatching(/^data:image\/svg\+xml[;,]/u),
       ),

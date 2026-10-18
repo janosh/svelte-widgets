@@ -14,7 +14,7 @@
     submit_prompt,
   } from './dialogs.svelte'
   import { focusable } from './attachments/shared'
-  import { restore_dialog_focus } from './dialog'
+  import { restore_dialog_focus, track_backdrop_dismiss } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element
@@ -37,6 +37,13 @@
   let dialog = $state<HTMLDialogElement | null>(null)
   let focus_origin: HTMLElement | SVGElement | null = null
   let programmatic_close_pending = false
+  // the close event below dismisses; browsers with `closedby` already closed it
+  const backdrop = track_backdrop_dismiss(
+    () => dialog,
+    () => {
+      if ((rest.closedby ?? `any`) === `any` && dialog?.open) dialog.close()
+    },
+  )
   let prompt_value = $derived(request?.kind === `prompt` ? request.initial_value : ``)
   // Writable derived on `request`: submitting an invalid value assigns the error, and
   // advancing the queue re-runs this and clears it, so no stale error survives a request.
@@ -98,7 +105,12 @@
   data-backdrop-dim={backdrop_dim || undefined}
   data-backdrop-blur={backdrop_blur || undefined}
   aria-labelledby={title_id}
+  onpointerdown={chain_handlers(backdrop.onpointerdown, rest.onpointerdown)}
+  onpointercancel={chain_handlers(backdrop.onpointercancel, rest.onpointercancel)}
+  onclick={chain_handlers(backdrop.onclick, rest.onclick)}
   onclose={chain_handlers(() => {
+    // a native light dismiss fires no click, so its press must not outlive this close
+    backdrop.reset()
     // Don't let a delayed programmatic close dismiss a newly queued request.
     if (programmatic_close_pending) programmatic_close_pending = false
     else if (!dialog?.open && request) dismiss_dialog()

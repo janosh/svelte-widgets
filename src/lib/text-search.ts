@@ -1,5 +1,6 @@
 // Find across DOM node boundaries by matching concatenated text within block elements.
 import { DIACRITIC, splits_letter } from './internal/diacritics'
+import { lower_bound } from './utils'
 
 // Block elements define match segments regardless of nested inline markup.
 export const DEFAULT_SEGMENT_SELECTOR =
@@ -160,13 +161,7 @@ const normalize_with_offsets = (source: string): NormalizedText => {
 
 // Binary-search cumulative node ends to avoid quadratic scans over tokenized blocks.
 const node_reaching = (nodes: SegmentNode[], min_end: number): SegmentNode => {
-  let [low, high] = [0, nodes.length - 1]
-  while (low < high) {
-    const mid = (low + high) >> 1
-    if (nodes[mid].end >= min_end) high = mid
-    else low = mid + 1
-  }
-  const found = nodes[low]
+  const found = nodes[lower_bound(nodes.length, (idx) => nodes[idx].end >= min_end)]
   // offsets come from the segment's own text, so they always land inside it
   if (!found || found.end < min_end) {
     throw new Error(`No text node reaches offset ${min_end} of ${nodes.at(-1)?.end}`)

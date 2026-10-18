@@ -32,15 +32,15 @@ git checkout -b test-some-feature
 Run the tests covering your changes, for example:
 
 ```sh
-npx vitest run tests/vitest/toc.svelte.test.ts
-npx playwright test tests/playwright/Toc.test.ts
+npx vp test run tests/vitest/toc.svelte.test.ts
+npx playwright test tests/playwright/toc.test.ts
 ```
 
 Install Chromium once with `npx playwright install chromium` before running browser tests. `npm test` runs both complete suites; CI also checks coverage, package imports, types, formatting, and the docs build.
 
 New features should include corresponding tests. Bug fixes should include a test that fails under the old code and passes with the change. PRs without tests are accepted when assistance is needed, but may take longer to merge.
 
-Demo pages live in [`src/routes/(demos)`](https://github.com/janosh/svelte-widgets/tree/main/src/routes/%28demos%29) under the same categories as the navigation: `(inputs)`, `(navigation)`, `(overlays)`, `(display)`, `(authoring)`, and `(attachments)`. Put new pages directly in the appropriate category, for example [`(inputs)/range-slider/+page.md`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/%28inputs%29/range-slider/+page.md). The category folders do not appear in URLs. Navigation, search, and previous/next links discover pages automatically; only custom display labels and category order live in [`(demos)/index.ts`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/index.ts). Pages in `(hide)` stay outside those menus.
+Demo pages live in [`src/routes/(demos)`](https://github.com/janosh/svelte-widgets/tree/main/src/routes/%28demos%29) under the same categories as the navigation: `(inputs)`, `(navigation)`, `(overlays)`, `(display)`, `(authoring)`, and `(attachments)`. Put new pages directly in the appropriate category, for example [`(inputs)/range-slider/+page.md`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/%28inputs%29/range-slider/+page.md). The category folders do not appear in URLs. Navigation, search, and previous/next links discover pages automatically; only category order, page descriptions, and custom display labels live in [`(demos)/index.ts`](https://github.com/janosh/svelte-widgets/blob/main/src/routes/%28demos%29/index.ts). Pages in `(hide)` stay outside those menus.
 
 ## ✅ CI checks
 

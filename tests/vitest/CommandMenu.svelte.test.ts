@@ -1,9 +1,16 @@
 import { CommandMenu, PageSearch } from '#lib'
 import type { CmdAction, LoadOptionsParams } from '#lib/types.ts'
 import { MULTI_SELECT_LABELS } from '#lib/labels.ts'
-import { type ComponentProps, flushSync, tick } from 'svelte'
+import { type ComponentProps, tick } from 'svelte'
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from 'vite-plus/test'
-import { click, create_element, doc_query, press_key, render } from './index'
+import {
+  click,
+  create_element,
+  doc_query,
+  pointer_event,
+  press_key,
+  render,
+} from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 
 const make_actions = (...labels: string[]) =>
@@ -21,6 +28,35 @@ const mount_menu = (props: ComponentProps<typeof CommandMenu>) => {
 }
 
 const type_search = (text: string) => type_search_text(text, menu_input())
+
+// dropdown option labels in display order
+const option_labels = () =>
+  Array.from(document.querySelectorAll(`li[role='option']`), (li) =>
+    li.textContent?.trim(),
+  )
+
+const shortcut_kbd_parts = () =>
+  Array.from(
+    document.querySelectorAll(`li[role='option'] .cmd-shortcut kbd`),
+    (kbd) => kbd.textContent,
+  )
+
+const stored_recents = (key: string): unknown =>
+  JSON.parse(localStorage.getItem(key) ?? `[]`)
+
+const press_ctrl_shift = (key: string) =>
+  press_key(globalThis, key, { ctrlKey: true, shiftKey: true })
+
+// for PageSearch, which debounces and loads with timers the tests fake
+const flush_timers = async () => {
+  await vi.runAllTimersAsync()
+  await tick()
+}
+
+const search_pagefind = async (query: string) => {
+  await type_search(query)
+  await flush_timers()
+}
 
 test.each([
   [[`k`], `k`, `meta`, true],
@@ -81,7 +117,6 @@ test.each([`Escape`, `x`])(
       onkeydown,
     })
     mount_menu(props)
-    await tick()
 
     const event = press_key(menu_input(), close_key)
     await tick()
@@ -107,7 +142,6 @@ test.each([
       actions: mock_actions,
       dialog_props: { oncancel, closedby },
     })
-    await tick()
 
     const cancel_event = new Event(`cancel`, { cancelable: true })
     const dialog = doc_query<HTMLDialogElement>(`dialog`)
@@ -119,7 +153,37 @@ test.each([
   },
 )
 
-test(`opens a labeled native light-dismiss dialog`, async () => {
+// happy-dom has no native `closedby` light dismiss, so this exercises the fallback
+test.each([
+  [[`Escape`], undefined, 10, true],
+  [[], undefined, 10, true], // backdrop still closes when Escape doesn't
+  [[`Escape`], `closerequest` as const, 10, false],
+  [[`Escape`], `none` as const, 10, false],
+  [[`Escape`], undefined, 150, false], // press started inside the box
+])(
+  `backdrop click with close_keys=%j closedby=%s pressed at %i closes: %s`,
+  async (close_keys, closedby, press_xy, should_close) => {
+    const props = $state({
+      open: true,
+      close_keys,
+      actions: mock_actions,
+      dialog_props: { closedby },
+    })
+    mount_menu(props)
+
+    const dialog = doc_query<HTMLDialogElement>(`dialog`)
+    dialog.getBoundingClientRect = () =>
+      ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
+    dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
+    dialog.dispatchEvent(pointer_event(`click`, 10, 10))
+    await tick()
+
+    expect(props.open).toBe(!should_close)
+    expect(document.querySelector(`dialog`) === null).toBe(should_close)
+  },
+)
+
+test(`opens a labeled native light-dismiss modal and forwards styling props`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
   mount_menu({
     actions: mock_actions,
@@ -127,8 +191,11 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
     open: true,
     backdrop_dim: false,
     backdrop_blur: true,
+    class: `my-custom-class`,
+    placeholder: `Custom placeholder`,
+    dialog_props: { style: `padding: 20px;` },
+    li_option_style: `font-weight: bold;`,
   })
-  await tick()
 
   const dialog = doc_query<HTMLDialogElement>(`dialog`)
   expect(dialog.getAttribute(`aria-label`)).toBe(`Run command`)
@@ -137,6 +204,10 @@ test(`opens a labeled native light-dismiss dialog`, async () => {
   expect(dialog.hasAttribute(`data-backdrop-dim`)).toBe(false)
   expect(dialog.hasAttribute(`data-backdrop-blur`)).toBe(true)
   expect(show_modal).toHaveBeenCalledOnce()
+  expect(dialog.style.padding).toBe(`20px`)
+  expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
+  expect(menu_input().placeholder).toBe(`Custom placeholder`)
+  expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
 })
 
 test(`handles action selection and execution`, async () => {
@@ -155,7 +226,6 @@ test(`handles action selection and execution`, async () => {
     on_execute,
   })
   mount_menu(props)
-  await tick()
 
   for (const key of [`ArrowDown`, `Enter`]) press_key(menu_input(), key)
 
@@ -231,7 +301,6 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
     title: `Command list`,
   })
   mount_menu(props)
-  await tick()
   expect(doc_query(`dialog li.group-header`).textContent).toContain(`Commands`)
   expect(doc_query(`dialog li.group-header button`).getAttribute(`aria-label`)).toBe(
     `Gruppe: Commands`,
@@ -284,7 +353,6 @@ test.each([0, 50])(
       dialog_props: { onclose },
     })
     mount_menu(props)
-    await tick()
 
     const dialog = doc_query<HTMLDialogElement>(`dialog`)
     props.open = false
@@ -294,8 +362,7 @@ test.each([0, 50])(
     expect(dialog_close).toHaveBeenCalled()
     expect(onclose).toHaveBeenCalledOnce()
     if (fade_duration_ms === 0) expect(document.querySelector(`dialog`)).toBeNull()
-    await vi.runAllTimersAsync()
-    await tick()
+    await flush_timers()
     expect(onclose).toHaveBeenCalledOnce()
   },
 )
@@ -312,7 +379,6 @@ test(`an onclose callback can reopen without another close event`, async () => {
     },
   })
   mount_menu(props)
-  await tick()
 
   props.open = false
   await tick()
@@ -326,7 +392,6 @@ test(`an onclose callback can reopen without another close event`, async () => {
 test(`a stale native close cannot close a reopened menu`, async () => {
   const props = $state({ open: true, actions: mock_actions })
   mount_menu(props)
-  await tick()
   const old_dialog = doc_query<HTMLDialogElement>(`dialog`)
 
   props.open = false
@@ -343,23 +408,6 @@ test(`a stale native close cannot close a reopened menu`, async () => {
   expect(current_dialog.open).toBe(true)
 })
 
-test(`forwards class, placeholder, dialog_props and li_option_style`, async () => {
-  mount_menu({
-    open: true,
-    actions: mock_actions,
-    class: `my-custom-class`,
-    placeholder: `Custom placeholder`,
-    dialog_props: { style: `padding: 20px;` },
-    li_option_style: `font-weight: bold;`,
-  })
-  await tick()
-
-  expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
-  expect(menu_input().placeholder).toBe(`Custom placeholder`)
-  expect(doc_query(`dialog`).style.padding).toBe(`20px`)
-  expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
-})
-
 test(`native dialog close resets state and forwards dialog_props.onclose`, async () => {
   const on_close = vi.fn()
   const props = $state({
@@ -371,7 +419,6 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
     dialog_props: { class: `custom-dialog`, onclose: on_close },
   })
   mount_menu(props)
-  await tick()
 
   const dialog = doc_query<HTMLDialogElement>(`dialog`)
   expect(dialog.classList.contains(`custom-dialog`)).toBe(true)
@@ -389,15 +436,16 @@ test(`native dialog close resets state and forwards dialog_props.onclose`, async
   })
 })
 
-test(`renders an empty list and accepts later actions`, async () => {
+test(`renders an empty list and later plain actions as default option rows`, async () => {
   const props = $state({ open: true, actions: [] as CmdAction[] })
   mount_menu(props)
-  await tick()
   expect(document.querySelectorAll(`[role="option"]:not(.user-msg)`)).toHaveLength(0)
   expect(document.body.textContent).toContain(`No matching commands`)
   props.actions = mock_actions
   await tick()
   expect(document.querySelectorAll(`[role="option"]`)).toHaveLength(mock_actions.length)
+  // without shortcut/description/badge/metadata the rich action snippet stays unused
+  expect(document.querySelector(`.cmd-action`)).toBeNull()
 })
 
 test.each([
@@ -405,10 +453,53 @@ test.each([
   [false, ``],
 ])(`virtual_list=%j pins option row height to %j`, async (virtual_list, height) => {
   mount_menu({ open: true, actions: mock_actions, virtual_list })
-  await tick()
   const rows = [...document.querySelectorAll<HTMLElement>(`li[role="option"]`)]
-  expect(rows.map((row) => row.style.height)).toEqual(rows.map(() => height))
+  expect(rows.map((row) => row.style.height)).toEqual(mock_actions.map(() => height))
 })
+
+// an empty-list row would contradict a pending load or render as a blank option
+test.each([{ loading: true }, { no_matching_options_msg: `` }])(
+  `omits the empty-list row for %j`,
+  async (props) => {
+    mount_menu({ open: true, actions: [], ...props })
+    await tick()
+    expect(document.querySelector(`dialog .user-msg`)).toBeNull()
+  },
+)
+
+// arrow keys await auto-scroll, which must not delay the consumer's own handler, and
+// expanding a collapsed group shifts indices, which must settle before that handler runs
+test.each([
+  [`plain list`, [], `a1`, `b1`],
+  [`collapsed group to expand`, [`A`], `b1`, `b2`],
+])(
+  `ArrowDown in a %s forwards to onkeydown synchronously with the new active option`,
+  async (_, collapsed, initial, expected) => {
+    const actions = make_actions(`a1`, `b1`, `b2`).map((action, idx) => ({
+      ...action,
+      group: idx ? `B` : `A`,
+    }))
+    const seen: (string | undefined)[] = []
+    const onkeydown = vi.fn(() => void seen.push(props.active_option?.label))
+    const props = $state<ComponentProps<typeof CommandMenu>>({
+      open: true,
+      actions,
+      collapsed_groups: new Set(collapsed),
+      collapsible_groups: true,
+      keyboard_expands_collapsed_groups: true,
+      active_option: null,
+      onkeydown,
+    })
+    mount_menu(props)
+    expect(props.active_option?.label).toBe(initial)
+    const event = press_key(menu_input(), `ArrowDown`)
+    expect(onkeydown).toHaveBeenCalledExactlyOnceWith(event)
+    expect(seen).toEqual([expected])
+    await tick()
+    expect(props.active_option?.label).toBe(expected)
+    expect(props.collapsed_groups?.size).toBe(0)
+  },
+)
 
 test(`remains open when trigger keys are pressed while already open`, async () => {
   const props = $state({ open: true, actions: mock_actions })
@@ -421,7 +512,6 @@ test(`remains open when trigger keys are pressed while already open`, async () =
 
 test(`lets command menu dropdown overflow dialog box`, async () => {
   mount_menu({ open: true, actions: mock_actions })
-  await tick()
 
   const { position, left, right, overflow } = getComputedStyle(doc_query(`dialog`))
   expect([position, left, right, overflow]).toEqual([`fixed`, `0px`, `0px`, `visible`])
@@ -503,7 +593,6 @@ test(`selects the first enabled action and preserves pointer selection across gr
     max_options: undefined as number | undefined,
   })
   mount_menu(props)
-  await tick()
 
   expect(doc_query(`li.active`).textContent).toContain(`Alpha`)
 
@@ -613,7 +702,6 @@ test(`active_option binding selects initial and externally changed commands`, as
     active_index: null as number | null,
   })
   mount_menu(props)
-  await tick()
   expect(props.active_index).toBe(1)
   expect(doc_query(`li.active`).textContent).toContain(`action 2`)
   props.active_option = { ...mock_actions[2] }
@@ -675,7 +763,6 @@ test.each([null, undefined])(
       max_options: max_options as number | undefined,
     })
     mount_menu(props)
-    await tick()
 
     expect(props.active_index).toBe(1)
     expect(option_labels()).toEqual([`Disabled`, `Enabled`])
@@ -714,7 +801,6 @@ test(`preserves duplicate labels across reorders, renames and rebuilt callbacks`
     active_index: 1,
   })
   mount_menu(props)
-  await tick()
 
   expect(props.active_index).toBe(1)
   const active_option = doc_query<HTMLLIElement>(`li.active`)
@@ -800,7 +886,6 @@ test.each(
       load_error: null as Error | null,
     })
     mount_menu(props)
-    await tick()
     expect(doc_query(`[role='status']`).textContent).toBe(
       labels?.loading_more ?? MULTI_SELECT_LABELS.loading_more,
     )
@@ -848,24 +933,6 @@ test.each(
   },
 )
 
-// dropdown option labels in display order (used by shortcut/recents tests below)
-const option_labels = () =>
-  Array.from(document.querySelectorAll(`li[role='option']`), (li) =>
-    li.textContent?.trim(),
-  )
-
-const shortcut_kbd_parts = () =>
-  Array.from(
-    document.querySelectorAll(`li[role='option'] .cmd-shortcut kbd`),
-    (kbd) => kbd.textContent,
-  )
-
-const stored_recents = (key: string): unknown =>
-  JSON.parse(localStorage.getItem(key) ?? `[]`)
-
-const press_ctrl_shift = (key: string) =>
-  press_key(globalThis, key, { ctrlKey: true, shiftKey: true })
-
 test(`renders and searches action descriptions, metadata, badges, and keywords`, async () => {
   const actions = [
     {
@@ -881,7 +948,6 @@ test(`renders and searches action descriptions, metadata, badges, and keywords`,
     { id: `quit`, label: `quit`, action: vi.fn() },
   ]
   mount_menu({ open: true, actions })
-  await tick()
 
   expect(doc_query(`.cmd-description`).textContent).toBe(`Write buffer to disk`)
   expect(doc_query(`.cmd-metadata`).textContent).toBe(`Workspace · Modified`)
@@ -892,12 +958,6 @@ test(`renders and searches action descriptions, metadata, badges, and keywords`,
   await type_search(`workspace persist`)
   expect(option_labels()).toEqual([expect.stringContaining(`save file`)])
 })
-
-async function search_pagefind(query: string): Promise<void> {
-  await type_search(query)
-  await vi.runAllTimersAsync()
-  await tick()
-}
 
 describe(`PageSearch`, () => {
   const base_props = { open: true, fade_duration_ms: 0, debounce_ms: 0 }
@@ -975,8 +1035,7 @@ describe(`PageSearch`, () => {
     expect(props.outer_div).toBe(doc_query(`dialog .option-list`))
     expect(document.querySelectorAll(`li[role='option']`)).toHaveLength(1)
     doc_query<HTMLUListElement>(`ul.options`).dispatchEvent(new Event(`scroll`))
-    await vi.runAllTimersAsync()
-    await tick()
+    await flush_timers()
     expect(search).toHaveBeenCalledOnce()
     const options = document.querySelectorAll<HTMLLIElement>(`li[role='option']`)
     expect(Array.from(options, (option) => option.textContent?.trim())).toEqual([
@@ -1012,8 +1071,7 @@ describe(`PageSearch`, () => {
     expect(search).toHaveBeenCalledTimes(2)
 
     requests[1].resolve(fresh_response)
-    await vi.runAllTimersAsync()
-    await tick()
+    await flush_timers()
     expect(doc_query(`.cmd-label`).childNodes[0]?.textContent?.trim()).toBe(`Fresh`)
 
     requests[0].resolve(stale_response)
@@ -1043,13 +1101,11 @@ describe(`PageSearch`, () => {
       expect(load_pagefind).toHaveBeenCalledOnce()
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
       request.reject(new Error(`Unavailable`))
-      await vi.runAllTimersAsync()
-      await tick()
+      await flush_timers()
       expect(option_labels()).toEqual([`Fallback`])
       expect(doc_query(`[role="alert"]`).textContent).toContain(`Could not load options`)
       doc_query<HTMLButtonElement>(`dialog [role="alert"] + button`).click()
-      await vi.runAllTimersAsync()
-      await tick()
+      await flush_timers()
       expect(menu_input().value).toBe(`fallback`)
       expect(document.querySelector(`[role="alert"]`)).toBeNull()
       expect(load_pagefind).toHaveBeenCalledTimes(failure === `result` ? 1 : 2)
@@ -1102,8 +1158,7 @@ describe(`PageSearch`, () => {
     props.pagefind_key = `fresh`
     props.load_pagefind = async () => ({ search: fresh_search })
     await tick()
-    await vi.runAllTimersAsync()
-    await tick()
+    await flush_timers()
 
     expect(fresh_search).toHaveBeenCalledExactlyOnceWith(`same query`)
     expect(doc_query(`.cmd-label`).textContent).toContain(`Fresh`)
@@ -1240,15 +1295,8 @@ test.each([
     open: true,
     actions: [{ id: `zoom in`, label: `zoom in`, action: vi.fn(), shortcut }],
   })
-  await tick()
 
   expect(shortcut_kbd_parts()).toEqual(expected_parts)
-})
-
-test(`plain actions without shortcut/description use default option rendering`, async () => {
-  mount_menu({ open: true, actions: mock_actions })
-  await tick()
-  expect(document.querySelector(`.cmd-action`)).toBeNull()
 })
 
 test.each([
@@ -1271,7 +1319,6 @@ test.each([
   ]
   const on_execute = vi.fn()
   mount_menu({ actions, open, global_shortcuts, on_execute })
-  await tick()
 
   press_key(globalThis, `s`, { ctrlKey: true, shiftKey: shift })
   await tick()
@@ -1345,7 +1392,6 @@ test(`recent_actions_key ranks, persists, and reloads recently triggered actions
   const actions = make_actions(`alpha`, `beta`, `gamma`)
   const props = $state({ open: true, actions, recent_actions_key: storage_key })
   mount_menu(props)
-  await tick()
 
   // no recents yet: original order
   expect(option_labels()).toEqual([`alpha`, `beta`, `gamma`])
@@ -1377,7 +1423,6 @@ test(`recent_actions_key uses action ids for duplicate labels`, async () => {
   ]
   const props = $state({ open: true, actions, recent_actions_key: storage_key })
   mount_menu(props)
-  await tick()
 
   expect(doc_query(`li[role='option'] .cmd-description`).textContent).toBe(`Mixed`)
 
@@ -1407,16 +1452,12 @@ test.each([
   async (_desc, stored, expected_order, max_recent) => {
     const storage_key = `test-cmd-stored-recents`
     localStorage.setItem(storage_key, stored)
-    // flushSync so render errors from bad storage data fail this test, not the suite
-    flushSync(() => {
-      mount_menu({
-        open: true,
-        actions: make_actions(`alpha`, `beta`, `gamma`),
-        recent_actions_key: storage_key,
-        max_recent,
-      })
+    mount_menu({
+      open: true,
+      actions: make_actions(`alpha`, `beta`, `gamma`),
+      recent_actions_key: storage_key,
+      max_recent,
     })
-    await tick()
 
     expect(option_labels()).toEqual(expected_order)
   },
@@ -1448,9 +1489,8 @@ test.each([
 ])(
   `global shortcut recents persistence: $desc`,
   async ({ actions, max_recent, keys, expected }) => {
-    const storage_key = `test-cmd-recents-${expected.join(`-`)}`
+    const storage_key = `test-cmd-recents`
     mount_menu({ actions, open: false, recent_actions_key: storage_key, max_recent })
-    await tick()
 
     for (const key of keys) press_ctrl_shift(key)
     await tick()

@@ -36,6 +36,5 @@
   {#if icon}<Icon
       {icon}
       class="heading-icon"
-      aria-hidden="true"
     />{/if}{@render children?.()}{#if link}{@html heading_anchor_html(id, icon_svg)}{/if}
 </svelte:element>

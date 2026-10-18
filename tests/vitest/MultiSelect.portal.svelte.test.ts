@@ -4,6 +4,14 @@ import type { MultiSelectProps, PortalParams } from '#lib/types.ts'
 import { create_element, doc_query } from './index'
 import { mount_multiselect } from './MultiSelect.test-utils'
 
+const is_open = () => doc_query(`div.multiselect`).classList.contains(`open`)
+
+// fires a window event the portal listens to, then waits for the rAF-scheduled reposition
+const reposition = async (type: `resize` | `scroll` = `resize`) => {
+  globalThis.dispatchEvent(new Event(type))
+  await new Promise(requestAnimationFrame)
+}
+
 describe(`portal placement`, () => {
   afterEach(() => vi.unstubAllGlobals()) // don't leak innerHeight overrides to other tests
 
@@ -111,6 +119,24 @@ describe(`portal placement`, () => {
       expected_placement: `top`,
       desc: `omitted placement defaults to auto and flips above`,
     },
+    // the next two would place the dropdown above the viewport top, so it clamps to 0
+    {
+      placement: `top`,
+      trigger_rect: { top: 50, bottom: 80 },
+      dropdown_height: 300,
+      viewport_height: 800,
+      expected_placement: `top`,
+      desc: `forced above a trigger near the viewport top`,
+    },
+    {
+      // flips above (830 + 900 > 800 and 750 > 800 - 780) but 750 - 900 < 0
+      placement: `auto`,
+      trigger_rect: { top: 750, bottom: 780 },
+      dropdown_height: 900,
+      viewport_height: 800,
+      expected_placement: `top`,
+      desc: `a dropdown taller than the space above`,
+    },
   ] as const)(
     `placement=$placement with $desc resolves to $expected_placement`,
     async ({
@@ -122,37 +148,12 @@ describe(`portal placement`, () => {
     }) => {
       await mount_with_portal(placement)
       const dropdown = stub_layout({ trigger_rect, dropdown_height, viewport_height })
-
-      globalThis.dispatchEvent(new Event(`resize`)) // force update_position with stubs
-      await new Promise(requestAnimationFrame)
+      await reposition() // force update_position with stubs
 
       expect(dropdown.dataset.placement).toBe(expected_placement)
       expect(dropdown.style.top).toBe(
         expected_top_style(expected_placement, trigger_rect, dropdown_height, dropdown),
       )
-    },
-  )
-
-  test.each([
-    // forced top with trigger near viewport top and dropdown taller than space above
-    { placement: `top`, trigger_rect: { top: 50, bottom: 80 }, dropdown_height: 300 },
-    // auto flips above (830 + 900 > 800 and 750 > 800 - 780) but 750 - 900 < 0
-    { placement: `auto`, trigger_rect: { top: 750, bottom: 780 }, dropdown_height: 900 },
-  ] as const)(
-    `placement=$placement never positions dropdown above viewport top (clamps to 0)`,
-    async ({ placement, trigger_rect, dropdown_height }) => {
-      await mount_with_portal(placement)
-      const dropdown = stub_layout({
-        trigger_rect,
-        dropdown_height,
-        viewport_height: 800,
-      })
-
-      globalThis.dispatchEvent(new Event(`resize`))
-      await new Promise(requestAnimationFrame)
-
-      expect(dropdown.dataset.placement).toBe(`top`)
-      expect(dropdown.style.top).toBe(`0px`)
     },
   )
 
@@ -170,8 +171,7 @@ describe(`portal placement`, () => {
       dropdown_height: 200,
       viewport_height: 800,
     })
-    globalThis.dispatchEvent(new Event(`scroll`)) // scroll listener also repositions
-    await new Promise(requestAnimationFrame)
+    await reposition(`scroll`) // scroll listener also repositions
     expect(dropdown.dataset.placement).toBe(`bottom`)
     expect(dropdown.style.top).toBe(`130px`)
 
@@ -181,15 +181,13 @@ describe(`portal placement`, () => {
       dropdown_height: 200,
       viewport_height: 700,
     })
-    globalThis.dispatchEvent(new Event(`scroll`))
-    await new Promise(requestAnimationFrame)
+    await reposition(`scroll`)
     expect(dropdown.dataset.placement).toBe(`top`)
 
     // changing placement via props flows through the action's update() method
     props.portal = { active: true, placement: `bottom` }
     await tick()
-    globalThis.dispatchEvent(new Event(`resize`))
-    await new Promise(requestAnimationFrame)
+    await reposition()
     expect(dropdown.dataset.placement).toBe(`bottom`)
     expect(dropdown.style.top).toBe(`630px`)
   })
@@ -229,7 +227,7 @@ test(`press on the portalled dropdown does not close it`, async () => {
   const press_is_open = async (target: Element) => {
     target.dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
     await tick()
-    return doc_query(`div.multiselect`).classList.contains(`open`)
+    return is_open()
   }
 
   expect(await press_is_open(doc_query(`body > ul.options`))).toBe(true)
@@ -246,7 +244,6 @@ test.each([
   async (_label, extra) => {
     mount_multiselect({ options: [1, 2, 3], dismiss_on: `release`, open: true, ...extra })
     await tick()
-    const is_open = () => doc_query(`div.multiselect`).classList.contains(`open`)
     expect(is_open()).toBe(true)
 
     const outside = create_element(`button`)

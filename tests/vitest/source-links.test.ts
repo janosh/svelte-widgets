@@ -6,7 +6,7 @@ import source_links, {
 import { mkdirSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, onTestFinished } from 'vite-plus/test'
-import { create_element, temp_dir } from './index'
+import { create_element, import_code, temp_dir } from './index'
 
 // Run the plugin's resolve + load hooks and evaluate the emitted module
 const load_symbols = async (root?: string): Promise<SourceSymbols> => {
@@ -19,7 +19,7 @@ const load_symbols = async (root?: string): Promise<SourceSymbols> => {
   expect(load(`some-other-module`)).toBeNull()
   const code = load(resolved)
   if (!code) throw new Error(`virtual module not loaded`)
-  return import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+  return import_code(code) as Promise<SourceSymbols>
 }
 
 describe(`source_links vite plugin`, () => {
@@ -83,8 +83,29 @@ export function only_a(value: string | number) { return value }
     [{ url: `git+ssh://git@github.com/user/repo.git` }, `https://github.com/user/repo`],
     [`git@gitlab.com:group/repo.git`, `https://gitlab.com/group/repo`],
     [`user/repo`, `https://github.com/user/repo`],
+    [`github:user/repo`, `https://github.com/user/repo`],
+    [`gitlab:group/repo`, `https://gitlab.com/group/repo`],
+    [`https://github.com/user/repo/`, `https://github.com/user/repo`],
+    [`user/repo.git`, `https://github.com/user/repo`],
+    [`github:user/repo.git`, `https://github.com/user/repo`],
+    [`gitlab:group/sub/repo`, `https://gitlab.com/group/sub/repo`],
+    [`bitbucket:user/repo`, `https://bitbucket.org/user/repo`],
+    [`user/repo/`, `https://github.com/user/repo`],
+    [`github:user/repo/`, `https://github.com/user/repo`],
+    [`git://github.com/user/repo.git`, `git://github.com/user/repo`],
   ])(`normalizes repository %j to %s`, (repository, expected) => {
     expect(repository_url(repository)).toBe(expected)
+  })
+
+  it.each([
+    `gist:11081aaa281`,
+    `github:group/sub/repo`,
+    `bitbucket:repo`,
+    `file:../repo`,
+  ])(`rejects unsupported repository shorthand %s`, (repository) => {
+    expect(() => repository_url(repository)).toThrow(
+      `"repository" shorthand "${repository}"`,
+    )
   })
 
   it.each([undefined, ``, { url: 42 }])(

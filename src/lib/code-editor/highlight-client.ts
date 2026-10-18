@@ -1,4 +1,4 @@
-import { to_error } from './types'
+import { to_error } from '../utils'
 import type {
   EditorBackend,
   EditorModel,
@@ -103,9 +103,11 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   const enqueue_resync = (): Promise<void> => {
     if (disposed) return Promise.resolve()
     backend_synced = false
+    // Keep queued opens; the snapshot below supersedes pending edits and resyncs.
+    // Drop only edit/resync tasks: other kinds (opens, future ones) must still run.
     const pending = queue
       .splice(queue_head)
-      .filter((task) => task.kind !== `resync` && task.kind !== `edit`)
+      .filter(({ kind }) => kind !== `edit` && kind !== `resync`)
     // Snapshot now: edits queued behind this task expect the backend at this revision.
     const args = { doc_id, revision: model.revision, text: model.text() }
     const task: QueuedTask = {

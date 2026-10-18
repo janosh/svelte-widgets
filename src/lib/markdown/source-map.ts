@@ -9,7 +9,7 @@ export type SourceMap = {
 }
 
 const BASE64 = `ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/`
-export const encode_vlq = (value: number): string => {
+const encode_vlq = (value: number): string => {
   let encoded = ``
   let remaining = value < 0 ? -value * 2 + 1 : value * 2
   do {

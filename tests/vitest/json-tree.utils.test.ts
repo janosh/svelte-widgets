@@ -474,6 +474,13 @@ describe(`values_equal`, () => {
     [NaN, NaN, true],
     [NaN, 0, false],
     [NaN, null, false],
+    [new Date(`nope`), new Date(`nope`), true], // invalid dates stay equal to each other
+    [new Date(0), new Date(1), false], // 1 ms apart: equal as strings, unequal as timestamps
+    // other leaves compare by their displayed string form
+    [new Error(`boom`), new Error(`boom`), true],
+    [new Error(`boom`), new TypeError(`boom`), false],
+    [Symbol(`s`), Symbol(`s`), true],
+    [10n, 11n, false],
   ])(`values_equal(%p, %p) = %p`, (val_a, val_b, expected) => {
     expect(values_equal(val_a, val_b)).toBe(expected)
   })

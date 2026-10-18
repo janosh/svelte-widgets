@@ -234,16 +234,16 @@ export function get_ancestor_paths(path: string, root_label = ``): string[] {
   return ancestors
 }
 
-// Leaf equality for change detection and edits: NaN equals NaN, Dates compare by timestamp,
-// RegExps by source and flags. Distinct containers are unequal (JsonTree diffs them per child).
+// Leaf equality for change detection, edits and diffs: NaN equals NaN, Dates compare by
+// timestamp (their strings omit milliseconds), other leaves (RegExps, Errors, symbols,
+// functions) by string form. Distinct containers are unequal (compute_diff walks their children).
 export function values_equal(val_a: unknown, val_b: unknown): boolean {
   if (val_a === val_b || (Number.isNaN(val_a) && Number.isNaN(val_b))) return true
   const type = get_value_type(val_a)
-  if (type !== get_value_type(val_b)) return false
-  if (type === `date`) return (val_a as Date).getTime() === (val_b as Date).getTime()
-  if (type === `regexp`)
-    return (val_a as RegExp).toString() === (val_b as RegExp).toString()
-  return false
+  if (type !== get_value_type(val_b) || is_expandable_type(type)) return false
+  if (type === `date`)
+    return Object.is((val_a as Date).getTime(), (val_b as Date).getTime())
+  return String(val_a) === String(val_b)
 }
 
 // JSON number grammar: Number() also accepts `0x1F`, `+5` and `007`, silently turning hex
@@ -391,14 +391,7 @@ export function compute_diff(
   const old_type = get_value_type(old_val)
   const new_type = get_value_type(new_val)
   if (old_type !== new_type || !is_expandable_type(old_type)) {
-    // Date strings omit milliseconds; compare the full timestamp instead.
-    const equal =
-      old_type === new_type &&
-      (old_type === `date`
-        ? Object.is((old_val as Date).getTime(), (new_val as Date).getTime())
-        : // primitives compare by value; other leaves (regexps, errors, symbols) by string form
-          values_equal(old_val, new_val) || String(old_val) === String(new_val))
-    if (!equal)
+    if (!values_equal(old_val, new_val))
       result.set(current_path, {
         status: `changed`,
         path: current_path,

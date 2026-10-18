@@ -1,7 +1,7 @@
 import LiteYouTubeEmbed from '#lib/LiteYouTubeEmbed.svelte'
-import { type ComponentProps, mount, tick } from 'svelte'
+import { type ComponentProps, tick } from 'svelte'
 import { afterAll, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query } from './index'
+import { click, doc_query, render } from './index'
 
 // happy-dom navigates an iframe's src for real, so intercept every request locally
 // instead of hitting youtube.com, recording what was asked for
@@ -22,12 +22,9 @@ afterAll(() => {
   settings.fetch.interceptor = original_interceptor
 })
 
-const mount_embed = async (
-  props: Partial<ComponentProps<typeof LiteYouTubeEmbed>> = {},
-) => {
+const mount_embed = (props: Partial<ComponentProps<typeof LiteYouTubeEmbed>> = {}) => {
   const state_props = $state({ video_id: `abc123`, ...props })
-  mount(LiteYouTubeEmbed, { target: document.body, props: state_props })
-  await tick()
+  render(LiteYouTubeEmbed, state_props)
   return state_props
 }
 const iframes = () => document.querySelectorAll(`iframe`)
@@ -42,7 +39,7 @@ test.each([`button.play-btn`, `img.poster`])(
   async (selector) => {
     // rest is spread ahead of the component's own onclick, so unchained this is dropped
     const consumer_click = vi.fn()
-    await mount_embed({ onclick: consumer_click })
+    mount_embed({ onclick: consumer_click })
     expect(iframes()).toHaveLength(0)
 
     await click(selector)
@@ -55,7 +52,7 @@ test.each([`button.play-btn`, `img.poster`])(
 )
 
 test(`builds both poster sources and the labels from video_id`, async () => {
-  const props = await mount_embed({
+  const props = mount_embed({
     video_id: `xyz789`,
     play_label: `Watch the talk`,
     iframe_title: `Talk player`,
@@ -104,13 +101,13 @@ test.each([
     `${nocookie_embed}/a%20b%2Fc?autoplay=1`,
   ],
 ])(`iframe src: %s`, async (_desc, props, expected_src) => {
-  await mount_embed(props)
+  mount_embed(props)
   await click(`button.play-btn`)
   expect(doc_query(`iframe`).getAttribute(`src`)).toBe(expected_src)
 })
 
 test(`a new video_id tears the player back down to the poster`, async () => {
-  const props = await mount_embed({ video_id: `first` })
+  const props = mount_embed({ video_id: `first` })
   await click(`button.play-btn`)
   expect(iframes()).toHaveLength(1)
 
@@ -137,7 +134,7 @@ test(`forwards host and nested props and makes the active play button inert`, as
   Reflect.set(nested_props.iframe_props, `src`, `https://example.com/wrong`)
   Reflect.set(nested_props.iframe_props, `srcdoc`, `<h1>Wrong document</h1>`)
   Reflect.set(nested_props.iframe_props, `title`, `Wrong title`)
-  await mount_embed(nested_props)
+  mount_embed(nested_props)
 
   const wrapper = doc_query(`div.lite-youtube`)
   const play = doc_query<HTMLButtonElement>(`button.play-btn`)

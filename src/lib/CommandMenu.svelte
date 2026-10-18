@@ -2,7 +2,7 @@
   import { untrack } from 'svelte'
   import type { HTMLDialogAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
-  import { is_dialog_backdrop_event } from './dialog'
+  import { track_backdrop_dismiss } from './dialog'
   import OptionList from './internal/OptionList.svelte'
   import { create_recent_list } from './storage'
   import { validate_cmd_actions } from './internal/command'
@@ -82,7 +82,6 @@
 
   // === Recent actions (most-recently-used ranking) ===
   let recent_action_ids = $state<string[]>([])
-  let backdrop_press_started = false
 
   const recent_actions = $derived(
     recent_actions_key
@@ -191,9 +190,8 @@
     // Escape has to work while the search input has focus, hence allow_in_inputs
     { keys: close_hotkeys, handler: close_menu, enabled: open, allow_in_inputs: true },
   ])
-  const custom_backdrop_dismiss = $derived(
-    !escape_closes && dialog_props?.closedby === undefined,
-  )
+  // Backdrop clicks close by default even when Escape doesn't (native closedby `none`)
+  const backdrop_closes = $derived((dialog_props?.closedby ?? `any`) === `any`)
   // Bare action shortcuts stay inert while the menu is up: the keyboard belongs to the
   // search input then.
   const key_bindings = $derived<Hotkey[]>([
@@ -210,16 +208,13 @@
     dialog_props?.oncancel?.(event)
   }
 
-  const track_backdrop_press = (event: PointerEvent) => {
-    backdrop_press_started =
-      custom_backdrop_dismiss &&
-      event.isPrimary &&
-      is_dialog_backdrop_event(dialog, event)
-  }
-  const track_backdrop_release = (event: MouseEvent) => {
-    if (backdrop_press_started && is_dialog_backdrop_event(dialog, event)) close_menu()
-    backdrop_press_started = false
-  }
+  // browsers with `closedby` support have already light-dismissed an `any` dialog
+  const backdrop = track_backdrop_dismiss(
+    () => dialog,
+    () => {
+      if (backdrop_closes && dialog?.open) close_menu()
+    },
+  )
 
   function handle_window_keydown(event: KeyboardEvent) {
     // a close key still lands after another handler already called preventDefault
@@ -275,12 +270,12 @@
     closedby={effective_closedby}
     onclose={chain_handlers(handle_dialog_close, dialog_props?.onclose)}
     oncancel={handle_dialog_cancel}
-    onpointerdown={chain_handlers(track_backdrop_press, dialog_props?.onpointerdown)}
+    onpointerdown={chain_handlers(backdrop.onpointerdown, dialog_props?.onpointerdown)}
     onpointercancel={chain_handlers(
-      () => (backdrop_press_started = false),
+      backdrop.onpointercancel,
       dialog_props?.onpointercancel,
     )}
-    onclick={chain_handlers(track_backdrop_release, dialog_props?.onclick)}
+    onclick={chain_handlers(backdrop.onclick, dialog_props?.onclick)}
   >
     <OptionList
       {...rest}

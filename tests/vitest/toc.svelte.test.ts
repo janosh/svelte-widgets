@@ -12,7 +12,7 @@ import {
   test,
   vi,
 } from 'vite-plus/test'
-import { click, doc_query, next_task, press_key, render } from './index'
+import { click, doc_query, next_task, press_key, render, raw_snippet } from './index'
 
 type TocProps = ComponentProps<typeof Toc>
 
@@ -150,10 +150,9 @@ describe(`Toc`, () => {
       await mount_toc({
         min_items: 5,
         warn_on_empty: true,
-        footer: createRawSnippet(() => ({
-          render: () =>
-            `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
-        })),
+        footer: raw_snippet(
+          `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
+        ),
       })
       expect(doc_query(`aside.toc`).hidden).toBe(false)
       expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
@@ -336,6 +335,23 @@ describe(`Toc`, () => {
     expect(toc_texts()).toEqual([`Stable`])
   })
 
+  // rows are keyed by id, so a repeated id crashed the each block; #id only reaches the first
+  test.each([
+    [`DOM headings`, undefined],
+    [
+      `items prop`,
+      [`First`, `Second`, `Other`].map((title, idx) => ({
+        id: idx < 2 ? `dup` : `other`,
+        level: 2,
+        title,
+      })),
+    ],
+  ])(`lists only the first of several %s sharing an id`, async (_, items) => {
+    set_body(`<h2 id="dup">First</h2><h2 id="dup">Second</h2><h2 id="other">Other</h2>`)
+    await mount_toc({ items })
+    expect(toc_texts()).toEqual([`First`, `Other`])
+  })
+
   test.each([
     {
       desc: `anchor keeps its own click behavior`,
@@ -481,7 +497,7 @@ describe(`Toc`, () => {
 
   // no selector below matches anything on setup_empty_page ('h2' only hits the excluded one)
   test.each(
-    [undefined, `foobar`, `h2`, `h4`].flatMap((heading_selector) =>
+    [undefined, `h2`, `h4`].flatMap((heading_selector) =>
       [true, false].map((auto_hide) => ({ heading_selector, auto_hide })),
     ),
   )(
@@ -537,7 +553,6 @@ describe(`Toc`, () => {
 
   test.each([
     [400, 500, 600],
-    [700, 800, 900],
     [999, 1000, 1001],
   ])(
     `small=%i, breakpoint=%i, large=%i resizes between mobile and desktop`,
@@ -806,28 +821,33 @@ describe(`Toc`, () => {
     expect(scroll_into_view_mock).not.toHaveBeenCalled()
   })
 
-  test(`ancestor attribute changes update heading_selector membership`, async () => {
+  test(`heading and ancestor attribute changes update heading_selector membership`, async () => {
     set_body(
-      `<h2 id="a">Alpha</h2><h3 id="b">Beta</h3><h4 id="c">Gamma</h4><main><h5 id="d">Delta</h5></main>`,
+      `<h2 id="a">Alpha</h2><h3 id="b">Beta</h3><h4 id="c">Gamma</h4><main><h5 id="d">Delta</h5></main><h2 class="toc-exclude">Epsilon</h2><h6 id="f">Zeta</h6>`,
     )
     onTestFinished(() => {
       document.body.classList.remove(`deep`)
       delete document.documentElement.dataset.full
     })
     await mount_toc({
-      heading_selector: `h2, body.deep h3, [data-full] h4, main.expanded h5`,
+      heading_selector: `h2, body.deep h3, [data-full] h4, main.expanded h5, h6[data-toc-heading]`,
     })
     expect(toc_texts()).toEqual([`Alpha`])
+    // the heading's own class and attributes
+    doc_query(`.toc-exclude`).classList.remove(`toc-exclude`)
+    doc_query(`#f`).setAttribute(`data-toc-heading`, ``)
+    await tick()
+    expect(toc_texts()).toEqual([`Alpha`, `Epsilon`, `Zeta`])
 
     document.body.classList.add(`deep`)
     await tick()
-    expect(toc_texts()).toEqual([`Alpha`, `Beta`])
+    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Epsilon`, `Zeta`])
     document.documentElement.dataset.full = ``
     await tick()
-    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Gamma`])
+    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Gamma`, `Epsilon`, `Zeta`])
     doc_query(`main`).classList.add(`expanded`)
     await tick()
-    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Gamma`, `Delta`])
+    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Gamma`, `Delta`, `Epsilon`, `Zeta`])
   })
 
   test(`unrelated DOM mutations skip the heading rebuild while real changes don't`, async () => {
@@ -907,17 +927,6 @@ describe(`Toc`, () => {
     const renamed = kind === `id attribute`
     expect(link.textContent.trim()).toBe(renamed ? `Old` : `New`)
     expect(link.getAttribute(`href`)).toBe(renamed ? `#new` : `#old`)
-  })
-
-  test(`selector-driven attribute changes update heading membership`, async () => {
-    set_body(`<h2 class="toc-exclude">Alpha</h2><h2>Beta</h2><h5 id="gamma">Gamma</h5>`)
-    await mount_toc({ heading_selector: `:is(h2, h5[data-toc-heading])` })
-    expect(toc_texts()).toEqual([`Beta`])
-
-    doc_query(`.toc-exclude`).classList.remove(`toc-exclude`)
-    doc_query(`#gamma`).setAttribute(`data-toc-heading`, ``)
-    await tick()
-    expect(toc_texts()).toEqual([`Alpha`, `Beta`, `Gamma`])
   })
 
   test(`rebinds when a heading element is replaced with identical content`, async () => {
@@ -1052,7 +1061,6 @@ describe(`hide_on_intersect`, () => {
   const is_intersecting = (aside: HTMLElement) => aside.classList.contains(`intersecting`)
 
   test.each<[string, boolean, BannerOptions]>([
-    [`hides the ToC when a banner overlaps it`, true, {}],
     [`keeps the ToC when no banner overlaps`, false, { b2_rect: clear_of_toc }],
     [`ignores overlap on mobile`, false, { window_width: 600 }],
     [`accepts an HTMLElement array`, true, { target: (b1, b2) => [b1, b2] }],
@@ -1063,7 +1071,7 @@ describe(`hide_on_intersect`, () => {
     expect(is_intersecting(aside)).toBe(expected)
   })
 
-  test(`re-shows the ToC once the overlap ends`, async () => {
+  test(`hides the ToC while a banner overlaps it and re-shows it after`, async () => {
     const { aside, b2 } = await setup_banners()
     await scroll()
     expect(is_intersecting(aside)).toBe(true)

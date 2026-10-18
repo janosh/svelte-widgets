@@ -4,8 +4,9 @@ import {
   type FindState,
 } from '#lib/find-in-page.svelte.ts'
 import FindBar from '#lib/FindBar.svelte'
+import { claim_escape } from '#lib/attachments/shared.ts'
 import type { ComponentProps } from 'svelte'
-import { mount, tick, unmount } from 'svelte'
+import { flushSync, mount, tick, unmount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { click, doc_query, fire_input, press_key, stub_css_highlights } from './index'
 
@@ -35,10 +36,7 @@ const nav_button = (name: `Previous` | `Next`) =>
   doc_query<HTMLButtonElement>(`.find-bar button[aria-label="${name} match"]`)
 
 // Use a real input event so FindBar's async path runs.
-const type_query = async (query: string) => {
-  await fire_input(input(), query, `input`)
-  await tick()
-}
+const type_query = (query: string) => fire_input(input(), query, `input`)
 
 const jumped = () => document.querySelector(`.search-match-jump`)?.textContent
 
@@ -98,9 +96,28 @@ describe(`FindBar`, () => {
     onTestFinished(() => document.body.removeEventListener(`keydown`, outer))
 
     doc_query<HTMLButtonElement>(`.find-close`).click()
+    flushSync() // attachments run before a user could focus anything
+    input().focus()
     expect(press_key(input(), `Escape`).defaultPrevented).toBe(true)
     expect(on_close).toHaveBeenCalledTimes(2)
     expect(outer).not.toHaveBeenCalled()
+  })
+
+  // outer surfaces (panes, popovers) claim Escape in the capture phase, which a keydown
+  // listener on the input can never outrank
+  test(`Escape in the bar closes it, not the surface hosting it`, () => {
+    const { on_close } = mount_bar(`<p>alpha</p>`)
+    const close_surface = vi.fn()
+    onTestFinished(claim_escape(close_surface))
+
+    flushSync()
+    input().focus()
+    press_key(input(), `Escape`)
+    expect([on_close.mock.calls.length, close_surface.mock.calls.length]).toEqual([1, 0])
+
+    input().blur()
+    press_key(document.body, `Escape`)
+    expect([on_close.mock.calls.length, close_surface.mock.calls.length]).toEqual([1, 1])
   })
 
   test(`opens every collapsed <details> ancestor holding a match`, async () => {
@@ -295,7 +312,6 @@ describe(`create_find_state`, () => {
     expect(registry.has(`find-match`)).toBe(true)
 
     await unmount_bar()
-    await tick()
     expect(disconnect).toHaveBeenCalled()
     expect(registry.has(`find-match`)).toBe(false)
     expect(root.isConnected).toBe(true) // the searched subtree is left alone

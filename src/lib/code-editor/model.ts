@@ -1,3 +1,4 @@
+import { lower_bound } from '../utils'
 import type {
   EditorModel,
   EditorModelInit,
@@ -125,15 +126,9 @@ const breaks_before = (root: RopeNode | null, offset: number): number => {
     count += rope_breaks(node.left)
     remaining -= left_length
     if (remaining <= node.text.length) {
-      // Lower bound: a newline at the cursor still belongs to the preceding line.
-      let low = 0
-      let high = node.own_breaks
-      while (low < high) {
-        const mid = (low + high) >>> 1
-        if (node.newline_offsets[mid] < remaining) low = mid + 1
-        else high = mid
-      }
-      return count + low
+      // A newline at the cursor still belongs to the preceding line.
+      const offsets = node.newline_offsets
+      return count + lower_bound(offsets.length, (idx) => offsets[idx] >= remaining)
     }
     count += node.own_breaks
     remaining -= node.text.length

@@ -185,7 +185,6 @@ h1 > .heading-icon {
   text-wrap-style: balance;
   /* Build-time and dynamic heading links occupy the same space before hover/focus. */
   a[aria-hidden='true'] {
-    margin-left: 0.5em;
     opacity: 0;
     transition: opacity 0.2s;
   }
@@ -223,10 +222,4 @@ blockquote {
 }
 div.multiselect.invalid {
   border-color: light-dark(#c33, #f66) !important;
-}
-/* Icon sizing for <svg><use href="#icon"></use></svg> */
-svg:has(use:only-child) {
-  width: 1em;
-  height: 1em;
-  vertical-align: middle;
 }

@@ -1,6 +1,12 @@
 // Lazy starry-night factory; custom grammars do not load the default grammar bundle.
 import type { Grammar } from '@wooorm/starry-night'
-import { type HastNode, escape_braces, escape_html_text, hast_to_html } from './hast.ts'
+import {
+  type HastNode,
+  escape_attribute,
+  escape_braces,
+  escape_html_text,
+  hast_to_html,
+} from './hast.ts'
 
 export type { Grammar } from '@wooorm/starry-night'
 
@@ -52,11 +58,12 @@ export const render_block = (
   code: string,
   lang?: string | null,
 ): string => {
-  // flagToScope lowercases the flag itself, so only the CSS class needs a normalized copy
+  // flagToScope lowercases the flag itself, so only the CSS class needs a normalized copy.
+  // It also resolves path-like flags by extension, so `a"b.ts` must not end the attribute.
   const lang_key = lang?.toLowerCase()
   const class_name =
     lang_key && instance.flagToScope(lang_key)
-      ? `highlight highlight-${lang_key}`
+      ? `highlight highlight-${escape_attribute(lang_key)}`
       : `highlight`
   return `<pre class="${class_name}"><code>${render_html(instance, code, lang_key)}</code></pre>`
 }

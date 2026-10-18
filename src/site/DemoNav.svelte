@@ -2,8 +2,8 @@
   import { page } from '$app/state'
   import { Nav, ThemeToggle } from '#lib'
   import type { ComponentProps } from 'svelte'
-  import { demo_title, demo_nav_routes, multiselect_recipes } from '../routes/(demos)'
-  import { resolve_demo_path as resolve_path } from './paths'
+  import { demo_nav_routes, multiselect_recipes } from '../routes/(demos)'
+  import { demo_link, resolve_demo_path as resolve_path } from './paths'
 
   let props: Partial<ComponentProps<typeof Nav>> = $props()
 
@@ -12,10 +12,7 @@
     ...demo_nav_routes.map((route) => ({
       ...route,
       href: resolve_path(route.href),
-      children: route.children.map((child) => ({
-        href: resolve_path(child),
-        label: demo_title(child),
-      })),
+      children: route.children.map(demo_link),
     })),
   ]
 

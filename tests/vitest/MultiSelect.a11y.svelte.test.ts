@@ -6,7 +6,9 @@ import {
   focus_input,
   fresh_key,
   get_input,
+  live_region,
   mount_multiselect,
+  option_rows,
   press_sequence,
   type_search_text,
 } from './MultiSelect.test-utils'
@@ -52,7 +54,7 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     const input = await focus_input()
 
-    const options = [...document.querySelectorAll(`ul.options > li[role="option"]`)]
+    const options = option_rows()
     const ids = options.map((opt) => opt.id)
     expect(ids.every(Boolean)).toBe(true)
     expect(new Set(ids).size).toBe(3) // one id per option, none shared
@@ -83,9 +85,8 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const input = await focus_input()
     if (filter) await type_search_text(filter, input)
 
-    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
-    expect(live_region.getAttribute(`aria-atomic`)).toBe(`true`)
-    expect(live_region.textContent).toContain(expected)
+    expect(live_region().getAttribute(`aria-atomic`)).toBe(`true`)
+    expect(live_region().textContent).toContain(expected)
   })
 
   test.each([
@@ -115,16 +116,12 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
     const props = $state({ options: [`foo`, `bar`], loading: false })
     mount_multiselect(props)
 
-    const input = get_input()
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
-
-    props.loading = true
-    await tick()
-    expect(input.getAttribute(`aria-busy`)).toBe(`true`)
-
-    props.loading = false
-    await tick()
-    expect(input.getAttribute(`aria-busy`)).toBeNull()
+    expect(get_input().getAttribute(`aria-busy`)).toBeNull()
+    for (const loading of [true, false]) {
+      props.loading = loading
+      await tick()
+      expect(get_input().getAttribute(`aria-busy`)).toBe(loading ? `true` : null)
+    }
   })
 
   test(`aria-live announces selection changes`, async () => {
@@ -134,15 +131,14 @@ describe(`VoiceOver/screen reader accessibility (issue #118)`, () => {
 
     await click(`ul.options > li[role="option"]`)
 
-    const live_region = doc_query(`.sr-only[aria-live="polite"]`)
-    expect(live_region.textContent).toContain(`selected`)
+    expect(live_region().textContent).toContain(`selected`)
 
     const selected_chip = doc_query(`ul.selected > li`)
     expect(selected_chip.getAttribute(`role`)).toBeNull()
     expect(selected_chip.getAttribute(`aria-selected`)).toBeNull()
 
     await click(`ul.selected button.remove`)
-    expect(live_region.textContent).toContain(`removed`)
+    expect(live_region().textContent).toContain(`removed`)
   })
 })
 

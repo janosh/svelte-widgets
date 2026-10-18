@@ -6,8 +6,6 @@ import { doc_query, render } from './index'
 describe(`Wiggle`, () => {
   beforeEach(vi.useFakeTimers)
 
-  const get_span = () => doc_query<HTMLSpanElement>(`span`)
-
   // a getter/setter pair (not a plain prop) is what Svelte writes the bound value back to
   const mount_bindable_wiggle = (
     initial: boolean,
@@ -46,7 +44,7 @@ describe(`Wiggle`, () => {
   test(`custom animation props produce matching transform values`, () => {
     const props = { wiggle: true, angle: 15, scale: 1.1, dx: 5, dy: 3, duration_ms: 150 }
     render(Wiggle, { ...props, spring_options: { stiffness: 0.08, damping: 0.15 } })
-    const transform = get_span().style.transform.replaceAll(/\s+/gu, ` `).trim()
+    const transform = doc_query(`span`).style.transform.replaceAll(/\s+/gu, ` `).trim()
     expect(transform).toBe(`rotate(15deg) scale(1.1) translate(5px, 3px)`)
   })
 

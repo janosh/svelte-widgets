@@ -24,3 +24,12 @@ export function virtual_window({
   const end = clamp(Math.ceil((top + viewport) / item_size) + overscan, 0, count)
   return { start, end: Math.max(end, clamp(start + min_window, 0, count)) }
 }
+
+// Smallest scroll change that shows the item at `top` in full, or its top edge when the
+// item is taller than the viewport.
+export const reveal_scroll = (
+  top: number,
+  item_size: number,
+  viewport: number,
+  scroll: number,
+): number => Math.min(top, Math.max(scroll, top + item_size - viewport))
