@@ -3,7 +3,11 @@
   import { page } from '$app/state'
   import { PrevNext } from '#lib'
   import type { Snippet } from 'svelte'
-  import { current_demo_route, resolve_demo_path as resolve_path } from '#site/paths.ts'
+  import {
+    current_demo_route,
+    demo_link,
+    resolve_demo_path as resolve_path,
+  } from '#site/paths.ts'
   import { demo_nav_routes, demo_title, multiselect_recipes } from './index'
 
   let { children }: { children?: Snippet<[]> } = $props()
@@ -26,10 +30,7 @@
       : category
         ? [category.href, ...category.children]
         : []
-    ).map((route) => ({
-      href: resolve_path(route),
-      label: demo_title(route),
-    })),
+    ).map(demo_link),
   )
 </script>
 
@@ -39,21 +40,19 @@
       <a href={resolve_path(category.href)}>{category.label}</a>
       {#if is_multiselect}
         <span aria-hidden="true">/</span>
-        <label>
-          <span class="visually-hidden">MultiSelect guide</span>
-          <select
-            value={current}
-            onchange={(event) => goto(resolve_path(event.currentTarget.value))}
-          >
-            {#each multiselect_pages as route (route)}
-              <option value={route}
-                >{route === `/multiselect`
-                  ? `MultiSelect overview`
-                  : demo_title(route)}</option
-              >
-            {/each}
-          </select>
-        </label>
+        <select
+          aria-label="MultiSelect guide"
+          value={current}
+          onchange={(event) => goto(resolve_path(event.currentTarget.value))}
+        >
+          {#each multiselect_pages as route (route)}
+            <option value={route}
+              >{route === `/multiselect`
+                ? `MultiSelect overview`
+                : demo_title(route)}</option
+            >
+          {/each}
+        </select>
       {/if}
     </nav>
   {/if}
@@ -73,20 +72,11 @@
     margin: 0 auto 1.5em;
     width: min(100%, var(--main-max-width));
     select {
+      min-width: 0;
       max-width: 100%;
       font: inherit;
       padding: 0.3em 0.5em;
     }
-    label {
-      min-width: 0;
-    }
-  }
-  .visually-hidden {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
   }
   main > :global(h2) {
     margin-top: 2em;

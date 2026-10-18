@@ -3,7 +3,7 @@
   import { Palette, Opacity, ShieldCheck } from '#lib/icons.ts'
 </script>
 
-## <Icon icon={Palette} class="heading-icon" aria-hidden="true" /> ColorInput
+## <Icon icon={Palette} class="heading-icon" /> ColorInput
 
 A native color picker, editable hex field, and optional opacity number input share one bindable color. Presets offer quick choices for palettes used throughout an application.
 
@@ -22,7 +22,7 @@ A native color picker, editable hex field, and optional opacity number input sha
 <p style:color>Selected color: <code>{color}</code></p>
 ```
 
-### <Icon icon={Opacity} class="heading-icon" aria-hidden="true" /> Transparency
+### <Icon icon={Opacity} class="heading-icon" /> Transparency
 
 Set `alpha` to accept transparent colors and show an opacity number input from 0 to 100%. Enter a whole percentage or use the arrow keys to adjust it. Empty or invalid entries leave the color unchanged; blur or Escape restores the committed opacity. Colors use `#rrggbbaa`: setting opacity to zero preserves the RGB channels, so raising it again restores the chosen color. The checkerboard swatches show transparency, while the native picker edits RGB without changing opacity.
 
@@ -44,7 +44,7 @@ Set `alpha` to accept transparent colors and show an opacity number input from 0
 </div>
 ```
 
-### <Icon icon={ShieldCheck} class="heading-icon" aria-hidden="true" /> Validation and commits
+### <Icon icon={ShieldCheck} class="heading-icon" /> Validation and commits
 
 The hex field accepts three or six digits, or four or eight digits with `alpha`, with an optional `#`. Commits normalize values to lowercase six-digit hex, or eight-digit hex when alpha is enabled. Invalid drafts show an accessible error and leave the committed value intact; blur or Escape restores that value. Invalid initial values and presets throw an error.
 

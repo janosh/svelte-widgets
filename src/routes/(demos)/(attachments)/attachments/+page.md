@@ -1,41 +1,8 @@
 <script lang="ts">
-  import { SubpageGrid } from 'svelte-widgets'
-  import { Puzzle } from 'svelte-widgets/icons'
-  import { resolve_demo_path } from '#site/paths.ts'
-  import { demo_labels } from '../..'
-
-  // keyed by route slug; titles come from demo_labels so they can't drift from the nav
-  const descriptions: Record<string, string> = {
-    tooltip: `Top-layer tooltips with automatic placement, delegation and hover/focus interaction.`,
-    draggable: `Pointer dragging with handles, axis locks and position callbacks.`,
-    resizable: `Edge and corner resize handles with keyboard support and size caps.`,
-    sortable: `Click-to-sort table headers with custom comparators and styling.`,
-    'highlight-matches': `Mark search matches in text using the CSS Custom Highlight API.`,
-    'click-outside': `Dismiss a surface on an outside press or Escape.`,
-    'dismiss-on-outside-press': `The imperative form of click_outside, for surfaces built from several elements.`,
-    'focus-trap': `Keep Tab inside a surface and hand the keyboard back when it closes.`,
-    hotkey: `Declarative keybindings scoped to a node or the whole page.`,
-    float: `Park an element beside an anchor and keep it there while the page moves.`,
-    portal: `Move existing DOM into another container and restore it on teardown.`,
-    'contrast-color': `Pick a readable foreground from the background painted behind an element.`,
-    'forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
-    'file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
-  }
-  const subpages = Object.entries(descriptions).map(
-    ([slug, description]) => ({
-      label: demo_labels[`/attachments/${slug}`] ?? slug,
-      href: resolve_demo_path(`/attachments/${slug}`),
-      description,
-    }),
-  )
+  import CategoryOverview from '#site/CategoryOverview.svelte'
 </script>
 
-<SubpageGrid
-title="Attachments"
-title_icon={Puzzle}
-subtitle="One behaviour per attachment, added to an element without wrapping it in a component."
-{subpages}
-/>
+<CategoryOverview name="attachments" />
 
 ## Quick start
 

@@ -1,7 +1,7 @@
 import { TaskStatus } from '#lib'
-import { createRawSnippet, tick, type ComponentProps } from 'svelte'
+import { tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { doc_query, render, raw_snippet } from './index'
 
 type Props = ComponentProps<typeof TaskStatus>
 const render_task = (props: Props) => {
@@ -48,7 +48,7 @@ test(`forwards progress, children and attributes, and runs cancel/retry under cu
     label: `Parsing`,
     value: 3,
     max: 7,
-    children: createRawSnippet(() => ({ render: () => `<em>3 of 7 files</em>` })),
+    children: raw_snippet(`<em>3 of 7 files</em>`),
     class: `caller-class`,
     id: `task`,
     on_cancel: vi.fn(),

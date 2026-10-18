@@ -3,7 +3,7 @@
   import { FileTree, ListChecks, Refresh, BookOpen, Keyboard } from '#lib/icons.ts'
 </script>
 
-## <Icon icon={FileTree} class="heading-icon" aria-hidden="true" /> TreeView
+## <Icon icon={FileTree} class="heading-icon" /> TreeView
 
 Navigate hierarchical data with stable node IDs, lazy loading and single or multiple selection. Use [JsonTree](json-tree) when your input is an object to inspect rather than a hierarchy of named nodes.
 
@@ -33,7 +33,7 @@ Bind `value` to a node ID and `expanded` to a set of branch IDs. Clicking a labe
 <p>Selected: {selected ?? `None`}</p>
 ```
 
-### <Icon icon={ListChecks} class="heading-icon" aria-hidden="true" /> Multiple selection
+### <Icon icon={ListChecks} class="heading-icon" /> Multiple selection
 
 Set `mode="multiple"` and bind `value` to an array of IDs. An ordinary click selects one node; Ctrl/Cmd-click or Space toggles its selection. Enter expands or collapses a branch and selects a leaf. Shift-click, Shift+Space and Shift+Up/Down/Home/End select a range over visible rows. Ctrl/Cmd with Shift adds the range to the existing selection. Ctrl/Cmd+A adds all visible, enabled rows. Arrow navigation alone only moves focus.
 
@@ -70,7 +70,7 @@ Disabled rows can receive focus but cannot be selected or expanded, and ranges s
 <button onclick={() => (selected_ids = [])}>Clear selection</button>
 ```
 
-### <Icon icon={Refresh} class="heading-icon" aria-hidden="true" /> Lazy branches, failure and retry
+### <Icon icon={Refresh} class="heading-icon" /> Lazy branches, failure and retry
 
 `load(signal)` runs when a branch first expands. Loaded children are cached for that node object; replacing `nodes` clears the cache and aborts outstanding requests. Failed branches collapse and announce the error. Expand again to retry. This example simulates a slow source; toggle failure before expanding Remote files.
 
@@ -110,7 +110,7 @@ Disabled rows can receive focus but cannot be selected or expanded, and ranges s
 
 For HTTP loaders, pass `signal` to `fetch`, check `response.ok`, and validate the returned nodes. Collapsing a branch leaves its request running; replacing the tree or unmounting cancels it. A loader returning `[]` produces a leaf. For an entirely empty tree, render your own message instead of `<TreeView nodes={[]} />`.
 
-### <Icon icon={BookOpen} class="heading-icon" aria-hidden="true" /> Main API
+### <Icon icon={BookOpen} class="heading-icon" /> Main API
 
 | Prop                            | Purpose                                                                                                                    |
 | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
@@ -122,6 +122,6 @@ For HTTP loaders, pass `signal` to `fetch`, check `response.ok`, and validate th
 | `children(node)`                | Customize the label without replacing the row's selection and expansion behavior.                                          |
 | `label`                         | Accessible tree name; defaults to `Tree`. Other HTML attributes apply to the outer wrapper.                                |
 
-### <Icon icon={Keyboard} class="heading-icon" aria-hidden="true" /> Keyboard behavior
+### <Icon icon={Keyboard} class="heading-icon" /> Keyboard behavior
 
 Tab enters the tree at its active row. Up/Down move through visible rows; Home/End reach the first/last. Right expands a branch or enters its first child; Left collapses it or moves to its parent. Enter toggles a branch without changing selection, or selects a leaf. Space selects the focused row (toggles its selection in multiple mode). Typing a character focuses the next visible label starting with that character. Moving focus does not select a node.

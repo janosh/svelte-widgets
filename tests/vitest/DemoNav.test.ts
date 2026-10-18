@@ -50,6 +50,9 @@ test(`home catalog exposes every main demo and resolves guide links under the ba
     expect(
       [...section.querySelectorAll(`li a`)].map((link) => link.getAttribute(`href`)),
     ).toEqual(children.map((route) => `${base}${route}`))
+    // every catalog link carries its description as a hover title
+    for (const link of section.querySelectorAll(`li a`))
+      expect(link.getAttribute(`title`)?.length).toBeGreaterThan(15)
   }
   expect(document.querySelector(`.catalog section > a`)?.textContent).toContain(
     `Markdown API`,
@@ -141,7 +144,7 @@ test(`DemoNav lists components while recipes remain in the complete searchable c
   }
 })
 
-test.each([`inputs`, `navigation`, `overlays`, `display`])(
+test.each([`inputs`, `navigation`, `overlays`, `display`, `attachments`])(
   `%s overview links to its components with descriptions`,
   (name) => {
     mount(CategoryOverview, { target: document.body, props: { name } })

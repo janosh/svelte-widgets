@@ -1,12 +1,15 @@
-import { repository } from '#root/package.json'
+import { bugs, repository } from '#root/package.json'
+import ErrorPage from '#root/src/routes/+error.svelte'
 import Layout from '#root/src/routes/+layout.svelte'
 import { tick } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { doc_query, fire_input, press_key, render } from './index'
 
 // explicit type or the inferred `id: string` rejects the 404 case's null below
-const mocks = vi.hoisted<{ page: { route: { id: string | null }; url: URL } }>(() => ({
-  page: { route: { id: `/` }, url: new URL(`https://x.co/`) },
+const mocks = vi.hoisted<{
+  page: { route: { id: string | null }; url: URL; status: number; error: Error | null }
+}>(() => ({
+  page: { route: { id: `/` }, url: new URL(`https://x.co/`), status: 200, error: null },
 }))
 
 vi.mock(`$app/navigation`, () => ({ afterNavigate: () => {}, goto: async () => {} }))
@@ -51,4 +54,18 @@ test(`command search includes custom demo labels`, async () => {
     option.textContent?.trim(),
   )
   expect(labels).toContain(`CodeEditor / DiffView`)
+})
+
+test(`error page links issues to the bug tracker and home to the site root`, () => {
+  Object.assign(mocks.page, {
+    route: { id: null },
+    url: new URL(`https://x.co/deeply/nested/missing`),
+    status: 500,
+    error: new Error(`boom`),
+  })
+  render(ErrorPage, {})
+  expect(doc_query(`h1`).textContent).toContain(`boom`)
+  expect(doc_query(`a[target="_blank"]`).getAttribute(`href`)).toBe(bugs)
+  // a relative "." would resolve to /deeply/nested/ instead of the landing page
+  expect(doc_query(`a:has(img)`).getAttribute(`href`)).toBe(`/`)
 })

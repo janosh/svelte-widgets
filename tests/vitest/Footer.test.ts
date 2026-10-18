@@ -3,10 +3,9 @@ import { GitHub } from '#lib/icons.ts'
 import type { FooterLink } from '#lib/types.ts'
 import { type ComponentProps, createRawSnippet } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
-import { doc_query, render } from './index'
+import { doc_query, render, raw_snippet } from './index'
 
 describe(`Footer`, () => {
-  const raw = (html: string) => createRawSnippet(() => ({ render: () => html }))
   const mount_footer = (props: ComponentProps<typeof Footer> = {}) =>
     render(Footer, props)
   const anchors = () =>
@@ -25,7 +24,7 @@ describe(`Footer`, () => {
       anchors().map((anchor) => [
         anchor.getAttribute(`href`),
         anchor.textContent?.trim(),
-        Boolean(anchor.querySelector(`svg`)),
+        Boolean(anchor.querySelector(`svg[aria-hidden="true"]`)),
         anchor.getAttribute(`target`),
         anchor.getAttribute(`rel`),
         anchor.getAttribute(`title`),
@@ -47,7 +46,7 @@ describe(`Footer`, () => {
   test(`renders children after the nav in source order`, () => {
     mount_footer({
       links: [{ href: `/issues`, label: `Issues` }],
-      children: raw(
+      children: raw_snippet(
         `<small><img src="/favicon.svg" alt="Logo" /><span data-testid="copyright">© 2026</span></small>`,
       ),
     })

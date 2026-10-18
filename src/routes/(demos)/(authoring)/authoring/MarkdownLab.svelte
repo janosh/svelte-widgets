@@ -2,6 +2,7 @@
   import { JsonTree } from 'svelte-widgets'
   import SourceInput from '#site/SourceInput.svelte'
   import { default_highlighter } from 'svelte-widgets/highlight'
+  import { to_error } from 'svelte-widgets/utils'
   import syntax_styles from '@wooorm/starry-night/style/light?raw'
   import type { Diagnostic } from 'svelte-widgets/markdown'
   import { onMount } from 'svelte'
@@ -93,7 +94,7 @@
       output = next
       last_source = content
     } catch (cause) {
-      error = cause instanceof Error ? cause.message : String(cause)
+      error = to_error(cause).message
       output = undefined
     } finally {
       working = false

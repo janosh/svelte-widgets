@@ -4,6 +4,7 @@
   import SourceInput from '#site/SourceInput.svelte'
   import { CodeBlock } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
+  import { to_error } from 'svelte-widgets/utils'
   import { checked_examples } from './examples'
   import { onMount } from 'svelte'
 
@@ -30,7 +31,7 @@
         : `Svelte syntax passes. Full type checks run through the Node checker.`
     } catch (error) {
       failed = true
-      feedback = error instanceof Error ? error.message : String(error)
+      feedback = to_error(error).message
     } finally {
       working = false
     }

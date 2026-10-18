@@ -5,7 +5,14 @@ import type { ButtonGroupOption } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query, hover as dispatch_hover, render, press_key } from './index'
+import {
+  click,
+  doc_query,
+  hover as dispatch_hover,
+  render,
+  press_key,
+  raw_snippet,
+} from './index'
 
 describe(`ButtonGroup`, () => {
   type Props = Partial<ComponentProps<typeof ButtonGroup>>
@@ -336,9 +343,7 @@ describe(`ButtonGroup`, () => {
     ])
   })
 
-  const count_suffix = createRawSnippet(() => ({
-    render: () => `<span class="count">3</span>`,
-  }))
+  const count_suffix = raw_snippet(`<span class="count">3</span>`)
   test.each([
     [`a button`, undefined],
     [`an option_suffix pill`, count_suffix],

@@ -3,6 +3,7 @@
   import { CodeBlock, Icon } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
+  import { to_error } from 'svelte-widgets/utils'
   import * as icon_module from 'svelte-widgets/icons'
   import type { IconData } from 'svelte-widgets/icons'
 
@@ -18,7 +19,7 @@
   // A clipboard write can be refused (unfocused document, denied permission); say so
   // rather than leaving a tile that silently never confirms.
   const { copied, copy } = create_clipboard_feedback(1200, (error, text) => {
-    copy_error = `Could not copy “${text}”: ${error instanceof Error ? error.message : error}`
+    copy_error = `Could not copy “${text}”: ${to_error(error).message}`
   })
   const copy_icon = (name: string): Promise<boolean> => {
     copy_error = ``

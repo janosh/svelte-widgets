@@ -9,6 +9,7 @@
   let last_key = $state(`none`)
 </script>
 
+<!-- svelte-ignore a11y_no_noninteractive_tabindex (focusable so it receives arrow keys) -->
 <div
   tabindex="0"
   style="padding: 1rem; border: 1px solid currentColor"
