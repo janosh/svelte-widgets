@@ -120,6 +120,10 @@ describe(`Markdown content manifests`, () => {
     expect(result.manifest.anchors.map(({ id }) => id)).not.toContain(`fake`)
     expect(result.manifest.links[0].url).toBe(`/docs/{value}`)
     expect(result.manifest.links[0].dynamic).toBe(true)
+    const [escaped] = (await document_manifest(String.raw`[Static](/docs/\{value\})`))
+      .links
+    expect(escaped.url).toBe(`/docs/{value}`)
+    expect(escaped.dynamic).toBeUndefined()
     expect(validate_content([result.manifest])).toEqual([])
     expect(content_search_record(result.manifest).text).toContain(
       `Text with bold and code.`,

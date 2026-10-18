@@ -36,6 +36,8 @@ export type ContentAnalysis = {
   unlinked_headings: Set<Token>
   html_edits: Map<Token, SourceEdit[]>
   heading_link?: (id: string) => string
+  // Whether a link URL holds a Svelte expression; omitted URLs are static.
+  url_expression?: (link: Tokens.Link | Tokens.Image) => boolean
   reserved_ids?: Iterable<string>
   examples?: ExampleOptions
 }
@@ -211,6 +213,7 @@ export function content_manifest(
     unlinked_headings,
     html_edits,
     heading_link,
+    url_expression,
     reserved_ids = [],
     examples,
   }: ContentAnalysis,
@@ -388,7 +391,7 @@ export function content_manifest(
           url: decode_entities(link.href),
           text: inline_text(link.tokens),
           range: at,
-          ...(svelte && link.href.includes(`{`) ? { dynamic: true as const } : {}),
+          ...(url_expression?.(link) ? { dynamic: true as const } : {}),
         })
       }
       if (token.type === `html` && !omit_html) scan_html(mapped, token)

@@ -2,11 +2,14 @@ import { example_key, fence_info, is_markdown_file, type ExampleOptions } from '
 import { scientific_references, type ReferenceOptions } from './references.ts'
 import { CORE_SCHEMA, load, YAMLException } from 'js-yaml'
 import {
+  Lexer,
   Marked,
   Renderer,
+  Tokenizer,
   type Token,
   type Tokens,
   type TokenizerAndRendererExtension,
+  type TokenizerObject,
   type TokenizerStartFunction,
 } from 'marked'
 import type * as Katex from 'katex'
@@ -255,37 +258,97 @@ async function prepare_document(
   const retained_pattern = new RegExp(`${sentinel}(\\d+)\uE001`, `gu`)
   const retain = (text: string, spans: SourceSpan[] = []): string =>
     `${sentinel}${retained.push({ code: text, spans }) - 1}\uE001`
-  const url_attribute = (token: Tokens.Link | Tokens.Image): string => {
-    const url = token.href
-    let raw_cursor = token.raw.indexOf(`](`) + 2
+  // First definition per normalized label, the one Marked resolves reference links to.
+  const definitions = new Map<string, Tokens.Def>()
+  // Marked drops the backslash of `\{` in link URLs and titles, so recover escapes from the
+  // raw source: the inline link itself, or the definition a reference link resolves to.
+  // The title is the last field and the URL precedes it, so their braces are the final
+  // braces of that source, in order. Escaped braces stay literal like in alt text and
+  // prose; unescaped ones open Svelte expressions.
+  const link_origin = (token: Tokens.Link | Tokens.Image) => {
+    const { reflink, nolink } = Lexer.rules.inline.gfm
+    const reference = token.raw.endsWith(`]`)
+      ? (reflink.exec(token.raw) ?? nolink.exec(token.raw))
+      : null
+    const label = reference && (reference[2] || reference[1]).replaceAll(/\s+/gu, ` `)
+    const origin = label ? definitions.get(label.toLowerCase()) : token
+    if (!origin) throw new Error(`No definition for reference link ${token.raw}`)
+    const { raw } = origin
+    const count = (text: string | null | undefined) => text?.match(/[{}]/gu)?.length ?? 0
+    const [url_count, title_count] = [count(token.href), count(token.title)]
+    const all_braces = [...raw.matchAll(/[{}]/gu)].map(({ index }) => index)
+    const braces = all_braces.slice(all_braces.length - url_count - title_count)
+    if (braces.length !== url_count + title_count)
+      throw new Error(`Cannot locate braces of ${token.raw} in ${raw}`)
+    // Each value brace maps to its raw index; odd runs of backslashes escape it.
+    const field = (value: string, raw_braces: number[]) => ({
+      value,
+      raw_braces,
+      escaped: raw_braces.map((index) => {
+        let start = index
+        while (raw[start - 1] === `\\`) start--
+        return (index - start) % 2 === 1
+      }),
+    })
+    return {
+      raw,
+      offsets: positions.get(origin)?.offsets,
+      url: field(token.href, braces.slice(0, url_count)),
+      title: field(token.title ?? ``, braces.slice(url_count)),
+    }
+  }
+  type LinkOrigin = ReturnType<typeof link_origin>
+  const url_expression = (token: Tokens.Link | Tokens.Image): boolean => {
+    const { value, escaped } = link_origin(token).url
+    return [...value.matchAll(/[{}]/gu)].some(
+      ([brace], idx) => brace === `{` && !escaped[idx],
+    )
+  }
+  // Encode literal text and retain unescaped Svelte expressions with their source spans.
+  const svelte_field = (
+    { raw, offsets }: LinkOrigin,
+    { value, raw_braces, escaped }: LinkOrigin['url'],
+    encode: (literal: string) => string,
+  ): string => {
     let result = ``
     let cursor = 0
-    while (cursor < url.length) {
-      const start = url.indexOf(`{`, cursor)
-      const end = start === -1 ? url.length : start
-      result += encodeURI(url.slice(cursor, end)).replaceAll(`%25`, `%`)
-      if (start === -1 || !syntax) break
-      const expression = syntax.read_expression(url.slice(start))
-      if (!expression) throw new Error(`Invalid URL expression: ${url}`)
-      const raw_start = token.raw.indexOf(expression, raw_cursor)
-      const offsets = positions.get(token)?.offsets
-      const spans: SourceSpan[] = []
-      if (raw_start !== -1 && offsets) {
-        for (let idx = 0; idx < expression.length; idx++)
-          spans.push({ generated: idx, original: offsets[raw_start + idx], length: 1 })
-        raw_cursor = raw_start + expression.length
+    let brace = 0
+    for (let idx = 0; idx < value.length; idx++) {
+      if (value[idx] !== `{` && value[idx] !== `}`) continue
+      if (value[idx] === `}` || escaped[brace]) {
+        brace++
+        continue
       }
-      result += retain(expression, spans)
-      cursor = start + expression.length
+      const expression = syntax?.read_expression(value.slice(idx))
+      if (!expression) throw new Error(`Invalid expression in ${value}`)
+      const raw_start = raw_braces[brace]
+      const spans: SourceSpan[] = []
+      if (offsets && raw.startsWith(expression, raw_start))
+        for (let char_idx = 0; char_idx < expression.length; char_idx++)
+          spans.push({
+            generated: char_idx,
+            original: offsets[raw_start + char_idx],
+            length: 1,
+          })
+      result += encode(value.slice(cursor, idx)) + retain(expression, spans)
+      brace += expression.match(/[{}]/gu)?.length ?? 0
+      idx += expression.length - 1
+      cursor = idx + 1
     }
-    return result
+    return result + encode(value.slice(cursor))
   }
+  // Literal braces become entities, which Marked's title escaping keeps.
+  const svelte_title = (origin: LinkOrigin): string =>
+    svelte_field(origin, origin.title, escape_braces)
   // Marked URI-encodes braces. Preserve authored Svelte URL expressions instead.
-  const with_url = (result: string, token: Tokens.Link | Tokens.Image, attr: string) =>
-    syntax && token.href.includes(`{`)
+  const with_url = (result: string, origin: LinkOrigin, attr: string) =>
+    origin.url.value.includes(`{`)
       ? result.replace(
           new RegExp(`${attr}="[^"]*"`, `u`),
-          () => `${attr}="${url_attribute(token)}"`,
+          () =>
+            `${attr}="${svelte_field(origin, origin.url, (literal) =>
+              encodeURI(literal).replaceAll(`%25`, `%`),
+            )}"`,
         )
       : result
   const html = (text: string): string => (syntax ? `{@html ${script_json(text)}}` : text)
@@ -307,7 +370,55 @@ async function prepare_document(
       )
     : undefined
   const extensions: TokenizerAndRendererExtension[] = []
+  let tokenizer: TokenizerObject | undefined
   if (syntax) {
+    // Lines opening block-level Svelte markup: control-flow and `{@…}` tags, components,
+    // scripts, styles and special elements.
+    const block_line = String.raw`\{[#:/@]|<(?:script|style|svelte:|[A-Z])`
+    // Lists and blockquotes absorb unindented lines as lazy continuations and table rows
+    // run to the next blank line, so a `{/each}` or `</Component>` right after one would
+    // land in its last item. End them before any line holding only block-level markup or
+    // a closing component tag, as the block extension below does for paragraphs. None of
+    // them continues past a blank line followed by an unindented non-list-marker line.
+    const block_lines = new RegExp(
+      String.raw`\n(?=${block_line}|<\/(?:svelte:|[A-Z]))`,
+      `gu`,
+    )
+    const block_bound = /\n[ \t]*\n(?![ \t\n*+\d-])/u
+    // Only a probe: lines in fences or comments need not be valid Svelte. Markup that is
+    // invalid outside code still fails in the Svelte tokenizers.
+    const markup_line = (line: string): boolean => {
+      try {
+        const raw = syntax.read_expression(line) ?? syntax.read_tag(line)
+        return raw !== undefined && /^[ \t]*(?:\n|$)/u.test(line.slice(raw.length))
+      } catch {
+        return false
+      }
+    }
+    const before_block_line = (text: string): string => {
+      const bound = text.search(block_bound)
+      const scope = bound === -1 ? text : text.slice(0, bound)
+      for (const { index } of scope.matchAll(block_lines))
+        if (markup_line(text.slice(index + 1))) return text.slice(0, index + 1)
+      return text
+    }
+    tokenizer = {
+      list(src) {
+        return this.rules.block.list.test(src)
+          ? Tokenizer.prototype.list.call(this, before_block_line(src))
+          : undefined
+      },
+      blockquote(src) {
+        return this.rules.block.blockquote.test(src)
+          ? Tokenizer.prototype.blockquote.call(this, before_block_line(src))
+          : undefined
+      },
+      table(src) {
+        return this.rules.block.table.test(src)
+          ? Tokenizer.prototype.table.call(this, before_block_line(src))
+          : undefined
+      },
+    }
     const svelte_extension = (
       level: 'block' | 'inline',
       start: RegExp,
@@ -328,8 +439,8 @@ async function prepare_document(
     extensions.push(
       svelte_extension(
         `block`,
-        /\n(?=\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u,
-        /^(?:\{[#:/@]|<(?:script|style|svelte:|[A-Z]))/u,
+        new RegExp(String.raw`\n(?=${block_line})`, `u`),
+        new RegExp(`^(?:${block_line})`, `u`),
       ),
       svelte_extension(`inline`, /[<{]/u),
     )
@@ -376,6 +487,7 @@ async function prepare_document(
   const heading_icon = icon_svg && syntax ? `{@html ${script_json(icon_svg)}}` : icon_svg
   const parser = new Marked({
     gfm: true,
+    tokenizer,
     extensions: extensions.map((extension) =>
       `start` in extension && extension.level === `block` && extension.start
         ? { ...extension, start: bounded_start(extension.start) }
@@ -400,7 +512,10 @@ async function prepare_document(
         return retain(mapped.code, mapped.spans)
       },
       link(token) {
-        return with_url(Renderer.prototype.link.call(this, token), token, `href`)
+        if (!syntax) return Renderer.prototype.link.call(this, token)
+        const origin = link_origin(token)
+        const link = token.title ? { ...token, title: svelte_title(origin) } : token
+        return with_url(Renderer.prototype.link.call(this, link), origin, `href`)
       },
       image(token) {
         // Math in alt text stays as authored TeX (like figure captions) instead of KaTeX
@@ -421,7 +536,10 @@ async function prepare_document(
           ...token,
           tokens: [{ type: `text`, raw: alt, text: alt }],
         }
-        return with_url(Renderer.prototype.image.call(this, image), token, `src`)
+        if (!syntax) return Renderer.prototype.image.call(this, image)
+        const origin = link_origin(token)
+        if (token.title) image.title = svelte_title(origin)
+        return with_url(Renderer.prototype.image.call(this, image), origin, `src`)
       },
       code(token) {
         return code_html.get(token) ?? ``
@@ -457,6 +575,12 @@ async function prepare_document(
       (_match, index: string) => retained[Number(index)].code,
     )
   const tokens = parser.lexer(body)
+  if (syntax)
+    void parser.walkTokens(tokens, (token) => {
+      const { tag } = token as Tokens.Def
+      if (token.type === `def` && !definitions.has(tag))
+        definitions.set(tag, token as Tokens.Def)
+    })
   references?.resolve(tokens)
   const manifest = content_manifest(
     source,
@@ -477,6 +601,7 @@ async function prepare_document(
         options.heading_links === false
           ? undefined
           : (id) => heading_anchor_html(id, heading_icon),
+      url_expression: syntax ? url_expression : undefined,
       reserved_ids: references?.reserved_ids(),
       examples: options.examples,
     },

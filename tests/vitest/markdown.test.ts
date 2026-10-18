@@ -12,6 +12,7 @@ import {
   compile_markdown as compile_document,
   render_markdown as render_document,
   DiagnosticError,
+  type MarkdownDocument,
 } from '#lib/markdown/index.ts'
 import {
   decode_source_map,
@@ -38,16 +39,20 @@ const compile_page = async (
   return result
 }
 
+// HTML for the markdown dialect, Svelte component source for the svelte dialect
+const emit = async (document: MarkdownDocument) =>
+  document.dialect === `markdown`
+    ? assert_ok(await render_document(document))
+    : assert_ok(await compile_document(document)).code
+
 describe(`Markdown output`, () => {
   test.each([`markdown`, `svelte`] as const)(
     `renders one stable heading anchor in the %s dialect`,
     async (dialect) => {
       const source = `# Diatomics\n\nLiteral \uE000widgets placeholder prefix.\n\n## Explicit <a aria-hidden="true" href="#custom">custom</a>`
-      const parsed = assert_ok(await create_markdown().parse(source, { dialect }))
-      const result =
-        dialect === `markdown`
-          ? assert_ok(await render_document(parsed))
-          : assert_ok(await compile_document(parsed)).code
+      const result = await emit(
+        assert_ok(await create_markdown().parse(source, { dialect })),
+      )
       const container = document.createElement(`main`)
       container.innerHTML = result
       const anchor = container.querySelector(`h1 a`)
@@ -112,9 +117,9 @@ describe(`Markdown output`, () => {
       `Visit <https://example.org> or <mailto:hi@example.org>`,
       [`href="https://example.org"`, `href="mailto:hi@example.org"`],
     ],
-  ])(`renders %s`, async (source, expected) => {
-    const result = await compile_page(source)
-    for (const fragment of expected) expect(result.code).toContain(fragment)
+  ])(`renders %s`, async (source, snippets) => {
+    const { code } = await compile_page(source)
+    for (const snippet of snippets) expect(code).toContain(snippet)
   })
 
   test(`HTML mode retains literal braces without loading Svelte semantics`, async () => {
@@ -194,6 +199,24 @@ describe(`Svelte integration`, () => {
     expect(result.map.mappings).not.toBe(``)
   })
 
+  test.each([
+    [`{#each xs as n}\n- {n}\n{/each}`, [`</ul>\n{/each}`]],
+    [`{#if a}\n- x\n{:else}\n1. y\n{/if}`, [`</ul>\n{:else}`, `</ol>\n{/if}`]],
+    [`{#key a}\n> quote\n{/key}`, [`</blockquote>\n{/key}`]],
+    [`{#if a}\n| h |\n| - |\n| 1 |\n{/if}`, [`</table>\n{/if}`]],
+    [`{#if a}\npara\n{/if}`, [`</p>\n{/if}`]],
+    [`{#if a}\n- x\n{@html y}\n{/if}`, [`</ul>\n{@html y}\n{/if}`]],
+    [`<Wrapper>\n- x\n</Wrapper>`, [`</ul>\n</Wrapper>`]],
+    [`- a\n  {#each xs as x}\n  - {x}\n  {/each}`, [`</ul>\n{/each}</li>`]],
+    // Inline markup sharing a line with text stays a lazy continuation
+    [`- item\n{#if a}more{/if}`, [`<li>item{#if a}more{/if}</li>`]],
+    // Lines inside fences are only probed, never required to be valid Svelte
+    ['- a\n```\n{#if\n```', [`</ul>\n<pre`]],
+  ])(`Svelte block lines end lists, quotes and tables: %j`, async (source, snippets) => {
+    const { code } = await compile_page(source)
+    for (const snippet of snippets) expect(code).toContain(snippet)
+  })
+
   test(`frontmatter merges into a module script and remains available to the template`, async () => {
     const result = await compile_page(
       `---\ntitle: "A </script> title"\ndate: 2026-09-06\nflags: [true, false]\n---\n<script module>export const answer = 42</script>\n<script>let value = 1</script>\n\n# {metadata.title} {value}`,
@@ -237,17 +260,35 @@ describe(`Svelte integration`, () => {
     ).toBe(`OAAA,CAAC,CAAC,CAAC,CAAC,CAAC`)
   })
 
-  test(`preserves Svelte expressions in link and image destinations`, async () => {
-    const { code } = await compile_page(
+  // Escaped braces in alt text, titles and URLs stay literal while unescaped ones remain
+  // live Svelte expressions
+  test.each([
+    [
       `[Paper]({paper.URL}) ![Image](/assets/{name}.png)\n\n[Details](<{base + '/details'}>)`,
-    )
-    expect(code).toContain(`href="{paper.URL}"`)
-    expect(code).toContain(`src="/assets/{name}.png"`)
-    expect(code).toContain(`href="{base + '/details'}"`)
-    // Escaped braces in alt text stay literal while unescaped ones remain expressions
-    const alt = await compile_page(String.raw`![a \{b\} {c} *Hi {name}*](/x.png)`)
-    expect(alt.code).toContain(`alt="a &#123;b&#125; {c} Hi {name}"`)
-  })
+      [`href="{paper.URL}"`, `src="/assets/{name}.png"`, `href="{base + '/details'}"`],
+    ],
+    [
+      String.raw`![a \{b\} {c} *Hi {name}*](/x.png)`,
+      [`alt="a &#123;b&#125; {c} Hi {name}"`],
+    ],
+    [String.raw`[l](/u "t \{c\}")`, [`title="t &#123;c&#125;"`]],
+    [`[l](/u "t {c}")`, [`title="t {c}"`]],
+    [`[l](/u "{a && b ? '<' : 1} &amp; }")`, [`title="{a && b ? '<' : 1} &amp; &#125;"`]],
+    [String.raw`![i](/u.png "t \{c\} {d}")`, [`title="t &#123;c&#125; {d}"`]],
+    [`[l][r]\n\n[r]: /u "t \\{c\\}"`, [`title="t &#123;c&#125;"`]],
+    [
+      `![i][R  x]\n\n[r x]: /u/\\{a\\}/{b} "\\{c\\} {d}"`,
+      [`src="/u/%7Ba%7D/{b}"`, `title="&#123;c&#125; {d}"`],
+    ],
+    [String.raw`[a](/x/\{b\}/{c})`, [`href="/x/%7Bb%7D/{c}"`]],
+    [String.raw`[a](/x/\\{b})`, [`href="/x/%5C{b}"`]],
+  ])(
+    `link and image attributes distinguish escaped braces: %s`,
+    async (source, snippets) => {
+      const { code } = await compile_page(source)
+      for (const snippet of snippets) expect(code).toContain(snippet)
+    },
+  )
 
   test.each([
     `---\ntitle: A`,
@@ -298,17 +339,11 @@ describe(`code and math`, () => {
   test.each([`markdown`, `svelte`] as const)(
     `keeps inline math in plain image alt text as authored TeX in the %s dialect`,
     async (dialect) => {
-      const engine = create_markdown({ math: true })
-      const parsed = assert_ok(
-        await engine.parse(`![area $x^2$ m](/a.png)`, {
-          filename: `/p/page.md`,
-          dialect,
-        }),
+      const parsed = await create_markdown({ math: true }).parse(
+        `![area $x^2$ m](/a.png)`,
+        { filename: `/p/page.md`, dialect },
       )
-      const output =
-        dialect === `markdown`
-          ? assert_ok(await render_document(parsed))
-          : assert_ok(await compile_document(parsed)).code
+      const output = await emit(assert_ok(parsed))
       if (dialect === `svelte`) compile(output, { generate: false })
       expect(output).toContain(`alt="area $x^2$ m"`)
       expect(output).not.toContain(`katex`)
