@@ -176,10 +176,30 @@
       hover_open = false
     }
   }
-  function is_current(path: string | undefined) {
-    if (path && (pathname === path || (path !== `/` && pathname?.startsWith(`${path}/`))))
-      return `page`
-  }
+  // `/docs` and `/docs/` name one page. Only slash-less hrefs also match their subpages: a
+  // trailing-slash href like the root `/` or a base-path home `/base/` prefixes every page.
+  const trim_slash = (path: string) => path.replace(/\/$/u, ``)
+  const matches_page = (path: string) =>
+    pathname !== undefined &&
+    (trim_slash(pathname) === trim_slash(path) || pathname.startsWith(`${path}/`))
+  // Only the most specific matching link is current: a section link like `/docs` stays lit on
+  // its subpages, unless the nav also links that subpage (`/docs/api`) itself. Disabled links
+  // render as a <span> without aria-current, so they can't claim it either.
+  // Holds the slash-trimmed href, so links compare against it directly.
+  const current_href = $derived.by(() => {
+    let best: string | undefined
+    for (const route of checked_routes) {
+      if (route.separator) continue
+      for (const { href, disabled } of [route, ...(route.children ?? [])]) {
+        if (!href || disabled || !matches_page(href)) continue
+        const trimmed = trim_slash(href)
+        if (best === undefined || trimmed.length > best.length) best = trimmed
+      }
+    }
+    return best
+  })
+  const is_current = (path: string | undefined) =>
+    path && trim_slash(path) === current_href ? `page` : undefined
   const is_active = (route: Route): boolean =>
     is_current(route.href) === `page` ||
     Boolean(route.children?.some((child) => is_current(child.href)))

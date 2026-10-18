@@ -143,7 +143,18 @@
   let prev_scroll_target_distance: number = Infinity
   let last_reported_open: boolean | undefined = undefined
   let discovered_items: TocHeadingData[] = $state([])
-  const heading_data = $derived(items ?? discovered_items)
+  // rows are keyed by id and `#id` only reaches the first match, so keep each id's first entry
+  function first_per_id<T extends { id: string }>(entries: Iterable<T>): T[] {
+    const seen_ids = new Set<string>()
+    const unique: T[] = []
+    for (const entry of entries) {
+      if (seen_ids.has(entry.id)) continue
+      seen_ids.add(entry.id)
+      unique.push(entry)
+    }
+    return unique
+  }
+  const heading_data = $derived(items ? first_per_id(items) : discovered_items)
   // without this a heading-less page can't tell its first update_toc_headings pass apart
   // from "nothing changed": both compare an empty query result against an empty headings
   let headings_initialized = false
@@ -273,19 +284,19 @@
 
   function query_toc_headings() {
     if (items) {
-      return items.flatMap(({ id }) => {
+      return first_per_id(items).flatMap(({ id }) => {
         // eslint-disable-next-line unicorn/prefer-query-selector -- IDs need not be valid CSS selectors.
         const heading = document.getElementById(id)
         return heading instanceof HTMLHeadingElement ? [heading] : []
       })
     }
-    return Array.from(
-      document.querySelectorAll<HTMLHeadingElement>(heading_selector),
-    ).filter(
-      (heading) =>
-        heading.id &&
-        !heading.closest(`aside.toc`) &&
-        (!exclude_selector || !heading.closest(exclude_selector)),
+    return first_per_id(
+      Array.from(document.querySelectorAll<HTMLHeadingElement>(heading_selector)).filter(
+        (heading) =>
+          heading.id &&
+          !heading.closest(`aside.toc`) &&
+          (!exclude_selector || !heading.closest(exclude_selector)),
+      ),
     )
   }
 
@@ -383,6 +394,8 @@
   }
 
   $effect(() => {
+    // validate every selector prop up front: an invalid one throws here instead of on the
+    // first match or scroll, and changing any of them re-queries the headings
     document.querySelector(heading_selector)
     if (exclude_selector) document.querySelector(exclude_selector)
     if (typeof hide_on_intersect === `string`) document.querySelector(hide_on_intersect)

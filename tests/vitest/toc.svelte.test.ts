@@ -12,7 +12,7 @@ import {
   test,
   vi,
 } from 'vite-plus/test'
-import { click, doc_query, next_task, press_key, render } from './index'
+import { click, doc_query, next_task, press_key, render, raw_snippet } from './index'
 
 type TocProps = ComponentProps<typeof Toc>
 
@@ -150,10 +150,9 @@ describe(`Toc`, () => {
       await mount_toc({
         min_items: 5,
         warn_on_empty: true,
-        footer: createRawSnippet(() => ({
-          render: () =>
-            `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
-        })),
+        footer: raw_snippet(
+          `<details open><summary>Figures and equations</summary><a href="#figure">Figure 1</a></details>`,
+        ),
       })
       expect(doc_query(`aside.toc`).hidden).toBe(false)
       expect(warn_mock).toHaveBeenCalledExactlyOnceWith(
@@ -334,6 +333,23 @@ describe(`Toc`, () => {
     await mount_toc()
     expect(doc_query(`body > h2`).outerHTML).toBe(`<h2>No id</h2>`)
     expect(toc_texts()).toEqual([`Stable`])
+  })
+
+  // rows are keyed by id, so a repeated id crashed the each block; #id only reaches the first
+  test.each([
+    [`DOM headings`, undefined],
+    [
+      `items prop`,
+      [`First`, `Second`, `Other`].map((title, idx) => ({
+        id: idx < 2 ? `dup` : `other`,
+        level: 2,
+        title,
+      })),
+    ],
+  ])(`lists only the first of several %s sharing an id`, async (_, items) => {
+    set_body(`<h2 id="dup">First</h2><h2 id="dup">Second</h2><h2 id="other">Other</h2>`)
+    await mount_toc({ items })
+    expect(toc_texts()).toEqual([`First`, `Other`])
   })
 
   test.each([

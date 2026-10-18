@@ -1,9 +1,17 @@
 import { Nav } from '#lib'
 import type { NavRoute, NavLink } from '#lib/types.ts'
-import { type ComponentProps, createRawSnippet, tick } from 'svelte'
+import { type ComponentProps, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { click, doc_query, next_task, press_key, render, stub_props } from './index'
+import {
+  click,
+  doc_query,
+  next_task,
+  press_key,
+  render,
+  stub_props,
+  raw_snippet,
+} from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
 describe(`Nav`, () => {
@@ -215,12 +223,49 @@ describe(`Nav`, () => {
     [`/home`, `/`, null],
     [`/some-page-v2`, `/some-page`, null], // must not match via startsWith alone
     [`/some-page`, `/some-page-v2`, null],
+    // a trailing slash doesn't change the page, but such hrefs (like a base-path home)
+    // prefix every subpage, so they match exactly
+    [`/docs`, `/docs/`, `page`],
+    [`/docs/`, `/docs`, `page`],
+    [`/docs/intro`, `/docs`, `page`],
+    [`/base/docs`, `/base/`, null],
   ])(`aria-current: pathname=%s link=%s -> %s`, (pathname, link_href, expected) => {
     mount_nav({ routes: [{ href: link_href, label: link_href }], pathname })
     expect(doc_query(`a[href="${link_href}"]`).getAttribute(`aria-current`)).toBe(
       expected,
     )
   })
+  // sibling submenu links where one prefixes the other: on the longer one's page only it is
+  // current (a section page and its subpage both listed in one dropdown). A disabled subpage
+  // link renders as a <span> without aria-current, so it must not steal it from its section.
+  test.each([
+    [false, [null, `page`]],
+    [true, [`page`, null]],
+  ])(
+    `aria-current marks only the most specific matching link (subpage disabled=%s)`,
+    (disabled, expected) => {
+      mount_nav({
+        pathname: `/table/colors`,
+        routes: [
+          {
+            label: `Elements`,
+            children: [
+              { href: `/table`, label: `Table` },
+              { href: `/table/colors`, label: `Colors`, disabled },
+            ],
+          },
+        ],
+      })
+      const items = [...document.querySelectorAll(`.dropdown :is(a, span.disabled)`)]
+      expect(
+        [`Table`, `Colors`].map((label) =>
+          items
+            .find((item) => item.textContent?.trim() === label)
+            ?.getAttribute(`aria-current`),
+        ),
+      ).toEqual(expected)
+    },
+  )
   test(`click outside closes burger menu and dropdowns, inside click does not`, async () => {
     const { submenu, toggle } = mount_dropdown()
     // spied after mount, so the tooltip layer's own document listener is not counted
@@ -295,8 +340,9 @@ describe(`Nav`, () => {
     // dropdown children stay reachable even under a disabled parent
     expect(hrefs(doc_query(`.dropdown [data-submenu]`))).toEqual(children)
   })
+  // only the most specific matching link is current; its group stays active
   test.each([
-    [`/parent/child`, [true, false], [`page`, `page`]],
+    [`/parent/child`, [true, false], [null, `page`]],
     [`/parent`, [true, false], [`page`, null]],
     [`/other`, [false, true], [null, null]],
   ])(
@@ -408,7 +454,7 @@ describe(`Nav`, () => {
       const on_navigate = vi.fn(() => (cancelled ? false : undefined))
       mount_nav({
         routes: default_routes,
-        item: createRawSnippet(() => ({ render: () => `<code>Custom</code>` })),
+        item: raw_snippet(`<code>Custom</code>`),
         open: true,
         on_navigate,
         link_props: { target: `_blank` },

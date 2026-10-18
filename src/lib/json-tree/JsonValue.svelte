@@ -153,7 +153,7 @@
     {/if}
     {#if is_url(trimmed_str)}
       <a
-        href={encodeURI(trimmed_str)}
+        href={trimmed_str}
         class="url-link"
         target="_blank"
         rel="noopener noreferrer"

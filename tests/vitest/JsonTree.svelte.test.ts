@@ -203,14 +203,15 @@ describe(`rendering`, () => {
   })
 
   it.each([
-    [`https://example.com`, true],
-    [`not a url`, false],
-  ])(`URL auto-link for %p = %s`, (text, is_link) => {
+    [`https://example.com`, `https://example.com/`],
+    // already percent-encoded URLs must not be encoded twice (%20 -> %2520)
+    [`  https://example.com/a%20b?q=%C3%A9  `, `https://example.com/a%20b?q=%C3%A9`],
+    [`not a url`, null],
+  ])(`URL auto-link for %p -> %s`, (text, href) => {
     mount_expanded({ value: { link: text } })
     const link = document.querySelector<HTMLAnchorElement>(`.url-link`)
-    expect(Boolean(link)).toBe(is_link)
+    expect(link?.href ?? null).toBe(href)
     if (link) {
-      expect(link.href).toBe(`https://example.com/`)
       expect(link.target).toBe(`_blank`)
       expect(link.rel).toBe(`noopener noreferrer`)
     }
@@ -621,6 +622,22 @@ describe(`search`, () => {
     await vi.waitFor(() => expect(scroll_into_view).toHaveBeenCalledTimes(2))
   })
 
+  it(`a new query restarts at its first match`, async () => {
+    mount_tree({ value: { a: 1, ab: 2, abc: 3, abcd: 4 }, default_fold_level: 5 })
+    await type_search(`a`, `1 of 4`)
+    const input = doc_query<HTMLInputElement>(`.search-input`)
+    press(input, `Enter`)
+    press(input, `Enter`)
+    expect(match_count()).toBe(`3 of 4`)
+    // typing and deleting within the debounce window keeps the query, so the match stays
+    const search = doc_query<HTMLInputElement>(`.search-input`)
+    await fire_input(search, `ab`, `input`)
+    await fire_input(search, `a`, `input`)
+    await new Promise<void>((resolve) => void setTimeout(resolve, 200))
+    expect(match_count()).toBe(`3 of 4`)
+    await type_search(`ab`, `1 of 3`)
+  })
+
   // The search box sits inside the div carrying the tree's keydown handler, so arrows typed
   // there yanked focus onto a tree node and Ctrl/Cmd+C copied the selection
   it(`leaves keys typed in the search box to the input`, async () => {
@@ -663,12 +680,60 @@ describe(`keyboard navigation and selection`, () => {
     press(tree(), `ArrowUp`)
     expect(focused_path()).toBe(`a`)
     expect(on_select).toHaveBeenLastCalledWith(`a`, { b: 1 })
+    press(tree(), `End`)
+    expect(focused_path()).toBe(`c`)
+    press(tree(), `Home`)
+    expect(focused_path()).toBe(``)
+  })
+
+  // roving tabindex: before any node is focused no treeitem was tabbable, while every fold
+  // toggle was its own tab stop. Collapsing the focused node's ancestor unmounted it and
+  // left no tab stop at all.
+  it(`exposes exactly one tab stop, the root until a node is focused`, () => {
+    mount_tree({ value: { a: { b: 1 }, c: 2 }, default_fold_level: 5 })
+    const tab_stops = () =>
+      paths_of(`.json-node[tabindex="0"]`).concat(
+        [
+          ...document.querySelectorAll(`.json-tree-content button:not([tabindex="-1"])`),
+        ].map((btn) => btn.className),
+      )
+    expect(tab_stops()).toEqual([``])
+    // tabbing onto the root adopts it, so its keys work before any arrow was pressed
+    const root = node_at(``)
+    root?.focus()
+    flushSync()
+    press(root, `Enter`)
+    expect(root?.getAttribute(`aria-expanded`)).toBe(`false`)
+    press(root, `ArrowRight`)
+    expect(root?.getAttribute(`aria-expanded`)).toBe(`true`)
+    press(tree(), `End`)
+    expect(tab_stops()).toEqual([`c`])
+
+    // collapsing an ancestor via its toggle hands focus (DOM focus too) to that ancestor
+    press(tree(), `ArrowUp`)
+    expect(document.activeElement).toBe(node_at(`a.b`))
+    fire(node_at(`a`)?.querySelector(`.collapse-toggle`), mouse(`click`))
+    expect(tab_stops()).toEqual([`a`])
+    expect(document.activeElement).toBe(node_at(`a`))
+
+    // Collapse all (which keeps an unlabeled root open) hands it to the outermost collapsed
+    // ancestor but leaves DOM focus on the clicked button
+    press(node_at(`a`), `ArrowRight`)
+    press(tree(), `ArrowDown`)
+    expect(tab_stops()).toEqual([`a.b`])
+    const collapse_all = control_group(1)[1]
+    collapse_all.focus()
+    fire(collapse_all, mouse(`click`))
+    expect(tab_stops()).toEqual([`a`])
+    expect(document.activeElement).toBe(collapse_all)
   })
 
   it(`click focuses only the clicked node and on_select resolves Map entry paths through their wrapper`, async () => {
     const on_select = vi.fn()
     const value = { m: new Map([[`k`, { deep: `v` }]]) }
     mount_tree({ value, default_fold_level: 10, on_select })
+    // a mouse press focuses the node before its click lands, which must not notify twice
+    node_at(`m[0].value.deep`)?.focus()
     await click(node_at(`m[0].value.deep`))
     // the click must not bubble into ancestor rows, which would re-focus each of them in
     // turn (ending on the root) and fire on_select once per ancestor
