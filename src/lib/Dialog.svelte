@@ -2,8 +2,8 @@
   import { onDestroy } from 'svelte'
   import { focusable } from './attachments/shared'
   import {
-    is_dialog_backdrop_event,
     restore_dialog_focus,
+    track_backdrop_dismiss,
     type DialogCloseVia,
     type DialogControls,
     type DialogProps,
@@ -32,7 +32,6 @@
   const dialog_id = $derived(id ?? unique_id)
   let focus_origin: HTMLElement | SVGElement | null = null
   let pending_close_via: DialogCloseVia | null = null
-  let backdrop_press_started = false
 
   const close = (via: DialogCloseVia) => {
     if (!open) return
@@ -63,22 +62,16 @@
     // Escape to that dialog before its ancestors.
     surface.showModal()
   })
-  const track_backdrop_press = (event: PointerEvent) => {
-    backdrop_press_started = event.isPrimary && is_dialog_backdrop_event(surface, event)
-  }
-  const track_backdrop_release = (event: MouseEvent) => {
-    if (
-      backdrop_press_started &&
-      closedby === `any` &&
-      is_dialog_backdrop_event(surface, event)
-    ) {
+  const backdrop = track_backdrop_dismiss(
+    () => surface,
+    () => {
+      if (closedby !== `any`) return
       // Browsers without `closedby` support leave the surface open; those with it have
       // already light-dismissed it and only need the reason recorded before `close` fires.
       if (surface?.open) close(`pointer`)
       else pending_close_via = `pointer`
-    }
-    backdrop_press_started = false
-  }
+    },
+  )
   onDestroy(() => {
     if (surface?.open) restore_dialog_focus(surface, focus_origin)
   })
@@ -97,14 +90,15 @@
     {closedby}
     aria-label={aria_label ?? (aria_labelledby ? undefined : `Dialog`)}
     aria-labelledby={aria_labelledby}
-    onpointerdown={chain_handlers(track_backdrop_press, rest.onpointerdown)}
-    onclick={chain_handlers(track_backdrop_release, rest.onclick)}
+    onpointerdown={chain_handlers(backdrop.onpointerdown, rest.onpointerdown)}
+    onpointercancel={chain_handlers(backdrop.onpointercancel, rest.onpointercancel)}
+    onclick={chain_handlers(backdrop.onclick, rest.onclick)}
     oncancel={(event) => {
       rest.oncancel?.(event)
       if (event.defaultPrevented) return
       if (closedby === `none`) event.preventDefault()
       // Chromium 156+ light-dismisses on pointerup via cancel + close, with no click after
-      else pending_close_via = backdrop_press_started ? `pointer` : `escape`
+      else pending_close_via = backdrop.press_started ? `pointer` : `escape`
     }}
     onclose={chain_handlers((event) => {
       // Ignore a queued close from a surface replaced by a rapid controlled reopen.
@@ -112,7 +106,7 @@
       const was_open = open
       const close_via = pending_close_via ?? `close`
       pending_close_via = null
-      backdrop_press_started = false
+      backdrop.reset()
       open = false
       // Explicit restoration also covers removed openers and partial DOM implementations.
       restore_dialog_focus(surface, focus_origin)

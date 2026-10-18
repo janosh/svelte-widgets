@@ -67,7 +67,7 @@ export function create_canvas_surface(inputs: {
     const parent = canvas.parentElement
     const style = parent && getComputedStyle(parent)
     const padding = (side: `Left` | `Right` | `Top` | `Bottom`) =>
-      css_px(style?.[`padding${side}`] ?? ``) || 0
+      css_px(style?.[`padding${side}`] ?? ``)
     const width = Math.max(
       0,
       (parent?.clientWidth ?? 0) - padding(`Left`) - padding(`Right`),

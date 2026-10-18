@@ -48,3 +48,41 @@ test(`copy feedback covers the icon name instead of squeezing it`, async ({ page
   await expect(card.locator(`small`)).toBeVisible()
   expect(await label_width()).toBe(before)
 })
+
+// The checked knob must travel exactly to the track's inner edge whatever the size vars,
+// which the old height-based offset only did for the default proportions.
+test.describe(`Toggle checked knob travel`, () => {
+  const cases: [string, Record<string, string>][] = [
+    [`defaults`, {}],
+    [`padding`, { '--toggle-knob-padding': `0.2em` }],
+    [`taller track`, { '--toggle-knob-height': `2em` }],
+    [`smaller knob`, { '--toggle-knob-after-width': `1em` }],
+  ]
+  for (const [name, vars] of cases) {
+    test(name, async ({ page }) => {
+      const label = page.locator(`label:has(> input[type="checkbox"] + span)`).first()
+      const { travel, expected } = await label.evaluate((node, css_vars) => {
+        const style_vars = {
+          ...css_vars,
+          '--toggle-knob-transition': `none`,
+          '--toggle-knob-after-transition': `none`,
+        }
+        for (const [key, val] of Object.entries(style_vars))
+          (node as HTMLElement).style.setProperty(key, val)
+        const input = node.querySelector(`input`)
+        const span = node.querySelector(`span`)
+        if (!input || !span) throw new Error(`Toggle markup not found`)
+        input.checked = true
+        const track = getComputedStyle(span)
+        const knob = getComputedStyle(span, `::after`)
+        const px = (value: string) => Number(value.replace(/px$/u, ``))
+        const padding = px(track.paddingLeft) + px(track.paddingRight)
+        return {
+          travel: new DOMMatrix(knob.transform).m41,
+          expected: span.clientWidth - padding - px(knob.width),
+        }
+      }, vars)
+      expect(travel).toBeCloseTo(expected, 1)
+    })
+  }
+})

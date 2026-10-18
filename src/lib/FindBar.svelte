@@ -5,6 +5,7 @@
   import { tick } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
+  import { claim_escape_while_focused } from './attachments/shared'
   import { create_find_state, type FindOptions } from './find-in-page.svelte'
   import Icon from './Icon.svelte'
   import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
@@ -56,15 +57,9 @@
   }
 
   const handle_keydown = (event: KeyboardEvent): void => {
-    if (event.key === `Escape`) {
-      event.preventDefault()
-      // Keep outer Escape handlers from closing the searched surface.
-      event.stopPropagation()
-      on_close()
-    } else if (event.key === `Enter`) {
-      event.preventDefault()
-      find.step(event.shiftKey ? -1 : 1)
-    }
+    if (event.key !== `Enter`) return
+    event.preventDefault()
+    find.step(event.shiftKey ? -1 : 1)
   }
 
   $effect(() => {
@@ -77,8 +72,15 @@
   })
 </script>
 
-<div {...rest} aria-label={find_label} role="search" class={[`find-bar`, rest.class]}>
-  <Icon icon={Search} aria-hidden="true" class="find-icon" />
+<!-- Escape closes the bar, never the surface hosting it -->
+<div
+  {...rest}
+  aria-label={find_label}
+  role="search"
+  class={[`find-bar`, rest.class]}
+  {@attach claim_escape_while_focused(() => on_close())}
+>
+  <Icon icon={Search} class="find-icon" />
   <input
     aria-label={find_label}
     bind:this={input_element}

@@ -64,15 +64,16 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
   // flag -> browser
   $effect(() => {
     const wrapper = options.get_wrapper()
-    if (!wrapper) return
+    if (!wrapper) return undefined
     const fullscreen = options.get_fullscreen()
     reconcile(wrapper)
 
     // a fullscreened element inherits nothing and would render on black; dropped on the way
-    // out so a later theme switch cannot read a stale value
+    // out (and on a var rename, wrapper swap or unmount) so nothing reads a stale value
+    if (!fullscreen) return undefined
     const bg_css_var = options.get_bg_css_var?.() ?? `--fullscreen-bg`
-    if (fullscreen) wrapper.style.setProperty(bg_css_var, get_page_background())
-    else wrapper.style.removeProperty(bg_css_var)
+    wrapper.style.setProperty(bg_css_var, get_page_background())
+    return () => wrapper.style.removeProperty(bg_css_var)
   })
 
   // browser -> flag, covering Esc, F11 and programmatic exits

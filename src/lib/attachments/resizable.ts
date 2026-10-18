@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
 import { merge_defaults, RESIZABLE_LABELS, type ResizableLabels } from '../labels'
 import { clamp } from '../utils'
-import { css_px, follow_pointer, is_primary_press, override_style } from './shared'
+import { css_px, follow_pointer, is_primary_press } from './shared'
 
 export type Dimensions = { width: number; height: number }
 export type ResizeEvent = MouseEvent | KeyboardEvent
@@ -62,7 +62,6 @@ export const resizable =
     type Grab = { horizontal?: `left` | `right`; vertical?: `top` | `bottom` }
     let is_resizing = false
     let stop_pointer_follow: (() => void) | undefined
-    let restore_user_select: (() => void) | undefined
 
     const computed = getComputedStyle(node)
     const previous_position =
@@ -71,7 +70,7 @@ export const resizable =
     // Absolute children anchor to the padding box, so a strip at `edge: 0` sits inside the
     // border and leaves the visible edge ungrabbable; negative insets restore the border box.
     const inset = (edge: Edge) =>
-      -(css_px(computed.getPropertyValue(`border-${edge}-width`)) || 0)
+      -css_px(computed.getPropertyValue(`border-${edge}-width`))
 
     const has_edge = (...sides: Edge[]) => sides.some((side) => edges.includes(side))
     // Whether a left/top shrink moved the node, so dblclick can clear the resize offsets.
@@ -80,7 +79,7 @@ export const resizable =
     const measure = () => {
       const current_style = getComputedStyle(node)
       const style_px = (property: string) =>
-        css_px(current_style.getPropertyValue(property)) || 0
+        css_px(current_style.getPropertyValue(property))
       // what offsetWidth/Height carry beyond CSS width/height on a content-box node
       const content_box_inset = (start: Edge, end: Edge) =>
         current_style.boxSizing === `border-box`
@@ -92,8 +91,8 @@ export const resizable =
       return {
         width: node.offsetWidth,
         height: node.offsetHeight,
-        left: css_px(current_style.left) || 0,
-        top: css_px(current_style.top) || 0,
+        left: css_px(current_style.left),
+        top: css_px(current_style.top),
         width_inset: content_box_inset(`left`, `right`),
         height_inset: content_box_inset(`top`, `bottom`),
       }
@@ -200,14 +199,12 @@ export const resizable =
       // bars a second primary mid-resize (mouse while a touch is down)
       if (is_resizing || !is_primary_press(event)) return
       is_resizing = true
+      // the handle owns this press: a `draggable` on the node or an ancestor must not also
+      // start moving it
+      event.stopPropagation()
 
       const origin = { x: event.clientX, y: event.clientY }
       const [measured, maximum] = [measure(), read_maximum()]
-      restore_user_select = override_style(
-        node.ownerDocument.body.style,
-        `user-select`,
-        `none`,
-      )
       on_resize_start?.(event, { width: measured.width, height: measured.height })
       stop_pointer_follow = follow_pointer(
         node,
@@ -227,7 +224,6 @@ export const resizable =
     }
 
     const on_pointerup = (event: PointerEvent) => {
-      restore_user_select?.()
       on_resize_end?.(event, { width: node.offsetWidth, height: node.offsetHeight })
       stop_pointer_follow?.()
       is_resizing = false
@@ -348,7 +344,6 @@ export const resizable =
 
     return () => {
       stop_pointer_follow?.()
-      restore_user_select?.()
       abort_controller.abort() // removal alone leaves a retained strip ref able to fire on_pointerdown
       for (const handle of handles) handle.remove()
       if (previous_position !== undefined) node.style.position = previous_position

@@ -3,7 +3,7 @@ import type { TabItem } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, mount, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, press_key } from './index'
+import { click, create_element, press_key } from './index'
 
 describe(`Tabs`, () => {
   const items = [
@@ -175,6 +175,17 @@ describe(`Tabs`, () => {
     await click(tabs()[0])
     expect(props.value).toBe(`overview`)
     expect(on_change).toHaveBeenLastCalledWith(`overview`)
+
+    // leaving the list puts the tab stop back on the selected tab, so Tab returns there
+    press_key(tabs()[0], `ArrowRight`)
+    await tick()
+    create_element(`button`).focus()
+    await tick()
+    expect(tab_states()).toEqual([
+      [`true`, 0],
+      [`false`, -1],
+      [`false`, -1],
+    ])
 
     tabs()[2].focus()
     props.items = [items[0]]

@@ -374,6 +374,35 @@ describe(`fullscreen background`, () => {
   )
 })
 
+test(`renaming bg_css_var or unmounting mid-fullscreen leaves no stale var`, async () => {
+  document.body.style.backgroundColor = `rgb(7, 8, 9)`
+  const css_var = writable(`--old-bg`)
+  const css_var_proxy = fromStore(css_var)
+  const wrapper = create_element()
+  // a spread would snapshot the getter, so render directly to keep bg_css_var live
+  const unmount_button = render(
+    FullscreenButton,
+    {
+      wrapper,
+      fullscreen: true,
+      get bg_css_var() {
+        return css_var_proxy.current
+      },
+    },
+    wrapper,
+  )
+  await settle()
+  expect(wrapper.style.getPropertyValue(`--old-bg`)).toBe(`rgb(7, 8, 9)`)
+
+  css_var.set(`--new-bg`)
+  await settle()
+  expect(wrapper.style.getPropertyValue(`--old-bg`)).toBe(``)
+  expect(wrapper.style.getPropertyValue(`--new-bg`)).toBe(`rgb(7, 8, 9)`)
+
+  await unmount_button()
+  expect(wrapper.style.getPropertyValue(`--new-bg`)).toBe(``)
+})
+
 describe(`button rendering`, () => {
   test.each([
     icons.Check,

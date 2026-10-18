@@ -3,7 +3,14 @@ import type { CmdAction, LoadOptionsParams } from '#lib/types.ts'
 import { MULTI_SELECT_LABELS } from '#lib/labels.ts'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { beforeEach, describe, expect, expectTypeOf, test, vi } from 'vite-plus/test'
-import { click, create_element, doc_query, press_key, render } from './index'
+import {
+  click,
+  create_element,
+  doc_query,
+  pointer_event,
+  press_key,
+  render,
+} from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 
 const make_actions = (...labels: string[]) =>
@@ -116,6 +123,37 @@ test.each([
     expect(cancel_event.defaultPrevented).toBe(default_prevented)
     expect(dialog.getAttribute(`closedby`)).toBe(effective_closedby)
     expect(oncancel).toHaveBeenCalledOnce()
+  },
+)
+
+// happy-dom has no native `closedby` light dismiss, so this exercises the fallback
+test.each([
+  [[`Escape`], undefined, 10, true],
+  [[], undefined, 10, true], // backdrop still closes when Escape doesn't
+  [[`Escape`], `closerequest` as const, 10, false],
+  [[`Escape`], `none` as const, 10, false],
+  [[`Escape`], undefined, 150, false], // press started inside the box
+])(
+  `backdrop click with close_keys=%j closedby=%s pressed at %i closes: %s`,
+  async (close_keys, closedby, press_xy, should_close) => {
+    const props = $state({
+      open: true,
+      close_keys,
+      actions: mock_actions,
+      dialog_props: { closedby },
+    })
+    mount_menu(props)
+    await tick()
+
+    const dialog = doc_query<HTMLDialogElement>(`dialog`)
+    dialog.getBoundingClientRect = () =>
+      ({ left: 100, top: 100, right: 300, bottom: 200 }) as DOMRect
+    dialog.dispatchEvent(pointer_event(`pointerdown`, press_xy, press_xy))
+    dialog.dispatchEvent(pointer_event(`click`, 10, 10))
+    await tick()
+
+    expect(props.open).toBe(!should_close)
+    expect(document.querySelector(`dialog`) === null).toBe(should_close)
   },
 )
 
@@ -408,6 +446,25 @@ test.each([
   await tick()
   const rows = [...document.querySelectorAll<HTMLElement>(`li[role="option"]`)]
   expect(rows.map((row) => row.style.height)).toEqual(rows.map(() => height))
+})
+
+// an empty-list row would contradict a pending load or render as a blank option
+test.each([{ loading: true }, { no_matching_options_msg: `` }])(
+  `omits the empty-list row for %j`,
+  async (props) => {
+    mount_menu({ open: true, actions: [], ...props })
+    await tick()
+    expect(document.querySelector(`dialog .user-msg`)).toBeNull()
+  },
+)
+
+// arrow keys await auto-scroll, which must not delay the consumer's own handler
+test(`forwards arrow keydowns to onkeydown synchronously`, async () => {
+  const onkeydown = vi.fn()
+  mount_menu({ open: true, actions: mock_actions, onkeydown })
+  await tick()
+  const event = press_key(menu_input(), `ArrowDown`)
+  expect(onkeydown).toHaveBeenCalledExactlyOnceWith(event)
 })
 
 test(`remains open when trigger keys are pressed while already open`, async () => {

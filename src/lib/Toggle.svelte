@@ -68,9 +68,12 @@
     transition: var(--toggle-knob-after-transition, 0.3s);
   }
   input:checked + span::after {
+    /* travel = border-box track width - padding - border - knob, each side. 2px is the
+       default border: --toggle-knob-border is a shorthand, which would invalidate the calc
+       and with it the whole transform (likewise a multi-value --toggle-knob-padding). */
     --checked-offset: calc(
-      var(--toggle-knob-width, 3em) - var(--toggle-knob-height, 1.5em) +
-        var(--toggle-knob-padding, 0.1em) - var(--toggle-knob-border, 2px)
+      var(--toggle-knob-width, 3em) - 2 * var(--toggle-knob-padding, 0.1em) - 2px -
+        var(--toggle-knob-after-width, 1.2em)
     );
     background: var(--toggle-knob-after-background, light-dark(green, #4ade80));
     transform: var(--toggle-knob-after-transform, translate(var(--checked-offset)));

@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
 import { clamp } from '../utils'
 import type { AnchorRect } from './float'
-import { css_px, follow_pointer, is_primary_press, override_style } from './shared'
+import { css_px, follow_pointer, is_primary_press } from './shared'
 
 export interface DraggableOptions {
   handle_selector?: string
@@ -22,7 +22,6 @@ export const draggable =
 
     let dragging = false
     let stop_pointer_follow: (() => void) | undefined
-    let restore_user_select: (() => void) | undefined
     let start = { x: 0, y: 0 }
     // pointer delta range keeping the node inside `bounds`
     const unbounded = {
@@ -58,14 +57,14 @@ export const draggable =
           ? node.getBoundingClientRect()
           : styles.position === `absolute`
             ? { left: node.offsetLeft, top: node.offsetTop }
-            : { left: css_px(styles.left) || 0, top: css_px(styles.top) || 0 }
+            : { left: css_px(styles.left), top: css_px(styles.top) }
       if (styles.position === `static`) node.style.position = `relative`
       // Rect and offsetLeft report the border edge, but left/top place the margin edge, so
       // an out-of-flow node with margins would jump by them on the first press. The in-flow
       // branch read the insets themselves and is already in that space.
       const out_of_flow = [`fixed`, `absolute`].includes(styles.position)
-      initial.left = origin.left - (out_of_flow ? css_px(styles.marginLeft) || 0 : 0)
-      initial.top = origin.top - (out_of_flow ? css_px(styles.marginTop) || 0 : 0)
+      initial.left = origin.left - (out_of_flow ? css_px(styles.marginLeft) : 0)
+      initial.top = origin.top - (out_of_flow ? css_px(styles.marginTop) : 0)
 
       if (move_x) {
         node.style.left = `${initial.left}px`
@@ -100,11 +99,6 @@ export const draggable =
         }
       }
       start = { x: event.clientX, y: event.clientY }
-      restore_user_select = override_style(
-        node.ownerDocument.body.style,
-        `user-select`,
-        `none`,
-      ) // Prevent text selection during drag
       drag_handle.style.cursor = `grabbing`
 
       options.on_drag_start?.(event)
@@ -131,7 +125,6 @@ export const draggable =
     const on_pointerup = (event: PointerEvent) => {
       dragging = false
       event.stopPropagation()
-      restore_user_select?.()
       drag_handle.style.cursor = `grab`
       stop_pointer_follow?.()
       options.on_drag_end?.(event)
@@ -148,7 +141,6 @@ export const draggable =
 
     return () => {
       stop_pointer_follow?.()
-      restore_user_select?.()
       drag_handle.removeEventListener(`pointerdown`, on_pointerdown)
       Object.assign(drag_handle.style, previous_styles)
     }

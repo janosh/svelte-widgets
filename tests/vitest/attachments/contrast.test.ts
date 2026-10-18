@@ -53,10 +53,13 @@ describe(`contrast_color`, () => {
     [`rgb(0, 0, 255)`, 0.114],
     // percentages are as legal in rgb() as anywhere else, in channels and alpha alike
     [`rgb(100% 0% 0%)`, 0.299],
-    [`rgb(0 0 0 / 50%)`, 0],
+    // translucent colors are judged over the white page they show through to
+    [`rgb(0 0 0 / 50%)`, 0.5],
     [`rgba(255, 255, 255, 50%)`, 1],
+    [`rgba(0, 0, 0, 0.1)`, 0.9],
+    [`transparent`, 1],
     [`hwb(0 25% 25%)`, 0.3995], // white and black both mixed into the pure hue
-    [`hsla(0, 100%, 50%, 0.5)`, 0.299],
+    [`hsla(0, 100%, 50%, 0.5)`, 0.6495], // red at half strength over white
   ])(`%s converts to a luminance of %f`, (bg_color, expected) => {
     expect(luminance_brackets(bg_color, expected, 1e-4)).toEqual(bracketed)
   })
@@ -153,6 +156,14 @@ describe(`contrast_color`, () => {
     cleanup?.()
   })
 
+  it(`walks out of a shadow root to the painted host`, () => {
+    const host = create_element(`div`, { backgroundColor: `rgb(10, 10, 10)` })
+    const node = document.createElement(`span`)
+    host.attachShadow({ mode: `open` }).append(node)
+
+    expect(get_bg_color(node)).toBe(`rgb(10, 10, 10)`)
+  })
+
   it(`bg_color skips the ancestor walk and cleanup restores the inline color`, () => {
     const node = create_element(`div`, {
       backgroundColor: `rgb(255, 255, 255)`,
@@ -165,4 +176,23 @@ describe(`contrast_color`, () => {
     cleanup?.()
     expect(node.style.color).toBe(`rebeccapurple`)
   })
+
+  // the node's own fill is what bg_color replaces, so only its parent's backdrop shows
+  it.each([
+    [`rgba(255, 0, 0, 0.3)`, `rgb(20, 20, 20)`, `white`], // blending over white said black
+    [`rgba(255, 0, 0, 0.3)`, `rgb(255, 255, 255)`, `black`],
+    [`rgba(255, 0, 0, 0.3)`, `rgba(0, 0, 0, 0)`, `black`], // nothing painted: white page
+    [`rgba(0, 0, 0, 0)`, `rgb(20, 20, 20)`, `white`],
+  ])(
+    `translucent bg_color %s blends over the parent's %s`,
+    (bg_color, parent_bg, expected_color) => {
+      const parent = create_element(`div`, { backgroundColor: parent_bg })
+      const node = document.createElement(`span`)
+      node.style.backgroundColor = `rgb(255, 255, 255)`
+      parent.append(node)
+
+      contrast_color({ bg_color })(node)
+      expect(node.style.color).toBe(expected_color)
+    },
+  )
 })

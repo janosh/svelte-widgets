@@ -4,7 +4,7 @@
   import { flip } from 'svelte/animate'
   import type { HTMLAttributes } from 'svelte/elements'
   import { fade } from 'svelte/transition'
-  import { chain_handlers, type MasonryOrder } from './utils'
+  import { chain_handlers, lower_bound, type MasonryOrder } from './utils'
 
   type ItemId = string | number
   type ItemRecord = { id: ItemId; idx: number; item: Item }
@@ -242,17 +242,6 @@
     }
   })
 
-  // Binary search: find first index where cumulative_heights[idx] >= target
-  function binary_search_ge(cumulative_heights: number[], target: number): number {
-    let [low_idx, high_idx] = [0, cumulative_heights.length]
-    while (low_idx < high_idx) {
-      const mid_idx = (low_idx + high_idx) >>> 1
-      if (cumulative_heights[mid_idx] < target) low_idx = mid_idx + 1
-      else high_idx = mid_idx
-    }
-    return low_idx
-  }
-
   // declared before prefix_heights, which depends on it
   let scroll_top = $state(0)
   let ticking = false
@@ -314,13 +303,14 @@
         return { start: 0, end: column_items.length, pad_top: 0, pad_bottom: 0 }
       }
       const ph = prefix_heights[col_idx]
-      const start = Math.max(0, binary_search_ge(ph, window_scroll_top) - 1 - overscan)
+      // first index whose cumulative height reaches the window's top/bottom edge
+      const top_idx = lower_bound(ph.length, (idx) => ph[idx] >= window_scroll_top)
+      const bottom_edge = window_scroll_top + container_height
+      const bottom_idx = lower_bound(ph.length, (idx) => ph[idx] >= bottom_edge)
+      const start = Math.max(0, top_idx - 1 - overscan)
       // the item straddling the bottom edge is on screen, so the exclusive end must clear it
       // (mirrors the row of margin `start` takes)
-      const end = Math.min(
-        ph.length,
-        binary_search_ge(ph, window_scroll_top + container_height) + 1 + overscan,
-      )
+      const end = Math.min(ph.length, bottom_idx + 1 + overscan)
       return {
         start,
         end,

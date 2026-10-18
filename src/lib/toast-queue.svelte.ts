@@ -480,20 +480,22 @@ export class ToastStore<Priority extends string = ToastPriority> {
   // reading it or reaching for its button. Only the visible toast has a running clock.
   pause(): void {
     const { active_toast } = this.#queue
-    // a null deadline means already paused, or never counting in the first place
-    if (!active_toast || active_toast.expires_at_ms === null) return
-    const paused = pause_visibility_timeout(active_toast, Date.now())
-    if (paused === active_toast) return // an absolute deadline has no budget to bank
-    this.#apply({ queue: { ...this.#queue, active_toast: paused }, effects: [] })
+    // a null deadline means already paused, or never counting in the first place; an
+    // absolute deadline has no budget to bank and comes back unchanged
+    if (active_toast && active_toast.expires_at_ms !== null)
+      this.#set_active(pause_visibility_timeout(active_toast, Date.now()))
   }
 
   resume(): void {
     const { active_toast } = this.#queue
     // resuming a running toast would grant a second full duration, not its remainder
-    if (active_toast?.expires_at_ms !== null) return
-    const resumed = start_visibility_timeout(active_toast, Date.now())
-    if (resumed === active_toast) return
-    this.#apply({ queue: { ...this.#queue, active_toast: resumed }, effects: [] })
+    if (active_toast?.expires_at_ms === null)
+      this.#set_active(start_visibility_timeout(active_toast, Date.now()))
+  }
+
+  #set_active(active_toast: ToastItem<Priority>): void {
+    if (active_toast === this.#queue.active_toast) return
+    this.#apply({ queue: { ...this.#queue, active_toast }, effects: [] })
   }
 
   // Drops the timer and every toast without firing on_close, for teardown between tests or

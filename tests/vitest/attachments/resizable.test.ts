@@ -446,6 +446,17 @@ describe(`resizable`, () => {
     expect(element.style.position).toBe(initial_position)
   })
 
+  it(`a handle press on a draggable node resizes without also dragging`, () => {
+    const element = create_box()
+    const on_drag_start = vi.fn()
+    onTestFinished(draggable({ on_drag_start })(element) ?? (() => {}))
+    attach_resizable(element)
+
+    drag(grip(element), [195, 75], [250, 75])
+    expect(on_drag_start).not.toHaveBeenCalled()
+    expect(element.style.width).toBe(`255px`)
+  })
+
   it.each([`resize first`, `drag first`])(
     `restores shared selection after %s cleanup`,
     (order) => {

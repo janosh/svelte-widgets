@@ -87,6 +87,19 @@ describe(`Toggle`, () => {
     expect(input_props.onblur).toHaveBeenCalledOnce()
   })
 
+  // --toggle-knob-border is a border shorthand (`2px solid red`). Inside calc() it made the
+  // checked knob's whole transform invalid, so overriding the border froze the knob.
+  test(`checked knob offset does not read the border shorthand`, () => {
+    render(Toggle, {})
+    const offsets = [...document.styleSheets]
+      .flatMap((sheet) => [...sheet.cssRules])
+      .filter((rule) => rule instanceof CSSStyleRule)
+      .map((rule) => rule.style.getPropertyValue(`--checked-offset`))
+      .filter(Boolean)
+    expect(offsets).toHaveLength(1)
+    expect(offsets[0]).not.toContain(`--toggle-knob-border`)
+  })
+
   test(`children snippet receives checked state and updates on toggle`, async () => {
     render(TestSnippetHarness, { component: `toggle`, checked: false })
 

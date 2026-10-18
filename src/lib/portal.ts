@@ -2,6 +2,7 @@ import { tick } from 'svelte'
 import type { PortalParams } from './types'
 import { compute_position } from './utils'
 import { auto_update_position } from './attachments/float'
+import { css_px } from './attachments/shared'
 
 type PortalActionParams = PortalParams & { open: boolean }
 
@@ -37,8 +38,7 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
       { placement, align: `start`, flip: can_flip && [`bottom`, `top`], shift: false },
     )
     if (chosen === `top`) {
-      // oxlint-disable-next-line unicorn/prefer-number-coercion -- computed CSS lengths include units
-      const margin_top = Number.parseFloat(getComputedStyle(node).marginTop) || 0
+      const margin_top = css_px(getComputedStyle(node).marginTop)
       node.style.top = `${Math.max(0, rect.top - dropdown_height - margin_top)}px`
     } else node.style.top = `${rect.bottom}px`
     node.dataset.placement = chosen

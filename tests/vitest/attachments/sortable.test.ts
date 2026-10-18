@@ -197,6 +197,18 @@ describe(`sortable`, () => {
     },
   )
 
+  it(`a header colspan does not shift later columns`, () => {
+    const table = create_table(
+      `<thead><tr><th colspan="2">Name</th><th>Age</th></tr></thead><tbody>` +
+        `<tr><td>Grace</td><td>Hopper</td><td>85</td></tr>` +
+        `<tr><td>Alan</td><td>Turing</td><td>41</td></tr>` +
+        `<tr><td>Ada</td><td>Lovelace</td><td>36</td></tr></tbody>`,
+    )
+    attach_sortable(table)
+    click(headers_of(table)[1])
+    expect(column_values(table)).toEqual([`Ada`, `Alan`, `Grace`])
+  })
+
   it(`does not re-parent rows of nested tables when sorting`, () => {
     const table = create_table(
       `<thead><tr><th>Name</th><th>Data</th></tr></thead><tbody>` +
