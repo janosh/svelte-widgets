@@ -80,7 +80,7 @@
       else accepted.push(file)
     }
     rejected = rejections
-    on_reject?.(rejections)
+    if (rejections.length) on_reject?.(rejections)
     error = ``
     if (!accepted.length) return
     cancel()

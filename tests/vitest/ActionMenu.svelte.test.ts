@@ -14,6 +14,7 @@ import {
   press_key,
   render,
   stub_props,
+  raw_snippet,
 } from './index'
 import TestActionMenu from './TestActionMenu.svelte'
 
@@ -53,9 +54,7 @@ describe(`ActionMenu`, () => {
     await flush_context_open()
     return event
   }
-  const region = createRawSnippet(() => ({
-    render: () => `<div data-testid="region">region</div>`,
-  }))
+  const region = raw_snippet(`<div data-testid="region">region</div>`)
   const menu = () => document.querySelector(`menu[role="menu"]`)
   // `role^=` catches both the plain menuitem and the menuitemradio a section renders
   const items = () =>

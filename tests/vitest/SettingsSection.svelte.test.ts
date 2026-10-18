@@ -1,10 +1,9 @@
 import { SettingsSection } from '#lib'
-import { createRawSnippet, tick, type ComponentProps } from 'svelte'
+import { tick, type ComponentProps } from 'svelte'
 import { describe, expect, test } from 'vite-plus/test'
-import { click, doc_query, render } from './index'
+import { click, doc_query, render, raw_snippet } from './index'
 import SettingsSectionRerenderHarness from './SettingsSectionRerenderHarness.svelte'
 
-const snippet = (content: string) => createRawSnippet(() => ({ render: () => content }))
 type SettingValues = Record<string, unknown>
 const mount_section = (props: ComponentProps<typeof SettingsSection>) =>
   render(SettingsSection, props)
@@ -27,7 +26,7 @@ const mount_tracked_section = (
           defaults[key] !== current_values[key],
       )
     },
-    children: snippet(children),
+    children: raw_snippet(children),
     on_reset_key: (key: string) => {
       reset_calls.push(key)
       const next_values = { ...current_values }
@@ -50,7 +49,7 @@ const mount_tracked_section = (
 describe(`SettingsSection`, () => {
   test(`renders content with unique aria-labelledby targets`, () => {
     for (const title of [`A`, `B`]) {
-      mount_section({ title, children: snippet(`<i>${title} content</i>`) })
+      mount_section({ title, children: raw_snippet(`<i>${title} content</i>`) })
     }
     const headings = [...document.querySelectorAll(`h4`)]
     const sections = [...document.querySelectorAll(`section`)]
@@ -69,7 +68,7 @@ describe(`SettingsSection`, () => {
     mount_section({
       title: `A`,
       changed_keys: [`radius`],
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius" data-description="Size"><input></label>`,
       ),
     })
@@ -90,7 +89,7 @@ describe(`SettingsSection`, () => {
         changed_keys = []
       },
       on_reset_key: (key: string) => calls.push(key),
-      children: snippet(`<label data-key="nested"><input></label>`),
+      children: raw_snippet(`<label data-key="nested"><input></label>`),
     })
     expect(document.querySelector(`.reset-button`)).toBeNull()
     changed_keys = [`nested`]
@@ -190,7 +189,7 @@ describe(`SettingsSection`, () => {
       changed_keys: [`k`],
       on_reset_key: () => undefined,
       descriptions_open: true,
-      children: snippet(
+      children: raw_snippet(
         html.replace(`data-key="k"`, `data-key="k" data-description="Desc"`),
       ),
     })
@@ -206,7 +205,7 @@ describe(`SettingsSection`, () => {
   test(`reveals row descriptions with an accessible section toggle`, async () => {
     mount_section({
       title: `Pointer sensitivity`,
-      children: snippet(`
+      children: raw_snippet(`
           <div data-key="wrapper">
             <label data-key="rotate_speed" data-description="Pointer rotation speed"><span>Rotate speed</span><input></label>
             <label data-key="rotation_damping" data-description="Motion inertia after releasing the pointer"><span>Damping</span><input></label>
@@ -259,7 +258,7 @@ describe(`SettingsSection`, () => {
         reset_section: (section_title: string) => `${section_title} zurücksetzen`,
         reset_key: (setting_key: string) => `${setting_key} zurücksetzen`,
       },
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius" data-description="Rendered atom radius"><span>Radius</span><input value="2"></label>`,
       ),
     })
@@ -304,7 +303,7 @@ describe(`SettingsSection`, () => {
       title: `Atoms`,
       descriptions_open: true,
       on_reset_key: () => undefined,
-      children: snippet(
+      children: raw_snippet(
         `<label data-key="radius"${attribute}><span>Radius</span><input></label>`,
       ),
     })
@@ -356,7 +355,7 @@ describe(`SettingsSection`, () => {
   test(`ignores missing and explicitly empty descriptions`, async () => {
     mount_section({
       title: `Atoms`,
-      children: snippet(
+      children: raw_snippet(
         `<div><div data-key="radius" data-description=""></div><div data-key="unrelated"></div></div>`,
       ),
     })

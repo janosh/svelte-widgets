@@ -22,7 +22,7 @@
 
 <details {...rest} class={[`settings-group`, rest.class]} bind:open>
   <summary>
-    <Icon icon={ChevronRight} aria-hidden="true" style="width: 0.85em; height: 0.85em" />
+    <Icon icon={ChevronRight} style="width: 0.85em; height: 0.85em" />
     <span class="group-title">{title}</span>
     {#if subtitle}<span class="group-subtitle">{subtitle}</span>{/if}
   </summary>

@@ -7,11 +7,14 @@
   import { create_option_loader } from './option-loader.svelte'
   import {
     create_option_rows,
+    group_names,
     group_options,
+    matches_query,
     navigable_options,
     next_option_index,
     option_disabled,
     option_matches,
+    option_row_scroll,
     option_window,
     validate_option_list_config,
   } from './option-list'
@@ -106,14 +109,9 @@
     load_error = loader.error
   })
   $effect.pre(() => {
+    const config = { filter_func, search_matches_groups, fuzzy }
     matching_options = [
-      ...options.filter(
-        (item) =>
-          filter_func(item, query) ||
-          (search_matches_groups &&
-            has_group(item) &&
-            option_matches(item.group, query, fuzzy)),
-      ),
+      ...options.filter((item) => matches_query(item, query, config)),
       ...(loader.config ? loader.options : []),
     ]
   })
@@ -142,8 +140,7 @@
   const viewport = $derived(
     option_window(virtual_list, scroll_top, client_height || 400, rows.length),
   )
-  // Pin rendered rows to item_height so spacer math matches the real layout.
-  const row_height = $derived(viewport ? `${viewport.item_height}px` : undefined)
+  const row_height = $derived(viewport?.row_height)
   let previous_index: number | null = untrack(() => active_index)
   let previous_option: Item | null = null
   let previous_key: unknown
@@ -177,7 +174,7 @@
     on_group_toggle?.({ group, collapsed: next.has(group) })
   }
   collapse_all_groups = () => {
-    const names = groups.flatMap(({ group }) => (group === null ? [] : [group]))
+    const names = group_names(groups)
     if (!names.length) return
     collapsed_groups = new Set(names)
     on_collapse_all?.({ groups: names })
@@ -188,54 +185,44 @@
     collapsed_groups = new Set()
     on_expand_all?.({ groups: names })
   }
-  function expand_matching_groups() {
-    for (const { group, collapsed } of groups) {
-      if (group !== null && collapsed) toggle_group(group)
-    }
-  }
+  const expand_matching_groups = () => group_names(groups, true).forEach(toggle_group)
   $effect(() => {
     if (query && search_expands_collapsed_groups && collapsible_groups)
       untrack(expand_matching_groups)
   })
-  async function handle_keydown(
-    event: KeyboardEvent & { currentTarget: EventTarget & HTMLInputElement },
-  ) {
-    if (!disabled && !event.isComposing) {
-      if (event.key === `Enter`) {
-        event.preventDefault()
-        if (active_option !== null && !option_disabled(active_option))
-          on_execute(active_option)
-      } else if (event.key === `ArrowDown` || event.key === `ArrowUp`) {
-        event.preventDefault()
-        if (keyboard_expands_collapsed_groups && collapsible_groups) {
-          expand_matching_groups()
-          await tick()
-        }
-        active_index = next_option_index(
-          visible_options,
-          active_index,
-          event.key === `ArrowDown` ? 1 : -1,
-        )
-        active_option = active_index === null ? null : visible_options[active_index]
-        on_activate?.({ option: active_option, index: active_index })
-        if (auto_scroll && active_index !== null) {
-          if (viewport && list) {
-            const row_index = rows.findIndex(
-              (row) => row.kind === `option` && row.flat_idx === active_index,
-            )
-            const top = row_index * viewport.item_height
-            scroll_top = Math.min(
-              top,
-              Math.max(scroll_top, top + viewport.item_height - (client_height || 400)),
-            )
-            list.scrollTop = scroll_top
-          }
-          await tick()
-          list?.querySelector(`.active`)?.scrollIntoView({ block: `nearest` })
-        }
+  async function handle_keydown(event: KeyboardEvent) {
+    if (disabled || event.isComposing) return
+    if (event.key === `Enter`) {
+      event.preventDefault()
+      if (active_option !== null && !option_disabled(active_option))
+        on_execute(active_option)
+    } else if (event.key === `ArrowDown` || event.key === `ArrowUp`) {
+      event.preventDefault()
+      if (keyboard_expands_collapsed_groups && collapsible_groups) {
+        expand_matching_groups()
+        await tick()
       }
+      active_index = next_option_index(
+        visible_options,
+        active_index,
+        event.key === `ArrowDown` ? 1 : -1,
+      )
+      active_option = active_index === null ? null : visible_options[active_index]
+      on_activate?.({ option: active_option, index: active_index })
+      if (!auto_scroll || active_index === null) return
+      if (viewport && list) {
+        scroll_top = option_row_scroll(
+          rows,
+          active_index,
+          viewport.item_height,
+          client_height || 400,
+          scroll_top,
+        )
+        list.scrollTop = scroll_top
+      }
+      await tick()
+      list?.querySelector(`.active`)?.scrollIntoView({ block: `nearest` })
     }
-    onkeydown?.(event as KeyboardEvent & { currentTarget: EventTarget & HTMLDivElement })
   }
 </script>
 
@@ -265,7 +252,12 @@
       ? undefined
       : `${base_id}-opt-${active_index}`}
     aria-busy={loading || loader.loading}
-    onkeydown={handle_keydown}
+    onkeydown={(event) => {
+      void handle_keydown(event) // internal logic first, then the forwarded handler
+      onkeydown?.(
+        event as KeyboardEvent & { currentTarget: EventTarget & HTMLDivElement },
+      )
+    }}
     {oninput}
     {onfocus}
     {onblur}
@@ -367,7 +359,7 @@
         {/if}
       {/snippet}
     </OptionRows>
-    {#if !matching_options.length && !loader.loading && !loader.error}<li
+    {#if !matching_options.length && !loading && !loader.loading && !loader.error && no_matching_options_msg}<li
         class="user-msg"
         role="option"
         aria-selected="false"

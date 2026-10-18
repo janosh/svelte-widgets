@@ -8,7 +8,7 @@
     SETTINGS_SEARCH_LABELS,
     type SettingsSearchLabels,
   } from './labels'
-  import { observe_subtree } from './utils'
+  import { create_term_matcher, observe_subtree } from './utils'
 
   let {
     query = $bindable(``),
@@ -35,14 +35,14 @@
   const input_id = `settings-search-input-${search_id}`
   const status_id = `settings-search-status-${search_id}`
   let match_count = $state(0)
-  let no_matches = $derived(query.trim().length > 0 && match_count === 0)
+  const no_matches = $derived(query.trim().length > 0 && match_count === 0)
   let search_input = $state<HTMLInputElement>()
   let search_trigger = $state<HTMLButtonElement>()
-  let collapsible = $derived(trigger === `icon`)
+  const collapsible = $derived(trigger === `icon`)
   // Tracked separately from `query`, or backspacing the last character would recompute the
   // field shut while the user is still typing in it.
   let opened = $state(false)
-  let field_open = $derived(!collapsible || opened || Boolean(query))
+  const field_open = $derived(!collapsible || opened || Boolean(query))
 
   // Rows opt into per-row reset with `data-key`, but a setting must not be unreachable by search
   // just because nothing resets it individually, so plain section rows count too.
@@ -95,8 +95,8 @@
     }
 
     const refresh = (): void => {
-      const normalized_query = query.trim().toLocaleLowerCase()
-      if (!normalized_query) {
+      const trimmed_query = query.trim()
+      if (!trimmed_query) {
         restore_visibility()
         match_count = 0
         return
@@ -107,28 +107,26 @@
       index ??= {
         containers: Array.from(
           root.querySelectorAll<HTMLElement>(CONTAINER_SELECTOR),
-          (node) => ({ node, text: title_of(node).toLocaleLowerCase() }),
+          (node) => ({ node, text: title_of(node) }),
         ),
         rows: Array.from(root.querySelectorAll<HTMLElement>(ROW_SELECTOR), (node) => ({
           node,
-          text: [node.dataset.label, node.textContent, node.dataset.description]
-            .join(` `)
-            .toLocaleLowerCase(),
+          text: [node.dataset.label, node.textContent, node.dataset.description].join(
+            ` `,
+          ),
         })),
       }
       const { containers, rows } = index
+      // One term, so a multi-word query stays a phrase; markup whitespace and diacritics
+      // the query lacks are ignored, as in the library's other searches.
+      const matches = create_term_matcher(trimmed_query, { split: false })
       // A heading match reveals everything under it, so typing a section or group name works
       // even though no row repeats that name in its own text.
       const titled = new Set<HTMLElement>()
-      for (const { node, text } of containers)
-        if (text.includes(normalized_query)) titled.add(node)
+      for (const { node, text } of containers) if (matches(text)) titled.add(node)
       const hits = new Set<HTMLElement>()
       for (const { node, text } of rows) {
-        if (
-          titled.has(node) ||
-          has_ancestor_in(node, titled) ||
-          text.includes(normalized_query)
-        )
+        if (titled.has(node) || has_ancestor_in(node, titled) || matches(text))
           hits.add(node)
       }
       const hit_ancestors = new Set<HTMLElement>()

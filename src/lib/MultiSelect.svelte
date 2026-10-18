@@ -4,12 +4,15 @@
   import {
     create_option_rows,
     type OptionGroupRow,
+    group_names,
     group_options as group_list_options,
     is_integer_at_least,
+    matches_query,
     navigable_options as list_navigable,
     next_option_index,
     option_disabled as is_disabled,
     option_matches,
+    option_row_scroll,
     option_window,
     validate_option_list_config,
   } from './internal/option-list'
@@ -172,8 +175,11 @@
   const selected = $derived<Option[]>(
     Array.isArray(value) ? value : value == null ? [] : [value],
   )
+  // any selection change resolves a prior "required" violation
   const set_selection = (items: Option[]) => {
     value = mode === `single` ? (items[0] ?? null) : items
+    invalid = false
+    form_input?.setCustomValidity(``)
   }
 
   // every string this component renders on its own, overridable key by key for i18n
@@ -294,7 +300,6 @@
 
   // === Derived collections and indexing ===
   let has_search_text = $derived(search_text.trim().length > 0)
-  let selected_labels = $derived(selected.map((opt) => utils.get_label(opt)))
   let input_committed_label = $derived(
     input_display && selected[0] !== undefined ? label_of(selected[0]) : null,
   )
@@ -311,21 +316,21 @@
       : search_text,
   )
 
-  const matches_search = (opt: Option, search: string): boolean =>
-    filter_func(opt, search) ||
-    (search_matches_groups &&
-      Boolean(search) &&
-      utils.has_group(opt) &&
-      option_matches(opt.group, search, fuzzy))
-
-  const local_matches = $derived(
-    options.filter((opt) => matches_search(opt, effective_filter_text)),
-  )
+  const local_matches = $derived.by(() => {
+    const config = { filter_func, search_matches_groups, fuzzy }
+    return options.filter((opt) => matches_query(opt, effective_filter_text, config))
+  })
   // `options` and `load_options` compose: local options are filtered client-side and lead
-  // the list (no debounce, no request) while remote batches append behind them
-  const effective_options = $derived(
-    loader.config ? [...local_matches, ...loader.options] : options,
-  )
+  // the list (no debounce, no request) while remote batches append behind them, minus any
+  // the server echoes back (e.g. a created option an on_create handler persisted)
+  const effective_options = $derived.by(() => {
+    if (!loader.config) return options
+    const local_keys = new Set(local_matches.map(key))
+    return [
+      ...local_matches,
+      ...loader.options.filter((opt) => !local_keys.has(key(opt))),
+    ]
+  })
   let form_value = $derived.by(() => {
     // input mode deliberately submits the visible text, committed or draft: the free-text
     // combobox contract, pinned by tests
@@ -364,7 +369,9 @@
   const lower_dupes = $derived(duplicates === `case-insensitive`)
   const norm_label = (label: unknown) =>
     lower_dupes ? `${label}`.toLowerCase() : `${label}`
-  let selected_labels_set = $derived(new Set(selected_labels.map(norm_label)))
+  let selected_labels_set = $derived(
+    new Set(selected.map((opt) => norm_label(utils.get_label(opt)))),
+  )
   const is_label_selected = (label: string): boolean =>
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option): boolean =>
@@ -439,11 +446,6 @@
   const render_rows = $derived.by(() =>
     build_rows(grouped_options, render_key_assigner(), collapsible_groups, max_options),
   )
-  // row index per navigable option: keyboard auto-scroll needs row offsets, which diverge
-  // from flat option indices once header rows are interleaved
-  const option_row_indices = $derived(
-    render_rows.flatMap((row, row_idx) => (row.kind === `option` ? [row_idx] : [])),
-  )
   // Window of row indices [start, end) to render as DOM nodes
   const virtual_window = $derived(
     render_rows.length
@@ -455,10 +457,7 @@
         )
       : null,
   )
-  // Pin rendered rows to item_height so spacer math matches the real layout.
-  const virtual_row_height = $derived(
-    virtual_window ? `${virtual_window.item_height}px` : undefined,
-  )
+  const virtual_row_height = $derived(virtual_window?.row_height)
   // keys for the dropdown's keyed {#each}: key(opt) for unique options, so filtering keeps
   // DOM nodes stable, but repeats (options=['a', 'a']) would crash Svelte with
   // each_key_duplicate. Repeats get cached symbols — outside the user key namespace (a
@@ -500,7 +499,7 @@
 
   // exposed via bindable props
   collapse_all_groups = () => {
-    const groups = grouped_options.flatMap(({ group }) => (group === null ? [] : [group]))
+    const groups = group_names(grouped_options)
     if (groups.length === 0) return
     collapsed_groups = new Set(groups)
     on_collapse_all?.({ groups })
@@ -511,11 +510,6 @@
     collapsed_groups = new Set()
     on_expand_all?.({ groups })
   }
-
-  const get_collapsed_with_matches = () =>
-    grouped_options.flatMap(({ group, collapsed }) =>
-      group !== null && collapsed ? [group] : [],
-    )
 
   // auto-expand groups whose options match. Reacts only to search-text changes, else a
   // group the user collapses mid-search is instantly re-expanded.
@@ -530,7 +524,7 @@
       search &&
       search_changed
     ) {
-      untrack(() => set_groups_collapsed(get_collapsed_with_matches(), false))
+      untrack(() => set_groups_collapsed(group_names(grouped_options, true), false))
     }
   })
 
@@ -566,7 +560,7 @@
   // active state of the user-message <li> (dupe / create / no-match)
   let is_user_message_active = $state(false)
 
-  // when loading remotely effective_options is already filtered (locals by matches_search,
+  // when loading remotely effective_options is already filtered (locals by matches_query,
   // batches by the server)
   const searched_options = $derived(loader.config ? effective_options : local_matches)
 
@@ -818,10 +812,9 @@
     // Finish fallible consumer sorting before mutating editor state.
     const next_selected =
       mode === `single` ? [option_to_add] : sort_selection([...selected, option_to_add])
-    if (is_user_option && allow_user_options === `append`) {
-      if (loader.config) loader.options = [...loader.options, option_to_add]
-      else options = [...options, option_to_add]
-    }
+    // local even with load_options: a remote batch would inflate the next page's offset
+    if (is_user_option && allow_user_options === `append`)
+      options = [...options, option_to_add]
     // Text typed while an async on_create was pending is the newer intent. In input
     // display the visible text is the selection, so a changed draft also skips selecting.
     const draft_changed = search_text !== submitted_search
@@ -830,7 +823,6 @@
     else if (reset_filter_on_add && !from_paste && !draft_changed) search_text = ``
     set_selection(next_selected)
 
-    clear_validity()
     handle_dropdown_after_select(event)
     announce(msg.option_selected(label_of(option_to_add)))
     on_add?.({ option: option_to_add, selected })
@@ -866,7 +858,6 @@
   // Chip removal and editing a committed input share validation, announcements, and events.
   function commit_removal(next_selected: Option[], option_removed: Option) {
     set_selection(next_selected)
-    clear_validity()
     announce(msg.option_removed(label_of(option_removed)))
     on_remove?.({ option: option_removed, selected })
     on_change?.({ option: option_removed, type: `remove` })
@@ -934,11 +925,6 @@
       focus_input_without_open()
       tick().then(() => focus_input_without_open(true))
     }
-  }
-
-  function clear_validity() {
-    invalid = false
-    form_input?.setCustomValidity(``)
   }
 
   // close dropdown and (in chip mode) clear the search draft — Escape/Tab + close shortcut
@@ -1020,7 +1006,7 @@
       collapsible_groups &&
       collapsed_groups.size > 0
     ) {
-      set_groups_collapsed(get_collapsed_with_matches(), false)
+      set_groups_collapsed(group_names(grouped_options, true), false)
       await tick()
     }
 
@@ -1058,13 +1044,14 @@
         !is_user_message_active
       ) {
         // the active li may not be rendered in virtual mode, so first scroll by row offset
-        // (clamped to [row_bottom - viewport, row_top]) to mount it. Leading rows like
-        // select-all sit outside that math, so scrollIntoView below corrects the offset.
-        const { item_height } = virtual_window
-        const row_top = (option_row_indices[active_index] ?? active_index) * item_height
-        const next_scroll_top = Math.min(
-          Math.max(options_scroll_top, row_top + item_height - virtual_viewport),
-          row_top,
+        // to mount it. Leading rows like select-all sit outside that math, so
+        // scrollIntoView below corrects the offset.
+        const next_scroll_top = option_row_scroll(
+          render_rows,
+          active_index,
+          virtual_window.item_height,
+          virtual_viewport,
+          options_scroll_top,
         )
         if (next_scroll_top !== options_scroll_top) {
           options_list_el.scrollTop = next_scroll_top
@@ -1210,7 +1197,6 @@
     if (added.length > 0) {
       set_selection(sort_selection([...selected, ...added]))
       if (reset_filter_on_add) search_text = ``
-      clear_validity()
       handle_dropdown_after_select(event)
       announce(msg.options_selected(added.length))
     }
@@ -1322,7 +1308,6 @@
       else kept.push(opt)
     }
     if (removed.length === 0) return
-    clear_validity()
     commit_bulk_removal(kept, removed)
   }
 
@@ -1494,22 +1479,15 @@
 
   // patch input.focus() so programmatic focus also opens the dropdown
   // https://github.com/janosh/svelte-widgets/issues/289
-  $effect(() => {
-    if (!input) return
-
-    const orig_focus = input.focus.bind(input)
-
-    input.focus = (focus_options?: FocusOptions) => {
-      orig_focus(focus_options)
+  const patch_focus = (node: HTMLInputElement) => {
+    node.focus = (focus_options?: FocusOptions) => {
+      HTMLElement.prototype.focus.call(node, focus_options)
       if (!suppress_next_focus_open && !disabled && !open) {
         open_dropdown(new FocusEvent(`focus`, { bubbles: true }))
       }
     }
-
-    return () => {
-      if (input) input.focus = orig_focus
-    }
-  })
+    return () => Reflect.deleteProperty(node, `focus`)
+  }
 
   const handle_input_blur: FocusEventHandler<HTMLInputElement> = (event) => {
     // a portalled dropdown must not close on blur: its own clicks blur the input, and
@@ -1675,17 +1653,21 @@
       {#each visible_chips as option, idx (chip_render_keys[idx])}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- selected chips stay plain list items; nested buttons handle removal -->
         <li
-          id="{base_id}-selected-{idx}"
           class={li_selected_class}
           class:highlighted={highlighted_idx === idx}
           animate:flip={selected_flip_params}
           draggable={selected_options_draggable && !disabled && selected.length > 1}
           ondragstart={on_chip_drag_start(idx)}
           ondragover={(event) => {
-            event.preventDefault() // needed for ondrop to fire
+            // accept the drop (needed for ondrop to fire) only for chip drags started here;
+            // foreign data (text, files, other instances) gets the no-drop cursor
+            if (drag_start_idx !== null) event.preventDefault()
           }}
           ondrop={on_chip_drop(idx)}
-          ondragenter={() => (drag_idx = idx)}
+          ondragenter={() => {
+            // foreign drags never fire dragend here, so they must not mark a target
+            if (drag_start_idx !== null) drag_idx = idx
+          }}
           ondragend={() => {
             drag_idx = null
             drag_start_idx = null
@@ -1736,6 +1718,7 @@
       class={input_class}
       style={input_style}
       bind:this={input}
+      {@attach patch_focus}
       bind:value={search_text}
       {id}
       {disabled}

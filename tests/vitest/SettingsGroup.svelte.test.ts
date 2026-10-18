@@ -1,9 +1,9 @@
 import { SettingsGroup } from '#lib'
-import { createRawSnippet, mount, tick } from 'svelte'
+import { mount, tick } from 'svelte'
 import { expect, test } from 'vite-plus/test'
-import { doc_query } from './index'
+import { doc_query, raw_snippet } from './index'
 
-const children = createRawSnippet(() => ({ render: () => `<p>Controls</p>` }))
+const children = raw_snippet(`<p>Controls</p>`)
 
 test(`renders title, subtitle, children and details props`, () => {
   mount(SettingsGroup, {

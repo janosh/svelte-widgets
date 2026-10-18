@@ -1,6 +1,6 @@
 import type { GroupedOptions, LoadOptionsConfig, Option, OptionListProps } from '../types'
 import { create_term_matcher, get_label, has_group, is_object } from '../utils'
-import { virtual_window } from '../virtual'
+import { reveal_scroll, virtual_window } from '../virtual'
 
 export const option_disabled = (option: Option): boolean =>
   Boolean(is_object(option) && option.disabled)
@@ -13,6 +13,22 @@ export const option_matches = (option: Option, search: string, fuzzy = true): bo
     last_matcher = { key, matches: create_term_matcher(search, { fuzzy, split: false }) }
   return last_matcher.matches(`${get_label(option)}`)
 }
+
+// An option passes its filter, or with search_matches_groups a non-blank query naming its group.
+export const matches_query = <T extends Option>(
+  option: T,
+  query: string,
+  config: {
+    filter_func: (option: T, query: string) => boolean
+    search_matches_groups: boolean
+    fuzzy: boolean
+  },
+): boolean =>
+  config.filter_func(option, query) ||
+  (config.search_matches_groups &&
+    Boolean(query) &&
+    has_group(option) &&
+    option_matches(option.group, query, config.fuzzy))
 
 export function group_options<T extends Option>(
   options: T[],
@@ -39,6 +55,12 @@ export function group_options<T extends Option>(
       collapsed: group !== null && collapsed.has(group),
     }))
 }
+
+// Named groups in display order, or only the collapsed ones.
+export const group_names = (groups: GroupedOptions[], collapsed_only = false): string[] =>
+  groups.flatMap(({ group, collapsed }) =>
+    group !== null && (collapsed || !collapsed_only) ? [group] : [],
+  )
 
 // Keyboard order: every option outside collapsed groups.
 export const navigable_options = <T extends Option>(
@@ -112,7 +134,23 @@ export function option_window(
   return {
     ...virtual_window({ scroll, viewport, count, item_size: item_height, overscan }),
     item_height,
+    // rendered rows are pinned to this so spacer math matches the real layout
+    row_height: `${item_height}px`,
   }
+}
+
+// Scroll offset that mounts and reveals the option row at flat_idx in a virtual window.
+export const option_row_scroll = (
+  rows: OptionRow<Option>[],
+  flat_idx: number,
+  item_height: number,
+  viewport: number,
+  scroll: number,
+): number => {
+  const row_idx = rows.findIndex(
+    (row) => row.kind === `option` && row.flat_idx === flat_idx,
+  )
+  return reveal_scroll(row_idx * item_height, item_height, viewport, scroll)
 }
 
 // The optional trailing row is used by controls that can create a new option.

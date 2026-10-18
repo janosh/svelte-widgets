@@ -756,20 +756,24 @@ test(`toggling required after invalid form submission allows submitting`, async 
   expect(form.checkValidity()).toBe(true)
 })
 
-test(`invalid=true gives top-level div class 'invalid' and input attribute of 'aria-invalid'`, async () => {
-  mount_multiselect({ options: [1, 2, 3], invalid: true })
+// any selection change, including removing every chip, clears the invalid state
+test.each([`ul.options > li`, `button.remove-all`])(
+  `invalid=true sets class 'invalid' and aria-invalid until %s is clicked`,
+  async (selector) => {
+    mount_multiselect({ options: [1, 2, 3], value: [1, 2], invalid: true })
 
-  const input = get_input()
+    const input = get_input()
 
-  expect(input.getAttribute(`aria-invalid`)).toBe(`true`)
-  const multiselect = doc_query(`div.multiselect`)
-  expect(multiselect.classList.contains(`invalid`)).toBe(true)
+    expect(input.getAttribute(`aria-invalid`)).toBe(`true`)
+    const multiselect = doc_query(`div.multiselect`)
+    expect(multiselect.classList.contains(`invalid`)).toBe(true)
 
-  await click(`ul.options > li`)
+    await click(selector)
 
-  expect(input.getAttribute(`aria-invalid`)).toBeNull()
-  expect(multiselect.classList.contains(`invalid`)).toBe(false)
-})
+    expect(input.getAttribute(`aria-invalid`)).toBeNull()
+    expect(multiselect.classList.contains(`invalid`)).toBe(false)
+  },
+)
 
 test(`option labels render markup as text`, () => {
   const label = `<a href="https://example.com">example.com</a>`
@@ -1437,7 +1441,9 @@ test(`canceled drag clears the active drop-target highlight`, async () => {
   mount_multiselect({ options, value: options })
 
   const li = doc_query(`ul.selected li`)
-  li.dispatchEvent(drag_event(`dragenter`, new DataTransfer()))
+  const transfer = new DataTransfer()
+  li.dispatchEvent(drag_event(`dragstart`, transfer))
+  li.dispatchEvent(drag_event(`dragenter`, transfer))
   await tick()
   expect(li.classList.contains(`active`)).toBe(true)
 
@@ -2677,6 +2683,19 @@ describe(`on_search event`, () => {
     })
   })
 
+  test(`swapping the callback does not re-fire for unchanged search text`, async () => {
+    const [first, second] = [vi.fn(), vi.fn()]
+    const props = $state<MultiSelectProps>({ options: [1, 2], on_search: first })
+    mount_multiselect(props)
+    await type_search_text(`1`, await focus_input())
+    await vi.advanceTimersByTimeAsync(200)
+    props.on_search = second
+    await vi.advanceTimersByTimeAsync(200)
+
+    expect(first).toHaveBeenCalledOnce()
+    expect(second).not.toHaveBeenCalled()
+  })
+
   test(`debounce resets when typing continues`, async () => {
     const onsearch_spy = vi.fn()
 
@@ -3081,11 +3100,19 @@ test.each([
 
   const transfer = new DataTransfer()
   transfer.setData(`text/plain`, drag_data)
-  doc_query(`ul.selected li:nth-child(2)`).dispatchEvent(drag_event(`drop`, transfer))
+  const chip = doc_query(`ul.selected li:nth-child(2)`)
+  chip.dispatchEvent(drag_event(`dragenter`, transfer))
+  const dragover = drag_event(`dragover`, transfer)
+  chip.dispatchEvent(dragover)
+  chip.dispatchEvent(drag_event(`drop`, transfer))
   await tick()
 
+  // chips don't advertise themselves as drop targets for foreign data
+  expect(dragover.defaultPrevented).toBe(false)
   expect(doc_query(`ul.selected`).textContent?.trim()).toBe(`1 2 3`)
   expect(onreorder_spy).not.toHaveBeenCalled()
+  // no dragend reaches this instance for a foreign drag, so it must not mark a drop target
+  expect(document.querySelector(`ul.selected li.active`)).toBeNull()
 })
 
 describe(`duplicate entries in options array`, () => {

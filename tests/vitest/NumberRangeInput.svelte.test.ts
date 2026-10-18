@@ -1,11 +1,9 @@
 import { NumberRangeInput } from '#lib'
-import { createRawSnippet, tick, type ComponentProps } from 'svelte'
+import { tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query, fire_input, hover, press_key, render } from './index'
+import { doc_query, fire_input, hover, press_key, render, raw_snippet } from './index'
 
-const label_snippet = createRawSnippet(() => ({
-  render: () => `<span>Atom radius</span>`,
-}))
+const label_snippet = raw_snippet(`<span>Atom radius</span>`)
 const named_props = {
   min: 0,
   max: 1,

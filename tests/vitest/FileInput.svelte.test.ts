@@ -59,6 +59,8 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   ).toEqual([`type`, `size`, `count`])
   expect(on_files.mock.calls[0][0]).toEqual([good])
   await select([good])
+  // a clean batch reports no rejections
+  expect(on_reject).toHaveBeenCalledOnce()
   expect(signals[0].aborted).toBe(true)
   expect(on_files).toHaveBeenCalledTimes(2)
   reject_loads[0](new Error(`Superseded failure`))

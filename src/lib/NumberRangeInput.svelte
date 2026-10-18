@@ -14,6 +14,7 @@
     step_range_coordinate,
     type RangeScale,
   } from './range-slider'
+  import { clamp } from './utils'
 
   // The wrapping label names the number input; the slider needs its own accessible label.
   let {
@@ -75,7 +76,7 @@
     }
   })
   const msg = $derived(merge_defaults(NUMBER_RANGE_INPUT_LABELS, labels))
-  let range_label = $derived(label?.trim() || msg.value)
+  const range_label = $derived(label?.trim() || msg.value)
   // With children the <label> already names the number input and an aria-label would override
   // that visible text; without them the label is empty and needs the fallback.
   const number_label = $derived(children ? undefined : range_label)
@@ -121,8 +122,10 @@
       if (input.type === `number`) input.value = draft
     }
   }
-  const log_keydown = (event: KeyboardEvent): void => {
-    const input = event.currentTarget as HTMLInputElement
+  const log_keydown = (
+    event: KeyboardEvent & { currentTarget: HTMLInputElement },
+  ): void => {
+    const input = event.currentTarget
     if (scale !== `log` || input.matches(`:disabled`) || input.readOnly) return
     const action = range_key_action(
       event,
@@ -138,8 +141,7 @@
           : Number.isFinite(input.valueAsNumber) && input.valueAsNumber > 0
             ? input.valueAsNumber
             : (value ?? min)
-      const bounded = Math.max(min, Math.min(max, baseline))
-      next = step_range_coordinate(bounded, domain, log_step, action)
+      next = step_range_coordinate(clamp(baseline, min, max), domain, log_step, action)
     }
     event.preventDefault()
     input.value = String(input.type === `range` ? next : domain.from_position(next))

@@ -1,4 +1,4 @@
-import { createRawSnippet, flushSync, tick } from 'svelte'
+import { flushSync, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { Option } from '#lib'
 import type {
@@ -8,7 +8,7 @@ import type {
   MultiSelectProps,
 } from '#lib/types.ts'
 import { get_label } from '#lib/utils.ts'
-import { click, doc_query, next_task } from './index'
+import { click, doc_query, next_task, raw_snippet } from './index'
 import {
   fresh_key,
   get_input,
@@ -188,6 +188,63 @@ describe(`load_options feature`, () => {
       }
     },
   )
+
+  test(`a created option the server echoes back renders once`, async () => {
+    vi.useFakeTimers()
+    const server = [`alpha`, `beta`]
+    const load_options = vi.fn(async ({ search }: LoadOptionsParams) => ({
+      options: server.filter((opt) => opt.includes(search)),
+      has_more: false,
+    }))
+    const props = $state<MultiSelectProps>({
+      load_options,
+      open: true,
+      value: [],
+      allow_user_options: `append`,
+    })
+    mount_multiselect(props)
+    await vi.runAllTimersAsync()
+    const input = await type_search_text(`custom`)
+    await vi.runAllTimersAsync()
+    input.dispatchEvent(fresh_key(`Enter`))
+    await vi.runAllTimersAsync()
+    server.push(`custom`) // e.g. an on_create handler persisted it
+    props.value = []
+    await type_search_text(`cust`)
+    await vi.runAllTimersAsync()
+    const rows = [...document.querySelectorAll(`ul.options li`)].map((li) =>
+      li.textContent?.trim(),
+    )
+    expect(rows.filter((text) => text === `custom`)).toHaveLength(1)
+  })
+
+  test(`a user option appended under load_options keeps the next page offset`, async () => {
+    vi.useFakeTimers()
+    const load_options = vi.fn(async ({ offset, limit }: LoadOptionsParams) => ({
+      options: mock_data.slice(offset, offset + limit),
+      has_more: true,
+    }))
+    const props = $state<MultiSelectProps>({
+      load_options,
+      open: true,
+      value: [],
+      allow_user_options: `append`,
+      reset_filter_on_add: false,
+    })
+    mount_multiselect(props)
+    await vi.runAllTimersAsync()
+    const input = await type_search_text(`custom`)
+    await vi.runAllTimersAsync()
+    input.dispatchEvent(fresh_key(`Enter`))
+    await vi.runAllTimersAsync()
+    expect(props.value).toEqual([`custom`])
+
+    mock_scroll_near_bottom(doc_query(`ul.options`))
+    await vi.runAllTimersAsync()
+    expect(load_options).toHaveBeenLastCalledWith(
+      expect.objectContaining({ search: `custom`, offset: 50 }),
+    )
+  })
 
   // https://github.com/janosh/svelte-widgets/issues/412
   // overflow is mocked before resolving, so auto-fill sees whether the list is scrollable
@@ -788,9 +845,7 @@ describe(`async on_create`, () => {
     const pending = Promise.withResolvers<OncreateResult>()
     const on_create = vi.fn(() => pending.promise)
     const on_add = vi.fn()
-    const spinner = createRawSnippet(() => ({
-      render: () => `<span class="custom-spinner">creating</span>`,
-    }))
+    const spinner = raw_snippet(`<span class="custom-spinner">creating</span>`)
     const props = mount_create(on_create, { on_add, spinner })
 
     const input = await type_search_text(`new async option`)

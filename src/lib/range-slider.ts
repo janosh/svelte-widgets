@@ -1,4 +1,4 @@
-import { clamp } from './utils'
+import { clamp, is_modifier_chord } from './utils'
 
 export type RangeValue = [number, number]
 export type RangeScale = 'linear' | 'log'
@@ -62,8 +62,8 @@ export const range_key_action = (
   event: KeyboardEvent,
   horizontal: -1 | 0 | 1,
 ): number | `min` | `max` | undefined => {
-  const { key, shiftKey, altKey, ctrlKey, metaKey } = event
-  if (event.defaultPrevented || event.isComposing || altKey || ctrlKey || metaKey)
+  const { key, shiftKey } = event
+  if (event.defaultPrevented || event.isComposing || is_modifier_chord(event))
     return undefined
   if (horizontal && key === `Home`) return `min`
   if (horizontal && key === `End`) return `max`
