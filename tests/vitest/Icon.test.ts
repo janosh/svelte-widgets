@@ -98,6 +98,21 @@ describe(`Icon`, () => {
     expect(new Set(shapes).size).toBe(shapes.length)
   })
 
+  // decorative by default: an unnamed role="img" is an image screen readers announce blank
+  test.each([
+    [{}, null, `true`],
+    [{ 'aria-label': `Close` }, `img`, null],
+    [{ 'aria-labelledby': `close-label` }, `img`, null],
+    [{ title: `Close` }, `img`, null],
+  ])(`naming props %j render role=%s aria-hidden=%s`, (naming, role, aria_hidden) => {
+    render(Icon, { icon: icons.Check, ...naming })
+    const svg = doc_query<SVGSVGElement>(`svg`)
+    expect([svg.getAttribute(`role`), svg.getAttribute(`aria-hidden`)]).toEqual([
+      role,
+      aria_hidden,
+    ])
+  })
+
   test(`applies attributes via rest props`, () => {
     const rest_props = {
       style: `width: 2em;`,

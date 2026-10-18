@@ -48,6 +48,22 @@ export const clamp_integer = (
 ): number =>
   Number.isFinite(value) ? clamp(Math.floor(value), minimum, maximum) : fallback
 
+// Binary search: first index in [0, count) where `is_past(idx)` holds, else `count`.
+// `is_past` must be monotone: false for a prefix, then true for the rest.
+export const lower_bound = (count: number, is_past: (idx: number) => boolean): number => {
+  let low = 0
+  let high = count
+  while (low < high) {
+    const middle = (low + high) >>> 1
+    if (is_past(middle)) high = middle
+    else low = middle + 1
+  }
+  return low
+}
+
+export const to_error = (error: unknown): Error =>
+  error instanceof Error ? error : new Error(String(error))
+
 export const slug_to_title = (slug: string): string =>
   slug
     .replaceAll(`-`, ` `)

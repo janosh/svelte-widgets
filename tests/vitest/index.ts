@@ -1,5 +1,5 @@
 import type { MultiSelectProps } from '#lib'
-import { flushSync, mount, tick, unmount, type Component } from 'svelte'
+import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vite-plus/test'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -163,6 +163,10 @@ export type Test2WayBindProps = MultiSelectProps & {
   onSearchTextChanged?: (data: MultiSelectProps[`search_text`]) => unknown
   onValueChanged?: (data: MultiSelectProps[`value`]) => unknown
 }
+
+// parameterless snippet rendering fixed HTML, for children/slot-like props
+export const raw_snippet = (html: string) =>
+  createRawSnippet(() => ({ render: () => html }))
 
 // mounts into the body, flushes, and unmounts when the test finishes
 export const render = <Props extends object>(

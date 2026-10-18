@@ -40,16 +40,18 @@ export const is_focus_available = (element: Element): boolean => {
 }
 
 // Computed CSS lengths resolve to `<number>px`; strip the unit so Number() coerces. Empty
-// and non-px values (`none`, `0.5rem`) give NaN, leaving fallbacks to the caller.
-export const css_px = (css_length: string): number => {
+// and non-px values (`none`, `auto`, `0.5rem`) give `fallback`.
+export const css_px = (css_length: string, fallback = 0): number => {
   const trimmed = css_length.trim()
-  return trimmed ? Number(trimmed.replace(/px$/, ``)) : NaN
+  const parsed = trimmed ? Number(trimmed.replace(/px$/, ``)) : NaN
+  return Number.isFinite(parsed) ? parsed : fallback
 }
 
 export const is_primary_press = (event: PointerEvent) =>
   event.button === 0 && event.isPrimary
 // Capture keeps moves reporting over iframes; lostpointercapture only fires on the target.
-// Filter other pointers and end on release, cancellation or capture loss.
+// Filter other pointers and end on release, cancellation or capture loss. Text selection is
+// off page-wide until the returned stop runs.
 export const follow_pointer = (
   target: HTMLElement,
   pointer_id: number,
@@ -64,6 +66,11 @@ export const follow_pointer = (
     return () => {}
   }
 
+  const restore_user_select = override_style(
+    target.ownerDocument.body.style,
+    `user-select`,
+    `none`,
+  )
   const abort_controller = new AbortController()
   const { signal } = abort_controller
   const on_pointer = (event: PointerEvent) => {
@@ -78,6 +85,7 @@ export const follow_pointer = (
   return () => {
     abort_controller.abort() // before release, or lostpointercapture re-enters on_end
     if (target.hasPointerCapture(pointer_id)) target.releasePointerCapture(pointer_id)
+    restore_user_select()
   }
 }
 
@@ -119,6 +127,39 @@ export const claim_escape = (handler: (event: KeyboardEvent) => void) =>
     handler(event)
     return true
   })
+
+// Attachment holding the top Escape layer while focus is inside the node, so a bar or panel
+// closes itself rather than the pane or dialog hosting it. Re-claims on every focusin, so it
+// also outranks layers registered after it. Capture phase so descendants claiming their own
+// layer on focusin (e.g. a tooltip on a focused button) still land above it.
+export const claim_escape_while_focused =
+  (handler: (event: KeyboardEvent) => void) =>
+  (node: HTMLElement): (() => void) => {
+    let release: (() => void) | undefined
+    const stop = () => {
+      release?.()
+      release = undefined
+    }
+    const claim = () => {
+      stop()
+      release = claim_escape(handler)
+    }
+    const listeners = new AbortController()
+    const { signal } = listeners
+    node.addEventListener(`focusin`, claim, { signal, capture: true })
+    node.addEventListener(
+      `focusout`,
+      ({ relatedTarget }) => {
+        if (!(relatedTarget instanceof Node && node.contains(relatedTarget))) stop()
+      },
+      { signal },
+    )
+    if (node.matches(`:focus-within`)) claim()
+    return () => {
+      listeners.abort()
+      stop()
+    }
+  }
 
 // isComposing for the same reason the Escape layer above filters it: Tab cycles IME
 // candidates mid-composition, and swallowing it there eats the user's word choice

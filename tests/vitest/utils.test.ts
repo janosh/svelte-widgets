@@ -18,6 +18,7 @@ import {
   is_editable_event_target,
   is_modifier_chord,
   is_object,
+  lower_bound,
   make_change_detector,
   matches_shortcut,
   normalize_combo,
@@ -28,6 +29,7 @@ import {
   sanitize_shortcut_overrides,
   slug_to_title,
   step_focus,
+  to_error,
 } from '#lib/utils.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { doc_query, stub_props } from './index'
@@ -1007,4 +1009,26 @@ describe(`observe_subtree`, () => {
     stop()
     root.remove()
   })
+})
+
+test.each([
+  [[], 5, 0],
+  [[1, 2, 3], 0, 0],
+  [[1, 2, 3], 9, 3],
+  [[1, 3, 3, 5], 3, 1],
+  [[1, 3, 3, 5], 4, 3],
+])(`lower_bound(%j, >= %d) = %d`, (sorted, target, expected) => {
+  expect(lower_bound(sorted.length, (idx) => sorted[idx] >= target)).toBe(expected)
+})
+
+test.each([
+  [new TypeError(`boom`), `boom`],
+  [`plain`, `plain`],
+  [42, `42`],
+  [undefined, `undefined`],
+])(`to_error(%j) has message %j`, (input, message) => {
+  const error = to_error(input)
+  expect(error).toBeInstanceOf(Error)
+  expect(error.message).toBe(message)
+  if (input instanceof Error) expect(error).toBe(input)
 })

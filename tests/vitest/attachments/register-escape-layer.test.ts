@@ -1,4 +1,5 @@
 import { register_escape_layer } from '#lib/attachments/index.ts'
+import { claim_escape, claim_escape_while_focused } from '#lib/attachments/shared.ts'
 import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -25,4 +26,30 @@ it(`register_escape_layer skips handled Escape and captures through stopped prop
   unregister()
   press_escape()
   expect(layer).toHaveBeenCalledExactlyOnceWith(event)
+})
+
+it(`claim_escape_while_focused stays below a layer a descendant claims on its own focusin`, () => {
+  const container = create_element()
+  const child = document.createElement(`button`)
+  container.append(child)
+  const close_container = vi.fn()
+  const close_child = vi.fn()
+  let release_child: (() => void) | undefined
+  child.addEventListener(`focusin`, () => {
+    release_child?.()
+    release_child = claim_escape(close_child)
+  })
+  const detach = claim_escape_while_focused(close_container)(container)
+  onTestFinished(() => {
+    detach()
+    release_child?.()
+  })
+  child.focus()
+  dispatch_key(child, `Escape`)
+  expect(close_child).toHaveBeenCalledOnce()
+  expect(close_container).not.toHaveBeenCalled()
+  release_child?.()
+  release_child = undefined
+  dispatch_key(child, `Escape`)
+  expect(close_container).toHaveBeenCalledOnce()
 })
