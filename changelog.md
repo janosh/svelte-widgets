@@ -1,5 +1,21 @@
 # Changelog
 
+## [v1.10.0](https://github.com/janosh/svelte-widgets/compare/v1.9.0...v1.10.0)
+
+> 18 October 2026
+
+- **Breaking:** Remove `file_matches_accept` from `svelte-widgets/file-drop` (use `create_file_accept_filter(accept)(file)`) and move `to_error` from `svelte-widgets/code-editor` to `svelte-widgets/utils`. `FileInput` calls `on_reject` only when files were rejected, MultiSelect chips no longer render `id` attributes, and `Icon` without `aria-label`, `aria-labelledby` or `title` is `aria-hidden`. `StatusMessage` keeps its empty `role="status"` and `role="alert"` regions mounted (boxless via `display: contents`), so tests counting alert roles should look for message content instead [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+- **Breaking:** Markdown math renders TeX to native MathML via [Temml](https://temml.org) instead of KaTeX HTML. The optional math peer is now `temml`, `KatexOptions` becomes `TemmlOptions`, and apps import `temml/dist/Temml-Local.css` instead of `katex/dist/katex.min.css`. Parse errors still throw by default and the TeX source stays in an `annotation`, so math headings keep their IDs
+- **Breaking:** An empty MultiSelect option list shows `no_matching_options_msg` when opened (set it to `""` to opt out), and `on_duplicate` reports the resolved option instead of the typed string [`#466`](https://github.com/janosh/svelte-widgets/pull/466) [`#469`](https://github.com/janosh/svelte-widgets/pull/469)
+- Migrate the docs site, tests and packaging to SvelteKit 3 and vite-plus 1.0; the library itself has no Kit dependency. Add a `QueryParams` type to `svelte-widgets/url-params` so read-only search params type-check, a DraggablePane pin button and a `--btn-group-flex-wrap` CSS variable [`#465`](https://github.com/janosh/svelte-widgets/pull/465) [`#467`](https://github.com/janosh/svelte-widgets/pull/467)
+- Escape inside a `DraggablePane` reaches the inner widget first: open MultiSelect dropdowns, ColorInput/NumberRangeInput/RangeSlider drafts, SettingsSearch, JsonTree edits and selections, and native Popovers dismiss before the pane [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+- MultiSelect adds the option named by typed or pasted text instead of creating a user option, keeps collapsed group headers visible, and no longer skips a server item or renders a created option twice under `load_options` [`#466`](https://github.com/janosh/svelte-widgets/pull/466) [`#469`](https://github.com/janosh/svelte-widgets/pull/469) [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+- Restore the default DraggablePane, MultiSelect, Nav and Toc shadows, which passed whole `box-shadow` values to `light-dark()` and silently vanished [`#467`](https://github.com/janosh/svelte-widgets/pull/467)
+- Markdown ends lists, quotes and tables at Svelte block lines such as `{/each}`, keeps escaped braces literal in alt text, link titles and URLs, renders figure captions and manifest link text as plain text, and source links accept `github:`, `gitlab:` and `bitbucket:` repository shorthands [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+- Fix about 60 more bugs, including backdrop dismiss without `closedby` in ConfirmDialog and CommandMenu, Tabs manual-activation focus, Toggle knob travel with custom sizes, contrast color on translucent backgrounds and in shadow roots, sortable `colspan` columns, a DiffView `on_error` loop, JsonTree keyboard focus and search, Nav trailing-slash matching, Toc duplicate ids and StatusMessage announcements [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+- Stop automatic paths from undoing host or user state: a DraggablePane keeps a host-set size when it re-anchors, a portalled MultiSelect dropdown gets its `ul_options_style` back when the portal turns off, a SettingsSearch refresh no longer reopens a group collapsed mid-search, and CommandMenu stays open when Ctrl/Cmd+K reopens it during its close fade
+- Cut about 3,600 lines by sharing internals and fold tests into `test.each` tables with shared helpers [`#465`](https://github.com/janosh/svelte-widgets/pull/465) [`#466`](https://github.com/janosh/svelte-widgets/pull/466) [`#470`](https://github.com/janosh/svelte-widgets/pull/470)
+
 ## [v1.9.0](https://github.com/janosh/svelte-widgets/compare/v1.8.0...v1.9.0)
 
 > 25 September 2026

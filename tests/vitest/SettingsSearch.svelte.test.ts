@@ -181,6 +181,16 @@ describe(`SettingsSearch`, () => {
     observer.disconnect()
     expect([open_writes, camera.open, filtered_out(segments)]).toEqual([[], true, true])
 
+    // a group the user collapses mid-search stays shut through refreshes for DOM changes
+    // elsewhere (a live value readout), and opens again only for a new query
+    camera.open = false
+    const atom_radius = setting_row(`atom_radius`)
+    atom_radius.append(` (damping 0.8)`)
+    await vi.waitFor(() => expect(filtered_out(atom_radius)).toBe(false))
+    expect(camera.open).toBe(false)
+    await type_search_text(`damp`, input)
+    expect(camera.open).toBe(true)
+
     await type_search_text(``, input)
     expect([camera.open, filtered_out(segments)]).toEqual([false, false])
   })

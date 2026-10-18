@@ -57,13 +57,13 @@ for (const width of [390, 1440]) {
     await expect(first_figure).toBeInViewport()
     for (const [idx, id] of [`eq:mass-energy`, `eq:hooke`].entries()) {
       const equation = page.locator(`[id="${id}"]`)
-      await expect(equation.locator(`.katex-mathml`)).toHaveCSS(`clip-path`, `inset(50%)`)
+      await expect(equation.locator(`math`)).toBeVisible()
       await expect(
         equation.getByRole(`link`, { name: `Equation ${idx + 1}` }),
       ).toHaveText(`(${idx + 1})`)
       await expect(equation.locator(`.equation-number`)).toBeVisible()
     }
-    await expect(page.locator(`main > p .katex`)).toHaveCount(2)
+    await expect(page.locator(`main > p math`)).toHaveCount(2)
     await expect(page.locator(`main > figure figcaption`)).toHaveText([
       `Figure 1. Two interacting particles`,
       `Figure 2. Spring displacement`,
@@ -149,7 +149,7 @@ for (const width of [390, 1440]) {
     await page.keyboard.press(`Tab`)
     await expect(figures.getByRole(`link`).first()).toBeFocused()
     await page.keyboard.press(`Enter`)
-    await expect(page).toHaveURL(/\/authoring#fig%3Aparticles$/u)
+    await expect(page).toHaveURL(/\/authoring#fig:particles$/u)
     await expect(first_figure).toBeInViewport()
     // Wait for Kit to record each native hash navigation before the next action.
     await expect.poll(history_index).toBeGreaterThan(initial_history)
@@ -177,13 +177,13 @@ for (const width of [390, 1440]) {
       ),
       equation_link.click(),
     ])
-    await expect(page).toHaveURL(/\/authoring#eq%3Ahooke$/u)
+    await expect(page).toHaveURL(/\/authoring#eq:hooke$/u)
     await expect(second_equation).toBeInViewport()
     await expect(second_equation).toHaveClass(/toc-clicked/u)
     await expect(second_equation).toHaveCSS(`animation-name`, flash_animation)
     await expect.poll(history_index).toBeGreaterThan(figure_history)
     await page.goBack()
-    await expect(page).toHaveURL(/\/authoring#fig%3Aparticles$/u)
+    await expect(page).toHaveURL(/\/authoring#fig:particles$/u)
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(figure_scroll)
     await page.reload()
     await expect(first_figure).toBeInViewport()

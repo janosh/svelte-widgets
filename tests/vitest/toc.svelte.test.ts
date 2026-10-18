@@ -265,7 +265,7 @@ describe(`Toc`, () => {
     await mount_toc()
 
     const link = doc_query(`aside.toc li > a`)
-    expect(link.getAttribute(`href`)).toBe(`#sec%3A1`) // a valid percent-encoded URL
+    expect(link.getAttribute(`href`)).toBe(`#sec:1`) // ':' is fragment-legal, so it stays literal
     const event = new MouseEvent(`click`, { bubbles: true, cancelable: true, ctrlKey })
     link.dispatchEvent(event)
     expect(event.defaultPrevented).toBe(false)
@@ -310,7 +310,7 @@ describe(`Toc`, () => {
     expect(doc_query(`h2`)).toBe(heading)
     expect(heading.id).toBe(props.id)
     expect(heading.querySelectorAll(`a`)).toHaveLength(1)
-    expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#changed%20%26%20id`)
+    expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#changed%20&%20id`)
     props.level = 3
     props.link = false
     await tick()

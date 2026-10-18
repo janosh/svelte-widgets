@@ -63,6 +63,11 @@ test(`live regions exist before the first message and persist across changes`, (
     `alert`,
   ])
   expect(initial.map((region) => region.textContent?.trim())).toEqual([``, ``])
+  // boxless, so the empty regions don't take a flex/grid gap in their parent
+  expect(initial.map((region) => getComputedStyle(region).display)).toEqual([
+    `contents`,
+    `contents`,
+  ])
   for (const [message, type, text_by_region] of [
     [`Saving`, `info`, [`Saving`, ``]],
     [`Saved`, `success`, [`Saved`, ``]],

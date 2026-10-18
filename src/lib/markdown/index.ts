@@ -12,7 +12,7 @@ import {
   type TokenizerObject,
   type TokenizerStartFunction,
 } from 'marked'
-import type * as Katex from 'katex'
+import type * as Temml from 'temml'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
@@ -67,7 +67,7 @@ export type {
   SourcePosition,
 } from './content.ts'
 
-export type { KatexOptions } from 'katex'
+export type { Options as TemmlOptions } from 'temml'
 
 export type { ExampleOptions, FenceSettings } from './meta.ts'
 export type MarkdownOptions = {
@@ -80,7 +80,7 @@ export type MarkdownOptions = {
   heading_links?: boolean | { icon_svg?: string }
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
-  math?: boolean | Katex.KatexOptions
+  math?: boolean | Temml.Options
   references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
@@ -128,7 +128,7 @@ const prepared_documents = new WeakMap<
   () => Promise<PreparedDocument>
 >()
 
-// KaTeX options can contain callbacks and cyclic token/lexer graphs. Retain callbacks
+// Math options can contain callbacks and cyclic token/lexer graphs. Retain callbacks
 // and prototypes while copying data so later configuration edits cannot alter a document.
 const copy_options = <Value>(
   value: Value,
@@ -241,7 +241,7 @@ async function prepare_document(
       ),
     )
   }
-  let math: typeof Katex | undefined
+  let math: typeof Temml.default | undefined
   const examples: LiveExample[] = []
   const imports: string[] = []
   const wrappers = new Map<string, string>()
@@ -356,7 +356,11 @@ async function prepare_document(
     ? (tex: string, displayMode: boolean) =>
         math
           ? html(
+              // annotate keeps the TeX source, which heading IDs read back; parse errors
+              // fail the build unless the caller opts out
               math.renderToString(tex.trim(), {
+                annotate: true,
+                throwOnError: true,
                 ...(typeof options.math === `object` ? options.math : {}),
                 displayMode,
               }),
@@ -518,8 +522,8 @@ async function prepare_document(
         return with_url(Renderer.prototype.link.call(this, link), origin, `href`)
       },
       image(token) {
-        // Math in alt text stays as authored TeX (like figure captions) instead of KaTeX
-        // HTML. Marked unescapes `\{` in alt text; only retained expressions may stay live.
+        // Math in alt text stays as authored TeX (like figure captions) instead of MathML.
+        // Marked unescapes `\{` in alt text; only retained expressions may stay live.
         // Flatten formatting first: the text renderer prints `*Hi {name}*` from its raw
         // text, which would bypass the expression placeholders in its child tokens.
         const flat = (tokens: Token[]): Token[] =>
@@ -700,7 +704,7 @@ async function prepare_document(
   })
   let pending: Promise<PreparedDocument> | undefined
   const emit = async () => {
-    math = options.math ? await import('katex') : undefined
+    math = options.math ? (await import('temml')).default : undefined
     const rendered_fences = await Promise.allSettled(
       render_fences.map((render) => render()),
     )

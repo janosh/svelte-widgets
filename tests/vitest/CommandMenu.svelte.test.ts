@@ -389,8 +389,13 @@ test(`an onclose callback can reopen without another close event`, async () => {
   expect(doc_query<HTMLDialogElement>(`dialog`).open).toBe(true)
 })
 
-test(`a stale native close cannot close a reopened menu`, async () => {
-  const props = $state({ open: true, actions: mock_actions })
+// The close event dialog.close() queues lands after a quick reopen: on a remounted dialog, or,
+// reopened mid-fade (e.g. Ctrl+K right after running an action), on the same element
+test.each([
+  [`remounted`, 0],
+  [`reopened mid-fade`, 200],
+])(`a stale native close cannot close a %s menu`, async (_label, fade_duration_ms) => {
+  const props = $state({ open: true, actions: mock_actions, fade_duration_ms })
   mount_menu(props)
   const old_dialog = doc_query<HTMLDialogElement>(`dialog`)
 
@@ -399,7 +404,7 @@ test(`a stale native close cannot close a reopened menu`, async () => {
   props.open = true
   await tick()
   const current_dialog = doc_query<HTMLDialogElement>(`dialog`)
-  expect(current_dialog).not.toBe(old_dialog)
+  expect(current_dialog === old_dialog).toBe(fade_duration_ms > 0)
 
   old_dialog.dispatchEvent(new Event(`close`))
   await tick()

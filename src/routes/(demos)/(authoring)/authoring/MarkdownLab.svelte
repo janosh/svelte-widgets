@@ -75,7 +75,7 @@
         }
       } else {
         const options = {
-          math: { output: `mathml` as const },
+          math: true,
           highlight: default_highlighter.highlight,
           references: { bibliography },
         }

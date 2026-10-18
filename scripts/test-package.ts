@@ -108,7 +108,7 @@ for (const name of [
   `typescript`,
   `@types/node`,
   `@wooorm/starry-night`,
-  `katex`,
+  `temml`,
 ]) {
   const {
     version,

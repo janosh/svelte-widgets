@@ -171,14 +171,12 @@
     }
   }
 
-  // Move the pane back under the toggle and drop manual size overrides. --pane-viewport-clamp
-  // (min()'d with --pane-max-height in CSS) keeps a fixed pane above the bottom edge and is
-  // rewritten on every move, else a reset after a drag plus window resize keeps a stale cap.
+  // Anchor under the toggle at the pane's current size, so a host-set size survives re-anchoring.
+  // --pane-viewport-clamp (min()'d with --pane-max-height in CSS) keeps a fixed pane above the
+  // bottom edge and is rewritten on every move, else a reset after a drag plus window resize
+  // keeps a stale cap.
   const position_pane = () => {
     if (!pane) return
-    // clear the manual size first so anchor_position() measures the natural width
-    pane.style.width = ``
-    pane.style.height = ``
     const { left, top } = anchor_position()
     Object.assign(pane.style, { left: `${left}px`, top: `${top}px`, right: `auto` })
     if (position === `fixed`) {
@@ -187,8 +185,10 @@
     }
   }
 
+  // Back to the natural size; clearing has_been_dragged re-runs the reanchor effect, which then
+  // measures the natural width under the default max-width cap
   const reset_position = () => {
-    position_pane()
+    if (pane) Object.assign(pane.style, { width: ``, height: `` })
     has_been_dragged = false
     resized_max_width = null
   }

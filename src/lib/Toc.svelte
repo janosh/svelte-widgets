@@ -12,6 +12,7 @@
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
   import { override_style } from './attachments/shared'
+  import { fragment_href } from './heading-anchors'
 
   let {
     active_heading = $bindable(null),
@@ -258,8 +259,7 @@
   const focus_toc_item = (node: HTMLLIElement | null) =>
     (first_custom_interactive(node) ?? node)?.focus({ preventScroll: true })
 
-  const href_for_id = (id: string | undefined) =>
-    id ? `#${encodeURIComponent(id)}` : undefined
+  const href_for_id = (id: string | undefined) => (id ? fragment_href(id) : undefined)
 
   let restore_scroll_behavior: (() => void) | undefined
 

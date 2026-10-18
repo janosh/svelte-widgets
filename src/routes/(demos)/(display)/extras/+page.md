@@ -1,6 +1,6 @@
 <script>
-  // eslint-disable-next-line import/no-unassigned-import -- styles this route's KaTeX demo
-  import 'katex/dist/katex.min.css'
+  // eslint-disable-next-line import/no-unassigned-import -- styles this route's math demo
+  import 'temml/dist/Temml-Local.css'
 </script>
 
 ## Extras
@@ -213,10 +213,10 @@ Fence metadata drives it: `collapsible` hides the source behind a button, `code_
 
 ### Markdown and math
 
-The docs site's `create_markdown({ math: true })` engine turns inline math such as $e^{i\pi} + 1 = 0$ and display math into static KaTeX markup:
+The docs site's `create_markdown({ math: true })` engine turns inline math such as $e^{i\pi} + 1 = 0$ and display math into static MathML:
 
 $$
 \int_{-\infty}^{\infty} e^{-x^2}\,dx = \sqrt{\pi}
 $$
 
-Import `katex/dist/katex.min.css` once in the app to style the generated markup.
+Browsers render MathML natively. Import a Temml stylesheet such as `temml/dist/Temml-Local.css` once in the app to tune spacing and use the system's math font.

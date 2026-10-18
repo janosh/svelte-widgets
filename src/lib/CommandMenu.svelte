@@ -169,8 +169,9 @@
     search_text = ``
   }
 
+  // A queued close must not shut a menu reopened since (remounted, or reshown mid-fade)
   function handle_dialog_close(event: Event) {
-    if (open && event.currentTarget !== dialog) return
+    if (open && (event.currentTarget !== dialog || dialog?.open)) return
     close_menu()
   }
 

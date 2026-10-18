@@ -24,6 +24,20 @@ test(`closing the native dialog restores focus to the opener`, async ({ page }) 
   await expect(opener).toBeFocused()
 })
 
+// dialog.close() queues its close event; a reopen during the fade-out must not be undone by it
+test(`reopening right after running an action keeps the menu open`, async ({ page }) => {
+  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  const dialog = page.getByRole(`dialog`, { name: `Command menu` })
+  await page.keyboard.press(`Control+p`)
+  await dialog.getByRole(`combobox`).fill(`open settings`)
+  await dialog.getByRole(`option`, { name: /Open settings/ }).click()
+  await expect(page.locator(`strong`, { hasText: /^Open settings$/ })).toBeVisible()
+  await page.keyboard.press(`Control+p`)
+  await page.waitForTimeout(400) // past the 200 ms fade and any queued close event
+  await expect(dialog).toBeVisible()
+  await expect(dialog.getByRole(`combobox`)).toBeFocused()
+})
+
 test(`PageSearch navigates through the generated Pagefind index`, async ({ page }) => {
   test.skip(!process.env.CI, `Pagefind index requires the CI build:site server`)
 

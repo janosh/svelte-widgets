@@ -6,6 +6,7 @@
   import { Edit, Sparkles } from '#lib/icons.ts'
   import { observe_subtree, slug_to_title } from '#lib/utils.ts'
   import { flash_toc_target } from '#lib/toc-utils.ts'
+  import { fragment_href } from '#lib/heading-anchors.ts'
   import { highlight_matches } from '#lib/attachments/index.ts'
   import { repository } from '#root/package.json'
   import { DemoNav } from '#site'
@@ -109,8 +110,9 @@
     // Hydration changes the sidebar layout. Align an initial scientific fragment once
     // after that layout settles; subsequent links and Back retain native scrolling.
     if (type === `enter`) {
+      // current links, and older ones spelled with encodeURIComponent (`#fig%3Ax`)
       const reference = reference_links.find(({ id }) =>
-        [`#${id}`, `#${encodeURIComponent(id)}`].includes(page.url.hash),
+        [fragment_href(id), `#${encodeURIComponent(id)}`].includes(page.url.hash),
       )
       if (reference) requestAnimationFrame(() => reference.target.scrollIntoView())
     }
@@ -182,7 +184,7 @@
                 {#each links as { id, label, target } (id)}
                   <li>
                     <a
-                      href={`#${encodeURIComponent(id)}`}
+                      href={fragment_href(id)}
                       onclick={(event) => jump_to_reference(event, target)}>{label}</a
                     >
                   </li>

@@ -55,6 +55,9 @@
 
   const filter_settings = (root: HTMLElement): (() => void) => {
     const opened_by_search = new Set<HTMLDetailsElement>()
+    // Query each kept group was last revealed for: refreshes for unrelated DOM changes must not
+    // re-open a group the user collapsed mid-search, only a new query does
+    const revealed_for = new Map<HTMLDetailsElement, string>()
     type SearchEntry = { node: HTMLElement; text: string }
     let index: { containers: SearchEntry[]; rows: SearchEntry[] } | undefined
 
@@ -65,6 +68,7 @@
       // Groups the user had open are never recorded, so their state survives untouched
       for (const group of opened_by_search) group.open = false
       opened_by_search.clear()
+      revealed_for.clear()
     }
 
     // Read the heading's title element, not the heading itself, or a section's own action
@@ -150,10 +154,11 @@
         const keep = visible.has(container) || containers_with_visible.has(container)
         container.toggleAttribute(HIDDEN_ATTR, !keep)
         if (container instanceof HTMLDetailsElement) {
-          if (keep && !container.open) {
+          if (keep && !container.open && revealed_for.get(container) !== trimmed_query) {
             container.open = true
             opened_by_search.add(container)
           }
+          if (keep) revealed_for.set(container, trimmed_query)
         } else if (
           container.previousElementSibling?.matches(`.settings-section-heading`)
         ) {

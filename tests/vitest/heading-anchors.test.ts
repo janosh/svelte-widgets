@@ -1,4 +1,6 @@
 import {
+  decode_entities,
+  fragment_href,
   heading_anchors,
   heading_anchor_html,
   slugify_heading,
@@ -8,6 +10,45 @@ import Heading from '#lib/Heading.svelte'
 import { Check } from '#lib/icons.ts'
 import { describe, expect, it } from 'vite-plus/test'
 import { doc_query, next_task, render, raw_snippet } from './index'
+
+describe(`fragment_href`, () => {
+  it.each([
+    // fragment-legal characters stay literal so decodeURI-based matchers find the id
+    [`fig:plot`, `#fig:plot`],
+    [`a@b!$&'()*+,;=/?c`, `#a@b!$&'()*+,;=/?c`],
+    [`dash-dot.under_tilde~`, `#dash-dot.under_tilde~`],
+    // characters a fragment can't hold are percent-encoded
+    [`two words`, `#two%20words`],
+    [`a"b<c>d\`e`, `#a%22b%3Cc%3Ed%60e`],
+    [`100%`, `#100%25`],
+    [`a#b`, `#a#b`], // literal: decodeURI never restores %23
+    [`übersicht`, `#%C3%BCbersicht`],
+    [`a{b}`, `#a%7Bb%7D`], // inert in Svelte markup
+  ])(`%s -> %s`, (id, expected) => {
+    expect(fragment_href(id)).toBe(expected)
+    // round-trips through the URL parser browsers use for location.hash
+    expect(decodeURIComponent(new URL(expected, `https://x.test`).hash.slice(1))).toBe(id)
+    // what SvelteKit's prerender crawler compares the id against
+    expect(decodeURI(expected.slice(1))).toBe(id)
+  })
+})
+
+describe(`decode_entities`, () => {
+  it.each([
+    [`a&amp;b &lt;c&gt;`, `a&b <c>`],
+    [`&#123;x&#x7D;`, `{x}`],
+    [`&unknown;`, `&unknown;`],
+    // HTML maps these numeric references to U+FFFD, so manifest and DOM ids agree
+    [`&#0;`, `\uFFFD`],
+    [`&#xD800;`, `\uFFFD`],
+    [`&#x110000;`, `\uFFFD`],
+  ])(`%s -> %s`, (html, expected) => {
+    expect(decode_entities(html)).toBe(expected)
+    const template = document.createElement(`template`)
+    template.innerHTML = html
+    expect(template.content.textContent).toBe(expected)
+  })
+})
 
 describe(`slugify_heading`, () => {
   // Unicode-preserving and NFC-normalized: IDs stay readable, equivalent spellings collide
@@ -33,6 +74,12 @@ describe(`slugify_heading`, () => {
 })
 
 describe(`Heading`, () => {
+  it(`escapes & as a character reference inside the anchor attribute`, () => {
+    const template = document.createElement(`template`)
+    template.innerHTML = heading_anchor_html(`a&lt;b`)
+    // without &amp; the parser would decode `&lt;` and link to `#a<b`
+    expect(template.content.querySelector(`a`)?.getAttribute(`href`)).toBe(`#a&lt;b`)
+  })
   it.each([1, 2, 6] as const)(
     `renders an explicit h%i with one encoded anchor`,
     (level) => {
@@ -46,7 +93,7 @@ describe(`Heading`, () => {
       expect(heading.id).toBe(`a&b%20c`)
       expect(heading.textContent).toBe(`Diatomics`)
       expect(heading.querySelectorAll(`a`)).toHaveLength(1)
-      expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#a%26b%2520c`)
+      expect(heading.querySelector(`a`)?.getAttribute(`href`)).toBe(`#a&b%2520c`)
       const icon = heading.querySelector(`:scope > svg`)
       if (level === 2) {
         expect(icon).toBe(heading.firstElementChild)
@@ -88,7 +135,7 @@ describe(`heading_anchors attachment`, () => {
       [...container.querySelectorAll(anchor_selector)].map((anchor) =>
         anchor.getAttribute(`href`),
       ),
-    ).toEqual([`#renamed%2520%26`, `#one`, `#two`, `#custom`])
+    ).toEqual([`#renamed%2520&`, `#one`, `#two`, `#custom`])
     // managed anchors carry their gap from the heading text, consumer links are left alone
     expect(
       [...container.querySelectorAll<HTMLElement>(anchor_selector)].map(

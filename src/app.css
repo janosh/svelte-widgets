@@ -37,10 +37,7 @@ body {
   --page-pad: clamp(1rem, 3vw, 2rem);
   margin: 0;
   padding: var(--page-pad) var(--page-pad) 0;
-  font-family:
-    system-ui,
-    -apple-system,
-    sans-serif;
+  font-family: system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;

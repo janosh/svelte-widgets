@@ -6,7 +6,8 @@ import {
 import { compile } from 'svelte/compiler'
 import { describe, expect, it } from 'vite-plus/test'
 
-const has_math = (html: string) => html.includes(`katex-html`)
+// Svelte output embeds the MathML as JSON, escaping `<` as \u003c
+const has_math = (html: string) => html.replaceAll(`\\u003c`, `<`).includes(`<math`)
 
 describe(`Markdown math`, () => {
   it.each([
@@ -17,7 +18,7 @@ describe(`Markdown math`, () => {
   ])(`renders %j with display mode %j`, async (source, display_mode) => {
     const html = await render_markdown(source, { math: true })
     expect(has_math(html)).toBe(true)
-    expect(html.includes(`katex-display`)).toBe(display_mode)
+    expect(html.includes(`tml-display`)).toBe(display_mode)
   })
 
   it.each([
@@ -61,9 +62,9 @@ describe(`Markdown math`, () => {
       math: { macros: { '\\RR': `\\mathbb{R}` } },
     })
     expect(html).toContain(`Cost $$100.`)
-    expect(html).toContain(`mathbb`)
+    expect(html).toContain(`<mi>ℝ</mi>`)
     await expect(render_markdown(`$\\notacommand$`, { math: true })).rejects.toThrow(
-      `KaTeX parse error`,
+      `Unsupported function name: \\notacommand`,
     )
     expect(
       has_math(

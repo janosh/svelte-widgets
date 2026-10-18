@@ -1,7 +1,7 @@
 <script>
   import Icon from '#lib/Icon.svelte'
   import { Flask } from '#lib/icons.ts'
-  import 'katex/dist/katex.min.css'
+  import 'temml/dist/Temml-Local.css'
 </script>
 
 ## <Icon icon={Flask} class="heading-icon" /> Figure and equation navigation

@@ -9,7 +9,7 @@ const opening_tag_regex = new RegExp(
 const heading_attr_regex =
   /(?:^|\s)(?<name>[^\s"'=<>`]+)(?:(?<equals>\s*=\s*)(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<unquoted>[^\s"'=<>`]+))?)?/gu
 const html_string_expression_regex = /\{@html\s+(?<json>"(?:\\.|[^"\\])*")\s*\}/gu
-const katex_annotation_regex =
+const tex_annotation_regex =
   /<annotation\b[^>]*encoding="application\/x-tex"[^>]*>(?<tex>[\s\S]*?)<\/annotation>/iu
 function find_svelte_expression_end(str: string, start: number): number {
   let depth = 0
@@ -61,7 +61,13 @@ export const decode_entities = (html: string): string =>
     (entity, hex?: string, dec?: string, name?: string) => {
       if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? entity
       const code_point = hex ? Number.parseInt(hex, 16) : Number(dec)
-      return code_point <= 0x10ffff ? String.fromCodePoint(code_point) : entity
+      // NUL, surrogates and out-of-range code points become U+FFFD as in the HTML parser
+      // (a lone surrogate would also make encodeURI throw)
+      const invalid =
+        code_point === 0 ||
+        (code_point >= 0xd800 && code_point <= 0xdfff) ||
+        code_point > 0x10ffff
+      return invalid ? `\uFFFD` : String.fromCodePoint(code_point)
     },
   )
 
@@ -74,7 +80,7 @@ const extract_math_sources = (inner: string): string =>
       return expression
     }
     if (typeof html !== `string`) return expression
-    const tex = katex_annotation_regex.exec(html)?.groups?.tex
+    const tex = tex_annotation_regex.exec(html)?.groups?.tex
     return tex ? decode_entities(tex).replaceAll(/[{}]/gu, ``) : expression
   })
 
@@ -118,11 +124,19 @@ export function unique_heading_id(base_id: string, used_ids: Set<string>): strin
 
 const link_svg = `<svg width="16" height="16" viewBox="0 0 16 16" aria-label="Link to heading" role="img"><path d="M7.775 3.275a.75.75 0 0 0 1.06 1.06l1.25-1.25a2 2 0 1 1 2.83 2.83l-2.5 2.5a2 2 0 0 1-2.83 0 .75.75 0 0 0-1.06 1.06 3.5 3.5 0 0 0 4.95 0l2.5-2.5a3.5 3.5 0 0 0-4.95-4.95l-1.25 1.25zm-4.69 9.64a2 2 0 0 1 0-2.83l2.5-2.5a2 2 0 0 1 2.83 0 .75.75 0 0 0 1.06-1.06 3.5 3.5 0 0 0-4.95 0l-2.5 2.5a3.5 3.5 0 0 0 4.95 4.95l1.25-1.25a.75.75 0 0 0-1.06-1.06l-1.25 1.25a2 2 0 0 1-2.83 0z" fill="currentColor"/></svg>`
 
-// Shared HTML for Markdown output and explicit Svelte headings. Encode the fragment as data.
-// The gap from the heading text ships with the markup, so no host stylesheet is needed to keep
-// the icon off the last letter; --heading-anchor-gap tunes it.
-export const heading_anchor_html = (id?: string, icon_markup = link_svg): string =>
-  `<a data-heading-anchor aria-hidden="true" style="padding-inline-start: var(--heading-anchor-gap, 0.3em)"${id ? ` href="#${encodeURIComponent(id)}"` : ``}>${icon_markup}</a>`
+// `#id` link that resolves after decodeURI (SvelteKit's prerender crawler, unlike
+// encodeURIComponent's `#fig%3Aplot`) and in browsers. Braces become `%7B`/`%7D`, so the
+// href stays inert in Svelte markup.
+export const fragment_href = (id: string): string => `#${encodeURI(id)}`
+
+// Shared HTML for Markdown output and explicit Svelte headings. The gap from the heading text
+// ships with the markup, so no host stylesheet is needed to keep the icon off the last letter;
+// --heading-anchor-gap tunes it.
+export const heading_anchor_html = (id?: string, icon_markup = link_svg): string => {
+  // `&` is legal in fragments but must not start a character reference in the attribute
+  const href = id ? ` href="${fragment_href(id).replaceAll(`&`, `&amp;`)}"` : ``
+  return `<a data-heading-anchor aria-hidden="true" style="padding-inline-start: var(--heading-anchor-gap, 0.3em)"${href}>${icon_markup}</a>`
+}
 
 export const has_heading_anchor = (inner: string): boolean =>
   [...inner.matchAll(opening_tag_regex)].some(
@@ -166,7 +180,7 @@ function add_anchor_to_heading(
     if (!base_id) return
     heading.id = unique_heading_id(base_id, get_used_ids())
   }
-  if (existing_anchor) existing_anchor.href = `#${encodeURIComponent(heading.id)}`
+  if (existing_anchor) existing_anchor.href = fragment_href(heading.id)
   else heading.insertAdjacentHTML(`beforeend`, heading_anchor_html(heading.id, icon_svg))
 }
 

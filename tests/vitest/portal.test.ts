@@ -18,7 +18,9 @@ const next_frame = () => new Promise(requestAnimationFrame)
 
 test(`restores from a shadow root after its anchor is removed`, async () => {
   const { target, node, sibling, active } = create_fixture(true)
-  node.style.color = `red`
+  // host styles (e.g. MultiSelect's ul_options_style), including the ones the portal
+  // overrides while active, come back as they were once it deactivates
+  node.style.cssText = `color: red; position: absolute; left: 4px; width: 20em`
   const action = portal_action(node, active)
   await tick()
   expect(node.parentElement).toBe(document.body)
@@ -26,7 +28,9 @@ test(`restores from a shadow root after its anchor is removed`, async () => {
   sibling.remove()
   action.update({ ...active, active: false })
   expect([node.previousSibling, node.nextSibling]).toEqual([target, null])
-  expect(node.style.cssText).toBe(`color: red;`)
+  expect(node.style.cssText).toBe(
+    `color: red; position: absolute; left: 4px; width: 20em;`,
+  )
   expect(node.hidden).toBe(false)
   expect(node.hasAttribute(`data-placement`)).toBe(false)
 

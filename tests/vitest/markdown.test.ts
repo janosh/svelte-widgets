@@ -331,7 +331,7 @@ describe(`code and math`, () => {
     const source =
       '<script>const currency = "$5 and $10"</script>\n\n$x^2$\n\n$$\nx+y\n$$\n\n`$code$` \\$escaped$ <span title="$attribute$">text</span>\n\n```txt\n$fenced$\n```'
     const { code } = await compile_page(source, { math: true })
-    expect(code.match(/class=\\"katex\\"/gu)).toHaveLength(2)
+    expect(code.replaceAll(`\\u003c`, `<`).match(/<math[ >]/gu)).toHaveLength(2)
     for (const literal of [`$attribute$`, `$code$`, `$escaped$`, `$fenced$`])
       expect(code).toContain(literal)
   })
@@ -346,7 +346,7 @@ describe(`code and math`, () => {
       const output = await emit(assert_ok(parsed))
       if (dialect === `svelte`) compile(output, { generate: false })
       expect(output).toContain(`alt="area $x^2$ m"`)
-      expect(output).not.toContain(`katex`)
+      expect(output).not.toContain(`<math`)
     },
   )
 
@@ -852,9 +852,9 @@ describe(`document pipeline`, () => {
   })
 
   test(`deferred rendering owns its options, including nested math and citation data`, async () => {
-    const katex = await import('katex')
+    const { default: temml } = await import('temml')
     const macros: Record<string, string | object> = { '\\value': `x` }
-    katex.renderToString(`\\gdef\\stored{z}`, { macros })
+    temml.renderToString(`\\gdef\\stored{z}`, { macros })
     const options = {
       typography: false,
       math: { macros, trust: () => false },
@@ -882,8 +882,8 @@ describe(`document pipeline`, () => {
       `Original paper`,
       `Original author`,
       `original highlight`,
-      `>x</span>`,
-      `>z</span>`,
+      `<mi>x</mi>`,
+      `<mi>z</mi>`,
     ])
       expect(first_html).toContain(text)
     for (const text of [
@@ -891,7 +891,7 @@ describe(`document pipeline`, () => {
       `Changed paper`,
       `Changed author`,
       `changed highlight`,
-      `>y</span>`,
+      `<mi>y</mi>`,
     ])
       expect(second_html).toContain(text)
     expect(original_highlight).toHaveBeenCalledTimes(1)

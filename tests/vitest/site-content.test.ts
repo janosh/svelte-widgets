@@ -83,7 +83,7 @@ test(`enriches metadata and indexes scientific targets once without changing hyd
   expect(globalThis).not.toHaveProperty(`executed`)
   expect(page.records).toEqual([
     {
-      url: `/base/science#fig%3Aplot`,
+      url: `/base/science#fig:plot`,
       content: `Figure 1. Phase diagram`,
       language: `en`,
       meta: {
@@ -93,7 +93,7 @@ test(`enriches metadata and indexes scientific targets once without changing hyd
       },
     },
     {
-      url: `/base/science#eq%3Aenergy`,
+      url: `/base/science#eq:energy`,
       content: `Equation 1 E = mc^2`,
       language: `en`,
       meta: {
@@ -162,7 +162,7 @@ test.each([``, `/docs`])(
       )
       expect(index.writeFiles).toHaveBeenCalledWith({ outputPath: `build/pagefind` })
       expect(index.addCustomRecord).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ url: `/nested/guide#fig%3Aplot` }),
+        expect.objectContaining({ url: `/nested/guide#fig:plot` }),
       )
       expect(pagefind.close).toHaveBeenCalled()
       // Native anchors participate in validation before any new index is published.

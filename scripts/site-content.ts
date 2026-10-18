@@ -9,6 +9,7 @@ import {
   type ContentManifest,
 } from '../src/lib/markdown/content.ts'
 import { source_locator } from '../src/lib/markdown/diagnostics.ts'
+import { fragment_href } from '../src/lib/heading-anchors.ts'
 
 // Inspect inert HTML; never execute a page's scripts or fetch its resources during builds.
 export function prepare_page(
@@ -21,7 +22,6 @@ export function prepare_page(
     settings: {
       enableJavaScriptEvaluation: false,
       disableJavaScriptFileLoading: true,
-      disableCSSFileLoading: true,
     },
   })
   const document = new window.DOMParser().parseFromString(html, `text/html`)
@@ -108,7 +108,7 @@ export function prepare_page(
         .filter(Boolean)
         .join(` `)
     records.push({
-      url: `${url}#${encodeURIComponent(element.id)}`,
+      url: `${url}${fragment_href(element.id)}`,
       content,
       language: document.documentElement.lang || `en`,
       meta: {

@@ -14,6 +14,7 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
   let params = initial_params
   let home_parent: ParentNode | null = null
   let home_anchor: Node | null = null
+  let home_styles: [property: string, value: string, priority: string][] = []
   let stop_tracking: (() => void) | undefined
 
   const update_position = (): void => {
@@ -58,6 +59,12 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
     if (home_parent || !node.isConnected) return
     home_parent = node.parentNode
     home_anchor = node.nextSibling
+    // the inline styles the portal overrides, handed back as the host set them
+    home_styles = [`position`, `left`, `top`, `width`].map((property) => [
+      property,
+      node.style.getPropertyValue(property),
+      node.style.getPropertyPriority(property),
+    ])
     document.body.append(node)
     node.style.position = `fixed`
   }
@@ -72,9 +79,9 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
       node,
       home_anchor?.parentNode === home_parent ? home_anchor : null,
     )
-    for (const property of [`position`, `left`, `top`, `width`]) {
-      node.style.removeProperty(property)
-    }
+    // an empty value removes the property, so portal-only styles are cleared too
+    for (const [property, value, priority] of home_styles)
+      node.style.setProperty(property, value, priority)
     delete node.dataset.placement
     // hand visibility back to the consumer's CSS: update() won't re-sync once home
     node.hidden = false

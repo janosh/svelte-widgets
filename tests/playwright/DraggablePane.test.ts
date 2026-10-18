@@ -59,7 +59,7 @@ for (const [title, press_at, delta, expected] of mouse_drags) {
   })
 }
 
-// reset_position() (a close and reopen) reruns the anchoring maths against the mutated layout
+// Reopening re-anchors (position_pane), rerunning the anchoring maths against the mutated layout
 // oxlint-disable-next-line vitest/prefer-each -- Playwright test has no each API
 for (const [title, mutate_layout] of [
   // The pane's insets resolve against the ancestor's padding box but were computed from its

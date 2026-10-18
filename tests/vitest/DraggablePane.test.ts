@@ -683,6 +683,8 @@ describe(`DraggablePane`, () => {
       expect(window_listeners.mock.calls.map(([type]) => type)).not.toContain(`resize`)
       mock_rect(toggle, { left: 600, top: 20, width: 20, height: 20 })
       mock_pane_rect(pane)
+      // a size the host restored onto the bound pane survives every re-anchor below
+      Object.assign(pane.style, { width: `420px`, height: `300px` })
       await click(toggle)
       expect(pane.style.left).toBe(`175px`)
       expect(observe.mock.calls).toEqual([
@@ -705,6 +707,7 @@ describe(`DraggablePane`, () => {
       mock_rect(toggle, { left: 600, top: 20, width: 40, height: 40 })
       notify_resize()
       expect([pane.style.left, pane.style.top]).toEqual([`345px`, `65px`])
+      expect([pane.style.width, pane.style.height]).toEqual([`420px`, `300px`])
 
       drag_by(20, 0)
       await tick()
