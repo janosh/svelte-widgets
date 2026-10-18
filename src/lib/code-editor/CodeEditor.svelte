@@ -426,8 +426,9 @@
       }
       refresh_input(true)
     })
-    active
-      .open()
+    // Untracked: the backend's open_doc runs synchronously here, and host state it reads
+    // must not re-run this effect (a handler bumping a $state counter reopened in a loop)
+    untrack(active.open)
       .then((result) => {
         if (!is_current()) return
         doc_info = {

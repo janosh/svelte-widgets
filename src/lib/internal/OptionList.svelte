@@ -1,5 +1,5 @@
 <script lang="ts" generics="Item extends import('../types').Option">
-  import { tick, untrack } from 'svelte'
+  import { flushSync, tick, untrack } from 'svelte'
   import { highlight_matches as highlight } from '../attachments/highlight-matches'
   import { get_label, get_option_key, has_group } from '../utils'
   import type { OptionListProps } from '../types'
@@ -198,10 +198,10 @@
         on_execute(active_option)
     } else if (event.key === `ArrowDown` || event.key === `ArrowUp`) {
       event.preventDefault()
-      if (keyboard_expands_collapsed_groups && collapsible_groups) {
-        expand_matching_groups()
-        await tick()
-      }
+      // flush synchronously so the active-index remap settles before stepping and
+      // before the forwarded onkeydown runs, same as when no group needs expanding
+      if (keyboard_expands_collapsed_groups && collapsible_groups)
+        flushSync(expand_matching_groups)
       active_index = next_option_index(
         visible_options,
         active_index,

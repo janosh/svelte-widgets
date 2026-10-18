@@ -16,6 +16,7 @@ describe(`Dialog`, () => {
     doc_query<HTMLButtonElement>(`[data-testid="${test_id}"]`)
   const trigger = () => item(`dialog-trigger`)
   const surface = () => document.querySelector<HTMLDialogElement>(`dialog.dialog`)
+  const open_surface = () => doc_query<HTMLDialogElement>(`dialog.dialog`)
   const press_backdrop_at = (
     dialog: HTMLDialogElement,
     client_x: number,
@@ -57,7 +58,7 @@ describe(`Dialog`, () => {
 
     await click(trigger())
 
-    const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
+    const dialog = open_surface()
     expect(show_modal).toHaveBeenCalledOnce()
     expect(dialog.open).toBe(true)
     expect(dialog.id).toBe(`profile-dialog`)
@@ -85,7 +86,7 @@ describe(`Dialog`, () => {
       trigger().focus()
       await click(trigger())
 
-      const dialog = doc_query<HTMLDialogElement>(`dialog.dialog`)
+      const dialog = open_surface()
       press_dialog_at(dialog, 50, 50) // a press inside the box never dismisses
       await tick()
       expect(surface()).toBe(dialog)
@@ -123,7 +124,7 @@ describe(`Dialog`, () => {
     ])
 
     await reopen()
-    doc_query<HTMLDialogElement>(`dialog.dialog`).close()
+    open_surface().close()
     await tick()
     expect([props.open, surface()]).toEqual([false, null])
     expect(on_close).toHaveBeenCalledTimes(2)
@@ -140,8 +141,7 @@ describe(`Dialog`, () => {
 
   test(`a stale native close cannot close a rapidly reopened dialog`, async () => {
     const props = mount_dialog({ open: true })
-    await tick()
-    const old_surface = doc_query<HTMLDialogElement>(`dialog.dialog`)
+    const old_surface = open_surface()
 
     props.open = false
     await tick()
@@ -164,9 +164,7 @@ describe(`Dialog`, () => {
   ] as const)(`%s ignores %s dismissal`, async (_label, extra, via) => {
     const on_close = vi.fn()
     mount_dialog({ ...extra, open: true, on_close })
-    await tick()
-
-    dismiss[via](doc_query<HTMLDialogElement>(`dialog.dialog`))
+    dismiss[via](open_surface())
     await tick()
     expect(surface()?.open).toBe(true)
     // the ignored dismissal must not leave its reason behind for the next close
@@ -233,8 +231,7 @@ describe(`Dialog`, () => {
     const focus_origin = create_element(`button`)
     focus_origin.focus()
     mount_dialog({ open: true, on_close })
-    await tick()
-    expect(doc_query<HTMLDialogElement>(`dialog.dialog`).open).toBe(true)
+    expect(open_surface().open).toBe(true)
 
     await unmount_dialog()
     expect(surface()).toBeNull()

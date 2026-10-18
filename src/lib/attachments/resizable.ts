@@ -1,7 +1,12 @@
 import type { Attachment } from 'svelte/attachments'
 import { merge_defaults, RESIZABLE_LABELS, type ResizableLabels } from '../labels'
 import { clamp } from '../utils'
-import { css_px, follow_pointer, is_primary_press } from './shared'
+import {
+  claimed_pointer_events,
+  css_px,
+  follow_pointer,
+  is_primary_press,
+} from './shared'
 
 export type Dimensions = { width: number; height: number }
 export type ResizeEvent = MouseEvent | KeyboardEvent
@@ -200,8 +205,8 @@ export const resizable =
       if (is_resizing || !is_primary_press(event)) return
       is_resizing = true
       // the handle owns this press: a `draggable` on the node or an ancestor must not also
-      // start moving it
-      event.stopPropagation()
+      // start moving it. Claim rather than stopPropagation so outer listeners still see it.
+      claimed_pointer_events.add(event)
 
       const origin = { x: event.clientX, y: event.clientY }
       const [measured, maximum] = [measure(), read_maximum()]

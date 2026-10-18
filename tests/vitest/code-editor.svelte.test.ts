@@ -10,7 +10,7 @@ import type {
 } from '#lib/code-editor/types.ts'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { doc_query, press_key, stub_prop } from './index'
+import { doc_query, next_task, pointer_event, press_key, stub_prop } from './index'
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
 const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
@@ -333,7 +333,6 @@ test(`native input, selection, history, commands, and backend deltas share the m
   expect(textarea.getAttribute(`autocorrect`)).toBe(`off`)
   expect(doc_query(`.gutter`).style.width).toBe(`2ch`)
   const text_spy = vi.spyOn(model, `text`)
-  text_spy.mockClear()
   emit_input(textarea, `insertText`, 6, 6, `xy`)
   textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
   emit_input(textarea, `insertText`, 8, 8, `λ`)
@@ -450,6 +449,19 @@ test(`save preserves disk format, external transactions sync, and model replacem
   )
 })
 
+// open_doc runs synchronously inside the model effect; host state it reads and writes
+// there must not become a dependency that reopens the document in a loop
+test(`a backend open_doc touching host state opens the document once`, async () => {
+  const host = $state({ opens: 0 })
+  const { backend, opens } = create_backend()
+  const open_doc: EditorBackend[`open_doc`] = (args) => {
+    host.opens = Math.min(host.opens + 1, 5) // capped so the pre-fix loop settles
+    return backend.open_doc(args)
+  }
+  await mount_editor(DEMO_TEXT, { backend: { ...backend, open_doc } })
+  expect([host.opens, opens.length]).toEqual([1, 1])
+})
+
 test(`undoing mid-save edits back to the written text reads clean`, async () => {
   const pending = Promise.withResolvers<undefined>()
   const on_save = vi.fn(() => pending.promise)
@@ -514,7 +526,7 @@ test.each([`canceled by another listener`, `not followed by input`] as const)(
     }
     // an external edit while the snapshot is pending still reaches the textarea
     model.transact([{ from: 0, to: 0, insert: `// ` }])
-    await new Promise((resolve) => void setTimeout(resolve, 0))
+    await next_task()
     expect(textarea.value.startsWith(`// ${DEMO_TEXT.slice(0, 5)}`)).toBe(true)
     textarea.setSelectionRange(2, 4)
     textarea.dispatchEvent(new Event(`select`))
@@ -522,44 +534,52 @@ test.each([`canceled by another listener`, `not followed by input`] as const)(
   },
 )
 
-test.each([`read-only`, `unsupported input`, `rejected command`] as const)(
-  `%s restores the model value`,
-  async (mode) => {
-    const on_error = vi.fn()
-    const { model, textarea, recorder } = await mount_editor(undefined, {
-      read_only: mode === `read-only`,
-      on_error,
-    })
-    const input_events = vi.fn()
-    textarea.addEventListener(`input`, input_events)
-    if (mode === `rejected command`) {
+test.each<
+  [string, (textarea: HTMLTextAreaElement, model: EditorModel) => void, number, string[]]
+>([
+  [`read-only`, (textarea) => emit_input(textarea, `insertText`, 0, 0, `!`), 0, []],
+  [
+    `unsupported input`,
+    (textarea) => emit_input(textarea, `formatBold`, 0, 0, `!`),
+    1,
+    [`Unsupported editor input type formatBold`],
+  ],
+  [
+    `rejected command`,
+    (textarea, model) => {
       vi.spyOn(model, `transact`).mockImplementationOnce(() => {
         throw new Error(`rejected command`)
       })
       press_key(textarea, `Tab`)
-    } else
-      emit_input(textarea, mode === `read-only` ? `insertText` : `formatBold`, 0, 0, `!`)
-    await flush_async()
-    expect([textarea.value, model.text(), recorder.edits]).toEqual([
-      DEMO_TEXT,
-      DEMO_TEXT,
-      [],
-    ])
-    expect(input_events).toHaveBeenCalledTimes(mode === `unsupported input` ? 1 : 0)
-    // Native input can arrive without a cancelable beforeinput event.
-    if (mode === `read-only`) {
-      textarea.value = `unexpected native update`
-      textarea.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
-      expect(textarea.value).toBe(DEMO_TEXT)
-      expect(model.text()).toBe(DEMO_TEXT)
-    }
-    expect(on_error).toHaveBeenCalledTimes(mode === `read-only` ? 0 : 1)
-    if (mode === `unsupported input`)
-      expect(on_error).toHaveBeenCalledWith(`Unsupported editor input type formatBold`)
-    if (mode === `rejected command`)
-      expect(on_error).toHaveBeenCalledWith(`rejected command`)
-  },
-)
+    },
+    0,
+    [`rejected command`],
+  ],
+])(`%s restores the model value`, async (mode, act, n_input_events, errors) => {
+  const on_error = vi.fn()
+  const read_only = mode === `read-only`
+  const { model, textarea, recorder } = await mount_editor(undefined, {
+    read_only,
+    on_error,
+  })
+  const input_events = vi.fn()
+  textarea.addEventListener(`input`, input_events)
+  act(textarea, model)
+  await flush_async()
+  expect([textarea.value, model.text(), recorder.edits]).toEqual([
+    DEMO_TEXT,
+    DEMO_TEXT,
+    [],
+  ])
+  expect(input_events).toHaveBeenCalledTimes(n_input_events)
+  // Native input can arrive without a cancelable beforeinput event.
+  if (read_only) {
+    textarea.value = `unexpected native update`
+    textarea.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+    expect([textarea.value, model.text()]).toEqual([DEMO_TEXT, DEMO_TEXT])
+  }
+  expect(on_error.mock.calls).toEqual(errors.map((message) => [message]))
+})
 
 test.each([`historyUndo`, `historyRedo`])(
   `read-only blocks native %s`,
@@ -874,34 +894,19 @@ test(`mouse selection retains its anchor and supports word and line selection`, 
   scroll_viewport(0)
   textarea.style.paddingLeft = `8px`
   textarea.setPointerCapture = vi.fn()
-  textarea.dispatchEvent(
-    new PointerEvent(`pointerdown`, {
-      bubbles: true,
-      button: 0,
-      pointerType: `mouse`,
-      pointerId: 1,
-      clientX: 9,
-      clientY: 5,
-    }),
-  )
-  textarea.dispatchEvent(
-    new PointerEvent(`pointermove`, {
-      bubbles: true,
-      pointerId: 1,
-      clientX: 10,
-      clientY: 25,
-    }),
-  )
-  textarea.dispatchEvent(new PointerEvent(`pointerup`, { bubbles: true, pointerId: 1 }))
+  const pointer = { pointerId: 1, pointerType: `mouse` }
+  textarea.dispatchEvent(pointer_event(`pointerdown`, 9, 5, pointer))
+  textarea.dispatchEvent(pointer_event(`pointermove`, 10, 25, pointer))
+  textarea.dispatchEvent(pointer_event(`pointerup`, 0, 0, pointer))
   expect(model.selection).toEqual({ anchor: 1, head: 8 })
-  textarea.dispatchEvent(
-    new MouseEvent(`click`, { bubbles: true, detail: 2, clientX: 10, clientY: 5 }),
-  )
-  expect(model.selection).toEqual({ anchor: 0, head: 5 })
-  textarea.dispatchEvent(
-    new MouseEvent(`click`, { bubbles: true, detail: 3, clientX: 10, clientY: 5 }),
-  )
-  expect(model.selection).toEqual({ anchor: 0, head: 6 })
+  // double click selects the word, triple click the line
+  for (const [detail, head] of [
+    [2, 5],
+    [3, 6],
+  ]) {
+    textarea.dispatchEvent(pointer_event(`click`, 10, 5, { detail }))
+    expect(model.selection).toEqual({ anchor: 0, head })
+  }
 })
 
 test(`host selection changes reveal both horizontal edges`, async () => {

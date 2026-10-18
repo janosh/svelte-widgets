@@ -1,7 +1,12 @@
 import type { Attachment } from 'svelte/attachments'
 import { clamp } from '../utils'
 import type { AnchorRect } from './float'
-import { css_px, follow_pointer, is_primary_press } from './shared'
+import {
+  claimed_pointer_events,
+  css_px,
+  follow_pointer,
+  is_primary_press,
+} from './shared'
 
 export interface DraggableOptions {
   handle_selector?: string
@@ -44,7 +49,8 @@ export const draggable =
     const on_pointerdown = (event: PointerEvent) => {
       // `dragging` bars a second primary pointer mid-drag (mouse while a touch is down),
       // which would strand the first follower's listeners past cleanup
-      if (dragging || !is_primary_press(event)) return
+      if (dragging || !is_primary_press(event) || claimed_pointer_events.has(event))
+        return
       if (!(event.target instanceof Node) || !drag_handle.contains(event.target)) return
 
       dragging = true

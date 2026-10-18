@@ -35,7 +35,10 @@
 
   const close = (via: DialogCloseVia) => {
     if (!open) return
-    if (!surface?.open) throw new Error(`Dialog: cannot close without an open surface`)
+    if (!surface) throw new Error(`Dialog: cannot close without a mounted surface`)
+    // Browsers fire `close` a task later, so `open` lags a surface that is already shut: a
+    // repeat call before then must neither throw nor overwrite the first call's reason
+    if (!surface.open) return
     pending_close_via = via
     surface.close()
   }

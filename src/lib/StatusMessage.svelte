@@ -15,13 +15,8 @@
   } & Omit<HTMLAttributes<HTMLDivElement>, `children`> = $props()
 </script>
 
-{#if message}
-  <div
-    role={type === `error` ? `alert` : `status`}
-    aria-live={type === `error` ? `assertive` : `polite`}
-    {...rest}
-    class={[`status-message`, type, rest.class]}
-  >
+{#snippet status_box()}
+  <div {...rest} class={[`status-message`, type, rest.class]}>
     {message}
     {#if dismissible}
       <button
@@ -33,7 +28,17 @@
       </button>
     {/if}
   </div>
-{/if}
+{/snippet}
+
+<!-- Both regions stay mounted and empty, as in Toast: a live region inserted together with its
+content is announced by only some screen readers, and swapping aria-live mid-flight is as
+unreliable -->
+<div role="status" aria-live="polite">
+  {#if message && type !== `error`}{@render status_box()}{/if}
+</div>
+<div role="alert" aria-live="assertive">
+  {#if message && type === `error`}{@render status_box()}{/if}
+</div>
 
 <style>
   .status-message {

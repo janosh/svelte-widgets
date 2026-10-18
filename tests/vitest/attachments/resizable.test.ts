@@ -330,38 +330,32 @@ describe(`resizable`, () => {
     },
   )
 
-  // a second finger drives nothing; only the first pointer or the OS can end the resize
-  it.each([
-    [
-      `pointercancel`,
-      (_el: HTMLElement, init: PointerEventInit) =>
-        globalThis.dispatchEvent(pointer_event(`pointercancel`, 250, 75, init)),
-    ],
-    [
-      `lostpointercapture`,
-      (el: HTMLElement, init: PointerEventInit) =>
-        el.dispatchEvent(pointer_event(`lostpointercapture`, 250, 75, init)),
-    ],
-  ])(`ignores another pointer, ends on %s`, (_end_type, dispatch_end) => {
-    const element = create_box()
-    const on_resize_end = vi.fn()
-    attach_resizable(element, { on_resize_end })
-    const [first, second] = [{ pointerId: 1 }, { pointerId: 2 }]
+  // a second finger drives nothing; only the first pointer or the OS can end the resize.
+  // All end events fire on the capture target: `lostpointercapture` is heard there, the
+  // others once they bubble to window.
+  it.each([`pointerup`, `pointercancel`, `lostpointercapture`])(
+    `ignores another pointer, ends on %s`,
+    (end_type) => {
+      const element = create_box()
+      const on_resize_end = vi.fn()
+      attach_resizable(element, { on_resize_end })
+      const [first, second] = [{ pointerId: 1 }, { pointerId: 2 }]
 
-    grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75, first))
-    expect(element.hasPointerCapture(1)).toBe(true)
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 400, 75, second))
-    globalThis.dispatchEvent(pointer_event(`pointerup`, 400, 75, second))
-    expect(element.style.width).toBe(`200px`)
-    expect(on_resize_end).not.toHaveBeenCalled()
+      grip(element).dispatchEvent(pointer_event(`pointerdown`, 195, 75, first))
+      expect(element.hasPointerCapture(1)).toBe(true)
+      globalThis.dispatchEvent(pointer_event(`pointermove`, 400, 75, second))
+      globalThis.dispatchEvent(pointer_event(`pointerup`, 400, 75, second))
+      expect(element.style.width).toBe(`200px`)
+      expect(on_resize_end).not.toHaveBeenCalled()
 
-    globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75, first))
-    dispatch_end(element, first)
-    expect(element.style.width).toBe(`255px`)
-    expect(on_resize_end).toHaveBeenCalledOnce()
-    expect(document.body.style.userSelect).toBe(``)
-    expect(element.hasPointerCapture(1)).toBe(false)
-  })
+      globalThis.dispatchEvent(pointer_event(`pointermove`, 250, 75, first))
+      element.dispatchEvent(pointer_event(end_type, 250, 75, first))
+      expect(element.style.width).toBe(`255px`)
+      expect(on_resize_end).toHaveBeenCalledOnce()
+      expect(document.body.style.userSelect).toBe(``)
+      expect(element.hasPointerCapture(1)).toBe(false)
+    },
+  )
 
   // the non-primary press matters most: the context menu it opens can swallow the release,
   // leaving the element stuck to the cursor
@@ -451,9 +445,14 @@ describe(`resizable`, () => {
     const on_drag_start = vi.fn()
     onTestFinished(draggable({ on_drag_start })(element) ?? (() => {}))
     attach_resizable(element)
+    // unrelated outer listeners (consumer wrappers, Popover's press tracking) still see it
+    const outer_pointerdown = vi.fn()
+    document.addEventListener(`pointerdown`, outer_pointerdown)
+    onTestFinished(() => document.removeEventListener(`pointerdown`, outer_pointerdown))
 
     drag(grip(element), [195, 75], [250, 75])
     expect(on_drag_start).not.toHaveBeenCalled()
+    expect(outer_pointerdown).toHaveBeenCalledOnce()
     expect(element.style.width).toBe(`255px`)
   })
 
