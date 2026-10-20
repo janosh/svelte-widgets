@@ -1118,6 +1118,48 @@ describe(`PageSearch`, () => {
     },
   )
 
+  test.each([
+    [undefined, undefined, `/fresh.html`],
+    [true, undefined, `/fresh`],
+    [false, (url: string) => `/docs${url}`, `/docs/fresh.html`],
+  ])(
+    `strip_html_suffix=%s with transform_url=%s navigates to %s`,
+    async (strip_html_suffix, transform_url, expected_url) => {
+      const navigate = vi.fn()
+      const search = vi.fn(async () => make_pagefind_response(`Fresh`))
+      mount_page_search({
+        navigate,
+        strip_html_suffix,
+        transform_url,
+        load_pagefind: async () => ({ search }),
+      })
+      await search_pagefind(`fresh`)
+      await click(doc_query<HTMLLIElement>(`li[role='option']`))
+      expect(navigate).toHaveBeenCalledExactlyOnceWith(
+        expected_url,
+        expect.objectContaining({ query: `fresh`, label: `Fresh` }),
+      )
+    },
+  )
+
+  test(`without load_pagefind imports the default index path and keeps fallbacks`, async ({
+    onTestFinished,
+  }) => {
+    const search = vi.fn(async () => make_pagefind_response(`Fresh`))
+    vi.doMock(`/pagefind/pagefind.js`, () => ({ search }))
+    onTestFinished(() => vi.doUnmock(`/pagefind/pagefind.js`))
+    mount_page_search({
+      fallback_actions: [{ id: `docs`, label: `Docs home`, action: vi.fn() }],
+    })
+    await search_pagefind(`docs`)
+    await vi.waitFor(async () => {
+      await flush_timers()
+      expect(option_labels()).toEqual([`Docs home`, `Fresh Fresh content`])
+    })
+    expect(search).toHaveBeenCalledExactlyOnceWith(`docs`)
+    expect(document.querySelector(`[role="alert"]`)).toBeNull()
+  })
+
   test(`keeps the loader stable while using current callback props`, async () => {
     const [first_navigate, second_navigate, on_execute] = [vi.fn(), vi.fn(), vi.fn()]
     const search = vi.fn(async () => make_pagefind_response(`Fresh`))

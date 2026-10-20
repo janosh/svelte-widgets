@@ -8,8 +8,8 @@
   --toc-width: 18rem;
   --nav-link-active-color: var(--accent);
   --bg: light-dark(#fafafa, #141418);
-  --text: light-dark(#222, #ccc);
-  --text-muted: light-dark(#666, #999);
+  --text-color: light-dark(#222, #ccc);
+  --text-color-muted: light-dark(#666, #999);
   --surface: light-dark(#fff, rgba(255, 255, 255, 0.05));
   /* Neutral footer band, darker than --bg. */
   --footer-bg: light-dark(#ebebeb, #0b0b0b);
@@ -39,7 +39,7 @@ body {
   padding: var(--page-pad) var(--page-pad) 0;
   font-family: system-ui, -apple-system, sans-serif;
   background: var(--bg);
-  color: var(--text);
+  color: var(--text-color);
   line-height: 1.6;
   /* Wrap oversized identifiers without changing intrinsic sizing. */
   overflow-wrap: break-word;

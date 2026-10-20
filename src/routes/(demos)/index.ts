@@ -74,6 +74,7 @@ export const demo_descriptions: Record<string, string> = {
   '/masonry': `Arrange variable-height content into balanced columns.`,
   '/patterns': `Compose dialogs, sheets, tabs, accordions, and in-page search.`,
   '/split-pane': `Resize adjacent panels with pointer and keyboard controls.`,
+  '/theming': `Every CSS custom property components read, generated from source.`,
   '/virtual-list': `Render a small visible window into a large fixed-height list.`,
   '/wiggle': `Animate a component to draw attention to a change.`,
   '/workbench': `Combine file loading, data inspection, and resizable panels.`,

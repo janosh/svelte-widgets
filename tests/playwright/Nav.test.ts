@@ -599,8 +599,9 @@ test(`expanded submenu rows are compact and share one continuous guide line`, as
 
 // The panel hangs off the pinned burger but used to restate its corner as its own constants,
 // which drifted as the button grew: it covered the burger's bottom 2px and started 8px to its
-// left. Both now derive from --nav-burger-inset and the button's own box.
-test(`the mobile menu clears the burger and shares its left edge`, async ({ page }) => {
+// left. Both now derive from --nav-burger-inset and the button's own box. It spans the
+// viewport at that inset so page text never shows beside the open menu.
+test(`the mobile menu clears the burger and mirrors its inset`, async ({ page }) => {
   const burger = await open_mobile_nav(page, `/`, 614)
   const menu = page.locator(`nav.mobile .menu`).first()
   await expect(menu).toBeVisible()
@@ -631,6 +632,11 @@ test(`the mobile menu clears the burger and shares its left edge`, async ({ page
   expect(menu_box.y, `menu overlaps the burger`).toBeGreaterThanOrEqual(
     burger_box.y + burger_box.height,
   )
+  const viewport_width = page.viewportSize()?.width ?? 0
+  expect(
+    viewport_width - (menu_box.x + menu_box.width),
+    `menu does not span to the burger's inset on the right`,
+  ).toBeCloseTo(burger_box.x, 0)
 })
 
 test(`demo section navigation and titles render before hydration`, async ({

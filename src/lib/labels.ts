@@ -23,6 +23,13 @@ export const BUTTON_GROUP_LABELS = {
 }
 export type ButtonGroupLabels = typeof BUTTON_GROUP_LABELS
 
+export const CODE_BLOCK_LABELS = {
+  // aria-label on the header's copy button
+  copy: `Copy code`,
+  line_count: (count: number) => `(${count} ${plural(count, `line`)})`,
+}
+export type CodeBlockLabels = typeof CODE_BLOCK_LABELS
+
 export const CODE_EDITOR_LABELS = {
   // visually hidden hint announced when the textarea takes focus
   keyboard_help: `Press Escape, then Tab to move focus away`,

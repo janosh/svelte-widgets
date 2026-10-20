@@ -77,9 +77,15 @@
       const skip_sel = skip_selector ?? as
       for (const code of document.querySelectorAll(global_selector ?? `pre > code`)) {
         const pre = code.parentElement
-        // Any existing copy button wins, including one from a second global instance:
-        // replacing it would have both instances swap buttons in an endless observer loop.
-        if (!pre || pre.querySelector(`[data-sms-copy]`)) continue
+        // Any existing copy button wins, including one from a second global instance
+        // (replacing it would have both instances swap buttons in an endless observer loop)
+        // or one in the caption of the block's figure, like CodeBlock's header.
+        if (
+          !pre ||
+          pre.querySelector(`[data-sms-copy]`) ||
+          pre.parentElement?.querySelector(`:scope > figcaption [data-sms-copy]`)
+        )
+          continue
         if (skip_sel && pre.querySelector(skip_sel)) continue
 
         const props = $state({

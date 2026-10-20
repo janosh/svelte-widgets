@@ -602,8 +602,12 @@ describe(`Toc`, () => {
     set_headings(2)
     const scroll_to = vi.spyOn(Element.prototype, `scrollTo`)
 
+    document.body.style.setProperty(`--text-color`, `rgb(1, 2, 3)`)
+    onTestFinished(() => void document.body.style.removeProperty(`--text-color`))
     await mount_toc({ desktop: false })
     expect(document.querySelector(`aside.toc > nav`)).toBeNull()
+    // the toggle's glyph follows the shared text color token
+    expect(getComputedStyle(doc_query(`aside.toc > button`)).color).toBe(`rgb(1, 2, 3)`)
     // both glyphs stay mounted so CSS can transition between them
     const shown_icons = () =>
       [...document.querySelectorAll(`aside.toc > button > svg`)].map((svg) =>

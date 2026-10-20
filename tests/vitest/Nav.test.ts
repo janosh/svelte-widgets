@@ -133,6 +133,15 @@ describe(`Nav`, () => {
     // one call per open/close transition and none on mount
     expect([on_open.mock.calls.length, on_close.mock.calls.length]).toEqual([2, 2])
   })
+  test(`burger bars take the shared --text-color`, () => {
+    const host = document.createElement(`div`)
+    host.style.setProperty(`--text-color`, `rgb(1, 2, 3)`)
+    document.body.append(host)
+    render(Nav, { routes: default_routes, pathname: `/` }, host)
+    const { backgroundColor } = getComputedStyle(doc_query(`.burger span`))
+    expect(backgroundColor).toBe(`rgb(1, 2, 3)`)
+  })
+
   test(`applies custom props and chains the burger click`, async () => {
     const onclick = vi.fn()
     const burger_props = {

@@ -78,6 +78,26 @@ describe(`FindBar`, () => {
     press_key(input(), `Enter`, { shiftKey: true })
     await tick()
     expect(status()).toBe(`3 of 3`)
+    // other keys keep their native input behavior and never step
+    expect(press_key(input(), `ArrowDown`).defaultPrevented).toBe(false)
+    await tick()
+    expect(status()).toBe(`3 of 3`)
+  })
+
+  test(`a bar mounted before its root searches nothing until the root binds`, async () => {
+    const root = render_root(`<p>alpha</p>`)
+    const props = $state<Props>({ root: undefined, on_close: vi.fn() })
+    const bar = mount(FindBar, { target: doc_query(`#bar`), props })
+    onTestFinished(() => unmount(bar))
+    await type_query(`alpha`)
+    expect(status()).toBe(`No matches`)
+
+    props.root = root
+    await tick()
+    expect(status()).toBe(`1 of 1`)
+    // the bound root is observed, so later content joins the matches
+    root.insertAdjacentHTML(`beforeend`, `<p>alpha</p>`)
+    await vi.waitFor(() => expect(status()).toBe(`1 of 2`))
   })
 
   test(`reports no matches and disables the arrows`, async () => {

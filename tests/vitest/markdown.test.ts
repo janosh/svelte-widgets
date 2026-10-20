@@ -117,6 +117,17 @@ describe(`Markdown output`, () => {
       `Visit <https://example.org> or <mailto:hi@example.org>`,
       [`href="https://example.org"`, `href="mailto:hi@example.org"`],
     ],
+    // Autolinks keep backslashes, so escaped braces stay literal in href and text alike
+    [
+      `<http://a/\\{b\\}> <http://a/{b}> www.c.org/\\{d\\}`,
+      [
+        `<a href="http://a/%5C%7Bb%5C%7D">http://a/\\&#123;b\\&#125;</a>`,
+        `<a href="http://a/{b}">http://a/{b}</a>`,
+        `<a href="http://www.c.org/%5C%7Bd%5C%7D">www.c.org/\\&#123;d\\&#125;</a>`,
+      ],
+    ],
+    // encodeURI rejects lone surrogates; browsers serialize them as U+FFFD
+    [`<h2 id="x\uD800y">T</h2>`, [`href="#x%EF%BF%BDy"`]],
   ])(`renders %s`, async (source, snippets) => {
     const { code } = await compile_page(source)
     for (const snippet of snippets) expect(code).toContain(snippet)
@@ -209,12 +220,45 @@ describe(`Svelte integration`, () => {
     [`<Wrapper>\n- x\n</Wrapper>`, [`</ul>\n</Wrapper>`]],
     [`- a\n  {#each xs as x}\n  - {x}\n  {/each}`, [`</ul>\n{/each}</li>`]],
     // Inline markup sharing a line with text stays a lazy continuation
-    [`- item\n{#if a}more{/if}`, [`<li>item{#if a}more{/if}</li>`]],
+    [`- item\n{#if a}more{/if}`, [`<li>item\n{#if a}more{/if}</li>`]],
+    [`> q\n{#if a}more{/if}`, [`<p>q\n{#if a}more{/if}</p>`]],
+    // A line closing every block it opens is inline content, not block markup
+    [`{#if a}more{/if}`, [`<p>{#if a}more{/if}</p>`]],
+    [`{#each xs as x}{x}{/each}`, [`<p>{#each xs as x}{x}{/each}</p>`]],
+    [`{#key k}text{/key} tail`, [`<p>{#key k}text{/key} tail</p>`]],
+    [`{#if a}x{:else}\\{y\\}{/if}`, [`<p>{#if a}x{:else}&#123;y&#125;{/if}</p>`]],
+    [`para\n{#if a}<b>x</b>{/if}\nafter`, [`<p>para\n{#if a}<b>x</b>{/if}\nafter</p>`]],
+    [
+      `{#each ys as y}\n{#if a}more{/if}\n{/each}`,
+      [`\n<p>{#if a}more{/if}</p>\n{/each}`],
+    ],
+    // A block left open stays block markup
+    [`{#if a}more\n{/if}`, [`{#if a}<p>more</p>\n{/if}`]],
     // Lines inside fences are only probed, never required to be valid Svelte
     ['- a\n```\n{#if\n```', [`</ul>\n<pre`]],
   ])(`Svelte block lines end lists, quotes and tables: %j`, async (source, snippets) => {
     const { code } = await compile_page(source)
     for (const snippet of snippets) expect(code).toContain(snippet)
+  })
+
+  // empty blocks and blocks wrapping block-level markup at any depth stay out of <p>
+  test.each([
+    `{#if a}{/if}`,
+    `{#if a}<div>x</div>{/if}`,
+    `{#if a}<Comp />{/if}`,
+    `{#if a}{#each xs as x}<div/>{/each}{/if}`,
+    `{#if a}{#if b}<div>x</div>{/if}{/if}`,
+  ])(`%s stays block markup`, async (source) => {
+    const { code } = await compile_page(source)
+    expect(code).toContain(source)
+    expect(code).not.toContain(`<p>${source}`)
+  })
+
+  // a snippet nested in a <p> would be out of scope where it's rendered
+  test(`a one-line snippet fails to compile instead of nesting in a paragraph`, async () => {
+    await expect(
+      compile_page(`{#snippet greet(n)}Hello {n}{/snippet}\n\n{@render greet('x')}`),
+    ).rejects.toThrow(`Unexpected block closing tag`)
   })
 
   test(`frontmatter merges into a module script and remains available to the template`, async () => {
@@ -410,6 +454,9 @@ describe(`code and math`, () => {
       expect(resolve_id(context, `./data.json?${name}`, undefined, {})).toBeUndefined()
     }
     expect(new Set(module_ids).size).toBe(2)
+    const resolve = vi.fn(async () => null)
+    expect(await resolve_id({ resolve }, `./missing.md?toc`)).toBeUndefined()
+    expect(resolve).toHaveBeenCalledWith(`./missing.md`, undefined, { skipSelf: true })
     expect(() => resolve_id(context, `./page.md?toc&metadata`, undefined, {})).toThrow(
       `Import one of ?toc or ?metadata at a time: ./page.md?toc&metadata`,
     )
@@ -534,11 +581,14 @@ describe(`code and math`, () => {
           },
         },
       }
+      const unknown_id = `/missing.md.widgets-example-ab-cd-0.svelte`
       for (const [path, importer, resolved] of [
         [module_id, undefined, nested_id],
         [module_id, `/project/index.html`, nested_id],
         [module_id, `/project/importer.js`, module_id],
         [module_id.slice(`/project`.length), undefined, module_id],
+        // unknown IDs pass through so load() reports them as unregistered
+        [unknown_id, undefined, unknown_id],
       ]) {
         const suffix = `?inline&svelte&type=style&lang.css`
         expect(await resolve_id(context, `${path}${suffix}`, importer, {})).toBe(
@@ -639,8 +689,31 @@ describe(`incremental Markdown compilation`, () => {
   const fence = (code: string, meta = ``) =>
     `\`\`\`svelte example ${meta}\n${code}\n\`\`\``
 
+  // Vitest 5 names the hook defineCacheKeyGenerator, Vitest 4 its experimental_ form
+  test.each([`defineCacheKeyGenerator`, `experimental_defineCacheKeyGenerator`] as const)(
+    `keeps Markdown pages out of Vitest's module cache via %s`,
+    (hook_name) => {
+      let generator: ((module: { id: string }) => false | undefined) | undefined
+      markdown_vite({ examples: {} }).plugin.configureVitest({
+        [hook_name]: (callback: typeof generator) => (generator = callback),
+      })
+      for (const id of [`/a.md`, `/a.md?toc`]) expect(generator?.({ id })).toBe(false)
+      for (const id of [`/App.svelte`, `/a.ts`])
+        expect(generator?.({ id })).toBeUndefined()
+      // Vitest 3 has neither hook
+      expect(() =>
+        markdown_vite({ examples: {} }).plugin.configureVitest({}),
+      ).not.toThrow()
+    },
+  )
+
   test(`hot updates ignore unrelated and deleted inputs while retrying failed pages`, async () => {
     const docs = markdown_vite({ examples: {} })
+    // preprocess skips non-Markdown and unnamed inputs
+    for (const filename of [`/project/Component.svelte`, undefined]) {
+      const { code } = await preprocess(`# Not a heading`, docs.preprocess, { filename })
+      expect(code).toBe(`# Not a heading`)
+    }
     const [update, remove] = [
       hook(docs.plugin, `hotUpdate`),
       hook(docs.plugin, `watchChange`),
@@ -673,45 +746,137 @@ describe(`incremental Markdown compilation`, () => {
     expect(read).not.toHaveBeenCalled()
   })
 
+  test(`hot updates invalidate changed and removed examples and order styles after scripts`, async () => {
+    const docs = markdown_vite({ examples: {} })
+    const [load, update] = [hook(docs.plugin, `load`), hook(docs.plugin, `hotUpdate`)]
+    const filename = `/project/page.md`
+    const kept = fence(`<p>Kept</p>`, `id="kept"`)
+    const removed = fence(`<p>Removed</p>`, `id="removed"`)
+    const changed = (html: string) => fence(html, `id="changed"`)
+    const initial = [kept, changed(`<p>Before</p>`), removed].join(`\n\n`)
+    const { code } = await preprocess(initial, docs.preprocess, { filename })
+    const ids = [...new Set(code.match(/\/project\/page\.md\.widgets-[\w-]+\.svelte/gu))]
+    expect(ids).toHaveLength(3)
+    const style = `?svelte&type=style&lang.css`
+    // styles precede scripts in the graph so the returned order relies on sorting
+    const modules = [...ids.map((id) => `${id}${style}`), ...ids].map((id) => ({ id }))
+    const [, changed_css, removed_css, , changed_js, removed_js] = modules
+    const [page, page_style] = [{ id: filename }, { id: `${filename}${style}` }]
+    const anonymous = { id: null } // virtual modules without an id count as scripts
+    const environment = {
+      moduleGraph: {
+        idToModuleMap: new Map(modules.map((module) => [module.id, module])),
+        invalidateModule: vi.fn(),
+      },
+    }
+    for (const id of ids) await load({ environment }, id)
+    const context = { file: filename, type: `update`, timestamp: 7 }
+    // example modules Vite lists for the file are re-derived from the graph
+    const listed = [page_style, anonymous, changed_css, page]
+    const hot_update = (source: string) =>
+      update({ environment }, { ...context, modules: listed, read: () => source })
+    const edited = [kept, changed(`<p>After</p>`)].join(`\n\n`)
+    expect(await hot_update(edited)).toEqual([
+      anonymous,
+      page,
+      changed_js,
+      page_style,
+      changed_css,
+    ])
+    const invalidated = [changed_css, removed_css, changed_js, removed_js]
+    expect(environment.moduleGraph.invalidateModule.mock.calls).toEqual(
+      invalidated.map((module) => [module, new Set(), 7]),
+    )
+    expect(() => load({ environment }, removed_js.id)).toThrow(`not registered`)
+    // a restored example was dropped from the loaded record, so it updates again even
+    // though its source equals what this environment last loaded
+    expect(await hot_update(`${edited}\n\n${removed}`)).toEqual([
+      anonymous,
+      page,
+      changed_js,
+      removed_js,
+      page_style,
+      changed_css,
+      removed_css,
+    ])
+  })
+
   test.each([`C:/project/page.md`, `C:\\project\\page.md`])(
     `deleting %s removes registered modules and cached compilations`,
     async (filename) => {
       const docs = markdown_vite({ examples: {} })
-      const [load, remove] = [hook(docs.plugin, `load`), hook(docs.plugin, `watchChange`)]
+      const [load, on_change] = [
+        hook(docs.plugin, `load`),
+        hook(docs.plugin, `watchChange`),
+      ]
       const source = fence(`<p>Example</p>`, `id="example"`)
       const render = () => preprocess(source, docs.preprocess, { filename })
       const result = await render()
       const id = /"(?<id>C:\/[^"\n]+\.widgets-example-[^"\n]+)"/u.exec(result.code)?.[1]
       if (!id) throw new Error(`Missing example module`)
-      expect(await load({}, id)).toMatchObject({ code: `<p>Example</p>` })
-      await remove({}, filename, { event: `delete` })
+      // only delete events drop compiled examples
+      for (const event of [`create`, `update`, `delete`]) {
+        expect(await load({}, id)).toMatchObject({ code: `<p>Example</p>` })
+        await on_change({}, filename, { event })
+      }
       expect(() => load({}, id)).toThrow(`not registered`)
       await render()
       expect(await load({}, id)).toMatchObject({ code: `<p>Example</p>` })
     },
   )
 
-  test(`shares pending work beyond cache capacity and does not repopulate a closed cache`, async () => {
-    const first = Promise.withResolvers<string>()
-    const second = Promise.withResolvers<string>()
+  // a request started before closeBundle must neither repopulate the closed cache nor
+  // evict the newer pending request for the same fence when it settles
+  test.each([`fulfilled`, `rejected`] as const)(
+    `shares pending work beyond cache capacity when a pre-closeBundle highlight is %s`,
+    async (status) => {
+      const [closed, other, fresh] = [0, 1, 2].map(() => Promise.withResolvers<string>())
+      const highlight = vi.fn().mockResolvedValue(`uncached`)
+      for (const { promise } of [closed, other, fresh])
+        highlight.mockReturnValueOnce(promise)
+      const docs = markdown_vite({ highlight, highlight_cache_size: 1 })
+      const render = (code: string, filename: string) =>
+        preprocess(`\`\`\`txt\n${code}\n\`\`\``, docs.preprocess, { filename })
+      const same_before = render(`same`, `first.md`)
+      const other_before = render(`other`, `second.md`)
+      const same_shared = render(`same`, `third.md`)
+      await vi.waitFor(() => expect(highlight).toHaveBeenCalledTimes(2))
+      await hook(docs.plugin, `closeBundle`)({})
+      const same_after = render(`same`, `fourth.md`)
+      await vi.waitFor(() => expect(highlight).toHaveBeenCalledTimes(3))
+      if (status === `fulfilled`) closed.resolve(`closed`)
+      else closed.reject(new Error(`closed build failed`))
+      const settled = await Promise.allSettled([same_before, same_shared])
+      expect(settled.map((result) => result.status)).toEqual([status, status])
+      other.resolve(`other`)
+      await other_before
+      await render(`other`, `fifth.md`)
+      expect(highlight).toHaveBeenCalledTimes(4)
+      const same_later = render(`same`, `sixth.md`)
+      // let the new request reach the highlighter before the shared one settles
+      await new Promise((resolve) => void setTimeout(resolve, 0))
+      fresh.resolve(`fresh`)
+      for (const { code } of await Promise.all([same_after, same_later]))
+        expect(code).toContain(`fresh`)
+      expect(highlight).toHaveBeenCalledTimes(4)
+    },
+  )
+
+  test(`an obsolete compilation failing late keeps the newer cached result`, async () => {
+    const old_highlight = Promise.withResolvers<string>()
     const highlight = vi.fn((code: string) =>
-      code === `first` ? first.promise : second.promise,
+      code === `old` ? old_highlight.promise : `<b>${code}</b>`,
     )
-    const docs = markdown_vite({ highlight, highlight_cache_size: 1 })
-    const render = (code: string, filename: string) =>
-      preprocess(`\`\`\`txt\n${code}\n\`\`\``, docs.preprocess, { filename })
-    const requests = [
-      render(`first`, `first.md`),
-      render(`second`, `second.md`),
-      render(`first`, `third.md`),
-    ]
-    await vi.waitFor(() => expect(highlight).toHaveBeenCalledTimes(2))
-    await hook(docs.plugin, `closeBundle`)({})
-    first.resolve(`first`)
-    second.resolve(`second`)
-    await Promise.all(requests)
-    await render(`first`, `first.md`)
-    expect(highlight).toHaveBeenCalledTimes(3)
+    const docs = markdown_vite({ highlight, highlight_cache_size: 0 })
+    const render = (code: string) =>
+      preprocess(`\`\`\`txt\n${code}\n\`\`\``, docs.preprocess, { filename: `page.md` })
+    const stale = render(`old`)
+    await vi.waitFor(() => expect(highlight).toHaveBeenCalledOnce())
+    await expect(render(`new`)).resolves.toHaveProperty(`code`)
+    old_highlight.reject(new Error(`stale failure`))
+    await expect(stale).rejects.toThrow(`stale failure`)
+    await render(`new`)
+    expect(highlight.mock.calls.map(([code]) => code)).toEqual([`old`, `new`])
   })
 
   test(`example identities survive prose, preceding fences and explicit-id edits`, async () => {

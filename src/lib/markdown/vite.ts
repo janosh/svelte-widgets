@@ -41,6 +41,18 @@ export type MarkdownViteOptions = {
   on_manifest?: (manifest: ContentManifest) => void
 }
 
+// Structural copy of Vitest's plugin hook, so these declarations don't depend on vitest.
+// Vitest 4 names it experimental_defineCacheKeyGenerator; 3.x has neither.
+type CacheKeyGenerator = (
+  generator: (module: { id: string }) => false | undefined,
+) => void
+type VitestCacheHook = {
+  configureVitest: (context: {
+    defineCacheKeyGenerator?: CacheKeyGenerator
+    experimental_defineCacheKeyGenerator?: CacheKeyGenerator
+  }) => void
+}
+
 // Share this instance between the Svelte preprocessor and Vite plugin. Examples are
 // registered before Svelte resolves imports; no generated JavaScript needs rewriting.
 export function markdown_vite(
@@ -48,7 +60,7 @@ export function markdown_vite(
   settings: MarkdownViteOptions = {},
 ): {
   preprocess: PreprocessorGroup
-  plugin: Plugin
+  plugin: Plugin & VitestCacheHook
 } {
   const options = engine.options
   const { highlight } = options
@@ -137,6 +149,13 @@ export function markdown_vite(
     plugin: {
       name: `widgets-markdown-examples`,
       enforce: `pre`,
+      // Examples register while their page compiles, so a page served from Vitest's module
+      // cache would leave its example modules unregistered ("Markdown module not registered")
+      configureVitest(context) {
+        const define =
+          context.defineCacheKeyGenerator ?? context.experimental_defineCacheKeyGenerator
+        define?.(({ id }) => (is_markdown(id.split(`?`)[0]) ? false : undefined))
+      },
       resolveId(id, importer) {
         const [filename, query] = id.split(`?`)
         const params = new URLSearchParams(query)
@@ -217,6 +236,9 @@ export function markdown_vite(
         const affected = new Set(
           context.modules.filter((module) => !MODULE_ID.test(module.id ?? ``)),
         )
+        // Forget removed sources only after the loop so every module of a removed
+        // example (script and style, in any graph order) is invalidated.
+        const removed = new Set<string>()
         for (const [id, module] of graph.idToModuleMap) {
           if (query_ids.has(id)) {
             graph.invalidateModule(module, new Set(), context.timestamp)
@@ -230,13 +252,15 @@ export function markdown_vite(
           // filters identical JS before Vite timestamps the actual CSS/JS updates.
           graph.invalidateModule(module, new Set(), context.timestamp)
           if (modules.has(source_id)) affected.add(module)
-          else previous?.delete(source_id)
+          else removed.add(source_id)
         }
+        for (const source_id of removed) previous?.delete(source_id)
         // The Svelte hot-update hook must compile components before requesting their
         // derived CSS, whose loader reads the compiler cache. It filters unchanged JS.
         return [...affected].toSorted(
           (left, right) =>
-            Number(left.id?.includes(`?`)) - Number(right.id?.includes(`?`)),
+            Number(left.id?.includes(`?`) ?? false) -
+            Number(right.id?.includes(`?`) ?? false),
         )
       },
       watchChange(id, change) {

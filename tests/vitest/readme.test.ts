@@ -6,6 +6,7 @@ import { exports as pkg_exports } from '#root/package.json'
 import readme from '#root/readme.md?raw'
 import markdown_guide from '#lib/markdown/readme.md?raw'
 import { expect, test } from 'vite-plus/test'
+import { definition_line, sync_readme_links } from '#root/scripts/readme-links.ts'
 
 const pages: Record<string, string> = import.meta.glob(
   `../../src/routes/**/+page.{md,svelte}`,
@@ -138,19 +139,29 @@ const lib_sources: Record<string, string> = import.meta.glob(
     eager: true,
   },
 )
-test(`source line links land on the symbol they name`, () => {
-  const link_re =
-    /\[`(?<name>[\w$]+)[^\]]*\]\(https:\/\/github\.com\/janosh\/svelte-widgets\/blob\/main\/(?<file>src\/lib\/[^)#]+)#L(?<line>\d+)\)/gu
-  const stale = [readme, markdown_guide]
-    .flatMap((doc) => [...doc.matchAll(link_re)])
-    .flatMap(({ groups: { name = ``, file = ``, line = `` } = {} }) =>
-    // Whole identifiers only: `markdown` must not match a `render_markdown` line
-    {
-      // bracket index, not .at(): a #L0 link must not wrap to the file's last line
-      const source_line = lib_sources[`../../${file}`]?.split(`\n`)[Number(line) - 1]
-      return source_line?.split(/[^\w$]+/u).includes(name)
-        ? []
-        : [`${file}#L${line} (${name})`]
-    })
-  expect(stale).toEqual([])
+test(`source line links point at their symbol's definition`, () => {
+  for (const doc of [readme, markdown_guide]) {
+    const { stale } = sync_readme_links(doc, (file) => lib_sources[`../../${file}`])
+    expect(stale, `run node scripts/readme-links.ts`).toEqual([])
+  }
+})
+
+test.each([
+  [`export function create_markdown(`, `create_markdown`, 2],
+  [`export async function render_markdown(`, `render_markdown`, 2],
+  [`export const [set_backend, get_backend] =`, `set_backend`, 2],
+  [`export const [set_backend, get_backend] =`, `get_backend`, 2],
+  [`export type Diagnostic = {`, `Diagnostic`, 2],
+  // whole identifiers only, and uses or re-exports are not definitions
+  [`export const render_markdown_options = 1`, `render_markdown`, undefined],
+  [`const markdown = 1\nexport { markdown }`, `markdown`, undefined],
+])(`definition_line(%j, %s) = %s`, (declaration, name, expected) => {
+  expect(definition_line(`// header\n${declaration}`, name)).toBe(expected)
+})
+
+test(`readme links without an exported definition throw`, () => {
+  const doc = `[\`gone()\`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts#L1)`
+  expect(() => sync_readme_links(doc, () => `export const kept = 1`)).toThrow(
+    `src/lib/utils.ts#L1 (gone)`,
+  )
 })

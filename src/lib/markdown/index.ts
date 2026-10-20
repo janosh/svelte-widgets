@@ -399,6 +399,40 @@ async function prepare_document(
         return false
       }
     }
+    // A line like `{#if a}more{/if}` closes every block it opens, so it is paragraph
+    // content: block tags around it would split the paragraph into invalid markup. Blocks
+    // left open, empty or wrapping block-level markup at any depth stay block-level, as do
+    // snippets, which a <p> would scope. Escapes and code spans hold no tags, as inline.
+    const block_content = new RegExp(String.raw`^(?!\{#)(?:${block_line})`, `u`)
+    const read_inline = (text: string): string | undefined =>
+      text.startsWith(`\\`)
+        ? text.slice(0, 2)
+        : text.startsWith(`\``)
+          ? (Lexer.rules.inline.gfm.code.exec(text) ?? /^`+/u.exec(text))?.[0]
+          : (syntax.read_expression(text) ?? syntax.read_tag(text))
+    const inline_block_line = (text: string): boolean => {
+      const [line] = text.split(`\n`, 1)
+      if (!line.startsWith(`{#`) || line.startsWith(`{#snippet`)) return false
+      // Only a probe: unparsable markup stays block-level, where the Svelte tokenizers
+      // re-read it and report the error
+      try {
+        let depth = 0
+        for (let idx = 0; idx < line.length;) {
+          const raw = read_inline(line.slice(idx)) ?? line[idx]
+          if (idx === 0 && raw.length < 2) return false // unparsable opening tag
+          idx += raw.length
+          if (raw.startsWith(`{#`)) {
+            const content = text.slice(idx)
+            if (block_content.test(content) || Lexer.rules.block.gfm.html.test(content))
+              return false
+            depth++
+          } else if (/^\{\/\w+\s*\}$/u.test(raw) && --depth < 0) return false
+        }
+        return depth === 0
+      } catch {
+        return false
+      }
+    }
     const before_block_line = (text: string): string => {
       const bound = text.search(block_bound)
       const scope = bound === -1 ? text : text.slice(0, bound)
@@ -425,28 +459,34 @@ async function prepare_document(
     }
     const svelte_extension = (
       level: 'block' | 'inline',
-      start: RegExp,
-      guard?: RegExp,
+      start: TokenizerStartFunction,
+      accept?: (text: string) => boolean,
     ): TokenizerAndRendererExtension => ({
       name: `svelte_${level}`,
       level,
-      start: (text) => text.search(start),
+      start,
       tokenizer(text) {
         const raw =
-          guard && !guard.test(text)
+          accept && !accept(text)
             ? undefined
             : (syntax.read_expression(text) ?? syntax.read_tag(text))
         return raw ? { type: `svelte_${level}`, raw, text: retain(raw) } : undefined
       },
       renderer: (token) => String(token.text),
     })
+    const block_start = new RegExp(`^(?:${block_line})`, `u`)
+    const block_starts = new RegExp(String.raw`\n(?=${block_line})`, `gu`)
     extensions.push(
       svelte_extension(
         `block`,
-        new RegExp(String.raw`\n(?=${block_line})`, `u`),
-        new RegExp(`^(?:${block_line})`, `u`),
+        (text) => {
+          for (const { index } of text.matchAll(block_starts))
+            if (!inline_block_line(text.slice(index + 1))) return index
+          return undefined
+        },
+        (text) => block_start.test(text) && !inline_block_line(text),
       ),
-      svelte_extension(`inline`, /[<{]/u),
+      svelte_extension(`inline`, (text) => text.search(/[<{]/u)),
     )
   }
   if (render_math) {
@@ -505,7 +545,7 @@ async function prepare_document(
           id &&
           options.heading_links !== false &&
           !unlinked_headings.has(token) &&
-          !has_heading_anchor(restore_text(inner))
+          !has_heading_anchor(restore_text(inner), Boolean(syntax))
             ? heading_anchor_html(id, heading_icon)
             : ``
         return `<h${token.depth}${id ? ` id="${escape_attribute(id)}"` : ``}>${inner}${anchor}</h${token.depth}>\n`
@@ -519,7 +559,13 @@ async function prepare_document(
         if (!syntax) return Renderer.prototype.link.call(this, token)
         const origin = link_origin(token)
         const link = token.title ? { ...token, title: svelte_title(origin) } : token
-        return with_url(Renderer.prototype.link.call(this, link), origin, `href`)
+        if (!token.autolink)
+          return with_url(Renderer.prototype.link.call(this, link), origin, `href`)
+        // Marked prints autolink text verbatim, repeating the URL's braces after any
+        // `mailto:` or `http://` prefix; literal ones become entities as in prose.
+        const text = svelte_field(origin, { ...origin.url, value: token.text }, String)
+        const rendered = Renderer.prototype.link.call(this, { ...link, text })
+        return with_url(escape_braces(rendered), origin, `href`)
       },
       image(token) {
         // Math in alt text stays as authored TeX (like figure captions) instead of MathML.

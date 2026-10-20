@@ -261,7 +261,7 @@
     small {
       margin-top: 1em;
       display: block;
-      color: var(--text-muted);
+      color: var(--text-color-muted);
     }
     kbd {
       background: var(--surface);

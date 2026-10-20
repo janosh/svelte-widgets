@@ -13,6 +13,10 @@ import {
   slugify_heading,
   unique_heading_id,
 } from '../heading-anchors.ts'
+import {
+  mask_svelte_expressions,
+  opening_tag_end,
+} from '../internal/svelte-expressions.ts'
 
 import {
   source_locator,
@@ -248,19 +252,37 @@ export function content_manifest(
   }
   const html_attributes =
     /\s+(?<name>[^\s"'=<>`]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?/gu
+  // Comments and raw element contents are not Markdown or navigable document headings, so
+  // they're blanked. A raw element keeps its opening tag, which ends at the first `>`
+  // outside quotes and Svelte expressions.
+  const raw_start = /<!--|<(?<tag>script|style|textarea|title)\b/giu
+  const blank_raw_elements = (text: string): string => {
+    let [blanked, cursor] = [``, 0]
+    for (const { index, groups } of text.matchAll(raw_start)) {
+      if (index < cursor) continue
+      const tag = groups?.tag
+      const body_start = tag ? opening_tag_end(text, index, svelte) : index
+      if (body_start === -1) continue
+      const closing = tag ? new RegExp(String.raw`<\/${tag}\s*>`, `iu`) : /-->/u
+      const close = closing.exec(text.slice(body_start))
+      if (!close) continue
+      const end = body_start + close.index + close[0].length
+      blanked += text.slice(cursor, body_start) + ` `.repeat(end - body_start)
+      cursor = end
+    }
+    return blanked + text.slice(cursor)
+  }
   const interactive_containers: string[] = []
   const scan_html = (mapped: MappedText, token: Token) => {
-    // Raw element contents are not Markdown or navigable document headings.
-    const visible = mapped.text.replaceAll(
-      /<!--[^]*?-->|(?<opening><(?<excluded>script|style|textarea|title)\b[^>]*>)[^]*?<\/\k<excluded>\s*>/giu,
-      (match: string, opening: string | undefined) =>
-        (opening ?? ``) + ` `.repeat(match.length - (opening?.length ?? 0)),
-    )
-    const lower_visible = visible.toLowerCase()
-    const pre_ranges = [...visible.matchAll(/<pre\b[^>]*>[^]*?<\/pre\s*>/giu)].map(
+    const visible = blank_raw_elements(mapped.text)
+    // Same-length masks keep a `>` or quote in `onclick={() => go()}` from ending a tag,
+    // so attribute and heading offsets index `visible` unchanged
+    const markup = svelte ? mask_svelte_expressions(visible) : visible
+    const lower_markup = markup.toLowerCase()
+    const pre_ranges = [...markup.matchAll(/<pre\b[^>]*>[^]*?<\/pre\s*>/giu)].map(
       (match) => ({ start: match.index, end: match.index + match[0].length }),
     )
-    for (const match of visible.matchAll(
+    for (const match of markup.matchAll(
       /<(?<closing>\/?)(?<tag>[a-z][\w:-]*)\b(?:[^>"']|"[^"]*"|'[^']*')*>/giu,
     )) {
       const tag = match[2].toLowerCase()
@@ -301,7 +323,7 @@ export function content_manifest(
       }
       if (/^h[1-6]$/u.test(tag) && !(svelte && id?.includes(`{`)) && !in_pre) {
         const start = match.index + match[0].length
-        const end = lower_visible.indexOf(`</${tag}>`, start)
+        const end = lower_markup.indexOf(`</${tag}>`, start)
         if (end !== -1)
           headings.push({
             id,
@@ -315,7 +337,7 @@ export function content_manifest(
             link_insertion:
               heading_link &&
               links_enabled &&
-              !has_heading_anchor(visible.slice(start, end)) &&
+              !has_heading_anchor(visible.slice(start, end), svelte) &&
               interactive_containers.length === 0
                 ? end
                 : undefined,

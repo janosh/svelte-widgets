@@ -62,7 +62,6 @@ export const file_drop =
       event.preventDefault()
     }
     const on_dragleave = (event: DragEvent) => {
-      if (!drag_active) return
       drag_depth = Math.max(0, drag_depth - 1)
       if (drag_depth === 0) set_drag_active(false, event)
     }

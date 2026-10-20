@@ -1,22 +1,48 @@
 <script lang="ts">
-  import type { CodeHighlight, CodeHighlighter } from './code-block'
-  import { to_error } from './utils'
+  import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
+  import type { CodeHighlight, CodeHighlighter } from './code-block'
+  import CopyButton from './CopyButton.svelte'
+  import Icon from './Icon.svelte'
+  import type { IconData } from './icons'
+  import { merge_defaults, CODE_BLOCK_LABELS, type CodeBlockLabels } from './labels'
+  import { to_error } from './utils'
 
   let {
     code,
     language = ``,
-    label = `Code`,
+    title,
+    label,
     highlight,
     wrap = false,
+    icon,
+    line_count = false,
+    copy = false,
+    actions,
+    labels,
+    class: class_name,
+    style,
     ...rest
   }: {
     code: string
     language?: string
+    // file name or caption shown in a header above the code, e.g. `diagram.typ`
+    title?: string
     label?: string
     highlight?: CodeHighlighter
     wrap?: boolean
-  } & Omit<HTMLAttributes<HTMLPreElement>, `children`> = $props()
+    // header extras: an icon before and the line count after the title (both need a
+    // title), a copy button, and other controls (e.g. source links) before the copy button.
+    // `class` and `style` go to the outermost element, the header's figure when it shows.
+    icon?: IconData
+    line_count?: boolean
+    copy?: boolean
+    actions?: Snippet
+    labels?: Partial<CodeBlockLabels>
+  } & Omit<HTMLAttributes<HTMLPreElement>, `children` | `title`> = $props()
+
+  const msg = $derived(merge_defaults(CODE_BLOCK_LABELS, labels))
+  const title_id = $props.id()
 
   let result = $state<{ code: string; language: string; value: CodeHighlight }>()
   let error = $state(``)
@@ -24,6 +50,8 @@
     result?.code === code && result.language === language ? result.value : undefined,
   )
   const pending = $derived(Boolean(highlight) && output === undefined && !error)
+  // a trailing newline ends the last line rather than starting another
+  const lines = $derived(code ? code.split(`\n`).length - Number(code.endsWith(`\n`)) : 0)
   $effect(() => {
     // Snapshot the inputs: a late result must be recorded against what it highlighted
     const [source, lang, highlighter] = [code, language, highlight]
@@ -47,18 +75,46 @@
   })
 </script>
 
-<!-- svelte-ignore a11y_no_noninteractive_tabindex -- keyboard scrolling -->
-<pre
-  aria-label={label}
-  role="region"
-  tabindex="0"
-  {...rest}
-  aria-busy={pending}
-  class={[`code-block`, { wrap }, rest.class]}><code
-    >{#if typeof output === `string`}{@html output}{:else if output}{#each output as token}<span
-          class={token.css}>{token.text}</span
-        >{/each}{:else}{code}{/if}</code
-  ></pre>
+{#snippet block(root: boolean)}
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -- keyboard scrolling -->
+  <pre
+    aria-label={label ?? title ?? `Code`}
+    role="region"
+    tabindex="0"
+    {...rest}
+    aria-busy={pending}
+    class={[`code-block`, { wrap }, root && class_name]}
+    style={root ? style : undefined}><code
+      >{#if typeof output === `string`}{@html output}{:else if output}{#each output as token}<span
+            class={token.css}>{token.text}</span
+          >{/each}{:else}{code}{/if}</code
+    ></pre>
+{/snippet}
+
+{#if title || actions || copy}
+  <figure
+    class={[`code-block-file`, class_name]}
+    {style}
+    aria-labelledby={title ? title_id : undefined}
+  >
+    <figcaption>
+      {#if title}
+        <span class="title">
+          {#if icon}<Icon {icon} />{/if}
+          <span id={title_id}>{title}</span>
+          {#if line_count}<small>{msg.line_count(lines)}</small>{/if}
+        </span>
+      {/if}
+      <span class="actions">
+        {@render actions?.()}
+        {#if copy}<CopyButton content={code} aria-label={msg.copy} />{/if}
+      </span>
+    </figcaption>
+    {@render block(false)}
+  </figure>
+{:else}
+  {@render block(true)}
+{/if}
 {#if error}<p role="alert">{error}</p>{/if}
 
 <style>
@@ -80,5 +136,43 @@
   }
   code {
     font: inherit;
+  }
+  figure {
+    margin: 0;
+    min-inline-size: 0;
+    border-radius: var(--code-block-radius, 6px);
+    background: var(--code-block-bg, light-dark(#f6f8fa, #161b22));
+    pre {
+      background: none;
+    }
+  }
+  figcaption {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1ex;
+    padding: var(--code-block-header-padding, 0.5rem 0.5rem 0);
+    font-size: var(--code-block-font-size, 0.85rem);
+    .title {
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 0.35em;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+    small {
+      font-weight: 300;
+    }
+  }
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: 1ex;
+    margin-inline-start: auto;
+    > :global(a) {
+      display: inline-flex;
+      color: inherit;
+    }
   }
 </style>

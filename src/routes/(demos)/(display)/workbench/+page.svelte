@@ -10,11 +10,14 @@
     Braces,
     MessageText,
     Keyboard,
+    GitHub,
+    Typst,
   } from '#lib/icons.ts'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
     CodeBlock,
+    Icon,
     StatGrid,
     Spinner,
     StatusMessage,
@@ -159,6 +162,24 @@
   language="javascript"
   highlight={default_highlighter.highlight}
 />
+<p>
+  A <code>title</code> (with optional <code>icon</code> and <code>line_count</code>),
+  <code>copy</code> button or <code>actions</code> snippet adds a header for showing a source
+  file.
+</p>
+<CodeBlock
+  code={'#set page(width: auto, height: auto)\n$ E = m c^2 $'}
+  title="mass-energy.typ"
+  icon={Typst}
+  line_count
+  copy
+>
+  {#snippet actions()}
+    <a href="https://github.com/janosh/svelte-widgets" aria-label="View on GitHub"
+      ><Icon icon={GitHub} /></a
+    >
+  {/snippet}
+</CodeBlock>
 <p>
   <code>StatGrid</code> accepts items with label, value, optional unit, delta and hint. A
   custom <code>format</code> callback controls value formatting. Non-finite values and changes
