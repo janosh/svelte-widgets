@@ -137,6 +137,8 @@ nav {
   --nav-dropdown-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
   --nav-dropdown-z-index: 100;
   --nav-mobile-z-index: 2;
+  --nav-mobile-inset: 1rem; /* `1rem auto` hugs the content instead of spanning the viewport */
+  --text-color: light-dark(#222, #ccc); /* burger bars */
   --nav-disabled-opacity: 0.5;
   --nav-separator-color: currentColor;
   --nav-separator-margin: 0 0.25em;

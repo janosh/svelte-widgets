@@ -576,8 +576,8 @@
   .burger span {
     width: 100%;
     height: 0.18rem;
-    /* hosts that don't define --text still get visible bars */
-    background-color: var(--text, currentColor);
+    /* hosts that don't define --text-color still get visible bars */
+    background-color: var(--text-color, currentColor);
     border-radius: 8pt;
     transition:
       opacity 0.2s linear,
@@ -605,12 +605,9 @@
     top: calc(
       var(--nav-burger-inset) + var(--nav-burger-box) + var(--nav-mobile-menu-gap, 0.5rem)
     );
-    /* hug the content beside the burger rather than spanning the viewport: a full-width bar
-       of empty space reads as broken layout. Set --nav-mobile-inset to a single value like
-       `0.5rem` for the full-width bar. */
-    inset-inline: var(--nav-mobile-inset, var(--nav-burger-inset) auto);
-    width: max-content;
-    max-width: calc(100dvw - 2 * var(--nav-burger-inset));
+    /* span the viewport at the burger's inset so page text never shows beside the open menu;
+       --nav-mobile-inset: `1rem auto` hugs the content beside the burger instead */
+    inset-inline: var(--nav-mobile-inset, var(--nav-burger-inset));
     background-color: var(--nav-surface-bg);
     border: 1px solid var(--nav-surface-border);
     box-shadow: var(--nav-surface-shadow);

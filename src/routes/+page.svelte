@@ -146,13 +146,13 @@
     }
     .summary {
       max-width: 44rem;
-      color: var(--text-muted);
+      color: var(--text-color-muted);
       font-size: 1.1rem;
       margin: 0;
     }
   }
   .eyebrow {
-    color: var(--text-muted);
+    color: var(--text-color-muted);
     font-size: 0.8rem;
     margin: 0;
     span {
@@ -187,7 +187,7 @@
     font-size: 1.35rem;
   }
   .section-intro {
-    color: var(--text-muted);
+    color: var(--text-color-muted);
     margin: 0 0 1.25rem;
     font-size: 0.95rem;
   }
@@ -219,14 +219,14 @@
           }
         }
         > span[aria-hidden='true'] {
-          color: var(--text-muted);
+          color: var(--text-color-muted);
           font-size: 0.9em;
         }
       }
     }
     p {
       margin: 0.4rem 0 0.9rem;
-      color: var(--text-muted);
+      color: var(--text-color-muted);
       font-size: 0.9rem;
     }
     ul {
@@ -262,7 +262,7 @@
       border-bottom: 1px solid var(--border);
       font-size: 0.9rem;
       > span {
-        color: var(--text-muted);
+        color: var(--text-color-muted);
       }
     }
   }
@@ -277,7 +277,7 @@
     margin-top: 2.5rem;
     p {
       font-size: 0.85rem;
-      color: var(--text-muted);
+      color: var(--text-color-muted);
     }
   }
   @media (max-width: 600px) {

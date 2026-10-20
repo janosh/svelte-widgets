@@ -893,7 +893,7 @@
     border: var(--toc-mobile-btn-border, var(--toc-surface-border));
     border-radius: var(--toc-mobile-btn-border-radius, 3pt);
     background: var(--toc-mobile-btn-bg, var(--toc-mobile-bg, rgba(255, 255, 255, 0.2)));
-    color: var(--toc-mobile-btn-color, var(--text, black));
+    color: var(--toc-mobile-btn-color, var(--text-color, black));
     box-shadow: var(--toc-mobile-btn-shadow, var(--toc-surface-shadow));
   }
   /* sized to match Nav's burger, the only other pinned mobile toggle. Not `:where()`: a host

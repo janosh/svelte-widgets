@@ -52,7 +52,7 @@
   }
   .subtitle {
     text-align: center;
-    color: var(--text-muted);
+    color: var(--text-color-muted, light-dark(#666, #999));
     margin: 0 auto 1.8em;
   }
   .grid {
@@ -86,7 +86,7 @@
   }
   .card p {
     margin: 0;
-    color: var(--text-muted);
+    color: var(--text-color-muted, light-dark(#666, #999));
     font-size: 0.88em;
     line-height: 1.45;
   }
