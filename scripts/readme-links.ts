@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
-// [`name(args)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/file.ts#L42)
+// Matches [`name(args)`](<repo>/blob/main/src/lib/<file>#L<line>) with <repo> the GitHub URL
 const link_re =
   /(?<head>\[`(?<name>[\w$]+)[^\]]*\]\(https:\/\/github\.com\/janosh\/svelte-widgets\/blob\/main\/(?<file>src\/lib\/[^)#]+)#L)(?<line>\d+)\)/gu
 
