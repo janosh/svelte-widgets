@@ -20,7 +20,9 @@ test(`changelog uses consistent release sections and literal code`, async () => 
   expect(
     [...page_document.querySelectorAll(`h1`)].map((heading) => heading.textContent),
   ).toEqual([`Changelog`])
+  // an optional undated Unreleased section may lead the numbered releases
   const releases = [...page_document.querySelectorAll(`h2`)]
+  if (releases[0]?.textContent === `Unreleased`) releases.shift()
   expect(releases.length).toBeGreaterThan(50)
   const release_tag = `v${version}`
   expect(releases[0].textContent).toBe(release_tag)
