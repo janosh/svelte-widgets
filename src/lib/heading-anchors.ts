@@ -53,6 +53,10 @@ const NAMED_ENTITIES: Record<string, string> = {
   thinsp: `\u2009`,
 }
 
+// The HTML parser reads C1 control references &#x80;-&#x9F; as Windows-1252 characters,
+// except the five code points that encoding leaves undefined.
+const C1_REPLACEMENTS = `€\u0081‚ƒ„…†‡ˆ‰Š‹Œ\u008DŽ\u008F\u0090‘’“”•–—˜™š›œ\u009DžŸ`
+
 // Markdown escapes `&`, `<`, `{` and friends in text, so `Using {foo}` arrives as
 // `Using &#123;foo&#125;`; slugging the raw source would bake `123` into the id.
 export const decode_entities = (html: string): string =>
@@ -61,6 +65,8 @@ export const decode_entities = (html: string): string =>
     (entity, hex?: string, dec?: string, name?: string) => {
       if (name) return NAMED_ENTITIES[name.toLowerCase()] ?? entity
       const code_point = hex ? Number.parseInt(hex, 16) : Number(dec)
+      if (code_point >= 0x80 && code_point <= 0x9f)
+        return C1_REPLACEMENTS[code_point - 0x80]
       // NUL, surrogates and out-of-range code points become U+FFFD as in the HTML parser
       // (a lone surrogate would also make encodeURI throw)
       const invalid =
@@ -126,8 +132,9 @@ const link_svg = `<svg width="16" height="16" viewBox="0 0 16 16" aria-label="Li
 
 // `#id` link that resolves after decodeURI (SvelteKit's prerender crawler, unlike
 // encodeURIComponent's `#fig%3Aplot`) and in browsers. Braces become `%7B`/`%7D`, so the
-// href stays inert in Svelte markup.
-export const fragment_href = (id: string): string => `#${encodeURI(id)}`
+// href stays inert in Svelte markup. Lone surrogates, which encodeURI rejects, become
+// U+FFFD as when browsers serialize the URL.
+export const fragment_href = (id: string): string => `#${encodeURI(id.toWellFormed())}`
 
 // Shared HTML for Markdown output and explicit Svelte headings. The gap from the heading text
 // ships with the markup, so no host stylesheet is needed to keep the icon off the last letter;

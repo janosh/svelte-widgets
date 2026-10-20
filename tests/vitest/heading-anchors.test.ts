@@ -1,8 +1,10 @@
 import {
   decode_entities,
   fragment_href,
+  has_heading_anchor,
   heading_anchors,
   heading_anchor_html,
+  heading_text,
   slugify_heading,
   unique_heading_id,
 } from '#lib/heading-anchors.ts'
@@ -31,9 +33,14 @@ describe(`fragment_href`, () => {
     // what SvelteKit's prerender crawler compares the id against
     expect(decodeURI(expected.slice(1))).toBe(id)
   })
+
+  it(`replaces lone surrogates, which encodeURI rejects, like the URL serializer`, () => {
+    expect(fragment_href(`x\uD800y`)).toBe(new URL(`#x\uD800y`, `https://x.test`).hash)
+  })
 })
 
 describe(`decode_entities`, () => {
+  const c1_codes = Array.from({ length: 32 }, (_, idx) => 0x80 + idx)
   it.each([
     [`a&amp;b &lt;c&gt;`, `a&b <c>`],
     [`&#123;x&#x7D;`, `{x}`],
@@ -42,11 +49,52 @@ describe(`decode_entities`, () => {
     [`&#0;`, `\uFFFD`],
     [`&#xD800;`, `\uFFFD`],
     [`&#x110000;`, `\uFFFD`],
+    // C1 references take their Windows-1252 meaning; undefined ones decode to themselves
+    [
+      c1_codes.map((code) => `&#x${code.toString(16)};`).join(``),
+      new TextDecoder(`windows-1252`).decode(Uint8Array.from(c1_codes)),
+    ],
+    [`&#128;&#X9F;&#159;`, `€ŸŸ`],
   ])(`%s -> %s`, (html, expected) => {
     expect(decode_entities(html)).toBe(expected)
     const template = document.createElement(`template`)
     template.innerHTML = html
     expect(template.content.textContent).toBe(expected)
+  })
+})
+
+describe(`heading_text`, () => {
+  const tex = `<math><annotation encoding="application/x-tex">\\frac{a}{b} &amp; c</annotation></math>`
+  it.each([
+    // expressions drop out, including braces inside their JS strings
+    [`Hello {name} world`, true, `Hello  world`],
+    [`A {"}"} B {'{'} C {\`}\`} D {"\\"}"} E`, true, `A  B  C  D  E`],
+    [`Open {unclosed`, true, `Open`],
+    // tags drop out before decoding, so escaped tags stay text
+    [`<em>a</em> &lt;b&gt; &#123;c&#125;`, true, `a <b> {c}`],
+    [`{name} <b>x</b>`, false, `{name} x`],
+    // rendered math contributes its TeX source, other {@html} strings drop out
+    [`E {@html ${JSON.stringify(tex)}}`, true, `E \\fracab & c`],
+    [`x {@html "<b>y</b>"} y {@html "\\x"} z`, true, `x  y  z`],
+  ])(`heading_text(%j, %s) -> %j`, (inner, svelte, expected) => {
+    expect(heading_text(inner, svelte)).toBe(expected)
+  })
+})
+
+describe(`has_heading_anchor`, () => {
+  it.each([
+    [`<a aria-hidden="true" href="#x">`, true],
+    [`<A ARIA-HIDDEN='true'>`, true],
+    // a quoted `>` does not end the tag, and unquoted values count
+    [`<a title="a > b" aria-hidden=true>`, true],
+    [`x <a aria-hidden = "true">`, true],
+    [`<a aria-hidden="false">`, false],
+    [`<a aria-hidden>`, false],
+    [`<a data-x="aria-hidden=true">`, false],
+    [`<abbr aria-hidden="true">`, false],
+    [`<span aria-hidden="true">`, false],
+  ])(`has_heading_anchor(%j) -> %s`, (inner, expected) => {
+    expect(has_heading_anchor(inner)).toBe(expected)
   })
 })
 
@@ -228,6 +276,10 @@ describe(`heading_anchors attachment`, () => {
     // an explicit id is used verbatim, even when the heading text is only whitespace
     [`whitespace text with id`, `<h2 id="spaces">   </h2>`, undefined, `#spaces`],
     [`text-less heading without id`, `<h2></h2>`, undefined, null],
+    // headings inside interactive elements or opted out stay unlinked
+    [`inside a link`, `<a href="/x"><h2 id="in-link">X</h2></a>`, undefined, null],
+    [`inside a button`, `<button><h2>X</h2></button>`, undefined, null],
+    [`opted out`, `<h2 id="out" data-heading-anchor="false">X</h2>`, undefined, null],
     [`h6 with children`, `<h6 id="test">T <span>x</span></h6>`, undefined, `#test`],
     [
       `custom selector skipping other headings`,
