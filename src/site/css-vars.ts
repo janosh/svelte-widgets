@@ -41,9 +41,15 @@ const sorted_unique = (values: Iterable<string>) =>
 // closes an enclosing paren, or -1 when neither occurs
 function scan(text: string, start: number, stops: string): number {
   let depth = 0
+  let quote: string | undefined
   for (let idx = start; idx < text.length; idx++) {
     const char = text[idx]
-    if (char === `(`) depth++
+    // CSS strings may hold `;` `,` `)`, unless `"` itself ends the value (inline style attrs)
+    if (quote) {
+      if (char === `\\`) idx++
+      else if (char === quote) quote = undefined
+    } else if ((char === `"` || char === `'`) && !stops.includes(`"`)) quote = char
+    else if (char === `(`) depth++
     else if (char === `)` && --depth < 0) return idx
     else if (depth === 0 && stops.includes(char)) return idx
   }
