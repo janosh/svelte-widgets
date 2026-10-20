@@ -7,6 +7,7 @@
 // group sets them at runtime or derives them from other variables. Variables read without
 // a note by at least `shared_min_groups` groups are shared tokens.
 import { posix } from 'node:path'
+import { type AST, parseCss } from 'svelte/compiler'
 
 type CssVarRead = {
   name: string
@@ -26,14 +27,12 @@ export const shared_min_groups = 3
 
 const lib_prefix_re = /^.*?src\/lib\//u
 // a single compound selector: no combinator, selector list or attribute qualifier
-const root_selector_re = /^[^\s,>+~[@]+$/u
+const root_selector_re = /^[^\s,>+~[]+$/u
 const collapse = (text: string) =>
   text
     .replaceAll(/\s+/gu, ` `)
     .replaceAll(/\( | \)/gu, (match) => match.trim())
     .trim()
-// Blank comments out with spaces so later offsets and boundaries stay intact
-const blank = (match: string) => match.replaceAll(/[^\n]/gu, ` `)
 const sorted_unique = (values: Iterable<string>) =>
   [...new Set(values)].toSorted((left, right) => left.localeCompare(right))
 
@@ -56,10 +55,10 @@ function scan(text: string, start: number, stops: string): number {
   return -1
 }
 
-// The property whose value contains offset `idx`: the `prop:` after the nearest
-// declaration boundary, else the markup attribute the value sits in on the same line.
-// Single-quoted strings and `"` inside values (e.g. `url("…") var(--x)`) aren't treated
-// as boundaries correctly; the library has neither.
+// The property whose value contains offset `idx` in markup or script: the `prop:` after
+// the nearest declaration boundary, else the markup attribute the value sits in on the
+// same line. Single-quoted strings and `"` inside values (e.g. `url("…") var(--x)`) aren't
+// treated as boundaries correctly; the library has neither outside stylesheets.
 function property_at(text: string, idx: number): string | null {
   const before = text.slice(0, idx)
   const boundary = Math.max(
@@ -74,7 +73,9 @@ function property_at(text: string, idx: number): string | null {
   return /[\w-]+(?==["{][^=]*$)/u.exec(line)?.[0] ?? null
 }
 
-function find_reads(text: string): CssVarRead[] {
+// `var()` reads in `text`, feeding `property` when known (stylesheet declarations), else
+// the property found around each read
+function find_reads(text: string, property?: string): CssVarRead[] {
   const reads: CssVarRead[] = []
   for (const { index } of text.matchAll(/\bvar\(/gu)) {
     const name_end = scan(text, index + 4, `,`)
@@ -84,36 +85,45 @@ function find_reads(text: string): CssVarRead[] {
     if (close_idx < 0 || !/^--[\w-]+$/u.test(name)) continue
     const fallback =
       name_end === close_idx ? null : collapse(text.slice(name_end + 1, close_idx))
-    reads.push({ name, fallback, property: property_at(text, index) })
+    reads.push({ name, fallback, property: property ?? property_at(text, index) })
   }
   return reads
 }
 
-// `--x: value` declarations; the value runs to the next top-level `;`, `}` or closing
-// quote, and for runtime (inline) styles also to the end of the line
-function find_declarations(text: string, source: `stylesheet` | `runtime`): CssVarSet[] {
-  const sets: CssVarSet[] = []
-  // preludes of the blocks enclosing `cursor` (only meaningful in stylesheets)
-  const scopes: string[] = []
-  let [cursor, prelude_start] = [0, 0]
-  for (const match of text.matchAll(/(?<![\w-])--[\w-]+(?=\s*:(?!:))/gu)) {
-    for (; cursor < match.index; cursor++) {
-      const char = text[cursor]
-      if (char === `{`) scopes.push(text.slice(prelude_start, cursor).trim())
-      else if (char === `}`) scopes.pop()
-      if (`{};`.includes(char)) prelude_start = cursor + 1
+// Reads and declarations in a stylesheet, parsed by Svelte's CSS parser so strings,
+// comments and nesting need no handling here. Declarations are defaults (`stylesheet`) on
+// root rules: top level, one compound selector. All others are `scoped`.
+function extract_stylesheet(css: string): FileCssVars {
+  const result: FileCssVars = { reads: [], sets: [] }
+  const walk = (block: AST.CSS.Block | null, kind: CssVarSet[`kind`]): void => {
+    for (const node of block?.children ?? []) {
+      if (node.type !== `Declaration`) walk(node.block, `scoped`)
+      else {
+        const { property, value } = node
+        result.reads.push(...find_reads(value, property))
+        if (property.startsWith(`--`))
+          result.sets.push({ name: property, value: collapse(value), kind })
+      }
     }
-    const is_root = scopes.length === 1 && root_selector_re.test(scopes[0])
-    const start = text.indexOf(`:`, match.index) + 1
-    const end = scan(text, start, source === `runtime` ? `;}"\`\n` : `;}`)
-    sets.push({
-      name: match[0],
-      value: collapse(text.slice(start, end < 0 ? text.length : end)),
-      kind: source === `stylesheet` && !is_root ? `scoped` : source,
-    })
   }
-  return sets
+  for (const node of parseCss(css).children) {
+    const is_root =
+      node.type === `Rule` &&
+      root_selector_re.test(css.slice(node.prelude.start, node.prelude.end))
+    walk(node.block, is_root ? `stylesheet` : `scoped`)
+  }
+  return result
 }
+
+// Inline `--x: value` declarations in markup `style` attributes and script strings; the
+// value runs to the next top-level `;`, `}`, quote or end of line
+const find_runtime_declarations = (text: string): CssVarSet[] =>
+  [...text.matchAll(/(?<![\w-])--[\w-]+(?=\s*:(?!:))/gu)].map((match) => {
+    const start = text.indexOf(`:`, match.index) + 1
+    const end = scan(text, start, `;}"\`\n`)
+    const value = collapse(text.slice(start, end < 0 ? text.length : end))
+    return { name: match[0], value, kind: `runtime` }
+  })
 
 const names = (text: string, re: RegExp) => [...text.matchAll(re)].map(([name]) => name)
 const runtime_set = (name: string): CssVarSet => ({ name, value: ``, kind: `runtime` })
@@ -121,16 +131,13 @@ const runtime_set = (name: string): CssVarSet => ({ name, value: ``, kind: `runt
 // Reads and sets in one `.svelte`, `.css` or `.ts` source. Svelte `<style>` blocks
 // extract like `.css` files, the rest (markup and script) like `.ts` files.
 export function extract_css_vars(source: string, filename: string): FileCssVars {
-  if (filename.endsWith(`.css`)) {
-    const css = source.replaceAll(/\/\*[\s\S]*?\*\//gu, blank)
-    return { reads: find_reads(css), sets: find_declarations(css, `stylesheet`) }
-  }
+  if (filename.endsWith(`.css`)) return extract_stylesheet(source)
   const styles: FileCssVars[] = []
   const code = filename.endsWith(`.svelte`)
     ? source
-        .replaceAll(/<!--[\s\S]*?-->/gu, blank)
+        .replaceAll(/<!--[\s\S]*?-->/gu, `\n`)
         .replaceAll(/<style[^>]*>(?<css>[\s\S]*?)<\/style>/gu, (_match, css: string) => {
-          styles.push(extract_css_vars(css, `.css`))
+          styles.push(extract_stylesheet(css))
           return ``
         })
     : source
@@ -143,7 +150,7 @@ export function extract_css_vars(source: string, filename: string): FileCssVars 
     ],
     sets: [
       ...styles.flatMap(({ sets }) => sets),
-      ...find_declarations(code, `runtime`),
+      ...find_runtime_declarations(code),
       // `setProperty(`--x`, ...)` in script, `style:--x={...}` on elements and
       // `--x="..."` passed to child components
       ...names(code, /(?<=setProperty\(\s*[`'"])--[\w-]+(?=[`'"])/gu).map(runtime_set),

@@ -7,11 +7,12 @@ const runtime = `set by component at runtime`
 // reads as [name, fallback, property], sets as [name, value, kind]
 test.each<[string, string, string, (string | null)[][], string[][]]>([
   [
-    `CSS: nested, multi-line and empty fallbacks, custom property targets, comments`,
+    `CSS: nested, multi-line and empty fallbacks, custom property targets, comments, strings`,
     `a.css`,
-    `/* var(--gone) */ a {
+    `/* var(--gone) */ a::before { content: "/*"; }
+    a {
       border-radius: var(--btn-radius, var(--border-radius, 3pt));
-      background: var(--bg,
+      background: url("a;b.svg") var(--bg,
         light-dark(#fff, rgb(0 0 0 / 0.5)));
       gap: var(--gap,); color: var(--fg);
       --box: calc(
@@ -36,9 +37,10 @@ test.each<[string, string, string, (string | null)[][], string[][]]>([
         0 2px black,
         0 4px red; /* --gone: \`1rem auto\` */ }
       @media (forced-colors: active) { .root { --b: Canvas; } }
+      @container style(--theme: dark) { .root { --g: 1px; } }
       .root { &.error { --c: red; } }
       .wrap .root { --d: 18px; }
-      :root[data-theme='dark'], :root { --e: #000; }
+      :root[data-icon='{'], :root { --e: #000; }
       :global(dialog.sheet) { --f: 2px; --font: "Inter", sans-serif; --sep: "a; b", ';'; }
     </style>`,
     [],
@@ -46,6 +48,7 @@ test.each<[string, string, string, (string | null)[][], string[][]]>([
       [`--a`, `1px`, `stylesheet`],
       [`--shadow`, `0 2px black, 0 4px red`, `stylesheet`],
       [`--b`, `Canvas`, `scoped`],
+      [`--g`, `1px`, `scoped`],
       [`--c`, `red`, `scoped`],
       [`--d`, `18px`, `scoped`],
       [`--e`, `#000`, `scoped`],
