@@ -133,6 +133,25 @@ describe(`Markdown content manifests`, () => {
     expect(result.code).toContain(`id="hello-world-1"`)
   })
 
+  test(`a > inside a Svelte expression ends no tag`, async () => {
+    const { code, manifest } = await compile_markdown(
+      `<h2 onclick={() => go()}>Title</h2>\n\n<Button onclick={() => go()} />\n\n## Later <a onclick={() => go()} aria-hidden="true" href="#later">#</a>\n\n## Last\n\n<img onload={() => go()} src="./pic.png">\n\n<textarea placeholder={a > b} id="notes"></textarea>`,
+    )
+    expect(manifest.headings.map(({ id, text }) => [id, text])).toEqual([
+      [`title`, `Title`],
+      [`later`, `Later #`],
+      [`last`, `Last`],
+    ])
+    expect(code).toContain(
+      `<h2 onclick={() => go()} id="title">Title<a data-heading-anchor`,
+    )
+    expect(code).toContain(`href="#later">#</a></h2>`)
+    // a self-closing <Button /> is no open interactive container
+    expect(code).toContain(`<h2 id="last">Last<a data-heading-anchor`)
+    expect(manifest.assets.map(({ url }) => url)).toEqual([`./pic.png`])
+    expect(manifest.anchors.map(({ id }) => id)).toContain(`notes`)
+  })
+
   test.each([`markdown`, `svelte`] as const)(
     `link and image text resolves escapes and emphasis in the %s dialect`,
     async (dialect) => {
@@ -155,6 +174,11 @@ describe(`Markdown content manifests`, () => {
     ])
     expect(assert_ok(await render_markdown(document))).toContain(
       `<h2 id="set-x">Set {x}<a data-heading-anchor`,
+    )
+    // braces in plain HTML attributes cannot hide an authored anchor
+    const authored = `## A <a data-x="{" aria-hidden="true" data-y="}">#</a>`
+    expect(assert_ok(await create_markdown().render(authored))).not.toContain(
+      `data-heading-anchor`,
     )
     expect(manifest.links).toHaveLength(3)
     expect(manifest.links[2].text).toBe(`Broken {link}`)
@@ -188,7 +212,7 @@ describe(`Markdown content manifests`, () => {
     `reserves the %s element's own ID while ignoring its raw contents`,
     async (tag) => {
       const result = await compile_markdown(
-        `# Title\n\n<${tag} id="title">${tag === `script` || tag === `style` ? `` : `<h2 id="fake">Fake</h2>`}</${tag}>`,
+        `# Title\n\n<${tag} data-x="a > b" id="title">${tag === `script` || tag === `style` ? `` : `<h2 id="fake">Fake</h2>`}</${tag}>`,
       )
       expect(result.manifest.headings.map(({ id }) => id)).toEqual([`title-1`])
       expect(result.manifest.anchors.map(({ id }) => id)).toEqual([`title`, `title-1`])

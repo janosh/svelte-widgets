@@ -1,9 +1,13 @@
 // Shared heading text, Markdown IDs, and opt-in dynamic DOM enhancement.
+import {
+  mask_svelte_expressions,
+  strip_svelte_expressions,
+} from './internal/svelte-expressions.ts'
 
-// Quoted attributes may contain `>`; only an unquoted one ends the opening tag.
+// Comments, then tags. Quoted attributes may contain `>`; only an unquoted one ends a tag.
 const heading_attrs = String.raw`(?:[^>"']|"[^"]*"|'[^']*')*`
-const opening_tag_regex = new RegExp(
-  String.raw`<[A-Za-z][^\s/>]*(?<attrs>${heading_attrs})>`,
+const markup_regex = new RegExp(
+  String.raw`<!--[^]*?-->|<\/?[A-Za-z][^\s/>]*(?<attrs>${heading_attrs})>`,
   `gu`,
 )
 const heading_attr_regex =
@@ -11,35 +15,6 @@ const heading_attr_regex =
 const html_string_expression_regex = /\{@html\s+(?<json>"(?:\\.|[^"\\])*")\s*\}/gu
 const tex_annotation_regex =
   /<annotation\b[^>]*encoding="application\/x-tex"[^>]*>(?<tex>[\s\S]*?)<\/annotation>/iu
-function find_svelte_expression_end(str: string, start: number): number {
-  let depth = 0
-  let quote: string | null = null
-  let escaped = false
-  for (let idx = start; idx < str.length; idx++) {
-    const char = str[idx]
-    if (quote) {
-      if (escaped) escaped = false
-      else if (char === `\\`) escaped = true
-      else if (char === quote) quote = null
-    } else if (char === `"` || char === `'` || char === `\``) quote = char
-    else if (char === `{`) depth++
-    else if (char === `}` && --depth === 0) return idx
-  }
-  return -1
-}
-
-// Remove expressions while respecting their JS strings.
-function strip_svelte_expressions(str: string): string {
-  let result = ``
-  let cursor = 0
-  for (let start = str.indexOf(`{`); start !== -1; start = str.indexOf(`{`, cursor)) {
-    result += str.slice(cursor, start)
-    const expression_end = find_svelte_expression_end(str, start)
-    if (expression_end === -1) return result
-    cursor = expression_end + 1
-  }
-  return result + str.slice(cursor)
-}
 
 const NAMED_ENTITIES: Record<string, string> = {
   amp: `&`,
@@ -87,14 +62,16 @@ const extract_math_sources = (inner: string): string =>
     }
     if (typeof html !== `string`) return expression
     const tex = tex_annotation_regex.exec(html)?.groups?.tex
-    return tex ? decode_entities(tex).replaceAll(/[{}]/gu, ``) : expression
+    // still entity-encoded, so a decoded `<` cannot open a tag before heading_text decodes
+    return tex ? tex.replaceAll(/[{}]/gu, ``) : expression
   })
 
 // Shared by heading IDs and the Markdown content manifest. Decode last so escaped tags
 // remain text, while rendered markup and dynamic expressions do not enter the slug.
+// Expressions go first: a `<` or `>` in their code must not open or end a tag.
 export const heading_text = (inner: string, svelte = true): string => {
-  const text = (svelte ? extract_math_sources(inner) : inner).replaceAll(/<[^>]+>/gu, ``)
-  return decode_entities(svelte ? strip_svelte_expressions(text) : text).trim()
+  const markup = svelte ? strip_svelte_expressions(extract_math_sources(inner)) : inner
+  return decode_entities(markup.replaceAll(markup_regex, ``)).trim()
 }
 
 // keeps Unicode letters and marks, normalizes to NFC, and separates on punctuation runs so
@@ -145,8 +122,9 @@ export const heading_anchor_html = (id?: string, icon_markup = link_svg): string
   return `<a data-heading-anchor aria-hidden="true" style="padding-inline-start: var(--heading-anchor-gap, 0.3em)"${href}>${icon_markup}</a>`
 }
 
-export const has_heading_anchor = (inner: string): boolean =>
-  [...inner.matchAll(opening_tag_regex)].some(
+// `svelte` masks expressions, so `onclick={() => go()}` cannot end the tag at its `=>`
+export const has_heading_anchor = (inner: string, svelte = true): boolean =>
+  [...(svelte ? mask_svelte_expressions(inner) : inner).matchAll(markup_regex)].some(
     (match) =>
       /^<a[\s>]/iu.test(match[0]) &&
       [...(match.groups?.attrs ?? ``).matchAll(heading_attr_regex)].some(

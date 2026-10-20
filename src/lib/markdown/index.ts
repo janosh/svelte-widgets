@@ -545,7 +545,7 @@ async function prepare_document(
           id &&
           options.heading_links !== false &&
           !unlinked_headings.has(token) &&
-          !has_heading_anchor(restore_text(inner))
+          !has_heading_anchor(restore_text(inner), Boolean(syntax))
             ? heading_anchor_html(id, heading_icon)
             : ``
         return `<h${token.depth}${id ? ` id="${escape_attribute(id)}"` : ``}>${inner}${anchor}</h${token.depth}>\n`

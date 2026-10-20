@@ -73,8 +73,18 @@ describe(`heading_text`, () => {
     // tags drop out before decoding, so escaped tags stay text
     [`<em>a</em> &lt;b&gt; &#123;c&#125;`, true, `a <b> {c}`],
     [`{name} <b>x</b>`, false, `{name} x`],
+    // a `>` in quotes, comments or expressions ends no tag, and a `<` in code opens none
+    [`a <span title="b>c">d</span>`, false, `a d`],
+    [`a <!-- b > c --> d`, false, `a  d`],
+    [`a <span class={b > c ? 'x' : 'y'}>d</span>`, true, `a d`],
+    [`a {b<c} <em>d</em>`, true, `a  d`],
     // rendered math contributes its TeX source, other {@html} strings drop out
     [`E {@html ${JSON.stringify(tex)}}`, true, `E \\fracab & c`],
+    [
+      `{@html ${JSON.stringify(tex.replace(`&amp;`, `&lt;`))}} <em>d</em>`,
+      true,
+      `\\fracab < c d`,
+    ],
     [`x {@html "<b>y</b>"} y {@html "\\x"} z`, true, `x  y  z`],
   ])(`heading_text(%j, %s) -> %j`, (inner, svelte, expected) => {
     expect(heading_text(inner, svelte)).toBe(expected)
@@ -93,8 +103,13 @@ describe(`has_heading_anchor`, () => {
     [`<a data-x="aria-hidden=true">`, false],
     [`<abbr aria-hidden="true">`, false],
     [`<span aria-hidden="true">`, false],
-  ])(`has_heading_anchor(%j) -> %s`, (inner, expected) => {
-    expect(has_heading_anchor(inner)).toBe(expected)
+    [`<!-- <a aria-hidden="true"> -->`, false],
+    // Svelte expressions cannot end the tag; plain HTML braces are literal
+    [`<a onclick={() => go()} aria-hidden="true">`, true],
+    [`<a data-x="{" aria-hidden="true" data-y="}">`, false],
+    [`<a data-x="{" aria-hidden="true" data-y="}">`, true, false],
+  ])(`has_heading_anchor(%j) -> %s`, (inner, expected, svelte = true) => {
+    expect(has_heading_anchor(inner, svelte)).toBe(expected)
   })
 })
 
