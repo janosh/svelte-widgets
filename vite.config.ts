@@ -100,7 +100,7 @@ export default {
       // `alle` is German for "all", used by the label-override tests
       '*': `codespell --ignore-words-list afterall,falsy,fo,alle --check-filenames`,
       // keep readme #L source links on their symbols as library lines shift
-      'src/lib/**/*.{ts,svelte}': `sh -c 'node scripts/readme-links.ts && git add readme.md src/lib/markdown/readme.md'`,
+      'src/lib/**/*.{ts,svelte}': `sh -c 'git diff --quiet -- readme.md src/lib/markdown/readme.md || { echo "readme-links: stage your readme edits first" >&2; exit 1; }; node scripts/readme-links.ts && git add readme.md src/lib/markdown/readme.md'`,
     },
   }),
 

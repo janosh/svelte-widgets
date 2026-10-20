@@ -41,12 +41,15 @@ export type MarkdownViteOptions = {
   on_manifest?: (manifest: ContentManifest) => void
 }
 
-// Structural copy of Vitest's plugin hook, so these declarations don't depend on vitest
+// Structural copy of Vitest's plugin hook, so these declarations don't depend on vitest.
+// Vitest 4 names it experimental_defineCacheKeyGenerator; 3.x has neither.
+type CacheKeyGenerator = (
+  generator: (module: { id: string }) => false | undefined,
+) => void
 type VitestCacheHook = {
   configureVitest: (context: {
-    defineCacheKeyGenerator: (
-      generator: (module: { id: string }) => false | undefined,
-    ) => void
+    defineCacheKeyGenerator?: CacheKeyGenerator
+    experimental_defineCacheKeyGenerator?: CacheKeyGenerator
   }) => void
 }
 
@@ -148,10 +151,10 @@ export function markdown_vite(
       enforce: `pre`,
       // Examples register while their page compiles, so a page served from Vitest's module
       // cache would leave its example modules unregistered ("Markdown module not registered")
-      configureVitest({ defineCacheKeyGenerator }) {
-        defineCacheKeyGenerator(({ id }) =>
-          is_markdown(id.split(`?`)[0]) ? false : undefined,
-        )
+      configureVitest(context) {
+        const define =
+          context.defineCacheKeyGenerator ?? context.experimental_defineCacheKeyGenerator
+        define?.(({ id }) => (is_markdown(id.split(`?`)[0]) ? false : undefined))
       },
       resolveId(id, importer) {
         const [filename, query] = id.split(`?`)

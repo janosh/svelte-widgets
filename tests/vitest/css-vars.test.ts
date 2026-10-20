@@ -39,7 +39,7 @@ test.each<[string, string, string, (string | null)[][], string[][]]>([
       .root { &.error { --c: red; } }
       .wrap .root { --d: 18px; }
       :root[data-theme='dark'], :root { --e: #000; }
-      :global(dialog.sheet) { --f: 2px; }
+      :global(dialog.sheet) { --f: 2px; --font: "Inter", sans-serif; }
     </style>`,
     [],
     [
@@ -50,6 +50,7 @@ test.each<[string, string, string, (string | null)[][], string[][]]>([
       [`--d`, `18px`, `scoped`],
       [`--e`, `#000`, `scoped`],
       [`--f`, `2px`, `stylesheet`],
+      [`--font`, `"Inter", sans-serif`, `stylesheet`],
     ],
   ],
   [

@@ -689,14 +689,23 @@ describe(`incremental Markdown compilation`, () => {
   const fence = (code: string, meta = ``) =>
     `\`\`\`svelte example ${meta}\n${code}\n\`\`\``
 
-  test(`keeps Markdown pages out of Vitest's module cache so examples re-register`, () => {
-    let generator: ((module: { id: string }) => false | undefined) | undefined
-    markdown_vite({ examples: {} }).plugin.configureVitest({
-      defineCacheKeyGenerator: (callback) => (generator = callback),
-    })
-    for (const id of [`/a.md`, `/a.md?toc`]) expect(generator?.({ id })).toBe(false)
-    for (const id of [`/App.svelte`, `/a.ts`]) expect(generator?.({ id })).toBeUndefined()
-  })
+  // Vitest 5 names the hook defineCacheKeyGenerator, Vitest 4 its experimental_ form
+  test.each([`defineCacheKeyGenerator`, `experimental_defineCacheKeyGenerator`] as const)(
+    `keeps Markdown pages out of Vitest's module cache via %s`,
+    (hook_name) => {
+      let generator: ((module: { id: string }) => false | undefined) | undefined
+      markdown_vite({ examples: {} }).plugin.configureVitest({
+        [hook_name]: (callback: typeof generator) => (generator = callback),
+      })
+      for (const id of [`/a.md`, `/a.md?toc`]) expect(generator?.({ id })).toBe(false)
+      for (const id of [`/App.svelte`, `/a.ts`])
+        expect(generator?.({ id })).toBeUndefined()
+      // Vitest 3 has neither hook
+      expect(() =>
+        markdown_vite({ examples: {} }).plugin.configureVitest({}),
+      ).not.toThrow()
+    },
+  )
 
   test(`hot updates ignore unrelated and deleted inputs while retrying failed pages`, async () => {
     const docs = markdown_vite({ examples: {} })

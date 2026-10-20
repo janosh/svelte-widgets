@@ -99,7 +99,7 @@ function find_declarations(text: string, source: `stylesheet` | `runtime`): CssV
     }
     const is_root = scopes.length === 1 && root_selector_re.test(scopes[0])
     const start = text.indexOf(`:`, match.index) + 1
-    const end = scan(text, start, source === `runtime` ? `;}"\`\n` : `;}"\``)
+    const end = scan(text, start, source === `runtime` ? `;}"\`\n` : `;}`)
     sets.push({
       name: match[0],
       value: collapse(text.slice(start, end < 0 ? text.length : end)),
