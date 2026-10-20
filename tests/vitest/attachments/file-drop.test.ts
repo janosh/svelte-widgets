@@ -15,6 +15,13 @@ describe(`file_drop`, () => {
   const files_of = (...names: string[]) => data_transfer(names.map((name) => file(name)))
   const drop = (node: HTMLElement, transfer: DataTransfer) =>
     node.dispatchEvent(drag_event(`drop`, transfer))
+  // dispatches a full drag gesture and returns which events were default-prevented
+  const drag_through = (node: HTMLElement, transfer: DataTransfer) =>
+    [`dragenter`, `dragover`, `dragleave`, `drop`].map((type) => {
+      const event = drag_event(type, transfer)
+      node.dispatchEvent(event)
+      return event.defaultPrevented
+    })
   const pending_until_aborted = (signal: AbortSignal) =>
     new Promise<void>((_resolve, reject) => {
       signal.addEventListener(
@@ -144,6 +151,27 @@ describe(`file_drop`, () => {
     expect(on_error).not.toHaveBeenCalled()
   })
 
+  it(`a superseded callback settling late does not detach the newer drop's signal`, async () => {
+    const first_result = Promise.withResolvers<undefined>()
+    const on_files = vi.fn((_files: File[], signal: AbortSignal) =>
+      on_files.mock.calls.length === 1
+        ? first_result.promise
+        : pending_until_aborted(signal),
+    )
+    const { node } = attach_file_drop({ on_files, on_error: vi.fn() })
+
+    drop(node, files_of(`first.txt`))
+    await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
+    drop(node, files_of(`second.txt`))
+    await vi.waitFor(() => expect(on_files).toHaveBeenCalledTimes(2))
+    // the first handler ignores its abort signal and resolves after being superseded
+    first_result.resolve(undefined)
+    await next_task()
+    drop(node, files_of(`third.txt`))
+    await vi.waitFor(() => expect(on_files).toHaveBeenCalledTimes(3))
+    expect(aborted_calls(on_files)).toEqual([true, true, false])
+  })
+
   it(`stops delivery when aborting the previous callback destroys the attachment`, async () => {
     let cleanup: (() => void) | undefined
     const on_files = vi.fn((_files: File[], signal: AbortSignal) => {
@@ -162,18 +190,25 @@ describe(`file_drop`, () => {
     expect(on_files).toHaveBeenCalledOnce()
   })
 
-  it(`reports directory expansion failures through on_error`, async () => {
-    const failure = new DOMException(`entry disappeared`, `NotFoundError`)
-    const [on_files, on_error] = [vi.fn(), vi.fn()]
-    const { node } = attach_file_drop({ multiple: true, on_files, on_error })
-
-    drop(
-      node,
-      entry_transfer(`broken.txt`, (_on_file, on_fail) => on_fail?.(failure)),
-    )
-    await vi.waitFor(() => expect(on_error).toHaveBeenCalledExactlyOnceWith(failure))
-    expect(on_files).not.toHaveBeenCalled()
-  })
+  it.each([false, true])(
+    `directory expansion failures are reported unless superseded=%s`,
+    async (superseded) => {
+      const failure = new DOMException(`entry disappeared`, `NotFoundError`)
+      const [on_files, on_error] = [vi.fn(), vi.fn()]
+      const { node } = attach_file_drop({ multiple: true, on_files, on_error })
+      let fail_entry: ErrorCallback | undefined
+      drop(
+        node,
+        entry_transfer(`broken.txt`, (_on_file, on_fail) => void (fail_entry = on_fail)),
+      )
+      if (superseded) drop(node, files_of(`fresh.txt`))
+      await next_task()
+      fail_entry?.(failure)
+      await next_task()
+      expect(on_error.mock.calls).toEqual(superseded ? [] : [[failure]])
+      expect(on_files).toHaveBeenCalledTimes(superseded ? 1 : 0)
+    },
+  )
 
   it(`disabled mode prevents browser navigation without activating or processing`, () => {
     const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
@@ -183,35 +218,54 @@ describe(`file_drop`, () => {
       on_drag_active,
     })
     const transfer = data_transfer([file(`ignored.txt`, `text/plain`)])
-    const [dragover, drop_event] = [
-      drag_event(`dragover`, transfer),
-      drag_event(`drop`, transfer),
-    ]
-
-    node.dispatchEvent(dragover)
-    node.dispatchEvent(drop_event)
+    expect(drag_through(node, transfer)).toEqual([true, true, false, true])
     expect(cleanup).toBeTypeOf(`function`)
-    expect(dragover.defaultPrevented).toBe(true)
     expect(transfer.dropEffect).toBe(`none`)
-    expect(drop_event.defaultPrevented).toBe(true)
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
     expect(on_drag_active).not.toHaveBeenCalled()
     expect(on_files).not.toHaveBeenCalled()
   })
 
-  it(`global dragend clears activity after unbalanced dragenter events`, () => {
+  it(`balanced dragleave and global dragend after unbalanced dragenter clear activity`, () => {
     const on_drag_active = vi.fn()
     const transfer = files_of(`file.txt`)
     const { node } = attach_file_drop({ on_files: vi.fn(), on_drag_active })
 
+    node.dispatchEvent(drag_event(`dragenter`, transfer))
+    node.dispatchEvent(drag_event(`dragleave`, transfer))
+    expect(node.hasAttribute(`data-drag-active`)).toBe(false)
     node.dispatchEvent(drag_event(`dragenter`, transfer))
     node.dispatchEvent(drag_event(`dragenter`, transfer))
     expect(node.hasAttribute(`data-drag-active`)).toBe(true)
     globalThis.dispatchEvent(drag_event(`dragend`, transfer))
 
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
-    expect(active_calls(on_drag_active)).toEqual([true, false])
+    expect(active_calls(on_drag_active)).toEqual([true, false, true, false])
   })
+
+  // text and link drags must keep their native behavior; file detection falls back to
+  // files and items for browsers that omit `Files` from types
+  it.each([
+    [`a text drag`, false, [`text/plain`], [], [{ kind: `string` }], []],
+    [`files without a Files type`, true, [], [file(`a.txt`)], [], [[`a.txt`]]],
+    // a file item yielding no File is detected but delivers nothing
+    [`file items without a Files type`, true, [], [], [{ kind: `file` }], []],
+  ])(
+    `%s is handled as a file drag: %s`,
+    async (_label, handled, types, files, items, delivered) => {
+      const on_files = vi.fn<FileDropOptions[`on_files`]>()
+      const [on_drag_active, on_error] = [vi.fn(), vi.fn()]
+      const { node } = attach_file_drop({ on_files, on_drag_active, on_error })
+      const transfer = { types, files, items } as unknown as DataTransfer
+      expect(drag_through(node, transfer)).toEqual([handled, handled, false, handled])
+      await next_task()
+      expect(active_calls(on_drag_active)).toEqual(handled ? [true, false] : [])
+      expect(
+        on_files.mock.calls.map(([dropped]) => dropped.map(({ name }) => name)),
+      ).toEqual(delivered)
+      expect(on_error).not.toHaveBeenCalled()
+    },
+  )
 
   // a consumer's handler failing must not itself become an unhandled rejection
   const consumer_failure = new Error(`consumer rejected files`)

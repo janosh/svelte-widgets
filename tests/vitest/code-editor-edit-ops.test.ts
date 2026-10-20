@@ -9,6 +9,7 @@ import {
   visible_line_window,
 } from '#lib/code-editor/index.ts'
 import type { EditorState, RangeEdit } from '#lib/code-editor/index.ts'
+import { line_comment_token } from '#lib/code-editor/languages.ts'
 import { expect, test } from 'vite-plus/test'
 
 const state = (
@@ -147,4 +148,22 @@ test.each([
   [`one\n\n`, 2],
 ])(`count_lines(%j) is %i`, (text, expected) => {
   expect(count_lines(text)).toBe(expected)
+})
+
+test.each([
+  [`file:///project/src/App.TS`, `//`],
+  [String.raw`C:\project\main.py`, `#`],
+  [`/project/query.sql`, `--`],
+  [`/project/.vimrc.vim`, `"`],
+  // known basenames match whole, by stem before any suffix, and as dotfile stems
+  [`/project/Makefile`, `#`],
+  [`/project/Dockerfile.dev`, `#`],
+  [`/project/.env.local`, `#`],
+  [`/project/.gitignore`, `#`],
+  [`/project/README`, null],
+  [`/project/notes.txt`, null],
+  [`/project/.hidden.unknown`, null],
+  [``, null],
+])(`line_comment_token(%j) is %j`, (filename, expected) => {
+  expect(line_comment_token(filename)).toBe(expected)
 })

@@ -1,8 +1,9 @@
-import { tick, type ComponentProps } from 'svelte'
+import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { click, create_element, doc_query, render, pointer_event } from './index'
 import TestDialog from './TestDialog.svelte'
 import { focusable } from '#lib/attachments/shared.ts'
+import Sheet from '#lib/Sheet.svelte'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
@@ -224,6 +225,17 @@ describe(`Dialog`, () => {
 
     await click(item(`dialog-action`))
     expect([props.open, document.querySelector(`dialog.sheet`)]).toEqual([false, null])
+  })
+
+  test.each([
+    [{}, `Sheet`],
+    [{ 'aria-label': `Filters` }, `Filters`],
+  ])(`an open Sheet with props %j is named %j`, (label_props, expected) => {
+    const children = createRawSnippet(() => ({ render: () => `<p>Body</p>` }))
+    render(Sheet, { open: true, children, ...label_props })
+    const dialog = doc_query<HTMLDialogElement>(`dialog.sheet`)
+    expect(dialog.getAttribute(`aria-label`)).toBe(expected)
+    expect(dialog.hasAttribute(`aria-labelledby`)).toBe(false)
   })
 
   test(`unmounting an open dialog restores focus without reporting a close`, async () => {

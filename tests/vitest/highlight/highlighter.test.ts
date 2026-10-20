@@ -157,6 +157,16 @@ describe(`create_highlighter`, () => {
   })
 })
 
+// swaps in a fake starry-night peer and a fresh module graph for this test only
+const mock_starry_night = (factory: Parameters<typeof vi.doMock>[1]) => {
+  vi.resetModules()
+  vi.doMock(`@wooorm/starry-night`, factory)
+  onTestFinished(() => {
+    vi.doUnmock(`@wooorm/starry-night`)
+    vi.resetModules()
+  })
+}
+
 test.each([
   [
     `default`,
@@ -171,15 +181,10 @@ test.each([
 ] as const)(
   `%s highlighter loads lazily and caches a missing peer error`,
   async (_name, create) => {
-    vi.resetModules()
     let load_count = 0
-    vi.doMock(`@wooorm/starry-night`, () => {
+    mock_starry_night(() => {
       load_count += 1
       throw new Error(`Cannot find package '@wooorm/starry-night'`)
-    })
-    onTestFinished(() => {
-      vi.doUnmock(`@wooorm/starry-night`)
-      vi.resetModules()
     })
     const highlighter = await create()
     // Flush pending imports to detect eager peer loading.
@@ -193,3 +198,16 @@ test.each([
     expect(load_count).toBe(failed_load_count) // failed load is cached, not retried
   },
 )
+
+test(`default highlighter rejects a Markdown grammar without fenced-code rules`, async () => {
+  mock_starry_night(() => ({
+    common: [{ scopeName: `text.md`, patterns: [], repository: {} }],
+    createStarryNight: vi.fn(),
+  }))
+  const { default_highlighter: highlighter } = await import(
+    `#lib/highlight/default-highlighter.ts`
+  )
+  await expect(highlighter.ready()).rejects.toThrow(
+    `Markdown grammar is missing its fenced-code rules`,
+  )
+})

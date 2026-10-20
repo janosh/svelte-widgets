@@ -2305,7 +2305,7 @@
       --sms-li-active-bg,
       var(
         --sms-active-color,
-        light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 170, 0.2))
+        light-dark(rgba(70, 70, 140, 0.2), rgba(120, 170, 255, 0.2))
       )
     );
   }

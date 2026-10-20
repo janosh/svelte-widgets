@@ -74,9 +74,9 @@
 
   // Bring an item into view without rendering the intervening rows.
   export function scroll_to_index(idx: number): void {
-    if (!element || !items.length) return
     if (!Number.isInteger(idx))
       throw new Error(`VirtualList requires an integer index; got ${idx}`)
+    if (!element || !items.length) return
     const top = Math.max(0, Math.min(items.length - 1, idx)) * item_size
     set_scroll(reveal_scroll(top, item_size, viewport, element.scrollTop))
   }

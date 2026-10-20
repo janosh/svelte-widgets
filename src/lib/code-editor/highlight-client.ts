@@ -147,7 +147,6 @@ export const create_highlight_client = (options: HighlightClientOptions) => {
   }
   const run_highlight = async (): Promise<void> => {
     await settled()
-    if (disposed) return
     if (!backend_synced) await enqueue_resync()
     if (disposed || !backend_synced) return
     const window = pending_window

@@ -18,6 +18,10 @@ const target_for = () => {
   onTestFinished(() => target.remove())
   return target
 }
+// VirtualList row snippet rendering each item as text
+const children = createRawSnippet<[unknown, number]>((item) => ({
+  render: () => `<span>${item()}</span>`,
+}))
 
 test.each([
   [
@@ -65,9 +69,6 @@ test(`split collapse restores size and Home/End respect bounds`, async () => {
 test.each([0, 5])(
   `virtual list scrolls to an unmounted row with overscan=%s`,
   async (overscan) => {
-    const children = createRawSnippet<[unknown, number]>((item) => ({
-      render: () => `<span>${item()}</span>`,
-    }))
     const key = vi.fn(Number)
     let items = $state(Array.from({ length: 10000 }, (_value, idx) => idx))
     const target = target_for()
@@ -98,8 +99,53 @@ test.each([0, 5])(
     await tick()
     expect(target.querySelector(`.virtual-list`)?.scrollTop).toBe(0)
     expect(target.querySelectorAll(`[data-index]`)).toHaveLength(0)
+    // Invalid indices throw even when there is nothing to reveal
+    expect(() => component.scroll_to_index(1.5)).toThrow(`integer index`)
   },
 )
+
+test(`virtual list sizes its window from the measured viewport, not initial_count`, async () => {
+  vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockReturnValue(100)
+  const target = target_for()
+  const component = mount(VirtualList, {
+    target,
+    props: {
+      items: Array.from({ length: 1000 }, (_value, idx) => idx),
+      item_size: 20,
+      overscan: 2,
+      initial_count: 50,
+      children,
+    },
+  })
+  onTestFinished(() => unmount(component))
+  flushSync()
+  const indices = () =>
+    Array.from(target.querySelectorAll<HTMLElement>(`[data-index]`), (row) =>
+      Number(row.dataset.index),
+    )
+  // 100px viewport / 20px rows = 5 visible rows + 2 overscan below
+  expect(indices()).toEqual([0, 1, 2, 3, 4, 5, 6])
+  // Revealing row 10 scrolls just far enough to show its bottom edge.
+  component.scroll_to_index(10)
+  await tick()
+  expect(target.querySelector(`.virtual-list`)?.scrollTop).toBe(120)
+  expect(indices()).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12])
+})
+
+test.each([
+  { item_size: 0 },
+  { item_size: Number.NaN },
+  { item_size: Infinity },
+  { overscan: 1.5 },
+  { overscan: -1 },
+  { initial_count: 2.5 },
+  { initial_count: -1 },
+])(`virtual list rejects invalid sizing prop %o`, (invalid) => {
+  const props = { items: [1, 2], children, ...invalid }
+  expect(() => mount(VirtualList, { target: target_for(), props })).toThrow(
+    `VirtualList requires positive item_size`,
+  )
+})
 
 test.each([
   [
