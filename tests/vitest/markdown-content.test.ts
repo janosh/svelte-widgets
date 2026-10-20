@@ -135,7 +135,7 @@ describe(`Markdown content manifests`, () => {
 
   test(`a > inside a Svelte expression ends no tag`, async () => {
     const { code, manifest } = await compile_markdown(
-      `<h2 onclick={() => go()}>Title</h2>\n\n<Button onclick={() => go()} />\n\n## Later <a onclick={() => go()} aria-hidden="true" href="#later">#</a>\n\n## Last\n\n<img onload={() => go()} src="./pic.png">\n\n<textarea placeholder={a > b} id="notes"></textarea>`,
+      `<h2 onclick={() => go()}>Title</h2>\n\n<Button onclick={() => go()} />\n\n## Later <a onclick={() => go()} aria-hidden="true" href="#later">#</a>\n\n## Last\n\n<img onload={() => go()} src="./pic.png">\n\n<textarea placeholder={a > b} id="notes"></textarea>\n\n<textarea data={[{ x: 1 }].length > 0} id="deep"></textarea>`,
     )
     expect(manifest.headings.map(({ id, text }) => [id, text])).toEqual([
       [`title`, `Title`],
@@ -149,7 +149,9 @@ describe(`Markdown content manifests`, () => {
     // a self-closing <Button /> is no open interactive container
     expect(code).toContain(`<h2 id="last">Last<a data-heading-anchor`)
     expect(manifest.assets.map(({ url }) => url)).toEqual([`./pic.png`])
-    expect(manifest.anchors.map(({ id }) => id)).toContain(`notes`)
+    expect(manifest.anchors.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([`notes`, `deep`]),
+    )
   })
 
   test.each([`markdown`, `svelte`] as const)(

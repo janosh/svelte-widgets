@@ -78,6 +78,9 @@ describe(`heading_text`, () => {
     [`a <!-- b > c --> d`, false, `a  d`],
     [`a <span class={b > c ? 'x' : 'y'}>d</span>`, true, `a d`],
     [`a {b<c} <em>d</em>`, true, `a  d`],
+    // braces in regex literals and comments aren't structural; `/` after an operand divides
+    [`A {v && /[}]/.test(v) ? 'Yes' : 'No'} B {/if} C`, true, `A  B  C`],
+    [`A {x /* } */ + 1} B {(a)/2} C`, true, `A  B  C`],
     // rendered math contributes its TeX source, other {@html} strings drop out
     [`E {@html ${JSON.stringify(tex)}}`, true, `E \\fracab & c`],
     [

@@ -2,18 +2,66 @@
 // Markdown content manifest. Braces, quotes and `>` inside an expression's JS strings
 // belong to the expression, not to the surrounding markup.
 
-// Index of the `}` closing the expression opened at `start`, or -1 when unclosed
+// A `/` here starts a regex literal (an expression may begin); elsewhere it divides
+const regex_preceders = `(,=:[!&|?{};+-*%<>~^`
+
+// Index of the last character of the string, comment or regex literal starting at `idx`,
+// `idx` itself when none starts there, or -1 when it never ends. Template literals'
+// `${}` holes are scanned as plain string text.
+function literal_end(str: string, idx: number, prev: string): number {
+  const [char, next] = [str[idx], str[idx + 1]]
+  if (char === `/` && next === `/`) return str.indexOf(`\n`, idx)
+  if (char === `/` && next === `*`) {
+    const close = str.indexOf(`*/`, idx + 2)
+    return close === -1 ? -1 : close + 1
+  }
+  const regex = char === `/` && regex_preceders.includes(prev)
+  if (!regex && !`"'\``.includes(char)) return idx
+  let in_class = false
+  for (let pos = idx + 1; pos < str.length; pos++) {
+    const current = str[pos]
+    if (current === `\\`) pos++
+    else if (regex && (current === `[` || current === `]`)) in_class = current === `[`
+    else if (current === char && !in_class) return pos
+  }
+  return -1
+}
+
+// Index of the `}` closing the expression opened at `start`, or -1 when unclosed. Braces
+// in JS strings, comments and regex literals (`{/[}]/.test(x)}`) aren't structural.
 function find_svelte_expression_end(str: string, start: number): number {
-  let depth = 0
+  let depth = 1
+  // `{/if}` closes a block: a `/` right after the opening brace starts no regex
+  let prev = `)`
+  for (let idx = start + 1; idx < str.length; idx++) {
+    const end = literal_end(str, idx, prev)
+    if (end === -1) return -1
+    if (end > idx) {
+      idx = end
+      prev = `)` // a literal is an operand, so a `/` after it divides
+      continue
+    }
+    const char = str[idx]
+    if (char === `{`) depth++
+    else if (char === `}` && --depth === 0) return idx
+    if (!/\s/u.test(char)) prev = char
+  }
+  return -1
+}
+
+// End (after `>`) of the HTML opening tag starting at `start`, or -1 when unterminated. A `>`
+// inside a quoted value or, with `svelte`, an `{expression}` at any depth doesn't end it.
+export function opening_tag_end(str: string, start: number, svelte: boolean): number {
   let quote: string | undefined
-  for (let idx = start; idx < str.length; idx++) {
+  for (let idx = start + 1; idx < str.length; idx++) {
     const char = str[idx]
     if (quote) {
-      if (char === `\\`) idx++ // skip the escaped character
-      else if (char === quote) quote = undefined
-    } else if (char === `"` || char === `'` || char === `\``) quote = char
-    else if (char === `{`) depth++
-    else if (char === `}` && --depth === 0) return idx
+      if (char === quote) quote = undefined
+    } else if (char === `"` || char === `'`) quote = char
+    else if (svelte && char === `{`) {
+      idx = find_svelte_expression_end(str, idx)
+      if (idx === -1) return -1
+    } else if (char === `>`) return idx + 1
   }
   return -1
 }

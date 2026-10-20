@@ -13,7 +13,10 @@ import {
   slugify_heading,
   unique_heading_id,
 } from '../heading-anchors.ts'
-import { mask_svelte_expressions } from '../internal/svelte-expressions.ts'
+import {
+  mask_svelte_expressions,
+  opening_tag_end,
+} from '../internal/svelte-expressions.ts'
 
 import {
   source_locator,
@@ -249,19 +252,29 @@ export function content_manifest(
   }
   const html_attributes =
     /\s+(?<name>[^\s"'=<>`]+)(?:\s*=\s*(?:"(?<double>[^"]*)"|'(?<single>[^']*)'|(?<bare>[^\s"'=<>`]+)))?/gu
-  // Raw element contents are not Markdown or navigable document headings. Their opening
-  // tag ends at the first `>` outside quotes and (one level of) Svelte expression braces.
-  const raw_elements = new RegExp(
-    String.raw`<!--[^]*?-->|(?<opening><(?<excluded>script|style|textarea|title)\b(?:${svelte ? String.raw`\{[^{}]*\}|` : ``}[^>"']|"[^"]*"|'[^']*')*>)[^]*?<\/\k<excluded>\s*>`,
-    `giu`,
-  )
+  // Comments and raw element contents are not Markdown or navigable document headings, so
+  // they're blanked. A raw element keeps its opening tag, which ends at the first `>`
+  // outside quotes and Svelte expressions.
+  const raw_start = /<!--|<(?<tag>script|style|textarea|title)\b/giu
+  const blank_raw_elements = (text: string): string => {
+    let [blanked, cursor] = [``, 0]
+    for (const { index, groups } of text.matchAll(raw_start)) {
+      if (index < cursor) continue
+      const tag = groups?.tag
+      const body_start = tag ? opening_tag_end(text, index, svelte) : index
+      if (body_start === -1) continue
+      const closing = tag ? new RegExp(String.raw`<\/${tag}\s*>`, `iu`) : /-->/u
+      const close = closing.exec(text.slice(body_start))
+      if (!close) continue
+      const end = body_start + close.index + close[0].length
+      blanked += text.slice(cursor, body_start) + ` `.repeat(end - body_start)
+      cursor = end
+    }
+    return blanked + text.slice(cursor)
+  }
   const interactive_containers: string[] = []
   const scan_html = (mapped: MappedText, token: Token) => {
-    const visible = mapped.text.replaceAll(
-      raw_elements,
-      (match: string, opening: string | undefined) =>
-        (opening ?? ``) + ` `.repeat(match.length - (opening?.length ?? 0)),
-    )
+    const visible = blank_raw_elements(mapped.text)
     // Same-length masks keep a `>` or quote in `onclick={() => go()}` from ending a tag,
     // so attribute and heading offsets index `visible` unchanged
     const markup = svelte ? mask_svelte_expressions(visible) : visible
