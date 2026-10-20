@@ -51,6 +51,8 @@ The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.
 - links: `link-check` runs lychee over every markdown, Svelte and TS file
 - docs: `build` prerenders pages, validates local links and builds the Pagefind index; `deploy` publishes to GitHub Pages only on `main`
 
+Readme links to API symbols carry `#L` line anchors derived from each symbol's definition. The pre-commit hook rewrites them when `src/lib` changes; run `node scripts/readme-links.ts` to sync them by hand, and `tests/vitest/readme.test.ts` fails on any that went stale.
+
 ## 🆕 New release
 
 To make a release, increase the `"version"` field in [`package.json`](https://github.com/janosh/svelte-widgets/blob/main/package.json). This package follows semantic versioning, meaning
