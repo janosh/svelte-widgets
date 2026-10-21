@@ -1,4 +1,10 @@
-import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '#lib'
+import {
+  apply_theme_mode,
+  watch_theme,
+  theme,
+  theme_init_script,
+  ThemeToggle,
+} from '#lib'
 import { Monitor, Moon, Sun } from '#lib/icons.ts'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
@@ -25,6 +31,9 @@ const applied_theme = () => [
   document.documentElement.style.colorScheme,
   document.documentElement.dataset.theme,
 ]
+// Runs the <head> script exactly as the browser does: from its source string
+// oxlint-disable-next-line typescript/no-implied-eval -- evaluating that string is the test
+const run_init_script = () => new Function(theme_init_script)()
 
 const rendered_icon_path = () => doc_query(`button svg path`).getAttribute(`d`)
 
@@ -229,4 +238,40 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
 test(`watch_theme fails clearly without a document`, () => {
   vi.stubGlobal(`document`, undefined)
   expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
+})
+
+// theme_init_script runs before hydration, so it must land on what apply_theme_mode applies
+test.each([
+  [`light`, false],
+  [`dark`, false],
+  [`light`, true],
+  [`system`, true],
+  [`system`, false],
+  [null, true],
+  [`bogus`, false],
+])(
+  `theme_init_script with stored %j and OS dark=%j matches apply_theme_mode`,
+  (stored, os_dark) => {
+    vi.stubGlobal(`matchMedia`, (query: string) => ({ media: query, matches: os_dark }))
+    if (stored !== null) localStorage.setItem(`theme`, stored)
+    run_init_script()
+    const from_script = applied_theme()
+    apply_theme_mode(stored === `light` || stored === `dark` ? stored : `system`)
+    expect(from_script).toEqual(applied_theme())
+    expect(from_script).toEqual(
+      Array(2).fill(
+        stored === `light` || stored === `dark` ? stored : os_dark ? `dark` : `light`,
+      ),
+    )
+  },
+)
+
+test(`theme_init_script survives unreadable storage`, () => {
+  vi.stubGlobal(`localStorage`, {
+    getItem: () => {
+      throw new Error(`denied`)
+    },
+  })
+  run_init_script()
+  expect(applied_theme()).toEqual([`light`, `light`])
 })

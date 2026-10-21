@@ -19,6 +19,7 @@ export { default as CopyButton } from './CopyButton.svelte'
 export { default as DraggablePane } from './DraggablePane.svelte'
 export { default as DiffView } from './code-editor/DiffView.svelte'
 export { default as FileDetails } from './FileDetails.svelte'
+export { default as ErrorPage } from './ErrorPage.svelte'
 export { default as FindBar } from './FindBar.svelte'
 export { default as Footer } from './Footer.svelte'
 export { default as FullscreenButton } from './FullscreenButton.svelte'
@@ -45,7 +46,14 @@ export { default as Heading } from './Heading.svelte'
 export { default as Toc } from './Toc.svelte'
 export { default as Toggle } from './Toggle.svelte'
 export { default as ThemeToggle } from './ThemeToggle.svelte'
-export { apply_theme_mode, watch_theme, theme, type ThemeMode } from './theme.svelte.ts'
+export {
+  apply_theme_mode,
+  theme,
+  theme_init_script,
+  watch_theme,
+  type ThemeMode,
+} from './theme.svelte.ts'
+export { default as ThemeScript } from './ThemeScript.svelte'
 export type * from './types'
 export type * from './utils'
 export { default as Wiggle } from './Wiggle.svelte'

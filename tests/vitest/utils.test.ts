@@ -29,6 +29,8 @@ import {
   sanitize_shortcut_overrides,
   slug_to_title,
   step_focus,
+  escape_html,
+  strip_html,
   to_error,
 } from '#lib/utils.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
@@ -1006,14 +1008,44 @@ test.each([
   expect(lower_bound(sorted.length, (idx) => sorted[idx] >= target)).toBe(expected)
 })
 
+const throwing_to_string = {
+  toString: () => {
+    throw new Error(`nope`)
+  },
+}
 test.each([
   [new TypeError(`boom`), `boom`],
   [`plain`, `plain`],
   [42, `42`],
   [undefined, `undefined`],
+  [Object.create(null), `Thrown value cannot be converted to a string`],
+  [throwing_to_string, `Thrown value cannot be converted to a string`],
 ])(`to_error(%j) has message %j`, (input, message) => {
   const error = to_error(input)
   expect(error).toBeInstanceOf(Error)
   expect(error.message).toBe(message)
   if (input instanceof Error) expect(error).toBe(input)
+  else expect(error.cause).toBe(input)
+})
+
+test.each([
+  [`<b>bold</b> &amp; <i class="x">it</i>`, `bold &amp; it`],
+  // comparisons aren't tags, so the prose between them survives
+  [`T < 300 K and P > 1 bar`, `T < 300 K and P > 1 bar`],
+  [`<span title="x>0">a</span>`, `a`],
+  [`a<!-- note -->b<br/>c`, `abc`],
+  [``, ``],
+])(`strip_html(%j) = %j`, (input, expected) => {
+  expect(strip_html(input)).toBe(expected)
+})
+
+test.each([
+  [
+    `<a href="x">Tom & Jerry's</a>`,
+    `&lt;a href=&quot;x&quot;&gt;Tom &amp; Jerry&#39;s&lt;/a&gt;`,
+  ],
+  [`&amp;`, `&amp;amp;`],
+  [`plain`, `plain`],
+])(`escape_html(%j) = %j`, (input, expected) => {
+  expect(escape_html(input)).toBe(expected)
 })

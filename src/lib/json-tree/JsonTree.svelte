@@ -12,7 +12,7 @@
     Download,
     Search,
   } from '../icons'
-  import { download } from './download'
+  import { download } from '../download'
   import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
   import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'

@@ -27,7 +27,8 @@
   ],
   "type": "module",
   "sideEffects": [
-    "./dist/code-editor/editor.css"
+    "./dist/code-editor/editor.css",
+    "./dist/highlight/theme.css"
   ],
   "types": "./dist/index.d.ts",
   "svelte": "./dist/index.js",
@@ -95,6 +96,9 @@
       "types": "./dist/highlight/index.d.ts",
       "default": "./dist/highlight/index.js"
     },
+    "./highlight/theme.css": {
+      "default": "./dist/highlight/theme.css"
+    },
     "./source-links": {
       "types": "./dist/source-links/index.d.ts",
       "default": "./dist/source-links/index.js"
@@ -133,6 +137,10 @@
     "./fullscreen": {
       "types": "./dist/fullscreen.svelte.d.ts",
       "default": "./dist/fullscreen.svelte.js"
+    },
+    "./download": {
+      "types": "./dist/download.d.ts",
+      "default": "./dist/download.js"
     },
     "./print": {
       "types": "./dist/print.d.ts",

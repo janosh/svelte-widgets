@@ -14,6 +14,8 @@ export { get_html_sort_value, sortable } from './sortable'
 export type { SortableOptions } from './sortable'
 export { highlight_matches } from './highlight-matches'
 export type { HighlightOptions } from './highlight-matches'
+export { in_view } from './in-view'
+export type { InViewOptions } from './in-view'
 export { tooltip } from './tooltip'
 export type {
   TooltipOpenDetail,
