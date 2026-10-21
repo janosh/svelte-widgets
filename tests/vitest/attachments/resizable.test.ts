@@ -132,6 +132,46 @@ describe(`resizable`, () => {
     expect([bottom.bottom, bottom.left, bottom.right]).toEqual([`-8px`, `-10px`, `-6px`])
   })
 
+  // A style or layout read after a DOM write forces a synchronous recalc, so setup reads
+  // everything (borders, size, limits) before touching the node: with all four edges that
+  // used to be one forced pass per handle
+  it(`reads style and size before writing to the node`, () => {
+    const element = create_box()
+    element.style.position = `static`
+    // the node's state at each read: handle count and inline position
+    const reads: string[] = []
+    const log_read = () =>
+      reads.push(`${element.children.length} ${element.style.position}`)
+    const read_style = globalThis.getComputedStyle
+    vi.spyOn(globalThis, `getComputedStyle`).mockImplementation((target) => {
+      const style = read_style(target)
+      return new Proxy(style, {
+        get(declaration, prop) {
+          log_read()
+          const value: unknown = Reflect.get(declaration, prop)
+          return typeof value === `function` ? value.bind(declaration) : value
+        },
+      })
+    })
+    for (const prop of [`offsetWidth`, `offsetHeight`] as const) {
+      const size = element[prop]
+      Object.defineProperty(element, prop, {
+        configurable: true,
+        get: () => (log_read(), size),
+      })
+    }
+    attach_resizable(element, {
+      edges: [`top`, `right`, `bottom`, `left`],
+      max_width: () => (log_read(), 400),
+    })
+
+    expect(reads.length).toBeGreaterThan(5) // position, 4 borders, sizes, limit
+    expect(new Set(reads)).toEqual(new Set([`0 static`]))
+    expect([element.children.length, element.style.position]).toEqual([8, `relative`])
+    expect(grip(element).getAttribute(`aria-valuenow`)).toBe(`200`)
+    expect(grip(element).getAttribute(`aria-valuemax`)).toBe(`400`)
+  })
+
   it(`preserves content-box dimensions at zero pointer delta`, () => {
     const element = create_box()
     Object.assign(element.style, {
@@ -187,6 +227,11 @@ describe(`resizable`, () => {
     const cleanup = resizable({ edges: [`right`, `bottom`, `top`], on_resize })(element)
 
     expect(handle_names(element, `data-resize-edge`)).toEqual([`top`, `bottom`, `right`])
+    // corners come after the strips, so they paint over the strips' overlap
+    const kinds = [...element.children].map((child) =>
+      child.hasAttribute(`data-resize-corner`) ? `corner` : `strip`,
+    )
+    expect(kinds).toEqual([`strip`, `strip`, `strip`, `corner`, `corner`])
     // only the two corners whose *both* edges are enabled; `left` is absent so its are too
     expect(handle_names(element, `data-resize-corner`)).toEqual([
       `top-right`,

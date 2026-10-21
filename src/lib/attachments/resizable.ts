@@ -71,7 +71,6 @@ export const resizable =
     const computed = getComputedStyle(node)
     const previous_position =
       computed.position === `static` ? node.style.position : undefined
-    if (previous_position !== undefined) node.style.position = `relative`
     // Absolute children anchor to the padding box, so a strip at `edge: 0` sits inside the
     // border and leaves the visible edge ungrabbable; negative insets restore the border box.
     const inset = (edge: Edge) =>
@@ -278,7 +277,7 @@ export const resizable =
       on_resize_end?.(event, dimensions)
     }
     // an edge grab names one side and drives one axis; a corner names and drives both
-    const add_handle = (grab: Grab, css: string) => {
+    const create_handle = (grab: Grab, css: string) => {
       const handle = document.createElement(`div`)
       const edge =
         grab.horizontal && grab.vertical ? null : (grab.horizontal ?? grab.vertical)
@@ -309,7 +308,6 @@ export const resizable =
         signal,
       })
       handle.addEventListener(`dblclick`, reset_size, { signal })
-      node.append(handle)
       return handle
     }
 
@@ -323,7 +321,7 @@ export const resizable =
           const cross = across
             ? ([`top`, `bottom`] as const)
             : ([`left`, `right`] as const)
-          return add_handle(
+          return create_handle(
             across ? { horizontal: edge } : { vertical: edge },
             `cursor: ${across ? `ew` : `ns`}-resize;
             ${across ? `width` : `height`}: ${handle_size}px;
@@ -334,7 +332,7 @@ export const resizable =
       // strips so it paints over their overlap, which would otherwise resize one axis.
       ...vertical_edges.flatMap((vertical) =>
         horizontal_edges.map((horizontal) =>
-          add_handle(
+          create_handle(
             { horizontal, vertical },
             // top-left/bottom-right share a diagonal, as do top-right/bottom-left
             `cursor: ${(vertical === `top`) === (horizontal === `left`) ? `nwse` : `nesw`}-resize;
@@ -345,7 +343,12 @@ export const resizable =
       ),
     ]
 
+    // Handles stay detached until all setup reads (borders above, size and limits here) are
+    // done, as each read after a DOM write forces a synchronous style and layout pass.
+    // Absolute handles and `position: relative` don't change the size measured here.
     sync_separator_values()
+    if (previous_position !== undefined) node.style.position = `relative`
+    node.append(...handles)
 
     return () => {
       stop_pointer_follow?.()
