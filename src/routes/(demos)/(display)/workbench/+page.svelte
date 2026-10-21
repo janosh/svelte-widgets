@@ -11,7 +11,7 @@
     MessageText,
     Keyboard,
     GitHub,
-    Typst,
+    TypeScript,
   } from '#lib/icons.ts'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
@@ -168,9 +168,11 @@
   file.
 </p>
 <CodeBlock
-  code={'#set page(width: auto, height: auto)\n$ E = m c^2 $'}
-  title="mass-energy.typ"
-  icon={Typst}
+  code={'export const sum = (values: number[]) =>\n  values.reduce((total, value) => total + value, 0)'}
+  language="typescript"
+  highlight={default_highlighter.highlight}
+  title="sum.ts"
+  icon={TypeScript}
   line_count
   copy
 >
