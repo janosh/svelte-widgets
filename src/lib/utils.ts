@@ -80,7 +80,9 @@ export const to_error = (value: unknown): Error => {
 // reading a malformed `<b c <i>` as text up to the `<i>` tag.
 export const HTML_TAG_SRC = String.raw`<(?:/?[a-z]|!)(?:[^<>"']|"[^"]*"|'[^']*')*>`
 const HTML_TAG_RE = new RegExp(HTML_TAG_SRC, `gi`)
-// Tags only, entities kept: the result is still HTML, fit for {@html} or an HTML sink.
+// Tags only, entities kept, for plain-text uses (titles, search records, lengths). Not a sanitizer:
+// a split tag reassembles (`<<b>img onerror=x>` leaves `<img onerror=x>`), so escape_html or
+// sanitize the result before it reaches {@html} or any other HTML sink.
 export const strip_html = (html: string): string => html.replaceAll(HTML_TAG_RE, ``)
 
 // Escape text for HTML element content and quoted attribute values (also valid XML)

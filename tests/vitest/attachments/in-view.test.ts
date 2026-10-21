@@ -55,7 +55,8 @@ test(`once ignores exits, fires on the first entry and disconnects`, () => {
   const [observer] = observers
   observer.callback(crossing(false))
   expect(callback).not.toHaveBeenCalled()
-  observer.callback(crossing(true))
+  // an entry and an exit in one batch still count as the first entry
+  observer.callback(crossing(true, false))
   expect(callback).toHaveBeenCalledExactlyOnceWith(true, { isIntersecting: true })
   expect(observer.disconnect).toHaveBeenCalledOnce()
 })

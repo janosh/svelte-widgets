@@ -1035,8 +1035,12 @@ test.each([
   [`<span title="x>0">a</span>`, `a`],
   [`a<!-- note -->b<br/>c`, `abc`],
   [``, ``],
+  // not a sanitizer: removing the inner tag reassembles an outer one
+  [`<<b>img src=x onerror=alert(1)>`, `<img src=x onerror=alert(1)>`],
 ])(`strip_html(%j) = %j`, (input, expected) => {
   expect(strip_html(input)).toBe(expected)
+  // escaped, the result is inert in any HTML sink
+  expect(escape_html(strip_html(input))).not.toMatch(/<[a-z]/iu)
 })
 
 test.each([
