@@ -87,7 +87,7 @@ Every component is a named export from the package root and has a direct subpath
 | [`LiteYouTubeEmbed`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/LiteYouTubeEmbed.svelte) | YouTube poster that only loads the player iframe once clicked                                    | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
 | [`Wiggle`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Wiggle.svelte)                     | Spring-animated shake wrapper                                                                    | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
 
-Fifteen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any element: fourteen come from `svelte-widgets/attachments`, while `heading_anchors` has its own subpath. `dismiss_on_outside_press` is the lower-level multi-surface primitive behind `click_outside`.
+Seventeen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any element: sixteen come from `svelte-widgets/attachments`, while `heading_anchors` has its own subpath. `dismiss_on_outside_press` is the lower-level multi-surface primitive behind `click_outside`.
 
 ```svelte
 <script>

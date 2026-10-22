@@ -81,6 +81,27 @@ test.each([`teardown`, `close_before_removal`] as const)(
   },
 )
 
+// A rerun without an anchor leaves the node alone, so teardown must undo everything attaching did
+test(`teardown restores the node's popover, styles and the trigger's target`, () => {
+  const anchor = document.createElement(`button`)
+  anchor.popoverTargetAction = `toggle`
+  document.body.append(anchor)
+  const menu = create_element()
+  menu.style.margin = `3px`
+  const cleanup = anchored_popover({ anchor, on_close: vi.fn() })(menu)
+  cleanup?.()
+  expect([
+    menu.popover,
+    menu.style.margin,
+    menu.style.pointerEvents,
+    menu.style.inset,
+  ]).toEqual([null, `3px`, ``, ``])
+  expect([anchor.popoverTargetElement, anchor.popoverTargetAction]).toEqual([
+    null,
+    `toggle`,
+  ])
+})
+
 test(`close_before_removal on a non-popover node is a no-op`, () => {
   expect(close_before_removal(create_element())).toEqual({})
 })

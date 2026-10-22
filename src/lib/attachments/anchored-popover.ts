@@ -36,6 +36,15 @@ export const anchored_popover =
       node.hidePopover()
       return true
     })
+    // Teardown restores what this changes: a rerun that bails (the anchor gone) must leave the
+    // node as it was, not a hidden popover
+    const { pointerEvents, inset, margin } = node.style
+    const before = {
+      popover: node.popover,
+      style: { pointerEvents, inset, margin },
+      target: anchor.popoverTargetElement,
+      action: anchor.popoverTargetAction,
+    }
     node.popover = `auto`
     // The top layer doesn't escape inherited styles: a click-through host overlay would pass
     // `pointer-events: none` on to the menu. `inset` and `margin` undo the UA [popover] box,
@@ -64,8 +73,11 @@ export const anchored_popover =
       close_silently()
       silent_closers.delete(node)
       release_escape()
-      anchor.popoverTargetElement = null
       stop_float?.()
+      node.popover = before.popover
+      Object.assign(node.style, before.style)
+      anchor.popoverTargetElement = before.target
+      anchor.popoverTargetAction = before.action
     }
   }
 
