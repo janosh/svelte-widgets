@@ -16,12 +16,15 @@ test.each([
     expect(doc_query(`.error-page.extra h1`).textContent?.trim()).toBe(heading)
     expect(document.querySelector(`a[href="${bugs_url}"]`) !== null).toBe(issue_link)
     expect(document.title).toBe(`Error ${status} • site`)
+    expect(doc_query(`a[href="/"]`).textContent).toBe(`landing page`)
   },
 )
 
 test(`home link uses home_href and logo`, () => {
   render(ErrorPage, { status: 404, home_href: `/base/`, logo: `/logo.svg`, name: `Site` })
   const home = doc_query<HTMLAnchorElement>(`a[href="/base/"]`)
+  // no whitespace inside the underlined link: the logo's margin spaces it from the text
+  expect(home.textContent).toBe(`landing page`)
   expect(home.querySelector(`img`)?.getAttribute(`src`)).toBe(`/logo.svg`)
   expect(home.querySelector(`img`)?.alt).toBe(`Site`)
 })

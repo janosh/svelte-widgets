@@ -73,3 +73,43 @@ test(`forwards progress, children and attributes, and runs cancel/retry under cu
   root.querySelector(`button`)?.click()
   expect(props.on_retry).toHaveBeenCalledOnce()
 })
+
+test(`spinner mode keeps one live region across states and forwards spinner_props`, async () => {
+  const props = $state<Props>({
+    state: `running`,
+    label: `Loading`,
+    spinner: true,
+    spinner_props: { title: `Parsing in a worker` },
+  })
+  const root = render_task(props)
+  const region = doc_query(`[role="status"]`)
+  const spinner = doc_query(`.task-status [role="status"] .spinner`)
+  // the spinner is no second live region inside the first
+  expect([spinner.getAttribute(`role`), spinner.getAttribute(`aria-live`)]).toEqual([
+    null,
+    null,
+  ])
+  expect([spinner.title, region.textContent?.trim()]).toEqual([
+    `Parsing in a worker`,
+    `Loading`,
+  ])
+  expect(document.querySelectorAll(`[aria-live]`)).toHaveLength(1)
+  props.state = `error`
+  props.label = `Failed`
+  await tick()
+  expect(doc_query(`[role="status"]`)).toBe(region)
+  expect([root.querySelector(`.spinner`), region.textContent?.trim()]).toEqual([
+    null,
+    `Failed`,
+  ])
+})
+
+test.each([
+  [{}, true, false],
+  [{ show_progress: false }, false, false],
+  [{ show_progress: false, overlay: true }, false, true],
+])(`%j: progress bar %s, overlay class %s`, (extra, has_progress, overlay) => {
+  const root = render_task({ label: `Loading`, ...extra })
+  expect(root.querySelector(`progress`) !== null).toBe(has_progress)
+  expect(root.classList.contains(`overlay`)).toBe(overlay)
+})

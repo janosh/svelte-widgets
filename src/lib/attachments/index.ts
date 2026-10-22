@@ -34,6 +34,8 @@ export type {
 } from './click-outside'
 export { register_escape_layer } from './shared'
 export { auto_update_position, float, portal } from './float'
+export { anchored_popover, close_before_removal } from './anchored-popover'
+export type { AnchoredPopoverOptions } from './anchored-popover'
 export type { AnchorRect, FloatOptions } from './float'
 export { forward_window_keydown, hotkey } from './keyboard'
 export type { ForwardWindowKeydownOptions, HotkeyOptions } from './keyboard'

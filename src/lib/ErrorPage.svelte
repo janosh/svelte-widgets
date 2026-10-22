@@ -61,10 +61,11 @@
   {@render children?.()}
 
   <p>
-    Back to <a href={home_href}>
-      {#if logo}<img src={logo} alt={name ?? ``} height="30" />{/if}
-      landing page
-    </a>.
+    <!-- one line: whitespace inside the link would be underlined -->
+    Back to
+    <a href={home_href}
+      >{#if logo}<img src={logo} alt={name ?? ``} height="30" />{/if}landing page</a
+    >.
   </p>
 </div>
 

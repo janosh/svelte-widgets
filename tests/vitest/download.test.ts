@@ -26,6 +26,20 @@ test.each([
   },
 )
 
+test(`download keeps its link detached and still revokes the URL when click throws`, async () => {
+  vi.useFakeTimers()
+  vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:test`)
+  const revoke_url = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+  const append = vi.spyOn(Element.prototype, `append`)
+  vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(() => {
+    throw new Error(`click failed`)
+  })
+  expect(() => download(`content`, `test.txt`, `text/plain`)).toThrow(`click failed`)
+  expect(append).not.toHaveBeenCalled()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(revoke_url).toHaveBeenCalledExactlyOnceWith(`blob:test`)
+})
+
 test(`download defers to a global download override`, () => {
   const host_download = vi.fn()
   vi.stubGlobal(`download`, host_download)

@@ -1018,7 +1018,10 @@ test.each([
   [`plain`, `plain`],
   [42, `42`],
   [undefined, `undefined`],
+  [null, `null`],
+  [Symbol(`failure`), `Symbol(failure)`],
   [Object.create(null), `Thrown value cannot be converted to a string`],
+  [{ toString: null }, `Thrown value cannot be converted to a string`],
   [throwing_to_string, `Thrown value cannot be converted to a string`],
 ])(`to_error(%j) has message %j`, (input, message) => {
   const error = to_error(input)
@@ -1035,6 +1038,12 @@ test.each([
   [`<span title="x>0">a</span>`, `a`],
   [`a<!-- note -->b<br/>c`, `abc`],
   [``, ``],
+  [`<a title="<b>">link</a>`, `link`], // `<` inside a quoted attribute
+  [`<B>UPPER</B>`, `UPPER`], // tags are case-insensitive
+  // an unterminated `<` is text, not a tag swallowing everything up to the next `>`
+  [`<b>bold</b`, `bold</b`],
+  [`a <b c <i>d</i>`, `a <b c d`], // a browser reads `<i` as an attribute, here it is text
+  [`<a "unclosed`, `<a "unclosed`],
   // not a sanitizer: removing the inner tag reassembles an outer one
   [`<<b>img src=x onerror=alert(1)>`, `<img src=x onerror=alert(1)>`],
 ])(`strip_html(%j) = %j`, (input, expected) => {
@@ -1042,6 +1051,18 @@ test.each([
   // escaped, the result is safe in HTML text and quoted attribute values
   expect(escape_html(strip_html(input))).not.toMatch(/<[a-z]/iu)
 })
+
+// `[^>"']` in the attribute run let every unclosed `<` rescan to the end of input, so 48 KB of
+// `<a ` took 631 ms and grew quadratically. Linear, these finish in well under 1 ms.
+test.each([`<a `, `<a "`, `<a '`, `<a "'`, `</b`, `<!`, `<a "<a" `])(
+  `strip_html stays linear on 200 KB of %j`,
+  (unit) => {
+    const input = unit.repeat(Math.ceil(200_000 / unit.length))
+    const start = performance.now()
+    strip_html(input)
+    expect(performance.now() - start).toBeLessThan(200)
+  },
+)
 
 test.each([
   [
