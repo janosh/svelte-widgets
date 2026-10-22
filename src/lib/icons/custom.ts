@@ -1,10 +1,15 @@
 // Hand-maintained glyphs (domain shapes, hand-tuned marks, pre-generator set). See icons.ts for tree-shake rationale.
 import type { IconData } from './types.ts'
 
-const icon = (markup: string, paint?: Pick<IconData, 'stroke' | 'fill'>) =>
-  ({ viewBox: `0 0 24 24`, markup, ...paint }) satisfies IconData
-const path = (d: string, paint?: Pick<IconData, 'stroke' | 'fill'>) =>
-  ({ viewBox: `0 0 24 24`, d, ...paint }) satisfies IconData
+type Paint = Pick<IconData, 'stroke' | 'fill'>
+// pure-call annotations let bundlers drop unused `export const X = icon(...)` glyphs; declared as
+// functions, the one form esbuild, rollup and terser all document for the annotation
+/* #__NO_SIDE_EFFECTS__ */ function icon(markup: string, paint?: Paint): IconData {
+  return { viewBox: `0 0 24 24`, markup, ...paint }
+}
+/* #__NO_SIDE_EFFECTS__ */ function path(d: string, paint?: Paint): IconData {
+  return { viewBox: `0 0 24 24`, d, ...paint }
+}
 
 export const AreaPlot = icon(
   `<path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M5 18c2-7 4-4 6-8s4 1 8-5v13z" fill="currentColor" opacity="0.45"/><path d="M5 18c2-7 4-4 6-8s4 1 8-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,

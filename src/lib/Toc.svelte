@@ -43,8 +43,10 @@
     close_button_label = `Close table of contents`,
     react_to_keys = [`ArrowDown`, `ArrowUp`, ` `, `Enter`, `Escape`, `Tab`],
     scroll_behavior = `smooth`,
+    scroll_root = null,
     title = `On this page`,
     toc_items = $bindable([]),
+    update_fragment = true,
     warn_on_empty = false,
     collapse_subheadings = false,
     blur_params = { duration: 200 },
@@ -90,8 +92,15 @@
     close_button_label?: string
     react_to_keys?: false | string[]
     scroll_behavior?: `auto` | `smooth`
+    // The scrolling element holding the headings, for a ToC beside a pane inside an app
+    // rather than the page: headings are queried and watched inside it, its scrolling
+    // drives the active heading, and the active offset counts from its top edge.
+    scroll_root?: HTMLElement | null
     title?: string
     toc_items?: HTMLLIElement[]
+    // Clicking an item also navigates to its `#id` fragment. Off for a pane inside an app,
+    // whose URL is not the page's to change and whose ids may repeat in other mounted panes.
+    update_fragment?: boolean
     warn_on_empty?: boolean
     // collapse subheadings under inactive parents. true = every level collapses
     // independently; 'h3' = deepest collapsing level, h4+ expand with their h3 ancestor
@@ -274,7 +283,7 @@
     // Keep root CSS until scrolling ends: browsers may start fragment scrolling after a frame.
     restore_scroll_behavior?.()
     restore_scroll_behavior = override_style(
-      document.documentElement.style,
+      (scroll_root ?? document.documentElement).style,
       `scroll-behavior`,
       scroll_behavior,
     )
@@ -282,16 +291,24 @@
     if (flash_duration_ms) flash_toc_target(node, flash_duration_ms)
   }
 
+  // An id inside scroll_root, not the page's first: other mounted panes may repeat it.
+  const heading_by_id = (id: string) =>
+    scroll_root
+      ? scroll_root.querySelector(`#${CSS.escape(id)}`)
+      : // eslint-disable-next-line unicorn/prefer-query-selector -- IDs need not be valid CSS selectors.
+        document.getElementById(id)
+
   function query_toc_headings() {
     if (items) {
       return first_per_id(items).flatMap(({ id }) => {
-        // eslint-disable-next-line unicorn/prefer-query-selector -- IDs need not be valid CSS selectors.
-        const heading = document.getElementById(id)
+        const heading = heading_by_id(id)
         return heading instanceof HTMLHeadingElement ? [heading] : []
       })
     }
     return first_per_id(
-      Array.from(document.querySelectorAll<HTMLHeadingElement>(heading_selector)).filter(
+      Array.from(
+        (scroll_root ?? document).querySelectorAll<HTMLHeadingElement>(heading_selector),
+      ).filter(
         (heading) =>
           heading.id &&
           !heading.closest(`aside.toc`) &&
@@ -416,7 +433,7 @@
     })
 
     // Attribute changes can affect heading_selector/exclude_selector membership.
-    observer.observe(document.body, {
+    observer.observe(scroll_root ?? document.body, {
       attributes: true,
       childList: true,
       characterData: true,
@@ -425,6 +442,18 @@
     observer.observe(document.documentElement, { attributes: true })
 
     return () => observer.disconnect()
+  })
+
+  // A pane's scroll events reach neither the window nor its listeners: scroll does not bubble.
+  $effect(() => {
+    const root = scroll_root
+    if (!root) return
+    root.addEventListener(`scroll`, on_scroll, { passive: true })
+    root.addEventListener(`scrollend`, on_scrollend)
+    return () => {
+      root.removeEventListener(`scroll`, on_scroll)
+      root.removeEventListener(`scrollend`, on_scrollend)
+    }
   })
 
   // clear_scroll_target writes component state, so its timer must not outlive the component.
@@ -438,9 +467,13 @@
     // during a programmatic scroll keep the target active until scrollend, so intermediate
     // headings aren't highlighted on the way
     if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
+    // headings' tops count from the viewport; a pane's own top edge is its zero
+    const root_top = scroll_root?.getBoundingClientRect().top ?? 0
     if (scroll_target) {
       const distance = Math.abs(
-        scroll_target.getBoundingClientRect().top - active_heading_scroll_offset,
+        scroll_target.getBoundingClientRect().top -
+          root_top -
+          active_heading_scroll_offset,
       )
       // growing distance means the user scrolled away; the threshold tolerates jitter
       if (distance > prev_scroll_target_distance + manual_scroll_threshold_px) {
@@ -453,9 +486,9 @@
 
     let idx = headings.length
     while (idx--) {
-      const { top } = headings[idx].getBoundingClientRect()
+      const top = headings[idx].getBoundingClientRect().top - root_top
 
-      // last heading the viewport has scrolled past, else the first one
+      // last heading the viewport (or pane) has scrolled past, else the first one
       if (top < active_heading_scroll_offset || idx === 0) {
         active_heading = headings[idx]
         return
@@ -507,7 +540,8 @@
       return
     }
     activate_heading(node)
-    if (!link) {
+    if (!update_fragment) event.preventDefault()
+    else if (!link) {
       event.preventDefault()
       // Reuse the real link; plain snippets need a temporary child to inherit li_props.
       const anchor =

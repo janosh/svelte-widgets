@@ -17,7 +17,12 @@
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
     CodeBlock,
+    ControlGroup,
+    EmptyState,
+    GlassChip,
     Icon,
+    KeyValueList,
+    LiveMessage,
     StatGrid,
     Spinner,
     StatusMessage,
@@ -42,6 +47,8 @@
   let collapsed = $state(false)
   let selected = $state<string | null>(null)
   let task_state = $state<`running` | `cancelled`>(`running`)
+  let chart_loading = $state(true)
+  let n_points = $state(0)
   const nodes: TreeNode[] = [
     {
       id: `project`,
@@ -145,6 +152,26 @@
   on_cancel={() => (task_state = `cancelled`)}
   on_retry={() => (task_state = `running`)}
 />
+<p>
+  <code>spinner</code> puts a spinner beside the label while running (styled through
+  <code>spinner_props</code>) and shows the bar only once a <code>value</code> arrives.
+  <code>label</code> also takes a snippet for markup, and errors go to an assertive alert
+  region. <code>overlay</code> centers the status over a positioned parent while pointer events
+  pass through to it everywhere but the buttons.
+</p>
+<button onclick={() => (chart_loading = !chart_loading)}>Toggle loading overlay</button>
+<div class="overlay-demo">
+  {#if chart_loading}
+    <TaskStatus
+      overlay
+      spinner
+      label="Loading structure…"
+      on_cancel={() => (chart_loading = false)}
+    />
+  {:else}
+    <EmptyState overlay message="Nothing plotted yet" />
+  {/if}
+</div>
 
 <Heading level={3} id="codeblock-and-statgrid" icon={Braces}
   >CodeBlock and StatGrid</Heading
@@ -219,6 +246,32 @@
   <code>DragOverlay</code> fills a positioned parent; <code>ClickFeedback</code> uses viewport
   coordinates. The caller owns visibility and timing.
 </p>
+<Heading level={3} id="layout-primitives" icon={ListBulleted}>Layout primitives</Heading>
+<p>
+  <code>EmptyState</code> is a polite status placeholder for missing data; with
+  <code>overlay</code> it lies over still-rendered axes or a blank canvas (as above)
+  without blocking their pointer events. <code>KeyValueList</code> renders one-line
+  term/value rows that ellipsize long values. <code>ControlGroup</code> is an unframed
+  fieldset headed by its legend. <code>GlassChip</code> is a frosted label over visual
+  content, placed with
+  <code>--glass-chip-top</code>/<code>-left</code>. <code>LiveMessage</code> is a visually hidden
+  live region that announces its message as it changes.
+</p>
+<div class="primitives-demo">
+  <ControlGroup legend="Sample">
+    <label>Points <input type="number" min="0" bind:value={n_points} /></label>
+    <LiveMessage message="{n_points} points" />
+  </ControlGroup>
+  <KeyValueList
+    rows={[
+      ['Points', n_points],
+      ['Spacings', '1.21, 2.42, 3.63, 4.84, 6.05, 7.26, 8.47, 9.68, 10.89'],
+    ]}
+  />
+  <div class="chip-demo">
+    <GlassChip>{n_points} points</GlassChip>
+  </div>
+</div>
 <Heading level={3} id="canvas-and-keyboard-primitives" icon={Keyboard}
   >Canvas and keyboard primitives</Heading
 >
@@ -239,6 +292,22 @@
 </p>
 
 <style>
+  .overlay-demo {
+    position: relative;
+    min-height: 8rem;
+    margin-block: 1rem;
+    border: 1px dashed #8888;
+  }
+  .primitives-demo {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12em, 1fr));
+    gap: 1em;
+  }
+  .chip-demo {
+    position: relative;
+    min-height: 5rem;
+    background: linear-gradient(135deg, teal, rebeccapurple);
+  }
   .split-demo {
     display: flex;
     position: relative;

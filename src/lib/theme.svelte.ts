@@ -38,6 +38,21 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
   storage_set(`theme`, mode)
 }
 
+// Inline <head> script restoring the theme before first paint, so prerendered pages don't
+// flash the wrong theme before hydration. Mirrors apply_theme_mode: a stored light/dark wins,
+// anything else (system, unset, unreadable storage) follows prefers-color-scheme. Render it via
+// ThemeScript, or inject it yourself (e.g. a transformPageChunk hook or a static app.html).
+export const theme_init_script = `{
+  let theme
+  try {
+    theme = localStorage.getItem('theme')
+  } catch {}
+  if (theme !== 'light' && theme !== 'dark')
+    theme = globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
+  document.documentElement.style.colorScheme = theme
+  document.documentElement.dataset.theme = theme
+}`
+
 // Mount once per owner and dispose with it. Also works without a ThemeToggle.
 export const watch_theme = (): (() => void) => {
   if (typeof document === `undefined`) throw new TypeError(`watch_theme() is client-only`)

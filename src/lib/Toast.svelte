@@ -221,9 +221,12 @@ announced by only some screen readers, and swapping aria-live mid-flight is as u
     gap: var(--toast-item-gap, 0.6em);
     padding: var(--toast-padding, 6pt 8pt);
     border: var(--toast-border, 1px solid light-dark(lightgray, #555));
-    border-left: 3px solid var(--toast-accent, transparent);
     border-radius: var(--toast-radius, 5pt);
-    background: var(--toast-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
+    /* Accent stripe as a background layer inside the border, not in place of its left side:
+       a neutral toast has no accent and must keep a full border */
+    background:
+      linear-gradient(var(--toast-accent, transparent) 0 0) left / 3px 100% no-repeat,
+      var(--toast-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
     color: var(--toast-color, inherit);
     box-shadow: var(--toast-shadow, 0 3px 12px rgba(0, 0, 0, 0.3));
     font-size: var(--toast-font-size, inherit);

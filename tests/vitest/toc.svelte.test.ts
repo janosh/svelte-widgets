@@ -1030,6 +1030,71 @@ describe(`Toc`, () => {
   })
 })
 
+// A ToC beside a scrolling pane inside an app: headings, ids and scrolling all stay in the
+// pane, whose top edge is the active offset's zero, and the page's URL stays untouched.
+describe(`scroll_root`, () => {
+  // an `#a` outside the pane, as another mounted pane would repeat it
+  const set_pane = () => {
+    set_body(
+      `<h2 id="a">Outside</h2><div id="pane"><h2 id="a">Inside A</h2><h2 id="b">Inside B</h2></div>`,
+    )
+    return doc_query(`#pane`)
+  }
+
+  test.each([
+    [`discovered`, undefined],
+    [`from items`, [{ id: `a`, level: 2, title: `Inside A` }]],
+  ] as const)(`%s headings resolve inside the pane, not the page`, async (_, items) => {
+    const pane = set_pane()
+    const scroll_into_view_mock = spy_scroll_into_view()
+    await mount_toc({ scroll_root: pane, items })
+    expect(toc_texts()).toEqual(items ? [`Inside A`] : [`Inside A`, `Inside B`])
+    await click(`aside.toc ol li`)
+    expect(scroll_into_view_mock.mock.contexts).toEqual([pane.querySelector(`#a`)])
+  })
+
+  test(`the pane's scroll moves the active heading, measured from the pane's top`, async () => {
+    const pane = set_pane()
+    vi.spyOn(pane, `getBoundingClientRect`).mockReturnValue(dom_rect({ top: 500 }))
+    const [inside_a, inside_b] = pane.querySelectorAll(`h2`)
+    let b_top = 700
+    vi.spyOn(inside_a, `getBoundingClientRect`).mockReturnValue(dom_rect({ top: 450 }))
+    vi.spyOn(inside_b, `getBoundingClientRect`).mockImplementation(() =>
+      dom_rect({ top: b_top }),
+    )
+    await mount_toc({ scroll_root: pane })
+    // 200px below the pane's top: not yet past the 100px offset, though far past the page's
+    expect(active_text()).toBe(`Inside A`)
+    b_top = 550
+    pane.dispatchEvent(new Event(`scroll`))
+    await tick()
+    expect(active_text()).toBe(`Inside B`)
+  })
+
+  test.each([true, false])(
+    `update_fragment=%s decides whether a click navigates`,
+    async (update_fragment) => {
+      const pane = set_pane()
+      const scroll_into_view_mock = spy_scroll_into_view()
+      const anchor_click = vi.spyOn(HTMLAnchorElement.prototype, `click`)
+      await mount_toc({ scroll_root: pane, update_fragment })
+      // clicking the link itself: the browser would follow it unless the click is prevented
+      const link = doc_query(`aside.toc ol li:nth-child(2) > a`)
+      const event = new MouseEvent(`click`, { bubbles: true, cancelable: true })
+      link.dispatchEvent(event)
+      // clicking the row: forwarded to its link only when the fragment updates
+      doc_query(`aside.toc ol li`).click()
+      await tick()
+      expect(event.defaultPrevented).toBe(!update_fragment)
+      expect(anchor_click).toHaveBeenCalledTimes(update_fragment ? 1 : 0)
+      expect(scroll_into_view_mock.mock.contexts).toEqual([
+        pane.querySelector(`#b`),
+        pane.querySelector(`#a`),
+      ])
+    },
+  )
+})
+
 describe(`hide_on_intersect`, () => {
   const mock_bounding_rect = (element: Element, rect: Partial<DOMRect>) =>
     vi.spyOn(element, `getBoundingClientRect`).mockReturnValue(dom_rect(rect))

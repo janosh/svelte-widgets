@@ -62,8 +62,37 @@ export const lower_bound = (count: number, is_past: (idx: number) => boolean): n
   return low
 }
 
-export const to_error = (error: unknown): Error =>
-  error instanceof Error ? error : new Error(String(error))
+// Coerce a thrown value into an Error, keeping the original as `cause`. String() throws for
+// null-prototype objects and objects whose toString throws, so those get a generic message.
+export const to_error = (value: unknown): Error => {
+  if (value instanceof Error) return value
+  try {
+    return new Error(String(value), { cause: value })
+  } catch {
+    return new Error(`Thrown value cannot be converted to a string`, { cause: value })
+  }
+}
+
+// A tag opens with a letter, `/` or `!`: a bare `<[^>]*>` ate the prose between a comparison
+// pair, so `T < 300 K and P > 1 bar` read back as `T  1 bar`. Quoted attribute values may
+// hold `>` (`title="x>0"`), so they are skipped whole. Outside quotes the run stops at `<`:
+// with `[^>"']` every unclosed `<` rescanned to the end of input (quadratic), at the cost of
+// reading a malformed `<b c <i>` as text up to the `<i>` tag.
+export const HTML_TAG_SRC = String.raw`<(?:/?[a-z]|!)(?:[^<>"']|"[^"]*"|'[^']*')*>`
+const HTML_TAG_RE = new RegExp(HTML_TAG_SRC, `gi`)
+// Tags only, entities kept, for plain-text uses (titles, search records, lengths). Not a sanitizer:
+// a split tag reassembles (`<<b>img onerror=x>` leaves `<img onerror=x>`), so escape_html or
+// sanitize the result before it reaches {@html} or any other HTML sink.
+export const strip_html = (html: string): string => html.replaceAll(HTML_TAG_RE, ``)
+
+// Escape text for HTML element content and quoted attribute values (also valid XML)
+export const escape_html = (text: string): string =>
+  text
+    .replaceAll(`&`, `&amp;`)
+    .replaceAll(`<`, `&lt;`)
+    .replaceAll(`>`, `&gt;`)
+    .replaceAll(`"`, `&quot;`)
+    .replaceAll(`'`, `&#39;`)
 
 export const slug_to_title = (slug: string): string =>
   slug

@@ -1,4 +1,11 @@
-import { apply_theme_mode, watch_theme, theme, ThemeToggle } from '#lib'
+import {
+  apply_theme_mode,
+  watch_theme,
+  theme,
+  theme_init_script,
+  ThemeScript,
+  ThemeToggle,
+} from '#lib'
 import { Monitor, Moon, Sun } from '#lib/icons.ts'
 import type { ComponentProps } from 'svelte'
 import { mount, tick, unmount } from 'svelte'
@@ -25,6 +32,9 @@ const applied_theme = () => [
   document.documentElement.style.colorScheme,
   document.documentElement.dataset.theme,
 ]
+// Runs the <head> script exactly as the browser does: from its source string
+// oxlint-disable-next-line typescript/no-implied-eval -- evaluating that string is the test
+const run_init_script = () => new Function(theme_init_script)()
 
 const rendered_icon_path = () => doc_query(`button svg path`).getAttribute(`d`)
 
@@ -229,4 +239,40 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
 test(`watch_theme fails clearly without a document`, () => {
   vi.stubGlobal(`document`, undefined)
   expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
+})
+
+// theme_init_script runs before hydration, so it must land on what apply_theme_mode applies.
+// `denied` makes the storage read throw (blocked storage), falling back to the OS setting
+test.each([
+  [`light`, false, `light`],
+  [`dark`, false, `dark`],
+  [`light`, true, `light`],
+  [`system`, true, `dark`],
+  [`system`, false, `light`],
+  [null, true, `dark`],
+  [`bogus`, false, `light`],
+  [`denied`, false, `light`],
+])(
+  `theme_init_script with stored %j, OS dark=%j applies %s`,
+  (stored, os_dark, expected) => {
+    vi.stubGlobal(`matchMedia`, (query: string) => ({ media: query, matches: os_dark }))
+    if (stored === `denied`) vi.stubGlobal(`localStorage`, null)
+    else if (stored !== null) localStorage.setItem(`theme`, stored)
+    run_init_script()
+    expect(applied_theme()).toEqual([expected, expected])
+    apply_theme_mode(stored === `light` || stored === `dark` ? stored : `system`)
+    expect(applied_theme()).toEqual([expected, expected])
+  },
+)
+
+// Server renders put this in <head> where it runs (consumers assert that on their SSR output);
+// here the client render checks placement and content
+test(`ThemeScript puts exactly the init script in <head>`, () => {
+  render(ThemeScript, {})
+  const scripts = [...document.head.querySelectorAll(`script`)]
+  const [script, ...others] = scripts.filter(
+    (node) => node.textContent === theme_init_script,
+  )
+  expect([others.length, script.attributes.length]).toEqual([0, 0])
+  script.remove()
 })

@@ -28,6 +28,7 @@
   import { hold_escape_while_focused } from './attachments/shared'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
+  import LiveMessage from './LiveMessage.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
@@ -2045,13 +2046,13 @@
     </div>
   {/if}
   <!-- live region: selection changes, else available option count while open -->
-  <div class="sr-only" aria-live="polite" aria-atomic="true">
+  <LiveMessage aria-atomic="true">
     {#if last_announcement}
       {#key last_announcement.id}{last_announcement.text}{/key}
     {:else if open}
       {msg.options_available(matching_options.length)}
     {/if}
-  </div>
+  </LiveMessage>
 </div>
 
 <style>

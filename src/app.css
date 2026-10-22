@@ -1,5 +1,5 @@
-/* starry-night syntax highlighting (GitHub-style, light/dark auto-switch) */
-@import '@wooorm/starry-night/style/both';
+/* starry-night syntax highlighting (GitHub-style), following the page's color-scheme */
+@import './lib/highlight/theme.css';
 
 :root {
   --accent: light-dark(#4a7abf, cornflowerblue);
@@ -17,18 +17,6 @@
   --pre-bg: light-dark(rgba(0, 0, 20, 0.03), rgba(0, 0, 0, 0.3));
   --github-corner-bg: light-dark(#222, #eee);
   --github-corner-color: light-dark(#fafafa, #1a1a1a);
-}
-/* starry-night's both.css keys off prefers-color-scheme; re-pin to html color-scheme
-   so ThemeToggle (light while OS is dark, and vice versa) stays readable */
-:root {
-  --color-prettylights-syntax-comment: light-dark(#59636e, #9198a1);
-  --color-prettylights-syntax-constant: light-dark(#0550ae, #79c0ff);
-  --color-prettylights-syntax-entity: light-dark(#6639ba, #d2a8ff);
-  --color-prettylights-syntax-entity-tag: light-dark(#0550ae, #7ee787);
-  --color-prettylights-syntax-keyword: light-dark(#cf222e, #ff7b72);
-  --color-prettylights-syntax-storage-modifier-import: light-dark(#1f2328, #f0f6fc);
-  --color-prettylights-syntax-string: light-dark(#0a3069, #a5d6ff);
-  --color-prettylights-syntax-variable: light-dark(#953800, #ffa657);
 }
 html {
   color-scheme: dark light;

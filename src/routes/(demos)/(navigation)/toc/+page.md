@@ -34,6 +34,38 @@ The site table of contents uses the Markdown manifest. The example scopes its on
 </div>
 ```
 
+### Inside a scrolling pane
+
+In an app, the headings often scroll inside a pane rather than the page. Pass that element as `scroll_root`: headings are queried and observed only inside it, its scrolling moves the active entry, and `active_heading_scroll_offset` counts from its top edge. `update_fragment={false}` keeps a click from rewriting the page URL, whose `#id` could name a heading in another pane. Pair them with `breakpoint={0}` (no mobile panel) and `react_to_keys={false}` (the page keeps its keys).
+
+```svelte example id="toc-scroll-root"
+<script lang="ts">
+  import { Heading, Toc } from 'svelte-widgets'
+
+  let pane = $state<HTMLElement>()
+</script>
+
+<div style="display: flex; gap: 1em; height: 14em">
+  <Toc
+    scroll_root={pane}
+    update_fragment={false}
+    breakpoint={0}
+    react_to_keys={false}
+    title=""
+    aside_props={{ style: `width: 10em` }}
+  />
+  <div
+    bind:this={pane}
+    style="flex: 1; overflow: auto; border: 1px solid; padding: 0 1em"
+  >
+    {#each [`Setup`, `Usage`, `Results`, `Notes`] as name (name)}
+      <Heading level={2} id="pane-{name.toLowerCase()}">{name}</Heading>
+      <p style="height: 10em">Scroll this pane: the entry on the left follows.</p>
+    {/each}
+  </div>
+</div>
+```
+
 ### Collapsing
 
 `collapse_subheadings` takes `true` to fold everything below the top level, or a heading tag to pick the level to fold from — `h3` keeps `h2` entries expanded and hides the rest until their section is active.

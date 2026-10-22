@@ -29,6 +29,8 @@ import {
   sanitize_shortcut_overrides,
   slug_to_title,
   step_focus,
+  escape_html,
+  strip_html,
   to_error,
 } from '#lib/utils.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
@@ -1006,14 +1008,69 @@ test.each([
   expect(lower_bound(sorted.length, (idx) => sorted[idx] >= target)).toBe(expected)
 })
 
+const throwing_to_string = {
+  toString: () => {
+    throw new Error(`nope`)
+  },
+}
 test.each([
   [new TypeError(`boom`), `boom`],
   [`plain`, `plain`],
   [42, `42`],
   [undefined, `undefined`],
+  [null, `null`],
+  [Symbol(`failure`), `Symbol(failure)`],
+  [Object.create(null), `Thrown value cannot be converted to a string`],
+  [{ toString: null }, `Thrown value cannot be converted to a string`],
+  [throwing_to_string, `Thrown value cannot be converted to a string`],
 ])(`to_error(%j) has message %j`, (input, message) => {
   const error = to_error(input)
   expect(error).toBeInstanceOf(Error)
   expect(error.message).toBe(message)
   if (input instanceof Error) expect(error).toBe(input)
+  else expect(error.cause).toBe(input)
+})
+
+test.each([
+  [`<b>bold</b> &amp; <i class="x">it</i>`, `bold &amp; it`],
+  // comparisons aren't tags, so the prose between them survives
+  [`T < 300 K and P > 1 bar`, `T < 300 K and P > 1 bar`],
+  [`<span title="x>0">a</span>`, `a`],
+  [`a<!-- note -->b<br/>c`, `abc`],
+  [``, ``],
+  [`<a title="<b>">link</a>`, `link`], // `<` inside a quoted attribute
+  [`<B>UPPER</B>`, `UPPER`], // tags are case-insensitive
+  // an unterminated `<` is text, not a tag swallowing everything up to the next `>`
+  [`<b>bold</b`, `bold</b`],
+  [`a <b c <i>d</i>`, `a <b c d`], // a browser reads `<i` as an attribute, here it is text
+  [`<a "unclosed`, `<a "unclosed`],
+  // not a sanitizer: removing the inner tag reassembles an outer one
+  [`<<b>img src=x onerror=alert(1)>`, `<img src=x onerror=alert(1)>`],
+])(`strip_html(%j) = %j`, (input, expected) => {
+  expect(strip_html(input)).toBe(expected)
+  // escaped, the result is safe in HTML text and quoted attribute values
+  expect(escape_html(strip_html(input))).not.toMatch(/<[a-z]/iu)
+})
+
+// `[^>"']` in the attribute run let every unclosed `<` rescan to the end of input, so 48 KB of
+// `<a ` took 631 ms and grew quadratically. Linear, these finish in well under 1 ms.
+test.each([`<a `, `<a "`, `<a '`, `<a "'`, `</b`, `<!`, `<a "<a" `])(
+  `strip_html stays linear on 200 KB of %j`,
+  (unit) => {
+    const input = unit.repeat(Math.ceil(200_000 / unit.length))
+    const start = performance.now()
+    strip_html(input)
+    expect(performance.now() - start).toBeLessThan(200)
+  },
+)
+
+test.each([
+  [
+    `<a b="c">Tom & Jerry's</a>`,
+    `&lt;a b=&quot;c&quot;&gt;Tom &amp; Jerry&#39;s&lt;/a&gt;`,
+  ],
+  [`&amp;`, `&amp;amp;`],
+  [`plain`, `plain`],
+])(`escape_html(%j) = %j`, (input, expected) => {
+  expect(escape_html(input)).toBe(expected)
 })

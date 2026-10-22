@@ -2,7 +2,8 @@ import { Icon } from '#lib'
 import * as icons from '#lib/icons.ts'
 import type { IconData } from '#lib/icons.ts'
 import { escape_template_literal } from '#root/scripts/generate-icons.ts'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { mount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { create_element, doc_query, render } from './index'
@@ -200,4 +201,25 @@ describe(`icon catalog page`, () => {
     await vi.waitFor(() => expect(document.querySelector(`[role="alert"]`)).toBeNull())
     expect(write_text).toHaveBeenCalledTimes(2)
   })
+})
+
+// custom.ts builds glyphs through helper calls, which bundlers keep unless marked pure: a page
+// importing one icon then shipped all ~150 hand-made glyphs
+test(`a bundle importing one icon drops every other glyph`, async () => {
+  const { build } = await import(`vite`)
+  const dir = mkdtempSync(`${tmpdir()}/icon-shake-`)
+  onTestFinished(() => rmSync(dir, { recursive: true }))
+  const entry = `${dir}/entry.ts`
+  const barrel = `${import.meta.dirname}/../../src/lib/icons.ts`
+  writeFileSync(entry, `import { AreaPlot } from '${barrel}'\nconsole.log(AreaPlot)\n`)
+  const result = await build({
+    configFile: false,
+    logLevel: `silent`,
+    build: { write: false, minify: false, lib: { entry, formats: [`es`] } },
+  })
+  const [output] = Array.isArray(result) ? result : [result]
+  if (!(`output` in output)) throw new Error(`expected a build output`)
+  const code = output.output.map((chunk) => (`code` in chunk ? chunk.code : ``)).join(``)
+  // helper calls, not the helpers' own declarations: AreaPlot's call only
+  expect(code.match(/(?<!function )\b(?:icon|path)\(/g)).toHaveLength(1)
 })

@@ -27,7 +27,11 @@
   })
 </script>
 
-<progress {...rest} aria-label={rest['aria-label'] ?? label} {max} value={progress}
+<progress
+  {...rest}
+  aria-label={rest['aria-labelledby'] ? undefined : (rest['aria-label'] ?? label)}
+  {max}
+  value={progress}
 ></progress>
 
 <style>
