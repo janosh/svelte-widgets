@@ -23,7 +23,6 @@ const children = raw_snippet(`<p class="custom-content">Custom content</p>`)
 // children take precedence over the message prop, and `` leaves a bare container
 test.each([
   [{}, `No data to display`, null, false],
-  [{ message: `` }, null, null, false],
   [{ message: `Hidden`, children }, null, `Custom content`, false],
   [{ overlay: true }, `No data to display`, null, true],
 ])(

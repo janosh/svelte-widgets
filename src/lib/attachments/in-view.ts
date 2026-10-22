@@ -1,5 +1,3 @@
-import type { Attachment } from 'svelte/attachments'
-
 export type InViewOptions = {
   root?: Element | Document | null // viewport by default
   root_margin?: string // grows the root box so work starts before the node scrolls in
@@ -14,8 +12,8 @@ export const in_view =
   (
     callback: (visible: boolean, entry: IntersectionObserverEntry) => void,
     options: InViewOptions = {},
-  ): Attachment =>
-  (node) => {
+  ) =>
+  (node: Element): (() => void) => {
     const { root, root_margin, threshold, once = false } = options
     const observer = new IntersectionObserver(
       (entries) => {

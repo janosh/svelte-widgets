@@ -154,9 +154,10 @@
 />
 <p>
   <code>spinner</code> puts a spinner beside the label while running (styled through
-  <code>spinner_props</code>), <code>show_progress={'{false}'}</code> drops the bar, and
-  <code>overlay</code> centers the status over a positioned parent while pointer events pass
-  through to it everywhere but the buttons.
+  <code>spinner_props</code>) and shows the bar only once a <code>value</code> arrives.
+  <code>label</code> also takes a snippet for markup, and errors go to an assertive alert
+  region. <code>overlay</code> centers the status over a positioned parent while pointer events
+  pass through to it everywhere but the buttons.
 </p>
 <button onclick={() => (chart_loading = !chart_loading)}>Toggle loading overlay</button>
 <div class="overlay-demo">
@@ -164,7 +165,6 @@
     <TaskStatus
       overlay
       spinner
-      show_progress={false}
       label="Loading structure…"
       on_cancel={() => (chart_loading = false)}
     />

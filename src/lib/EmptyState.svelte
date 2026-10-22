@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
 
-  // `children` takes precedence over the plain-text `message` (`` renders a bare container).
+  // `children` takes precedence over the plain-text `message`.
   // `overlay` lays it over a still-rendered parent (empty plot axes, a blank canvas) without
   // blocking that parent's pointer events. A polite status region unless `role` says otherwise.
   let {
@@ -21,7 +21,7 @@
 <div {...rest} {role} class={[`empty-state`, rest.class, { overlay }]}>
   {#if children}
     {@render children()}
-  {:else if message}
+  {:else}
     <span class="message">{message}</span>
   {/if}
 </div>

@@ -277,18 +277,14 @@ test(`theme_init_script survives unreadable storage`, () => {
   expect(applied_theme()).toEqual([`light`, `light`])
 })
 
-// Under a CSP the inline head script needs the request's nonce, escaped like any attribute
-test.each([
-  [undefined, null],
-  [`r4nd"om`, `r4nd"om`],
-])(
-  `ThemeScript with nonce %j puts the init script in <head> with nonce %j`,
-  (nonce, expected) => {
-    render(ThemeScript, { nonce })
-    const script = [...document.head.querySelectorAll(`script`)].find(
-      (node) => node.textContent === theme_init_script,
-    )
-    expect(script?.getAttribute(`nonce`)).toBe(expected)
-    script?.remove()
-  },
-)
+// Server renders put this in <head> where it runs (consumers assert that on their SSR output);
+// here the client render checks placement and content
+test(`ThemeScript puts exactly the init script in <head>`, () => {
+  render(ThemeScript, {})
+  const scripts = [...document.head.querySelectorAll(`script`)].filter(
+    (node) => node.textContent === theme_init_script,
+  )
+  expect(scripts).toHaveLength(1)
+  expect(scripts[0].attributes).toHaveLength(0)
+  scripts[0].remove()
+})

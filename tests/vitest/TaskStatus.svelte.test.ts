@@ -12,27 +12,30 @@ const button_texts = (root: Element) =>
   [...root.querySelectorAll(`button`)].map((button) => button.textContent)
 
 test.each([
-  [`idle`, false, []],
-  [`running`, true, [`Cancel`]],
-  [`success`, false, []],
-  [`error`, false, [`Retry`]],
-  [`cancelled`, false, [`Retry`]],
-] as const)(`state=%s: progress=%s, buttons=%j`, (state, has_progress, buttons) => {
-  const root = render_task({
-    state,
-    label: `Parsing`,
-    on_cancel: vi.fn(),
-    on_retry: vi.fn(),
-  })
-  expect(root.dataset.state).toBe(state)
-  const status = doc_query(`[role="status"]`)
-  expect([status.textContent, status.getAttribute(`aria-live`)]).toEqual([
-    `Parsing`,
-    `polite`,
-  ])
-  expect(root.querySelector(`progress`) !== null).toBe(has_progress)
-  expect(button_texts(root)).toEqual(buttons)
-})
+  [`idle`, false, [], `status`],
+  [`running`, true, [`Cancel`], `status`],
+  [`success`, false, [], `status`],
+  [`error`, false, [`Retry`], `alert`],
+  [`cancelled`, false, [`Retry`], `status`],
+] as const)(
+  `state=%s: progress=%s, buttons=%j, label in the %s region`,
+  (state, has_progress, buttons, region) => {
+    const root = render_task({
+      state,
+      label: `Parsing`,
+      on_cancel: vi.fn(),
+      on_retry: vi.fn(),
+    })
+    expect(root.dataset.state).toBe(state)
+    // both regions stay mounted; only errors go to the assertive one
+    const texts = [`status`, `alert`].map((role) =>
+      doc_query(`[role="${role}"]`).textContent?.trim(),
+    )
+    expect(texts).toEqual(region === `status` ? [`Parsing`, ``] : [``, `Parsing`])
+    expect(root.querySelector(`progress`) !== null).toBe(has_progress)
+    expect(button_texts(root)).toEqual(buttons)
+  },
+)
 
 test.each([`running`, `error`, `cancelled`] as const)(
   `state=%s offers no button without its handler`,
@@ -62,7 +65,10 @@ test(`forwards progress, children and attributes, and runs cancel/retry under cu
   const progress = doc_query(`progress`)
   expect(
     [`value`, `max`, `aria-label`].map((attr) => progress.getAttribute(attr)),
-  ).toEqual([`3`, `7`, `Parsing`])
+  ).toEqual([`3`, `7`, null])
+  // named by the visible label, which may be a snippet
+  const label_id = progress.getAttribute(`aria-labelledby`) ?? ``
+  expect(doc_query(`[id="${label_id}"]`).textContent).toBe(`Parsing`)
   expect(button_texts(root)).toEqual([`Stop`])
   root.querySelector(`button`)?.click()
   expect(props.on_cancel).toHaveBeenCalledOnce()
@@ -74,7 +80,7 @@ test(`forwards progress, children and attributes, and runs cancel/retry under cu
   expect(props.on_retry).toHaveBeenCalledOnce()
 })
 
-test(`spinner mode keeps one live region across states and forwards spinner_props`, async () => {
+test(`spinner mode adds no live region and moves an error label to the alert region`, async () => {
   const props = $state<Props>({
     state: `running`,
     label: `Loading`,
@@ -82,34 +88,51 @@ test(`spinner mode keeps one live region across states and forwards spinner_prop
     spinner_props: { title: `Parsing in a worker` },
   })
   const root = render_task(props)
-  const region = doc_query(`[role="status"]`)
-  const spinner = doc_query(`.task-status [role="status"] .spinner`)
-  // the spinner is no second live region inside the first
-  expect([spinner.getAttribute(`role`), spinner.getAttribute(`aria-live`)]).toEqual([
-    null,
-    null,
-  ])
-  expect([spinner.title, region.textContent?.trim()]).toEqual([
+  const [status, alert] = [`status`, `alert`].map((role) => doc_query(`[role="${role}"]`))
+  const spinner = doc_query(`[role="status"] .spinner`)
+  expect(
+    [`role`, `aria-live`, `aria-label`].map((attr) => spinner.getAttribute(attr)),
+  ).toEqual([null, null, null])
+  expect([spinner.title, status.textContent?.trim()]).toEqual([
     `Parsing in a worker`,
     `Loading`,
   ])
-  expect(document.querySelectorAll(`[aria-live]`)).toHaveLength(1)
+  expect(document.querySelectorAll(`[aria-live]`)).toHaveLength(2)
   props.state = `error`
   props.label = `Failed`
   await tick()
-  expect(doc_query(`[role="status"]`)).toBe(region)
-  expect([root.querySelector(`.spinner`), region.textContent?.trim()]).toEqual([
-    null,
-    `Failed`,
+  // same mounted regions, so the change is announced
+  expect([doc_query(`[role="status"]`), doc_query(`[role="alert"]`)]).toEqual([
+    status,
+    alert,
   ])
+  expect([
+    root.querySelector(`.spinner`),
+    status.textContent?.trim(),
+    alert.textContent?.trim(),
+  ]).toEqual([null, ``, `Failed`])
 })
 
+// a spinner stands in for the bar only while progress is unknown, never both
 test.each([
   [{}, true, false],
-  [{ show_progress: false }, false, false],
-  [{ show_progress: false, overlay: true }, false, true],
-])(`%j: progress bar %s, overlay class %s`, (extra, has_progress, overlay) => {
-  const root = render_task({ label: `Loading`, ...extra })
-  expect(root.querySelector(`progress`) !== null).toBe(has_progress)
-  expect(root.classList.contains(`overlay`)).toBe(overlay)
+  [{ spinner: true }, false, true],
+  [{ spinner: true, value: 40 }, true, false],
+])(
+  `%j while running: progress bar %s, spinner %s`,
+  (extra, has_progress, has_spinner) => {
+    const root = render_task({ label: `Loading`, ...extra })
+    expect(root.querySelector(`progress`) !== null).toBe(has_progress)
+    expect(root.querySelector(`.spinner`) !== null).toBe(has_spinner)
+  },
+)
+
+test(`overlay class and snippet labels with markup`, () => {
+  const root = render_task({
+    state: `error`,
+    label: raw_snippet(`<span>Could not load κ<sub>SRME</sub></span>`),
+    overlay: true,
+  })
+  expect(root.classList.contains(`overlay`)).toBe(true)
+  expect(doc_query(`[role="alert"] sub`).textContent).toBe(`SRME`)
 })

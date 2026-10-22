@@ -2,7 +2,13 @@
 
 export type DownloadData = string | Blob | ArrayBuffer | ArrayBufferView<ArrayBuffer>
 
-const anchor_download = (data: DownloadData, filename: string, type: string): void => {
+// Download data to a file, unless a global `download` override (installed by VS Code webviews
+// to route saves through the extension host) takes it
+export const download = (data: DownloadData, filename: string, type: string): void => {
+  const global_download = (globalThis as Record<string, unknown>).download
+  if (typeof global_download === `function` && global_download !== download) {
+    return (global_download as typeof download)(data, filename, type)
+  }
   const link = document.createElement(`a`)
   const url = URL.createObjectURL(new Blob([data], { type }))
   link.href = url
@@ -14,16 +20,6 @@ const anchor_download = (data: DownloadData, filename: string, type: string): vo
     // deferred: some browsers resolve the blob URL after click() returns
     setTimeout(() => URL.revokeObjectURL(url), 0)
   }
-}
-
-// Download data to a file, unless a global `download` override (installed by VS Code webviews
-// to route saves through the extension host) takes it
-export const download = (data: DownloadData, filename: string, type: string): void => {
-  const global_download = (globalThis as Record<string, unknown>).download
-  if (typeof global_download === `function` && global_download !== download) {
-    return (global_download as typeof download)(data, filename, type)
-  }
-  return anchor_download(data, filename, type)
 }
 
 // Base64 data URL of a blob (FileReader streams it; a fromCharCode spread overflows on big ones)

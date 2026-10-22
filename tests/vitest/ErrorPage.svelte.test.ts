@@ -14,6 +14,7 @@ test.each([
   (status, message, heading, issue_link) => {
     render(ErrorPage, { status, message, name: `site`, bugs_url, class: `extra` })
     expect(doc_query(`.error-page.extra h1`).textContent?.trim()).toBe(heading)
+    expect(doc_query(`h1`).getAttribute(`aria-label`)).toBe(heading.replace(`😵`, `0`))
     expect(document.querySelector(`a[href="${bugs_url}"]`) !== null).toBe(issue_link)
     expect(document.title).toBe(`Error ${status} • site`)
     expect(doc_query(`a[href="/"]`).textContent).toBe(`landing page`)

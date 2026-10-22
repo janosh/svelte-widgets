@@ -28,6 +28,7 @@
   // undefined until hydration reads navigator.onLine: starting with false would flash the
   // offline note at online visitors in prerendered HTML, starting with true would hide it
   let online: boolean | undefined = $state()
+  const tail = $derived(message ? `: ${message}` : ``)
 </script>
 
 <svelte:head>
@@ -37,8 +38,9 @@
 <svelte:window bind:online />
 
 <div {...rest} class={[`error-page`, rest.class]}>
-  <h1 id="error">
-    Error {String(status).replace(`0`, `😵`)}{message ? `: ${message}` : ``}
+  <!-- the dizzy 0 is for eyes; screen readers get the plain status -->
+  <h1 id="error" aria-label="Error {status}{tail}">
+    Error {String(status).replace(`0`, `😵`)}{tail}
   </h1>
 
   {#if status >= 500 && bugs_url}
