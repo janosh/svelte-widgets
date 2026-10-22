@@ -40,22 +40,21 @@
     min-height: inherit;
     text-align: center;
     box-sizing: border-box;
-  }
-  .empty-state.overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-  }
-  .empty-state > :global(:is(p, h3, ul, strong)),
-  .empty-state > .message {
-    max-width: var(--empty-state-max-width, 500px);
-  }
-  .empty-state :global(p),
-  .empty-state > .message {
-    color: var(--text-color-muted, light-dark(#666, #bbb));
-    margin: 0;
-  }
-  .empty-state :global(h3) {
-    margin: 0 0 0.5em;
+    &.overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+    > :global(*) {
+      max-width: var(--empty-state-max-width, 500px);
+    }
+    :global(p),
+    .message {
+      color: var(--text-color-muted, light-dark(#666, #bbb));
+      margin: 0;
+    }
+    :global(h3) {
+      margin: 0 0 0.5em;
+    }
   }
 </style>

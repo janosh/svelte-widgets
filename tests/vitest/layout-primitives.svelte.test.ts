@@ -5,29 +5,20 @@ import { doc_query, raw_snippet, render } from './index'
 
 const children = raw_snippet(`<span class="custom">Custom content</span>`)
 const attrs = { class: `caller`, id: `root`, style: `margin-top: 3px` }
+const legend = `Stacking`
+const children_text = `Custom content`
 
 test.each([
-  [`EmptyState`, () => render(EmptyState, attrs), `.empty-state`],
-  [
-    `KeyValueList`,
-    () => render(KeyValueList, { rows: [], ...attrs }),
-    `dl.key-value-list`,
-  ],
-  [`LiveMessage`, () => render(LiveMessage, attrs), `span.sr-only`],
-  [`GlassChip`, () => render(GlassChip, { children, ...attrs }), `.glass-chip`],
-  [
-    `ControlGroup`,
-    () => render(ControlGroup, { legend: `Stacking`, children, ...attrs }),
-    `fieldset.control-group`,
-  ],
-] as const)(
-  `%s forwards class, attributes and style to its root`,
-  (_name, mount, selector) => {
-    mount()
-    const root = doc_query(`${selector}.caller`)
-    expect([root.id, root.style.marginTop]).toEqual([`root`, `3px`])
-  },
-)
+  [`.empty-state`, () => render(EmptyState, attrs)],
+  [`dl.key-value-list`, () => render(KeyValueList, { rows: [], ...attrs })],
+  [`span.sr-only`, () => render(LiveMessage, attrs)],
+  [`.glass-chip`, () => render(GlassChip, { children, ...attrs })],
+  [`fieldset.control-group`, () => render(ControlGroup, { legend, children, ...attrs })],
+] as const)(`%s forwards class, attributes and style`, (selector, mount) => {
+  mount()
+  const root = doc_query(`${selector}.caller`)
+  expect([root.id, root.style.marginTop]).toEqual([`root`, `3px`])
+})
 
 test.each([
   [{}, `No data to display`, null, false, `status`],
@@ -35,43 +26,40 @@ test.each([
   [{ overlay: true, role: `alert` }, `No data to display`, null, true, `alert`],
 ])(
   `EmptyState %j: message %s, children %s, overlay %s, role %s`,
-  (props, message, custom, overlay, role) => {
+  (props, ...expected) => {
     render(EmptyState, props)
     const root = doc_query(`.empty-state`)
     // a span, so the message stays valid inside a <p>
-    expect(root.querySelector(`span.message`)?.textContent ?? null).toBe(message)
-    expect(root.querySelector(`.custom`)?.textContent ?? null).toBe(custom)
-    expect([root.classList.contains(`overlay`), root.getAttribute(`role`)]).toEqual([
-      overlay,
-      role,
-    ])
+    const text = (selector: string) => root.querySelector(selector)?.textContent ?? null
+    const state = [root.classList.contains(`overlay`), root.getAttribute(`role`)]
+    expect([text(`span.message`), text(`.custom`), ...state]).toEqual(expected)
   },
 )
 
-test(`KeyValueList renders term/value rows with the full value in the title and follows updates`, () => {
+test(`KeyValueList shows each full value in its title and follows updates`, () => {
   const props = $state<ComponentProps<typeof KeyValueList>>({
     rows: [
       [`Atoms`, 42],
-      [`Spacings`, `1.2, 3.4, 5.6`],
+      [`Spacings`, `1.2, 3.4`],
     ],
   })
   render(KeyValueList, props)
   const rows = () =>
-    [...document.querySelectorAll(`dl div`)].map((row) => [
-      row.querySelector(`dt`)?.textContent,
-      row.querySelector(`dd`)?.textContent,
-      row.querySelector(`dd`)?.getAttribute(`title`),
-    ])
+    [...document.querySelectorAll(`dl div`)].map((row) =>
+      [`dt`, `dd`]
+        .map((tag) => row.querySelector(tag)?.textContent)
+        .concat(row.querySelector(`dd`)?.title),
+    )
   expect(rows()).toEqual([
     [`Atoms`, `42`, `42`],
-    [`Spacings`, `1.2, 3.4, 5.6`, `1.2, 3.4, 5.6`],
+    [`Spacings`, `1.2, 3.4`, `1.2, 3.4`],
   ])
   props.rows = [[`Atoms`, 7]]
   flushSync()
   expect(rows()).toEqual([[`Atoms`, `7`, `7`]])
 })
 
-test(`LiveMessage stays mounted while empty, announces changes and lets children and aria-live override`, () => {
+test(`LiveMessage stays mounted while empty and lets children and aria-live override`, () => {
   const props = $state<ComponentProps<typeof LiveMessage>>({ message: `` })
   render(LiveMessage, props)
   const region = doc_query(`span.sr-only`)
@@ -87,30 +75,26 @@ test(`LiveMessage stays mounted while empty, announces changes and lets children
   ])
 })
 
-test(`GlassChip renders children start-aligned inside a centered parent`, () => {
+test(`GlassChip stays start-aligned inside a centered parent`, () => {
   const section = document.createElement(`section`)
   section.style.textAlign = `center`
   document.body.append(section)
   render(GlassChip, { children }, section)
   const chip = doc_query(`.glass-chip`)
   expect([chip.textContent, getComputedStyle(chip).textAlign]).toEqual([
-    `Custom content`,
+    children_text,
     `start`,
   ])
 })
 
-test(`ControlGroup renders a fieldset named by its legend that disables its controls`, () => {
-  render(ControlGroup, {
-    legend: `Stacking`,
-    children: raw_snippet(`<label>Gap <input type="number" /></label>`),
-    disabled: true,
-  })
+test(`ControlGroup is a fieldset named by its legend that disables its controls`, () => {
+  const label = raw_snippet(`<label>Gap <input type="number" /></label>`)
+  render(ControlGroup, { legend, children: label, disabled: true })
   const fieldset = doc_query<HTMLFieldSetElement>(`fieldset.control-group`)
-  const legend = fieldset.firstElementChild
-  expect([legend?.tagName, legend?.textContent, fieldset.disabled]).toEqual([
-    `LEGEND`,
-    `Stacking`,
+  const { tagName, textContent } = fieldset.firstElementChild ?? {}
+  expect([tagName, textContent]).toEqual([`LEGEND`, legend])
+  expect([fieldset.disabled, fieldset.querySelector(`input`)?.type]).toEqual([
     true,
+    `number`,
   ])
-  expect(fieldset.querySelector(`input`)).not.toBeNull()
 })

@@ -1066,8 +1066,8 @@ test.each([`<a `, `<a "`, `<a '`, `<a "'`, `</b`, `<!`, `<a "<a" `])(
 
 test.each([
   [
-    `<a href="x">Tom & Jerry's</a>`,
-    `&lt;a href=&quot;x&quot;&gt;Tom &amp; Jerry&#39;s&lt;/a&gt;`,
+    `<a b="c">Tom & Jerry's</a>`,
+    `&lt;a b=&quot;c&quot;&gt;Tom &amp; Jerry&#39;s&lt;/a&gt;`,
   ],
   [`&amp;`, `&amp;amp;`],
   [`plain`, `plain`],

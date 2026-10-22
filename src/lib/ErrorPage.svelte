@@ -1,7 +1,6 @@
 <script lang="ts">
   // Body of a SvelteKit +error.svelte. Takes status and message as props (pass page.status
   // and page.error?.message) so the library stays free of $app imports.
-  import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
 
   const {
@@ -12,7 +11,6 @@
     status_page_url,
     home_href = `/`,
     logo,
-    children,
     ...rest
   }: {
     status: number
@@ -22,8 +20,7 @@
     status_page_url?: string // the host's status page, linked when the visitor is offline
     home_href?: string
     logo?: string // image URL shown in the home link
-    children?: Snippet // extra content after the default notes
-  } & Omit<HTMLAttributes<HTMLDivElement>, `children`> = $props()
+  } & HTMLAttributes<HTMLDivElement> = $props()
 
   // undefined until hydration reads navigator.onLine: starting with false would flash the
   // offline note at online visitors in prerendered HTML, starting with true would hide it
@@ -59,8 +56,6 @@
       {/if}
     </p>
   {/if}
-
-  {@render children?.()}
 
   <p>
     <!-- one line: whitespace inside the link would be underlined -->

@@ -1,33 +1,20 @@
 import { in_view } from '#lib/attachments/index.ts'
-import { beforeEach, expect, test, vi } from 'vite-plus/test'
+import { expect, test, vi } from 'vite-plus/test'
 
-// One fake observer per test: `report` delivers a batch of crossings to in_view's callback
+// `report` delivers a batch of crossings to the latest fake observer's callback
 let report: (...states: boolean[]) => void
 let options: IntersectionObserverInit | undefined
 const observe = vi.fn()
 const disconnect = vi.fn()
-beforeEach(() => {
-  vi.stubGlobal(
-    `IntersectionObserver`,
-    class {
-      observe = observe
-      disconnect = disconnect
-      constructor(
-        callback: IntersectionObserverCallback,
-        init?: IntersectionObserverInit,
-      ) {
-        options = init
-        report = (...states) =>
-          callback(
-            states.map(
-              (isIntersecting) => ({ isIntersecting }) as IntersectionObserverEntry,
-            ),
-            this as unknown as IntersectionObserver,
-          )
-      }
-    },
-  )
-})
+class FakeObserver {
+  observe = observe
+  disconnect = disconnect
+  constructor(callback: (entries: object[]) => void, init?: IntersectionObserverInit) {
+    options = init
+    report = (...states) => callback(states.map((isIntersecting) => ({ isIntersecting })))
+  }
+}
+vi.stubGlobal(`IntersectionObserver`, FakeObserver)
 
 test(`reports every crossing with the latest entry of a batch, and forwards options`, () => {
   const node = document.createElement(`div`)

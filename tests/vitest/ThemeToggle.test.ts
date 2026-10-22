@@ -241,7 +241,8 @@ test(`watch_theme fails clearly without a document`, () => {
   expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
 })
 
-// theme_init_script runs before hydration, so it must land on what apply_theme_mode applies
+// theme_init_script runs before hydration, so it must land on what apply_theme_mode applies.
+// `denied` makes the storage read throw (blocked storage), falling back to the OS setting
 test.each([
   [`light`, false, `light`],
   [`dark`, false, `dark`],
@@ -250,11 +251,13 @@ test.each([
   [`system`, false, `light`],
   [null, true, `dark`],
   [`bogus`, false, `light`],
+  [`denied`, false, `light`],
 ])(
-  `theme_init_script with stored %j and OS dark=%j applies %s like apply_theme_mode`,
+  `theme_init_script with stored %j, OS dark=%j applies %s`,
   (stored, os_dark, expected) => {
     vi.stubGlobal(`matchMedia`, (query: string) => ({ media: query, matches: os_dark }))
-    if (stored !== null) localStorage.setItem(`theme`, stored)
+    if (stored === `denied`) vi.stubGlobal(`localStorage`, null)
+    else if (stored !== null) localStorage.setItem(`theme`, stored)
     run_init_script()
     expect(applied_theme()).toEqual([expected, expected])
     apply_theme_mode(stored === `light` || stored === `dark` ? stored : `system`)
@@ -262,24 +265,14 @@ test.each([
   },
 )
 
-test(`theme_init_script survives unreadable storage`, () => {
-  vi.stubGlobal(`localStorage`, {
-    getItem: () => {
-      throw new Error(`denied`)
-    },
-  })
-  run_init_script()
-  expect(applied_theme()).toEqual([`light`, `light`])
-})
-
 // Server renders put this in <head> where it runs (consumers assert that on their SSR output);
 // here the client render checks placement and content
 test(`ThemeScript puts exactly the init script in <head>`, () => {
   render(ThemeScript, {})
-  const scripts = [...document.head.querySelectorAll(`script`)].filter(
+  const scripts = [...document.head.querySelectorAll(`script`)]
+  const [script, ...others] = scripts.filter(
     (node) => node.textContent === theme_init_script,
   )
-  expect(scripts).toHaveLength(1)
-  expect(scripts[0].attributes).toHaveLength(0)
-  scripts[0].remove()
+  expect([others.length, script.attributes.length]).toEqual([0, 0])
+  script.remove()
 })
