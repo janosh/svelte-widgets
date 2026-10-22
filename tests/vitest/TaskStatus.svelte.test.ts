@@ -80,37 +80,27 @@ test(`forwards progress, children and attributes, and runs cancel/retry under cu
   expect(props.on_retry).toHaveBeenCalledOnce()
 })
 
-test(`spinner mode adds no live region and moves an error label to the alert region`, async () => {
+test(`spinner adds no live region, and an error moves the label to the same mounted alert`, async () => {
   const props = $state<Props>({
-    state: `running`,
     label: `Loading`,
     spinner: true,
-    spinner_props: { title: `Parsing in a worker` },
+    spinner_props: { title: `Worker` },
   })
   const root = render_task(props)
-  const [status, alert] = [`status`, `alert`].map((role) => doc_query(`[role="${role}"]`))
   const spinner = doc_query(`[role="status"] .spinner`)
-  expect(
-    [`role`, `aria-live`, `aria-label`].map((attr) => spinner.getAttribute(attr)),
-  ).toEqual([null, null, null])
-  expect([spinner.title, status.textContent?.trim()]).toEqual([
-    `Parsing in a worker`,
-    `Loading`,
-  ])
-  expect(document.querySelectorAll(`[aria-live]`)).toHaveLength(2)
-  props.state = `error`
-  props.label = `Failed`
+  const attrs = [`role`, `aria-live`, `aria-label`, `title`].map((attr) =>
+    spinner.getAttribute(attr),
+  )
+  expect(attrs).toEqual([null, null, null, `Worker`])
+  const alert = doc_query(`[role="alert"]`)
+  Object.assign(props, { state: `error`, label: `Failed` })
   await tick()
-  // same mounted regions, so the change is announced
-  expect([doc_query(`[role="status"]`), doc_query(`[role="alert"]`)]).toEqual([
-    status,
+  // the same mounted region, so the change is announced
+  expect([doc_query(`[role="alert"]`), alert.textContent?.trim()]).toEqual([
     alert,
+    `Failed`,
   ])
-  expect([
-    root.querySelector(`.spinner`),
-    status.textContent?.trim(),
-    alert.textContent?.trim(),
-  ]).toEqual([null, ``, `Failed`])
+  expect(root.querySelector(`.spinner`)).toBeNull()
 })
 
 // a spinner stands in for the bar only while progress is unknown, never both

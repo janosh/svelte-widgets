@@ -5,11 +5,14 @@ import { create_element, press_key } from '../index'
 const toggle_event = (new_state: `open` | `closed`) =>
   Object.assign(new Event(`beforetoggle`), { newState: new_state })
 
-// trigger button plus a menu holding a focusable option, attached and torn down per test
+// trigger button plus a menu holding a focusable option, attached and torn down per test.
+// The preset margin and action are what teardown must restore.
 const setup = () => {
   const anchor = document.createElement(`button`)
+  anchor.popoverTargetAction = `toggle`
   document.body.append(anchor)
   const menu = create_element()
+  menu.style.margin = `3px`
   const option = document.createElement(`button`)
   menu.append(option)
   const on_close = vi.fn()
@@ -18,10 +21,11 @@ const setup = () => {
   return { anchor, menu, option, on_close, cleanup }
 }
 
-test(`without an anchor it leaves the node alone`, () => {
+test(`without an anchor it leaves the node alone, and close_before_removal is a no-op`, () => {
   const node = create_element()
   expect(anchored_popover({ anchor: null, on_close: vi.fn() })(node)).toBeUndefined()
   expect([node.popover, node.matches(`:popover-open`)]).toEqual([null, false])
+  expect(close_before_removal(node)).toEqual({})
 })
 
 test(`shows an auto popover the anchor invokes, undoing the UA popover box`, () => {
@@ -64,7 +68,7 @@ test(`Escape hides the open popover before outer listeners and refocuses the tri
 })
 
 test.each([`teardown`, `close_before_removal`] as const)(
-  `%s hides silently and the trigger stops invoking it`,
+  `%s hides silently, and teardown restores node and trigger`,
   (closer) => {
     const { anchor, menu, on_close, cleanup } = setup()
     // a real hide fires beforetoggle, which must not reach on_close here
@@ -77,31 +81,22 @@ test.each([`teardown`, `close_before_removal`] as const)(
     else expect(close_before_removal(menu)).toEqual({})
     expect(menu.matches(`:popover-open`)).toBe(false)
     expect(on_close).not.toHaveBeenCalled()
-    expect(anchor.popoverTargetElement).toBe(closer === `teardown` ? null : menu)
+    // the outro only hides; teardown undoes all attaching did (a rerun without an anchor
+    // leaves the node alone)
+    const { popover, style } = menu
+    const state = [
+      popover,
+      style.margin,
+      style.pointerEvents,
+      style.inset,
+      anchor.popoverTargetAction,
+    ]
+    const torn_down = closer === `teardown`
+    expect(state).toEqual(
+      torn_down
+        ? [null, `3px`, ``, ``, `toggle`]
+        : [`auto`, `0px`, `auto`, `auto`, `show`],
+    )
+    expect(anchor.popoverTargetElement).toBe(torn_down ? null : menu)
   },
 )
-
-// A rerun without an anchor leaves the node alone, so teardown must undo everything attaching did
-test(`teardown restores the node's popover, styles and the trigger's target`, () => {
-  const anchor = document.createElement(`button`)
-  anchor.popoverTargetAction = `toggle`
-  document.body.append(anchor)
-  const menu = create_element()
-  menu.style.margin = `3px`
-  const cleanup = anchored_popover({ anchor, on_close: vi.fn() })(menu)
-  cleanup?.()
-  expect([
-    menu.popover,
-    menu.style.margin,
-    menu.style.pointerEvents,
-    menu.style.inset,
-  ]).toEqual([null, `3px`, ``, ``])
-  expect([anchor.popoverTargetElement, anchor.popoverTargetAction]).toEqual([
-    null,
-    `toggle`,
-  ])
-})
-
-test(`close_before_removal on a non-popover node is a no-op`, () => {
-  expect(close_before_removal(create_element())).toEqual({})
-})

@@ -1,6 +1,14 @@
 import { blob_to_data_url, download, type DownloadData } from '#lib/download.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
+// fake timers hold the deferred revoke until the test advances them
+const stub_urls = () => {
+  vi.useFakeTimers()
+  const create = vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:file`)
+  const revoke = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+  return { create, revoke }
+}
+
 test.each([
   [`text`, `a,b`, `a,b`],
   [`ArrayBuffer`, new TextEncoder().encode(`buf`).buffer, `buf`],
@@ -9,9 +17,7 @@ test.each([
 ] as [string, DownloadData, string][])(
   `download saves %s data through an anchor and revokes its URL after the click`,
   async (_kind, data, text) => {
-    vi.useFakeTimers()
-    const create_url = vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:file`)
-    const revoke_url = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+    const { create: create_url, revoke: revoke_url } = stub_urls()
     const anchor_click = vi
       .spyOn(HTMLAnchorElement.prototype, `click`)
       .mockImplementation(() => {})
@@ -27,9 +33,7 @@ test.each([
 )
 
 test(`download keeps its link detached and still revokes the URL when click throws`, async () => {
-  vi.useFakeTimers()
-  vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:test`)
-  const revoke_url = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+  const { revoke: revoke_url } = stub_urls()
   const append = vi.spyOn(Element.prototype, `append`)
   vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(() => {
     throw new Error(`click failed`)
@@ -37,7 +41,7 @@ test(`download keeps its link detached and still revokes the URL when click thro
   expect(() => download(`content`, `test.txt`, `text/plain`)).toThrow(`click failed`)
   expect(append).not.toHaveBeenCalled()
   await vi.advanceTimersByTimeAsync(0)
-  expect(revoke_url).toHaveBeenCalledExactlyOnceWith(`blob:test`)
+  expect(revoke_url).toHaveBeenCalledExactlyOnceWith(`blob:file`)
 })
 
 test(`download defers to a global download override`, () => {

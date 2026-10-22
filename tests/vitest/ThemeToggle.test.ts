@@ -1,9 +1,9 @@
-import ThemeScript from '#lib/ThemeScript.svelte'
 import {
   apply_theme_mode,
   watch_theme,
   theme,
   theme_init_script,
+  ThemeScript,
   ThemeToggle,
 } from '#lib'
 import { Monitor, Moon, Sun } from '#lib/icons.ts'
@@ -243,27 +243,22 @@ test(`watch_theme fails clearly without a document`, () => {
 
 // theme_init_script runs before hydration, so it must land on what apply_theme_mode applies
 test.each([
-  [`light`, false],
-  [`dark`, false],
-  [`light`, true],
-  [`system`, true],
-  [`system`, false],
-  [null, true],
-  [`bogus`, false],
+  [`light`, false, `light`],
+  [`dark`, false, `dark`],
+  [`light`, true, `light`],
+  [`system`, true, `dark`],
+  [`system`, false, `light`],
+  [null, true, `dark`],
+  [`bogus`, false, `light`],
 ])(
-  `theme_init_script with stored %j and OS dark=%j matches apply_theme_mode`,
-  (stored, os_dark) => {
+  `theme_init_script with stored %j and OS dark=%j applies %s like apply_theme_mode`,
+  (stored, os_dark, expected) => {
     vi.stubGlobal(`matchMedia`, (query: string) => ({ media: query, matches: os_dark }))
     if (stored !== null) localStorage.setItem(`theme`, stored)
     run_init_script()
-    const from_script = applied_theme()
+    expect(applied_theme()).toEqual([expected, expected])
     apply_theme_mode(stored === `light` || stored === `dark` ? stored : `system`)
-    expect(from_script).toEqual(applied_theme())
-    expect(from_script).toEqual(
-      Array(2).fill(
-        stored === `light` || stored === `dark` ? stored : os_dark ? `dark` : `light`,
-      ),
-    )
+    expect(applied_theme()).toEqual([expected, expected])
   },
 )
 
