@@ -4,6 +4,7 @@
   import { get_label, get_option_key, has_group } from '../utils'
   import type { OptionListProps } from '../types'
   import { merge_defaults, MULTI_SELECT_LABELS } from '../labels'
+  import { create_key_selector } from './key-selector.svelte'
   import { create_option_loader } from './option-loader.svelte'
   import {
     create_option_rows,
@@ -141,6 +142,7 @@
     option_window(virtual_list, scroll_top, client_height || 400, rows.length),
   )
   const row_height = $derived(viewport?.row_height)
+  const is_active_idx = create_key_selector(() => active_index)
   let previous_index: number | null = untrack(() => active_index)
   let previous_option: Item | null = null
   let previous_key: unknown
@@ -312,6 +314,8 @@
           </li>
         {:else}
           {@const disabled_option = disabled || option_disabled(row.option)}
+          <!-- per-key, so an arrow key re-runs only the two rows it moves between -->
+          {@const is_active = is_active_idx(row.flat_idx)}
           <li
             id="{base_id}-opt-{row.flat_idx}"
             role="option"
@@ -322,8 +326,8 @@
             aria-setsize={visible_options.length}
             class={[
               li_option_class,
-              { active: active_index === row.flat_idx, disabled: disabled_option },
-              active_index === row.flat_idx && li_active_option_class,
+              { active: is_active, disabled: disabled_option },
+              is_active && li_active_option_class,
             ]}
             style={li_option_style}
             style:height={row_height}
@@ -346,7 +350,7 @@
                 option: row.option,
                 idx: row.flat_idx,
                 selected: false,
-                active: active_index === row.flat_idx,
+                active: is_active,
                 disabled: disabled_option,
               })}
             {:else if option_children}{@render option_children({

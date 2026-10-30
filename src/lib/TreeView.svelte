@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { SelectionProps, TreeNode } from './types'
+  import { create_key_selector } from './internal/key-selector.svelte'
   import { selection_values } from './internal/selection'
   import { tick, type Snippet } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
@@ -50,9 +51,13 @@
     size: number
     expandable: boolean
   }
+  // Rows unchanged since the last pass are reused, so expanding or collapsing one branch
+  // re-renders only rows whose own fields changed, not every visible row
+  let previous_rows = new Map<string, Row>()
   const tree = $derived.by(() => {
     const result: Row[] = []
     const indices = new Map<string, number>()
+    const reused = new Map<string, Row>()
     const visit = (siblings: readonly TreeNode[], depth: number, parent?: string) => {
       siblings.forEach((node, idx) => {
         if (indices.has(node.id))
@@ -61,18 +66,27 @@
         const branch = branches.get(node)
         const descendants =
           node.children ?? (branch instanceof AbortController ? undefined : branch)
-        result.push({
+        const row: Row = {
           node,
           depth,
           parent,
           pos: idx + 1,
           size: siblings.length,
           expandable: Boolean(descendants?.length || (node.load && !descendants)),
-        })
+        }
+        const prev = previous_rows.get(node.id)
+        const kept =
+          prev &&
+          (Object.keys(row) as (keyof Row)[]).every((key) => prev[key] === row[key])
+            ? prev
+            : row
+        reused.set(node.id, kept)
+        result.push(kept)
         if (expanded.has(node.id) && descendants) visit(descendants, depth + 1, node.id)
       })
     }
     visit(nodes, 1)
+    previous_rows = reused
     return { rows: result, indices }
   })
   const rows = $derived(tree.rows)
@@ -80,13 +94,15 @@
   $effect(() => {
     for (const { node } of rows) if (expanded.has(node.id)) void expand(node)
   })
-  const is_selected = (node: TreeNode): boolean | undefined =>
-    node.disabled ? undefined : selected_ids.has(node.id)
   const active_id = $derived(
     focused !== undefined && tree.indices.has(focused)
       ? focused
-      : (rows.find(({ node }) => is_selected(node))?.node.id ?? rows[0]?.node.id),
+      : (rows.find(({ node }) => !node.disabled && selected_ids.has(node.id))?.node.id ??
+          rows[0]?.node.id),
   )
+  // per-key, so moving focus or toggling a selection re-runs only the rows it changes
+  const is_active = create_key_selector(() => active_id)
+  const has_selected = create_key_selector(() => selected_ids)
   async function expand(node: TreeNode): Promise<void> {
     if (node.disabled) return
     if (!expanded.has(node.id)) expanded = new Set(expanded).add(node.id)
@@ -218,10 +234,10 @@
         aria-posinset={pos}
         aria-setsize={size}
         aria-expanded={expandable ? expanded.has(node.id) : undefined}
-        aria-selected={is_selected(node)}
+        aria-selected={node.disabled ? undefined : has_selected(node.id)}
         aria-disabled={node.disabled}
         aria-busy={branches.get(node) instanceof AbortController}
-        tabindex={active_id === node.id ? 0 : -1}
+        tabindex={is_active(node.id) ? 0 : -1}
         style:padding-inline-start={`${(depth - 1) * 1.25}em`}
         onfocus={() => (focused = node.id)}
         onpointerdown={(event) => {

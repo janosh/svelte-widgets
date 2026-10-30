@@ -75,19 +75,21 @@ export type OptionGroupRow<T extends Option> = GroupedOptions<T> & {
   render_key: symbol
   selectable: T[]
 }
-type OptionRow<T extends Option> =
-  | {
-      kind: `option`
-      option: T
-      flat_idx: number
-      render_key: unknown
-      group: string | null
-    }
-  | OptionGroupRow<T>
+type OptionItemRow<T extends Option> = {
+  kind: `option`
+  option: T
+  flat_idx: number
+  render_key: unknown
+  group: string | null
+}
+type OptionRow<T extends Option> = OptionItemRow<T> | OptionGroupRow<T>
 
-// Each control owns its header keys; symbols cannot collide with option keys.
+// Each control owns its header keys; symbols cannot collide with option keys. Option rows
+// unchanged since the last build are reused, so appending or filtering re-renders only rows
+// whose option or position changed.
 export function create_option_rows<T extends Option>() {
   const header_keys = new Map<string, symbol>()
+  let previous = new Map<unknown, OptionItemRow<T>>()
   return (
     groups: GroupedOptions<T>[],
     key: (option: T) => unknown,
@@ -96,6 +98,7 @@ export function create_option_rows<T extends Option>() {
   ): OptionRow<T>[] => {
     const limit = max_options ?? Infinity
     const rows: OptionRow<T>[] = []
+    const built = new Map<unknown, OptionItemRow<T>>()
     let flat_idx = 0
     for (const { group, options, collapsed } of groups) {
       const hidden = collapsed && collapsible
@@ -114,10 +117,19 @@ export function create_option_rows<T extends Option>() {
         if (group !== null && (hidden || visible) && !option_disabled(option))
           selectable.push(option)
         if (hidden) continue
-        if (visible) rows.push({ kind: `option`, option, flat_idx, render_key, group })
+        if (visible) {
+          const prev = previous.get(render_key)
+          const row: OptionItemRow<T> =
+            prev?.option === option && prev.flat_idx === flat_idx && prev.group === group
+              ? prev
+              : { kind: `option`, option, flat_idx, render_key, group }
+          built.set(render_key, row)
+          rows.push(row)
+        }
         flat_idx++
       }
     }
+    previous = built
     return rows
   }
 }

@@ -1843,11 +1843,16 @@ describe(`keep_selected_in_dropdown feature`, () => {
     `toggles option selection with $interaction in $mode mode`,
     async ({ mode, interaction }) => {
       const on_change = vi.fn()
+      let style_reads = 0 // each row reads it when (re)building its view
       mount_multiselect({
         options,
         value: [`Apple`],
         keep_selected_in_dropdown: mode,
         on_change,
+        get li_option_style() {
+          style_reads++
+          return undefined
+        },
       })
       const input = await focus_input()
       for (const [label, type] of [
@@ -1855,10 +1860,13 @@ describe(`keep_selected_in_dropdown feature`, () => {
         [`Banana`, `add`],
       ]) {
         const option = option_by_label(label)
+        style_reads = 0
         if (interaction === `keyboard`) await press_sequence(input, `ArrowDown`, `Enter`)
         else await click_keep_selected_option(option, mode)
         expect(on_change).toHaveBeenLastCalledWith({ option: label, type })
         expect(option.classList.contains(`selected`)).toBe(type === `add`)
+        // the selection lives outside each row's view, so no toggle rebuilds every row
+        expect(style_reads).toBe(0)
       }
     },
   )

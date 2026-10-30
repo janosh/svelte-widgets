@@ -13,6 +13,7 @@
     Search,
   } from '../icons'
   import { download } from '../download'
+  import { create_key_selector } from '../internal/key-selector.svelte'
   import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
   import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'
@@ -105,25 +106,28 @@
   })
   const value_at = (path: string): unknown => get_value_at_path(value, path, root_label)
 
-  // Reset per-value UI state when a different value is passed (not on mount)
+  // When a different value is passed (not on mount), e.g. an edit's new set_at_path root,
+  // keep per-path UI state whose paths still resolve and drop the rest
   let previous_value = untrack(() => value)
   $effect.pre(() => {
     if (value === previous_value) return
     previous_value = value
-    focused_path = null
     copy_feedback.reset()
     context_menu_state = null
-    force_expanded = new SvelteSet()
-    if (collapsed_paths.size > 0) {
-      const valid_paths = new Set(collect_all_paths(value, root_path))
-      collapsed_paths = new SvelteSet(
-        [...collapsed_paths].filter((path) => valid_paths.has(path)),
-      )
-    }
-    pinned_paths.clear()
-    selected_paths.clear()
-    last_selected_path = null
-    current_match_index = -1
+    untrack(() => {
+      const gone = (path: string | null): boolean =>
+        path !== null && value_at(path) === undefined
+      if (gone(focused_path)) focused_path = null
+      if (gone(last_selected_path)) last_selected_path = null
+      for (const paths of [force_expanded, pinned_paths, selected_paths])
+        for (const path of paths) if (gone(path)) paths.delete(path)
+      if (collapsed_paths.size > 0) {
+        const valid_paths = new Set(collect_all_paths(value, root_path))
+        collapsed_paths = new SvelteSet(
+          [...collapsed_paths].filter((path) => valid_paths.has(path)),
+        )
+      }
+    })
     prev_values.clear()
     if (search_query) queueMicrotask(() => expand_to_matches())
   })
@@ -356,12 +360,6 @@
     get settings() {
       return settings
     },
-    get collapsed() {
-      return collapsed_paths
-    },
-    get force_expanded() {
-      return force_expanded
-    },
     get current_match_path() {
       return current_match_path
     },
@@ -369,6 +367,11 @@
       return focused_path
     },
     selected_paths,
+    has_collapsed: create_key_selector(() => collapsed_paths),
+    has_force_expanded: create_key_selector(() => force_expanded),
+    is_current_match: create_key_selector(() => current_match_path),
+    is_focused: create_key_selector(() => focused_path),
+    has_selected: create_key_selector(() => selected_paths),
     get diff_map() {
       return diff_map
     },

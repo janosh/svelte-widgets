@@ -7,10 +7,18 @@ import {
   type TreeNode,
   type SelectionProps,
 } from '#lib'
+import OptionRows from '#lib/internal/OptionRows.svelte'
+import { create_key_selector } from '#lib/internal/key-selector.svelte.ts'
+import { create_option_rows } from '#lib/internal/option-list.ts'
 import { virtual_window } from '#lib/virtual.ts'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
+import { SvelteSet } from 'svelte/reactivity'
 import { expect, test, vi, onTestFinished } from 'vite-plus/test'
-import { click, create_element, doc_query, press_key, render } from './index'
+import { click, create_element, doc_query, key_reads, press_key, render } from './index'
+
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
 
 // a fresh target, so queries stay scoped to this test's widget
 const target_for = () => {
@@ -107,6 +115,7 @@ test.each([0, 5])(
 test(`virtual list sizes its window from the measured viewport, not initial_count`, async () => {
   vi.spyOn(HTMLElement.prototype, `clientHeight`, `get`).mockReturnValue(100)
   const target = target_for()
+  const key = vi.fn(Number)
   const component = mount(VirtualList, {
     target,
     props: {
@@ -114,6 +123,7 @@ test(`virtual list sizes its window from the measured viewport, not initial_coun
       item_size: 20,
       overscan: 2,
       initial_count: 50,
+      key,
       children,
     },
   })
@@ -130,6 +140,126 @@ test(`virtual list sizes its window from the measured viewport, not initial_coun
   await tick()
   expect(target.querySelector(`.virtual-list`)?.scrollTop).toBe(120)
   expect(indices()).toEqual([4, 5, 6, 7, 8, 9, 10, 11, 12])
+  // a scroll within the same rows (window [4, 14) at both offsets) re-slices nothing
+  const scroll_to = (top: number) => {
+    const list = doc_query(`.virtual-list`)
+    list.scrollTop = top
+    list.dispatchEvent(new Event(`scroll`))
+    flushSync()
+  }
+  scroll_to(125)
+  key.mockClear()
+  scroll_to(135)
+  expect(key).not.toHaveBeenCalled()
+  expect(indices()).toHaveLength(10)
+})
+
+// One reader per key, as rows are: a change re-runs only readers whose answer flips
+test(`key selector re-runs only the readers whose key enters or leaves the current value`, () => {
+  let current = $state<string | Set<string>>(`a`)
+  let bump = $state(0) // re-runs every reader, as a rebuilt row would
+  const runs: Record<string, number> = {}
+  const answers: Record<string, boolean> = {}
+  const readers: Record<string, () => boolean> = {}
+  const cleanup = $effect.root(() => {
+    const is = create_key_selector(() => current)
+    for (const key of [`a`, `b`, `c`]) {
+      const answer = $derived.by(() => {
+        void bump
+        runs[key] = (runs[key] ?? 0) + 1
+        return is(key)
+      })
+      readers[key] = () => answer
+      $effect(() => void (answers[key] = answer))
+    }
+  })
+  onTestFinished(cleanup)
+  flushSync()
+  const step = (change: () => void) => {
+    for (const key of Object.keys(runs)) runs[key] = 0
+    change()
+    flushSync()
+    return [{ ...runs }, { ...answers }]
+  }
+  const no = { a: false, b: false, c: false }
+  expect(step(() => (current = `b`))).toEqual([
+    { a: 1, b: 1, c: 0 },
+    { ...no, b: true },
+  ])
+  // a set mutated in place diffs against what readers last saw
+  const keys = new SvelteSet([`b`])
+  expect(step(() => (current = keys))).toEqual([
+    { a: 0, b: 0, c: 0 },
+    { ...no, b: true },
+  ])
+  expect(step(() => keys.add(`c`))).toEqual([
+    { a: 0, b: 0, c: 1 },
+    { ...no, b: true, c: true },
+  ])
+  // a reader answering before the effect ran, for a change since reverted, isn't left stale
+  expect(
+    step(() => {
+      current = `a`
+      bump++
+      readers.b()
+      current = keys
+    }),
+  ).toEqual([
+    { a: 1, b: 2, c: 1 },
+    { ...no, b: true, c: true },
+  ])
+})
+
+// MultiSelect and OptionList get a fresh window object from option_window on every scroll
+test(`option rows re-slice only when the window's rows change, reusing unchanged rows`, () => {
+  let render_key_reads = 0
+  const rows = Array.from({ length: 100 }, (_value, idx) => ({
+    get render_key() {
+      render_key_reads++
+      return idx
+    },
+  }))
+  let window = $state({ start: 10, end: 20, item_height: 30 })
+  const target = target_for()
+  const component = mount(OptionRows, {
+    target,
+    props: {
+      rows,
+      get window() {
+        return window
+      },
+      children: createRawSnippet<[{ render_key: unknown }]>((row) => ({
+        render: () => `<li>row ${String(row().render_key)}</li>`,
+      })),
+    },
+  })
+  onTestFinished(() => unmount(component))
+  flushSync()
+  const labels = () =>
+    Array.from(target.querySelectorAll(`li:not([aria-hidden])`), (li) => li.textContent)
+  expect(labels()).toHaveLength(10)
+  render_key_reads = 0
+  window = { start: 10, end: 20, item_height: 30 }
+  flushSync()
+  expect(render_key_reads).toBe(0)
+  window = { start: 11, end: 21, item_height: 30 }
+  flushSync()
+  expect([labels()[0], labels().length]).toEqual([`row 11`, 10])
+  // rebuilt rows keep their objects where option and position are unchanged, so appending
+  // an option renders its row alone rather than re-rendering every row
+  const build = create_option_rows<string>()
+  const build_from = (options: string[]) =>
+    build(
+      [{ group: null, options, collapsed: false }],
+      (option) => option,
+      false,
+      undefined,
+    )
+  const [first, second] = build_from([`a`, `b`])
+  const appended = build_from([`a`, `b`, `c`])
+  expect(appended[0]).toBe(first)
+  expect(appended[1]).toBe(second)
+  expect(build_from([`b`])[0]).not.toBe(second) // a shifted option is a new row
 })
 
 test.each([
@@ -296,6 +426,7 @@ test.each([`ctrlKey`, `metaKey`] as const)(
   `tree multiple selection supports %s toggles and visible ranges`,
   async (modifier) => {
     const on_change = vi.fn()
+    let delta_label_reads = 0 // each render of its row reads it
     const props = $state({
       mode: `multiple` as const,
       nodes: [
@@ -308,7 +439,13 @@ test.each([`ctrlKey`, `metaKey`] as const)(
             { id: `gamma`, label: `Gamma` },
           ],
         },
-        { id: `delta`, label: `Delta` },
+        {
+          id: `delta`,
+          get label() {
+            delta_label_reads++
+            return `Delta`
+          },
+        },
       ],
       expanded: new Set([`folder`]),
       value: [`alpha`],
@@ -349,8 +486,11 @@ test.each([`ctrlKey`, `metaKey`] as const)(
     expect(row(`disabled`).hasAttribute(`aria-selected`)).toBe(false)
 
     // Collapsing keeps hidden selections; ranges only include rows still visible.
+    delta_label_reads = 0
     await click(`button[aria-label="Collapse Folder"]`)
     expect(selected()).toEqual([])
+    // the sibling row's own fields are unchanged, so collapsing doesn't re-render it
+    expect(delta_label_reads).toBe(0)
     row(`delta`).dispatchEvent(new MouseEvent(`click`, { bubbles: true, shiftKey: true }))
     await tick()
     expect(selected()).toEqual([`delta`])
@@ -366,11 +506,15 @@ test.each([`ctrlKey`, `metaKey`] as const)(
 
 test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
   const on_change = vi.fn()
+  let label_reads = 0 // each row render reads its label
   render(TreeView, {
     mode: `multiple` as const,
     nodes: [`Alpha`, `Disabled`, `Beta`, `Gamma`].map((label) => ({
       id: label,
-      label,
+      get label() {
+        label_reads++
+        return label
+      },
       disabled: label === `Disabled`,
     })),
     on_change,
@@ -392,6 +536,12 @@ test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves sele
     expect(document.activeElement?.getAttribute(`data-tree-id`)).toBe(focused)
     expect(on_change).toHaveBeenLastCalledWith(selected)
   }
+  // moving focus re-renders only the rows it leaves and enters, not every row
+  label_reads = 0
+  key_reads.count = 0
+  press_key(doc_query(`[role="treeitem"]:focus`), `End`)
+  await tick()
+  expect([label_reads, key_reads.count]).toEqual([2, 2])
   const input = document.createElement(`input`)
   doc_query(`[data-tree-id="Alpha"]`).append(input)
   const calls = on_change.mock.calls.length

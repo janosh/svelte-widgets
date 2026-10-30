@@ -1,11 +1,15 @@
 import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '#lib'
-import { to_json } from '#lib/json-tree/utils.ts'
-import { click, doc_query, fire_input, render } from './index'
+import { set_at_path, to_json } from '#lib/json-tree/utils.ts'
+import { click, doc_query, fire_input, key_reads, render } from './index'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vite-plus/test'
+
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
 
 const mouse = (type: string, init: MouseEventInit = {}) =>
   new MouseEvent(type, { bubbles: true, ...init })
@@ -317,8 +321,11 @@ describe(`folding`, () => {
     mount_expanded({ value: { nested: { deep: 42 } }, default_fold_level: 1 })
     expect(node_at(`nested.deep`)).toBeNull()
     expect(doc_query(`.node-key`).classList.contains(`collapsed`)).toBe(true) // ▸ hint
+    key_reads.count = 0
     await click(`.node-key`)
     expect(node_at(`nested.deep`)).toBeInstanceOf(HTMLElement)
+    // the unfolded node rechecks its 2 fold sets, its new child its 3 keys; the root none
+    expect(key_reads.count).toBe(5)
     expect(doc_query(`.node-key`).classList.contains(`collapsed`)).toBe(false) // ⧉ hint
     expect(write_text).not.toHaveBeenCalled()
 
@@ -437,8 +444,16 @@ describe(`folding`, () => {
 
 describe(`header toggles`, () => {
   it(`T and # toggle type annotations and array indices from their initial props`, async () => {
+    // counts reads of the array's elements, i.e. a node re-listing its children
+    let array_reads = 0
+    const value = new Proxy([`a`, `b`, `c`], {
+      get: (target, key) => {
+        if (typeof key === `string` && /^\d+$/.test(key)) array_reads++
+        return Reflect.get(target, key)
+      },
+    })
     mount_tree({
-      value: [`a`, `b`, `c`],
+      value,
       default_fold_level: 5,
       show_data_types: true,
       show_array_indices: false,
@@ -452,9 +467,12 @@ describe(`header toggles`, () => {
     ]
     expect([type_toggle.textContent, index_toggle.textContent]).toEqual([`T`, `#`])
     expect(state()).toEqual([true, false, 3, 0])
+    array_reads = 0
     await click(type_toggle)
     await click(index_toggle)
     expect(state()).toEqual([false, true, 0, 3])
+    // only a sort_keys change re-lists a node's children
+    expect(array_reads).toBe(0)
   })
 })
 
@@ -590,9 +608,11 @@ describe(`search`, () => {
     async (key, shiftKey, target, expected) => {
       mount_tree({ value: { bar: 1, baz: 2, bat: 3 }, default_fold_level: 5 })
       await type_search(`ba`, `1 of 3`)
+      key_reads.count = 0
       press(key_targets[target](), key, { shiftKey })
       await tick()
       expect(match_count()).toBe(expected)
+      expect(key_reads.count).toBe(2) // only the old and new match re-check
     },
   )
 
@@ -677,8 +697,10 @@ describe(`keyboard navigation and selection`, () => {
     press(tree(), `ArrowUp`)
     expect(focused_path()).toBe(`a`)
     expect(on_select).toHaveBeenLastCalledWith(`a`, { b: 1 })
+    key_reads.count = 0
     press(tree(), `End`)
     expect(focused_path()).toBe(`c`)
+    expect(key_reads.count).toBe(2) // only the nodes losing and gaining focus re-check
     press(tree(), `Home`)
     expect(focused_path()).toBe(``)
   })
@@ -776,8 +798,10 @@ describe(`keyboard navigation and selection`, () => {
     expect(node_at(`b`)?.getAttribute(`aria-selected`)).toBe(`true`)
     fire(node_at(`d`), mouse(`click`, { ctrlKey: true, shiftKey: true }))
     expect(selected()).toEqual([`b`, `c`, `d`])
+    key_reads.count = 0
     fire(node_at(`c`), mouse(`click`, { metaKey: true }))
     expect(selected()).toEqual([`b`, `d`])
+    expect(key_reads.count).toBe(1) // only the deselected node re-checks
 
     press(tree(), `c`, { ctrlKey: true })
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`2\n4`))
@@ -840,6 +864,32 @@ describe(`context menu and pinning`, () => {
     await open_menu(node_at(`key`))
     await click(menu_button(`Expand all children`))
     expect(node_at(`key.a.b`)).toBeInstanceOf(HTMLElement)
+  })
+
+  // the documented edit flow (value = set_at_path(value, ...)) passes a new root per edit
+  it(`keeps expansion, focus, selection and pins whose paths survive a new value`, async () => {
+    let value = $state<unknown>({ a: { b: { c: 1 }, d: 2 } })
+    mount_tree({
+      get value() {
+        return value
+      },
+      ui: { header: false },
+      default_fold_level: 1,
+    })
+    await click(node_at(`a`)?.querySelector(`.collapse-toggle`))
+    await click(node_at(`a.b`)?.querySelector(`.collapse-toggle`))
+    fire(node_at(`a.b.c`), mouse(`click`))
+    for (const path of [`a.b.c`, `a.d`]) {
+      fire(node_at(path), mouse(`click`, { ctrlKey: true }))
+      await open_menu(node_at(path))
+      await click(menu_button(`Pin this path`))
+    }
+    value = set_at_path(value, `a`, { b: { c: 5 } })
+    await tick()
+    expect(paths_of(`.json-node:not(.collapsed)`)).toEqual([``, `a`, `a.b`, `a.b.c`])
+    expect(paths_of(`.json-node.focused`)).toEqual([`a.b.c`])
+    expect(paths_of(`.json-node.selected`)).toEqual([`a.b.c`])
+    expect(doc_query(`.pinned-panel`).textContent).toContain(`Pinned (1)`)
   })
 
   it(`pins paths into a panel that copies, unpins and clears`, async () => {

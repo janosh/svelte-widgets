@@ -8,14 +8,19 @@ import {
   create_element,
   doc_query,
   hover,
+  key_reads,
   next_task,
   pointer_event,
   press_key,
+  raw_snippet,
   render,
   stub_props,
-  raw_snippet,
 } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
+
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
 
 describe(`Nav`, () => {
   const default_routes = [
@@ -742,13 +747,19 @@ describe(`Nav`, () => {
       set_window_width(width)
       const { dropdown, submenu, toggle } = mount_dropdown()
       const initial_focus = document.activeElement
+      key_reads.count = 0
       pointer(dropdown, `pointerenter`, pointer_type)
       await tick()
+      expect(key_reads.count).toBe(opens ? 1 : 0) // only the opened dropdown re-checks
       expect(is_visible(submenu)).toBe(opens)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(String(opens))
       expect(document.activeElement).toBe(initial_focus)
+      // a closing dropdown drops its focus trap rather than rebuilding a disabled one,
+      // which looked up its toggle again
+      const query_spy = vi.spyOn(document, `querySelector`)
       pointer(dropdown, `pointerleave`, pointer_type)
       await tick()
+      expect(query_spy).not.toHaveBeenCalled()
       expect(is_visible(submenu)).toBe(false)
       expect(document.activeElement).toBe(initial_focus)
       await click(toggle)

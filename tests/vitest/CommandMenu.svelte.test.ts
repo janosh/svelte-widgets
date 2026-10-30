@@ -7,11 +7,16 @@ import {
   click,
   create_element,
   doc_query,
+  key_reads,
   pointer_event,
   press_key,
   render,
 } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
+
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
 
 const make_actions = (...labels: string[]) =>
   labels.map((label) => ({ id: label, label, action: vi.fn() }))
@@ -185,6 +190,7 @@ test.each([
 
 test(`opens a labeled native light-dismiss modal and forwards styling props`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
+  let style_reads = 0 // each option row render reads its style once
   mount_menu({
     actions: mock_actions,
     aria_label: `Run command`,
@@ -194,7 +200,10 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
     class: `my-custom-class`,
     placeholder: `Custom placeholder`,
     dialog_props: { style: `padding: 20px;` },
-    li_option_style: `font-weight: bold;`,
+    get li_option_style() {
+      style_reads++
+      return `font-weight: bold;`
+    },
   })
 
   const dialog = doc_query<HTMLDialogElement>(`dialog`)
@@ -208,6 +217,12 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
   expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
   expect(menu_input().placeholder).toBe(`Custom placeholder`)
   expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
+  // an arrow key re-renders only the two rows whose active state flips, not every row
+  style_reads = 0
+  key_reads.count = 0
+  press_key(menu_input(), `ArrowDown`)
+  await tick()
+  expect([style_reads, key_reads.count]).toEqual([2, 2])
 })
 
 test(`handles action selection and execution`, async () => {

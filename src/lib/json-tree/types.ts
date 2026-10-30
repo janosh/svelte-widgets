@@ -78,11 +78,15 @@ export interface JsonTreeContext {
     editable: boolean
     ui: NonNullable<JsonTreeProps['ui']>
   }
-  collapsed: Set<string>
-  force_expanded: Set<string>
   current_match_path: string | null
   focused_path: string | null
   selected_paths: Set<string>
+  // per-path membership tests, re-running a node only when its own path's answer changes
+  has_collapsed: (path: string) => boolean
+  has_force_expanded: (path: string) => boolean
+  is_current_match: (path: string) => boolean
+  is_focused: (path: string) => boolean
+  has_selected: (path: string) => boolean
   diff_map: Map<string, DiffEntry> | null
   ghost_map: Map<string, GhostEntry[]>
   prev_values: Map<string, unknown>

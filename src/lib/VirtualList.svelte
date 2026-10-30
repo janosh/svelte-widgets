@@ -25,7 +25,9 @@
   let scroll_top = $state(0)
   let viewport = $state(0)
   const total_height = $derived(items.length * item_size)
-  const window_range = $derived.by(() => {
+  // Destructured into per-field deriveds: unlike the fresh window object, the numbers stay
+  // equal across sub-row scrolls, so the keyed each re-slices only when a row enters or leaves
+  const { start, end } = $derived.by(() => {
     if (
       !Number.isFinite(item_size) ||
       item_size <= 0 ||
@@ -96,16 +98,16 @@
     <div
       style:position="absolute"
       style:inset-inline="0"
-      style:top={`${window_range.start * item_size}px`}
+      style:top={`${start * item_size}px`}
     >
-      {#each items.slice(window_range.start, window_range.end) as item, offset (key(item, window_range.start + offset))}
+      {#each items.slice(start, end) as item, offset (key(item, start + offset))}
         <div
           style:height={`${item_size}px`}
           style:display="flow-root"
           style:box-sizing="border-box"
-          data-index={window_range.start + offset}
+          data-index={start + offset}
         >
-          {@render children(item, window_range.start + offset)}
+          {@render children(item, start + offset)}
         </div>
       {/each}
     </div>
