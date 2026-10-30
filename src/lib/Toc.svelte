@@ -488,8 +488,10 @@
     while (idx--) {
       const top = headings[idx].getBoundingClientRect().top - root_top
 
-      // last heading the viewport (or pane) has scrolled past, else the first one
-      if (top < active_heading_scroll_offset || idx === 0) {
+      // last heading the viewport (or pane) has scrolled past, else the first one. A
+      // heading without a box (display: none) reports top 0, so it counts as never passed
+      const passed = top < active_heading_scroll_offset && headings[idx].checkVisibility()
+      if (passed || idx === 0) {
         active_heading = headings[idx]
         return
       }

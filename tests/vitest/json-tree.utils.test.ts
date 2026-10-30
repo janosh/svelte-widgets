@@ -331,8 +331,19 @@ describe(`get_children / get_value_at_path`, () => {
     [map, false, [{ key: 0, value: { key: { id: 1 }, value: `v1` } }]],
     [root.set, false, [{ key: 0, value: `s0` }]],
     [`leaf`, false, []],
+    // holes become undefined children (toStrictEqual tells holes from undefined)
+    [
+      // oxlint-disable-next-line no-sparse-arrays
+      [1, , 3],
+      false,
+      [
+        { key: 0, value: 1 },
+        { key: 1, value: undefined },
+        { key: 2, value: 3 },
+      ],
+    ],
   ])(`get_children(%j, sort=%s)`, (value, sort_keys, expected) => {
-    expect(get_children(value, sort_keys)).toEqual(expected)
+    expect(get_children(value, sort_keys)).toStrictEqual(expected)
   })
 
   it.each([

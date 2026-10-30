@@ -4,13 +4,21 @@ export const get_html_sort_value = (element: HTMLElement): string =>
   element.textContent ??
   ``
 
-// Visual column of a cell: colspans before it shift every later column, which cellIndex
-// ignores
+// Visual column of a cell: colspans before it and rowspans from earlier rows of its
+// section (multi-row thead) shift every later column, which cellIndex ignores
 const column_start = (cell: HTMLTableCellElement): number => {
-  let start = 0
-  for (let prev = cell.previousElementSibling; prev; prev = prev.previousElementSibling)
-    if (prev instanceof HTMLTableCellElement) start += prev.colSpan
-  return start
+  let covered: number[] = [] // rows each column stays spanned from above
+  for (const row of cell.parentElement?.parentElement?.children ?? []) {
+    if (!(row instanceof HTMLTableRowElement)) continue
+    let col = 0
+    for (const other of row.cells) {
+      while (covered[col] > 0) col++
+      if (other === cell) return col
+      for (let span = 0; span < other.colSpan; span++) covered[col++] = other.rowSpan
+    }
+    covered = covered.map((left) => left - 1)
+  }
+  return 0
 }
 
 // Cell starting at visual `column`, in one pass over the row; undefined when the column

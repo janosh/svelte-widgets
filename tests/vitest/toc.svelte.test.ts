@@ -1069,6 +1069,11 @@ describe(`scroll_root`, () => {
     pane.dispatchEvent(new Event(`scroll`))
     await tick()
     expect(active_text()).toBe(`Inside B`)
+    // a heading without a box is skipped, whatever top its zero rect reports
+    inside_b.setAttribute(`style`, `display: none`)
+    pane.dispatchEvent(new Event(`scroll`))
+    await tick()
+    expect(active_text()).toBe(`Inside A`)
   })
 
   test.each([true, false])(

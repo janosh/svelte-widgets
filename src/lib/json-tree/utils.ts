@@ -63,14 +63,14 @@ export function get_child_count(value: unknown): number {
 // Shared traversal: Map entries become indexed { key, value } objects so non-string keys
 // remain expandable; Set members use numeric indices.
 export function get_children(value: unknown, sort_keys = false): JsonChild[] {
-  if (Array.isArray(value)) return value.map((val, idx) => ({ key: idx, value: val }))
+  // Array.from (not .map) so sparse-array holes become undefined children
+  if (Array.isArray(value) || value instanceof Set)
+    return Array.from(value, (val, idx) => ({ key: idx, value: val }))
   if (value instanceof Map)
     return Array.from(value, ([key, val], idx) => ({
       key: idx,
       value: { key, value: val },
     }))
-  if (value instanceof Set)
-    return Array.from(value, (val, idx) => ({ key: idx, value: val }))
   if (get_value_type(value) !== `object`) return []
   const record = value as Record<string, unknown>
   const keys = Object.keys(record)

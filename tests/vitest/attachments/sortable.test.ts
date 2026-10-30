@@ -177,6 +177,13 @@ describe(`sortable`, () => {
     `<tr><td>Grace</td><td>Hopper</td><td>85</td></tr>` +
     `<tr><td>Alan</td><td>Turing</td><td>41</td></tr>` +
     `<tr><td>Ada</td><td>Lovelace</td><td>36</td></tr></tbody>`
+  // Name spans both header rows, so Max sits in the third column
+  const header_rowspan =
+    `<thead><tr><th rowspan="2">Name</th><th colspan="2">Score</th></tr>` +
+    `<tr><th>Min</th><th>Max</th></tr></thead><tbody>` +
+    `<tr><td>Ann</td><td>1</td><td>9</td></tr>` +
+    `<tr><td>Bob</td><td>2</td><td>5</td></tr>` +
+    `<tr><td>Cy</td><td>3</td><td>7</td></tr></tbody>`
   // sorts by the last header's column, then reads the first column
   it.each<[string, string, string[], SortableOptions?]>([
     [`whitespace-only cells as empty`, one_column(`   `, `5`, `1`), [`1`, `5`, ``]],
@@ -198,6 +205,7 @@ describe(`sortable`, () => {
       { header_selector: `thead th:last-child` },
     ],
     [`past a header colspan`, header_colspan, [`Ada`, `Alan`, `Grace`]],
+    [`past a header rowspan`, header_rowspan, [`Bob`, `Cy`, `Ann`]],
   ])(`sorts %s`, (_desc, html, expected, options) => {
     const table = create_table(html)
     attach_sortable(table, options)
