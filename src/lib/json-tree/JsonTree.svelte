@@ -366,6 +366,12 @@
     ui,
   })
 
+  // A fold setting (level or size threshold) can fold the focused node's ancestor too
+  $effect.pre(() => {
+    void settings
+    untrack(hoist_hidden_focus)
+  })
+
   const context: JsonTreeContext = {
     get settings() {
       return settings

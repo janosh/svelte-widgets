@@ -71,10 +71,11 @@
   let shown_count = $state(CHILD_PAGE_SIZE)
   // The current search match (or the ancestor holding it) may sit past the bound: extend it
   // to that child so JsonTree can scroll the match into view
+  // (unpaged nodes return before reading the match, so a search step re-runs only paged ones)
   const revealed_count = $derived.by(() => {
+    if (children.length <= shown_count) return shown_count
     const match = ctx.current_match_path
-    if (!match || children.length <= shown_count || !match.startsWith(path))
-      return shown_count
+    if (!match || !match.startsWith(path)) return shown_count
     const idx = children.findIndex(({ key }) => {
       const child_path = build_path(path, key)
       return (

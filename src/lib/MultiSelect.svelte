@@ -382,6 +382,14 @@
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option): boolean =>
     has_selected_option(opt) || (lower_dupes && is_label_selected(label_of(opt)))
+  // An option row's own check: per-key when the key alone decides, so a toggle re-runs only
+  // the toggled row. Aggregates (select-all, group headers) keep reading the sets directly:
+  // a selector subscription per candidate would cost more than the set lookups it replaces.
+  const has_selected_key = create_key_selector(() => selected_keys_set)
+  const is_row_selected = (opt: Option): boolean =>
+    duplicates !== true && !lower_dupes
+      ? has_selected_key(key(opt))
+      : is_option_selected(opt)
 
   // identity check for bulk/range ops. Compares label too, since a custom `key` may
   // deliberately collapse distinct options onto one key.
@@ -1854,7 +1862,7 @@
         positionally so duplicate option values still get unique ids/posinset/hover indices -->
       {#snippet option_li(option_item: Option, flat_idx: number, group: string | null)}
         {@const view = get_option_view(option_item)}
-        {@const is_selected = is_option_selected(option_item)}
+        {@const is_selected = is_row_selected(option_item)}
         {@const is_active = is_active_idx(flat_idx)}
         {@const activate = () => {
           if (view.disabled) return

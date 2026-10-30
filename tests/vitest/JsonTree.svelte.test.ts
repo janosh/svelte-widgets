@@ -925,6 +925,22 @@ describe(`context menu and pinning`, () => {
     expect(node_at(``)?.getAttribute(`aria-expanded`)).toBe(`false`)
   })
 
+  it(`hoists focus out of an ancestor a lowered fold level folds`, async () => {
+    let fold_level = $state(5)
+    mount_tree({
+      value: { a: { b: { c: 1 } } },
+      ui: { header: false },
+      get default_fold_level() {
+        return fold_level
+      },
+    })
+    fire(node_at(`a.b.c`), mouse(`click`))
+    fold_level = 1
+    await tick()
+    expect(node_at(`a`)?.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(paths_of(`.json-node.focused`)).toEqual([`a`])
+  })
+
   it(`pins paths into a panel that copies, unpins and clears`, async () => {
     const write_text = mock_clipboard_write()
     const node_actions = fromStore(writable(true))

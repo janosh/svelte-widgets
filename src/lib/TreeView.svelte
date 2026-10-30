@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { SelectionProps, TreeNode } from './types'
-  import { create_key_selector } from './internal/key-selector.svelte'
+  import { create_key_selector, keep_unchanged } from './internal/key-selector.svelte'
   import { selection_values } from './internal/selection'
   import { tick, type Snippet } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
@@ -66,22 +66,16 @@
         const branch = branches.get(node)
         const descendants =
           node.children ?? (branch instanceof AbortController ? undefined : branch)
-        const row: Row = {
+        const row = keep_unchanged(previous_rows.get(node.id), {
           node,
           depth,
           parent,
           pos: idx + 1,
           size: siblings.length,
           expandable: Boolean(descendants?.length || (node.load && !descendants)),
-        }
-        const prev = previous_rows.get(node.id)
-        const kept =
-          prev &&
-          (Object.keys(row) as (keyof Row)[]).every((key) => prev[key] === row[key])
-            ? prev
-            : row
-        reused.set(node.id, kept)
-        result.push(kept)
+        })
+        reused.set(node.id, row)
+        result.push(row)
         if (expanded.has(node.id) && descendants) visit(descendants, depth + 1, node.id)
       })
     }

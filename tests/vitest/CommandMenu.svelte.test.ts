@@ -192,7 +192,8 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
   let style_reads = 0 // each option row render reads its style once
   mount_menu({
-    actions: mock_actions,
+    // more rows than the two an arrow key moves between, so re-running all would show
+    actions: make_actions(`a1`, `a2`, `a3`, `a4`, `a5`, `a6`),
     aria_label: `Run command`,
     open: true,
     backdrop_dim: false,

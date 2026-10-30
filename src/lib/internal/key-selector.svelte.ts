@@ -6,6 +6,8 @@ type Signal = { subscribe: () => void; notify?: () => void }
 // Like SolidJS's createSelector: `is(key)` re-runs a reader only when its own key enters or
 // leaves the current key (or set of keys), where `current === key` in every row re-ran all
 // N rows per change. A key's signal lives while a reader subscribes. Call during init.
+// For one key per reader (a row): an aggregate over many keys (all selected?) should read
+// the source directly, as a subscription per key costs more than the lookups it saves.
 export const create_key_selector = <Key>(get_current: () => Key | ReadonlySet<Key>) => {
   const signals = new Map<Key, Signal>()
   const as_set = (current: Key | ReadonlySet<Key>) =>
@@ -14,9 +16,11 @@ export const create_key_selector = <Key>(get_current: () => Key | ReadonlySet<Ke
   let read_early = new Set<Key>() // answered ahead of the effect, maybe since reverted
   $effect.pre(() => {
     const next = as_set(get_current())
-    for (const key of new Set([...previous, ...next, ...read_early]))
-      if (read_early.has(key) || previous.has(key) !== next.has(key))
-        signals.get(key)?.notify?.()
+    const notify = (key: Key) => signals.get(key)?.notify?.()
+    // each flipped key, then early answers a revert made stale (flipped ones already ran)
+    for (const key of previous) if (!next.has(key)) notify(key)
+    for (const key of next) if (!previous.has(key)) notify(key)
+    for (const key of read_early) if (previous.has(key) === next.has(key)) notify(key)
     ;[previous, read_early] = [next, new Set()]
   })
   return (key: Key): boolean => {
@@ -42,3 +46,14 @@ export const create_key_selector = <Key>(get_current: () => Key | ReadonlySet<Ke
     return answer
   }
 }
+
+// The previous row when every field of the rebuilt one equals it, so a keyed each and the
+// rows reading it see no change: rebuilding a list re-renders only rows that changed
+export const keep_unchanged = <Row extends object>(
+  previous: Row | undefined,
+  row: Row,
+): Row =>
+  previous &&
+  (Object.keys(row) as (keyof Row)[]).every((key) => previous[key] === row[key])
+    ? previous
+    : row

@@ -1871,6 +1871,30 @@ describe(`keep_selected_in_dropdown feature`, () => {
     },
   )
 
+  // every row checks its selection through `key`: counting calls shows how many rows re-ran
+  test.each(keep_selected_modes)(
+    `a toggle re-checks only the toggled row in %s mode`,
+    async (mode) => {
+      let key_calls = 0
+      mount_multiselect({
+        options: Array.from({ length: 30 }, (_, idx) => `opt ${idx}`),
+        value: [`opt 0`],
+        keep_selected_in_dropdown: mode,
+        key: (opt) => {
+          key_calls++
+          return get_label(opt)
+        },
+      })
+      await focus_input()
+      key_calls = 0
+      await click_keep_selected_option(option_by_label(`opt 5`), mode)
+      expect(option_by_label(`opt 5`).classList.contains(`selected`)).toBe(true)
+      // rebuilding the selected-key set and the option lists; re-checking all 30 rows'
+      // selection adds one call per row (43 before the per-key check)
+      expect(key_calls).toBe(14)
+    },
+  )
+
   test.each(keep_selected_modes)(
     `search filters selected and unselected options alike in %s mode`,
     async (mode) => {

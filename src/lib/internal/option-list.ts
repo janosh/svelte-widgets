@@ -1,6 +1,7 @@
 import type { GroupedOptions, LoadOptionsConfig, Option, OptionListProps } from '../types'
 import { create_term_matcher, get_label, has_group, is_object } from '../utils'
 import { reveal_scroll, virtual_window } from '../virtual'
+import { keep_unchanged } from './key-selector.svelte'
 
 export const option_disabled = (option: Option): boolean =>
   Boolean(is_object(option) && option.disabled)
@@ -118,11 +119,13 @@ export function create_option_rows<T extends Option>() {
           selectable.push(option)
         if (hidden) continue
         if (visible) {
-          const prev = previous.get(render_key)
-          const row: OptionItemRow<T> =
-            prev?.option === option && prev.flat_idx === flat_idx && prev.group === group
-              ? prev
-              : { kind: `option`, option, flat_idx, render_key, group }
+          const row = keep_unchanged(previous.get(render_key), {
+            kind: `option` as const,
+            option,
+            flat_idx,
+            render_key,
+            group,
+          })
           built.set(render_key, row)
           rows.push(row)
         }

@@ -222,13 +222,14 @@ export const import_code = (code: string): Promise<Record<string, unknown>> =>
 // Counts key selector reads: its readers are per-row deriveds, so the reads after a change
 // show whether it re-ran O(1) rows or all N. Use as the factory of a `vi.mock` of the module.
 export const key_reads = { count: 0 }
-export const count_key_reads = ({
-  create_key_selector,
-}: {
-  create_key_selector: typeof KeySelector
-}) => ({
+export const count_key_reads = <
+  Module extends { create_key_selector: typeof KeySelector },
+>(
+  actual: Module,
+) => ({
+  ...actual,
   create_key_selector: <Key>(get_current: () => Key | ReadonlySet<Key>) => {
-    const is = create_key_selector(get_current)
+    const is = actual.create_key_selector(get_current)
     return (key: Key): boolean => {
       key_reads.count++
       return is(key)
