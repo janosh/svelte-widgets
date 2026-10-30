@@ -104,7 +104,9 @@ test.describe(`multiselect`, () => {
     const input = page.locator(`#foods input[autocomplete]`)
     await input.click()
     await expect(input).toBeFocused()
-    await expect(page.locator(`#foods ul.options`)).toBeVisible()
+    // without a portal, the dropdown renders inside the component, not in body
+    await expect(page.locator(`#foods > div.multiselect > ul.options`)).toBeVisible()
+    await expect(open_portalled(page)).toHaveCount(0)
 
     const active_option = page.locator(`#foods ul.options > li.active`)
     for (const expected_fruit of foods) {
@@ -197,54 +199,6 @@ test(`browser drag reorders selected options`, async ({ page }) => {
 })
 
 test.describe(`portal feature`, () => {
-  test(`dropdown renders within component when portal is inactive`, async ({ page }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
-    await page.click(`#foods input[autocomplete]`)
-
-    await expect(
-      page.locator(`#foods > div.multiselect > ul.options:not(.hidden)`),
-    ).toBeVisible()
-    await expect(open_portalled(page)).toHaveCount(0)
-  })
-
-  test(`mobile touch selection works with portal enabled`, async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 })
-    const modal_content = await open_portal_modal(page)
-    const languages_input = modal_content.locator(
-      `div.multiselect input[placeholder='Choose languages...']`,
-    )
-
-    await languages_input.click()
-
-    const portalled_languages_options = portalled_options(page, languages[0])
-    await expect(portalled_languages_options).toBeVisible()
-
-    const dropdown_stays_open = await page.evaluate(() => {
-      const outer_div = document.querySelector(`div.multiselect`)
-      const portalled_option = document.querySelector(
-        `body > ul.options li[role="option"]`,
-      )
-      const dropdown = document.querySelector(`body > ul.options`)
-
-      if (!outer_div || !portalled_option || !dropdown) return false
-
-      const click_event = new MouseEvent(`click`, { bubbles: true })
-      Object.defineProperty(click_event, `target`, { value: portalled_option })
-      globalThis.dispatchEvent(click_event)
-
-      return !dropdown.classList.contains(`hidden`)
-    })
-
-    expect(dropdown_stays_open).toBe(true)
-
-    await portalled_languages_options
-      .getByRole(`option`, { name: languages[0], exact: true })
-      .click()
-    await expect(
-      modal_content.getByRole(`button`, { name: `Remove ${languages[0]}` }),
-    ).toBeVisible()
-  })
-
   test(`dropdowns in modal render in body when portal is active`, async ({ page }) => {
     const modal_content = await open_portal_modal(page)
     const open_dropdown = open_portalled(page)
@@ -263,6 +217,7 @@ test.describe(`portal feature`, () => {
 
       await portalled.getByRole(`option`, { name: label, exact: true }).click()
       // clicks inside the portalled list must not count as clicks outside the component
+      // https://github.com/janosh/svelte-widgets/issues/336
       await expect(open_dropdown).toBeVisible()
       await expect(
         modal_content.getByRole(`button`, { name: `Remove ${label}` }),
