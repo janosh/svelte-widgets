@@ -546,16 +546,23 @@ test.each([
   },
 )
 test.each([
-  [`single-line`, 11, `first`, `1 of 1`],
-  [`multi-line`, 24, ``, `No matches`],
+  [`single-line`, 11, ``, `first`, `1 of 1`],
+  [`multi-line`, 24, ``, ``, `No matches`],
+  // an earlier query's nearest match would otherwise replace the selection
+  [`multi-line after an earlier query`, 24, `first`, ``, `No matches`],
 ])(
   `open_search seeds the query from a %s selection only`,
-  async (_kind, head, query, status) => {
+  async (_kind, head, earlier, query, status) => {
     const { model, instance } = await mount_editor()
+    if (earlier) {
+      await instance.open_search()
+      await fill_search(earlier)
+    }
     model.set_selection({ anchor: 6, head })
     await instance.open_search()
     expect(doc_query<HTMLInputElement>(`input[aria-label="Find"]`).value).toBe(query)
     expect(status_text()).toBe(status)
+    expect(model.selection).toEqual({ anchor: 6, head })
   },
 )
 test(`typing with the find panel open patches matches near the edit`, async () => {

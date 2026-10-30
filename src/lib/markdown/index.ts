@@ -645,7 +645,11 @@ async function prepare_document(
       else {
         if (!/^$|[\s([{]$/u.test(before)) after_inline.add(token)
         if (/^(?:<br\b|<[a-z][^>]*(?<!\/)>|\{[#:])/iu.test(token.raw)) before = ``
-        else if (!/^(?:<|\{\/)/u.test(token.raw)) before = token.raw.at(-1) ?? before
+        // a text token's rendered text, not its source: `A&#32;` ends in a space, not `;`
+        else if (!/^(?:<|\{\/)/u.test(token.raw))
+          before =
+            (token.type === `text` ? (token as Tokens.Text).text : token.raw).at(-1) ??
+            before
       }
     }
     return before

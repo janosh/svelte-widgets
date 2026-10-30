@@ -86,10 +86,11 @@
   }
 
   function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
-    // `[data-value]` excludes option_suffix buttons, which would desync focus from the
-    // option it is meant to select; `:scope >` excludes groups nested in a suffix
+    // Only option buttons: `[data-value]` and `:first-child` (the option leads its `.option`)
+    // skip option_suffix buttons, even one with its own data-value, which would desync focus
+    // from the option it is meant to select; `:scope >` skips groups nested in a suffix
     const button = `button[data-value]:not(:disabled)`
-    const selector = `:scope > ${button}, :scope > .option > ${button}`
+    const selector = `:scope > ${button}, :scope > .option > ${button}:first-child`
     const { target, currentTarget } = event
     const buttons = [...currentTarget.querySelectorAll<HTMLButtonElement>(selector)]
     // keys pressed in option_suffix content (links, inputs, nested groups) keep their

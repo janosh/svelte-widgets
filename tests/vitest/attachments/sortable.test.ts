@@ -108,6 +108,12 @@ describe(`sortable`, () => {
     expect(press_key(filter, ` `).defaultPrevented).toBe(false)
     filter.click()
     expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
+    // an iframe table's nodes come from another realm, where `instanceof Element` fails: a
+    // class the input is not an instance of stands in for this realm's Element
+    vi.stubGlobal(`Element`, HTMLCanvasElement)
+    filter.click()
+    vi.unstubAllGlobals()
+    expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
 
     cleanup?.()
     expect([first.getAttribute(`tabindex`), first.getAttribute(`aria-sort`)]).toEqual([

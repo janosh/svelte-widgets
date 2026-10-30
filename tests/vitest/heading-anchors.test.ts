@@ -265,6 +265,22 @@ describe(`heading_anchors attachment`, () => {
     }
 
     expect(await insert_heading(`before`)).toBe(`#before`)
+    // setting a heading's text replaces its anchor, which comes back
+    const before = container.querySelector(`#before`)
+    if (before) before.textContent = `Renamed`
+    await next_task()
+    expect(
+      container.querySelector(`#before ${anchor_selector}`)?.getAttribute(`href`),
+    ).toBe(`#before`)
+    // an empty heading gets its anchor once text arrives
+    container.insertAdjacentHTML(`beforeend`, `<div><h3 class="late"></h3></div>`)
+    await next_task()
+    const late = container.querySelector(`h3.late`)
+    if (late) late.textContent = `Late`
+    await next_task()
+    expect(
+      container.querySelector(`#late ${anchor_selector}`)?.getAttribute(`href`),
+    ).toBe(`#late`)
     cleanup()
     expect(await insert_heading(`after`)).toBeUndefined()
   })

@@ -69,8 +69,8 @@
     {#if collapsible}
       {@render title?.()}
       <button
-        aria-expanded={open}
         {...button_props}
+        aria-expanded={open}
         type="button"
         onclick={chain_handlers(() => (open = !open), button_props?.onclick)}
       >

@@ -163,11 +163,10 @@ export const sortable =
         sort_column()
       }
       // a click on (or a key-fired click from) a control inside the header is the control's
+      // duck-typed, not `instanceof Element`: an iframe table's nodes come from its own realm
       const on_click = ({ target }: MouseEvent) => {
-        if (
-          !(target instanceof Element && header.contains(target.closest(header_controls)))
-        )
-          sort_column()
+        const control = (target as Partial<Element> | null)?.closest?.(header_controls)
+        if (!(control && header.contains(control))) sort_column()
       }
       header.addEventListener(`click`, on_click, { signal: listeners.signal })
       header.addEventListener(`keydown`, on_keydown, { signal: listeners.signal })

@@ -6,7 +6,8 @@ const [id, src] = [`uniq-id`, `some code`]
 
 test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   const onclick = vi.fn()
-  const button_props = { onclick }
+  // a stale aria-expanded in button_props must not override the toggle's own state
+  const button_props = { onclick, 'aria-expanded': true }
   // Omit'd from the prop type; a bare button inside a form would submit it on toggle
   Reflect.set(button_props, `type`, `submit`)
   const props = {
