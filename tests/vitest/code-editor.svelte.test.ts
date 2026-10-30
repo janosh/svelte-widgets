@@ -447,6 +447,12 @@ test(`save preserves disk format, external transactions sync, and model replacem
   expect(doc_query(`[role="alert"]`).textContent).toBe(
     `Unsupported editor input type formatBold`,
   )
+  // same revision and slice range as `third`, so only its text tells the two apart
+  const fourth = create_editor_model({ uri: `memory:fourth`, text: `x` })
+  fourth.transact([{ from: 1, to: 1, insert: `z` }])
+  props.model = fourth
+  await flush_async()
+  expect(textarea.value).toBe(`xz`)
 })
 
 // open_doc runs synchronously inside the model effect; host state it reads and writes
@@ -713,17 +719,53 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
   expect(line_classes()).toEqual(Array(2).fill(`tok-keyword`))
 })
 
-test(`a scroll that widens the overlay measures and refreshes the input once`, async () => {
-  const { textarea } = await mount_editor()
+// Measuring the overlay forces a layout, as do redundant input refreshes
+test(`scrolls and typing measure the overlay only when the input slice changes`, async () => {
+  const model = create_editor_model({ uri: `demo.ts`, text: numbered_lines(40) })
+  // spied before mounting: the props $state proxy caches the methods it has read
+  const line_spy = vi.spyOn(model, `line`)
+  const slice_spy = vi.spyOn(model, `slice`)
+  const { textarea } = await mount_editor(model)
   let width_reads = 0
   function scroll_width(this: Element) {
     return this === textarea ? ++width_reads && 640 : 0
   }
   vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(scroll_width)
-  scroll_viewport(40)
+  scroll_viewport(40) // two more rows enter the slice: re-slice and measure once
   await flush_async()
   expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`640px`)
   expect(width_reads).toBe(1)
+  line_spy.mockClear()
+  slice_spy.mockClear()
+  // same rows: only the slice's two edge-line lookups, no re-slice, re-measure or row rebuild
+  scroll_viewport(50)
+  await flush_async()
+  expect([width_reads, slice_spy.mock.calls.length, line_spy.mock.calls.length]).toEqual([
+    1, 0, 2,
+  ])
+  // a typed character is refreshed (and measured) once, by on_input
+  press_key(textarea, `x`)
+  emit_input(textarea, `insertText`, 0, 0, `x`)
+  textarea.dispatchEvent(new KeyboardEvent(`keyup`, { key: `x`, bubbles: true }))
+  await flush_async()
+  expect(model.line(0).text).toBe(`xline 0`)
+  expect(width_reads).toBe(2)
+  // a native caret move still refreshes (and reveals) on keyup
+  textarea.setSelectionRange(3, 3)
+  textarea.dispatchEvent(new KeyboardEvent(`keyup`, { key: `ArrowRight`, bubbles: true }))
+  expect([model.selection.head, width_reads]).toEqual([3, 3])
+  // keydown recentres on the caret for other keys, and for typing only once it left the slice
+  const port = scroll_viewport(40)
+  await flush_async()
+  const scroll_after = (key: string): number => {
+    press_key(textarea, key)
+    return port.scrollTop
+  }
+  expect(scroll_after(`y`)).toBe(40)
+  expect(scroll_after(`Backspace`)).toBe(0)
+  scroll_viewport(600)
+  await flush_async()
+  expect(scroll_after(`y`)).toBe(0)
 })
 
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {

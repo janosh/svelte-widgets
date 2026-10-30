@@ -96,6 +96,8 @@
   let scrollport = $state<HTMLDivElement>()
   let input_from = $state(0)
   let input_to = 0
+  // Model revision the textarea's value was sliced at, -1 forcing the next slice
+  let input_revision = -1
   let rendered_selection: EditorSelection | null = null
   let doc_info = $state<EditorDocumentInfo | null>(null)
   let error_message = $state<string | null>(null)
@@ -257,7 +259,10 @@
   })
   const line_window = (count: number): LineWindow =>
     visible_line_window(scroll_top, viewport_height, line_height, count, OVERSCAN_ROWS)
-  const window_lines = $derived(line_window(line_count))
+  // Destructured into per-field deriveds: unlike the fresh window object, the numbers stay
+  // equal across sub-row scrolls, so row rebuilds and the token LRU touch re-run only when
+  // a row enters or leaves
+  const { start: window_start, end: window_end } = $derived(line_window(line_count))
   const search_tokens = (tokens: RenderedToken[], line_from: number): RenderedToken[] => {
     if (search_matches.length === 0) return tokens
     let match_idx = lower_bound(
@@ -297,9 +302,8 @@
   const visible_rows = $derived.by(() => {
     void model_revision
     void token_revision
-    const { start, end } = window_lines
-    return Array.from({ length: end - start }, (_unused, offset) => {
-      const line_idx = start + offset
+    return Array.from({ length: window_end - window_start }, (_unused, offset) => {
+      const line_idx = window_start + offset
       const line = model.line(line_idx)
       return {
         line_idx,
@@ -345,27 +349,40 @@
   }
   // Native input owns only visible lines and explicit selections. A selection spanning
   // the document deliberately expands this window so native copy/cut and AT keep working.
-  const refresh_input = (reveal = false): void => {
+  // Returns whether the textarea's value changed.
+  const refresh_input = (reveal = false): boolean => {
     const area = textarea
-    if (!area || composing || input_pending()) return
+    if (!area || composing || input_pending()) return false
     if (reveal) reveal_selection()
-    // read the model directly: window_lines' line_count only refreshes on a revision bump
+    // read the model directly: line_count only refreshes on a revision bump
     const window = line_window(model.line_count)
     const [from, to] = ordered(model.selection)
     if (from !== to || reveal) {
       window.start = Math.min(window.start, model.line_at(from).line_idx)
       window.end = Math.max(window.end, model.line_at(to).line_idx + 1)
     }
-    input_from = model.line(window.start).from
-    input_to = window.end < model.line_count ? model.line(window.end).from : model.length
-    const value = model.slice(input_from, input_to)
+    const slice_from = model.line(window.start).from
+    const slice_to =
+      window.end < model.line_count ? model.line(window.end).from : model.length
+    // An unchanged range and revision means an unchanged value: skip re-slicing it, which
+    // for a big selection copies megabytes on every scroll
+    const stale =
+      slice_from !== input_from ||
+      slice_to !== input_to ||
+      model.revision !== input_revision
+    ;[input_from, input_to, input_revision] = [slice_from, slice_to, model.revision]
+    let changed = false
     // Position synchronously before setting a caret: native navigation uses layout before
     // Svelte's next render, and stale window geometry can swallow an arrow-key movement.
     area.style.top = `${window.start * line_height}px`
     area.style.height = `${Math.max(1, window.end - window.start) * line_height}px`
     refreshing_input = true
     try {
-      if (area.value !== value) area.value = value
+      if (stale) {
+        const value = model.slice(slice_from, slice_to)
+        changed = area.value !== value
+        if (changed) area.value = value
+      }
       set_dom_selection(area, model.selection)
     } finally {
       refreshing_input = false
@@ -377,6 +394,7 @@
       measure_overlay_width()
       reveal_horizontal_selection()
     }
+    return changed
   }
   $effect(() => {
     const active_model = model
@@ -393,6 +411,7 @@
     const is_current = (): boolean => active_client === active && model === active_model
     untrack(() => {
       token_cache.clear()
+      input_revision = -1 // a new model's revisions restart
       cached_line_count = active_model.line_count
       token_revision += 1
     })
@@ -460,7 +479,7 @@
     // Arriving spans are what make an uncached window cached, so the LRU touch below must
     // re-run then; `model_revision` no longer covers it, hence a signal of its own.
     void token_revision
-    const { start, end } = window_lines
+    const [start, end] = [window_start, window_end] // tracked: the untrack below hides its reads
     const cached = untrack(() => touch_tokens(start, end))
     if (doc_info?.highlightable && !cached) active_client?.request_highlight(start, end)
   })
@@ -473,13 +492,17 @@
     area.style.minWidth = `${width}px`
     if (width !== overlay_width) overlay_width = width
   }
+  let measured_viewport_width = -1
   $effect(() => {
     void viewport_height
     void viewport_width
     void scroll_top
     void model_revision
-    untrack(() => refresh_input())
+    const changed = untrack(() => refresh_input())
     if (scrollport) scrollport.scrollTop = scroll_top
+    // Measuring forces a layout: only a new value or viewport width can change the width.
+    if (!changed && viewport_width === measured_viewport_width) return
+    measured_viewport_width = viewport_width
     // Untracked: it writes `overlay_width`, and reading that back re-ran this whole effect.
     untrack(measure_overlay_width)
   })
@@ -496,19 +519,23 @@
     tab_moves_focus = false
   }
   onDestroy(on_blur)
+  // The textarea still shows the selection refresh_input last set on it
+  const shows_rendered = (area: HTMLTextAreaElement): boolean => {
+    const { anchor, head } = dom_selection(area)
+    return rendered_selection?.anchor === anchor && rendered_selection.head === head
+  }
+  // The model selection reaches past the textarea's slice (which shows it clamped)
+  const selection_outside_input = (): boolean => {
+    const [from, to] = ordered(model.selection)
+    return from < input_from || to > input_to
+  }
   const selection_of = (
     area: HTMLTextAreaElement,
     preserve_clamped = true,
   ): EditorSelection => {
-    const { anchor, head } = dom_selection(area)
-    const [from, to] = ordered(model.selection)
-    if (
-      preserve_clamped &&
-      (from < input_from || to > input_to) &&
-      rendered_selection?.anchor === anchor &&
-      rendered_selection.head === head
-    )
+    if (preserve_clamped && selection_outside_input() && shows_rendered(area))
       return model.selection
+    const { anchor, head } = dom_selection(area)
     return { anchor: input_from + anchor, head: input_from + head }
   }
   const update_locally = (update: () => void): void => {
@@ -1076,8 +1103,10 @@
       return
     }
     // Recenter before native navigation/deletion reaches either edge of the input slice.
+    // A character typed inside the slice needs none: on_input refreshes after the edit.
     sync_selection()
-    refresh_input(true)
+    const typed = !command_modifier && [...event.key].length === 1
+    if (!typed || selection_outside_input()) refresh_input(true)
     if (editing_disabled) return
     if (
       command_modifier &&
@@ -1304,6 +1333,8 @@
         oninput={on_input}
         onkeydown={on_keydown}
         onkeyup={() => {
+          // only a native caret move needs syncing; on_input already refreshed typed text
+          if (textarea && shows_rendered(textarea)) return
           sync_selection()
           refresh_input(true)
         }}
