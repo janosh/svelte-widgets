@@ -2,12 +2,7 @@ import { expect, test } from '@playwright/test'
 import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { mkdtemp, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import {
-  createServer,
-  type EnvironmentModuleNode,
-  type Plugin,
-  type ViteDevServer,
-} from 'vite'
+import { createServer, type ViteDevServer } from 'vite'
 import { create_markdown } from '../../src/lib/markdown/index.ts'
 import { markdown_vite } from '../../src/lib/markdown/vite.ts'
 
@@ -48,48 +43,6 @@ ${extra}
 
 const write_page = (source: string) => writeFile(`${directory}/Page.md`, source)
 
-// TEMP diagnostics for the CI-only full reload on a CSS-only edit: log each environment's
-// final hot-update modules and, on a full reload, the import chain that dead-ends.
-const describe_node = (mod: EnvironmentModuleNode) =>
-  JSON.stringify({
-    id: mod.id?.replace(directory, ``),
-    self: mod.isSelfAccepting,
-    exports: mod.acceptedHmrExports && [...mod.acceptedHmrExports],
-    importers: [...mod.importers].map((importer) => importer.url),
-  })
-const dead_ends = (
-  mod: EnvironmentModuleNode,
-  chain: string[] = [],
-  seen = new Set<EnvironmentModuleNode>(),
-): string[] => {
-  if (seen.has(mod)) return []
-  seen.add(mod)
-  const here = [...chain, describe_node(mod)]
-  if (mod.isSelfAccepting === undefined || mod.isSelfAccepting) return []
-  if (mod.acceptedHmrExports) return []
-  if (!mod.importers.size) return [here.join(`\n    <- `)]
-  return [...mod.importers].flatMap((importer) =>
-    importer.acceptedHmrDeps.has(mod) ? [] : dead_ends(importer, here, seen),
-  )
-}
-const hmr_debug: Plugin = {
-  name: `hmr-debug`,
-  enforce: `post`,
-  hotUpdate: {
-    order: `post`,
-    handler({ file, modules, type }) {
-      console.info(
-        `HMR-DEBUG ${this.environment.name} ${type} ${file.replace(directory, ``)}`,
-      )
-      for (const mod of modules) {
-        console.info(`  module ${describe_node(mod)}`)
-        if (this.environment.name === `client`)
-          for (const chain of dead_ends(mod)) console.info(`  DEAD END ${chain}`)
-      }
-    },
-  },
-}
-
 // Keep the files, server, and optimizer cache isolated; only dependencies are shared.
 test.beforeAll(async () => {
   directory = await realpath(await mkdtemp(`${tmpdir()}/widgets-browser-`))
@@ -112,7 +65,6 @@ test.beforeAll(async () => {
     plugins: [
       docs.plugin,
       svelte({ extensions: [`.svelte`, `.md`], preprocess: docs.preprocess }),
-      hmr_debug,
     ],
     resolve: {
       dedupe: [`svelte`],
