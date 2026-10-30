@@ -258,3 +258,56 @@ test(`nested groups with duplicate keys keep independent tab stops and navigatio
   expect(document.activeElement).toBe(outer.marks[1])
   expect(outer.tabstops()).toEqual([`-1`, `0`, `-1`])
 })
+
+// A chart restyles thousands of nodes per update: only mutations a mark is part of re-check
+// eligibility, whose computed-style walk forces a style recalc mid-update
+test(`restyling nodes that hold no mark leaves the tab stops unchecked`, async () => {
+  const { container, marks, tabstops } = setup()
+  const other = document.createElement(`span`)
+  container.append(other)
+  const computed_style = vi.spyOn(window, `getComputedStyle`)
+  onTestFinished(() => computed_style.mockRestore())
+  const settle = async () => {
+    // MutationObserver callbacks
+    await new Promise((resolve) => {
+      setTimeout(resolve, 0)
+    })
+    flushSync()
+  }
+  other.classList.add(`restyled`)
+  other.style.color = `red`
+  await settle()
+  expect(computed_style).not.toHaveBeenCalled()
+  marks[1].classList.add(`restyled`)
+  await settle()
+  expect(computed_style).toHaveBeenCalled()
+  expect(tabstops().slice(0, 3)).toEqual([`0`, `-1`, `-1`])
+})
+
+test(`a changed item list re-runs no measured tab stop`, () => {
+  const container = document.createElement(`div`)
+  const mark = document.createElement(`button`)
+  mark.setAttribute(ROVING_ATTR, `alpha`)
+  container.append(mark)
+  document.body.append(container)
+  let revision = $state(0)
+  let runs = 0
+  onTestFinished(
+    $effect.root(() => {
+      const focus = create_roving_focus({
+        container: () => container,
+        items: () => revision,
+      })
+      $effect(() => {
+        runs++
+        mark.tabIndex = focus.tabindex(`alpha`)
+      })
+    }),
+  )
+  flushSync()
+  const measured_runs = runs
+  revision++
+  flushSync()
+  expect(runs).toBe(measured_runs)
+  expect(mark.tabIndex).toBe(0)
+})

@@ -53,13 +53,28 @@ export function create_roving_focus(opts: {
     [...container.querySelectorAll<HTMLElement | SVGElement>(`[${ROVING_ATTR}]`)].filter(
       (mark) => owns(mark, container),
     )
+  // Whether a node is a mark or holds one: only then can its mutation change which marks
+  // exist or can take focus (a chart restyles thousands of nodes per update)
+  const touches_marks = (node: Node): boolean =>
+    node instanceof Element &&
+    (node.matches(`[${ROVING_ATTR}]`) || node.querySelector(`[${ROVING_ATTR}]`) !== null)
 
   $effect(() => {
     const container = opts.container()
     if (!container) return undefined
     groups.add(container)
-    // Batch DOM changes in one observer callback.
-    const observer = new MutationObserver(() => void dom_revision++)
+    // Batch DOM changes in one observer callback, ignoring those no mark is part of. The
+    // container's ancestors (observed for their own attributes) always count.
+    const observer = new MutationObserver((records) => {
+      const relevant = records.some(({ type, target, addedNodes, removedNodes }) =>
+        !container.contains(target)
+          ? true
+          : type === `attributes`
+            ? touches_marks(target)
+            : [...addedNodes, ...removedNodes].some(touches_marks),
+      )
+      if (relevant) dom_revision++
+    })
     const attributes = { attributes: true, attributeFilter: ELIGIBILITY_ATTRS }
     observer.observe(container, { ...attributes, subtree: true, childList: true })
     for (let node = composed_parent(container); node; node = composed_parent(node))
@@ -76,11 +91,21 @@ export function create_roving_focus(opts: {
     return { fallback: null as string | null }
   })
 
+  // The marks and DOM revision last checked: the same marks with no eligibility change since
+  // keep their tab stops, sparing the computed-style walk (a forced style recalc mid-update)
+  let checked: { marks: Element[]; revision: number } | undefined
   $effect(() => {
     opts.items()
-    void dom_revision
+    const revision = dom_revision
     const container = opts.container()
     const marks = container ? marks_in(container) : []
+    if (
+      checked?.revision === revision &&
+      checked.marks.length === marks.length &&
+      checked.marks.every((mark, idx) => mark === marks[idx])
+    )
+      return
+    checked = { marks, revision }
     // A key left behind by marks that no longer render would strand the group at -1
     if (
       focused_key != null &&
@@ -94,13 +119,14 @@ export function create_roving_focus(opts: {
   })
 
   return {
-    tabindex: (key) => {
-      pass.fallback ??= key
-      return key ===
-        (focused_key ?? (fallback_key === undefined ? pass.fallback : fallback_key))
+    // Read `pass` only until the first measurement, so a changed item list (a chart's pan
+    // frame) re-runs no item's tab stop once one is measured
+    tabindex: (key) =>
+      key ===
+      (focused_key ??
+        (fallback_key === undefined ? (pass.fallback ??= key) : fallback_key))
         ? 0
-        : -1
-    },
+        : -1,
     focusin: (event) => {
       const mark = (event.target as Element | null)?.closest?.(`[${ROVING_ATTR}]`)
       const container = opts.container()
