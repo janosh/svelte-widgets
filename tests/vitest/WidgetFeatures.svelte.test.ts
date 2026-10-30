@@ -504,6 +504,53 @@ test.each([`ctrlKey`, `metaKey`] as const)(
   },
 )
 
+// each row reads its node's label when it re-renders: the reads count the rows a change hit
+test(`expanding or lazily loading one branch re-renders no sibling row`, async () => {
+  let label_reads = 0
+  const branch = (idx: number): TreeNode => ({
+    id: `branch ${idx}`,
+    get label() {
+      label_reads++
+      return `Branch ${idx}`
+    },
+    children: [{ id: `child ${idx}`, label: `Child ${idx}` }],
+  })
+  let resolve_load: (nodes: TreeNode[]) => void = () => {}
+  const lazy: TreeNode = {
+    id: `lazy`,
+    label: `Lazy`,
+    load: () =>
+      new Promise((resolve) => {
+        resolve_load = resolve
+      }),
+  }
+  const target = target_for()
+  render(
+    TreeView,
+    { nodes: [...Array.from({ length: 8 }, (_, idx) => branch(idx)), lazy] },
+    target,
+  )
+  const toggle = (id: string) =>
+    doc_query(`[data-tree-id="${id}"] button`).dispatchEvent(
+      new MouseEvent(`click`, { bubbles: true }),
+    )
+  label_reads = 0
+  toggle(`branch 0`)
+  await tick()
+  expect(target.querySelector(`[data-tree-id="child 0"]`)).not.toBeNull()
+  // branch 0's own row only: re-rendering its 7 expandable siblings too read 10
+  expect(label_reads).toBe(3)
+  label_reads = 0
+  toggle(`lazy`)
+  await tick()
+  expect(doc_query(`[data-tree-id="lazy"]`).getAttribute(`aria-busy`)).toBe(`true`)
+  resolve_load([{ id: `loaded`, label: `Loaded` }])
+  await tick()
+  await tick()
+  expect(target.querySelector(`[data-tree-id="loaded"]`)).not.toBeNull()
+  expect(label_reads).toBe(1) // no branch row re-rendered for the lazy row's load
+})
+
 test(`tree keyboard ranges shrink, Space toggles, and focus alone preserves selection`, async () => {
   const on_change = vi.fn()
   let label_reads = 0 // each row render reads its label

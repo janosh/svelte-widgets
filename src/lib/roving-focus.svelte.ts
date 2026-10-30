@@ -3,6 +3,7 @@ import {
   is_active_element,
   is_focus_available,
 } from './attachments/shared'
+import { create_key_selector } from './internal/key-selector.svelte'
 import { is_editable_event_target, is_modifier_chord } from './utils'
 import { SvelteSet } from 'svelte/reactivity'
 // Roving tabindex over keyed HTML or SVG items in DOM order.
@@ -119,13 +120,18 @@ export function create_roving_focus(opts: {
     fallback_key = marks.find(is_focus_available)?.getAttribute(ROVING_ATTR) ?? null
   })
 
+  // per-key, so a focus move re-runs only the two marks it moves the tab stop between
+  const is_tab_stop = create_key_selector(() => focused_key ?? fallback_key)
+
   return {
-    // Read `pass` only until the first measurement, so a changed item list (a chart's pan
-    // frame) re-runs no item's tab stop once one is measured
+    // Until the first measurement the first key asked claims a provisional tab stop. After it
+    // `pass` is never read, so a changed item list (a chart's pan frame) re-runs no item.
     tabindex: (key) =>
-      key ===
-      (focused_key ??
-        (fallback_key === undefined ? (pass.fallback ??= key) : fallback_key))
+      (
+        fallback_key === undefined
+          ? key === (focused_key ?? (pass.fallback ??= key))
+          : is_tab_stop(key)
+      )
         ? 0
         : -1,
     focusin: (event) => {

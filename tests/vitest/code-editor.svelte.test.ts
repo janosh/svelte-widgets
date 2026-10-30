@@ -1,6 +1,7 @@
 import { register_escape_layer } from '#lib/attachments/index.ts'
 import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '#lib/code-editor/model.ts'
+import type * as Tokens from '#lib/code-editor/tokens.ts'
 import type {
   ApplyEditsArgs,
   EditorBackend,
@@ -11,6 +12,19 @@ import type {
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, next_task, pointer_event, press_key, stub_prop } from './index'
+
+// Counts line tokenizations: the visible rows a change rebuilt
+const token_renders = vi.hoisted(() => ({ count: 0 }))
+vi.mock(`#lib/code-editor/tokens.ts`, async (import_original) => {
+  const actual = await import_original<typeof Tokens>()
+  return {
+    ...actual,
+    render_tokens: (...args: Parameters<typeof actual.render_tokens>) => {
+      token_renders.count++
+      return actual.render_tokens(...args)
+    },
+  }
+})
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
 const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
@@ -717,6 +731,17 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
   model.transact([{ from: model.line(1).to, to: model.line(3).from, insert: `` }])
   await tick()
   expect(line_classes()).toEqual(Array(2).fill(`tok-keyword`))
+})
+
+test(`a keystroke re-tokenizes only its own line, not every visible line`, async () => {
+  const { model, textarea } = await mount_editor(numbered_lines(40))
+  await flush_async()
+  token_renders.count = 0
+  press_key(textarea, `x`)
+  emit_input(textarea, `insertText`, 0, 0, `x`)
+  await flush_async()
+  expect(model.line(0).text).toBe(`xline 0`)
+  expect(token_renders.count).toBe(1) // rebuilding every row tokenized all 9 visible lines
 })
 
 // Measuring the overlay forces a layout, as do redundant input refreshes

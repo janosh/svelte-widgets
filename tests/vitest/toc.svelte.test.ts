@@ -677,6 +677,31 @@ describe(`Toc`, () => {
     expect(props.toc_items?.filter(Boolean)).toHaveLength(count - (removed_id ? 1 : 0))
   })
 
+  // each row's active check reads its heading's id: the reads count the rows a change re-ran
+  test(`moving the active heading re-runs only the two rows it moves between`, async () => {
+    set_headings(8)
+    set_window_width(1200)
+    mock_active_heading(`heading-1`)
+    spy_scroll_into_view()
+    let id_reads = 0
+    const items = Array.from({ length: 8 }, (_, idx) => ({
+      get id() {
+        id_reads++
+        return `heading-${idx + 1}`
+      },
+      level: 2,
+      title: `Heading ${idx + 1}`,
+    }))
+    await mount_toc({ items })
+    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+    id_reads = 0
+    press_key(document.activeElement ?? document.body, `ArrowDown`)
+    await tick()
+    expect(active_text()).toBe(`Heading 2`)
+    // 4 from locating the headings, then one per re-run row: 2 here, all 8 (12) per-row compare
+    expect(id_reads).toBe(6)
+  })
+
   test.each([`Enter`, ` `])(
     `desktop arrow keys move focus + selection and %j follows the real link`,
     async (key) => {

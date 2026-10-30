@@ -50,6 +50,10 @@
     pos: number
     size: number
     expandable: boolean
+    // per-row copies of `expanded` and the branch loads, so expanding a branch or starting a
+    // load re-renders only that row instead of every row reading the set or map
+    open: boolean
+    busy: boolean
   }
   // Rows unchanged since the last pass are reused, so expanding or collapsing one branch
   // re-renders only rows whose own fields changed, not every visible row
@@ -64,8 +68,9 @@
           throw new Error(`TreeView requires unique node ids, duplicate ${node.id}`)
         indices.set(node.id, result.length)
         const branch = branches.get(node)
-        const descendants =
-          node.children ?? (branch instanceof AbortController ? undefined : branch)
+        const busy = branch instanceof AbortController
+        const descendants = node.children ?? (busy ? undefined : branch)
+        const open = expanded.has(node.id)
         const row = keep_unchanged(previous_rows.get(node.id), {
           node,
           depth,
@@ -73,10 +78,12 @@
           pos: idx + 1,
           size: siblings.length,
           expandable: Boolean(descendants?.length || (node.load && !descendants)),
+          open,
+          busy,
         })
         reused.set(node.id, row)
         result.push(row)
-        if (expanded.has(node.id) && descendants) visit(descendants, depth + 1, node.id)
+        if (open && descendants) visit(descendants, depth + 1, node.id)
       })
     }
     visit(nodes, 1)
@@ -214,7 +221,7 @@
     aria-multiselectable={multiple || undefined}
     onkeydown={keydown}
   >
-    {#each rows as { node, depth, pos, size, expandable } (node.id)}
+    {#each rows as { node, depth, pos, size, expandable, open, busy } (node.id)}
       <div
         role="treeitem"
         aria-label={node.label}
@@ -227,10 +234,10 @@
         aria-level={depth}
         aria-posinset={pos}
         aria-setsize={size}
-        aria-expanded={expandable ? expanded.has(node.id) : undefined}
+        aria-expanded={expandable ? open : undefined}
         aria-selected={node.disabled ? undefined : has_selected(node.id)}
         aria-disabled={node.disabled}
-        aria-busy={branches.get(node) instanceof AbortController}
+        aria-busy={busy}
         tabindex={is_active(node.id) ? 0 : -1}
         style:padding-inline-start={`${(depth - 1) * 1.25}em`}
         onfocus={() => (focused = node.id)}
@@ -249,12 +256,12 @@
             type="button"
             tabindex="-1"
             disabled={node.disabled}
-            aria-label={`${expanded.has(node.id) ? `Collapse` : `Expand`} ${node.label}`}
+            aria-label={`${open ? `Collapse` : `Expand`} ${node.label}`}
             onclick={(event) => {
               event.stopPropagation()
               void focus_node(node.id)
               toggle_expanded(node)
-            }}>{expanded.has(node.id) ? `▾` : `▸`}</button
+            }}>{open ? `▾` : `▸`}</button
           >{:else}<span aria-hidden="true" style="width: 1.5em"></span>{/if}
         {#if children}{@render children(node)}{:else}{node.label}{/if}
       </div>

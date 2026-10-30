@@ -9,6 +9,7 @@
     OpenChangeTrigger,
     TocHeadingData,
   } from './types'
+  import { create_key_selector } from './internal/key-selector.svelte'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
   import { override_style } from './attachments/shared'
@@ -224,6 +225,17 @@
       collapse_enabled && active_heading ? heading_index(active_heading) : null
     return get_heading_visibility(levels, active_idx, collapse_threshold)
   })
+  // per-key, so a scroll that moves the active heading (or the subheadings it unfolds)
+  // re-runs only the rows it changes, not every row reading the active id or visibility array
+  const is_active_id = create_key_selector(() => active_heading?.id)
+  const is_collapsed_id = create_key_selector(
+    () =>
+      new Set(
+        collapse_enabled
+          ? heading_data.filter((_, idx) => !heading_visibility[idx]).map(({ id }) => id)
+          : [],
+      ),
+  )
 
   $effect(() => {
     desktop = window_width > breakpoint
@@ -758,8 +770,8 @@
       <ol {...ol_props}>
         {#each heading_data as heading, idx (heading.id)}
           {@const indent = heading.level - min_level}
-          {@const collapsed = collapse_enabled && !heading_visibility[idx]}
-          {@const is_active = heading.id === active_heading?.id}
+          {@const collapsed = is_collapsed_id(heading.id)}
+          {@const is_active = is_active_id(heading.id)}
           {@const item_tabindex = collapsed ? -1 : 0}
           {@const use_fallback_toc_item =
             toc_item && toc_item_has_interactive[idx] === false}

@@ -31,6 +31,7 @@
     update_editor_matches,
   } from './search'
   import type { EditorMatch } from './search'
+  import { create_key_selector } from '../internal/key-selector.svelte'
   import { render_tokens, type RenderedToken } from './tokens'
   import { resolve_editor_backend } from './types'
   import type {
@@ -299,22 +300,42 @@
       return pieces
     })
   }
+  type VisibleRow = { line_idx: number; top: number; tokens: RenderedToken[] }
+  // Each row with the inputs it was built from: a row whose line text, highlight spans and
+  // (while searching) offset and matches are unchanged is reused with its tokens, so a
+  // keystroke re-tokenizes and re-renders only its own line, not every visible one
+  let built_rows = new Map<number, { inputs: unknown[]; row: VisibleRow }>()
+  const NO_SPANS: never[] = []
   const visible_rows = $derived.by(() => {
     void model_revision
     void token_revision
-    return Array.from({ length: window_end - window_start }, (_unused, offset) => {
+    const built = new Map<number, { inputs: unknown[]; row: VisibleRow }>()
+    const rows = Array.from({ length: window_end - window_start }, (_unused, offset) => {
       const line_idx = window_start + offset
       const line = model.line(line_idx)
-      return {
-        line_idx,
-        top: line_idx * line_height,
-        tokens: search_tokens(
-          render_tokens(line.text, token_cache.get(line_idx)?.spans ?? []),
-          line.from,
-        ),
-      }
+      const spans = token_cache.get(line_idx)?.spans ?? NO_SPANS
+      // search_tokens shifts matches by the line's offset, which edits above it change
+      const search_inputs = search_matches.length ? [line.from, search_matches] : []
+      const inputs = [line.text, spans, line_height, ...search_inputs]
+      const previous = built_rows.get(line_idx)
+      const same =
+        previous?.inputs.length === inputs.length &&
+        previous.inputs.every((input, idx) => input === inputs[idx])
+      const row = same
+        ? previous.row
+        : {
+            line_idx,
+            top: line_idx * line_height,
+            tokens: search_tokens(render_tokens(line.text, spans), line.from),
+          }
+      built.set(line_idx, { inputs, row })
+      return row
     })
+    built_rows = built
+    return rows
   })
+  // per-key, so moving the caret to another line re-runs only the two gutter rows it changes
+  const is_caret_line = create_key_selector(() => caret_line)
   const total_height = $derived(line_count * line_height)
   const dom_selection = ({
     selectionStart: start,
@@ -1286,7 +1307,7 @@
         >
           {#each visible_rows as row (row.line_idx)}
             <div
-              class={[`gutter-line`, { active: row.line_idx === caret_line }]}
+              class={[`gutter-line`, { active: is_caret_line(row.line_idx) }]}
               style:top={`${row.top}px`}
             >
               {row.line_idx + 1}

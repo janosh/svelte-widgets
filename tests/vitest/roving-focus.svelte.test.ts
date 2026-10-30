@@ -261,6 +261,46 @@ test(`nested groups with duplicate keys keep independent tab stops and navigatio
 
 // A chart restyles thousands of nodes per update: only mutations a mark is part of re-check
 // eligibility, whose computed-style walk forces a style recalc mid-update
+// more marks than a move touches, so re-running every mark's tab stop would show
+test(`a focus move re-runs only the tab stops of the two marks it moves between`, () => {
+  const container = document.createElement(`div`)
+  const marks = Array.from({ length: 8 }, (_, idx) => {
+    const mark = document.createElement(`button`)
+    mark.setAttribute(ROVING_ATTR, `key ${idx}`)
+    return mark
+  })
+  container.append(...marks)
+  document.body.append(container)
+  onTestFinished(() => container.remove())
+  let runs = 0
+  onTestFinished(
+    $effect.root(() => {
+      const focus = create_roving_focus({
+        container: () => container,
+        items: () => marks,
+      })
+      container.addEventListener(`focusin`, focus.focusin as EventListener)
+      container.addEventListener(`keydown`, (event) => {
+        focus.handle_keydown(event)
+      })
+      for (const mark of marks)
+        $effect(() => {
+          runs++
+          mark.tabIndex = focus.tabindex(mark.getAttribute(ROVING_ATTR) ?? ``)
+        })
+    }),
+  )
+  flushSync()
+  marks[0].focus()
+  flushSync()
+  runs = 0
+  press_key(marks[0], `ArrowRight`)
+  flushSync()
+  expect(document.activeElement).toBe(marks[1])
+  expect(marks.map((mark) => mark.tabIndex)).toEqual([-1, 0, -1, -1, -1, -1, -1, -1])
+  expect(runs).toBe(2)
+})
+
 test(`restyling nodes that hold no mark leaves the tab stops unchecked`, async () => {
   const { container, marks, tabstops } = setup()
   const other = document.createElement(`span`)
