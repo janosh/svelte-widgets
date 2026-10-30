@@ -302,6 +302,23 @@ describe(`load_options feature`, () => {
     expect(offsets).toEqual([0])
   })
 
+  // a later page that comes back empty while still reporting has_more makes no progress:
+  // pagination ends instead of re-requesting the same offset on every scroll
+  test(`scroll pagination stops after an empty later batch`, async () => {
+    const offsets: number[] = []
+    const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
+      offsets.push(offset)
+      return { options: offset ? [] : [`a`, `b`, `c`, `d`, `e`], has_more: true }
+    })
+    await mount_autofill(load_options, 500)
+    await flush_ticks(10)
+    for (let idx = 0; idx < 3; idx++) {
+      mock_scroll_near_bottom(doc_query(`ul.options`))
+      await flush_ticks(5)
+    }
+    expect(offsets).toEqual([0, 5])
+  })
+
   test(`stale fetch result discarded when search changes during load`, async () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
