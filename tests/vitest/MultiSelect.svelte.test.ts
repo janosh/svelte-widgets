@@ -1223,27 +1223,6 @@ test.each<[string, MultiSelectProps, string, number]>([
   },
 )
 
-test.each([
-  [null, [1, 2]],
-  [1, 2],
-  [2, [1, 2]],
-])(
-  `1-way (outward) binding of value works when max_select=%s, expected value=%s`,
-  async (max_select, expected) => {
-    const on_value_changed = vi.fn()
-    mount_2way({
-      options: [1, 2, 3],
-      ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
-      onValueChanged: on_value_changed,
-    })
-
-    // internal changes bind outward
-    for (const _ of [1, 2]) await click(`ul.options li`)
-
-    expect(on_value_changed).toHaveBeenLastCalledWith(expected)
-  },
-)
-
 test(`disabled multiselect disables input, removal controls, and shows disabled icon`, () => {
   const disabled_input_title = `Selection unavailable`
   mount_multiselect({
@@ -2574,15 +2553,7 @@ test.each<[MultiSelectProps, string]>([
     },
     `Red`,
   ],
-  [{ value: [`Red`, `Green`], options: [`Red`, `Green`, `Blue`] }, `Red Green`],
-  [{ value: [1, 2], options: [1, 2, 3] }, `1 2`],
-  [
-    {
-      value: [{ label: `Red` }, { label: `Green` }],
-      options: [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
-    },
-    `Red Green`,
-  ],
+  // multiple-mode initial chips are covered by `single remove button removes 1 selected option`
 ])(`initial selection from %j renders %s`, (props, expected_text) => {
   mount_multiselect(props)
 

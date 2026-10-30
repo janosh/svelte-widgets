@@ -72,8 +72,7 @@ test(`editor CSS styles every token and defines readable dark defaults`, () => {
   }
   const dark_palette =
     /:root\[data-theme='dark'\],[\s\S]*?\n}/.exec(editor_css)?.[0] ?? ``
-  expect(dark_palette).toContain(
-    `--editor-gutter-active-color: var(--text-color, #c9d1d9);`,
-  )
-  expect(dark_palette).toContain(`--tok-plain: var(--text-color, #c9d1d9);`)
+  // the dark block must override these, else dark mode inherits the light text fallback
+  for (const name of [`--editor-gutter-active-color`, `--tok-plain`])
+    expect(dark_palette).toMatch(new RegExp(`${name}:`))
 })

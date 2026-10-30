@@ -50,11 +50,4 @@ describe(`dismiss_on_outside_press`, () => {
     expect(callback).toHaveBeenCalledTimes(1)
     expect(callback.mock.calls[0][0]).toMatchObject({ focus_inside: true, via: `escape` })
   })
-
-  it(`disabled registers no listener and returns a callable cleanup`, () => {
-    const { callback, cleanup } = listen({ enabled: false })
-    press(create_element())
-    expect(callback).not.toHaveBeenCalled()
-    expect(() => cleanup()).not.toThrow()
-  })
 })

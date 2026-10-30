@@ -447,27 +447,13 @@ describe(`keyboard shortcuts`, () => {
     },
   )
 
-  test.each([
-    [
-      `select_all respects max_select`,
-      {
-        value: [],
-        select_all_option: true,
-        shortcuts: { select_all: `ctrl+a` },
-        max_select: 2,
-      },
-      { key: `a`, ctrlKey: true },
-      2,
-    ],
-    [
-      `clear_all respects min_select`,
+  // select_all under max_select is covered by `select_all shortcut %s` in MultiSelect.svelte.test.ts
+  test(`clear_all respects min_select`, async () => {
+    const { props } = await test_shortcut(
       { value: [`a`, `b`, `c`], min_select: 1 },
       { key: `Backspace`, ctrlKey: true },
-      1,
-    ],
-  ])(`%s`, async (_label, extra_props, key_event, expected_length) => {
-    const { props } = await test_shortcut(extra_props, key_event)
-    expect(props.value).toHaveLength(expected_length)
+    )
+    expect(props.value).toHaveLength(1)
   })
 
   test(`clear_all skipped when search_text is non-empty`, async () => {

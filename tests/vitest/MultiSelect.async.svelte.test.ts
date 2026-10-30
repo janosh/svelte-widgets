@@ -961,8 +961,8 @@ describe(`async on_create`, () => {
     expect(props.value).toEqual([`only-once`])
   })
 
+  // returning false is covered by `on_create returning false rejects option` in the main file
   test.each<[string, MultiSelectProps[`on_create`], Option[], Option[]?]>([
-    [`returning false blocks the option`, () => false, []],
     [
       `returning an option transforms it`,
       ({ option }) => `${get_label(option)}`.toUpperCase(),

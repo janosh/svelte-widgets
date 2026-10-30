@@ -197,8 +197,8 @@ describe(`rows and layouts`, () => {
     expect(side_text(visual_rows[1], `new`)).toBe(`  gamma beta`)
     expect(text_of(query_element(`.diff-row-delete .tok-emph`))).toBe(`alpha`)
     expect(text_of(query_element(`.diff-row-insert .tok-emph`))).toBe(`gamma`)
-    expect(query_element(`[data-spacer='new']`)).toBeDefined()
-    expect(query_element(`[data-spacer='old']`)).toBeDefined()
+    query_element(`[data-spacer='new']`) // doc_query throws when a spacer is missing
+    query_element(`[data-spacer='old']`)
   })
 
   test(`toggles between unified and split without duplicating context`, async () => {

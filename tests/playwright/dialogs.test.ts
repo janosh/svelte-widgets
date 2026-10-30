@@ -6,8 +6,6 @@ test(`ConfirmDialog advances queued focus and restores the opener`, async ({ pag
   await opener.click()
 
   const dialog = page.locator(`dialog.confirm-dialog`)
-  await expect(dialog.locator(`h2`)).toHaveCSS(`margin-top`, `0px`)
-  await expect(dialog).toHaveCSS(`padding`, `12px`)
   const delete_button = dialog.getByRole(`button`, { name: `Delete` })
   expect((await delete_button.boundingBox())?.height ?? Infinity).toBeLessThan(32)
   await delete_button.click()

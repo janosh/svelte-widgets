@@ -201,29 +201,13 @@ describe(`Nav`, () => {
     expect(burger.getAttribute(`aria-expanded`)).toBe(`true`)
     expect(onclick).toHaveBeenCalledOnce()
   })
+  // plain label text is covered by `handles all route formats together with all features`
   test.each([
-    [
-      `explicit labels`,
-      [
-        { href: `/`, label: `Home` },
-        { href: `/about`, label: `About Us` },
-        { href: `/contact`, label: `Get In Touch` },
-      ] satisfies NavRoute[],
-      [`Home`, `About Us`, `Get In Touch`],
-    ],
     [`empty routes`, [], []],
     [
       `HTML labels`,
       [{ href: `/home`, label: `<strong>Home</strong>` }] satisfies NavRoute[],
       [`<strong>Home</strong>`],
-    ],
-    [
-      `special chars`,
-      [
-        { href: `/path?query=test`, label: `path?query=test` },
-        { href: `/path#anchor`, label: `path#anchor` },
-      ],
-      [`path?query=test`, `path#anchor`],
     ],
   ])(`handles %s`, (_desc, routes, expected_content) => {
     mount_nav({ routes })

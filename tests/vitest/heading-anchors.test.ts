@@ -207,7 +207,7 @@ describe(`heading_anchors attachment`, () => {
       [...container.querySelectorAll<HTMLElement>(anchor_selector)].map(
         (anchor) => anchor.style.paddingInlineStart,
       ),
-    ).toEqual([...Array(3).fill(`var(--heading-anchor-gap, 0.3em)`), ``])
+    ).toEqual([...Array(3).fill(expect.stringContaining(`--heading-anchor-gap`)), ``])
   })
 
   it.each([

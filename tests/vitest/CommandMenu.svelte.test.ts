@@ -1384,20 +1384,17 @@ test.each([
   [`fires when closed`, {}, 1],
   [`disabled via prop`, { global_shortcuts: false }, 0],
   [`inactive while open`, { open: true }, 0],
-  [`ignores disabled actions`, { disabled: true }, 0],
+  // disabled actions: see `global shortcuts skip disabled duplicate bindings`
   [`ignores wrong modifiers`, { shift: false }, 0],
 ] as const)(`global action shortcuts: %s`, async (_desc, overrides, calls) => {
-  const { open, global_shortcuts, shift, disabled } = {
+  const { open, global_shortcuts, shift } = {
     open: false,
     global_shortcuts: true,
     shift: true,
-    disabled: false,
     ...overrides,
   }
   const spy = vi.fn()
-  const actions = [
-    { id: `save`, label: `save`, action: spy, shortcut: `ctrl+shift+s`, disabled },
-  ]
+  const actions = [{ id: `save`, label: `save`, action: spy, shortcut: `ctrl+shift+s` }]
   const on_execute = vi.fn()
   mount_menu({ actions, open, global_shortcuts, on_execute })
 
