@@ -31,6 +31,8 @@
     format_preview,
     get_ancestor_paths,
     get_value_at_path,
+    has_path,
+    is_folded,
     relative_path_segments,
     serialize_for_copy,
     to_json,
@@ -115,18 +117,19 @@
     copy_feedback.reset()
     context_menu_state = null
     untrack(() => {
+      // by existence, not value: a path may hold undefined (a sparse-array hole)
       const gone = (path: string | null): boolean =>
-        path !== null && value_at(path) === undefined
+        path !== null && !has_path(value, path, root_label)
       if (gone(focused_path)) focused_path = null
       if (gone(last_selected_path)) last_selected_path = null
       for (const paths of [force_expanded, pinned_paths, selected_paths])
         for (const path of paths) if (gone(path)) paths.delete(path)
-      if (collapsed_paths.size > 0) {
-        const valid_paths = new Set(collect_all_paths(value, root_path))
+      if ([...collapsed_paths].some(gone))
         collapsed_paths = new SvelteSet(
-          [...collapsed_paths].filter((path) => valid_paths.has(path)),
+          [...collapsed_paths].filter((path) => !gone(path)),
         )
-      }
+      // the new value can fold an ancestor of the focused node past an auto-fold threshold
+      hoist_hidden_focus()
     })
     prev_values.clear()
     if (search_query) queueMicrotask(() => expand_to_matches())
@@ -242,14 +245,21 @@
   // Set when focused_path moves without the user's focus being in the tree content
   let skip_dom_focus = false
 
-  // Collapsing an ancestor unmounts the focused node, leaving the tree without a tab stop:
-  // hand focus to the outermost collapsed ancestor, and only pull DOM focus along if it
-  // was on a node (not e.g. on the "Collapse all" button)
+  // Collapsing an ancestor (explicitly or by auto-fold) unmounts the focused node, leaving the
+  // tree without a tab stop: hand focus to the outermost collapsed ancestor, and only pull DOM
+  // focus along if it was on a node (not e.g. on the "Collapse all" button)
   function hoist_hidden_focus(): void {
     if (focused_path === null || focused_path === root_path) return
     const ancestors = get_ancestor_paths(focused_path, root_path)
     if (!root_label) ancestors.unshift(root_path) // an unlabeled root isn't listed
-    const hidden_by = ancestors.find((path) => collapsed_paths.has(path))
+    const hidden_by = ancestors.find((path) =>
+      is_folded(
+        value_at(path),
+        relative_path_segments(path, root_label).length,
+        collapsed_paths.has(path) || (force_expanded.has(path) ? false : undefined),
+        settings,
+      ),
+    )
     if (hidden_by === undefined) return
     skip_dom_focus = !content_element?.contains(document.activeElement)
     set_focused(hidden_by)

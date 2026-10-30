@@ -1,5 +1,5 @@
 import { build_path, parse_path } from './path'
-import type { DiffEntry, JsonValueType } from './types'
+import type { DiffEntry, JsonTreeContext, JsonValueType } from './types'
 
 type JsonChild = { key: string | number; value: unknown }
 type NodeKey = JsonChild[`key`] | null
@@ -91,24 +91,58 @@ export function relative_path_segments(
   return parse_path(rest)
 }
 
-// Resolve a dot/bracket path (optionally prefixed by root_label) against root
-export function get_value_at_path(
+// Resolve a dot/bracket path (optionally prefixed by root_label) against root, boxed so a
+// path holding undefined (a property set to it, a sparse-array hole) differs from a missing
+// one (null)
+function resolve_path(
   root: unknown,
   path: string,
   root_label?: string,
-): unknown {
-  const segments = relative_path_segments(path, root_label)
+): { value: unknown } | null {
   let current = root
-  for (const segment of segments) {
+  for (const segment of relative_path_segments(path, root_label)) {
     const type = get_value_type(current)
-    if (type === `map` || type === `set`) {
-      current = get_children(current)[Number(segment)]?.value
-    } else if (type === `object` || type === `array`) {
-      if (!Object.hasOwn(current as object, segment)) return undefined
-      current = (current as Record<string | number, unknown>)[segment]
-    } else return undefined
+    if (type === `object`) {
+      if (!Object.hasOwn(current as object, segment)) return null
+      current = (current as Record<string, unknown>)[segment]
+      continue
+    }
+    if (type !== `array` && type !== `map` && type !== `set`) return null
+    // by rendered child index: a sparse array's holes are children too
+    const idx = Number(segment)
+    if (!Number.isInteger(idx) || idx < 0 || idx >= get_child_count(current)) return null
+    current =
+      type === `array` ? (current as unknown[])[idx] : get_children(current)[idx].value
   }
-  return current
+  return { value: current }
+}
+
+export const get_value_at_path = (
+  root: unknown,
+  path: string,
+  root_label?: string,
+): unknown => resolve_path(root, path, root_label)?.value
+
+export const has_path = (root: unknown, path: string, root_label?: string): boolean =>
+  resolve_path(root, path, root_label) !== null
+
+// Whether an expandable node renders collapsed: an explicit collapse (true) or expand (false)
+// wins, then the depth fold level, then the array/object size thresholds
+export function is_folded(
+  value: unknown,
+  depth: number,
+  explicit: boolean | undefined,
+  settings: Pick<
+    JsonTreeContext[`settings`],
+    `default_fold_level` | `auto_fold_arrays` | `auto_fold_objects`
+  >,
+): boolean {
+  if (explicit !== undefined) return explicit
+  if (depth >= settings.default_fold_level) return true
+  const type = get_value_type(value)
+  if (type === `array`) return get_child_count(value) > settings.auto_fold_arrays
+  if (type === `object`) return get_child_count(value) > settings.auto_fold_objects
+  return false
 }
 
 // String form of a non-container value, or null for strings/functions/containers

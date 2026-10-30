@@ -9,12 +9,19 @@ export const get_html_sort_value = (element: HTMLElement): string =>
 const column_start = (cell: HTMLTableCellElement): number => {
   let covered: number[] = [] // rows each column stays spanned from above
   for (const row of cell.parentElement?.parentElement?.children ?? []) {
-    if (!(row instanceof HTMLTableRowElement)) continue
+    // by tag, not instanceof: a table from another realm (same-origin iframe) has rows
+    // that aren't this window's HTMLTableRowElement
+    if (row.localName !== `tr`) continue
     let col = 0
-    for (const other of row.cells) {
+    for (const other of (row as HTMLTableRowElement).cells) {
       while (covered[col] > 0) col++
       if (other === cell) return col
-      for (let span = 0; span < other.colSpan; span++) covered[col++] = other.rowSpan
+      // rowspan="0" spans every remaining row of the section. Browsers report it as rowSpan
+      // 0; happy-dom reports 1, so the attribute is checked as well.
+      const zero_span =
+        other.rowSpan === 0 || other.getAttribute(`rowspan`)?.trim() === `0`
+      const rows = zero_span ? Infinity : other.rowSpan
+      for (let span = 0; span < other.colSpan; span++) covered[col++] = rows
     }
     covered = covered.map((left) => left - 1)
   }

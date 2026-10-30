@@ -1074,6 +1074,13 @@ describe(`scroll_root`, () => {
     pane.dispatchEvent(new Event(`scroll`))
     await tick()
     expect(active_text()).toBe(`Inside A`)
+    // before any heading is passed, the first visible one is active, not a hidden first one
+    inside_b.removeAttribute(`style`)
+    inside_a.setAttribute(`style`, `display: none`)
+    b_top = 700
+    pane.dispatchEvent(new Event(`scroll`))
+    await tick()
+    expect(active_text()).toBe(`Inside B`)
   })
 
   test.each([true, false])(

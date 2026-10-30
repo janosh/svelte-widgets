@@ -892,6 +892,39 @@ describe(`context menu and pinning`, () => {
     expect(doc_query(`.pinned-panel`).textContent).toContain(`Pinned (1)`)
   })
 
+  // paths are kept by existence, not value, and the unlabeled root (path ``) is a path too
+  it(`keeps undefined-valued and root paths across a new value, hoisting focus an auto-fold hides`, async () => {
+    // oxlint-disable-next-line no-sparse-arrays -- a hole renders as an undefined child
+    let value = $state<unknown>({ a: { u: undefined, n: 1 }, list: [1, , 3] })
+    mount_tree({
+      get value() {
+        return value
+      },
+      ui: { header: false },
+      default_fold_level: 5,
+      auto_fold_objects: 3,
+    })
+    const replace = async (next: unknown) => {
+      value = next
+      await tick()
+    }
+    for (const path of [`a.u`, `list[1]`]) {
+      fire(node_at(path), mouse(`click`))
+      await replace({ ...(value as object) })
+      expect(paths_of(`.json-node.focused`)).toEqual([path])
+    }
+    // `a` grows past auto_fold_objects: its focused child unmounts, so focus moves up to `a`
+    fire(node_at(`a.n`), mouse(`click`))
+    await replace({ ...(value as object), a: { u: undefined, n: 1, p: 2, q: 3 } })
+    expect(node_at(`a`)?.getAttribute(`aria-expanded`)).toBe(`false`)
+    expect(paths_of(`.json-node.focused`)).toEqual([`a`])
+    expect(paths_of(`.json-node[tabindex="0"]`)).toEqual([`a`])
+    // an explicitly collapsed unlabeled root stays collapsed
+    await click(node_at(``)?.querySelector(`.collapse-toggle`))
+    await replace({ ...(value as object), b: 1 })
+    expect(node_at(``)?.getAttribute(`aria-expanded`)).toBe(`false`)
+  })
+
   it(`pins paths into a panel that copies, unpins and clears`, async () => {
     const write_text = mock_clipboard_write()
     const node_actions = fromStore(writable(true))

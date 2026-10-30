@@ -484,18 +484,17 @@
       }
     }
 
+    // last heading the viewport (or pane) has scrolled past, else the first visible one. A
+    // heading without a box (display: none) reports top 0, so it counts as never passed.
     let idx = headings.length
     while (idx--) {
       const top = headings[idx].getBoundingClientRect().top - root_top
-
-      // last heading the viewport (or pane) has scrolled past, else the first one. A
-      // heading without a box (display: none) reports top 0, so it counts as never passed
-      const passed = top < active_heading_scroll_offset && headings[idx].checkVisibility()
-      if (passed || idx === 0) {
+      if (top < active_heading_scroll_offset && headings[idx].checkVisibility()) {
         active_heading = headings[idx]
         return
       }
     }
+    active_heading = headings.find((heading) => heading.checkVisibility()) ?? null
   }
 
   function check_toc_overlap() {

@@ -501,7 +501,9 @@
     const changed = untrack(() => refresh_input())
     if (scrollport) scrollport.scrollTop = scroll_top
     // Measuring forces a layout: only a new value or viewport width can change the width.
-    if (!changed && viewport_width === measured_viewport_width) return
+    // While composing, refresh_input leaves the field to the IME and reports no change, yet
+    // the composed text can widen its line.
+    if (!composing && !changed && viewport_width === measured_viewport_width) return
     measured_viewport_width = viewport_width
     // Untracked: it writes `overlay_width`, and reading that back re-ran this whole effect.
     untrack(measure_overlay_width)

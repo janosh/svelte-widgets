@@ -3,7 +3,7 @@ import {
   sortable,
   type SortableOptions,
 } from '#lib/attachments/index.ts'
-import { describe, expect, it, onTestFinished } from 'vite-plus/test'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, press_key } from '../index'
 
 describe(`get_html_sort_value`, () => {
@@ -206,12 +206,35 @@ describe(`sortable`, () => {
     ],
     [`past a header colspan`, header_colspan, [`Ada`, `Alan`, `Grace`]],
     [`past a header rowspan`, header_rowspan, [`Bob`, `Cy`, `Ann`]],
+    [
+      `past a header rowspan="0" (spanning the rest of its section)`,
+      header_rowspan.replace(`rowspan="2"`, `rowspan="0"`),
+      [`Bob`, `Cy`, `Ann`],
+    ],
   ])(`sorts %s`, (_desc, html, expected, options) => {
     const table = create_table(html)
     attach_sortable(table, options)
     const headers = headers_of(table)
     click(headers[headers.length - 1])
     expect(column_values(table).map((val) => val?.trim())).toEqual(expected)
+  })
+
+  // a same-origin iframe's rows are another realm's HTMLTableRowElement: stubbing this
+  // realm's class makes every row foreign, as they are to an iframe-unaware instanceof
+  it(`sorts rows that aren't this realm's HTMLTableRowElement by their own column`, () => {
+    vi.stubGlobal(
+      `HTMLTableRowElement`,
+      class ForeignRow {
+        readonly foreign = true
+      },
+    )
+    onTestFinished(() => {
+      vi.unstubAllGlobals()
+    })
+    const table = create_table(header_rowspan)
+    attach_sortable(table)
+    click(headers_of(table).at(-1) as HTMLTableCellElement)
+    expect(column_values(table)).toEqual([`Bob`, `Cy`, `Ann`])
   })
 
   it(`does not re-parent rows of nested tables when sorting`, () => {

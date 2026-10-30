@@ -64,14 +64,15 @@ export function create_roving_focus(opts: {
     if (!container) return undefined
     groups.add(container)
     // Batch DOM changes in one observer callback, ignoring those no mark is part of. The
-    // container's ancestors (observed for their own attributes) always count.
+    // container's ancestors (observed for their own attributes) always count, as does a node
+    // gaining or losing the mark attribute (once lost, it no longer looks like a mark).
     const observer = new MutationObserver((records) => {
-      const relevant = records.some(({ type, target, addedNodes, removedNodes }) =>
-        !container.contains(target)
-          ? true
-          : type === `attributes`
-            ? touches_marks(target)
-            : [...addedNodes, ...removedNodes].some(touches_marks),
+      const relevant = records.some(
+        ({ type, target, attributeName, addedNodes, removedNodes }) =>
+          !container.contains(target) ||
+          (type === `attributes`
+            ? attributeName === ROVING_ATTR || touches_marks(target)
+            : [...addedNodes, ...removedNodes].some(touches_marks)),
       )
       if (relevant) dom_revision++
     })

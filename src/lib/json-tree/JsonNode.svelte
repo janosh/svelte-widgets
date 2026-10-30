@@ -8,10 +8,10 @@
   import {
     estimate_byte_size,
     format_preview,
-    get_child_count,
     get_children,
     get_value_type,
     is_expandable_type,
+    is_folded,
   } from './utils'
 
   // Children mount in pages: a 50k-entry container would otherwise render 50k rows (and
@@ -37,17 +37,16 @@
   const value_type = $derived(get_value_type(value))
   const expandable = $derived(is_expandable_type(value_type))
 
-  // Explicit collapse/expand wins, then the depth fold level, then the size thresholds
-  const is_collapsed = $derived.by(() => {
-    if (!expandable) return false
-    if (ctx.has_collapsed(path)) return true
-    if (ctx.has_force_expanded(path)) return false
-    const { default_fold_level, auto_fold_arrays, auto_fold_objects } = ctx.settings
-    if (depth >= default_fold_level) return true
-    if (value_type === `array`) return get_child_count(value) > auto_fold_arrays
-    if (value_type === `object`) return get_child_count(value) > auto_fold_objects
-    return false
-  })
+  // Leaves skip the per-path selectors entirely
+  const is_collapsed = $derived(
+    expandable &&
+      is_folded(
+        value,
+        depth,
+        ctx.has_collapsed(path) || (ctx.has_force_expanded(path) ? false : undefined),
+        ctx.settings,
+      ),
+  )
 
   // Search highlighting is handled by the CSS Highlight API in JsonTree.svelte
   const is_focused = $derived(ctx.is_focused(path))

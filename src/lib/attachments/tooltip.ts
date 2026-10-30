@@ -109,11 +109,8 @@ const accepts_tooltip_trigger = (
 ): boolean => [trigger, `hover-focus`].includes(tooltip_trigger(options))
 
 // A detached or non-rendering trigger anchors nothing. `checkVisibility` covers detachment,
-// `display: none` and `content-visibility` alike; `isConnected` is the fallback.
-const is_trigger_visible = (trigger: HTMLElement): boolean =>
-  typeof trigger.checkVisibility === `function`
-    ? trigger.checkVisibility()
-    : trigger.isConnected
+// `display: none` and `content-visibility` alike.
+const is_trigger_visible = (trigger: HTMLElement): boolean => trigger.checkVisibility()
 
 const changed_attribute_names = (records: MutationRecord[], skip?: string): string[] =>
   records.flatMap(({ attributeName }) =>

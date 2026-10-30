@@ -766,6 +766,18 @@ test(`scrolls and typing measure the overlay only when the input slice changes`,
   scroll_viewport(600)
   await flush_async()
   expect(scroll_after(`y`)).toBe(0)
+
+  // IME text widens its line before compositionend: measured while composing too
+  vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(function (
+    this: Element,
+  ) {
+    return this === textarea ? 900 : 0
+  })
+  textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
+  emit_input(textarea, `insertCompositionText`, 1, 1, `λ`, 0, 1)
+  await flush_async()
+  expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`900px`)
+  textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
 })
 
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {

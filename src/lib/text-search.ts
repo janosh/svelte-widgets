@@ -313,13 +313,18 @@ export const search_text = (
   const keep_marks = DIACRITIC.test(normalized_query)
 
   const matches: TextMatch[] = []
+  // texts already found to miss this query: tables repeat cell texts across many rows
+  const misses = new Set<string>()
   for (const segment of text_segments(root, node_filter, segment_selector)) {
+    if (misses.has(segment.text)) continue
     if (
       !normalize_cache.has(segment.text) &&
       !match_bounds(plain_normalized(segment.text, keep_marks), normalized_query, fuzzy)
         .length
-    )
+    ) {
+      misses.add(segment.text)
       continue
+    }
     const { text, offsets } = normalize_cached(segment.text, keep_marks)
     for (const { start, end } of match_bounds(text, normalized_query, fuzzy)) {
       const source = source_bounds(offsets, start, end)

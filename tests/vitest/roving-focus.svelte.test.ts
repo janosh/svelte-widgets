@@ -282,6 +282,10 @@ test(`restyling nodes that hold no mark leaves the tab stops unchecked`, async (
   await settle()
   expect(computed_style).toHaveBeenCalled()
   expect(tabstops().slice(0, 3)).toEqual([`0`, `-1`, `-1`])
+  // the tab-stop mark stops being a mark (no item-list change): the next mark takes over
+  marks[0].removeAttribute(ROVING_ATTR)
+  await settle()
+  expect(tabstops().slice(1, 3)).toEqual([`0`, `-1`])
 })
 
 test(`a changed item list re-runs no measured tab stop`, () => {
