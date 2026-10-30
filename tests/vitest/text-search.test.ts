@@ -180,8 +180,9 @@ describe(`search_text`, () => {
   })
 
   it(`reports every non-overlapping hit`, () => {
-    const root = render(`<p>aaaa</p><p>aa</p>`)
-    const [first, second] = root.querySelectorAll(`p`)
+    const root = render(`<p>aaaa</p><p>Größe naïve</p><p>aa</p>`)
+    const [first, , second] = root.querySelectorAll(`p`)
+    const normalize_spy = vi.spyOn(String.prototype, `normalize`)
     const hits = search_text(root, `aa`).map(({ element, range }) => [
       element,
       range.startOffset,
@@ -192,6 +193,8 @@ describe(`search_text`, () => {
       [first, 2, 4],
       [second, 0, 2],
     ])
+    // at most one native pass per segment: the non-ASCII miss builds no per-char offsets
+    expect(normalize_spy.mock.calls.length).toBeLessThanOrEqual(3)
   })
 
   // Pins the binary search that replaced a linear scan: a match on every offset-table

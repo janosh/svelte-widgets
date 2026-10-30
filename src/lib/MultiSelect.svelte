@@ -16,6 +16,7 @@
     option_window,
     validate_option_list_config,
   } from './internal/option-list'
+  import { create_key_selector } from './internal/key-selector.svelte'
   import { create_option_loader } from './internal/option-loader.svelte'
   import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
@@ -381,6 +382,14 @@
     selected_labels_set.has(norm_label(label))
   const is_option_selected = (opt: Option): boolean =>
     has_selected_option(opt) || (lower_dupes && is_label_selected(label_of(opt)))
+  // An option row's own check: per-key when the key alone decides, so a toggle re-runs only
+  // the toggled row. Aggregates (select-all, group headers) keep reading the sets directly:
+  // a selector subscription per candidate would cost more than the set lookups it replaces.
+  const has_selected_key = create_key_selector(() => selected_keys_set)
+  const is_row_selected = (opt: Option): boolean =>
+    duplicates !== true && !lower_dupes
+      ? has_selected_key(key(opt))
+      : is_option_selected(opt)
 
   // identity check for bulk/range ops. Compares label too, since a custom `key` may
   // deliberately collapse distinct options onto one key.
@@ -658,6 +667,8 @@
   // the header is presentational, so its options cite this id as their description
   const group_header_id = (group_name: string) =>
     `${base_id}-group-${encodeURIComponent(group_name)}`
+  // per-key, so an arrow key re-runs only the two option rows it moves between
+  const is_active_idx = create_key_selector(() => active_index)
   const active_option_id = $derived(
     is_user_message_active
       ? user_message_id
@@ -696,9 +707,9 @@
       title,
       selected_title,
       disabled_title,
-      // `active` deliberately stays out of this object: it's the only field tracking
-      // `active_index`, and bundling it re-rendered every row on each arrow key
-      selected: is_option_selected(option_item),
+      // `active` and `selected` deliberately stay out of this object: they track
+      // `active_index` and the selection, and bundling them re-rendered every row on each
+      // arrow key or toggle
       style: merge_styles(option_item, `option`, li_option_style),
     }
   }
@@ -1851,7 +1862,8 @@
         positionally so duplicate option values still get unique ids/posinset/hover indices -->
       {#snippet option_li(option_item: Option, flat_idx: number, group: string | null)}
         {@const view = get_option_view(option_item)}
-        {@const is_active = active_index === flat_idx}
+        {@const is_selected = is_row_selected(option_item)}
+        {@const is_active = is_active_idx(flat_idx)}
         {@const activate = () => {
           if (view.disabled) return
           // Release the user-message row so it cannot pin active_index during option focus.
@@ -1863,15 +1875,15 @@
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
           title={view.disabled
             ? view.disabled_title
-            : (view.selected && view.selected_title) || view.title}
-          class:selected={view.selected}
+            : (is_selected && view.selected_title) || view.title}
+          class:selected={is_selected}
           class:active={is_active}
           class:disabled={view.disabled}
           class={[li_option_class, is_active && li_active_option_class]}
           onmousemove={activate}
           onfocus={activate}
           role="option"
-          aria-selected={view.selected ? `true` : `false`}
+          aria-selected={is_selected ? `true` : `false`}
           aria-disabled={view.disabled ? `true` : undefined}
           aria-describedby={group === null ? undefined : group_header_id(group)}
           aria-posinset={flat_idx + 1}
@@ -1884,13 +1896,13 @@
           )}
         >
           {#if keep_selected_in_dropdown === `checkboxes`}
-            <!-- suppressing the native toggle leaves the box driven only by `view.selected`;
+            <!-- suppressing the native toggle leaves the box driven only by `is_selected`;
                  the click still bubbles to the <li>, so a rejected toggle (max_select/min_select
                  reached, disabled option) can't leave the box flipped -->
             <input
               type="checkbox"
               class="option-checkbox"
-              checked={view.selected}
+              checked={is_selected}
               aria-label={msg.toggle_option(label_of(option_item))}
               tabindex="-1"
               onclick={(event) => event.preventDefault()}
@@ -1900,7 +1912,7 @@
             {@render option({
               option: option_item,
               idx: flat_idx,
-              selected: view.selected,
+              selected: is_selected,
               active: is_active,
               disabled: view.disabled ?? false,
             })}

@@ -9,6 +9,7 @@
     OpenChangeTrigger,
     TocHeadingData,
   } from './types'
+  import { create_key_selector } from './internal/key-selector.svelte'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
   import { is_editable_event_target } from './utils'
   import { override_style } from './attachments/shared'
@@ -224,6 +225,18 @@
       collapse_enabled && active_heading ? heading_index(active_heading) : null
     return get_heading_visibility(levels, active_idx, collapse_threshold)
   })
+  // per-key, so a scroll that moves the active heading (or the subheadings it unfolds)
+  // re-runs only the rows it changes, not every row reading the active id or visibility array
+  const is_active_id = create_key_selector(() => active_heading?.id)
+  // a derived: the selector reads its source on every row lookup
+  const collapsed_ids = $derived(
+    new Set(
+      collapse_enabled
+        ? heading_data.filter((_, idx) => !heading_visibility[idx]).map(({ id }) => id)
+        : [],
+    ),
+  )
+  const is_collapsed_id = create_key_selector(() => collapsed_ids)
 
   $effect(() => {
     desktop = window_width > breakpoint
@@ -386,7 +399,12 @@
             data.level === discovered_items[idx]?.level &&
             data.title === discovered_items[idx]?.title,
         )
-      if (unchanged) return
+      if (unchanged) {
+        // a restyle can hide the active heading (or reveal one when none was shown) while
+        // leaving the heading set as it was
+        if (!active_heading || !is_shown(active_heading)) set_active_heading()
+        return
+      }
       headings_initialized = true
 
       headings = heading_entries.map(({ heading }) => heading)
@@ -463,10 +481,17 @@
     clearTimeout(scroll_target_timeout)
   })
 
+  // Rendered and visible: `display: none` and content-visibility drop a heading's box, and
+  // `visibility: hidden` keeps the box but shows nothing
+  const is_shown = (heading: HTMLElement): boolean =>
+    heading.checkVisibility({ visibilityProperty: true })
+
   function set_active_heading() {
     // during a programmatic scroll keep the target active until scrollend, so intermediate
-    // headings aren't highlighted on the way
-    if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
+    // headings aren't highlighted on the way. A target that stopped rendering (a class hid it
+    // mid-scroll) can't stay active.
+    if (scroll_target && (!headings.includes(scroll_target) || !is_shown(scroll_target)))
+      clear_scroll_target()
     // headings' tops count from the viewport; a pane's own top edge is its zero
     const root_top = scroll_root?.getBoundingClientRect().top ?? 0
     if (scroll_target) {
@@ -484,16 +509,17 @@
       }
     }
 
+    // last heading the viewport (or pane) has scrolled past, else the first visible one. A
+    // heading without a box (display: none) reports top 0, so it counts as never passed.
     let idx = headings.length
     while (idx--) {
       const top = headings[idx].getBoundingClientRect().top - root_top
-
-      // last heading the viewport (or pane) has scrolled past, else the first one
-      if (top < active_heading_scroll_offset || idx === 0) {
+      if (top < active_heading_scroll_offset && is_shown(headings[idx])) {
         active_heading = headings[idx]
         return
       }
     }
+    active_heading = headings.find(is_shown) ?? null
   }
 
   function check_toc_overlap() {
@@ -757,8 +783,8 @@
       <ol {...ol_props}>
         {#each heading_data as heading, idx (heading.id)}
           {@const indent = heading.level - min_level}
-          {@const collapsed = collapse_enabled && !heading_visibility[idx]}
-          {@const is_active = heading.id === active_heading?.id}
+          {@const collapsed = is_collapsed_id(heading.id)}
+          {@const is_active = is_active_id(heading.id)}
           {@const item_tabindex = collapsed ? -1 : 0}
           {@const use_fallback_toc_item =
             toc_item && toc_item_has_interactive[idx] === false}

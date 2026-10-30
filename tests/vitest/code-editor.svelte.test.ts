@@ -1,6 +1,7 @@
 import { register_escape_layer } from '#lib/attachments/index.ts'
 import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '#lib/code-editor/model.ts'
+import type * as Tokens from '#lib/code-editor/tokens.ts'
 import type {
   ApplyEditsArgs,
   EditorBackend,
@@ -11,6 +12,19 @@ import type {
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, next_task, pointer_event, press_key, stub_prop } from './index'
+
+// Counts line tokenizations: the visible rows a change rebuilt
+const token_renders = vi.hoisted(() => ({ count: 0 }))
+vi.mock(`#lib/code-editor/tokens.ts`, async (import_original) => {
+  const actual = await import_original<typeof Tokens>()
+  return {
+    ...actual,
+    render_tokens: (...args: Parameters<typeof actual.render_tokens>) => {
+      token_renders.count++
+      return actual.render_tokens(...args)
+    },
+  }
+})
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
 const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
@@ -160,6 +174,32 @@ const fill_search = async (value: string, label = `Find`): Promise<HTMLInputElem
   await flush_async()
   return input
 }
+// both matches stay on screen, so the reused rows must still follow the current match
+test(`moving between visible matches moves the highlight, re-tokenizing only changed lines`, async () => {
+  const { textarea, model } = await mount_editor(`foo one\nfoo two\nthree`)
+  textarea.focus()
+  press_key(textarea, `f`, { ctrlKey: true })
+  await flush_async()
+  const input = await fill_search(`foo`)
+  const current_line = () =>
+    [...document.querySelectorAll(`.line`)].findIndex((line) =>
+      line.querySelector(`.editor-search-match.current`),
+    )
+  expect(current_line()).toBe(0)
+  token_renders.count = 0
+  press_key(input, `Enter`)
+  await flush_async()
+  expect(document.querySelectorAll(`.editor-search-match.current`)).toHaveLength(1)
+  expect(current_line()).toBe(1)
+  expect(token_renders.count).toBe(2) // the lines losing and gaining the current match
+  // an edit while searching re-tokenizes its own line: the others keep their own matches
+  token_renders.count = 0
+  model.transact([{ from: model.line(2).from, to: model.line(2).from, insert: `x` }])
+  await flush_async()
+  expect(model.line(2).text).toBe(`xthree`)
+  expect(token_renders.count).toBe(1)
+})
+
 test(`search navigates offscreen matches, refreshes after edits, and preserves focus on Escape`, async () => {
   const lines = Array.from({ length: 2000 }, (_unused, line_idx) =>
     [0, 999, 1999].includes(line_idx) ? `😀foo ${line_idx}` : `line ${line_idx}`,
@@ -447,6 +487,12 @@ test(`save preserves disk format, external transactions sync, and model replacem
   expect(doc_query(`[role="alert"]`).textContent).toBe(
     `Unsupported editor input type formatBold`,
   )
+  // same revision and slice range as `third`, so only its text tells the two apart
+  const fourth = create_editor_model({ uri: `memory:fourth`, text: `x` })
+  fourth.transact([{ from: 1, to: 1, insert: `z` }])
+  props.model = fourth
+  await flush_async()
+  expect(textarea.value).toBe(`xz`)
 })
 
 // open_doc runs synchronously inside the model effect; host state it reads and writes
@@ -713,17 +759,76 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
   expect(line_classes()).toEqual(Array(2).fill(`tok-keyword`))
 })
 
-test(`a scroll that widens the overlay measures and refreshes the input once`, async () => {
-  const { textarea } = await mount_editor()
+test(`a keystroke re-tokenizes only its own line, not every visible line`, async () => {
+  const { model, textarea } = await mount_editor(numbered_lines(40))
+  await flush_async()
+  token_renders.count = 0
+  press_key(textarea, `x`)
+  emit_input(textarea, `insertText`, 0, 0, `x`)
+  await flush_async()
+  expect(model.line(0).text).toBe(`xline 0`)
+  expect(token_renders.count).toBe(1) // rebuilding every row tokenized all 9 visible lines
+})
+
+// Measuring the overlay forces a layout, as do redundant input refreshes
+test(`scrolls and typing measure the overlay only when the input slice changes`, async () => {
+  const model = create_editor_model({ uri: `demo.ts`, text: numbered_lines(40) })
+  // spied before mounting: the props $state proxy caches the methods it has read
+  const line_spy = vi.spyOn(model, `line`)
+  const slice_spy = vi.spyOn(model, `slice`)
+  const { textarea } = await mount_editor(model)
   let width_reads = 0
   function scroll_width(this: Element) {
     return this === textarea ? ++width_reads && 640 : 0
   }
   vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(scroll_width)
-  scroll_viewport(40)
+  scroll_viewport(40) // two more rows enter the slice: re-slice and measure once
   await flush_async()
   expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`640px`)
   expect(width_reads).toBe(1)
+  line_spy.mockClear()
+  slice_spy.mockClear()
+  // same rows: only the slice's two edge-line lookups, no re-slice, re-measure or row rebuild
+  scroll_viewport(50)
+  await flush_async()
+  expect([width_reads, slice_spy.mock.calls.length, line_spy.mock.calls.length]).toEqual([
+    1, 0, 2,
+  ])
+  // a typed character is refreshed (and measured) once, by on_input
+  press_key(textarea, `x`)
+  emit_input(textarea, `insertText`, 0, 0, `x`)
+  textarea.dispatchEvent(new KeyboardEvent(`keyup`, { key: `x`, bubbles: true }))
+  await flush_async()
+  expect(model.line(0).text).toBe(`xline 0`)
+  expect(width_reads).toBe(2)
+  // a native caret move still refreshes (and reveals) on keyup
+  textarea.setSelectionRange(3, 3)
+  textarea.dispatchEvent(new KeyboardEvent(`keyup`, { key: `ArrowRight`, bubbles: true }))
+  expect([model.selection.head, width_reads]).toEqual([3, 3])
+  // keydown recentres on the caret for other keys, and for typing only once it left the slice
+  const port = scroll_viewport(40)
+  await flush_async()
+  const scroll_after = (key: string): number => {
+    press_key(textarea, key)
+    return port.scrollTop
+  }
+  expect(scroll_after(`y`)).toBe(40)
+  expect(scroll_after(`Backspace`)).toBe(0)
+  scroll_viewport(600)
+  await flush_async()
+  expect(scroll_after(`y`)).toBe(0)
+
+  // IME text widens its line before compositionend: measured while composing too
+  vi.spyOn(Element.prototype, `scrollWidth`, `get`).mockImplementation(function (
+    this: Element,
+  ) {
+    return this === textarea ? 900 : 0
+  })
+  textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
+  emit_input(textarea, `insertCompositionText`, 1, 1, `λ`, 0, 1)
+  await flush_async()
+  expect(doc_query<HTMLDivElement>(`.scroll-space`).style.width).toBe(`900px`)
+  textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
 })
 
 test(`token cache keeps viewport-touched lines when evicting beyond 2048`, async () => {

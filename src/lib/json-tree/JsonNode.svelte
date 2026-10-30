@@ -8,10 +8,10 @@
   import {
     estimate_byte_size,
     format_preview,
-    get_child_count,
     get_children,
     get_value_type,
     is_expandable_type,
+    is_folded,
   } from './utils'
 
   // Children mount in pages: a 50k-entry container would otherwise render 50k rows (and
@@ -37,22 +37,21 @@
   const value_type = $derived(get_value_type(value))
   const expandable = $derived(is_expandable_type(value_type))
 
-  // Explicit collapse/expand wins, then the depth fold level, then the size thresholds
-  const is_collapsed = $derived.by(() => {
-    if (!expandable) return false
-    if (ctx.collapsed.has(path)) return true
-    if (ctx.force_expanded.has(path)) return false
-    const { default_fold_level, auto_fold_arrays, auto_fold_objects } = ctx.settings
-    if (depth >= default_fold_level) return true
-    if (value_type === `array`) return get_child_count(value) > auto_fold_arrays
-    if (value_type === `object`) return get_child_count(value) > auto_fold_objects
-    return false
-  })
+  // Leaves skip the per-path selectors entirely
+  const is_collapsed = $derived(
+    expandable &&
+      is_folded(
+        value,
+        depth,
+        { collapsed: ctx.has_collapsed(path), expanded: ctx.has_force_expanded(path) },
+        ctx.settings,
+      ),
+  )
 
   // Search highlighting is handled by the CSS Highlight API in JsonTree.svelte
-  const is_focused = $derived(ctx.focused_path === path)
-  const is_current_match = $derived(ctx.current_match_path === path)
-  const is_selected = $derived(ctx.selected_paths.has(path))
+  const is_focused = $derived(ctx.is_focused(path))
+  const is_current_match = $derived(ctx.is_current_match(path))
+  const is_selected = $derived(ctx.has_selected(path))
   const diff_status = $derived(ctx.diff_map?.get(path)?.status ?? null)
 
   // Row handlers stop propagation so ancestor rows don't re-focus, select or toggle themselves
@@ -66,14 +65,17 @@
     if (expandable) ctx.toggle_collapse(path, is_collapsed)
   }
 
-  const children = $derived(expandable ? get_children(value, ctx.settings.sort_keys) : [])
+  // ctx.settings is a fresh object per change: only a sort_keys change re-lists the children
+  const sort_keys = $derived(ctx.settings.sort_keys)
+  const children = $derived(expandable ? get_children(value, sort_keys) : [])
   let shown_count = $state(CHILD_PAGE_SIZE)
   // The current search match (or the ancestor holding it) may sit past the bound: extend it
   // to that child so JsonTree can scroll the match into view
+  // (unpaged nodes return before reading the match, so a search step re-runs only paged ones)
   const revealed_count = $derived.by(() => {
+    if (children.length <= shown_count) return shown_count
     const match = ctx.current_match_path
-    if (!match || children.length <= shown_count || !match.startsWith(path))
-      return shown_count
+    if (!match || !match.startsWith(path)) return shown_count
     const idx = children.findIndex(({ key }) => {
       const child_path = build_path(path, key)
       return (

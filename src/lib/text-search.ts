@@ -1,5 +1,5 @@
 // Find across DOM node boundaries by matching concatenated text within block elements.
-import { DIACRITIC, splits_letter } from './internal/diacritics'
+import { DIACRITIC, DIACRITICS, splits_letter } from './internal/diacritics'
 import { lower_bound } from './utils'
 
 // Block elements define match segments regardless of nested inline markup.
@@ -286,6 +286,16 @@ const normalize_cached = (source: string, keep_marks: boolean): NormalizedText =
   return keep_marks ? cached.marked : (cached.stripped ??= strip_marks(cached.marked))
 }
 
+// The text normalize_with_offsets and strip_marks build, from native string ops and without
+// per-char offsets: ~10x cheaper, so a segment the cache misses is first checked for any hit
+// and only a match builds (and caches) offsets. A long non-ASCII page outgrows the cache,
+// which then rebuilt every segment's offsets per keystroke.
+const plain_normalized = (source: string, keep_marks: boolean): string => {
+  const lower = source.replaceAll(/\s+/gu, ` `).toLowerCase().replaceAll(`ς`, `σ`)
+  const text = lower.normalize(`NFD`)
+  return keep_marks ? text : text.replaceAll(DIACRITICS, ``)
+}
+
 // every occurrence of query under root, case- and whitespace-insensitively
 export const search_text = (
   root: Element,
@@ -303,7 +313,18 @@ export const search_text = (
   const keep_marks = DIACRITIC.test(normalized_query)
 
   const matches: TextMatch[] = []
+  // texts already found to miss this query: tables repeat cell texts across many rows
+  const misses = new Set<string>()
   for (const segment of text_segments(root, node_filter, segment_selector)) {
+    if (misses.has(segment.text)) continue
+    if (
+      !normalize_cache.has(segment.text) &&
+      !match_bounds(plain_normalized(segment.text, keep_marks), normalized_query, fuzzy)
+        .length
+    ) {
+      misses.add(segment.text)
+      continue
+    }
     const { text, offsets } = normalize_cached(segment.text, keep_marks)
     for (const { start, end } of match_bounds(text, normalized_query, fuzzy)) {
       const source = source_bounds(offsets, start, end)

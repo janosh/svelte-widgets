@@ -120,10 +120,11 @@
   }
 
   const notify_resize = () => on_resize?.({ ratio, first_px, collapsed })
+  $effect(() => update_parent(pane_size))
   $effect(() => {
     const parent = divider?.parentElement
-    parent?.style.setProperty(`--split-pane-size`, pane_size)
-    // a parent that outlives the divider must not keep sizing panes for a gone separator
+    // a parent that outlives the divider must not keep sizing panes for a gone separator.
+    // Apart from the size effect, so a drag step doesn't remove and re-add the property
     return () => parent?.style.removeProperty(`--split-pane-size`)
   })
 

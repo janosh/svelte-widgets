@@ -3,6 +3,7 @@ import {
   is_active_element,
   is_focus_available,
 } from './attachments/shared'
+import { create_key_selector } from './internal/key-selector.svelte'
 import { is_editable_event_target, is_modifier_chord } from './utils'
 import { SvelteSet } from 'svelte/reactivity'
 // Roving tabindex over keyed HTML or SVG items in DOM order.
@@ -53,13 +54,40 @@ export function create_roving_focus(opts: {
     [...container.querySelectorAll<HTMLElement | SVGElement>(`[${ROVING_ATTR}]`)].filter(
       (mark) => owns(mark, container),
     )
+  // Whether a node is a mark or holds one: only then can its mutation change which marks
+  // exist or can take focus (a chart restyles thousands of nodes per update)
+  const touches_marks = (node: Node | null): boolean =>
+    node instanceof Element &&
+    (node.matches(`[${ROVING_ATTR}]`) || node.querySelector(`[${ROVING_ATTR}]`) !== null)
+  const has_mark_child = (node: Node | null): boolean =>
+    node instanceof Element && node.querySelector(`:scope > [${ROVING_ATTR}]`) !== null
 
   $effect(() => {
     const container = opts.container()
     if (!container) return undefined
     groups.add(container)
-    // Batch DOM changes in one observer callback.
-    const observer = new MutationObserver(() => void dom_revision++)
+    // Batch DOM changes in one observer callback, ignoring those no mark is near. Always
+    // relevant: the container's ancestors (observed for their own attributes), a node gaining
+    // or losing the mark attribute (once lost, it no longer looks like a mark), a mark's
+    // sibling (sibling CSS like `.hide + button` restyles it) and child-list changes beside
+    // marks or inside a fieldset/details holding them (a first legend or summary decides
+    // which of them are disabled). Nodes with no mark nearby (a chart's axes) don't count.
+    const observer = new MutationObserver((records) => {
+      const relevant = records.some(
+        ({ type, target, attributeName, addedNodes, removedNodes }) =>
+          !container.contains(target) ||
+          (type === `attributes`
+            ? attributeName === ROVING_ATTR ||
+              touches_marks(target) ||
+              has_mark_child(target.parentNode)
+            : [...addedNodes, ...removedNodes].some(touches_marks) ||
+              has_mark_child(target) ||
+              (target instanceof Element &&
+                target.matches(`fieldset, details`) &&
+                touches_marks(target))),
+      )
+      if (relevant) dom_revision++
+    })
     const attributes = { attributes: true, attributeFilter: ELIGIBILITY_ATTRS }
     observer.observe(container, { ...attributes, subtree: true, childList: true })
     for (let node = composed_parent(container); node; node = composed_parent(node))
@@ -76,11 +104,21 @@ export function create_roving_focus(opts: {
     return { fallback: null as string | null }
   })
 
+  // The marks and DOM revision last checked: the same marks with no eligibility change since
+  // keep their tab stops, sparing the computed-style walk (a forced style recalc mid-update)
+  let checked: { marks: Element[]; revision: number } | undefined
   $effect(() => {
     opts.items()
-    void dom_revision
+    const revision = dom_revision
     const container = opts.container()
     const marks = container ? marks_in(container) : []
+    if (
+      checked?.revision === revision &&
+      checked.marks.length === marks.length &&
+      checked.marks.every((mark, idx) => mark === marks[idx])
+    )
+      return
+    checked = { marks, revision }
     // A key left behind by marks that no longer render would strand the group at -1
     if (
       focused_key != null &&
@@ -93,14 +131,18 @@ export function create_roving_focus(opts: {
     fallback_key = marks.find(is_focus_available)?.getAttribute(ROVING_ATTR) ?? null
   })
 
+  // per-key, so a focus move re-runs only the two marks it moves the tab stop between
+  const is_tab_stop = create_key_selector(() => focused_key ?? fallback_key)
+  // flips once: a later fallback change (another first focusable mark) re-runs no reader
+  const measured = $derived(fallback_key !== undefined)
+
   return {
-    tabindex: (key) => {
-      pass.fallback ??= key
-      return key ===
-        (focused_key ?? (fallback_key === undefined ? pass.fallback : fallback_key))
+    // Until the first measurement the first key asked claims a provisional tab stop. After it
+    // `pass` is never read, so a changed item list (a chart's pan frame) re-runs no item.
+    tabindex: (key) =>
+      (measured ? is_tab_stop(key) : key === (focused_key ?? (pass.fallback ??= key)))
         ? 0
-        : -1
-    },
+        : -1,
     focusin: (event) => {
       const mark = (event.target as Element | null)?.closest?.(`[${ROVING_ATTR}]`)
       const container = opts.container()

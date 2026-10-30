@@ -1,4 +1,5 @@
 import type { MultiSelectProps } from '#lib'
+import type { create_key_selector as KeySelector } from '#lib/internal/key-selector.svelte.ts'
 import { createRawSnippet, flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { assert, onTestFinished, vi } from 'vite-plus/test'
 import { mkdtemp, rm } from 'node:fs/promises'
@@ -217,3 +218,21 @@ export const stub_props = (target: object, props: Record<string, unknown>) => {
 // evaluates generated ES module source (e.g. a plugin's output) via a data: URL import
 export const import_code = (code: string): Promise<Record<string, unknown>> =>
   import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+
+// Counts key selector reads: its readers are per-row deriveds, so the reads after a change
+// show whether it re-ran O(1) rows or all N. Use as the factory of a `vi.mock` of the module.
+export const key_reads = { count: 0 }
+export const count_key_reads = <
+  Module extends { create_key_selector: typeof KeySelector },
+>(
+  actual: Module,
+) => ({
+  ...actual,
+  create_key_selector: <Key>(get_current: () => Key | ReadonlySet<Key>) => {
+    const is = actual.create_key_selector(get_current)
+    return (key: Key): boolean => {
+      key_reads.count++
+      return is(key)
+    }
+  },
+})

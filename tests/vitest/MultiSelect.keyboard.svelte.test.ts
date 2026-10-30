@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps } from '#lib/types.ts'
-import { click, create_element, doc_query, press_key } from './index'
+import { click, create_element, doc_query, key_reads, press_key } from './index'
 import {
   active_text,
   focus_input,
@@ -15,6 +15,10 @@ import {
   type_search_text,
 } from './MultiSelect.test-utils'
 
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
+
 // https://github.com/janosh/svelte-widgets/issues/111
 // https://github.com/janosh/svelte-widgets/issues/112
 test(`can select 1st and last option with arrow and enter key`, async () => {
@@ -23,8 +27,11 @@ test(`can select 1st and last option with arrow and enter key`, async () => {
 
   const input = get_input()
 
+  key_reads.count = 0
   await press_sequence(input, `ArrowDown`)
   expect(active_text()).toBe(`1`)
+  // only the row whose active state flips re-checks it
+  expect(key_reads.count).toBe(1)
   await press_sequence(input, `Enter`)
   expect(props.value).toEqual([1])
 

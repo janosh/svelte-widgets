@@ -14,6 +14,7 @@
     tooltip,
   } from './attachments/index'
   import Icon from './Icon.svelte'
+  import { create_key_selector } from './internal/key-selector.svelte'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavGroup, NavLink, NavRoute } from './types'
   import { chain_handlers, step_focus } from './utils'
@@ -201,10 +202,22 @@
     }
     return best
   })
-  const is_current = (route: Route) => (route === current_link ? `page` : undefined)
-  const is_active = (route: Route): boolean =>
-    route === current_link ||
-    Boolean(route.children?.some((child) => child === current_link))
+  // the current link and the group holding it
+  const active_routes = $derived(
+    new Set([
+      current_link,
+      ...checked_routes.filter(
+        (route): route is Route =>
+          !route.separator &&
+          Boolean(route.children?.some((child) => child === current_link)),
+      ),
+    ]),
+  )
+  // per-key, so navigating or opening a dropdown re-runs only the routes it changes
+  const is_current_link = create_key_selector(() => current_link)
+  const is_current = (route: Route) => (is_current_link(route) ? `page` : undefined)
+  const is_active = create_key_selector(() => active_routes)
+  const is_open_dropdown = create_key_selector(() => open_dropdown)
   const route_tooltip = (route: Route) => {
     if (!route.tooltip) return
     return tooltip({
@@ -301,7 +314,7 @@
         <div class="separator" role="separator"></div>
       {:else if route.children}
         {@const sub_routes = route.children}
-        {@const dropdown_open = open_dropdown === route}
+        {@const dropdown_open = is_open_dropdown(route)}
         <!-- svelte-ignore a11y_no_static_element_interactions -- links keep native semantics; the handler routes arrows/Escape -->
         <div
           class={[
@@ -356,11 +369,12 @@
                 node.style.removeProperty(`translate`)
               }
             }}
-            {@attach focus_trap({
-              enabled: dropdown_open,
-              initial: false, // toggle_dropdown already picks the entry point
-              restore: hover_open ? false : (dropdown_toggle(route_idx) ?? false),
-            })}
+            {@attach dropdown_open &&
+              // closed dropdowns read no hover state, so hovering one rebuilds no other trap
+              focus_trap({
+                initial: false, // toggle_dropdown already picks the entry point
+                restore: hover_open ? false : (dropdown_toggle(route_idx) ?? false),
+              })}
           >
             <!-- display: contents on desktop; the mobile grid row animates 0fr to 1fr. -->
             <div class="submenu-inner">

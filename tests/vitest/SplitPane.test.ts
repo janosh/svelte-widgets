@@ -88,15 +88,22 @@ test.each([
 ] as const)(
   `%s %s divider resizes during pointer movement`,
   (orientation, direction, position, aria_orientation) => {
-    const { divider, pointer, aria, size } = mount_divider({ orientation, direction })
+    const { divider, parent, pointer, aria, size } = mount_divider({
+      orientation,
+      direction,
+    })
     expect(divider.getAttribute(`aria-orientation`)).toBe(aria_orientation)
     // no pixel clamps: the announced range is the bare ratio range
     expect(aria()).toEqual({ min: `15`, max: `85`, now: `50` })
+    const remove_spy = vi.spyOn(parent.style, `removeProperty`)
     pointer(`pointerdown`)
     pointer(`pointermove`, position)
 
     // The split changes before pointerup, rather than snapping on release.
     expect(size()).toBe(`75%`)
+    flushSync()
+    // a drag step re-sets the size, never removing it from the parent in between
+    expect(remove_spy).not.toHaveBeenCalled()
     pointer(`pointerup`)
     pointer(`pointermove`)
     expect(size()).toBe(`75%`)

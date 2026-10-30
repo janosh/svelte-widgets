@@ -677,6 +677,86 @@ describe(`Toc`, () => {
     expect(props.toc_items?.filter(Boolean)).toHaveLength(count - (removed_id ? 1 : 0))
   })
 
+  // each row's active check reads its heading's id: the reads count the rows a change re-ran
+  test(`moving the active heading re-runs only the two rows it moves between`, async () => {
+    set_headings(8)
+    set_window_width(1200)
+    mock_active_heading(`heading-1`)
+    spy_scroll_into_view()
+    let id_reads = 0
+    const items = Array.from({ length: 8 }, (_, idx) => ({
+      get id() {
+        id_reads++
+        return `heading-${idx + 1}`
+      },
+      level: 2,
+      title: `Heading ${idx + 1}`,
+    }))
+    await mount_toc({ items })
+    doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+    id_reads = 0
+    press_key(document.activeElement ?? document.body, `ArrowDown`)
+    await tick()
+    expect(active_text()).toBe(`Heading 2`)
+    // 4 from locating the headings, then one per re-run row: 2 here, all 8 (12) per-row compare
+    expect(id_reads).toBe(6)
+  })
+
+  // a class that hides the active heading leaves the heading set as it was
+  test(`restyles hiding or revealing headings move the active one to a shown heading`, async () => {
+    set_headings(3)
+    mock_active_heading(`heading-2`)
+    await mount_toc()
+    expect(active_text()).toBe(`Heading 2`)
+    const style = document.createElement(`style`)
+    style.textContent = `.gone { display: none } .faded { visibility: hidden }`
+    document.head.append(style)
+    onTestFinished(() => style.remove())
+    const restyle = async (id: string, css_class: string, on = true) => {
+      doc_query(`#${id}`).classList.toggle(css_class, on)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+      await tick()
+    }
+    await restyle(`heading-2`, `gone`)
+    expect(active_text()).toBe(`Heading 1`)
+    // a clicked heading stays active while scrolling there, unless it stops showing
+    spy_scroll_into_view()
+    await click(toc_lis()[2])
+    expect(active_text()).toBe(`Heading 3`)
+    await restyle(`heading-3`, `faded`) // keeps its box, shows nothing
+    expect(active_text()).toBe(`Heading 1`)
+    // with every heading hidden none is active, until one shows again
+    await restyle(`heading-1`, `faded`)
+    expect(document.querySelector(`aside.toc li.active`)).toBeNull()
+    await restyle(`heading-1`, `faded`, false)
+    expect(active_text()).toBe(`Heading 1`)
+  })
+
+  // the collapsed-id set must be built once per change, not once per row lookup (O(N^2)):
+  // id reads at mount grow linearly with the heading count
+  test(`mounting a collapsing Toc reads heading ids in linear time`, async () => {
+    const mount_reads = async (count: number) => {
+      let id_reads = 0
+      const items = Array.from({ length: count }, (_, idx) => ({
+        get id() {
+          id_reads++
+          return `heading-${idx + 1}`
+        },
+        level: 2 + (idx % 2),
+        title: `Heading ${idx + 1}`,
+      }))
+      set_headings(count)
+      const unmount = await mount_toc({ items, collapse_subheadings: `h3` })
+      await unmount()
+      return id_reads
+    }
+    const [reads_60, reads_120] = [await mount_reads(60), await mount_reads(120)]
+    // linear: 2.0x (899 -> 1799); building the set per lookup measured 3.0x (1740 -> 5280)
+    expect(reads_120 / reads_60).toBeLessThan(2.5)
+  })
+
   test.each([`Enter`, ` `])(
     `desktop arrow keys move focus + selection and %j follows the real link`,
     async (key) => {
@@ -1066,6 +1146,18 @@ describe(`scroll_root`, () => {
     // 200px below the pane's top: not yet past the 100px offset, though far past the page's
     expect(active_text()).toBe(`Inside A`)
     b_top = 550
+    pane.dispatchEvent(new Event(`scroll`))
+    await tick()
+    expect(active_text()).toBe(`Inside B`)
+    // a heading without a box is skipped, whatever top its zero rect reports
+    inside_b.setAttribute(`style`, `display: none`)
+    pane.dispatchEvent(new Event(`scroll`))
+    await tick()
+    expect(active_text()).toBe(`Inside A`)
+    // before any heading is passed, the first visible one is active, not a hidden first one
+    inside_b.removeAttribute(`style`)
+    inside_a.setAttribute(`style`, `display: none`)
+    b_top = 700
     pane.dispatchEvent(new Event(`scroll`))
     await tick()
     expect(active_text()).toBe(`Inside B`)

@@ -8,14 +8,19 @@ import {
   create_element,
   doc_query,
   hover,
+  key_reads,
   next_task,
   pointer_event,
   press_key,
+  raw_snippet,
   render,
   stub_props,
-  raw_snippet,
 } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
+
+vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
+  (await import(`./index`)).count_key_reads(await import_original()),
+)
 
 describe(`Nav`, () => {
   const default_routes = [
@@ -246,6 +251,24 @@ describe(`Nav`, () => {
     expect(doc_query(`a[href="${link_href}"]`).getAttribute(`aria-current`)).toBe(
       expected,
     )
+  })
+  // navigating re-checks only the links whose current/active state flips, not all six
+  test(`navigating re-runs only the old and new current link`, async () => {
+    const pathname = fromStore(writable(`/a`))
+    mount_nav({
+      routes: [`a`, `b`, `c`, `d`, `e`, `f`].map((name) => ({
+        href: `/${name}`,
+        label: name,
+      })),
+      get pathname() {
+        return pathname.current
+      },
+    })
+    key_reads.count = 0
+    pathname.current = `/b`
+    await tick()
+    expect(doc_query(`a[aria-current="page"]`).getAttribute(`href`)).toBe(`/b`)
+    expect(key_reads.count).toBe(2)
   })
   // sibling submenu links where one prefixes the other: on the longer one's page only it is
   // current (a section page and its subpage both listed in one dropdown). A disabled subpage
@@ -740,15 +763,29 @@ describe(`Nav`, () => {
       [500, `touch`, false],
     ])(`hover at width %d with %s opens=%s`, async (width, pointer_type, opens) => {
       set_window_width(width)
-      const { dropdown, submenu, toggle } = mount_dropdown()
+      // more dropdowns than the one opened, so re-running them all would show in the count
+      const extra_dropdowns = [`x`, `y`].map((name) => ({
+        href: `/${name}`,
+        label: name,
+        children: [{ href: `/${name}/child`, label: `child` }],
+      }))
+      const { dropdown, submenu, toggle } = mount_dropdown({
+        routes: [...single_dropdown_route, ...extra_dropdowns],
+      })
       const initial_focus = document.activeElement
+      key_reads.count = 0
       pointer(dropdown, `pointerenter`, pointer_type)
       await tick()
+      expect(key_reads.count).toBe(opens ? 1 : 0) // only the opened dropdown re-checks
       expect(is_visible(submenu)).toBe(opens)
       expect(toggle.getAttribute(`aria-expanded`)).toBe(String(opens))
       expect(document.activeElement).toBe(initial_focus)
+      // a closing dropdown drops its focus trap rather than rebuilding a disabled one,
+      // which looked up its toggle again
+      const query_spy = vi.spyOn(document, `querySelector`)
       pointer(dropdown, `pointerleave`, pointer_type)
       await tick()
+      expect(query_spy).not.toHaveBeenCalled()
       expect(is_visible(submenu)).toBe(false)
       expect(document.activeElement).toBe(initial_focus)
       await click(toggle)
