@@ -31,12 +31,10 @@
         (typeof value === `number` && Number.isFinite(value))),
   )
 
-  // Unmount-only teardown: an effect cleanup reruns per settings change (ctx.settings is a
-  // fresh object each time), which cancelled the un-flash timer mid-flash.
+  // Timers are cleared on unmount only: the change-flash effect below reruns on every value
+  // or settings update and must neither cancel an un-flash nor eat a pending copy
   const changed_flash = create_flash(false, 1000)
-  // Click-to-copy is delayed while editable so a double-click can cancel it. Cleared on unmount
-  // only: the change-flash effect below re-runs on every value update and must not eat a
-  // pending copy.
+  // Click-to-copy is delayed while editable so a double-click can cancel it
   let click_timer: ReturnType<typeof setTimeout> | undefined
   $effect(() => () => clearTimeout(click_timer))
 
@@ -65,8 +63,7 @@
     event.stopPropagation()
     if (is_editable) {
       clearTimeout(click_timer)
-      const copy_pos = { clientX: event.clientX, clientY: event.clientY }
-      click_timer = setTimeout(() => ctx.copy_value(path, value, copy_pos), 250)
+      click_timer = setTimeout(() => ctx.copy_value(path, value, event), 250)
     } else void ctx.copy_value(path, value, event)
   }
 
@@ -141,6 +138,8 @@
     ondblclick={start_edit}
     oncontextmenu={(event) => ctx.show_context_menu(event, path, value, false, false)}
     onkeydown={(event) => {
+      // the URL link and expand button inside keep their own Enter/Space
+      if (event.target !== event.currentTarget) return
       if (event.key === `Enter` || event.key === ` `) {
         event.preventDefault()
         ctx.copy_value(path, value)

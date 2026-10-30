@@ -104,8 +104,7 @@ export function portal_action(node: HTMLElement, initial_params: PortalActionPar
     destroy() {
       if (!home_parent) return
       stop_tracking?.()
-      home_parent = null
-      home_anchor = null
+      home_parent = null // the queued tick reposition reads this as destroyed
       node.remove()
     },
   }

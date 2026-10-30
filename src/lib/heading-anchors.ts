@@ -135,7 +135,8 @@ export const has_heading_anchor = (inner: string, svelte = true): boolean =>
   )
 
 export interface HeadingAnchorsOptions {
-  // heading selector, default h1-h6 direct or 2nd-level children of the attached node
+  // heading selector, default h1-h6 direct or 2nd-level children of the attached node. Later
+  // DOM changes are picked up when they add an h1-h6 (or a subtree holding one) or set one's id
   selector?: string
   // Assigned via innerHTML, so pass trusted content only; sanitize untrusted input first,
   // e.g. new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
@@ -170,6 +171,19 @@ function add_anchor_to_heading(
 }
 
 const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagName)
+// Only an added subtree holding a heading, or an id written on one, can change the anchors.
+// Requerying the container on every other change (a dense plot redrawing thousands of nodes)
+// cost ~90 ms of selector matching on a 75k-node page.
+const touches_headings = (records: MutationRecord[]): boolean =>
+  records.some(({ type, target, addedNodes }) =>
+    type === `attributes`
+      ? target instanceof Element && is_heading(target)
+      : [...addedNodes].some(
+          (added) =>
+            added instanceof Element &&
+            (is_heading(added) || added.querySelector(`h1, h2, h3, h4, h5, h6`) !== null),
+        ),
+  )
 
 // adds anchor links to headings within a container
 export const heading_anchors =
@@ -190,7 +204,8 @@ export const heading_anchors =
     add_anchors()
 
     // requery for new headings and keep existing links aligned with dynamic IDs
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((records) => {
+      if (!touches_headings(records)) return
       add_anchors()
       observer.takeRecords()
     })

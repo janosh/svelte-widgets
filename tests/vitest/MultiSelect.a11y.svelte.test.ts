@@ -157,7 +157,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
   for (const [event_name, expected_active] of [
     [`mousemove`, true],
     [`mouseout`, false],
-    [`focus`, true],
+    [`mousemove`, true],
     [`blur`, false],
   ] as const) {
     user_msg.dispatchEvent(new Event(event_name, { bubbles: true }))

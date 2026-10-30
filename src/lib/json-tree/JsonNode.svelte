@@ -115,6 +115,9 @@
   function handle_keydown(event: KeyboardEvent) {
     if (!is_focused) return
     if (event.key === `Enter` || event.key === ` `) {
+      // Enter/Space on the value, its link or a button inside the row is theirs (arrows still
+      // bubble up to navigate)
+      if (event.target !== event.currentTarget) return
       event.preventDefault()
       if (expandable) toggle_collapse()
       else ctx.copy_value(path, value)
@@ -276,7 +279,7 @@
         >
           <span class="node-content">
             <span class="no-toggle"></span>
-            <span style="color: var(--jt-key)">
+            <span style="color: var(--jt-key, light-dark(#001080, #9cdcfe))">
               {#if typeof ghost.key === `number`}
                 <span class="index">{ghost.key}</span>
               {:else}
@@ -284,7 +287,8 @@
               {/if}
             </span>
             <span class="colon">:</span>
-            <span style="color: var(--jt-preview); font-style: italic"
+            <span
+              style="color: var(--jt-preview, light-dark(#808080, #808080)); font-style: italic"
               >{format_preview(ghost.value)}</span
             >
           </span>
@@ -300,9 +304,6 @@
 
 <style>
   .json-node {
-    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
-    font-size: var(--jt-font-size, 13px);
-    line-height: var(--jt-line-height, 1.5);
     outline: none;
     &.focused > .node-content {
       background: var(--jt-focus-bg, light-dark(#e3f2fd, #0d3a58));
@@ -419,7 +420,7 @@
   .colon,
   .comma,
   .bracket {
-    color: var(--jt-punctuation, light-dark(#000, #d4d4d4));
+    color: var(--jt-punctuation, light-dark(#000000, #d4d4d4));
   }
   .colon {
     margin-right: 4px;

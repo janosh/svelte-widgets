@@ -22,8 +22,8 @@
   const mode_icons = { light: Sun, dark: Moon, system: Monitor } as const
   const msg = $derived(merge_defaults(THEME_TOGGLE_LABELS, labels))
   let is_hydrated = $state(false)
-  let next_mode = $derived(THEME_MODE_CYCLE[theme.mode])
-  let title = $derived(msg.switch_to(msg[next_mode]))
+  const next_mode = $derived(THEME_MODE_CYCLE[theme.mode])
+  const title = $derived(msg.switch_to(msg[next_mode]))
 
   onMount(() => {
     is_hydrated = true

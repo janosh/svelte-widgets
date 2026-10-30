@@ -102,6 +102,13 @@ describe(`sortable`, () => {
     expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
     const sorted = column_values(table)
 
+    // keys typed into and clicks on a control inside a header belong to that control
+    const filter = document.createElement(`input`)
+    second.append(filter)
+    expect(press_key(filter, ` `).defaultPrevented).toBe(false)
+    filter.click()
+    expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
+
     cleanup?.()
     expect([first.getAttribute(`tabindex`), first.getAttribute(`aria-sort`)]).toEqual([
       `-1`,

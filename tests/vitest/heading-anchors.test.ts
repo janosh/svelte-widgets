@@ -10,7 +10,7 @@ import {
 } from '#lib/heading-anchors.ts'
 import Heading from '#lib/Heading.svelte'
 import { Check } from '#lib/icons.ts'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { doc_query, next_task, render, raw_snippet } from './index'
 
 describe(`fragment_href`, () => {
@@ -267,6 +267,32 @@ describe(`heading_anchors attachment`, () => {
     expect(await insert_heading(`before`)).toBe(`#before`)
     cleanup()
     expect(await insert_heading(`after`)).toBeUndefined()
+  })
+
+  // DOM churn without headings (a plot redrawing its marks) must not requery the container:
+  // on a 75k-node page each requery cost ~0.5 ms of selector matching, ~90 ms per page load
+  it(`skips the requery for mutations that touch no heading`, async () => {
+    const container = create_container(`<section><h2 id="kept">Kept</h2></section>`)
+    const selector = `:scope > * > h2`
+    const cleanup = heading_anchors({ selector })(container)
+    const query = vi.spyOn(container, `querySelectorAll`)
+    const plot = document.createElement(`svg`)
+    container.append(plot)
+    for (let idx = 0; idx < 20; idx++) plot.append(document.createElement(`circle`))
+    plot.id = `plot`
+    await next_task()
+    expect(query).not.toHaveBeenCalled()
+
+    container.insertAdjacentHTML(
+      `beforeend`,
+      `<section><h2 id="added">Added</h2></section>`,
+    )
+    await next_task()
+    expect(query).toHaveBeenCalledWith(selector)
+    expect(
+      container.querySelector(`#added ${anchor_selector}`)?.getAttribute(`href`),
+    ).toBe(`#added`)
+    cleanup()
   })
 
   it(`icon_svg customizes icon, default has aria-label`, () => {

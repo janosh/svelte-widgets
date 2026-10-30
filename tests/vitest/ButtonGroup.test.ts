@@ -21,8 +21,11 @@ describe(`ButtonGroup`, () => {
   const mount_group = (props: Props) => {
     render(ButtonGroup, props as ComponentProps<typeof ButtonGroup>)
     // `[data-value]` so an option_suffix rendering its own button doesn't join the list
+    const option = `button[data-value]`
     return [
-      ...document.querySelectorAll<HTMLButtonElement>(`.options button[data-value]`),
+      ...document.querySelectorAll<HTMLButtonElement>(
+        `.options > ${option}, .options > .option > ${option}`,
+      ),
     ]
   }
   const values_of = (buttons: HTMLButtonElement[]) =>
@@ -141,13 +144,14 @@ describe(`ButtonGroup`, () => {
     expect(on_change).toHaveBeenCalledTimes(3)
   })
 
-  // Suffix buttons must stay out of navigation, which a broad button selector would include.
+  // Suffix buttons, incl. a nested group's [data-value] ones, must stay out of navigation,
+  // which a broad descendant selector would include.
   test(`arrow keys move focus and the selection with it, wrapping both ends past suffix buttons`, async () => {
     const on_change = vi.fn()
     const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
       (get_params) => ({
         render: () =>
-          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
+          `<span><button type="button" data-remove="${get_params().option.value}">x</button><button type="button" data-value="nested">n</button></span>`,
       }),
     )
     const buttons = mount_group({
@@ -173,6 +177,14 @@ describe(`ButtonGroup`, () => {
       expect(checked_state(buttons[expected_idx]), key).toBe(`true`)
     }
     expect(on_change.mock.calls.flat()).toEqual(walk.map(([, idx]) => letters[idx].value))
+    // keys pressed inside suffix content keep their native behavior and select nothing
+    for (const suffix_button of [
+      doc_query(`[data-remove="beta"]`),
+      doc_query(`.option [data-value="nested"]`),
+    ])
+      expect(press_key(suffix_button, `ArrowRight`).defaultPrevented).toBe(false)
+    await tick()
+    expect(on_change).toHaveBeenCalledTimes(walk.length)
   })
 
   test.each([

@@ -9,18 +9,13 @@ export const chain_handlers =
   (event: EventType): void =>
     handlers.forEach((handler) => handler?.(event))
 
-// UUID for DOM IDs. Fallback is timestamp+counter: unique enough, not secure.
-export function get_uuid(): string {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
-  const hex = (Date.now().toString(16) + (uuid_counter++).toString(16)).padStart(32, `0`)
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20),
-  ].join(`-`)
-}
+// UUID for DOM IDs. randomUUID needs a secure context, so plain-http pages fall back to a
+// timestamp+counter in UUID shape: unique enough, not secure.
+export const get_uuid = (): string =>
+  globalThis.crypto?.randomUUID?.() ??
+  (Date.now().toString(16) + (uuid_counter++).toString(16))
+    .padStart(32, `0`)
+    .replaceAll(/(?<=^.{8}|^.{12}|^.{16}|^.{20})/gu, `-`)
 
 export const is_object = (val: unknown): val is Record<string, unknown> =>
   typeof val === `object` && val !== null
@@ -216,23 +211,20 @@ export function compute_position(
     return Math.max(0, needed - free_space[side])
   }
 
-  // `flip: false` pins the requested side, else least main-axis overflow wins
+  // `flip: false` pins the requested side, else least main-axis overflow wins. A named
+  // placement stays first choice, its fallbacks queue up behind it.
   const explicit_order = fallback_placements ?? (Array.isArray(flip) ? flip : null)
-  const candidate_placements = (): Placement[] => {
-    if (flip === false) return [requested]
-    if (!explicit_order) return FLIP_ORDER[requested]
-    // a named placement stays first choice, its fallbacks queue up behind it
-    if (fallback_placements && placement !== `auto`)
-      return [requested, ...explicit_order.filter((side) => side !== requested)]
-    return explicit_order
-  }
+  let candidates = explicit_order ?? FLIP_ORDER[requested]
+  if (flip === false) candidates = [requested]
+  else if (fallback_placements && placement !== `auto`)
+    candidates = [requested, ...fallback_placements.filter((side) => side !== requested)]
 
   // plain `auto` has no preferred side, so it breaks overflow ties on free space
   const rank_by_space = flip !== false && placement === `auto` && !explicit_order
   let chosen = requested
   let least_overflow = Infinity
   let greatest_space = -Infinity
-  for (const candidate of candidate_placements()) {
+  for (const candidate of candidates) {
     const candidate_overflow = main_axis_overflow(candidate)
     if (
       candidate_overflow < least_overflow ||

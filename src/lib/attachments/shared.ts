@@ -205,11 +205,11 @@ const style_overrides = new WeakMap<
 >()
 
 // Latest active owner wins; the last release restores the original inline declaration.
-export function override_style(
+export const override_style = (
   style: CSSStyleDeclaration,
   property: string,
   value: string,
-) {
+): (() => void) => {
   let properties = style_overrides.get(style)
   if (!properties) style_overrides.set(style, (properties = new Map()))
   let state = properties.get(property)

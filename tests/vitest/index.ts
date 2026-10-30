@@ -158,10 +158,6 @@ export const track = <T>(promise: Promise<T>) => {
 }
 
 export type Test2WayBindProps = MultiSelectProps & {
-  onActiveIndexChanged?: (data: MultiSelectProps[`active_index`]) => unknown
-  onActiveOptionChanged?: (data: MultiSelectProps[`active_option`]) => unknown
-  onOptionsChanged?: (data: MultiSelectProps[`options`]) => unknown
-  onSearchTextChanged?: (data: MultiSelectProps[`search_text`]) => unknown
   onValueChanged?: (data: MultiSelectProps[`value`]) => unknown
 }
 

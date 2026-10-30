@@ -54,18 +54,9 @@
   const graphemes = new Intl.Segmenter(undefined, { granularity: `grapheme` })
   const words = new Intl.Segmenter(undefined, { granularity: `word` })
   // Text metrics a hidden measuring line copies from the textarea
-  const MEASURED_STYLES = [
-    `font-family`,
-    `font-size`,
-    `font-style`,
-    `font-weight`,
-    `font-variant-ligatures`,
-    `line-height`,
-    `letter-spacing`,
-    `word-spacing`,
-    `tab-size`,
-    `direction`,
-  ]
+  const MEASURED_STYLES =
+    `font-family font-size font-style font-weight font-variant-ligatures
+    line-height letter-spacing word-spacing tab-size direction`.split(/\s+/)
   let {
     model,
     options = {},
@@ -128,6 +119,8 @@
   let composing = false
   let composition_seq = 0
   let composition_range: EditorSelection | null = null
+  const in_composition = (input_type: string): boolean =>
+    composing || input_type.includes(`Composition`)
   let unregister_escape: (() => void) | undefined
   type InputSnapshot = EditorSelection & {
     input_type: string
@@ -592,22 +585,22 @@
   const on_before_input = (event: InputEvent): void => {
     const area = textarea
     if (!area) return
+    const { inputType: input_type } = event
     if (editing_disabled) {
       event.preventDefault()
       before_snapshot = null
       return
     }
-    if (event.inputType === `historyUndo` || event.inputType === `historyRedo`) {
+    if (input_type === `historyUndo` || input_type === `historyRedo`) {
       event.preventDefault()
       before_snapshot = null
-      ;(event.inputType === `historyUndo` ? model.undo : model.redo)()
+      ;(input_type === `historyUndo` ? model.undo : model.redo)()
       return
     }
-    const composition =
-      event.inputType.includes(`Composition`) || composing ? composition_range : null
+    const composition = in_composition(input_type) ? composition_range : null
     const snapshot = {
       ...(composition ?? selection_of(area)),
-      input_type: event.inputType,
+      input_type,
       value_length: area.value.length,
       event,
     }
@@ -705,8 +698,7 @@
     }
   }
   const history_group = (input_type: string): string | null => {
-    if (input_type.includes(`Composition`) || composing)
-      return `composition-${composition_seq}`
+    if (in_composition(input_type)) return `composition-${composition_seq}`
     if (input_type === `insertText`) return `insert`
     if (input_type === `deleteContentBackward`) return `backspace`
     if (input_type === `deleteContentForward`) return `delete`
@@ -736,7 +728,7 @@
             source: `input`,
             history_group: history_group(snapshot.input_type),
           })
-        if (snapshot.input_type.includes(`Composition`) || composing)
+        if (in_composition(snapshot.input_type))
           composition_range = {
             anchor: edit.from,
             head: edit.from + edit.insert.length,
@@ -1005,7 +997,9 @@
   export const open_search = async (replace = false): Promise<void> => {
     if (document.activeElement === textarea) sync_selection()
     const [from, to] = ordered(model.selection)
-    if (from !== to) search_query = model.slice(from, to)
+    // only a single-line selection: the find field strips line breaks, so a multi-line seed
+    // would count matches of text the field doesn't show
+    if (from !== to && to <= model.line_at(from).to) search_query = model.slice(from, to)
     search_panel = `find`
     show_replace = replace && !editing_disabled
     await focus_panel_input()
@@ -1164,9 +1158,12 @@
     const state: EditorState = { model, selection_start, selection_end }
     if (event.key === `Tab`) {
       event.preventDefault() // a no-op dedent must not move focus
+      // A space unit dedents a leading tab or up to tab_size spaces, even when Tab inserts \t
       apply_command(
         event,
-        (event.shiftKey ? dedent_selection : indent_selection)(state, indent),
+        event.shiftKey
+          ? dedent_selection(state, ` `.repeat(tab_size))
+          : indent_selection(state, indent),
       )
     } else if (event.key === `Enter` && !command_modifier && !event.altKey)
       apply_command(event, auto_indent_newline(state, indent))

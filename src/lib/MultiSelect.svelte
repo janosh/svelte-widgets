@@ -360,13 +360,6 @@
     }
     prev_input_committed_label = input_committed_label
   })
-  let load_options_pending = $derived(
-    Boolean(loader.config) &&
-      (loader.loading ||
-        (open &&
-          loader.has_more &&
-          (loader.last_search ?? ``) !== effective_filter_text)),
-  )
   // plain Sets for O(1) lookups: these deriveds are rebuilt wholesale, never mutated in
   // place, so reactive collections would buy nothing
   let selected_keys_set = $derived(new Set(selected.map((opt) => key(opt))))
@@ -429,10 +422,7 @@
 
   // keyboard nav must stop at max_options: past it aria-activedescendant would point at a
   // non-existent DOM id and Enter could select an option the user can't see
-  let visible_navigable_count = $derived(
-    Math.min(navigable_options.length, max_options ?? Infinity),
-  )
-  const rendered_options = $derived(navigable_options.slice(0, visible_navigable_count))
+  const rendered_options = $derived(navigable_options.slice(0, max_options ?? undefined))
   // `matching` scope needs the full local option set, which remote loading can't provide
   const matching_scope_unavailable = $derived(
     select_all_scope === `matching` && Boolean(load_options),
@@ -452,10 +442,6 @@
   // validation rejects sticky grouped headers: one scrolled out of the window can't stay pinned
   let options_scroll_top = $state(0)
   let options_client_height = $state(0)
-  // happy-dom and SSR report clientHeight 0 — fall back to a 400px viewport estimate
-  const virtual_viewport = $derived(
-    options_client_height > 0 ? options_client_height : 400,
-  )
   const build_rows = create_option_rows<Option>()
   const render_rows = $derived.by(() =>
     build_rows(grouped_options, render_key_assigner(), collapsible_groups, max_options),
@@ -466,7 +452,7 @@
       ? option_window(
           virtual_list,
           options_scroll_top,
-          virtual_viewport,
+          options_client_height,
           render_rows.length,
         )
       : null,
@@ -525,21 +511,12 @@
     on_expand_all?.({ groups })
   }
 
-  // auto-expand groups whose options match. Reacts only to search-text changes, else a
-  // group the user collapses mid-search is instantly re-expanded.
-  let prev_expand_search = ``
+  // auto-expand groups whose options match. Groups stay untracked, else a group the user
+  // collapses mid-search is instantly re-expanded.
   $effect(() => {
-    const search = has_search_text ? search_text : ``
-    const search_changed = search !== prev_expand_search
-    prev_expand_search = search
-    if (
-      search_expands_collapsed_groups &&
-      collapsible_groups &&
-      search &&
-      search_changed
-    ) {
+    void search_text // re-expand on every edit of a non-blank search
+    if (has_search_text && search_expands_collapsed_groups && collapsible_groups)
       untrack(() => set_groups_collapsed(group_names(grouped_options, true), false))
-    }
   })
 
   const placeholder_text = $derived(
@@ -603,20 +580,14 @@
   // Keep active state valid and preserve option identity across regrouping/refreshes.
   $effect(() => {
     if (is_user_message_active) {
-      if (has_user_message) active_index = visible_navigable_count
+      if (has_user_message) active_index = rendered_options.length
       else {
         is_user_message_active = false
         active_index = null
       }
     }
-    if (
-      active_index !== null &&
-      !is_user_message_active &&
-      (navigable_options[active_index] === undefined ||
-        active_index >= visible_navigable_count)
-    ) {
+    if (!is_user_message_active && rendered_options[active_index ?? -1] === undefined)
       active_index = null
-    }
     const index_changed = active_index !== previous_active_index
     const option_changed = active_option !== previous_active_option
     const filter_changed = effective_filter_text !== previous_filter_text
@@ -656,7 +627,7 @@
     }
     active_option = is_user_message_active
       ? null
-      : (navigable_options[active_index ?? -1] ?? null)
+      : (rendered_options[active_index ?? -1] ?? null)
     previous_active_index = active_index
     previous_active_option = active_option
     previous_filter_text = effective_filter_text
@@ -672,7 +643,7 @@
   const active_option_id = $derived(
     is_user_message_active
       ? user_message_id
-      : active_index !== null && active_index < navigable_options.length
+      : rendered_options[active_index ?? -1] !== undefined
         ? `${base_id}-opt-${active_index}`
         : undefined,
   )
@@ -715,13 +686,6 @@
   }
 
   // === Selection mutations ===
-  // keep_selected_in_dropdown mode
-  function toggle_option(option_to_toggle: Option, event: Event) {
-    if (has_selected_option(option_to_toggle)) {
-      if (can_remove) remove(option_to_toggle, event)
-    } else void add(option_to_toggle, event)
-  }
-
   // true while an async on_create callback is pending, blocks further create attempts
   let creating_option = $state(false)
 
@@ -984,7 +948,7 @@
         // a blank message must not leave a navigable row that blocks the create row
         return duplicate_option_msg ? { type: `dupe`, msg: duplicate_option_msg } : null
       }
-      if (load_options_pending) return null
+      if (loader.pending) return null
       if (allow_user_options && resolved_create_msg) {
         return { type: `create`, msg: resolved_create_msg }
       }
@@ -1041,10 +1005,10 @@
     )
     if (active_index === null) return
 
-    is_user_message_active = has_user_message && active_index === visible_navigable_count
+    is_user_message_active = has_user_message && active_index === rendered_options.length
     active_option = is_user_message_active
       ? null
-      : (navigable_options[active_index] ?? null)
+      : (rendered_options[active_index] ?? null)
 
     // keyboard navigation only, not mouse hover. Runs before the auto-scroll tick,
     // during which a repeated key press would already have moved the active option.
@@ -1065,8 +1029,7 @@
         const next_scroll_top = option_row_scroll(
           render_rows,
           active_index,
-          virtual_window.item_height,
-          virtual_viewport,
+          virtual_window,
           options_scroll_top,
         )
         if (next_scroll_top !== options_scroll_top) {
@@ -1149,7 +1112,7 @@
       if (active_option != null) {
         if (is_disabled(active_option)) return
         handle_option_interact(active_option, event, active_index)
-      } else if (allow_user_options && has_search_text && !load_options_pending) {
+      } else if (allow_user_options && has_search_text && !loader.pending) {
         add_typed_text(event)
       } else {
         // no active option and no search text: the dropdown is closed, so Enter opens it
@@ -1401,8 +1364,10 @@
     // select_range reports false when there's no usable anchor
     if (range_select && extends_range && select_range(opt, event, option_idx)) return
     const selected_before = selected.length
-    if (keep_selected_in_dropdown && !input_display) toggle_option(opt, event)
-    else void add(opt, event)
+    // keep_selected_in_dropdown toggles: a selected option is removed instead
+    if (keep_selected_in_dropdown && !input_display && has_selected_option(opt)) {
+      if (can_remove) remove(opt, event)
+    } else void add(opt, event)
     if (!range_select) return
     // anchor only on an add that landed: a rejected add or a toggle-off leaves no sensible
     // anchor, and a later Shift+click would extend from a stale position. max_select===1
@@ -1606,10 +1571,9 @@
   title: string,
   icon_props: { option: Option; is_remove_all: false } | { is_remove_all: true },
 )}
-  {@const rescued = with_focus_rescue(handler)}
   <button
-    onclick={rescued}
-    onkeydown={if_enter_or_space(rescued)}
+    onclick={with_focus_rescue(handler)}
+    onmouseup={(event) => event.stopPropagation()}
     type="button"
     {title}
     class={[`remove`, { 'remove-all': icon_props.is_remove_all }]}
@@ -1751,7 +1715,7 @@
       aria-expanded={open}
       aria-controls={listbox_rendered ? listbox_id : undefined}
       aria-activedescendant={active_option_id}
-      aria-busy={loading || load_options_pending || creating_option || null}
+      aria-busy={loading || loader.pending || creating_option || null}
       aria-invalid={invalid ? `true` : null}
       ondrop={utils.chain_handlers((event) => event.preventDefault(), ondrop)}
       onpaste={utils.chain_handlers(handle_paste, onpaste)}
@@ -1864,12 +1828,6 @@
         {@const view = get_option_view(option_item)}
         {@const is_selected = is_row_selected(option_item)}
         {@const is_active = is_active_idx(flat_idx)}
-        {@const activate = () => {
-          if (view.disabled) return
-          // Release the user-message row so it cannot pin active_index during option focus.
-          is_user_message_active = false
-          active_index = flat_idx
-        }}
         <li
           id="{base_id}-opt-{flat_idx}"
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
@@ -1880,14 +1838,18 @@
           class:active={is_active}
           class:disabled={view.disabled}
           class={[li_option_class, is_active && li_active_option_class]}
-          onmousemove={activate}
-          onfocus={activate}
+          onmousemove={() => {
+            if (view.disabled) return
+            // release the user-message row so it cannot pin active_index
+            is_user_message_active = false
+            active_index = flat_idx
+          }}
           role="option"
           aria-selected={is_selected ? `true` : `false`}
           aria-disabled={view.disabled ? `true` : undefined}
           aria-describedby={group === null ? undefined : group_header_id(group)}
           aria-posinset={flat_idx + 1}
-          aria-setsize={visible_navigable_count}
+          aria-setsize={rendered_options.length}
           style={view.style}
           style:height={virtual_row_height}
           style:box-sizing={virtual_row_height && `border-box`}
@@ -1935,8 +1897,6 @@
           if (collapsible_groups)
             set_groups_collapsed([group_name], !collapsed_groups.has(group_name))
         }}
-        {@const handle_group_select = (event: Event) =>
-          toggle_group_selection(selectable, all_selected, event)}
         <!-- a listbox may only own `option`/`group` children, so this row is presentational
             and its options carry the group name via `aria-describedby`. `role="presentation"`
             is dropped if the element is focusable or has a global ARIA attribute, so this
@@ -1974,8 +1934,8 @@
                 type="button"
                 class={[`group-select-all`, { deselect: all_selected }]}
                 disabled={group_blocked}
-                onclick={handle_group_select}
-                onkeydown={if_enter_or_space(handle_group_select)}
+                onclick={(event) =>
+                  toggle_group_selection(selectable, all_selected, event)}
               >
                 {all_selected ? msg.group_deselect_all : msg.group_select_all}
               </button>
@@ -2015,7 +1975,6 @@
           title={msg_type !== `no-match` ? user_msg_text : ``}
           class:active={is_user_message_active}
           onmousemove={() => (is_user_message_active = true)}
-          onfocus={() => (is_user_message_active = true)}
           onmouseout={() => (is_user_message_active = false)}
           onblur={() => (is_user_message_active = false)}
           role="option"

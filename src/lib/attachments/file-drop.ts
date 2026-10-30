@@ -65,39 +65,42 @@ export const file_drop =
       drag_depth = Math.max(0, drag_depth - 1)
       if (drag_depth === 0) set_drag_active(false, event)
     }
+    // A newer drop or teardown bumps drop_generation, silencing this one's late results
+    const deliver = async (data_transfer: DataTransfer, generation: number) => {
+      let controller: AbortController | undefined
+      try {
+        const dropped = await files_from_data_transfer(data_transfer)
+        if (generation !== drop_generation) return
+        const accepted = filter_accepted_files(dropped, accept, multiple)
+        if (accepted.length === 0) return
+        callback_controller?.abort()
+        // aborting can run consumer code that drops again or tears down
+        if (generation !== drop_generation) return
+        controller = new AbortController()
+        callback_controller = controller
+        try {
+          await on_files(accepted, controller.signal)
+        } finally {
+          if (callback_controller === controller) callback_controller = undefined
+        }
+      } catch (error) {
+        if (controller ? controller.signal.aborted : generation !== drop_generation)
+          return
+        // A consumer's handler failing must not itself become an unhandled rejection
+        try {
+          if (on_error) await on_error(error)
+          else globalThis.reportError(error)
+        } catch (reporting_error) {
+          globalThis.reportError(reporting_error)
+        }
+      }
+    }
     const on_drop = (event: DragEvent) => {
       const { dataTransfer: data_transfer } = event
       if (!data_transfer || !carries_files(data_transfer)) return
       event.preventDefault()
       reset_drag(event)
-      if (disabled) return
-
-      const generation = ++drop_generation
-      let delivery_controller: AbortController | undefined
-      void files_from_data_transfer(data_transfer)
-        .then(async (dropped) => {
-          if (generation !== drop_generation) return
-          const accepted = filter_accepted_files(dropped, accept, multiple)
-          if (accepted.length === 0) return
-          callback_controller?.abort()
-          if (generation !== drop_generation) return
-          delivery_controller = new AbortController()
-          callback_controller = delivery_controller
-          await on_files(accepted, delivery_controller.signal)
-          if (callback_controller === delivery_controller) callback_controller = undefined
-        })
-        .catch(async (error: unknown) => {
-          if (callback_controller === delivery_controller) callback_controller = undefined
-          if (delivery_controller?.signal.aborted) return
-          if (!delivery_controller && generation !== drop_generation) return
-          // A consumer's handler failing must not itself become an unhandled rejection
-          try {
-            if (on_error) await on_error(error)
-            else globalThis.reportError(error)
-          } catch (reporting_error) {
-            globalThis.reportError(reporting_error)
-          }
-        })
+      if (!disabled) void deliver(data_transfer, ++drop_generation)
     }
     const event_controller = new AbortController()
     const { signal } = event_controller

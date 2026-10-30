@@ -163,12 +163,10 @@
     clear_timeouts()
     if (!open) return
     const scheduled_mode = trigger_mode
-    close_timeout = setTimeout(
-      () => {
-        if (trigger_mode === scheduled_mode) close(`trigger`)
-      },
-      close_delay_ms ?? (click_mode ? 0 : 150),
-    )
+    // only hover/focus handlers schedule closes, hence their 150 ms default
+    close_timeout = setTimeout(() => {
+      if (trigger_mode === scheduled_mode) close(`trigger`)
+    }, close_delay_ms ?? 150)
   }
   const contains_interaction_target = (target: EventTarget | null) =>
     target instanceof Node &&

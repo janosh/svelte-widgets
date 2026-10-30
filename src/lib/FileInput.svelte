@@ -122,7 +122,7 @@
     /></label
   >
   {#if children}{@render children(files)}
-  {:else}
+  {:else if files.length}
     <ul>
       {#each files as file, idx (idx)}
         <li>

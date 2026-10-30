@@ -773,7 +773,9 @@ describe(`keyboard navigation and selection`, () => {
     const leaf = node_at(`key`)
     expect(leaf?.classList.contains(`focused`)).toBe(true)
     press(leaf, `Enter`)
-    await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`42`))
+    // Enter on the value itself (focusable by click) must not also copy via the focused row
+    press(leaf?.querySelector(`.json-value`), `Enter`)
+    expect(write_text.mock.calls).toEqual([[`42`], [`42`]])
 
     press(tree(), `ArrowDown`)
     const container = node_at(`obj`)
@@ -788,6 +790,33 @@ describe(`keyboard navigation and selection`, () => {
     press(container, `c`, { ctrlKey: true })
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`{\n  "a": 1\n}`))
   })
+
+  it.each([
+    [`url`, `.url-link`],
+    [`long`, `.expand-btn`],
+  ])(
+    `Enter/Space on the %s value's %s stays native on its focused row`,
+    (key, selector) => {
+      const write_text = mock_clipboard_write()
+      mount_expanded({
+        value: { url: `https://example.com`, long: `a`.repeat(300) },
+        max_string_length: 50,
+      })
+      const presses = key === `url` ? 2 : 3
+      for (let idx = 0; idx < presses; idx++) press(tree(), `ArrowDown`)
+      expect(node_at(key)?.classList.contains(`focused`)).toBe(true)
+      for (const pressed of [`Enter`, ` `]) {
+        const event = new KeyboardEvent(`keydown`, {
+          bubbles: true,
+          cancelable: true,
+          key: pressed,
+        })
+        doc_query(selector).dispatchEvent(event)
+        expect(event.defaultPrevented, pressed).toBe(false)
+      }
+      expect(write_text).not.toHaveBeenCalled()
+    },
+  )
 
   it(`Ctrl+click toggles selection, Shift extends a range, Ctrl+C copies all, Escape clears`, async () => {
     const write_text = mock_clipboard_write()

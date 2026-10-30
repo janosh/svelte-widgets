@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown } from './icons'
-  import type { Snippet } from 'svelte'
+  import { tick, type Snippet } from 'svelte'
   import type {
     HTMLAnchorAttributes,
     HTMLAttributes,
@@ -90,7 +90,6 @@
   // Start from the real client width to avoid flashing desktop navigation on phones.
   let viewport_width = $state(globalThis.innerWidth ?? Infinity)
   const is_mobile = $derived(viewport_width <= breakpoint)
-  let focus_timeout: ReturnType<typeof setTimeout> | undefined
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
   // Plain bookkeeping avoids retriggering the observer when it records the new state.
@@ -108,7 +107,6 @@
   $effect(() => {
     if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null
   })
-  $effect(() => () => clearTimeout(focus_timeout))
 
   function close_menus() {
     open = false
@@ -129,12 +127,11 @@
     hover_open = false
     const opening = open_dropdown !== checked_routes[idx]
     open_dropdown = opening ? checked_routes[idx] : null
-    if (opening && focus_first) {
-      clearTimeout(focus_timeout)
-      focus_timeout = setTimeout(() => {
+    // the links are hidden until the panel renders open; skip if it closed again meanwhile
+    if (opening && focus_first)
+      void tick().then(() => {
         if (open_dropdown === checked_routes[idx]) dropdown_links(idx)[0]?.focus()
-      }, 0)
-    }
+      })
   }
   function handle_dropdown_pointer(event: PointerEvent, idx: number) {
     if (is_mobile || event.pointerType !== `mouse`) return
@@ -451,12 +448,10 @@
     cursor: not-allowed;
   }
   /* only the first right-aligned item gets the auto margin */
-  .menu > :is(.align-right, .dropdown.align-right) {
+  .menu > .align-right {
     margin-inline-start: auto;
   }
-  .menu
-    > :is(.align-right, .dropdown.align-right)
-    + :is(.align-right, .dropdown.align-right) {
+  .menu > .align-right + .align-right {
     margin-inline-start: 0;
   }
   .menu > .separator {
@@ -758,7 +753,7 @@
   nav.mobile .dropdown > div:last-child a[aria-current='page'] {
     border-inline-start-color: var(--nav-link-active-color, currentColor);
   }
-  nav.mobile .menu > :is(.align-right, .dropdown.align-right) {
+  nav.mobile .menu > .align-right {
     margin-inline-start: 0;
   }
 </style>

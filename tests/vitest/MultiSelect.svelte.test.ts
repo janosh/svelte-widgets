@@ -29,8 +29,12 @@ import {
   mount_multiselect,
   mouseup,
   normalized_text,
+  option_by_label,
+  option_rows,
+  option_texts,
   press_sequence,
   selected_chips,
+  selected_text,
   type_search_text,
   user_msg_text,
 } from './MultiSelect.test-utils'
@@ -41,17 +45,6 @@ const mount_snippets = (props: ComponentProps<typeof TestMultiSelectSnippets>) =
 const mount_2way = (props: Test2WayBindProps) =>
   mount(Test2WayBind, { target: document.body, props })
 const click_expand_icon = () => mouseup(`.expand-icon`)
-const selected_text = () => doc_query(`ul.selected`).textContent?.trim()
-// dropdown option rows minus the message row, which also carries role="option"
-const option_items = (): HTMLLIElement[] => [
-  ...document.querySelectorAll<HTMLLIElement>(`ul.options > li:not(.user-msg)`),
-]
-const option_labels = () => option_items().map((item) => item.textContent?.trim())
-const option_by_label = (label: string): HTMLLIElement => {
-  const option_item = option_items().find((item) => item.textContent?.trim() === label)
-  if (!option_item) throw new Error(`Option "${label}" not in ${option_labels()}`)
-  return option_item
-}
 
 test(`2-way binding preserves a valid initial auto-active index`, async () => {
   const props = $state<MultiSelectProps>({
@@ -439,7 +432,7 @@ describe(`selected_display=input`, () => {
       await reopen(input)
 
       expect(input.getAttribute(`aria-expanded`)).toBe(`true`)
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
 
       const selected_option = option_by_label(`Red`)
       expect(selected_option.classList.contains(`selected`)).toBe(true)
@@ -475,7 +468,7 @@ describe(`selected_display=input`, () => {
       })
       await tick()
 
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
 
       const input = get_input()
       expect(input.value).toBe(`Red`)
@@ -492,7 +485,7 @@ describe(`selected_display=input`, () => {
       await type_search_text(`Bl`, input)
 
       // editing the committed text drops the selection but keeps the draft
-      expect(option_labels()).toEqual([`Blue`])
+      expect(option_texts()).toEqual([`Blue`])
       expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
       expect(input.value).toBe(`Bl`)
       expect(select.search_text).toBe(`Bl`)
@@ -504,7 +497,7 @@ describe(`selected_display=input`, () => {
 
       await click_expand_icon()
 
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
     },
   )
 
@@ -514,7 +507,7 @@ describe(`selected_display=input`, () => {
     const input = await focus_input()
     await type_search_text(`Purple`, input)
 
-    expect(option_labels()).toEqual([])
+    expect(option_texts()).toEqual([])
     expect(user_msg_text()).toContain(`No matching options`)
 
     await click_expand_icon()
@@ -524,7 +517,7 @@ describe(`selected_display=input`, () => {
     await click_expand_icon()
 
     expect(input.value).toBe(`Purple`)
-    expect(option_labels()).toEqual(color_options)
+    expect(option_texts()).toEqual(color_options)
     expect(user_msg_text()).toBeUndefined()
     expect(select.value).toBeNull()
 
@@ -760,6 +753,21 @@ test.each([`ul.options > li`, `button.remove-all`])(
     expect(multiselect.classList.contains(`invalid`)).toBe(false)
   },
 )
+
+// a pointer press on a remove button runs mouseup before click: like chips and the
+// "+N more" toggle, it must not bubble up and open the dropdown
+test.each([
+  [`ul.selected button.remove`, 1],
+  [`button.remove-all`, 0],
+])(`pressing %s removes without opening the dropdown`, async (selector, remaining) => {
+  const on_open = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], value: [1, 2], on_open })
+  await mouseup(selector)
+  await click(selector)
+  expect(on_open).not.toHaveBeenCalled()
+  expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(false)
+  expect(selected_chips()).toHaveLength(remaining)
+})
 
 test(`option labels render markup as text`, () => {
   const label = `<a href="https://example.com">example.com</a>`
@@ -1779,7 +1787,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       // [selected class, checkbox state] per row; plain mode renders no checkbox
       const box = (checked: boolean) => (mode === `checkboxes` ? checked : undefined)
       expect(
-        option_items().map((li) => [
+        option_rows().map((li) => [
           li.classList.contains(`selected`),
           li.querySelector<HTMLInputElement>(`.option-checkbox`)?.checked,
         ]),
@@ -1904,7 +1912,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
         keep_selected_in_dropdown: mode,
       })
       await type_search_text(`a`)
-      expect(option_labels()).toEqual([`Apple`, `Banana`, `Date`])
+      expect(option_texts()).toEqual([`Apple`, `Banana`, `Date`])
     },
   )
 })
@@ -2135,7 +2143,7 @@ test(`close_dropdown_on_select='retain-focus' clears active create message after
   await type_search_text(`b`, input_el)
 
   expect(dropdown.classList).not.toContain(`hidden`)
-  expect(option_labels()[0]).toBe(`banana`)
+  expect(option_texts()[0]).toBe(`banana`)
   expect(doc_query(`ul.options li.user-msg`).classList).not.toContain(`active`)
   expect(input_el.getAttribute(`aria-activedescendant`) ?? ``).not.toMatch(/user-msg/u)
 })
@@ -2900,7 +2908,7 @@ describe(`on_activate event`, () => {
     expect(on_activate).toHaveBeenCalledExactlyOnceWith(expected)
   })
 
-  test(`pointer and focus activation do not fire on_activate`, async () => {
+  test(`pointer activation does not fire on_activate`, async () => {
     const { on_activate, input } = await mount_activate()
     await press_sequence(input, `ArrowDown`)
     on_activate.mockClear()
@@ -2913,12 +2921,6 @@ describe(`on_activate event`, () => {
     option3.dispatchEvent(fresh_mousemove())
     await tick()
     expect(active_text()).toBe(`3`)
-
-    const option2 = doc_query(`ul.options li:nth-child(2)`)
-    option2.dispatchEvent(new FocusEvent(`focus`, { bubbles: true }))
-    await tick()
-    expect(active_text()).toBe(`2`)
-
     expect(on_activate).not.toHaveBeenCalled()
   })
 

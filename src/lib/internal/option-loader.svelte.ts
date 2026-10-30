@@ -24,9 +24,6 @@ export function create_option_loader<T extends Option>(get: {
     )
     return () => clearTimeout(timer)
   })
-  const effective_filter_text = $derived(get.query())
-  const open = $derived(get.open())
-  const options_list_el = $derived(get.element())
   // normalizes the function-or-config-object prop into one shape
   const load_options_config = $derived.by(() => {
     const load_options = get.config()
@@ -49,6 +46,14 @@ export function create_option_loader<T extends Option>(get: {
     error: null as Error | null,
     get config() {
       return load_options_config
+    },
+    // loading, or a changed query whose debounced fetch hasn't started yet
+    get pending() {
+      return (
+        Boolean(load_options_config) &&
+        (loader.loading ||
+          (get.open() && loader.has_more && (loader.last_search ?? ``) !== get.query()))
+      )
     },
     load: load_dynamic_options,
     on_scroll: handle_options_scroll,
@@ -86,7 +91,7 @@ export function create_option_loader<T extends Option>(get: {
       auto_fill_count = 0
       load_abort_controller?.abort()
     }
-    const search = effective_filter_text
+    const search = get.query()
     const offset = reset ? 0 : loader.options.length
     const request_id = ++load_request_id
     const abort_controller = new AbortController()
@@ -130,7 +135,7 @@ export function create_option_loader<T extends Option>(get: {
     // can never fire — keep loading until scrollable or done. An empty batch stops it, since
     // the next request would be identical (and it keeps offset=0 meaning "reset").
     const live_list = () =>
-      request_id === load_request_id && open ? options_list_el : undefined
+      request_id === load_request_id && get.open() ? get.element() : undefined
     if (
       batch_length <= 0 ||
       loader.error ||
@@ -158,13 +163,14 @@ export function create_option_loader<T extends Option>(get: {
     const fetch_changed = config.fetch !== previous_load_options_fetch
     previous_load_options_fetch = config.fetch
     // Reset when closed or when the loader changes under the current query.
+    const open = get.open()
     if (!open || fetch_changed) {
       reset_loaded_batch()
       loader.last_search = null
     }
     if (!open) return undefined
 
-    const search = effective_filter_text
+    const search = get.query()
     // first load = nothing dispatched yet for this open (none completed, none in flight).
     // untrack the loading flag, else its synchronous set re-triggers this effect and
     // keystrokes during the first fetch fire immediate loads instead of debouncing.

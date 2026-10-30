@@ -169,11 +169,9 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
 // under it and `inside` is left for the trigger and portalled parts.
 export const click_outside =
   <T extends HTMLElement>(config: ClickOutsideConfig<T> = {}) =>
-  (node: T): (() => void) | undefined => {
-    if (config.enabled === false) return undefined
-    return dismiss_on_outside_press({
+  (node: T): (() => void) =>
+    dismiss_on_outside_press({
       ...config,
       node,
       callback: (detail) => config.callback?.(node, config, detail),
     })
-  }

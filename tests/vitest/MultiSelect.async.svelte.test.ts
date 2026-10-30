@@ -662,7 +662,7 @@ test(`#468: no_matching_options_msg shows on open when an empty query loads noth
 })
 
 // https://github.com/janosh/svelte-widgets/pull/403#issuecomment-4106385445
-describe(`load_options_pending`, () => {
+describe(`load_options pending state`, () => {
   beforeEach(() => vi.useFakeTimers())
 
   test(`typing during the first in-flight load debounces instead of firing immediate fetches`, async () => {

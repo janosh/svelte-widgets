@@ -75,12 +75,11 @@
     ...rest
   }: JsonTreeProps & HTMLAttributes<HTMLDivElement> = $props()
 
-  type CopyFeedback = { error: boolean; pos: CopyEventPosition | null }
-
   let search_query = $state(``)
   let search_input_value = $state(``)
   let search_debounce_timeout: ReturnType<typeof setTimeout> | undefined
   let focused_path = $state<string | null>(null)
+  type CopyFeedback = { error: boolean; pos?: CopyEventPosition }
   const copy_feedback = create_flash<CopyFeedback | null>(null, 1000)
   $effect(() => () => clearTimeout(search_debounce_timeout))
   // Paths expanded explicitly (overrides auto-fold thresholds)
@@ -289,7 +288,6 @@
     text: string,
     event?: CopyEventPosition,
   ): Promise<void> {
-    const pos = event ? { clientX: event.clientX, clientY: event.clientY } : null
     let error = false
     try {
       await navigator.clipboard.writeText(text)
@@ -297,7 +295,7 @@
     } catch {
       error = true // show feedback regardless, but flag the failure
     }
-    copy_feedback.show({ error, pos })
+    copy_feedback.show({ error, pos: event })
   }
 
   const diff_map = $derived(
@@ -724,31 +722,9 @@
     color: inherit;
   }
   .json-tree {
-    /* Color variables with light-dark() for automatic theme support */
-    --jt-string: light-dark(#a31515, #ce9178);
-    --jt-number: light-dark(#098658, #b5cea8);
-    --jt-boolean: light-dark(#0000ff, #569cd6);
-    --jt-null: light-dark(#808080, #808080);
-    --jt-key: light-dark(#001080, #9cdcfe);
-    --jt-punctuation: light-dark(#000000, #d4d4d4);
-    --jt-arrow: light-dark(#6e6e6e, #858585);
-    --jt-preview: light-dark(#808080, #808080);
-    --jt-search-match-bg: light-dark(#fff59d, #614d00);
-    --jt-current-match-bg: light-dark(#ffcc80, #8a5600);
-    --jt-change-flash: light-dark(#c8e6c9, #1b5e20);
-    --jt-focus-bg: light-dark(#e3f2fd, #0d3a58);
-    --jt-hover-bg: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08));
-    --jt-indent-guide: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
-    --jt-header-bg: light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.05));
-    --jt-header-border: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
-    /* Layout variables */
-    --jt-indent: 1.2em;
-    --jt-line-height: 1.5;
-    --jt-font-size: 13px;
-    --jt-font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-    font-family: var(--jt-font-family);
-    font-size: var(--jt-font-size);
-    line-height: var(--jt-line-height);
+    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
+    font-size: var(--jt-font-size, 13px);
+    line-height: var(--jt-line-height, 1.5);
     position: relative;
     background: var(--jt-bg, transparent);
     border-radius: var(--jt-border-radius, 4px);
@@ -813,7 +789,10 @@
       opacity: 1;
     }
     &:hover {
-      background: var(--jt-hover-bg);
+      background: var(
+        --jt-hover-bg,
+        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
+      );
     }
   }
   .clear-search {
@@ -837,7 +816,10 @@
   .divider {
     width: 1px;
     height: 16px;
-    background: var(--jt-header-border);
+    background: var(
+      --jt-header-border,
+      light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1))
+    );
     margin: 0 4px;
     align-self: center;
   }
@@ -868,14 +850,18 @@
   .path-breadcrumb,
   .pinned-panel {
     padding: 4px 8px;
-    background: var(--jt-header-bg);
-    border-bottom: 1px solid var(--jt-header-border);
+    background: var(
+      --jt-header-bg,
+      light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.05))
+    );
+    border-bottom: 1px solid
+      var(--jt-header-border, light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1)));
     font-size: 11px;
     overflow: hidden;
   }
   .copy-path-btn,
   .pinned-path {
-    color: var(--jt-key);
+    color: var(--jt-key, light-dark(#001080, #9cdcfe));
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -889,7 +875,10 @@
     padding: 2px 4px;
     border-radius: 2px;
     &:hover {
-      background: var(--jt-hover-bg);
+      background: var(
+        --jt-hover-bg,
+        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
+      );
     }
   }
   .json-tree-content {
@@ -998,14 +987,17 @@
     padding: 2px 4px;
     border-radius: 2px;
     &:hover {
-      background: var(--jt-hover-bg);
+      background: var(
+        --jt-hover-bg,
+        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
+      );
     }
   }
   .pinned-path {
     max-width: 200px;
   }
   .pinned-value {
-    color: var(--jt-preview);
+    color: var(--jt-preview, light-dark(#808080, #808080));
     font-style: italic;
     white-space: nowrap;
     overflow: hidden;

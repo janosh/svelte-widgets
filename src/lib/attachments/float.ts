@@ -30,14 +30,13 @@ export const auto_update_position = (
   view?.addEventListener(`resize`, schedule_update, { signal })
   visual_viewport?.addEventListener(`scroll`, schedule_update, { signal })
   visual_viewport?.addEventListener(`resize`, schedule_update, { signal })
-  const resize_observer =
-    typeof ResizeObserver === `undefined` ? null : new ResizeObserver(schedule_update)
-  resize_observer?.observe(floating)
-  if (anchor) resize_observer?.observe(anchor)
+  const resize_observer = new ResizeObserver(schedule_update)
+  resize_observer.observe(floating)
+  if (anchor) resize_observer.observe(anchor)
 
   return () => {
     listeners.abort()
-    resize_observer?.disconnect()
+    resize_observer.disconnect()
     if (frame_id !== undefined) animation_host.cancelAnimationFrame(frame_id)
   }
 }

@@ -121,9 +121,7 @@ const described_by_tokens = (element: Element): string[] =>
   (element.getAttribute(`aria-describedby`) ?? ``).split(/\s+/u).filter(Boolean)
 
 const first_nonempty = (...values: (string | null | undefined)[]): string | null =>
-  values.find(
-    (value): value is string => typeof value === `string` && value.length > 0,
-  ) ?? null
+  values.find((value): value is string => Boolean(value)) ?? null
 
 // A tooltip repeating its trigger's text adds nothing, unless the trigger or a descendant
 // overflows (ellipsis, clipping), where it reveals the hidden part
@@ -754,9 +752,7 @@ const registration_target = (
 export const tooltip =
   (options: TooltipOptions = {}): Attachment =>
   (node: Element): (() => void) | undefined => {
-    if (typeof document === `undefined` || !(node instanceof HTMLElement))
-      return undefined
-
+    if (!(node instanceof HTMLElement)) return undefined
     if (
       options.trigger !== undefined &&
       ![`hover-focus`, `hover`, `focus`].includes(options.trigger)
@@ -764,13 +760,13 @@ export const tooltip =
       throw new Error(
         `tooltip trigger must be hover-focus, hover, or focus; got ${options.trigger}`,
       )
+    if (options.disabled) return undefined
 
     const has_root_source =
       options.content !== undefined || node.matches(TOOLTIP_SOURCE_SELECTOR)
     const delegate = options.delegate ?? !has_root_source
     const delegate_selector =
       typeof delegate === `string` ? delegate : delegate ? TOOLTIP_SOURCE_SELECTOR : null
-    if (options.disabled) return undefined
     // Throws the native SyntaxError naming the selector here rather than on first hover
     if (delegate_selector) node.matches(delegate_selector)
 

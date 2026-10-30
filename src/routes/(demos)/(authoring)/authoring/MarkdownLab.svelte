@@ -199,10 +199,10 @@
       opacity: 0.5;
       cursor: wait;
     }
-  }
-  button:focus-visible {
-    outline: 2px solid #6987ef;
-    outline-offset: 2px;
+    &:focus-visible {
+      outline: 2px solid #6987ef;
+      outline-offset: 2px;
+    }
   }
   .summary {
     font-variant-numeric: tabular-nums;

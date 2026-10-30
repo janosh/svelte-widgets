@@ -43,3 +43,15 @@ test(`Dialog close() twice in one task closes once without throwing`, async ({
   expect({ close_events, errors }).toEqual({ close_events: 1, errors: [] })
   await expect(demo.getByText(`Last close: close`)).toBeVisible()
 })
+
+// Dialog's class-scoped rule outranked a bare `dialog.sheet` selector, so its margin: auto and
+// 2rem max-height inset the sheet from the top and bottom of its edge
+test(`a side Sheet spans its whole edge`, async ({ page }) => {
+  await page.goto(`/patterns`, { waitUntil: `networkidle` })
+  await page
+    .locator(`#patterns-sheet`)
+    .getByRole(`button`, { name: `Open settings` })
+    .click()
+  const box = await page.getByRole(`dialog`, { name: `Settings` }).boundingBox()
+  expect([box?.y, box?.height]).toEqual([0, page.viewportSize()?.height])
+})

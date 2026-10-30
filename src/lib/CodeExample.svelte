@@ -49,9 +49,9 @@
 
   const msg = $derived(merge_defaults(CODE_EXAMPLE_LABELS, labels))
 
-  let { id: meta_id, collapsible, repl, github, lang } = $derived(meta)
-  let code_above = $derived(meta.code_above ?? collapsible)
-  let external_links = $derived(
+  const { id: meta_id, collapsible, repl, github, lang } = $derived(meta)
+  const code_above = $derived(meta.code_above ?? collapsible)
+  const external_links = $derived(
     [
       { href: repl, icon: Svelte, title: `Svelte` },
       { href: github, icon: GitHub, title: `GitHub` },
@@ -59,24 +59,27 @@
   )
 </script>
 
-<nav>
-  {#each external_links as { href, icon, title } (title)}
-    <a target="_blank" rel="noreferrer" {title} {...link_props} {href}>
-      <Icon {icon} />
-    </a>
-  {/each}
-  {#if collapsible}
-    {@render title?.()}
-    <button
-      {...button_props}
-      type="button"
-      onclick={chain_handlers(() => (open = !open), button_props?.onclick)}
-    >
-      <Icon icon={open ? ChevronCollapse : ChevronExpand} />
-      {open ? msg.hide_code : msg.show_code}
-    </button>
-  {/if}
-</nav>
+{#if collapsible || external_links.length}
+  <nav>
+    {#each external_links as { href, icon, title } (title)}
+      <a target="_blank" rel="noreferrer" {title} {...link_props} {href}>
+        <Icon {icon} />
+      </a>
+    {/each}
+    {#if collapsible}
+      {@render title?.()}
+      <button
+        aria-expanded={open}
+        {...button_props}
+        type="button"
+        onclick={chain_handlers(() => (open = !open), button_props?.onclick)}
+      >
+        <Icon icon={open ? ChevronCollapse : ChevronExpand} />
+        {open ? msg.hide_code : msg.show_code}
+      </button>
+    {/if}
+  </nav>
+{/if}
 <!-- wrap in div with id for precise CSS selectors in playwright E2E tests -->
 <div
   {...rest}

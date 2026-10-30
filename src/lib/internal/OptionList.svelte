@@ -139,7 +139,7 @@
   untrack(validate_config)
   $effect(() => validate_config(groups.some(({ group }) => group !== null)))
   const viewport = $derived(
-    option_window(virtual_list, scroll_top, client_height || 400, rows.length),
+    option_window(virtual_list, scroll_top, client_height, rows.length),
   )
   const row_height = $derived(viewport?.row_height)
   const is_active_idx = create_key_selector(() => active_index)
@@ -213,13 +213,7 @@
       on_activate?.({ option: active_option, index: active_index })
       if (!auto_scroll || active_index === null) return
       if (viewport && list) {
-        scroll_top = option_row_scroll(
-          rows,
-          active_index,
-          viewport.item_height,
-          client_height || 400,
-          scroll_top,
-        )
+        scroll_top = option_row_scroll(rows, active_index, viewport, scroll_top)
         list.scrollTop = scroll_top
       }
       await tick()
@@ -253,7 +247,7 @@
     aria-activedescendant={active_index === null
       ? undefined
       : `${base_id}-opt-${active_index}`}
-    aria-busy={loading || loader.loading}
+    aria-busy={loading || loader.pending}
     onkeydown={(event) => {
       void handle_keydown(event) // internal logic first, then the forwarded handler
       onkeydown?.(
@@ -363,7 +357,7 @@
         {/if}
       {/snippet}
     </OptionRows>
-    {#if !matching_options.length && !loading && !loader.loading && !loader.error && no_matching_options_msg}<li
+    {#if !matching_options.length && !loading && !loader.pending && !loader.error && no_matching_options_msg}<li
         class="user-msg"
         role="option"
         aria-selected="false"

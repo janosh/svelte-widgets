@@ -622,16 +622,17 @@ test(`IME composition guard: Enter during composition is ignored`, async () => {
   expect(props.value).toEqual([`foo`])
 })
 
-// the remove button is unmounted by the removal it just ran, so focus fell to <body>
+// the remove button is unmounted by the removal it just ran, so focus fell to <body>.
+// Enter/Space on a focused <button> activate it natively, i.e. dispatch this click.
 test.each([
   [`a single chip's remove button`, `ul.selected button.remove`],
   [`the remove-all button`, `button.remove-all`],
-])(`keyboard removal via %s hands focus back to the input`, async (_case, selector) => {
+])(`removal via focused %s hands focus back to the input`, async (_case, selector) => {
   mount_multiselect({ options: [`a`, `b`, `c`], value: [`a`, `b`] })
   await tick()
   const button = doc_query<HTMLButtonElement>(selector)
   button.focus()
-  await press_sequence(button, `Enter`)
+  button.click()
   await tick() // the rescue runs after the flush that unmounts the button
 
   expect(document.activeElement).toBe(get_input())

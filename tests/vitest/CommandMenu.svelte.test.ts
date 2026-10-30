@@ -488,6 +488,24 @@ test.each([{ loading: true }, { no_matching_options_msg: `` }])(
   },
 )
 
+// a debounced remote search must not flash the empty-list row before its fetch starts
+test(`a pending remote search hides the empty-list row and marks the input busy`, async () => {
+  vi.useFakeTimers()
+  const fetch = vi.fn(async ({ search }: LoadOptionsParams) => ({
+    options: search ? make_actions(`Remote ${search}`) : [],
+    has_more: false,
+  }))
+  mount_menu({ open: true, actions: [], load_options: { fetch, debounce_ms: 100 } })
+  await flush_timers()
+  expect(document.querySelector(`dialog .user-msg`)).not.toBeNull()
+  await type_search(`x`)
+  expect(document.querySelector(`dialog .user-msg`)).toBeNull()
+  expect(menu_input().getAttribute(`aria-busy`)).toBe(`true`)
+  await flush_timers()
+  expect(option_labels()).toEqual([`Remote x`])
+  expect(menu_input().getAttribute(`aria-busy`)).toBe(`false`)
+})
+
 // arrow keys await auto-scroll, which must not delay the consumer's own handler, and
 // expanding a collapsed group shifts indices, which must settle before that handler runs
 test.each([
