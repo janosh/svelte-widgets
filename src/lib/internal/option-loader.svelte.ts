@@ -99,7 +99,8 @@ export function create_option_loader<T extends Option>(get: {
     loader.last_search = search
     loader.loading = true
     loader.error = null
-    let batch_length = 0
+    // whether this batch moved the next offset; one that didn't would only repeat itself
+    let advanced = false
     try {
       const result = await load_options_config.fetch({
         search,
@@ -108,12 +109,12 @@ export function create_option_loader<T extends Option>(get: {
         signal: abort_controller.signal,
       })
       if (request_id !== load_request_id) return // stale request, discard
-      batch_length = result.options.length - (result.replace ? offset : 0)
       loader.options =
         reset || result.replace ? result.options : [...loader.options, ...result.options]
-      // a later batch leaving the next offset where it was ends pagination, since the next
-      // request would repeat this one; a shorter replace snapshot still moves it back
-      loader.has_more = result.has_more && (reset || loader.options.length !== offset)
+      // an empty page still reporting has_more leaves the offset where it was; a shorter
+      // replace snapshot moves it back, which is progress
+      advanced = loader.options.length !== offset
+      loader.has_more = result.has_more && (reset || advanced)
       loader.error = result.error ?? null
     } catch (error) {
       // a consumer forwarding `signal` rejects with a self-inflicted AbortError on cancel,
@@ -134,12 +135,13 @@ export function create_option_loader<T extends Option>(get: {
       }
     }
     // auto-fill: a batch that doesn't overflow the dropdown yields no scrollbar, so onscroll
-    // can never fire — keep loading until scrollable or done. An empty batch stops it, since
-    // the next request would be identical (and it keeps offset=0 meaning "reset").
+    // can never fire — keep loading until scrollable or done. A batch that didn't move the
+    // offset stops it, since the next request would be identical (and an empty first batch
+    // keeps offset=0 meaning "reset").
     const live_list = () =>
       request_id === load_request_id && get.open() ? get.element() : undefined
     if (
-      batch_length <= 0 ||
+      !advanced ||
       loader.error ||
       !loader.has_more ||
       auto_fill_count >= MAX_AUTO_FILL_ROUNDS ||

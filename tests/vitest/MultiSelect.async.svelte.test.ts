@@ -325,6 +325,21 @@ describe(`load_options feature`, () => {
     expect(offsets).toEqual(expected)
   })
 
+  // a shorter replace snapshot moves the offset back, so auto-fill keeps loading from there
+  test(`auto-fill continues after a shorter replace snapshot`, async () => {
+    const offsets: number[] = []
+    const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
+      offsets.push(offset)
+      if (offset === 0) return { options: [`a`, `b`, `c`, `d`, `e`], has_more: true }
+      if (offset === 5)
+        return { options: [`a`, `b`, `c`, `d`], has_more: true, replace: true }
+      return { options: [`f`], has_more: false }
+    })
+    await mount_autofill(load_options, 100)
+    await flush_ticks(20)
+    expect(offsets).toEqual([0, 5, 4])
+  })
+
   test(`stale fetch result discarded when search changes during load`, async () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
