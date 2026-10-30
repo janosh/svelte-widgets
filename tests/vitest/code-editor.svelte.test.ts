@@ -174,6 +174,32 @@ const fill_search = async (value: string, label = `Find`): Promise<HTMLInputElem
   await flush_async()
   return input
 }
+// both matches stay on screen, so the reused rows must still follow the current match
+test(`moving between visible matches moves the highlight, re-tokenizing only changed lines`, async () => {
+  const { textarea, model } = await mount_editor(`foo one\nfoo two\nthree`)
+  textarea.focus()
+  press_key(textarea, `f`, { ctrlKey: true })
+  await flush_async()
+  const input = await fill_search(`foo`)
+  const current_line = () =>
+    [...document.querySelectorAll(`.line`)].findIndex((line) =>
+      line.querySelector(`.editor-search-match.current`),
+    )
+  expect(current_line()).toBe(0)
+  token_renders.count = 0
+  press_key(input, `Enter`)
+  await flush_async()
+  expect(document.querySelectorAll(`.editor-search-match.current`)).toHaveLength(1)
+  expect(current_line()).toBe(1)
+  expect(token_renders.count).toBe(2) // the lines losing and gaining the current match
+  // an edit while searching re-tokenizes its own line: the others keep their own matches
+  token_renders.count = 0
+  model.transact([{ from: model.line(2).from, to: model.line(2).from, insert: `x` }])
+  await flush_async()
+  expect(model.line(2).text).toBe(`xthree`)
+  expect(token_renders.count).toBe(1)
+})
+
 test(`search navigates offscreen matches, refreshes after edits, and preserves focus on Escape`, async () => {
   const lines = Array.from({ length: 2000 }, (_unused, line_idx) =>
     [0, 999, 1999].includes(line_idx) ? `😀foo ${line_idx}` : `line ${line_idx}`,

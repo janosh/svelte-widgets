@@ -300,10 +300,25 @@
       return pieces
     })
   }
+  // A line's search matches relative to its start, the current one starred: exactly what
+  // search_tokens renders into it, independent of edits elsewhere and of other matches
+  const line_matches_key = (from: number, length: number): string => {
+    let key = ``
+    let idx = lower_bound(search_matches.length, (pos) => search_matches[pos].to > from)
+    for (
+      ;
+      idx < search_matches.length && search_matches[idx].from < from + length;
+      idx++
+    ) {
+      const match = search_matches[idx]
+      key += `${match.from - from}:${match.to - from}${idx === current_match ? `*` : ``},`
+    }
+    return key
+  }
   type VisibleRow = { line_idx: number; top: number; tokens: RenderedToken[] }
   // Each row with the inputs it was built from: a row whose line text, highlight spans and
-  // (while searching) offset and matches are unchanged is reused with its tokens, so a
-  // keystroke re-tokenizes and re-renders only its own line, not every visible one
+  // own search matches are unchanged is reused with its tokens, so a keystroke (searching
+  // or not) re-tokenizes and re-renders only its own line, not every visible one
   let built_rows = new Map<number, { inputs: unknown[]; row: VisibleRow }>()
   const NO_SPANS: never[] = []
   const visible_rows = $derived.by(() => {
@@ -314,13 +329,14 @@
       const line_idx = window_start + offset
       const line = model.line(line_idx)
       const spans = token_cache.get(line_idx)?.spans ?? NO_SPANS
-      // search_tokens shifts matches by the line's offset, which edits above it change
-      const search_inputs = search_matches.length ? [line.from, search_matches] : []
-      const inputs = [line.text, spans, line_height, ...search_inputs]
+      const inputs = [
+        line.text,
+        spans,
+        line_height,
+        line_matches_key(line.from, line.text.length),
+      ]
       const previous = built_rows.get(line_idx)
-      const same =
-        previous?.inputs.length === inputs.length &&
-        previous.inputs.every((input, idx) => input === inputs[idx])
+      const same = previous?.inputs.every((input, idx) => input === inputs[idx])
       const row = same
         ? previous.row
         : {

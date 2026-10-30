@@ -228,14 +228,15 @@
   // per-key, so a scroll that moves the active heading (or the subheadings it unfolds)
   // re-runs only the rows it changes, not every row reading the active id or visibility array
   const is_active_id = create_key_selector(() => active_heading?.id)
-  const is_collapsed_id = create_key_selector(
-    () =>
-      new Set(
-        collapse_enabled
-          ? heading_data.filter((_, idx) => !heading_visibility[idx]).map(({ id }) => id)
-          : [],
-      ),
+  // a derived: the selector reads its source on every row lookup
+  const collapsed_ids = $derived(
+    new Set(
+      collapse_enabled
+        ? heading_data.filter((_, idx) => !heading_visibility[idx]).map(({ id }) => id)
+        : [],
+    ),
   )
+  const is_collapsed_id = create_key_selector(() => collapsed_ids)
 
   $effect(() => {
     desktop = window_width > breakpoint
@@ -398,7 +399,11 @@
             data.level === discovered_items[idx]?.level &&
             data.title === discovered_items[idx]?.title,
         )
-      if (unchanged) return
+      if (unchanged) {
+        // a restyle can hide the active heading while leaving the heading set as it was
+        if (active_heading && !active_heading.checkVisibility()) set_active_heading()
+        return
+      }
       headings_initialized = true
 
       headings = heading_entries.map(({ heading }) => heading)
@@ -477,8 +482,13 @@
 
   function set_active_heading() {
     // during a programmatic scroll keep the target active until scrollend, so intermediate
-    // headings aren't highlighted on the way
-    if (scroll_target && !headings.includes(scroll_target)) clear_scroll_target()
+    // headings aren't highlighted on the way. A target that stopped rendering (a class hid it
+    // mid-scroll) can't stay active.
+    if (
+      scroll_target &&
+      (!headings.includes(scroll_target) || !scroll_target.checkVisibility())
+    )
+      clear_scroll_target()
     // headings' tops count from the viewport; a pane's own top edge is its zero
     const root_top = scroll_root?.getBoundingClientRect().top ?? 0
     if (scroll_target) {

@@ -702,6 +702,56 @@ describe(`Toc`, () => {
     expect(id_reads).toBe(6)
   })
 
+  // a class that hides the active heading leaves the heading set as it was
+  test(`a restyle hiding the active heading activates the last visible one passed`, async () => {
+    set_headings(3)
+    mock_active_heading(`heading-2`)
+    await mount_toc()
+    expect(active_text()).toBe(`Heading 2`)
+    const style = document.createElement(`style`)
+    style.textContent = `.gone { display: none }`
+    document.head.append(style)
+    onTestFinished(() => style.remove())
+    const hide = async (id: string) => {
+      doc_query(`#${id}`).classList.add(`gone`)
+      await new Promise((resolve) => {
+        setTimeout(resolve, 0)
+      })
+      await tick()
+    }
+    await hide(`heading-2`)
+    expect(active_text()).toBe(`Heading 1`)
+    // a clicked heading stays active while scrolling there, unless it stops rendering
+    spy_scroll_into_view()
+    await click(toc_lis()[2])
+    expect(active_text()).toBe(`Heading 3`)
+    await hide(`heading-3`)
+    expect(active_text()).toBe(`Heading 1`)
+  })
+
+  // the collapsed-id set must be built once per change, not once per row lookup (O(N^2)):
+  // id reads at mount grow linearly with the heading count
+  test(`mounting a collapsing Toc reads heading ids in linear time`, async () => {
+    const mount_reads = async (count: number) => {
+      let id_reads = 0
+      const items = Array.from({ length: count }, (_, idx) => ({
+        get id() {
+          id_reads++
+          return `heading-${idx + 1}`
+        },
+        level: 2 + (idx % 2),
+        title: `Heading ${idx + 1}`,
+      }))
+      set_headings(count)
+      const unmount = await mount_toc({ items, collapse_subheadings: `h3` })
+      await unmount()
+      return id_reads
+    }
+    const [reads_60, reads_120] = [await mount_reads(60), await mount_reads(120)]
+    // linear: 2.0x (899 -> 1799); building the set per lookup measured 3.0x (1740 -> 5280)
+    expect(reads_120 / reads_60).toBeLessThan(2.5)
+  })
+
   test.each([`Enter`, ` `])(
     `desktop arrow keys move focus + selection and %j follows the real link`,
     async (key) => {

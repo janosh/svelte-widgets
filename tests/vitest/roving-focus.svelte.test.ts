@@ -262,7 +262,7 @@ test(`nested groups with duplicate keys keep independent tab stops and navigatio
 // A chart restyles thousands of nodes per update: only mutations a mark is part of re-check
 // eligibility, whose computed-style walk forces a style recalc mid-update
 // more marks than a move touches, so re-running every mark's tab stop would show
-test(`a focus move re-runs only the tab stops of the two marks it moves between`, () => {
+test(`a focus move re-runs only the tab stops of the two marks it moves between`, async () => {
   const container = document.createElement(`div`)
   const marks = Array.from({ length: 8 }, (_, idx) => {
     const mark = document.createElement(`button`)
@@ -299,6 +299,11 @@ test(`a focus move re-runs only the tab stops of the two marks it moves between`
   expect(document.activeElement).toBe(marks[1])
   expect(marks.map((mark) => mark.tabIndex)).toEqual([-1, 0, -1, -1, -1, -1, -1, -1])
   expect(runs).toBe(2)
+  // a new first focusable mark changes the fallback, not the focused tab stop: no mark re-runs
+  runs = 0
+  marks[0].disabled = true
+  await settle_dom()
+  expect(runs).toBe(0)
 })
 
 // MutationObserver callbacks, then the re-measure they schedule

@@ -8,6 +8,7 @@ type Signal = { subscribe: () => void; notify?: () => void }
 // N rows per change. A key's signal lives while a reader subscribes. Call during init.
 // For one key per reader (a row): an aggregate over many keys (all selected?) should read
 // the source directly, as a subscription per key costs more than the lookups it saves.
+// `get_current` runs on every read, so it should return state or a derived, not build one.
 export const create_key_selector = <Key>(get_current: () => Key | ReadonlySet<Key>) => {
   const signals = new Map<Key, Signal>()
   const as_set = (current: Key | ReadonlySet<Key>) =>

@@ -133,16 +133,14 @@ export function create_roving_focus(opts: {
 
   // per-key, so a focus move re-runs only the two marks it moves the tab stop between
   const is_tab_stop = create_key_selector(() => focused_key ?? fallback_key)
+  // flips once: a later fallback change (another first focusable mark) re-runs no reader
+  const measured = $derived(fallback_key !== undefined)
 
   return {
     // Until the first measurement the first key asked claims a provisional tab stop. After it
     // `pass` is never read, so a changed item list (a chart's pan frame) re-runs no item.
     tabindex: (key) =>
-      (
-        fallback_key === undefined
-          ? key === (focused_key ?? (pass.fallback ??= key))
-          : is_tab_stop(key)
-      )
+      (measured ? is_tab_stop(key) : key === (focused_key ?? (pass.fallback ??= key)))
         ? 0
         : -1,
     focusin: (event) => {
