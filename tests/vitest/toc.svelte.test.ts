@@ -703,29 +703,34 @@ describe(`Toc`, () => {
   })
 
   // a class that hides the active heading leaves the heading set as it was
-  test(`a restyle hiding the active heading activates the last visible one passed`, async () => {
+  test(`restyles hiding or revealing headings move the active one to a shown heading`, async () => {
     set_headings(3)
     mock_active_heading(`heading-2`)
     await mount_toc()
     expect(active_text()).toBe(`Heading 2`)
     const style = document.createElement(`style`)
-    style.textContent = `.gone { display: none }`
+    style.textContent = `.gone { display: none } .faded { visibility: hidden }`
     document.head.append(style)
     onTestFinished(() => style.remove())
-    const hide = async (id: string) => {
-      doc_query(`#${id}`).classList.add(`gone`)
+    const restyle = async (id: string, css_class: string, on = true) => {
+      doc_query(`#${id}`).classList.toggle(css_class, on)
       await new Promise((resolve) => {
         setTimeout(resolve, 0)
       })
       await tick()
     }
-    await hide(`heading-2`)
+    await restyle(`heading-2`, `gone`)
     expect(active_text()).toBe(`Heading 1`)
-    // a clicked heading stays active while scrolling there, unless it stops rendering
+    // a clicked heading stays active while scrolling there, unless it stops showing
     spy_scroll_into_view()
     await click(toc_lis()[2])
     expect(active_text()).toBe(`Heading 3`)
-    await hide(`heading-3`)
+    await restyle(`heading-3`, `faded`) // keeps its box, shows nothing
+    expect(active_text()).toBe(`Heading 1`)
+    // with every heading hidden none is active, until one shows again
+    await restyle(`heading-1`, `faded`)
+    expect(document.querySelector(`aside.toc li.active`)).toBeNull()
+    await restyle(`heading-1`, `faded`, false)
     expect(active_text()).toBe(`Heading 1`)
   })
 

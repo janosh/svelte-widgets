@@ -400,8 +400,9 @@
             data.title === discovered_items[idx]?.title,
         )
       if (unchanged) {
-        // a restyle can hide the active heading while leaving the heading set as it was
-        if (active_heading && !active_heading.checkVisibility()) set_active_heading()
+        // a restyle can hide the active heading (or reveal one when none was shown) while
+        // leaving the heading set as it was
+        if (!active_heading || !is_shown(active_heading)) set_active_heading()
         return
       }
       headings_initialized = true
@@ -480,14 +481,16 @@
     clearTimeout(scroll_target_timeout)
   })
 
+  // Rendered and visible: `display: none` and content-visibility drop a heading's box, and
+  // `visibility: hidden` keeps the box but shows nothing
+  const is_shown = (heading: HTMLElement): boolean =>
+    heading.checkVisibility({ visibilityProperty: true })
+
   function set_active_heading() {
     // during a programmatic scroll keep the target active until scrollend, so intermediate
     // headings aren't highlighted on the way. A target that stopped rendering (a class hid it
     // mid-scroll) can't stay active.
-    if (
-      scroll_target &&
-      (!headings.includes(scroll_target) || !scroll_target.checkVisibility())
-    )
+    if (scroll_target && (!headings.includes(scroll_target) || !is_shown(scroll_target)))
       clear_scroll_target()
     // headings' tops count from the viewport; a pane's own top edge is its zero
     const root_top = scroll_root?.getBoundingClientRect().top ?? 0
@@ -511,12 +514,12 @@
     let idx = headings.length
     while (idx--) {
       const top = headings[idx].getBoundingClientRect().top - root_top
-      if (top < active_heading_scroll_offset && headings[idx].checkVisibility()) {
+      if (top < active_heading_scroll_offset && is_shown(headings[idx])) {
         active_heading = headings[idx]
         return
       }
     }
-    active_heading = headings.find((heading) => heading.checkVisibility()) ?? null
+    active_heading = headings.find(is_shown) ?? null
   }
 
   function check_toc_overlap() {

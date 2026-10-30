@@ -336,8 +336,7 @@
         line_matches_key(line.from, line.text.length),
       ]
       const previous = built_rows.get(line_idx)
-      const same = previous?.inputs.every((input, idx) => input === inputs[idx])
-      const row = same
+      const row = previous?.inputs.every((input, idx) => input === inputs[idx])
         ? previous.row
         : {
             line_idx,
