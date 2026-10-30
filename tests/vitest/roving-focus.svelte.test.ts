@@ -301,31 +301,70 @@ test(`a focus move re-runs only the tab stops of the two marks it moves between`
   expect(runs).toBe(2)
 })
 
-test(`restyling nodes that hold no mark leaves the tab stops unchecked`, async () => {
+// MutationObserver callbacks, then the re-measure they schedule
+const settle_dom = async () => {
+  await new Promise((resolve) => {
+    setTimeout(resolve, 0)
+  })
+  flushSync()
+}
+
+test(`restyling nodes with no mark nearby leaves the tab stops unchecked`, async () => {
   const { container, marks, tabstops } = setup()
-  const other = document.createElement(`span`)
-  container.append(other)
+  // a chart axis: its own group, no mark among its nodes or their siblings
+  const axis = document.createElement(`div`)
+  const tick_label = document.createElement(`span`)
+  axis.append(tick_label)
+  container.append(axis)
+  const sibling = document.createElement(`span`)
+  marks[0].before(sibling)
+  await settle_dom()
   const computed_style = vi.spyOn(window, `getComputedStyle`)
   onTestFinished(() => computed_style.mockRestore())
-  const settle = async () => {
-    // MutationObserver callbacks
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0)
-    })
-    flushSync()
-  }
-  other.classList.add(`restyled`)
-  other.style.color = `red`
-  await settle()
+  tick_label.classList.add(`restyled`)
+  tick_label.style.color = `red`
+  await settle_dom()
   expect(computed_style).not.toHaveBeenCalled()
-  marks[1].classList.add(`restyled`)
-  await settle()
+  // a mark's sibling can restyle it through sibling CSS (`.hide + button`)
+  sibling.classList.add(`hide`)
+  await settle_dom()
   expect(computed_style).toHaveBeenCalled()
-  expect(tabstops().slice(0, 3)).toEqual([`0`, `-1`, `-1`])
+  computed_style.mockClear()
+  marks[1].classList.add(`restyled`)
+  await settle_dom()
+  expect(computed_style).toHaveBeenCalled()
+  expect(tabstops().slice(1, 4)).toEqual([`0`, `-1`, `-1`])
   // the tab-stop mark stops being a mark (no item-list change): the next mark takes over
   marks[0].removeAttribute(ROVING_ATTR)
-  await settle()
-  expect(tabstops().slice(1, 3)).toEqual([`0`, `-1`])
+  await settle_dom()
+  expect(tabstops().slice(2, 4)).toEqual([`0`, `-1`])
+})
+
+// a disabled fieldset's first legend stays enabled, so inserting one changes which nested
+// marks can take focus without any mark being added or restyled
+test(`a legend inserted into a fieldset holding marks re-checks the tab stops`, async () => {
+  const container = document.createElement(`div`)
+  const fieldset = document.createElement(`fieldset`)
+  const group = document.createElement(`div`)
+  const mark = document.createElement(`button`)
+  mark.setAttribute(ROVING_ATTR, `alpha`)
+  group.append(mark)
+  fieldset.append(group)
+  container.append(fieldset)
+  document.body.append(container)
+  onTestFinished(() => container.remove())
+  onTestFinished(
+    $effect.root(() => {
+      const focus = create_roving_focus({ container: () => container, items: () => 1 })
+      $effect(() => void focus.tabindex(`alpha`))
+    }),
+  )
+  await settle_dom()
+  const computed_style = vi.spyOn(window, `getComputedStyle`)
+  onTestFinished(() => computed_style.mockRestore())
+  fieldset.prepend(document.createElement(`legend`))
+  await settle_dom()
+  expect(computed_style).toHaveBeenCalled()
 })
 
 test(`a changed item list re-runs no measured tab stop`, () => {

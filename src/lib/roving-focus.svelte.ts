@@ -56,24 +56,35 @@ export function create_roving_focus(opts: {
     )
   // Whether a node is a mark or holds one: only then can its mutation change which marks
   // exist or can take focus (a chart restyles thousands of nodes per update)
-  const touches_marks = (node: Node): boolean =>
+  const touches_marks = (node: Node | null): boolean =>
     node instanceof Element &&
     (node.matches(`[${ROVING_ATTR}]`) || node.querySelector(`[${ROVING_ATTR}]`) !== null)
+  const has_mark_child = (node: Node | null): boolean =>
+    node instanceof Element && node.querySelector(`:scope > [${ROVING_ATTR}]`) !== null
 
   $effect(() => {
     const container = opts.container()
     if (!container) return undefined
     groups.add(container)
-    // Batch DOM changes in one observer callback, ignoring those no mark is part of. The
-    // container's ancestors (observed for their own attributes) always count, as does a node
-    // gaining or losing the mark attribute (once lost, it no longer looks like a mark).
+    // Batch DOM changes in one observer callback, ignoring those no mark is near. Always
+    // relevant: the container's ancestors (observed for their own attributes), a node gaining
+    // or losing the mark attribute (once lost, it no longer looks like a mark), a mark's
+    // sibling (sibling CSS like `.hide + button` restyles it) and child-list changes beside
+    // marks or inside a fieldset/details holding them (a first legend or summary decides
+    // which of them are disabled). Nodes with no mark nearby (a chart's axes) don't count.
     const observer = new MutationObserver((records) => {
       const relevant = records.some(
         ({ type, target, attributeName, addedNodes, removedNodes }) =>
           !container.contains(target) ||
           (type === `attributes`
-            ? attributeName === ROVING_ATTR || touches_marks(target)
-            : [...addedNodes, ...removedNodes].some(touches_marks)),
+            ? attributeName === ROVING_ATTR ||
+              touches_marks(target) ||
+              has_mark_child(target.parentNode)
+            : [...addedNodes, ...removedNodes].some(touches_marks) ||
+              has_mark_child(target) ||
+              (target instanceof Element &&
+                target.matches(`fieldset, details`) &&
+                touches_marks(target))),
       )
       if (relevant) dom_revision++
     })
