@@ -111,8 +111,9 @@ export function create_option_loader<T extends Option>(get: {
       batch_length = result.options.length - (result.replace ? offset : 0)
       loader.options =
         reset || result.replace ? result.options : [...loader.options, ...result.options]
-      // a later batch adding nothing ends pagination: the next request would be identical
-      loader.has_more = result.has_more && (reset || batch_length > 0)
+      // a later batch leaving the next offset where it was ends pagination, since the next
+      // request would repeat this one; a shorter replace snapshot still moves it back
+      loader.has_more = result.has_more && (reset || loader.options.length !== offset)
       loader.error = result.error ?? null
     } catch (error) {
       // a consumer forwarding `signal` rejects with a self-inflicted AbortError on cancel,

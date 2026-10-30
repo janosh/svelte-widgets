@@ -302,13 +302,19 @@ describe(`load_options feature`, () => {
     expect(offsets).toEqual([0])
   })
 
-  // a later page that comes back empty while still reporting has_more makes no progress:
-  // pagination ends instead of re-requesting the same offset on every scroll
-  test(`scroll pagination stops after an empty later batch`, async () => {
+  // A later batch that leaves the next offset unchanged (an empty page still reporting
+  // has_more) ends pagination instead of re-requesting it on every scroll, while a shorter
+  // replace snapshot moves the offset back and keeps paging.
+  test.each([
+    [`stops after an empty later batch`, [], undefined, [0, 5]],
+    [`continues after a shorter replace snapshot`, [`a`, `b`, `c`, `d`], true, [0, 5, 4]],
+  ] as const)(`scroll pagination %s`, async (_desc, second_page, replace, expected) => {
     const offsets: number[] = []
     const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
       offsets.push(offset)
-      return { options: offset ? [] : [`a`, `b`, `c`, `d`, `e`], has_more: true }
+      if (offset === 0) return { options: [`a`, `b`, `c`, `d`, `e`], has_more: true }
+      if (offset === 5) return { options: [...second_page], has_more: true, replace }
+      return { options: [] as string[], has_more: false }
     })
     await mount_autofill(load_options, 500)
     await flush_ticks(10)
@@ -316,7 +322,7 @@ describe(`load_options feature`, () => {
       mock_scroll_near_bottom(doc_query(`ul.options`))
       await flush_ticks(5)
     }
-    expect(offsets).toEqual([0, 5])
+    expect(offsets).toEqual(expected)
   })
 
   test(`stale fetch result discarded when search changes during load`, async () => {
