@@ -126,18 +126,18 @@ export const get_value_at_path = (
 export const has_path = (root: unknown, path: string, root_label?: string): boolean =>
   resolve_path(root, path, root_label) !== null
 
-// Whether an expandable node renders collapsed: an explicit collapse (true) or expand (false)
-// wins, then the depth fold level, then the array/object size thresholds
+// Whether an expandable node renders collapsed: an explicit collapse, then an explicit
+// expand, wins over the depth fold level, then the array/object size thresholds
 export function is_folded(
   value: unknown,
   depth: number,
-  explicit: boolean | undefined,
+  { collapsed, expanded }: { collapsed: boolean; expanded: boolean },
   settings: Pick<
     JsonTreeContext[`settings`],
     `default_fold_level` | `auto_fold_arrays` | `auto_fold_objects`
   >,
 ): boolean {
-  if (explicit !== undefined) return explicit
+  if (collapsed || expanded) return collapsed
   if (depth >= settings.default_fold_level) return true
   const type = get_value_type(value)
   if (type === `array`) return get_child_count(value) > settings.auto_fold_arrays

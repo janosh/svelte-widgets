@@ -43,7 +43,7 @@
       is_folded(
         value,
         depth,
-        ctx.has_collapsed(path) || (ctx.has_force_expanded(path) ? false : undefined),
+        { collapsed: ctx.has_collapsed(path), expanded: ctx.has_force_expanded(path) },
         ctx.settings,
       ),
   )

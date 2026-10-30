@@ -256,7 +256,7 @@
       is_folded(
         value_at(path),
         relative_path_segments(path, root_label).length,
-        collapsed_paths.has(path) || (force_expanded.has(path) ? false : undefined),
+        { collapsed: collapsed_paths.has(path), expanded: force_expanded.has(path) },
         settings,
       ),
     )
