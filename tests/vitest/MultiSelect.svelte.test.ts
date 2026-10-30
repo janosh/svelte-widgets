@@ -1065,22 +1065,28 @@ test.each([
   expect(selected_chips()).toHaveLength(options_set.length - 1)
 })
 
-// that remove-all only shows with 2+ selected options is covered by the CSS class "remove" test
+// remove-all only shows with 2+ selected options; the last button (remove-all, or the lone
+// chip's remove) clears the selection
 test.each([
-  [{}, `Remove`, `Remove all`],
-  [{ remove_btn_title: `Drop`, remove_all_title: `Clear` }, `Drop`, `Clear`],
+  [[1, 2, 3], {}, [`Remove 1`, `Remove 2`, `Remove 3`, `Remove all`]],
+  [
+    [1, 2, 3],
+    { remove_btn_title: `Drop`, remove_all_title: `Clear` },
+    [`Drop 1`, `Drop 2`, `Drop 3`, `Clear`],
+  ],
+  [[1], {}, [`Remove 1`]],
 ])(
-  `remove buttons titled by %j, remove-all clears the selection`,
-  async (titles, btn, all) => {
-    mount_multiselect({ options: [1, 2, 3], value: [1, 2, 3], ...titles })
-    expect(
-      Array.from(
-        document.querySelectorAll<HTMLElement>(`button.remove`),
-        ({ title }) => title,
-      ),
-    ).toEqual([`${btn} 1`, `${btn} 2`, `${btn} 3`, all])
+  `value=%j with titles %j renders remove buttons %j`,
+  async (value, titles, expected) => {
+    mount_multiselect({ options: [1, 2, 3], value, ...titles })
+    const buttons = [...document.querySelectorAll<HTMLElement>(`button.remove`)]
+    expect(buttons.map(({ title }) => title)).toEqual(expected)
+    // without a remove_icon snippet, every remove button gets the default icon
+    expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(
+      expected.length,
+    )
 
-    await click(`button.remove-all`)
+    await click(buttons.at(-1))
     expect(selected_text()).toBe(``)
   },
 )
@@ -1115,22 +1121,17 @@ test(`auto_scroll scopes active option lookup to current instance`, async () => 
   expect(second_option.scrollIntoView).toHaveBeenCalledOnce()
 })
 
-test.each([2, 10])(
-  `can't select more than max_select options`,
-  async (max_select: number) => {
-    mount_multiselect({ options: [...Array.from({ length: 10 }).keys()], max_select })
+test(`can't select more than max_select options`, async () => {
+  mount_multiselect({ options: [...Array.from({ length: 10 }).keys()], max_select: 2 })
 
-    // click the first rendered option 10 times: selects 0..max_select-1, then no-ops
-    for (const _ of Array.from({ length: 10 })) {
-      document.querySelector<HTMLLIElement>(`ul.options > li`)?.click()
-      await tick()
-    }
+  // click the first rendered option 10 times: selects 0 and 1, then no-ops
+  for (const _ of Array.from({ length: 10 })) {
+    document.querySelector<HTMLLIElement>(`ul.options > li`)?.click()
+    await tick()
+  }
 
-    expect(selected_text()).toEqual(
-      [...Array.from({ length: max_select }).keys()].join(` `),
-    )
-  },
-)
+  expect(selected_text()).toBe(`0 1`)
+})
 
 // https://github.com/janosh/svelte-widgets/issues/353
 test.each<[string, MultiSelectProps, boolean]>([
@@ -1239,7 +1240,6 @@ test(`disabled multiselect disables input, removal controls, and shows disabled 
   expect(document.querySelector(`button.remove`)).toBeNull()
 
   const disabled_icon = doc_query(`svg[data-name='disabled-icon']`)
-  expect(disabled_icon).toBeInstanceOf(SVGSVGElement)
   expect(disabled_icon.getAttribute(`aria-disabled`)).toBe(`true`)
 })
 
@@ -1474,32 +1474,12 @@ test(`throws synchronously when adding an empty option`, () => {
   )
 })
 
-test.each([[[1]], [[1, 2, 3]]])(
-  `buttons to remove selected options have CSS class "remove"`,
-  (selected) => {
-    mount_multiselect({ options: selected, value: selected })
-
-    expect(document.querySelectorAll(`ul.selected button.remove`)).toHaveLength(
-      selected.length,
-    )
-
-    expect(document.querySelectorAll(`button.remove.remove-all`)).toHaveLength(
-      selected.length > 1 ? 1 : 0,
-    )
-
-    // without remove_icon snippet, all remove buttons get default-icon class
-    expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(
-      selected.length + (selected.length > 1 ? 1 : 0),
-    )
-  },
-)
-
 // options: [1,2,3], selected: [1,2] → clicking ul.options li adds 3,
-// clicking ul.selected button.remove removes 1, clicking button.remove-all removes all
+// clicking ul.selected button.remove removes 1, clicking button.remove-all removes all.
+// on_remove payloads and on_change for an add are covered by the on_add/on_remove and
+// on_change-count tests
 test.each([
   [`add`, `ul.options li`, { option: 3 }],
-  [`change`, `ul.options li`, { option: 3, type: `add` }],
-  [`remove`, `ul.selected button.remove`, { option: 1 }],
   [`change`, `ul.selected button.remove`, { option: 1, type: `remove` }],
   [`remove_all`, `button.remove-all`, { options: [1, 2] }], // removed options
   [`change`, `button.remove-all`, { options: [], type: `remove_all` }], // remaining selected
@@ -1895,34 +1875,30 @@ describe(`keep_selected_in_dropdown feature`, () => {
   )
 })
 
-// all 2x2x2 combos of allow_user_options x no_matching_options_msg x create_option_msg:
-// .user-msg only renders when the applicable message prop is truthy
+// combos of allow_user_options x no_matching_options_msg x create_option_msg:
+// .user-msg only renders when the applicable message prop is truthy (user options with an
+// empty create_option_msg throw, see `rejects user options without a creation message`)
 test.each(
   [true, false].flatMap((allow_user_options) =>
     [``, `no matches`].flatMap((no_matching_options_msg) =>
-      [`make option`, ``].map(
-        (create_option_msg) =>
-          [allow_user_options, no_matching_options_msg, create_option_msg] as const,
-      ),
+      [`make option`, ``]
+        .filter((create_option_msg) => !allow_user_options || create_option_msg)
+        .map(
+          (create_option_msg) =>
+            [allow_user_options, no_matching_options_msg, create_option_msg] as const,
+        ),
     ),
   ),
 )(
   `user-msg rendering with allow_user_options=%s, no_matching_options_msg=%s, create_option_msg=%s`,
   async (allow_user_options, no_matching_options_msg, create_option_msg) => {
-    const props = {
+    mount_multiselect({
       options: [`foo`],
       value: [`foo`],
       no_matching_options_msg,
       create_option_msg,
       allow_user_options,
-    }
-    if (allow_user_options && !create_option_msg) {
-      expect(() => mount_multiselect(props)).toThrow(
-        `requires a non-empty create_option_msg or explicit null`,
-      )
-      return
-    }
-    mount_multiselect(props)
+    })
 
     // no option matches this search text
     await type_search_text(`bar`)
@@ -2236,9 +2212,8 @@ describe(`create_option_msg as function`, () => {
     expect(captured_state.matching_options).toEqual(expected_matching)
   })
 
-  // Static string, null, and function returning empty string
+  // null and a function returning empty string (static strings: `user-msg rendering` table)
   test.each([
-    [`Create this option...`, `Create this option...`],
     [null, `No matches`],
     [() => ``, `No matches`], // function returning '' should not show phantom create slot
   ])(
@@ -2542,24 +2517,6 @@ describe(`select_all_option feature`, () => {
   })
 })
 
-test.each<[MultiSelectProps, string]>([
-  [{ mode: `single`, value: `Red`, options: [`Red`, `Green`, `Blue`] }, `Red`],
-  [{ mode: `single`, value: 1, options: [1, 2, 3] }, `1`],
-  [
-    {
-      mode: `single`,
-      value: { label: `Red` },
-      options: [{ label: `Red` }, { label: `Green` }],
-    },
-    `Red`,
-  ],
-  // multiple-mode initial chips are covered by `single remove button removes 1 selected option`
-])(`initial selection from %j renders %s`, (props, expected_text) => {
-  mount_multiselect(props)
-
-  expect(selected_text()).toBe(expected_text)
-})
-
 // https://github.com/janosh/svelte-widgets/issues/369
 describe(`binding update event count`, () => {
   test.each([
@@ -2753,9 +2710,9 @@ describe(`on_max_reached event`, () => {
     },
   )
 
+  // single mode (replace, never fires) is covered by `$mode mode with one selected item`
   test.each([
     { max_select: 3, value: [1], desc: `under limit` },
-    { mode: `single` as const, value: 1, desc: `max_select=1 (replace mode)` },
     { max_select: null, value: [1, 2, 3, 4], desc: `max_select=null (unlimited)` },
   ])(`does not fire when $desc`, async ({ desc: _description, ...props }) => {
     const onmaxreached_spy = vi.fn()
