@@ -57,10 +57,11 @@ Without `href`, items render as buttons and `on_navigate(item, index, event)` ru
   import { Breadcrumbs, Icon } from 'svelte-widgets'
   import { ChevronRight } from 'svelte-widgets/icons'
 
+  // hash links to this page's own headings: the docs prerender fails on a missing target
   const items = [
-    { label: `Materials`, href: `#materials`, count: 1204 },
-    { label: `Oxides`, href: `#oxides`, count: 312 },
-    { label: `Perovskites with a remarkably long name`, href: `#perovskites`, count: 41 },
+    { label: `Materials`, href: `#breadcrumbs`, count: 1204 },
+    { label: `Oxides`, href: `#custom-rendering`, count: 312 },
+    { label: `Perovskites with a remarkably long name`, count: 41 },
   ]
 </script>
 
