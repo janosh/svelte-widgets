@@ -6,7 +6,7 @@ import {
 } from 'marked'
 import { escape_attribute, escape_braces } from '../highlight/hast.ts'
 import { decode_entities } from '../heading-anchors.ts'
-import { child_tokens, type ContentManifestDraft, type TokenSource } from './content.ts'
+import { walk_tokens, type ContentManifestDraft, type TokenSource } from './content.ts'
 import { DiagnosticError, type SourceRange } from './diagnostics.ts'
 import { parse_meta } from './meta.ts'
 
@@ -70,15 +70,6 @@ const plain_text = (tokens: readonly Token[]): string =>
           : token.raw,
     )
     .join(``)
-
-// Same document order as Marked's walkTokens, which concatenates callback results per
-// token and so grows quadratically with the number of top-level blocks.
-function walk_tokens(tokens: readonly Token[], visit: (token: Token) => void): void {
-  for (const token of tokens) {
-    visit(token)
-    walk_tokens(child_tokens(token), visit)
-  }
-}
 
 export function scientific_references(
   options: ReferenceOptions,
@@ -390,7 +381,7 @@ export function scientific_references(
     bibliography: () => (bibliography_token ? `` : bibliography_html),
     reserved_ids: () =>
       [...targets.values()]
-        .map(({ target: resolved }) => resolved)
+        .map(({ target }) => target)
         .concat(bibliography_html ? [`bibliography`] : []),
   }
 }

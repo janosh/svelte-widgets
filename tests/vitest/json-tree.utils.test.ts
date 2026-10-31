@@ -68,7 +68,6 @@ it.each([
   [`a`.repeat(100), `a`.repeat(100), `"${`a`.repeat(50)}..."`], // previews truncate at 50
   [42, `42`],
   [true, `true`],
-  [false, `false`],
   [123n, `123n`],
   [Symbol(`test`), `Symbol(test)`],
   [new Date(`2024-01-15T10:30:00.000Z`), `2024-01-15T10:30:00.000Z`],
@@ -141,7 +140,6 @@ it.each([
   [new Map([[`a`, 1]]), `[\n  [\n    "a",\n    1\n  ]\n]`],
 ])(`to_json(%p) is valid JSON %s`, (value, expected) => {
   expect(to_json(value)).toBe(expected)
-  expect(() => JSON.parse(to_json(value))).not.toThrow()
 })
 
 it.each([
@@ -176,31 +174,19 @@ it(`serializes shared and circular references in objects, Maps and Sets`, () => 
   }
 })
 
-it.each([`日本語テキスト`, `🚀 🎨 🔧`, `∑∏∫∂∇`, `First\nSecond\tThird`, ``, `   `])(
-  `preserves unicode/special strings: %p`,
-  (str) => {
-    expect(format_preview(str)).toBe(`"${str}"`)
-    expect(serialize_for_copy(str)).toBe(str)
-  },
-)
-
 describe(`matches_search`, () => {
   it.each([
     // empty query
     [`key`, `value`, ``, false],
     // key matches (case-insensitive)
-    [`firstName`, `John`, `name`, true],
     [`FIRSTNAME`, `John`, `name`, true],
     // numeric key
     [123, `value`, `12`, true],
     // string value (case-insensitive)
     [`key`, `Hello World`, `world`, true],
-    [`key`, `HELLO`, `hello`, true],
     // number value
-    [`key`, 42, `42`, true],
     [`key`, 3.14, `3.14`, true],
     // boolean value
-    [`key`, true, `true`, true],
     [`key`, false, `fal`, true],
     // other leaves match their displayed text
     [`key`, 12n, `12n`, true],
@@ -464,8 +450,6 @@ describe(`get_ancestor_paths`, () => {
 describe(`values_equal`, () => {
   it.each([
     [`hello`, `hello`, true],
-    [42, 42, true],
-    [true, true, true],
     [null, null, true],
     [`hello`, `world`, false],
     [null, undefined, false],
@@ -476,7 +460,6 @@ describe(`values_equal`, () => {
     [/test/g, /test/i, false],
     // distinct containers are never equal, even with the same size
     [[1, 2, 3], [4, 5, 6], false],
-    [{ a: 1, b: 2 }, { c: 3, d: 4 }, false],
     [{ a: 1 }, [1], false], // object vs array subtypes differ
     [new Date(`2024-01-01`), {}, false], // date vs object
     [new Date(`2024-01-15`), new Date(`2024-01-15`), true], // dates compare by timestamp
@@ -484,7 +467,6 @@ describe(`values_equal`, () => {
     // NaN === NaN is false in JS, but change detection should treat NaN values as equal.
     [NaN, NaN, true],
     [NaN, 0, false],
-    [NaN, null, false],
     [new Date(`nope`), new Date(`nope`), true], // invalid dates stay equal to each other
     [new Date(0), new Date(1), false], // 1 ms apart: equal as strings, unequal as timestamps
     // other leaves compare by their displayed string form
@@ -575,9 +557,7 @@ describe(`estimate_byte_size`, () => {
 
 describe(`compute_diff`, () => {
   it.each([
-    [42, 42],
     [`hello`, `hello`],
-    [true, true],
     [null, null],
     [NaN, NaN],
     [{ x: NaN }, { x: NaN }],

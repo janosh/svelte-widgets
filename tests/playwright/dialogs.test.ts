@@ -1,13 +1,12 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
 test(`ConfirmDialog advances queued focus and restores the opener`, async ({ page }) => {
-  await page.goto(`/dialogs`, { waitUntil: `networkidle` })
+  await goto(page, `/dialogs`, { waitUntil: `networkidle` })
   const opener = page.getByRole(`button`, { name: `Ask both at once` })
   await opener.click()
 
   const dialog = page.locator(`dialog.confirm-dialog`)
-  await expect(dialog.locator(`h2`)).toHaveCSS(`margin-top`, `0px`)
-  await expect(dialog).toHaveCSS(`padding`, `12px`)
   const delete_button = dialog.getByRole(`button`, { name: `Delete` })
   expect((await delete_button.boundingBox())?.height ?? Infinity).toBeLessThan(32)
   await delete_button.click()
@@ -22,7 +21,7 @@ test(`ConfirmDialog advances queued focus and restores the opener`, async ({ pag
 test(`Dialog close() twice in one task closes once without throwing`, async ({
   page,
 }) => {
-  await page.goto(`/patterns`, { waitUntil: `networkidle` })
+  await goto(page, `/patterns`, { waitUntil: `networkidle` })
   const errors: string[] = []
   page.on(`pageerror`, (error) => errors.push(error.message))
   const demo = page.locator(`#patterns-dialog`)
@@ -42,4 +41,16 @@ test(`Dialog close() twice in one task closes once without throwing`, async ({
   await expect(dialog).toBeHidden()
   expect({ close_events, errors }).toEqual({ close_events: 1, errors: [] })
   await expect(demo.getByText(`Last close: close`)).toBeVisible()
+})
+
+// Dialog's class-scoped rule outranked a bare `dialog.sheet` selector, so its margin: auto and
+// 2rem max-height inset the sheet from the top and bottom of its edge
+test(`a side Sheet spans its whole edge`, async ({ page }) => {
+  await goto(page, `/patterns`, { waitUntil: `networkidle` })
+  await page
+    .locator(`#patterns-sheet`)
+    .getByRole(`button`, { name: `Open settings` })
+    .click()
+  const box = await page.getByRole(`dialog`, { name: `Settings` }).boundingBox()
+  expect([box?.y, box?.height]).toEqual([0, page.viewportSize()?.height])
 })

@@ -78,6 +78,10 @@ test.beforeAll(async () => {
       watch: { awaitWriteFinish: { stabilityThreshold: 50, pollInterval: 10 } },
     },
   })
+  // NODE_ENV=production (e.g. leaked by an in-process build in this worker) compiles
+  // without HMR, which turns the CSS-only update below into a state-resetting reload
+  if (server.config.isProduction)
+    throw new Error(`Fixture server needs dev mode, got NODE_ENV=${process.env.NODE_ENV}`)
   await server.listen()
   const address = server.httpServer?.address()
   if (!address || typeof address === `string`) throw new Error(`Expected HTTP address`)

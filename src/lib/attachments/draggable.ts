@@ -51,7 +51,6 @@ export const draggable =
       // which would strand the first follower's listeners past cleanup
       if (dragging || !is_primary_press(event) || claimed_pointer_events.has(event))
         return
-      if (!(event.target instanceof Node) || !drag_handle.contains(event.target)) return
 
       dragging = true
       // A fixed node is placed in viewport coordinates (what its rect reports), an absolute

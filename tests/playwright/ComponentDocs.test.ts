@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
+import { goto } from './helpers'
 
 const width_of = (locator: Locator) =>
   locator.evaluate((element) => element.getBoundingClientRect().width)
@@ -6,7 +7,7 @@ const width_of = (locator: Locator) =>
 test(`ColorInput examples preserve hex drafts and restore transparent colors`, async ({
   page,
 }) => {
-  await page.goto(`/color-input`, { waitUntil: `networkidle` })
+  await goto(page, `/color-input`, { waitUntil: `networkidle` })
   const heading = page.getByRole(`heading`, { name: `ColorInput`, exact: true })
   await expect(heading).toHaveAttribute(`id`, `colorinput`)
   await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
@@ -66,7 +67,7 @@ test(`ColorInput examples preserve hex drafts and restore transparent colors`, a
 test(`TreeView examples select nodes and ranges, and retry failed lazy branches`, async ({
   page,
 }) => {
-  await page.goto(`/tree-view`, { waitUntil: `networkidle` })
+  await goto(page, `/tree-view`, { waitUntil: `networkidle` })
   const heading = page.getByRole(`heading`, { name: `TreeView`, exact: true })
   await expect(heading).toHaveAttribute(`id`, `treeview`)
   await expect(heading.locator(`svg.heading-icon`)).toHaveAttribute(`aria-hidden`, `true`)
@@ -122,7 +123,7 @@ test(`TreeView examples select nodes and ranges, and retry failed lazy branches`
 test(`JsonTree example applies leaf edits and restores the comparison snapshot`, async ({
   page,
 }) => {
-  await page.goto(`/json-tree`, { waitUntil: `networkidle` })
+  await goto(page, `/json-tree`, { waitUntil: `networkidle` })
   const demo = page.locator(`#json-tree-edit`)
   await demo.locator(`.json-value.string`).dblclick()
   await demo.locator(`.edit-input`).fill(`Updated experiment`)
@@ -135,7 +136,7 @@ test(`JsonTree example applies leaf edits and restores the comparison snapshot`,
 test(`FileInput example reports parse errors then displays and removes valid JSON`, async ({
   page,
 }) => {
-  await page.goto(`/file-input`, { waitUntil: `networkidle` })
+  await goto(page, `/file-input`, { waitUntil: `networkidle` })
   const demo = page.locator(`#file-input-json`)
   const input = demo.getByLabel(`Choose a JSON file`)
   for (const width of [1280, 390, 320]) {
@@ -162,7 +163,7 @@ test(`FileInput example reports parse errors then displays and removes valid JSO
 })
 
 test(`SplitPane example sizes panes and restores keyboard collapse`, async ({ page }) => {
-  await page.goto(`/split-pane`, { waitUntil: `networkidle` })
+  await goto(page, `/split-pane`, { waitUntil: `networkidle` })
   const demo = page.locator(`#split-pane-basic`)
   const divider = demo.getByRole(`separator`)
   const first_pane = demo.locator(`section`).first()
@@ -180,7 +181,7 @@ test(`SplitPane example sizes panes and restores keyboard collapse`, async ({ pa
 test(`VirtualList example jumps without mounting every row and resets filtered scrolling`, async ({
   page,
 }) => {
-  await page.goto(`/virtual-list`, { waitUntil: `networkidle` })
+  await goto(page, `/virtual-list`, { waitUntil: `networkidle` })
   const demo = page.locator(`#virtual-list-filter`)
   const list = demo.locator(`.virtual-list`)
   const rows = list.locator(`[data-index]`)

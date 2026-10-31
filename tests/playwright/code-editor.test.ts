@@ -1,8 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { goto } from './helpers'
 
 // Opens the basic demo once its backend has opened the document for editing.
 const open_editor = async (page: Page) => {
-  await page.goto(`/code-editor`)
+  await goto(page, `/code-editor`)
   const demo = page.locator(`#code-editor-basic`)
   const code_editor = demo.locator(`.code-editor`)
   const area = code_editor.locator(`textarea`)

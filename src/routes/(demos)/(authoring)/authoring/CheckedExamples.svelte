@@ -120,15 +120,14 @@ assert_ok(await check_document(document))`}
     border-radius: 0;
     background: light-dark(#f6f8fa, #151b24);
     padding: 0.6rem;
+    &:focus-visible {
+      outline: 2px solid #6987ef;
+      outline-offset: 2px;
+    }
   }
   select {
     border-bottom: 1px solid light-dark(#b7c1d1, #526078);
     max-width: 28rem;
-  }
-  select:focus-visible,
-  button:focus-visible {
-    outline: 2px solid #6987ef;
-    outline-offset: 2px;
   }
   button {
     margin-top: 0.75rem;

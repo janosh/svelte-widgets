@@ -1,11 +1,11 @@
 import { expect, test, type Page } from '@playwright/test'
-import { hover_until } from './helpers'
+import { hover_until, goto } from './helpers'
 
 // .click() races a decorative overlay for the press, and the burger's hit area is not what
 // these tests are about
 const open_mobile_nav = async (page: Page, path = `/nav`, width = 420) => {
   await page.setViewportSize({ width, height: 800 })
-  await page.goto(path, { waitUntil: `networkidle` })
+  await goto(page, path, { waitUntil: `networkidle` })
   const burger = page.locator(`nav.mobile button.burger`).first()
   await burger.evaluate((element: HTMLElement) => element.click())
   return burger
@@ -107,7 +107,7 @@ for (const [width, color_scheme] of [
       `https://api.github.com/repos/janosh/svelte-widgets/contributors*`,
       (route) => route.fulfill({ json: [] }),
     )
-    await page.goto(`/`, { waitUntil: `networkidle` })
+    await goto(page, `/`, { waitUntil: `networkidle` })
     await expect(page.locator(`.site-header a[href="/"]`).last()).toHaveAttribute(
       `aria-current`,
       `page`,
@@ -189,7 +189,7 @@ for (const [stored_theme, color_scheme] of [
       })
       Object.assign(globalThis, { __theme_prepaint_snapshot: snapshot_promise })
     }, stored_theme)
-    await page.goto(`/`)
+    await goto(page, `/`)
     const snapshot = await page.evaluate(() => {
       const browser_global = globalThis as typeof globalThis & {
         __theme_prepaint_snapshot: Promise<{ body_present: boolean; theme: string }>
@@ -245,7 +245,7 @@ test.describe(`Nav dropdown`, () => {
   test(`long desktop submenus read down two columns and collapse to one on mobile`, async ({
     page,
   }) => {
-    await page.goto(`/nav`, { waitUntil: `networkidle` })
+    await goto(page, `/nav`, { waitUntil: `networkidle` })
     const nav = page.locator(`nav`).first()
     const top_rows = await nav
       .locator(`.menu > span, .menu > .dropdown > div:first-child`)
@@ -320,7 +320,7 @@ test.describe(`Nav dropdown`, () => {
   test(`desktop hover opens a pane and keeps it reachable across the gap`, async ({
     page,
   }) => {
-    await page.goto(`/nav`, { waitUntil: `networkidle` })
+    await goto(page, `/nav`, { waitUntil: `networkidle` })
 
     const dropdown = page.locator(`.dropdown`).first()
     const menu = dropdown.locator(`[data-submenu]`)
@@ -353,7 +353,7 @@ test.describe(`Nav dropdown`, () => {
       page,
     }) => {
       if (mobile) await open_mobile_nav(page)
-      else await page.goto(`/nav`, { waitUntil: `networkidle` })
+      else await goto(page, `/nav`, { waitUntil: `networkidle` })
       const caret = page
         .locator(`${mobile ? `nav.mobile ` : ``}.dropdown [data-dropdown-toggle]`)
         .first()
@@ -397,7 +397,7 @@ test.describe(`Nav dropdown`, () => {
   test(`desktop caret has trailing padding and Escape dismisses a hovered pane`, async ({
     page,
   }) => {
-    await page.goto(`/nav`, { waitUntil: `networkidle` })
+    await goto(page, `/nav`, { waitUntil: `networkidle` })
 
     const dropdown = page.locator(`.dropdown`).first()
     const menu = dropdown.locator(`[data-submenu]`)
@@ -656,7 +656,7 @@ test(`demo section navigation and titles render before hydration`, async ({
 for (const width of [390, 1440]) {
   test(`demo navigation keeps recipes local at width ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 })
-    await page.goto(`/inputs`, { waitUntil: `networkidle` })
+    await goto(page, `/inputs`, { waitUntil: `networkidle` })
     await expect(page.locator(`main h1`)).toHaveText(`Inputs`)
     await page.locator(`main .card[href="/multiselect"]`).click()
     await expect(page.getByLabel(`MultiSelect guide`)).toHaveValue(`/multiselect`)
@@ -705,7 +705,7 @@ for (const width of [390, 1440]) {
 }
 
 test(`Nav item content keeps link styling and disabled tooltips`, async ({ page }) => {
-  await page.goto(`/nav`, { waitUntil: `networkidle` })
+  await goto(page, `/nav`, { waitUntil: `networkidle` })
   const demo = page.locator(`#nav-items`)
   const link = demo.getByRole(`link`, { name: `📚 Docs` })
   await expect(link).toHaveAttribute(`href`, `/docs`)

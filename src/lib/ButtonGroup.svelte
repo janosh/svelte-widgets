@@ -86,10 +86,14 @@
   }
 
   function handle_keydown(event: KeyboardEvent & { currentTarget: HTMLElement }) {
-    // `[data-value]` excludes option_suffix buttons, which would desync focus from the
-    // option it is meant to select
-    const selector = `button[data-value]:not(:disabled)`
-    const buttons = [...event.currentTarget.querySelectorAll<HTMLButtonElement>(selector)]
+    // Option buttons only (each leads its `.option`): a suffix button, even with its own
+    // data-value, would desync focus from its option; `:scope >` skips nested groups
+    const button = `button[data-value]:not(:disabled)`
+    const selector = `:scope > ${button}, :scope > .option > ${button}:first-child`
+    const { target, currentTarget } = event
+    const buttons = [...currentTarget.querySelectorAll<HTMLButtonElement>(selector)]
+    // keys pressed in option_suffix content keep their native behavior
+    if (target !== currentTarget && !buttons.some((btn) => btn === target)) return
     const next_value = step_focus(event, buttons, { horizontal: true })?.dataset.value
     // A radio group carries its selection with focus; independent toggles don't. Value is
     // read off the button so DOM order and the option list can't drift apart.

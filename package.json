@@ -183,6 +183,11 @@
       "types": "./dist/json-tree/path.d.ts",
       "default": "./dist/json-tree/path.js"
     },
+    "./table": {
+      "types": "./dist/table/index.d.ts",
+      "svelte": "./dist/table/index.js",
+      "default": "./dist/table/index.js"
+    },
     "./csv": {
       "types": "./dist/csv.d.ts",
       "default": "./dist/csv.js"
@@ -206,6 +211,10 @@
     "./url-params": {
       "types": "./dist/url-params.d.ts",
       "default": "./dist/url-params.js"
+    },
+    "./poll": {
+      "types": "./dist/poll.d.ts",
+      "default": "./dist/poll.js"
     },
     "./image-markup": {
       "types": "./dist/image-markup.d.ts",
@@ -278,7 +287,8 @@
     "typescript": "^6.0.3",
     "vite": "npm:@voidzero-dev/vite-plus-core@1.3.0",
     "vite-plus": "1.3.0",
-    "vitest": "5.0.5"
+    "vitest": "5.0.5",
+    "vscode-oniguruma": "^2.0.1"
   },
   "peerDependencies": {
     "@wooorm/starry-night": "^3.0.0",

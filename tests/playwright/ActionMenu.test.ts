@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
-test.beforeEach(({ page }) => page.goto(`/popover`, { waitUntil: `networkidle` }))
+test.beforeEach(({ page }) => goto(page, `/popover`, { waitUntil: `networkidle` }))
 
 test(`native Popover dismissal reports pointer and Escape`, async ({ page }) => {
   const demo = page.locator(`#popover-basic`)

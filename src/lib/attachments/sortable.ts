@@ -43,6 +43,8 @@ const cell_at = (
   return undefined
 }
 
+const header_controls = `a, button, input, select, textarea, label, [contenteditable]`
+
 export interface SortableOptions {
   header_selector?: string
   asc_class?: string
@@ -139,29 +141,34 @@ export const sortable =
             return [row, cell ? get_html_sort_value(cell).trim() : ``] as const
           },
         )
-        rows.sort(([, trimmed_1], [, trimmed_2]) => {
-          if (trimmed_1 === trimmed_2) return 0
-          if (trimmed_1 === ``) return 1 // treat empty/whitespace as lower than any value
-          if (trimmed_2 === ``) return -1
-          const [num_1, num_2] = [Number(trimmed_1), Number(trimmed_2)]
-          if (Number.isNaN(num_1) && Number.isNaN(num_2)) {
-            return sort_dir * collator.compare(trimmed_1, trimmed_2)
-          }
-          // sort non-numeric values after numeric ones
-          if (Number.isNaN(num_1)) return sort_dir
-          if (Number.isNaN(num_2)) return -sort_dir
-          return sort_dir * (num_1 - num_2)
+        rows.sort(([, val_1], [, val_2]) => {
+          if (val_1 === val_2) return 0
+          if (val_1 === ``) return 1 // empty/whitespace cells last in either direction
+          if (val_2 === ``) return -1
+          const [num_1, num_2] = [Number(val_1), Number(val_2)]
+          const [text_1, text_2] = [Number.isNaN(num_1), Number.isNaN(num_2)]
+          // non-numeric values sort after numeric ones
+          if (text_1 !== text_2) return text_1 ? sort_dir : -sort_dir
+          return sort_dir * (text_1 ? collator.compare(val_1, val_2) : num_1 - num_2)
         })
 
         for (const [row] of rows) table_body.append(row)
       }
 
+      // only keys aimed at the header itself: a control inside it keeps its own Enter/Space
       const on_keydown = (event: KeyboardEvent) => {
-        if (event.key !== `Enter` && event.key !== ` `) return
+        if (event.target !== header || (event.key !== `Enter` && event.key !== ` `))
+          return
         event.preventDefault()
         sort_column()
       }
-      header.addEventListener(`click`, sort_column, { signal: listeners.signal })
+      // a click on (or a key-fired click from) a control inside the header is the control's
+      // duck-typed, not `instanceof Element`: an iframe table's nodes come from its own realm
+      const on_click = ({ target }: MouseEvent) => {
+        const control = (target as Partial<Element> | null)?.closest?.(header_controls)
+        if (!(control && header.contains(control))) sort_column()
+      }
+      header.addEventListener(`click`, on_click, { signal: listeners.signal })
       header.addEventListener(`keydown`, on_keydown, { signal: listeners.signal })
     })
 

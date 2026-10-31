@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
 test.use({ viewport: { width: 390, height: 780 } })
-test.beforeEach(({ page }) => page.goto(`/extras`, { waitUntil: `networkidle` }))
+test.beforeEach(({ page }) => goto(page, `/extras`, { waitUntil: `networkidle` }))
 
 // The title's rule cancels the panel's inline padding, a custom property that substitutes as
 // text: in `em` it resolved against the h2's larger font-size and overhung the panel.
@@ -155,8 +156,6 @@ test(`heading links retain history, smooth scrolling and root styles`, async ({
   await page.evaluate(() =>
     document.documentElement.style.setProperty(`scroll-behavior`, `auto`, `important`),
   )
-  // Kit writes its history metadata on hydration; capturing earlier would record null
-  await expect.poll(() => page.evaluate(() => history.state)).not.toBeNull()
   const original_state = await page.evaluate(() => history.state)
   const hashes: string[] = []
   for (const idx of [1, 2]) {
@@ -165,27 +164,41 @@ test(`heading links retain history, smooth scrolling and root styles`, async ({
     const href = await link.getAttribute(`href`)
     if (!href) throw new Error(`Missing heading href`)
     hashes.push(href)
-    const scrolling = await page.evaluateHandle(() => {
-      const positions = new Set<number>()
-      const record_scroll = () => positions.add(window.scrollY)
-      window.addEventListener(`scroll`, record_scroll)
+    const heading = page.locator(`[id="${decodeURIComponent(href.slice(1))}"]`)
+    // A starved renderer can finish a smooth scroll in a frame or two and outlast the timed
+    // toc-clicked flash, so record both as they happen: the root scroll-behavior the ToC
+    // holds when the page starts scrolling (capture phase reads it before the ToC's own
+    // listener can restore it; element scrolls like the panel's own are skipped) and
+    // whether the heading flashed.
+    const recorder = await heading.evaluateHandle((node) => {
+      const seen: { scroll?: string; flash?: boolean } = {}
+      const record_scroll = (event: Event) => {
+        if (event.target !== document) return
+        seen.scroll ??= getComputedStyle(document.documentElement).scrollBehavior
+      }
+      window.addEventListener(`scroll`, record_scroll, true)
+      const observer = new MutationObserver(() => {
+        if (node.classList.contains(`toc-clicked`)) seen.flash = true
+      })
+      observer.observe(node, { attributeFilter: [`class`] })
       return {
-        positions,
-        stop: () => window.removeEventListener(`scroll`, record_scroll),
+        seen,
+        stop: () => {
+          window.removeEventListener(`scroll`, record_scroll, true)
+          observer.disconnect()
+        },
       }
     })
     if (idx === 1) await link.click()
     else await link.press(`Enter`)
-    await expect
-      .poll(() => scrolling.evaluate(({ positions }) => positions.size))
-      .toBeGreaterThan(2)
-    await scrolling.evaluate(({ stop }) => stop())
-    await scrolling.dispose()
+    await expect(heading).toBeInViewport()
     await expect(page).toHaveURL(new RegExp(`${href}$`))
     await expect(panel).toHaveCount(0)
-    const heading = page.locator(`[id="${decodeURIComponent(href.slice(1))}"]`)
-    await expect(heading).toHaveClass(/toc-clicked/)
-    await expect(heading).toBeInViewport()
+    await expect
+      .poll(() => recorder.evaluate(({ seen }) => ({ ...seen })))
+      .toEqual({ scroll: `smooth`, flash: true })
+    await recorder.evaluate(({ stop }) => stop())
+    await recorder.dispose()
   }
   await page.goBack()
   await expect(page).toHaveURL(new RegExp(`${hashes[0]}$`))
@@ -202,6 +215,14 @@ test(`heading links retain history, smooth scrolling and root styles`, async ({
     .toEqual([`auto`, `important`])
   await page.goForward()
   await expect(page).toHaveURL(new RegExp(`${hashes[0]}$`))
+})
+
+// a separate test: under CI load the history walk above already spends most of the timeout
+test(`replacestate ToC links keep history length for every activation`, async ({
+  page,
+}) => {
+  const toggle = page.locator(`aside.toc.mobile > button`).first()
+  const panel = page.locator(`aside.toc.mobile > nav`).first()
   for (const [idx, activation] of [`click`, `Enter`, `Space`, `row`].entries()) {
     await toggle.click()
     const link = panel.locator(`ol > li > a`).nth(idx + 2)

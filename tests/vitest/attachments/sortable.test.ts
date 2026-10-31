@@ -102,6 +102,19 @@ describe(`sortable`, () => {
     expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
     const sorted = column_values(table)
 
+    // keys typed into and clicks on a control inside a header belong to that control
+    const filter = document.createElement(`input`)
+    second.append(filter)
+    expect(press_key(filter, ` `).defaultPrevented).toBe(false)
+    filter.click()
+    expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
+    // an iframe table's nodes come from another realm, where `instanceof Element` fails: a
+    // class the input is not an instance of stands in for this realm's Element
+    vi.stubGlobal(`Element`, HTMLCanvasElement)
+    filter.click()
+    vi.unstubAllGlobals()
+    expect(second.getAttribute(`aria-sort`)).toBe(`ascending`)
+
     cleanup?.()
     expect([first.getAttribute(`tabindex`), first.getAttribute(`aria-sort`)]).toEqual([
       `-1`,

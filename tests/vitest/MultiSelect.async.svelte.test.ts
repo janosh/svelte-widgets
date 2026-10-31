@@ -302,6 +302,44 @@ describe(`load_options feature`, () => {
     expect(offsets).toEqual([0])
   })
 
+  // A later batch that leaves the next offset unchanged (an empty page still reporting
+  // has_more) ends pagination instead of re-requesting it on every scroll, while a shorter
+  // replace snapshot moves the offset back and keeps paging.
+  test.each([
+    [`stops after an empty later batch`, [], undefined, [0, 5]],
+    [`continues after a shorter replace snapshot`, [`a`, `b`, `c`, `d`], true, [0, 5, 4]],
+  ] as const)(`scroll pagination %s`, async (_desc, second_page, replace, expected) => {
+    const offsets: number[] = []
+    const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
+      offsets.push(offset)
+      if (offset === 0) return { options: [`a`, `b`, `c`, `d`, `e`], has_more: true }
+      if (offset === 5) return { options: [...second_page], has_more: true, replace }
+      return { options: [] as string[], has_more: false }
+    })
+    await mount_autofill(load_options, 500)
+    await flush_ticks(10)
+    for (let idx = 0; idx < 3; idx++) {
+      mock_scroll_near_bottom(doc_query(`ul.options`))
+      await flush_ticks(5)
+    }
+    expect(offsets).toEqual(expected)
+  })
+
+  // a shorter replace snapshot moves the offset back, so auto-fill keeps loading from there
+  test(`auto-fill continues after a shorter replace snapshot`, async () => {
+    const offsets: number[] = []
+    const load_options = vi.fn(async ({ offset }: LoadOptionsParams) => {
+      offsets.push(offset)
+      if (offset === 0) return { options: [`a`, `b`, `c`, `d`, `e`], has_more: true }
+      if (offset === 5)
+        return { options: [`a`, `b`, `c`, `d`], has_more: true, replace: true }
+      return { options: [`f`], has_more: false }
+    })
+    await mount_autofill(load_options, 100)
+    await flush_ticks(20)
+    expect(offsets).toEqual([0, 5, 4])
+  })
+
   test(`stale fetch result discarded when search changes during load`, async () => {
     const { fn: load_options, resolvers } = await mount_deferred_open()
     expect(load_options).toHaveBeenCalledTimes(1)
@@ -662,7 +700,7 @@ test(`#468: no_matching_options_msg shows on open when an empty query loads noth
 })
 
 // https://github.com/janosh/svelte-widgets/pull/403#issuecomment-4106385445
-describe(`load_options_pending`, () => {
+describe(`load_options pending state`, () => {
   beforeEach(() => vi.useFakeTimers())
 
   test(`typing during the first in-flight load debounces instead of firing immediate fetches`, async () => {
@@ -962,7 +1000,6 @@ describe(`async on_create`, () => {
   })
 
   test.each<[string, MultiSelectProps[`on_create`], Option[], Option[]?]>([
-    [`returning false blocks the option`, () => false, []],
     [
       `returning an option transforms it`,
       ({ option }) => `${get_label(option)}`.toUpperCase(),

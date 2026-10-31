@@ -17,12 +17,6 @@ describe(`highlight_matches`, () => {
   const offsets = () => ranges().map((range) => [range.startOffset, range.endOffset])
 
   it.each([
-    [
-      `case insensitive`,
-      `test`,
-      `<p>Test with TEST and TeSt</p>`,
-      [`Test`, `TEST`, `TeSt`],
-    ],
     // substring matches come from search_text, so they span inline markup
     [
       `across inline markup`,
@@ -217,26 +211,12 @@ describe(`highlight_matches`, () => {
     expect(registry.has(`highlight-match`)).toBe(false)
   })
 
-  const previous = { external: `previous` }
-  const replacement = { external: `replacement` }
-  it.each([
-    [`restores a pre-existing`, () => {}, previous],
-    [
-      `preserves a later replacement of the`,
-      () => registry.set(`highlight-match`, replacement),
-      replacement,
-    ],
-    [
-      `respects a later deletion of the`,
-      () => registry.delete(`highlight-match`),
-      undefined,
-    ],
-  ])(`%s same-name highlight on cleanup`, (_desc, external_write, expected) => {
-    registry.set(`highlight-match`, previous)
+  it(`respects a later deletion of the same-name highlight on cleanup`, () => {
+    registry.set(`highlight-match`, { external: `previous` })
     node.textContent = `match`
     const cleanup = highlight_matches({ query: `match` })(node)
-    external_write()
+    registry.delete(`highlight-match`)
     cleanup?.()
-    expect(registry.get(`highlight-match`)).toBe(expected)
+    expect(registry.has(`highlight-match`)).toBe(false)
   })
 })

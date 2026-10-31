@@ -2,7 +2,7 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '#lib'
 import { set_at_path, to_json } from '#lib/json-tree/utils.ts'
-import { click, doc_query, fire_input, key_reads, render } from './index'
+import { click, doc_query, fire_input, key_reads, press_key, render } from './index'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vite-plus/test'
@@ -535,17 +535,84 @@ describe(`copy and download`, () => {
     if (!override) expect(revoke_url).toHaveBeenCalledWith(`blob:download`)
   })
 
-  it(`clicking a value copies it with inline feedback and fires on_copy`, async () => {
-    const write_text = mock_clipboard_write()
-    const on_copy = vi.fn()
-    mount_expanded({ value: { name: `test` }, on_copy })
-    fire(doc_query(`.json-value`), mouse(`click`, { clientX: 40, clientY: 60 }))
-    await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`name`, `test`))
-    flushSync()
-    expect(write_text).toHaveBeenCalledWith(`test`)
-    const feedback = doc_query(`.copy-feedback`)
-    expect(feedback.textContent?.trim()).toBe(`Copied!`)
-    expect(feedback.style.left).toBe(`40px`)
+  // beside the copied value, centered on its row, not at the pointer; before it when the
+  // viewport's right edge leaves no room
+  it.each([
+    [`beside`, new DOMRect(30, 50, 70, 20), [`106px`, `60px`, `0 -50%`]],
+    [`before`, new DOMRect(950, 50, 60, 20), [`944px`, `60px`, `-100% -50%`]],
+  ])(
+    `clicking a value copies it with feedback %s it and fires on_copy`,
+    async (_side, rect, expected) => {
+      vi.stubGlobal(`innerWidth`, 1024)
+      const write_text = mock_clipboard_write()
+      const on_copy = vi.fn()
+      mount_expanded({ value: { name: `test` }, on_copy })
+      const value_el = doc_query(`.json-value`)
+      value_el.getBoundingClientRect = () => rect
+      fire(value_el, mouse(`click`, { clientX: 40, clientY: 55 }))
+      await vi.waitFor(() => expect(on_copy).toHaveBeenCalledWith(`name`, `test`))
+      flushSync()
+      expect(write_text).toHaveBeenCalledWith(`test`)
+      const feedback = doc_query(`.copy-feedback`)
+      expect(feedback.textContent?.trim()).toBe(`Copied!`)
+      const { left, top, translate } = feedback.style
+      expect([left, top, translate]).toEqual(expected)
+    },
+  )
+
+  // every copy trigger shows its feedback beside the element it copied, never in a corner
+  const name_row = () => node_at(`name`)?.querySelector(`:scope > .node-content`) ?? null
+  it.each<[string, () => Promise<void> | void, () => Element | null]>([
+    [
+      `Enter on a focused leaf`,
+      () => {
+        fire(node_at(`name`), mouse(`click`)) // focuses the node without copying
+        press(node_at(`name`), `Enter`)
+      },
+      name_row,
+    ],
+    [
+      `middle-click on a node row`,
+      () => fire(node_at(`name`), mouse(`auxclick`, { button: 1 })),
+      name_row,
+    ],
+    [
+      `Enter on a value`,
+      () => press(doc_query(`.json-value`), `Enter`),
+      () => doc_query(`.json-value`),
+    ],
+    [
+      `context menu Copy value`,
+      async () => {
+        fire(node_at(`name`), mouse(`contextmenu`))
+        await tick()
+        const copy = [
+          ...document.querySelectorAll<HTMLButtonElement>(`.context-menu button`),
+        ].find((btn) => btn.textContent?.includes(`Copy value`))
+        fire(copy, mouse(`click`))
+      },
+      name_row,
+    ],
+    [
+      `Ctrl+C on a selection`,
+      () => {
+        fire(node_at(`name`), mouse(`click`, { ctrlKey: true }))
+        press(tree(), `c`, { ctrlKey: true })
+      },
+      name_row,
+    ],
+  ])(`%s anchors the copy feedback to what it copied`, async (_desc, act, anchor_of) => {
+    mock_clipboard_write()
+    mount_expanded({ value: { name: `test` } })
+    const anchor = anchor_of()
+    if (!anchor) throw new Error(`no anchor element`)
+    anchor.getBoundingClientRect = () => new DOMRect(30, 50, 70, 20)
+    await act()
+    await vi.waitFor(() =>
+      expect(document.querySelector(`.copy-feedback`)).not.toBeNull(),
+    )
+    const { left, top, translate } = doc_query(`.copy-feedback`).style
+    expect([left, top, translate]).toEqual([`106px`, `60px`, `0 -50%`])
   })
 
   it(`Shift+click and middle-click on a key or node row copy only that path`, async () => {
@@ -773,7 +840,9 @@ describe(`keyboard navigation and selection`, () => {
     const leaf = node_at(`key`)
     expect(leaf?.classList.contains(`focused`)).toBe(true)
     press(leaf, `Enter`)
-    await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`42`))
+    // Enter on the value itself (focusable by click) must not also copy via the focused row
+    press(leaf?.querySelector(`.json-value`), `Enter`)
+    expect(write_text.mock.calls).toEqual([[`42`], [`42`]])
 
     press(tree(), `ArrowDown`)
     const container = node_at(`obj`)
@@ -788,6 +857,25 @@ describe(`keyboard navigation and selection`, () => {
     press(container, `c`, { ctrlKey: true })
     await vi.waitFor(() => expect(write_text).toHaveBeenCalledWith(`{\n  "a": 1\n}`))
   })
+
+  it.each([
+    [`url`, `.url-link`, 2],
+    [`long`, `.expand-btn`, 3],
+  ])(
+    `Enter/Space on the %s value's %s stays native on its focused row`,
+    (key, selector, arrow_downs) => {
+      const write_text = mock_clipboard_write()
+      mount_expanded({
+        value: { url: `https://example.com`, long: `a`.repeat(300) },
+        max_string_length: 50,
+      })
+      for (let idx = 0; idx < arrow_downs; idx++) press(tree(), `ArrowDown`)
+      expect(node_at(key)?.classList.contains(`focused`)).toBe(true)
+      for (const key_name of [`Enter`, ` `])
+        expect(press_key(doc_query(selector), key_name).defaultPrevented).toBe(false)
+      expect(write_text).not.toHaveBeenCalled()
+    },
+  )
 
   it(`Ctrl+click toggles selection, Shift extends a range, Ctrl+C copies all, Escape clears`, async () => {
     const write_text = mock_clipboard_write()

@@ -33,7 +33,8 @@
 
   const find = create_find_state(() => ({
     only_within,
-    also_ignore,
+    // The bar usually sits inside its root, whose status text must never match itself
+    also_ignore: also_ignore ? `.find-bar, ${also_ignore}` : `.find-bar`,
     before_search,
     labels,
   }))

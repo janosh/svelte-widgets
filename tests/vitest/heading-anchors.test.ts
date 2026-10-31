@@ -10,7 +10,7 @@ import {
 } from '#lib/heading-anchors.ts'
 import Heading from '#lib/Heading.svelte'
 import { Check } from '#lib/icons.ts'
-import { describe, expect, it } from 'vite-plus/test'
+import { describe, expect, it, vi } from 'vite-plus/test'
 import { doc_query, next_task, render, raw_snippet } from './index'
 
 describe(`fragment_href`, () => {
@@ -182,6 +182,8 @@ describe(`heading_anchors attachment`, () => {
     return doc_query(`main`)
   }
   const anchor_selector = `a[aria-hidden="true"]`
+  const href_of = (id: string) =>
+    document.querySelector(`#${id} ${anchor_selector}`)?.getAttribute(`href`)
 
   it(`keeps managed anchors unique and synced without rewriting consumer links`, async () => {
     const container = create_container(
@@ -207,7 +209,7 @@ describe(`heading_anchors attachment`, () => {
       [...container.querySelectorAll<HTMLElement>(anchor_selector)].map(
         (anchor) => anchor.style.paddingInlineStart,
       ),
-    ).toEqual([...Array(3).fill(`var(--heading-anchor-gap, 0.3em)`), ``])
+    ).toEqual([...Array(3).fill(expect.stringContaining(`--heading-anchor-gap`)), ``])
   })
 
   it.each([
@@ -259,14 +261,57 @@ describe(`heading_anchors attachment`, () => {
     const insert_heading = async (id: string) => {
       container.insertAdjacentHTML(`beforeend`, `<div><h3 id="${id}">X</h3></div>`)
       // the anchor must arrive via the observer callback, not synchronously
-      expect(container.querySelector(`#${id} ${anchor_selector}`)).toBeNull()
+      expect(href_of(id)).toBeUndefined()
       await next_task()
-      return container.querySelector(`#${id} ${anchor_selector}`)?.getAttribute(`href`)
+      return href_of(id)
     }
 
     expect(await insert_heading(`before`)).toBe(`#before`)
+    // setting a heading's text replaces its anchor, which comes back
+    doc_query(`#before`).textContent = `Renamed`
+    await next_task()
+    expect(href_of(`before`)).toBe(`#before`)
+    // an empty heading gets its anchor once text arrives
+    container.insertAdjacentHTML(`beforeend`, `<div><h3 class="late"></h3></div>`)
+    await next_task()
+    doc_query(`h3.late`).textContent = `Late`
+    await next_task()
+    expect(href_of(`late`)).toBe(`#late`)
     cleanup()
     expect(await insert_heading(`after`)).toBeUndefined()
+  })
+
+  // DOM churn without headings (a plot redrawing its marks) must not requery the container:
+  // on a 75k-node page each requery cost ~0.5 ms of selector matching, ~90 ms per page load
+  it(`skips the requery for mutations that touch no heading`, async () => {
+    const container = create_container(`<section><h2 id="kept">Kept</h2></section>`)
+    const selector = `:scope > * > h2`
+    const cleanup = heading_anchors({ selector })(container)
+    const query = vi.spyOn(container, `querySelectorAll`)
+    const plot = document.createElement(`svg`)
+    container.append(plot)
+    for (let idx = 0; idx < 20; idx++) plot.append(document.createElement(`circle`))
+    plot.id = `plot`
+    await next_task()
+    expect(query).not.toHaveBeenCalled()
+
+    container.insertAdjacentHTML(
+      `beforeend`,
+      `<section><h2 id="added">Added</h2></section>`,
+    )
+    await next_task()
+    expect(query).toHaveBeenCalledWith(selector)
+    expect(href_of(`added`)).toBe(`#added`)
+    cleanup()
+  })
+
+  it(`anchors a custom selector's non-heading matches added later`, async () => {
+    const container = create_container(``)
+    const cleanup = heading_anchors({ selector: `.title` })(container)
+    container.insertAdjacentHTML(`beforeend`, `<div class="title" id="b">B</div>`)
+    await next_task()
+    expect(href_of(`b`)).toBe(`#b`)
+    cleanup()
   })
 
   it(`icon_svg customizes icon, default has aria-label`, () => {

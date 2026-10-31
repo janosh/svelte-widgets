@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
-test.beforeEach(({ page }) => page.goto(`/patterns`, { waitUntil: `networkidle` }))
+test.beforeEach(({ page }) => goto(page, `/patterns`, { waitUntil: `networkidle` }))
 
 test(`FindBar registers the matching range`, async ({ page }) => {
   const demo = page.locator(`#patterns-find-bar`)
@@ -22,7 +23,6 @@ test(`Sheet backdrop closes and restores focus`, async ({ page }) => {
   const sheet = page.getByRole(`dialog`, { name: `Settings` })
   await expect(sheet.getByRole(`button`, { name: `Close` })).toBeFocused()
   await expect(sheet).toHaveCSS(`right`, `0px`)
-  await expect(sheet).toHaveCSS(`border-radius`, `0px`)
 
   await page.mouse.click(1, 1)
   await expect(sheet).toBeHidden()

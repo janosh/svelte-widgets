@@ -104,20 +104,29 @@
     value_type === `array` ? [`[`, `]`] : [`{`, `}`],
   )
 
+  // this node's own line, not its whole (possibly expanded) subtree: copy feedback shows beside it
+  let row: HTMLElement | undefined
+
   // Middle-click copies the path (stopped so ancestor rows don't overwrite the clipboard)
-  function copy_path_on_middle_click(event: MouseEvent) {
+  function copy_path_on_middle_click(event: MouseEvent & { currentTarget: HTMLElement }) {
     if (event.button !== 1) return
     event.preventDefault()
     event.stopPropagation()
-    ctx.copy_path(path, event)
+    ctx.copy_path(
+      path,
+      event.currentTarget.matches(`.node-key`) ? event.currentTarget : row,
+    )
   }
 
   function handle_keydown(event: KeyboardEvent) {
     if (!is_focused) return
     if (event.key === `Enter` || event.key === ` `) {
+      // Enter/Space on the value, its link or a button inside the row is theirs (arrows still
+      // bubble up to navigate)
+      if (event.target !== event.currentTarget) return
       event.preventDefault()
       if (expandable) toggle_collapse()
-      else ctx.copy_value(path, value)
+      else ctx.copy_value(path, value, row)
     } else if (event.key === `ArrowRight` || event.key === `ArrowLeft`) {
       event.preventDefault()
       // Right unfolds a collapsed node, Left folds an expanded one
@@ -127,7 +136,7 @@
       if (ctx.selected_paths.size) return
       event.preventDefault()
       event.stopPropagation()
-      ctx.copy_value(path, value)
+      ctx.copy_value(path, value, row)
     }
   }
 </script>
@@ -163,7 +172,7 @@
   })}
   onkeydown={handle_keydown}
 >
-  <span class="node-content">
+  <span class="node-content" bind:this={row}>
     {#if expandable}
       <button
         type="button"
@@ -192,9 +201,9 @@
         tabindex="-1"
         onclick={stopped((event) => {
           if (event.ctrlKey || event.metaKey) ctx.toggle_select(path, event.shiftKey)
-          else if (event.shiftKey) ctx.copy_path(path, event)
+          else if (event.shiftKey) ctx.copy_path(path, event.currentTarget)
           else if (expandable && is_collapsed) ctx.toggle_collapse(path, true)
-          else ctx.copy_value(path, value, event)
+          else ctx.copy_value(path, value, event.currentTarget)
         })}
         onauxclick={copy_path_on_middle_click}
       >
@@ -276,7 +285,7 @@
         >
           <span class="node-content">
             <span class="no-toggle"></span>
-            <span style="color: var(--jt-key)">
+            <span style="color: var(--jt-key, light-dark(#001080, #9cdcfe))">
               {#if typeof ghost.key === `number`}
                 <span class="index">{ghost.key}</span>
               {:else}
@@ -284,7 +293,7 @@
               {/if}
             </span>
             <span class="colon">:</span>
-            <span style="color: var(--jt-preview); font-style: italic"
+            <span style="color: var(--jt-preview, #808080); font-style: italic"
               >{format_preview(ghost.value)}</span
             >
           </span>
@@ -300,9 +309,6 @@
 
 <style>
   .json-node {
-    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
-    font-size: var(--jt-font-size, 13px);
-    line-height: var(--jt-line-height, 1.5);
     outline: none;
     &.focused > .node-content {
       background: var(--jt-focus-bg, light-dark(#e3f2fd, #0d3a58));
@@ -425,7 +431,7 @@
     margin-right: 4px;
   }
   .preview {
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     font-style: italic;
     margin: 0 4px;
     &:hover {
@@ -440,7 +446,7 @@
   }
   .size-hint {
     font-size: 0.8em;
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     margin-left: 4px;
     opacity: 0.6;
   }
@@ -448,7 +454,7 @@
     display: flex;
     gap: 8px;
     padding-left: 1em;
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     font-style: italic;
     button:hover {
       text-decoration: underline;

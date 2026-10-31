@@ -41,7 +41,12 @@ import { format_bytes } from 'svelte-widgets/format'
 import { format_stat_delta } from 'svelte-widgets/stats'
 import { url_with_params, valid_query_param } from 'svelte-widgets/url-params'
 import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/image-markup'
-import { create_highlighter, default_highlighter } from 'svelte-widgets/highlight'
+import {
+  configure_default_highlighter,
+  create_highlighter,
+  default_highlighter,
+  type HighlighterOptions,
+} from 'svelte-widgets/highlight'
 import { assert_ok, create_markdown, compile_markdown } from 'svelte-widgets/markdown'
 import { content_toc } from 'svelte-widgets/markdown/content'
 import { parse_yaml, stringify_yaml } from 'svelte-widgets/yaml'
@@ -215,7 +220,12 @@ export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) =>
 
 export const highlighter: CodeHighlighter = (code) => [{ text: code }]
 export const markdown_highlighter = default_highlighter.highlight
-export const custom_highlighter = create_highlighter([])
+const highlighter_options: HighlighterOptions = {
+  onig_url: new URL(`https://cdn.test/onig.wasm`),
+}
+export const custom_highlighter = create_highlighter([], highlighter_options)
+export const configure_highlighter = () =>
+  configure_default_highlighter(highlighter_options)
 // @ts-expect-error Typed metadata requires a validator that produces that shape.
 create_markdown<{ title: string }>({})
 

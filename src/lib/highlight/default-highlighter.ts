@@ -2,7 +2,10 @@ import {
   create_highlighter,
   optional_peer_error,
   type Highlighter,
+  type HighlighterOptions,
 } from './create-highlighter.ts'
+
+let options: HighlighterOptions = {}
 
 const load_highlighter = async (): Promise<Highlighter> => {
   const [common_grammars, { default: svelte_grammar }] = await Promise.all([
@@ -41,7 +44,7 @@ const load_highlighter = async (): Promise<Highlighter> => {
       },
     }
   })
-  return create_highlighter([...grammars, svelte_grammar])
+  return create_highlighter([...grammars, svelte_grammar], options)
 }
 
 // One lazy default bundle shared by callers that opt into built-in highlighting.
@@ -50,6 +53,16 @@ const load_highlighter = async (): Promise<Highlighter> => {
 let highlighter_promise: Promise<Highlighter> | undefined
 const get_highlighter = (): Promise<Highlighter> =>
   (highlighter_promise ??= load_highlighter())
+
+// Set before the shared instance's first use, e.g. in a client init hook; it is created
+// once. Repeating the same URL later is fine (e.g. from a component script), changing it is not.
+export const configure_default_highlighter = (next: HighlighterOptions): void => {
+  if (highlighter_promise && String(next.onig_url) !== String(options.onig_url))
+    throw new Error(
+      `configure_default_highlighter() must run before default_highlighter is first used`,
+    )
+  options = next
+}
 
 export const default_highlighter: Highlighter = {
   ready: async () => (await get_highlighter()).ready(),

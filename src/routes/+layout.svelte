@@ -15,7 +15,7 @@
   import favicon from '#site/favicon.svg'
   import type { TocHeadingData } from '#lib/types.ts'
   import markdown_guide_toc from '#lib/markdown/readme.md?toc'
-  import type { Snippet } from 'svelte'
+  import { onMount, type Snippet } from 'svelte'
   import { slide } from 'svelte/transition'
   // eslint-disable-next-line import/no-unassigned-import -- global route styles
   import '../app.css'
@@ -44,6 +44,11 @@
   let toc_open = $state(false)
   let reference_open = $state<Record<string, boolean>>({ figure: true, equation: true })
   const reference_nav_id = $props.id()
+
+  // e2e tests wait for this marker: the root layout mounts after every page component
+  onMount(() => {
+    document.documentElement.dataset.hydrated = ``
+  })
 
   // The resolver emits these labels from the same definitions as the public manifest.
   // Observe only page content, so updating the sidebar cannot trigger another scan.

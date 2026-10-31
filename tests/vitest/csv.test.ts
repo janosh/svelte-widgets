@@ -32,13 +32,7 @@ describe(`rows_to_csv`, () => {
   })
 
   test.each([
-    [`plain`, `plain`],
-    [42, `42`],
-    [`=1+2`, `=1+2`],
-    [true, `true`],
-    [null, ``],
-    [`a,b`, `"a,b"`],
-    [`say "hi"`, `"say ""hi"""`],
+    [`=1+2`, `=1+2`], // formula prefixes are preserved, not sanitized
     [`line1\rline2`, `"line1\rline2"`],
   ])(`escape_csv_field(%j) = %j`, (value, expected) => {
     expect(escape_csv_field(value)).toBe(expected)

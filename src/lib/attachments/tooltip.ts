@@ -2,7 +2,7 @@ import type { Attachment } from 'svelte/attachments'
 import type { Placement } from '../utils'
 import { clamp, compute_position, get_uuid } from '../utils'
 import { auto_update_position } from './float'
-import { claim_escape, css_px } from './shared'
+import { consume_escape, css_px, register_escape_layer } from './shared'
 
 export type TooltipTrigger = `hover-focus` | `hover` | `focus`
 export type TooltipWrap = `balance` | `normal` | `nowrap`
@@ -121,9 +121,7 @@ const described_by_tokens = (element: Element): string[] =>
   (element.getAttribute(`aria-describedby`) ?? ``).split(/\s+/u).filter(Boolean)
 
 const first_nonempty = (...values: (string | null | undefined)[]): string | null =>
-  values.find(
-    (value): value is string => typeof value === `string` && value.length > 0,
-  ) ?? null
+  values.find((value): value is string => Boolean(value)) ?? null
 
 // A tooltip repeating its trigger's text adds nothing, unless the trigger or a descendant
 // overflows (ellipsis, clipping), where it reveals the hidden part
@@ -290,8 +288,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     clearTimeout(open_timeout)
     open_timeout = undefined
   }
-  // unlike open_timeout (read by `??=`), nothing reads close_timeout, so it needs no reset
-  const clear_close_timeout = () => clearTimeout(close_timeout)
+  // reset so the Escape layer can tell a pending close from none
+  const clear_close_timeout = () => {
+    clearTimeout(close_timeout)
+    close_timeout = undefined
+  }
+  const escape_hides_active = consume_escape(() =>
+    hide_active(`escape`, { keep_active: true }),
+  )
 
   const track_input = (event: PointerEvent | KeyboardEvent) => {
     last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
@@ -591,7 +595,13 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     removal_observer.observe(doc.body, { childList: true, subtree: true })
     stop_open_effects = [
       auto_update_position(opening.trigger, surface, position_active),
-      claim_escape(() => hide_active(`escape`, { keep_active: true })),
+      // Pointer and focus already left a closing tooltip, so Escape dismisses it early but
+      // still belongs to whatever the user moved on to, e.g. the pane this trigger opened.
+      register_escape_layer((event) => {
+        if (close_timeout === undefined) return escape_hides_active(event)
+        hide_active(`escape`)
+        return false
+      }),
     ]
     // before positioning, which may hide again and must report a close that follows an
     // open rather than one out of nowhere
@@ -754,9 +764,7 @@ const registration_target = (
 export const tooltip =
   (options: TooltipOptions = {}): Attachment =>
   (node: Element): (() => void) | undefined => {
-    if (typeof document === `undefined` || !(node instanceof HTMLElement))
-      return undefined
-
+    if (!(node instanceof HTMLElement)) return undefined
     if (
       options.trigger !== undefined &&
       ![`hover-focus`, `hover`, `focus`].includes(options.trigger)
@@ -764,13 +772,13 @@ export const tooltip =
       throw new Error(
         `tooltip trigger must be hover-focus, hover, or focus; got ${options.trigger}`,
       )
+    if (options.disabled) return undefined
 
     const has_root_source =
       options.content !== undefined || node.matches(TOOLTIP_SOURCE_SELECTOR)
     const delegate = options.delegate ?? !has_root_source
     const delegate_selector =
       typeof delegate === `string` ? delegate : delegate ? TOOLTIP_SOURCE_SELECTOR : null
-    if (options.disabled) return undefined
     // Throws the native SyntaxError naming the selector here rather than on first hover
     if (delegate_selector) node.matches(delegate_selector)
 

@@ -83,7 +83,7 @@
     if (size > 0) hi = Math.min(hi, size - (second_min_px ?? 0))
     return [lo, Math.max(lo, hi)]
   }
-  let px_mode = $derived(first_px !== undefined)
+  const px_mode = $derived(first_px !== undefined)
   const size_bounds = $derived(
     px_mode ? px_bounds(container_size) : ratio_bounds(container_size),
   )
@@ -92,13 +92,13 @@
   const safe_size = $derived(clamp_size(first_px ?? ratio))
   const format_size = (value: number): string =>
     px_mode ? `${value}px` : `${value * 100}%`
-  let pane_size = $derived(collapsed ? `0px` : format_size(safe_size))
+  const pane_size = $derived(collapsed ? `0px` : format_size(safe_size))
   // aria values are in the mode's own unit: percent of the container, or px. Both follow the
   // effective clamps, so pixel floors tightening the ratio range show in the announced bounds
-  let aria_bounds = $derived(
+  const aria_bounds = $derived(
     px_mode ? size_bounds : size_bounds.map((bound) => bound * 100),
   )
-  let aria_value = $derived(Math.round(px_mode ? safe_size : safe_size * 100))
+  const aria_value = $derived(Math.round(px_mode ? safe_size : safe_size * 100))
 
   const update_parent = (value: string): void => {
     divider?.parentElement?.style.setProperty(`--split-pane-size`, value)
@@ -147,7 +147,7 @@
     event.preventDefault()
     active_pointer = event.pointerId
     drag_from_right = is_right_to_left()
-    ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
+    divider?.setPointerCapture?.(event.pointerId)
   }
 
   const stop_resize = (event: PointerEvent): void => {

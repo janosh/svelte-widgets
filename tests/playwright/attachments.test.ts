@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test'
 import process from 'node:process'
 import { build } from 'vite'
 import type * as ContrastModule from '../../src/lib/attachments/contrast-color'
-import { hover_until } from './helpers'
+import { hover_until, goto } from './helpers'
 
 type TooltipMetrics = {
   border_box_width: number
@@ -78,7 +78,7 @@ const expect_within_viewport = (metrics: TooltipMetrics) => {
 
 test.describe(`tooltip layout and lifecycle`, () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto(`/attachments/tooltip`, { waitUntil: `networkidle` })
+    await goto(page, `/attachments/tooltip`, { waitUntil: `networkidle` })
   })
 
   test(`short single-word tooltip renders one snug line below its max-width`, async ({
@@ -280,6 +280,9 @@ test.describe(`tooltip layout and lifecycle`, () => {
 test(`contrast_color walks slotted content through the slot's painted wrapper`, async ({
   page,
 }) => {
+  // Vite's build sets NODE_ENV=production for the whole worker, so a later dev server here
+  // (Markdown.test.ts) would compile without HMR. Restore it once bundled.
+  const node_env = process.env.NODE_ENV
   const result = await build({
     configFile: false,
     logLevel: `silent`,
@@ -292,6 +295,9 @@ test(`contrast_color walks slotted content through the slot's painted wrapper`, 
         name: `contrast_module`,
       },
     },
+  }).finally(() => {
+    if (node_env === undefined) delete process.env.NODE_ENV
+    else process.env.NODE_ENV = node_env
   })
   const [bundle] = Array.isArray(result) ? result : [result]
   if (!bundle || !(`output` in bundle))

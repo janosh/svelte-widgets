@@ -405,6 +405,13 @@ export type LinkItem = Pick<HTMLAnchorAttributes, `target` | `rel` | `title`> & 
   href: string
   label: string
 }
+// A trail level navigates by href, by its own onclick, or through Breadcrumbs' on_navigate,
+// so router-free views (a file browser, a wizard) need no URLs. Extra fields reach snippets.
+export type BreadcrumbItem = Omit<LinkItem, `href`> & {
+  href?: string
+  onclick?: (event: MouseEvent) => void
+  icon?: IconData
+}
 type NavDetails = Omit<LinkItem, `href`> & {
   disabled?: boolean
   tooltip?: string | Omit<TooltipOptions, `disabled`>

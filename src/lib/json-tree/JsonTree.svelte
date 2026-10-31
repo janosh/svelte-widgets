@@ -21,7 +21,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
   import JsonNode from './JsonNode.svelte'
-  import type { CopyEventPosition, JsonTreeContext, JsonTreeProps } from './types'
+  import type { JsonTreeContext, JsonTreeProps } from './types'
   import { set_json_tree_context } from './types'
   import {
     build_ghost_map,
@@ -75,13 +75,13 @@
     ...rest
   }: JsonTreeProps & HTMLAttributes<HTMLDivElement> = $props()
 
-  type CopyFeedback = { error: boolean; pos: CopyEventPosition | null }
-
   let search_query = $state(``)
   let search_input_value = $state(``)
   let search_debounce_timeout: ReturnType<typeof setTimeout> | undefined
   let focused_path = $state<string | null>(null)
+  type CopyFeedback = { error: boolean; rect?: DOMRect }
   const copy_feedback = create_flash<CopyFeedback | null>(null, 1000)
+  const copy_feedback_room = 100 // px, fits "Copy failed" plus its gap
   $effect(() => () => clearTimeout(search_debounce_timeout))
   // Paths expanded explicitly (overrides auto-fold thresholds)
   let force_expanded = $state(new SvelteSet<string>())
@@ -95,6 +95,7 @@
     value: unknown
     expandable: boolean
     is_collapsed: boolean
+    row: Element | null // the right-clicked node's line, where copy feedback shows
   } | null>(null)
   const pinned_paths = new SvelteSet<string>()
   const selected_paths = new SvelteSet<string>()
@@ -287,9 +288,14 @@
   async function copy_to_clipboard(
     path: string,
     text: string,
-    event?: CopyEventPosition,
+    anchor: EventTarget | null | undefined, // the copied element; feedback shows beside it
   ): Promise<void> {
-    const pos = event ? { clientX: event.clientX, clientY: event.clientY } : null
+    // measured now: the element may re-render while the clipboard write settles. A detached
+    // one (data replaced under an open context menu) has no box, so it falls back to the corner
+    const rect =
+      anchor instanceof Element && anchor.isConnected
+        ? anchor.getBoundingClientRect()
+        : undefined
     let error = false
     try {
       await navigator.clipboard.writeText(text)
@@ -297,7 +303,7 @@
     } catch {
       error = true // show feedback regardless, but flag the failure
     }
-    copy_feedback.show({ error, pos })
+    copy_feedback.show({ error, rect })
   }
 
   const diff_map = $derived(
@@ -313,14 +319,14 @@
   type MenuItem = { label: string; icon?: IconData; action: () => void }
   const context_menu_items = $derived.by((): (MenuItem | null)[] => {
     if (!context_menu_state) return []
-    const { path, value: node_value, expandable, is_collapsed } = context_menu_state
+    const { path, value: node_value, expandable, is_collapsed, row } = context_menu_state
     return [
       {
         label: `Copy value`,
         icon: Copy,
-        action: () => copy_to_clipboard(path, serialize_for_copy(node_value)),
+        action: () => copy_to_clipboard(path, serialize_for_copy(node_value), row),
       },
-      { label: `Copy path`, action: () => copy_to_clipboard(path, path) },
+      { label: `Copy path`, action: () => copy_to_clipboard(path, path, row) },
       null,
       ...(expandable
         ? [
@@ -401,13 +407,16 @@
     collapse_children_only,
     set_focused,
     toggle_select,
-    copy_value: (path, val, event) =>
-      copy_to_clipboard(path, serialize_for_copy(val), event),
-    copy_path: (path, event) => copy_to_clipboard(path, path, event),
+    copy_value: (path, val, anchor) =>
+      copy_to_clipboard(path, serialize_for_copy(val), anchor),
+    copy_path: (path, anchor) => copy_to_clipboard(path, path, anchor),
     show_context_menu: (event, path, ctx_value, expandable, is_collapsed) => {
       if (ui.node_actions === false) return
       event.preventDefault()
       event.stopPropagation() // ancestors would otherwise re-target the menu to themselves
+      // the clicked node's own line (blank space on the row targets the node itself)
+      const node =
+        event.target instanceof Element ? event.target.closest(`.json-node`) : null
       context_menu_state = {
         x: event.clientX,
         y: event.clientY,
@@ -415,6 +424,7 @@
         value: ctx_value,
         expandable,
         is_collapsed,
+        row: node?.querySelector(`:scope > .node-content`) ?? null,
       }
     },
     get on_change() {
@@ -443,7 +453,10 @@
       if (selected_paths.size === 0) return
       event.preventDefault()
       const values = [...selected_paths].map((path) => serialize_for_copy(value_at(path)))
-      void copy_to_clipboard(`[selection]`, values.join(`\n`))
+      const first_row = content_element?.querySelector(
+        `.json-node[aria-selected="true"] > .node-content`,
+      )
+      void copy_to_clipboard(`[selection]`, values.join(`\n`), first_row)
       return
     }
     // Any arrow key focuses the first node (index -1 clamps to 0); afterwards Up/Down/Home/End
@@ -488,7 +501,7 @@
 
 {#snippet header_btn(
   title: string,
-  onclick: () => void,
+  onclick: (event: MouseEvent) => void,
   content: IconData | string,
   active = false,
 )}
@@ -586,7 +599,7 @@
       <div class="controls">
         {@render header_btn(
           `Copy JSON to clipboard`,
-          () => copy_to_clipboard(`[root]`, to_json(value)),
+          (event) => copy_to_clipboard(`[root]`, to_json(value), event.currentTarget),
           Copy,
         )}
         {@render header_btn(`Download as JSON file`, download_json, Download)}
@@ -599,7 +612,9 @@
       <button
         type="button"
         class="copy-path-btn"
-        onclick={() => focused_path && copy_to_clipboard(focused_path, focused_path)}
+        onclick={(event) =>
+          focused_path &&
+          copy_to_clipboard(focused_path, focused_path, event.currentTarget)}
         title="Click to copy path"
         {@attach tooltip()}
       >
@@ -625,8 +640,12 @@
           <button
             type="button"
             class="pinned-path"
-            onclick={() =>
-              copy_to_clipboard(pinned_path, serialize_for_copy(value_at(pinned_path)))}
+            onclick={(event) =>
+              copy_to_clipboard(
+                pinned_path,
+                serialize_for_copy(value_at(pinned_path)),
+                event.currentTarget,
+              )}
             title="Click to copy value"
             {@attach tooltip()}
           >
@@ -659,14 +678,16 @@
   </div>
 
   {#if copy_feedback.value}
-    {@const feedback = copy_feedback.value}
+    {@const { rect, error } = copy_feedback.value}
+    {@const before = rect && rect.right + copy_feedback_room > globalThis.innerWidth}
+    <!-- beside the copied element, or before it when that would cross the viewport edge -->
     <div
-      class={[`copy-feedback`, { error: feedback.error }]}
-      style={feedback.pos
-        ? `left: ${feedback.pos.clientX}px; top: ${feedback.pos.clientY - 24}px`
+      class={[`copy-feedback`, { error }]}
+      style={rect
+        ? `left: ${before ? rect.left - 6 : rect.right + 6}px; top: ${rect.top + rect.height / 2}px; translate: ${before ? `-100%` : 0} -50%`
         : `right: 8px; top: 8px`}
     >
-      {feedback.error ? `Copy failed` : `Copied!`}
+      {error ? `Copy failed` : `Copied!`}
     </div>
   {/if}
 
@@ -724,31 +745,9 @@
     color: inherit;
   }
   .json-tree {
-    /* Color variables with light-dark() for automatic theme support */
-    --jt-string: light-dark(#a31515, #ce9178);
-    --jt-number: light-dark(#098658, #b5cea8);
-    --jt-boolean: light-dark(#0000ff, #569cd6);
-    --jt-null: light-dark(#808080, #808080);
-    --jt-key: light-dark(#001080, #9cdcfe);
-    --jt-punctuation: light-dark(#000000, #d4d4d4);
-    --jt-arrow: light-dark(#6e6e6e, #858585);
-    --jt-preview: light-dark(#808080, #808080);
-    --jt-search-match-bg: light-dark(#fff59d, #614d00);
-    --jt-current-match-bg: light-dark(#ffcc80, #8a5600);
-    --jt-change-flash: light-dark(#c8e6c9, #1b5e20);
-    --jt-focus-bg: light-dark(#e3f2fd, #0d3a58);
-    --jt-hover-bg: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08));
-    --jt-indent-guide: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
-    --jt-header-bg: light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.05));
-    --jt-header-border: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1));
-    /* Layout variables */
-    --jt-indent: 1.2em;
-    --jt-line-height: 1.5;
-    --jt-font-size: 13px;
-    --jt-font-family: 'SF Mono', Monaco, 'Courier New', monospace;
-    font-family: var(--jt-font-family);
-    font-size: var(--jt-font-size);
-    line-height: var(--jt-line-height);
+    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
+    font-size: var(--jt-font-size, 13px);
+    line-height: var(--jt-line-height, 1.5);
     position: relative;
     background: var(--jt-bg, transparent);
     border-radius: var(--jt-border-radius, 4px);
@@ -812,9 +811,12 @@
     &.active {
       opacity: 1;
     }
-    &:hover {
-      background: var(--jt-hover-bg);
-    }
+  }
+  :is(.clear-search, .nav-btn, .controls button, .copy-path-btn, .pinned-item):hover {
+    background: var(
+      --jt-hover-bg,
+      light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
+    );
   }
   .clear-search {
     padding: 2px;
@@ -837,7 +839,10 @@
   .divider {
     width: 1px;
     height: 16px;
-    background: var(--jt-header-border);
+    background: var(
+      --jt-header-border,
+      light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1))
+    );
     margin: 0 4px;
     align-self: center;
   }
@@ -868,14 +873,18 @@
   .path-breadcrumb,
   .pinned-panel {
     padding: 4px 8px;
-    background: var(--jt-header-bg);
-    border-bottom: 1px solid var(--jt-header-border);
+    background: var(
+      --jt-header-bg,
+      light-dark(rgba(0, 0, 0, 0.03), rgba(255, 255, 255, 0.05))
+    );
+    border-bottom: 1px solid
+      var(--jt-header-border, light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.1)));
     font-size: 11px;
     overflow: hidden;
   }
   .copy-path-btn,
   .pinned-path {
-    color: var(--jt-key);
+    color: var(--jt-key, light-dark(#001080, #9cdcfe));
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -888,9 +897,6 @@
     display: block;
     padding: 2px 4px;
     border-radius: 2px;
-    &:hover {
-      background: var(--jt-hover-bg);
-    }
   }
   .json-tree-content {
     padding: var(--jt-content-padding, 8px);
@@ -915,11 +921,11 @@
   @keyframes fade-in-out {
     0% {
       opacity: 0;
-      transform: translateY(-4px);
+      transform: translateX(-4px);
     }
     15% {
       opacity: 1;
-      transform: translateY(0);
+      transform: translateX(0);
     }
     85% {
       opacity: 1;
@@ -997,15 +1003,12 @@
     gap: 4px;
     padding: 2px 4px;
     border-radius: 2px;
-    &:hover {
-      background: var(--jt-hover-bg);
-    }
   }
   .pinned-path {
     max-width: 200px;
   }
   .pinned-value {
-    color: var(--jt-preview);
+    color: var(--jt-preview, #808080);
     font-style: italic;
     white-space: nowrap;
     overflow: hidden;

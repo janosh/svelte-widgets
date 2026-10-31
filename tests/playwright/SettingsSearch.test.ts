@@ -1,11 +1,12 @@
 import type { Locator, Page } from '@playwright/test'
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
 // The corner trigger and the filtered-row override are pure CSS, which happy-dom applies no
 // layout for. Every locator is scoped to this demo: other examples repeat these classes.
 
 const open_demo = async (page: Page) => {
-  await page.goto(`/settings`, { waitUntil: `networkidle` })
+  await goto(page, `/settings`, { waitUntil: `networkidle` })
   const demo = page.locator(`#settings-search`).first()
   // `networkidle` lands before Markdown compiles the live examples on a cold dev server
   await expect(demo).toBeVisible()
@@ -78,7 +79,7 @@ test(`filtering hides rows and groups, then Escape restores focus and rows`, asy
 test(`per-setting reset buttons preserve control width and restore keyboard focus`, async ({
   page,
 }) => {
-  await page.goto(`/settings`)
+  await goto(page, `/settings`)
   const row = page.locator(`#settings-section [data-key="radius"]`)
   const input = row.locator(`input`)
   const reset = row.locator(`.setting-reset-button`)

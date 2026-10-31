@@ -126,7 +126,7 @@ export const register_escape_layer = key_layer_stack(
 // Wrap a handler as a layer that always consumes the key. Safe to swallow: only the
 // innermost layer gets here, so no outer surface waits on it. Canceling the default keeps a
 // wrapping native <dialog> open until a second Escape.
-const consume_escape =
+export const consume_escape =
   (handler: (event: KeyboardEvent) => void): KeyLayer =>
   (event) => {
     event.preventDefault()
@@ -205,11 +205,11 @@ const style_overrides = new WeakMap<
 >()
 
 // Latest active owner wins; the last release restores the original inline declaration.
-export function override_style(
+export const override_style = (
   style: CSSStyleDeclaration,
   property: string,
   value: string,
-) {
+): (() => void) => {
   let properties = style_overrides.get(style)
   if (!properties) style_overrides.set(style, (properties = new Map()))
   let state = properties.get(property)

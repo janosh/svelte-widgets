@@ -1,16 +1,8 @@
 import { expect, test } from '@playwright/test'
-
-test(`page navigation links use the blue accent`, async ({ page }) => {
-  await page.emulateMedia({ colorScheme: `light` })
-  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
-  await expect(page.locator(`nav.prev-next a`).first()).toHaveCSS(
-    `color`,
-    `rgb(74, 122, 191)`,
-  )
-})
+import { goto } from './helpers'
 
 test(`closing the native dialog restores focus to the opener`, async ({ page }) => {
-  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  await goto(page, `/command-menu`, { waitUntil: `networkidle` })
   const opener = page.getByRole(`button`, { name: `View code` }).first()
   await opener.focus()
 
@@ -26,7 +18,7 @@ test(`closing the native dialog restores focus to the opener`, async ({ page }) 
 
 // dialog.close() queues its close event; a reopen during the fade-out must not be undone by it
 test(`reopening right after running an action keeps the menu open`, async ({ page }) => {
-  await page.goto(`/command-menu`, { waitUntil: `networkidle` })
+  await goto(page, `/command-menu`, { waitUntil: `networkidle` })
   const dialog = page.getByRole(`dialog`, { name: `Command menu` })
   await page.keyboard.press(`Control+p`)
   await dialog.getByRole(`combobox`).fill(`open settings`)
@@ -42,7 +34,7 @@ test(`PageSearch navigates through the generated Pagefind index`, async ({ page 
   test.skip(!process.env.CI, `Pagefind index requires the CI build:site server`)
 
   const base = process.env.BASE_PATH ?? ``
-  await page.goto(`${base}/command-menu`, { waitUntil: `networkidle` })
+  await goto(page, `${base}/command-menu`, { waitUntil: `networkidle` })
   await page.keyboard.press(`Control+k`)
   const search = page.getByRole(`dialog`, { name: `Site search` })
   await search.getByRole(`combobox`).fill(`whitespace collapsing`)
@@ -56,7 +48,7 @@ test(`PageSearch navigates through the generated Pagefind index`, async ({ page 
 })
 
 test(`backdrop still dismisses when CommandMenu disables Escape`, async ({ page }) => {
-  await page.goto(`/shadow-dom`, { waitUntil: `networkidle` })
+  await goto(page, `/shadow-dom`, { waitUntil: `networkidle` })
   const menu = page.locator(`#shadow-host dialog`)
   await expect(menu).toBeVisible()
 

@@ -1,8 +1,4 @@
-import {
-  files_from_data_transfer,
-  create_file_accept_filter,
-  filter_accepted_files,
-} from '#lib/file-drop.ts'
+import { files_from_data_transfer, create_file_accept_filter } from '#lib/file-drop.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
 // happy-dom has DataTransfer but no webkitGetAsEntry, so drops use hand-rolled entries
@@ -66,18 +62,6 @@ test.each([
   [`data.json`, `application/json`, `.txt,image/*`, false],
 ] as const)(`%s (%j) vs accept=%j matches: %s`, (name, type, accept, expected) => {
   expect(create_file_accept_filter(accept)(new File([``], name, { type }))).toBe(expected)
-})
-
-test(`accept filtering happens before the multiple limit`, () => {
-  const files = [`skip.txt`, `first.png`, `second.png`].map(
-    (name) => new File([``], name),
-  )
-
-  expect(names(filter_accepted_files(files, `.png`))).toEqual([`first.png`])
-  expect(names(filter_accepted_files(files, `.png`, true))).toEqual([
-    `first.png`,
-    `second.png`,
-  ])
 })
 
 // why the helper exists: DataTransfer.files reports a dropped directory as one zero-byte

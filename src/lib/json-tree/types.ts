@@ -95,8 +95,13 @@ export interface JsonTreeContext {
   collapse_children_only: (path: string) => void
   set_focused: (path: string | null) => void
   toggle_select: (path: string, shift: boolean) => void
-  copy_value: (path: string, value: unknown, event?: CopyEventPosition) => Promise<void>
-  copy_path: (path: string, event?: CopyEventPosition) => Promise<void>
+  // anchor: the clicked element, whose right edge the copy feedback sits beside
+  copy_value: (
+    path: string,
+    value: unknown,
+    anchor: EventTarget | null | undefined,
+  ) => Promise<void>
+  copy_path: (path: string, anchor: EventTarget | null | undefined) => Promise<void>
   show_context_menu: (
     event: MouseEvent,
     path: string,
@@ -106,9 +111,6 @@ export interface JsonTreeContext {
   ) => void
   on_change?: (path: string, new_value: unknown, old_value: unknown) => void
 }
-
-// Minimal position info for copy feedback (avoids partial MouseEvent mocks)
-export type CopyEventPosition = { clientX: number; clientY: number }
 
 export const [get_json_tree_context, set_json_tree_context] =
   createContext<JsonTreeContext>()

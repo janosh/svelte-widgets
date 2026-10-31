@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { box_of, center_of, mouse_drag, touch_drag } from './helpers'
+import { box_of, center_of, mouse_drag, touch_drag, goto } from './helpers'
 
 // Read related boxes in one frame so scrolling cannot skew their relative positions.
 const tick_layout = (group: Locator) =>
@@ -25,13 +25,10 @@ const drag_to = async (page: Page, thumb: Locator, destination: number) => {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto(`/range-slider`, { waitUntil: `networkidle` })
-  // Wait for hydration rather than mistaking SSR markup for a working control.
+  await goto(page, `/range-slider`, { waitUntil: `networkidle` })
   const lower = page.getByRole(`slider`, { name: `Nightly budget From` })
-  await expect(async () => {
-    await lower.press(`Home`)
-    await expect(lower).toHaveAttribute(`aria-valuenow`, `0`)
-  }).toPass()
+  await lower.press(`Home`)
+  await expect(lower).toHaveAttribute(`aria-valuenow`, `0`)
   await page.getByRole(`button`, { name: `Reset`, exact: true }).click()
 })
 
@@ -105,13 +102,11 @@ test(`logarithmic controls keep native keyboard edits and announcements in real 
   await input.press(`Enter`)
   await expect(input).toHaveValue(`0.001`)
 
-  await page.goto(`/settings`)
+  await goto(page, `/settings`)
   const number = page.getByRole(`spinbutton`, { name: `Pressure bar` })
   const range = page.getByRole(`slider`, { name: `Pressure in bar` })
-  await expect(async () => {
-    await range.press(`End`)
-    await expect(number).toHaveValue(`100`)
-  }).toPass()
+  await range.press(`End`)
+  await expect(number).toHaveValue(`100`)
   await range.press(`Home`)
   await expect(number).toHaveValue(`1e-10`)
   await expect(range).toHaveAttribute(`aria-valuenow`, `1e-10`)

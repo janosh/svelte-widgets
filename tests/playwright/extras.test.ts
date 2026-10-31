@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
-test.beforeEach(({ page }) => page.goto(`/extras`, { waitUntil: `networkidle` }))
+test.beforeEach(({ page }) => goto(page, `/extras`, { waitUntil: `networkidle` }))
 
 // CopyButton is white-space: nowrap and ActionButton is width: fit-content, so a card
 // holding a long CamelCase icon name used to outgrow its track and paint over its neighbor.

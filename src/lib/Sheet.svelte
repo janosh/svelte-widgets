@@ -26,7 +26,9 @@
 />
 
 <style>
-  :global(dialog.sheet) {
+  /* .dialog too: Dialog's own rule is class-scoped (0,2,0), which a bare dialog.sheet loses
+     to, leaving its margin: auto and 2rem max sizes to inset the sheet from its edge */
+  :global(dialog.dialog.sheet) {
     --dialog-width: auto;
     --dialog-border: var(--sheet-border, 1px solid light-dark(lightgray, #555));
     --dialog-radius: 0;
@@ -38,7 +40,6 @@
     --dialog-section-padding: var(--sheet-section-padding, 1rem);
     --dialog-content-padding: var(--sheet-content-padding, 1rem);
     position: fixed;
-    inset: auto;
     margin: 0;
     height: auto;
     max-width: 100vw;
