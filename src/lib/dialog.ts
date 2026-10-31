@@ -24,18 +24,15 @@ export type DialogProps = Omit<HTMLDialogAttributes, `children`> & {
   on_close?: (detail: DialogCloseDetail) => void
 }
 
-export const is_dialog_backdrop_event = (
+// A press on the ::backdrop targets the dialog itself but lands outside its box
+const is_backdrop_press = (
   dialog: HTMLDialogElement | null,
   event: MouseEvent,
 ): boolean => {
-  if (event.target !== dialog || !dialog) return false
+  if (!dialog || event.target !== dialog) return false
   const { top, right, bottom, left } = dialog.getBoundingClientRect()
-  return (
-    event.clientX < left ||
-    event.clientX > right ||
-    event.clientY < top ||
-    event.clientY > bottom
-  )
+  const { clientX: x, clientY: y } = event
+  return x < left || x > right || y < top || y > bottom
 }
 
 // Light dismiss for browsers without `closedby` support: only a primary press that started
@@ -56,12 +53,12 @@ export const track_backdrop_dismiss = (
     },
     reset,
     onpointerdown: (event: PointerEvent) => {
-      press_started = event.isPrimary && is_dialog_backdrop_event(get_dialog(), event)
+      press_started = event.isPrimary && is_backdrop_press(get_dialog(), event)
     },
     onpointercancel: reset,
     onclick: (event: MouseEvent) => {
-      const dismiss = press_started && is_dialog_backdrop_event(get_dialog(), event)
-      press_started = false
+      const dismiss = press_started && is_backdrop_press(get_dialog(), event)
+      reset()
       if (dismiss) on_dismiss()
     },
   }

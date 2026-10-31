@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test'
-import { box_of, center_of, mouse_drag, touch_drag, type Point } from './helpers'
+import { box_of, center_of, mouse_drag, touch_drag, type Point, goto } from './helpers'
 
 // A touch drag never produces mousemove, which happy-dom cannot model — hence a real browser.
 
@@ -13,7 +13,7 @@ const anchoring_error = async (pane: Locator, toggle: Locator) => {
 }
 
 const open_pane = async (page: Page) => {
-  await page.goto(`/draggable-pane`, { waitUntil: `networkidle` })
+  await goto(page, `/draggable-pane`, { waitUntil: `networkidle` })
   const toggle = page.locator(`button.pane-toggle`).first()
   await toggle.click()
   const pane = page.locator(`div.draggable-pane`).first()
@@ -159,7 +159,7 @@ test(`the default pane is capped to the viewport at phone width`, async ({ page 
 // closes through the browser's close watcher, which happy-dom lacks.
 test.describe(`Escape inside an open pane`, () => {
   const open_fixture = async (page: Page) => {
-    await page.goto(`/pane-escape`, { waitUntil: `networkidle` })
+    await goto(page, `/pane-escape`, { waitUntil: `networkidle` })
     await page.locator(`button.pane-toggle`).click()
     const pane = page.locator(`div.draggable-pane`)
     await expect(pane).toBeVisible()

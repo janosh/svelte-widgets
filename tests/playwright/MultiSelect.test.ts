@@ -1,8 +1,9 @@
 import { foods, languages, octicons } from '#site/options.ts'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { goto, reload } from './helpers'
 
 async function open_portal_modal(page: Page): Promise<Locator> {
-  await page.goto(`/portal`, { waitUntil: `networkidle` })
+  await goto(page, `/portal`, { waitUntil: `networkidle` })
   await page.getByRole(`button`, { name: `Open Modal` }).click()
   return page.locator(`div.modal-content.modal`)
 }
@@ -12,20 +13,12 @@ const open_portalled = (page: Page): Locator =>
 const portalled_options = (page: Page, label: string): Locator =>
   page.locator(`body > ul.options:not(.hidden):has(li:has-text("${label}"))`)
 
-// keyboard/scroll handlers only work once hydration installs MultiSelect's input.focus override
-const wait_for_hydration = (page: Page, input_selector: string) =>
-  page.waitForFunction((selector) => {
-    const input_el = document.querySelector<HTMLInputElement>(selector)
-    return input_el && !String(input_el.focus).includes(`[native code]`)
-  }, input_selector)
-
 const store_binding_input = `#store-binding input[placeholder='Select colors...']`
 
 async function goto_persistent(page: Page): Promise<void> {
-  await page.goto(`/persistent`)
+  await goto(page, `/persistent`)
   await expect(page.locator(`#languages input[autocomplete]`)).toBeVisible()
   await expect(page.locator(store_binding_input)).toBeVisible()
-  await wait_for_hydration(page, store_binding_input)
 }
 
 // Issue #309: Array cloning by reactive wrappers (stores, Superforms) caused infinite loops
@@ -47,7 +40,7 @@ test(`array cloning infinite loop prevention (issue #309)`, async ({ page }) => 
 test.describe(`input`, () => {
   // https://github.com/janosh/svelte-widgets/issues/289
   test(`programmatic focus opens dropdown`, async ({ page }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
+    await goto(page, `/ui`, { waitUntil: `networkidle` })
     const dropdown = page.locator(`#foods div.multiselect > ul.options`)
     // raw DOM focus/blur: locator.focus() skips an already-focused element and would bypass
     // the component's .focus() override in the retry below
@@ -59,11 +52,8 @@ test.describe(`input`, () => {
     await expect(dropdown).toHaveClass(/hidden/u)
     await expect(dropdown).toBeHidden()
 
-    // focus is a no-op until hydration installs the .focus() override, so retry
-    await expect(async () => {
-      await input_method(`focus`)
-      await expect(dropdown).not.toHaveClass(/hidden/u, { timeout: 1000 })
-    }).toPass()
+    await input_method(`focus`)
+    await expect(dropdown).not.toHaveClass(/hidden/u)
     await expect(dropdown).toBeVisible()
 
     await input_method(`blur`)
@@ -73,7 +63,7 @@ test.describe(`input`, () => {
 
   // https://github.com/janosh/svelte-widgets/issues/423
   test(`retain-focus keeps input focused after mouse selection`, async ({ page }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
+    await goto(page, `/ui`, { waitUntil: `networkidle` })
     const input = page.locator(`#retain-focus input[autocomplete]`)
     const dropdown = page.locator(`#retain-focus ul.options`)
 
@@ -100,11 +90,13 @@ test.describe(`multiselect`, () => {
   test(`loops through dropdown list with arrow keys making each option active in turn`, async ({
     page,
   }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
+    await goto(page, `/ui`, { waitUntil: `networkidle` })
     const input = page.locator(`#foods input[autocomplete]`)
     await input.click()
     await expect(input).toBeFocused()
-    await expect(page.locator(`#foods ul.options`)).toBeVisible()
+    // without a portal, the dropdown renders inside the component, not in body
+    await expect(page.locator(`#foods > div.multiselect > ul.options`)).toBeVisible()
+    await expect(open_portalled(page)).toHaveCount(0)
 
     const active_option = page.locator(`#foods ul.options > li.active`)
     for (const expected_fruit of foods) {
@@ -124,7 +116,7 @@ test.describe(`multiselect`, () => {
   test(`keyboard nav ignores scroll-triggered mouseover but re-enables on mouse movement`, async ({
     page,
   }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
+    await goto(page, `/ui`, { waitUntil: `networkidle` })
     await page.click(`#foods input[autocomplete]`)
 
     for (let idx = 0; idx < 3; idx++) await page.keyboard.press(`ArrowDown`)
@@ -157,7 +149,7 @@ test.describe(`multiselect`, () => {
       [`["Ruby"]`, [`Ruby`]],
     ] as const) {
       await page.evaluate((value) => sessionStorage.setItem(`languages`, value), stored)
-      await page.reload()
+      await reload(page)
       await expect
         .poll(() => page.evaluate(() => sessionStorage.getItem(`languages`)))
         .toBe(JSON.stringify(expected))
@@ -166,7 +158,7 @@ test.describe(`multiselect`, () => {
       )
     }
     await page.evaluate(() => sessionStorage.clear())
-    await page.reload()
+    await reload(page)
     await expect(page.locator(`#languages input[autocomplete]`)).toBeVisible()
 
     const selected = page.locator(`#languages ul.selected`)
@@ -176,7 +168,7 @@ test.describe(`multiselect`, () => {
     await expect(page.locator(`#languages ul.options`)).toBeVisible()
     await page.locator(`#languages ul.options li:has-text("Ruby")`).first().click()
 
-    await page.reload()
+    await reload(page)
 
     await expect(selected).toContainText(`Ruby`)
     await expect(selected).toContainText(`Python`)
@@ -197,54 +189,6 @@ test(`browser drag reorders selected options`, async ({ page }) => {
 })
 
 test.describe(`portal feature`, () => {
-  test(`dropdown renders within component when portal is inactive`, async ({ page }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
-    await page.click(`#foods input[autocomplete]`)
-
-    await expect(
-      page.locator(`#foods > div.multiselect > ul.options:not(.hidden)`),
-    ).toBeVisible()
-    await expect(open_portalled(page)).toHaveCount(0)
-  })
-
-  test(`mobile touch selection works with portal enabled`, async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 812 })
-    const modal_content = await open_portal_modal(page)
-    const languages_input = modal_content.locator(
-      `div.multiselect input[placeholder='Choose languages...']`,
-    )
-
-    await languages_input.click()
-
-    const portalled_languages_options = portalled_options(page, languages[0])
-    await expect(portalled_languages_options).toBeVisible()
-
-    const dropdown_stays_open = await page.evaluate(() => {
-      const outer_div = document.querySelector(`div.multiselect`)
-      const portalled_option = document.querySelector(
-        `body > ul.options li[role="option"]`,
-      )
-      const dropdown = document.querySelector(`body > ul.options`)
-
-      if (!outer_div || !portalled_option || !dropdown) return false
-
-      const click_event = new MouseEvent(`click`, { bubbles: true })
-      Object.defineProperty(click_event, `target`, { value: portalled_option })
-      globalThis.dispatchEvent(click_event)
-
-      return !dropdown.classList.contains(`hidden`)
-    })
-
-    expect(dropdown_stays_open).toBe(true)
-
-    await portalled_languages_options
-      .getByRole(`option`, { name: languages[0], exact: true })
-      .click()
-    await expect(
-      modal_content.getByRole(`button`, { name: `Remove ${languages[0]}` }),
-    ).toBeVisible()
-  })
-
   test(`dropdowns in modal render in body when portal is active`, async ({ page }) => {
     const modal_content = await open_portal_modal(page)
     const open_dropdown = open_portalled(page)
@@ -263,6 +207,7 @@ test.describe(`portal feature`, () => {
 
       await portalled.getByRole(`option`, { name: label, exact: true }).click()
       // clicks inside the portalled list must not count as clicks outside the component
+      // https://github.com/janosh/svelte-widgets/issues/336
       await expect(open_dropdown).toBeVisible()
       await expect(
         modal_content.getByRole(`button`, { name: `Remove ${label}` }),
@@ -356,9 +301,8 @@ test.describe(`virtual_list`, () => {
     page.locator(`.virtual ul.options > li[aria-hidden="true"]`)
 
   const goto_virtual_list = async (page: Page): Promise<void> => {
-    await page.goto(`/multiselect-virtual-list`, { waitUntil: `networkidle` })
+    await goto(page, `/multiselect-virtual-list`, { waitUntil: `networkidle` })
     await expect(page.locator(`.virtual ul.options`)).toBeVisible()
-    await wait_for_hydration(page, `.virtual input[autocomplete]`)
   }
 
   test(`renders a small window of the 2000-option list and re-windows it on scroll`, async ({
@@ -474,7 +418,7 @@ for (const [height, placeholder, placement] of [
 }
 
 test(`input width minimizes when options are selected`, async ({ page }) => {
-  await page.goto(`/ui`, { waitUntil: `networkidle` })
+  await goto(page, `/ui`, { waitUntil: `networkidle` })
   const input = page.locator(`#foods input[autocomplete]`)
   await expect(input).toHaveCSS(`min-width`, `32px`)
 
@@ -489,7 +433,7 @@ test(`input width minimizes when options are selected`, async ({ page }) => {
 // Issue #380: CSS class specificity - user classes should override component defaults
 // https://github.com/janosh/svelte-widgets/issues/380
 test(`component buttons are styled correctly with border: none`, async ({ page }) => {
-  await page.goto(`/css-classes`, { waitUntil: `networkidle` })
+  await goto(page, `/css-classes`, { waitUntil: `networkidle` })
   const button = page.locator(`ul.selected > li button`).first()
   await expect(button).toBeVisible()
   await expect(button).toHaveCSS(`border-style`, `none`)
@@ -511,7 +455,7 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
   test(`in-place widget text uses the light-dark() default, not the inherited page color`, async ({
     page,
   }) => {
-    await page.goto(`/ui`, { waitUntil: `networkidle` })
+    await goto(page, `/ui`, { waitUntil: `networkidle` })
 
     // simulate a dark page that never declares color-scheme, with a distinctive parent color
     await page.evaluate(() => {
@@ -557,7 +501,7 @@ test.describe(`schemeless-dark-page text-color readability`, () => {
 // spreading the submitted FormData into JSON.stringify() silently dropped every field but the
 // first (extra entries land in the replacer/space args)
 test(`form demo previews every submitted FormData field`, async ({ page }) => {
-  await page.goto(`/form`, { waitUntil: `networkidle` })
+  await goto(page, `/form`, { waitUntil: `networkidle` })
 
   const label = `Which colors would you pick for the Martian flag?`
   await page.getByLabel(label).click()
@@ -574,7 +518,7 @@ test(`form demo previews every submitted FormData field`, async ({ page }) => {
   await expect(
     page.locator(`pre code`).filter({ hasText: /^\["Red","Green"\]$/u }),
   ).toHaveCount(1)
-  await page.goto(`/kit-form-actions`, { waitUntil: `networkidle` })
+  await goto(page, `/kit-form-actions`, { waitUntil: `networkidle` })
   await page.getByText(label, { exact: true }).click()
   await expect(page.getByLabel(label)).toBeFocused()
 })
@@ -582,8 +526,7 @@ test(`form demo previews every submitted FormData field`, async ({ page }) => {
 test(`failed option loads can be retried from the keyboard without selecting an option`, async ({
   page,
 }) => {
-  // Wait for the live Markdown example to hydrate before toggling its state.
-  await page.goto(`/infinite-scroll`, { waitUntil: `networkidle` })
+  await goto(page, `/infinite-scroll`, { waitUntil: `networkidle` })
   await page.getByRole(`checkbox`, { name: `Fail the next request` }).check()
   const input = page.getByPlaceholder(`Search 10,000 items...`)
   const multiselect = page.locator(`div.multiselect`).filter({ has: input })

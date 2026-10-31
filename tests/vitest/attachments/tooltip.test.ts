@@ -267,6 +267,9 @@ describe(`tooltip manager`, () => {
   })
 
   it(`closes only once every pointer has left both trigger and tooltip`, () => {
+    // an outer surface (e.g. a pane) opened before the tooltip, which thus outranks it
+    const outer_layer = vi.fn(() => true)
+    onTestFinished(register_escape_layer(outer_layer))
     const { element, tooltip_el } = show_tooltip({ close_delay_ms: 100 })
     const surface_pointer = (type: string, pointer_type = `mouse`) =>
       tooltip_el.dispatchEvent(
@@ -293,7 +296,10 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(false)
 
     pointer_out(element)
-    vi.advanceTimersByTime(100)
+    vi.advanceTimersByTime(50)
+    // Escape hides a closing tooltip at once yet still reaches the outer surface
+    press_escape()
+    expect(outer_layer).toHaveBeenCalledOnce()
     expect(tooltip_el.hidden).toBe(true)
   })
 

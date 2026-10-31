@@ -16,7 +16,11 @@ import type * as Temml from 'temml'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
-import { heading_anchor_html, has_heading_anchor } from '../heading-anchors.ts'
+import {
+  decode_entities,
+  heading_anchor_html,
+  has_heading_anchor,
+} from '../heading-anchors.ts'
 import {
   source_map,
   edit_source,
@@ -37,7 +41,10 @@ import {
   type DiagnosticResult,
 } from './diagnostics.ts'
 import {
+  child_tokens,
   content_manifest,
+  table_cells,
+  walk_tokens,
   type ContentManifest,
   type FrontmatterValidator,
   type TokenSource,
@@ -151,14 +158,18 @@ const copy_options = <Value>(
   return copy as Value
 }
 
-const smart_quotes = (text: string): string =>
+// A quote opens after whitespace or an opening bracket, and at the start of a text token
+// unless inline content precedes it (`**bold**'s`), which `opens` reports
+const smart_quotes = (text: string, opens: boolean): string =>
   text
     .replaceAll(`...`, `…`)
     .replaceAll(/(?<!-)--(?!-)/gu, `—`)
-    .replaceAll(/(?<space>^|[\s([{])"/gu, `$1“`)
+    .replaceAll(opens ? /(?<=^|[\s([{])["']/gu : /(?<=[\s([{])["']/gu, (quote) =>
+      quote === `"` ? `“` : `‘`,
+    )
     .replaceAll(`"`, `”`)
-    .replaceAll(/(?<space>^|[\s([{])'/gu, `$1‘`)
     .replaceAll(`'`, `’`)
+const inline_parents = new Set([`strong`, `em`, `del`, `link`, `text`])
 
 // Marked cuts each top-level paragraph at the earliest block `start` index, calling every
 // hook on the whole rest of the document once per paragraph. No paragraph spans an empty
@@ -440,23 +451,18 @@ async function prepare_document(
         if (markup_line(text.slice(index + 1))) return text.slice(0, index + 1)
       return text
     }
-    tokenizer = {
-      list(src) {
-        return this.rules.block.list.test(src)
-          ? Tokenizer.prototype.list.call(this, before_block_line(src))
-          : undefined
-      },
-      blockquote(src) {
-        return this.rules.block.blockquote.test(src)
-          ? Tokenizer.prototype.blockquote.call(this, before_block_line(src))
-          : undefined
-      },
-      table(src) {
-        return this.rules.block.table.test(src)
-          ? Tokenizer.prototype.table.call(this, before_block_line(src))
-          : undefined
-      },
-    }
+    tokenizer = Object.fromEntries(
+      ([`list`, `blockquote`, `table`] as const).map((name) => [
+        name,
+        function (this: Tokenizer, src: string) {
+          const tokenize: (this: Tokenizer, src: string) => Token | undefined =
+            Tokenizer.prototype[name]
+          return this.rules.block[name].test(src)
+            ? tokenize.call(this, before_block_line(src))
+            : undefined
+        },
+      ]),
+    )
     const svelte_extension = (
       level: 'block' | 'inline',
       start: TokenizerStartFunction,
@@ -528,7 +534,7 @@ async function prepare_document(
   if (references) extensions.push(...references.extensions)
   const icon_svg =
     typeof options.heading_links === `object` ? options.heading_links.icon_svg : undefined
-  const heading_icon = icon_svg && syntax ? `{@html ${script_json(icon_svg)}}` : icon_svg
+  const heading_icon = icon_svg && html(icon_svg)
   const parser = new Marked({
     gfm: true,
     tokenizer,
@@ -602,7 +608,7 @@ async function prepare_document(
           return this.parser.parseInline(token.tokens)
         const text =
           options.typography && token.type !== `escape`
-            ? smart_quotes(token.text)
+            ? smart_quotes(token.text, !after_inline.has(token))
             : token.text
         return escape_braces(Renderer.prototype.text.call(this, { ...token, text }))
       },
@@ -625,8 +631,39 @@ async function prepare_document(
       (_match, index: string) => retained[Number(index)].code,
     )
   const tokens = parser.lexer(body)
+  // Text tokens that inline content precedes within their block, so quotes after inline
+  // markup close (`**bold**'s`). Opening tags, <br> and Svelte block openers start fresh
+  // (`<b>"x"</b>`, `{#if a}"x"{/if}` open); closing tags, comments and `{/...}` are transparent.
+  const after_inline = new Set<Token>()
+  const scan_quotes = (children: readonly Token[], before = ``): string => {
+    for (const token of children) {
+      if (token.type === `table`) {
+        for (const cell of table_cells(token as Tokens.Table)) scan_quotes(cell.tokens)
+        continue
+      }
+      const nested = token.type === `image` ? [] : child_tokens(token)
+      if (nested.length)
+        before = inline_parents.has(token.type)
+          ? scan_quotes(nested, before)
+          : (scan_quotes(nested), ``)
+      else {
+        if (!/^$|[\s([{]$/u.test(before)) after_inline.add(token)
+        if (/^(?:<br\b|<[a-z][^>]*(?<!\/)>|\{[#:])/iu.test(token.raw)) before = ``
+        // a text token's rendered text, not its source: `A&#32;` and `A&nbsp;` end in a space,
+        // not `;` (marked decodes numeric entities but leaves named ones)
+        else if (!/^(?:<|\{\/)/u.test(token.raw))
+          before =
+            (token.type === `text`
+              ? decode_entities((token as Tokens.Text).text)
+              : token.raw
+            ).at(-1) ?? before
+      }
+    }
+    return before
+  }
+  if (options.typography) scan_quotes(tokens)
   if (syntax)
-    void parser.walkTokens(tokens, (token) => {
+    walk_tokens(tokens, (token) => {
       const { tag } = token as Tokens.Def
       if (token.type === `def` && !definitions.has(tag))
         definitions.set(tag, token as Tokens.Def)

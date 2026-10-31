@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
 test(`inline code mentions of components link to their source, on load and after navigation`, async ({
   page,
@@ -19,7 +20,7 @@ test(`inline code mentions of components link to their source, on load and after
         })),
       }),
   )
-  await page.goto(`/`)
+  await goto(page, `/`)
   // Direct headings remain eligible for the site's table of contents.
   await expect(
     page.locator(`main > h2`).filter({ hasText: `Demo categories` }),
@@ -42,7 +43,7 @@ test(`inline code mentions of components link to their source, on load and after
   expect(await page.locator(`a code a`).count()).toBe(0)
 
   // client-side nav swaps the page inside the same wrapper: new mentions link too
-  await page.goto(`/popover`)
+  await goto(page, `/popover`)
   await expect(
     page.locator(`code > a[href$="/src/lib/Popover.svelte"]`).first(),
   ).toBeVisible()

@@ -43,26 +43,27 @@
 
   const msg = $derived(merge_defaults(FILE_DETAILS_LABELS, labels))
 
-  let detail_elements = $state<(HTMLDetailsElement | null)[]>([])
-
+  let list = $state<HTMLElement>()
+  // Queried rather than bound per index, so keyed reorders and removals can't leave stale refs
+  const details = () => [
+    ...(list?.querySelectorAll<HTMLDetailsElement>(`:scope > li > details`) ?? []),
+  ]
   // Mirror native open state for the toggle-all label.
   let has_open_details = $state(false)
   const sync_has_open_details = () => {
-    has_open_details = detail_elements.some((node) => node?.open)
+    has_open_details = details().some((node) => node.open)
   }
-
+  // Re-sync when the file list changes, including pre-opened details, which emit no
+  // initial toggle event.
   $effect(() => {
-    if (detail_elements.length > files.length) {
-      detail_elements.splice(files.length)
-    }
-    // Include pre-opened details, which emit no initial toggle event.
+    void files.slice()
     sync_has_open_details()
   })
 
   function toggle_all() {
-    const open = !detail_elements.some((node) => node?.open)
-    for (const node of detail_elements) if (node) node.open = open
-    sync_has_open_details()
+    const open = !details().some((node) => node.open)
+    for (const node of details()) node.open = open
+    has_open_details = open
   }
 
   // Normalize common file extensions to language names.
@@ -95,14 +96,13 @@
   </button>
 {/if}
 
-<svelte:element this={as} {...rest}>
+<svelte:element this={as} bind:this={list} {...rest}>
   <!-- object identity supports duplicate titles and preserves open state across inserts -->
   {#each files as file, idx (file)}
     {@const { title, content } = file}
     {@const language = file.language ?? lang_from_title(title) ?? default_lang}
     <li>
       <details
-        bind:this={detail_elements[idx]}
         {...details_props}
         ontoggle={chain_handlers(sync_has_open_details, details_props?.ontoggle)}
       >

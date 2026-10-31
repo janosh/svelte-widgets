@@ -50,8 +50,7 @@
   )
 
   const reset_key = (key: string): void => {
-    if (!on_reset_key || !changed_keys.includes(key)) return
-    on_reset_key(key)
+    if (changed_keys.includes(key)) on_reset_key?.(key)
   }
 
   // Reset buttons may sit inside a <summary> or <label>, neither of which should react to them.

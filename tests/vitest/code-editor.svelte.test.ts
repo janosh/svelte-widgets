@@ -528,6 +528,43 @@ test(`undoing mid-save edits back to the written text reads clean`, async () => 
   expect([model.undo(), model.dirty]).toEqual([true, true])
 })
 
+// Shift+Tab strips one tab or up to tab_size spaces, whichever unit the line uses
+test.each([
+  [{}, `    a\n\tb`, `  a\nb`, `  `],
+  [{ tab_size: 4 }, `      a\n\tb`, `  a\nb`, `    `],
+  [{ insert_spaces: false, tab_size: 4 }, `      a\n\tb`, `  a\nb`, `\t`],
+])(
+  `options %o: Shift+Tab dedents one level, Tab inserts the indent`,
+  async (options, text, dedented, indent) => {
+    const { model, textarea } = await mount_editor(text, { options })
+    model.set_selection({ anchor: 0, head: model.length })
+    press_key(textarea, `Tab`, { shiftKey: true })
+    expect(model.text()).toBe(dedented)
+    model.set_selection({ anchor: 0, head: 0 })
+    press_key(textarea, `Tab`)
+    expect(model.text()).toBe(indent + dedented)
+  },
+)
+test.each([
+  [`single-line`, 11, ``, `first`, `1 of 1`],
+  [`multi-line`, 24, ``, ``, `No matches`],
+  // an earlier query's nearest match would otherwise replace the selection
+  [`multi-line after an earlier query`, 24, `first`, ``, `No matches`],
+])(
+  `open_search seeds the query from a %s selection only`,
+  async (_kind, head, earlier, query, status) => {
+    const { model, instance } = await mount_editor()
+    if (earlier) {
+      await instance.open_search()
+      await fill_search(earlier)
+    }
+    model.set_selection({ anchor: 6, head })
+    await instance.open_search()
+    expect(doc_query<HTMLInputElement>(`input[aria-label="Find"]`).value).toBe(query)
+    expect(status_text()).toBe(status)
+    expect(model.selection).toEqual({ anchor: 6, head })
+  },
+)
 test(`typing with the find panel open patches matches near the edit`, async () => {
   const model = create_editor_model({
     uri: `memory:find-typing`,

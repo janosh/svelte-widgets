@@ -179,9 +179,8 @@
   const open_shortcuts = $derived(
     triggers.flatMap((key) => [`meta+${key}`, `ctrl+${key}`]),
   )
-  const escape_closes = $derived(close_keys.includes(`Escape`))
   const effective_closedby = $derived(
-    dialog_props?.closedby ?? (escape_closes ? `any` : `none`),
+    dialog_props?.closedby ?? (close_keys.includes(`Escape`) ? `any` : `none`),
   )
   const close_hotkeys = $derived(
     close_keys.filter((key) => key !== `Escape` || effective_closedby !== `none`),

@@ -1,7 +1,9 @@
 <script lang="ts">
-  let { data }: { data: { changelog?: { code?: string } } } = $props()
+  import type { PageProps } from './$types'
+
+  let { data }: PageProps = $props()
 </script>
 
 <main>
-  {@html data.changelog?.code}
+  {@html data.changelog}
 </main>

@@ -11,7 +11,7 @@
   } from './types'
   import { create_key_selector } from './internal/key-selector.svelte'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
-  import { is_editable_event_target } from './utils'
+  import { is_editable_event_target, is_modified_click } from './utils'
   import { override_style } from './attachments/shared'
   import { fragment_href } from './heading-anchors'
 
@@ -137,8 +137,6 @@
   const manual_scroll_threshold_px = 50
   const custom_interactive_selector = `a, button, input, select, textarea, summary, [role="button"], [role="link"], [tabindex]`
   const is_activation_key = (key: string) => key === `Enter` || key === ` `
-  const is_modified_click = (event: MouseEvent) =>
-    event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
 
   let window_width: number = $state(0)
   // ignores spurious scrollend events chrome fires on page load before any real scrolling

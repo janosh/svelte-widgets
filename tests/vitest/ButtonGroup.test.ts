@@ -20,9 +20,12 @@ describe(`ButtonGroup`, () => {
 
   const mount_group = (props: Props) => {
     render(ButtonGroup, props as ComponentProps<typeof ButtonGroup>)
-    // `[data-value]` so an option_suffix rendering its own button doesn't join the list
+    // option buttons only: a suffix's own buttons, even ones with a data-value, follow it
+    const option = `button[data-value]`
     return [
-      ...document.querySelectorAll<HTMLButtonElement>(`.options button[data-value]`),
+      ...document.querySelectorAll<HTMLButtonElement>(
+        `.options > ${option}, .options > .option > ${option}:first-child`,
+      ),
     ]
   }
   const values_of = (buttons: HTMLButtonElement[]) =>
@@ -141,39 +144,60 @@ describe(`ButtonGroup`, () => {
     expect(on_change).toHaveBeenCalledTimes(3)
   })
 
-  // Suffix buttons must stay out of navigation, which a broad button selector would include.
-  test(`arrow keys move focus and the selection with it, wrapping both ends past suffix buttons`, async () => {
-    const on_change = vi.fn()
-    const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
-      (get_params) => ({
-        render: () =>
-          `<button type="button" data-remove="${get_params().option.value}">x</button>`,
-      }),
-    )
-    const buttons = mount_group({
-      options: letters,
-      value: `alpha`,
-      on_change,
-      option_suffix,
-    })
-    buttons[0].focus()
+  // Suffix buttons must stay out of navigation: a nested group's [data-value] ones (which a
+  // broad descendant selector would include) and a direct one with its own data-value.
+  test.each([
+    [
+      `nested`,
+      (value: string) =>
+        `<span><button type="button" data-remove="${value}">x</button><button type="button" data-value="nested">n</button></span>`,
+      [`[data-remove="beta"]`, `.option [data-value="nested"]`],
+    ],
+    [
+      `direct`,
+      (value: string) =>
+        `<button type="button" data-remove="${value}" data-value="direct">x</button>`,
+      [`.option > [data-remove="beta"]`],
+    ],
+  ])(
+    `arrow keys move focus and the selection with it, wrapping both ends past %s suffix buttons`,
+    async (_shape, suffix_html, suffix_selectors) => {
+      const on_change = vi.fn()
+      const option_suffix = createRawSnippet<[{ option: { value: string } }]>(
+        (get_params) => ({ render: () => suffix_html(get_params().option.value) }),
+      )
+      const buttons = mount_group({
+        options: letters,
+        value: `alpha`,
+        on_change,
+        option_suffix,
+      })
+      buttons[0].focus()
 
-    const walk: [string, number][] = [
-      [`ArrowRight`, 1],
-      [`ArrowDown`, 2],
-      [`ArrowRight`, 0], // wraps past the end
-      [`ArrowLeft`, 2], // and back past the start
-      [`ArrowUp`, 1],
-      [`Home`, 0],
-      [`End`, 2],
-    ]
-    for (const [key, expected_idx] of walk) {
-      await press(key)
-      expect(document.activeElement, key).toBe(buttons[expected_idx])
-      expect(checked_state(buttons[expected_idx]), key).toBe(`true`)
-    }
-    expect(on_change.mock.calls.flat()).toEqual(walk.map(([, idx]) => letters[idx].value))
-  })
+      const walk: [string, number][] = [
+        [`ArrowRight`, 1],
+        [`ArrowDown`, 2],
+        [`ArrowRight`, 0], // wraps past the end
+        [`ArrowLeft`, 2], // and back past the start
+        [`ArrowUp`, 1],
+        [`Home`, 0],
+        [`End`, 2],
+      ]
+      for (const [key, expected_idx] of walk) {
+        await press(key)
+        expect(document.activeElement, key).toBe(buttons[expected_idx])
+        expect(checked_state(buttons[expected_idx]), key).toBe(`true`)
+      }
+      expect(on_change.mock.calls.flat()).toEqual(
+        walk.map(([, idx]) => letters[idx].value),
+      )
+      // keys pressed inside suffix content keep their native behavior and select nothing
+      for (const selector of suffix_selectors)
+        expect(press_key(doc_query(selector), `ArrowRight`).defaultPrevented).toBe(false)
+      await tick()
+      expect(on_change).toHaveBeenCalledTimes(walk.length)
+    },
+  )
 
   test.each([
     [`ArrowLeft`, 2],

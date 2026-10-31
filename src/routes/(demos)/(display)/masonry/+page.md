@@ -52,7 +52,6 @@ Set `virtualize` with a `height` to render only the items near the viewport. Use
 
   let virtualize = $state(true)
   let rendered = $state(0)
-  let masonry = $state<HTMLDivElement>()
   const count_rendered = (node: Element) => {
     const update = () => (rendered = node.querySelectorAll(`:scope > .col > div`).length)
     const observer = new MutationObserver(update)
@@ -60,9 +59,6 @@ Set `virtualize` with a `height` to render only the items near the viewport. Use
     update()
     return () => observer.disconnect()
   }
-  $effect(() => {
-    if (masonry) return count_rendered(masonry)
-  })
   const items = Array.from({ length: 500 }, (_, idx) => ({
     id: idx,
     height: 48 + ((idx * 29) % 72),
@@ -76,7 +72,7 @@ Set `virtualize` with a `height` to render only the items near the viewport. Use
 <output>{rendered} of {items.length} item nodes mounted</output>
 
 <Masonry
-  bind:div={masonry}
+  {@attach count_rendered}
   {items}
   {virtualize}
   height={360}

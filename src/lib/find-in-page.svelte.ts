@@ -38,7 +38,8 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
   }
 
   let query = $state(``)
-  let occurrences = $state<TextMatch[]>([])
+  // replaced wholesale on every search, so no per-hit proxies
+  let occurrences = $state.raw<TextMatch[]>([])
   let current_idx = $state(-1)
   let release: (() => void) | undefined
   const jump = create_search_jump()

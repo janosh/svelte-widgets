@@ -49,10 +49,10 @@ export const repository_url = (repository: unknown): string => {
       )
     return `https://${host}/${path}`
   }
-  return raw
+  return trimmed
     .replace(/^git\+/, ``)
     .replace(/^(?:ssh:\/\/)?git@(?<host>[^/:]+)[/:]/, `https://$<host>/`)
-    .replace(/(?:\.git)?\/?$/, ``)
+    .replace(/\.git$/, ``)
 }
 
 export type SourceLinksPluginOptions = {

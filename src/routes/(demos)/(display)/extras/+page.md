@@ -154,6 +154,68 @@ A list of collapsible `<details>`, one per file, with a button that opens or clo
 <FileDetails {files} highlight={default_highlighter.highlight} />
 ```
 
+### `Tag`
+
+An inline pill for categories, statuses, filters and counts. It is a static `<span>` by default, a link with `href` and a button with `onclick`. `active` fills it like `solid`; on a button it also sets `aria-pressed`, making a toggle. `on_remove` adds a remove button named after the tag's content, whether `label` or `children`. `variant` is `soft` (tint, default), `solid` (fill) or `outline`; on a fill the text color is picked for contrast from the painted background, so `color` takes any CSS color including `var()`. `icon` leads, `count` trails, and a `children` snippet replaces the `label` text. `class` and `style` land on the pill, other attributes on its link, button or label. For text overlaid on a plot or image, use [`GlassChip`](workbench#layout-primitives) instead.
+
+```svelte example id="tag-demo"
+<script lang="ts">
+  import { Tag } from 'svelte-widgets'
+  import { Star, Tag as TagIcon } from 'svelte-widgets/icons'
+
+  const topics = [`svelte`, `typescript`, `css`, `a11y`]
+  let selected = $state<string[]>([`svelte`])
+  let filters = $state([`open source`, `stars > 100`, `updated this year`])
+</script>
+
+<div style="display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center">
+  <Tag label="soft" />
+  <Tag label="solid" variant="solid" color="#1769aa" />
+  <Tag label="solid light" variant="solid" color="gold" />
+  <Tag label="outline" variant="outline" color="seagreen" />
+  <Tag label="stars" icon={Star} count={1234} --tag-font-size="0.7em" />
+  <Tag label="docs link" href="extras#tag" icon={TagIcon} --tag-font-size="1em" />
+  <Tag label="disabled" onclick={() => {}} disabled />
+</div>
+
+<p>Toggle tags filter by topic:</p>
+<div role="group" aria-label="Topics" style="display: flex; flex-wrap: wrap; gap: 0.5em">
+  {#each topics as topic (topic)}
+    {@const active = selected.includes(topic)}
+    <Tag
+      label={topic}
+      {active}
+      onclick={() =>
+        (selected = active
+          ? selected.filter((other) => other !== topic)
+          : [...selected, topic])}
+    />
+  {/each}
+</div>
+<p>Selected: {selected.join(`, `) || `none`}</p>
+
+<p>Removable filter chips:</p>
+<ul style="display: flex; flex-wrap: wrap; gap: 0.5em; list-style: none; padding: 0">
+  {#each filters as filter (filter)}
+    <li>
+      <Tag
+        label={filter}
+        variant="outline"
+        on_remove={() => (filters = filters.filter((other) => other !== filter))}
+      />
+    </li>
+  {:else}
+    <li>
+      <button onclick={() => (filters = [`open source`, `stars > 100`])}
+        >Reset filters</button
+      >
+    </li>
+  {/each}
+</ul>
+```
+
+Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-border-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
+
 ### `PrevNext`
 
 Sequential navigation with wraparound. Pass `items` as `{ href, label }` objects and the `current` href. A nonempty list must contain `current`. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. `labels` translates the previous/next headings; `as` changes the wrapper element. Navigation uses ordinary links; apps own keyboard shortcuts, preloading, and router behavior. The links at the bottom of every demo page use this component.
@@ -208,6 +270,43 @@ Colors come from `--github-corner-bg` and `--github-corner-color` (plus their `-
 The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `create_markdown({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })` and pass that engine to `markdown_vite(engine)`. Every "View code" button on this site uses this component.
 
 Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported.
+
+### `start_polling`
+
+`svelte-widgets/poll` runs a task on an interval only while the page is visible, unless `while_hidden`. Returning to the tab (or, with `catch_up_on_focus`, to the window) runs it at once, or with `catch_up_after_ms` only once the last run is that old, and re-arms the interval, so the catch-up is not followed by a timed run a moment later. `first_delay_ms` sets the first timed run, `0` to run right away. A run never overlaps the previous one: ticks, returns and `run_now()` landing while a returned promise is pending are skipped. Its `AbortSignal` aborts on stop, and a task returning `false` marks a skipped run that does not reset the catch-up age. The returned function stops polling, which makes it a ready-made `$effect` cleanup; its `run_now()` runs at once and restarts the interval, e.g. for a refresh button.
+
+```svelte example id="poll-demo"
+<script lang="ts">
+  import { start_polling } from 'svelte-widgets/poll'
+
+  let [runs, last_run] = $state([0, `never`])
+  let interval_ms = $state(2000)
+
+  $effect(() =>
+    start_polling(
+      async (signal) => {
+        await new Promise((resolve) => setTimeout(resolve, 300)) // a fetch(url, { signal })
+        if (signal.aborted) return
+        runs += 1
+        last_run = new Date().toLocaleTimeString()
+      },
+      { interval_ms, first_delay_ms: 0, catch_up_after_ms: interval_ms },
+    ),
+  )
+</script>
+
+<label>
+  Interval
+  <select bind:value={interval_ms}>
+    <option value={1000}>1 s</option>
+    <option value={2000}>2 s</option>
+    <option value={5000}>5 s</option>
+  </select>
+</label>
+<p aria-live="polite">
+  {runs} runs, last at {last_run}. Switch tabs and come back: hidden time is skipped.
+</p>
+```
 
 ## Build-time helpers
 

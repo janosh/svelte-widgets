@@ -148,14 +148,12 @@
     return text === undefined ? null : { line_no, text, spans: [] }
   }
 
-  const display_rows_of = (
-    result: DiffResult,
-    current_layout: RowLayout,
-    expanded: ReadonlySet<number>,
-  ): DisplayRow[] => {
+  const display_rows = $derived.by((): DisplayRow[] => {
+    const result = diff
     const rows: DisplayRow[] = []
+    if (!result) return rows
     const push_row = ({ kind: row_kind, old, new: next }: DiffRow) => {
-      if (current_layout === `side-by-side`) {
+      if (row_layout === `side-by-side`) {
         rows.push({ kind: `pair`, row_kind, old, new: next })
         return
       }
@@ -181,7 +179,7 @@
     }
     const push_gap = (gap_idx: number, skipped: number, starts: [number, number]) => {
       if (skipped <= 0) return
-      if (!expanded.has(gap_idx)) rows.push({ kind: `gap`, gap_idx, skipped })
+      if (!expanded_gaps.has(gap_idx)) rows.push({ kind: `gap`, gap_idx, skipped })
       else {
         for (let offset = 0; offset < skipped; offset++) {
           const old = plain_line(old_lines, starts[0] + offset)
@@ -210,18 +208,14 @@
 
     const missing: Side[] = []
     // Solo has no old column to mark, and the side it would mark is empty anyway.
-    if (current_layout !== `solo` && !result.old_ends_with_newline) missing.push(`old`)
+    if (row_layout !== `solo` && !result.old_ends_with_newline) missing.push(`old`)
     if (!result.new_ends_with_newline) missing.push(`new`)
     // Only side-by-side has two columns to mark at once.
-    if (current_layout !== `side-by-side`)
+    if (row_layout !== `side-by-side`)
       for (const side of missing) rows.push({ kind: `no_newline`, sides: [side] })
     else if (missing.length > 0) rows.push({ kind: `no_newline`, sides: missing })
     return rows
-  }
-
-  const display_rows = $derived(
-    diff ? display_rows_of(diff, row_layout, expanded_gaps) : [],
-  )
+  })
 
   const row_window = $derived(
     visible_line_window(
@@ -362,7 +356,7 @@
       <div class="panel-actions">
         {@render nav_button(msg.prev_change, -1, `↑`)}
         {@render nav_button(msg.next_change, 1, `↓`)}
-        <div class="segmented layout-toggle">
+        <div class="layout-toggle">
           {@render layout_option(`side-by-side`, msg.side_by_side, `M8 3v10`)}
           {@render layout_option(`unified`, msg.unified, `M2 8h12`)}
         </div>
@@ -547,15 +541,15 @@
     outline: 2px solid color-mix(in srgb, var(--active-color, #6ea8ff) 60%, transparent);
     outline-offset: 1px;
   }
-  .segmented {
+  .layout-toggle {
     display: inline-flex;
     gap: 1px;
   }
-  .segmented .icon-btn:not(:first-child) {
+  .layout-toggle .icon-btn:not(:first-child) {
     border-start-start-radius: 0;
     border-end-start-radius: 0;
   }
-  .segmented .icon-btn:not(:last-child) {
+  .layout-toggle .icon-btn:not(:last-child) {
     border-start-end-radius: 0;
     border-end-end-radius: 0;
   }

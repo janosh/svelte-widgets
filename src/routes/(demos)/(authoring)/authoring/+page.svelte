@@ -81,13 +81,13 @@
     flex-wrap: wrap;
     gap: 0.5rem 1.5rem;
     margin-block: 1.5rem;
+    a {
+      padding-block: 0.3rem;
+    }
   }
   :global(.authoring-section-heading) {
     margin-top: 3rem;
     padding-top: 1.5rem;
     border-top: 1px solid light-dark(#e0e4eb, #30343c);
-  }
-  nav a {
-    padding-block: 0.3rem;
   }
 </style>

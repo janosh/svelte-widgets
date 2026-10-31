@@ -16,6 +16,8 @@ export { highlight_matches } from './highlight-matches'
 export type { HighlightOptions } from './highlight-matches'
 export { in_view } from './in-view'
 export type { InViewOptions } from './in-view'
+export { create_stick_to_bottom } from './stick-to-bottom.svelte.ts'
+export type { StickToBottom, StickToBottomOptions } from './stick-to-bottom.svelte.ts'
 export { tooltip } from './tooltip'
 export type {
   TooltipOpenDetail,
@@ -41,5 +43,11 @@ export { forward_window_keydown, hotkey } from './keyboard'
 export type { ForwardWindowKeydownOptions, HotkeyOptions } from './keyboard'
 export { focus_trap, tabbable_selector } from './focus-trap'
 export type { FocusTrapOptions } from './focus-trap'
-export { contrast_color, get_bg_color, pick_contrast_color } from './contrast-color'
+export {
+  contrast_color,
+  contrast_ratio,
+  get_bg_color,
+  parse_color,
+  pick_contrast_color,
+} from './contrast-color'
 export type { ContrastOptions } from './contrast-color'

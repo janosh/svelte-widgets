@@ -154,6 +154,17 @@ export async function check_examples(
   )
   const root = dirname(filename)
   const require_tool = createRequire(`${root}/package.json`)
+  // Optional peers resolve from the documentation project, so checks use its versions
+  const require_peer = (name: string, option: string): unknown => {
+    try {
+      return require_tool(name)
+    } catch (error) {
+      throw new Error(
+        `Checking ${filename} requires ${name}; install it in the documentation project or pass options.${option}`,
+        { cause: error },
+      )
+    }
+  }
   const files = new Map<string, CheckedFile>()
   const shims = new Set<string>()
   let compiler = options.typescript
@@ -162,24 +173,16 @@ export async function check_examples(
     fence: CheckedSource,
     component_filename: string,
   ): void => {
-    if (!svelte_checker) {
-      try {
-        const { svelte2tsx } = require_tool(`svelte2tsx`) as {
+    svelte_checker ??= {
+      transform: (
+        require_peer(`svelte2tsx`, `svelte_typechecker`) as {
           svelte2tsx: SvelteTypeChecker['transform']
         }
-        svelte_checker = {
-          transform: svelte2tsx,
-          shims: [
-            require_tool.resolve(`svelte2tsx/svelte-shims-v4.d.ts`),
-            require_tool.resolve(`svelte2tsx/svelte-jsx-v4.d.ts`),
-          ],
-        }
-      } catch (error) {
-        throw new Error(
-          `Svelte type checking requires svelte2tsx in ${filename}; install the documentation toolchain or pass options.svelte_typechecker`,
-          { cause: error },
-        )
-      }
+      ).svelte2tsx,
+      shims: [
+        require_tool.resolve(`svelte2tsx/svelte-shims-v4.d.ts`),
+        require_tool.resolve(`svelte2tsx/svelte-jsx-v4.d.ts`),
+      ],
     }
     for (const shim of svelte_checker.shims) shims.add(shim)
     const { code, map } = svelte_checker.transform(fence.code, {
@@ -217,16 +220,7 @@ export async function check_examples(
           report_located(fence, warning.code, warning, warning.message, `warning`)
       }
       if (component && options.typecheck === false) continue
-      if (!compiler) {
-        try {
-          compiler = require_tool(`typescript`) as typeof TypeScript
-        } catch (error) {
-          throw new Error(
-            `Type checking requires TypeScript in ${filename}; install it in the documentation project or pass options.typescript`,
-            { cause: error },
-          )
-        }
-      }
+      compiler ??= require_peer(`typescript`, `typescript`) as typeof TypeScript
       if (typeof compiler.createProgram !== `function`)
         throw new Error(
           `Type checking requires the TypeScript 5/6 compiler API; found TypeScript ${compiler.version} in ${filename}. Install TypeScript 6 or pass options.typescript with a compatible compiler`,

@@ -71,7 +71,7 @@ test(`file picker validates, cancels superseded work, removes files and permits 
   expect(signals[1].aborted).toBe(false)
   await click(`button[aria-label="Remove ok.json"]`)
   expect(signals[1].aborted).toBe(true)
-  expect(target.querySelectorAll(`li`)).toHaveLength(0)
+  expect(target.querySelector(`ul`)).toBeNull() // no empty list left behind
   await select([good])
   reject_loads[2](new Error(`Retry this file`))
   await tick()

@@ -193,6 +193,30 @@ describe(`Markdown output`, () => {
     expect(code).toContain(`“Hello” — it’s…`)
     expect(code).toContain(`title='plain'`)
     expect(code).toContain(`<code>"code"</code>`)
+    // quotes after inline content close, while ones opening a block or emphasis open
+    const { code: inline } = await compile_page(
+      `[Svelte](/x)'s **bold**'s \`code\`'s <b>x</b>'s {a}'s *"em"* <b>"tag"</b> a<br>"br" x<i>"y"</i> {#if a}"if"{/if} "**strong**" A&#32;**"ent"** B&nbsp;**"nb"**\n\n| "x" | it's |\n| - | - |`,
+      { typography: true },
+    )
+    for (const snippet of [
+      `</a>’s`,
+      `</strong>’s`,
+      `</code>’s`,
+      `</b>’s`,
+      `{a}’s`,
+      `<em>“em”</em>`,
+      `<b>“tag”</b>`,
+      `<br>“br”`,
+      `<i>“y”</i>`,
+      `“if”`,
+      `“<strong>strong</strong>”`,
+      // an entity's rendered text, not its source's trailing `;`, decides the quote
+      `<strong>“ent”</strong>`,
+      `<strong>“nb”</strong>`,
+      `<th>“x”</th>`,
+      `<th>it’s</th>`,
+    ])
+      expect(inline).toContain(snippet)
   })
 })
 

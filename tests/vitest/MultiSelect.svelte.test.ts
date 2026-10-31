@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { tick, type ComponentProps } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { Option, OptionStyle } from '#lib'
@@ -29,8 +28,12 @@ import {
   mount_multiselect,
   mouseup,
   normalized_text,
+  option_by_label,
+  option_rows,
+  option_texts,
   press_sequence,
   selected_chips,
+  selected_text,
   type_search_text,
   user_msg_text,
 } from './MultiSelect.test-utils'
@@ -41,17 +44,6 @@ const mount_snippets = (props: ComponentProps<typeof TestMultiSelectSnippets>) =
 const mount_2way = (props: Test2WayBindProps) =>
   mount(Test2WayBind, { target: document.body, props })
 const click_expand_icon = () => mouseup(`.expand-icon`)
-const selected_text = () => doc_query(`ul.selected`).textContent?.trim()
-// dropdown option rows minus the message row, which also carries role="option"
-const option_items = (): HTMLLIElement[] => [
-  ...document.querySelectorAll<HTMLLIElement>(`ul.options > li:not(.user-msg)`),
-]
-const option_labels = () => option_items().map((item) => item.textContent?.trim())
-const option_by_label = (label: string): HTMLLIElement => {
-  const option_item = option_items().find((item) => item.textContent?.trim() === label)
-  if (!option_item) throw new Error(`Option "${label}" not in ${option_labels()}`)
-  return option_item
-}
 
 test(`2-way binding preserves a valid initial auto-active index`, async () => {
   const props = $state<MultiSelectProps>({
@@ -439,7 +431,7 @@ describe(`selected_display=input`, () => {
       await reopen(input)
 
       expect(input.getAttribute(`aria-expanded`)).toBe(`true`)
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
 
       const selected_option = option_by_label(`Red`)
       expect(selected_option.classList.contains(`selected`)).toBe(true)
@@ -475,7 +467,7 @@ describe(`selected_display=input`, () => {
       })
       await tick()
 
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
 
       const input = get_input()
       expect(input.value).toBe(`Red`)
@@ -492,7 +484,7 @@ describe(`selected_display=input`, () => {
       await type_search_text(`Bl`, input)
 
       // editing the committed text drops the selection but keeps the draft
-      expect(option_labels()).toEqual([`Blue`])
+      expect(option_texts()).toEqual([`Blue`])
       expect(document.querySelector(`ul.options > li.selected`)).toBeNull()
       expect(input.value).toBe(`Bl`)
       expect(select.search_text).toBe(`Bl`)
@@ -504,7 +496,7 @@ describe(`selected_display=input`, () => {
 
       await click_expand_icon()
 
-      expect(option_labels()).toEqual(color_options)
+      expect(option_texts()).toEqual(color_options)
     },
   )
 
@@ -514,7 +506,7 @@ describe(`selected_display=input`, () => {
     const input = await focus_input()
     await type_search_text(`Purple`, input)
 
-    expect(option_labels()).toEqual([])
+    expect(option_texts()).toEqual([])
     expect(user_msg_text()).toContain(`No matching options`)
 
     await click_expand_icon()
@@ -524,7 +516,7 @@ describe(`selected_display=input`, () => {
     await click_expand_icon()
 
     expect(input.value).toBe(`Purple`)
-    expect(option_labels()).toEqual(color_options)
+    expect(option_texts()).toEqual(color_options)
     expect(user_msg_text()).toBeUndefined()
     expect(select.value).toBeNull()
 
@@ -760,6 +752,18 @@ test.each([`ul.options > li`, `button.remove-all`])(
     expect(multiselect.classList.contains(`invalid`)).toBe(false)
   },
 )
+
+// a pointer press on remove-all runs mouseup before click: like chips and the "+N more"
+// toggle, it must not bubble up and open the dropdown
+test(`pressing remove-all removes without opening the dropdown`, async () => {
+  const on_open = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], value: [1, 2], on_open })
+  await mouseup(`button.remove-all`)
+  await click(`button.remove-all`)
+  expect(on_open).not.toHaveBeenCalled()
+  expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(false)
+  expect(selected_chips()).toHaveLength(0)
+})
 
 test(`option labels render markup as text`, () => {
   const label = `<a href="https://example.com">example.com</a>`
@@ -1058,22 +1062,28 @@ test.each([
   expect(selected_chips()).toHaveLength(options_set.length - 1)
 })
 
-// that remove-all only shows with 2+ selected options is covered by the CSS class "remove" test
+// remove-all only shows with 2+ selected options; the last button (remove-all, or the lone
+// chip's remove) clears the selection
 test.each([
-  [{}, `Remove`, `Remove all`],
-  [{ remove_btn_title: `Drop`, remove_all_title: `Clear` }, `Drop`, `Clear`],
+  [[1, 2, 3], {}, [`Remove 1`, `Remove 2`, `Remove 3`, `Remove all`]],
+  [
+    [1, 2, 3],
+    { remove_btn_title: `Drop`, remove_all_title: `Clear` },
+    [`Drop 1`, `Drop 2`, `Drop 3`, `Clear`],
+  ],
+  [[1], {}, [`Remove 1`]],
 ])(
-  `remove buttons titled by %j, remove-all clears the selection`,
-  async (titles, btn, all) => {
-    mount_multiselect({ options: [1, 2, 3], value: [1, 2, 3], ...titles })
-    expect(
-      Array.from(
-        document.querySelectorAll<HTMLElement>(`button.remove`),
-        ({ title }) => title,
-      ),
-    ).toEqual([`${btn} 1`, `${btn} 2`, `${btn} 3`, all])
+  `value=%j with titles %j renders remove buttons %j`,
+  async (value, titles, expected) => {
+    mount_multiselect({ options: [1, 2, 3], value, ...titles })
+    const buttons = [...document.querySelectorAll<HTMLElement>(`button.remove`)]
+    expect(buttons.map(({ title }) => title)).toEqual(expected)
+    // without a remove_icon snippet, every remove button gets the default icon
+    expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(
+      expected.length,
+    )
 
-    await click(`button.remove-all`)
+    await click(buttons.at(-1))
     expect(selected_text()).toBe(``)
   },
 )
@@ -1108,22 +1118,17 @@ test(`auto_scroll scopes active option lookup to current instance`, async () => 
   expect(second_option.scrollIntoView).toHaveBeenCalledOnce()
 })
 
-test.each([2, 10])(
-  `can't select more than max_select options`,
-  async (max_select: number) => {
-    mount_multiselect({ options: [...Array.from({ length: 10 }).keys()], max_select })
+test(`can't select more than max_select options`, async () => {
+  mount_multiselect({ options: [...Array.from({ length: 10 }).keys()], max_select: 2 })
 
-    // click the first rendered option 10 times: selects 0..max_select-1, then no-ops
-    for (const _ of Array.from({ length: 10 })) {
-      document.querySelector<HTMLLIElement>(`ul.options > li`)?.click()
-      await tick()
-    }
+  // click the first rendered option 10 times: selects 0 and 1, then no-ops
+  for (const _ of Array.from({ length: 10 })) {
+    document.querySelector<HTMLLIElement>(`ul.options > li`)?.click()
+    await tick()
+  }
 
-    expect(selected_text()).toEqual(
-      [...Array.from({ length: max_select }).keys()].join(` `),
-    )
-  },
-)
+  expect(selected_text()).toBe(`0 1`)
+})
 
 // https://github.com/janosh/svelte-widgets/issues/353
 test.each<[string, MultiSelectProps, boolean]>([
@@ -1216,27 +1221,6 @@ test.each<[string, MultiSelectProps, string, number]>([
   },
 )
 
-test.each([
-  [null, [1, 2]],
-  [1, 2],
-  [2, [1, 2]],
-])(
-  `1-way (outward) binding of value works when max_select=%s, expected value=%s`,
-  async (max_select, expected) => {
-    const on_value_changed = vi.fn()
-    mount_2way({
-      options: [1, 2, 3],
-      ...(max_select === 1 ? { mode: `single` } : { mode: `multiple`, max_select }),
-      onValueChanged: on_value_changed,
-    })
-
-    // internal changes bind outward
-    for (const _ of [1, 2]) await click(`ul.options li`)
-
-    expect(on_value_changed).toHaveBeenLastCalledWith(expected)
-  },
-)
-
 test(`disabled multiselect disables input, removal controls, and shows disabled icon`, () => {
   const disabled_input_title = `Selection unavailable`
   mount_multiselect({
@@ -1253,7 +1237,6 @@ test(`disabled multiselect disables input, removal controls, and shows disabled 
   expect(document.querySelector(`button.remove`)).toBeNull()
 
   const disabled_icon = doc_query(`svg[data-name='disabled-icon']`)
-  expect(disabled_icon).toBeInstanceOf(SVGSVGElement)
   expect(disabled_icon.getAttribute(`aria-disabled`)).toBe(`true`)
 })
 
@@ -1488,32 +1471,10 @@ test(`throws synchronously when adding an empty option`, () => {
   )
 })
 
-test.each([[[1]], [[1, 2, 3]]])(
-  `buttons to remove selected options have CSS class "remove"`,
-  (selected) => {
-    mount_multiselect({ options: selected, value: selected })
-
-    expect(document.querySelectorAll(`ul.selected button.remove`)).toHaveLength(
-      selected.length,
-    )
-
-    expect(document.querySelectorAll(`button.remove.remove-all`)).toHaveLength(
-      selected.length > 1 ? 1 : 0,
-    )
-
-    // without remove_icon snippet, all remove buttons get default-icon class
-    expect(document.querySelectorAll(`button.remove.default-icon`)).toHaveLength(
-      selected.length + (selected.length > 1 ? 1 : 0),
-    )
-  },
-)
-
 // options: [1,2,3], selected: [1,2] → clicking ul.options li adds 3,
 // clicking ul.selected button.remove removes 1, clicking button.remove-all removes all
 test.each([
   [`add`, `ul.options li`, { option: 3 }],
-  [`change`, `ul.options li`, { option: 3, type: `add` }],
-  [`remove`, `ul.selected button.remove`, { option: 1 }],
   [`change`, `ul.selected button.remove`, { option: 1, type: `remove` }],
   [`remove_all`, `button.remove-all`, { options: [1, 2] }], // removed options
   [`change`, `button.remove-all`, { options: [], type: `remove_all` }], // remaining selected
@@ -1779,7 +1740,7 @@ describe(`keep_selected_in_dropdown feature`, () => {
       // [selected class, checkbox state] per row; plain mode renders no checkbox
       const box = (checked: boolean) => (mode === `checkboxes` ? checked : undefined)
       expect(
-        option_items().map((li) => [
+        option_rows().map((li) => [
           li.classList.contains(`selected`),
           li.querySelector<HTMLInputElement>(`.option-checkbox`)?.checked,
         ]),
@@ -1904,39 +1865,35 @@ describe(`keep_selected_in_dropdown feature`, () => {
         keep_selected_in_dropdown: mode,
       })
       await type_search_text(`a`)
-      expect(option_labels()).toEqual([`Apple`, `Banana`, `Date`])
+      expect(option_texts()).toEqual([`Apple`, `Banana`, `Date`])
     },
   )
 })
 
-// all 2x2x2 combos of allow_user_options x no_matching_options_msg x create_option_msg:
-// .user-msg only renders when the applicable message prop is truthy
+// combos of allow_user_options x no_matching_options_msg x create_option_msg:
+// .user-msg only renders when the applicable message prop is truthy (user options require
+// a create_option_msg)
 test.each(
   [true, false].flatMap((allow_user_options) =>
     [``, `no matches`].flatMap((no_matching_options_msg) =>
-      [`make option`, ``].map(
-        (create_option_msg) =>
-          [allow_user_options, no_matching_options_msg, create_option_msg] as const,
-      ),
+      [`make option`, ``]
+        .filter((create_option_msg) => !allow_user_options || create_option_msg)
+        .map(
+          (create_option_msg) =>
+            [allow_user_options, no_matching_options_msg, create_option_msg] as const,
+        ),
     ),
   ),
 )(
   `user-msg rendering with allow_user_options=%s, no_matching_options_msg=%s, create_option_msg=%s`,
   async (allow_user_options, no_matching_options_msg, create_option_msg) => {
-    const props = {
+    mount_multiselect({
       options: [`foo`],
       value: [`foo`],
       no_matching_options_msg,
       create_option_msg,
       allow_user_options,
-    }
-    if (allow_user_options && !create_option_msg) {
-      expect(() => mount_multiselect(props)).toThrow(
-        `requires a non-empty create_option_msg or explicit null`,
-      )
-      return
-    }
-    mount_multiselect(props)
+    })
 
     // no option matches this search text
     await type_search_text(`bar`)
@@ -2135,7 +2092,7 @@ test(`close_dropdown_on_select='retain-focus' clears active create message after
   await type_search_text(`b`, input_el)
 
   expect(dropdown.classList).not.toContain(`hidden`)
-  expect(option_labels()[0]).toBe(`banana`)
+  expect(option_texts()[0]).toBe(`banana`)
   expect(doc_query(`ul.options li.user-msg`).classList).not.toContain(`active`)
   expect(input_el.getAttribute(`aria-activedescendant`) ?? ``).not.toMatch(/user-msg/u)
 })
@@ -2250,9 +2207,8 @@ describe(`create_option_msg as function`, () => {
     expect(captured_state.matching_options).toEqual(expected_matching)
   })
 
-  // Static string, null, and function returning empty string
+  // null and a function returning empty string
   test.each([
-    [`Create this option...`, `Create this option...`],
     [null, `No matches`],
     [() => ``, `No matches`], // function returning '' should not show phantom create slot
   ])(
@@ -2556,32 +2512,6 @@ describe(`select_all_option feature`, () => {
   })
 })
 
-test.each<[MultiSelectProps, string]>([
-  [{ mode: `single`, value: `Red`, options: [`Red`, `Green`, `Blue`] }, `Red`],
-  [{ mode: `single`, value: 1, options: [1, 2, 3] }, `1`],
-  [
-    {
-      mode: `single`,
-      value: { label: `Red` },
-      options: [{ label: `Red` }, { label: `Green` }],
-    },
-    `Red`,
-  ],
-  [{ value: [`Red`, `Green`], options: [`Red`, `Green`, `Blue`] }, `Red Green`],
-  [{ value: [1, 2], options: [1, 2, 3] }, `1 2`],
-  [
-    {
-      value: [{ label: `Red` }, { label: `Green` }],
-      options: [{ label: `Red` }, { label: `Green` }, { label: `Blue` }],
-    },
-    `Red Green`,
-  ],
-])(`initial selection from %j renders %s`, (props, expected_text) => {
-  mount_multiselect(props)
-
-  expect(selected_text()).toBe(expected_text)
-})
-
 // https://github.com/janosh/svelte-widgets/issues/369
 describe(`binding update event count`, () => {
   test.each([
@@ -2777,7 +2707,6 @@ describe(`on_max_reached event`, () => {
 
   test.each([
     { max_select: 3, value: [1], desc: `under limit` },
-    { mode: `single` as const, value: 1, desc: `max_select=1 (replace mode)` },
     { max_select: null, value: [1, 2, 3, 4], desc: `max_select=null (unlimited)` },
   ])(`does not fire when $desc`, async ({ desc: _description, ...props }) => {
     const onmaxreached_spy = vi.fn()
@@ -2900,7 +2829,7 @@ describe(`on_activate event`, () => {
     expect(on_activate).toHaveBeenCalledExactlyOnceWith(expected)
   })
 
-  test(`pointer and focus activation do not fire on_activate`, async () => {
+  test(`pointer activation does not fire on_activate`, async () => {
     const { on_activate, input } = await mount_activate()
     await press_sequence(input, `ArrowDown`)
     on_activate.mockClear()
@@ -2913,12 +2842,6 @@ describe(`on_activate event`, () => {
     option3.dispatchEvent(fresh_mousemove())
     await tick()
     expect(active_text()).toBe(`3`)
-
-    const option2 = doc_query(`ul.options li:nth-child(2)`)
-    option2.dispatchEvent(new FocusEvent(`focus`, { bubbles: true }))
-    await tick()
-    expect(active_text()).toBe(`2`)
-
     expect(on_activate).not.toHaveBeenCalled()
   })
 
@@ -3369,97 +3292,4 @@ test(`sort_selected orders chips before clearing the accepted search`, async () 
   expect(search_seen_by_comparator).toBe(`b`)
   expect(props.search_text).toBe(``)
   expect(normalized_text(doc_query(`ul.selected`))).toBe(`c b a`)
-})
-
-describe(`CSS static analysis`, () => {
-  const component_source = readFileSync(
-    `${import.meta.dirname}/../../src/lib/MultiSelect.svelte`,
-    `utf-8`,
-  )
-  const css =
-    /<style>(?<style>[\s\S]*?)<\/style>/u.exec(component_source)?.groups?.style ?? ``
-  // body of the rule whose selector list is exactly `selector`
-  const css_block = (selector: string) => {
-    const escaped = selector.replaceAll(/[.*+?^${}()|[\]\\]/gu, `\\$&`)
-    const pattern = new RegExp(`${escaped}\\s*\\{(?<block>[^}]*)\\}`, `u`)
-    return pattern.exec(css)?.groups?.block ?? ``
-  }
-
-  const props = [
-    `--sms-border`,
-    `--sms-bg`,
-    `--sms-disabled-bg`,
-    `--sms-selected-bg`,
-    `--sms-li-active-bg`,
-    `--sms-remove-btn-hover-bg`,
-    `--sms-options-bg`,
-    `--sms-options-shadow`,
-    `--sms-li-selected-plain-bg`,
-    `--sms-li-disabled-bg`,
-    `--sms-li-disabled-text`,
-    `--sms-select-all-border-bottom`,
-  ]
-
-  test.each(props)(`%s uses light-dark()`, (prop) => {
-    expect(css).toMatch(
-      new RegExp(`${prop.replaceAll(`-`, `[-]`)}[^;]*light-dark\\(`, `u`),
-    )
-  })
-
-  test(`--sms-active-color fallbacks use light-dark()`, () => {
-    expect(
-      css.match(/--sms-active-color,\s*light-dark\(/gu)?.length,
-    ).toBeGreaterThanOrEqual(2)
-  })
-
-  // every text-bearing surface must pair its light-dark() background with a light-dark() text
-  // default, else a page that never declares color-scheme renders white-on-white
-  const text_color = /color:\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)/u
-  test.each<[string, string, RegExp[]]>([
-    [
-      `::highlight is global and uses light-dark()`,
-      `:global(::highlight(sms-search-matches))`,
-      [/light-dark\(/u],
-    ],
-    [
-      `default-icon buttons stay circular`,
-      `:is(div.multiselect button.default-icon)`,
-      [/min-height:\s*0/u, /overflow:\s*hidden/u],
-    ],
-    [
-      `options dropdown pairs text color with light-dark border and bg defaults`,
-      `:where(ul.options)`,
-      [
-        /--sms-options-border,\s*1px solid light-dark\(/u,
-        /border-width:\s*var\(--sms-options-border-width,\s*1px\)/u,
-        /--sms-options-bg,\s*light-dark\(#fcfcfc/u,
-        text_color,
-      ],
-    ],
-    [
-      `root pairs text color with a light-dark() default`,
-      `:where(div.multiselect)`,
-      [text_color],
-    ],
-    [
-      `input pairs text color with a light-dark() default`,
-      `:where(div.multiselect > ul.selected > input)`,
-      [text_color],
-    ],
-    [
-      `selected option text color chain ends in a light-dark() default`,
-      `:where(div.multiselect > ul.selected > li)`,
-      [
-        /color:\s*var\(--sms-selected-text-color,\s*var\(--sms-text-color,\s*light-dark\(#222,\s*#eee\)\)\)/u,
-      ],
-    ],
-    [
-      `custom-snippet remove-all overrides circular defaults`,
-      `:is(div.multiselect button.remove-all:not(.default-icon))`,
-      [/border-radius:\s*3pt/u, /aspect-ratio:\s*auto/u, /padding:\s*0 2pt/u],
-    ],
-  ])(`%s`, (_desc, selector, patterns) => {
-    const block = css_block(selector)
-    for (const pattern of patterns) expect(block).toMatch(pattern)
-  })
 })

@@ -224,13 +224,10 @@
     const { left, width } = pane_node.getBoundingClientRect()
     const room =
       globalThis.innerWidth - Math.max(viewport_margin_px, left) - viewport_margin_px
-    const explicit_limit = Number(max_width?.trim().match(/^.*(?=px$)/u)?.[0])
+    const explicit_px = Number(max_width?.trim().match(/^(?<px>.+)px$/u)?.groups?.px)
     // cap at least the pane's width so starting a resize doesn't yank an overflowing pane
     // narrower; an explicit pixel cap stays authoritative
-    return Math.min(
-      Math.max(room, width),
-      explicit_limit >= 0 ? explicit_limit : Infinity,
-    )
+    return Math.min(Math.max(room, width), explicit_px >= 0 ? explicit_px : Infinity)
   }
 </script>
 

@@ -1,7 +1,8 @@
 import { expect, test } from '@playwright/test'
+import { goto } from './helpers'
 
 test(`theming page lists variables and filters them by name`, async ({ page }) => {
-  await page.goto(`/theming`, { waitUntil: `networkidle` })
+  await goto(page, `/theming`, { waitUntil: `networkidle` })
   await expect(
     page.getByRole(`cell`, { name: `--tooltip-bg`, exact: true }),
   ).toBeVisible()

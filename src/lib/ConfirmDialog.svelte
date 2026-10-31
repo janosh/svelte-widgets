@@ -34,6 +34,7 @@
   const unique_id = $props.id()
   const title_id = `confirm-dialog-${unique_id}-title`
   const error_id = `confirm-dialog-${unique_id}-error`
+  const body_id = `confirm-dialog-${unique_id}-body`
   let dialog = $state<HTMLDialogElement | null>(null)
   let focus_origin: HTMLElement | SVGElement | null = null
   let programmatic_close_pending = false
@@ -100,6 +101,7 @@
 <dialog
   bind:this={dialog}
   closedby="any"
+  aria-describedby={request && body_id}
   {...rest}
   class={[`confirm-dialog`, rest.class]}
   data-backdrop-dim={backdrop_dim || undefined}
@@ -118,11 +120,14 @@
 >
   {#if request}
     <h2 id={title_id} data-heading-anchor="false">{request.title}</h2>
-    {#if request.body.kind === `text`}
-      <p class="message">{request.body.text}</p>
-    {:else}
-      {@render request.body.snippet()}
-    {/if}
+    <!-- the question describes the dialog: focus lands on a control, not on this text -->
+    <div id={body_id}>
+      {#if request.body.kind === `text`}
+        <p class="message">{request.body.text}</p>
+      {:else}
+        {@render request.body.snippet()}
+      {/if}
+    </div>
     <!-- Rebuilds the controls between questions: keyed on choice id alone, Svelte reused the
     nodes, so a double-click's second half answered the NEXT question -->
     {#key request}

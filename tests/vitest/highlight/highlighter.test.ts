@@ -211,3 +211,43 @@ test(`default highlighter rejects a Markdown grammar without fenced-code rules`,
     `Markdown grammar is missing its fenced-code rules`,
   )
 })
+
+test(`onig_url sends starry-night's browser WASM fetch to a self-hosted copy`, async () => {
+  type WasmOptions = { getOnigurumaUrlFetch: () => URL } | undefined
+  const create_starry_night = vi.fn(
+    async (_grammars: unknown, _options: WasmOptions) => ({
+      flagToScope: () => undefined,
+      highlight: vi.fn(),
+    }),
+  )
+  mock_starry_night(() => ({ common: [], createStarryNight: create_starry_night }))
+  vi.stubGlobal(`location`, { href: `https://site.test/docs/page` })
+  onTestFinished(() => {
+    vi.unstubAllGlobals()
+  })
+  const {
+    configure_default_highlighter,
+    create_highlighter: create,
+    default_highlighter: shared,
+  } = await import(`#lib/highlight/index.ts`)
+  const wasm_href = (call_idx: number) =>
+    create_starry_night.mock.calls[call_idx]?.[1]?.getOnigurumaUrlFetch().href
+
+  await create([grammar_typst]).ready()
+  expect(create_starry_night.mock.calls[0]?.[1]).toBeUndefined() // starry-night's default
+  await create([grammar_typst], { onig_url: `/assets/onig.wasm` }).ready()
+  expect(wasm_href(1)).toBe(`https://site.test/assets/onig.wasm`) // relative to the page
+  await create([grammar_typst], {
+    onig_url: new URL(`https://cdn.test/onig.wasm`),
+  }).ready()
+  expect(wasm_href(2)).toBe(`https://cdn.test/onig.wasm`) // absolute URLs ignore the page
+
+  configure_default_highlighter({ onig_url: `/assets/onig.wasm` })
+  await shared.ready()
+  expect(wasm_href(3)).toBe(`https://site.test/assets/onig.wasm`)
+  // the shared instance exists now: repeating the URL is fine, changing it fails loudly
+  configure_default_highlighter({ onig_url: `/assets/onig.wasm` })
+  expect(() => configure_default_highlighter({ onig_url: `/other.wasm` })).toThrow(
+    `must run before default_highlighter is first used`,
+  )
+})

@@ -610,18 +610,22 @@ describe(`DraggablePane`, () => {
     expect(pane.style.maxWidth).toBe(default_max_width)
   })
 
-  test(`an explicit max_width remains authoritative after resizing`, async () => {
-    const { pane } = await open_pane({ resize: `width`, max_width: `600px` })
-    mock_pane_rect(pane)
-    const right_strip = strip_of(pane, `right`)
+  // any CSS px number caps the drag, not just the plain `\d+px` spelling
+  test.each([`600px`, `6e2px`, ` 600.0px `])(
+    `an explicit max_width=%p remains authoritative after resizing`,
+    async (max_width) => {
+      const { pane } = await open_pane({ resize: `width`, max_width })
+      mock_pane_rect(pane)
+      const right_strip = strip_of(pane, `right`)
 
-    drag(right_strip, [450, 150], [700, 150])
-    await tick()
+      drag(right_strip, [450, 150], [700, 150])
+      await tick()
 
-    expect(pane.style.width).toBe(`600px`)
-    expect(pane.style.maxWidth).toBe(`600px`)
-    expect(right_strip.getAttribute(`aria-valuenow`)).toBe(`600`)
-  })
+      expect(pane.style.width).toBe(`600px`)
+      expect(pane.style.maxWidth).toBe(max_width.trim())
+      expect(right_strip.getAttribute(`aria-valuenow`)).toBe(`600`)
+    },
+  )
 
   // The visible grip is pointer-transparent decoration over the attachment's corner handle.
   test(`double-clicking the corner resets a manual resize`, async () => {

@@ -3,7 +3,7 @@ import { version } from '#root/package.json'
 import { expect, test } from 'vite-plus/test'
 
 test(`changelog uses consistent release sections and literal code`, async () => {
-  const html = (await load()).changelog.code
+  const html = (await load()).changelog
   for (const code of [
     `ul.selected &gt; li`,
     `ul.options &gt; li`,

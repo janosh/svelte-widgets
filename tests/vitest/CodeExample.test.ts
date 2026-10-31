@@ -6,7 +6,8 @@ const [id, src] = [`uniq-id`, `some code`]
 
 test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   const onclick = vi.fn()
-  const button_props = { onclick }
+  // a stale aria-expanded in button_props must not override the toggle's own state
+  const button_props = { onclick, 'aria-expanded': true }
   // Omit'd from the prop type; a bare button inside a form would submit it on toggle
   Reflect.set(button_props, `type`, `submit`)
   const props = {
@@ -27,6 +28,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   const toggle_button = doc_query<HTMLButtonElement>(`nav > button`)
   const toggle_label = () => toggle_button.textContent?.trim()
   expect(toggle_button.type).toBe(`button`)
+  expect(toggle_button.getAttribute(`aria-expanded`)).toBe(`false`)
   expect(toggle_label()).toBe(`View code`)
   expect(getComputedStyle(toggle_button).whiteSpace).toBe(`nowrap`)
   const pre_closed = doc_query<HTMLPreElement>(`pre`)
@@ -39,6 +41,7 @@ test(`CodeExample toggles class .open on <pre> on button click`, async () => {
   expect(getComputedStyle(doc_query(`pre.open`)).overflow).toBe(`auto`)
   expect(doc_query(`pre.open > code`).textContent).toBe(src)
   expect(toggle_label()).toBe(`Close`)
+  expect(toggle_button.getAttribute(`aria-expanded`)).toBe(`true`)
   expect(onclick).toHaveBeenCalledOnce()
 })
 
@@ -56,7 +59,8 @@ test(`forwards host attributes when metadata does not override the ID`, () => {
     `40rem`,
   ])
   expect(host.dataset.testid).toBe(`example`)
-  expect(document.querySelectorAll(`nav a, .lang-label`)).toHaveLength(0)
+  // no links or toggle: no empty navigation landmark either
+  expect(document.querySelectorAll(`nav, .lang-label`)).toHaveLength(0)
 })
 
 test.each([

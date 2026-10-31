@@ -86,6 +86,7 @@ export function only_a(value: string | number) { return value }
     [`github:user/repo`, `https://github.com/user/repo`],
     [`gitlab:group/repo`, `https://gitlab.com/group/repo`],
     [`https://github.com/user/repo/`, `https://github.com/user/repo`],
+    [`https://github.com/user/repo.git//`, `https://github.com/user/repo`],
     [`user/repo.git`, `https://github.com/user/repo`],
     [`github:user/repo.git`, `https://github.com/user/repo`],
     [`gitlab:group/sub/repo`, `https://gitlab.com/group/sub/repo`],

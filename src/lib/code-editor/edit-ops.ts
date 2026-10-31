@@ -97,7 +97,7 @@ export const indent_selection: BlockCommand = (state, indent) => {
 }
 const dedent_width = (line: string, indent: string): number => {
   if (line.startsWith(`\t`)) return 1
-  const unit_width = indent.includes(`\t`) ? 1 : Math.max(1, indent.length)
+  const unit_width = Math.max(1, indent.length)
   let width = 0
   while (width < unit_width && line[width] === ` `) width++
   return width

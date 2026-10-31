@@ -14,27 +14,26 @@
 </script>
 
 <div {...rest} class={[`stat-tiles`, rest.class]} role="list">
-  {#each items as item, idx (idx)}
+  {#each items as { label, value, unit, delta, delta_tone, hint }}
     <div class="stat" role="listitem">
-      <span class="stat-label">{item.label}</span>
+      <span class="stat-label">{label}</span>
       <span class="stat-value">
-        {format(item.value)}{#if item.unit}<small class="stat-unit">{item.unit}</small
-          >{/if}
+        {format(value)}{#if unit}<small class="stat-unit">{unit}</small>{/if}
       </span>
-      {#if item.delta !== undefined}
-        {@const finite = Number.isFinite(item.delta)}
+      {#if delta !== undefined}
+        {@const finite = Number.isFinite(delta)}
         <span
-          class={[`stat-delta`, finite && item.delta_tone]}
-          class:up={finite && item.delta > 0}
-          class:down={finite && item.delta < 0}
+          class={[`stat-delta`, finite && delta_tone]}
+          class:up={finite && delta > 0}
+          class:down={finite && delta < 0}
           role="img"
-          aria-label={stat_delta_label(item.delta)}
+          aria-label={stat_delta_label(delta)}
         >
-          {format_stat_delta(item.delta)}
+          {format_stat_delta(delta)}
         </span>
       {/if}
-      {#if item.hint}
-        <span class="stat-hint">{item.hint}</span>
+      {#if hint}
+        <span class="stat-hint">{hint}</span>
       {/if}
     </div>
   {/each}
@@ -56,11 +55,16 @@
     background: color-mix(in srgb, currentColor 3%, transparent);
     min-inline-size: 0;
   }
-  .stat-label {
+  .stat-label,
+  .stat-unit,
+  .stat-delta,
+  .stat-hint {
     font-size: 0.72rem;
+    color: var(--text-color-muted, inherit);
+  }
+  .stat-label {
     text-transform: uppercase;
     letter-spacing: 0.04em;
-    color: var(--text-color-muted, inherit);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -74,23 +78,16 @@
   }
   .stat-unit {
     margin-inline-start: 0.25em;
-    font-size: 0.72rem;
     font-weight: 500;
-    color: var(--text-color-muted, inherit);
   }
   .stat-delta {
     font-size: 0.78rem;
     font-variant-numeric: tabular-nums;
-    color: var(--text-color-muted, inherit);
-  }
-  .stat-delta.positive {
-    color: var(--success-color, light-dark(#2e7d32, #3d9a5c));
-  }
-  .stat-delta.negative {
-    color: var(--error-color, light-dark(#b23c22, #d4654a));
-  }
-  .stat-hint {
-    font-size: 0.72rem;
-    color: var(--text-color-muted, inherit);
+    &.positive {
+      color: var(--success-color, light-dark(#2e7d32, #3d9a5c));
+    }
+    &.negative {
+      color: var(--error-color, light-dark(#b23c22, #d4654a));
+    }
   }
 </style>

@@ -16,7 +16,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 
 ### Placement
 
-`auto` measures the free space on every side and takes the roomiest, so a trigger near the bottom of the window puts its tooltip above without being told to. Naming a side pins it, though the tooltip still slides along the viewport edge rather than overflowing — and the arrow keeps pointing at the trigger after that slide. `align` moves it along the trigger's cross axis, `offset` sets the gap, and `fallback_placements` restricts which sides `auto` may pick from.
+`auto` opens above or below the trigger, whichever has more room, so a trigger near the bottom of the window puts its tooltip above without being told to. It goes beside the trigger only when neither fits, so tooltips in a row of chips don't cover their neighbors. Naming a side pins it, though the tooltip still slides along the viewport edge rather than overflowing — and the arrow keeps pointing at the trigger after that slide. `align` moves it along the trigger's cross axis, `offset` sets the gap, and `fallback_placements` restricts which sides `auto` may pick from.
 
 ```svelte example id="attachments-tooltip-placement"
 <script lang="ts">

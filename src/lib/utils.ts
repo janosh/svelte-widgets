@@ -9,18 +9,13 @@ export const chain_handlers =
   (event: EventType): void =>
     handlers.forEach((handler) => handler?.(event))
 
-// UUID for DOM IDs. Fallback is timestamp+counter: unique enough, not secure.
-export function get_uuid(): string {
-  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
-  const hex = (Date.now().toString(16) + (uuid_counter++).toString(16)).padStart(32, `0`)
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20),
-  ].join(`-`)
-}
+// UUID for DOM IDs. randomUUID needs a secure context, so plain-http pages fall back to a
+// timestamp+counter in UUID shape: unique enough, not secure.
+export const get_uuid = (): string =>
+  globalThis.crypto?.randomUUID?.() ??
+  (Date.now().toString(16) + (uuid_counter++).toString(16))
+    .padStart(32, `0`)
+    .replaceAll(/(?<=^.{8}|^.{12}|^.{16}|^.{20})/gu, `-`)
 
 export const is_object = (val: unknown): val is Record<string, unknown> =>
   typeof val === `object` && val !== null
@@ -216,29 +211,30 @@ export function compute_position(
     return Math.max(0, needed - free_space[side])
   }
 
-  // `flip: false` pins the requested side, else least main-axis overflow wins
+  // `flip: false` pins the requested side, else least main-axis overflow wins. A named
+  // placement stays first choice, its fallbacks queue up behind it.
   const explicit_order = fallback_placements ?? (Array.isArray(flip) ? flip : null)
-  const candidate_placements = (): Placement[] => {
-    if (flip === false) return [requested]
-    if (!explicit_order) return FLIP_ORDER[requested]
-    // a named placement stays first choice, its fallbacks queue up behind it
-    if (fallback_placements && placement !== `auto`)
-      return [requested, ...explicit_order.filter((side) => side !== requested)]
-    return explicit_order
-  }
+  let candidates = explicit_order ?? FLIP_ORDER[requested]
+  if (flip === false) candidates = [requested]
+  else if (fallback_placements && placement !== `auto`)
+    candidates = [requested, ...fallback_placements.filter((side) => side !== requested)]
 
-  // plain `auto` has no preferred side, so it breaks overflow ties on free space
+  // Plain `auto` breaks overflow ties above or below before beside (a tooltip beside a
+  // trigger in a row of chips covers its neighbors), then on free space
   const rank_by_space = flip !== false && placement === `auto` && !explicit_order
+  const vertical = (side: Placement): boolean => side === `top` || side === `bottom`
   let chosen = requested
   let least_overflow = Infinity
   let greatest_space = -Infinity
-  for (const candidate of candidate_placements()) {
+  for (const candidate of candidates) {
     const candidate_overflow = main_axis_overflow(candidate)
     if (
       candidate_overflow < least_overflow ||
       (rank_by_space &&
         candidate_overflow === least_overflow &&
-        free_space[candidate] > greatest_space)
+        (vertical(candidate) === vertical(chosen)
+          ? free_space[candidate] > greatest_space
+          : vertical(candidate)))
     ) {
       chosen = candidate
       least_overflow = candidate_overflow
@@ -319,6 +315,8 @@ const key_symbols = new Map([
   [`backspace`, `⌫`],
   [`delete`, `⌦`],
   [`escape`, `Esc`],
+  [`pageup`, `PgUp`],
+  [`pagedown`, `PgDn`],
   [`arrowup`, `↑`],
   [`arrowdown`, `↓`],
   [`arrowleft`, `←`],
@@ -379,6 +377,10 @@ export const is_editable_event_target = (target: EventTarget | null): boolean =>
 // Alt/Ctrl/Meta make a keystroke a chord. Shift is excluded: it types capitals.
 export const is_modifier_chord = (event: KeyboardEvent): boolean =>
   event.altKey || event.ctrlKey || event.metaKey
+
+// A link click the browser handles itself (new tab or window, download), so skip in-page routing
+export const is_modified_click = (event: MouseEvent): boolean =>
+  event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
 
 // Move focus within items, wrapping at both ends, returning the newly focused item so a
 // radio group can carry its selection along; undefined (event untouched) for a non-nav key

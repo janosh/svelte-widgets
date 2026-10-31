@@ -175,6 +175,8 @@ describe(`keyboard shortcut parsing`, () => {
     [`cmd+plus`, [`⌘`, `+`]],
     [`option+space`, [`⌥`, `␣`]],
     [` SHIFT + Escape `, [`⇧`, `Esc`]],
+    // aria-keyshortcuts spelling (`Control+PageDown`) renders the same as the short form
+    [`Control+PageDown`, [`Ctrl`, `PgDn`]],
     [`F12`, [`F12`]],
     [`ß`, [`SS`]],
     [`😀`, [`😀`]],
@@ -461,11 +463,14 @@ describe(`compute_position`, () => {
   test.each([
     [`most room below`, 400, 400, rect(10, 20, 190, 20), `bottom`],
     [`most room above`, 400, 400, rect(370, 20, 190, 20), `top`],
-    [`most room right`, 400, 400, rect(190, 20, 10, 20), `right`],
-    [`most room left`, 400, 400, rect(190, 20, 370, 20), `left`],
+    // the sides only win when neither above nor below fits
+    [`below over more room right`, 400, 400, rect(190, 20, 10, 20), `bottom`],
+    [`above over more room left`, 400, 400, rect(370, 20, 300, 20), `top`],
+    [`right when above and below overflow`, 400, 60, rect(20, 20, 10, 20), `right`],
+    [`left when above and below overflow`, 400, 60, rect(20, 20, 370, 20), `left`],
     [`a stable four-way tie`, 400, 400, rect(190, 20, 190, 20), `bottom`],
     [`a top/bottom tie`, 400, 400, rect(300, 20, 80, 20), `top`],
-    [`a right/left tie`, 600, 200, rect(90, 20, 290, 20), `right`],
+    [`a right/left tie`, 600, 60, rect(20, 20, 290, 20), `right`],
   ] as const)(`auto chooses %s`, (_description, width, height, anchor, expected) => {
     viewport(width, height)
     expect(

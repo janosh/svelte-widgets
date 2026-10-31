@@ -1,4 +1,5 @@
 import { expect, test, type Locator } from '@playwright/test'
+import { goto, reload } from './helpers'
 import { fileURLToPath } from 'node:url'
 
 // width relative to the parent; `full_width` first stretches the element to 100%
@@ -14,7 +15,7 @@ test(`standalone example buttons keep their natural width across demos`, async (
   page,
 }) => {
   for (const route of [`/authoring/hot-reload`, `/toast`, `/attachments/tooltip`]) {
-    await page.goto(route, { waitUntil: `networkidle` })
+    await goto(page, route, { waitUntil: `networkidle` })
     const buttons = page.locator(`.code-example > button`)
     expect(
       await buttons.count(),
@@ -53,7 +54,7 @@ for (const width of [390, 1440]) {
       page.evaluate(() => history.state?.[`sveltekit:metadata`]?.historyIndex)
     await page.setViewportSize({ width, height: 900 })
     await page.emulateMedia({ colorScheme: `dark` })
-    await page.goto(`/authoring#fig%3Aparticles`)
+    await goto(page, `/authoring#fig%3Aparticles`)
     await expect(first_figure).toBeInViewport()
     for (const [idx, id] of [`eq:mass-energy`, `eq:hooke`].entries()) {
       const equation = page.locator(`[id="${id}"]`)
@@ -68,7 +69,7 @@ for (const width of [390, 1440]) {
       `Figure 1. Two interacting particles`,
       `Figure 2. Spring displacement`,
     ])
-    await page.goto(`/authoring`)
+    await goto(page, `/authoring`)
     const sidebar = page.locator(`aside.toc`)
     const mobile = width < 1100
     if (mobile) {
@@ -185,7 +186,7 @@ for (const width of [390, 1440]) {
     await page.goBack()
     await expect(page).toHaveURL(/\/authoring#fig:particles$/u)
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(figure_scroll)
-    await page.reload()
+    await reload(page)
     await expect(first_figure).toBeInViewport()
     if (mobile)
       await sidebar.getByRole(`button`, { name: `Open table of contents` }).click()
@@ -212,7 +213,7 @@ for (const width of [390, 1440]) {
 test(`editable content labs validate manifests and recover from bad references`, async ({
   page,
 }) => {
-  await page.goto(`/authoring`)
+  await goto(page, `/authoring`)
   await expect(
     page.getByRole(`navigation`, { name: `Authoring features` }).getByRole(`link`),
   ).toHaveText([
@@ -291,7 +292,7 @@ test(`editable content labs validate manifests and recover from bad references`,
 test(`checked-example scenarios and editable syntax checks expose actual failures`, async ({
   page,
 }) => {
-  await page.goto(`/authoring`)
+  await goto(page, `/authoring`)
   const lab = page.getByRole(`region`, { name: `Checked examples lab`, exact: true })
   await expect(lab.locator(`.preview .pl-k`).first()).toHaveText(`let`)
   const scenario = lab.locator(`pre[aria-label="Scenario source"]`)

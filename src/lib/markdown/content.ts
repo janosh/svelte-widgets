@@ -22,6 +22,7 @@ import {
   source_locator,
   DiagnosticError,
   error_diagnostics,
+  make_diagnostic,
   type Diagnostic,
   type SourcePosition,
   type SourceRange,
@@ -92,7 +93,7 @@ export type FrontmatterValidator = (
 
 type MappedText = { text: string; offsets: number[] }
 
-const table_cells = ({ header, rows }: Tokens.Table): Tokens.TableCell[] => [
+export const table_cells = ({ header, rows }: Tokens.Table): Tokens.TableCell[] => [
   ...header,
   ...rows.flat(),
 ]
@@ -105,6 +106,17 @@ export const child_tokens = (token: Token): Token[] =>
       : `tokens` in token && Array.isArray(token.tokens)
         ? token.tokens
         : []
+// Same document order as Marked's walkTokens, which concatenates callback results per
+// token and so grows quadratically with the number of top-level blocks.
+export function walk_tokens(
+  tokens: readonly Token[],
+  visit: (token: Token) => void,
+): void {
+  for (const token of tokens) {
+    visit(token)
+    walk_tokens(child_tokens(token), visit)
+  }
+}
 
 // Container tokens remove quote/list indentation. Match complete lines within the parent
 // rather than searching the whole document, which confuses repeated code and headings.
@@ -485,10 +497,7 @@ export function validate_content(
     related?: Diagnostic['related'],
   ) =>
     diagnostics.push({
-      code,
-      message,
-      severity: `error`,
-      range,
+      ...make_diagnostic(code, message, range),
       ...(related && { related }),
     })
   const documents = new Map<

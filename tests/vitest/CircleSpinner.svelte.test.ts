@@ -2,25 +2,21 @@ import { CircleSpinner } from '#lib'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'
 
-test.each([
-  [`defaults`, {}, `1em`, `cornflowerblue`, `1.5s`],
-  [
-    `custom props`,
-    { size: `100px`, color: `rebeccapurple`, duration: `250ms` },
-    `100px`,
-    `rebeccapurple`,
-    `250ms`,
-  ],
-] as const)(
-  `CircleSpinner renders %s and forwards rest props`,
-  (_label, props, size, color, duration) => {
-    render(CircleSpinner, { ...props, style: `margin: 0`, class: `in-button` })
+test(`CircleSpinner applies custom props and forwards rest props`, () => {
+  render(CircleSpinner, {
+    size: `100px`,
+    color: `rebeccapurple`,
+    duration: `250ms`,
+    style: `margin: 0`,
+    class: `in-button`,
+  })
 
-    const div = doc_query(`.circle-spinner.in-button`)
-    expect(div.style.width).toBe(size)
-    expect(div.style.height).toBe(size)
-    expect(div.style.borderColor).toBe(`${color} transparent ${color} ${color}`)
-    expect(div.style.getPropertyValue(`--duration`)).toBe(duration)
-    expect(div.style.margin).toBe(`0px`)
-  },
-)
+  const div = doc_query(`.circle-spinner.in-button`)
+  expect(div.style.width).toBe(`100px`)
+  expect(div.style.height).toBe(`100px`)
+  expect(div.style.borderColor).toBe(
+    `rebeccapurple transparent rebeccapurple rebeccapurple`,
+  )
+  expect(div.style.getPropertyValue(`--duration`)).toBe(`250ms`)
+  expect(div.style.margin).toBe(`0px`)
+})

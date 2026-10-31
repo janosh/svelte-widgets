@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { untrack, type Snippet } from 'svelte'
+  import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { Spring } from 'svelte/motion'
 
@@ -26,13 +26,11 @@
     children?: Snippet
   } = $props()
 
-  const store = Spring.of(
-    () => (wiggle ? { scale, angle, dx, dy } : { angle: 0, scale: 1, dx: 0, dy: 0 }),
-    // later option changes flow through the effect below
-    untrack(() => spring_options),
+  const store = Spring.of(() =>
+    wiggle ? { scale, angle, dx, dy } : { angle: 0, scale: 1, dx: 0, dy: 0 },
   )
-
-  $effect(() => {
+  // applied before any motion: the spring starts at its target and only moves on a later change
+  $effect.pre(() => {
     store.stiffness = spring_options.stiffness
     store.damping = spring_options.damping
   })

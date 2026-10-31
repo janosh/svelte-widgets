@@ -24,14 +24,14 @@
   .drag-overlay {
     position: absolute;
     inset: 0;
-    background: rgba(25, 118, 210, 0.1);
-    border: 2px dashed var(--accent-color, #1976d2);
+    color: var(--accent-color, #1976d2);
+    background: color-mix(in srgb, currentColor 10%, transparent);
+    border: 2px dashed;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    color: var(--accent-color, #1976d2);
     font-weight: 600;
     font-size: 1.1em;
     pointer-events: none;

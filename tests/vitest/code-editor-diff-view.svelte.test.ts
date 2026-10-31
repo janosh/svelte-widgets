@@ -197,8 +197,8 @@ describe(`rows and layouts`, () => {
     expect(side_text(visual_rows[1], `new`)).toBe(`  gamma beta`)
     expect(text_of(query_element(`.diff-row-delete .tok-emph`))).toBe(`alpha`)
     expect(text_of(query_element(`.diff-row-insert .tok-emph`))).toBe(`gamma`)
-    expect(query_element(`[data-spacer='new']`)).toBeDefined()
-    expect(query_element(`[data-spacer='old']`)).toBeDefined()
+    query_element(`[data-spacer='new']`) // doc_query throws when a spacer is missing
+    query_element(`[data-spacer='old']`)
   })
 
   test(`toggles between unified and split without duplicating context`, async () => {
@@ -218,10 +218,10 @@ describe(`rows and layouts`, () => {
     expect(text_of(query_element(`.diff-row-delete`))).toBe(`was here`)
     expect(text_of(query_element(`.diff-row-insert`))).toBe(`is here`)
 
-    await click(query_element(`.segmented button[aria-pressed='false']`))
+    await click(query_element(`.layout-toggle button[aria-pressed='false']`))
     expect(document.querySelectorAll(`.diff-row.pair`)).toHaveLength(4)
     expect(new Set(code_texts())).toEqual(expected)
-    await click(query_element(`.segmented button[aria-pressed='false']`))
+    await click(query_element(`.layout-toggle button[aria-pressed='false']`))
     expect(document.querySelectorAll(`.diff-row.unified`)).toHaveLength(5)
   })
 
@@ -581,7 +581,7 @@ describe(`virtualization`, () => {
     await scroll_to_row(150)
     expect(code_texts()).toContain(`new 75`)
 
-    await click(query_element(`.segmented button[aria-pressed='false']`))
+    await click(query_element(`.layout-toggle button[aria-pressed='false']`))
     expect(code_texts()).toContain(`new 99`)
     expect(document.querySelectorAll(`.diff-row.pair`).length).toBeGreaterThan(0)
   })

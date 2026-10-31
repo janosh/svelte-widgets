@@ -55,7 +55,7 @@ Renders YouTube's poster image (a `webp` source with a `jpg` fallback) behind th
 
 ### `ContributorList`
 
-An avatar row, grayscale until hovered, with the username in a [`tooltip`](attachments/tooltip). `contributors` is structural — `login`, `avatar_url` and `html_url` — so a GitHub API response drops straight in. `tooltip_options` forwards placement and delay, and `--contributor-avatar-size` and `--contributor-gap` size the row.
+An avatar row with each username in a [`tooltip`](attachments/tooltip). `contributors` is structural — `login`, `avatar_url` and `html_url` — so a GitHub API response drops straight in. `tooltip_options` forwards placement and delay, and `--contributor-avatar-size` and `--contributor-gap` size the row.
 
 ```svelte example id="contributor-list-demo"
 <script lang="ts">

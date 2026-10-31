@@ -22,9 +22,14 @@ const resolve_theme_mode = (initial_mode: ThemeMode = `system`): ThemeMode =>
 
 // Shared so ThemeToggle's icon stays in sync when apply_theme_mode is called elsewhere
 let theme_mode = $state<ThemeMode>(`system`)
+let theme_resolved = $state<`light` | `dark`>()
 export const theme = {
   get mode(): ThemeMode {
     return theme_mode
+  },
+  // the applied light or dark scheme, which also changes when the OS flips in system mode
+  get resolved(): `light` | `dark` | undefined {
+    return theme_resolved
   },
 }
 
@@ -35,6 +40,7 @@ export const apply_theme_mode = (mode: ThemeMode): void => {
   document.documentElement.style.colorScheme = effective
   document.documentElement.dataset.theme = effective
   theme_mode = mode
+  theme_resolved = effective
   storage_set(`theme`, mode)
 }
 

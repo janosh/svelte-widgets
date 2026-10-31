@@ -150,7 +150,7 @@ describe(`option grouping feature`, () => {
     })
   })
 
-  test(`group_select_all buttons select groups by click, collapsed or not, and keyboard`, async () => {
+  test(`group_select_all buttons select groups, collapsed or not`, async () => {
     const on_select_all = vi.fn()
     await mount_grouped({
       collapsible_groups: true,
@@ -167,7 +167,7 @@ describe(`option grouping feature`, () => {
     expect(on_select_all).toHaveBeenCalledTimes(1)
     expect(on_select_all.mock.calls[0][0].options).toEqual(genre_options)
 
-    await press_sequence(group_select_all_btn(`Key`), `Enter`)
+    await click(group_select_all_btn(`Key`))
 
     expect(on_select_all).toHaveBeenCalledTimes(2)
     expect(on_select_all.mock.calls[1][0].options).toHaveLength(2)

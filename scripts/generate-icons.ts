@@ -31,14 +31,15 @@ const path_d = /\s+d="(?<value>[^"]+)"/
 const current_color_fill = /\s+fill="currentColor"/
 export const escape_template_literal = (value: string): string =>
   value.replaceAll(`\\`, `\\\\`).replaceAll(`\``, `\\\``).replaceAll(`\${`, `\\\${`)
-const as_markup = (body: string) => `markup: \`${escape_template_literal(body)}\``
 
+// A lone currentColor path ships as its `d` string, anything else as raw markup
 const as_shape = (body: string): string => {
   const attrs = single_path.exec(body)?.groups?.attrs
   const d = attrs && path_d.exec(attrs)?.groups?.value
   const extra_attrs = attrs?.replace(path_d, ``).replace(current_color_fill, ``)
-  if (!d || extra_attrs) return as_markup(body)
-  return `d: \`${escape_template_literal(d)}\``
+  return !d || extra_attrs
+    ? `markup: \`${escape_template_literal(body)}\``
+    : `d: \`${escape_template_literal(d)}\``
 }
 
 export const generate_icons = async (): Promise<void> => {

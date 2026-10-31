@@ -242,7 +242,6 @@
     }
   })
 
-  // declared before prefix_heights, which depends on it
   let scroll_top = $state(0)
   let ticking = false
 
@@ -314,8 +313,8 @@
       return {
         start,
         end,
-        pad_top: start > 0 ? ph[start - 1] : 0,
-        pad_bottom: Math.max(0, (ph.at(-1) ?? 0) - (end > 0 ? (ph[end - 1] ?? 0) : 0)),
+        pad_top: ph[start - 1] ?? 0,
+        pad_bottom: Math.max(0, (ph.at(-1) ?? 0) - (ph[end - 1] ?? 0)),
       }
     }),
   )

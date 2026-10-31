@@ -135,7 +135,8 @@ export const has_heading_anchor = (inner: string, svelte = true): boolean =>
   )
 
 export interface HeadingAnchorsOptions {
-  // heading selector, default h1-h6 direct or 2nd-level children of the attached node
+  // heading selector, default h1-h6 direct or 2nd-level children of the attached node. Later
+  // DOM changes are picked up when they add an h1-h6 (or a subtree holding one) or set one's id
   selector?: string
   // Assigned via innerHTML, so pass trusted content only; sanitize untrusted input first,
   // e.g. new DOMParser().parseFromString(svg, 'image/svg+xml').documentElement
@@ -170,6 +171,27 @@ function add_anchor_to_heading(
 }
 
 const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagName)
+const HEADINGS = `h1, h2, h3, h4, h5, h6`
+// Only an added subtree holding a heading (or a custom selector's match), an id written on
+// one, or its own children changing (`textContent` replacing its anchor, text filling an empty
+// one) can change the anchors. Requerying the container on every other change (a dense plot
+// redrawing thousands of nodes) cost ~90 ms of selector matching on a 75k-node page.
+const touches_headings = (records: MutationRecord[], selector?: string): boolean => {
+  // matches() can't see :scope-relative selectors, so headings always count
+  const counts = (el: Element) =>
+    is_heading(el) || (selector !== undefined && el.matches(selector))
+  const query = selector ? `${HEADINGS}, ${selector}` : HEADINGS
+  return records.some(
+    ({ type, target, addedNodes }) =>
+      (target instanceof Element && counts(target)) ||
+      (type === `childList` &&
+        [...addedNodes].some(
+          (added) =>
+            added instanceof Element &&
+            (counts(added) || added.querySelector(query) !== null),
+        )),
+  )
+}
 
 // adds anchor links to headings within a container
 export const heading_anchors =
@@ -190,7 +212,8 @@ export const heading_anchors =
     add_anchors()
 
     // requery for new headings and keep existing links aligned with dynamic IDs
-    const observer = new MutationObserver(() => {
+    const observer = new MutationObserver((records) => {
+      if (!touches_headings(records, selector)) return
       add_anchors()
       observer.takeRecords()
     })

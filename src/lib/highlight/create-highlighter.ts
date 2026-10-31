@@ -25,10 +25,21 @@ export type Highlighter = {
   highlight_block: (code: string, lang?: string | null) => Promise<string>
 }
 
+export type HighlighterOptions = {
+  // Where browsers fetch oniguruma's WASM instead of starry-night's esm.sh default, e.g. a
+  // bundler asset URL (Vite: `vscode-oniguruma/release/onig.wasm?url`). Runtimes resolving
+  // the `node` export condition read it from disk and ignore this. Relative URLs resolve
+  // against the page.
+  onig_url?: string | URL
+}
+
 // Shared with the default highlighter when its grammar import fails.
 export const optional_peer_error = `svelte-widgets/highlight requires optional peer dependency @wooorm/starry-night`
 
-const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNight> => {
+const create_instance = async (
+  grammars: readonly Grammar[],
+  { onig_url }: HighlighterOptions,
+): Promise<StarryNight> => {
   // only the import is guarded: a grammar failing to compile is bad caller input, not an
   // absent peer dependency, and must not be reported as one
   const { create_starry_night } = await import('./starry-night.ts').catch(
@@ -36,7 +47,12 @@ const create_instance = async (grammars: readonly Grammar[]): Promise<StarryNigh
       throw new Error(optional_peer_error, { cause })
     },
   )
-  return create_starry_night(grammars)
+  return create_starry_night(
+    grammars,
+    onig_url
+      ? { getOnigurumaUrlFetch: () => new URL(onig_url, globalThis.location?.href) }
+      : undefined,
+  )
 }
 
 // Falls back to plain escaped code for a missing or unsupported language. Braces are escaped
@@ -69,9 +85,13 @@ export const render_block = (
 }
 
 // Initialization is lazy and cached, including a rejection.
-export const create_highlighter = (grammars: readonly Grammar[]): Highlighter => {
+export const create_highlighter = (
+  grammars: readonly Grammar[],
+  options: HighlighterOptions = {},
+): Highlighter => {
   let instance: Promise<StarryNight> | undefined
-  const ready = (): Promise<StarryNight> => (instance ??= create_instance(grammars))
+  const ready = (): Promise<StarryNight> =>
+    (instance ??= create_instance(grammars, options))
   return {
     ready,
     highlight: async (code, lang) => render_html(await ready(), code, lang),

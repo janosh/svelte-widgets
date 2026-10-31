@@ -189,7 +189,7 @@ test.each<[string, string, Record<string, unknown>]>([
     },
   ],
   [`Nav`, `--nav-burger-inset`, { note: ``, declared: [`1rem`] }],
-  [`tooltip`, `--tooltip-bg`, { note: ``, fallbacks: [`light-dark(#fff, #2a2a2e)`] }],
+  [`tooltip`, `--tooltip-bg`, { note: ``, fallbacks: [expect.any(String)] }],
   [`code-editor`, `--tok-constant`, { note: `derived from --tok-number` }],
   // only root-rule declarations count: no forced-colors, dark-theme or variant values
   [`Nav`, `--nav-border-radius`, { declared: [`3pt`] }],

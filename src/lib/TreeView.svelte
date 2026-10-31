@@ -28,7 +28,7 @@
   const selected_ids = $derived(new Set(selection_values(mode, value)))
   let focused = $state<string>()
   let selection_anchor: string | undefined
-  const node_elements = new Map<string, HTMLElement>()
+  let tree_element: HTMLElement | undefined
   const range_keys = new Set([`ArrowDown`, `ArrowUp`, `Home`, `End`])
   // keys that still act while Ctrl/Cmd is held
   const chord_keys = new Set([...range_keys, ` `, `Enter`])
@@ -134,7 +134,9 @@
     if (id === undefined) return
     focused = id
     await tick()
-    node_elements.get(id)?.focus()
+    tree_element
+      ?.querySelector<HTMLElement>(`[data-tree-id="${CSS.escape(id)}"]`)
+      ?.focus()
   }
   const update_selection = (next_value: string | string[]) => {
     value = next_value
@@ -215,6 +217,7 @@
 
 <div {...rest} class={[`tree-view`, rest.class]}>
   <div
+    bind:this={tree_element}
     role="tree"
     tabindex="-1"
     aria-label={label}
@@ -226,11 +229,6 @@
         role="treeitem"
         aria-label={node.label}
         data-tree-id={node.id}
-        {@attach (element) => {
-          const { id } = node
-          node_elements.set(id, element)
-          return () => node_elements.delete(id)
-        }}
         aria-level={depth}
         aria-posinset={pos}
         aria-setsize={size}

@@ -109,6 +109,19 @@ describe(`FindBar`, () => {
       expect(nav_button(name).disabled).toBe(true)
   })
 
+  // the default absolute placement puts the bar inside its root, whose status text would
+  // otherwise match the query and flip the count on every observed re-search
+  test(`never searches its own chrome when mounted inside the root`, async () => {
+    vi.useFakeTimers()
+    const root = render_root(`<p>alpha</p>`)
+    const bar = mount(FindBar, { target: root, props: { root, on_close: vi.fn() } })
+    onTestFinished(() => unmount(bar))
+    await type_query(`matches`)
+    expect(status()).toBe(`No matches`)
+    await vi.advanceTimersByTimeAsync(400)
+    expect(status()).toBe(`No matches`)
+  })
+
   test(`the close button and Escape close the bar, Escape without reaching the page`, () => {
     const { on_close } = mount_bar(`<p>alpha</p>`)
     const outer = vi.fn()

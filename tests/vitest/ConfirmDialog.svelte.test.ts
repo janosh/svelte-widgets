@@ -69,6 +69,13 @@ const submit_form = () =>
   )
 const heading = () => doc_query(`dialog h2`).textContent
 
+test(`a consumer's aria-describedby outranks the default question description`, async () => {
+  const dialog = await mount_dialog({ 'aria-describedby': `own-hint` })
+  ask(`Overwrite src/lib?`, `Write files`)
+  await flush()
+  expect(dialog.getAttribute(`aria-describedby`)).toBe(`own-hint`)
+})
+
 test(`shows the queued question, closes once drained and ignores a stale close`, async () => {
   const dialog = await mount_dialog({ backdrop_dim: false, backdrop_blur: true })
   // defer the native close event so it can arrive after the next request is queued
@@ -86,6 +93,10 @@ test(`shows the queued question, closes once drained and ignores a stale close`,
   expect(dialog.open).toBe(true)
   expect(heading()).toBe(`Write files`)
   expect(doc_query(`dialog p`).textContent).toBe(`Overwrite src/lib?`)
+  // focus lands on a button, so the question must be the dialog's description or a screen
+  // reader announces only the title and that button
+  const description = doc_query(`[id="${dialog.getAttribute(`aria-describedby`)}"]`)
+  expect(description.textContent?.trim()).toBe(`Overwrite src/lib?`)
   expect(buttons().map((btn) => btn.textContent?.trim())).toEqual([`Cancel`, `Write`])
   // tone marks the answer to reach for, the dismiss choice stays plain
   expect(buttons().map((btn) => btn.classList.contains(`accent`))).toEqual([false, true])

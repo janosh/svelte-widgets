@@ -16,6 +16,14 @@ export const ACTION_BUTTON_LABELS = {
 }
 export type ActionButtonLabels = typeof ACTION_BUTTON_LABELS
 
+export const BREADCRUMBS_LABELS = {
+  // aria-label naming the <nav> landmark; an aria-label prop on the component wins
+  nav: `Breadcrumb`,
+  // aria-label on the ellipsis button that reveals the collapsed middle of a long trail
+  expand: (count: number) => `Show ${count} hidden ${plural(count, `level`)}`,
+}
+export type BreadcrumbsLabels = typeof BREADCRUMBS_LABELS
+
 export const BUTTON_GROUP_LABELS = {
   // aria-label on the sort-direction button, naming the current order and what a press does
   sort_ascending: `Sorted ascending, activate to sort descending`,
@@ -234,6 +242,12 @@ export const SOURCE_LINKS_LABELS = {
   link_title: (path: string) => `Source: ${path}`,
 }
 export type SourceLinksLabels = typeof SOURCE_LINKS_LABELS
+
+export const TAG_LABELS = {
+  // the remove button's own text; its accessible name appends the tag's content to it
+  remove: `Remove`,
+}
+export type TagLabels = typeof TAG_LABELS
 
 // light/dark/system name the theme modes; switch_to receives whichever one a press selects
 export const THEME_TOGGLE_LABELS = {

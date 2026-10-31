@@ -137,18 +137,21 @@ export function create_option_rows<T extends Option>() {
   }
 }
 
-// Both option controls use fixed-height rows, including their group headers.
+// Both option controls use fixed-height rows, including their group headers. happy-dom
+// and SSR report clientHeight 0, so an unmeasured list assumes a 400px viewport.
 export function option_window(
   config: OptionListProps[`virtual_list`],
   scroll: number,
-  viewport: number,
+  client_height: number,
   count: number,
 ) {
   if (!config) return null
   const { item_height = 30, overscan = 10 } = typeof config === `object` ? config : {}
+  const viewport = client_height || 400
   return {
     ...virtual_window({ scroll, viewport, count, item_size: item_height, overscan }),
     item_height,
+    viewport,
     // rendered rows are pinned to this so spacer math matches the real layout
     row_height: `${item_height}px`,
   }
@@ -158,8 +161,7 @@ export function option_window(
 export const option_row_scroll = (
   rows: OptionRow<Option>[],
   flat_idx: number,
-  item_height: number,
-  viewport: number,
+  { item_height, viewport }: { item_height: number; viewport: number },
   scroll: number,
 ): number => {
   const row_idx = rows.findIndex(

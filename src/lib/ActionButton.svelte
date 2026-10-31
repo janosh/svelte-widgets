@@ -37,6 +37,7 @@
     children?: Snippet<[ActionButtonSnippetProps<Result>]>
   } = $props()
 
+  // writable $derived, not $state: the `state` prop makes `$state` a store subscription
   let result = $derived<Result | undefined>(undefined)
   let error = $derived<unknown>(undefined)
   let reset_timeout: ReturnType<typeof setTimeout> | undefined
