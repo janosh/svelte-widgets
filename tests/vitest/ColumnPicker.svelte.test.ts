@@ -31,7 +31,7 @@ describe(`ColumnPicker`, () => {
     )
   const search = (text: string) =>
     fire_input(
-      doc_query<HTMLInputElement>(`input[aria-label="Filter columns"]`),
+      doc_query<HTMLInputElement>(`input[aria-label="Search columns"]`),
       text,
       `input`,
     )
@@ -273,13 +273,13 @@ describe(`ColumnPicker`, () => {
       expect(doc_query(`.column-items`).style.gridTemplateColumns).toBe(
         `repeat(${expected}, max-content)`,
       )
-      expect(document.querySelector(`input[aria-label="Filter columns"]`) !== null).toBe(
+      expect(document.querySelector(`input[aria-label="Search columns"]`) !== null).toBe(
         count > 20,
       )
     })
 
     test.each([
-      [{ filter_threshold: 0 }, 1, true, `repeat(1, max-content)`],
+      [{ search_threshold: 0 }, 1, true, `repeat(1, max-content)`],
       [{ max_grid_columns: 5, max_grid_rows: 4 }, 18, false, `repeat(5, max-content)`],
     ])(`honours layout props %o`, (props, count, has_search, template) => {
       mount_menu(make_many_columns(count), props)

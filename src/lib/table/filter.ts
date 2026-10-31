@@ -70,7 +70,7 @@ export const CATEGORY_LIMIT = 40
 const natural_order = new Intl.Collator(undefined, { numeric: true })
 // Checklist order: numbers by value (the collator reads `-` as punctuation and orders 0.25
 // after 0.5), ahead of other text in natural order, which keeps the order total
-const sort_options = (texts: Iterable<string>): string[] =>
+const sort_choices = (texts: Iterable<string>): string[] =>
   [...texts]
     .map((text) => ({ text, num: default_to_number(text) }))
     .toSorted((opt_a, opt_b) => {
@@ -89,8 +89,8 @@ export type FilterPanelOptions<Val = unknown> = CellReaders<Val> & {
   category_limit?: number
 }
 
-// Control kind, checklist options and numeric extent for one column's filter panel. Pass
-// unfiltered values so a filter never hides the options or range needed to widen it.
+// Control kind, checklist choices and numeric extent for one column's filter panel. Pass
+// unfiltered values so a filter never hides the choices or range needed to widen it.
 export function filter_panel<Val>(
   values: Iterable<Val>,
   {
@@ -110,16 +110,16 @@ export function filter_panel<Val>(
     if (num !== null) [min, max] = [Math.min(min, num), Math.max(max, num)]
     // blank cells are gaps in a numeric column, not text (they still list as blank)
     else if (all_numeric && to_text(val).trim() !== ``) all_numeric = false
-    // past the cap the panel is a text box, so options stop being collected
+    // past the cap the panel is a text box, so choices stop being collected
     if (overflow) continue
     seen.add(to_text(val))
     overflow = kind !== `category` && seen.size > category_limit
   }
-  const options = overflow ? [] : sort_options(seen)
+  const choices = overflow ? [] : sort_choices(seen)
   const extent = min <= max ? { min, max } : undefined
   const is_numeric = numeric ?? (extent !== undefined && all_numeric)
-  const detected = is_numeric ? `numeric` : options.length > 0 ? `category` : `text`
-  return { kind: kind === `auto` ? detected : kind, options, extent }
+  const detected = is_numeric ? `numeric` : choices.length > 0 ? `category` : `text`
+  return { kind: kind === `auto` ? detected : kind, choices, extent }
 }
 
 // A numeric filter with neither bound, or a category filter allowing everything, is the same
@@ -137,13 +137,13 @@ export function with_numeric_bound(
 export function with_category_toggled(
   current: ColumnFilterValue | undefined,
   value: string,
-  options: readonly string[],
+  choices: readonly string[],
 ): ColumnFilterValue | undefined {
-  const allowed = new Set(current?.kind === `category` ? current.values : options)
+  const allowed = new Set(current?.kind === `category` ? current.values : choices)
   if (!allowed.delete(value)) allowed.add(value)
   // Values no row holds any more drop out, else they'd keep an allow-everything filter active
-  const next = options.filter((option) => allowed.has(option))
-  return next.length === options.length ? undefined : { kind: `category`, values: next }
+  const next = choices.filter((choice) => allowed.has(choice))
+  return next.length === choices.length ? undefined : { kind: `category`, values: next }
 }
 
 // Rows passing every filter, with filters keyed by the row property they test

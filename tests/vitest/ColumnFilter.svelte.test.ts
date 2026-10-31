@@ -17,7 +17,7 @@ describe(`ColumnFilter`, () => {
       open: initially_open,
     })
     render(ColumnFilter, {
-      label: `Score`,
+      column: `Score`,
       values: () => values,
       ...props,
       get filter() {
@@ -75,12 +75,12 @@ describe(`ColumnFilter`, () => {
       labels: { blank: `(empty)` },
     })
     const labels = () =>
-      [...document.querySelectorAll(`.column-filter-options label`)].map((label) =>
+      [...document.querySelectorAll(`.column-filter-choices label`)].map((label) =>
         label.textContent?.trim(),
       )
     expect(labels()).toEqual([`(empty)`, `alpha`, `beta`]) // null is missing, not blank
     const boxes = document.querySelectorAll<HTMLInputElement>(
-      `.column-filter-options input`,
+      `.column-filter-choices input`,
     )
     await click(boxes[2])
     expect(state.filter).toEqual({ kind: `category`, values: [``, `alpha`] })
@@ -104,7 +104,7 @@ describe(`ColumnFilter`, () => {
         render: () => `<em>${get_args().value}:${get_args().checked}</em>`,
       })),
     })
-    expect(doc_query(`.column-filter-options em`).textContent).toBe(`x:true`)
+    expect(doc_query(`.column-filter-choices em`).textContent).toBe(`x:true`)
   })
 
   test(`reads values only while open and closes on popover dismissal`, async () => {

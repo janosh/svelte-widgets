@@ -33,7 +33,7 @@ export type ColumnFilterValue =
 // the range of the column's numbers (undefined when it has none)
 export type FilterPanel = {
   kind: FilterKind
-  options: string[]
+  choices: string[]
   extent?: { min: number; max: number }
 }
 

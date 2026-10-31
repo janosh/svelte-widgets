@@ -373,34 +373,34 @@ describe(`filters`, () => {
       `few strings`,
       [`t10`, `t2`, null, `t2`],
       {},
-      { kind: `category`, options: [`t2`, `t10`] },
+      { kind: `category`, choices: [`t2`, `t10`] },
     ],
-    [`too many strings`, tags, {}, { kind: `text`, options: [] }],
+    [`too many strings`, tags, {}, { kind: `text`, choices: [] }],
     [
       `numbers`,
       [3, `1.5`, NaN, 2],
       {},
-      { kind: `numeric`, options: [`1.5`, `2`, `3`], extent: { min: 1.5, max: 3 } },
+      { kind: `numeric`, choices: [`1.5`, `2`, `3`], extent: { min: 1.5, max: 3 } },
     ],
     [
       `numeric override`,
       [`a`, `b`],
       { numeric: true },
-      { kind: `numeric`, options: [`a`, `b`] },
+      { kind: `numeric`, choices: [`a`, `b`] },
     ],
     [
       `text override, extent still read`,
       [1, `x`, -2],
       { kind: `text` },
-      { kind: `text`, options: [`-2`, `1`, `x`], extent: { min: -2, max: 1 } },
+      { kind: `text`, choices: [`-2`, `1`, `x`], extent: { min: -2, max: 1 } },
     ],
-    [`no values`, [], {}, { kind: `text`, options: [] }],
+    [`no values`, [], {}, { kind: `text`, choices: [] }],
     // blanks are gaps in a numeric column, still listed as blank
     [
       `numbers with blanks`,
       [1, ``, 2.5, ` `, 3],
       {},
-      { kind: `numeric`, options: [`1`, `2.5`, `3`, ``], extent: { min: 1, max: 3 } },
+      { kind: `numeric`, choices: [`1`, `2.5`, `3`, ``], extent: { min: 1, max: 3 } },
     ],
     // numbers by value (decimals, negatives), then text in natural order
     [
@@ -409,17 +409,17 @@ describe(`filters`, () => {
       {},
       {
         kind: `category`,
-        options: [`-10`, `-2`, `0.125`, `0.25`, `0.5`, `1.75`, `N/A`, `n9`, `n10`],
+        choices: [`-10`, `-2`, `0.125`, `0.25`, `0.5`, `1.75`, `N/A`, `n9`, `n10`],
         extent: { min: -10, max: 1.75 },
       },
     ],
-    [`custom cap`, [`a`, `b`, `c`], { category_limit: 2 }, { kind: `text`, options: [] }],
+    [`custom cap`, [`a`, `b`, `c`], { category_limit: 2 }, { kind: `text`, choices: [] }],
   ])(`filter_panel: %s`, (_desc, values, options, expected) => {
     expect(filter_panel(values, options)).toEqual(expected)
   })
 
   test(`an explicit category column lists every value however many there are`, () => {
-    expect(filter_panel(tags, { kind: `category` }).options).toHaveLength(
+    expect(filter_panel(tags, { kind: `category` }).choices).toHaveLength(
       CATEGORY_LIMIT + 1,
     )
     // past the cap the scan still settles numeric detection on later values
@@ -441,17 +441,17 @@ describe(`filters`, () => {
       max: 2,
     })
 
-    const options = [`a`, `b`, `c`]
-    const without_b = with_category_toggled(undefined, `b`, options)
+    const choices = [`a`, `b`, `c`]
+    const without_b = with_category_toggled(undefined, `b`, choices)
     expect(without_b).toEqual({ kind: `category`, values: [`a`, `c`] })
-    expect(with_category_toggled(without_b, `a`, options)).toEqual({
+    expect(with_category_toggled(without_b, `a`, choices)).toEqual({
       kind: `category`,
       values: [`c`],
     })
-    expect(with_category_toggled(without_b, `b`, options)).toBeUndefined() // all allowed again
+    expect(with_category_toggled(without_b, `b`, choices)).toBeUndefined() // all allowed again
     // a value no row holds any more drops out instead of keeping the filter active
     const stale = { kind: `category` as const, values: [`a`, `c`, `gone`] }
-    expect(with_category_toggled(stale, `b`, options)).toBeUndefined()
+    expect(with_category_toggled(stale, `b`, choices)).toBeUndefined()
   })
 
   test(`filter_rows compiles each filter once, not per row`, () => {

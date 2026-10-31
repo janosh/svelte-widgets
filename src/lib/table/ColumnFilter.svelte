@@ -44,7 +44,7 @@
   let {
     filter = $bindable(),
     open = $bindable(false),
-    label,
+    column,
     values,
     options,
     format_bound = inclusive_bound,
@@ -56,7 +56,7 @@
     filter?: ColumnFilterValue
     open?: boolean
     // column name, read by the trigger's aria-label
-    label: string
+    column: string
     // the column's unfiltered values, read only while the panel is open
     values: () => Iterable<Val>
     // control kind, numeric override, checklist cap and cell readers, as filter_panel takes
@@ -97,7 +97,7 @@
     bind:this={trigger_el}
     type="button"
     class={[`column-filter-trigger`, { active: Boolean(filter) }]}
-    aria-label={msg.trigger(label)}
+    aria-label={msg.trigger(column)}
     aria-expanded={open}
     onclick={() => (open = !open)}
   >
@@ -130,15 +130,15 @@
         {/each}
       {:else if panel.kind === `category`}
         {@const selected = filter?.kind === `category` ? new Set(filter.values) : null}
-        {@const { options } = panel}
-        <div class="column-filter-options">
-          {#each options as value (value)}
+        {@const { choices } = panel}
+        <div class="column-filter-choices">
+          {#each choices as value (value)}
             {@const checked = selected === null || selected.has(value)}
             <label>
               <input
                 type="checkbox"
                 {checked}
-                onchange={() => (filter = with_category_toggled(filter, value, options))}
+                onchange={() => (filter = with_category_toggled(filter, value, choices))}
               />
               {#if option}
                 {@render option({ value, checked })}
@@ -241,11 +241,11 @@
       padding: 1px 3px;
     }
   }
-  .column-filter-options {
+  .column-filter-choices {
     display: flex;
     flex-direction: column;
     gap: 2px;
-    max-height: var(--column-filter-options-max-height, 14em);
+    max-height: var(--column-filter-choices-max-height, 14em);
     overflow-y: auto;
     label {
       justify-content: flex-start;

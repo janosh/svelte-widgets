@@ -17,7 +17,7 @@
     columns = $bindable([]),
     open = $bindable(false),
     collapsed_groups = $bindable([]),
-    filter_threshold = 20,
+    search_threshold = 20,
     max_grid_columns = 3,
     max_grid_rows = 10,
     slide_ms = 200,
@@ -36,7 +36,7 @@
     // groups whose sections are folded; a non-empty query shows every section regardless
     collapsed_groups?: string[]
     // show the search box above this many columns (0: always, Infinity: never)
-    filter_threshold?: number
+    search_threshold?: number
     // grid layout: the fewest columns that keep each at most max_grid_rows tall, at least
     // two once there are two items, at most max_grid_columns
     max_grid_columns?: number
@@ -62,7 +62,7 @@
   let query = $state(``)
   const is_visible = (col: Col): boolean => col.visible !== false
   const default_visible = (col: Col): boolean => col.default_visible ?? is_visible(col)
-  const show_search = $derived(columns.length > filter_threshold)
+  const show_search = $derived(columns.length > search_threshold)
   const normalized_query = $derived(show_search ? query.trim().toLowerCase() : ``)
   const matches_query = (col: Col): boolean =>
     !normalized_query || search_text(col).toLowerCase().includes(normalized_query)
@@ -206,10 +206,10 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
         <div class="menu-header">
           {#if show_search}
             <input
-              aria-label={msg.filter}
+              aria-label={msg.search}
               bind:value={query}
               class="column-search"
-              placeholder={msg.filter_placeholder}
+              placeholder={msg.search}
               type="search"
             />
           {/if}

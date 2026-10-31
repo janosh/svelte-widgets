@@ -3,8 +3,8 @@
 export const COLUMN_PICKER_LABELS = {
   // text of the default trigger, and its aria-label when a `trigger` snippet replaces it
   trigger: `Columns`,
-  filter: `Filter columns`,
-  filter_placeholder: `Filter columns…`,
+  // search box aria-label and placeholder
+  search: `Search columns`,
   no_matches: `No matching columns`,
   // aria-label of the hover popover holding a column's description
   details: `Column details`,
