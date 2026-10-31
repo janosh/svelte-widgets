@@ -1,20 +1,26 @@
 import type { ContrastOptions } from '#lib/attachments/index.ts'
 import {
   contrast_color,
+  contrast_ratio,
   get_bg_color,
+  parse_color,
   pick_contrast_color,
 } from '#lib/attachments/index.ts'
 import { describe, expect, it, vi } from 'vite-plus/test'
 import { create_element } from '../index'
 
 describe(`contrast_color`, () => {
-  // pins a luminance without exposing it: thresholds just below/above read `over`/`under`
-  const luminance_brackets = (bg_color: string, expected: number, tolerance: number) => {
-    const probe = (luminance_threshold: number) =>
-      pick_contrast_color({ bg_color, luminance_threshold, choices: [`over`, `under`] })
-    return [probe(expected - tolerance), probe(expected + tolerance)]
+  // perceived brightness of the parsed color over a white page, to pin each color space's
+  // conversion with one number per case
+  const brightness = (color: string): number => {
+    const parsed = parse_color(color)
+    if (!parsed) throw new Error(`unparsable test color ${color}`)
+    const [red, green, blue, alpha] = parsed
+    const [over_red, over_green, over_blue] = [red, green, blue].map(
+      (channel) => channel * alpha + 255 * (1 - alpha),
+    )
+    return (0.299 * over_red + 0.587 * over_green + 0.114 * over_blue) / 255
   }
-  const bracketed = [`over`, `under`]
 
   it.each([
     [`light rgb background`, `rgb(255, 255, 255)`, `black`],
@@ -60,8 +66,8 @@ describe(`contrast_color`, () => {
     [`transparent`, 1],
     [`hwb(0 25% 25%)`, 0.3995], // white and black both mixed into the pure hue
     [`hsla(0, 100%, 50%, 0.5)`, 0.6495], // red at half strength over white
-  ])(`%s converts to a luminance of %f`, (bg_color, expected) => {
-    expect(luminance_brackets(bg_color, expected, 1e-4)).toEqual(bracketed)
+  ])(`%s converts to a brightness of %f`, (bg_color, expected) => {
+    expect(Math.abs(brightness(bg_color) - expected)).toBeLessThan(1e-4)
   })
 
   // the cases above are primaries or white, which every space maps to the same sRGB
@@ -85,22 +91,79 @@ describe(`contrast_color`, () => {
     [`color(xyz-d65 0.3 0.4 0.2)`, [139, 182, 107]],
   ])(`%s lands where Chrome paints it`, (bg_color, [red, green, blue]) => {
     const luminance = (0.299 * red + 0.587 * green + 0.114 * blue) / 255
-    expect(luminance_brackets(bg_color, luminance, 2e-3)).toEqual(bracketed)
+    expect(Math.abs(brightness(bg_color) - luminance)).toBeLessThan(2e-3)
   })
 
   it.each<[string, ContrastOptions, string]>([
     [`custom choices`, { bg_color: `#000`, choices: [`#222`, `#eee`] }, `#eee`],
-    // white's luminance is 1, so a threshold above it flips even white to dark text
-    [`custom threshold`, { bg_color: `#fff`, luminance_threshold: 1.5 }, `white`],
+    // the lighter choice reaches AA here, so a stricter bar flips it to the darker one
+    [`custom min_ratio`, { bg_color: `#4e79a7`, min_ratio: 5 }, `black`],
     [`empty bg treated as a white page`, { bg_color: `` }, `black`],
     [`no bg treated as a white page`, {}, `black`],
+    [`no bg shows the backdrop`, { backdrop: `#111` }, `white`],
+    [`named colors`, { bg_color: `navy`, choices: [`gold`, `black`] }, `gold`],
+    // neither red (4.0:1 on white) reaches AA, so the higher-ratio blue wins
+    [`choices in either order`, { bg_color: `#fff`, choices: [`red`, `blue`] }, `blue`],
+    [
+      `translucent fill over a dark backdrop`,
+      { bg_color: `rgba(255 255 255 / 0.1)`, backdrop: `black` },
+      `white`,
+    ],
+    [
+      `translucent fill over the default white page`,
+      { bg_color: `rgba(0 0 0 / 0.1)` },
+      `black`,
+    ],
+    // a translucent choice is judged blended over the background it sits on
+    [
+      `translucent choice`,
+      { bg_color: `#000`, choices: [`rgb(255 255 255 / 0.2)`, `#777`] },
+      `#777`,
+    ],
   ])(`honors %s`, (_desc, options, expected) => {
     expect(pick_contrast_color(options)).toBe(expected)
   })
 
-  // named colors and color-mix() never reach a computed value (color-mix resolves first)
+  // the lighter choice wins whenever it reaches AA (near-ties like steelblue read better in
+  // white), else the higher ratio; black or white always reaches 4.58:1
   it.each([
-    `red`,
+    [`#000000`, `white`],
+    [`#4fc3f7`, `black`], // light cyan
+    [`#1f77b4`, `white`], // white 4.8:1 vs black 4.4:1
+    [`#4e79a7`, `white`], // near-tie: black 4.60 vs white 4.57, white still reaches AA
+    [`#00a1ff`, `black`], // white 2.8:1
+    [`#59a14f`, `black`], // white 3.2:1
+    [`#808080`, `black`], // white 3.9:1
+  ])(`prefers white at WCAG AA on %s, else the higher ratio`, (bg_color, expected) => {
+    expect(pick_contrast_color({ bg_color })).toBe(expected)
+    // independent of the picker: the rule restated on contrast_ratio
+    const [black, white] = [
+      contrast_ratio(`black`, bg_color),
+      contrast_ratio(`white`, bg_color),
+    ]
+    expect(white >= 4.5 ? `white` : black > white ? `black` : `white`).toBe(expected)
+  })
+
+  it.each([
+    [`black`, `white`, 21],
+    [`white`, `white`, 1],
+    [`#777`, `#fff`, 4.4781],
+    // a translucent top color blends over the bottom one first (to sRGB 127.5)
+    [`rgb(0 0 0 / 0.5)`, `white`, 3.9767],
+  ])(`contrast_ratio(%s, %s) = %f`, (color_a, color_b, expected) => {
+    expect(contrast_ratio(color_a, color_b)).toBeCloseTo(expected, 3)
+  })
+
+  it(`rejects a translucent backdrop`, () => {
+    expect(() =>
+      pick_contrast_color({ bg_color: `#000`, backdrop: `rgb(0 0 0 / 0.5)` }),
+    ).toThrow(/backdrop must be opaque/u)
+  })
+
+  // color-mix() never reaches a computed value (it resolves first)
+  it.each([
+    `notacolor`,
+    `currentcolor`,
     `color-mix(in oklab, red, blue)`,
     `color(not-a-space 1 1 1)`,
     // Object.prototype keys are not color spaces: a bare lookup finds `constructor`

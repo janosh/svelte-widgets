@@ -7,16 +7,19 @@ const clamp_unit = (value: number): number => clamp(value, 0, 1)
 export interface ContrastOptions {
   // Skips the ancestor walk where the background behind the node is already known
   bg_color?: string
-  luminance_threshold?: number
-  choices?: [string, string] // [on light background, on dark background]
+  // Opaque color a translucent bg_color is painted over. Defaults to the white a page
+  // starts as; the attachment passes the background resolved behind the node.
+  backdrop?: string
+  // Contrast ratio the lighter choice needs to win (default 4.5, WCAG AA body text)
+  min_ratio?: number
+  choices?: readonly [string, string] // in either order; translucent ones blend over the bg
 }
 
 // === CSS color parsing ===
 // `getComputedStyle` returns wide-gamut and perceptual colors verbatim (`oklch(…)`,
 // `color(display-p3 …)`), not as sRGB, so reading only `rgb()`/`rgba()` would mistake a
-// painted ancestor for a transparent one. Everything below converts to sRGB. Named colors
-// and `color-mix()` are rejected: a computed value never carries either, so only a
-// hand-passed color hits that error.
+// painted ancestor for a transparent one. Everything below converts to sRGB. `color-mix()`
+// and `currentcolor` are rejected: a computed background never carries either.
 const RGB_COLOR = /^rgba?\((?<channels>[^)]+)\)$/iu
 const HEX_COLOR = /^#(?<digits>[\da-f]+)$/iu
 const COLOR_FN = /^(?<name>oklch|oklab|lch|lab|hsla?|hwb|color)\((?<args>[^)]*)\)$/iu
@@ -260,9 +263,31 @@ const parse_color_function = (name: string, args: string): Rgba | null => {
   return finite_rgba(rgb, parse_alpha(alpha_arg?.trim() ?? legacy_alpha))
 }
 
-const parse_color = (color: string): Rgba | null => {
+// The 148 CSS named colors as `name hex` pairs, expanded on first use. Computed styles never
+// carry them, but hand-passed colors (`choices`, `backdrop`) often do.
+const NAMED_COLORS_SOURCE = `aliceblue f0f8ff antiquewhite faebd7 aqua 00ffff aquamarine 7fffd4 azure f0ffff beige f5f5dc bisque ffe4c4 black 000000 blanchedalmond ffebcd blue 0000ff blueviolet 8a2be2 brown a52a2a burlywood deb887 cadetblue 5f9ea0 chartreuse 7fff00 chocolate d2691e coral ff7f50 cornflowerblue 6495ed cornsilk fff8dc crimson dc143c cyan 00ffff darkblue 00008b darkcyan 008b8b darkgoldenrod b8860b darkgray a9a9a9 darkgreen 006400 darkgrey a9a9a9 darkkhaki bdb76b darkmagenta 8b008b darkolivegreen 556b2f darkorange ff8c00 darkorchid 9932cc darkred 8b0000 darksalmon e9967a darkseagreen 8fbc8f darkslateblue 483d8b darkslategray 2f4f4f darkslategrey 2f4f4f darkturquoise 00ced1 darkviolet 9400d3 deeppink ff1493 deepskyblue 00bfff dimgray 696969 dimgrey 696969 dodgerblue 1e90ff firebrick b22222 floralwhite fffaf0 forestgreen 228b22 fuchsia ff00ff gainsboro dcdcdc ghostwhite f8f8ff gold ffd700 goldenrod daa520 gray 808080 green 008000 greenyellow adff2f grey 808080 honeydew f0fff0 hotpink ff69b4 indianred cd5c5c indigo 4b0082 ivory fffff0 khaki f0e68c lavender e6e6fa lavenderblush fff0f5 lawngreen 7cfc00 lemonchiffon fffacd lightblue add8e6 lightcoral f08080 lightcyan e0ffff lightgoldenrodyellow fafad2 lightgray d3d3d3 lightgreen 90ee90 lightgrey d3d3d3 lightpink ffb6c1 lightsalmon ffa07a lightseagreen 20b2aa lightskyblue 87cefa lightslategray 778899 lightslategrey 778899 lightsteelblue b0c4de lightyellow ffffe0 lime 00ff00 limegreen 32cd32 linen faf0e6 magenta ff00ff maroon 800000 mediumaquamarine 66cdaa mediumblue 0000cd mediumorchid ba55d3 mediumpurple 9370db mediumseagreen 3cb371 mediumslateblue 7b68ee mediumspringgreen 00fa9a mediumturquoise 48d1cc mediumvioletred c71585 midnightblue 191970 mintcream f5fffa mistyrose ffe4e1 moccasin ffe4b5 navajowhite ffdead navy 000080 oldlace fdf5e6 olive 808000 olivedrab 6b8e23 orange ffa500 orangered ff4500 orchid da70d6 palegoldenrod eee8aa palegreen 98fb98 paleturquoise afeeee palevioletred db7093 papayawhip ffefd5 peachpuff ffdab9 peru cd853f pink ffc0cb plum dda0dd powderblue b0e0e6 purple 800080 rebeccapurple 663399 red ff0000 rosybrown bc8f8f royalblue 4169e1 saddlebrown 8b4513 salmon fa8072 sandybrown f4a460 seagreen 2e8b57 seashell fff5ee sienna a0522d silver c0c0c0 skyblue 87ceeb slateblue 6a5acd slategray 708090 slategrey 708090 snow fffafa springgreen 00ff7f steelblue 4682b4 tan d2b48c teal 008080 thistle d8bfd8 tomato ff6347 turquoise 40e0d0 violet ee82ee wheat f5deb3 white ffffff whitesmoke f5f5f5 yellow ffff00 yellowgreen 9acd32`
+let named_colors: Map<string, string> | undefined
+const named_hex = (name: string): string | undefined => {
+  if (!named_colors) {
+    const tokens = NAMED_COLORS_SOURCE.split(` `)
+    named_colors = new Map(
+      Array.from({ length: tokens.length / 2 }, (_, idx) => [
+        tokens[2 * idx],
+        `#${tokens[2 * idx + 1]}`,
+      ]),
+    )
+  }
+  return named_colors.get(name)
+}
+
+// Any CSS color except `color-mix()` and `currentcolor` as sRGB `[red, green, blue, alpha]`
+// (channels 0..255, alpha 0..1), or null when unreadable
+export const parse_color = (color: string): Rgba | null => {
   const trimmed = color.trim()
-  if (trimmed.toLowerCase() === `transparent`) return [0, 0, 0, 0]
+  const lower = trimmed.toLowerCase()
+  if (lower === `transparent`) return [0, 0, 0, 0]
+  const named = named_hex(lower)
+  if (named) return parse_color(named)
   const channels = RGB_COLOR.exec(trimmed)?.groups?.channels
   if (channels) {
     // percentages are legal in channels and alpha (`rgb(50% 0% 0% / 50%)`), even though a
@@ -305,20 +330,30 @@ const composite_color = (top: Rgba, bottom: Rgba): Rgba => {
 
 const PAGE_WHITE: Rgba = [255, 255, 255, 1]
 
-// Human-perceived brightness on 0..1, from https://stackoverflow.com/a/596243. A
-// translucent color is judged over white: node-less pick_contrast_color can't know what it
-// sits on, while the contrast_color attachment pre-blends over the node's real backdrop.
-const luminance = (color: string): number => {
+const read_color = (color: string): Rgba => {
   const parsed = parse_color(color)
-  if (!parsed) {
-    throw new Error(
-      `pick_contrast_color: cannot read color \`${color}\`, expected hex, rgb()/rgba(), ` +
-        `hsl()/hwb(), lab()/lch()/oklab()/oklch(), color() or transparent; named ` +
-        `colors and color-mix() are not parsed`,
-    )
-  }
-  const [red, green, blue] = composite_color(parsed, PAGE_WHITE)
-  return (0.299 * red + 0.587 * green + 0.114 * blue) / 255
+  if (parsed) return parsed
+  throw new Error(
+    `pick_contrast_color: cannot read color \`${color}\`, expected hex, a named color, ` +
+      `rgb()/rgba(), hsl()/hwb(), lab()/lch()/oklab()/oklch(), color() or transparent; ` +
+      `color-mix() and currentcolor are not parsed`,
+  )
+}
+
+// WCAG 2 relative luminance of an opaque color, from linearized sRGB channels
+const relative_luminance = ([red, green, blue]: Rgba): number => {
+  const linear = (channel: number) => srgb_decode(clamp(channel, 0, 255) / 255)
+  return 0.2126 * linear(red) + 0.7152 * linear(green) + 0.0722 * linear(blue)
+}
+const luminance_ratio = (lum_a: number, lum_b: number): number =>
+  (Math.max(lum_a, lum_b) + 0.05) / (Math.min(lum_a, lum_b) + 0.05)
+
+// WCAG 2 contrast ratio from 1 (identical) to 21 (black on white). `color_a` is painted over
+// `color_b`, which is in turn judged over a white page when translucent.
+export const contrast_ratio = (color_a: string, color_b: string): number => {
+  const bottom = composite_color(read_color(color_b), PAGE_WHITE)
+  const top = composite_color(read_color(color_a), bottom)
+  return luminance_ratio(relative_luminance(top), relative_luminance(bottom))
 }
 
 // The browser reports 8-bit channels; match that rather than emit blend fractions
@@ -342,22 +377,25 @@ export const get_bg_color = (element: Element | null): string => {
   return composite ? rgb_string(composite_color(composite, PAGE_WHITE)) : ``
 }
 
-// A translucent explicit fill only tints what the node sits on, so blend it over the
-// resolved background behind the node rather than over white (wrong on a dark page)
-const blend_over_backdrop = (bg_color: string, node: Element): string => {
-  const layer = parse_color(bg_color)
-  if (!layer || layer[3] >= OPAQUE) return bg_color // luminance reports unreadable colors
-  const backdrop = get_bg_color(composed_parent(node))
-  const base = backdrop ? parse_color(backdrop) : PAGE_WHITE
-  if (!base) throw new Error(`contrast_color: cannot read backdrop color \`${backdrop}\``)
-  return rgb_string(composite_color(layer, base))
-}
-
+// The lighter choice whenever it reaches min_ratio, else the higher-contrast one (black or
+// white always reaches 4.58:1). Pure max-ratio flips near-ties like #4e79a7 (black 4.62:1,
+// white 4.55:1) to black, which reads worse; APCA puts white on mid-tones at 2.7-3.3:1.
 export const pick_contrast_color = (options: ContrastOptions = {}): string => {
-  const { bg_color, luminance_threshold = 0.7, choices = [`black`, `white`] } = options
-  // Nothing opaque behind the node: it shows through to the white a page starts as
-  const background = bg_color?.trim() ? bg_color : `#fff`
-  return luminance(background) > luminance_threshold ? choices[0] : choices[1]
+  const { bg_color, backdrop, min_ratio = 4.5, choices = [`black`, `white`] } = options
+  const base = backdrop === undefined ? PAGE_WHITE : read_color(backdrop)
+  if (base[3] < OPAQUE) {
+    throw new Error(`pick_contrast_color: backdrop must be opaque, got \`${backdrop}\``)
+  }
+  // No fill of its own: the node shows the backdrop
+  const background = bg_color?.trim() ? composite_color(read_color(bg_color), base) : base
+  const bg_luminance = relative_luminance(background)
+  const luminances = choices.map((choice) =>
+    relative_luminance(composite_color(read_color(choice), background)),
+  )
+  const ratios = luminances.map((lum) => luminance_ratio(lum, bg_luminance))
+  const lighter_idx = luminances[1] >= luminances[0] ? 1 : 0
+  if (ratios[lighter_idx] >= min_ratio) return choices[lighter_idx]
+  return ratios[0] >= ratios[1] ? choices[0] : choices[1]
 }
 
 // Sets text color once at setup to whichever of `choices` reads better on the background
@@ -367,11 +405,15 @@ export const contrast_color =
   (node: Element): (() => void) | undefined => {
     if (!(node instanceof HTMLElement)) return undefined
     const previous_color = node.style.color
-    const bg_color =
-      options.bg_color === undefined
-        ? get_bg_color(node)
-        : blend_over_backdrop(options.bg_color, node)
-    node.style.color = pick_contrast_color({ ...options, bg_color })
+    const bg_color = options.bg_color ?? get_bg_color(node)
+    // An explicit fill replaces the node's own, so only its parent's background shows
+    // through a translucent one (white on a dark page would otherwise read as light)
+    const backdrop =
+      options.backdrop ??
+      (options.bg_color === undefined
+        ? undefined
+        : get_bg_color(composed_parent(node)) || undefined)
+    node.style.color = pick_contrast_color({ ...options, bg_color, backdrop })
     return () => {
       node.style.color = previous_color
     }

@@ -59,6 +59,7 @@ export const demo_descriptions: Record<string, string> = {
   '/settings': `Organize, search, and reset related application settings.`,
   '/command-menu': `Find commands and search site content from a keyboard palette.`,
   '/nav': `Build responsive navigation with dropdowns and keyboard controls.`,
+  '/breadcrumbs': `Show the path to the current page with link or callback navigation and collapsing.`,
   '/site-chrome': `Add footers, contributor lists, and lightweight media embeds.`,
   '/toc': `Navigate headings with an automatically generated table of contents.`,
   '/tree-view': `Select nodes and visible ranges in a keyboard-navigable tree with lazy-loaded branches.`,
@@ -74,6 +75,7 @@ export const demo_descriptions: Record<string, string> = {
   '/masonry': `Arrange variable-height content into balanced columns.`,
   '/patterns': `Compose dialogs, sheets, tabs, accordions, and in-page search.`,
   '/split-pane': `Resize adjacent panels with pointer and keyboard controls.`,
+  '/table': `Compose column picking, per-column filters, cell-range selection and export into a table.`,
   '/theming': `Every CSS custom property components read, generated from source.`,
   '/virtual-list': `Render a small visible window into a large fixed-height list.`,
   '/wiggle': `Animate a component to draw attention to a change.`,
@@ -111,6 +113,7 @@ export const demo_descriptions: Record<string, string> = {
   '/attachments/contrast-color': `Pick a readable foreground from the background painted behind an element.`,
   '/attachments/forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
   '/attachments/file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
+  '/attachments/stick-to-bottom': `Keep a streaming log or chat pinned to its end until the reader scrolls away.`,
 }
 
 // Source groups determine membership; recipes remain searchable without filling the nav.

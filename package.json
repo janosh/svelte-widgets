@@ -183,6 +183,11 @@
       "types": "./dist/json-tree/path.d.ts",
       "default": "./dist/json-tree/path.js"
     },
+    "./table": {
+      "types": "./dist/table/index.d.ts",
+      "svelte": "./dist/table/index.js",
+      "default": "./dist/table/index.js"
+    },
     "./csv": {
       "types": "./dist/csv.d.ts",
       "default": "./dist/csv.js"
@@ -206,6 +211,10 @@
     "./url-params": {
       "types": "./dist/url-params.d.ts",
       "default": "./dist/url-params.js"
+    },
+    "./poll": {
+      "types": "./dist/poll.d.ts",
+      "default": "./dist/poll.js"
     },
     "./image-markup": {
       "types": "./dist/image-markup.d.ts",

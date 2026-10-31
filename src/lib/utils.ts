@@ -311,6 +311,8 @@ const key_symbols = new Map([
   [`backspace`, `⌫`],
   [`delete`, `⌦`],
   [`escape`, `Esc`],
+  [`pageup`, `PgUp`],
+  [`pagedown`, `PgDn`],
   [`arrowup`, `↑`],
   [`arrowdown`, `↓`],
   [`arrowleft`, `←`],

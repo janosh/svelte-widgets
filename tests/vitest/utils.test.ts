@@ -175,6 +175,8 @@ describe(`keyboard shortcut parsing`, () => {
     [`cmd+plus`, [`⌘`, `+`]],
     [`option+space`, [`⌥`, `␣`]],
     [` SHIFT + Escape `, [`⇧`, `Esc`]],
+    // aria-keyshortcuts spelling (`Control+PageDown`) renders the same as the short form
+    [`Control+PageDown`, [`Ctrl`, `PgDn`]],
     [`F12`, [`F12`]],
     [`ß`, [`SS`]],
     [`😀`, [`😀`]],
