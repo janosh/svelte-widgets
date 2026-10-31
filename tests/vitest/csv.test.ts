@@ -31,7 +31,6 @@ describe(`rows_to_csv`, () => {
     expect(rows_to_csv(rows)).toBe(expected)
   })
 
-  // comma, quote, LF, boolean and nullish cells are covered through rows_to_csv above
   test.each([
     [`=1+2`, `=1+2`], // formula prefixes are preserved, not sanitized
     [`line1\rline2`, `"line1\rline2"`],

@@ -997,9 +997,8 @@
   export const open_search = async (replace = false): Promise<void> => {
     if (document.activeElement === textarea) sync_selection()
     const [from, to] = ordered(model.selection)
-    // only a single-line selection seeds the query: the find field strips line breaks, so a
-    // multi-line seed would count matches of text the field doesn't show. A multi-line one
-    // clears it, or the nearest match of an old query would replace the selection.
+    // only a single-line selection seeds the query (the field strips line breaks); a
+    // multi-line one clears it, else an old query's nearest match replaces the selection
     if (from !== to)
       search_query = to <= model.line_at(from).to ? model.slice(from, to) : ``
     search_panel = `find`

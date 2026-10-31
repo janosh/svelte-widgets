@@ -94,6 +94,14 @@ describe(`contrast_color`, () => {
     expect(Math.abs(brightness(bg_color) - luminance)).toBeLessThan(2e-3)
   })
 
+  it.each([
+    [`#f008`, [255, 0, 0, 0x88 / 255]],
+    [`#1A2b3C`, [26, 43, 60, 1]],
+    [`#1a2b3c80`, [26, 43, 60, 0x80 / 255]],
+  ])(`parse_color reads the hex %s`, (color, expected) => {
+    expect(parse_color(color)).toEqual(expected)
+  })
+
   it.each<[string, ContrastOptions, string]>([
     [`custom choices`, { bg_color: `#000`, choices: [`#222`, `#eee`] }, `#eee`],
     // the lighter choice reaches AA here, so a stricter bar flips it to the darker one
@@ -101,6 +109,11 @@ describe(`contrast_color`, () => {
     [`empty bg treated as a white page`, { bg_color: `` }, `black`],
     [`no bg treated as a white page`, {}, `black`],
     [`no bg shows the backdrop`, { backdrop: `#111` }, `white`],
+    [
+      `empty backdrop treated as a white page`,
+      { bg_color: `rgb(255 255 255 / 0.1)`, backdrop: `` },
+      `black`,
+    ],
     [`named colors`, { bg_color: `navy`, choices: [`gold`, `black`] }, `gold`],
     // neither red (4.0:1 on white) reaches AA, so the higher-ratio blue wins
     [`choices in either order`, { bg_color: `#fff`, choices: [`red`, `blue`] }, `blue`],
@@ -163,15 +176,18 @@ describe(`contrast_color`, () => {
   // color-mix() never reaches a computed value (it resolves first)
   it.each([
     `notacolor`,
+    `ffffff`, // a hex without `#` is no name, though the name table holds its digits
     `currentcolor`,
     `color-mix(in oklab, red, blue)`,
     `color(not-a-space 1 1 1)`,
     // Object.prototype keys are not color spaces: a bare lookup finds `constructor`
     `color(constructor 1 1 1)`,
     `color(srgb 1 1)`,
+    `color(srgb 1 0 0 0.5)`, // alpha only after a slash
     `oklch(0.7 0.1)`,
     `#12345`,
     `rgb(1, 2)`,
+    `rgb(1 2 3 4 5)`,
     `rgb(a, b, c)`,
   ])(`throws on the unparsable color %s`, (bg_color) => {
     expect(() => pick_contrast_color({ bg_color })).toThrow(/cannot read color/u)

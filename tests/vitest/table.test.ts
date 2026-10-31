@@ -20,6 +20,17 @@ import { tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
 import { create_element, press_key } from './index'
 
+// rectangle from (start_row, start_col) to (end_row, end_col)
+const rect = (
+  start_row: number,
+  start_col: number,
+  end_row: number,
+  end_col: number,
+) => ({
+  start: { row: start_row, col: start_col },
+  end: { row: end_row, col: end_col },
+})
+
 describe(`CellSelection`, () => {
   // Selected cells of a 10x10 grid as "row:col", probed through has()
   const sorted_keys = (selection: CellSelection) =>
@@ -52,7 +63,7 @@ describe(`CellSelection`, () => {
     expect(selection.end_drag()).toBe(false)
   })
 
-  // size counts distinct cells: overlapping rectangles share theirs, and a select-all on a
+  // size counts what a copy emits: overlapping cells once per rectangle, and a select-all on a
   // huge table is measured from the rectangles instead of enumerating every cell
   test.each([
     {
@@ -60,7 +71,7 @@ describe(`CellSelection`, () => {
         [0, 0, 2, 2],
         [1, 1, 3, 3],
       ],
-      size: 14,
+      size: 18,
     },
     {
       rects: [
@@ -68,7 +79,7 @@ describe(`CellSelection`, () => {
         [2, 0, 2, 0],
         [0, 2, 1, 3],
       ],
-      size: 9,
+      size: 10,
     },
     {
       rects: [
@@ -76,26 +87,22 @@ describe(`CellSelection`, () => {
         [0, 5, 3, 6],
         [1, 4, 2, 5],
       ],
-      size: 26,
+      size: 28,
     },
     {
       rects: [
         [0, 0, 9, 9],
         [5, 5, 5, 5],
       ],
-      size: 100,
+      size: 101,
     },
     { rects: [[0, 0, 1e8 - 1, 9]], size: 1e9 },
   ])(`size of $rects is $size`, ({ rects, size }) => {
     const selection = new CellSelection()
-    selection.rects = rects.map(([start_row, start_col, end_row, end_col]) => ({
-      start_row,
-      start_col,
-      end_row,
-      end_col,
-    }))
+    selection.rects = rects.map(([start_row, start_col, end_row, end_col]) =>
+      rect(start_row, start_col, end_row, end_col),
+    )
     expect(selection.size).toBe(size)
-    if (size <= 100) expect(sorted_keys(selection)).toHaveLength(size)
   })
 
   test(`keyboard steps replace the selection, Shift grows it from the anchor`, () => {
@@ -107,25 +114,25 @@ describe(`CellSelection`, () => {
     expect(sorted_keys(selection)).toEqual([`1:0`, `1:1`, `2:0`, `2:1`, `3:0`, `3:1`])
     // without a prior rectangle, Shift anchors at the cell being left
     const fresh = new CellSelection()
-    fresh.step({ row: 4, col: 4 }, { row: 4, col: 5 }, true)
+    const cursor = { row: 4, col: 4 }
+    fresh.step(cursor, { row: 4, col: 5 }, true)
+    expect(sorted_keys(fresh)).toEqual([`4:4`, `4:5`])
+    cursor.row = 9 // the host moving its cursor must not drag the stored anchor along
     expect(sorted_keys(fresh)).toEqual([`4:4`, `4:5`])
   })
 
   test(`serialises rectangles as TSV blocks`, () => {
     const selection = new CellSelection()
-    selection.rects = [
-      { start_row: 1, start_col: 1, end_row: 0, end_col: 0 }, // drawn up-left
-      { start_row: 5, start_col: 0, end_row: 5, end_col: 1 },
-    ]
+    selection.rects = [rect(1, 1, 0, 0), rect(5, 0, 5, 1)] // first drawn up-left
     expect(selection.to_tsv((row, col) => `r${row}c${col}`)).toBe(
       `r0c0\tr0c1\nr1c0\tr1c1\nr5c0\tr5c1`,
     )
     // tabs and newlines inside a cell would split it, so they flatten to spaces
-    selection.rects = [{ start_row: 0, start_col: 0, end_row: 0, end_col: 0 }]
+    selection.rects = [rect(0, 0, 0, 0)]
     expect(selection.to_tsv(() => `a\tb\r\nc`)).toBe(`a b c`)
     // a selection the host forgot to clear copies only cells still in range
     const rows = [[`a`, `b`]]
-    selection.rects = [{ start_row: 0, start_col: 0, end_row: 3, end_col: 2 }]
+    selection.rects = [rect(0, 0, 3, 2)]
     expect(selection.to_tsv((row, col) => rows[row]?.[col])).toBe(`a\tb`)
   })
 })
@@ -326,6 +333,7 @@ describe(`filters`, () => {
     [3, { kind: `numeric`, min: 1, max: 2 }, false],
     [`abc`, { kind: `numeric`, min: 0 }, false],
     [`0x1f`, { kind: `numeric`, min: 0 }, false], // hex is an ID, not 31
+    [`1e400`, { kind: `numeric`, min: 0 }, false], // overflows to Infinity, no number
     [``, { kind: `numeric`, max: 1 }, false], // blank is missing, not 0
     [5, { kind: `numeric`, max: 5 }, true],
     [`oxide`, { kind: `category`, values: [`oxide`] }, true],
@@ -335,6 +343,9 @@ describe(`filters`, () => {
     [` `, { kind: `category`, values: [``] }, true],
     [`Fe2O3`, { kind: `text`, text: `e2o` }, true],
     [`Fe2O3`, { kind: `text`, text: `cu` }, false],
+    // default cell text: dates as ISO strings, other objects as JSON
+    [new Date(Date.UTC(2024, 0, 2)), { kind: `text`, text: `2024-01-02t` }, true],
+    [{ el: `Fe` }, { kind: `text`, text: `"el":"fe"` }, true],
   ])(`cell %j against %j: %j`, (val, filter, expected) => {
     expect(compile_filter(filter)(val)).toBe(expected)
   })
@@ -528,11 +539,12 @@ describe(`table exporters`, () => {
   })
 
   test(`escapes markdown backslashes, pipes and newlines and right-aligns numeric columns`, () => {
-    const [header, align, row_1, row_2] = table_to_text(matrix, `md`).split(`\n`)
+    const [header, align, row_1, row_2, row_3] = table_to_text(matrix, `md`).split(`\n`)
     expect(header).toBe(`| Name | a\\|b | Val |`)
     expect(align).toBe(`| :--- | :--- | ---: |`)
     expect(row_1).toBe(`| x, "q" | multi<br>line | 1 |`)
     expect(row_2).toBe(`| 50% & $3_{} | ^~\\\\ | 2 |`)
+    expect(row_3).toBe(`| cr<br>line |  | 3 |`) // a bare CR ends a GFM line too
     // decoded escaped markup stays text: `<br>` must not become a live line break
     const markdown = table_to_text({ headers: [`<br> &lt;`], rows: [] }, `md`)
     expect(markdown.split(`\n`)).toEqual([`| &lt;br> &amp;lt; |`, `| :--- |`])
@@ -541,7 +553,12 @@ describe(`table exporters`, () => {
   test(`escapes LaTeX specials once and builds a booktabs tabular`, () => {
     const lines = table_to_text(matrix, `tex`).split(`\n`)
     expect(lines[0]).toBe(`\\begin{tabular}{llr}`)
-    expect(lines[6]).toBe(
+    // a line break inside a cell would end the paragraph mid-tabular
+    expect([lines[4], lines[6]]).toEqual([
+      `  x, "q" & multi line & 1 \\\\`,
+      `  cr line &  & 3 \\\\`,
+    ])
+    expect(lines[5]).toBe(
       `  50\\% \\& \\$3\\_\\{\\} & \\textasciicircum{}\\textasciitilde{}\\textbackslash{} & 2 \\\\`,
     )
     expect(lines.at(-1)).toBe(`\\end{tabular}`)

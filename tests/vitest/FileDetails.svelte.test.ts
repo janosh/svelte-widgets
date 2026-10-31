@@ -145,7 +145,7 @@ test(`toggle all button opens/closes all, tracks (custom) label, and handles par
 test(`pre-opened details set the toggle-all label and forward native toggle events`, () => {
   const ontoggle = vi.fn()
   const files = [`file1`, `file2`].map((title) => ({ title, content: title }))
-  // the toggle event never fires on mount, so the label must init from detail_elements
+  // the toggle event never fires on mount, so the label must init from the rendered details
   render(FileDetails, { files, details_props: { open: true, ontoggle } })
   const details = doc_query<HTMLDetailsElement>(`details`)
   expect(details.open).toBe(true)

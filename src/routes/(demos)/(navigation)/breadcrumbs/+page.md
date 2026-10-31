@@ -50,7 +50,7 @@ Without `href`, items render as buttons and `on_navigate(item, index, event)` ru
 
 ### Custom rendering
 
-`separator` takes a string or a snippet, `item({ item, index, current })` replaces the icon and label inside the default link, button or span, and `link_props` lands on every link (e.g. SvelteKit's `data-sveltekit-preload-data`). Extra item fields reach the snippet and `on_navigate`. Restyle the trail with `--breadcrumbs-*` properties such as `--breadcrumbs-gap`, `--breadcrumbs-color`, `--breadcrumbs-current-font-weight`, `--breadcrumbs-item-max-width` (long labels ellipsize) and `--breadcrumbs-wrap: nowrap`.
+`separator` takes a string or a snippet, `item({ item, index, current })` replaces the icon and label inside the default link, button or span, and other attributes land on the `<nav>`, where SvelteKit link options such as `data-sveltekit-preload-data` reach every link. Items carry their own `target`, `rel` and `title`. Extra item fields reach the snippet and `on_navigate`. Restyle the trail with `--breadcrumbs-*` properties such as `--breadcrumbs-gap`, `--breadcrumbs-color`, `--breadcrumbs-current-font-weight`, `--breadcrumbs-item-max-width` (long labels ellipsize) and `--breadcrumbs-wrap: nowrap`.
 
 ```svelte example id="breadcrumbs-snippets"
 <script lang="ts">

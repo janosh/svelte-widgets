@@ -84,7 +84,6 @@ describe(`Tag`, () => {
       const on_remove = vi.fn()
       render(Tag, { ...props, on_remove })
       expect(remove_name()).toBe(name)
-      expect(doc_query(`.tag`).classList.contains(`removable`)).toBe(true)
       await click(remove_button())
       expect(on_remove).toHaveBeenCalledOnce()
     },
@@ -130,6 +129,11 @@ describe(`Tag`, () => {
     [`dark solid fill`, { variant: `solid`, color: `#1a1a2e` }, `white`],
     [`light solid fill`, { variant: `solid`, color: `#f7d154` }, `black`],
     [`active soft tag fills`, { color: `#1a1a2e`, active: true }, `white`],
+    [
+      `--tag-color from style`,
+      { variant: `solid`, style: `--tag-color: #1a1a2e` },
+      `white`,
+    ],
     [`soft tint keeps inherited text`, { color: `#1a1a2e` }, undefined],
   ])(`%s sets --tag-contrast-color=%s`, (_desc, props, expected) => {
     render(Tag, { label: `x`, ...props })
@@ -137,7 +141,7 @@ describe(`Tag`, () => {
     expect(contrast || undefined).toBe(expected)
   })
 
-  test(`contrast is re-picked when the color, theme or variant changes`, () => {
+  test(`contrast is re-picked when the color, theme, variant or style changes`, () => {
     const sheet = document.createElement(`style`)
     sheet.textContent = `:root { --brand: #1a1a2e } :root[data-theme='dark'] { --brand: #f7d154 }`
     document.head.append(sheet)
@@ -164,5 +168,9 @@ describe(`Tag`, () => {
     props.variant = `outline`
     flushSync()
     expect(contrast()).toBe(``)
+    props.variant = `solid`
+    props.style = `--tag-color: #f7d154` // style comes last, so it wins over color
+    flushSync()
+    expect(contrast()).toBe(`black`)
   })
 })

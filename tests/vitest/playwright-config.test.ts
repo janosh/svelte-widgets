@@ -3,9 +3,7 @@ import global_setup from '../playwright/global-setup'
 
 test(`PLAYWRIGHT_PORT moves the e2e server off the default port`, async () => {
   vi.stubEnv(`PLAYWRIGHT_PORT`, `3123`)
-  onTestFinished(() => {
-    vi.unstubAllEnvs()
-  })
+  onTestFinished(() => void vi.unstubAllEnvs())
   vi.resetModules()
   const { default: config } = await import(`../../playwright.config`)
   expect(config.webServer.port).toBe(3123)
@@ -18,9 +16,7 @@ test.each([
   [`<script data-domain="matterviz.janosh.dev">`, true],
 ])(`e2e global setup rejects a server serving %s: %s`, async (html, rejects) => {
   vi.stubGlobal(`fetch`, async () => new Response(html))
-  onTestFinished(() => {
-    vi.unstubAllGlobals()
-  })
+  onTestFinished(() => void vi.unstubAllGlobals())
   const setup = global_setup({ webServer: { port: 3006 } })
   if (rejects)
     await expect(setup).rejects.toThrow(`serves another app, not svelte-widgets`)

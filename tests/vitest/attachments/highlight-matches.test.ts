@@ -211,8 +211,6 @@ describe(`highlight_matches`, () => {
     expect(registry.has(`highlight-match`)).toBe(false)
   })
 
-  // restoring a pre-existing highlight and keeping a later replacement are covered on
-  // the shared owner store in text-search.test.ts (highlight_ranges)
   it(`respects a later deletion of the same-name highlight on cleanup`, () => {
     registry.set(`highlight-match`, { external: `previous` })
     node.textContent = `match`

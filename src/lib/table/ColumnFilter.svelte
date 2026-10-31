@@ -1,12 +1,14 @@
 <script lang="ts" module>
-  // 3 significant digits, rounded outwards (min down, max up) so the shown range still
-  // includes every value; exact when 3 digits already hold it
+  // 3 significant digits, stepped one unit outwards (min down, max up) when rounding to
+  // nearest would exclude the value, so the shown range still includes every value. Compares
+  // final doubles, so values a few ULPs past a short decimal (0.1 * 3) round the right way.
   const inclusive_bound = (num: number, bound: `min` | `max`): string => {
     const short = Number(num.toPrecision(3))
-    if (short === num || !Number.isFinite(num)) return String(short)
-    const scale = 10 ** (Math.floor(Math.log10(Math.abs(num))) - 2)
-    const round = bound === `min` ? Math.floor : Math.ceil
-    return String(Number((round(num / scale) * scale).toPrecision(3)))
+    if ((bound === `min` ? short <= num : short >= num) || !Number.isFinite(num)) {
+      return String(short)
+    }
+    const step = 10 ** (Math.floor(Math.log10(Math.abs(num))) - 2)
+    return String(Number((bound === `min` ? short - step : short + step).toPrecision(3)))
   }
 </script>
 
@@ -44,49 +46,35 @@
     open = $bindable(false),
     label,
     values,
-    kind,
-    numeric,
-    to_text,
-    to_number,
-    is_missing,
-    category_limit,
+    options,
     format_bound = inclusive_bound,
     labels,
     trigger,
     option,
     ...rest
-  }: Omit<HTMLAttributes<HTMLSpanElement>, `children` | StoppedEvents> &
-    FilterPanelOptions<Val> & {
-      filter?: ColumnFilterValue
-      open?: boolean
-      // column name, read by the trigger's aria-label
-      label: string
-      // the column's unfiltered values, read only while the panel is open
-      values: () => Iterable<Val>
-      // formats the numeric extent shown as the range inputs' placeholders; keep it
-      // inclusive (never round `min` up or `max` down) so typing it in keeps every row
-      format_bound?: (num: number, bound: `min` | `max`) => string
-      labels?: Partial<ColumnFilterLabels>
-      // replaces the funnel icon inside the trigger button
-      trigger?: Snippet<[{ open: boolean; active: boolean }]>
-      // a checklist entry's text
-      option?: Snippet<[{ value: string; checked: boolean }]>
-    } = $props()
+  }: Omit<HTMLAttributes<HTMLSpanElement>, `children` | StoppedEvents> & {
+    filter?: ColumnFilterValue
+    open?: boolean
+    // column name, read by the trigger's aria-label
+    label: string
+    // the column's unfiltered values, read only while the panel is open
+    values: () => Iterable<Val>
+    // control kind, numeric override, checklist cap and cell readers, as filter_panel takes
+    // them; the readers can be the same object passed to filter_rows / compile_filter
+    options?: FilterPanelOptions<Val>
+    // formats the numeric extent shown as the range inputs' placeholders; keep it
+    // inclusive (never round `min` up or `max` down) so typing it in keeps every row
+    format_bound?: (num: number, bound: `min` | `max`) => string
+    labels?: Partial<ColumnFilterLabels>
+    // replaces the funnel icon inside the trigger button
+    trigger?: Snippet<[{ open: boolean; active: boolean }]>
+    // a checklist entry's text
+    option?: Snippet<[{ value: string; checked: boolean }]>
+  } = $props()
 
   const msg = $derived(merge_defaults(COLUMN_FILTER_LABELS, labels))
   // Lazy: the distinct-value scan is O(rows) and only runs for the open panel
-  const panel = $derived(
-    open
-      ? filter_panel(values(), {
-          kind,
-          numeric,
-          to_text,
-          to_number,
-          is_missing,
-          category_limit,
-        })
-      : null,
-  )
+  const panel = $derived(open ? filter_panel(values(), options) : null)
   const stop_event = (event: Event) => event.stopPropagation()
   // Other keys (Escape, arrows, typing) keep bubbling for the table's own shortcuts
   const stop_activation = (event: KeyboardEvent) => {
@@ -132,6 +120,7 @@
             {msg[bound]}
             <input
               type="number"
+              step="any"
               value={range?.[bound] ?? ``}
               placeholder={panel.extent ? format_bound(panel.extent[bound], bound) : ``}
               oninput={(event) =>
@@ -162,6 +151,7 @@
       {:else}
         <input
           type="search"
+          aria-label={msg.contains}
           placeholder={msg.contains}
           value={filter?.kind === `text` ? filter.text : ``}
           oninput={({ currentTarget: { value: text } }) =>

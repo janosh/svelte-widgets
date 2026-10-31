@@ -47,7 +47,19 @@ const INPUT_WINDOW_MS = 800
 // changes no observer sees. Setting `stuck` detaches or re-pins programmatically (e.g. false
 // before attaching to start detached, or before jumping to a search hit). Create it anywhere:
 // it installs nothing until attached.
-export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
+export interface StickToBottom {
+  stuck: boolean
+  readonly distance: number // px left to scroll before the end
+  readonly far_from_end: boolean
+  readonly selecting: boolean // whether a text selection inside is pausing the follow
+  attach: (node: HTMLElement) => () => void
+  follow: () => void
+  scroll_to_end: (scroll_behavior?: ScrollBehavior) => void
+}
+
+export const create_stick_to_bottom = (
+  options: StickToBottomOptions = {},
+): StickToBottom => {
   const {
     threshold = 40,
     far_threshold,
@@ -57,12 +69,15 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
     on_scroll,
     hold_position,
   } = options
-  let stuck = $state(true)
-  let distance = $state(0)
-  let far_from_end = $state(false)
-  let selecting = $state(false)
+  const state = $state({
+    stuck: true,
+    distance: 0,
+    far_from_end: false,
+    selecting: false,
+  })
   let element: HTMLElement | null = null
   let user_scroll_until = 0
+  let last_top = 0
   // Removers of the window listeners of an open press (a scrollbar drag can rest on the thumb
   // indefinitely, outliving any timed window, so it holds intent until released) and of a
   // selection. Whichever listener fires removes them all, as does teardown.
@@ -77,14 +92,18 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
   }
   const note_user_scroll = (): void => {
     user_scroll_until = performance.now() + INPUT_WINDOW_MS
+    if (element) last_top = element.scrollTop
   }
   const measure = (node: HTMLElement): number => {
-    distance = Math.max(0, node.scrollHeight - node.scrollTop - node.clientHeight)
-    far_from_end = distance >= (far_threshold ?? node.clientHeight)
-    return distance
+    last_top = node.scrollTop
+    state.distance = Math.max(0, node.scrollHeight - node.scrollTop - node.clientHeight)
+    // a zero-height (hidden) container is at its end, not far from it
+    state.far_from_end =
+      state.distance > 0 && state.distance >= (far_threshold ?? node.clientHeight)
+    return state.distance
   }
   const scroll_to_end = (scroll_behavior: ScrollBehavior = behavior): void => {
-    stuck = true
+    state.stuck = true
     element?.scrollTo({ top: element.scrollHeight, behavior: scroll_behavior })
   }
 
@@ -93,16 +112,19 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
   const follow = (): void =>
     untrack(() => {
       if (!element) return
-      if (!stuck) hold_position?.()
-      else if (!selecting) scroll_to_end()
+      if (!state.stuck) hold_position?.()
+      else if (!state.selecting) scroll_to_end()
       measure(element)
     })
 
   const handle_scroll = (event: Event): void => {
     if (!element) return
-    if (measure(element) <= threshold) stuck = true
-    else if (end_press || performance.now() < user_scroll_until) {
-      stuck = false
+    // a move toward the end never detaches: a smooth follow passes through far positions on
+    // its way, possibly inside the input window of the keystroke or flick that preceded it
+    const toward_end = element.scrollTop > last_top
+    if (measure(element) <= threshold) state.stuck = true
+    else if (!toward_end && (end_press || performance.now() < user_scroll_until)) {
+      state.stuck = false
       note_user_scroll()
     }
     on_scroll?.(event)
@@ -125,12 +147,12 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
   }
   const end_selection = (): void => {
     end_selection_listeners?.()
-    selecting = false
-    if (globalThis.getSelection()?.isCollapsed === false) stuck = false
+    state.selecting = false
+    if (globalThis.getSelection()?.isCollapsed === false) state.stuck = false
   }
   const handle_selectstart = (): void => {
-    if (selecting) return
-    selecting = true
+    if (state.selecting) return
+    state.selecting = true
     const types = [`pointerup`, `pointercancel`, `blur`]
     end_selection_listeners = listen_window(types, end_selection)
   }
@@ -150,10 +172,8 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
     sizes.observe(node)
     if (observe_children) for (const child of node.children) sizes.observe(child)
     const mutations = new MutationObserver((records) => {
-      for (const { target, addedNodes, removedNodes } of observe_children
-        ? records
-        : []) {
-        if (target !== node) continue
+      for (const { target, addedNodes, removedNodes } of records) {
+        if (!observe_children || target !== node) continue
         for (const removed of removedNodes)
           if (removed instanceof Element) sizes.unobserve(removed)
         for (const added of addedNodes) if (added instanceof Element) sizes.observe(added)
@@ -173,32 +193,10 @@ export const create_stick_to_bottom = (options: StickToBottomOptions = {}) => {
       end_press?.()
       end_selection_listeners?.()
       end_press = undefined
-      selecting = false
+      state.selecting = false
       if (element === node) element = null
     }
   }
 
-  return {
-    get stuck(): boolean {
-      return stuck
-    },
-    set stuck(next: boolean) {
-      stuck = next
-    },
-    // px left to scroll before the end
-    get distance(): number {
-      return distance
-    },
-    get far_from_end(): boolean {
-      return far_from_end
-    },
-    // whether a text selection inside is pausing the follow
-    get selecting(): boolean {
-      return selecting
-    },
-    attach,
-    follow,
-    scroll_to_end,
-  }
+  return Object.assign(state, { attach, follow, scroll_to_end })
 }
-export type StickToBottom = ReturnType<typeof create_stick_to_bottom>

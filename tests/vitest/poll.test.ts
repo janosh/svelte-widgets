@@ -49,14 +49,14 @@ test(`the task receives a signal that aborts on stop`, () => {
 
 test.each([0, 500])(
   `first_delay_ms=%s sets only the first timed run`,
-  (first_delay_ms) => {
+  async (first_delay_ms) => {
     const task = vi.fn()
     const stop = start_polling(task, { interval_ms: 10_000, first_delay_ms })
-    vi.advanceTimersByTime(first_delay_ms)
+    await vi.advanceTimersByTimeAsync(first_delay_ms)
     expect(task).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(9999)
+    await vi.advanceTimersByTimeAsync(9999)
     expect(task).toHaveBeenCalledOnce()
-    vi.advanceTimersByTime(1)
+    await vi.advanceTimersByTimeAsync(1)
     expect(task).toHaveBeenCalledTimes(2)
     stop()
   },
@@ -82,56 +82,58 @@ const collect_rejections = async (run: () => Promise<unknown>): Promise<string[]
 }
 
 // The interval re-arms before the task runs, so a task that throws or rejects keeps polling.
-test(`a throwing task surfaces its error and keeps the loop going`, async () => {
-  const task = vi.fn(() => {
-    throw new Error(`poll failed`)
-  })
-  const stop = start_polling(task, { interval_ms: 1000 })
-  await vi.advanceTimersByTimeAsync(1000).catch(() => undefined)
-  await vi.advanceTimersByTimeAsync(1000).catch(() => undefined)
-  expect(task).toHaveBeenCalledTimes(2)
-  stop()
-})
+test.each([
+  [
+    `throwing`,
+    () => {
+      throw new Error(`poll failed`)
+    },
+  ],
+  [`rejecting`, () => Promise.reject(new Error(`poll failed`))],
+])(
+  `a %s task surfaces each error unhandled and keeps the loop going`,
+  async (_desc, fail) => {
+    const task = vi.fn(fail)
+    const stop = start_polling(task, { interval_ms: 1000 })
+    const reported = await collect_rejections(() => vi.advanceTimersByTimeAsync(2000))
+    expect(task).toHaveBeenCalledTimes(2)
+    expect(reported).toEqual([`poll failed`, `poll failed`])
+    stop()
+  },
+)
 
-test(`a rejecting task surfaces each rejection unhandled and keeps the loop going`, async () => {
-  const task = vi.fn(() => Promise.reject(new Error(`poll failed`)))
-  const stop = start_polling(task, { interval_ms: 1000 })
-  const reported = await collect_rejections(() => vi.advanceTimersByTimeAsync(2000))
-  expect(task).toHaveBeenCalledTimes(2)
-  expect(reported).toEqual([`poll failed`, `poll failed`])
-  stop()
-})
-
-// Ticks landing while a run is pending skip, but run_now() and returns queue one run that starts
-// as soon as it settles, so a manual refresh never ends on data fetched before it.
+// Ticks, returns and run_now() landing while a run is pending skip; the interval stays armed.
 test(`an async task never overlaps itself, and its rejection after stop is ignored`, async () => {
   const pending: PromiseWithResolvers<unknown>[] = []
   const task = vi.fn(() => {
     pending.push(Promise.withResolvers())
     return pending.at(-1)?.promise
   })
-  const poller = start_polling(task, { interval_ms: 1000 })
+  const stop = start_polling(task, { interval_ms: 1000 })
   await vi.advanceTimersByTimeAsync(3000) // ticks at 2 s and 3 s land while the first is pending
-  expect(task).toHaveBeenCalledOnce()
-  poller.run_now()
   set_hidden(true)
-  set_hidden(false) // both queue the same single run
+  set_hidden(false)
+  stop.run_now()
   expect(task).toHaveBeenCalledOnce()
   pending[0].resolve(undefined)
-  await vi.advanceTimersByTimeAsync(0)
+  await vi.advanceTimersByTimeAsync(500)
+  stop.run_now() // runs at once and restarts the interval from 3.5 s
   expect(task).toHaveBeenCalledTimes(2)
-  await vi.advanceTimersByTimeAsync(5000) // the queued run is pending in turn
+  pending[1].resolve(undefined)
+  await vi.advanceTimersByTimeAsync(999)
   expect(task).toHaveBeenCalledTimes(2)
-  poller()
+  await vi.advanceTimersByTimeAsync(1)
+  expect(task).toHaveBeenCalledTimes(3)
+  stop()
   const reported = await collect_rejections(async () =>
-    pending[1].reject(new DOMException(`aborted`, `AbortError`)),
+    pending[2].reject(new DOMException(`aborted`, `AbortError`)),
   )
   expect(reported).toEqual([])
 })
 
 // A loop that runs while hidden still catches up on return; focus counts as a return only
 // when asked, gated by the catch-up age.
-test(`while_hidden runs hidden ticks; catch_up_after_ms gates returns and focus`, () => {
+test(`while_hidden runs hidden ticks; catch_up_after_ms gates returns and focus`, async () => {
   const task = vi.fn()
   const stop = start_polling(task, {
     interval_ms: 60_000,
@@ -141,17 +143,17 @@ test(`while_hidden runs hidden ticks; catch_up_after_ms gates returns and focus`
     catch_up_on_focus: true,
   })
   set_hidden(true)
-  vi.advanceTimersByTime(1000)
+  await vi.advanceTimersByTimeAsync(1000)
   expect(task).toHaveBeenCalledOnce()
   set_hidden(false) // the last run is fresh: no catch-up
   focus_window()
   expect(task).toHaveBeenCalledOnce()
-  vi.advanceTimersByTime(30_000)
+  await vi.advanceTimersByTimeAsync(30_000)
   focus_window()
   expect(task).toHaveBeenCalledTimes(2)
   // a run returning false skipped its work, so it leaves the catch-up age running
   task.mockReturnValue(false)
-  vi.advanceTimersByTime(60_000)
+  await vi.advanceTimersByTimeAsync(60_000)
   expect(task).toHaveBeenCalledTimes(3)
   focus_window() // the last real run was 60 s ago
   expect(task).toHaveBeenCalledTimes(4)
@@ -169,32 +171,17 @@ test.each([
   stop()
 })
 
-test(`catch_up_after_ms = interval_ms only catches up an overdue task`, () => {
+test(`catch_up_after_ms = interval_ms only catches up an overdue task`, async () => {
   const task = vi.fn()
   const stop = start_polling(task, { interval_ms: 10_000, catch_up_after_ms: 10_000 })
-  vi.advanceTimersByTime(4000)
+  await vi.advanceTimersByTimeAsync(4000)
   set_hidden(false)
   expect(task).not.toHaveBeenCalled()
   set_hidden(true)
-  vi.advanceTimersByTime(30_000)
+  await vi.advanceTimersByTimeAsync(30_000)
   set_hidden(false)
   expect(task).toHaveBeenCalledOnce()
   stop()
-})
-
-test(`run_now runs at once and re-arms the interval from there`, () => {
-  const task = vi.fn()
-  const poller = start_polling(task, { interval_ms: 10_000 })
-  vi.advanceTimersByTime(6000)
-  poller.run_now()
-  expect(task).toHaveBeenCalledOnce()
-  vi.advanceTimersByTime(9999)
-  expect(task).toHaveBeenCalledOnce()
-  vi.advanceTimersByTime(1)
-  expect(task).toHaveBeenCalledTimes(2)
-  poller()
-  poller.run_now() // stopped: a no-op
-  expect(task).toHaveBeenCalledTimes(2)
 })
 
 test.each([0, -1, Number.NaN, Infinity])(`interval_ms=%s throws`, (interval_ms) => {

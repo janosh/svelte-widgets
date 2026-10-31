@@ -182,6 +182,8 @@ describe(`heading_anchors attachment`, () => {
     return doc_query(`main`)
   }
   const anchor_selector = `a[aria-hidden="true"]`
+  const href_of = (id: string) =>
+    document.querySelector(`#${id} ${anchor_selector}`)?.getAttribute(`href`)
 
   it(`keeps managed anchors unique and synced without rewriting consumer links`, async () => {
     const container = create_container(
@@ -259,28 +261,22 @@ describe(`heading_anchors attachment`, () => {
     const insert_heading = async (id: string) => {
       container.insertAdjacentHTML(`beforeend`, `<div><h3 id="${id}">X</h3></div>`)
       // the anchor must arrive via the observer callback, not synchronously
-      expect(container.querySelector(`#${id} ${anchor_selector}`)).toBeNull()
+      expect(href_of(id)).toBeUndefined()
       await next_task()
-      return container.querySelector(`#${id} ${anchor_selector}`)?.getAttribute(`href`)
+      return href_of(id)
     }
 
     expect(await insert_heading(`before`)).toBe(`#before`)
     // setting a heading's text replaces its anchor, which comes back
-    const before = container.querySelector(`#before`)
-    if (before) before.textContent = `Renamed`
+    doc_query(`#before`).textContent = `Renamed`
     await next_task()
-    expect(
-      container.querySelector(`#before ${anchor_selector}`)?.getAttribute(`href`),
-    ).toBe(`#before`)
+    expect(href_of(`before`)).toBe(`#before`)
     // an empty heading gets its anchor once text arrives
     container.insertAdjacentHTML(`beforeend`, `<div><h3 class="late"></h3></div>`)
     await next_task()
-    const late = container.querySelector(`h3.late`)
-    if (late) late.textContent = `Late`
+    doc_query(`h3.late`).textContent = `Late`
     await next_task()
-    expect(
-      container.querySelector(`#late ${anchor_selector}`)?.getAttribute(`href`),
-    ).toBe(`#late`)
+    expect(href_of(`late`)).toBe(`#late`)
     cleanup()
     expect(await insert_heading(`after`)).toBeUndefined()
   })
@@ -305,9 +301,16 @@ describe(`heading_anchors attachment`, () => {
     )
     await next_task()
     expect(query).toHaveBeenCalledWith(selector)
-    expect(
-      container.querySelector(`#added ${anchor_selector}`)?.getAttribute(`href`),
-    ).toBe(`#added`)
+    expect(href_of(`added`)).toBe(`#added`)
+    cleanup()
+  })
+
+  it(`anchors a custom selector's non-heading matches added later`, async () => {
+    const container = create_container(``)
+    const cleanup = heading_anchors({ selector: `.title` })(container)
+    container.insertAdjacentHTML(`beforeend`, `<div class="title" id="b">B</div>`)
+    await next_task()
+    expect(href_of(`b`)).toBe(`#b`)
     cleanup()
   })
 

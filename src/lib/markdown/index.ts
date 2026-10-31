@@ -16,7 +16,11 @@ import type * as Temml from 'temml'
 import type { PreprocessorGroup } from 'svelte/compiler'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
-import { heading_anchor_html, has_heading_anchor } from '../heading-anchors.ts'
+import {
+  decode_entities,
+  heading_anchor_html,
+  has_heading_anchor,
+} from '../heading-anchors.ts'
 import {
   source_map,
   edit_source,
@@ -645,11 +649,14 @@ async function prepare_document(
       else {
         if (!/^$|[\s([{]$/u.test(before)) after_inline.add(token)
         if (/^(?:<br\b|<[a-z][^>]*(?<!\/)>|\{[#:])/iu.test(token.raw)) before = ``
-        // a text token's rendered text, not its source: `A&#32;` ends in a space, not `;`
+        // a text token's rendered text, not its source: `A&#32;` and `A&nbsp;` end in a space,
+        // not `;` (marked decodes numeric entities but leaves named ones)
         else if (!/^(?:<|\{\/)/u.test(token.raw))
           before =
-            (token.type === `text` ? (token as Tokens.Text).text : token.raw).at(-1) ??
-            before
+            (token.type === `text`
+              ? decode_entities((token as Tokens.Text).text)
+              : token.raw
+            ).at(-1) ?? before
       }
     }
     return before

@@ -80,12 +80,12 @@ describe(`Breadcrumbs`, () => {
       [`SPAN`, `leaf`, `page`],
     ])
     expect(crumbs()[0].getAttribute(`type`)).toBe(`button`)
-    await click(crumbs()[0])
-    await click(crumbs()[1])
+    // the plain current item (with no onclick) stays inert
+    for (const crumb of crumbs()) await click(crumb)
     expect(calls).toEqual([`root onclick`, `navigate root 0`])
   })
 
-  test(`link clicks reach on_navigate, which can take over routing`, () => {
+  test(`link clicks reach on_navigate, which can take over routing, unless modified`, () => {
     const on_navigate = vi.fn(
       (_item: BreadcrumbItem, _index: number, event: MouseEvent) =>
         event.preventDefault(),
@@ -95,6 +95,13 @@ describe(`Breadcrumbs`, () => {
     crumbs()[1].dispatchEvent(event)
     expect(on_navigate).toHaveBeenCalledExactlyOnceWith(trail(3)[1], 1, event)
     expect(event.defaultPrevented).toBe(true)
+    // a modified click opens a new tab or window, which the browser handles (prevented after
+    // the component saw it, to keep the test page in place)
+    globalThis.addEventListener(`click`, (evt) => evt.preventDefault(), { once: true })
+    crumbs()[0].dispatchEvent(
+      new MouseEvent(`click`, { bubbles: true, cancelable: true, metaKey: true }),
+    )
+    expect(on_navigate).toHaveBeenCalledOnce()
   })
 
   test.each<[string, Partial<Props>, string[], string]>([
@@ -160,6 +167,7 @@ describe(`Breadcrumbs`, () => {
     [4, 1, 4, [`level0`, `level1`, `level2`, `level3`]],
     [3, 3, 5, [`level0`, `level1`, `…`, `level4`]],
     [2, 5, 4, [`level0`, `…`, `level3`]],
+    [3, Number.NaN, 5, [`…`, `level2`, `level3`, `level4`]],
   ])(
     `max_items=%s items_before=%s over %s items shows %j`,
     (max_items, items_before, count, visible) => {
@@ -197,10 +205,16 @@ describe(`Breadcrumbs`, () => {
   test(`icons, titles, link attributes and nav attributes pass through`, () => {
     render(Breadcrumbs, {
       items: [
-        { label: `home`, href: `/`, icon: Home, title: `Go home`, target: `_self` },
-        { label: `page` },
+        {
+          label: `home`,
+          href: `/`,
+          icon: Home,
+          title: `Go home`,
+          target: `_self`,
+          rel: `nofollow`,
+        },
+        { label: `page`, title: `You are here`, target: `_blank` },
       ],
-      link_props: { rel: `nofollow`, class: `extra` },
       'aria-label': `Path`,
       class: `custom`,
       id: `trail`,
@@ -208,13 +222,18 @@ describe(`Breadcrumbs`, () => {
     const nav = doc_query(`nav#trail`)
     expect(nav.getAttribute(`aria-label`)).toBe(`Path`)
     expect([...nav.classList]).toEqual(expect.arrayContaining([`breadcrumbs`, `custom`]))
-    const [home] = crumbs()
+    const [home, page] = crumbs()
     expect(home.querySelector(`svg`)).not.toBeNull()
     expect([home.title, home.getAttribute(`target`), home.getAttribute(`rel`)]).toEqual([
       `Go home`,
       `_self`,
       `nofollow`,
     ])
-    expect(home.classList.contains(`extra`)).toBe(true)
+    // the plain current item keeps its title but no link attributes
+    expect([page.title, page.tabIndex, page.hasAttribute(`target`)]).toEqual([
+      `You are here`,
+      -1,
+      false,
+    ])
   })
 })

@@ -75,9 +75,25 @@ describe(`stick_to_bottom`, () => {
   })
 
   // layout clamps the offset when content shrinks, emitting a scroll no reader made
-  test(`a scroll without input evidence keeps it pinned`, () => {
+  test.each<[string, string, (child: Element) => void]>([
+    [`no input`, `p`, () => {}],
+    [
+      `a scroll key typed into an editable child`,
+      `input`,
+      (child) => press_key(child, `PageUp`),
+    ],
+    [`a non-scrolling key`, `p`, (child) => press_key(child, `a`)],
+    [
+      `a pointer press on content, not the scrollbar`,
+      `p`,
+      (child) => child.dispatchEvent(pointer_event(`pointerdown`, 0, 0)),
+    ],
+  ])(`a scroll after %s keeps it pinned`, (_desc, child_tag, input) => {
     const { node, stick } = setup()
-    scroll_to(node, 100)
+    const child = document.createElement(child_tag)
+    node.append(child)
+    input(child)
+    scroll_to(node, 300)
     expect(stick.stuck).toBe(true)
   })
 
@@ -102,24 +118,11 @@ describe(`stick_to_bottom`, () => {
     globalThis.dispatchEvent(new Event(`pointerup`))
   })
 
-  test.each([
-    [`a key typed into an editable child`, `input`, `PageUp`],
-    [`a non-scrolling key`, `div`, `a`],
-  ])(`%s is no scroll intent`, (_desc, child_tag, key) => {
-    const { node, stick } = setup()
-    const child = document.createElement(child_tag)
-    node.append(child)
-    press_key(child, key, { bubbles: true })
-    scroll_to(node, 300)
-    expect(stick.stuck).toBe(true)
-  })
-
-  test(`a pointer press on content (not the scrollbar) is no scroll intent`, () => {
-    const { node, stick } = setup()
-    const child = document.createElement(`p`)
-    node.append(child)
-    child.dispatchEvent(pointer_event(`pointerdown`, 0, 0))
-    scroll_to(node, 300)
+  test(`a smooth follow inside the input window stays stuck`, () => {
+    const { node, box, stick } = setup()
+    press_key(node, `End`)
+    box.extent = 2000
+    scroll_to(node, 1000) // first frame of the smooth scroll toward the new end, still far
     expect(stick.stuck).toBe(true)
   })
 
@@ -146,7 +149,7 @@ describe(`stick_to_bottom`, () => {
     node.dispatchEvent(new WheelEvent(`wheel`))
     scroll_to(node, 790)
     expect([stick.stuck, stick.far_from_end]).toEqual([false, false])
-    scroll_to(node, 650)
+    scroll_to(node, 700) // exactly far_threshold away already counts
     expect(stick.far_from_end).toBe(true)
     scroll_to(node, 796)
     expect(stick.stuck).toBe(true)
@@ -208,19 +211,19 @@ describe(`stick_to_bottom`, () => {
     vi.restoreAllMocks()
   })
 
-  test(`DOM mutations inside follow by default and can be turned off`, async () => {
-    const { node, box } = setup()
-    box.extent = 1500
-    node.append(document.createElement(`p`))
-    await Promise.resolve()
-    expect(node.scrollTop).toBe(1300)
-
-    const other = setup({ observe_mutations: false })
-    other.box.extent = 1500
-    other.node.append(document.createElement(`p`))
-    await Promise.resolve()
-    expect(other.node.scrollTop).toBe(800)
-  })
+  test.each([
+    [true, 1300],
+    [false, 800],
+  ])(
+    `observe_mutations=%s: an appended child scrolls it to %i`,
+    async (observe_mutations, expected) => {
+      const { node, box } = setup({ observe_mutations })
+      box.extent = 1500
+      node.append(document.createElement(`p`))
+      await Promise.resolve()
+      expect(node.scrollTop).toBe(expected)
+    },
+  )
 
   test(`observe_children watches each direct child's size as children come and go`, async () => {
     const { node } = setup({ observe_children: true, observe_mutations: false })

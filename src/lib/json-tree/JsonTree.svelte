@@ -788,12 +788,12 @@
     &.active {
       opacity: 1;
     }
-    &:hover {
-      background: var(
-        --jt-hover-bg,
-        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
-      );
-    }
+  }
+  :is(.clear-search, .nav-btn, .controls button, .copy-path-btn, .pinned-item):hover {
+    background: var(
+      --jt-hover-bg,
+      light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
+    );
   }
   .clear-search {
     padding: 2px;
@@ -874,12 +874,6 @@
     display: block;
     padding: 2px 4px;
     border-radius: 2px;
-    &:hover {
-      background: var(
-        --jt-hover-bg,
-        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
-      );
-    }
   }
   .json-tree-content {
     padding: var(--jt-content-padding, 8px);
@@ -986,18 +980,12 @@
     gap: 4px;
     padding: 2px 4px;
     border-radius: 2px;
-    &:hover {
-      background: var(
-        --jt-hover-bg,
-        light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.08))
-      );
-    }
   }
   .pinned-path {
     max-width: 200px;
   }
   .pinned-value {
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     font-style: italic;
     white-space: nowrap;
     overflow: hidden;

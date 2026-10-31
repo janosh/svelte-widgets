@@ -195,7 +195,7 @@
       color: var(--jt-boolean, light-dark(#0000ff, #569cd6));
     }
     &.null {
-      color: var(--jt-null, light-dark(#808080, #808080));
+      color: var(--jt-null, #808080);
     }
   }
   .json-value {

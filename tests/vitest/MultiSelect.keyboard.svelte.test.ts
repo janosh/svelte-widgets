@@ -447,7 +447,6 @@ describe(`keyboard shortcuts`, () => {
     },
   )
 
-  // select_all under max_select is covered by `select_all shortcut %s` in MultiSelect.svelte.test.ts
   test(`clear_all respects min_select`, async () => {
     const { props } = await test_shortcut(
       { value: [`a`, `b`, `c`], min_select: 1 },

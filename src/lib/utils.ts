@@ -374,6 +374,10 @@ export const is_editable_event_target = (target: EventTarget | null): boolean =>
 export const is_modifier_chord = (event: KeyboardEvent): boolean =>
   event.altKey || event.ctrlKey || event.metaKey
 
+// A link click the browser handles itself (new tab or window, download), so skip in-page routing
+export const is_modified_click = (event: MouseEvent): boolean =>
+  event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey
+
 // Move focus within items, wrapping at both ends, returning the newly focused item so a
 // radio group can carry its selection along; undefined (event untouched) for a non-nav key
 // or empty list. Left/Right are opt-in so vertical menus leave them to the page. Focus from

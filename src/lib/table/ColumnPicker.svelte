@@ -95,18 +95,15 @@
     for (const col of changed) on_toggle?.(col, is_visible(col))
   }
 
-  const is_changed = (col: Col) =>
-    is_visible(col) !== (default_visibility.get(col.id) ?? true)
+  const baseline = (col: Col): boolean => default_visibility.get(col.id) ?? true
+  // a disabled column can't be toggled back, so resets leave it alone too
+  const is_changed = (col: Col): boolean =>
+    !col.disabled && is_visible(col) !== baseline(col)
   const has_any_changes = $derived(columns.some(is_changed))
-
-  function reset_columns(items: Col[]): void {
-    const defaults = default_visibility
+  const reset_columns = (items: Col[]): void =>
     publish_visibility(
-      items
-        .filter(is_changed)
-        .map((col) => ({ ...col, visible: defaults.get(col.id) ?? true })),
+      items.filter(is_changed).map((col) => ({ ...col, visible: baseline(col) })),
     )
-  }
 
   // First-seen group order (stable sort), ungrouped columns last in a headerless section,
   // also while searching. A menu without groups is that one section.
@@ -201,6 +198,7 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     <div
       class={[`column-menu`, { grouped: columns.some((col) => col.group) }]}
       role="group"
+      aria-label={msg.trigger}
       out:close_before_removal
       {@attach anchored_popover({ anchor: trigger_el, on_close: () => (open = false) })}
     >
@@ -229,7 +227,9 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
                 onclick={() => toggle_group(section.name)}
                 type="button"
               >
-                <span class="collapse-icon">{collapsed ? `▶` : `▼`}</span>
+                <span class="collapse-icon" aria-hidden="true"
+                  >{collapsed ? `▶` : `▼`}</span
+                >
                 {section.name}
               </button>
               {#if section.items.some(is_changed)}

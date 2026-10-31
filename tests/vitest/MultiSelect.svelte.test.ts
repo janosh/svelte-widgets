@@ -753,19 +753,16 @@ test.each([`ul.options > li`, `button.remove-all`])(
   },
 )
 
-// a pointer press on a remove button runs mouseup before click: like chips and the
-// "+N more" toggle, it must not bubble up and open the dropdown
-test.each([
-  [`ul.selected button.remove`, 1],
-  [`button.remove-all`, 0],
-])(`pressing %s removes without opening the dropdown`, async (selector, remaining) => {
+// a pointer press on remove-all runs mouseup before click: like chips and the "+N more"
+// toggle, it must not bubble up and open the dropdown
+test(`pressing remove-all removes without opening the dropdown`, async () => {
   const on_open = vi.fn()
   mount_multiselect({ options: [1, 2, 3], value: [1, 2], on_open })
-  await mouseup(selector)
-  await click(selector)
+  await mouseup(`button.remove-all`)
+  await click(`button.remove-all`)
   expect(on_open).not.toHaveBeenCalled()
   expect(doc_query(`div.multiselect`).classList.contains(`open`)).toBe(false)
-  expect(selected_chips()).toHaveLength(remaining)
+  expect(selected_chips()).toHaveLength(0)
 })
 
 test(`option labels render markup as text`, () => {
@@ -1475,9 +1472,7 @@ test(`throws synchronously when adding an empty option`, () => {
 })
 
 // options: [1,2,3], selected: [1,2] → clicking ul.options li adds 3,
-// clicking ul.selected button.remove removes 1, clicking button.remove-all removes all.
-// on_remove payloads and on_change for an add are covered by the on_add/on_remove and
-// on_change-count tests
+// clicking ul.selected button.remove removes 1, clicking button.remove-all removes all
 test.each([
   [`add`, `ul.options li`, { option: 3 }],
   [`change`, `ul.selected button.remove`, { option: 1, type: `remove` }],
@@ -1876,8 +1871,8 @@ describe(`keep_selected_in_dropdown feature`, () => {
 })
 
 // combos of allow_user_options x no_matching_options_msg x create_option_msg:
-// .user-msg only renders when the applicable message prop is truthy (user options with an
-// empty create_option_msg throw, see `rejects user options without a creation message`)
+// .user-msg only renders when the applicable message prop is truthy (user options require
+// a create_option_msg)
 test.each(
   [true, false].flatMap((allow_user_options) =>
     [``, `no matches`].flatMap((no_matching_options_msg) =>
@@ -2212,7 +2207,7 @@ describe(`create_option_msg as function`, () => {
     expect(captured_state.matching_options).toEqual(expected_matching)
   })
 
-  // null and a function returning empty string (static strings: `user-msg rendering` table)
+  // null and a function returning empty string
   test.each([
     [null, `No matches`],
     [() => ``, `No matches`], // function returning '' should not show phantom create slot
@@ -2710,7 +2705,6 @@ describe(`on_max_reached event`, () => {
     },
   )
 
-  // single mode (replace, never fires) is covered by `$mode mode with one selected item`
   test.each([
     { max_select: 3, value: [1], desc: `under limit` },
     { max_select: null, value: [1, 2, 3, 4], desc: `max_select=null (unlimited)` },

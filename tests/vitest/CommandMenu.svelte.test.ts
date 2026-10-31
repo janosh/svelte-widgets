@@ -1384,7 +1384,6 @@ test.each([
   [`fires when closed`, {}, 1],
   [`disabled via prop`, { global_shortcuts: false }, 0],
   [`inactive while open`, { open: true }, 0],
-  // disabled actions: see `global shortcuts skip disabled duplicate bindings`
   [`ignores wrong modifiers`, { shift: false }, 0],
 ] as const)(`global action shortcuts: %s`, async (_desc, overrides, calls) => {
   const { open, global_shortcuts, shift } = {

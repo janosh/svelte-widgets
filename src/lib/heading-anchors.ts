@@ -171,21 +171,27 @@ function add_anchor_to_heading(
 }
 
 const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagName)
-// Only an added subtree holding a heading, an id written on one, or a heading's own children
-// changing (`textContent` replacing its anchor, text filling an empty one) can change the
-// anchors. Requerying the container on every other change (a dense plot redrawing thousands
-// of nodes) cost ~90 ms of selector matching on a 75k-node page.
-const touches_headings = (records: MutationRecord[]): boolean =>
-  records.some(
+const HEADINGS = `h1, h2, h3, h4, h5, h6`
+// Only an added subtree holding a heading (or a custom selector's match), an id written on
+// one, or its own children changing (`textContent` replacing its anchor, text filling an empty
+// one) can change the anchors. Requerying the container on every other change (a dense plot
+// redrawing thousands of nodes) cost ~90 ms of selector matching on a 75k-node page.
+const touches_headings = (records: MutationRecord[], selector?: string): boolean => {
+  // matches() can't see :scope-relative selectors, so headings always count
+  const counts = (el: Element) =>
+    is_heading(el) || (selector !== undefined && el.matches(selector))
+  const query = selector ? `${HEADINGS}, ${selector}` : HEADINGS
+  return records.some(
     ({ type, target, addedNodes }) =>
-      (target instanceof Element && is_heading(target)) ||
+      (target instanceof Element && counts(target)) ||
       (type === `childList` &&
         [...addedNodes].some(
           (added) =>
             added instanceof Element &&
-            (is_heading(added) || added.querySelector(`h1, h2, h3, h4, h5, h6`) !== null),
+            (counts(added) || added.querySelector(query) !== null),
         )),
   )
+}
 
 // adds anchor links to headings within a container
 export const heading_anchors =
@@ -207,7 +213,7 @@ export const heading_anchors =
 
     // requery for new headings and keep existing links aligned with dynamic IDs
     const observer = new MutationObserver((records) => {
-      if (!touches_headings(records)) return
+      if (!touches_headings(records, selector)) return
       add_anchors()
       observer.takeRecords()
     })

@@ -45,7 +45,7 @@ const escape_md = (text: string) =>
     .replaceAll(`<`, `&lt;`)
     .replaceAll(`\\`, `\\\\`)
     .replaceAll(`|`, `\\|`)
-    .replaceAll(/\r?\n/g, `<br>`)
+    .replaceAll(/\r\n?|\n/g, `<br>`)
 
 // One pass over a character map: escaping in stages would re-escape the backslashes and
 // braces of the replacements themselves.
@@ -62,7 +62,7 @@ const TEX_ESCAPES: Record<string, string> = {
   '}': `\\}`,
 }
 const escape_tex = (text: string) =>
-  text.replaceAll(/[\\^~&%$#_{}]/g, (char) => TEX_ESCAPES[char] ?? char)
+  text.replaceAll(/[\\^~&%$#_{}]/g, (char) => TEX_ESCAPES[char])
 
 // CSV (RFC 4180 via csv_line), TSV (cells flattened by tsv_cell), GitHub-flavoured Markdown
 // or a LaTeX booktabs tabular, numeric columns right-aligned in the last two
@@ -75,7 +75,8 @@ export const table_to_text = (matrix: TableMatrix, format: TableTextFormat): str
     const line = (cells: string[]) => `| ${cells.map(escape_md).join(` | `)} |`
     return [headers, align(matrix, `---:`, `:---`), ...rows].map(line).join(`\n`)
   }
-  const line = (cells: string[]) => `  ${cells.map(escape_tex).join(` & `)} \\\\`
+  const line = (cells: string[]) =>
+    `  ${cells.map((cell) => escape_tex(tsv_cell(cell))).join(` & `)} \\\\`
   return [
     `\\begin{tabular}{${align(matrix, `r`, `l`).join(``)}}`,
     `  \\toprule`,

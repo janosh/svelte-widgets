@@ -62,6 +62,8 @@ describe(`ColumnFilter`, () => {
     [[0.12355, 9.8745], `0.123`, `9.88`],
     [[-9.8745, -0.12355], `-9.88`, `-0.123`],
     [[98_765, 123_456], `98700`, `124000`],
+    // a few ULPs past a short decimal, as computed data lands
+    [[0.000021799999999999998, 0.28500000000000003], `0.0000217`, `0.286`],
   ])(`default bound placeholders for %j are %s to %s`, (values, min, max) => {
     mount_filter(values)
     const inputs = document.querySelectorAll<HTMLInputElement>(`input[type="number"]`)
@@ -88,7 +90,7 @@ describe(`ColumnFilter`, () => {
   })
 
   test(`text columns get a substring box that clears when emptied`, async () => {
-    const state = mount_filter([`a`, `b`], { kind: `text` })
+    const state = mount_filter([`a`, `b`], { options: { kind: `text` } })
     const input = doc_query<HTMLInputElement>(`.column-filter-panel input[type="search"]`)
     await fire_input(input, `ab`, `input`)
     expect(state.filter).toEqual({ kind: `text`, text: `ab` })

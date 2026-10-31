@@ -2,7 +2,7 @@ import JsonTreeReplacementHarness from './JsonTreeReplacementHarness.svelte'
 // Component tests for JsonTree, JsonNode, and JsonValue
 import { JsonTree } from '#lib'
 import { set_at_path, to_json } from '#lib/json-tree/utils.ts'
-import { click, doc_query, fire_input, key_reads, render } from './index'
+import { click, doc_query, fire_input, key_reads, press_key, render } from './index'
 import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vite-plus/test'
@@ -792,28 +792,20 @@ describe(`keyboard navigation and selection`, () => {
   })
 
   it.each([
-    [`url`, `.url-link`],
-    [`long`, `.expand-btn`],
+    [`url`, `.url-link`, 2],
+    [`long`, `.expand-btn`, 3],
   ])(
     `Enter/Space on the %s value's %s stays native on its focused row`,
-    (key, selector) => {
+    (key, selector, arrow_downs) => {
       const write_text = mock_clipboard_write()
       mount_expanded({
         value: { url: `https://example.com`, long: `a`.repeat(300) },
         max_string_length: 50,
       })
-      const presses = key === `url` ? 2 : 3
-      for (let idx = 0; idx < presses; idx++) press(tree(), `ArrowDown`)
+      for (let idx = 0; idx < arrow_downs; idx++) press(tree(), `ArrowDown`)
       expect(node_at(key)?.classList.contains(`focused`)).toBe(true)
-      for (const pressed of [`Enter`, ` `]) {
-        const event = new KeyboardEvent(`keydown`, {
-          bubbles: true,
-          cancelable: true,
-          key: pressed,
-        })
-        doc_query(selector).dispatchEvent(event)
-        expect(event.defaultPrevented, pressed).toBe(false)
-      }
+      for (const key_name of [`Enter`, ` `])
+        expect(press_key(doc_query(selector), key_name).defaultPrevented).toBe(false)
       expect(write_text).not.toHaveBeenCalled()
     },
   )

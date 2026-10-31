@@ -55,27 +55,26 @@
   const content_id = $derived(rest.id ?? `${uid}-content`)
 
   // Contrast is picked from the painted fill rather than the color prop, so var(), color-mix()
-  // and a --tag-color set in a stylesheet all resolve. Reads color and the theme mode to re-pick
-  // when either changes, e.g. for light-dark() or a theme-dependent var().
+  // and a --tag-color set in a stylesheet all resolve. Reads every input of the fill and the
+  // applied theme to re-pick when any changes, e.g. for light-dark() or a theme-dependent var().
   let contrast_text = $state<string>()
   const auto_contrast = (node: HTMLElement) => {
     if (variant !== `solid` && !active) return
-    void [color, theme.mode]
+    void [color, style, class_name, theme.resolved]
     contrast_text = pick_contrast_color({ bg_color: get_bg_color(node) })
     return () => (contrast_text = undefined)
   }
 </script>
 
 <span
-  class={[
-    `tag`,
-    variant,
-    { active, disabled, removable: Boolean(on_remove) },
-    class_name,
-  ]}
-  {style}
-  style:--tag-color={color}
-  style:--tag-contrast-color={contrast_text}
+  class={[`tag`, variant, { active, disabled }, class_name]}
+  style={[
+    color && `--tag-color: ${color}`,
+    contrast_text && `--tag-contrast-color: ${contrast_text}`,
+    style,
+  ]
+    .filter(Boolean)
+    .join(`; `)}
   {@attach auto_contrast}
 >
   <svelte:element
@@ -144,36 +143,36 @@
   .tag.disabled {
     opacity: var(--tag-disabled-opacity, 0.5);
   }
-  .content {
+  .content,
+  .remove {
     display: inline-flex;
     align-items: center;
-    gap: var(--tag-gap, 0.35em);
-    min-width: 0;
-    padding: var(--tag-padding, 0.15em 0.65em);
     border: none;
     border-radius: inherit;
     background: none;
     color: inherit;
     font: inherit;
-    text-decoration: none;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    &:is(a[href], button:enabled) {
-      cursor: pointer;
-      &:hover {
-        background: var(
-          --tag-hover-bg,
-          color-mix(in srgb, currentColor 12%, transparent)
-        );
-      }
-    }
     &:focus-visible {
       outline: 2px solid var(--tag-focus-color, var(--tag-fill));
       outline-offset: 1px;
     }
   }
-  .removable .content {
-    padding-inline-end: 0.3em;
+  .content {
+    gap: var(--tag-gap, 0.35em);
+    min-width: 0;
+    padding: var(--tag-padding, 0.15em 0.65em);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    &:not(:last-child) {
+      padding-inline-end: 0.3em; /* closer to the remove button */
+    }
+    &:is(a[href], button:enabled):hover {
+      background: var(--tag-hover-bg, color-mix(in srgb, currentColor 12%, transparent));
+    }
+  }
+  :is(.content[href], button:enabled) {
+    cursor: pointer;
   }
   .count {
     padding: 0 0.45em;
@@ -183,26 +182,11 @@
     font-variant-numeric: tabular-nums;
   }
   .remove {
-    display: inline-grid;
-    place-items: center;
     align-self: stretch;
     padding: var(--tag-remove-padding, 0 0.5em 0 0.2em);
-    border: none;
-    border-radius: inherit;
-    background: none;
-    color: inherit;
-    font: inherit;
     opacity: 0.7;
-    cursor: pointer;
-    &:hover:enabled,
-    &:focus-visible {
+    &:is(:enabled:hover, :focus-visible) {
       opacity: 1;
-    }
-    &:focus-visible {
-      outline: 2px solid var(--tag-focus-color, var(--tag-fill));
-    }
-    &:disabled {
-      cursor: not-allowed;
     }
   }
 </style>

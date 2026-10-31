@@ -5,31 +5,28 @@ import type { CellPos } from './types'
 
 // Cell-range selection model: a list of rectangles in absolute (row index, column index)
 // coordinates. Drag selects one rectangle, Shift/Cmd/Ctrl-drag adds disjoint ones,
-// Shift+arrow grows the newest from its anchor. Headless so the geometry is testable without
-// a DOM; `cell_range_select` maps pointer and keyboard events onto these calls, or a host
-// wires its own.
-export type CellRect = {
-  start_row: number
-  start_col: number
-  end_row: number
-  end_col: number
-}
+// Shift+arrow grows the newest from its anchor (`start`). Headless so the geometry is
+// testable without a DOM; `cell_range_select` maps pointer events onto these calls.
+export type CellRect = { start: CellPos; end: CellPos }
 // Plain text of the cell at absolute (row, col), undefined when out of range
 export type CellText = (row: number, col: number) => string | undefined
 type RectBounds = { row_lo: number; row_hi: number; col_lo: number; col_hi: number }
 
-const rect_bounds = (rect: CellRect): RectBounds => ({
-  row_lo: Math.min(rect.start_row, rect.end_row),
-  row_hi: Math.max(rect.start_row, rect.end_row),
-  col_lo: Math.min(rect.start_col, rect.end_col),
-  col_hi: Math.max(rect.start_col, rect.end_col),
+// Stored positions are copies, so a caller's (possibly reactive) cursor never aliases them
+const copy = ({ row, col }: CellPos): CellPos => ({ row, col })
+const rect_bounds = ({ start, end }: CellRect): RectBounds => ({
+  row_lo: Math.min(start.row, end.row),
+  row_hi: Math.max(start.row, end.row),
+  col_lo: Math.min(start.col, end.col),
+  col_hi: Math.max(start.col, end.col),
 })
 
 // Contract: coordinates index the host's current rows and columns, so hosts clear the
 // selection whenever those change (re-sort, filter, hide or reorder). A forgotten clear never
 // throws here: `to_tsv` skips cells whose `cell_text` returns undefined (out of range).
 export class CellSelection {
-  rects = $state<CellRect[]>([])
+  // replaced, never mutated in place, so its rectangles stay plain objects
+  rects = $state.raw<CellRect[]>([])
   dragging = $state(false)
   // true once a drag crossed into another cell, so the click on release can be swallowed
   #drag_moved = false
@@ -42,27 +39,15 @@ export class CellSelection {
       ({ row_lo, row_hi, col_lo, col_hi }) =>
         row >= row_lo && row <= row_hi && col >= col_lo && col <= col_hi,
     )
-  // Distinct selected cells (rectangles may overlap): sweep the row bands between rectangle
-  // edges, merging the column spans of the rectangles covering each band
-  size = $derived.by(() => {
-    const edges = [
-      ...new Set(this.bounds.flatMap((rect) => [rect.row_lo, rect.row_hi + 1])),
-    ].toSorted((edge_a, edge_b) => edge_a - edge_b)
-    let total = 0
-    for (let idx = 1; idx < edges.length; idx++) {
-      const band_lo = edges[idx - 1]
-      const spans = this.bounds
-        .filter((rect) => rect.row_lo <= band_lo && rect.row_hi >= band_lo)
-        .toSorted((rect_a, rect_b) => rect_a.col_lo - rect_b.col_lo)
-      let [width, reach] = [0, -Infinity] // reach: last column counted so far
-      for (const { col_lo, col_hi } of spans) {
-        width += Math.max(0, col_hi - Math.max(col_lo, reach + 1) + 1)
-        reach = Math.max(reach, col_hi)
-      }
-      total += width * (edges[idx] - band_lo)
-    }
-    return total
-  })
+  // Cells to_tsv copies: overlapping rectangles count their shared cells once per rectangle,
+  // like a spreadsheet's status bar, and a huge select-all is measured, not enumerated
+  size = $derived(
+    this.bounds.reduce(
+      (sum, { row_lo, row_hi, col_lo, col_hi }) =>
+        sum + (row_hi - row_lo + 1) * (col_hi - col_lo + 1),
+      0,
+    ),
+  )
   // A no-op when empty, so clearing on every data update re-runs no cell's has()
   clear = (): void => {
     if (this.rects.length > 0) this.rects = []
@@ -70,12 +55,7 @@ export class CellSelection {
 
   // Pointer down on a cell: start a 1x1 rectangle, replacing the selection unless additive
   start_drag(pos: CellPos, additive: boolean): void {
-    const rect = {
-      start_row: pos.row,
-      start_col: pos.col,
-      end_row: pos.row,
-      end_col: pos.col,
-    }
+    const rect = { start: copy(pos), end: copy(pos) }
     this.rects = additive ? [...this.rects, rect] : [rect]
     this.dragging = true
     this.#drag_moved = false
@@ -86,12 +66,9 @@ export class CellSelection {
   extend_drag(pos: CellPos): boolean {
     const active = this.rects.at(-1)
     if (!this.dragging || !active) return false
-    if (pos.row === active.end_row && pos.col === active.end_col) return false
+    if (pos.row === active.end.row && pos.col === active.end.col) return false
     this.#drag_moved = true
-    this.rects = [
-      ...this.rects.slice(0, -1),
-      { ...active, end_row: pos.row, end_col: pos.col },
-    ]
+    this.rects = [...this.rects.slice(0, -1), { start: active.start, end: copy(pos) }]
     return true
   }
 
@@ -105,11 +82,9 @@ export class CellSelection {
   // Keyboard step from `from` to `target`: extend grows the newest rectangle from where it
   // started, otherwise the selection becomes the 1x1 cell it lands on.
   step(from: CellPos, target: CellPos, extend: boolean): void {
-    const anchor = extend
-      ? (this.rects.at(-1) ?? { start_row: from.row, start_col: from.col })
-      : { start_row: target.row, start_col: target.col }
+    const start = extend ? (this.rects.at(-1)?.start ?? copy(from)) : copy(target)
     const kept = extend ? this.rects.slice(0, -1) : []
-    this.rects = [...kept, { ...anchor, end_row: target.row, end_col: target.col }]
+    this.rects = [...kept, { start, end: copy(target) }]
   }
 
   // Selected cells as TSV blocks, one per rectangle, newline-joined. Cells whose text is
@@ -195,14 +170,8 @@ export const cell_range_select =
         },
         capture,
       ),
-      on(
-        window,
-        `pointerup`,
-        () => {
-          if (selection.end_drag()) suppress_click = true
-        },
-        capture,
-      ),
+      // every press resets the guard first, so a release can just overwrite it
+      on(window, `pointerup`, () => (suppress_click = selection.end_drag()), capture),
       // the browser took the pointer (touch scroll, pen leaving range): no click follows
       on(window, `pointercancel`, () => void selection.end_drag(), capture),
       on(

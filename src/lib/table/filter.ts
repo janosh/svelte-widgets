@@ -20,8 +20,8 @@ const DECIMAL_RE = /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i
 export const default_to_number = (val: unknown): number | null => {
   if (typeof val === `number`) return Number.isFinite(val) ? val : null
   if (typeof val !== `string`) return null
-  const text = val.trim()
-  return DECIMAL_RE.test(text) ? Number(text) : null
+  const num = DECIMAL_RE.test(val.trim()) ? Number(val) : null
+  return num !== null && Number.isFinite(num) ? num : null // `1e400` overflows to Infinity
 }
 
 export const default_to_text = (val: unknown): string => {
@@ -130,8 +130,7 @@ export function with_numeric_bound(
   raw: string,
 ): ColumnFilterValue | undefined {
   const base = current?.kind === `numeric` ? current : { kind: `numeric` as const }
-  const value = raw.trim() === `` ? undefined : Number(raw)
-  const next = { ...base, [bound]: Number.isFinite(value) ? value : undefined }
+  const next = { ...base, [bound]: default_to_number(raw) ?? undefined }
   return next.min == null && next.max == null ? undefined : next
 }
 

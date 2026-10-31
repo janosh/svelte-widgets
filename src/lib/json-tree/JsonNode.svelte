@@ -287,8 +287,7 @@
               {/if}
             </span>
             <span class="colon">:</span>
-            <span
-              style="color: var(--jt-preview, light-dark(#808080, #808080)); font-style: italic"
+            <span style="color: var(--jt-preview, #808080); font-style: italic"
               >{format_preview(ghost.value)}</span
             >
           </span>
@@ -420,13 +419,13 @@
   .colon,
   .comma,
   .bracket {
-    color: var(--jt-punctuation, light-dark(#000000, #d4d4d4));
+    color: var(--jt-punctuation, light-dark(#000, #d4d4d4));
   }
   .colon {
     margin-right: 4px;
   }
   .preview {
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     font-style: italic;
     margin: 0 4px;
     &:hover {
@@ -441,7 +440,7 @@
   }
   .size-hint {
     font-size: 0.8em;
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     margin-left: 4px;
     opacity: 0.6;
   }
@@ -449,7 +448,7 @@
     display: flex;
     gap: 8px;
     padding-left: 1em;
-    color: var(--jt-preview, light-dark(#808080, #808080));
+    color: var(--jt-preview, #808080);
     font-style: italic;
     button:hover {
       text-decoration: underline;

@@ -158,7 +158,7 @@ test(`user message exposes active descendant and toggles active class`, async ()
     [`mousemove`, true],
     [`mouseout`, false],
     [`mousemove`, true],
-    [`blur`, false],
+    [`blur`, false], // a11y pairing for mouseout, though the row never takes focus
   ] as const) {
     user_msg.dispatchEvent(new Event(event_name, { bubbles: true }))
     await tick()

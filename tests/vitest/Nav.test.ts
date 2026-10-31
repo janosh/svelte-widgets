@@ -201,7 +201,6 @@ describe(`Nav`, () => {
     expect(burger.getAttribute(`aria-expanded`)).toBe(`true`)
     expect(onclick).toHaveBeenCalledOnce()
   })
-  // plain label text is covered by `handles all route formats together with all features`
   test.each([
     [`empty routes`, [], []],
     [

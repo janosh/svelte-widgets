@@ -63,7 +63,7 @@
   function toggle_all() {
     const open = !details().some((node) => node.open)
     for (const node of details()) node.open = open
-    sync_has_open_details()
+    has_open_details = open
   }
 
   // Normalize common file extensions to language names.

@@ -353,21 +353,19 @@ describe(`ColumnPicker`, () => {
     const global_reset = () =>
       document.querySelector<HTMLElement>(`.column-picker > .reset-btn`)
 
-    test.each<[string, TableColumn[], number[], boolean[], boolean]>([
-      [`flat menu`, make_columns(), [0], [false, false, true], false],
-      ...[false, true].map<[string, TableColumn[], number[], boolean[], boolean]>(
-        (section) => [
-          section ? `one group` : `grouped menu`,
-          [`name`, `age`, `email`, `phone`].map((key, idx) => ({
-            id: key,
-            label: key,
-            group: idx < 2 ? `Personal` : `Contact`,
-          })),
-          [0],
-          [false, true, true, true],
-          section,
-        ],
-      ),
+    // section resets are covered by the section and search tests below
+    test.each<[string, TableColumn[], number[], boolean[]]>([
+      [`flat menu`, make_columns(), [0], [false, false, true]],
+      [
+        `grouped menu`,
+        [`name`, `age`, `email`, `phone`].map((key, idx) => ({
+          id: key,
+          label: key,
+          group: idx < 2 ? `Personal` : `Contact`,
+        })),
+        [0],
+        [false, true, true, true],
+      ],
       [
         `duplicate labels`,
         [
@@ -376,30 +374,42 @@ describe(`ColumnPicker`, () => {
         ],
         [0, 1],
         [false, true],
-        false,
+      ],
+      [
+        // the user can't toggle a disabled column back, so reset must not flip it
+        `disabled column off its default`,
+        [
+          {
+            id: `req`,
+            label: `Req`,
+            disabled: true,
+            visible: true,
+            default_visible: false,
+          },
+          { id: `opt`, label: `Opt` },
+        ],
+        [1],
+        [true, false],
       ],
     ])(
-      `reset restores only changed columns and reports them: %s`,
-      async (_name, columns, toggle, changed, section) => {
+      `global reset restores only changed columns and reports them: %s`,
+      async (_name, columns, toggle, changed) => {
         const initial = columns.map((column) => column.visible !== false)
         const on_toggle = vi.fn()
         const calls = () =>
           on_toggle.mock.calls.map(([column, visible]) => [column.id, visible])
         mount_menu(columns, { on_toggle })
-        const selector = section
-          ? `.section-header-row .reset-btn`
-          : `.column-picker > .reset-btn`
-        expect(document.querySelector(selector)).toBeNull()
+        expect(global_reset()).toBeNull()
         const labels = document.querySelectorAll<HTMLElement>(`.toggle-label`)
         for (const idx of toggle) labels[idx].click()
         await tick()
         expect(checkbox_states()).toEqual(changed)
         expect(calls()).toEqual(toggle.map((idx) => [columns[idx].id, changed[idx]]))
         on_toggle.mockClear()
-        await click(selector)
+        await click(global_reset())
         expect(checkbox_states()).toEqual(initial)
         expect(calls()).toEqual(toggle.map((idx) => [columns[idx].id, initial[idx]]))
-        expect(document.querySelector(selector)).toBeNull()
+        expect(global_reset()).toBeNull()
       },
     )
 
