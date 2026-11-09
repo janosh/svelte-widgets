@@ -1,6 +1,98 @@
+## DataTable
+
+`DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
+
+Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color`, which here shades the mass column. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
+
+```svelte example id="data-table"
+<script lang="ts">
+  import { DataTable, TABLE_EXPORT_FORMATS, type Column } from 'svelte-widgets/table'
+
+  const rows = [
+    { name: `Hydrogen`, symbol: `H`, number: 1, mass: 1.008, state: `gas`, year: 1766 },
+    { name: `Helium`, symbol: `He`, number: 2, mass: 4.0026, state: `gas`, year: 1868 },
+    { name: `Carbon`, symbol: `C`, number: 6, mass: 12.011, state: `solid`, year: null },
+    { name: `Nitrogen`, symbol: `N`, number: 7, mass: 14.007, state: `gas`, year: 1772 },
+    { name: `Oxygen`, symbol: `O`, number: 8, mass: 15.999, state: `gas`, year: 1774 },
+    { name: `Sodium`, symbol: `Na`, number: 11, mass: 22.99, state: `solid`, year: 1807 },
+    { name: `Iron`, symbol: `Fe`, number: 26, mass: 55.845, state: `solid`, year: null },
+    {
+      name: `Bromine`,
+      symbol: `Br`,
+      number: 35,
+      mass: 79.904,
+      state: `liquid`,
+      year: 1826,
+    },
+    {
+      name: `Silver`,
+      symbol: `Ag`,
+      number: 47,
+      mass: 107.87,
+      state: `solid`,
+      year: null,
+    },
+    {
+      name: `Mercury`,
+      symbol: `Hg`,
+      number: 80,
+      mass: 200.59,
+      state: `liquid`,
+      year: null,
+    },
+  ]
+  const columns: Column<(typeof rows)[number]>[] = [
+    { id: `name`, label: `Name`, group: `Identity`, sticky: true, disabled: true },
+    { id: `symbol`, label: `Symbol`, group: `Identity` },
+    { id: `number`, label: `Z`, group: `Identity`, description: `Atomic number` },
+    {
+      id: `mass`,
+      label: `Mass`,
+      group: `Physical`,
+      description: `Standard atomic weight in u`,
+      better: `lower`,
+      highlight_best: true,
+    },
+    { id: `state`, label: `State`, group: `Physical`, filter: `category` },
+    { id: `year`, label: `Discovered`, group: `History`, render_as: `bar` },
+  ]
+  // one color function per column, kept while its domain holds
+  let mass_color: { key: string; fn: (num: number | null) => { bg: string; text: null } }
+  const column_color = (
+    col: Column,
+    { domain: [lo, hi] }: { domain: [number, number] },
+  ) => {
+    if (col.id !== `mass`) return undefined
+    if (mass_color?.key !== `${lo},${hi}`) {
+      const fn = (num: number | null) => ({
+        bg: `color-mix(in srgb, cornflowerblue ${num === null ? 0 : (100 * (num - lo)) / (hi - lo)}%, transparent)`,
+        text: null,
+      })
+      mass_color = { key: `${lo},${hi}`, fn }
+    }
+    return mass_color.fn
+  }
+</script>
+
+<DataTable
+  data={rows}
+  {columns}
+  {column_color}
+  initial_sort="number"
+  search
+  show_filters
+  show_column_toggle
+  show_controls="always"
+  keyboard_cells
+  summary={[`mean`, `max`]}
+  export_formats={[...TABLE_EXPORT_FORMATS, `tsv`]}
+  export_filename="elements"
+/>
+```
+
 ## Table building blocks
 
-`svelte-widgets/table` holds the parts of a data table that are tedious to get right, without owning your markup or row model: `ColumnPicker` (show/hide columns), `ColumnFilter` (a per-column range, checklist or substring filter), `CellSelection` with the `cell_range_select` attachment (drag-select cells and copy them as TSV), and serializers to CSV, TSV, JSON, Markdown and LaTeX.
+The same parts, for tables that keep their own markup and row model: `ColumnPicker` (show/hide columns), `ColumnFilter` (a per-column range, checklist or substring filter), `CellSelection` with the `cell_range_select` attachment (drag-select cells and copy them as TSV), and serializers to CSV, TSV, JSON, Markdown and LaTeX.
 
 ### Composed table
 

@@ -80,6 +80,37 @@ const HTML_TAG_RE = new RegExp(HTML_TAG_SRC, `gi`)
 // sanitize the result before it reaches {@html} or any other HTML sink.
 export const strip_html = (html: string): string => html.replaceAll(HTML_TAG_RE, ``)
 
+export const HTML_ENTITY_SRC = String.raw`&(?:#(?<dec>\d+)|#x(?<hex>[\da-f]+)|(?<name>[a-z][\da-z]+));`
+// Named entities common in science; a Map, so `&constructor;` can't hit Object.prototype
+// oxfmt-ignore
+const NAMED_ENTITIES = new Map(Object.entries({
+  amp: `&`, lt: `<`, gt: `>`, quot: `"`, apos: `'`, nbsp: `\u00A0`, thinsp: `\u2009`,
+  ndash: `–`, mdash: `—`, hellip: `…`, minus: `−`, plusmn: `±`, times: `×`, middot: `·`,
+  sdot: `⋅`, deg: `°`, prime: `′`, le: `≤`, ge: `≥`, ne: `≠`, asymp: `≈`, infin: `∞`,
+  sup2: `²`, sup3: `³`, rarr: `→`, larr: `←`, micro: `µ`, angst: `Å`, Aring: `Å`, aring: `å`,
+  Auml: `Ä`, auml: `ä`, Ouml: `Ö`, ouml: `ö`, Uuml: `Ü`, uuml: `ü`, eacute: `é`, egrave: `è`,
+  ccedil: `ç`, ntilde: `ñ`, szlig: `ß`, sigmaf: `ς`,
+}))
+const GREEK_NAMES = `alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega`
+for (const [idx, name] of GREEK_NAMES.split(` `).entries()) {
+  const letter = `αβγδεζηθικλμνξοπρστυφχψω`[idx]
+  NAMED_ENTITIES.set(name, letter)
+  NAMED_ENTITIES.set(name[0].toUpperCase() + name.slice(1), letter.toUpperCase())
+}
+// Visible text of an HTML string without a DOM (SSR-safe). One pass drops tags and decodes
+// entities, so `&amp;lt;` reads `&lt;` and `&l<i></i>t;` stays `&lt;` as in a browser. Unknown
+// entities stay as written. NUL, surrogate and > U+10FFFF references read U+FFFD as in a browser,
+// but &#128;-&#159; stay C1 controls (browsers remap those to Windows-1252: &#128; reads €).
+const HTML_TEXT_RE = new RegExp(`${HTML_TAG_SRC}|${HTML_ENTITY_SRC}`, `gi`)
+export const html_to_text = (str: string): string =>
+  str.replaceAll(HTML_TEXT_RE, (match, dec?: string, hex?: string, name?: string) => {
+    if (match.startsWith(`<`)) return ``
+    if (name) return NAMED_ENTITIES.get(name) ?? match
+    const code = hex ? Number.parseInt(hex, 16) : Number(dec)
+    const invalid = code === 0 || (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff
+    return invalid ? `\uFFFD` : String.fromCodePoint(code)
+  })
+
 // Escape text for HTML element content and quoted attribute values (also valid XML)
 export const escape_html = (text: string): string =>
   text
