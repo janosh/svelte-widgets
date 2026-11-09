@@ -1356,7 +1356,7 @@
     event: MouseEvent | KeyboardEvent,
     option_idx?: number | null,
   ) => {
-    if (is_disabled(opt)) return
+    if (disabled || is_disabled(opt)) return
     // only Shift-click and Shift+Arrow extend a range, not e.g. Shift+Enter
     const extends_range =
       event.shiftKey &&
