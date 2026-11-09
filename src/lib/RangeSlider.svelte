@@ -9,7 +9,11 @@
     type RangeScale,
     type RangeValue,
   } from './range-slider'
-  import { hold_escape_while_focused, is_primary_press } from './attachments/shared'
+  import {
+    hold_escape_while_focused,
+    is_composing,
+    is_primary_press,
+  } from './attachments/shared'
   import { clamp } from './utils'
 
   let {
@@ -266,7 +270,7 @@
               onchange={(event) => commit_number(event.currentTarget, thumb)}
               onblur={(event) => commit_number(event.currentTarget, thumb)}
               onkeydown={(event) => {
-                if (event.defaultPrevented || event.isComposing) return
+                if (event.defaultPrevented || is_composing(event)) return
                 if (event.key === `Enter`) {
                   event.preventDefault()
                   commit_number(event.currentTarget, thumb)

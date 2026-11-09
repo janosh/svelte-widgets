@@ -1491,3 +1491,21 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
     }
   },
 )
+
+// short trailing sections never pass the offset line, so at max scroll the last heading in
+// the viewport wins; anywhere above the bottom the usual "last scrolled past" rule holds
+test.each([
+  [500, `Heading 4`], // at the bottom: 500 + 600 >= 1100
+  [100, `Heading 2`],
+  [0, `Heading 2`], // an unscrolled page keeps the usual rule
+])(`at scrollTop=%s the active heading is %s`, async (scroll_top, expected) => {
+  set_headings(4)
+  mock_active_heading(`heading-2`) // tops: -20, -10, 100, 200
+  const root = document.documentElement
+  vi.spyOn(root, `scrollTop`, `get`).mockReturnValue(scroll_top)
+  vi.spyOn(root, `clientHeight`, `get`).mockReturnValue(scroll_top === 0 ? 1100 : 600)
+  vi.spyOn(root, `scrollHeight`, `get`).mockReturnValue(1100)
+  await mount_toc()
+  await scroll()
+  expect(active_text()).toBe(expected)
+})

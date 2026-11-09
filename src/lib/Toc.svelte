@@ -507,6 +507,22 @@
       }
     }
 
+    // At the very bottom, short trailing sections can never pass the offset line, so the last
+    // heading inside the viewport wins. scrollTop > 0 leaves unscrollable pages alone.
+    const root = scroll_root ?? document.documentElement
+    const { scrollTop, clientHeight, scrollHeight } = root
+    if (scrollTop > 0 && scrollTop + clientHeight >= scrollHeight - 1) {
+      const in_view = headings.findLast(
+        (heading) =>
+          is_shown(heading) &&
+          heading.getBoundingClientRect().top - root_top < clientHeight,
+      )
+      if (in_view) {
+        active_heading = in_view
+        return
+      }
+    }
+
     // last heading the viewport (or pane) has scrolled past, else the first visible one. A
     // heading without a box (display: none) reports top 0, so it counts as never passed.
     let idx = headings.length

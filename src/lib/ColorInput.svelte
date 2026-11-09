@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
-  import { hold_escape_while_focused } from './attachments/shared'
+  import { hold_escape_while_focused, is_composing } from './attachments/shared'
   import { COLOR_INPUT_LABELS, merge_defaults, type ColorInputLabels } from './labels'
 
   let {
@@ -106,7 +106,7 @@
   const handle_keydown = (
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
   ): void => {
-    if (event.isComposing) return
+    if (is_composing(event)) return
     const input = event.currentTarget
     if (event.key === `Enter`) {
       event.preventDefault()

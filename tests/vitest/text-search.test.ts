@@ -414,6 +414,31 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
     return { root, on_mutation, stop }
   }
 
+  it(`ignores mutations whose target skip rejects`, async () => {
+    const root = render(`<p>content</p><div class="chrome"><span>1 of 2</span></div>`)
+    const on_mutation = vi.fn()
+    onTestFinished(
+      observe_text_mutations(root, on_mutation, {
+        debounce_ms: 10,
+        skip: (target) =>
+          Boolean(
+            (target instanceof Element ? target : target.parentElement)?.closest(
+              `.chrome`,
+            ),
+          ),
+      }),
+    )
+    const chrome = root.querySelector(`.chrome`)
+    const status = chrome?.querySelector(`span`)?.firstChild
+    if (!chrome || !status) throw new Error(`missing find bar chrome`)
+    status.nodeValue = `2 of 2` // characterData inside the skipped chrome
+    await mutate(chrome, 20) // childList inside it too
+    expect(on_mutation).not.toHaveBeenCalled()
+
+    await mutate(root, 20) // a mutation outside still counts
+    expect(on_mutation).toHaveBeenCalledOnce()
+  })
+
   it(`collapses a burst of mutations into one call`, async () => {
     const { root, on_mutation } = observe({ debounce_ms: 50 })
 

@@ -1,3 +1,10 @@
+// mid-IME keystrokes belong to the input method. WebKit ends the composition before the
+// Enter (or Escape) that confirms a candidate, so that keydown reads isComposing=false and
+// only its legacy keyCode 229 gives it away.
+export const is_composing = (event: KeyboardEvent): boolean =>
+  // oxlint-disable-next-line typescript/no-deprecated -- WebKit's only IME signal here
+  event.isComposing || event.keyCode === 229
+
 // Flat-tree parent: slotted light-DOM content renders inside its slot (and the slot's
 // shadow ancestors), and a shadow root's top-level children continue at the host.
 export const composed_parent = (element: Element): Element | null => {
@@ -120,7 +127,7 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
 // Register an Escape handler; return true to consume, false to try the next layer.
 // Returns an unregister function. Skip prevented events and IME composition.
 export const register_escape_layer = key_layer_stack(
-  (event) => event.key === `Escape` && !event.isComposing,
+  (event) => event.key === `Escape` && !is_composing(event),
 )
 
 // Wrap a handler as a layer that always consumes the key. Safe to swallow: only the
@@ -197,7 +204,7 @@ export const claim_escape_while_focused = (handler: (event: KeyboardEvent) => vo
 // isComposing for the same reason the Escape layer above filters it: Tab cycles IME
 // candidates mid-composition, and swallowing it there eats the user's word choice
 export const register_trap_layer = key_layer_stack(
-  (event) => event.key === `Tab` && !event.isComposing,
+  (event) => event.key === `Tab` && !is_composing(event),
 )
 const style_overrides = new WeakMap<
   CSSStyleDeclaration,

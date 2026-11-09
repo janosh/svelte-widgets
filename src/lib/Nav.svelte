@@ -17,6 +17,7 @@
   import { create_key_selector } from './internal/key-selector.svelte'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavGroup, NavLink, NavRoute } from './types'
+  import { is_composing } from './attachments/shared'
   import { chain_handlers, step_focus } from './utils'
 
   type Route = NavLink | NavGroup
@@ -168,7 +169,7 @@
       close_menus()
       dropdown_toggle(idx)?.focus()
     } else if (
-      (event.key === `Tab` && !event.isComposing) ||
+      (event.key === `Tab` && !is_composing(event)) ||
       step_focus(event, [...dropdown_links(idx)])
     ) {
       hover_open = false

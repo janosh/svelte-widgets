@@ -212,6 +212,12 @@ function frontmatter(source: string): {
   }
   const header = source.slice(0, source.indexOf(`\n`) + 1)
   const value: unknown = load(header + match[1], { schema: CORE_SCHEMA })
+  // only comments between the fences: almost always a document opening with a thematic
+  // break whose `# Heading` YAML read as a comment, so its content would vanish silently
+  if (value === null && match[1].trim())
+    throw new Error(
+      `Frontmatter holds no YAML mapping, only comments. To open with a thematic break, use *** or ___ instead of ---`,
+    )
   return {
     body: source.slice(match[0].length),
     metadata: serialize_metadata(value ?? {}),

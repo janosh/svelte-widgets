@@ -275,6 +275,12 @@ describe(`checked Markdown examples`, () => {
       },
     ],
     [
+      `---\n\n# Title\n\n---\n\nBody`,
+      {},
+      false,
+      { code: `frontmatter`, message: expect.stringContaining(`holds no YAML mapping`) },
+    ],
+    [
       fence(`html`, `<img src="x.png">`),
       { typecheck: false },
       true,

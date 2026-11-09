@@ -1,5 +1,5 @@
 import type { CmdAction, Option } from './types'
-import { is_active_element } from './attachments/shared'
+import { is_active_element, is_composing } from './attachments/shared'
 import { DIACRITIC, DIACRITICS, splits_letter } from './internal/diacritics'
 
 let uuid_counter = 0
@@ -345,7 +345,7 @@ export type Hotkey = {
 // Runs the first matching binding and reports whether one fired. Shared by the `hotkey`
 // attachment and components that own a window listener.
 export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
-  if (event.isComposing) return false // mid-IME the keystroke belongs to the editor
+  if (is_composing(event)) return false // mid-IME the keystroke belongs to the editor
   // outside a chord, a bare key in a text field is typing, not a shortcut
   const typing = !is_modifier_chord(event) && is_editable_event_target(event.target)
   for (const binding of bindings) {
@@ -391,7 +391,7 @@ export function step_focus<T extends HTMLElement>(
   items: T[],
   { horizontal = false }: { horizontal?: boolean } = {},
 ): T | undefined {
-  if (event.defaultPrevented || event.isComposing || is_modifier_chord(event))
+  if (event.defaultPrevented || is_composing(event) || is_modifier_chord(event))
     return undefined
   const { key } = event
   const back = key === `ArrowUp` || (horizontal && key === `ArrowLeft`)

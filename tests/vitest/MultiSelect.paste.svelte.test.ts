@@ -61,6 +61,26 @@ describe(`parse_paste`, () => {
     )
   })
 
+  // typed text can only create options with allow_user_options, and pasted text must not
+  // be a back door around that (it also slipped bare strings into object selections)
+  test.each([
+    [[`alpha`, `beta`], `alpha`],
+    [[{ label: `alpha`, value: 1 }], { label: `alpha`, value: 1 }],
+  ])(
+    `paste without allow_user_options rejects text naming no option`,
+    async (options, kept) => {
+      const { props, on_create, on_parsed_paste } = await paste_into(
+        { options, value: [] },
+        `alpha,zeta`,
+      )
+      expect(props.value).toEqual([kept])
+      expect(on_create).not.toHaveBeenCalled()
+      expect(on_parsed_paste).toHaveBeenCalledWith(
+        expect.objectContaining({ added: [`alpha`], rejected: [`zeta`] }),
+      )
+    },
+  )
+
   test(`input display keeps a draft typed while pasted creation is pending`, async () => {
     const creation = Promise.withResolvers<undefined>()
     const completed = Promise.withResolvers<undefined>()

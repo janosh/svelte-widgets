@@ -24,18 +24,24 @@
     path,
     depth,
     is_last = true,
+    ancestors = [],
   }: {
     node_key?: string | number | null
     value: unknown
     path: string
     depth: number
     is_last?: boolean
+    // containers on the path from the root, so a cycle renders as a leaf instead of
+    // recursing forever (e.g. obj.self = obj with default_fold_level: Infinity)
+    ancestors?: readonly unknown[]
   } = $props()
 
   const ctx = get_json_tree_context()
 
   const value_type = $derived(get_value_type(value))
-  const expandable = $derived(is_expandable_type(value_type))
+  const is_circular = $derived(ancestors.includes(value))
+  const expandable = $derived(!is_circular && is_expandable_type(value_type))
+  const child_ancestors = $derived(expandable ? [...ancestors, value] : ancestors)
 
   // Leaves skip the per-path selectors entirely
   const is_collapsed = $derived(
@@ -237,6 +243,9 @@
           ⊟
         </button>
       {/if}
+    {:else if is_circular}
+      <span style="color: var(--jt-preview, #808080); font-style: italic">[Circular]</span
+      >
     {:else}
       <JsonValue {value} {value_type} {path} />
     {/if}
@@ -254,6 +263,7 @@
           value={child.value}
           path={build_path(path, child.key)}
           depth={depth + 1}
+          ancestors={child_ancestors}
           is_last={idx === children.length - 1 && ghost_children.length === 0}
         />
       {/each}

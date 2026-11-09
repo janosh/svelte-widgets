@@ -19,6 +19,7 @@ import type {
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { click, doc_query, escape_key, press_key, render as mount_body } from './index'
+import { claim_escape } from '#lib/attachments/shared.ts'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -752,25 +753,33 @@ describe(`<Toast />`, () => {
     },
   )
 
-  // Escape is scoped to the stack and gated on `dismissible`, else it would be the one
-  // way left to shut a toast declared undismissable
+  // Escape is scoped to focus in the stack and gated on `dismissible`, else it would be the
+  // one way left to shut a toast declared undismissable. An open pane's older Escape layer
+  // must not take the key from a focused toast.
   test.each([
     [true, undefined],
     [false, `a`],
   ] as const)(
     `Escape inside the toast dismisses when dismissible=%s`,
     async (dismissible, left_on_screen) => {
+      const pane_escape = vi.fn()
+      const release_pane = claim_escape(pane_escape)
       const store = render({ dismissible })
-      store.show(`a`)
+      store.show(`a`, { action: { label: `Undo`, on_click: vi.fn() } })
       await tick()
 
       document.body.dispatchEvent(escape_key())
       await tick()
       expect(store.active_toast?.message).toBe(`a`)
+      expect(pane_escape).toHaveBeenCalledOnce()
 
-      doc_query(`.toast`).dispatchEvent(escape_key())
+      press_focus_hotkey()
+      doc_query(`.toast-action`).dispatchEvent(escape_key())
       await tick()
       expect(store.active_toast?.message).toBe(left_on_screen)
+      // an undismissable toast passes Escape on to the pane
+      expect(pane_escape).toHaveBeenCalledTimes(dismissible ? 1 : 2)
+      release_pane()
     },
   )
 

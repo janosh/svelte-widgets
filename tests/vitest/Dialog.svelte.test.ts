@@ -1,8 +1,15 @@
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, create_element, doc_query, render, pointer_event } from './index'
+import {
+  click,
+  create_element,
+  doc_query,
+  escape_key,
+  render,
+  pointer_event,
+} from './index'
 import TestDialog from './TestDialog.svelte'
-import { focusable } from '#lib/attachments/shared.ts'
+import { claim_escape, focusable } from '#lib/attachments/shared.ts'
 import Sheet from '#lib/Sheet.svelte'
 
 describe(`Dialog`, () => {
@@ -202,6 +209,26 @@ describe(`Dialog`, () => {
     expect(surface()).toBeNull()
     expect(document.activeElement).toBe(trigger())
     expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `escape` })
+  })
+
+  // the Escape layer stack listens on document capture, so a pane or menu left open behind
+  // the modal would otherwise take Escape and cancel the dialog's own close
+  test(`an older Escape layer behind the open modal doesn't see Escape`, async () => {
+    const pane_escape = vi.fn()
+    const release_pane = claim_escape(pane_escape)
+    mount_dialog()
+    await click(trigger())
+
+    const event = escape_key()
+    item(`dialog-action`).dispatchEvent(event)
+    expect(pane_escape).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false) // native cancel still closes the dialog
+
+    cancel_dialog(open_surface())
+    await tick()
+    document.body.dispatchEvent(escape_key())
+    expect(pane_escape).toHaveBeenCalledOnce() // the barrier left with the dialog
+    release_pane()
   })
 
   test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {

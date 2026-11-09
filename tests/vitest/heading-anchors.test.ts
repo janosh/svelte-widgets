@@ -277,6 +277,18 @@ describe(`heading_anchors attachment`, () => {
     doc_query(`h3.late`).textContent = `Late`
     await next_task()
     expect(href_of(`late`)).toBe(`#late`)
+    // Svelte fills `<h3>{title}</h3>` by writing the existing text node's nodeValue, a
+    // characterData mutation rather than a childList one
+    container.insertAdjacentHTML(
+      `beforeend`,
+      `<div><h3 class="svelte"><span> </span></h3></div>`,
+    )
+    await next_task()
+    const text_node = doc_query(`h3.svelte > span`).firstChild
+    if (!text_node) throw new Error(`missing text node`)
+    text_node.nodeValue = `Filled`
+    await next_task()
+    expect(href_of(`filled`)).toBe(`#filled`)
     cleanup()
     expect(await insert_heading(`after`)).toBeUndefined()
   })
@@ -292,6 +304,9 @@ describe(`heading_anchors attachment`, () => {
     container.append(plot)
     for (let idx = 0; idx < 20; idx++) plot.append(document.createElement(`circle`))
     plot.id = `plot`
+    plot.append(`label`)
+    await next_task()
+    ;(plot.lastChild as Text).nodeValue = `relabeled` // text outside any heading
     await next_task()
     expect(query).not.toHaveBeenCalled()
 

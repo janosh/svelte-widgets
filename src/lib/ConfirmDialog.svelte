@@ -14,7 +14,7 @@
     submit_prompt,
   } from './dialogs.svelte'
   import { focusable } from './attachments/shared'
-  import { restore_dialog_focus, track_backdrop_dismiss } from './dialog'
+  import { restore_dialog_focus, show_modal, track_backdrop_dismiss } from './dialog'
   import { chain_handlers } from './utils'
 
   // An app mounting this alongside its own dialogs needs its card class on the element
@@ -81,7 +81,7 @@
     }
     if (!dialog.open) {
       focus_origin = focusable(document.activeElement) ?? focus_origin
-      dialog.showModal()
+      show_modal(dialog)
     }
     const selector = request.kind === `prompt` ? `input` : `.actions button`
     dialog.querySelector<HTMLElement>(selector)?.focus()

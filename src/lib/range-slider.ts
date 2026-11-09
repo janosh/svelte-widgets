@@ -1,3 +1,4 @@
+import { is_composing } from './attachments/shared'
 import { clamp, is_modifier_chord } from './utils'
 
 export type RangeValue = [number, number]
@@ -63,7 +64,7 @@ export const range_key_action = (
   horizontal: -1 | 0 | 1,
 ): number | `min` | `max` | undefined => {
   const { key, shiftKey } = event
-  if (event.defaultPrevented || event.isComposing || is_modifier_chord(event))
+  if (event.defaultPrevented || is_composing(event) || is_modifier_chord(event))
     return undefined
   if (horizontal && key === `Home`) return `min`
   if (horizontal && key === `End`) return `max`

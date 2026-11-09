@@ -55,8 +55,11 @@ export const CODE_EDITOR_LABELS = {
   go: `Go`,
   no_matches: `No matches`,
   match_position: (position: number, total: number) => `${position} of ${total}`,
-  match_position_truncated: (position: number, limit: number) =>
-    `${position} of ${limit}+ (first ${limit} shown)`,
+  // position is null for a selected match past the first `limit` (reached via Next)
+  match_position_truncated: (position: number | null, limit: number) =>
+    position === null
+      ? `Match past ${limit} of ${limit}+ (first ${limit} shown)`
+      : `${position} of ${limit}+ (first ${limit} shown)`,
 }
 export type CodeEditorLabels = typeof CODE_EDITOR_LABELS
 

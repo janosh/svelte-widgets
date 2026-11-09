@@ -26,7 +26,7 @@
     click_outside,
     highlight_matches as attach_highlight_matches,
   } from './attachments/index'
-  import { hold_escape_while_focused } from './attachments/shared'
+  import { hold_escape_while_focused, is_composing } from './attachments/shared'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import LiveMessage from './LiveMessage.svelte'
@@ -747,6 +747,9 @@
     if (max_reached) reject_at_max(option_to_add)
     if (is_duplicate) on_duplicate?.({ option: option_to_add })
     if (max_reached || is_duplicate) return
+    // pasted text naming no option is a new option, which only allow_user_options permits
+    // (typed text is already gated before add): handle_paste reports it as rejected
+    if (from_paste && !is_from_options && !is_user_option) return
     // This also prevents adding the same custom option twice in append mode.
     if (is_user_option) {
       if (!(from_paste && typeof option_to_add === `object`)) {
@@ -1065,7 +1068,7 @@
     if (disabled) return
     // during an IME composition Enter confirms the composition and arrows move the
     // candidate window, so acting on them would hijack CJK text input
-    if (event.isComposing) return
+    if (is_composing(event)) return
     const chip_navigation_enabled = !input_display && selected.length > 0 && !search_text
 
     if (

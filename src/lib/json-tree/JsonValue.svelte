@@ -1,7 +1,7 @@
 <script lang="ts">
   import { create_flash } from './feedback.svelte'
   import { tick } from 'svelte'
-  import { hold_escape_while_focused } from '../attachments/shared'
+  import { hold_escape_while_focused, is_composing } from '../attachments/shared'
   import { get_json_tree_context, type JsonValueType } from './types'
   import {
     format_preview,
@@ -107,7 +107,7 @@
   }
 
   function handle_edit_keydown(event: KeyboardEvent) {
-    if (event.defaultPrevented || event.isComposing) return
+    if (event.defaultPrevented || is_composing(event)) return
     if (event.key === `Enter`) {
       event.preventDefault()
       commit_edit()
