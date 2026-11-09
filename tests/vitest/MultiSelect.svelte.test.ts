@@ -1686,7 +1686,7 @@ test(`on_add selected accumulates and on_remove selected reflects removal`, asyn
   expect(onremove_spy).toHaveBeenCalledExactlyOnceWith({ option: 1, selected: [2] })
 })
 
-test(`on_open and on_close fire once per transition with the triggering event`, async () => {
+test(`on_open and on_close fire once per transition`, async () => {
   const [open_spy, close_spy] = [vi.fn(), vi.fn()]
   mount_multiselect({ options: [1, 2, 3], on_open: open_spy, on_close: close_spy })
 
@@ -1695,19 +1695,55 @@ test(`on_open and on_close fire once per transition with the triggering event`, 
   expect(close_spy).not.toHaveBeenCalled()
 
   const input = await focus_input()
-  expect(open_spy).toHaveBeenCalledOnce()
-  expect(open_spy.mock.calls[0][0].event).toBeInstanceOf(FocusEvent)
+  expect(open_spy).toHaveBeenCalledExactlyOnceWith()
 
   // already open, so a second click must not re-fire
   await mouseup(input)
   expect(open_spy).toHaveBeenCalledOnce()
   await press_sequence(input, `Escape`)
-  expect(close_spy).toHaveBeenCalledOnce()
-  expect(close_spy.mock.calls[0][0].event).toBeInstanceOf(KeyboardEvent)
+  expect(close_spy).toHaveBeenCalledExactlyOnceWith({ via: `escape` })
 
   // closed again, so no extra fire
   await click(document.body)
   expect(close_spy).toHaveBeenCalledOnce()
+})
+
+test.each([
+  [`tab`, {}, (input: HTMLInputElement) => press_sequence(input, `Tab`)],
+  [
+    `shortcut`,
+    { shortcuts: { close: `ctrl+e` } },
+    async (input: HTMLInputElement) => {
+      press_key(input, `e`, { ctrlKey: true })
+      await tick()
+    },
+  ],
+  [`select`, { close_dropdown_on_select: true }, () => click(option_by_label(`2`))],
+  [
+    `blur`,
+    {},
+    async (input: HTMLInputElement) => {
+      const external = create_element(`button`)
+      input.dispatchEvent(
+        new FocusEvent(`blur`, { bubbles: true, relatedTarget: external }),
+      )
+      await tick()
+    },
+  ],
+  [
+    `pointer`,
+    {},
+    async () => {
+      create_element().dispatchEvent(new PointerEvent(`pointerdown`, { bubbles: true }))
+      await tick()
+    },
+  ],
+  [`trigger`, {}, click_expand_icon],
+] as const)(`on_close reports via=%s`, async (via, props, close) => {
+  const on_close = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], on_close, ...props })
+  await close(await focus_input())
+  expect(on_close).toHaveBeenCalledExactlyOnceWith({ via })
 })
 
 describe(`keep_selected_in_dropdown feature`, () => {

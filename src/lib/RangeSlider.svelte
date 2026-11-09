@@ -9,7 +9,7 @@
     type RangeScale,
     type RangeValue,
   } from './range-slider'
-  import { hold_escape_while_focused, is_primary_press } from './attachments/shared'
+  import { escape_layer, is_composing, is_primary_press } from './attachments/shared'
   import { clamp } from './utils'
 
   let {
@@ -266,7 +266,7 @@
               onchange={(event) => commit_number(event.currentTarget, thumb)}
               onblur={(event) => commit_number(event.currentTarget, thumb)}
               onkeydown={(event) => {
-                if (event.defaultPrevented || event.isComposing) return
+                if (event.defaultPrevented || is_composing(event)) return
                 if (event.key === `Enter`) {
                   event.preventDefault()
                   commit_number(event.currentTarget, thumb)
@@ -278,9 +278,11 @@
                   if (event.defaultPrevented) discard_drafts()
                 }
               }}
-              {@attach hold_escape_while_focused(() =>
-                drafts.some((draft, idx) => draft !== String(values[idx])),
-              )}
+              {@attach (node) =>
+                escape_layer(
+                  () => drafts.some((draft, idx) => draft !== String(values[idx])),
+                  { while_focused: node },
+                )}
             />
           {/if}
         </div>

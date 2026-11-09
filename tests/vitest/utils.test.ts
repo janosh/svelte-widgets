@@ -933,6 +933,7 @@ describe(`step_focus`, () => {
     [`PageDown`, `PageDown`, {}, false],
     [`prevented arrow`, `ArrowDown`, {}, true],
     [`composing arrow`, `ArrowDown`, { isComposing: true }, false],
+    [`WebKit IME arrow`, `ArrowDown`, { keyCode: 229 }, false],
     [`modified arrow`, `ArrowDown`, { ctrlKey: true }, false],
   ] as const)(`leaves %s untouched`, (_desc, key, init, prevented) => {
     items[0].focus()

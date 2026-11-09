@@ -1,6 +1,104 @@
+## DataTable
+
+`DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder it within its group, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
+
+Bind `sort` (a list of `{ column, dir }` keys in priority order, empty for the data's order) and `hidden_columns` to persist them. A column with `visible: false` starts hidden but stays in the column picker, whose Reset hides it again; `disabled` locks a column's toggle, and `pin` sticks it to the `left` or `right` edge. Attributes for the toolbar go in `controls_props`.
+
+Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color`, which here shades the mass column. It is called again only when the column's extrema or color domain change, so it needs no caching. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
+
+```svelte example id="data-table"
+<script lang="ts">
+  import {
+    type ColorStats,
+    type Column,
+    DataTable,
+    TABLE_EXPORT_FORMATS,
+  } from 'svelte-widgets/table'
+
+  const rows = [
+    { name: `Hydrogen`, symbol: `H`, number: 1, mass: 1.008, state: `gas`, year: 1766 },
+    { name: `Helium`, symbol: `He`, number: 2, mass: 4.0026, state: `gas`, year: 1868 },
+    { name: `Carbon`, symbol: `C`, number: 6, mass: 12.011, state: `solid`, year: null },
+    { name: `Nitrogen`, symbol: `N`, number: 7, mass: 14.007, state: `gas`, year: 1772 },
+    { name: `Oxygen`, symbol: `O`, number: 8, mass: 15.999, state: `gas`, year: 1774 },
+    { name: `Sodium`, symbol: `Na`, number: 11, mass: 22.99, state: `solid`, year: 1807 },
+    { name: `Iron`, symbol: `Fe`, number: 26, mass: 55.845, state: `solid`, year: null },
+    {
+      name: `Bromine`,
+      symbol: `Br`,
+      number: 35,
+      mass: 79.904,
+      state: `liquid`,
+      year: 1826,
+    },
+    {
+      name: `Silver`,
+      symbol: `Ag`,
+      number: 47,
+      mass: 107.87,
+      state: `solid`,
+      year: null,
+    },
+    {
+      name: `Mercury`,
+      symbol: `Hg`,
+      number: 80,
+      mass: 200.59,
+      state: `liquid`,
+      year: null,
+    },
+  ]
+  const columns: Column<(typeof rows)[number]>[] = [
+    { id: `name`, label: `Name`, group: `Identity`, pin: `left`, disabled: true },
+    { id: `symbol`, label: `Symbol`, group: `Identity`, visible: false },
+    { id: `number`, label: `Z`, group: `Identity`, description: `Atomic number` },
+    {
+      id: `mass`,
+      label: `Mass`,
+      group: `Physical`,
+      description: `Standard atomic weight in u`,
+      better: `lower`,
+      highlight_best: true,
+    },
+    { id: `state`, label: `State`, group: `Physical`, filter: `category` },
+    { id: `year`, label: `Discovered`, group: `History`, render_as: `bar` },
+  ]
+  // at most 45% blue, so the page's text color stays legible on the fill in either theme;
+  // a one-row domain (lo === hi) shades fully
+  const column_color = (
+    col: Column<(typeof rows)[number]>,
+    { domain: [lo, hi] }: ColorStats,
+  ) =>
+    col.id === `mass`
+      ? (num: number | null) => ({
+          bg:
+            num === null
+              ? null
+              : `color-mix(in srgb, cornflowerblue ${hi === lo ? 45 : (45 * (num - lo)) / (hi - lo)}%, transparent)`,
+          text: null,
+        })
+      : undefined
+</script>
+
+<DataTable
+  data={rows}
+  {columns}
+  {column_color}
+  sort={[{ column: `number`, dir: `asc` }]}
+  search
+  show_filters
+  show_column_toggle
+  show_controls="always"
+  keyboard_cells
+  summary={[`mean`, `max`]}
+  export_formats={TABLE_EXPORT_FORMATS}
+  export_filename="elements"
+/>
+```
+
 ## Table building blocks
 
-`svelte-widgets/table` holds the parts of a data table that are tedious to get right, without owning your markup or row model: `ColumnPicker` (show/hide columns), `ColumnFilter` (a per-column range, checklist or substring filter), `CellSelection` with the `cell_range_select` attachment (drag-select cells and copy them as TSV), and serializers to CSV, TSV, JSON, Markdown and LaTeX.
+The same parts, for tables that keep their own markup and row model: `ColumnPicker` (show/hide columns), `ColumnFilter` (a per-column range, checklist or substring filter), `CellSelection` with the `cell_range_select` attachment (drag-select cells and copy them as TSV), and serializers to CSV, TSV, JSON, Markdown and LaTeX.
 
 ### Composed table
 

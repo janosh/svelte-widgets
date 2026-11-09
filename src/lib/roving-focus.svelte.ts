@@ -1,6 +1,7 @@
 import {
   composed_parent,
   is_active_element,
+  is_composing,
   is_focus_available,
 } from './attachments/shared'
 import { create_key_selector } from './internal/key-selector.svelte'
@@ -154,7 +155,7 @@ export function create_roving_focus(opts: {
       if (
         !step ||
         event.defaultPrevented ||
-        event.isComposing ||
+        is_composing(event) ||
         is_modifier_chord(event) ||
         is_editable_event_target(event.target)
       )

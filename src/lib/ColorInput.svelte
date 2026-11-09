@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
-  import { hold_escape_while_focused } from './attachments/shared'
+  import { escape_layer, is_composing } from './attachments/shared'
   import { COLOR_INPUT_LABELS, merge_defaults, type ColorInputLabels } from './labels'
 
   let {
@@ -100,13 +100,15 @@
     if (final) opacity_draft = committed_opacity()
   }
   // Escape reverts an uncommitted draft; with nothing to revert it is left to a hosting pane
-  const hold_escape = hold_escape_while_focused(
-    () => parsed !== color || opacity_draft.value !== String(get_opacity()),
-  )
+  const hold_escape = (node: HTMLElement) =>
+    escape_layer(
+      () => parsed !== color || opacity_draft.value !== String(get_opacity()),
+      { while_focused: node },
+    )
   const handle_keydown = (
     event: KeyboardEvent & { currentTarget: HTMLInputElement },
   ): void => {
-    if (event.isComposing) return
+    if (is_composing(event)) return
     const input = event.currentTarget
     if (event.key === `Enter`) {
       event.preventDefault()

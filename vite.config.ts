@@ -19,6 +19,7 @@ const manifests = new Map<string, ContentManifest>()
 const docs = markdown_vite(
   create_markdown({
     math: true,
+    mermaid: true,
     references: true,
     typography: true,
     highlight: default_highlighter.highlight,

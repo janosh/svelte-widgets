@@ -404,6 +404,48 @@ describe(`code and math`, () => {
       expect(code).toContain(literal)
   })
 
+  test.each([
+    [`markdown`, true, `<pre class="mermaid">`],
+    [`svelte`, true, `<pre class="mermaid" {@attach WidgetsMermaidDiagrams()}>`],
+    [`markdown`, { theme: `forest` }, `<pre class="mermaid">`],
+    [
+      `svelte`,
+      { theme: `forest`, flowchart: { curve: `basis` } },
+      `<pre class="mermaid" {@attach WidgetsMermaidDiagrams({"theme":"forest","flowchart":{"curve":"basis"}})}>`,
+    ],
+    [`markdown`, false, `<pre class="highlight highlight-mermaid">`],
+    [`svelte`, false, `<pre class="highlight highlight-mermaid">`],
+  ] as const)(
+    `%s dialect with mermaid=%o renders mermaid fences as %s`,
+    async (dialect, mermaid, opening) => {
+      const source =
+        '```mermaid\ngraph TD\n  A{x} --> B<y>\n```\n\n```mermaid collapsible\nsequenceDiagram\n```\n\n```js\nconst a = 1\n```'
+      const highlight = vi.fn((code: string, _lang: string) => `<b>${code}</b>`)
+      const parsed = await create_markdown({ mermaid, highlight }).parse(source, {
+        filename: `/p/page.md`,
+        dialect,
+      })
+      const document = assert_ok(parsed)
+      const output = await emit(document)
+      if (dialect === `svelte`) compile(output, { generate: false })
+      expect(output.split(opening)).toHaveLength(3)
+      // diagrams skip the highlighter but stay ordinary fences in the manifest
+      expect(highlight.mock.calls.map(([, lang]) => lang)).toEqual(
+        mermaid ? [`js`] : [`mermaid`, `mermaid`, `js`],
+      )
+      expect(document.manifest.fences.map(({ language }) => language)).toEqual([
+        `mermaid`,
+        `mermaid`,
+        `js`,
+      ])
+      if (mermaid) expect(output).toContain(`A&#123;x&#125; --&gt; B&lt;y&gt;</pre>`)
+      // the Svelte dialect imports the client renderer exactly once
+      expect(output.match(/from 'svelte-widgets\/markdown\/mermaid'/gu)?.length).toBe(
+        dialect === `svelte` && mermaid ? 1 : undefined,
+      )
+    },
+  )
+
   test.each([`markdown`, `svelte`] as const)(
     `keeps inline math in plain image alt text as authored TeX in the %s dialect`,
     async (dialect) => {

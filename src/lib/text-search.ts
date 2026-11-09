@@ -439,10 +439,14 @@ export const create_burst_debounce = (
 export const observe_text_mutations = (
   root: Node,
   on_mutation: () => void,
-  options: TextMutationOptions = {},
+  // records whose target this rejects (e.g. a find bar's own status text inside the
+  // root) don't count, else updating it after a search would trigger the next one
+  { skip, ...options }: TextMutationOptions & { skip?: (target: Node) => boolean } = {},
 ): (() => void) => {
   const { trigger, cancel } = create_burst_debounce(on_mutation, options)
-  const observer = new MutationObserver(trigger)
+  const observer = new MutationObserver((records) => {
+    if (!skip || records.some(({ target }) => !skip(target))) trigger()
+  })
   observer.observe(root, { childList: true, characterData: true, subtree: true })
 
   return () => {

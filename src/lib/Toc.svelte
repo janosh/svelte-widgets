@@ -6,7 +6,7 @@
   import type {
     CollapseMode,
     OpenChangeHandler,
-    OpenChangeTrigger,
+    OpenChangeVia,
     TocHeadingData,
   } from './types'
   import { create_key_selector } from './internal/key-selector.svelte'
@@ -175,11 +175,11 @@
     prev_scroll_target_distance = Infinity
   }
 
-  function set_open(value: boolean, trigger: OpenChangeTrigger) {
+  function set_open(value: boolean, via: OpenChangeVia) {
     if ((last_reported_open ?? open) === value) return
     last_reported_open = value
     open = value
-    on_open_change?.({ open: value, desktop, trigger })
+    on_open_change?.({ open: value, desktop, via })
   }
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {
@@ -244,7 +244,7 @@
     if (current_open === last_reported_open) return
     untrack(() => {
       last_reported_open = current_open
-      on_open_change?.({ open: current_open, desktop, trigger: `programmatic` })
+      on_open_change?.({ open: current_open, desktop, via: `programmatic` })
     })
   })
 
@@ -503,6 +503,24 @@
         clear_scroll_target()
       } else {
         prev_scroll_target_distance = distance
+        return
+      }
+    }
+
+    // At the very bottom, short trailing sections can never pass the offset line, so the last
+    // heading inside the viewport wins. scrollTop > 0 leaves unscrollable pages alone.
+    // scrollingElement: in quirks mode the body, not <html>, scrolls the page
+    const root = scroll_root ?? document.scrollingElement ?? document.documentElement
+    const { scrollTop, clientHeight, scrollHeight, clientTop } = root
+    if (scrollTop > 0 && scrollTop + clientHeight >= scrollHeight - 1) {
+      // a pane's scrollport starts below its top border
+      const in_view = headings.findLast(
+        (heading) =>
+          is_shown(heading) &&
+          heading.getBoundingClientRect().top - root_top - clientTop < clientHeight,
+      )
+      if (in_view) {
+        active_heading = in_view
         return
       }
     }

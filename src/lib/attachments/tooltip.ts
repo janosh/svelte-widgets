@@ -2,16 +2,16 @@ import type { Attachment } from 'svelte/attachments'
 import type { Placement } from '../utils'
 import { clamp, compute_position, get_uuid } from '../utils'
 import { auto_update_position } from './float'
-import { consume_escape, css_px, register_escape_layer } from './shared'
+import { css_px, escape_layer } from './shared'
 
 export type TooltipTrigger = `hover-focus` | `hover` | `focus`
 export type TooltipWrap = `balance` | `normal` | `nowrap`
 export type TooltipStrategy = `top-layer` | `fixed` | `absolute`
-export type TooltipOpenReason = `pointer` | `focus` | `blur` | `escape` | `visibility`
+export type TooltipOpenVia = `pointer` | `focus` | `blur` | `escape` | `visibility`
 
 export type TooltipOpenDetail = {
   trigger: HTMLElement
-  reason: TooltipOpenReason
+  via: TooltipOpenVia
 }
 
 export interface TooltipOptions {
@@ -34,6 +34,8 @@ export interface TooltipOptions {
   close_delay_ms?: number
   skip_delay_ms?: number
   on_open_change?: (open: boolean, detail: TooltipOpenDetail) => void
+  // Never opens, but still holds the trigger's title so no native tooltip shows instead.
+  // Toggling it re-attaches, which closes a tooltip that is open.
   disabled?: boolean
   delegate?: boolean | string
   style?: string
@@ -55,10 +57,13 @@ type ActiveTooltip = {
   pointer_surface: boolean
   focus: boolean
   open: boolean
-  dismissed: boolean
+  // Why a still-active tooltip was hidden: an Escape holds until the interaction ends, a
+  // press only until the pointer leaves the trigger
+  dismissed: `escape` | `pointer` | false
 }
 
-type HideOptions = { keep_active?: boolean; notify?: boolean }
+// `dismiss` keeps the tooltip active but hidden (see ActiveTooltip.dismissed)
+type HideOptions = { dismiss?: ActiveTooltip[`dismissed`]; notify?: boolean }
 
 const TOOLTIP_SOURCE_SELECTOR = `[title], [aria-label], [data-title]`
 const TOOLTIP_CONTENT_ATTRIBUTES = [`title`, `aria-label`, `data-title`]
@@ -253,6 +258,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   let stop_open_effects: (() => void)[] = []
   let last_closed_at = -Infinity
   let last_input_was_touch = false
+  // A mouse press focuses what it lands on: that focus is no request for help (browsers keep
+  // :focus-visible off for it), so it opens no hover-focus tooltip until a key is pressed
+  let last_input_was_mouse_press = false
 
   const compact_balanced_tooltip = () => {
     const can_compact =
@@ -293,19 +301,18 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     clearTimeout(close_timeout)
     close_timeout = undefined
   }
-  const escape_hides_active = consume_escape(() =>
-    hide_active(`escape`, { keep_active: true }),
-  )
 
   const track_input = (event: PointerEvent | KeyboardEvent) => {
-    last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
-    if (!active || !(event instanceof PointerEvent)) return
-    // A press dismisses a hover tooltip that would otherwise hang over whatever it opened;
-    // re-entering the trigger brings it back. `hover-focus` keeps its own, since the press
-    // focuses the trigger, itself a show state.
-    if (tooltip_trigger(active.registration.options) !== `hover`) return
+    const is_pointer = event instanceof PointerEvent
+    last_input_was_touch = is_pointer && event.pointerType === `touch`
+    last_input_was_mouse_press = is_pointer && !last_input_was_touch
+    if (!active || !is_pointer) return
+    // A press dismisses a hover tooltip that would otherwise hang over whatever it opened
+    // (and take its clicks); re-entering the trigger brings it back. Only a focus-only
+    // tooltip stays, since there the press's focus is the show state.
+    if (tooltip_trigger(active.registration.options) === `focus`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
-      hide_active(`pointer`, { keep_active: true })
+      hide_active(`pointer`, { dismiss: `pointer` })
     }
   }
   doc.addEventListener(`pointerdown`, track_input, true)
@@ -481,8 +488,8 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   }
 
   function hide_active(
-    reason: TooltipOpenReason,
-    { keep_active = false, notify = true }: HideOptions = {},
+    via: TooltipOpenVia,
+    { dismiss = false, notify = true }: HideOptions = {},
   ): void {
     const closing = active
     clear_open_timeout()
@@ -491,12 +498,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (!closing) return
     const was_open = closing.open
     closing.open = false
-    closing.dismissed = keep_active
+    closing.dismissed = dismiss
     remove_description(closing.trigger, surface.id)
     if (surface.hasAttribute(`popover`) && surface.matches(`:popover-open`))
       surface.hidePopover()
     hide_surface()
-    if (keep_active) closing.pointer_surface = false
+    if (dismiss) closing.pointer_surface = false
     else {
       release_delegated_title(closing.registration, closing.trigger)
       active = null
@@ -505,7 +512,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (was_open && notify)
       closing.registration.options.on_open_change?.(false, {
         trigger: closing.trigger,
-        reason,
+        via,
       })
   }
 
@@ -576,7 +583,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     } else surface.removeAttribute(`popover`)
   }
 
-  const show_active = (reason: TooltipOpenReason): void => {
+  const show_active = (via: TooltipOpenVia): void => {
     clear_open_timeout()
     if (!active || active.dismissed || active.open || !is_trigger_visible(active.trigger))
       return
@@ -597,15 +604,20 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       auto_update_position(opening.trigger, surface, position_active),
       // Pointer and focus already left a closing tooltip, so Escape dismisses it early but
       // still belongs to whatever the user moved on to, e.g. the pane this trigger opened.
-      register_escape_layer((event) => {
-        if (close_timeout === undefined) return escape_hides_active(event)
-        hide_active(`escape`)
-        return false
+      escape_layer((event) => {
+        if (close_timeout !== undefined) {
+          hide_active(`escape`)
+          return false
+        }
+        event.preventDefault()
+        event.stopPropagation()
+        hide_active(`escape`, { dismiss: `escape` })
+        return true
       }),
     ]
     // before positioning, which may hide again and must report a close that follows an
     // open rather than one out of nowhere
-    options.on_open_change?.(true, { trigger: opening.trigger, reason })
+    options.on_open_change?.(true, { trigger: opening.trigger, via })
     position_active()
   }
 
@@ -690,8 +702,11 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       active.pointer_surface = true
       return clear_close_timeout()
     }
-    if (reason === `pointer`) active.pointer_trigger = false
-    else active.focus = false
+    if (reason === `pointer`) {
+      active.pointer_trigger = false
+      // a press hid it while focus kept it active: re-entering the trigger shows it again
+      if (active.dismissed === `pointer`) active.dismissed = false
+    } else active.focus = false
     close_if_interaction_ended(CLOSE_REASON[reason])
   }
 
@@ -701,6 +716,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // A tap focuses after suppressing hover; opening on that focus is opt-in.
     if (last_input_was_touch && options.trigger !== `focus` && !options.touch_focus)
       return
+    if (last_input_was_mouse_press && options.trigger !== `focus`) return
     activate(registration, trigger, `focus`)
   }
 
@@ -772,7 +788,6 @@ export const tooltip =
       throw new Error(
         `tooltip trigger must be hover-focus, hover, or focus; got ${options.trigger}`,
       )
-    if (options.disabled) return undefined
 
     const has_root_source =
       options.content !== undefined || node.matches(TOOLTIP_SOURCE_SELECTOR)
@@ -798,8 +813,9 @@ export const tooltip =
     // only claims kinds its trigger accepts, so a focus-only one leaves hovers to its parent
     const claim = (event: Event, kind: `hover` | `focus`): HTMLElement | null => {
       if (
+        options.disabled ||
         handled_tooltip_events.has(event) ||
-        !accepts_tooltip_trigger(registration.options, kind)
+        !accepts_tooltip_trigger(options, kind)
       )
         return null
       const trigger = registration_target(registration, event.target)

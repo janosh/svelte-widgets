@@ -240,6 +240,8 @@
   class={[`pane-toggle`, toggle_props.class]}
   {@attach tooltip({
     content: toggle_props.title ?? (open ? msg.close_pane : msg.open_pane),
+    // beside the toggle: below it the tooltip covers the top of the pane it opens
+    placement: `left`,
   })}
 >
   {#if toggle}

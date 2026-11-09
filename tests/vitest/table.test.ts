@@ -336,6 +336,7 @@ describe(`filters`, () => {
     [`1e400`, { kind: `numeric`, min: 0 }, false], // overflows to Infinity, no number
     [``, { kind: `numeric`, max: 1 }, false], // blank is missing, not 0
     [5, { kind: `numeric`, max: 5 }, true],
+    [`−1.5`, { kind: `numeric`, min: -2, max: -1 }, true], // typeset Unicode minus, as cells read it
     [`oxide`, { kind: `category`, values: [`oxide`] }, true],
     // missing cells never match a category; real blanks do
     [null, { kind: `category`, values: [``] }, false],
@@ -430,6 +431,10 @@ describe(`filters`, () => {
   test(`collapses no-op filters to undefined when editing bounds and checklists`, () => {
     const min_only = with_numeric_bound(undefined, `min`, ` 1.5 `)
     expect(min_only).toEqual({ kind: `numeric`, min: 1.5 })
+    expect(with_numeric_bound(undefined, `max`, `−3`)).toEqual({
+      kind: `numeric`,
+      max: -3,
+    })
     expect(with_numeric_bound(min_only, `max`, `abc`)).toEqual({
       kind: `numeric`,
       min: 1.5,

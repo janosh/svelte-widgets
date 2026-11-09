@@ -45,7 +45,7 @@ export interface ToastAction {
 
 export type ToastCloseHandler = (
   toast: ToastItem<string>,
-  reason: ToastLifecycleReason,
+  detail: { via: ToastLifecycleReason },
 ) => void
 
 export interface ToastRequest<Priority extends string = ToastPriority> {
@@ -512,7 +512,7 @@ export class ToastStore<Priority extends string = ToastPriority> {
     // after the queue is committed, so a handler enqueuing a follow-up sees current state
     for (const { toast, reason } of transition.effects) {
       if (reason === `action`) toast.action?.on_click?.(toast)
-      toast.on_close?.(toast, reason)
+      toast.on_close?.(toast, { via: reason })
     }
   }
 

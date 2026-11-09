@@ -1,5 +1,5 @@
 import type { TooltipOptions } from '#lib/attachments/index.ts'
-import { register_escape_layer, tooltip } from '#lib/attachments/index.ts'
+import { escape_layer, tooltip } from '#lib/attachments/index.ts'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -9,6 +9,7 @@ import {
   mock_rect,
   pointer_event,
   press_escape,
+  press_key,
   stub_props,
 } from '../index'
 
@@ -65,6 +66,9 @@ describe(`tooltip manager`, () => {
     vi.advanceTimersByTime(0)
   }
 
+  // the manager tracks the last input on the document to tell keyboard from mouse focus
+  const press_tab = () => press_key(document.body, `Tab`)
+
   const visible_text = () =>
     document.querySelector(`.custom-tooltip:not([hidden])`)?.textContent ?? null
   const visible_tooltip = (): HTMLElement => {
@@ -109,12 +113,12 @@ describe(`tooltip manager`, () => {
     expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
     cleanup()
     cleanup()
-    expect(
-      on_open_change.mock.calls.map(([open, detail]) => [open, detail.reason]),
-    ).toEqual([
-      [true, `pointer`],
-      [false, `visibility`],
-    ])
+    expect(on_open_change.mock.calls.map(([open, detail]) => [open, detail.via])).toEqual(
+      [
+        [true, `pointer`],
+        [false, `visibility`],
+      ],
+    )
   })
 
   it.each([
@@ -174,6 +178,41 @@ describe(`tooltip manager`, () => {
     },
   )
 
+  // Svelte re-attaches when `disabled` flips, so that's what each toggle simulates here
+  it(`disabled holds the title, never opens, and closes an open tooltip`, () => {
+    const outer = create_element()
+    attach_tooltip(outer, { content: `Outer`, trigger: `hover` })
+    const element = document.createElement(`button`)
+    element.title = `Native`
+    outer.append(element)
+    mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
+    const on_open_change = vi.fn()
+    let cleanup = attach_tooltip(element, { on_open_change })
+    pointer_over(element)
+    expect(visible_text()).toBe(`Native`)
+
+    cleanup()
+    cleanup = attach_tooltip(element, { on_open_change, disabled: true })
+    expect(on_open_change).toHaveBeenLastCalledWith(false, {
+      trigger: element,
+      via: `visibility`,
+    })
+    expect(element.hasAttribute(`title`)).toBe(false)
+    focus_in(element)
+    // unclaimed, so the enclosing tooltip takes the hover
+    pointer_over(element)
+    expect(visible_text()).toBe(`Outer`)
+    expect(on_open_change).toHaveBeenCalledTimes(2)
+
+    pointer_out(element)
+    focus_out(element)
+    cleanup()
+    expect(element.title).toBe(`Native`)
+    attach_tooltip(element, { on_open_change })
+    pointer_over(element)
+    expect(visible_text()).toBe(`Native`)
+  })
+
   it(`gives explicit content precedence and treats an empty result as disabled`, () => {
     pointer_over(register_tooltip(`Native`, { content: `Explicit` }).element)
     expect(doc_query(`.tooltip-content`).textContent).toBe(`Explicit`)
@@ -226,26 +265,64 @@ describe(`tooltip manager`, () => {
     expect(content_el?.childElementCount ?? 0).toBe(0)
   })
 
-  it(`defaults to hover-focus and focus ignores pointer delay`, () => {
-    const { element } = register_tooltip(`Keyboard`, { open_delay_ms: 1000 })
-    document.dispatchEvent(new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }))
+  // the press's own focus must not keep it up either: a clicked pane toggle's tooltip used
+  // to stay over the pane it opened and take its clicks
+  it.each<TooltipOptions>([{ trigger: `hover` }, {}])(
+    `%j stays dismissed after a press until re-entered`,
+    (options) => {
+      const { element } = register_tooltip(`Hover only`, options)
+      pointer_over(element)
+      const tooltip_el = visible_tooltip()
+      element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))
+      focus_in(element)
+      expect(tooltip_el.hidden).toBe(true)
+
+      pointer_out(element)
+      pointer_over(element)
+      expect(visible_tooltip()).toBe(tooltip_el)
+    },
+  )
+
+  // keyboard focus keeps the interaction going after a press hides the tooltip: leaving and
+  // re-entering the trigger still brings it back, while an Escape holds until focus leaves
+  it.each([
+    [`a press`, true, () => pointer_event(`pointerdown`, 110, 110)],
+    [`Escape`, false, () => escape_key()],
+  ] as const)(
+    `after %s hides keyboard-focus help, re-entry shows it: %s`,
+    (_desc, back, make_event) => {
+      const { element } = register_tooltip(`Help`)
+      press_tab()
+      focus_in(element)
+      pointer_over(element)
+      expect(visible_text()).toBe(`Help`)
+      element.dispatchEvent(make_event())
+      expect(visible_text()).toBeNull()
+
+      pointer_out(element)
+      pointer_over(element)
+      expect(visible_text()).toBe(back ? `Help` : null)
+    },
+  )
+
+  // the default hover-focus help opens on keyboard focus but not on mouse-press focus;
+  // focus-only help opens on any focus, since there focus is the only way in. Either way
+  // focus skips the pointer open delay and focusout closes
+  it.each<[TooltipOptions, `pointerdown` | `keydown`, boolean]>([
+    [{}, `keydown`, true],
+    [{}, `pointerdown`, false],
+    [{ trigger: `focus` }, `pointerdown`, true],
+  ])(`%j opens on focus after a %s: %s`, (options, last_input, opens) => {
+    const { element } = register_tooltip(`Help`, { open_delay_ms: 1000, ...options })
+    if (last_input === `keydown`) press_tab()
+    else
+      document.body.dispatchEvent(
+        pointer_event(`pointerdown`, 0, 0, { pointerType: `mouse` }),
+      )
     focus_in(element)
-    expect(visible_text()).toBe(`Keyboard`)
+    expect(visible_text()).toBe(opens ? `Help` : null)
     focus_out(element)
     expect(visible_text()).toBeNull()
-  })
-
-  it(`explicit hover stays dismissed after a press until re-entered`, () => {
-    const { element } = register_tooltip(`Hover only`, { trigger: `hover` })
-    pointer_over(element)
-    const tooltip_el = visible_tooltip()
-    element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))
-    focus_in(element)
-    expect(tooltip_el.hidden).toBe(true)
-
-    pointer_out(element)
-    pointer_over(element)
-    expect(visible_tooltip()).toBe(tooltip_el)
   })
 
   it(`keeps one tooltip when pointer and focus states overlap`, () => {
@@ -262,14 +339,14 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change).toHaveBeenLastCalledWith(false, {
       trigger: element,
-      reason: `blur`,
+      via: `blur`,
     })
   })
 
   it(`closes only once every pointer has left both trigger and tooltip`, () => {
     // an outer surface (e.g. a pane) opened before the tooltip, which thus outranks it
     const outer_layer = vi.fn(() => true)
-    onTestFinished(register_escape_layer(outer_layer))
+    onTestFinished(escape_layer(outer_layer))
     const { element, tooltip_el } = show_tooltip({ close_delay_ms: 100 })
     const surface_pointer = (type: string, pointer_type = `mouse`) =>
       tooltip_el.dispatchEvent(
@@ -321,7 +398,7 @@ describe(`tooltip manager`, () => {
     const on_open_change = vi.fn()
     // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
     const surrounding_layer = vi.fn(() => true)
-    onTestFinished(register_escape_layer(surrounding_layer))
+    onTestFinished(escape_layer(surrounding_layer))
     const element = create_element(`button`)
     attach_tooltip(element, {
       trigger: `focus`,
@@ -342,7 +419,7 @@ describe(`tooltip manager`, () => {
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
-      [false, { trigger: element, reason: `escape` }],
+      [false, { trigger: element, via: `escape` }],
     ])
 
     // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.

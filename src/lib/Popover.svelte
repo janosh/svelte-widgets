@@ -3,7 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
-  import { focusable, register_escape_layer } from './attachments/shared'
+  import { escape_layer, focusable } from './attachments/shared'
   import { chain_handlers, type Placement } from './utils'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
@@ -119,7 +119,7 @@
     // The browser's close watcher dismisses an auto popover on Escape, so claim the key from
     // outer layers (e.g. a hosting pane's capture listener would cancel it first) without
     // canceling it ourselves
-    const release_escape = register_escape_layer(() => native_dismiss)
+    const release_escape = escape_layer(() => native_dismiss)
     const source = anchor instanceof HTMLElement ? anchor : undefined
     node.showPopover(source ? { source } : undefined)
     return () => {

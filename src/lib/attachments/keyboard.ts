@@ -1,5 +1,6 @@
 import type { Hotkey } from '../utils'
 import { run_hotkeys } from '../utils'
+import { is_composing } from './shared'
 
 export interface HotkeyOptions {
   bindings: Hotkey[]
@@ -50,7 +51,7 @@ export const forward_window_keydown =
         !is_hovered ||
         !(event instanceof KeyboardEvent) ||
         event.defaultPrevented ||
-        event.isComposing
+        is_composing(event)
       )
         return
       // The root may be focusable so keyboard users can aim shortcuts at it, and an

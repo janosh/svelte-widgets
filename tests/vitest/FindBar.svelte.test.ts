@@ -4,7 +4,7 @@ import {
   type FindState,
 } from '#lib/find-in-page.svelte.ts'
 import FindBar from '#lib/FindBar.svelte'
-import { claim_escape } from '#lib/attachments/shared.ts'
+import { escape_layer } from '#lib/attachments/shared.ts'
 import type { ComponentProps } from 'svelte'
 import { flushSync, mount, tick, unmount } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
@@ -141,7 +141,7 @@ describe(`FindBar`, () => {
   test(`Escape in the bar closes it, not the surface hosting it`, () => {
     const { on_close } = mount_bar(`<p>alpha</p>`)
     const close_surface = vi.fn()
-    onTestFinished(claim_escape(close_surface))
+    onTestFinished(escape_layer(close_surface, { consume: true }))
 
     flushSync()
     input().focus()

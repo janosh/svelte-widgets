@@ -5,7 +5,6 @@ import { click, create_element, doc_query, key_reads, press_key } from './index'
 import {
   active_text,
   focus_input,
-  fresh_key,
   get_input,
   mount_multiselect,
   normalized_text,
@@ -587,25 +586,28 @@ test(`keyboard navigation respects max_options: arrow keys wrap within rendered 
   }
 })
 
-test(`IME composition guard: Enter during composition is ignored`, async () => {
-  const props = $state<MultiSelectProps>({ options: [`foo`, `bar`], value: [] })
-  mount_multiselect(props)
-  const input = get_input()
+// WebKit ends the composition before the confirming Enter, which then reads
+// isComposing=false and only keyCode 229 marks it as the IME's
+test.each([{ isComposing: true }, { keyCode: 229 }])(
+  `IME composition guard: Enter during composition is ignored (%o)`,
+  async (composing) => {
+    const props = $state<MultiSelectProps>({ options: [`foo`, `bar`], value: [] })
+    mount_multiselect(props)
+    const input = get_input()
 
-  await press_sequence(input, `ArrowDown`)
-  expect(active_text()).toBe(`foo`)
+    await press_sequence(input, `ArrowDown`)
+    expect(active_text()).toBe(`foo`)
 
-  // Enter mid-composition (confirming CJK text) must not select the active option
-  const composing_enter = fresh_key(`Enter`)
-  Object.defineProperty(composing_enter, `isComposing`, { value: true })
-  input.dispatchEvent(composing_enter)
-  await tick()
-  expect(props.value).toEqual([])
+    // Enter mid-composition (confirming CJK text) must not select the active option
+    press_key(input, `Enter`, composing)
+    await tick()
+    expect(props.value).toEqual([])
 
-  // same keystroke outside composition selects normally
-  await press_sequence(input, `Enter`)
-  expect(props.value).toEqual([`foo`])
-})
+    // same keystroke outside composition selects normally
+    await press_sequence(input, `Enter`)
+    expect(props.value).toEqual([`foo`])
+  },
+)
 
 // the remove button is unmounted by the removal it just ran, so focus fell to <body>.
 // Enter/Space on a focused <button> activate it natively, i.e. dispatch this click.

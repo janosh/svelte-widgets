@@ -1,5 +1,5 @@
 import type { CmdAction, Option } from './types'
-import { is_active_element } from './attachments/shared'
+import { is_active_element, is_composing } from './attachments/shared'
 import { DIACRITIC, DIACRITICS, splits_letter } from './internal/diacritics'
 
 let uuid_counter = 0
@@ -79,6 +79,44 @@ const HTML_TAG_RE = new RegExp(HTML_TAG_SRC, `gi`)
 // a split tag reassembles (`<<b>img onerror=x>` leaves `<img onerror=x>`), so escape_html or
 // sanitize the result before it reaches {@html} or any other HTML sink.
 export const strip_html = (html: string): string => html.replaceAll(HTML_TAG_RE, ``)
+
+// A decimal literal, typeset Unicode minus (U+2212) included: the one number syntax table
+// cells, filters and filter bounds read. Not Number() alone: it reads hex/binary/octal, so a
+// "0x1f" ID would read as 31, and blank strings as 0. The mantissa alternatives never
+// overlap: `\d+\.?\d*` split a digit run between its two quantifiers in O(n²) ways, so a
+// 30k-digit cell ending in a letter took over a second.
+export const DECIMAL_SRC = String.raw`[-+−]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+−]?\d+)?`
+
+export const HTML_ENTITY_SRC = String.raw`&(?:#(?<dec>\d+)|#x(?<hex>[\da-f]+)|(?<name>[a-z][\da-z]+));`
+// Named entities common in science; a Map, so `&constructor;` can't hit Object.prototype
+// oxfmt-ignore
+const NAMED_ENTITIES = new Map(Object.entries({
+  amp: `&`, lt: `<`, gt: `>`, quot: `"`, apos: `'`, nbsp: `\u00A0`, thinsp: `\u2009`,
+  ndash: `–`, mdash: `—`, hellip: `…`, minus: `−`, plusmn: `±`, times: `×`, middot: `·`,
+  sdot: `⋅`, deg: `°`, prime: `′`, le: `≤`, ge: `≥`, ne: `≠`, asymp: `≈`, infin: `∞`,
+  sup2: `²`, sup3: `³`, rarr: `→`, larr: `←`, micro: `µ`, angst: `Å`, Aring: `Å`, aring: `å`,
+  Auml: `Ä`, auml: `ä`, Ouml: `Ö`, ouml: `ö`, Uuml: `Ü`, uuml: `ü`, eacute: `é`, egrave: `è`,
+  ccedil: `ç`, ntilde: `ñ`, szlig: `ß`, sigmaf: `ς`,
+}))
+const GREEK_NAMES = `alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho sigma tau upsilon phi chi psi omega`
+for (const [idx, name] of GREEK_NAMES.split(` `).entries()) {
+  const letter = `αβγδεζηθικλμνξοπρστυφχψω`[idx]
+  NAMED_ENTITIES.set(name, letter)
+  NAMED_ENTITIES.set(name[0].toUpperCase() + name.slice(1), letter.toUpperCase())
+}
+// Visible text of an HTML string without a DOM (SSR-safe). One pass drops tags and decodes
+// entities, so `&amp;lt;` reads `&lt;` and `&l<i></i>t;` stays `&lt;` as in a browser. Unknown
+// entities stay as written. NUL, surrogate and > U+10FFFF references read U+FFFD as in a browser,
+// but &#128;-&#159; stay C1 controls (browsers remap those to Windows-1252: &#128; reads €).
+const HTML_TEXT_RE = new RegExp(`${HTML_TAG_SRC}|${HTML_ENTITY_SRC}`, `gi`)
+export const html_to_text = (str: string): string =>
+  str.replaceAll(HTML_TEXT_RE, (match, dec?: string, hex?: string, name?: string) => {
+    if (match.startsWith(`<`)) return ``
+    if (name) return NAMED_ENTITIES.get(name) ?? match
+    const code = hex ? Number.parseInt(hex, 16) : Number(dec)
+    const invalid = code === 0 || (code >= 0xd800 && code <= 0xdfff) || code > 0x10ffff
+    return invalid ? `\uFFFD` : String.fromCodePoint(code)
+  })
 
 // Escape text for HTML element content and quoted attribute values (also valid XML)
 export const escape_html = (text: string): string =>
@@ -345,7 +383,7 @@ export type Hotkey = {
 // Runs the first matching binding and reports whether one fired. Shared by the `hotkey`
 // attachment and components that own a window listener.
 export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
-  if (event.isComposing) return false // mid-IME the keystroke belongs to the editor
+  if (is_composing(event)) return false // mid-IME the keystroke belongs to the editor
   // outside a chord, a bare key in a text field is typing, not a shortcut
   const typing = !is_modifier_chord(event) && is_editable_event_target(event.target)
   for (const binding of bindings) {
@@ -391,7 +429,7 @@ export function step_focus<T extends HTMLElement>(
   items: T[],
   { horizontal = false }: { horizontal?: boolean } = {},
 ): T | undefined {
-  if (event.defaultPrevented || event.isComposing || is_modifier_chord(event))
+  if (event.defaultPrevented || is_composing(event) || is_modifier_chord(event))
     return undefined
   const { key } = event
   const back = key === `ArrowUp` || (horizontal && key === `ArrowLeft`)

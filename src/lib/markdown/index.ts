@@ -14,6 +14,7 @@ import {
 } from 'marked'
 import type * as Temml from 'temml'
 import type { PreprocessorGroup } from 'svelte/compiler'
+import type { MermaidDiagramConfig } from './mermaid.ts'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
 import {
@@ -88,6 +89,10 @@ export type MarkdownOptions = {
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | Temml.Options
+  // Emit ```mermaid fences as <pre class="mermaid"> for client-side rendering through
+  // the optional Mermaid peer (see svelte-widgets/markdown/mermaid). A config object
+  // (JSON-serializable) is passed to the diagrams of compiled Svelte pages.
+  mermaid?: boolean | MermaidDiagramConfig
   references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
@@ -212,6 +217,19 @@ function frontmatter(source: string): {
   }
   const header = source.slice(0, source.indexOf(`\n`) + 1)
   const value: unknown = load(header + match[1], { schema: CORE_SCHEMA })
+  // Only comments between the fences is almost always a document opening with a thematic
+  // break whose `# Heading` YAML read as a comment, so its content would vanish silently.
+  // A bare `null`/`~` is just not a mapping.
+  if (value === null && match[1].trim()) {
+    const only_comments = match[1]
+      .split(`\n`)
+      .every((line) => !line.trim() || line.trim().startsWith(`#`))
+    throw new Error(
+      only_comments
+        ? `Frontmatter holds no YAML mapping, only comments. To open with a thematic break, use *** or ___ instead of ---`
+        : `Frontmatter must be a YAML mapping`,
+    )
+  }
   return {
     body: source.slice(match[0].length),
     metadata: serialize_metadata(value ?? {}),
@@ -709,6 +727,7 @@ async function prepare_document(
     manifest,
   })
   // Validate fence settings and assign identities during analysis, before rendering.
+  let mermaid_import = false
   const render_fences = code_tokens.map((token) => {
     try {
       const fence = positions.get(token)?.fence
@@ -717,6 +736,23 @@ async function prepare_document(
       const live =
         Boolean(options.examples && meta.example) &&
         (language === `svelte` || language === `html`)
+      if (options.mermaid && language === `mermaid`) {
+        // Svelte pages render their own diagrams; HTML strings need the mermaid_diagrams
+        // attachment (or render_mermaid) on a container in the browser
+        if (syntax && !mermaid_import) {
+          imports.push(
+            `import { mermaid_diagrams as WidgetsMermaidDiagrams } from 'svelte-widgets/markdown/mermaid';\n`,
+          )
+          mermaid_import = true
+        }
+        const config = options.mermaid === true ? `` : JSON.stringify(options.mermaid)
+        const attach = syntax ? ` {@attach WidgetsMermaidDiagrams(${config})}` : ``
+        code_html.set(
+          token,
+          `<pre class="mermaid"${attach}>${escape_braces(escape_html_text(token.text))}</pre>\n`,
+        )
+        return async () => undefined
+      }
       let display_code = token.text
       let wrapper_alias = ``
       let component = ``

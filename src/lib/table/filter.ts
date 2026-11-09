@@ -1,6 +1,7 @@
 // Headless per-column filtering: compiling a filter into a cell test, picking the control a
 // column's filter panel shows, and the edits that panel makes. Hosts with their own cell
 // semantics (markup, units, uncertainties) pass `to_text` / `to_number` / `is_missing` readers.
+import { DECIMAL_SRC } from '../utils'
 import type { ColumnFilterValue, FilterKind, FilterPanel } from './types'
 
 // Typed by the host's cell value, so readers written for that type plug in directly
@@ -13,15 +14,17 @@ export type CellReaders<Val = unknown> = {
   is_missing?: (val: Val) => boolean
 }
 
-// A decimal literal only: Number() alone reads hex/binary/octal, so a "0x1f" ID would
-// filter as 31, and reads blank strings as 0
-const DECIMAL_RE = /^[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?$/i
+const DECIMAL_RE = new RegExp(`^${DECIMAL_SRC}$`)
 
+// Finite number or decimal literal ("−3" with a Unicode minus too), else null. Same syntax
+// (DECIMAL_SRC) as data.ts's cell reading, so a bound parses like the cells it filters.
 export const default_to_number = (val: unknown): number | null => {
   if (typeof val === `number`) return Number.isFinite(val) ? val : null
   if (typeof val !== `string`) return null
-  const num = DECIMAL_RE.test(val.trim()) ? Number(val) : null
-  return num !== null && Number.isFinite(num) ? num : null // `1e400` overflows to Infinity
+  const text = val.trim()
+  if (!DECIMAL_RE.test(text)) return null
+  const num = Number(text.replaceAll(`−`, `-`))
+  return Number.isFinite(num) ? num : null // `1e400` overflows to Infinity
 }
 
 export const default_to_text = (val: unknown): string => {

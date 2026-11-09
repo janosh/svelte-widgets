@@ -281,6 +281,7 @@ test(`keeps command groups but excludes selection state, chips and bulk controls
       | `form_input`
       | `form_serialize`
       | `required`
+      | `disabled`
       | `portal`
       | `before_input`
       | `expand_icon`

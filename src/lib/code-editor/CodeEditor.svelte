@@ -8,7 +8,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from '../Icon.svelte'
   import { Hash, TextSearch } from '../icons'
-  import { claim_escape, claim_escape_while_focused, css_px } from '../attachments/shared'
+  import { css_px, escape_layer, is_composing } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp, clamp_integer, lower_bound, to_error } from '../utils'
   import {
@@ -192,6 +192,11 @@
     const [from, to] = ordered(current_selection)
     return search_matches.findIndex((match) => match.from === from && match.to === to)
   })
+  // Next can step past a capped list, where the status can't give a position
+  const selection_past_cap = $derived(
+    search_result.truncated &&
+      ordered(current_selection)[0] >= (search_matches.at(-1)?.to ?? 0),
+  )
   const report_error = (error: unknown): void => {
     const message = to_error(error).message
     error_message = message
@@ -539,10 +544,13 @@
   })
   const on_focus = (): void => {
     // Escape is fully consumed here, never reaching outer layers such as a host dialog.
-    unregister_escape ??= claim_escape(() => {
-      if (search_panel) close_search()
-      else tab_moves_focus = true
-    })
+    unregister_escape ??= escape_layer(
+      () => {
+        if (search_panel) close_search()
+        else tab_moves_focus = true
+      },
+      { consume: true },
+    )
   }
   const on_blur = (): void => {
     unregister_escape?.()
@@ -615,17 +623,33 @@
       refresh_input()
     }, 0)
   }
-  type InputShape = `replace` | `backward` | `forward` | `around`
+  // `diff`: drops and transposes edit away from the snapshot selection (the drop point, the
+  // swapped pair), so their range comes from diffing the textarea against the model
+  type InputShape = `replace` | `backward` | `forward` | `around` | `diff`
   const INPUT_TYPES: Record<InputShape, string> = {
     replace: ` insertText insertCompositionText insertFromComposition insertReplacementText insertFromPaste insertFromPasteAsQuotation insertFromYank insertLineBreak insertParagraph deleteByComposition deleteByCut deleteContent `,
     backward: ` deleteContentBackward deleteWordBackward deleteSoftLineBackward deleteHardLineBackward `,
     forward: ` deleteContentForward deleteWordForward deleteSoftLineForward deleteHardLineForward `,
     around: ` deleteEntireSoftLine `,
+    diff: ` insertFromDrop deleteByDrag insertTranspose `,
   }
   const input_shape = (input_type: string): InputShape | undefined =>
-    ([`replace`, `backward`, `forward`, `around`] as const).find((shape) =>
+    ([`replace`, `backward`, `forward`, `around`, `diff`] as const).find((shape) =>
       INPUT_TYPES[shape].includes(` ${input_type} `),
     )
+  // lengths of the shared prefix and the (non-overlapping) shared suffix of two strings
+  const common_affixes = (before: string, after: string): [number, number] => {
+    let prefix = 0
+    while (prefix < before.length && before[prefix] === after[prefix]) prefix += 1
+    let suffix = 0
+    while (
+      suffix < before.length - prefix &&
+      suffix < after.length - prefix &&
+      before.at(-suffix - 1) === after.at(-suffix - 1)
+    )
+      suffix += 1
+    return [prefix, suffix]
+  }
   const derive_input_edit = (
     before: InputSnapshot,
     next_value: string,
@@ -637,6 +661,17 @@
       throw new Error(
         `Editor input length mismatch: textarea=${before.value_length}, window=${input_to - input_from}`,
       )
+    if (shape === `diff`) {
+      const [prefix, suffix] = common_affixes(
+        model.slice(input_from, input_to),
+        next_value,
+      )
+      return {
+        from: input_from + prefix,
+        to: input_to - suffix,
+        insert: next_value.slice(prefix, next_value.length - suffix),
+      }
+    }
     let [from, to] = ordered(before)
     const delta = next_value.length - before.value_length
     if (before.input_type === `insertReplacementText` && from === to) {
@@ -647,19 +682,7 @@
         window_from - input_from,
         window_to + delta - input_from,
       )
-      let prefix_length = 0
-      while (
-        prefix_length < old_window.length &&
-        old_window[prefix_length] === new_window[prefix_length]
-      )
-        prefix_length += 1
-      let suffix_length = 0
-      while (
-        suffix_length < old_window.length - prefix_length &&
-        suffix_length < new_window.length - prefix_length &&
-        old_window.at(-suffix_length - 1) === new_window.at(-suffix_length - 1)
-      )
-        suffix_length += 1
+      const [prefix_length, suffix_length] = common_affixes(old_window, new_window)
       if (
         (prefix_length === 0 && window_from > input_from) ||
         (suffix_length === 0 && window_to < input_to)
@@ -968,7 +991,10 @@
       })
       return
     }
-    const word = words.segment(line.text).containing(offset - line.from)
+    // a click past the line end lands on its length, which no segment contains
+    const word = words
+      .segment(line.text)
+      .containing(Math.min(offset - line.from, line.text.length - 1))
     if (word)
       model.set_selection({
         anchor: line.from + word.index,
@@ -1009,11 +1035,27 @@
   export const find_next = (direction: 1 | -1 = 1): boolean => {
     search_panel = `find`
     const [start, end] = ordered(model.selection)
-    const match =
-      direction === 1
-        ? (search_matches.find(({ from }) => from >= end) ?? search_matches[0])
-        : (search_matches.findLast(({ to }) => to <= start) ?? search_matches.at(-1))
-    return select_match(match)
+    const scan = (range: { from: number; to?: number }) =>
+      iterate_editor_matches(model, search_query, search_options, range)
+    // A capped list ends at its SEARCH_MATCH_LIMIT-th match, so past it Next scans the model
+    // forward from the selection and Previous the gap between the list's end and the selection
+    const { truncated } = search_result
+    const last_to = search_matches.at(-1)?.to ?? 0
+    if (direction === 1)
+      return select_match(
+        search_matches.find(({ from }) => from >= end) ??
+          (truncated ? scan({ from: end }).next().value : undefined) ??
+          search_matches[0],
+      )
+    let previous: EditorMatch | undefined
+    if (truncated && start > last_to)
+      for (const match of scan({ from: last_to, to: start }))
+        if (match.to <= start) previous = match // not one the caret sits inside
+    return select_match(
+      previous ??
+        search_matches.findLast(({ to }) => to <= start) ??
+        search_matches.at(-1),
+    )
   }
   export const replace_current = (): boolean => {
     if (editing_disabled || composing) return false
@@ -1056,12 +1098,12 @@
   const on_search_enter =
     (action: (event: KeyboardEvent) => unknown) =>
     (event: KeyboardEvent): void => {
-      if (event.key !== `Enter` || event.isComposing) return
+      if (event.key !== `Enter` || is_composing(event)) return
       event.preventDefault()
       action(event)
     }
   const handle_search_shortcut = (event: KeyboardEvent): boolean => {
-    if (event.isComposing) return false
+    if (is_composing(event)) return false
     const key = event.key.toLowerCase()
     const command = event.ctrlKey || event.metaKey
     if (command && key === `f` && !event.altKey) void open_search()
@@ -1080,7 +1122,7 @@
   }
   const on_keydown = (event: KeyboardEvent): void => {
     const area = textarea
-    if (!area || event.isComposing) return
+    if (!area || is_composing(event)) return
     if (handle_search_shortcut(event)) return
     const release_focus = tab_moves_focus
     tab_moves_focus = false
@@ -1201,7 +1243,8 @@
       role="search"
       aria-label={search_panel === `find` ? msg.find : msg.go_to_line}
       {@attach (node) => on(node, `keydown`, handle_search_shortcut)}
-      {@attach claim_escape_while_focused(close_search)}
+      {@attach (node) =>
+        escape_layer(close_search, { consume: true, while_focused: node })}
     >
       <div>
         {#if search_panel === `find`}
@@ -1220,7 +1263,10 @@
           <span role="status"
             >{search_matches.length
               ? search_result.truncated
-                ? msg.match_position_truncated(current_match + 1, search_matches.length)
+                ? msg.match_position_truncated(
+                    selection_past_cap ? null : current_match + 1,
+                    search_matches.length,
+                  )
                 : msg.match_position(current_match + 1, search_matches.length)
               : msg.no_matches}</span
           >

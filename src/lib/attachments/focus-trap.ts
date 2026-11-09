@@ -1,6 +1,6 @@
 import {
-  claim_escape,
   composed_parent,
+  escape_layer,
   focusable,
   is_focus_available,
   register_trap_layer,
@@ -206,7 +206,9 @@ export const focus_trap =
     }
 
     const unregister = register_trap_layer(on_tab)
-    const unregister_escape = on_escape ? claim_escape(on_escape) : undefined
+    const unregister_escape = on_escape
+      ? escape_layer(on_escape, { consume: true })
+      : undefined
 
     return () => {
       trap_active = false

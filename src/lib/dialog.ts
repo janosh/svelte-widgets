@@ -1,5 +1,6 @@
 import type { Snippet } from 'svelte'
 import type { HTMLDialogAttributes } from 'svelte/elements'
+import { escape_layer } from './attachments/shared'
 
 export type DialogCloseVia = `pointer` | `escape` | `close`
 export type DialogCloseDetail = { via: DialogCloseVia }
@@ -71,4 +72,24 @@ export const restore_dialog_focus = (
   const active_element = document.activeElement
   if (surface?.contains(active_element) || active_element === document.body)
     focus_origin?.focus()
+}
+
+// showModal() plus an Escape barrier: the layer stack listens on document capture, so an
+// older layer behind the modal (an open pane, menu or tooltip) would otherwise take Escape
+// and cancel the dialog's own close. Claiming without preventDefault leaves the native cancel
+// to close the dialog; layers registered later, inside it, still come first.
+export const show_modal = (dialog: HTMLDialogElement): void => {
+  dialog.showModal()
+  const release = escape_layer(() => {
+    if (dialog.open && dialog.isConnected) return true
+    release() // closed or unmounted without a close event reaching us
+    return false
+  })
+  // the close event lands a task later, so a dialog reopened meanwhile keeps its barrier
+  const on_close = () => {
+    if (dialog.open) return
+    release()
+    dialog.removeEventListener(`close`, on_close)
+  }
+  dialog.addEventListener(`close`, on_close)
 }

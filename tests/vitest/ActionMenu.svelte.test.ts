@@ -262,6 +262,36 @@ describe(`ActionMenu`, () => {
     expect(menu()).toBeNull()
   })
 
+  // each opener returns the reactive props; context mode has no `open` (it anchors at `at`)
+  test.each([
+    [
+      `context`,
+      async () => {
+        const props = mount_menu(make_actions())
+        right_click(document.body)
+        await flush_context_open()
+        return props
+      },
+    ],
+    [
+      `dropdown`,
+      async () => {
+        const props = $state({ actions: make_actions(), open: false, disabled: false })
+        render(TestActionMenu, props)
+        await click(doc_query(`[data-testid="action-menu-trigger"]`))
+        return props
+      },
+    ],
+  ] as const)(`disabling an open %s menu closes it`, async (_mode, open) => {
+    const props = await open()
+    expect(menu()).not.toBeNull()
+
+    props.disabled = true
+    await tick()
+    expect(menu()).toBeNull()
+    if (`open` in props) expect(props.open).toBe(false) // bind:open hears the close
+  })
+
   describe(`sections`, () => {
     const make_sections = (): CmdSection[] => [
       {

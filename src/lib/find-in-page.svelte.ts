@@ -28,9 +28,11 @@ export type FindOptions = {
 
 // Getter keeps caller props live rather than freezing a creation-time snapshot.
 export const create_find_state = (get_options: () => FindOptions = () => ({})) => {
+  const ignored_selector = () =>
+    [IGNORED_SELECTOR, get_options().also_ignore].filter(Boolean).join(`, `)
   const make_node_filter = () => {
-    const { only_within, also_ignore } = get_options()
-    const selector = [IGNORED_SELECTOR, also_ignore].filter(Boolean).join(`, `)
+    const { only_within } = get_options()
+    const selector = ignored_selector()
     return ({ parentElement: parent }: Node): number =>
       (only_within && !parent?.closest(only_within)) || parent?.closest(selector)
         ? NodeFilter.FILTER_REJECT
@@ -98,13 +100,22 @@ export const create_find_state = (get_options: () => FindOptions = () => ({})) =
 
   // Re-search after DOM mutations settle; returns an effect teardown.
   const observe = (root: Element): (() => void) => {
-    const stop = observe_text_mutations(root, () => {
-      if (!query.trim()) return
-      const had_matches = occurrences.length > 0
-      refresh(root)
-      // Select the first hit after an empty result.
-      if (!had_matches && occurrences.length > 0) jump_to(0)
-    })
+    const stop = observe_text_mutations(
+      root,
+      () => {
+        if (!query.trim()) return
+        const had_matches = occurrences.length > 0
+        refresh(root)
+        // Select the first hit after an empty result.
+        if (!had_matches && occurrences.length > 0) jump_to(0)
+      },
+      {
+        skip: (target) => {
+          const element = target instanceof Element ? target : target.parentElement
+          return Boolean(element?.closest(ignored_selector()))
+        },
+      },
+    )
     return () => {
       stop()
       jump.clear()

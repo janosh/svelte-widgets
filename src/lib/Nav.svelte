@@ -17,6 +17,7 @@
   import { create_key_selector } from './internal/key-selector.svelte'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavGroup, NavLink, NavRoute } from './types'
+  import { is_composing } from './attachments/shared'
   import { chain_handlers, step_focus } from './utils'
 
   type Route = NavLink | NavGroup
@@ -168,7 +169,7 @@
       close_menus()
       dropdown_toggle(idx)?.focus()
     } else if (
-      (event.key === `Tab` && !event.isComposing) ||
+      (event.key === `Tab` && !is_composing(event)) ||
       step_focus(event, [...dropdown_links(idx)])
     ) {
       hover_open = false
@@ -217,10 +218,12 @@
   const is_open_dropdown = create_key_selector(() => open_dropdown)
   const route_tooltip = (route: Route) => {
     if (!route.tooltip) return
-    return tooltip({
+    const options = {
       ...tooltip_options,
       ...(typeof route.tooltip === `string` ? { content: route.tooltip } : route.tooltip),
-    })
+    }
+    // An open dropdown hangs below its parent, where the parent's tooltip would open
+    return tooltip({ ...options, disabled: options.disabled || is_open_dropdown(route) })
   }
   function handle_link_click(event: MouseEvent, route: Route) {
     if (

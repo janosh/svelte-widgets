@@ -19,6 +19,7 @@ import type {
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { click, doc_query, escape_key, press_key, render as mount_body } from './index'
+import { escape_layer } from '#lib/attachments/shared.ts'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -411,7 +412,7 @@ describe(`ToastStore`, () => {
     [`dismiss`, (store: ToastStore) => store.dismiss(`toast-1`)],
     [`action`, (store: ToastStore) => store.run_action(`toast-1`)],
     [`timeout`, () => vi.advanceTimersByTime(DEFAULT_TOAST_DURATION_MS)],
-  ] as const)(`on_close reports reason=%s`, (reason, act) => {
+  ] as const)(`on_close reports via=%s`, (via, act) => {
     fake_clock()
     const store = track(new ToastStore())
     const on_close = vi.fn<ToastCloseHandler>()
@@ -420,8 +421,8 @@ describe(`ToastStore`, () => {
 
     act(store)
 
-    expect(on_close).toHaveBeenCalledExactlyOnceWith(expect.anything(), reason)
-    expect(on_click).toHaveBeenCalledTimes(reason === `action` ? 1 : 0)
+    expect(on_close).toHaveBeenCalledExactlyOnceWith(expect.anything(), { via })
+    expect(on_click).toHaveBeenCalledTimes(via === `action` ? 1 : 0)
   })
 
   test(`an overflowed toast reports on_close too`, () => {
@@ -431,7 +432,7 @@ describe(`ToastStore`, () => {
     store.show(`kept`)
     store.show(`dropped`, { on_close })
 
-    expect(on_close.mock.calls[0][1]).toBe(`overflow`)
+    expect(on_close.mock.calls[0][1]).toEqual({ via: `overflow` })
     expect(messages(store.items)).toEqual([`active`, `kept`])
   })
 
@@ -752,25 +753,32 @@ describe(`<Toast />`, () => {
     },
   )
 
-  // Escape is scoped to the stack and gated on `dismissible`, else it would be the one
-  // way left to shut a toast declared undismissable
+  // Escape is scoped to focus in the stack and gated on `dismissible`, else it would be the
+  // one way left to shut a toast declared undismissable. An open pane's older Escape layer
+  // must not take the key from a focused toast.
   test.each([
     [true, undefined],
     [false, `a`],
   ] as const)(
     `Escape inside the toast dismisses when dismissible=%s`,
     async (dismissible, left_on_screen) => {
+      const pane_escape = vi.fn()
+      onTestFinished(escape_layer(pane_escape, { consume: true }))
       const store = render({ dismissible })
-      store.show(`a`)
+      store.show(`a`, { action: { label: `Undo`, on_click: vi.fn() } })
       await tick()
 
       document.body.dispatchEvent(escape_key())
       await tick()
       expect(store.active_toast?.message).toBe(`a`)
+      expect(pane_escape).toHaveBeenCalledOnce()
 
-      doc_query(`.toast`).dispatchEvent(escape_key())
+      press_focus_hotkey()
+      doc_query(`.toast-action`).dispatchEvent(escape_key())
       await tick()
       expect(store.active_toast?.message).toBe(left_on_screen)
+      // an undismissable toast passes Escape on to the pane
+      expect(pane_escape).toHaveBeenCalledTimes(dismissible ? 1 : 2)
     },
   )
 

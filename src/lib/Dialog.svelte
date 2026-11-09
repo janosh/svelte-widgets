@@ -3,6 +3,7 @@
   import { focusable } from './attachments/shared'
   import {
     restore_dialog_focus,
+    show_modal,
     track_backdrop_dismiss,
     type DialogCloseVia,
     type DialogControls,
@@ -63,7 +64,7 @@
     focus_origin = focusable(document.activeElement) ?? focus_origin
     // Native modal stacking makes only the innermost nested dialog interactive and gives
     // Escape to that dialog before its ancestors.
-    surface.showModal()
+    show_modal(surface)
   })
   const backdrop = track_backdrop_dismiss(
     () => surface,

@@ -1,5 +1,5 @@
 import { highlight_matches } from '#lib/attachments/index.ts'
-import type { HighlightRangesOptions, TextMutationOptions } from '#lib/text-search.ts'
+import type { HighlightRangesOptions } from '#lib/text-search.ts'
 import {
   create_burst_debounce,
   create_search_jump,
@@ -406,13 +406,40 @@ describe(`observe_text_mutations and create_burst_debounce`, () => {
     node.append(document.createElement(`span`))
     await vi.advanceTimersByTimeAsync(advance_ms)
   }
-  const observe = (options: TextMutationOptions) => {
-    const root = render(`<p>content</p>`)
+  const observe = (
+    options: Parameters<typeof observe_text_mutations>[2],
+    html = `<p>content</p>`,
+  ) => {
+    const root = render(html)
     const on_mutation = vi.fn()
     const stop = observe_text_mutations(root, on_mutation, options)
     onTestFinished(stop)
     return { root, on_mutation, stop }
   }
+
+  it(`ignores mutations whose target skip rejects`, async () => {
+    const { root, on_mutation } = observe(
+      {
+        debounce_ms: 10,
+        skip: (target) =>
+          Boolean(
+            (target instanceof Element ? target : target.parentElement)?.closest(
+              `.chrome`,
+            ),
+          ),
+      },
+      `<p>content</p><div class="chrome"><span>1 of 2</span></div>`,
+    )
+    const chrome = root.querySelector(`.chrome`)
+    const status = chrome?.querySelector(`span`)?.firstChild
+    if (!chrome || !status) throw new Error(`missing find bar chrome`)
+    status.nodeValue = `2 of 2` // characterData inside the skipped chrome
+    await mutate(chrome, 20) // childList inside it too
+    expect(on_mutation).not.toHaveBeenCalled()
+
+    await mutate(root, 20) // a mutation outside still counts
+    expect(on_mutation).toHaveBeenCalledOnce()
+  })
 
   it(`collapses a burst of mutations into one call`, async () => {
     const { root, on_mutation } = observe({ debounce_ms: 50 })

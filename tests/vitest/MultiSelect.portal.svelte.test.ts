@@ -2,7 +2,7 @@ import { tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps, PortalParams } from '#lib/types.ts'
 import { create_element, doc_query } from './index'
-import { mount_multiselect } from './MultiSelect.test-utils'
+import { focus_input, mount_multiselect } from './MultiSelect.test-utils'
 
 const is_open = () => doc_query(`div.multiselect`).classList.contains(`open`)
 
@@ -262,5 +262,53 @@ test.each([
     outside.dispatchEvent(new PointerEvent(`click`, { bubbles: true, detail: 1 }))
     await tick()
     expect(is_open()).toBe(false)
+  },
+)
+
+test.each([true, false])(
+  `disabling an open list closes it and keeps it closed (portal.active=%s)`,
+  async (active) => {
+    const on_close = vi.fn()
+    const props = $state<MultiSelectProps>({
+      options: [`Apple`, `Orange`],
+      portal: { active },
+      select_all_option: true,
+      on_close,
+    })
+    mount_multiselect(props)
+    await focus_input()
+    expect(is_open()).toBe(true)
+    const select_all = doc_query(`ul.options > li.select-all`)
+    select_all.focus() // focus inside the list would keep taking Enter/Space
+    expect(document.activeElement).toBe(select_all)
+
+    props.disabled = true
+    await tick()
+    expect(is_open()).toBe(false)
+    expect(document.activeElement).toBe(document.body)
+    expect(doc_query(`ul.options`).classList).toContain(`hidden`)
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `disabled` })
+
+    props.open = true // a parent binding can't reopen a disabled control
+    await tick()
+    expect(is_open()).toBe(false)
+    expect(on_close).toHaveBeenCalledOnce() // nor hear another close for it
+
+    // a parent re-opening from on_close itself mustn't ping-pong with the disabled close
+    props.disabled = false
+    await tick()
+    await focus_input()
+    on_close.mockImplementation(() => (props.open = true))
+    props.disabled = true
+    await tick()
+    expect(is_open()).toBe(false)
+    expect(on_close).toHaveBeenCalledTimes(2)
+    on_close.mockReset()
+
+    props.disabled = false
+    await tick()
+    expect(is_open()).toBe(false) // re-enabling doesn't reopen on its own
+    await focus_input()
+    expect(is_open()).toBe(true)
   },
 )

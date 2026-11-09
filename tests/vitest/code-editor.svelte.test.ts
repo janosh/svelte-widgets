@@ -1,4 +1,4 @@
-import { register_escape_layer } from '#lib/attachments/index.ts'
+import { escape_layer } from '#lib/attachments/index.ts'
 import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '#lib/code-editor/model.ts'
 import type * as Tokens from '#lib/code-editor/tokens.ts'
@@ -206,7 +206,7 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
   )
   const { model, textarea, props } = await mount_editor(lines.join(`\n`))
   const parent_escape = vi.fn(() => true)
-  onTestFinished(register_escape_layer(parent_escape))
+  onTestFinished(escape_layer(parent_escape))
   textarea.focus()
   expect(press_key(textarea, `f`, { ctrlKey: true }).defaultPrevented).toBe(true)
   await flush_async()
@@ -317,6 +317,19 @@ test.each([5000, 5001])(
     await flush_async()
     expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })
     expect(status.textContent).toBe(`5000 of ${total}`)
+    if (count === 5001) {
+      // Next keeps going past the capped list instead of wrapping early
+      expect(instance.find_next()).toBe(true)
+      await flush_async()
+      expect(model.selection).toEqual({ anchor: 20_000, head: 20_003 })
+      expect(status.textContent).toBe(`Match past 5000 of 5000+ (first 5000 shown)`)
+      // Previous from a caret inside the 5001st match skips it for the 5000th
+      model.set_selection({ anchor: 20_001, head: 20_001 })
+      expect(instance.find_next(-1)).toBe(true)
+      await flush_async()
+      expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })
+      expect(instance.find_next()).toBe(true) // back to the 5001st
+    }
     expect(instance.find_next()).toBe(true)
     await flush_async()
     expect(model.selection).toEqual({ anchor: 0, head: 3 })
@@ -421,7 +434,7 @@ test(`native input, selection, history, commands, and backend deltas share the m
   const no_op_dedent = press_key(textarea, `Tab`, { shiftKey: true })
   expect([no_op_dedent.defaultPrevented, model.revision]).toEqual([true, 11])
   const parent_escape = vi.fn(() => true)
-  const unregister = register_escape_layer(parent_escape)
+  const unregister = escape_layer(parent_escape)
   onTestFinished(unregister)
   textarea.focus()
   expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)
@@ -696,6 +709,10 @@ test.each([
   [`insertReplacementText`, 1, 2, `X`, 1, 2, `aXc`],
   [`insertReplacementText`, 3, 3, `acb`, 0, 3, `acb`],
   [`insertLineBreak`, 1, 1, `\n`, 1, 1, `a\nbc`],
+  // drops and transposes edit away from the snapshot selection
+  [`insertFromDrop`, 0, 0, `X`, 3, 3, `abcX`],
+  [`deleteByDrag`, 0, 0, ``, 1, 2, `ac`],
+  [`insertTranspose`, 2, 2, `cb`, 1, 3, `acb`],
 ] as const)(
   `%s derives one bounded transaction`,
   async (input_type, selection_start, selection_end, insert, from, to, expected) => {
@@ -1049,6 +1066,10 @@ test(`mouse selection retains its anchor and supports word and line selection`, 
     textarea.dispatchEvent(pointer_event(`click`, 10, 5, { detail }))
     expect(model.selection).toEqual({ anchor: 0, head })
   }
+  // past the line end the click lands on its length, which still picks the last word
+  model.set_selection({ anchor: 0, head: 0 })
+  textarea.dispatchEvent(pointer_event(`click`, 95, 5, { detail: 2 }))
+  expect(model.selection).toEqual({ anchor: 0, head: 5 })
 })
 
 test(`host selection changes reveal both horizontal edges`, async () => {

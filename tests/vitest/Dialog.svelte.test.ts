@@ -1,9 +1,17 @@
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
-import { describe, expect, test, vi } from 'vite-plus/test'
-import { click, create_element, doc_query, render, pointer_event } from './index'
+import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import {
+  click,
+  create_element,
+  doc_query,
+  escape_key,
+  render,
+  pointer_event,
+} from './index'
 import TestDialog from './TestDialog.svelte'
-import { focusable } from '#lib/attachments/shared.ts'
+import { escape_layer, focusable } from '#lib/attachments/shared.ts'
 import Sheet from '#lib/Sheet.svelte'
+import * as dialog_helpers from '#lib/dialog.ts'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
@@ -202,6 +210,40 @@ describe(`Dialog`, () => {
     expect(surface()).toBeNull()
     expect(document.activeElement).toBe(trigger())
     expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `escape` })
+  })
+
+  // the Escape layer stack listens on document capture, so a pane or menu left open behind
+  // the modal would otherwise take Escape and cancel the dialog's own close
+  test(`an older Escape layer behind the open modal doesn't see Escape`, async () => {
+    const pane_escape = vi.fn()
+    onTestFinished(escape_layer(pane_escape, { consume: true }))
+    mount_dialog()
+    await click(trigger())
+
+    const event = escape_key()
+    item(`dialog-action`).dispatchEvent(event)
+    expect(pane_escape).not.toHaveBeenCalled()
+    expect(event.defaultPrevented).toBe(false) // native cancel still closes the dialog
+
+    cancel_dialog(open_surface())
+    await tick()
+    document.body.dispatchEvent(escape_key())
+    expect(pane_escape).toHaveBeenCalledOnce() // the barrier left with the dialog
+  })
+
+  // browsers fire `close` a task after close(), so a dialog reopened in between hears the
+  // earlier opening's close event: that mustn't drop the new opening's barrier
+  test(`a late close event from an earlier opening keeps a reopened dialog's barrier`, () => {
+    const pane_escape = vi.fn()
+    onTestFinished(escape_layer(pane_escape, { consume: true }))
+    const dialog = document.createElement(`dialog`)
+    document.body.append(dialog)
+    dialog_helpers.show_modal(dialog)
+    dialog.close()
+    dialog_helpers.show_modal(dialog)
+    dialog.dispatchEvent(new Event(`close`)) // the first opening's, arriving late
+    document.body.dispatchEvent(escape_key())
+    expect(pane_escape).not.toHaveBeenCalled()
   })
 
   test(`Sheet forwards Dialog bindings, attributes, snippets, and controls`, async () => {

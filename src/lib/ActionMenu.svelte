@@ -124,6 +124,10 @@
     if (trigger_snippet) open = false
     else at = null
   }
+  // disabling an open menu closes it, so its items can't run while the trigger is disabled
+  $effect(() => {
+    if (disabled && (open || at)) untrack(close)
+  })
   const trigger_props = $derived<TriggerProps>({
     onclick: (event) => {
       if (!open && (disabled || all_empty)) return

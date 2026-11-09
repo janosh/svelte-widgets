@@ -1,6 +1,7 @@
 <script lang="ts" generics="Item extends import('../types').Option">
   import { flushSync, tick, untrack } from 'svelte'
   import { highlight_matches as highlight } from '../attachments/highlight-matches'
+  import { is_composing } from '../attachments/shared'
   import { get_label, get_option_key, has_group } from '../utils'
   import type { OptionListProps } from '../types'
   import { merge_defaults, MULTI_SELECT_LABELS } from '../labels'
@@ -193,7 +194,7 @@
       untrack(expand_matching_groups)
   })
   async function handle_keydown(event: KeyboardEvent) {
-    if (disabled || event.isComposing) return
+    if (disabled || is_composing(event)) return
     if (event.key === `Enter`) {
       event.preventDefault()
       if (active_option !== null && !option_disabled(active_option))

@@ -1,3 +1,10 @@
+// mid-IME keystrokes belong to the input method. WebKit ends the composition before the
+// Enter (or Escape) that confirms a candidate, so that keydown reads isComposing=false and
+// only its legacy keyCode 229 gives it away.
+export const is_composing = (event: KeyboardEvent): boolean =>
+  // oxlint-disable-next-line typescript/no-deprecated -- WebKit's only IME signal here
+  event.isComposing || event.keyCode === 229
+
 // Flat-tree parent: slotted light-DOM content renders inside its slot (and the slot's
 // shadow ancestors), and a shadow root's top-level children continue at the host.
 export const composed_parent = (element: Element): Element | null => {
@@ -117,26 +124,9 @@ const key_layer_stack = (wants: (event: KeyboardEvent) => boolean) => {
   }
 }
 
-// Register an Escape handler; return true to consume, false to try the next layer.
-// Returns an unregister function. Skip prevented events and IME composition.
-export const register_escape_layer = key_layer_stack(
-  (event) => event.key === `Escape` && !event.isComposing,
+const push_escape_layer = key_layer_stack(
+  (event) => event.key === `Escape` && !is_composing(event),
 )
-
-// Wrap a handler as a layer that always consumes the key. Safe to swallow: only the
-// innermost layer gets here, so no outer surface waits on it. Canceling the default keeps a
-// wrapping native <dialog> open until a second Escape.
-export const consume_escape =
-  (handler: (event: KeyboardEvent) => void): KeyLayer =>
-  (event) => {
-    event.preventDefault()
-    event.stopPropagation()
-    handler(event)
-    return true
-  }
-
-export const claim_escape = (handler: (event: KeyboardEvent) => void) =>
-  register_escape_layer(consume_escape(handler))
 
 // document.activeElement stops at the outermost shadow host, so walk down the focus chain:
 // the host may sit inside the node, or the node inside that shadow tree.
@@ -149,55 +139,74 @@ const holds_focus = (node: Node): boolean => {
   return false
 }
 
-// Attachment holding an Escape layer while focus is inside the node. Re-registers on every
-// focusin, so it also outranks layers registered after it. Capture phase so descendants
-// claiming their own layer on focusin (e.g. a tooltip on a focused button) still land above
-// it. A layer returning true without stopping the event keeps outer surfaces (a pane, a
-// dialog) from seeing the key while still letting it reach the node's own keydown handlers,
-// e.g. `hold_escape_while_focused(() => open)` for a dropdown that closes itself on Escape.
-export const hold_escape_while_focused =
-  (layer: KeyLayer) =>
-  (node: HTMLElement): (() => void) => {
-    let release: (() => void) | undefined
-    const stop = () => {
-      release?.()
-      release = undefined
-    }
-    const claim = () => {
-      stop()
-      release = register_escape_layer((event) => {
-        // Focus can leave without a focusout reaching the node (a focused descendant hidden
-        // via display: none or removed), so drop the stale hold and pass the key on.
-        if (holds_focus(node)) return layer(event)
-        stop()
-        return false
-      })
-    }
-    const listeners = new AbortController()
-    const { signal } = listeners
-    node.addEventListener(`focusin`, claim, { signal, capture: true })
-    node.addEventListener(
-      `focusout`,
-      ({ relatedTarget }) => {
-        if (!(relatedTarget instanceof Node && node.contains(relatedTarget))) stop()
-      },
-      { signal },
-    )
-    if (holds_focus(node)) claim()
-    return () => {
-      listeners.abort()
-      stop()
-    }
-  }
+export interface EscapeLayerOptions {
+  // Take every key that reaches the layer, whatever the handler returns: cancel its default,
+  // stop its propagation and stop older layers. Safe to swallow: only the innermost layer
+  // gets here, so no outer surface waits on it. Canceling the default keeps a wrapping
+  // native <dialog> open until a second Escape.
+  consume?: boolean
+  // Hold the layer only while focus is inside this node. Re-registers on every focusin, so
+  // it also outranks layers registered after it. Capture phase so descendants claiming their
+  // own layer on focusin (e.g. a tooltip on a focused button) still land above it.
+  while_focused?: HTMLElement
+}
 
-// Consuming form: a bar or panel closes itself rather than the pane or dialog hosting it.
-export const claim_escape_while_focused = (handler: (event: KeyboardEvent) => void) =>
-  hold_escape_while_focused(consume_escape(handler))
+// Add an Escape handler to the shared newest-first stack, listening on document keydown
+// capture (before descendant handlers) and skipping prevented events and IME composition.
+// Without `consume`, return true to stop older layers or false to pass the key on. Such a
+// layer keeps outer surfaces (a pane, a dialog) from seeing the key while still letting it
+// reach the focused node's own keydown handlers, e.g.
+// `{@attach (node) => escape_layer(() => open, { while_focused: node })}` for a dropdown
+// that closes itself on Escape. Returns the unregister function, so it also works as the
+// body of an attachment.
+export const escape_layer = (
+  handler: (event: KeyboardEvent) => unknown,
+  { consume = false, while_focused: node }: EscapeLayerOptions = {},
+): (() => void) => {
+  const layer = (event: KeyboardEvent) => {
+    if (!consume) return Boolean(handler(event))
+    event.preventDefault()
+    event.stopPropagation()
+    handler(event)
+    return true
+  }
+  if (!node) return push_escape_layer(layer)
+  let release: (() => void) | undefined
+  const stop = () => {
+    release?.()
+    release = undefined
+  }
+  const claim = () => {
+    stop()
+    release = push_escape_layer((event) => {
+      // Focus can leave without a focusout reaching the node (a focused descendant hidden
+      // via display: none or removed), so drop the stale hold and pass the key on.
+      if (holds_focus(node)) return layer(event)
+      stop()
+      return false
+    })
+  }
+  const listeners = new AbortController()
+  const { signal } = listeners
+  node.addEventListener(`focusin`, claim, { signal, capture: true })
+  node.addEventListener(
+    `focusout`,
+    ({ relatedTarget }) => {
+      if (!(relatedTarget instanceof Node && node.contains(relatedTarget))) stop()
+    },
+    { signal },
+  )
+  if (holds_focus(node)) claim()
+  return () => {
+    listeners.abort()
+    stop()
+  }
+}
 
 // isComposing for the same reason the Escape layer above filters it: Tab cycles IME
 // candidates mid-composition, and swallowing it there eats the user's word choice
 export const register_trap_layer = key_layer_stack(
-  (event) => event.key === `Tab` && !event.isComposing,
+  (event) => event.key === `Tab` && !is_composing(event),
 )
 const style_overrides = new WeakMap<
   CSSStyleDeclaration,

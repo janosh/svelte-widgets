@@ -1166,3 +1166,19 @@ describe(`unmount`, () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 })
+
+test.each([5, Infinity])(
+  `a cyclic value renders [Circular] instead of recursing (default_fold_level=%s)`,
+  (default_fold_level) => {
+    const list: unknown[] = []
+    const value: Record<string, unknown> = { a: 1, list }
+    value.self = value
+    list.push(value, { back: value })
+    mount_tree({ value, default_fold_level })
+
+    for (const path of [`self`, `list[0]`, `list[1].back`])
+      expect(node_at(path)?.textContent).toContain(`[Circular]`)
+    // a circular leaf has no toggle and no children
+    expect(node_at(`self`)?.querySelector(`.collapse-toggle, .children`)).toBeNull()
+  },
+)

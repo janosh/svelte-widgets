@@ -570,30 +570,30 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`on_open_change handler receives open state, desktop state, and trigger`, async () => {
+  test(`on_open_change handler receives open state, desktop state, and via`, async () => {
     set_window_width(1200)
     set_nested_pair()
     const on_open_change = vi.fn<OpenChangeHandler>()
     const events = () => on_open_change.mock.calls.map(([event]) => event)
 
     await mount_toc({ on_open_change, open: false })
-    expect(events()).toEqual([{ desktop: true, open: false, trigger: `programmatic` }])
+    expect(events()).toEqual([{ desktop: true, open: false, via: `programmatic` }])
 
     set_window_width(600)
     await tick()
     await click(`aside.toc button`)
     press_key(globalThis, `Escape`)
     await tick()
-    // Same-tick open changes should emit each internal trigger separately.
+    // Same-tick open changes should emit each internal cause separately.
     doc_query(`aside.toc button`).click()
     press_key(globalThis, `Escape`)
     await tick()
 
     expect(events().slice(1)).toEqual([
-      { desktop: false, open: true, trigger: `button` },
-      { desktop: false, open: false, trigger: `escape` },
-      { desktop: false, open: true, trigger: `button` },
-      { desktop: false, open: false, trigger: `escape` },
+      { desktop: false, open: true, via: `button` },
+      { desktop: false, open: false, via: `escape` },
+      { desktop: false, open: true, via: `button` },
+      { desktop: false, open: false, via: `escape` },
     ])
   })
 
@@ -838,29 +838,29 @@ describe(`Toc`, () => {
     },
   )
 
-  // a null trigger means the key is absent from react_to_keys, so nothing should happen
+  // a null via means the key is absent from react_to_keys, so nothing should happen
   test.each([
-    { desc: `Escape closes the mobile ToC`, key: `Escape`, trigger: `escape` },
-    { desc: `Tab out of a focused ToC closes it`, key: `Tab`, trigger: `tab` },
-    { desc: `an empty react_to_keys ignores Escape`, key: `Escape`, trigger: null },
-  ] as const)(`$desc`, async ({ key, trigger }) => {
+    { desc: `Escape closes the mobile ToC`, key: `Escape`, via: `escape` },
+    { desc: `Tab out of a focused ToC closes it`, key: `Tab`, via: `tab` },
+    { desc: `an empty react_to_keys ignores Escape`, key: `Escape`, via: null },
+  ] as const)(`$desc`, async ({ key, via }) => {
     set_headings(2)
     set_window_width(600)
     const on_open_change = vi.fn<OpenChangeHandler>()
-    const react_to_keys = trigger === null ? [] : [key]
+    const react_to_keys = via === null ? [] : [key]
     await mount_toc({ open: true, react_to_keys, on_open_change })
     on_open_change.mockClear()
 
-    if (trigger === `tab`) doc_query(`aside.toc > nav > ol > li.active > a`).focus()
+    if (via === `tab`) doc_query(`aside.toc > nav > ol > li.active > a`).focus()
     const key_event = press_key(globalThis, key)
     await tick()
 
     // Tab must stay un-prevented so focus still leaves the ToC
-    expect(key_event.defaultPrevented).toBe(trigger === `escape`)
-    if (trigger === null) expect(on_open_change).not.toHaveBeenCalled()
+    expect(key_event.defaultPrevented).toBe(via === `escape`)
+    if (via === null) expect(on_open_change).not.toHaveBeenCalled()
     else {
       expect(on_open_change).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ desktop: false, open: false, trigger }),
+        expect.objectContaining({ desktop: false, open: false, via }),
       )
     }
   })
@@ -1491,3 +1491,21 @@ test.each([`scrollend`, `timeout`, `older unmount`, `newer unmount`])(
     }
   },
 )
+
+// short trailing sections never pass the offset line, so at max scroll the last heading in
+// the viewport wins; anywhere above the bottom the usual "last scrolled past" rule holds
+test.each([
+  [500, `Heading 4`], // at the bottom: 500 + 600 >= 1100
+  [100, `Heading 2`],
+  [0, `Heading 2`], // an unscrolled page keeps the usual rule
+])(`at scrollTop=%s the active heading is %s`, async (scroll_top, expected) => {
+  set_headings(4)
+  mock_active_heading(`heading-2`) // tops: -20, -10, 100, 200
+  const root = document.documentElement
+  vi.spyOn(root, `scrollTop`, `get`).mockReturnValue(scroll_top)
+  vi.spyOn(root, `clientHeight`, `get`).mockReturnValue(scroll_top === 0 ? 1100 : 600)
+  vi.spyOn(root, `scrollHeight`, `get`).mockReturnValue(1100)
+  await mount_toc()
+  await scroll()
+  expect(active_text()).toBe(expected)
+})
