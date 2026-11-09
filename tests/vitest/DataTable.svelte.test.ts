@@ -563,6 +563,7 @@ describe(`DataTable`, () => {
         const select = await open_select(idx)
         select.value = value
         await fire(select, new Event(`input`, { bubbles: true }))
+        await fire(select, mouse(`click`)) // a pointer pick ends in a click, which closes
       }
       expect(cells()).toEqual([
         `2024-01-02`,
@@ -617,7 +618,11 @@ describe(`DataTable`, () => {
       select.value = `relative`
       select.dispatchEvent(new Event(`input`, { bubbles: true }))
       expect(on_change).toHaveBeenCalledExactlyOnceWith(`relative`)
-      expect(on_toggle).toHaveBeenCalledTimes(2) // a pick also closes the menu
+      // Chromium fires input on arrow keys too, so the list stays open until a click or Enter
+      expect(on_toggle).toHaveBeenCalledOnce()
+      select.dispatchEvent(mouse(`click`))
+      select.dispatchEvent(keydown(`Enter`))
+      expect(on_toggle).toHaveBeenCalledTimes(3)
       expect(header).not.toHaveBeenCalled()
     })
 
@@ -1752,6 +1757,25 @@ describe(`DataTable`, () => {
       await tick()
       expect(table.getAttribute(`style`)).toContain(`--group-header-height: 0px`)
     })
+  })
+
+  // class rows keep their values in prototype getters, not own keys: they still count
+  it(`renders rows whose column values come from getters`, () => {
+    class Element_row {
+      [key: string]: RowData[string]
+      readonly #symbol: string
+      constructor(symbol: string) {
+        this.#symbol = symbol
+      }
+      get mass() {
+        return this.#symbol.length
+      }
+    }
+    mount_table({
+      data: [new Element_row(`He`), new Element_row(`O`)],
+      columns: [{ id: `mass`, label: `mass` }],
+    })
+    expect(col_values(`mass`)).toEqual([`2`, `1`])
   })
 
   it(`shows an empty row with colspan over every column, select and row-number`, () => {

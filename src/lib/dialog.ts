@@ -85,5 +85,11 @@ export const show_modal = (dialog: HTMLDialogElement): void => {
     release() // closed or unmounted without a close event reaching us
     return false
   })
-  dialog.addEventListener(`close`, release, { once: true })
+  // the close event lands a task later, so a dialog reopened meanwhile keeps its barrier
+  const on_close = () => {
+    if (dialog.open) return
+    release()
+    dialog.removeEventListener(`close`, on_close)
+  }
+  dialog.addEventListener(`close`, on_close)
 }

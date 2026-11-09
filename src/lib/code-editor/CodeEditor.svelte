@@ -1049,7 +1049,8 @@
       )
     let previous: EditorMatch | undefined
     if (truncated && start > last_to)
-      for (const match of scan({ from: last_to, to: start })) previous = match
+      for (const match of scan({ from: last_to, to: start }))
+        if (match.to <= start) previous = match // not one the caret sits inside
     return select_match(
       previous ??
         search_matches.findLast(({ to }) => to <= start) ??

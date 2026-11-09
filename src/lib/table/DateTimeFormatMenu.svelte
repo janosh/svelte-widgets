@@ -67,13 +67,14 @@
       size={options.length}
       out:close_before_removal
       {@attach anchored_popover({ anchor: trigger, on_close: on_toggle })}
-      onclick={(event) => {
-        if (event.currentTarget.value === mode) on_toggle() // re-picking the current mode closes
+      onclick={on_toggle}
+      onkeydown={(event) => {
+        if (event.key === `Enter` || event.key === ` `) on_toggle()
       }}
       oninput={(event) => {
+        // Chromium also fires input on arrow keys, so applying keeps the list open
         const picked = event.currentTarget.value as DateTimeFormatMode
         if (options.includes(picked)) on_change(picked)
-        on_toggle()
       }}
     >
       {#each options as option (option)}

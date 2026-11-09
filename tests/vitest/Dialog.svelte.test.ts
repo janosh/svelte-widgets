@@ -11,6 +11,7 @@ import {
 import TestDialog from './TestDialog.svelte'
 import { escape_layer, focusable } from '#lib/attachments/shared.ts'
 import Sheet from '#lib/Sheet.svelte'
+import * as dialog_helpers from '#lib/dialog.ts'
 
 describe(`Dialog`, () => {
   type DialogProps = ComponentProps<typeof TestDialog>
@@ -228,6 +229,22 @@ describe(`Dialog`, () => {
     await tick()
     document.body.dispatchEvent(escape_key())
     expect(pane_escape).toHaveBeenCalledOnce() // the barrier left with the dialog
+    release_pane()
+  })
+
+  // browsers fire `close` a task after close(), so a dialog reopened in between hears the
+  // earlier opening's close event: that mustn't drop the new opening's barrier
+  test(`a late close event from an earlier opening keeps a reopened dialog's barrier`, () => {
+    const pane_escape = vi.fn()
+    const release_pane = escape_layer(pane_escape, { consume: true })
+    const dialog = document.createElement(`dialog`)
+    document.body.append(dialog)
+    dialog_helpers.show_modal(dialog)
+    dialog.close()
+    dialog_helpers.show_modal(dialog)
+    dialog.dispatchEvent(new Event(`close`)) // the first opening's, arriving late
+    document.body.dispatchEvent(escape_key())
+    expect(pane_escape).not.toHaveBeenCalled()
     release_pane()
   })
 

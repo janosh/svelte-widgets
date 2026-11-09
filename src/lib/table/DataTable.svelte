@@ -426,25 +426,22 @@
     return () => clearTimeout(timer)
   })
 
-  const has_value = (row: RowData): boolean => {
-    for (const key in row)
-      if (Object.hasOwn(row, key) && row[key] !== undefined) return true
-    return false
-  }
   // Searched values and their lowercased text (filled lazily once a query reaches a cell) per
   // row object. An entry outlives data updates while its row's searched values are unchanged,
   // so a live refresh re-reads only replaced or edited rows (50k x 30, one row replaced under a
   // query: 537 -> 132 ms). Objects and Dates can change inside, so their text is never cached.
   type SearchEntry = { values: CellVal[]; text: string[] }
   const search_cache = new WeakMap<object, SearchEntry>()
-  // Every row holding any defined value, with its index in `data`. Without search.keys only
-  // column data is searched, not row style/class or other fields.
+  // Every row with a value in some column (read like a cell, so class rows' getters count),
+  // with its index in `data`. Without search.keys only column data is searched, not row
+  // style/class or other fields.
   let search_index = $derived.by(() => {
-    const keys = search_config?.keys ?? columns.map(cell_key)
+    const column_keys = columns.map(cell_key)
+    const keys = search_config?.keys ?? column_keys
     const index: { row: Row & RowData; row_idx: number; entry: SearchEntry }[] = []
     for (let row_idx = 0; row_idx < data.length; row_idx++) {
       const row = data[row_idx]
-      if (!has_value(row)) continue
+      if (!column_keys.some((key) => row[key] !== undefined)) continue
       const cached = search_cache.get(row)
       const entry =
         cached?.values.length === keys.length &&

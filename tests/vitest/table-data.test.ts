@@ -39,6 +39,11 @@ describe(`column stats and domains`, () => {
     expect(compute_column_stats([null, undefined, NaN])).toBeNull()
     // the smallest value above zero, a log scale's lower end
     expect(compute_column_stats([-2, 0, 3, 0.5], false)?.min_positive).toBe(0.5)
+    // equal values bound an exact zero-width quantile domain (weighting them rounded off)
+    expect(compute_column_stats([0.0003, 0.0003])).toMatchObject({
+      q_lo: 0.0003,
+      q_hi: 0.0003,
+    })
     expect(compute_column_stats([-2, 0], false)?.min_positive).toBeNull()
     // without quantiles, q_lo/q_hi fall back to min/max and no median is computed
     expect(compute_column_stats(values, false)).toMatchObject({
@@ -184,11 +189,13 @@ it.each<[CellVal, number | null]>([
 
 // `\d+\.?\d*` overlapped itself: a 30k-digit cell ending in a letter backtracked O(n²),
 // over a second per call (now well under a millisecond)
+// quadratic backtracking took over a second at 30k digits (4x that at 60k), so the cap
+// leaves a loaded runner ample room
 it(`parse_numeric_val stays linear on long digit runs`, () => {
-  const long_digits = `${`1`.repeat(30_000)}x`
+  const long_digits = `${`1`.repeat(60_000)}x`
   const start = performance.now()
   expect(parse_numeric_val(long_digits)).toBeNull()
-  expect(performance.now() - start).toBeLessThan(200)
+  expect(performance.now() - start).toBeLessThan(1000)
 })
 
 describe(`sort_table_rows`, () => {

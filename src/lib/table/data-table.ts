@@ -200,6 +200,7 @@ function quantile_unordered(values: number[], point_value: number): number {
   const lo_val = quickselect(values, lower)
   if (upper === lower) return lo_val
   const hi_val = quickselect(values, upper)
+  if (hi_val === lo_val) return lo_val // weighting equal values can round off them
   const frac = idx - lower
   // Weighting both ends avoids overflowing hi - lo. For midpoints, add before halving
   // to preserve subnormals when the sum is finite; otherwise keep the weighted form.
@@ -281,8 +282,9 @@ export type DataTableProps<
   sort?: TableSort[]
   // Format passed to format_number for columns without their own `format`
   default_num_format?: string
-  // Numeric cells and summary values. Defaults to the locale's grouping with up to 4
-  // significant digits; pass e.g. a d3-format wrapper to honor `format` strings.
+  // Numeric cells and summary values. Defaults to integers in full and other numbers to 3
+  // significant digits, grouped from 5 digits on; pass e.g. a d3-format wrapper to honor
+  // `format` strings.
   format_number?: (num: number, format?: string) => string
   // Turns HTML-looking cells, labels and descriptions into markup for {@html}. Defaults to
   // escaped plain text: pass a sanitizer to render formatting (never the raw string).

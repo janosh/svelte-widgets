@@ -217,12 +217,19 @@ function frontmatter(source: string): {
   }
   const header = source.slice(0, source.indexOf(`\n`) + 1)
   const value: unknown = load(header + match[1], { schema: CORE_SCHEMA })
-  // only comments between the fences: almost always a document opening with a thematic
-  // break whose `# Heading` YAML read as a comment, so its content would vanish silently
-  if (value === null && match[1].trim())
+  // Only comments between the fences is almost always a document opening with a thematic
+  // break whose `# Heading` YAML read as a comment, so its content would vanish silently.
+  // A bare `null`/`~` is just not a mapping.
+  if (value === null && match[1].trim()) {
+    const only_comments = match[1]
+      .split(`\n`)
+      .every((line) => !line.trim() || line.trim().startsWith(`#`))
     throw new Error(
-      `Frontmatter holds no YAML mapping, only comments. To open with a thematic break, use *** or ___ instead of ---`,
+      only_comments
+        ? `Frontmatter holds no YAML mapping, only comments. To open with a thematic break, use *** or ___ instead of ---`
+        : `Frontmatter must be a YAML mapping`,
     )
+  }
   return {
     body: source.slice(match[0].length),
     metadata: serialize_metadata(value ?? {}),

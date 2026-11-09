@@ -323,6 +323,8 @@ test.each([5000, 5001])(
       await flush_async()
       expect(model.selection).toEqual({ anchor: 20_000, head: 20_003 })
       expect(status.textContent).toBe(`Match past 5000 of 5000+ (first 5000 shown)`)
+      // Previous from a caret inside the 5001st match skips it for the 5000th
+      model.set_selection({ anchor: 20_001, head: 20_001 })
       expect(instance.find_next(-1)).toBe(true)
       await flush_async()
       expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })

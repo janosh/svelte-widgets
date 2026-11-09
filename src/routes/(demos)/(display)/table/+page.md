@@ -1,6 +1,6 @@
 ## DataTable
 
-`DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
+`DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder it within its group, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
 
 Bind `sort` (a list of `{ column, dir }` keys in priority order, empty for the data's order) and `hidden_columns` to persist them. A column with `visible: false` starts hidden but stays in the column picker, whose Reset hides it again; `disabled` locks a column's toggle, and `pin` sticks it to the `left` or `right` edge. Attributes for the toolbar go in `controls_props`.
 
@@ -63,10 +63,18 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
     { id: `state`, label: `State`, group: `Physical`, filter: `category` },
     { id: `year`, label: `Discovered`, group: `History`, render_as: `bar` },
   ]
-  const column_color = (col: Column, { domain: [lo, hi] }: ColorStats) =>
+  // at most 45% blue, so the page's text color stays legible on the fill in either theme;
+  // a one-row domain (lo === hi) shades fully
+  const column_color = (
+    col: Column<(typeof rows)[number]>,
+    { domain: [lo, hi] }: ColorStats,
+  ) =>
     col.id === `mass`
       ? (num: number | null) => ({
-          bg: `color-mix(in srgb, cornflowerblue ${num === null ? 0 : (100 * (num - lo)) / (hi - lo)}%, transparent)`,
+          bg:
+            num === null
+              ? null
+              : `color-mix(in srgb, cornflowerblue ${hi === lo ? 45 : (45 * (num - lo)) / (hi - lo)}%, transparent)`,
           text: null,
         })
       : undefined
