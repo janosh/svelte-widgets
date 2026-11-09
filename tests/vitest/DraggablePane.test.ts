@@ -482,6 +482,16 @@ describe(`DraggablePane`, () => {
     expect(await tooltip_text(toggle)).toBe(expected)
   })
 
+  // below the toggle, its tooltip would cover the pane it opens (and intercept clicks there)
+  test(`the toggle tooltip opens beside the toggle, not over the pane`, async () => {
+    mock_viewport()
+    const { toggle } = await setup({ open: true })
+    toggle.getBoundingClientRect = () =>
+      DOMRect.fromRect({ x: 900, y: 20, width: 24, height: 24 })
+    await tooltip_text(toggle)
+    expect(doc_query(`.custom-tooltip`).getAttribute(`data-placement`)).toBe(`left`)
+  })
+
   test(`a drag reports through on_drag_start and data-dragging`, async () => {
     const on_drag_start = vi.fn()
     const { pane } = await open_pane({ on_drag_start })
