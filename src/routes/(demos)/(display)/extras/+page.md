@@ -319,3 +319,18 @@ $$
 $$
 
 Browsers render MathML natively. Import a Temml stylesheet such as `temml/dist/Temml-Local.css` once in the app to tune spacing and use the system's math font.
+
+### Markdown diagrams
+
+With `create_markdown({ mermaid: true })`, a ` ```mermaid ` fence becomes a diagram. The page ships its source; Mermaid loads in the browser on the first diagram and redraws it when the theme toggles:
+
+```mermaid
+sequenceDiagram
+  participant Author
+  participant Vite as Vite preprocessor
+  participant Browser
+  Author->>Vite: page.md with a mermaid fence
+  Vite->>Browser: pre.mermaid holding the source
+  Browser->>Browser: import('mermaid'), render SVG
+  Note over Browser: re-renders on light/dark switch
+```

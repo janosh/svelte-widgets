@@ -88,6 +88,9 @@ export type MarkdownOptions = {
   // Return the HTML inside <code>. Omit for plain, escaped code.
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | Temml.Options
+  // Emit ```mermaid fences as <pre class="mermaid"> for client-side rendering through
+  // the optional Mermaid peer (see svelte-widgets/markdown/mermaid)
+  mermaid?: boolean
   references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
@@ -715,6 +718,7 @@ async function prepare_document(
     manifest,
   })
   // Validate fence settings and assign identities during analysis, before rendering.
+  let mermaid_import = false
   const render_fences = code_tokens.map((token) => {
     try {
       const fence = positions.get(token)?.fence
@@ -723,6 +727,22 @@ async function prepare_document(
       const live =
         Boolean(options.examples && meta.example) &&
         (language === `svelte` || language === `html`)
+      if (options.mermaid && language === `mermaid`) {
+        // Svelte pages render their own diagrams; HTML strings need the mermaid_diagrams
+        // attachment (or render_mermaid) on a container in the browser
+        if (syntax && !mermaid_import) {
+          imports.push(
+            `import { mermaid_diagrams as WidgetsMermaidDiagrams } from 'svelte-widgets/markdown/mermaid';\n`,
+          )
+          mermaid_import = true
+        }
+        const attach = syntax ? ` {@attach WidgetsMermaidDiagrams}` : ``
+        code_html.set(
+          token,
+          `<pre class="mermaid"${attach}>${escape_braces(escape_html_text(token.text))}</pre>\n`,
+        )
+        return async () => undefined
+      }
       let display_code = token.text
       let wrapper_alias = ``
       let component = ``
