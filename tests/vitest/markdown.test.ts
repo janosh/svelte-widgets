@@ -406,11 +406,17 @@ describe(`code and math`, () => {
 
   test.each([
     [`markdown`, true, `<pre class="mermaid">`],
-    [`svelte`, true, `<pre class="mermaid" {@attach WidgetsMermaidDiagrams}>`],
+    [`svelte`, true, `<pre class="mermaid" {@attach WidgetsMermaidDiagrams()}>`],
+    [`markdown`, { theme: `forest` }, `<pre class="mermaid">`],
+    [
+      `svelte`,
+      { theme: `forest`, flowchart: { curve: `basis` } },
+      `<pre class="mermaid" {@attach WidgetsMermaidDiagrams({"theme":"forest","flowchart":{"curve":"basis"}})}>`,
+    ],
     [`markdown`, false, `<pre class="highlight highlight-mermaid">`],
     [`svelte`, false, `<pre class="highlight highlight-mermaid">`],
   ] as const)(
-    `%s dialect with mermaid=%s renders mermaid fences as %s`,
+    `%s dialect with mermaid=%o renders mermaid fences as %s`,
     async (dialect, mermaid, opening) => {
       const source =
         '```mermaid\ngraph TD\n  A{x} --> B<y>\n```\n\n```mermaid collapsible\nsequenceDiagram\n```\n\n```js\nconst a = 1\n```'

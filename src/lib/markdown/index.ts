@@ -14,6 +14,7 @@ import {
 } from 'marked'
 import type * as Temml from 'temml'
 import type { PreprocessorGroup } from 'svelte/compiler'
+import type { MermaidDiagramConfig } from './mermaid.ts'
 import { escape_attribute, escape_braces, escape_html_text } from '../highlight/hast.ts'
 import { assert_json_node, script_json } from '../serialization.ts'
 import {
@@ -89,8 +90,9 @@ export type MarkdownOptions = {
   highlight?: (code: string, language: string) => string | Promise<string>
   math?: boolean | Temml.Options
   // Emit ```mermaid fences as <pre class="mermaid"> for client-side rendering through
-  // the optional Mermaid peer (see svelte-widgets/markdown/mermaid)
-  mermaid?: boolean
+  // the optional Mermaid peer (see svelte-widgets/markdown/mermaid). A config object
+  // (JSON-serializable) is passed to the diagrams of compiled Svelte pages.
+  mermaid?: boolean | MermaidDiagramConfig
   references?: boolean | ReferenceOptions
   typography?: boolean
   examples?: ExampleOptions
@@ -736,7 +738,8 @@ async function prepare_document(
           )
           mermaid_import = true
         }
-        const attach = syntax ? ` {@attach WidgetsMermaidDiagrams}` : ``
+        const config = options.mermaid === true ? `` : JSON.stringify(options.mermaid)
+        const attach = syntax ? ` {@attach WidgetsMermaidDiagrams(${config})}` : ``
         code_html.set(
           token,
           `<pre class="mermaid"${attach}>${escape_braces(escape_html_text(token.text))}</pre>\n`,

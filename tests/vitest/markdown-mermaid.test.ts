@@ -1,9 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import {
-  configure_mermaid,
-  mermaid_diagrams,
-  render_mermaid,
-} from '#lib/markdown/mermaid.ts'
+import { mermaid_diagrams, render_mermaid } from '#lib/markdown/mermaid.ts'
 
 const mermaid = vi.hoisted(() => ({
   initialize: vi.fn<(config: Record<string, unknown>) => void>(),
@@ -37,7 +33,6 @@ beforeEach(() => {
   mermaid.render.mockImplementation(async (_id, source) => ({
     svg: `<svg data-source="${source}" data-theme="${theme}"></svg>`,
   }))
-  configure_mermaid({})
 })
 afterEach(() => {
   document.body.replaceChildren()
@@ -80,15 +75,20 @@ describe(`render_mermaid`, () => {
     },
   )
 
-  test(`an explicit configured theme overrides the page scheme`, async () => {
-    configure_mermaid({ theme: `forest`, flowchart: { curve: `basis` } })
+  test(`an explicit config theme overrides the page scheme and config stays per call`, async () => {
     document.documentElement.dataset.theme = `dark`
-    const block = diagram(`graph LR`)
-    document.body.append(block)
-    await render_mermaid(document.body)
-    expect(mermaid.initialize).toHaveBeenCalledWith({
+    document.documentElement.style.colorScheme = `dark`
+    const [themed, plain] = [diagram(`graph LR`), diagram(`graph TD`)]
+    document.body.append(themed, plain)
+    await render_mermaid(themed, { theme: `forest`, flowchart: { curve: `basis` } })
+    expect(mermaid.initialize).toHaveBeenLastCalledWith({
       theme: `forest`,
       flowchart: { curve: `basis` },
+      startOnLoad: false,
+    })
+    await render_mermaid(plain)
+    expect(mermaid.initialize).toHaveBeenLastCalledWith({
+      theme: `dark`,
       startOnLoad: false,
     })
   })
@@ -125,7 +125,7 @@ describe(`mermaid_diagrams attachment`, () => {
     const container = document.createElement(`article`)
     container.append(diagram(`graph TD\n  A --> B`))
     document.body.append(container)
-    const detach = mermaid_diagrams(container)
+    const detach = mermaid_diagrams({ flowchart: { curve: `basis` } })(container)
     await settle()
     expect(container.querySelector(`svg`)?.dataset.theme).toBe(`default`)
     document.documentElement.style.colorScheme = `dark` // as apply_theme_mode sets it
@@ -135,6 +135,9 @@ describe(`mermaid_diagrams attachment`, () => {
       source: `graph TD\n  A --> B`,
     })
     expect(mermaid.render).toHaveBeenCalledTimes(2)
+    expect(mermaid.initialize).toHaveBeenLastCalledWith(
+      expect.objectContaining({ theme: `dark`, flowchart: { curve: `basis` } }),
+    )
     if (typeof detach === `function`) detach()
     document.documentElement.style.colorScheme = `light`
     await new Promise((resolve) => {
@@ -146,7 +149,7 @@ describe(`mermaid_diagrams attachment`, () => {
   test(`renders diagrams added to the container later`, async () => {
     const container = document.createElement(`div`)
     document.body.append(container)
-    const detach = mermaid_diagrams(container)
+    const detach = mermaid_diagrams()(container)
     await settle()
     expect(mermaid.render).not.toHaveBeenCalled()
     container.innerHTML = `<p>Intro</p><pre class="mermaid">graph LR</pre>`
