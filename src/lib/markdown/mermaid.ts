@@ -4,7 +4,9 @@
 import type { MermaidConfig } from 'mermaid'
 import type { Attachment } from 'svelte/attachments'
 
-export type MermaidDiagramConfig = Omit<MermaidConfig, 'startOnLoad'>
+// Mermaid's own config (its MermaidConfig, minus startOnLoad), declared structurally so the
+// published types don't need the optional `mermaid` package installed
+export type MermaidDiagramConfig = { theme?: string; [option: string]: unknown }
 
 export const MERMAID_SELECTOR = `pre.mermaid`
 // Authored source per block, so theme changes re-render from it rather than from the SVG
@@ -15,7 +17,7 @@ let render_count = 0
 
 // The page's resolved color-scheme (apply_theme_mode sets it inline, custom themes such
 // as a `black` one declare it in CSS), else the OS preference when it allows both
-const page_theme = (): NonNullable<MermaidConfig['theme']> => {
+const page_theme = (): string => {
   const scheme = getComputedStyle(document.documentElement).colorScheme.trim()
   const dark =
     scheme === `dark` || scheme === `light`
@@ -39,7 +41,8 @@ export function render_mermaid(
     ].filter((block) => block.isConnected && block.dataset.mermaidTheme !== theme)
     if (!blocks.length) return
     const { default: mermaid } = await import('mermaid')
-    mermaid.initialize({ ...config, theme, startOnLoad: false })
+    // hosts pass Mermaid's own options, which mermaid validates itself
+    mermaid.initialize({ ...config, theme, startOnLoad: false } as MermaidConfig)
     for (const block of blocks) {
       const source = sources.get(block) ?? block.textContent
       sources.set(block, source)
