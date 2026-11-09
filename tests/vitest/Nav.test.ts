@@ -915,6 +915,7 @@ describe(`Nav`, () => {
           {
             href: `/docs`,
             label: `Docs`,
+            title: `Documentation`,
             tooltip: `All docs`,
             children: [{ href: `/docs/intro`, label: `Introduction` }],
           },
@@ -926,9 +927,16 @@ describe(`Nav`, () => {
           ?.textContent ?? null
       await open_tooltip(`a[href="/docs"]`)
       expect(shown()).toBe(`All docs`)
+      // leaving the link closes it, as moving to the dropdown toggle does
+      doc_query(`a[href="/docs"]`).dispatchEvent(
+        new PointerEvent(`pointerout`, { bubbles: true, pointerType: `mouse` }),
+      )
+      await vi.advanceTimersByTimeAsync(200)
       await click(`[data-dropdown-toggle]`)
       await open_tooltip(`a[href="/docs"]`)
       expect(shown()).toBeNull()
+      // nor does the link's title come back to show the browser's own tooltip
+      expect(document.querySelector(`a[href="/docs"]`)?.hasAttribute(`title`)).toBe(false)
       await click(`[data-dropdown-toggle]`)
       await open_tooltip(`a[href="/docs"]`)
       expect(shown()).toBe(`All docs`)

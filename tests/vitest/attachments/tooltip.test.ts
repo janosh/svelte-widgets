@@ -253,6 +253,34 @@ describe(`tooltip manager`, () => {
     },
   )
 
+  // keyboard focus keeps the interaction going after a press hides the tooltip: leaving and
+  // re-entering the trigger still brings it back, while an Escape holds until focus leaves
+  it.each([
+    [`a press`, true, () => pointer_event(`pointerdown`, 110, 110)],
+    [
+      `Escape`,
+      false,
+      () => new KeyboardEvent(`keydown`, { key: `Escape`, bubbles: true }),
+    ],
+  ] as const)(
+    `after %s hides keyboard-focus help, re-entry shows it: %s`,
+    (_desc, back, make_event) => {
+      const { element } = register_tooltip(`Help`)
+      document.body.dispatchEvent(
+        new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }),
+      )
+      focus_in(element)
+      pointer_over(element)
+      expect(visible_text()).toBe(`Help`)
+      element.dispatchEvent(make_event())
+      expect(visible_text()).toBeNull()
+
+      pointer_out(element)
+      pointer_over(element)
+      expect(visible_text()).toBe(back ? `Help` : null)
+    },
+  )
+
   // mouse-press focus opens no hover-focus help, keyboard focus does; focus-only help still
   // opens on any focus, since there focus is the only way in
   it.each<[TooltipOptions, `pointerdown` | `keydown`, boolean]>([

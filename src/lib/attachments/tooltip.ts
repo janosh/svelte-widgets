@@ -55,10 +55,13 @@ type ActiveTooltip = {
   pointer_surface: boolean
   focus: boolean
   open: boolean
-  dismissed: boolean
+  // Why a still-active tooltip was hidden: an Escape holds until the interaction ends, a
+  // press only until the pointer leaves the trigger
+  dismissed: `escape` | `pointer` | false
 }
 
-type HideOptions = { keep_active?: boolean; notify?: boolean }
+// `dismiss` keeps the tooltip active but hidden (see ActiveTooltip.dismissed)
+type HideOptions = { dismiss?: ActiveTooltip[`dismissed`]; notify?: boolean }
 
 const TOOLTIP_SOURCE_SELECTOR = `[title], [aria-label], [data-title]`
 const TOOLTIP_CONTENT_ATTRIBUTES = [`title`, `aria-label`, `data-title`]
@@ -297,7 +300,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     close_timeout = undefined
   }
   const escape_hides_active = consume_escape(() =>
-    hide_active(`escape`, { keep_active: true }),
+    hide_active(`escape`, { dismiss: `escape` }),
   )
 
   const track_input = (event: PointerEvent | KeyboardEvent) => {
@@ -310,7 +313,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // tooltip stays, since there the press's focus is the show state.
     if (tooltip_trigger(active.registration.options) === `focus`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
-      hide_active(`pointer`, { keep_active: true })
+      hide_active(`pointer`, { dismiss: `pointer` })
     }
   }
   doc.addEventListener(`pointerdown`, track_input, true)
@@ -487,7 +490,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
 
   function hide_active(
     reason: TooltipOpenReason,
-    { keep_active = false, notify = true }: HideOptions = {},
+    { dismiss = false, notify = true }: HideOptions = {},
   ): void {
     const closing = active
     clear_open_timeout()
@@ -496,12 +499,12 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     if (!closing) return
     const was_open = closing.open
     closing.open = false
-    closing.dismissed = keep_active
+    closing.dismissed = dismiss
     remove_description(closing.trigger, surface.id)
     if (surface.hasAttribute(`popover`) && surface.matches(`:popover-open`))
       surface.hidePopover()
     hide_surface()
-    if (keep_active) closing.pointer_surface = false
+    if (dismiss) closing.pointer_surface = false
     else {
       release_delegated_title(closing.registration, closing.trigger)
       active = null
@@ -695,8 +698,11 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
       active.pointer_surface = true
       return clear_close_timeout()
     }
-    if (reason === `pointer`) active.pointer_trigger = false
-    else active.focus = false
+    if (reason === `pointer`) {
+      active.pointer_trigger = false
+      // a press hid it while focus kept it active: re-entering the trigger shows it again
+      if (active.dismissed === `pointer`) active.dismissed = false
+    } else active.focus = false
     close_if_interaction_ended(CLOSE_REASON[reason])
   }
 
