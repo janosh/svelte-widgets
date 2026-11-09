@@ -6,14 +6,16 @@
     actions,
     open = $bindable(false),
     match_width = false,
+    disabled = false,
   }: {
     actions: CmdAction[]
     open?: boolean
     match_width?: boolean
+    disabled?: boolean
   } = $props()
 </script>
 
-<ActionMenu {actions} bind:open {match_width}>
+<ActionMenu {actions} bind:open {match_width} {disabled}>
   {#snippet trigger(props)}
     <span data-testid="action-menu-anchor">
       <button type="button" data-testid="action-menu-trigger" {...props}>Actions</button>

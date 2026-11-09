@@ -111,6 +111,7 @@ export interface MultiSelectEvents<
   T extends Option = Option,
 > extends OptionListEvents<T> {
   on_open?: (data: { event: Event }) => unknown
+  // also fires with a synthetic `disabled` event when disabling closes an open list
   on_close?: (data: { event: Event }) => unknown
   on_add?: (data: { option: T; selected: T[] }) => unknown
   on_create?: (data: {

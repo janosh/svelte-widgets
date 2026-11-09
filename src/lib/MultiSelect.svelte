@@ -907,6 +907,23 @@
     }
   }
 
+  // a disabled control has no open list: disabling mid-interaction (or binding open=true
+  // while disabled) closes it, so no row, select-all or create item stays clickable. A
+  // focused select-all row or group button would still take Enter/Space through the
+  // list's fade-out, so focus leaves the list too. untrack: on_close's reads aren't deps.
+  $effect(() => {
+    if (!disabled || !open) return
+    untrack(() => {
+      const { activeElement } = document
+      if (
+        activeElement instanceof HTMLElement &&
+        options_list_el?.contains(activeElement)
+      )
+        activeElement.blur()
+      close_dropdown(new Event(`disabled`))
+    })
+  })
+
   // close dropdown and (in chip mode) clear the search draft — Escape/Tab + close shortcut
   function close_and_clear(event: Event) {
     close_dropdown(event)
@@ -1356,7 +1373,7 @@
     event: MouseEvent | KeyboardEvent,
     option_idx?: number | null,
   ) => {
-    if (disabled || is_disabled(opt)) return
+    if (is_disabled(opt)) return
     // only Shift-click and Shift+Arrow extend a range, not e.g. Shift+Enter
     const extends_range =
       event.shiftKey &&

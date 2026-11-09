@@ -262,6 +262,32 @@ describe(`ActionMenu`, () => {
     expect(menu()).toBeNull()
   })
 
+  test.each([`context`, `dropdown`])(
+    `disabling an open %s menu closes it`,
+    async (mode) => {
+      const dropdown_props = $state({
+        actions: make_actions(),
+        open: false,
+        disabled: false,
+      })
+      // context mode has no `open`: its menu is anchored at `at` instead
+      const props = mode === `context` ? mount_menu(make_actions()) : dropdown_props
+      if (mode === `context`) {
+        right_click(document.body)
+        await flush_context_open()
+      } else {
+        render(TestActionMenu, dropdown_props)
+        await click(doc_query(`[data-testid="action-menu-trigger"]`))
+      }
+      expect(menu()).not.toBeNull()
+
+      props.disabled = true
+      await tick()
+      expect(menu()).toBeNull()
+      expect(dropdown_props.open).toBe(false)
+    },
+  )
+
   describe(`sections`, () => {
     const make_sections = (): CmdSection[] => [
       {

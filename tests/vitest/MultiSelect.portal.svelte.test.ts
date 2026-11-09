@@ -2,7 +2,7 @@ import { tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps, PortalParams } from '#lib/types.ts'
 import { create_element, doc_query } from './index'
-import { focus_input, mount_multiselect, option_by_label } from './MultiSelect.test-utils'
+import { focus_input, mount_multiselect } from './MultiSelect.test-utils'
 
 const is_open = () => doc_query(`div.multiselect`).classList.contains(`open`)
 
@@ -265,31 +265,38 @@ test.each([
   },
 )
 
-test(`disabling an open portalled list prevents an option click`, async () => {
-  const on_change = vi.fn()
-  const props = $state<MultiSelectProps>({
-    mode: `single`,
-    options: [`Apple`, `Orange`],
-    value: `Apple`,
-    portal: { active: true },
-    on_change,
-  })
-  mount_multiselect(props)
-  await focus_input()
-  expect(is_open()).toBe(true)
+test.each([true, false])(
+  `disabling an open list closes it and keeps it closed (portal.active=%s)`,
+  async (active) => {
+    const on_close = vi.fn()
+    const props = $state<MultiSelectProps>({
+      options: [`Apple`, `Orange`],
+      portal: { active },
+      select_all_option: true,
+      on_close,
+    })
+    mount_multiselect(props)
+    await focus_input()
+    expect(is_open()).toBe(true)
+    const select_all = doc_query(`ul.options > li.select-all`)
+    select_all.focus() // focus inside the list would keep taking Enter/Space
+    expect(document.activeElement).toBe(select_all)
 
-  props.disabled = true
-  await tick()
-  expect(doc_query(`body > ul.options`).getAttribute(`aria-disabled`)).toBe(`true`)
-  option_by_label(`Orange`).click()
-  await tick()
+    props.disabled = true
+    await tick()
+    expect(is_open()).toBe(false)
+    expect(document.activeElement).toBe(document.body)
+    expect(doc_query(`ul.options`).classList).toContain(`hidden`)
+    expect(on_close).toHaveBeenCalledOnce()
 
-  expect(on_change).not.toHaveBeenCalled()
-  expect(doc_query(`[aria-label="selected options"]`).textContent).toContain(`Apple`)
+    props.open = true // a parent binding can't reopen a disabled control
+    await tick()
+    expect(is_open()).toBe(false)
 
-  props.disabled = false
-  await tick()
-  option_by_label(`Orange`).click()
-  await tick()
-  expect(on_change).toHaveBeenCalledOnce()
-})
+    props.disabled = false
+    await tick()
+    expect(is_open()).toBe(false) // re-enabling doesn't reopen on its own
+    await focus_input()
+    expect(is_open()).toBe(true)
+  },
+)
