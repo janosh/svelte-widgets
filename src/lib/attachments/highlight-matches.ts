@@ -48,7 +48,7 @@ export const highlight_matches = (ops: HighlightOptions) => (node: HTMLElement) 
     const text = text_node.data
     const starts = new Set<number>()
     for (const idx of fuzzy_match_indices(fuzzy_search, text) ?? []) {
-      const code_unit = text.charCodeAt(idx)
+      const code_unit = text.codePointAt(idx) ?? 0
       starts.add(code_unit >= 0xdc00 && code_unit <= 0xdfff ? idx - 1 : idx)
     }
     return Array.from(starts, (start) => {

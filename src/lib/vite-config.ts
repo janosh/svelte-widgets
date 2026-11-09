@@ -115,6 +115,8 @@ const error_rules = [
   eslint-plugin-vitest/prefer-to-have-length`,
   // named capture groups self-document a match; `export ... from` beats importing to re-export
   `prefer-named-capture-group eslint-plugin-unicorn/prefer-export-from`,
+  // codePointAt handles astral characters such as emoji that charCodeAt splits
+  `eslint-plugin-unicorn/prefer-code-point`,
 ]
   .join(` `)
   .split(/\s+/u)
@@ -129,6 +131,9 @@ const lint: SharedConfig[`lint`] = {
     ...Object.fromEntries(error_rules.map((rule) => [rule, `error`] as const)),
     // the rest carry an option, or a reason for being off
     'no-promise-executor-return': [`error`, { allowVoid: true }],
+    // closures that read a binding before its single later assignment need `let`, and
+    // `[before, tail]` stays one destructuring when only `before` is reassigned
+    'prefer-const': [`error`, { destructuring: `all`, ignoreReadBeforeAssign: true }],
     // `void` marks intentionally ignored Promise-executor return values
     'typescript/no-meaningless-void-operator': `off`,
     'no-console': [`error`, { allow: [`info`, `warn`, `error`] }],

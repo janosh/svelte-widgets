@@ -129,6 +129,7 @@ export function example_key(source: string): string {
   let first = 2166136261
   let second = 2246822507
   for (let idx = 0; idx < source.length; idx++) {
+    // oxlint-disable-next-line eslint-plugin-unicorn/prefer-code-point -- hashes UTF-16 code units
     const code = source.charCodeAt(idx)
     first = Math.imul(first ^ code, 16777619)
     second = Math.imul(second ^ code, 3266489909)

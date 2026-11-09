@@ -605,9 +605,8 @@
       if (preserved_idx === -1) {
         // fall back to the key, but only when it identifies exactly one row
         const active_key = key(previous_option)
-        const [key_match, ...other_matches] = rendered_options.flatMap(
-          (candidate, idx) =>
-            key(candidate) === active_key && !is_disabled(candidate) ? [idx] : [],
+        const [key_match, ...other_matches] = rendered_options.flatMap((candidate, idx) =>
+          key(candidate) === active_key && !is_disabled(candidate) ? [idx] : [],
         )
         if (key_match !== undefined && !other_matches.length) preserved_idx = key_match
       }

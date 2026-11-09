@@ -264,7 +264,7 @@ describe(`highlight_ranges`, () => {
   const installed_ranges = (css_class = `text-search-match`): Range[] => {
     const highlight = registry.get(css_class)
     if (!(highlight instanceof globalThis.Highlight)) {
-      throw new Error(`no highlight installed for ${css_class}, got ${highlight}`)
+      throw new TypeError(`no highlight installed for ${css_class}, got ${highlight}`)
     }
     return (highlight as unknown as { ranges: Range[] }).ranges
   }

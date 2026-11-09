@@ -33,7 +33,7 @@ const load_highlighter = async (): Promise<Highlighter> => {
           patterns: [
             {
               begin: '(^|\\G)[ ]{0,3}(`{3,}|~{3,})(?i:svelte)(?=[\\t ]|$).*$',
-              end: '(^|\\G)[ ]{0,3}\\2[\\t ]*$',
+              end: String.raw`(^|\G)[ ]{0,3}\2[\t ]*$`,
               name: `markup.code.svelte.md`,
               contentName: `meta.embedded.svelte`,
               patterns: [{ include: svelte_grammar.scopeName }],
