@@ -292,6 +292,18 @@ test.each([true, false])(
     props.open = true // a parent binding can't reopen a disabled control
     await tick()
     expect(is_open()).toBe(false)
+    expect(on_close).toHaveBeenCalledOnce() // nor hear another close for it
+
+    // a parent re-opening from on_close itself mustn't ping-pong with the disabled close
+    props.disabled = false
+    await tick()
+    await focus_input()
+    on_close.mockImplementation(() => (props.open = true))
+    props.disabled = true
+    await tick()
+    expect(is_open()).toBe(false)
+    expect(on_close).toHaveBeenCalledTimes(2)
+    on_close.mockReset()
 
     props.disabled = false
     await tick()

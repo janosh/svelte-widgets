@@ -914,8 +914,15 @@
   // while disabled) closes it, so no row, select-all or create item stays clickable. A
   // focused select-all row or group button would still take Enter/Space through the
   // list's fade-out, so focus leaves the list too. untrack: on_close's reads aren't deps.
+  // on_close hears one close per disable: a parent re-opening from it is closed silently,
+  // else the two would ping-pong until Svelte's update-depth limit throws.
+  let closed_for_disabled = false
   $effect(() => {
-    if (!disabled || !open) return
+    if (!disabled) {
+      closed_for_disabled = false
+      return
+    }
+    if (!open) return
     untrack(() => {
       const { activeElement } = document
       if (
@@ -923,7 +930,11 @@
         options_list_el?.contains(activeElement)
       )
         activeElement.blur()
-      close_dropdown(new Event(`disabled`))
+      if (closed_for_disabled) open = false
+      else {
+        closed_for_disabled = true
+        close_dropdown(new Event(`disabled`))
+      }
     })
   })
 
