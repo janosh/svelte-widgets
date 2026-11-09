@@ -2,11 +2,18 @@
 
 `DataTable` from `svelte-widgets/table` is a ready-made table built from the pieces below. Click a header to sort (Shift-click adds sort keys), open a funnel to filter a column, search, show or hide columns, drag a header edge (or focus it and press the arrow keys) to resize, double-click the edge to fit the content, drag a header to reorder, and right-click a header or cell to pin the column to either edge or copy it. Drag across cells and press Cmd/Ctrl+C to copy them, or export the visible rows.
 
-Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color`, which here shades the mass column. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
+Bind `sort` (a list of `{ column, dir }` keys in priority order, empty for the data's order) and `hidden_columns` to persist them. A column with `visible: false` starts hidden but stays in the column picker, whose Reset hides it again; `disabled` locks a column's toggle, and `pin` sticks it to the `left` or `right` edge. Attributes for the toolbar go in `controls_props`.
+
+Number formatting, HTML rendering and cell colors are hooks: `format_number`, `render_html` (cells and labels render as escaped text unless you pass a sanitizer) and `column_color`, which here shades the mass column. It is called again only when the column's extrema or color domain change, so it needs no caching. MatterViz's `HeatmapTable` wraps `DataTable` with d3 color scales in the same way.
 
 ```svelte example id="data-table"
 <script lang="ts">
-  import { DataTable, TABLE_EXPORT_FORMATS, type Column } from 'svelte-widgets/table'
+  import {
+    type ColorStats,
+    type Column,
+    DataTable,
+    TABLE_EXPORT_FORMATS,
+  } from 'svelte-widgets/table'
 
   const rows = [
     { name: `Hydrogen`, symbol: `H`, number: 1, mass: 1.008, state: `gas`, year: 1766 },
@@ -42,8 +49,8 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
     },
   ]
   const columns: Column<(typeof rows)[number]>[] = [
-    { id: `name`, label: `Name`, group: `Identity`, sticky: true, disabled: true },
-    { id: `symbol`, label: `Symbol`, group: `Identity` },
+    { id: `name`, label: `Name`, group: `Identity`, pin: `left`, disabled: true },
+    { id: `symbol`, label: `Symbol`, group: `Identity`, visible: false },
     { id: `number`, label: `Z`, group: `Identity`, description: `Atomic number` },
     {
       id: `mass`,
@@ -56,29 +63,20 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
     { id: `state`, label: `State`, group: `Physical`, filter: `category` },
     { id: `year`, label: `Discovered`, group: `History`, render_as: `bar` },
   ]
-  // one color function per column, kept while its domain holds
-  let mass_color: { key: string; fn: (num: number | null) => { bg: string; text: null } }
-  const column_color = (
-    col: Column,
-    { domain: [lo, hi] }: { domain: [number, number] },
-  ) => {
-    if (col.id !== `mass`) return undefined
-    if (mass_color?.key !== `${lo},${hi}`) {
-      const fn = (num: number | null) => ({
-        bg: `color-mix(in srgb, cornflowerblue ${num === null ? 0 : (100 * (num - lo)) / (hi - lo)}%, transparent)`,
-        text: null,
-      })
-      mass_color = { key: `${lo},${hi}`, fn }
-    }
-    return mass_color.fn
-  }
+  const column_color = (col: Column, { domain: [lo, hi] }: ColorStats) =>
+    col.id === `mass`
+      ? (num: number | null) => ({
+          bg: `color-mix(in srgb, cornflowerblue ${num === null ? 0 : (100 * (num - lo)) / (hi - lo)}%, transparent)`,
+          text: null,
+        })
+      : undefined
 </script>
 
 <DataTable
   data={rows}
   {columns}
   {column_color}
-  initial_sort="number"
+  sort={[{ column: `number`, dir: `asc` }]}
   search
   show_filters
   show_column_toggle

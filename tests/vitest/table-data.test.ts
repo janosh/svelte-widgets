@@ -2,7 +2,7 @@ import {
   type CellVal,
   type Column,
   type RowData,
-  type SortCriterion,
+  type TableSort,
   cell_readers,
   cell_text,
   compile_filter,
@@ -37,6 +37,9 @@ describe(`column stats and domains`, () => {
     ])
     expect(stats).toMatchObject({ min: 1, max: 3, mean: 2, median: 2, count: 3 })
     expect(compute_column_stats([null, undefined, NaN])).toBeNull()
+    // the smallest value above zero, a log scale's lower end
+    expect(compute_column_stats([-2, 0, 3, 0.5], false)?.min_positive).toBe(0.5)
+    expect(compute_column_stats([-2, 0], false)?.min_positive).toBeNull()
     // without quantiles, q_lo/q_hi fall back to min/max and no median is computed
     expect(compute_column_stats(values, false)).toMatchObject({
       q_lo: 0,
@@ -190,13 +193,12 @@ it(`parse_numeric_val stays linear on long digit runs`, () => {
 
 describe(`sort_table_rows`, () => {
   const rows = (...vals: CellVal[]): RowData[] => vals.map((val) => ({ val }))
-  const order = (vals: CellVal[], ascending = true) => {
+  const order = (vals: CellVal[], dir: TableSort[`dir`] = `asc`) => {
     const data = rows(...vals)
-    const criteria = [{ key: `val`, ascending }]
-    return sort_table_rows(data, criteria).map((row) => row.val)
+    return sort_table_rows(data, [{ column: `val`, dir }]).map((row) => row.val)
   }
 
-  it.each([true, false])(`sinks missing sort keys with ascending=%s`, (ascending) => {
+  it.each([`asc`, `desc`] as const)(`sinks missing sort keys sorting %s`, (dir) => {
     const invalid_date = new Date(NaN)
     expect(cell_text(invalid_date)).toBe(``)
     const blank_key = `<span data-sort-value="">42</span>` // not sorted by its numeric text
@@ -214,8 +216,8 @@ describe(`sort_table_rows`, () => {
       invalid_date,
       ` <b></b>`,
     ]
-    expect(order(vals, ascending)).toEqual([
-      ...(ascending ? [1, 2, 3, `a`] : [`a`, 3, 2, 1]),
+    expect(order(vals, dir)).toEqual([
+      ...(dir === `asc` ? [1, 2, 3, `a`] : [`a`, 3, 2, 1]),
       null,
       ``,
       undefined,
@@ -247,7 +249,12 @@ describe(`sort_table_rows`, () => {
       Infinity,
       `x`,
     ])
-    expect(order([3, Infinity, -Infinity, 1], false)).toEqual([Infinity, 3, 1, -Infinity])
+    expect(order([3, Infinity, -Infinity, 1], `desc`)).toEqual([
+      Infinity,
+      3,
+      1,
+      -Infinity,
+    ])
     expect(order([`b`, `B`, `a`])).toEqual([`a`, `b`, `B`]) // case-insensitive keeps input order for ties
   })
 
@@ -277,7 +284,7 @@ describe(`sort_table_rows`, () => {
     [[`0x1f`, `1 eV`, `0x0a`], [`1 eV`, `0x0a`, `0x1f`]], // so do hex IDs
   ])(`sorts unit-suffixed numbers %j by their number`, (vals, expected) => {
     expect(order(vals)).toEqual(expected)
-    expect(order(vals, false)).toEqual(expected.toReversed())
+    expect(order(vals, `desc`)).toEqual(expected.toReversed())
   })
 
   // the type-mismatch branch answered "the other one first" both ways: not a total order
@@ -312,7 +319,7 @@ describe(`sort_table_rows`, () => {
       },
     }))
     const data = values.map((val) => ({ val }))
-    const criteria = [{ key: `val`, ascending: true }]
+    const criteria: TableSort[] = [{ column: `val`, dir: `asc` }]
     expect(sort_table_rows(data, criteria).map(({ val }) => val.rank)).toEqual(
       Array.from({ length: 40 }, (_, idx) => idx),
     )
@@ -338,13 +345,13 @@ describe(`sort_table_rows`, () => {
   })
 
   // every primary key ties, so only a working secondary criterion yields the name order
-  const by_name: SortCriterion = { key: `name`, ascending: true }
-  const by_score: SortCriterion = { key: `score`, ascending: true }
+  const by_name: TableSort = { column: `name`, dir: `asc` }
+  const by_score: TableSort = { column: `score`, dir: `asc` }
   // oxfmt-ignore
-  it.each<[string, RowData[], SortCriterion[], string[]]>([
+  it.each<[string, RowData[], TableSort[], string[]]>([
     [`dates compare by time`,
       [{ when: new Date(2024, 0, 2), name: `b` }, { when: new Date(2024, 0, 1), name: `z` }, { when: new Date(2024, 0, 2), name: `a` }],
-      [{ key: `when`, ascending: false }, by_name], [`a`, `b`, `z`]],
+      [{ column: `when`, dir: `desc` }, by_name], [`a`, `b`, `z`]],
     // both-NaN rows sink together but still order by name among themselves
     [`both primary values are invalid`,
       [{ score: NaN, name: `b` }, { score: NaN, name: `a` }, { score: 1, name: `c` }],

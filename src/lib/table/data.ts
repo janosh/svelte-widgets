@@ -8,7 +8,14 @@ import {
   HTML_TAG_SRC,
 } from '../utils'
 import { type CellReaders, default_is_missing } from './filter'
-import type { CellVal, Column, DateTimeFormatMode, RowData } from './data-table'
+import type {
+  CellVal,
+  Column,
+  DateTimeFormatMode,
+  RowData,
+  SortDir,
+  TableSort,
+} from './data-table'
 
 const grapheme_segmenter = new Intl.Segmenter(`en`, { granularity: `grapheme` })
 
@@ -126,22 +133,17 @@ const get_sort_val = (val: CellVal): SortVal => {
   )
 }
 
-export type SortCriterion = { key: string; ascending: boolean }
 const sort_collator = new Intl.Collator(undefined, { numeric: true, sensitivity: `base` })
 
 // Comparator over one criterion's sort keys: missing sort keys sink to the bottom regardless
 // of direction, numbers sort before strings, strings compare natural-order and
 // case-insensitively. Unit-suffixed cells rank by their number, ties going to a bare number,
 // then their text. 0 lets the next criterion decide.
-function compare_sort_vals(
-  sort_val1: SortVal,
-  sort_val2: SortVal,
-  ascending: boolean,
-): number {
+function compare_sort_vals(sort_val1: SortVal, sort_val2: SortVal, dir: SortDir): number {
   // both missing ranks them equally low, so let the next criterion break the tie
   if (sort_val1 === null && sort_val2 === null) return 0
   if (sort_val1 === null || sort_val2 === null) return sort_val1 === null ? 1 : -1
-  const modifier = ascending ? 1 : -1
+  const modifier = dir === `asc` ? 1 : -1
   const key1 = typeof sort_val1 === `object` ? sort_val1[0] : sort_val1
   const key2 = typeof sort_val2 === `object` ? sort_val2[0] : sort_val2
   if (typeof key1 === `string` && typeof key2 === `string`) {
@@ -160,10 +162,10 @@ function compare_sort_vals(
 // Parse each distinct cell once per sort, not on every O(n log n) comparison, and read each
 // row's keys up front so comparisons index arrays rather than re-reading cells (a 50k-row sort
 // went 67 -> 15 ms). The cache is local to this operation, so edits to rows, objects and
-// Dates are read on the next sort.
+// Dates are read on the next sort. Each sort key's `column` names a row property here.
 export function sort_table_rows<Row extends RowData>(
   rows: Row[],
-  criteria: SortCriterion[],
+  sort: TableSort[],
 ): Row[] {
   const values = new Map<CellVal, SortVal>()
   const sort_value = (val: CellVal): SortVal => {
@@ -172,15 +174,15 @@ export function sort_table_rows<Row extends RowData>(
     if (parsed === undefined) values.set(val, (parsed = get_sort_val(val)))
     return parsed
   }
-  const keyed = criteria.map(({ key, ascending }) => ({
-    ascending,
-    vals: rows.map((row) => sort_value(row[key])),
+  const keyed = sort.map(({ column, dir }) => ({
+    dir,
+    vals: rows.map((row) => sort_value(row[column])),
   }))
   return rows
     .map((_, idx) => idx)
     .toSorted((idx_a, idx_b) => {
-      for (const { ascending, vals } of keyed) {
-        const cmp = compare_sort_vals(vals[idx_a], vals[idx_b], ascending)
+      for (const { dir, vals } of keyed) {
+        const cmp = compare_sort_vals(vals[idx_a], vals[idx_b], dir)
         if (cmp !== 0) return cmp
       }
       return 0

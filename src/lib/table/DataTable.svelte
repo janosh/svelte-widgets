@@ -23,11 +23,11 @@
     CellColor,
     CellSnippet,
     CellVal,
+    ColorStats,
     Column,
     ColumnPrefs,
     ColumnStats,
     DateTimeFormatMode,
-    InitialSort,
     Pagination,
     PinSide,
     RowData,
@@ -41,7 +41,6 @@
     DataTableProps,
   } from './data-table'
   import { compute_column_stats, NULL_CELL_COLOR, resolve_domain } from './data-table'
-  import type { SortCriterion } from './data'
   import {
     cell_readers,
     cell_text,
@@ -81,9 +80,7 @@
     sort_hint = undefined,
     cell,
     controls,
-    initial_sort = undefined,
-    sort = $bindable({ column: ``, dir: `asc` }),
-    multi_sort = $bindable([]),
+    sort = $bindable([]),
     default_num_format = undefined,
     format_number = default_format_number,
     render_html = escape_markup,
@@ -99,7 +96,6 @@
     export_filename = `table-export`,
     on_export,
     show_column_toggle = false,
-    columns_open = $bindable(false),
     show_filters = false,
     summary = false,
     density = `cosy`,
@@ -113,16 +109,14 @@
     row_animation_ms = 0,
     selected_ids = $bindable([]),
     visible_rows = $bindable([]),
-    hidden_columns = $bindable([]),
-    default_hidden_columns = [],
+    hidden_columns = $bindable(),
     scroll_style,
     root_style,
     show_row_numbers = $bindable(false),
     allow_better_toggle = false,
     allow_pinning = true,
     show_controls = `hover`,
-    controls_class,
-    controls_style,
+    controls_props,
     controls_active = false,
     container_el = $bindable(),
     ...rest
@@ -221,13 +215,6 @@
   })
 
   // === Config normalisation ===
-  let initial_sort_config = $derived(
-    initial_sort
-      ? typeof initial_sort === `string`
-        ? { column: initial_sort, direction: `asc` as const }
-        : { direction: `asc` as const, ...initial_sort }
-      : null,
-  )
   let pagination_config = $derived(with_defaults(pagination, { page_size: 25 }))
   // Writable: the page-size selector overrides it until the parent changes pagination
   let page_size = $derived(pagination_config?.page_size ?? 25)
@@ -252,6 +239,7 @@
   )
 
   let export_menu_open = $state(false)
+  let columns_open = $state(false)
   // At most one header popover open: one column's filter panel or date/time format list
   type PopoverKind = `filter` | `datetime`
   let header_popover = $state<{ kind: PopoverKind; col_id: string } | null>(null)
@@ -317,10 +305,15 @@
   // Kept while the same columns show in the same order: the mount-time column_order write-back
   // (a fresh but equal ordered_columns) then re-scans no column statistics
   let prev_visible_columns: Column<Row>[] = []
+  // hidden_columns, else the columns hidden by default
+  let hidden_ids = $derived(
+    new Set(
+      hidden_columns ??
+        columns.filter((col) => col.visible === false).map((col) => col.id),
+    ),
+  )
   let visible_columns = $derived.by(() => {
-    const next = ordered_columns.filter(
-      (col) => col.visible !== false && !hidden_columns.includes(col.id),
-    )
+    const next = ordered_columns.filter((col) => !hidden_ids.has(col.id))
     if (same_parts(next, prev_visible_columns)) return prev_visible_columns
     return (prev_visible_columns = next)
   })
@@ -494,21 +487,11 @@
   let filtered_data = $derived(filtered_items.map(({ row }) => row))
 
   // === Sorting ===
-  // Sort criteria as column IDs. multi_sort (Shift+click) takes precedence over the single
-  // bindable sort, which falls back to initial_sort while unset.
-  let sort_state = $derived({
-    column: sort.column || initial_sort_config?.column || ``,
-    ascending: sort.column
-      ? sort.dir !== `desc`
-      : initial_sort_config?.direction !== `desc`,
-  })
-  const active_sort = $derived(
-    multi_sort.length > 0 ? multi_sort : sort_state.column ? [sort_state] : [],
-  )
-  let sort_criteria = $derived<SortCriterion[]>(
-    active_sort
+  // `sort` holds column IDs; the row sort reads their data keys
+  let sort_criteria = $derived(
+    sort
       .filter(({ column }) => columns_by_id.has(column)) // skip entries for removed columns
-      .map(({ column, ascending }) => ({ key: key_of_id(column), ascending })),
+      .map(({ column, dir }) => ({ column: key_of_id(column), dir })),
   )
   let sorted_data = $derived(
     sort_criteria.length === 0
@@ -521,27 +504,23 @@
 
   function sort_rows(col: Column<Row>, event: MouseEvent | KeyboardEvent) {
     if (col.sortable === false) return
-    const col_id = col.id
-    // The user's gradient-direction pref wins over the column config, as for the colors
-    const lower_first = better_of(col) === `lower`
-    // Shift-click toggles this column in multi-sort and clears single-column sorting
+    const { id: column } = col
+    // The first direction puts the better end on top; the user's pref wins over the config
+    const first_dir = better_of(col) === `lower` ? `asc` : `desc`
+    // Shift-click adds this column as the last sort key, or removes it
     if (event.shiftKey) {
-      multi_sort = multi_sort.some((entry) => entry.column === col_id)
-        ? multi_sort.filter((entry) => entry.column !== col_id)
-        : [...multi_sort, { column: col_id, ascending: lower_first }]
-      sort = { column: ``, dir: `asc` }
+      sort = sort.some((entry) => entry.column === column)
+        ? sort.filter((entry) => entry.column !== column)
+        : [...sort, { column, dir: first_dir }]
       return
     }
-    multi_sort = []
-    const first_dir = lower_first ? `asc` : `desc`
-    const on_this_col = sort_state.column === col_id
-    const flipped = sort_state.ascending ? `desc` : `asc`
-    // Third click on the same column clears the sort, restoring the data's own order — unless
-    // an initial_sort is set (sort_state would fall back to it and the cycle would stick)
-    const cleared = on_this_col && !initial_sort_config && flipped === first_dir
-    sort = cleared
-      ? { column: ``, dir: `asc` }
-      : { column: col_id, dir: on_this_col ? flipped : first_dir }
+    // A plain click cycles a column's sole sort: first direction, flipped, then cleared back
+    // to the data's order (whatever the initial sort was). Any other sort gives way to it.
+    const [only] = sort.length === 1 ? sort : []
+    if (only?.column !== column) sort = [{ column, dir: first_dir }]
+    else if (only.dir === first_dir)
+      sort = [{ column, dir: first_dir === `asc` ? `desc` : `asc` }]
+    else sort = []
   }
 
   // Header click, or Enter/Space while it has focus, sorts — unless a drag is in progress,
@@ -559,13 +538,10 @@
   const sort_indicator = (
     col_id: string,
   ): { ascending: boolean; rank: number | null } | null => {
-    const idx = active_sort.findIndex((entry) => entry.column === col_id)
+    const idx = sort.findIndex((entry) => entry.column === col_id)
     return idx === -1
       ? null
-      : {
-          ascending: active_sort[idx].ascending,
-          rank: active_sort.length > 1 ? idx + 1 : null,
-        }
+      : { ascending: sort[idx].dir === `asc`, rank: sort.length > 1 ? idx + 1 : null }
   }
 
   // === Pagination and row virtualisation ===
@@ -573,7 +549,7 @@
   // sorted_data: a same-length live-data refresh must not bounce the user to page 1.
   let row_count = $derived(sorted_data.length)
   let current_page = $derived.by(() => {
-    void [row_count, debounced_query, sort, multi_sort]
+    void [row_count, debounced_query, sort]
     return 1
   })
   let total_pages = $derived(Math.max(1, Math.ceil(sorted_data.length / page_size)))
@@ -712,11 +688,10 @@
   })
 
   // === Pinned columns ===
-  // A user pin (column_prefs) wins over the column config; `sticky: true` means left.
+  // A user pin (column_prefs) wins over the column config
   const pin_of = (col: Column<Row>): PinSide | null => {
     const pref = prefs_of(col.id).pinned
-    if (pref !== undefined) return pref
-    return col.sticky === true ? `left` : col.sticky || null
+    return pref === undefined ? (col.pin ?? null) : pref
   }
   // Offset the second sticky header row by the first row's height
   let group_header_height = $state(0)
@@ -749,8 +724,9 @@
   // Per-column cell inputs, resolved once per column rather than per cell (a 60x30 window is
   // 1800 cells). Views are cached by column id and survive data updates; every field is its
   // own derived signal, so a cell re-runs only when a field it reads changes value. New data
-  // rebuilds column_stats, but a column keeps its color function and bar domain while their
-  // inputs (extrema, domain, scheme) are equal: an edit that moves no range repaints one cell.
+  // rebuilds column_stats, but a column keeps its color stats, and with them its color
+  // function and bar domain, while they are equal: an edit that moves no range repaints one
+  // cell, with no caching needed in the host's column_color.
   // (Fields are $derived.by closures: they read `col`, which the constructor assigns.)
   type ColorFn = (num: number | null) => CellColor
   class ColumnView {
@@ -796,18 +772,27 @@
         ? this.stats[this.better === `lower` ? `min` : `max`]
         : null,
     )
-    #prev_domain: [number, number] | undefined
-    domain = $derived.by(() => {
-      const next = this.stats?.domain
-      if (next?.[0] !== this.#prev_domain?.[0] || next?.[1] !== this.#prev_domain?.[1])
-        this.#prev_domain = next
-      return this.#prev_domain
+    // Kept while its numbers are equal, so the derivations below re-run only on a change
+    #color_stats: ColorStats | undefined
+    color_stats = $derived.by(() => {
+      const [prev, stats] = [this.#color_stats, this.stats]
+      if (!stats) return (this.#color_stats = undefined)
+      const { min, max, min_positive, domain } = stats
+      const same =
+        prev &&
+        same_parts(
+          [min, max, min_positive, ...domain],
+          [prev.min, prev.max, prev.min_positive, ...prev.domain],
+        )
+      // a copy of the domain: a domain_group shares (and widens) one tuple
+      if (!same) this.#color_stats = { min, max, min_positive, domain: [...domain] }
+      return this.#color_stats
     })
+    domain = $derived.by(() => this.color_stats?.domain)
     // Undefined when the host paints nothing here (or the column holds no number)
-    color = $derived.by((): ColorFn | undefined => {
-      const [stats, domain] = [this.stats, this.domain]
-      return stats && domain ? column_color?.(this.col, { ...stats, domain }) : undefined
-    })
+    color = $derived.by((): ColorFn | undefined =>
+      this.color_stats ? column_color?.(this.col, this.color_stats) : undefined,
+    )
   }
   // One view per visible column, reused while its definition object is unchanged
   let view_cache = new Map<string, ColumnView>()
@@ -1331,19 +1316,17 @@
   )
 
   // === Column picker ===
-  // Keep the bindable `hidden_columns` list authoritative while ColumnPicker edits a projection
+  // Keep the bindable `hidden_columns` list authoritative while ColumnPicker edits a projection.
+  // `visible: false` columns are the picker's Reset baseline.
   function set_column_visible(col_id: string, visible: boolean) {
-    const others = hidden_columns.filter((identifier) => identifier !== col_id)
+    const others = [...hidden_ids].filter((identifier) => identifier !== col_id)
     hidden_columns = visible ? others : [...others, col_id]
   }
-  let default_hidden = $derived(new Set(default_hidden_columns))
   let toggle_columns = $derived(
     ordered_columns.map((col) => ({
       ...col,
-      default_visible: col.visible !== false && !default_hidden.has(col.id),
-      // Caller-hidden columns cannot be shown through `hidden_columns`
-      disabled: col.disabled || col.visible === false,
-      visible: col.visible !== false && !hidden_columns.includes(col.id),
+      default_visible: col.visible !== false,
+      visible: !hidden_ids.has(col.id),
     })),
   )
 
@@ -1511,8 +1494,8 @@
 >
   {#if show_controls !== `never`}
     <section
-      class={[`control-buttons`, `${show_controls}-visible`, controls_class]}
-      style={controls_style}
+      {...controls_props}
+      class={[`control-buttons`, `${show_controls}-visible`, controls_props?.class]}
       class:force-visible={controls_active || columns_open || export_menu_open}
     >
       {#if search_config}
@@ -1675,8 +1658,8 @@
               data-drag-side={drag_side(col_id)}
               draggable="true"
               aria-dropeffect="move"
-              aria-sort={active_sort[0]?.column === col_id
-                ? active_sort[0].ascending
+              aria-sort={sort[0]?.column === col_id
+                ? sort[0].dir === `asc`
                   ? `ascending`
                   : `descending`
                 : `none`}

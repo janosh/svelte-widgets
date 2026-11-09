@@ -62,15 +62,17 @@ export type Column<Row extends object = RowData> = {
   // Per-column filter control shown in the header. `auto` picks numeric/category/text
   // from the data; false suppresses it for that column.
   filter?: `auto` | `numeric` | `text` | `category` | false
-  // Stick to an edge while scrolling sideways; `true` means left. Users can re-pin from the
-  // header context menu (stored as column_prefs[id].pinned).
-  sticky?: boolean | PinSide
+  // Stick to an edge while scrolling sideways. Users can re-pin from the header context menu
+  // (stored as column_prefs[id].pinned).
+  pin?: PinSide
+  // false hides the column by default: the column picker can show it, and its Reset hides it
+  // again. Without a bound hidden_columns, these columns are the hidden ones.
   visible?: boolean
   sortable?: boolean
   // Fixed bounds for drag and keyboard resizing (default 50 and 500 px)
   min_width?: number
   max_width?: number
-  // When true, the column picker's checkbox is greyed out and non-interactive
+  // When true, the column picker's checkbox is greyed out, so users can't toggle the column
   disabled?: boolean
   style?: string
   cell_style?: string
@@ -98,14 +100,14 @@ export type SummaryStat = `mean` | `median` | `min` | `max` | `count`
 // fields beside these: the table copies unknown ones through untouched.
 export type ColumnPrefs = {
   width?: number
-  // null unpins a column its config makes sticky
+  // null unpins a column its config pins
   pinned?: PinSide | null
   better?: `higher` | `lower`
   datetime_format?: DateTimeFormatMode
   filter?: ColumnFilterValue
 }
 
-// Externally bindable sort, by column id
+// One sort key: a column id for DataTable's `sort`, a row property for sort_table_rows
 export type SortDir = `asc` | `desc`
 export type TableSort = { column: string; dir: SortDir }
 
@@ -119,9 +121,6 @@ export type SortHint =
       style?: string
       class?: ClassValue
     }
-
-// Initial sort configuration (string for column name, object for full control)
-export type InitialSort = string | { column: string; direction?: SortDir }
 
 // Pagination configuration (boolean to enable, object for full control)
 export type Pagination =
@@ -151,14 +150,20 @@ export const NULL_CELL_COLOR: CellColor = { bg: null, text: null }
 // Numeric summary of one column over the rows left after search and filters, shared by
 // summary rows, best-cell rings, data bars and host coloring (DataTable's column_color).
 export type ColumnStats = {
-  values: number[]
   min: number
   max: number
+  // Smallest value above zero (a log scale's lower end), null when there is none
+  min_positive: number | null
   q_lo: number // 5th percentile
   q_hi: number // 95th percentile
   mean: number
   median: number | null
   count: number
+}
+
+// What DataTable's column_color receives: the column's extrema and resolved domain
+export type ColorStats = Pick<ColumnStats, `min` | `max` | `min_positive`> & {
+  domain: [number, number]
 }
 
 // Value at sorted position `kth` by partial sorting (Hoare quickselect), in place
@@ -214,12 +219,14 @@ export function compute_column_stats(
   let sum = 0
   let lowest = Infinity
   let highest = -Infinity
+  let lowest_positive = Infinity
   for (const val of values) {
     if (typeof val !== `number` || !Number.isFinite(val)) continue
     nums.push(val)
     sum += val
     if (val < lowest) lowest = val
     if (val > highest) highest = val
+    if (val > 0 && val < lowest_positive) lowest_positive = val
   }
   if (nums.length === 0) return null
   // Running mean only when the plain sum overflowed (~1.8e308), so huge values stay finite
@@ -228,16 +235,15 @@ export function compute_column_stats(
     mean = 0
     for (const [idx, val] of nums.entries()) mean += (val - mean) / (idx + 1)
   }
-  // quantile_unordered partially sorts in place, so give it a copy
-  const scratch = with_quantiles ? [...nums] : []
+  // quantile_unordered partially sorts nums in place, which nothing else reads
   return {
-    values: nums,
     min: lowest,
     max: highest,
-    q_lo: with_quantiles ? quantile_unordered(scratch, 0.05) : lowest,
-    q_hi: with_quantiles ? quantile_unordered(scratch, 0.95) : highest,
+    min_positive: lowest_positive === Infinity ? null : lowest_positive,
+    q_lo: with_quantiles ? quantile_unordered(nums, 0.05) : lowest,
+    q_hi: with_quantiles ? quantile_unordered(nums, 0.95) : highest,
     mean,
-    median: with_quantiles ? quantile_unordered(scratch, 0.5) : null,
+    median: with_quantiles ? quantile_unordered(nums, 0.5) : null,
     count: nums.length,
   }
 }
@@ -269,11 +275,10 @@ export type DataTableProps<
   // Extra toolbar content, after the built-in buttons. Receives the export sources (text
   // of the visible columns over the exported rows) for hosts rendering their own export UI.
   controls?: Snippet<[{ sources: Record<TableExportFormat, () => string> }]>
-  initial_sort?: InitialSort
-  // Active sort by column ID. Bindable for external control/persistence.
-  sort?: TableSort
-  // Shift-click criteria in priority order. Takes precedence over sort; bind to persist.
-  multi_sort?: { column: string; ascending: boolean }[]
+  // Sort keys by column ID in priority order: empty keeps the data's order, several sort by
+  // each in turn (Shift+click adds or removes one). Its initial value is the starting sort;
+  // bind it to control or persist the sort.
+  sort?: TableSort[]
   // Format passed to format_number for columns without their own `format`
   default_num_format?: string
   // Numeric cells and summary values. Defaults to the locale's grouping with up to 4
@@ -282,13 +287,12 @@ export type DataTableProps<
   // Turns HTML-looking cells, labels and descriptions into markup for {@html}. Defaults to
   // escaped plain text: pass a sanitizer to render formatting (never the raw string).
   render_html?: (html: string) => string
-  // Per-column cell colors, resolved once per column and again whenever its stats object
-  // changes (any data update). Return a value-to-color function, or undefined to leave the
-  // column unpainted. Return the same function while its inputs are equal: a new one
-  // repaints every cell of the column.
+  // Per-column cell colors: a value-to-color function, or undefined to leave the column
+  // unpainted. Called again only when the column, its color stats or reactive state the hook
+  // reads change, so a data update that moves no extremum repaints only the edited cells.
   column_color?: (
     col: Column<Row>,
-    stats: ColumnStats & { domain: [number, number] },
+    stats: ColorStats,
   ) => ((num: number | null) => CellColor) | undefined
   // Extra sections appended to a column's context menu (right-click a header or cell)
   menu_sections?: (col: Column<Row>) => CmdSection[]
@@ -309,9 +313,6 @@ export type DataTableProps<
   export_filename?: string
   on_export?: (detail: { format: TableExportFormat; text: string }) => void
   show_column_toggle?: boolean
-  // Whether the column picker is open. Bindable so hosts can close it when opening their
-  // own toolbar panes.
-  columns_open?: boolean
   // Show a per-column filter funnel in each header (range, checklist or substring,
   // picked from the column's data). Individual columns opt out with `filter: false`.
   show_filters?: boolean
@@ -343,11 +344,10 @@ export type DataTableProps<
   // Read-only output: every row left after search and filters, in the current sort order
   // and across all pages (bind it to export or pick from what the table shows)
   visible_rows?: Row[]
-  // Column IDs hidden through the column toggle. Bindable for persistence.
+  // Hidden column IDs. While undefined, the columns with `visible: false` are hidden (and
+  // follow column changes); the first toggle writes the full list. Bindable for persistence:
+  // bind an undefined state to start from the defaults.
   hidden_columns?: string[]
-  // Togglable columns hidden by default: Reset hides them again, and their being hidden is
-  // no change to reset. Start hidden_columns with them to hide them on mount.
-  default_hidden_columns?: readonly string[]
   scroll_style?: string
   // Inline styles for the root container (merged with rest.style)
   root_style?: string
@@ -359,8 +359,8 @@ export type DataTableProps<
   allow_pinning?: boolean
   // Toolbar visibility: on hover/focus (default), always, or never
   show_controls?: `hover` | `always` | `never`
-  controls_class?: string
-  controls_style?: string
+  // Attributes spread onto the toolbar <section>; class merges with the built-in ones
+  controls_props?: HTMLAttributes<HTMLElement>
   // Keep the toolbar shown, e.g. while a host's own pane in it is open
   controls_active?: boolean
   // The root .table-container element. Bindable for hosts resolving styles against it.

@@ -1,12 +1,14 @@
 import type {
   CellColor,
   CellSnippetArgs,
+  ColorStats,
   ColumnPrefs,
   Column,
   DateTimeFormatMode,
   RowData,
   RowId,
   SummaryStat,
+  TableSort,
 } from '#lib/table/index.ts'
 import DateTimeFormatMenu from '#lib/table/DateTimeFormatMenu.svelte'
 import DataTable from '#lib/table/DataTable.svelte'
@@ -14,6 +16,7 @@ import * as table_data from '#lib/table/data.ts'
 import data_table_source from '#lib/table/DataTable.svelte?raw'
 import * as data_table_module from '#lib/table/data-table.ts'
 import { TABLE_EXPORT_FORMATS } from '#lib/table/index.ts'
+import { html_to_text } from '#lib/utils.ts'
 import type { Component, ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte'
 import * as animations from 'svelte/animate'
@@ -153,7 +156,7 @@ describe(`DataTable`, () => {
   ]
 
   const sample_columns: Column[] = [
-    { id: `Model`, label: `Model`, sticky: true },
+    { id: `Model`, label: `Model`, pin: `left` },
     { id: `Score`, label: `Score`, better: `higher`, format: `.2f` },
     { id: `Value`, label: `Value`, better: `lower` },
   ]
@@ -399,30 +402,19 @@ describe(`DataTable`, () => {
         counted(`phase`, `Phase`),
       ]
       const phases = [`solid`, `liquid`, `gas`]
-      // A host keeps returning one color function while the column's domain is unchanged,
-      // so an edit that moves no range repaints only its own cell. Count stays unpainted.
-      const color_fns = new Map<
-        string,
-        { key: string; fn: (num: number | null) => CellColor }
-      >()
-      const memo_color = (
-        col: { id: string },
-        { domain }: { domain: [number, number] },
-      ) => {
+      // A plain host hook, returning a new function per call: the table calls it again only
+      // when the column's color stats change. Count stays unpainted.
+      const color_calls: string[] = []
+      const plain_color = (col: { id: string }, { domain: [lo, hi] }: ColorStats) => {
+        color_calls.push(col.id)
         if (col.id === `count`) return undefined
-        const key = domain.join(`,`)
-        const cached = color_fns.get(col.id)
-        if (cached?.key === key) return cached.fn
-        const [lo, hi] = domain
-        const fn = (num: number | null): CellColor => ({
+        return (num: number | null): CellColor => ({
           bg:
             num === null
               ? null
               : `rgb(${Math.round((255 * (num - lo)) / (hi - lo || 1))} 0 0)`,
           text: null,
         })
-        color_fns.set(col.id, { key, fn })
-        return fn
       }
       let data = $state.raw(
         Array.from({ length: 20 }, (_, idx) => ({
@@ -438,9 +430,11 @@ describe(`DataTable`, () => {
         },
         columns,
         row_key: `name`,
-        column_color: memo_color,
+        column_color: plain_color,
       })
       flushSync()
+      expect(color_calls.toSorted()).toEqual([`count`, `energy`])
+      color_calls.length = 0
       const tbody = doc_query(`tbody`)
       const nodes = () => [...tbody.querySelectorAll(`tr, td`)]
       const initial_nodes = nodes()
@@ -479,6 +473,7 @@ describe(`DataTable`, () => {
       expect(repainted).toContain(cell_at(7, 2))
       expect(repainted).toContain(cell_at(19, 2))
       expect(best_row()).toBe(`7`)
+      expect(color_calls.splice(0)).toEqual([`energy`])
 
       // An edit inside the range keeps the column's color function: one cell re-runs
       const edited = update_energy(3, 0.8)
@@ -486,6 +481,7 @@ describe(`DataTable`, () => {
       expect(edited).toHaveLength(1)
       expect(edited[0]).toBe(cell_at(3, 2))
       expect(cell_at(3, 2).textContent?.trim()).toBe(`0.8`)
+      expect(color_calls).toEqual([])
 
       // Restoring the old maximum restores every other cell's color
       update_energy(7, 7 / 4)
@@ -626,8 +622,8 @@ describe(`DataTable`, () => {
     })
 
     // Cell parsing itself is covered by the sort_table_rows/parse_numeric_val unit tests; these
-    // check a column is wired through them (string initial_sort shorthand sorts ascending)
-    // and that a header click then flips the order.
+    // check a column is wired through them (an initial ascending sort) and that header clicks
+    // then clear it (asc isn't the first direction) and sort descending.
     it.each<[string, string[], string[], boolean]>([
       [
         `data-sort-value over the visible text`,
@@ -662,14 +658,16 @@ describe(`DataTable`, () => {
       mount_table({
         data: values.map((Col) => ({ Col })),
         columns: plain_columns(`Col`),
-        initial_sort: `Col`,
+        sort: [{ column: `Col`, dir: `asc` }],
       })
       await tick()
       expect(col_values(`Col`)).toEqual(expected)
       expect(doc_query(`td[data-col="Col"]`).classList.contains(`numeric-col`)).toBe(
         numeric,
       )
-      await click(`th`) // toggle to descending
+      await click(`th`) // clears to the data's order
+      expect(col_values(`Col`)).toEqual(values.map((val) => html_to_text(val)))
+      await click(`th`) // descending
       expect(col_values(`Col`)).toEqual(expected.toReversed())
     })
 
@@ -782,7 +780,7 @@ describe(`DataTable`, () => {
     mount_table({
       data: sample_data,
       columns: [
-        { id: `Col`, label: `Col`, description: `<b>Description</b>`, sticky: true },
+        { id: `Col`, label: `Col`, description: `<b>Description</b>`, pin: `left` },
       ],
     })
 
@@ -875,7 +873,7 @@ describe(`DataTable`, () => {
           score: { width: 180, filter: { kind: `numeric` as const, min: 2 } },
         },
         hidden_columns: [`other`],
-        sort: { column: `score`, dir: `desc` as const },
+        sort: [{ column: `score`, dir: `desc` as const }],
       })
       const data = [`low`, `middle`, `high`].map((name, idx) => ({
         name,
@@ -894,7 +892,7 @@ describe(`DataTable`, () => {
       expect(state.column_order).toEqual([`score`, `name`, `other`])
       expect(state.hidden_columns).toEqual([`other`])
       expect(doc_query(`th[data-col-id="score"]`).style.width).toBe(`180px`)
-      expect(state.sort).toEqual({ column: `score`, dir: `desc` })
+      expect(state.sort).toEqual([{ column: `score`, dir: `desc` }])
     })
 
     // Header cells read as `label/colspan`. A split group used to swallow the intervening
@@ -903,7 +901,7 @@ describe(`DataTable`, () => {
       [
         `grouped, repeated and interleaved ungrouped`,
         [
-          { id: `Name`, label: `Name`, sticky: true },
+          { id: `Name`, label: `Name`, pin: `left` },
           { id: `Regular`, label: `Regular` },
           { ...grouped(`Value 1`, `Values`), description: `V1 only` },
           grouped(`Value 2`, `Values`),
@@ -1156,29 +1154,35 @@ describe(`DataTable`, () => {
       ),
     ]
     // The menu is ColumnPicker, whose dropdown portals to <body>, so query from document.
-    // Default-hidden columns start hidden without counting as a change, and Reset hides them again
-    it(`default_hidden_columns is the reset baseline`, async () => {
-      const state = $state({
-        hidden_columns: [`Value`],
-        show_column_toggle: true,
-        default_hidden_columns: [`Value`],
-      })
-      mount_sample(state)
+    // `visible: false` columns start hidden (while hidden_columns is undefined) without
+    // counting as a change, the picker can show them, and Reset hides them again
+    it(`visible: false is the default-hidden reset baseline`, async () => {
+      const state = $state<{ hidden_columns?: string[] }>({ hidden_columns: undefined })
+      const columns = sample_columns.map((col) =>
+        col.id === `Value` ? { ...col, visible: false } : col,
+      )
+      mount_sample(bind_props({ columns, show_column_toggle: true }, state))
       await tick()
+      expect(texts(`th`)).toEqual([`Model`, `Score`])
+      expect(state.hidden_columns).toBeUndefined()
       expect(document.querySelector(`.column-picker > .reset-btn`)).toBeNull()
       await click(`.column-picker > button`)
       await click(
         menu_boxes().find((box) => box.closest(`label`)?.textContent?.includes(`Value`)),
       )
       expect(state.hidden_columns).toEqual([])
+      expect(texts(`th`)).toEqual([`Model`, `Score`, `Value`])
       await click(`.column-picker > .reset-btn`)
       expect(state.hidden_columns).toEqual([`Value`])
     })
 
-    it(`toggles columns and resets without enabling caller-hidden columns`, async () => {
+    it(`toggles columns and resets, leaving disabled columns alone`, async () => {
       const state = $state({
-        hidden_columns: [`Value`],
-        columns: [...sample_columns, { id: `Static`, label: `Static`, visible: false }],
+        hidden_columns: [`Value`, `Static`],
+        columns: [
+          ...sample_columns,
+          { id: `Static`, label: `Static`, visible: false, disabled: true },
+        ],
         show_column_toggle: true,
       })
       mount_sample(state)
@@ -1201,11 +1205,11 @@ describe(`DataTable`, () => {
       )
 
       await click(boxes[0])
-      expect(state.hidden_columns).toEqual([`Value`, `Model`])
+      expect(state.hidden_columns).toEqual([`Value`, `Static`, `Model`])
       expect(document.querySelectorAll(`th`)).toHaveLength(1)
 
       await click(`.column-picker > .reset-btn`)
-      expect(state.hidden_columns).toEqual([])
+      expect(state.hidden_columns).toEqual([`Static`])
       expect(document.querySelectorAll(`th`)).toHaveLength(3)
     })
 
@@ -1290,13 +1294,13 @@ describe(`DataTable`, () => {
     expect(document.querySelectorAll(`tr.selected`)).toHaveLength(0)
   })
 
-  it(`Shift+click toggles multi-sort columns and regular click clears them`, async () => {
+  it(`Shift+click adds and removes sort keys and a plain click replaces them`, async () => {
     const state = $state({
       data: sample_data.map((row) => ({
         ...row,
         Score: row.Model === `Model C` ? 0.85 : row.Score,
       })),
-      multi_sort: [] as { column: string; ascending: boolean }[],
+      sort: [] as TableSort[],
     })
     mount_sample(state)
     const headers = document.querySelectorAll(`th`)
@@ -1312,37 +1316,37 @@ describe(`DataTable`, () => {
 
     await shift_click(0)
     await shift_click(1)
-    expect(state.multi_sort).toEqual([
-      { column: `Model`, ascending: false },
-      { column: `Score`, ascending: false },
+    expect(state.sort).toEqual([
+      { column: `Model`, dir: `desc` },
+      { column: `Score`, dir: `desc` },
     ])
     expect(col_values(`Model`)).toEqual([`Model C`, `Model B`, `Model A`])
     expect(marks()).toEqual([`1↕ descending`, `2↕ none`, ` none`])
 
     await shift_click(0)
-    expect(state.multi_sort).toEqual([{ column: `Score`, ascending: false }])
+    expect(state.sort).toEqual([{ column: `Score`, dir: `desc` }])
     expect(marks()).toEqual([` none`, `↕ descending`, ` none`])
 
+    // a plain click replaces the multi-sort with this column's first direction
     await click(headers[2])
-    expect(state.multi_sort).toEqual([])
+    expect(state.sort).toEqual([{ column: `Value`, dir: `asc` }])
     expect(marks()).toEqual([` none`, ` none`, `↕ ascending`])
 
-    // Restored external criteria take precedence over the single-column sort and
-    // the second criterion resolves tied scores.
-    state.multi_sort = [
-      { column: `Score`, ascending: true },
-      { column: `Value`, ascending: false },
+    // Restored keys apply in priority order: the second resolves tied scores
+    state.sort = [
+      { column: `Score`, dir: `asc` },
+      { column: `Value`, dir: `desc` },
     ]
     await tick()
     expect(col_values(`Model`)).toEqual([`Model C`, `Model B`, `Model A`])
     expect(marks()).toEqual([` none`, `1↕ ascending`, `2↕ none`])
-    state.multi_sort = [{ column: `Score`, ascending: true }]
+    state.sort = [{ column: `Score`, dir: `asc` }]
     await tick()
     expect(marks()).toEqual([` none`, `↕ ascending`, ` none`])
-    state.multi_sort = []
+    state.sort = []
     await tick()
     expect(col_values(`Model`)).toEqual([`Model A`, `Model B`, `Model C`])
-    expect(marks()).toEqual([` none`, ` none`, `↕ ascending`])
+    expect(marks()).toEqual([` none`, ` none`, ` none`])
   })
 
   describe(`Pagination`, () => {
@@ -1663,10 +1667,10 @@ describe(`DataTable`, () => {
       expect(header.getAttribute(`aria-grabbed`)).toBeNull()
     })
 
-    // Sticky columns pin to one edge, so any after the first clears the ones before it (by
+    // Pinned columns stick to one edge, so any after the first clears the ones before it (by
     // their measured offsetWidth, re-read when a header resizes). Right pins stack from the
     // right edge in reverse order, and the header context menu re-pins or unpins (a null pref
-    // overrides the column's own `sticky`).
+    // overrides the column's own `pin`).
     it(`pins and stacks columns on either edge from config and the context menu`, async () => {
       let name_width = 80
       const width_spy = vi
@@ -1679,10 +1683,10 @@ describe(`DataTable`, () => {
         column_prefs: {},
       })
       const columns: Column[] = [
-        { id: `Name`, label: `Name`, sticky: true },
+        { id: `Name`, label: `Name`, pin: `left` },
         { id: `Tag`, label: `Tag` },
-        { id: `Value`, label: `Value`, sticky: `right`, group: `Numbers` },
-        { id: `Note`, label: `Note`, sticky: `right` },
+        { id: `Value`, label: `Value`, pin: `right`, group: `Numbers` },
+        { id: `Note`, label: `Note`, pin: `right` },
       ]
       const data = [{ Name: `A`, Tag: `x`, Value: 1, Note: `n` }]
       mount_table(bind_props({ data, columns, summary: true }, state))
@@ -2005,7 +2009,7 @@ describe(`DataTable`, () => {
         columns: metrics,
         column_prefs: { Tier: { filter } },
       }
-      const sort = { column: `Score`, dir: `desc` as const }
+      const sort = [{ column: `Score`, dir: `desc` as const }]
       mount_table(bind_props({ ...props, sort, pagination: { page_size: 1 } }, state))
       await tick()
       expect(state.visible_rows.map((row) => row.Model)).toEqual([`C`, `A`])
@@ -2125,7 +2129,7 @@ describe(`DataTable`, () => {
         desc: `clears the sort on the third click`,
         data: unsorted_rows,
         columns: metrics,
-        initial_sort: undefined,
+        sort: [],
         initial: [`A`, `B`, `C`],
         states: [
           [[`C`, `A`, `B`], `↑`],
@@ -2140,7 +2144,7 @@ describe(`DataTable`, () => {
         data: unsorted_rows,
         columns: metrics,
         column_prefs: { Score: { better: `lower` as const } },
-        initial_sort: undefined,
+        sort: [],
         initial: [`A`, `B`, `C`],
         states: [
           [[`B`, `A`, `C`], `↓`],
@@ -2149,20 +2153,20 @@ describe(`DataTable`, () => {
         ] as const,
       },
       {
-        // An initial sort has no unsorted state to return to, so its cycle stays two-step.
-        // Data arrives ascending, so the initial order proves the object form sorts desc.
-        desc: `keeps cycling asc/desc under an initial_sort`,
+        // An initial sort cycles like a clicked one, back to the data's order on the second
+        // click. Data arrives ascending, so the initial order proves it sorts desc.
+        desc: `cycles an initial sort through to the data's order`,
         data: [
           { Model: `B`, Score: 10 },
           { Model: `A`, Score: 20 },
         ],
         columns: plain_columns(`Model`, `Score`),
-        initial_sort: { column: `Score`, direction: `desc` as const },
+        sort: [{ column: `Score`, dir: `desc` as const }],
         initial: [`A`, `B`],
         states: [
           [[`B`, `A`], `↓`],
+          [[`B`, `A`], ``],
           [[`A`, `B`], `↑`],
-          [[`B`, `A`], `↓`],
         ] as const,
       },
     ])(`$desc`, async ({ desc: _desc, initial, states, ...props }) => {
@@ -2170,7 +2174,7 @@ describe(`DataTable`, () => {
       const header = doc_query(`th[data-col-id="Score"]`)
       expect(rendered_models()).toEqual(initial)
       expect(/[↑↓]/.exec(header.textContent ?? ``)?.[0] ?? ``).toBe(
-        props.initial_sort ? `↑` : ``,
+        props.sort.length ? `↑` : ``,
       )
       for (const [expected, arrow] of states) {
         await click(header)
@@ -2522,7 +2526,7 @@ describe(`DataTable`, () => {
           columns: sample_columns,
           show_row_select: true,
           row_key: `Model`,
-          sort: { column: `Value`, dir: `desc` },
+          sort: [{ column: `Value`, dir: `desc` }],
         },
         async () => {
           // the first two rendered rows (C, B): data order would export them as B, C
@@ -2554,14 +2558,17 @@ describe(`DataTable`, () => {
   })
 
   describe(`Controls`, () => {
-    it(`show_controls picks the toolbar mode and controls_style styles it`, async () => {
+    it(`show_controls picks the toolbar mode and controls_props reach the toolbar`, async () => {
       const state = $state<{ show_controls: `hover` | `always` | `never` }>({
         show_controls: `always`,
       })
-      mount_sample(bind_props({ search: true, controls_style: `opacity: 0.5` }, state))
+      const controls_props = { class: `host-bar`, style: `opacity: 0.5`, id: `bar` }
+      mount_sample(bind_props({ search: true, controls_props }, state))
       const row = doc_query(`.control-buttons`)
-      expect(row.classList.contains(`always-visible`)).toBe(true)
-      expect(row.style.opacity).toBe(`0.5`)
+      expect([...row.classList]).toEqual(
+        expect.arrayContaining([`always-visible`, `host-bar`]),
+      )
+      expect([row.style.opacity, row.id]).toEqual([`0.5`, `bar`])
       state.show_controls = `hover`
       await tick()
       expect(row.classList.contains(`hover-visible`)).toBe(true)
