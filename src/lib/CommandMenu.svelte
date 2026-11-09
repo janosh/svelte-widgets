@@ -53,7 +53,10 @@
     recent_actions_key = null,
     max_recent = 20,
     ...rest
-  }: Omit<OptionListProps<Action>, `auto_active_first_option` | `key` | `options`> & {
+  }: Omit<
+    OptionListProps<Action>,
+    `auto_active_first_option` | `disabled` | `key` | `options`
+  > & {
     actions: Action[]
     // Called after a menu selection or global shortcut invokes its action.
     on_execute?: (detail: { action: Action }) => unknown
