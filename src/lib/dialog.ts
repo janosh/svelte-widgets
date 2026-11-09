@@ -1,6 +1,6 @@
 import type { Snippet } from 'svelte'
 import type { HTMLDialogAttributes } from 'svelte/elements'
-import { register_escape_layer } from './attachments/shared'
+import { escape_layer } from './attachments/shared'
 
 export type DialogCloseVia = `pointer` | `escape` | `close`
 export type DialogCloseDetail = { via: DialogCloseVia }
@@ -80,7 +80,7 @@ export const restore_dialog_focus = (
 // to close the dialog; layers registered later, inside it, still come first.
 export const show_modal = (dialog: HTMLDialogElement): void => {
   dialog.showModal()
-  const release = register_escape_layer(() => {
+  const release = escape_layer(() => {
     if (dialog.open && dialog.isConnected) return true
     release() // closed or unmounted without a close event reaching us
     return false

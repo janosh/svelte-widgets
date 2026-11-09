@@ -5,7 +5,7 @@
   import { tick } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
-  import { claim_escape_while_focused } from './attachments/shared'
+  import { escape_layer } from './attachments/shared'
   import { create_find_state, type FindOptions } from './find-in-page.svelte'
   import Icon from './Icon.svelte'
   import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
@@ -79,7 +79,7 @@
   aria-label={find_label}
   role="search"
   class={[`find-bar`, rest.class]}
-  {@attach claim_escape_while_focused(() => on_close())}
+  {@attach (node) => escape_layer(on_close, { consume: true, while_focused: node })}
 >
   <Icon icon={Search} class="find-icon" />
   <input

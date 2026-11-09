@@ -9,7 +9,7 @@ import {
   pointer_event,
 } from './index'
 import TestDialog from './TestDialog.svelte'
-import { claim_escape, focusable } from '#lib/attachments/shared.ts'
+import { escape_layer, focusable } from '#lib/attachments/shared.ts'
 import Sheet from '#lib/Sheet.svelte'
 
 describe(`Dialog`, () => {
@@ -215,7 +215,7 @@ describe(`Dialog`, () => {
   // the modal would otherwise take Escape and cancel the dialog's own close
   test(`an older Escape layer behind the open modal doesn't see Escape`, async () => {
     const pane_escape = vi.fn()
-    const release_pane = claim_escape(pane_escape)
+    const release_pane = escape_layer(pane_escape, { consume: true })
     mount_dialog()
     await click(trigger())
 

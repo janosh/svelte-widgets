@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes, HTMLInputAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
-  import { hold_escape_while_focused } from './attachments/shared'
+  import { escape_layer } from './attachments/shared'
   import {
     merge_defaults,
     NUMBER_RANGE_INPUT_LABELS,
@@ -188,7 +188,8 @@
       number_props?.onkeydown?.(event)
       log_keydown(event)
     }}
-    {@attach hold_escape_while_focused(() => draft !== String(value ?? ``))}
+    {@attach (node) =>
+      escape_layer(() => draft !== String(value ?? ``), { while_focused: node })}
   />
   <input
     {...range_props}

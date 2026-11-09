@@ -2,7 +2,7 @@
   import { type Snippet, tick, untrack } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { hotkey } from './attachments/index'
-  import { consume_escape, hold_escape_while_focused } from './attachments/shared'
+  import { escape_layer } from './attachments/shared'
   import { merge_defaults, TOAST_LABELS, type ToastLabels } from './labels'
   import { toast as default_store } from './toast-queue.svelte.ts'
   import type { ToastItem, ToastPosition, ToastStore } from './toast-queue.svelte.ts'
@@ -126,9 +126,12 @@
   // Scoped to focus inside the stack so a global Escape doesn't fight every dialog, and on
   // the Escape layer stack so an open pane or menu behind it can't take the key first.
   // Gated on `dismissible`, or Escape would be the one way to close an undismissable toast.
-  const escape_layer = (event: KeyboardEvent) => {
+  const dismiss_on_escape = (event: KeyboardEvent) => {
     if (!active_toast || !dismissible) return false
-    return consume_escape(() => dismiss(active_toast.id))(event)
+    event.preventDefault()
+    event.stopPropagation()
+    dismiss(active_toast.id)
+    return true
   }
 </script>
 
@@ -174,7 +177,7 @@ announced by only some screen readers, and swapping aria-live mid-flight is as u
   onfocusin={chain_handlers(() => set_focused(true), rest.onfocusin)}
   onfocusout={chain_handlers(() => set_focused(false), rest.onfocusout)}
   {@attach hotkey({ bindings, global: true })}
-  {@attach hold_escape_while_focused(escape_layer)}
+  {@attach (node) => escape_layer(dismiss_on_escape, { while_focused: node })}
 >
   <div role="status" aria-live="polite" aria-atomic="true">
     {#if active_toast && !is_assertive}

@@ -10,7 +10,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 
 - Content: `content` or a per-trigger `content(trigger)`. Without explicit content, `title`, `aria-label`, then `data-title` are read, `aria-label` only for icon-only triggers (a trigger showing its own text, or a checkbox/radio beside its label, keeps it as its accessible name). Attaching once to a container delegates to matching descendants; `delegate` takes a selector. Text that only repeats the trigger's own visible text is skipped, unless the trigger or a descendant overflows (e.g. an ellipsis), where the tooltip reveals the hidden part.
 - Position: `placement` defaults to `auto`. `align`, `fallback_placements`, `offset`, `cross_axis_offset`, `viewport_padding`, `boundary`, `flip` and `shift` refine it, and the tooltip tracks scrolling, resizing and content changes.
-- Interaction: `trigger`, `touch_focus`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change` reports visibility changes caused by hover, focus, Escape, or teardown.
+- Interaction: `trigger`, `touch_focus`, `open_delay_ms`, `close_delay_ms` and `skip_delay_ms`; `on_open_change(open, { trigger, via })` reports visibility changes caused by hover, focus, Escape, or teardown. `disabled` keeps the tooltip shut (closing it if open) while still holding the trigger's `title`, so no native tooltip shows in its place.
 - Rendering: content is plain text, `wrap` is `balance`, `normal` or `nowrap`, and `show_arrow` defaults to true.
 - Styling: `style` for one-off declarations, or theme with `--tooltip-bg`, `--text-color`, `--tooltip-border`, `--tooltip-padding`, `--tooltip-radius`, `--tooltip-font-size`, `--tooltip-font-family`, `--tooltip-shadow`, `--tooltip-max-width`, `--tooltip-max-height`, `--tooltip-opacity`, `--tooltip-arrow-size`, `--tooltip-transition` and `--tooltip-z-index`.
 
@@ -138,7 +138,7 @@ With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is
   import { tooltip } from 'svelte-widgets/attachments'
 
   let [open_delay_ms, close_delay_ms] = $state([100, 100])
-  let last_reason = $state(`—`)
+  let last_via = $state(`—`)
 </script>
 
 <div style="display: flex; gap: 1em; align-items: end; flex-wrap: wrap">
@@ -172,13 +172,13 @@ With `hover-focus`, touch-induced focus is ignored unless `touch_focus: true` is
     {@attach tooltip({
       content: `Reports focus, pointer, and Escape changes`,
       on_open_change: (_open, detail) => {
-        last_reason = detail.reason
+        last_via = detail.via
       },
     })}
   >
     Visibility events
   </button>
-  <small>last reason: <code>{last_reason}</code></small>
+  <small>last via: <code>{last_via}</code></small>
 </div>
 ```
 

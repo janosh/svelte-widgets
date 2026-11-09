@@ -107,12 +107,23 @@ export interface OptionListEvents<T extends Option = Option> {
   on_activate?: (data: { option: T | null; index: number | null }) => unknown // keyboard nav
 }
 
+// What closed the dropdown: `select` covers close_dropdown_on_select and reaching max_select,
+// `pointer` a press outside, `trigger` the expand icon, `shortcut` the `close` hotkey
+export type MultiSelectCloseVia =
+  | `escape`
+  | `tab`
+  | `shortcut`
+  | `select`
+  | `blur`
+  | `pointer`
+  | `trigger`
+  | `disabled`
+
 export interface MultiSelectEvents<
   T extends Option = Option,
 > extends OptionListEvents<T> {
-  on_open?: (data: { event: Event }) => unknown
-  // also fires with a synthetic `disabled` event when disabling closes an open list
-  on_close?: (data: { event: Event }) => unknown
+  on_open?: () => unknown
+  on_close?: (data: { via: MultiSelectCloseVia }) => unknown
   on_add?: (data: { option: T; selected: T[] }) => unknown
   on_create?: (data: {
     option: T
@@ -429,7 +440,7 @@ export type NavRoute =
 
 // === Toc ===
 export type CollapseMode = boolean | `h${2 | 3 | 4 | 5 | 6}`
-export type OpenChangeTrigger =
+export type OpenChangeVia =
   | `button`
   | `escape`
   | `outside-click`
@@ -439,7 +450,7 @@ export type OpenChangeTrigger =
 export type OpenChangeEvent = {
   open: boolean
   desktop: boolean
-  trigger: OpenChangeTrigger
+  via: OpenChangeVia
 }
 export type OpenChangeHandler = (event: OpenChangeEvent) => void
 export type TocHeadingData = { id: string; level: number; title: string }

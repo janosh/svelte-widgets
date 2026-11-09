@@ -17,7 +17,7 @@
   import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
   import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'
-  import { hold_escape_while_focused } from '../attachments/shared'
+  import { escape_layer } from '../attachments/shared'
   import type { HTMLAttributes } from 'svelte/elements'
   import { SvelteSet } from 'svelte/reactivity'
   import JsonNode from './JsonNode.svelte'
@@ -520,11 +520,13 @@
   {...rest}
   class={[`json-tree`, rest.class]}
   onkeydown={handle_tree_keydown}
-  {@attach hold_escape_while_focused(
-    (event) =>
-      !is_editable_event_target(event.target) &&
-      (context_menu_state !== null || selected_paths.size > 0),
-  )}
+  {@attach (node) =>
+    escape_layer(
+      (event) =>
+        !is_editable_event_target(event.target) &&
+        (context_menu_state !== null || selected_paths.size > 0),
+      { while_focused: node },
+    )}
 >
   {#if ui.header !== false}
     <header class="json-tree-header">
@@ -536,7 +538,8 @@
           value={search_input_value}
           oninput={handle_search_input}
           onkeydown={handle_search_keydown}
-          {@attach hold_escape_while_focused(() => search_input_value !== ``)}
+          {@attach (node) =>
+            escape_layer(() => search_input_value !== ``, { while_focused: node })}
           class="search-input"
         />
         {#if search_input_value}

@@ -21,7 +21,7 @@ export type { StickToBottom, StickToBottomOptions } from './stick-to-bottom.svel
 export { tooltip } from './tooltip'
 export type {
   TooltipOpenDetail,
-  TooltipOpenReason,
+  TooltipOpenVia,
   TooltipOptions,
   TooltipStrategy,
   TooltipTrigger,
@@ -34,7 +34,8 @@ export type {
   DismissDetail,
   DismissOptions,
 } from './click-outside'
-export { register_escape_layer } from './shared'
+export { escape_layer } from './shared'
+export type { EscapeLayerOptions } from './shared'
 export { auto_update_position, float, portal } from './float'
 export { anchored_popover, close_before_removal } from './anchored-popover'
 export type { AnchoredPopoverOptions } from './anchored-popover'

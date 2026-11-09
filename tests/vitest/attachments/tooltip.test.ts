@@ -1,5 +1,5 @@
 import type { TooltipOptions } from '#lib/attachments/index.ts'
-import { register_escape_layer, tooltip } from '#lib/attachments/index.ts'
+import { escape_layer, tooltip } from '#lib/attachments/index.ts'
 import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -109,12 +109,12 @@ describe(`tooltip manager`, () => {
     expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
     cleanup()
     cleanup()
-    expect(
-      on_open_change.mock.calls.map(([open, detail]) => [open, detail.reason]),
-    ).toEqual([
-      [true, `pointer`],
-      [false, `visibility`],
-    ])
+    expect(on_open_change.mock.calls.map(([open, detail]) => [open, detail.via])).toEqual(
+      [
+        [true, `pointer`],
+        [false, `visibility`],
+      ],
+    )
   })
 
   it.each([
@@ -173,6 +173,41 @@ describe(`tooltip manager`, () => {
       expect(element.title).toBe(`Description`)
     },
   )
+
+  // Svelte re-attaches when `disabled` flips, so that's what each toggle simulates here
+  it(`disabled holds the title, never opens, and closes an open tooltip`, () => {
+    const outer = create_element()
+    attach_tooltip(outer, { content: `Outer`, trigger: `hover` })
+    const element = document.createElement(`button`)
+    element.title = `Native`
+    outer.append(element)
+    mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
+    const on_open_change = vi.fn()
+    let cleanup = attach_tooltip(element, { on_open_change })
+    pointer_over(element)
+    expect(visible_text()).toBe(`Native`)
+
+    cleanup()
+    cleanup = attach_tooltip(element, { on_open_change, disabled: true })
+    expect(on_open_change).toHaveBeenLastCalledWith(false, {
+      trigger: element,
+      via: `visibility`,
+    })
+    expect(element.hasAttribute(`title`)).toBe(false)
+    focus_in(element)
+    // unclaimed, so the enclosing tooltip takes the hover
+    pointer_over(element)
+    expect(visible_text()).toBe(`Outer`)
+    expect(on_open_change).toHaveBeenCalledTimes(2)
+
+    pointer_out(element)
+    focus_out(element)
+    cleanup()
+    expect(element.title).toBe(`Native`)
+    attach_tooltip(element, { on_open_change })
+    pointer_over(element)
+    expect(visible_text()).toBe(`Native`)
+  })
 
   it(`gives explicit content precedence and treats an empty result as disabled`, () => {
     pointer_over(register_tooltip(`Native`, { content: `Explicit` }).element)
@@ -312,14 +347,14 @@ describe(`tooltip manager`, () => {
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change).toHaveBeenLastCalledWith(false, {
       trigger: element,
-      reason: `blur`,
+      via: `blur`,
     })
   })
 
   it(`closes only once every pointer has left both trigger and tooltip`, () => {
     // an outer surface (e.g. a pane) opened before the tooltip, which thus outranks it
     const outer_layer = vi.fn(() => true)
-    onTestFinished(register_escape_layer(outer_layer))
+    onTestFinished(escape_layer(outer_layer))
     const { element, tooltip_el } = show_tooltip({ close_delay_ms: 100 })
     const surface_pointer = (type: string, pointer_type = `mouse`) =>
       tooltip_el.dispatchEvent(
@@ -371,7 +406,7 @@ describe(`tooltip manager`, () => {
     const on_open_change = vi.fn()
     // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
     const surrounding_layer = vi.fn(() => true)
-    onTestFinished(register_escape_layer(surrounding_layer))
+    onTestFinished(escape_layer(surrounding_layer))
     const element = create_element(`button`)
     attach_tooltip(element, {
       trigger: `focus`,
@@ -392,7 +427,7 @@ describe(`tooltip manager`, () => {
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
     expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
-      [false, { trigger: element, reason: `escape` }],
+      [false, { trigger: element, via: `escape` }],
     ])
 
     // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.

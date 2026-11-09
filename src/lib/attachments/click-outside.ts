@@ -1,4 +1,4 @@
-import { claim_escape, is_primary_press } from './shared'
+import { escape_layer, is_primary_press } from './shared'
 
 export type DismissDetail = {
   // lets an Escape dismissal hand focus back to the trigger rather than strand it
@@ -154,8 +154,9 @@ export const dismiss_on_outside_press = (options: DismissOptions = {}): (() => v
     document.addEventListener(`pointercancel`, forget_press, capture)
   }
   const unregister_escape = escape
-    ? claim_escape((event) =>
-        dismiss({ focus_inside: focus_is_inside(), via: `escape`, event }),
+    ? escape_layer(
+        (event) => dismiss({ focus_inside: focus_is_inside(), via: `escape`, event }),
+        { consume: true },
       )
     : undefined
 

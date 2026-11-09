@@ -6,7 +6,7 @@
   import type {
     CollapseMode,
     OpenChangeHandler,
-    OpenChangeTrigger,
+    OpenChangeVia,
     TocHeadingData,
   } from './types'
   import { create_key_selector } from './internal/key-selector.svelte'
@@ -175,11 +175,11 @@
     prev_scroll_target_distance = Infinity
   }
 
-  function set_open(value: boolean, trigger: OpenChangeTrigger) {
+  function set_open(value: boolean, via: OpenChangeVia) {
     if ((last_reported_open ?? open) === value) return
     last_reported_open = value
     open = value
-    on_open_change?.({ open: value, desktop, trigger })
+    on_open_change?.({ open: value, desktop, via })
   }
 
   type LiEvent = (MouseEvent | KeyboardEvent) & {
@@ -244,7 +244,7 @@
     if (current_open === last_reported_open) return
     untrack(() => {
       last_reported_open = current_open
-      on_open_change?.({ open: current_open, desktop, trigger: `programmatic` })
+      on_open_change?.({ open: current_open, desktop, via: `programmatic` })
     })
   })
 

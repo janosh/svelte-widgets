@@ -855,16 +855,16 @@ Example using several snippets:
    Triggers when an option is either added (selected) or removed from selected, all selected options are removed at once, a range is selected, or selected options are reordered via drag-and-drop. `type` is one of `'add' | 'remove' | 'remove_all' | 'select_all' | 'range_select' | 'reorder'` and payload will be `option: Option` or `options: Option[]`, respectively.
 
 1. ```ts
-   on_open={({ event }) => console.log(`Dropdown opened by`, event)}
+   on_open={() => console.log(`Dropdown opened`)}
    ```
 
-   Triggers when the dropdown list of options appears. `event` is the DOM's `FocusEvent`, `KeyboardEvent` or `ClickEvent` that triggered the open.
+   Triggers when the dropdown list of options appears.
 
 1. ```ts
-   on_close={({ event }) => console.log(`Dropdown closed by`, event)}
+   on_close={({ via }) => console.log(`Dropdown closed via`, via)}
    ```
 
-   Triggers when the dropdown list of options disappears. `event` is the DOM's `FocusEvent`, `KeyboardEvent` or `ClickEvent` that triggered the close.
+   Triggers when the dropdown list of options disappears. `via` is `'escape' | 'tab' | 'shortcut' | 'select' | 'blur' | 'pointer' | 'trigger' | 'disabled'`: `select` covers `close_dropdown_on_select` and reaching `max_select`, `pointer` a press outside, `trigger` the expand icon, `shortcut` the `close` hotkey and `disabled` disabling an open dropdown.
 
 1. ```ts
    on_search={({ search_text, matching_options }) => console.log(search_text, matching_options.length)}

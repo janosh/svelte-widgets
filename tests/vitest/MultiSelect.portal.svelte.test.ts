@@ -287,7 +287,7 @@ test.each([true, false])(
     expect(is_open()).toBe(false)
     expect(document.activeElement).toBe(document.body)
     expect(doc_query(`ul.options`).classList).toContain(`hidden`)
-    expect(on_close).toHaveBeenCalledOnce()
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({ via: `disabled` })
 
     props.open = true // a parent binding can't reopen a disabled control
     await tick()

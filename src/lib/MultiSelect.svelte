@@ -26,14 +26,14 @@
     click_outside,
     highlight_matches as attach_highlight_matches,
   } from './attachments/index'
-  import { hold_escape_while_focused, is_composing } from './attachments/shared'
+  import { escape_layer, is_composing } from './attachments/shared'
   import CircleSpinner from './CircleSpinner.svelte'
   import Icon from './Icon.svelte'
   import LiveMessage from './LiveMessage.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
   import { portal_action } from './portal'
-  import type { MultiSelectProps, SelectAllScope } from './types'
+  import type { MultiSelectCloseVia, MultiSelectProps, SelectAllScope } from './types'
   import * as utils from './utils'
   import Wiggle from './Wiggle.svelte'
 
@@ -806,7 +806,7 @@
     else if (reset_filter_on_add && !from_paste && !draft_changed) search_text = ``
     set_selection(next_selected)
 
-    handle_dropdown_after_select(event)
+    handle_dropdown_after_select()
     announce(msg.option_selected(label_of(option_to_add)))
     on_add?.({ option: option_to_add, selected })
     on_change?.({ option: option_to_add, type: `add` })
@@ -853,7 +853,7 @@
     const clicked_expand_icon =
       event.target instanceof Element && event.target.closest(`.expand-icon`)
     if (clicked_expand_icon) {
-      if (open) return close_dropdown(event) // expand icon toggles the dropdown
+      if (open) return close_dropdown(`trigger`) // expand icon toggles the dropdown
       if (input_display) show_all_input_options = true
     }
     if (open) return
@@ -862,7 +862,7 @@
       // skipped for FocusEvents, which already focused the input
       input?.focus()
     }
-    on_open?.({ event })
+    on_open?.()
   }
 
   let suppress_next_focus_open = false
@@ -894,7 +894,7 @@
     }
   }
 
-  function close_dropdown(event: Event, retain_focus = false) {
+  function close_dropdown(via: MultiSelectCloseVia, retain_focus = false) {
     if (!open) return
     const focus_before_onclose = document.activeElement
     open = false
@@ -902,7 +902,7 @@
     if (!retain_focus) input?.blur()
     active_index = null
     is_user_message_active = false
-    on_close?.({ event })
+    on_close?.({ via })
     // skip when on_close moved focus itself
     if (retain_focus && document.activeElement === focus_before_onclose) {
       focus_input_without_open()
@@ -923,7 +923,7 @@
         options_list_el?.contains(activeElement)
       )
         activeElement.blur()
-      close_dropdown(new Event(`disabled`))
+      close_dropdown(`disabled`)
     })
   })
   $effect(() => {
@@ -931,8 +931,8 @@
   })
 
   // close dropdown and (in chip mode) clear the search draft — Escape/Tab + close shortcut
-  function close_and_clear(event: Event) {
-    close_dropdown(event)
+  function close_and_clear(via: MultiSelectCloseVia) {
+    close_dropdown(via)
     if (!input_display) search_text = ``
   }
 
@@ -948,7 +948,7 @@
     form_input?.setCustomValidity(validity_msg)
   }
 
-  function handle_dropdown_after_select(event: Event) {
+  function handle_dropdown_after_select() {
     const reached_max = selected.length >= (max_select ?? Infinity)
     const window_width = globalThis.innerWidth
     const should_close =
@@ -958,7 +958,7 @@
         window_width &&
         window_width < breakpoint)
     if (reached_max || should_close) {
-      close_dropdown(event, close_dropdown_on_select === `retain-focus`)
+      close_dropdown(`select`, close_dropdown_on_select === `retain-focus`)
     } else input?.focus()
   }
 
@@ -1100,7 +1100,7 @@
           {
             keys: effective_shortcuts.close ?? [],
             enabled: open,
-            handler: close_and_clear,
+            handler: () => close_and_clear(`shortcut`),
           },
         ].map(({ handler, ...binding }) => ({
           ...binding,
@@ -1126,7 +1126,7 @@
       // a closed dropdown has nothing to dismiss, so the key belongs to the enclosing pane.
       // While open, the outer div's Escape hold keeps a pane's capture-phase layer off it.
       if (open) event.stopPropagation()
-      close_and_clear(event)
+      close_and_clear(event.key === `Escape` ? `escape` : `tab`)
     } else if (event.key === `Enter`) {
       event.stopPropagation()
       event.preventDefault() // prevent enter key from triggering form submission
@@ -1200,7 +1200,7 @@
     if (added.length > 0) {
       set_selection(sort_selection([...selected, ...added]))
       if (reset_filter_on_add) search_text = ``
-      handle_dropdown_after_select(event)
+      handle_dropdown_after_select()
       announce(msg.options_selected(added.length))
     }
     if (added.length < unselected.length) reject_at_max(unselected[added.length])
@@ -1503,7 +1503,7 @@
       (!(event.relatedTarget instanceof Node) ||
         !outer_div?.contains(event.relatedTarget))
     )
-      close_dropdown(event)
+      close_dropdown(`blur`)
 
     onblur?.(event)
   }
@@ -1625,9 +1625,9 @@
     // a portalled dropdown is no longer a descendant of this div
     inside: [options_list_el],
     dismiss_on,
-    callback: (_node, _config, { event }) => close_dropdown(event),
+    callback: () => close_dropdown(`pointer`),
   })}
-  {@attach hold_escape_while_focused(() => open)}
+  {@attach (node) => escape_layer(() => open, { while_focused: node })}
   title={disabled ? disabled_input_title : null}
   data-id={id}
   tabindex="-1"

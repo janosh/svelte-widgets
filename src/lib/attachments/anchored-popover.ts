@@ -1,6 +1,6 @@
 import type { TransitionConfig } from 'svelte/transition'
 import { float } from './float'
-import { register_escape_layer } from './shared'
+import { escape_layer } from './shared'
 
 // Each open anchored popover's silent close (hide without reporting it through on_close)
 const silent_closers = new WeakMap<Element, () => void>()
@@ -28,7 +28,7 @@ export const anchored_popover =
     // Escape belongs to the open popover (the innermost Escape layer), before a host's own
     // Escape handling. Focus returns to the trigger before hiding: the browser's own restore
     // fires focusin mid-hide, where a tooltip's showPopover throws.
-    const release_escape = register_escape_layer((event) => {
+    const release_escape = escape_layer((event) => {
       if (!node.matches(`:popover-open`)) return false
       event.preventDefault()
       event.stopPropagation()

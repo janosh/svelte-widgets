@@ -59,14 +59,14 @@ Repeats collapse: a second toast with the same `dedupe_key` (defaulting to the m
       dedupe_key: `delete-${Math.random()}`,
       duration_ms: null,
       action: { label: `Undo`, on_click: () => record(`undo pressed`) },
-      on_close: (toast, reason) => record(`${reason}: ${toast.message}`),
+      on_close: (toast, { via }) => record(`${via}: ${toast.message}`),
     })
   const spam = () => {
     for (const idx of [1, 2, 3, 4, 5]) {
       store.show(`Background job ${idx} finished`, {
         priority: `success`,
         duration_ms: null,
-        on_close: (toast, reason) => record(`${reason}: ${toast.message}`),
+        on_close: (toast, { via }) => record(`${via}: ${toast.message}`),
       })
     }
   }

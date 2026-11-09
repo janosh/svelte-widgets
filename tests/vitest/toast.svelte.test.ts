@@ -19,7 +19,7 @@ import type {
 import { createRawSnippet, tick } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { click, doc_query, escape_key, press_key, render as mount_body } from './index'
-import { claim_escape } from '#lib/attachments/shared.ts'
+import { escape_layer } from '#lib/attachments/shared.ts'
 
 const undo = { label: `Undo` }
 // The ladder this queue was extracted from: `action` for undo prompts, `watch` for
@@ -412,7 +412,7 @@ describe(`ToastStore`, () => {
     [`dismiss`, (store: ToastStore) => store.dismiss(`toast-1`)],
     [`action`, (store: ToastStore) => store.run_action(`toast-1`)],
     [`timeout`, () => vi.advanceTimersByTime(DEFAULT_TOAST_DURATION_MS)],
-  ] as const)(`on_close reports reason=%s`, (reason, act) => {
+  ] as const)(`on_close reports via=%s`, (via, act) => {
     fake_clock()
     const store = track(new ToastStore())
     const on_close = vi.fn<ToastCloseHandler>()
@@ -421,8 +421,8 @@ describe(`ToastStore`, () => {
 
     act(store)
 
-    expect(on_close).toHaveBeenCalledExactlyOnceWith(expect.anything(), reason)
-    expect(on_click).toHaveBeenCalledTimes(reason === `action` ? 1 : 0)
+    expect(on_close).toHaveBeenCalledExactlyOnceWith(expect.anything(), { via })
+    expect(on_click).toHaveBeenCalledTimes(via === `action` ? 1 : 0)
   })
 
   test(`an overflowed toast reports on_close too`, () => {
@@ -432,7 +432,7 @@ describe(`ToastStore`, () => {
     store.show(`kept`)
     store.show(`dropped`, { on_close })
 
-    expect(on_close.mock.calls[0][1]).toBe(`overflow`)
+    expect(on_close.mock.calls[0][1]).toEqual({ via: `overflow` })
     expect(messages(store.items)).toEqual([`active`, `kept`])
   })
 
@@ -763,7 +763,7 @@ describe(`<Toast />`, () => {
     `Escape inside the toast dismisses when dismissible=%s`,
     async (dismissible, left_on_screen) => {
       const pane_escape = vi.fn()
-      const release_pane = claim_escape(pane_escape)
+      const release_pane = escape_layer(pane_escape, { consume: true })
       const store = render({ dismissible })
       store.show(`a`, { action: { label: `Undo`, on_click: vi.fn() } })
       await tick()

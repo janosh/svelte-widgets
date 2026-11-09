@@ -1,4 +1,4 @@
-import { register_escape_layer } from '#lib/attachments/index.ts'
+import { escape_layer } from '#lib/attachments/index.ts'
 import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '#lib/code-editor/model.ts'
 import type * as Tokens from '#lib/code-editor/tokens.ts'
@@ -206,7 +206,7 @@ test(`search navigates offscreen matches, refreshes after edits, and preserves f
   )
   const { model, textarea, props } = await mount_editor(lines.join(`\n`))
   const parent_escape = vi.fn(() => true)
-  onTestFinished(register_escape_layer(parent_escape))
+  onTestFinished(escape_layer(parent_escape))
   textarea.focus()
   expect(press_key(textarea, `f`, { ctrlKey: true }).defaultPrevented).toBe(true)
   await flush_async()
@@ -432,7 +432,7 @@ test(`native input, selection, history, commands, and backend deltas share the m
   const no_op_dedent = press_key(textarea, `Tab`, { shiftKey: true })
   expect([no_op_dedent.defaultPrevented, model.revision]).toEqual([true, 11])
   const parent_escape = vi.fn(() => true)
-  const unregister = register_escape_layer(parent_escape)
+  const unregister = escape_layer(parent_escape)
   onTestFinished(unregister)
   textarea.focus()
   expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)

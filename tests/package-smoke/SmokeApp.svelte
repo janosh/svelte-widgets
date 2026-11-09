@@ -52,7 +52,7 @@
     auto_update_position,
     click_outside,
     file_drop,
-    register_escape_layer,
+    escape_layer,
   } from 'svelte-widgets/attachments'
   import { count_lines } from 'svelte-widgets/code-editor'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
@@ -108,7 +108,7 @@
     typeof ask_prompt === `function` &&
     typeof auto_update_position === `function` &&
     typeof file_drop === `function` &&
-    typeof register_escape_layer === `function` &&
+    typeof escape_layer === `function` &&
     typeof create_find_state === `function` &&
     count_lines(`one\ntwo`) === 2 &&
     editor_model.text() === `a\nb` &&

@@ -62,7 +62,7 @@ This demo logs common selection, dropdown, search, activation, and native input 
       on_remove_all={(data) => log_event('on_remove_all', data)}
       on_change={(data) => log_event('on_change', data)}
       on_create={(data) => log_event('on_create', data)}
-      on_open={(data) => log_event('on_open', data)}
+      on_open={() => log_event('on_open', {})}
       on_close={(data) => log_event('on_close', data)}
       on_search={(data) => log_event('on_search', data)}
       on_max_reached={(data) => log_event('on_max_reached', data)}
@@ -196,8 +196,8 @@ The tables below list only the events wired up in the demo above. `MultiSelect` 
 | `on_remove_all`  | Fired when all options are removed               | `{ options: T[] }`                                                                                                      |
 | `on_change`      | Fired for any selection change                   | `{ option?: T, options?: T[], type: 'add' \| 'remove' \| 'remove_all' \| 'select_all' \| 'range_select' \| 'reorder' }` |
 | `on_create`      | Fired when user creates a custom option          | `{ option: T }`                                                                                                         |
-| `on_open`        | Fired when dropdown opens                        | `{ event: Event }`                                                                                                      |
-| `on_close`       | Fired when dropdown closes                       | `{ event: Event }`                                                                                                      |
+| `on_open`        | Fired when dropdown opens                        | none                                                                                                                    |
+| `on_close`       | Fired when dropdown closes                       | `{ via: MultiSelectCloseVia }`                                                                                          |
 | `on_search`      | Fired (debounced 150ms) when search text changes | `{ search_text: string, matching_options: T[] }`                                                                        |
 | `on_max_reached` | Fired when user tries to exceed max_select       | `{ selected: T[], max_select: number, attempted_option: T }`                                                            |
 | `on_duplicate`   | Fired when user tries to add duplicate           | `{ option: T }`                                                                                                         |

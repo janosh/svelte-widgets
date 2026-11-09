@@ -1,9 +1,4 @@
-import { register_escape_layer } from '#lib/attachments/index.ts'
-import {
-  claim_escape,
-  claim_escape_while_focused,
-  hold_escape_while_focused,
-} from '#lib/attachments/shared.ts'
+import { escape_layer } from '#lib/attachments/index.ts'
 import { expect, it, onTestFinished, vi } from 'vite-plus/test'
 import {
   create_element,
@@ -12,9 +7,9 @@ import {
   press_key as dispatch_key,
 } from '../index'
 
-it(`register_escape_layer skips handled Escape and captures through stopped propagation`, () => {
+it(`escape_layer skips handled Escape and captures through stopped propagation`, () => {
   const layer = vi.fn()
-  const unregister = register_escape_layer(layer)
+  const unregister = escape_layer(layer)
   onTestFinished(unregister)
   const handled = escape_key()
   handled.preventDefault()
@@ -32,7 +27,29 @@ it(`register_escape_layer skips handled Escape and captures through stopped prop
   expect(layer).toHaveBeenCalledExactlyOnceWith(event)
 })
 
-it(`claim_escape_while_focused stays below a layer a descendant claims on its own focusin`, () => {
+// Without `consume` the return decides whether older layers run; `consume` takes the key
+// whatever the handler returns, so `() => (open = false)` can't leak it to an outer layer
+it.each([
+  [false, false, true, false],
+  [false, undefined, true, false],
+  [false, true, false, false],
+  [true, false, false, true],
+  [true, undefined, false, true],
+] as const)(
+  `consume=%s layer returning %s: older layer runs=%s, prevented=%s`,
+  (consume, returned, older_runs, prevented) => {
+    const older = vi.fn(() => true)
+    const newer = vi.fn(() => returned)
+    onTestFinished(escape_layer(older))
+    onTestFinished(escape_layer(newer, { consume }))
+    const event = press_escape()
+    expect(newer).toHaveBeenCalledOnce()
+    expect(older).toHaveBeenCalledTimes(older_runs ? 1 : 0)
+    expect(event.defaultPrevented).toBe(prevented)
+  },
+)
+
+it(`a while_focused layer stays below a layer a descendant claims on its own focusin`, () => {
   const container = create_element()
   const child = document.createElement(`button`)
   container.append(child)
@@ -41,9 +58,12 @@ it(`claim_escape_while_focused stays below a layer a descendant claims on its ow
   let release_child: (() => void) | undefined
   child.addEventListener(`focusin`, () => {
     release_child?.()
-    release_child = claim_escape(close_child)
+    release_child = escape_layer(close_child, { consume: true })
   })
-  const detach = claim_escape_while_focused(close_container)(container)
+  const detach = escape_layer(close_container, {
+    consume: true,
+    while_focused: container,
+  })
   onTestFinished(() => {
     detach()
     release_child?.()
@@ -58,20 +78,16 @@ it(`claim_escape_while_focused stays below a layer a descendant claims on its ow
   expect(close_container).toHaveBeenCalledOnce()
 })
 
-it.each([`claim`, `hold`] as const)(
-  `%s_escape_while_focused lets Escape through once focus left without a focusout`,
-  (kind) => {
+it.each([true, false])(
+  `a while_focused layer (consume=%s) lets Escape through once focus left without a focusout`,
+  (consume) => {
     const outer = vi.fn(() => true)
-    const unregister_outer = register_escape_layer(outer)
+    const unregister_outer = escape_layer(outer)
     const container = create_element()
     const child = document.createElement(`button`)
     container.append(child)
-    const inner = vi.fn()
-    const attach =
-      kind === `claim`
-        ? claim_escape_while_focused(inner)
-        : hold_escape_while_focused(() => (inner(), true))
-    const detach = attach(container)
+    const inner = vi.fn(() => true)
+    const detach = escape_layer(inner, { consume, while_focused: container })
     onTestFinished(() => {
       detach()
       unregister_outer()

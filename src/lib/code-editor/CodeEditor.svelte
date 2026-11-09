@@ -8,12 +8,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import Icon from '../Icon.svelte'
   import { Hash, TextSearch } from '../icons'
-  import {
-    claim_escape,
-    claim_escape_while_focused,
-    css_px,
-    is_composing,
-  } from '../attachments/shared'
+  import { css_px, escape_layer, is_composing } from '../attachments/shared'
   import { merge_defaults, CODE_EDITOR_LABELS, type CodeEditorLabels } from '../labels'
   import { clamp, clamp_integer, lower_bound, to_error } from '../utils'
   import {
@@ -549,10 +544,13 @@
   })
   const on_focus = (): void => {
     // Escape is fully consumed here, never reaching outer layers such as a host dialog.
-    unregister_escape ??= claim_escape(() => {
-      if (search_panel) close_search()
-      else tab_moves_focus = true
-    })
+    unregister_escape ??= escape_layer(
+      () => {
+        if (search_panel) close_search()
+        else tab_moves_focus = true
+      },
+      { consume: true },
+    )
   }
   const on_blur = (): void => {
     unregister_escape?.()
@@ -1244,7 +1242,8 @@
       role="search"
       aria-label={search_panel === `find` ? msg.find : msg.go_to_line}
       {@attach (node) => on(node, `keydown`, handle_search_shortcut)}
-      {@attach claim_escape_while_focused(close_search)}
+      {@attach (node) =>
+        escape_layer(close_search, { consume: true, while_focused: node })}
     >
       <div>
         {#if search_panel === `find`}
