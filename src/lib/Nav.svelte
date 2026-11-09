@@ -217,10 +217,12 @@
   const is_open_dropdown = create_key_selector(() => open_dropdown)
   const route_tooltip = (route: Route) => {
     if (!route.tooltip) return
-    return tooltip({
+    const options = {
       ...tooltip_options,
       ...(typeof route.tooltip === `string` ? { content: route.tooltip } : route.tooltip),
-    })
+    }
+    // an open dropdown hangs below its parent, right where the parent's tooltip would open
+    return tooltip({ ...options, disabled: options.disabled || is_open_dropdown(route) })
   }
   function handle_link_click(event: MouseEvent, route: Route) {
     if (

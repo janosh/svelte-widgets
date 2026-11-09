@@ -908,6 +908,31 @@ describe(`Nav`, () => {
         )
       },
     )
+    // the dropdown opens below its parent, where the parent's tooltip would cover it
+    test(`a dropdown parent's tooltip stays shut while its dropdown is open`, async () => {
+      mount_nav({
+        routes: [
+          {
+            href: `/docs`,
+            label: `Docs`,
+            tooltip: `All docs`,
+            children: [{ href: `/docs/intro`, label: `Introduction` }],
+          },
+        ],
+        tooltip_options: { open_delay_ms: 0 },
+      })
+      const shown = () =>
+        document.querySelector(`.custom-tooltip:not([hidden]) .tooltip-content`)
+          ?.textContent ?? null
+      await open_tooltip(`a[href="/docs"]`)
+      expect(shown()).toBe(`All docs`)
+      await click(`[data-dropdown-toggle]`)
+      await open_tooltip(`a[href="/docs"]`)
+      expect(shown()).toBeNull()
+      await click(`[data-dropdown-toggle]`)
+      await open_tooltip(`a[href="/docs"]`)
+      expect(shown()).toBe(`All docs`)
+    })
     test(`shared tooltip_options merge with per-route options taking precedence`, async () => {
       mount_nav({
         routes: [
