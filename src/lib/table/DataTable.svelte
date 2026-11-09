@@ -186,6 +186,8 @@
     })
   })
 
+  const join_styles = (...parts: (string | null | undefined)[]): string | undefined =>
+    parts.filter(Boolean).join(`; `) || undefined
   // Elementwise === of two lists, for the memoized deriveds below
   const same_parts = (parts: readonly unknown[], prev: readonly unknown[]): boolean =>
     parts.length === prev.length && parts.every((part, idx) => part === prev[idx])
@@ -250,7 +252,7 @@
   )
 
   let export_menu_open = $state(false)
-  // Likewise for the header popovers: one column's filter panel or date/time format list
+  // At most one header popover open: one column's filter panel or date/time format list
   type PopoverKind = `filter` | `datetime`
   let header_popover = $state<{ kind: PopoverKind; col_id: string } | null>(null)
   const popover_open = (kind: PopoverKind, col_id: string): boolean =>
@@ -343,18 +345,6 @@
     }
     return kinds
   })
-  const is_datetime_column = (col: Column<Row>): boolean =>
-    datetime_column_kinds.has(col.id)
-  const datetime_kind = (col: Column<Row>) =>
-    datetime_column_kinds.get(col.id) ?? `datetime`
-  const datetime_format_options = (col: Column<Row>): DateTimeFormatMode[] =>
-    DATETIME_MODES_BY_KIND[datetime_kind(col)]
-  const datetime_mode = (col: Column<Row>): DateTimeFormatMode => {
-    const options = datetime_format_options(col)
-    const selected =
-      prefs_of(col.id).datetime_format ?? col.datetime_format ?? datetime_kind(col)
-    return options.includes(selected) ? selected : options[0]
-  }
   // Ticks once a minute while any column shows relative times so "Xm ago" cells stay fresh.
   let relative_now_ms = $state(Date.now())
   // A boolean, so the timer restarts only when relative mode toggles, not per view rebuild
@@ -405,7 +395,10 @@
     const is_numeric = (col: Column<Row>) => {
       const parsed = parsed_columns.get(cell_key(col))
       return (
-        !is_datetime_column(col) && !col.cell && parsed?.any_numeric && parsed.all_numeric
+        !datetime_column_kinds.has(col.id) &&
+        !col.cell &&
+        parsed?.any_numeric &&
+        parsed.all_numeric
       )
     }
     return new Set(columns.filter(is_numeric).map((col) => col.id))
@@ -701,7 +694,6 @@
       const { nums } = parsed
       const col_stats = compute_column_stats(
         filtered_items.map(({ row_idx }) => nums[row_idx]),
-        undefined,
         needs_median || col.normalize === `quantile`,
       )
       if (!col_stats) continue
@@ -718,16 +710,6 @@
     }
     return stats
   })
-
-  // Columns holding any number, over UNFILTERED data so the better-direction toggle doesn't
-  // vanish mid-search. Looser than `numeric_columns`: mixed-in "N/A" still counts.
-  let any_numeric_ids = $derived(
-    new Set(
-      columns
-        .filter((col) => parsed_columns.get(cell_key(col))?.any_numeric)
-        .map((col) => col.id),
-    ),
-  )
 
   // === Pinned columns ===
   // A user pin (column_prefs) wins over the column config; `sticky: true` means left.
@@ -782,26 +764,30 @@
     bar = $derived.by(() => this.col.render_as === `bar` || this.col.render_as === `both`)
     numeric = $derived.by(() => numeric_columns.has(this.id))
     width = $derived.by(() => prefs_of(this.id).width)
-    #size = (edge: `min-width` | `max-width`) =>
-      this.width ? `; width: ${this.width}px; ${edge}: ${this.width}px` : ``
-    head_style = $derived.by(
-      () => `${this.col.style ?? ``}${this.#size(`min-width`)}` || undefined,
-    )
-    cell_style = $derived.by(
-      () =>
-        `${this.col.cell_style ?? this.col.style ?? ``}${this.#size(`max-width`)}` ||
-        undefined,
-    )
+    // Every cell of the column carries these, from group header to summary row
     pin = $derived.by(() => pin_offsets[this.id])
-    pin_left = $derived.by(() =>
-      this.pin?.side === `left` ? `${this.pin.offset}px` : undefined,
+    pin_class = $derived.by(() => this.pin && [`pinned`, `pinned-${this.pin.side}`])
+    pin_style = $derived.by(() => this.pin && `${this.pin.side}: ${this.pin.offset}px`)
+    #size = (edge: `min-width` | `max-width`) =>
+      this.width ? `width: ${this.width}px; ${edge}: ${this.width}px` : undefined
+    head_style = $derived.by(() =>
+      join_styles(this.col.style, this.#size(`min-width`), this.pin_style),
     )
-    pin_right = $derived.by(() =>
-      this.pin?.side === `right` ? `${this.pin.offset}px` : undefined,
+    cell_style = $derived.by(() =>
+      join_styles(
+        this.col.cell_style ?? this.col.style,
+        this.#size(`max-width`),
+        this.pin_style,
+      ),
     )
-    dt_mode = $derived.by(() =>
-      is_datetime_column(this.col) ? datetime_mode(this.col) : null,
-    )
+    dt_kind = $derived.by(() => datetime_column_kinds.get(this.id))
+    dt_options = $derived.by(() => this.dt_kind && DATETIME_MODES_BY_KIND[this.dt_kind])
+    dt_mode = $derived.by((): DateTimeFormatMode | null => {
+      if (!this.dt_kind || !this.dt_options) return null
+      const selected =
+        prefs_of(this.id).datetime_format ?? this.col.datetime_format ?? this.dt_kind
+      return this.dt_options.includes(selected) ? selected : this.dt_options[0]
+    })
     better = $derived.by(() => better_of(this.col))
     // A new object on every data update: cells read the narrower fields below instead
     stats = $derived.by(() => column_stats.get(this.id))
@@ -929,7 +915,7 @@
     target instanceof Element && Boolean(target.closest(INTERACTIVE_SELECTOR))
 
   // Body events are delegated to <tbody>; cells and rows carry their absolute index. Only
-  // this table's own rows/cells count (a nested HeatmapTable has the same attributes). tbody
+  // this table's own rows/cells count (a nested DataTable has the same attributes). tbody
   // comes from currentTarget since bind:this resolves late, after a keydown right at mount.
   type BodyEvent = Event & { currentTarget: HTMLTableSectionElement }
   const cell_in = (target: EventTarget | null, tbody: Element): CellPos | null => {
@@ -1142,15 +1128,25 @@
     context_menu_col = col_id
     context_menu_at = { x: event.clientX, y: event.clientY }
   }
-  // toggling off re-selects nothing, so the section's radios all read unchecked
-  const toggle_better = (direction: `higher` | `lower`) => {
-    if (!context_menu_col) return
-    const current = prefs_of(context_menu_col).better
-    set_pref(context_menu_col, `better`, current === direction ? undefined : direction)
-  }
-  let context_menu_column = $derived(
-    visible_columns.find((col) => col.id === context_menu_col),
-  )
+  let context_menu_column = $derived(columns_by_id.get(context_menu_col ?? ``))
+  // A radio section over one pref; re-picking the current option sets `cleared` (undefined
+  // drops the pref, so all radios read unchecked; a null pin overrides a config pin)
+  const pref_section = <Key extends `better` | `pinned`>(
+    col_id: string,
+    title: string,
+    key: Key,
+    current: ColumnPrefs[Key],
+    cleared: ColumnPrefs[Key],
+    options: [NonNullable<ColumnPrefs[Key]>, string][],
+  ): CmdSection<CmdAction> => ({
+    title,
+    selected: current ?? ``,
+    actions: options.map(([id, label]) => ({
+      id,
+      label,
+      action: () => set_pref(col_id, key, current === id ? cleared : id),
+    })),
+  })
   let context_menu_actions = $derived([
     {
       title: `Copy`,
@@ -1171,45 +1167,36 @@
           : []),
       ],
     },
-    // Better direction only means something for columns holding numbers
-    ...(allow_better_toggle &&
-    context_menu_column &&
-    any_numeric_ids.has(context_menu_column.id)
-      ? [
-          {
-            title: `Better direction`,
-            selected: prefs_of(context_menu_col ?? ``).better ?? ``,
-            actions: [
-              {
-                id: `higher`,
-                label: `▲ Higher is better`,
-                action: () => toggle_better(`higher`),
-              },
-              {
-                id: `lower`,
-                label: `▼ Lower is better`,
-                action: () => toggle_better(`lower`),
-              },
-            ],
-          },
-        ]
-      : []),
-    ...(allow_pinning && context_menu_column ? [pin_section(context_menu_column)] : []),
-    ...(context_menu_column ? (menu_sections?.(context_menu_column) ?? []) : []),
+    ...(context_menu_column ? column_menu_sections(context_menu_column) : []),
   ])
-  // Pin left/right toggles; re-picking the current side unpins (null overrides a config pin)
-  function pin_section(col: Column<Row>): CmdSection<CmdAction> {
-    const current = pin_of(col)
-    const set_pin = (side: PinSide) =>
-      set_pref(col.id, `pinned`, current === side ? null : side)
-    return {
-      title: `Pin column`,
-      selected: current ?? ``,
-      actions: [
-        { id: `left`, label: `Pin left`, action: () => set_pin(`left`) },
-        { id: `right`, label: `Pin right`, action: () => set_pin(`right`) },
-      ],
+  function column_menu_sections(col: Column<Row>): CmdSection[] {
+    const sections: CmdSection[] = []
+    // Better direction only means something for columns holding numbers. Checked over
+    // unfiltered data so the toggle doesn't vanish mid-search, and mixed-in "N/A" counts.
+    if (allow_better_toggle && parsed_columns.get(cell_key(col))?.any_numeric) {
+      sections.push(
+        pref_section(
+          col.id,
+          `Better direction`,
+          `better`,
+          prefs_of(col.id).better,
+          undefined,
+          [
+            [`higher`, `▲ Higher is better`],
+            [`lower`, `▼ Lower is better`],
+          ],
+        ),
+      )
     }
+    if (allow_pinning) {
+      sections.push(
+        pref_section(col.id, `Pin column`, `pinned`, pin_of(col), null, [
+          [`left`, `Pin left`],
+          [`right`, `Pin right`],
+        ]),
+      )
+    }
+    return [...sections, ...(menu_sections?.(col) ?? [])]
   }
 
   // === Row selection ===
@@ -1322,15 +1309,12 @@
     md: () => table_to_text(table_matrix(), `md`),
     tex: () => table_to_text(table_matrix(), `tex`),
   }
-  const EXPORT_FILES: Record<
-    TableExportFormat,
-    { ext: string; mime: string; label: string }
-  > = {
-    csv: { ext: `csv`, mime: `text/csv`, label: `CSV` },
-    tsv: { ext: `tsv`, mime: `text/tab-separated-values`, label: `TSV (copy)` },
-    json: { ext: `json`, mime: `application/json`, label: `JSON` },
-    md: { ext: `md`, mime: `text/markdown`, label: `Markdown` },
-    tex: { ext: `tex`, mime: `application/x-tex`, label: `LaTeX` },
+  const EXPORT_FILES: Record<TableExportFormat, { mime: string; label: string }> = {
+    csv: { mime: `text/csv`, label: `CSV` },
+    tsv: { mime: `text/tab-separated-values`, label: `TSV (copy)` },
+    json: { mime: `application/json`, label: `JSON` },
+    md: { mime: `text/markdown`, label: `Markdown` },
+    tex: { mime: `application/x-tex`, label: `LaTeX` },
   }
   // TSV pastes into spreadsheet columns, so it goes to the clipboard; the rest download
   const export_actions = $derived<CmdAction[]>(
@@ -1339,9 +1323,8 @@
       label: EXPORT_FILES[format].label,
       action: () => {
         const text = export_sources[format]()
-        const { ext, mime } = EXPORT_FILES[format]
         if (format === `tsv`) void navigator.clipboard?.writeText(text)
-        else download(text, `${export_filename}.${ext}`, mime)
+        else download(text, `${export_filename}.${format}`, EXPORT_FILES[format].mime)
         on_export?.({ format, text })
       },
     })),
@@ -1370,11 +1353,13 @@
   let resize = $state<{ col_id: string; start_x: number; start_width: number } | null>(
     null,
   )
-  // A column's width clamped to its own bounds (default 50-500 px)
-  const clamp_width = (col_id: string, width: number): number => {
-    const col = columns_by_id.get(col_id)
-    return clamp(width, col?.min_width ?? 50, col?.max_width ?? 500)
-  }
+  // A column's resize bounds, its own or the default 50-500 px
+  const width_bounds = (col?: Column<Row>): [number, number] => [
+    col?.min_width ?? 50,
+    col?.max_width ?? 500,
+  ]
+  const clamp_width = (col_id: string, width: number): number =>
+    clamp(width, ...width_bounds(columns_by_id.get(col_id)))
   function start_resize(
     event: PointerEvent & { currentTarget: HTMLElement },
     col_id: string,
@@ -1443,9 +1428,7 @@
   const table_tooltips = tooltip({
     delegate: `[title], [aria-label]:not([data-no-tooltip]), [data-title]`,
   })
-  let root_styles = $derived(
-    [rest.style, root_style].filter(Boolean).join(`; `) || undefined,
-  )
+  let root_styles = $derived(join_styles(rest.style, root_style))
 </script>
 
 {#snippet column_label(label: string, description?: string)}
@@ -1642,14 +1625,9 @@
           <tr class="group-header" bind:clientHeight={group_header_height}>
             {#if show_row_select}<th class="select-col"></th>{/if}
             {#if show_row_numbers}<th class="row-num-col"></th>{/if}
-            {#each cols as { col, id: identifier, pin, pin_left, pin_right } (identifier)}
+            {#each cols as { col, id: identifier, pin_class, pin_style } (identifier)}
               {#if !col.group}
-                <th
-                  class:pinned={pin}
-                  class:pinned-right={pin?.side === `right`}
-                  style:left={pin_left}
-                  style:right={pin_right}
-                ></th>
+                <th class={pin_class} style={pin_style}></th>
                 <!-- the group header renders once per group, on the group's first column -->
               {:else if visible_columns.find((one) => one.group === col.group) === col}
                 <th
@@ -1683,16 +1661,13 @@
             {@const sortable = col.sortable !== false}
             <th
               data-col-id={col_id}
-              style:left={view.pin_left}
-              style:right={view.pin_right}
               tabindex={sortable ? 0 : undefined}
               role="columnheader"
               oncontextmenu={(event) => open_column_context_menu(event, col_id)}
               onclick={(event) => activate_header(event, col)}
               onkeydown={(event) => activate_header(event, col)}
               style={view.head_style}
-              class:pinned={view.pin}
-              class:pinned-right={view.pin?.side === `right`}
+              class={view.pin_class}
               class:numeric-col={view.numeric}
               class:not-sortable={!sortable}
               class:resizing={resize?.col_id === col_id}
@@ -1745,7 +1720,7 @@
                 <DateTimeFormatMenu
                   col_label={col.label}
                   mode={dt_mode}
-                  options={datetime_format_options(col)}
+                  options={view.dt_options ?? []}
                   open={popover_open(`datetime`, col_id)}
                   on_toggle={() => toggle_popover(`datetime`, col_id)}
                   on_change={(mode) => set_pref(col_id, `datetime_format`, mode)}
@@ -1767,9 +1742,9 @@
                 aria-label="Resize {html_to_text(col.label)} column"
                 data-no-tooltip
                 aria-orientation="vertical"
-                aria-valuenow={view.width ?? 100}
-                aria-valuemin={50}
-                aria-valuemax={500}
+                aria-valuenow={view.width}
+                aria-valuemin={width_bounds(col)[0]}
+                aria-valuemax={width_bounds(col)[1]}
               ></span>
             </th>
           {/each}
@@ -1821,10 +1796,7 @@
               data-sort-value={is_html ? null : val instanceof Date ? val.getTime() : val}
               data-row-idx={abs_idx}
               data-col-idx={col_idx}
-              style:left={view.pin_left}
-              style:right={view.pin_right}
-              class:pinned={view.pin}
-              class:pinned-right={view.pin?.side === `right`}
+              class={view.pin_class}
               class:numeric-col={view.numeric}
               class:cell-selected={selection.has(abs_idx, col_idx)}
               class:best-cell={view.best !== null && num === view.best}
@@ -1906,14 +1878,8 @@
                 <td class="select-col">{show_row_numbers ? `` : stat}</td>
               {/if}
               {#if show_row_numbers}<td class="row-num-col">{stat}</td>{/if}
-              {#each cols as { col, id: identifier, numeric, stats, pin, pin_left, pin_right }, col_idx (identifier)}
-                <td
-                  class:pinned={pin}
-                  class:pinned-right={pin?.side === `right`}
-                  class:numeric-col={numeric}
-                  style:left={pin_left}
-                  style:right={pin_right}
-                >
+              {#each cols as { col, id: identifier, numeric, stats, pin_class, pin_style }, col_idx (identifier)}
+                <td class={pin_class} class:numeric-col={numeric} style={pin_style}>
                   {#if col_idx === 0 && leading_cols === 0}
                     <span class="summary-label">{stat}</span>
                   {:else if stats && numeric && stats[stat] != null}
@@ -2506,23 +2472,6 @@
   .row-count {
     color: var(--text-color-muted);
     font-size: 0.85em;
-  }
-  .col-color-row {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 2px 0;
-    select {
-      font-size: 0.85em;
-      padding: 1px 2px;
-    }
-  }
-  .col-color-label {
-    flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    min-width: 0;
   }
   .resize-handle {
     position: absolute;

@@ -159,7 +159,6 @@ export type ColumnStats = {
   mean: number
   median: number | null
   count: number
-  best: number | null
 }
 
 // Value at sorted position `kth` by partial sorting (Hoare quickselect), in place
@@ -189,7 +188,7 @@ const quickselect = (values: number[], kth: number): number => {
 }
 
 // Linearly interpolated quantile of unsorted values. Partially sorts `values` in place.
-export function quantile_unordered(values: number[], point_value: number): number {
+function quantile_unordered(values: number[], point_value: number): number {
   const idx = (values.length - 1) * point_value
   const lower = Math.floor(idx)
   const upper = Math.ceil(idx)
@@ -207,7 +206,6 @@ export function quantile_unordered(values: number[], point_value: number): numbe
 
 export function compute_column_stats(
   values: (number | null | undefined)[],
-  better?: `higher` | `lower`,
   // Quantiles (up to six quickselect passes) only serve quantile domains and medians
   with_quantiles = true,
 ): ColumnStats | null {
@@ -241,7 +239,6 @@ export function compute_column_stats(
     mean,
     median: with_quantiles ? quantile_unordered(scratch, 0.5) : null,
     count: nums.length,
-    best: better === `lower` ? lowest : better === `higher` ? highest : null,
   }
 }
 
@@ -304,7 +301,7 @@ export type DataTableProps<
   highlighted_row_id?: RowId | null
   // Column IDs in display order. Bindable so drag reorders persist.
   column_order?: string[]
-  // Per-column user tuning (width, pin, gradient direction, date format, filter), keyed
+  // Per-column user tuning (width, pin, better direction, date format, filter), keyed
   // by column ID. Bindable so hosts can persist and restore it.
   column_prefs?: Record<string, Prefs>
   // Built-in export menu (download a file); empty hides it. TSV goes to the clipboard.

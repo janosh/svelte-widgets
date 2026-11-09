@@ -20,16 +20,17 @@ export const configure_mermaid = (options: MermaidDiagramConfig): void => {
   config = { ...options }
 }
 
-// Mirrors apply_theme_mode from svelte-widgets/theme: an explicit root `data-theme`
-// wins, anything else follows prefers-color-scheme.
-const color_scheme = (): `light` | `dark` => {
-  const { theme } = document.documentElement.dataset
-  if (theme === `light` || theme === `dark`) return theme
-  return matchMedia(`(prefers-color-scheme: dark)`).matches ? `dark` : `light`
+// The page's resolved color-scheme (apply_theme_mode sets it inline, custom themes such
+// as a `black` one declare it in CSS), else the OS preference when it allows both
+const diagram_theme = (): NonNullable<MermaidConfig['theme']> => {
+  if (config.theme) return config.theme
+  const scheme = getComputedStyle(document.documentElement).colorScheme.trim()
+  const dark =
+    scheme === `dark` || scheme === `light`
+      ? scheme === `dark`
+      : matchMedia(`(prefers-color-scheme: dark)`).matches
+  return dark ? `dark` : `default`
 }
-
-const diagram_theme = (): NonNullable<MermaidConfig['theme']> =>
-  config.theme ?? (color_scheme() === `dark` ? `dark` : `default`)
 
 // Render every block in `root` (or `root` itself) not yet rendered with the current theme.
 // Resolves after rendering; a failing diagram keeps its source and records the error.
@@ -75,14 +76,12 @@ export const mermaid_diagrams: Attachment<HTMLElement> = (node) => {
   render()
   const media = matchMedia(`(prefers-color-scheme: dark)`)
   media.addEventListener(`change`, render)
-  const theme_observer = new MutationObserver(render)
-  theme_observer.observe(document.documentElement, { attributeFilter: [`data-theme`] })
   // Own SVG writes also trigger this; blocks already rendered with the theme are skipped
-  const content_observer = new MutationObserver(render)
-  content_observer.observe(node, { childList: true, subtree: true })
+  const observer = new MutationObserver(render)
+  observer.observe(document.documentElement, { attributeFilter: [`data-theme`, `style`] })
+  observer.observe(node, { childList: true, subtree: true })
   return () => {
     media.removeEventListener(`change`, render)
-    theme_observer.disconnect()
-    content_observer.disconnect()
+    observer.disconnect()
   }
 }

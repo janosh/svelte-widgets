@@ -30,14 +30,13 @@ import {
   bind_props,
   count_attribute_updates,
   dismiss_popover,
-  doc_query,
   fire,
   keydown,
-  mount_in_test,
   mouse,
   stub_reduced_motion,
   trigger_resize_observer,
 } from './data-table-test-utils'
+import { click, create_element, doc_query, render } from './index'
 
 // vp lint sees .svelte imports as nongeneric; specialize only row-dependent props for mount.
 type TableProps<Row extends object = RowData> = Omit<
@@ -74,6 +73,13 @@ const unmount_table = async (table: ReturnType<typeof mount>): Promise<void> => 
 
 const plain_columns = (...labels: string[]): Column[] =>
   labels.map((label) => ({ id: label, label }))
+// A grouped column whose ID qualifies its label, reading `key` from rows when given
+const grouped = (label: string, group: string, key?: string): Column => ({
+  id: `${label} (${group})`,
+  label,
+  group,
+  ...(key && { key }),
+})
 const value_rows = (values: readonly RowData[string][]): RowData[] =>
   values.map((value, idx) => ({ Name: String.fromCharCode(65 + idx), Value: value }))
 
@@ -82,16 +88,18 @@ const texts = (selector: string): (string | undefined)[] =>
   [...document.querySelectorAll(selector)].map((elem) =>
     elem.textContent?.replaceAll(/\s+/g, ` `).trim(),
   )
-// Trimmed text of every cell in the given column.
-const col_values = (col_name: string): (string | undefined)[] =>
-  [...document.querySelectorAll(`td[data-col="${col_name}"]`)].map((cell) =>
-    cell.textContent?.trim(),
-  )
-
-const cell_at = (row_idx: number, col_idx: number): HTMLTableCellElement =>
-  doc_query(
+const col_values = (col_name: string) => texts(`td[data-col="${col_name}"]`)
+const cell_at = (row_idx: number, col_idx: number) =>
+  doc_query<HTMLTableCellElement>(
     `td[data-row-idx="${row_idx}"][data-col-idx="${col_idx}"]`,
-    HTMLTableCellElement,
+  )
+const n_selected = () => document.querySelectorAll(`td.cell-selected`).length
+// Right-click a header or cell, then pick the context-menu item whose text matches
+const open_context_menu = (target: Element | null) =>
+  fire(target, mouse(`contextmenu`, { button: 2 }))
+const menu_item = (label: string) =>
+  [...document.querySelectorAll<HTMLButtonElement>(`.action-menu button`)].find((btn) =>
+    btn.textContent?.includes(label),
   )
 
 // Call before mounting, so the debounce wait below costs no wall clock
@@ -168,12 +176,7 @@ describe(`DataTable`, () => {
     Value: idx * 10,
   }))
 
-  const click = async (element: HTMLElement | null | undefined) => {
-    assert(element)
-    element.click()
-    await tick()
-  }
-  const open_export_menu = () => click(doc_query(`button[aria-label="Export"]`))
+  const open_export_menu = () => click(`button[aria-label="Export"]`)
   const export_item = (label: string) =>
     [...document.querySelectorAll<HTMLButtonElement>(`menu [role=menuitem]`)].find(
       (item) => item.textContent?.trim() === label,
@@ -548,8 +551,7 @@ describe(`DataTable`, () => {
         { id: `Unix`, label: `Unix`, datetime_format: `datetime` },
       ]
       mount_table({ data, columns })
-      const cells = () =>
-        [...document.querySelectorAll(`tbody td`)].map((cell) => cell.textContent?.trim())
+      const cells = () => texts(`tbody td`)
       const triggers = document.querySelectorAll<HTMLButtonElement>(
         `.datetime-format-trigger`,
       )
@@ -598,14 +600,9 @@ describe(`DataTable`, () => {
     it(`DateTimeFormatMenu keeps its events from the header`, () => {
       const [on_toggle, on_change, header] = [vi.fn(), vi.fn(), vi.fn()]
       const options: DateTimeFormatMode[] = [`date`, `relative`]
-      mount_in_test(DateTimeFormatMenu, {
-        col_label: `Created`,
-        mode: options[0],
-        options,
-        open: true,
-        on_toggle,
-        on_change,
-      })
+      // its own target: Svelte delegates events to the mount root, here a stand-in header
+      const props = { col_label: `Created`, mode: options[0], options, open: true }
+      render(DateTimeFormatMenu, { ...props, on_toggle, on_change }, create_element())
       const types = [`click`, `input`, `keydown`, `mousedown`, `pointerdown`]
       for (const type of types) document.body.addEventListener(type, header)
       onTestFinished(() => {
@@ -672,8 +669,7 @@ describe(`DataTable`, () => {
       expect(doc_query(`td[data-col="Col"]`).classList.contains(`numeric-col`)).toBe(
         numeric,
       )
-      document.querySelector(`th`)?.click() // toggle to descending
-      await tick()
+      await click(`th`) // toggle to descending
       expect(col_values(`Col`)).toEqual(expected.toReversed())
     })
 
@@ -881,18 +877,11 @@ describe(`DataTable`, () => {
         hidden_columns: [`other`],
         sort: { column: `score`, dir: `desc` as const },
       })
-      mount_table(
-        bind_props(
-          {
-            data: [
-              { name: `low`, score: 1 },
-              { name: `middle`, score: 2 },
-              { name: `high`, score: 3 },
-            ],
-          },
-          state,
-        ),
-      )
+      const data = [`low`, `middle`, `high`].map((name, idx) => ({
+        name,
+        score: idx + 1,
+      }))
+      mount_table(bind_props({ data }, state))
       await tick()
       state.columns = state.columns.map((col) =>
         col.id === `score` ? { ...col, label: `Renamed score`, group: `New group` } : col,
@@ -908,106 +897,56 @@ describe(`DataTable`, () => {
       expect(state.sort).toEqual({ column: `score`, dir: `desc` })
     })
 
-    it(`renders grouped, repeated, and interleaved ungrouped columns`, () => {
-      const grouped_columns: Column[] = [
-        { id: `Name`, label: `Name`, sticky: true },
-        { id: `Regular`, label: `Regular` },
-        {
-          id: `Value 1 (Values)`,
-          label: `Value 1`,
-          group: `Values`,
-          description: `V1 only`,
-        },
-        { id: `Value 2 (Values)`, label: `Value 2`, group: `Values` },
-        {
-          id: `Metric 1 (Metrics)`,
-          key: `Metric 1`,
-          label: `Metric 1`,
-          group: `Metrics`,
-        },
-        {
-          id: `Metric 2 (Metrics)`,
-          key: `Metric 2`,
-          label: `Metric 2`,
-          group: `Metrics`,
-        },
-        { id: `Another`, label: `Another` },
-        { id: `Value 1 (Second Values)`, label: `Value 1`, group: `Second Values` },
-        { id: `Value 2 (Second Values)`, label: `Value 2`, group: `Second Values` },
-      ]
-
-      const grouped_data = [
-        {
-          Name: `Item A`,
-          Regular: 1,
-          'Value 1 (Values)': 10,
-          'Value 2 (Values)': 20,
-          'Metric 1': 30,
-          'Metric 2': 40,
-          Another: 2,
-          'Value 1 (Second Values)': 50,
-          'Value 2 (Second Values)': 60,
-        },
-      ]
-
-      mount_table({ data: grouped_data, columns: grouped_columns })
-
-      const header_rows = document.querySelectorAll(`thead tr`)
-      expect(header_rows).toHaveLength(2)
-
-      const group_headers = [...header_rows[0].querySelectorAll(`th`)]
-      expect(
-        group_headers.map((header_cell) => [
-          header_cell.textContent?.trim(),
-          header_cell.getAttribute(`colspan`),
-        ]),
-      ).toEqual([
-        [``, null],
-        [``, null],
-        [`Values`, `2`],
-        [`Metrics`, `2`],
-        [``, null],
-        [`Second Values`, `2`],
-      ])
-      // a member column's description belongs to that column, not its group header
-      expect(header_rows[0].querySelector(`button`)).toBeNull()
-
-      expect(
-        [...header_rows[1].querySelectorAll(`th`)].map((header) =>
-          header.textContent?.trim().replaceAll(/\s+|[↑↓]/g, ``),
-        ),
-      ).toEqual([
-        `Name`,
-        `Regular`,
-        `Value1`,
-        `Value2`,
-        `Metric1`,
-        `Metric2`,
-        `Another`,
-        `Value1`,
-        `Value2`,
-      ])
-    })
-
-    // A split group used to swallow the intervening column under its label, leaving its tail
-    // unlabelled
-    it(`pulls a group's columns together when they are listed non-contiguously`, () => {
-      mount_table({
-        data: [{ A: 1, B: 2, C: 3 }],
-        columns: [
-          { id: `A (g1)`, key: `A`, label: `A`, group: `g1` },
-          { id: `B`, label: `B` },
-          { id: `C (g1)`, key: `C`, label: `C`, group: `g1` },
+    // Header cells read as `label/colspan`. A split group used to swallow the intervening
+    // column under its label, leaving its tail unlabelled.
+    it.each<[string, Column[], string[], string[]]>([
+      [
+        `grouped, repeated and interleaved ungrouped`,
+        [
+          { id: `Name`, label: `Name`, sticky: true },
+          { id: `Regular`, label: `Regular` },
+          { ...grouped(`Value 1`, `Values`), description: `V1 only` },
+          grouped(`Value 2`, `Values`),
+          grouped(`Metric 1`, `Metrics`, `Metric 1`),
+          grouped(`Metric 2`, `Metrics`, `Metric 2`),
+          { id: `Another`, label: `Another` },
+          grouped(`Value 1`, `Second Values`),
+          grouped(`Value 2`, `Second Values`),
         ],
-      })
-      const [group_row, header_row] = document.querySelectorAll(`thead tr`)
+        [`/1`, `/1`, `Values/2`, `Metrics/2`, `/1`, `SecondValues/2`],
+        [
+          `Name`,
+          `Regular`,
+          `Value1`,
+          `Value2`,
+          `Metric1`,
+          `Metric2`,
+          `Another`,
+          `Value1`,
+          `Value2`,
+        ],
+      ],
+      [
+        `non-contiguously listed group`,
+        [grouped(`A`, `g1`, `A`), { id: `B`, label: `B` }, grouped(`C`, `g1`, `C`)],
+        [`g1/2`, `/1`],
+        [`A`, `C`, `B`],
+      ],
+    ])(`renders %s columns`, (_desc, columns, group_spans, header_labels) => {
+      const data = [
+        Object.fromEntries(columns.map((col, idx) => [col.key ?? col.id, idx])),
+      ]
+      mount_table({ data, columns })
       const spans = (row: Element) =>
         [...row.querySelectorAll(`th`)].map(
-          (header_cell) =>
-            `${header_cell.textContent?.trim().replaceAll(/[↑↓\s]/g, ``)}/${header_cell.colSpan}`,
+          (cell) => `${cell.textContent?.replaceAll(/[↑↓\s]/g, ``)}/${cell.colSpan}`,
         )
-      expect(spans(group_row)).toEqual([`g1/2`, `/1`])
-      expect(spans(header_row)).toEqual([`A/1`, `C/1`, `B/1`])
+      const [group_row, header_row, ...rest] = document.querySelectorAll(`thead tr`)
+      expect(rest).toHaveLength(0)
+      expect(spans(group_row)).toEqual(group_spans)
+      expect(spans(header_row)).toEqual(header_labels.map((label) => `${label}/1`))
+      // a member column's description belongs to that column, not its group header
+      expect(group_row.querySelector(`button`)).toBeNull()
     })
   })
 
@@ -1065,8 +1004,7 @@ describe(`DataTable`, () => {
       mount_sample({ search })
 
       expect(document.querySelector(`.control-buttons .icon-btn`)).not.toBeNull()
-      if (open_search)
-        await click(doc_query<HTMLButtonElement>(`.control-buttons .icon-btn`))
+      if (open_search) await click(`.control-buttons .icon-btn`)
 
       const search_input = doc_query<HTMLInputElement>(`input[type="search"]`)
       if (placeholder) expect(search_input.placeholder).toBe(placeholder)
@@ -1075,32 +1013,43 @@ describe(`DataTable`, () => {
     // Filtering is tested through the bindable search_query prop (simulating typing
     // via bind:value needs native input events that happy-dom doesn't support).
 
-    it.each([
-      [`substring match`, `model b`, [`Model B`]],
-      [`html is stripped before matching`, `bold`, [`Model C`]],
-      [`no match`, `no-such-model`, []],
-      [`empty query returns all rows`, `  `, [`Model A`, `Model B`, `Model C`]],
-      [`non-column keys like row style are not searched`, `gold`, []],
-      [`entities decode before matching`, `c & co`, [`Model C`]],
-    ])(`filters rows by search_query: %s`, async (_desc, query, expected) => {
+    const search_rows = [
+      { Model: `Model A`, Note: `great`, style: `background: gold` },
+      { Model: `Model B`, Note: `model a lookalike` },
+      { Model: `<b>bold</b> Model C &amp; co`, Note: `` },
+    ]
+    const shown_models = { A: `Model A`, B: `Model B`, C: `bold Model C & co` }
+    it.each<[string, TableProps[`search`], string, (keyof typeof shown_models)[]]>([
+      [`substring match`, true, `model b`, [`B`]],
+      [`html is stripped before matching`, true, `bold`, [`C`]],
+      [`no match`, true, `no-such-model`, []],
+      [`empty query returns all rows`, true, `  `, [`A`, `B`, `C`]],
+      [`non-column keys like row style are not searched`, true, `gold`, []],
+      [`entities decode before matching`, true, `c & co`, [`C`]],
+      [
+        `keys restricts matching to the given columns`,
+        { keys: [`Model`] },
+        `model a`,
+        [`A`],
+      ],
+      [`no keys searches every column`, {}, `model a`, [`A`, `B`]],
+      [
+        `fuzzy matches an in-order subsequence`,
+        { keys: [`Model`], fuzzy: true },
+        `mdla`,
+        [`A`],
+      ],
+      [`fuzzy=false requires a substring`, { keys: [`Model`], fuzzy: false }, `mdla`, []],
+    ])(`filters rows by search_query: %s`, async (_desc, search, query, expected) => {
       fake_search_timers()
       const state = $state({ search_query: `` })
-      const data = [
-        { Model: `Model A`, Score: 0.95, style: `background: gold` },
-        { Model: `Model B`, Score: 0.85 },
-        { Model: `<b>bold</b> Model C &amp; co`, Score: 0.75 },
-      ]
-      mount_table(bind_props({ data, columns: sample_columns, search: true }, state))
-
+      const columns = plain_columns(`Model`, `Note`)
+      mount_table(bind_props({ data: search_rows, columns, search }, state))
       state.search_query = query
       await tick()
       if (query.trim()) expect(col_values(`Model`)).toHaveLength(3) // debounced, not yet applied
       await settle_search(state, query)
-
-      const model_cells = col_values(`Model`)
-      expect(model_cells).toHaveLength(expected.length)
-      for (const [idx, name] of expected.entries())
-        expect(model_cells[idx]).toContain(name)
+      expect(col_values(`Model`)).toEqual(expected.map((letter) => shown_models[letter]))
     })
 
     it(`refreshes indexed searches after row, key, filter, object and Date changes`, async () => {
@@ -1166,18 +1115,14 @@ describe(`DataTable`, () => {
       // raw, as the data prop asks: a deep proxy re-wraps every row object on reassignment
       let data = $state.raw<RowData[]>(rows)
       const columns = plain_columns(`Model`, `Score`)
-      mount_table(
-        bind_props(
-          {
-            get data() {
-              return data
-            },
-            columns,
-            search: true,
-          },
-          state,
-        ),
-      )
+      const props = {
+        get data() {
+          return data
+        },
+        columns,
+        search: true,
+      }
+      mount_table(bind_props(props, state))
       await settle_search(state, `z`)
       expect(text_spy).toHaveBeenCalledTimes(6) // every searched cell once
       text_spy.mockClear()
@@ -1190,35 +1135,6 @@ describe(`DataTable`, () => {
       expect(col_values(`Model`)).toEqual([]) // Z scores 1
     })
 
-    it.each([
-      [
-        `keys restricts matching to the given columns`,
-        { keys: [`Model`] },
-        `model a`,
-        [`A`],
-      ],
-      [`no keys searches every column`, {}, `model a`, [`A`, `B`]],
-      [
-        `fuzzy matches an in-order subsequence`,
-        { keys: [`Model`], fuzzy: true },
-        `mdla`,
-        [`A`],
-      ],
-      [`fuzzy=false requires a substring`, { keys: [`Model`], fuzzy: false }, `mdla`, []],
-    ])(`search config: %s`, async (_desc, search, query, expected) => {
-      fake_search_timers()
-      const state = $state({ search_query: `` })
-      const data = [
-        { Model: `Model A`, Note: `great` },
-        { Model: `Model B`, Note: `model a lookalike` },
-      ]
-      mount_table(
-        bind_props({ data, columns: plain_columns(`Model`, `Note`), search }, state),
-      )
-      await settle_search(state, query)
-      expect(col_values(`Model`)).toEqual(expected.map((letter) => `Model ${letter}`))
-    })
-
     it(`clear button resets bound search_query`, async () => {
       const state = $state({ search_query: `model b` })
       mount_sample(bind_props({ search: true }, state))
@@ -1226,8 +1142,7 @@ describe(`DataTable`, () => {
       expect(col_values(`Model`)).toEqual([`Model B`])
 
       // input is rendered (non-empty query implies expanded); clear button follows it
-      const clear_btn = doc_query<HTMLButtonElement>(`.control-buttons .icon-btn`)
-      await click(clear_btn)
+      await click(`.control-buttons .icon-btn`)
 
       expect(state.search_query).toBe(``)
       expect(col_values(`Model`)).toHaveLength(3)
@@ -1235,60 +1150,43 @@ describe(`DataTable`, () => {
   })
 
   describe(`Column Visibility Toggle`, () => {
+    const menu_boxes = () => [
+      ...document.querySelectorAll<HTMLInputElement>(
+        `.column-menu input[type="checkbox"]`,
+      ),
+    ]
     // The menu is ColumnPicker, whose dropdown portals to <body>, so query from document.
     // Default-hidden columns start hidden without counting as a change, and Reset hides them again
     it(`default_hidden_columns is the reset baseline`, async () => {
-      const state = $state({ hidden_columns: [`Value`] })
-      mount_table(
-        bind_props(
-          {
-            data: sample_data,
-            columns: sample_columns,
-            show_column_toggle: true,
-            default_hidden_columns: [`Value`],
-          },
-          state,
-        ),
-      )
+      const state = $state({
+        hidden_columns: [`Value`],
+        show_column_toggle: true,
+        default_hidden_columns: [`Value`],
+      })
+      mount_sample(state)
       await tick()
       expect(document.querySelector(`.column-picker > .reset-btn`)).toBeNull()
-      await click(doc_query(`.column-picker > button`))
-      const value_box = [
-        ...document.querySelectorAll<HTMLInputElement>(
-          `.column-menu input[type="checkbox"]`,
-        ),
-      ].find((box) => box.closest(`label`)?.textContent?.includes(`Value`))
-      if (!value_box) throw new Error(`no Value checkbox`)
-      await click(value_box)
+      await click(`.column-picker > button`)
+      await click(
+        menu_boxes().find((box) => box.closest(`label`)?.textContent?.includes(`Value`)),
+      )
       expect(state.hidden_columns).toEqual([])
-      await click(doc_query(`.column-picker > .reset-btn`))
+      await click(`.column-picker > .reset-btn`)
       expect(state.hidden_columns).toEqual([`Value`])
     })
 
     it(`toggles columns and resets without enabling caller-hidden columns`, async () => {
-      const state = $state({ hidden_columns: [`Value`] })
-      mount_table(
-        bind_props(
-          {
-            data: sample_data,
-            columns: [
-              ...sample_columns,
-              { id: `Static`, label: `Static`, visible: false },
-            ],
-            show_column_toggle: true,
-          },
-          state,
-        ),
-      )
+      const state = $state({
+        hidden_columns: [`Value`],
+        columns: [...sample_columns, { id: `Static`, label: `Static`, visible: false }],
+        show_column_toggle: true,
+      })
+      mount_sample(state)
       await tick()
       expect(document.querySelectorAll(`th`)).toHaveLength(2)
 
-      await click(doc_query(`.column-picker > button`))
-      const boxes = [
-        ...document.querySelectorAll<HTMLInputElement>(
-          `.column-menu input[type="checkbox"]`,
-        ),
-      ]
+      await click(`.column-picker > button`)
+      const boxes = menu_boxes()
       expect(boxes).toHaveLength(4)
       expect(boxes.at(-1)?.disabled).toBe(true)
 
@@ -1306,36 +1204,27 @@ describe(`DataTable`, () => {
       expect(state.hidden_columns).toEqual([`Value`, `Model`])
       expect(document.querySelectorAll(`th`)).toHaveLength(1)
 
-      await click(doc_query(`.column-picker > .reset-btn`))
+      await click(`.column-picker > .reset-btn`)
       expect(state.hidden_columns).toEqual([])
       expect(document.querySelectorAll(`th`)).toHaveLength(3)
     })
 
     it(`keeps distinct IDs independent of repeated data keys`, async () => {
       const state = $state({ hidden_columns: [] as string[] })
-      mount_table(
-        bind_props(
-          {
-            data: [{ 'Value (Group A)': 1 }],
-            columns: [
-              { id: `grouped`, key: `Value (Group A)`, label: `Value`, group: `Group A` },
-              { id: `ungrouped`, key: `Value (Group A)`, label: `Qualified value` },
-            ],
-            show_column_toggle: true,
-          },
-          state,
-        ),
-      )
+      const columns = [
+        { id: `grouped`, key: `Value (Group A)`, label: `Value`, group: `Group A` },
+        { id: `ungrouped`, key: `Value (Group A)`, label: `Qualified value` },
+      ]
+      const data = [{ 'Value (Group A)': 1 }]
+      mount_table(bind_props({ data, columns, show_column_toggle: true }, state))
       await tick()
 
-      await click(doc_query(`.column-picker > button`))
-      document
-        .querySelectorAll<HTMLInputElement>(`.column-menu.grouped input`)
-        .forEach((checkbox) => checkbox.click())
-      await tick()
+      await click(`.column-picker > button`)
+      for (const box of document.querySelectorAll(`.column-menu.grouped input`))
+        await click(box)
       expect(state.hidden_columns).toEqual([`grouped`, `ungrouped`])
 
-      await click(doc_query(`.column-picker > .reset-btn`))
+      await click(`.column-picker > .reset-btn`)
       expect(state.hidden_columns).toEqual([])
     })
 
@@ -1364,17 +1253,7 @@ describe(`DataTable`, () => {
 
   it(`row selection preserves IDs across row replacement, tracks full selection, then clears it`, async () => {
     const state = $state({ data: sample_data, selected_ids: [] as string[] })
-    mount_table(
-      bind_props(
-        {
-          columns: sample_columns,
-          show_row_select: true,
-          row_key: `Model`,
-          style: `--accent-color: rgb(255 255 0)`,
-        },
-        state,
-      ),
-    )
+    mount_sample(bind_props({ show_row_select: true, row_key: `Model` }, state))
     const checkboxes = [
       ...document.querySelectorAll<HTMLInputElement>(
         `td.select-col input[type="checkbox"]`,
@@ -1421,13 +1300,15 @@ describe(`DataTable`, () => {
     })
     mount_sample(state)
     const headers = document.querySelectorAll(`th`)
-    const shift_click = async (idx: number) => {
-      await fire(headers[idx], mouse(`click`, { shiftKey: true }))
-    }
-    const expect_sort = (primary: number, direction: string) =>
-      expect([...headers].map((header) => header.getAttribute(`aria-sort`))).toEqual(
-        [...headers].map((_header, idx) => (idx === primary ? direction : `none`)),
-      )
+    const shift_click = (idx: number) =>
+      fire(headers[idx], mouse(`click`, { shiftKey: true }))
+    // per header: its multi-sort rank, whether it shows a sort arrow, and its aria-sort
+    const marks = () =>
+      [...headers].map((header) => {
+        const arrow = /[↑↓]/.test(header.textContent ?? ``) ? `↕` : ``
+        const rank = header.querySelector(`sup`)?.textContent ?? ``
+        return `${rank}${arrow} ${header.getAttribute(`aria-sort`)}`
+      })
 
     await shift_click(0)
     await shift_click(1)
@@ -1436,24 +1317,15 @@ describe(`DataTable`, () => {
       { column: `Score`, ascending: false },
     ])
     expect(col_values(`Model`)).toEqual([`Model C`, `Model B`, `Model A`])
-    expect(headers[0].innerHTML).toContain(`<sup>1</sup>`)
-    expect(headers[1].innerHTML).toContain(`<sup>2</sup>`)
-    expect(headers[0].textContent).toMatch(/[↑↓]/)
-    expect(headers[1].textContent).toMatch(/[↑↓]/)
-    expect_sort(0, `descending`)
+    expect(marks()).toEqual([`1↕ descending`, `2↕ none`, ` none`])
 
     await shift_click(0)
     expect(state.multi_sort).toEqual([{ column: `Score`, ascending: false }])
-    expect(headers[0].textContent).not.toMatch(/[↑↓]/)
-    expect(headers[1].innerHTML).not.toContain(`<sup>`)
-    expect_sort(1, `descending`)
+    expect(marks()).toEqual([` none`, `↕ descending`, ` none`])
 
     await click(headers[2])
     expect(state.multi_sort).toEqual([])
-    expect(headers[0].innerHTML).not.toContain(`<sup>`)
-    expect(headers[1].innerHTML).not.toContain(`<sup>`)
-    expect(headers[2].textContent).toMatch(/[↑↓]/)
-    expect_sort(2, `ascending`)
+    expect(marks()).toEqual([` none`, ` none`, `↕ ascending`])
 
     // Restored external criteria take precedence over the single-column sort and
     // the second criterion resolves tied scores.
@@ -1463,19 +1335,14 @@ describe(`DataTable`, () => {
     ]
     await tick()
     expect(col_values(`Model`)).toEqual([`Model C`, `Model B`, `Model A`])
-    expect(headers[1].innerHTML).toContain(`<sup>1</sup>`)
-    expect(headers[2].innerHTML).toContain(`<sup>2</sup>`)
-    expect_sort(1, `ascending`)
+    expect(marks()).toEqual([` none`, `1↕ ascending`, `2↕ none`])
     state.multi_sort = [{ column: `Score`, ascending: true }]
     await tick()
-    expect(headers[1].textContent).toMatch(/[↑↓]/)
-    expect(headers[2].textContent).not.toMatch(/[↑↓]/)
-    expect_sort(1, `ascending`)
+    expect(marks()).toEqual([` none`, `↕ ascending`, ` none`])
     state.multi_sort = []
     await tick()
     expect(col_values(`Model`)).toEqual([`Model A`, `Model B`, `Model C`])
-    expect(headers[2].textContent).toMatch(/[↑↓]/)
-    expect_sort(2, `ascending`)
+    expect(marks()).toEqual([` none`, ` none`, `↕ ascending`])
   })
 
   describe(`Pagination`, () => {
@@ -1578,18 +1445,29 @@ describe(`DataTable`, () => {
   it(`renders resize handles with ARIA roles and drags them into clamped column widths`, async () => {
     const column_prefs: Record<string, ColumnPrefs> = {}
     const state = $state({ column_prefs })
-    mount_sample(state)
+    // Value carries its own min_width and max_width, overriding the default [50, 500] clamp
+    const columns = sample_columns.with(2, {
+      ...sample_columns[2],
+      min_width: 80,
+      max_width: 160,
+    })
+    mount_sample(bind_props({ columns }, state))
 
     const resize_handles = document.querySelectorAll<HTMLElement>(`.resize-handle`)
     expect(resize_handles).toHaveLength(3) // One per column
     expect(resize_handles[0].getAttribute(`role`)).toBe(`separator`)
     expect(resize_handles[0].getAttribute(`aria-orientation`)).toBe(`vertical`)
+    // the announced range is the column's own clamp, and no width is claimed before a resize
+    const aria_range = (handle: HTMLElement) =>
+      [`min`, `max`, `now`].map((key) => handle.getAttribute(`aria-value${key}`))
+    expect(aria_range(resize_handles[1])).toEqual([`50`, `500`, null])
+    expect(aria_range(resize_handles[2])).toEqual([`80`, `160`, null])
 
     // headers have no layout width in happy-dom, so widths start from 0 and clamp to [50, 500].
     // The handle captures the pointer, so every event of the drag targets it.
     const handle = resize_handles[1]
-    const pointer = (type: string, clientX: number) =>
-      handle.dispatchEvent(
+    const pointer = (type: string, clientX: number, target = handle) =>
+      target.dispatchEvent(
         new PointerEvent(type, { clientX, bubbles: true, pointerId: 1 }),
       )
     pointer(`pointerdown`, 100)
@@ -1597,6 +1475,7 @@ describe(`DataTable`, () => {
     await tick()
     expect(state.column_prefs.Score?.width).toBe(120)
     expect(doc_query(`th[data-col-id="Score"]`).style.width).toBe(`120px`)
+    expect(resize_handles[1].getAttribute(`aria-valuenow`)).toBe(`120`)
     pointer(`pointermove`, 900)
     expect(state.column_prefs.Score?.width).toBe(500)
     pointer(`pointerup`, 900)
@@ -1613,48 +1492,32 @@ describe(`DataTable`, () => {
       handle.dispatchEvent(keydown(key))
     expect(state.column_prefs.Score?.width).toBe(490) // 500 is the cap: ArrowRight stays there
     expect(doc_query(`th[data-col-id="Score"]`).getAttribute(`aria-sort`)).toBe(`none`)
-  })
-
-  it(`clamps resizing to a column's own min_width and max_width`, () => {
-    const state = $state<{ column_prefs: Record<string, ColumnPrefs> }>({
-      column_prefs: {},
-    })
-    mount_table(
-      bind_props(
-        {
-          data: sample_data,
-          columns: [
-            { id: `Model`, label: `Model`, min_width: 80, max_width: 160 },
-          ] as Column[],
-        },
-        state,
-      ),
-    )
-    const handle = doc_query(`.resize-handle`)
-    const pointer = (type: string, clientX: number) =>
-      handle.dispatchEvent(
-        new PointerEvent(type, { clientX, bubbles: true, pointerId: 1 }),
+    for (const [client_x, width] of [
+      [100, undefined],
+      [400, 160],
+      [0, 80],
+    ] as const) {
+      pointer(
+        client_x === 100 ? `pointerdown` : `pointermove`,
+        client_x,
+        resize_handles[2],
       )
-    pointer(`pointerdown`, 100)
-    pointer(`pointermove`, 400)
-    expect(state.column_prefs.Model?.width).toBe(160)
-    pointer(`pointermove`, 0)
-    expect(state.column_prefs.Model?.width).toBe(80)
-    pointer(`pointerup`, 0)
+      expect(state.column_prefs.Value?.width).toBe(width)
+    }
+    pointer(`pointerup`, 0, resize_handles[2])
   })
 
-  it(`appends menu_sections to a column's context menu`, async () => {
+  it(`appends menu_sections to a column's context menu, without pins when allow_pinning=false`, async () => {
     const action = vi.fn()
     mount_sample({
+      allow_pinning: false,
       menu_sections: (col: { id: string }) => [
         { title: `Host`, actions: [{ id: `x`, label: `Inspect ${col.id}`, action }] },
       ],
     })
-    await fire(doc_query(`th[data-col-id="Score"]`), mouse(`contextmenu`, { button: 2 }))
-    const item = [
-      ...document.querySelectorAll<HTMLButtonElement>(`.action-menu button`),
-    ].find((btn) => btn.textContent?.trim() === `Inspect Score`)
-    await fire(item)
+    await open_context_menu(doc_query(`th[data-col-id="Score"]`))
+    expect(menu_item(`Pin left`)).toBeUndefined()
+    await fire(menu_item(`Inspect Score`))
     expect(action).toHaveBeenCalledOnce()
   })
 
@@ -1712,50 +1575,28 @@ describe(`DataTable`, () => {
       expect(col_values(`Name`)).toEqual([`B`, `B`, `A`])
     })
 
-    // Two columns share the label `Value`: the header click must sort by its own group
-    it(`correctly matches grouped columns for sorting`, async () => {
-      const grouped_columns: Column[] = [
-        { id: `Name`, label: `Name` },
-        { id: `Value (Group A)`, label: `Value`, group: `Group A` },
-        { id: `Value (Group B)`, label: `Value`, group: `Group B` }, // Same label, different group
-      ]
-
+    // Two columns share the label `Value`: the header click must sort by its own group.
+    // Descending by Group B gives 1, 3, 2 (Group A would give 2, 1, 3). Keyed columns read
+    // their plain data key, not their ID.
+    it.each<[string, Column[]]>([
+      [`ID`, [grouped(`Value`, `Group A`), grouped(`Value`, `Group B`)]],
+      [
+        `key`,
+        [
+          grouped(`A`, `Physical`, `Value (Group A)`),
+          grouped(`B`, `Physical`, `Value (Group B)`),
+        ],
+      ],
+    ])(`renders and sorts grouped columns by %s`, async (_desc, group_cols) => {
       const data = [
         { Name: `Item 1`, 'Value (Group A)': 10, 'Value (Group B)': 100 },
-        { Name: `Item 2`, 'Value (Group A)': 20, 'Value (Group B)': 50 },
+        { Name: `Item 2`, 'Value (Group A)': 20, 'Value (Group B)': 50.25 },
         { Name: `Item 3`, 'Value (Group A)': 5, 'Value (Group B)': 75 },
       ]
-
-      mount_table({ data, columns: grouped_columns })
-      await click(document.querySelectorAll<HTMLElement>(`thead tr:last-child th`)[2])
-      // descending by Group B (100, 75, 50); Group A would give Item 2, Item 1, Item 3
+      mount_table({ data, columns: [{ id: `Name`, label: `Name` }, ...group_cols] })
+      expect(texts(`td[data-col-idx="2"]`)).toEqual([`100`, `50.3`, `75`])
+      await click(document.querySelectorAll(`thead tr:last-child th`)[2])
       expect(col_values(`Name`)).toEqual([`Item 1`, `Item 3`, `Item 2`])
-    })
-
-    it(`renders and sorts plainly keyed grouped columns`, async () => {
-      const columns: Column[] = [
-        { id: `Name`, label: `Name` },
-        {
-          id: `Mass (Physical)`,
-          key: `Mass`,
-          label: `Mass`,
-          group: `Physical`,
-        },
-        { id: `Charge (Physical)`, key: `Charge`, label: `Charge`, group: `Physical` },
-      ]
-      mount_table({
-        data: [
-          { Name: `O`, Mass: 16, Charge: -2 },
-          { Name: `Fe`, Mass: 55.85, Charge: 3 },
-        ],
-        columns,
-      })
-
-      expect(col_values(`Mass`)).toEqual([`16`, `55.9`])
-      expect(col_values(`Charge`)).toEqual([`-2`, `3`])
-      expect(document.body.textContent).not.toContain(`n/a`)
-      await click(document.querySelectorAll<HTMLElement>(`thead tr:last-child th`)[1])
-      expect(col_values(`Name`)).toEqual([`Fe`, `O`])
     })
 
     it(`reads an explicit key present only after the first 50 rows`, () => {
@@ -1764,10 +1605,7 @@ describe(`DataTable`, () => {
       )
       mount_table({
         data,
-        columns: [
-          { id: `Name`, label: `Name` },
-          { id: `Mass (Physical)`, label: `Mass`, group: `Physical` },
-        ],
+        columns: [{ id: `Name`, label: `Name` }, grouped(`Mass`, `Physical`)],
       })
       expect(col_values(`Mass`).at(-1)).toBe(`55.9`)
     })
@@ -1825,67 +1663,42 @@ describe(`DataTable`, () => {
       expect(header.getAttribute(`aria-grabbed`)).toBeNull()
     })
 
-    // Sticky columns all pin to the same edge, so any after the first must clear the ones
-    // before it. Widths only exist after layout, hence the measured offsetWidth.
-    it(`stacks multiple sticky columns instead of overlapping them`, async () => {
-      let first_width = 80
+    // Sticky columns pin to one edge, so any after the first clears the ones before it (by
+    // their measured offsetWidth, re-read when a header resizes). Right pins stack from the
+    // right edge in reverse order, and the header context menu re-pins or unpins (a null pref
+    // overrides the column's own `sticky`).
+    it(`pins and stacks columns on either edge from config and the context menu`, async () => {
+      let name_width = 80
       const width_spy = vi
         .spyOn(HTMLElement.prototype, `offsetWidth`, `get`)
         .mockImplementation(function (this: HTMLElement) {
-          return this.dataset.colId === `Name` ? first_width : 80
+          return this.dataset.colId === `Name` ? name_width : 80
         })
-      onTestFinished(() => width_spy.mockRestore())
-      mount_table({
-        data: [{ Name: `A`, Tag: `x`, Value: 1 }],
-        columns: [
-          { id: `Name`, label: `Name`, sticky: true },
-          { id: `Tag`, label: `Tag`, sticky: true },
-          { id: `Value`, label: `Value` },
-        ],
-      })
-      await tick()
-
-      const left_of = (selector: string) =>
-        document.querySelector<HTMLElement>(selector)?.style.left
-      expect(left_of(`thead th[data-col-id="Name"]`)).toBe(`0px`)
-      expect(left_of(`thead th[data-col-id="Tag"]`)).toBe(`80px`)
-      expect(left_of(`td[data-col="Tag"]`)).toBe(`80px`)
-      expect(left_of(`td[data-col="Value"]`)).toBe(``)
-
-      // the first header grows (a manual resize, longer label): every sticky column after it shifts
-      first_width = 120
-      trigger_resize_observer(doc_query(`thead th[data-col-id="Name"]`))
-      await tick()
-      expect(left_of(`thead th[data-col-id="Tag"]`)).toBe(`120px`)
-      expect(left_of(`td[data-col="Tag"]`)).toBe(`120px`)
-    })
-
-    // right pins stack from the right edge in reverse order, and the header context menu
-    // re-pins or unpins (a null pref overrides the column's own `sticky`)
-    it(`pins columns to either edge from config and the context menu`, async () => {
-      const width_spy = vi
-        .spyOn(HTMLElement.prototype, `offsetWidth`, `get`)
-        .mockReturnValue(80)
       onTestFinished(() => width_spy.mockRestore())
       const state = $state<{ column_prefs: Record<string, ColumnPrefs> }>({
         column_prefs: {},
       })
-      mount_table(
-        bind_props(
-          {
-            data: [{ Name: `A`, Tag: `x`, Value: 1, Note: `n` }],
-            columns: [
-              { id: `Name`, label: `Name`, sticky: true },
-              { id: `Tag`, label: `Tag` },
-              { id: `Value`, label: `Value`, sticky: `right` },
-              { id: `Note`, label: `Note`, sticky: `right` },
-            ] as Column[],
-          },
-          state,
-        ),
-      )
+      const columns: Column[] = [
+        { id: `Name`, label: `Name`, sticky: true },
+        { id: `Tag`, label: `Tag` },
+        { id: `Value`, label: `Value`, sticky: `right`, group: `Numbers` },
+        { id: `Note`, label: `Note`, sticky: `right` },
+      ]
+      const data = [{ Name: `A`, Tag: `x`, Value: 1, Note: `n` }]
+      mount_table(bind_props({ data, columns, summary: true }, state))
       await tick()
+      // group-header spacers and summary cells pin with their column too
+      const [name_spacer] = document.querySelectorAll<HTMLElement>(`tr.group-header th`)
+      expect([name_spacer.className.includes(`pinned`), name_spacer.style.left]).toEqual([
+        true,
+        `0px`,
+      ])
+      const [, , value_mean, note_mean] =
+        document.querySelectorAll<HTMLElement>(`tfoot td`)
+      expect([value_mean.style.right, note_mean.style.right]).toEqual([`80px`, `0px`])
+      expect(note_mean.classList.contains(`pinned-right`)).toBe(true)
       const head = (col_id: string) => doc_query(`thead th[data-col-id="${col_id}"]`)
+      const cell_style = (col: string) => doc_query(`td[data-col="${col}"]`).style
       const edges = (col_id: string) => {
         const { left, right } = head(col_id).style
         return {
@@ -1897,20 +1710,21 @@ describe(`DataTable`, () => {
       expect(edges(`Name`)).toEqual({ left: `0px`, right: ``, pinned_right: false })
       expect(edges(`Note`)).toEqual({ left: ``, right: `0px`, pinned_right: true })
       expect(edges(`Value`)).toEqual({ left: ``, right: `80px`, pinned_right: true })
-      expect(
-        document.querySelector<HTMLElement>(`td[data-col="Value"]`)?.style.right,
-      ).toBe(`80px`)
+      expect(cell_style(`Value`).right).toBe(`80px`)
+      expect(cell_style(`Tag`).left).toBe(``)
 
       const pick = async (col_id: string, label: string) => {
-        await fire(head(col_id), mouse(`contextmenu`, { button: 2 }))
-        const item = [
-          ...document.querySelectorAll<HTMLButtonElement>(`.action-menu button`),
-        ].find((btn) => btn.textContent?.trim() === label)
-        await fire(item)
+        await open_context_menu(head(col_id))
+        await fire(menu_item(label))
       }
       await pick(`Tag`, `Pin left`)
       expect(state.column_prefs.Tag?.pinned).toBe(`left`)
-      expect(edges(`Tag`).left).toBe(`80px`) // after Name
+      expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`80px`, `80px`]) // after Name
+      // the first header grows (a manual resize, longer label): every pin after it shifts
+      name_width = 120
+      trigger_resize_observer(head(`Name`))
+      await tick()
+      expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`120px`, `120px`])
       await pick(`Name`, `Pin left`) // re-picking the current side unpins, over its config
       expect(state.column_prefs.Name?.pinned).toBeNull()
       expect(head(`Name`).classList.contains(`pinned`)).toBe(false)
@@ -1919,32 +1733,14 @@ describe(`DataTable`, () => {
       expect(edges(`Value`).right).toBe(`0px`) // Note left the right edge
     })
 
-    it(`allow_pinning=false leaves the pin section out of the context menu`, async () => {
-      mount_sample({ allow_pinning: false })
-      await fire(doc_query(`th`), mouse(`contextmenu`, { button: 2 }))
-      expect(document.querySelector(`.action-menu`)?.textContent).not.toContain(
-        `Pin left`,
-      )
-    })
-
     it(`clears the grouped-header offset when the final group is hidden`, async () => {
       const height_spy = vi
         .spyOn(HTMLElement.prototype, `clientHeight`, `get`)
         .mockReturnValue(24)
       onTestFinished(() => height_spy.mockRestore())
       const state = $state({ hidden_columns: [] as string[] })
-      mount_table(
-        bind_props(
-          {
-            data: [{ Name: `Fe`, Mass: 55.85 }],
-            columns: [
-              { id: `Name`, label: `Name` },
-              { id: `Mass (Physical)`, key: `Mass`, label: `Mass`, group: `Physical` },
-            ],
-          },
-          state,
-        ),
-      )
+      const columns = [{ id: `Name`, label: `Name` }, grouped(`Mass`, `Physical`, `Mass`)]
+      mount_table(bind_props({ data: [{ Name: `Fe`, Mass: 55.85 }], columns }, state))
       await tick()
       const table = doc_query(`table`)
       expect(table.getAttribute(`style`)).toContain(`--group-header-height: 24px`)
@@ -2003,19 +1799,9 @@ describe(`DataTable`, () => {
         render: () => `<table><tbody><tr><td class="inner">x</td></tr></tbody></table>`,
       }))
       const state = $state({ hidden_columns: [] as string[] })
+      const props = { data, columns: plain_columns(`A`), cell, show_row_select: true }
       mount_table(
-        bind_props(
-          {
-            data,
-            columns: plain_columns(`A`),
-            on_row_click,
-            on_row_double_click,
-            cell,
-            show_row_select: true,
-            row_key: `A`,
-          },
-          state,
-        ),
+        bind_props({ ...props, on_row_click, on_row_double_click, row_key: `A` }, state),
       )
       await tick()
       const inner = document.querySelectorAll<HTMLElement>(`td.inner`)[1]
@@ -2176,17 +1962,9 @@ describe(`DataTable`, () => {
         return 4
       },
     }
-    mount_table(
-      bind_props(
-        {
-          columns: plain_columns(`id`),
-          data: [{ id: 1 }, { id: 2 }, { id: 3 }, offscreen_row],
-          row_key: `id`,
-          pagination: { page_size: 3 },
-        },
-        state,
-      ),
-    )
+    const data = [{ id: 1 }, { id: 2 }, { id: 3 }, offscreen_row]
+    const props = { data, columns: plain_columns(`id`), pagination: { page_size: 3 } }
+    mount_table(bind_props({ ...props, row_key: `id` }, state))
     await tick()
     const shaded = () =>
       [...document.querySelectorAll(`tbody tr[data-row-idx]`)].map((row) =>
@@ -2219,35 +1997,16 @@ describe(`DataTable`, () => {
     ]
     const rendered_models = () => col_values(`Model`)
 
-    // Filters live in column_prefs, so setting them from the outside is the same code path
-    // the funnel UI drives — and doubles as the persistence test for that prop.
-    it(`filters rows by a column filter plus global search`, () => {
-      mount_table({
-        data: metric_rows,
-        columns: metrics,
-        column_prefs: { Score: { filter: { kind: `numeric`, min: 20 } } },
-        search: true,
-        search_query: `alpha`,
-      })
-      expect(rendered_models()).toEqual([`C`]) // alpha AND score >= 20
-    })
-
     it(`binds visible_rows to the filtered rows in sort order across all pages`, async () => {
       const state = $state({ visible_rows: [] as RowData[] })
-      mount_table(
-        bind_props(
-          {
-            data: metric_rows,
-            columns: metrics,
-            sort: { column: `Score`, dir: `desc` as const },
-            pagination: { page_size: 1 },
-            column_prefs: {
-              Tier: { filter: { kind: `category` as const, values: [`alpha`] } },
-            },
-          },
-          state,
-        ),
-      )
+      const filter = { kind: `category` as const, values: [`alpha`] }
+      const props = {
+        data: metric_rows,
+        columns: metrics,
+        column_prefs: { Tier: { filter } },
+      }
+      const sort = { column: `Score`, dir: `desc` as const }
+      mount_table(bind_props({ ...props, sort, pagination: { page_size: 1 } }, state))
       await tick()
       expect(state.visible_rows.map((row) => row.Model)).toEqual([`C`, `A`])
       expect(rendered_models()).toEqual([`C`]) // one page rendered, all rows reported
@@ -2263,22 +2022,30 @@ describe(`DataTable`, () => {
         column_prefs: {} satisfies Record<string, ColumnPrefs>,
       })
       mount_table(props)
-      const summary_cells = () =>
-        [...document.querySelectorAll(`tfoot .summary-row`)].map((row) =>
-          [...row.querySelectorAll(`td`)].map((cell) => cell.textContent?.trim()),
-        )
-
+      const summary_cells = () => texts(`tfoot .summary-row td`)
       expect(summary_cells()).toEqual([
-        [`mean`, `20`, ``],
-        [`median`, `20`, ``],
-        [`count`, `3`, ``],
+        `mean`,
+        `20`,
+        ``,
+        `median`,
+        `20`,
+        ``,
+        `count`,
+        `3`,
+        ``,
       ])
       props.column_prefs = { Score: { filter: { kind: `numeric`, min: 20 } } }
       await tick()
       expect(summary_cells()).toEqual([
-        [`mean`, `25`, ``],
-        [`median`, `25`, ``],
-        [`count`, `2`, ``],
+        `mean`,
+        `25`,
+        ``,
+        `median`,
+        `25`,
+        ``,
+        `count`,
+        `2`,
+        ``,
       ])
     })
 
@@ -2307,11 +2074,7 @@ describe(`DataTable`, () => {
       props.summary = [`median`]
       await tick()
       expect(fill(19, 1)).toBe(fill(19, 2))
-      expect(
-        [...document.querySelectorAll(`tfoot .summary-row td`)].map((cell) =>
-          cell.textContent?.trim(),
-        ),
-      ).toEqual([`median`, `50`, `50`])
+      expect(texts(`tfoot .summary-row td`)).toEqual([`median`, `50`, `50`])
       // A later column widens the shared domain of columns already processed.
       props.columns[1].domain_group = `values`
       props.columns[2].domain_group = `values`
@@ -2342,11 +2105,10 @@ describe(`DataTable`, () => {
             },
           ],
         })
-        expect(
-          [...document.querySelectorAll(`td[data-col="Score"] .data-bar`)].map(
-            (bar) => (bar as HTMLElement).style.width,
-          ),
-        ).toEqual(widths)
+        const bars = document.querySelectorAll<HTMLElement>(
+          `td[data-col="Score"] .data-bar`,
+        )
+        expect([...bars].map((bar) => bar.style.width)).toEqual(widths)
         expect(
           document.querySelector(`td.best-cell[data-col="Score"]`)?.textContent?.trim(),
         ).toBe(best)
@@ -2443,19 +2205,19 @@ describe(`DataTable`, () => {
         `td[data-row-idx="1"][data-col-idx="1"]`,
       ) as HTMLElement
       await fire(cell, new PointerEvent(`pointerdown`, { bubbles: true, button: 0 }))
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(1)
+      expect(n_selected()).toBe(1)
 
       offscreen_reads = 0
       props.column_prefs = { Score: { width: 180 } } // a resize, not a filter
       await tick()
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(1)
+      expect(n_selected()).toBe(1)
       expect(cell.style.width).toBe(`180px`)
       props.column_prefs = {
         Score: { width: 180, better: `lower`, color_scale: `interpolatePlasma` },
       }
       await tick()
       expect(offscreen_reads).toBe(0)
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(1)
+      expect(n_selected()).toBe(1)
       expect(
         document.querySelector(`td.best-cell[data-col="Score"]`)?.textContent?.trim(),
       ).toBe(`10`)
@@ -2591,10 +2353,7 @@ describe(`DataTable`, () => {
       // one pass per column holding numbers (not the text-only Model): writing back the
       // resolved column_order re-scans none
       expect(stats_spy).toHaveBeenCalledTimes(2)
-      const cells = [...document.querySelectorAll(`tfoot .summary-row td`)].map((cell) =>
-        cell.textContent?.trim(),
-      )
-      expect(cells).toEqual([`mean`, `15`, ``]) // Mixed has a text value -> no mean
+      expect(texts(`tfoot .summary-row td`)).toEqual([`mean`, `15`, ``]) // Mixed has a text value -> no mean
     })
 
     // Keyboard parity: arrows walk the active cell, Shift extends the rectangle,
@@ -2614,13 +2373,13 @@ describe(`DataTable`, () => {
       expect([...document.querySelectorAll(`td[tabindex="0"]`)]).toHaveLength(1)
 
       await fire(cell_at(0, 0), keydown(`ArrowDown`))
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(1)
+      expect(n_selected()).toBe(1)
       expect(cell_at(1, 0).classList.contains(`cell-selected`)).toBe(true)
       expect(cell_at(1, 0).getAttribute(`tabindex`)).toBe(`0`)
       expect(document.activeElement).toBe(cell_at(1, 0))
 
       await fire(cell_at(1, 0), keydown(`ArrowRight`, { shiftKey: true }))
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(2)
+      expect(n_selected()).toBe(2)
 
       await fire(cell_at(1, 1), keydown(`ArrowLeft`, { altKey: true }))
       expect(props.column_order).toEqual([`Score`, `Model`, `Tier`])
@@ -2656,10 +2415,6 @@ describe(`DataTable`, () => {
   })
 
   describe(`Export`, () => {
-    const export_labels = () =>
-      [...document.querySelectorAll(`menu [role=menuitem]`)].map((item) =>
-        item.textContent?.trim(),
-      )
     it.each([
       [
         `export_formats picks the options`,
@@ -2674,7 +2429,7 @@ describe(`DataTable`, () => {
         return
       }
       await open_export_menu()
-      expect(export_labels()).toEqual(expected)
+      expect(texts(`menu [role=menuitem]`)).toEqual(expected)
       // an open menu keeps the hover toolbar visible
       expect(doc_query(`.control-buttons`).classList.contains(`force-visible`)).toBe(true)
     })
@@ -2686,32 +2441,21 @@ describe(`DataTable`, () => {
       format = `CSV`,
     ): Promise<string> {
       const create_url = vi.spyOn(URL, `createObjectURL`).mockReturnValue(`blob:test`)
-      const revoke_url = vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
-      const anchor_click = vi
-        .spyOn(HTMLAnchorElement.prototype, `click`)
-        .mockImplementation(() => {})
+      vi.spyOn(URL, `revokeObjectURL`).mockImplementation(() => {})
+      vi.spyOn(HTMLAnchorElement.prototype, `click`).mockImplementation(() => {})
+      onTestFinished(() => void vi.restoreAllMocks())
       const on_export = vi.fn()
-      try {
-        mount_table({
-          show_column_toggle: true,
-          export_formats: TABLE_EXPORT_FORMATS,
-          on_export,
-          ...props,
-        } as TableProps)
-        if (before_export) await before_export()
-        await open_export_menu()
-        await click(export_item(format))
-        const text = await (create_url.mock.calls[0][0] as Blob).text()
-        expect(on_export).toHaveBeenCalledExactlyOnceWith({
-          format: { CSV: `csv`, Markdown: `md`, LaTeX: `tex`, JSON: `json` }[format],
-          text,
-        })
-        return text
-      } finally {
-        create_url.mockRestore()
-        revoke_url.mockRestore()
-        anchor_click.mockRestore()
-      }
+      const export_formats = TABLE_EXPORT_FORMATS
+      mount_sample({ show_column_toggle: true, export_formats, on_export, ...props })
+      if (before_export) await before_export()
+      await open_export_menu()
+      await click(export_item(format))
+      const text = await (create_url.mock.calls[0][0] as Blob).text()
+      expect(on_export).toHaveBeenCalledExactlyOnceWith({
+        format: { CSV: `csv`, Markdown: `md`, LaTeX: `tex`, JSON: `json` }[format],
+        text,
+      })
+      return text
     }
 
     // Escaping itself is covered by the exporter unit tests; this checks the download wiring,
@@ -2814,17 +2558,7 @@ describe(`DataTable`, () => {
       const state = $state<{ show_controls: `hover` | `always` | `never` }>({
         show_controls: `always`,
       })
-      mount_table(
-        bind_props(
-          {
-            data: sample_data,
-            columns: sample_columns,
-            search: true,
-            controls_style: `opacity: 0.5`,
-          },
-          state,
-        ),
-      )
+      mount_sample(bind_props({ search: true, controls_style: `opacity: 0.5` }, state))
       const row = doc_query(`.control-buttons`)
       expect(row.classList.contains(`always-visible`)).toBe(true)
       expect(row.style.opacity).toBe(`0.5`)
@@ -2871,7 +2605,7 @@ describe(`DataTable`, () => {
       drag_cells([0, 0], [1, 1])
       await tick()
 
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(4)
+      expect(n_selected()).toBe(4)
       // a focused resize handle lets the copy through
       expect(copy_cells(doc_query(`.resize-handle`))).toBe(`Model A\t0.95\nModel B\t0.85`)
 
@@ -2879,13 +2613,13 @@ describe(`DataTable`, () => {
       drag_cells([2, 2], [2, 2], { shiftKey: true })
       await tick()
 
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(2)
+      expect(n_selected()).toBe(2)
       expect(copy_cells()).toBe(`Model A\n300`)
 
       drag_cells([2, 1], [2, 1])
       await tick()
 
-      expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(1)
+      expect(n_selected()).toBe(1)
       expect(cell_at(2, 1).classList.contains(`cell-selected`)).toBe(true)
     })
 
@@ -2901,7 +2635,7 @@ describe(`DataTable`, () => {
         drag_cells([0, 0], [1, 1])
         cell_at(1, 1).dispatchEvent(pointer(`click`)) // consume the post-drag click guard
         await tick()
-        expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(4)
+        expect(n_selected()).toBe(4)
         if (action === `hide`) state.hidden_columns = [`Value`]
         else if (action === `reorder`) state.column_order = [`Score`, `Model`, `Value`]
         else if (action === `sort`) doc_query(`th[data-col-id="Model"]`).click()
@@ -2910,7 +2644,7 @@ describe(`DataTable`, () => {
           doc_query(`.resize-handle`).dispatchEvent(keydown(`Escape`))
         else document.body.dispatchEvent(pointer(`pointerdown`))
         await tick()
-        expect(document.querySelectorAll(`td.cell-selected`)).toHaveLength(0)
+        expect(n_selected()).toBe(0)
       },
     )
 
@@ -2934,11 +2668,8 @@ describe(`DataTable`, () => {
       const data = sample_data.with(2, { ...sample_data[2], Model: `Model\tC\nx` })
       await mount_sample_table({ data, pagination: { page_size: 2 } })
 
-      await fire(cell_at(0, 0), pointer(`contextmenu`, { button: 2 }))
-
-      const copy_option = [
-        ...document.querySelectorAll<HTMLButtonElement>(`.action-menu button`),
-      ].find((btn) => btn.textContent?.includes(`Copy column`))
+      await open_context_menu(cell_at(0, 0))
+      const copy_option = menu_item(`Copy column`)
       expect(copy_option?.textContent).toContain(`3 values`)
       await click(copy_option)
 
@@ -2953,16 +2684,8 @@ describe(`DataTable`, () => {
     it(`context menu on headers offers copy for non-heatmap columns`, async () => {
       await mount_sample_table()
 
-      const header = document.querySelector(`th`)
-      header?.dispatchEvent(pointer(`contextmenu`, { button: 2 }))
-      await tick()
-
-      const options = [...document.querySelectorAll(`.action-menu button`)].map((btn) =>
-        btn.textContent?.trim(),
-      )
-      expect(options.some((text) => text?.includes(`Copy column`))).toBe(true)
-      // no color_scale on Model -> no gradient-direction section
-      expect(options.some((text) => text?.includes(`Higher is better`))).toBe(false)
+      await open_context_menu(document.querySelector(`th`))
+      expect(menu_item(`Copy column`)).toBeDefined()
 
       // right-clicking another column while the menu is open must retarget it, not
       // leave it dismissed: the pointerdown of that right-click is an outside press
@@ -2985,8 +2708,7 @@ describe(`DataTable`, () => {
       })
       await tick()
 
-      const headers = document.querySelectorAll(`th`)
-      await fire(headers[th_idx], pointer(`contextmenu`, { button: 2 }))
+      await open_context_menu(document.querySelectorAll(`th`)[th_idx])
       const menu_text = document.querySelector(`.action-menu`)?.textContent ?? ``
       expect(/Higher is better|Lower is better/.test(menu_text)).toBe(shown)
     })
@@ -3064,10 +2786,15 @@ describe(`DataTable`, () => {
       expect(scroller.scrollTop).toBe(49 * row_height_px - scroller.clientHeight / 2)
     })
 
-    it(`moves the window and preserves absolute row numbers on scroll`, async () => {
+    it(`moves the window without forcing layout and preserves absolute row numbers`, async () => {
+      const rect_spy = vi.spyOn(Element.prototype, `getBoundingClientRect`)
+      onTestFinished(() => rect_spy.mockRestore())
       const row_key = vi.fn((row: RowData) => Number(row.Score))
       mount_virtual({ show_row_numbers: true, keyboard_cells: true, row_key })
+      await tick()
+      rect_spy.mockClear()
       const scroller = await scroll_to(30 * row_height_px)
+      expect(rect_spy).not.toHaveBeenCalled()
       // a scroll within one row keeps the window, so no rendered row is re-keyed
       row_key.mockClear()
       await scroll_to(30 * row_height_px + 5)
@@ -3150,17 +2877,6 @@ describe(`DataTable`, () => {
       trigger_resize_observer(scroller)
       await tick()
       expect(measurement_reads).toBe(min_window * 3)
-    })
-
-    it(`does not force layout for every row when the virtual window moves`, async () => {
-      const rect_spy = vi.spyOn(Element.prototype, `getBoundingClientRect`)
-      onTestFinished(() => rect_spy.mockRestore())
-      mount_virtual()
-      await tick()
-      rect_spy.mockClear()
-
-      await scroll_to(11 * row_height_px)
-      expect(rect_spy).not.toHaveBeenCalled()
     })
 
     // Clickable rows step by absolute index, not DOM sibling: the element after the last

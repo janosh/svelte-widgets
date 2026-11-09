@@ -42,31 +42,43 @@ beforeEach(() => {
 afterEach(() => {
   document.body.replaceChildren()
   delete document.documentElement.dataset.theme
+  document.documentElement.style.colorScheme = ``
+  vi.unstubAllGlobals()
   vi.clearAllMocks()
 })
 
 describe(`render_mermaid`, () => {
+  // the resolved color-scheme decides, so a custom `black` theme still gets dark diagrams;
+  // a scheme allowing both (or none) follows the OS
   test.each([
-    [`light`, `default`],
-    [`dark`, `dark`],
-  ])(`data-theme=%s renders with the %s Mermaid theme`, async (scheme, expected) => {
-    document.documentElement.dataset.theme = scheme
-    const block = diagram(`graph TD\n  A --> B`)
-    document.body.append(block)
-    await render_mermaid(block)
-    expect(mermaid.initialize).toHaveBeenCalledWith(
-      expect.objectContaining({ theme: expected, startOnLoad: false }),
-    )
-    expect(mermaid.render).toHaveBeenCalledWith(
-      expect.stringMatching(/^widgets-mermaid-\d+$/u),
-      `graph TD\n  A --> B`,
-    )
-    expect(block.querySelector(`svg`)?.dataset).toMatchObject({
-      source: `graph TD\n  A --> B`,
-      theme: expected,
-    })
-    expect(block.dataset.mermaidTheme).toBe(expected)
-  })
+    [`light`, `light`, false, `default`],
+    [`dark`, `dark`, false, `dark`],
+    [`black`, `dark`, false, `dark`],
+    [undefined, `light dark`, true, `dark`],
+    [undefined, ``, false, `default`],
+  ])(
+    `data-theme=%s, color-scheme=%s, OS dark=%s renders with the %s Mermaid theme`,
+    async (data_theme, scheme, os_dark, expected) => {
+      if (data_theme) document.documentElement.dataset.theme = data_theme
+      document.documentElement.style.colorScheme = scheme
+      vi.stubGlobal(`matchMedia`, () => ({ matches: os_dark }))
+      const block = diagram(`graph TD\n  A --> B`)
+      document.body.append(block)
+      await render_mermaid(block)
+      expect(mermaid.initialize).toHaveBeenCalledWith(
+        expect.objectContaining({ theme: expected, startOnLoad: false }),
+      )
+      expect(mermaid.render).toHaveBeenCalledWith(
+        expect.stringMatching(/^widgets-mermaid-\d+$/u),
+        `graph TD\n  A --> B`,
+      )
+      expect(block.querySelector(`svg`)?.dataset).toMatchObject({
+        source: `graph TD\n  A --> B`,
+        theme: expected,
+      })
+      expect(block.dataset.mermaidTheme).toBe(expected)
+    },
+  )
 
   test(`an explicit configured theme overrides the page scheme`, async () => {
     configure_mermaid({ theme: `forest`, flowchart: { curve: `basis` } })
@@ -109,14 +121,14 @@ describe(`render_mermaid`, () => {
 })
 
 describe(`mermaid_diagrams attachment`, () => {
-  test(`re-renders from the authored source when data-theme changes`, async () => {
+  test(`re-renders from the authored source when the page scheme changes`, async () => {
     const container = document.createElement(`article`)
     container.append(diagram(`graph TD\n  A --> B`))
     document.body.append(container)
     const detach = mermaid_diagrams(container)
     await settle()
     expect(container.querySelector(`svg`)?.dataset.theme).toBe(`default`)
-    document.documentElement.dataset.theme = `dark`
+    document.documentElement.style.colorScheme = `dark` // as apply_theme_mode sets it
     await settle()
     expect(container.querySelector(`svg`)?.dataset).toMatchObject({
       theme: `dark`,
@@ -124,7 +136,7 @@ describe(`mermaid_diagrams attachment`, () => {
     })
     expect(mermaid.render).toHaveBeenCalledTimes(2)
     if (typeof detach === `function`) detach()
-    document.documentElement.dataset.theme = `light`
+    document.documentElement.style.colorScheme = `light`
     await new Promise((resolve) => {
       setTimeout(resolve, 0)
     })

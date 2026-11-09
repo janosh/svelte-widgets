@@ -910,19 +910,12 @@
     }
   }
 
-  // a disabled control has no open list: disabling mid-interaction (or binding open=true
-  // while disabled) closes it, so no row, select-all or create item stays clickable. A
-  // focused select-all row or group button would still take Enter/Space through the
-  // list's fade-out, so focus leaves the list too. untrack: on_close's reads aren't deps.
-  // on_close hears one close per disable: a parent re-opening from it is closed silently,
-  // else the two would ping-pong until Svelte's update-depth limit throws.
-  let closed_for_disabled = false
+  // a disabled control has no open list, so no row stays clickable. Disabling closes it
+  // (on_close hears it once) and moves focus out, else a focused select-all row or group
+  // button still takes Enter/Space through the fade-out. A later open=true, even from
+  // on_close, is shut silently by the second effect, so the two can't ping-pong.
   $effect(() => {
-    if (!disabled) {
-      closed_for_disabled = false
-      return
-    }
-    if (!open) return
+    if (!disabled) return
     untrack(() => {
       const { activeElement } = document
       if (
@@ -930,12 +923,11 @@
         options_list_el?.contains(activeElement)
       )
         activeElement.blur()
-      if (closed_for_disabled) open = false
-      else {
-        closed_for_disabled = true
-        close_dropdown(new Event(`disabled`))
-      }
+      close_dropdown(new Event(`disabled`))
     })
+  })
+  $effect(() => {
+    if (disabled && open) open = false
   })
 
   // close dropdown and (in chip mode) clear the search draft — Escape/Tab + close shortcut

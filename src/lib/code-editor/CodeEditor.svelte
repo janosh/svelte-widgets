@@ -197,10 +197,10 @@
     const [from, to] = ordered(current_selection)
     return search_matches.findIndex((match) => match.from === from && match.to === to)
   })
-  // Next can step past a capped list; the status then can't give a position
+  // Next can step past a capped list, where the status can't give a position
   const selection_past_cap = $derived(
     search_result.truncated &&
-      ordered(current_selection)[0] >= (search_matches.at(-1)?.to ?? Infinity),
+      ordered(current_selection)[0] >= (search_matches.at(-1)?.to ?? 0),
   )
   const report_error = (error: unknown): void => {
     const message = to_error(error).message
@@ -1034,41 +1034,26 @@
     await focus_panel_input()
     select_nearest_match()
   }
-  // A capped list ends at its SEARCH_MATCH_LIMIT-th match, so stepping past it scans the
-  // model from the selection on: forward to the next match, backward over the gap since
-  // the list's last match (its matches before the selection are already in the list)
-  const match_beyond_cap = (
-    direction: 1 | -1,
-    start: number,
-    end: number,
-  ): EditorMatch | undefined => {
-    const last = search_matches.at(-1)
-    if (!search_result.truncated || !last) return undefined
-    if (direction === 1)
-      return (
-        iterate_editor_matches(model, search_query, search_options, { from: end }).next()
-          .value ?? undefined
-      )
-    if (start <= last.to) return undefined
-    let found: EditorMatch | undefined
-    for (const match of iterate_editor_matches(model, search_query, search_options, {
-      from: last.to,
-      to: start,
-    }))
-      found = match
-    return found
-  }
   export const find_next = (direction: 1 | -1 = 1): boolean => {
     search_panel = `find`
     const [start, end] = ordered(model.selection)
+    const scan = (range: { from: number; to?: number }) =>
+      iterate_editor_matches(model, search_query, search_options, range)
+    // A capped list ends at its SEARCH_MATCH_LIMIT-th match, so past it Next scans the model
+    // forward from the selection and Previous the gap between the list's end and the selection
+    const { truncated } = search_result
+    const last_to = search_matches.at(-1)?.to ?? 0
     if (direction === 1)
       return select_match(
         search_matches.find(({ from }) => from >= end) ??
-          match_beyond_cap(1, start, end) ??
+          (truncated ? scan({ from: end }).next().value : undefined) ??
           search_matches[0],
       )
+    let previous: EditorMatch | undefined
+    if (truncated && start > last_to)
+      for (const match of scan({ from: last_to, to: start })) previous = match
     return select_match(
-      match_beyond_cap(-1, start, end) ??
+      previous ??
         search_matches.findLast(({ to }) => to <= start) ??
         search_matches.at(-1),
     )
@@ -1279,7 +1264,7 @@
             >{search_matches.length
               ? search_result.truncated
                 ? msg.match_position_truncated(
-                    current_match === -1 && selection_past_cap ? null : current_match + 1,
+                    selection_past_cap ? null : current_match + 1,
                     search_matches.length,
                   )
                 : msg.match_position(current_match + 1, search_matches.length)

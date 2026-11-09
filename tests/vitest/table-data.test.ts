@@ -24,20 +24,27 @@ import { describe, expect, it } from 'vite-plus/test'
 describe(`column stats and domains`, () => {
   const values = [...Array.from({ length: 20 }, (_unused_value, idx) => idx * 5), 10_000]
 
-  it(`summarizes a column in one pass, ignoring non-numeric entries`, () => {
-    const stats = compute_column_stats([1, 2, 3, null, undefined, NaN], `higher`)
-    expect(stats).toMatchObject({ min: 1, max: 3, mean: 2, median: 2, count: 3, best: 3 })
-    expect(compute_column_stats([1, 2, 3], `lower`)?.best).toBe(1)
-    expect(compute_column_stats([1, 2, 3])?.best).toBeNull()
+  it(`summarizes a column in one pass, ignoring non-numeric and non-finite entries`, () => {
+    const stats = compute_column_stats([
+      1,
+      2,
+      3,
+      null,
+      undefined,
+      NaN,
+      Infinity,
+      -Infinity,
+    ])
+    expect(stats).toMatchObject({ min: 1, max: 3, mean: 2, median: 2, count: 3 })
     expect(compute_column_stats([null, undefined, NaN])).toBeNull()
     // without quantiles, q_lo/q_hi fall back to min/max and no median is computed
-    expect(compute_column_stats(values, undefined, false)).toMatchObject({
+    expect(compute_column_stats(values, false)).toMatchObject({
       q_lo: 0,
       q_hi: 10_000,
       median: null,
     })
     for (const zero of [-0, 0]) {
-      expect(compute_column_stats([zero, -zero], undefined, false)).toMatchObject({
+      expect(compute_column_stats([zero, -zero], false)).toMatchObject({
         min: zero,
         max: zero,
       })
@@ -68,14 +75,6 @@ describe(`column stats and domains`, () => {
     expect([min, max, mean, median, q_lo, q_hi]).toEqual(Array(6).fill(val))
     // a zero-width quantile range must fall back to min/max, not produce an empty domain
     expect(resolve_domain(stats, `quantile`)).toEqual([val, val])
-  })
-
-  it(`ignores non-finite values`, () => {
-    expect(compute_column_stats([1, 2, Infinity, -Infinity])).toMatchObject({
-      min: 1,
-      max: 2,
-      count: 2,
-    })
   })
 
   // oxfmt-ignore

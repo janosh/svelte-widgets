@@ -84,7 +84,7 @@
 </span>
 
 <style>
-  /* wrapper, trigger and panel chrome come from HeatmapTable's .header-popover rules */
+  /* wrapper, trigger and panel chrome come from DataTable's .header-popover rules */
   .datetime-format-trigger :global(svg) {
     width: 10px;
     height: 10px;

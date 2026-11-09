@@ -41,7 +41,7 @@
   const value_type = $derived(get_value_type(value))
   const is_circular = $derived(ancestors.includes(value))
   const expandable = $derived(!is_circular && is_expandable_type(value_type))
-  const child_ancestors = $derived(expandable ? [...ancestors, value] : ancestors)
+  const child_ancestors = $derived([...ancestors, value]) // lazy: read only by children
 
   // Leaves skip the per-path selectors entirely
   const is_collapsed = $derived(

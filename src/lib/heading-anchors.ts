@@ -173,9 +173,9 @@ function add_anchor_to_heading(
 const is_heading = (element: Element): boolean => /^H[1-6]$/u.test(element.tagName)
 const HEADINGS = `h1, h2, h3, h4, h5, h6`
 // Only an added subtree holding a heading (or a custom selector's match), an id written on
-// one, or its own children changing (`textContent` replacing its anchor, text filling an empty
-// one, including Svelte's `nodeValue` writes on its text node) can change the anchors. Requerying the container on every other change (a dense plot
-// redrawing thousands of nodes) cost ~90 ms of selector matching on a 75k-node page.
+// one, or its children or text changing (`textContent` replacing its anchor, text or a Svelte
+// `nodeValue` write filling an empty one) can change the anchors. Requerying the container on
+// every other change (a plot redrawing thousands of nodes) cost ~90 ms on a 75k-node page.
 const touches_headings = (records: MutationRecord[], selector?: string): boolean => {
   // matches() can't see :scope-relative selectors, so headings always count
   const counts = (el: Element) =>

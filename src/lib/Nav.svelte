@@ -223,10 +223,9 @@
       ...(typeof route.tooltip === `string` ? { content: route.tooltip } : route.tooltip),
     }
     const { content } = options
-    // An open dropdown hangs below its parent, right where the parent's tooltip would open.
-    // Empty content keeps it shut while leaving it registered: disabling would tear it down
-    // and restore the link's title, whose native tooltip then shows over the dropdown.
-    // Read at open time, after a hover has already opened the dropdown.
+    // An open dropdown hangs below its parent, where the parent's tooltip would open. Empty
+    // content (read at open time) keeps it shut but registered: disabling it would restore
+    // the link's title, whose native tooltip then shows over the dropdown.
     return tooltip({
       ...options,
       content: (trigger) => {

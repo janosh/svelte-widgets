@@ -1,7 +1,7 @@
 // Test environment and helpers for the DataTable suite (ported with it from MatterViz's
 // HeatmapTable tests). Importing this module installs a ResizeObserver mock and fixed
 // element sizes for its test file only.
-import { type Component, mount, tick, unmount } from 'svelte'
+import { tick } from 'svelte'
 import { prefersReducedMotion } from 'svelte/motion'
 import { beforeEach, onTestFinished, vi } from 'vite-plus/test'
 import { is_plain_object } from '#lib/table/data.ts'
@@ -62,20 +62,6 @@ Object.defineProperty(navigator, `clipboard`, {
   writable: true,
   configurable: true,
 })
-
-type ElementConstructor<T extends Element> = abstract new (...args: never[]) => T
-
-// First match of a selector, asserting it exists (and its class when given)
-export const doc_query = <T extends Element = HTMLElement>(
-  selector: string,
-  element_constructor?: ElementConstructor<T>,
-): T => {
-  const element = document.querySelector(selector)
-  if (!element) throw new Error(`No element matches ${selector}`)
-  if (element_constructor && !(element instanceof element_constructor))
-    throw new Error(`${selector} is a ${element.constructor.name}`)
-  return element as T
-}
 
 // Expose `state`'s keys on `props` as live accessors, so a mounted component's bindable
 // props write back into a test-owned $state object
@@ -147,15 +133,4 @@ export const fire = async (
   if (!target) throw new Error(`event target for ${event.type} not found`)
   target.dispatchEvent(event)
   await tick()
-}
-
-export const mount_in_test = <Props extends object>(
-  component: Component<Props>,
-  props: Props,
-): HTMLElement => {
-  const target = document.createElement(`div`)
-  document.body.append(target)
-  const instance = mount(component, { target, props })
-  onTestFinished(() => unmount(instance).finally(() => target.remove()))
-  return target
 }

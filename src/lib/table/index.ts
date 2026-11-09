@@ -6,7 +6,6 @@
 export { default as ColumnFilter } from './ColumnFilter.svelte'
 export { default as ColumnPicker } from './ColumnPicker.svelte'
 export { default as DataTable } from './DataTable.svelte'
-export { default as DateTimeFormatMenu } from './DateTimeFormatMenu.svelte'
 export * from './data'
 export * from './data-table'
 export * from './export'

@@ -68,7 +68,7 @@ flowchart LR
   page & html --> browser[Diagrams render in the browser]
 ```
 
-Svelte pages need no setup: compiled pages attach the renderer to each diagram. For HTML strings from `engine.render()`, attach [`mermaid_diagrams`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L73) to the container. It also renders diagrams that appear later, e.g. when `{@html}` updates. Outside Svelte, call [`render_mermaid(element)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L36), which renders the diagrams within `element` and resolves when they are done.
+Svelte pages need no setup: compiled pages attach the renderer to each diagram. For HTML strings from `engine.render()`, attach [`mermaid_diagrams`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L74) to the container. It also renders diagrams that appear later, e.g. when `{@html}` updates. Outside Svelte, call [`render_mermaid(element)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L37), which renders the diagrams within `element` and resolves when they are done.
 
 ```svelte
 <script lang="ts">

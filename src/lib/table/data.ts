@@ -10,10 +10,7 @@ import {
 import { type CellReaders, default_is_missing } from './filter'
 import type { CellVal, Column, DateTimeFormatMode, RowData } from './data-table'
 
-const normalize_unicode_minus = (value: string): string => value.replaceAll(`−`, `-`)
 const grapheme_segmenter = new Intl.Segmenter(`en`, { granularity: `grapheme` })
-const graphemes = (text: string): string[] =>
-  Array.from(grapheme_segmenter.segment(text), ({ segment }) => segment)
 
 // Columns discovered from the first rows when the caller passes none
 export const discover_columns = <Row extends object>(rows: Row[]): Column<Row>[] => {
@@ -28,7 +25,7 @@ export const discover_columns = <Row extends object>(rows: Row[]): Column<Row>[]
 // marks and emoji aren't torn apart. Strings at or below MIDDLE_ELLIPSIS_MIN_LENGTH render whole.
 export const MIDDLE_ELLIPSIS_MIN_LENGTH = 16
 export const middle_ellipsis_parts = (text: string): [string, string] => {
-  const chars = graphemes(text)
+  const chars = Array.from(grapheme_segmenter.segment(text), ({ segment }) => segment)
   const split_at = chars.length - Math.min(8, Math.floor(chars.length / 2))
   return [chars.slice(0, split_at).join(``), chars.slice(split_at).join(``)]
 }
@@ -70,11 +67,10 @@ const get_data_sort_value = (val: string): string | null | undefined => {
   return captured?.trim() === `` ? null : captured
 }
 
-// Finite decimal reading of plain text, else null
-const parse_numeric_string = (text: string): number | null => {
-  const numeric_str = NUMERIC_WITH_ERROR_RE.exec(text)?.groups?.numeric
-  const num =
-    numeric_str === undefined ? NaN : Number(normalize_unicode_minus(numeric_str))
+// Finite reading of a regex's `numeric` group in plain text, else null
+const match_number = (regex: RegExp, text: string): number | null => {
+  const numeric_str = regex.exec(text)?.groups?.numeric
+  const num = numeric_str === undefined ? NaN : Number(numeric_str.replaceAll(`−`, `-`))
   return Number.isFinite(num) ? num : null
 }
 
@@ -91,7 +87,7 @@ export function parse_numeric_val(val: CellVal): number | null {
   if (typeof val === `number`) return Number.isFinite(val) ? val : null
   if (typeof val !== `string`) return null
   const text = sort_text(val)
-  return text === null ? null : parse_numeric_string(text)
+  return text === null ? null : match_number(NUMERIC_WITH_ERROR_RE, text)
 }
 
 // A number with a unit or other suffix ("1.5 eV", "-3 GPa"), not a version, IP, thousands
@@ -102,10 +98,8 @@ const LEADING_NUMBER_RE =
 // Sort key only ([number, full text]; colors and filters still read these cells as text): the
 // collator compared digit runs as integers, so 1.5 eV sorted after 1.25 eV, -1 GPa before -3 GPa
 const leading_number_key = (text: string): [number, string] | null => {
-  const numeric_str = LEADING_NUMBER_RE.exec(text)?.groups?.numeric
-  const num =
-    numeric_str === undefined ? NaN : Number(normalize_unicode_minus(numeric_str))
-  return Number.isFinite(num) ? [num, text] : null
+  const num = match_number(LEADING_NUMBER_RE, text)
+  return num === null ? null : [num, text]
 }
 
 type SortVal = string | number | [number, string] | null
@@ -120,11 +114,12 @@ const get_sort_val = (val: CellVal): SortVal => {
   if (val instanceof Date) return val.getTime()
   // ±Infinity sort as numbers at the ends: as text "-Infinity" landed after every number
   if (typeof val === `number`) return val
-  if (typeof val !== `string`) return parse_numeric_val(val) ?? cell_text(val)
+  // booleans and objects: parse_numeric_val reads only numbers and strings
+  if (typeof val !== `string`) return cell_text(val)
   const text = sort_text(val)
   if (!text) return null
   return (
-    parse_numeric_string(text) ??
+    match_number(NUMERIC_WITH_ERROR_RE, text) ??
     parse_datetime_text(text) ??
     leading_number_key(text) ??
     text
@@ -269,10 +264,11 @@ export const parse_datetime_val = (
   if (typeof val === `number`)
     return col.datetime_format ? normalize_timestamp(val) : null
   if (typeof val !== `string`) return null
-  const parsed_text = parse_datetime_text(html_to_text(val).trim())
+  const text = html_to_text(val).trim()
+  const parsed_text = parse_datetime_text(text)
   if (parsed_text !== null) return parsed_text
   if (!col.datetime_format) return null
-  return normalize_timestamp(Number(get_data_sort_value(val) ?? html_to_text(val).trim()))
+  return normalize_timestamp(Number(get_data_sort_value(val) ?? text))
 }
 
 // A column's date/time kind from its config, else a sample: any value with a time of day
