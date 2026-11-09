@@ -235,17 +235,39 @@ describe(`tooltip manager`, () => {
     expect(visible_text()).toBeNull()
   })
 
-  it(`explicit hover stays dismissed after a press until re-entered`, () => {
-    const { element } = register_tooltip(`Hover only`, { trigger: `hover` })
-    pointer_over(element)
-    const tooltip_el = visible_tooltip()
-    element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))
-    focus_in(element)
-    expect(tooltip_el.hidden).toBe(true)
+  // the press's own focus must not keep it up either: a clicked pane toggle's tooltip used
+  // to stay over the pane it opened and take its clicks
+  it.each<TooltipOptions>([{ trigger: `hover` }, {}])(
+    `%j stays dismissed after a press until re-entered`,
+    (options) => {
+      const { element } = register_tooltip(`Hover only`, options)
+      pointer_over(element)
+      const tooltip_el = visible_tooltip()
+      element.dispatchEvent(pointer_event(`pointerdown`, 110, 110))
+      focus_in(element)
+      expect(tooltip_el.hidden).toBe(true)
 
-    pointer_out(element)
-    pointer_over(element)
-    expect(visible_tooltip()).toBe(tooltip_el)
+      pointer_out(element)
+      pointer_over(element)
+      expect(visible_tooltip()).toBe(tooltip_el)
+    },
+  )
+
+  // mouse-press focus opens no hover-focus help, keyboard focus does; focus-only help still
+  // opens on any focus, since there focus is the only way in
+  it.each<[TooltipOptions, `pointerdown` | `keydown`, boolean]>([
+    [{}, `pointerdown`, false],
+    [{}, `keydown`, true],
+    [{ trigger: `focus` }, `pointerdown`, true],
+  ])(`%j opens on focus after a %s: %s`, (options, last_input, opens) => {
+    const { element } = register_tooltip(`Help`, options)
+    document.body.dispatchEvent(
+      last_input === `pointerdown`
+        ? pointer_event(`pointerdown`, 0, 0, { pointerType: `mouse` })
+        : new KeyboardEvent(`keydown`, { key: `Tab`, bubbles: true }),
+    )
+    focus_in(element)
+    expect(visible_text()).toBe(opens ? `Help` : null)
   })
 
   it(`keeps one tooltip when pointer and focus states overlap`, () => {

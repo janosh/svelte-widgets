@@ -253,6 +253,9 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   let stop_open_effects: (() => void)[] = []
   let last_closed_at = -Infinity
   let last_input_was_touch = false
+  // A mouse press focuses what it lands on: that focus is no request for help (browsers keep
+  // :focus-visible off for it), so it opens no hover-focus tooltip until a key is pressed
+  let last_input_was_mouse_press = false
 
   const compact_balanced_tooltip = () => {
     const can_compact =
@@ -298,12 +301,14 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   )
 
   const track_input = (event: PointerEvent | KeyboardEvent) => {
-    last_input_was_touch = event instanceof PointerEvent && event.pointerType === `touch`
-    if (!active || !(event instanceof PointerEvent)) return
-    // A press dismisses a hover tooltip that would otherwise hang over whatever it opened;
-    // re-entering the trigger brings it back. `hover-focus` keeps its own, since the press
-    // focuses the trigger, itself a show state.
-    if (tooltip_trigger(active.registration.options) !== `hover`) return
+    const is_pointer = event instanceof PointerEvent
+    last_input_was_touch = is_pointer && event.pointerType === `touch`
+    last_input_was_mouse_press = is_pointer && !last_input_was_touch
+    if (!active || !is_pointer) return
+    // A press dismisses a hover tooltip that would otherwise hang over whatever it opened
+    // (and take its clicks); re-entering the trigger brings it back. Only a focus-only
+    // tooltip stays, since there the press's focus is the show state.
+    if (tooltip_trigger(active.registration.options) === `focus`) return
     if (event.target instanceof Node && active.trigger.contains(event.target)) {
       hide_active(`pointer`, { keep_active: true })
     }
@@ -701,6 +706,7 @@ const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
     // A tap focuses after suppressing hover; opening on that focus is opt-in.
     if (last_input_was_touch && options.trigger !== `focus` && !options.touch_focus)
       return
+    if (last_input_was_mouse_press && options.trigger !== `focus`) return
     activate(registration, trigger, `focus`)
   }
 
