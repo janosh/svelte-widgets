@@ -314,6 +314,11 @@
         <div class="separator" role="separator"></div>
       {:else if route.children}
         {@const sub_routes = route.children}
+        {@const section_starts = sub_routes.map(
+          ({ section }, idx) =>
+            Boolean(section) && section !== sub_routes[idx - 1]?.section,
+        )}
+        {@const n_items = sub_routes.length + section_starts.filter(Boolean).length}
         {@const dropdown_open = is_open_dropdown(route)}
         <!-- svelte-ignore a11y_no_static_element_interactions -- links keep native semantics; the handler routes arrows/Escape -->
         <div
@@ -345,9 +350,8 @@
           </div>
           <div
             class:visible={dropdown_open}
-            class:two-columns={!is_mobile &&
-              sub_routes.length > dropdown_column_threshold}
-            style:--submenu-rows={Math.ceil(sub_routes.length / 2)}
+            class:two-columns={!is_mobile && n_items > dropdown_column_threshold}
+            style:--submenu-rows={Math.ceil(n_items / 2)}
             data-submenu
             tabindex="-1"
             {@attach (node) => {
@@ -378,7 +382,10 @@
           >
             <!-- display: contents on desktop; the mobile grid row animates 0fr to 1fr. -->
             <div class="submenu-inner">
-              {#each sub_routes as child (child)}
+              {#each sub_routes as child, child_idx (child)}
+                {#if section_starts[child_idx]}
+                  <div class="submenu-section">{child.section}</div>
+                {/if}
                 {@render default_link(child)}
               {/each}
             </div>
@@ -555,6 +562,19 @@
     white-space: nowrap;
     font-size: 0.9em;
     transition: background-color 0.15s;
+  }
+  .submenu-section {
+    padding: var(--nav-section-padding, 5pt 6pt 1pt);
+    font-size: var(--nav-section-font-size, 0.72em);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    opacity: var(--nav-section-opacity, 0.6);
+    white-space: nowrap;
+    &:not(:first-child) {
+      margin-top: 3pt;
+      border-top: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
+    }
   }
   .dropdown > div:last-child a:hover {
     background-color: var(--nav-link-bg-hover, rgba(0, 0, 0, 0.1));

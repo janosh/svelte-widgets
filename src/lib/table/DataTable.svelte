@@ -621,6 +621,21 @@
     row_height_measured = measure_row_height()
     sync_viewport(true)
   })
+  // Scroll vertically only on real overflow. A fractional table height rounds scrollHeight one
+  // pixel past clientHeight, which drew a scrollbar with nothing to scroll. CSS can't tell that
+  // apart from a height limit (scroll_style, or a max-height inherited from the parent).
+  let y_overflow = $state(true)
+  $effect(() => {
+    const el = scroll_el
+    const table = el?.querySelector(`:scope > table`)
+    if (!el || !table || typeof ResizeObserver === `undefined`) return
+    const observer = new ResizeObserver(() => {
+      y_overflow = el.scrollHeight - el.clientHeight > 1
+    })
+    observer.observe(el)
+    observer.observe(table)
+    return () => observer.disconnect()
+  })
   // Track scroll-container resizes (e.g. dashboard card resizing)
   $effect(() => {
     if (!virtual_config || !scroll_el || typeof ResizeObserver === `undefined`) return
@@ -1599,7 +1614,7 @@
   {@render sort_hint_element(`top`)}
 
   <div
-    class={['table-scroll', { 'has-scroll': scroll_style }]}
+    class={['table-scroll', { 'has-scroll': scroll_style, 'no-y-overflow': !y_overflow }]}
     style={scroll_style}
     bind:this={scroll_el}
     onscroll={virtual_config ? () => sync_viewport() : undefined}
@@ -2037,6 +2052,9 @@
   .table-scroll {
     position: relative;
     overflow: auto;
+  }
+  .table-scroll.no-y-overflow {
+    overflow-y: hidden;
   }
   .table-scroll.has-scroll {
     border: 1px solid light-dark(rgba(0, 0, 0, 0.12), rgba(255, 255, 255, 0.12));

@@ -431,7 +431,8 @@ type NavDetails = Omit<LinkItem, `href`> & {
   style?: string
   [key: string]: unknown
 }
-export type NavLink = NavDetails & { href: string; children?: never }
+// `section` on submenu links: a run of links sharing one gets a heading above its first link
+export type NavLink = NavDetails & { href: string; children?: never; section?: string }
 // Omit href for a heading without a destination; children contain only submenu links.
 export type NavGroup = NavDetails & { href?: string; children: readonly NavLink[] }
 export type NavRoute =

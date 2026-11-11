@@ -94,6 +94,9 @@ const TOOLTIP_CSS_VARS = [
 // how an ending interaction names its close: focus becomes blur, pointer keeps its name
 const CLOSE_REASON = { pointer: `pointer`, focus: `blur` } as const
 
+// how far the arrow's fill reaches into the surface past its base (see sync_arrow_styles)
+const ARROW_OVERLAP_PX = 1
+
 const ARROW_PLACEMENT: Record<Placement, readonly [Placement, number]> = {
   top: [`bottom`, 135],
   bottom: [`top`, 315],
@@ -105,6 +108,15 @@ const handled_tooltip_events = new WeakSet<Event>()
 
 const is_transparent = (color: string): boolean =>
   [``, `transparent`, `rgba(0, 0, 0, 0)`].includes(color.trim())
+// Computed colors give alpha as rgba()'s 4th argument or after a slash (color(), oklch()), and
+// omit it when opaque
+const is_opaque = (color: string): boolean => {
+  if (is_transparent(color)) return false
+  const alpha = /(?:^rgba\(.*,|\/)\s*(?<value>[\d.]+)(?<percent>%?)\s*\)$/u.exec(
+    color.trim(),
+  )?.groups
+  return !alpha || Number(alpha.value) >= (alpha.percent ? 100 : 1)
+}
 
 const tooltip_trigger = (options: TooltipOptions): TooltipTrigger =>
   options.trigger ?? `hover-focus`
@@ -217,7 +229,17 @@ const sync_arrow_styles = (
   const border_color = styles.getPropertyValue(`border-${inset_side}-color`)
   const border_width = is_transparent(border_color) ? 0 : layout_border(inset_side)
   const arrow_side = (arrow_px + border_width) * Math.SQRT2
-  arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid ${border_color}; clip-path: polygon(0 0, 100% 0, 100% 100%); transform: rotate(${rotation_deg}deg);`
+  // The kept triangle's legs (the square's top and right sides) draw the outline; its base
+  // sits on the surface's inner border edge, so its fill hides the surface border there. With
+  // no margin, device-pixel snapping could stop the fill at the outer edge and leave the border
+  // as a seam across the base, so the clip reaches ARROW_OVERLAP_PX past the base into the
+  // surface, over the other two sides, kept transparent so the overlap is fill on fill. Only
+  // an opaque surface hides that strip: over a translucent or transparent one it would show.
+  const overlap = is_opaque(background) ? ARROW_OVERLAP_PX * Math.SQRT2 : 0 // along a side
+  const clip = overlap
+    ? `polygon(0 0, 100% 0, 100% 100%, calc(100% - ${overlap}px) 100%, 0 ${overlap}px)`
+    : `polygon(0 0, 100% 0, 100% 100%)`
+  arrow.style.cssText = `position: absolute; box-sizing: border-box; width: ${arrow_side}px; height: ${arrow_side}px; pointer-events: none; background: ${fill_color}; border: ${border_width}px solid transparent; border-top-color: ${border_color}; border-right-color: ${border_color}; clip-path: ${clip}; transform: rotate(${rotation_deg}deg);`
   const set = (property: string, value: string) =>
     arrow.style.setProperty(property, value)
   // insets resolve against the padding box, measurements above are border-box, so both

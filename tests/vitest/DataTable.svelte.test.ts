@@ -1676,6 +1676,25 @@ describe(`DataTable`, () => {
   })
 
   describe(`Regression tests for bug fixes`, () => {
+    it.each([
+      [`sub-pixel rounding`, 601, false],
+      [`content that fits`, 600, false],
+      [`real overflow`, 900, true],
+    ])(
+      `scrolls vertically only on real overflow: %s`,
+      async (_desc, scroll_height, scrolls) => {
+        mount_table({
+          data: value_rows([1, 2, 3]),
+          columns: plain_columns(`Name`, `Value`),
+        })
+        await tick()
+        const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
+        Object.defineProperty(scroller, `scrollHeight`, { value: scroll_height })
+        trigger_resize_observer(scroller) // clientHeight is mocked to 600
+        await tick()
+        expect(scroller.classList.contains(`no-y-overflow`)).toBe(!scrolls)
+      },
+    )
     it.each<[TableProps[`sort_hint`], string, boolean, `top` | `bottom`]>([
       [`Click to sort`, `Click to sort`, false, `bottom`],
       [
