@@ -33,7 +33,7 @@ describe(`get_html_sort_value`, () => {
     const host = create_element()
     host.innerHTML = markup
     const element = host.firstElementChild
-    if (!(element instanceof HTMLElement)) throw new Error(`bad markup ${markup}`)
+    if (!(element instanceof HTMLElement)) throw new TypeError(`bad markup ${markup}`)
     expect(get_html_sort_value(element)).toBe(expected)
   })
 })

@@ -2,6 +2,8 @@
 // Narrower than \p{M}, which also covers marks that change the letter itself, like Japanese
 // dakuten (か vs が) or Indic vowel signs.
 export const DIACRITIC =
+  // the class lists marks by escape to match a lone mark, so none can merge with a neighbor
+  // oxlint-disable-next-line no-misleading-character-class
   /[\u0300-\u036F\u1AB0-\u1AFF\u1DC0-\u1DFF\u20D0-\u20FF\uFE20-\uFE2F]/u
 export const DIACRITICS = new RegExp(DIACRITIC.source, `gu`)
 const COMBINING_MARK = /\p{M}/u

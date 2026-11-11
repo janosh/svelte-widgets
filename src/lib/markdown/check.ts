@@ -222,7 +222,7 @@ export async function check_examples(
       if (component && options.typecheck === false) continue
       compiler ??= require_peer(`typescript`, `typescript`) as typeof TypeScript
       if (typeof compiler.createProgram !== `function`)
-        throw new Error(
+        throw new TypeError(
           `Type checking requires the TypeScript 5/6 compiler API; found TypeScript ${compiler.version} in ${filename}. Install TypeScript 6 or pass options.typescript with a compatible compiler`,
         )
       if (component) transform_component(fence, example_filename)

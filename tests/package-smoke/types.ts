@@ -232,7 +232,7 @@ create_markdown<{ title: string }>({})
 export const typed_content = async () => {
   const engine = create_markdown({
     validate_frontmatter(metadata) {
-      if (typeof metadata.title !== `string`) throw new Error(`Missing title`)
+      if (typeof metadata.title !== `string`) throw new TypeError(`Missing title`)
       return { title: metadata.title, nested: { tags: [`docs`] } }
     },
   })

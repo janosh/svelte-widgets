@@ -41,7 +41,7 @@ export function fence_settings(
     const value = raw[key]
     if (value === undefined) continue
     if (typeof value !== `boolean`)
-      throw new Error(`Code fence option ${key} must be boolean`)
+      throw new TypeError(`Code fence option ${key} must be boolean`)
     settings[key] = value
   }
   for (const key of string_keys) {

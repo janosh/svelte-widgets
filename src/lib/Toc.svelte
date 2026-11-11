@@ -149,7 +149,7 @@
   let scroll_target: HTMLHeadingElement | null = $state(null)
   let scroll_target_timeout: ReturnType<typeof setTimeout> | undefined
   // Infinity so the first scroll event always passes the "distance increasing" check
-  let prev_scroll_target_distance: number = Infinity
+  let prev_scroll_target_distance = Infinity
   let last_reported_open: boolean | undefined = undefined
   let discovered_items: TocHeadingData[] = $state([])
   // rows are keyed by id and `#id` only reaches the first match, so keep each id's first entry

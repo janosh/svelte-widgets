@@ -699,7 +699,7 @@ test.each([
   expect(form.checkValidity()).toBe(true)
   // parse rather than compare the JSON text, which is brittle to key order and spacing
   const submitted = new FormData(form).get(`choices`)
-  if (typeof submitted !== `string`) throw new Error(`expected a string form value`)
+  if (typeof submitted !== `string`) throw new TypeError(`expected a string form value`)
   expect(JSON.parse(submitted)).toEqual(options)
 })
 

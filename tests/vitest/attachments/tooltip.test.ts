@@ -716,10 +716,35 @@ describe(`tooltip manager`, () => {
     )
     expect(content_el.style.overflowY).toBe(`auto`)
     expect(tooltip_el.querySelectorAll(`[class^="custom-tooltip-arrow"]`)).toHaveLength(1)
-    expect(arrow.style.border).toBe(`2px solid rgb(4, 5, 6)`)
-    expect(arrow.style.clipPath).toBe(`polygon(0 0, 100% 0, 100% 100%)`)
+    // only the legs draw the border; the base side stays transparent, and the clip reaches
+    // 1px (√2 along a side) past the base so its fill covers the surface border there
+    expect(arrow.style.borderWidth).toBe(`2px`)
+    expect(
+      [`top`, `right`, `bottom`, `left`].map((side) =>
+        arrow.style.getPropertyValue(`border-${side}-color`),
+      ),
+    ).toEqual([`rgb(4, 5, 6)`, `rgb(4, 5, 6)`, `transparent`, `transparent`])
+    expect(arrow.style.clipPath).toBe(
+      `polygon(0 0, 100% 0, 100% 100%, calc(100% - ${Math.SQRT2}px) 100%, 0 ${Math.SQRT2}px)`,
+    )
     expect(Number(tooltip_el.style.left.replace(/px$/u, ``))).toBeLessThan(860)
     expect(Number(arrow.style.left.replace(/px$/u, ``))).toBeGreaterThan(150)
+  })
+
+  // the base's overlap into the surface hides under an opaque fill only; over a see-through
+  // one the strip would show, so it is dropped there
+  it.each([
+    [`rgb(1, 2, 3)`, true],
+    [`rgba(1, 2, 3, 0.5)`, false],
+    [`transparent`, false],
+  ])(`a %s tooltip background overlaps the arrow's base: %s`, (background, overlaps) => {
+    mock_tooltip_rect(200, 40)
+    show_tooltip({ placement: `top`, flip: false, style: `--tooltip-bg: ${background}` })
+    expect(doc_query(`.custom-tooltip-arrow`).style.clipPath).toBe(
+      overlaps
+        ? `polygon(0 0, 100% 0, 100% 100%, calc(100% - ${Math.SQRT2}px) 100%, 0 ${Math.SQRT2}px)`
+        : `polygon(0 0, 100% 0, 100% 100%)`,
+    )
   })
 
   it.each([

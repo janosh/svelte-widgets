@@ -214,7 +214,7 @@ describe(`resizable`, () => {
     attach_resizable(inner, { edges: [`right`] })
     attach_resizable(outer, { edges: [`right`] })
     const outer_strip = outer.lastElementChild // appended after inner, and no corners
-    if (!(outer_strip instanceof HTMLElement)) throw new Error(`missing outer strip`)
+    if (!(outer_strip instanceof HTMLElement)) throw new TypeError(`missing outer strip`)
 
     drag(outer_strip, [195, 75], [295, 75])
     expect(outer_strip.getAttribute(`aria-valuenow`)).toBe(`300`)

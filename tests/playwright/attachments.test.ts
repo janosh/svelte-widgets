@@ -243,8 +243,11 @@ test.describe(`tooltip layout and lifecycle`, () => {
     )
 
     const arrow = tooltip_el.locator(`.custom-tooltip-arrow`)
-    await expect(arrow).toHaveCSS(`border-bottom-color`, `rgb(255, 0, 0)`)
-    await expect(arrow).toHaveCSS(`border-bottom-width`, `6px`)
+    // the legs (the rotated square's top and right) draw it; the base side stays transparent
+    await expect(arrow).toHaveCSS(`border-top-color`, `rgb(255, 0, 0)`)
+    await expect(arrow).toHaveCSS(`border-right-color`, `rgb(255, 0, 0)`)
+    await expect(arrow).toHaveCSS(`border-bottom-color`, `rgba(0, 0, 0, 0)`)
+    await expect(arrow).toHaveCSS(`border-top-width`, `6px`)
     const [arrow_box, box] = await Promise.all([
       arrow.boundingBox(),
       tooltip_el.boundingBox(),
@@ -257,6 +260,88 @@ test.describe(`tooltip layout and lifecycle`, () => {
     // still 6px proud: unlike the colour this survives reading the wrong border, so it is the
     // one guard that the arrow's size and inset come off the SAME side
     expect(arrow_box.y + arrow_box.height - box.y - box.height).toBeCloseTo(6, 0)
+  })
+
+  // The arrow's base sits on the surface's inner border edge, its fill hiding the surface
+  // border there. Device-pixel snapping at some sub-pixel offsets (on 2x displays) let a
+  // translucent border show through as a line across the base.
+  test.describe(() => {
+    test.use({ deviceScaleFactor: 2 })
+    test(`no surface border shows across the arrow's base at any sub-pixel offset`, async ({
+      page,
+    }) => {
+      await page.addStyleTag({
+        content: `.custom-tooltip { border: 1px solid rgba(255, 255, 255, 0.3) !important;
+          background: rgb(42, 42, 46) !important; transition: none !important }`,
+      })
+      const demo = page.locator(`#attachments-tooltip-placement`)
+      await demo.getByLabel(`placement`).selectOption(`top`)
+      const tooltip_el = page.locator(`.custom-tooltip`)
+      await hover_until(
+        page,
+        demo.getByRole(`button`, { name: `Hover the target` }),
+        () =>
+          expect(tooltip_el).toHaveAttribute(`data-placement`, `top`, { timeout: 1000 }),
+      )
+      await expect(tooltip_el).toHaveCSS(`opacity`, `1`)
+      const arrow = tooltip_el.locator(`.custom-tooltip-arrow`)
+      // brightest pixel in a screenshot region, decoded in the page (no image library)
+      const max_red = async (clip: {
+        x: number
+        y: number
+        width: number
+        height: number
+      }) =>
+        page.evaluate(
+          async (data) => {
+            const img = new Image()
+            img.src = `data:image/png;base64,${data}`
+            await img.decode()
+            const canvas = new OffscreenCanvas(img.width, img.height)
+            const ctx = canvas.getContext(`2d`)
+            if (!ctx) throw new Error(`No 2d context`)
+            ctx.drawImage(img, 0, 0)
+            const { data: pixels } = ctx.getImageData(0, 0, img.width, img.height)
+            return Math.max(...pixels.filter((_value, idx) => idx % 4 === 0))
+          },
+          (await page.screenshot({ clip })).toString(`base64`),
+        )
+      const seams: string[] = []
+      const base_padding = await tooltip_el.evaluate(
+        (el) => getComputedStyle(el).paddingBottom,
+      )
+      const fractions = [0, 0.2, 0.4, 0.5, 0.6, 0.8]
+      for (const [offset, extra_height] of fractions.flatMap((dy) =>
+        fractions.map((dh) => [dy, dh]),
+      )) {
+        // both the surface's position and its height (where the arrow's base sits) go fractional
+        await tooltip_el.evaluate(
+          (el, [dy, dh, pad]) => {
+            el.style.marginTop = `${dy}px`
+            el.style.paddingBottom = `calc(${pad} + ${dh}px)`
+          },
+          [offset, extra_height, base_padding] as const,
+        )
+        const [arrow_box, box] = await Promise.all([
+          arrow.boundingBox(),
+          tooltip_el.boundingBox(),
+        ])
+        if (!arrow_box || !box) throw new Error(`Missing tooltip arrow geometry`)
+        // the middle half of the base, clear of the legs, across the surface's bottom border
+        const x = Math.round(arrow_box.x + arrow_box.width * 0.375)
+        const width = Math.round(arrow_box.width / 4)
+        const bottom = Math.floor(box.y + box.height)
+        const fill = await max_red({ x, y: bottom - 6, width, height: 2 })
+        const base = await max_red({ x, y: bottom - 2, width, height: 4 })
+        // a clean base is fill throughout; a seam is the lighter border mixed in
+        if (base - fill > 10) {
+          seams.push(
+            `+${offset}px, +${extra_height}px tall: base ${base} vs fill ${fill}`,
+          )
+        }
+      }
+      expect(seams).toEqual([])
+    })
   })
 
   test(`active attribute content rerenders without leaving the viewport`, async ({

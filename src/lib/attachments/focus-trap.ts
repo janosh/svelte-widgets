@@ -195,8 +195,9 @@ export const focus_trap =
       event.preventDefault() // even with nothing to focus, Tab must not leave
       if (items.length === 0) return true
       const step = event.shiftKey ? -1 : 1
-      // findIndex keeps the SVG candidate type compatible.
       const active = deep_active_element()
+      // findIndex keeps the SVG candidate type compatible: indexOf won't take an Element | null
+      // oxlint-disable-next-line prefer-array-index-of
       const idx = items.findIndex((item) => item === active)
       // Focus on the container enters at the edge Tab would reach first.
       const edge = event.shiftKey ? items.at(-1) : items[0]

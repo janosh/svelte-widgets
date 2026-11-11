@@ -117,6 +117,19 @@ const error_rules = [
   `prefer-named-capture-group eslint-plugin-unicorn/prefer-export-from`,
   // codePointAt handles astral characters such as emoji that charCodeAt splits
   `eslint-plugin-unicorn/prefer-code-point`,
+  // modern, shorter forms (style/pedantic categories, picked one by one)
+  `no-lone-blocks arrow-body-style logical-assignment-operators
+  @typescript-eslint/no-inferrable-types
+  eslint-plugin-unicorn/prefer-classlist-toggle eslint-plugin-unicorn/prefer-object-from-entries
+  eslint-plugin-unicorn/no-unnecessary-array-flat-depth
+  eslint-plugin-unicorn/no-unnecessary-array-splice-count
+  eslint-plugin-unicorn/prefer-string-trim-start-end eslint-plugin-unicorn/prefer-array-index-of
+  eslint-plugin-unicorn/no-useless-switch-case eslint-plugin-unicorn/prefer-event-target
+  eslint-plugin-unicorn/consistent-template-literal-escape
+  eslint-plugin-unicorn/no-immediate-mutation eslint-plugin-unicorn/no-array-method-this-argument
+  eslint-plugin-unicorn/prefer-dom-node-remove
+  eslint-plugin-unicorn/no-negation-in-equality-check
+  eslint-plugin-vitest/no-alias-methods eslint-plugin-vitest/no-unneeded-async-expect-function`,
 ]
   .join(` `)
   .split(/\s+/u)

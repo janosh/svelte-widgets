@@ -74,7 +74,8 @@ describe(`Markdown content manifests`, () => {
 
   test(`validates normalized metadata and reports callback failures with a filename`, async () => {
     const validate_frontmatter = (metadata: Record<string, unknown>) => {
-      if (typeof metadata.title !== `string`) throw new Error(`title must be a string`)
+      if (typeof metadata.title !== `string`)
+        throw new TypeError(`title must be a string`)
       return Object.setPrototypeOf(
         {
           ...metadata,

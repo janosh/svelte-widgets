@@ -31,7 +31,7 @@ function recipe_loader(source: string, fetch_mock: typeof fetch, cursor = false)
 
 function query_params(request_url: RequestInfo | URL | undefined) {
   if (typeof request_url !== `string`)
-    throw new Error(`Expected the recipe to fetch a URL string`)
+    throw new TypeError(`Expected the recipe to fetch a URL string`)
   return new URL(request_url, `https://example.com`).searchParams
 }
 

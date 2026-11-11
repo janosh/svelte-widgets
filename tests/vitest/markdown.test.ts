@@ -514,7 +514,7 @@ describe(`code and math`, () => {
       )
       expect(new Set(ids).size).toBe(1)
       const [module_id] = ids
-      if (typeof module_id !== `string`) throw new Error(`Expected virtual module ID`)
+      if (typeof module_id !== `string`) throw new TypeError(`Expected virtual module ID`)
       expect(module_id).toMatch(/\.js$/u)
       module_ids.push(module_id)
       expect(resolve_id(context, `./data.json?${name}`, undefined, {})).toBeUndefined()
@@ -529,7 +529,7 @@ describe(`code and math`, () => {
     const [toc_id, metadata_id] = module_ids
     const load_json = async (module_id: string): Promise<unknown> => {
       const code = await load(context, module_id)
-      if (typeof code !== `string`) throw new Error(`Expected JS module source`)
+      if (typeof code !== `string`) throw new TypeError(`Expected JS module source`)
       return JSON.parse(code.slice(`export default `.length, -1))
     }
     for (const title of [`First`, `Changed`]) {

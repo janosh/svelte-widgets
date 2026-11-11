@@ -739,6 +739,32 @@ describe(`Nav`, () => {
         expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
       },
     )
+    test(`section runs get one heading each, counted toward the column threshold`, () => {
+      set_window_width(1024)
+      const sections = [`both`, `both`, undefined, `electronic`, `phonon`, `phonon`]
+      const children = sections.map((section, idx) => ({
+        href: `/docs/page-${idx}`,
+        label: `Page ${idx}`,
+        section,
+      }))
+      const { submenu } = mount_dropdown({
+        routes: [{ href: `/docs`, label: `docs`, children }],
+        dropdown_column_threshold: 8, // 6 links + 3 headings
+      })
+      const headings = [...submenu.querySelectorAll(`.submenu-section`)]
+      expect(headings.map((heading) => heading.textContent)).toEqual([
+        `both`,
+        `electronic`,
+        `phonon`,
+      ])
+      // each heading sits right before its run's first link
+      expect(
+        headings.map((heading) => heading.nextElementSibling?.getAttribute(`href`)),
+      ).toEqual([`/docs/page-0`, `/docs/page-3`, `/docs/page-4`])
+      expect(submenu.classList.contains(`two-columns`)).toBe(true)
+      expect(submenu.style.getPropertyValue(`--submenu-rows`)).toBe(`5`)
+      expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
+    })
     test.each([
       [1024, `mouse`, true],
       [500, `mouse`, false],

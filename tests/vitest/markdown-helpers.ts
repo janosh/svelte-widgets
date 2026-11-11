@@ -33,7 +33,7 @@ export const markdown_integration = ({
 // Vite types each hook as a function or a { handler } object; tests call the function
 export const hook = (plugin: Plugin, name: keyof Plugin) => {
   const value: unknown = plugin[name]
-  if (typeof value !== `function`) throw new Error(`Expected ${name} hook`)
+  if (typeof value !== `function`) throw new TypeError(`Expected ${name} hook`)
   return (context: object, ...args: unknown[]): unknown =>
     Reflect.apply(value, context, args)
 }

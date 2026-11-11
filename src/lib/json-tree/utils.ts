@@ -175,7 +175,7 @@ export function serialize_for_copy(value: unknown): string {
 export const to_json = (value: unknown): string => safe_stringify(value) ?? `null`
 
 // Inline preview of a collapsed node or leaf
-export function format_preview(value: unknown, max_length: number = 50): string {
+export function format_preview(value: unknown, max_length = 50): string {
   const type = get_value_type(value)
   if (type === `array`) return `Array(${(value as unknown[]).length})`
   if (type === `object`) {
@@ -228,8 +228,8 @@ function walk_tree(
 // Collect all expandable paths (render order), starting at current_path when non-empty
 export function collect_all_paths(
   value: unknown,
-  current_path: string = ``,
-  max_depth: number = Infinity,
+  current_path = ``,
+  max_depth = Infinity,
 ): string[] {
   const paths: string[] = []
   walk_tree(value, current_path, false, (val, path, _key, depth) => {
@@ -244,7 +244,7 @@ export function collect_all_paths(
 export function find_matching_paths(
   value: unknown,
   query: string,
-  current_path: string = ``,
+  current_path = ``,
   sort_keys = false,
 ): string[] {
   const matches: string[] = []
@@ -357,8 +357,8 @@ export function is_css_color(str: string): boolean {
 // Rough serialized byte size; subtrees past max_depth count a flat 10 so large trees stay cheap
 export function estimate_byte_size(
   value: unknown,
-  max_depth: number = 4,
-  current_depth: number = 0,
+  max_depth = 4,
+  current_depth = 0,
 ): number {
   if (current_depth >= max_depth) return 10
   const type = get_value_type(value)
@@ -417,7 +417,7 @@ export function build_ghost_map(
 export function compute_diff(
   old_val: unknown,
   new_val: unknown,
-  current_path: string = ``,
+  current_path = ``,
   result = new Map<string, DiffEntry>(),
   seen = new WeakMap<object, WeakSet<object>>(),
 ): Map<string, DiffEntry> {

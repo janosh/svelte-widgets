@@ -1,5 +1,5 @@
 import { globSync, readFileSync } from 'node:fs'
-import { expect, test } from 'vitest'
+import { expect, test } from 'vite-plus/test'
 
 // light-dark() only accepts colors. A whole `1px solid red` or box-shadow inside it makes the
 // declaration invalid at computed-value time, so the border or shadow silently vanishes

@@ -197,7 +197,7 @@ test(`CodeEditor focus, alignment, virtualization, and 100k-line editing`, async
     .evaluate((gutter) => {
       const widest_number = gutter.querySelector(`.gutter-line:last-child`)
       if (!(widest_number instanceof HTMLElement))
-        throw new Error(`Expected widest gutter number`)
+        throw new TypeError(`Expected widest gutter number`)
       const gutter_box = gutter.getBoundingClientRect()
       const number_box = widest_number.getBoundingClientRect()
       const border_right = gutter_box.width - gutter.clientWidth

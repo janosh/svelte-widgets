@@ -203,7 +203,7 @@ describe(`asset imports`, () => {
       logLevel: `silent`,
       build: { write: false, lib: { entry, formats: [`es`] } },
     })
-    if (!Array.isArray(bundle)) throw new Error(`Expected Vite library output`)
+    if (!Array.isArray(bundle)) throw new TypeError(`Expected Vite library output`)
     const chunk = bundle[0].output.find((output) => output.type === `chunk`)
     if (!chunk) throw new Error(`Missing bundled asset module`)
     expect((await import_code(chunk.code)).default).toEqual(
