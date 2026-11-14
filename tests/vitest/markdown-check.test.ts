@@ -286,6 +286,13 @@ describe(`checked Markdown examples`, () => {
       false,
       { code: `frontmatter`, message: expect.stringContaining(`must be a YAML mapping`) },
     ],
+    // CommonMark #96: a scalar between the fences reads as a thematic break and a heading
+    [
+      `---\nFoo\n---\nBar`,
+      {},
+      false,
+      { code: `frontmatter`, message: expect.stringContaining(`set frontmatter: false`) },
+    ],
     [
       fence(`html`, `<img src="x.png">`),
       { typecheck: false },

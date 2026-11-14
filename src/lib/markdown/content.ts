@@ -1,4 +1,4 @@
-import type { Marked, Token, Tokens } from 'marked'
+import { Lexer, type Marked, type Token, type Tokens } from 'marked'
 import type { ContentReference, ReferenceDefinition } from './references.ts'
 import {
   fence_info,
@@ -126,55 +126,80 @@ export function walk_tokens(
 const QUOTE_PREFIX = / {0,3}>[ \t]*/uy
 const ITEM_FIRST_PREFIX = / {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*/uy
 const INDENT = /[ \t]*/uy
+// A lazy continuation line that would read as a setext underline: Marked's blockquote and list
+// item tokenizers indent it to four spaces so it stays paragraph text. Padding ahead of its
+// real spaces where Marked did not is harmless, since lines match as substrings.
+const LAZY_UNDERLINE_INDENT = / {0,3}(?=(?:=+|-+)[ \t]*(?:\n|$))/uy
 const UNESCAPED_BY_PARENT: Readonly<Record<string, string>> = {
   table: `|`,
   link: `[]`,
   image: `[]`,
 }
-// Length of the run of backslashes ending at `end`
-function backslash_run(text: string, end: number): number {
-  let start = end
-  while (start > 0 && text[start - 1] === `\\`) start--
-  return end - start + 1
+// Whether the character at `index` follows an odd run of backslashes
+export function escaped_at(text: string, index: number): boolean {
+  let start = index
+  while (text[start - 1] === `\\`) start--
+  return (index - start) % 2 === 1
 }
-// A code span inside a link label, which Marked's label grammar takes as one unit
-const LABEL_CODE_SPAN = /`+(?!`)[^`]*?`+(?!`)/uy
-// Index of a link or image raw's label-closing bracket: the first unescaped `]` outside nested
-// brackets and code spans. Marked unescapes only the label, never this bracket.
+// Column of the next tab stop-expanded character after `text`, starting at `column`
+const expanded_column = (text: string, column = 0): number => {
+  for (const char of text) column = char === `\t` ? column + 4 - (column % 4) : column + 1
+  return column
+}
+// End of a link or image raw's label, the only text Marked unescapes brackets in: the first
+// capture of the rule that built the link (inline, full, collapsed or shortcut reference)
+const { gfm } = Lexer.rules.inline
+const LABEL_RULES = [gfm.link, gfm.reflink, gfm.nolink]
 function label_end(raw: string): number {
-  let depth = 0
-  for (let idx = raw.indexOf(`[`) + 1; idx < raw.length; idx++) {
-    if (raw[idx] === `\\`) idx++
-    else if (raw[idx] === `\``) {
-      LABEL_CODE_SPAN.lastIndex = idx
-      const span = LABEL_CODE_SPAN.exec(raw)
-      if (span) idx += span[0].length - 1
-    } else if (raw[idx] === `[`) depth++
-    else if (raw[idx] === `]` && depth-- === 0) return idx
+  for (const rule of LABEL_RULES) {
+    const label = rule.exec(raw)?.[1]
+    if (label !== undefined) return raw.indexOf(`[`) + 1 + label.length
   }
   return raw.length
 }
 // The text Marked hands a parent's children, with the parent index of each character, or
-// undefined when Marked passes the parent's text through unchanged. Built once per parent.
-const child_views = new WeakMap<MappedText, MappedText>()
+// undefined when that equals the parent's text (nothing to rewrite)
 function child_view(parent: MappedText, kind: string): MappedText | undefined {
+  const { text } = parent
   const unescaped = UNESCAPED_BY_PARENT[kind]
   const expands_tabs = kind === `blockquote` || kind === `list_item`
-  if (!unescaped && !expands_tabs) return undefined
-  const cached = child_views.get(parent)
-  if (cached) return cached
-  const { text } = parent
-  const unescape_end = kind === `table` ? text.length : label_end(text)
+  if (!(unescaped || expands_tabs) || !/[\t\\]|\n {0,3}[=-]/u.test(text)) return undefined
+  const unescape_end = kind === `table` ? text.length : unescaped ? label_end(text) : 0
+  // a list item's content column (Marked's R): continuation lines indented less are lazy and
+  // keep their tabs
+  let content_column = 0
+  if (kind === `list_item`) {
+    ITEM_FIRST_PREFIX.lastIndex = 0
+    const [prefix = ``] = ITEM_FIRST_PREFIX.exec(text) ?? []
+    const marker = prefix.trimEnd().length
+    const gap = expanded_column(prefix.slice(marker), marker) - marker
+    content_column =
+      marker + (/^[^\n]*\S/u.test(text.slice(prefix.length)) && gap <= 4 ? gap : 1)
+  }
   const view: MappedText = { text: ``, offsets: [] }
   let column = 0
   let prefix_end = 0
   for (let idx = 0; idx < text.length; idx++) {
+    if (expands_tabs && column === 0 && idx > 0) {
+      LAZY_UNDERLINE_INDENT.lastIndex = idx
+      const indent = LAZY_UNDERLINE_INDENT.exec(text)?.[0]
+      for (let pad = indent?.length ?? 4; pad < 4; pad++) {
+        view.text += ` `
+        view.offsets.push(idx)
+      }
+    }
     const char = text[idx]
     if (expands_tabs && column === 0) {
       const prefix =
         kind === `blockquote` ? QUOTE_PREFIX : idx ? INDENT : ITEM_FIRST_PREFIX
       prefix.lastIndex = idx
       prefix_end = idx + (prefix.exec(text)?.[0].length ?? 0)
+      const lazy =
+        kind === `list_item` &&
+        idx > 0 &&
+        ![`\n`, undefined].includes(text[prefix_end]) &&
+        expanded_column(text.slice(idx, prefix_end)) < content_column
+      if (lazy) prefix_end = idx
     }
     if (char === `\t` && idx < prefix_end) {
       const width = 4 - (column % 4)
@@ -189,14 +214,13 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
       char === `\\` &&
       idx + 1 < unescape_end &&
       unescaped?.includes(text[idx + 1] ?? `\n`) &&
-      (kind !== `table` || backslash_run(text, idx) % 2 === 1)
+      (kind !== `table` || escaped_at(text, idx + 1))
     )
       continue
     view.text += char
     view.offsets.push(idx)
     column = char === `\n` ? 0 : column + 1
   }
-  child_views.set(parent, view)
   return view
 }
 
@@ -208,9 +232,8 @@ function locate(
   raw: string,
   parent: MappedText,
   cursor: number,
-  kind = ``,
+  view?: MappedText,
 ): MappedText & { end: number } {
-  const view = child_view(parent, kind)
   const exact = view ? -1 : parent.text.indexOf(raw, cursor)
   if (exact !== -1)
     return {
@@ -411,13 +434,20 @@ export function content_manifest(
     heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
   // `kind` is the parent token's type, which decides how Marked rewrote the children's text
   const visit = (children: Token[], parent: MappedText, kind = ``) => {
+    const view = child_view(parent, kind)
     let cursor = 0
     for (const token of children) {
-      const mapped = locate(token.raw, parent, cursor, kind)
+      // Marked builds a task checkbox's raw as `[ ] ` whatever whitespace follows it
+      const raw = token.type === `checkbox` ? token.raw.trimEnd() : token.raw
+      const mapped = locate(raw, parent, cursor, view)
       cursor = mapped.end
+      // ends before any trailing whitespace, which Marked keeps in nested raws (`# H\n` in a
+      // quote) but strips at the top level
       const at = range(
         mapped.offsets[0] ?? parent.offsets[cursor] ?? source.length,
-        (mapped.offsets.at(-1) ?? source.length - 1) + 1,
+        (mapped.offsets[token.raw.trimEnd().length - 1] ??
+          mapped.offsets.at(-1) ??
+          source.length - 1) + 1,
       )
       const token_source: TokenSource = { range: at, offsets: mapped.offsets }
       positions.set(token, token_source)
