@@ -2,7 +2,7 @@
 
 ## 🙋 How can I help?
 
-Pull requests to improve docs, test coverage, or examples are welcome. Before implementing a new feature, submit an issue to discuss project fit. The [issues labeled `help wanted`](https://github.com/janosh/svelte-widgets/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) are also available for contributions. Incomplete work can be submitted as a draft PR for others to continue.
+To report a bug, open an issue with a minimal repro, e.g. starting from the [Svelte Playground](https://svelte.dev/playground/a5a14b8f15d64cb083b567292480db05) or [StackBlitz](https://stackblitz.com/github/janosh/svelte-widgets). Pull requests to improve docs, test coverage, or examples are welcome. Before implementing a new feature, submit an issue to discuss project fit. The [issues labeled `help wanted`](https://github.com/janosh/svelte-widgets/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22) are also available for contributions. Incomplete work can be submitted as a draft PR for others to continue.
 
 ## 🚀 Submit a PR
 
@@ -50,6 +50,7 @@ The [CI workflow](https://github.com/janosh/svelte-widgets/actions/workflows/ci.
 - linting and type checks: `check` runs `vp check` plus `svelte-check`
 - links: `link-check` runs lychee over every markdown, Svelte and TS file
 - docs: `build` prerenders pages, validates local links and builds the Pagefind index; `deploy` publishes to GitHub Pages only on `main`
+- release: `main-build` uploads each `main` build to the `main-build` prerelease; `publish` pushes a published GitHub release to npm once `check`, `unit` and `e2e` pass
 
 Readme links to API symbols carry `#L` line anchors derived from each symbol's definition. The pre-commit hook rewrites them when `src/lib` changes; run `node scripts/readme-links.ts` to sync them by hand, and `tests/vitest/readme.test.ts` fails on any that went stale.
 
@@ -82,4 +83,4 @@ git push origin main
 git push origin vx.y.z
 ```
 
-Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). Publishing the release triggers [`publish.yml`](https://github.com/janosh/svelte-widgets/blob/main/.github/workflows/publish.yml), which pushes the package to npm through trusted publishing (OIDC), so no manual `npm publish` is needed.
+Finally, [publish a new release on GitHub](https://github.com/janosh/svelte-widgets/releases/new). Publishing the release runs the CI workflow's `publish` job, which pushes the package to npm through trusted publishing (OIDC) once the tests pass, so no manual `npm publish` is needed.

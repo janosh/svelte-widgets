@@ -44,6 +44,7 @@ import {
 import {
   child_tokens,
   content_manifest,
+  escaped_at,
   table_cells,
   walk_tokens,
   type ContentManifest,
@@ -217,17 +218,16 @@ function frontmatter(source: string): {
   }
   const header = source.slice(0, source.indexOf(`\n`) + 1)
   const value: unknown = load(header + match[1], { schema: CORE_SCHEMA })
-  // Only comments between the fences is almost always a document opening with a thematic
-  // break whose `# Heading` YAML read as a comment, so its content would vanish silently.
-  // A bare `null`/`~` is just not a mapping.
-  if (value === null && match[1].trim()) {
+  // non-mapping content between the fences usually means an opening thematic break
+  if (
+    match[1].trim() &&
+    (value === null || typeof value !== `object` || Array.isArray(value))
+  ) {
     const only_comments = match[1]
       .split(`\n`)
       .every((line) => !line.trim() || line.trim().startsWith(`#`))
     throw new Error(
-      only_comments
-        ? `Frontmatter holds no YAML mapping, only comments. To open with a thematic break, use *** or ___ instead of ---`
-        : `Frontmatter must be a YAML mapping`,
+      `${only_comments ? `Frontmatter holds no YAML mapping, only comments` : `Frontmatter must be a YAML mapping`}. To open with a thematic break, use *** or ___ instead of ---, or set frontmatter: false`,
     )
   }
   return {
@@ -313,11 +313,7 @@ async function prepare_document(
     const field = (value: string, raw_braces: number[]) => ({
       value,
       raw_braces,
-      escaped: raw_braces.map((index) => {
-        let start = index
-        while (raw[start - 1] === `\\`) start--
-        return (index - start) % 2 === 1
-      }),
+      escaped: raw_braces.map((index) => escaped_at(raw, index)),
     })
     return {
       raw,

@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 concurrency:
@@ -119,3 +121,24 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v5
+
+  # Releases reach npm only once their commit passes CI. npm trusted publishing (OIDC) names
+  # this workflow file.
+  publish:
+    if: github.event_name == 'release' && !github.event.release.prerelease
+    needs: [check, unit, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - run: npm install --legacy-peer-deps
+
+      # prepublishOnly builds dist/ via `npm run package`; OIDC attaches provenance
+      - run: npm publish --provenance

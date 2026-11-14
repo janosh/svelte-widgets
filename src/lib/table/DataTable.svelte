@@ -6,9 +6,9 @@
   // number formatting, HTML rendering and cell colors through props (see MatterViz's
   // HeatmapTable for a color-scale wrapper).
   import { prefersReducedMotion } from 'svelte/motion'
+  import { SvelteMap } from 'svelte/reactivity'
   import ActionMenu from '../ActionMenu.svelte'
   import Icon from '../Icon.svelte'
-  import Popover from '../Popover.svelte'
   import { tooltip } from '../attachments/index'
   import { download } from '../download'
   import { Columns, Cross, Download, Search as SearchIcon } from '../icons'
@@ -202,6 +202,12 @@
       if (!col.id || ids.has(col.id))
         throw new Error(`Column id must be nonempty and unique: ${col.id}`)
       ids.add(col.id)
+      const { label_angle } = col
+      if (label_angle !== undefined && !(label_angle > 0 && label_angle <= 90)) {
+        throw new RangeError(
+          `Column ${col.id}: label_angle must be in (0, 90], got ${label_angle}`,
+        )
+      }
     }
     return resolved
   })
@@ -727,6 +733,49 @@
     observer.observe(header_cell)
     return () => observer.disconnect()
   }
+  // Angled header labels report their unrotated size and where their column's center sits:
+  // the header row grows to the tallest one, and the table reserves room on its right for
+  // labels that rise past the last column, and on its left for a steep label's own height
+  // swinging back past a narrow first column
+  type AngledLabel = { rise: number; reach: number; back: number }
+  const angled_labels = new SvelteMap<string, AngledLabel>()
+  const track_angled_label =
+    (col_id: string, degrees: number) => (label: HTMLElement) => {
+      // re-measure on reorder: swapping equal-width columns moves labels but resizes nothing
+      void visible_columns
+      const header_cell = label.parentElement
+      const table = label.closest(`table`)
+      if (!header_cell || !table) return
+      const radians = (degrees * Math.PI) / 180
+      // compared here, not read back from the state the attachment writes (an effect loop)
+      let prev: AngledLabel | undefined
+      const measure = () => {
+        const { offsetWidth: width, offsetHeight: height } = label
+        const rise = width * Math.sin(radians) + height * Math.cos(radians)
+        // offsetLeft is from the sticky thead, which starts at the table's left edge
+        const center = header_cell.offsetLeft + header_cell.offsetWidth / 2
+        const reach = center + width * Math.cos(radians)
+        const back = center - height * Math.sin(radians)
+        if (prev?.rise === rise && prev.reach === reach && prev.back === back) return
+        prev = { rise, reach, back }
+        angled_labels.set(col_id, prev)
+      }
+      measure()
+      if (typeof ResizeObserver === `undefined`) return
+      const observer = new ResizeObserver(measure)
+      // the table too: another column resizing moves this one without resizing it
+      for (const el of [label, header_cell, table]) observer.observe(el)
+      return () => {
+        observer.disconnect()
+        angled_labels.delete(col_id)
+      }
+    }
+  const angled_max = (pick: (label: AngledLabel) => number): number =>
+    Math.max(0, ...[...angled_labels.values()].map(pick))
+  let angled_rise = $derived(angled_max(({ rise }) => rise))
+  let table_width = $state(0)
+  let angled_overhang = $derived(angled_max(({ reach }) => reach - table_width))
+  let angled_underhang = $derived(angled_max(({ back }) => -back))
   let pin_offsets = $derived.by(() => {
     const offsets: Record<string, { side: PinSide; offset: number }> = {}
     for (const side of [`left`, `right`] as const) {
@@ -767,7 +816,15 @@
     #size = (edge: `min-width` | `max-width`) =>
       this.width ? `width: ${this.width}px; ${edge}: ${this.width}px` : undefined
     head_style = $derived.by(() =>
-      join_styles(this.col.style, this.#size(`min-width`), this.pin_style),
+      join_styles(
+        this.col.style,
+        this.#size(`min-width`),
+        this.pin_style,
+        // the label's rise plus the bottom gap it sits on
+        this.col.label_angle !== undefined
+          ? `height: calc(${angled_rise}px + 0.5em)`
+          : undefined,
+      ),
     )
     cell_style = $derived.by(() =>
       join_styles(
@@ -1434,22 +1491,18 @@
   let root_styles = $derived(join_styles(rest.style, root_style))
 </script>
 
+<!-- a described header explains itself in a tooltip on hover, keyboard focus or a tap: its own
+registration accepts touch focus, which the shared one ignores, and a click focuses the button
+itself since Safari does not focus a tapped button -->
 {#snippet column_label(label: string, description?: string)}
   {#if description}
-    <Popover
-      trigger_mode="hover"
-      trap_focus={false}
-      placement="top"
-      onclick={stop_event}
-      onkeydown={stop_event}
+    <button
+      type="button"
+      style="all: unset; cursor: help"
+      title={html_to_text(description)}
+      onclick={(event) => event.currentTarget.focus()}
+      {@attach tooltip({ touch_focus: true })}>{@html render_html(label)}</button
     >
-      {#snippet trigger(trigger_props)}
-        <button type="button" {...trigger_props} style="all: unset; cursor: help"
-          >{@html render_html(label)}</button
-        >
-      {/snippet}
-      {@html render_html(description)}
-    </Popover>
   {:else}
     {@html render_html(label)}
   {/if}
@@ -1622,6 +1675,9 @@
     <table
       class="data-table"
       style:--group-header-height="{has_group_header ? group_header_height : 0}px"
+      style:margin-right={angled_overhang ? `${angled_overhang}px` : undefined}
+      style:margin-left={angled_underhang ? `${angled_underhang}px` : undefined}
+      bind:offsetWidth={table_width}
     >
       <thead>
         {#if has_group_header}
@@ -1671,6 +1727,7 @@
               onkeydown={(event) => activate_header(event, col)}
               style={view.head_style}
               class={view.pin_class}
+              class:angled={col.label_angle !== undefined}
               class:numeric-col={view.numeric}
               class:not-sortable={!sortable}
               class:resizing={resize?.col_id === col_id}
@@ -1691,7 +1748,16 @@
               ondragend={reset_drag_state}
               {@attach view.pin ? track_pinned_width : undefined}
             >
-              {@render column_label(col.label, col.description)}
+              {#if col.label_angle !== undefined}
+                <span
+                  class="angled-label"
+                  style:rotate="-{col.label_angle}deg"
+                  {@attach track_angled_label(col_id, col.label_angle)}
+                  >{@render column_label(col.label, col.description)}</span
+                >
+              {:else}
+                {@render column_label(col.label, col.description)}
+              {/if}
               {#if sorted_by}
                 <span style="font-size: 0.8em"
                   >{sorted_by.ascending ? `↓` : `↑`}{#if sorted_by.rank}<sup
@@ -2143,13 +2209,6 @@
       flex: none;
     }
   }
-  /* a column description renders inside its header, but wraps as prose instead of taking
-     the header's single bold line (which the popover's max-width then clips) */
-  th :global(.popover) {
-    white-space: normal;
-    text-align: start;
-    font-weight: normal;
-  }
   th {
     background: var(--table-header-bg, var(--page-bg, Canvas));
     position: sticky;
@@ -2163,6 +2222,27 @@
     &.popover-open {
       overflow: visible;
       z-index: 30;
+    }
+    /* An angled label leans over the next columns' headers, which paint and hit-test later:
+       those stay transparent (the sticky thead paints the header background) and pass pointer
+       events through their empty space, so a label is clickable along its length. Angled
+       headers trade the hover highlight for this. */
+    &.angled {
+      overflow: visible;
+      /* above later, ordinary headers, whose opaque backgrounds would cover the label */
+      z-index: 3;
+      background: transparent;
+      pointer-events: none;
+      > :global(*) {
+        pointer-events: auto;
+      }
+    }
+    .angled-label {
+      position: absolute;
+      left: 50%;
+      bottom: 0.25em;
+      transform-origin: 0 100%;
+      white-space: nowrap;
     }
     /* styled off aria-grabbed rather than a second class computed from the same state */
     &[aria-grabbed='true'] {
@@ -2181,6 +2261,17 @@
     &.not-sortable {
       cursor: default;
     }
+  }
+  /* with angled labels the whole thead sticks and paints the header background, so body rows
+     don't show through the transparent angled cells; every header sits on the bottom line */
+  table:has(th.angled) thead {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    background: var(--table-header-bg, var(--page-bg, Canvas));
+  }
+  thead tr:has(> th.angled) > th {
+    vertical-align: bottom;
   }
   /* clears the group-header row above it, which sticks at top: 0 (var unset without one) */
   thead tr:not(.group-header) th {

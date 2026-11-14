@@ -33,7 +33,7 @@ const docs = markdown_vite(
 
 // Demos, tests and docs import the package by name so examples stay copy-pasteable, which
 // subpath imports can't express. Stateful exports point at `.svelte.ts` modules, so their
-// aliases precede the prefix rule. tsconfig.json `paths` mirrors these for TS.
+// aliases precede the prefix rule (tsconfig.json `paths` resolves them by a fallback location).
 const self_aliases: { find: string | RegExp; replacement: string }[] = []
 for (const [path, target] of Object.entries(package_json.exports)) {
   if (`default` in target && target.default.endsWith(`.svelte.js`))
@@ -96,6 +96,8 @@ const native_svelte_compiler = {
 export default {
   // shared lint/fmt/build/staged, published as svelte-widgets/vite-config
   ...make_config({
+    // generated fixtures compared byte-for-byte
+    fmt: { ignorePatterns: [`tests/vitest/fixtures/*.json`] },
     staged: {
       // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup;
       // `alle` is German for "all", used by the label-override tests

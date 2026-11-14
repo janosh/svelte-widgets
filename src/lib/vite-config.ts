@@ -18,7 +18,13 @@ export type SharedConfig = {
     rules: Rules
     overrides: { files: string[]; rules: Rules }[]
   }
-  fmt: { semi: boolean; singleQuote: boolean; printWidth: number; svelte: boolean }
+  fmt: {
+    semi: boolean
+    singleQuote: boolean
+    printWidth: number
+    svelte: boolean
+    ignorePatterns?: string[]
+  }
   build: { cssTarget: string }
   // lint-staged allows a function here, but vite-plus JSON.stringifies this to reach its
   // Rust side, which drops functions, so this config always uses a glob map.
@@ -213,7 +219,7 @@ const fmt: SharedConfig[`fmt`] = {
 const build: SharedConfig[`build`] = { cssTarget: `esnext` }
 
 const staged: SharedConfig[`staged`] = {
-  '*.{js,ts,svelte,html,css,scss,less,md,json,yaml,graphql,gql}': `vp check --fix`,
+  '*.{js,ts,svelte,html,css,scss,less,md,json,yaml,graphql,gql}': `vp check --fix --no-error-on-unmatched-pattern`,
   '*.{ts,svelte}': `sh -c 'npx svelte-kit sync && npx svelte-check --threshold error'`,
 }
 

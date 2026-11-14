@@ -1,4 +1,4 @@
-import type { Marked, Token, Tokens } from 'marked'
+import { Lexer, type Marked, type Token, type Tokens } from 'marked'
 import type { ContentReference, ReferenceDefinition } from './references.ts'
 import {
   fence_info,
@@ -118,6 +118,121 @@ export function walk_tokens(
   }
 }
 
+// Marked rewrites some container text before tokenizing the children: it expands tabs to the
+// next multiple of four columns after a blockquote's `>` and in a list item's first-line marker
+// and continuation indentation, and drops the backslash of `\|` in table cells and of `\[`
+// and `\]` in link and image labels (its outputLink regex). Each rewrites one container level,
+// since a nested container's raw is already in its parent's coordinates.
+const QUOTE_PREFIX = / {0,3}>[ \t]*/uy
+const ITEM_FIRST_PREFIX = / {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*/uy
+const INDENT = /[ \t]*/uy
+// A lazy continuation line that would read as a setext underline: Marked's blockquote and list
+// item tokenizers indent it to four spaces so it stays paragraph text. Padding ahead of its
+// real spaces where Marked did not is harmless, since lines match as substrings.
+const LAZY_UNDERLINE_INDENT = / {0,3}(?=(?:=+|-+)[ \t]*(?:\n|$))/uy
+// Whether the character at `index` follows an odd run of backslashes
+export function escaped_at(text: string, index: number): boolean {
+  let start = index
+  while (text[start - 1] === `\\`) start--
+  return (index - start) % 2 === 1
+}
+// Column of the next tab stop-expanded character after `text`, starting at `column`
+const expanded_column = (text: string, column = 0): number => {
+  for (const char of text) column = char === `\t` ? column + 4 - (column % 4) : column + 1
+  return column
+}
+// End of a link or image raw's label, the only text Marked unescapes brackets in: the first
+// capture of the rule that built the link (inline, full, collapsed or shortcut reference)
+const { gfm } = Lexer.rules.inline
+const LABEL_RULES = [gfm.link, gfm.reflink, gfm.nolink]
+function label_end(raw: string): number {
+  for (const rule of LABEL_RULES) {
+    const label = rule.exec(raw)?.[1]
+    if (label !== undefined) return raw.indexOf(`[`) + 1 + label.length
+  }
+  return raw.length
+}
+// The text Marked hands the children of `owner` (autolinks keep their backslashes), mapped to
+// source offsets: the parent itself unless something is rewritten
+function child_view(parent: MappedText, owner?: Token): MappedText {
+  const { text } = parent
+  const kind = owner?.type ?? ``
+  const unescaped =
+    kind === `table`
+      ? `|`
+      : /^(?:link|image)$/u.test(kind) && !(owner as Tokens.Link).autolink
+        ? `[]`
+        : undefined
+  const expands_tabs = kind === `blockquote` || kind === `list_item`
+  if (!expands_tabs && !(unescaped && /\\/u.test(text))) return parent
+  const unescape_end = kind === `table` ? text.length : unescaped ? label_end(text) : 0
+  // a list item's content column (Marked's R): continuation lines indented less are lazy and
+  // keep their tabs
+  let content_column = 0
+  if (kind === `list_item`) {
+    ITEM_FIRST_PREFIX.lastIndex = 0
+    const [prefix = ``] = ITEM_FIRST_PREFIX.exec(text) ?? []
+    const marker = prefix.trimEnd().length
+    const gap = expanded_column(prefix.slice(marker), marker) - marker
+    content_column =
+      marker + (/^[^\n]*\S/u.test(text.slice(prefix.length)) && gap <= 4 ? gap : 1)
+  }
+  const view: MappedText = { text: ``, offsets: [] }
+  let column = 0
+  let prefix_end = 0
+  let marker_end = 0
+  for (let idx = 0; idx < text.length; idx++) {
+    if (expands_tabs && column === 0 && idx > 0) {
+      LAZY_UNDERLINE_INDENT.lastIndex = idx
+      const indent = LAZY_UNDERLINE_INDENT.exec(text)?.[0]
+      for (let pad = indent?.length ?? 4; pad < 4; pad++) {
+        view.text += ` `
+        view.offsets.push(parent.offsets[idx])
+      }
+    }
+    const char = text[idx]
+    if (expands_tabs && column === 0) {
+      const prefix =
+        kind === `blockquote` ? QUOTE_PREFIX : idx ? INDENT : ITEM_FIRST_PREFIX
+      prefix.lastIndex = idx
+      const prefix_text = prefix.exec(text)?.[0] ?? ``
+      prefix_end = idx + prefix_text.length
+      const lazy =
+        kind === `list_item` &&
+        idx > 0 &&
+        ![`\n`, undefined].includes(text[prefix_end]) &&
+        expanded_column(text.slice(idx, prefix_end)) < content_column
+      if (lazy) prefix_end = idx
+      marker_end = lazy ? idx : idx + prefix_text.trimEnd().length
+    }
+    // Marked strips quote and item markers, so no child can sit on one
+    if (idx < marker_end) {
+      column++
+      continue
+    }
+    if (char === `\t` && idx < prefix_end) {
+      const width = 4 - (column % 4)
+      view.text += ` `.repeat(width)
+      for (let space = 0; space < width; space++) view.offsets.push(parent.offsets[idx])
+      column += width
+      continue
+    }
+    // escaped and target characters never overlap, so one pass mirrors Marked's regexes. A
+    // table pipe after an even backslash run is a cell separator that keeps every backslash.
+    if (
+      char === `\\` &&
+      idx + 1 < unescape_end &&
+      unescaped?.includes(text[idx + 1] ?? `\n`) &&
+      (kind !== `table` || escaped_at(text, idx + 1))
+    )
+      continue
+    view.text += char
+    view.offsets.push(parent.offsets[idx])
+    column = char === `\n` ? 0 : column + 1
+  }
+  return view
+}
+
 // Container tokens remove quote/list indentation. Match complete lines within the parent
 // rather than searching the whole document, which confuses repeated code and headings.
 function locate(
@@ -125,80 +240,32 @@ function locate(
   parent: MappedText,
   cursor: number,
 ): MappedText & { end: number } {
-  const exact = parent.text.indexOf(raw, cursor)
-  if (exact !== -1)
-    return {
-      text: raw,
-      offsets: parent.offsets.slice(exact, exact + raw.length),
-      end: exact + raw.length,
-    }
   const offsets: number[] = []
   let offset = cursor
-  let expanded: MappedText | undefined
-  let unescaped: MappedText | undefined
-  const transformed_match = (mapped: MappedText, text: string): number => {
-    let low = 0
-    let high = mapped.offsets.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (mapped.offsets[middle] < offset) low = middle + 1
-      else high = middle
-    }
-    return mapped.text.indexOf(text, low)
-  }
   for (const line of raw.split(/(?<=\n)/u)) {
     const newline = line.endsWith(`\n`)
     const text = newline ? line.slice(0, -1) : line
-    const start = text ? parent.text.indexOf(text, offset) : offset
-    if (start !== -1) {
+    if (text) {
+      const start = parent.text.indexOf(text, offset)
+      if (start === -1)
+        throw new Error(
+          `Cannot locate Markdown token ${JSON.stringify(raw.slice(0, 80))}`,
+        )
       for (let idx = start; idx < start + text.length; idx++)
         offsets.push(parent.offsets[idx])
       offset = start + text.length
     }
-    // Marked replaces each tab in a list line's indentation with four spaces and removes
-    // escaped table separators. Keep a source index for every transformed character,
-    // including expanded spaces.
-    if (start === -1) {
-      if (!expanded) {
-        expanded = { text: ``, offsets: [] }
-        const line_start = parent.text.lastIndexOf(`\n`, offset - 1) + 1
-        let indentation = /^[ \t]*$/u.test(parent.text.slice(line_start, offset))
-        for (let idx = offset; idx < parent.text.length; idx++) {
-          const char = parent.text[idx]
-          if (char === `\n`) indentation = true
-          else if (char !== ` ` && char !== `\t`) indentation = false
-          if (char === `\t` && indentation) {
-            expanded.text += `    `
-            expanded.offsets.push(idx, idx, idx, idx)
-          } else {
-            expanded.text += char
-            expanded.offsets.push(idx)
-          }
-        }
-      }
-      let transformed = expanded
-      let matched = transformed_match(transformed, text)
-      if (matched === -1) {
-        unescaped ??= {
-          text: expanded.text.replaceAll(`\\|`, `|`),
-          offsets: expanded.offsets.filter(
-            (_, idx) =>
-              transformed.text[idx] !== `\\` || transformed.text[idx + 1] !== `|`,
-          ),
-        }
-        transformed = unescaped
-        matched = transformed_match(transformed, text)
-      }
-      if (matched === -1)
-        throw new Error(
-          `Cannot locate Markdown token ${JSON.stringify(raw.slice(0, 80))}`,
-        )
-      for (const idx of transformed.offsets.slice(matched, matched + text.length))
-        offsets.push(parent.offsets[idx])
-      offset = transformed.offsets[matched + text.length - 1] + 1
-    }
     if (newline) {
       const end = parent.text.indexOf(`\n`, offset)
+      // Marked doubles the newline after an indented lazy line in its inline text raw
+      if (
+        !text &&
+        offsets.length &&
+        /\S/u.test(parent.text.slice(offset, end === -1 ? undefined : end))
+      ) {
+        offsets.push(offsets[offsets.length - 1])
+        continue
+      }
       // Marked replaces trailing whitespace in quoted lists with a synthetic newline.
       if (end === -1 && /^[ \t]+$/u.test(parent.text.slice(offset))) {
         offsets.push(parent.offsets[offset])
@@ -360,14 +427,21 @@ export function content_manifest(
   }
   const inline_text = (children: Token[]): string =>
     heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
-  const visit = (children: Token[], parent: MappedText) => {
+  const visit = (children: Token[], parent: MappedText, owner?: Token) => {
+    const view = child_view(parent, owner)
     let cursor = 0
     for (const token of children) {
-      const mapped = locate(token.raw, parent, cursor)
+      // Marked builds a task checkbox's raw as `[ ] ` whatever whitespace follows it
+      const raw = token.type === `checkbox` ? token.raw.trimEnd() : token.raw
+      const mapped = locate(raw, view, cursor)
       cursor = mapped.end
+      // ends before any trailing whitespace, which Marked keeps in nested raws (`# H\n` in a
+      // quote) but strips at the top level
       const at = range(
-        mapped.offsets[0] ?? parent.offsets[cursor] ?? source.length,
-        (mapped.offsets.at(-1) ?? source.length - 1) + 1,
+        mapped.offsets[0] ?? view.offsets[cursor] ?? source.length,
+        (mapped.offsets[token.raw.trimEnd().length - 1] ??
+          mapped.offsets.at(-1) ??
+          source.length - 1) + 1,
       )
       const token_source: TokenSource = { range: at, offsets: mapped.offsets }
       positions.set(token, token_source)
@@ -442,7 +516,7 @@ export function content_manifest(
       if (token.type === `table`)
         for (const cell of table_cells(token as Tokens.Table))
           prose.push(inline_text(cell.tokens))
-      visit(child_tokens(token), mapped)
+      visit(child_tokens(token), mapped, token)
     }
   }
   visit(tokens, { text: normalized, offsets })
