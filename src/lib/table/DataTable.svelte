@@ -735,8 +735,9 @@
   }
   // Angled header labels report their unrotated size and where their column's center sits:
   // the header row grows to the tallest one, and the table reserves room on its right for
-  // labels that rise past the last column
-  type AngledLabel = { rise: number; reach: number }
+  // labels that rise past the last column, and on its left for a steep label's own height
+  // swinging back past a narrow first column
+  type AngledLabel = { rise: number; reach: number; back: number }
   const angled_labels = new SvelteMap<string, AngledLabel>()
   const track_angled_label =
     (col_id: string, degrees: number) => (label: HTMLElement) => {
@@ -754,8 +755,9 @@
         // offsetLeft is from the sticky thead, which starts at the table's left edge
         const center = header_cell.offsetLeft + header_cell.offsetWidth / 2
         const reach = center + width * Math.cos(radians)
-        if (prev?.rise === rise && prev.reach === reach) return
-        prev = { rise, reach }
+        const back = center - height * Math.sin(radians)
+        if (prev?.rise === rise && prev.reach === reach && prev.back === back) return
+        prev = { rise, reach, back }
         angled_labels.set(col_id, prev)
       }
       measure()
@@ -773,6 +775,7 @@
   let angled_rise = $derived(angled_max(({ rise }) => rise))
   let table_width = $state(0)
   let angled_overhang = $derived(angled_max(({ reach }) => reach - table_width))
+  let angled_underhang = $derived(angled_max(({ back }) => -back))
   let pin_offsets = $derived.by(() => {
     const offsets: Record<string, { side: PinSide; offset: number }> = {}
     for (const side of [`left`, `right`] as const) {
@@ -1671,6 +1674,7 @@ registration, as the shared one ignores touch focus) -->
       class="data-table"
       style:--group-header-height="{has_group_header ? group_header_height : 0}px"
       style:margin-right={angled_overhang ? `${angled_overhang}px` : undefined}
+      style:margin-left={angled_underhang ? `${angled_underhang}px` : undefined}
       bind:offsetWidth={table_width}
     >
       <thead>

@@ -1896,9 +1896,22 @@ describe(`DataTable`, () => {
       state.column_order = [`Name`, `B`, `A`]
       await tick()
       expect(overhang()).toBeCloseTo(100 + 100 * Math.SQRT1_2 - 120, 6)
-      ;[sizes.A.left, sizes.B.left] = [40, 80]
+      // no label swings back past the table's left edge yet
+      expect(doc_query(`table`).style.marginLeft).toBe(``)
+      // A first and 20 px wide: its 20 px tall label leans back 20 sin 45° from its center at
+      // 10, past the left edge, which the table reserves
+      sizes.A = { left: 0, width: 20 }
+      state.column_order = [`A`, `Name`, `B`]
+      await tick()
+      expect(Number(doc_query(`table`).style.marginLeft.replace(`px`, ``))).toBeCloseTo(
+        20 * Math.SQRT1_2 - 10,
+        6,
+      )
+      sizes.A = { left: 40, width: 40 }
+      sizes.B.left = 80
       state.column_order = [`Name`, `A`, `B`]
       await tick()
+      expect(doc_query(`table`).style.marginLeft).toBe(``)
       // hiding B drops its measurement: A alone reaches 40 + 20 + 100 cos 45° past 120 px
       state.hidden_columns = [`B`]
       await tick()
