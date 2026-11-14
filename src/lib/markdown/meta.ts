@@ -33,7 +33,19 @@ export function fence_settings(
   info: string,
   defaults: ExampleOptions = {},
 ): Readonly<FenceSettings> {
-  const raw: Record<string, unknown> = { ...defaults, ...parse_meta(info) }
+  // CommonMark allows any info string: one with a word that is not `key` / `key=value` syntax
+  // and naming no setting is another tool's text and sets nothing
+  let meta: Record<string, unknown> = {}
+  try {
+    meta = parse_meta(info)
+  } catch (error) {
+    const words = info.split(/\s+/u)
+    const foreign =
+      words.some((word) => !/^[a-zA-Z_]\w*(?:=|$)/u.test(word)) &&
+      !words.some((word) => setting_keys.has(word.split(`=`)[0]))
+    if (!foreign) throw error
+  }
+  const raw: Record<string, unknown> = { ...defaults, ...meta }
   for (const key of Object.keys(raw))
     if (!setting_keys.has(key)) throw new Error(`Unknown code fence option: ${key}`)
   const settings: FenceSettings = {}

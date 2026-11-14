@@ -9,6 +9,7 @@ import {
   assert_valid_content,
 } from '#lib/markdown/index.ts'
 import { compile_source as compile_markdown } from './markdown-helpers'
+import spec_cases from './fixtures/markdown-spec-cases.json' with { type: 'json' }
 import { describe, expect, test } from 'vite-plus/test'
 
 const document_manifest = async (source: string, filename = `/guide.md`) =>
@@ -296,8 +297,11 @@ describe(`Markdown content manifests`, () => {
     [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [1, 1, 1]],
-    // the tab after 3 spaces expands to column 4, so the line maps to that tab
-    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [4]],
+    // the tab after 3 spaces fills one column to the tab stop, and the item strips 2 of the 4,
+    // so the code line starts at the third space
+    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [3]],
+    // a lazy underline keeps its real spaces, padded ahead of them to four
+    [`- \`\`\`\n   ---\n  \`\`\``, [2], [3]],
   ])(`maps fence lines in %s`, async (source, lines, columns) => {
     const { fences } = await document_manifest(source)
     expect(fences[0].line_positions.map(({ line }) => line)).toEqual(lines)
@@ -318,6 +322,23 @@ describe(`Markdown content manifests`, () => {
   test.each([
     [`- first\n\t[Link](next.md)`, 2, 2],
     [`| some \\| text [Link](next.md) |\n|---|\n| body |`, 1, 16],
+    // Marked expands a tab after `>` or a list marker to the next tab stop
+    [`>\t[Link](next.md)`, 1, 3],
+    [`- >\t[Link](next.md)`, 1, 5],
+    // an escaped bracket in an image alt shifts every later offset by its dropped backslash
+    [`![a\\]b](i.png) [Link](next.md)`, 1, 16],
+    // a lazy continuation line, indented less than the item's content, keeps its tab
+    [`10.  a\n\tfoo [Link](next.md)`, 2, 6],
+    // a task checkbox's raw ends in a space whatever whitespace follows it
+    [`- [ ]\t[Link](next.md)`, 1, 7],
+    // a nested list's own tab is expanded by its item, not by the outer one
+    [`- a\n\t-\t[Link](next.md)`, 2, 4],
+    // the expanded first line must not jump to a later, literal copy of its text
+    [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
+    // the table strips only \\| and the image alt only \\]
+    [`| ![a\\]\\|b](i.png) [Link](next.md) |\n|---|`, 1, 20],
+    // a pipe after an even backslash run separates cells and keeps both backslashes
+    [`| a\\\\| [Link](next.md) |\n|---|---|`, 1, 8],
   ])(
     `maps links through normalized container text in %s`,
     async (source, line, column) => {
@@ -328,6 +349,61 @@ describe(`Markdown content manifests`, () => {
       expect(source.slice(manifest.links[0].range.start.offset)).toMatch(/^\[Link\]/u)
     },
   )
+
+  // a tab after a container marker fills to the next multiple of four columns, so its child
+  // tokens start with that many spaces, which locate() must map back to the one tab
+  test.each([
+    `> \tcode`,
+    `>\t- item`,
+    `> >\tcode`,
+    `>\t-\t\tcode`,
+    `- a\n\n\t-\tb\n\n\t\t[L](n.md)`,
+    // Marked doubles the newline after an indented lazy line in its inline text raw
+    `> quoted text\n    continued\nlazy`,
+    // a later lazy copy of a line must not capture an earlier child
+    `> a\n> b\n>\n> c\na\nb\n>\tx`,
+  ])(`renders a tab after a container marker: %j`, async (source) => {
+    const result = await create_markdown().render(source, { filename: `/guide.md` })
+    expect(result.diagnostics).toEqual([])
+  })
+
+  // Marked strips the backslash of \[ and \] in link and image labels before tokenizing them,
+  // so locate() must undo that to map their text back to the source (svelte-widgets#476)
+  test.each([
+    [`[a\\]b](https://example.com)`, `<p><a href="https://example.com">a]b</a></p>`],
+    [
+      `[arr\\[0\\]](https://example.com)`,
+      `<p><a href="https://example.com">arr[0]</a></p>`,
+    ],
+    [`![alt \\[x\\]](img.png)`, `<p><img src="img.png" alt="alt [x]"></p>`],
+    // CommonMark #550 and #194: Marked unescapes the label only, never its closing bracket
+    [`[a\\\\](https://example.com)`, `<p><a href="https://example.com">a\\</a></p>`],
+    [`[bar\\\\]: /uri\n\n[bar\\\\]`, `<p><a href="/uri">bar\\</a></p>`],
+    [
+      `[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]`,
+      `<p><a href="my_(url)" title="title (with parens)">Foo*bar]</a></p>`,
+    ],
+    // a code span in the label is one unit, so its `]` does not close the label
+    [`[\`]\` \\[](/uri)`, `<p><a href="/uri"><code>]</code> [</a></p>`],
+    [`![\`]\` \\[](/i.png)`, `<p><img src="/i.png" alt="] ["></p>`],
+    // ...but not inside a nested bracket group, which Marked matches first
+    [`[[\`[\`]] \\[](/uri)`, `<p><a href="/uri">[<code>[</code>]] [</a></p>`],
+    [`![[\`[\`]] \\[](/i.png)`, `<p><img src="/i.png" alt="[[]] ["></p>`],
+    // autolinks never pass through outputLink, so their text keeps the backslash
+    [
+      `<https://x.com/a\\]b>`,
+      `<p><a href="https://x.com/a%5C%5Db">https://x.com/a\\]b</a></p>`,
+    ],
+    // both transforms at once: the tab after `>` and the escaped bracket
+    [
+      `>\t[a\\]b](https://example.com)`,
+      // Marked keeps the two columns the tab fills past `> `
+      `<blockquote>\n<p>  <a href="https://example.com">a]b</a></p>\n</blockquote>`,
+    ],
+  ])(`renders escaped brackets in link and image labels: %s`, async (source, html) => {
+    const result = await create_markdown().render(source, { filename: `/guide.md` })
+    expect(result).toMatchObject({ ok: true, value: `${html}\n` })
+  })
 })
 
 test(`analyzes typed fence settings once, including defaults and explicit false`, async () => {
@@ -357,6 +433,8 @@ test.each([
   `collapsible=1`,
   `id=" "`,
   `wrapper=["", "Wrapper"]`,
+  // an unknown key with invalid JSON is a typo, not another tool's text
+  `label=Demo`,
 ])(
   `rejects invalid settings during analysis without enabling rendering: %s`,
   async (info) => {
@@ -371,3 +449,36 @@ test.each([
     })
   },
 )
+
+// a range ends before trailing whitespace, which Marked keeps in nested raws only
+test.each([
+  [`# H\n\nx`, `# H`],
+  [`> # H\n> z`, `# H`],
+  [`- # H\n  z`, `# H`],
+  [`> H\n> ===\n> z`, `H\n> ===`],
+])(`heading range in %j`, async (source, heading) => {
+  const { headings } = await document_manifest(source)
+  const [{ range }] = headings
+  expect(source.slice(range.start.offset, range.end.offset)).toBe(heading)
+})
+
+// The inputs of every CommonMark 0.31.2 example and the GFM table, strikethrough and autolink
+// examples (spec.commonmark.org, github/cmark-gfm). locate() mirrors Marked's text rewrites, so
+// a Marked upgrade that changes one fails here. Frontmatter is not CommonMark, so it is off.
+test(`parses every CommonMark and GFM spec example`, async () => {
+  const engine = create_markdown({ frontmatter: false })
+  const failures: string[] = []
+  for (const { markdown, source } of spec_cases) {
+    const result = await engine.parse(markdown, {
+      filename: `/spec.md`,
+      dialect: `markdown`,
+    })
+    if (!result.ok) failures.push(`${source}: ${result.diagnostics[0]?.message}`)
+    // a link starts at `[`, `![`, an autolink's `<`, a bare URL or an HTML href attribute
+    else
+      for (const { range } of result.value.manifest.links)
+        if (!/^(?:[[!<\w]|\s+href=)/u.test(markdown.slice(range.start.offset)))
+          failures.push(`${source}: link starts at ${range.start.offset}`)
+  }
+  expect(failures).toEqual([])
+})
