@@ -96,6 +96,30 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
 />
 ```
 
+### Angled header labels
+
+Set `label_angle` (degrees, up to 90) on a column to tilt its header label up from the column's center, so a long name over a narrow column no longer sets its width. The header row grows to fit the tallest label, and labels lean over the headers to their right.
+
+```svelte example id="data-table-angled"
+<script lang="ts">
+  import { type Column, DataTable } from 'svelte-widgets/table'
+
+  const rows = [
+    { model: `alpha`, accuracy: 0.91, f1: 0.88, latency: 12 },
+    { model: `beta`, accuracy: 0.87, f1: 0.9, latency: 8 },
+    { model: `gamma`, accuracy: 0.93, f1: 0.85, latency: 21 },
+  ]
+  const columns: Column<(typeof rows)[number]>[] = [
+    { id: `model`, label: `Model` },
+    { id: `accuracy`, label: `Balanced accuracy`, label_angle: 45 },
+    { id: `f1`, label: `Macro-averaged F1 score`, label_angle: 45 },
+    { id: `latency`, label: `Latency (ms)` },
+  ]
+</script>
+
+<DataTable data={rows} {columns} />
+```
+
 ## Table building blocks
 
 The same parts, for tables that keep their own markup and row model: `ColumnPicker` (show/hide columns), `ColumnFilter` (a per-column range, checklist or substring filter), `CellSelection` with the `cell_range_select` attachment (drag-select cells and copy them as TSV), and serializers to CSV, TSV, JSON, Markdown and LaTeX.

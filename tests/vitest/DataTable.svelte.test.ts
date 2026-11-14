@@ -932,23 +932,37 @@ describe(`DataTable`, () => {
     expect(col_values(`Plain`)).toEqual([`1.5|.2f`, `2|.2f`])
   })
 
-  it(`explains described columns in the shared tooltip on keyboard focus`, async () => {
-    mount_table({
-      data: sample_data,
-      columns: [
-        { id: `Col`, label: `Col`, description: `<b>Description</b> text`, pin: `left` },
-      ],
-    })
-    const header = doc_query(`th`)
-    doc_query(`th button`).dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
-    await vi.waitFor(() =>
-      expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
-        `Description text`,
-      ),
-    )
-    expect(header.classList.contains(`pinned`)).toBe(true)
-    expect(header.querySelector(`.popover`)).toBeNull()
-  })
+  // a tap focuses after touch input, which the table's shared tooltip ignores
+  it.each([`keyboard`, `touch`])(
+    `explains described columns on %s focus`,
+    async (pointerType) => {
+      mount_table({
+        data: sample_data,
+        columns: [
+          {
+            id: `Col`,
+            label: `Col`,
+            description: `<b>Description</b> text`,
+            pin: `left`,
+          },
+        ],
+      })
+      const header = doc_query(`th`)
+      const button = doc_query(`th button`)
+      if (pointerType === `touch`)
+        button.dispatchEvent(
+          new PointerEvent(`pointerdown`, { bubbles: true, pointerType }),
+        )
+      button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+      await vi.waitFor(() =>
+        expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
+          `Description text`,
+        ),
+      )
+      expect(header.classList.contains(`pinned`)).toBe(true)
+      expect(header.querySelector(`.popover`)).toBeNull()
+    },
+  )
 
   // Missing values displayed as 'n/a', never as literal 'NaN' or 'undefined'. A row whose
   // values are all undefined still shows, as all n/a: silently dropping it hid it from row
@@ -1844,7 +1858,10 @@ describe(`DataTable`, () => {
           return size_of(this)[field]
         })
       }
-      const state = $state<{ hidden_columns: string[] }>({ hidden_columns: [] })
+      const state = $state<{ hidden_columns: string[]; column_order: string[] }>({
+        hidden_columns: [],
+        column_order: [],
+      })
       const data = [{ Name: `x`, A: 1, B: 2 }]
       mount_table(
         bind_props(
@@ -1873,6 +1890,15 @@ describe(`DataTable`, () => {
       const overhang = () =>
         Number(doc_query(`table`).style.marginRight.replace(`px`, ``))
       expect(overhang()).toBeCloseTo(100 + 100 * Math.cos(Math.PI / 6) - 120, 6)
+      // swapping the equal-width A and B moves both labels but resizes nothing: A now ends the
+      // row and reaches 80 + 20 + 100 cos 45° past 120 px
+      ;[sizes.A.left, sizes.B.left] = [80, 40]
+      state.column_order = [`Name`, `B`, `A`]
+      await tick()
+      expect(overhang()).toBeCloseTo(100 + 100 * Math.SQRT1_2 - 120, 6)
+      ;[sizes.A.left, sizes.B.left] = [40, 80]
+      state.column_order = [`Name`, `A`, `B`]
+      await tick()
       // hiding B drops its measurement: A alone reaches 40 + 20 + 100 cos 45° past 120 px
       state.hidden_columns = [`B`]
       await tick()

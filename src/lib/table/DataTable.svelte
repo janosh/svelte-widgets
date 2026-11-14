@@ -740,6 +740,8 @@
   const angled_labels = new SvelteMap<string, AngledLabel>()
   const track_angled_label =
     (col_id: string, degrees: number) => (label: HTMLElement) => {
+      // re-measure on reorder: swapping equal-width columns moves labels but resizes nothing
+      void visible_columns
       const header_cell = label.parentElement
       const table = label.closest(`table`)
       if (!header_cell || !table) return
@@ -1486,13 +1488,15 @@
   let root_styles = $derived(join_styles(rest.style, root_style))
 </script>
 
-<!-- a described header explains itself in the table's shared tooltip (hover, keyboard focus) -->
+<!-- a described header explains itself in a tooltip on hover, keyboard focus or a tap (its own
+registration, as the shared one ignores touch focus) -->
 {#snippet column_label(label: string, description?: string)}
   {#if description}
     <button
       type="button"
       style="all: unset; cursor: help"
-      title={html_to_text(description)}>{@html render_html(label)}</button
+      title={html_to_text(description)}
+      {@attach tooltip({ touch_focus: true })}>{@html render_html(label)}</button
     >
   {:else}
     {@html render_html(label)}
@@ -2219,6 +2223,8 @@
        headers trade the hover highlight for this. */
     &.angled {
       overflow: visible;
+      /* above later, ordinary headers, whose opaque backgrounds would cover the label */
+      z-index: 3;
       background: transparent;
       pointer-events: none;
       > :global(*) {
