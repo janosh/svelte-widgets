@@ -118,14 +118,69 @@ export function walk_tokens(
   }
 }
 
+// Marked rewrites some container text before tokenizing the children: it expands tabs to the
+// next multiple of four columns after a blockquote's `>` and in a list item's first-line marker
+// and continuation indentation, and drops the backslash of `\|` in table cells and of `\[`
+// and `\]` in link and image labels (its outputLink regex). Each rewrites one container level,
+// since a nested container's raw is already in its parent's coordinates.
+const QUOTE_PREFIX = / {0,3}>[ \t]*/uy
+const ITEM_FIRST_PREFIX = / {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*/uy
+const INDENT = /[ \t]*/uy
+const UNESCAPED_BY_PARENT: Readonly<Record<string, string>> = {
+  table: `|`,
+  link: `[]`,
+  image: `[]`,
+}
+// The text Marked hands a parent's children, with the parent index of each character, or
+// undefined when Marked passes the parent's text through unchanged. Built once per parent.
+const child_views = new WeakMap<MappedText, MappedText>()
+function child_view(parent: MappedText, kind: string): MappedText | undefined {
+  const unescaped = UNESCAPED_BY_PARENT[kind]
+  const expands_tabs = kind === `blockquote` || kind === `list_item`
+  if (!unescaped && !expands_tabs) return undefined
+  const cached = child_views.get(parent)
+  if (cached) return cached
+  const { text } = parent
+  const view: MappedText = { text: ``, offsets: [] }
+  let column = 0
+  let prefix_end = 0
+  for (let idx = 0; idx < text.length; idx++) {
+    const char = text[idx]
+    if (expands_tabs && column === 0) {
+      const prefix =
+        kind === `blockquote` ? QUOTE_PREFIX : idx ? INDENT : ITEM_FIRST_PREFIX
+      prefix.lastIndex = idx
+      prefix_end = idx + (prefix.exec(text)?.[0].length ?? 0)
+    }
+    if (char === `\t` && idx < prefix_end) {
+      const width = 4 - (column % 4)
+      view.text += ` `.repeat(width)
+      for (let space = 0; space < width; space++) view.offsets.push(idx)
+      column += width
+      continue
+    }
+    // escaped and target characters never overlap, so one pass mirrors Marked's regexes
+    if (char === `\\` && unescaped?.includes(text[idx + 1] ?? `\n`)) continue
+    view.text += char
+    view.offsets.push(idx)
+    column = char === `\n` ? 0 : column + 1
+  }
+  child_views.set(parent, view)
+  return view
+}
+
 // Container tokens remove quote/list indentation. Match complete lines within the parent
-// rather than searching the whole document, which confuses repeated code and headings.
+// rather than searching the whole document, which confuses repeated code and headings. A
+// rewritten parent is searched only in its child view: its plain text can hold a later,
+// literal copy of a rewritten line.
 function locate(
   raw: string,
   parent: MappedText,
   cursor: number,
+  kind = ``,
 ): MappedText & { end: number } {
-  const exact = parent.text.indexOf(raw, cursor)
+  const view = child_view(parent, kind)
+  const exact = view ? -1 : parent.text.indexOf(raw, cursor)
   if (exact !== -1)
     return {
       text: raw,
@@ -134,68 +189,31 @@ function locate(
     }
   const offsets: number[] = []
   let offset = cursor
-  let expanded: MappedText | undefined
-  let unescaped: MappedText | undefined
-  const transformed_match = (mapped: MappedText, text: string): number => {
-    let low = 0
-    let high = mapped.offsets.length
-    while (low < high) {
-      const middle = (low + high) >>> 1
-      if (mapped.offsets[middle] < offset) low = middle + 1
-      else high = middle
-    }
-    return mapped.text.indexOf(text, low)
-  }
+  // parent index of a view index (the view of an unchanged parent is the parent itself)
+  const parent_idx = (idx: number) => (view ? view.offsets[idx] : idx)
   for (const line of raw.split(/(?<=\n)/u)) {
     const newline = line.endsWith(`\n`)
     const text = newline ? line.slice(0, -1) : line
-    const start = text ? parent.text.indexOf(text, offset) : offset
-    if (start !== -1) {
-      for (let idx = start; idx < start + text.length; idx++)
-        offsets.push(parent.offsets[idx])
-      offset = start + text.length
-    }
-    // Marked replaces each tab in a list line's indentation with four spaces and removes
-    // escaped table separators. Keep a source index for every transformed character,
-    // including expanded spaces.
-    if (start === -1) {
-      if (!expanded) {
-        expanded = { text: ``, offsets: [] }
-        const line_start = parent.text.lastIndexOf(`\n`, offset - 1) + 1
-        let indentation = /^[ \t]*$/u.test(parent.text.slice(line_start, offset))
-        for (let idx = offset; idx < parent.text.length; idx++) {
-          const char = parent.text[idx]
-          if (char === `\n`) indentation = true
-          else if (char !== ` ` && char !== `\t`) indentation = false
-          if (char === `\t` && indentation) {
-            expanded.text += `    `
-            expanded.offsets.push(idx, idx, idx, idx)
-          } else {
-            expanded.text += char
-            expanded.offsets.push(idx)
-          }
+    if (text) {
+      let from = offset
+      if (view) {
+        // first view character at or after the parent cursor
+        let high = view.offsets.length
+        from = 0
+        while (from < high) {
+          const middle = (from + high) >>> 1
+          if (view.offsets[middle] < offset) from = middle + 1
+          else high = middle
         }
       }
-      let transformed = expanded
-      let matched = transformed_match(transformed, text)
-      if (matched === -1) {
-        unescaped ??= {
-          text: expanded.text.replaceAll(`\\|`, `|`),
-          offsets: expanded.offsets.filter(
-            (_, idx) =>
-              transformed.text[idx] !== `\\` || transformed.text[idx + 1] !== `|`,
-          ),
-        }
-        transformed = unescaped
-        matched = transformed_match(transformed, text)
-      }
+      const matched = (view ?? parent).text.indexOf(text, from)
       if (matched === -1)
         throw new Error(
           `Cannot locate Markdown token ${JSON.stringify(raw.slice(0, 80))}`,
         )
-      for (const idx of transformed.offsets.slice(matched, matched + text.length))
-        offsets.push(parent.offsets[idx])
-      offset = transformed.offsets[matched + text.length - 1] + 1
+      for (let idx = matched; idx < matched + text.length; idx++)
+        offsets.push(parent.offsets[parent_idx(idx)])
+      offset = parent_idx(matched + text.length - 1) + 1
     }
     if (newline) {
       const end = parent.text.indexOf(`\n`, offset)
@@ -360,10 +378,11 @@ export function content_manifest(
   }
   const inline_text = (children: Token[]): string =>
     heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
-  const visit = (children: Token[], parent: MappedText) => {
+  // `kind` is the parent token's type, which decides how Marked rewrote the children's text
+  const visit = (children: Token[], parent: MappedText, kind = ``) => {
     let cursor = 0
     for (const token of children) {
-      const mapped = locate(token.raw, parent, cursor)
+      const mapped = locate(token.raw, parent, cursor, kind)
       cursor = mapped.end
       const at = range(
         mapped.offsets[0] ?? parent.offsets[cursor] ?? source.length,
@@ -442,7 +461,12 @@ export function content_manifest(
       if (token.type === `table`)
         for (const cell of table_cells(token as Tokens.Table))
           prose.push(inline_text(cell.tokens))
-      visit(child_tokens(token), mapped)
+      // autolinks never pass through outputLink, so their text keeps its backslashes
+      visit(
+        child_tokens(token),
+        mapped,
+        (token as Tokens.Link).autolink ? `autolink` : token.type,
+      )
     }
   }
   visit(tokens, { text: normalized, offsets })

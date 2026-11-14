@@ -296,8 +296,9 @@ describe(`Markdown content manifests`, () => {
     [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [1, 1, 1]],
-    // the tab after 3 spaces expands to column 4, so the line maps to that tab
-    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [4]],
+    // the tab after 3 spaces fills one column to the tab stop, and the item strips 2 of the 4,
+    // so the code line starts at the third space
+    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [3]],
   ])(`maps fence lines in %s`, async (source, lines, columns) => {
     const { fences } = await document_manifest(source)
     expect(fences[0].line_positions.map(({ line }) => line)).toEqual(lines)
@@ -318,6 +319,17 @@ describe(`Markdown content manifests`, () => {
   test.each([
     [`- first\n\t[Link](next.md)`, 2, 2],
     [`| some \\| text [Link](next.md) |\n|---|\n| body |`, 1, 16],
+    // Marked expands a tab after `>` or a list marker to the next tab stop
+    [`>\t[Link](next.md)`, 1, 3],
+    [`- >\t[Link](next.md)`, 1, 5],
+    // an escaped bracket in an image alt shifts every later offset by its dropped backslash
+    [`![a\\]b](i.png) [Link](next.md)`, 1, 16],
+    // a nested list's own tab is expanded by its item, not by the outer one
+    [`- a\n\t-\t[Link](next.md)`, 2, 4],
+    // the expanded first line must not jump to a later, literal copy of its text
+    [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
+    // the table strips only \\| and the image alt only \\]
+    [`| ![a\\]\\|b](i.png) [Link](next.md) |\n|---|`, 1, 20],
   ])(
     `maps links through normalized container text in %s`,
     async (source, line, column) => {
@@ -328,6 +340,46 @@ describe(`Markdown content manifests`, () => {
       expect(source.slice(manifest.links[0].range.start.offset)).toMatch(/^\[Link\]/u)
     },
   )
+
+  // a tab after a container marker fills to the next multiple of four columns, so its child
+  // tokens start with that many spaces, which locate() must map back to the one tab
+  test.each([
+    `>\tplain text`,
+    `> \tcode`,
+    `>\t- item`,
+    `> >\tcode`,
+    `-\t\tcode`,
+    `>\t-\t\tcode`,
+    `- a\n\n\t-\tb\n\n\t\t[L](n.md)`,
+  ])(`renders a tab after a container marker: %j`, async (source) => {
+    const result = await create_markdown().render(source, { filename: `/guide.md` })
+    expect(result.diagnostics).toEqual([])
+  })
+
+  // Marked strips the backslash of \[ and \] in link and image labels before tokenizing them,
+  // so locate() must undo that to map their text back to the source (svelte-widgets#476)
+  test.each([
+    [`[a\\]b](https://example.com)`, `<p><a href="https://example.com">a]b</a></p>`],
+    [
+      `[arr\\[0\\]](https://example.com)`,
+      `<p><a href="https://example.com">arr[0]</a></p>`,
+    ],
+    [`![alt \\[x\\]](img.png)`, `<p><img src="img.png" alt="alt [x]"></p>`],
+    // autolinks never pass through outputLink, so their text keeps the backslash
+    [
+      `<https://x.com/a\\]b>`,
+      `<p><a href="https://x.com/a%5C%5Db">https://x.com/a\\]b</a></p>`,
+    ],
+    // both transforms at once: the tab after `>` and the escaped bracket
+    [
+      `>\t[a\\]b](https://example.com)`,
+      // Marked keeps the two columns the tab fills past `> `
+      `<blockquote>\n<p>  <a href="https://example.com">a]b</a></p>\n</blockquote>`,
+    ],
+  ])(`renders escaped brackets in link and image labels: %s`, async (source, html) => {
+    const result = await create_markdown().render(source, { filename: `/guide.md` })
+    expect(result).toMatchObject({ ok: true, value: `${html}\n` })
+  })
 })
 
 test(`analyzes typed fence settings once, including defaults and explicit false`, async () => {
