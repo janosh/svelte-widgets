@@ -1491,14 +1491,16 @@
   let root_styles = $derived(join_styles(rest.style, root_style))
 </script>
 
-<!-- a described header explains itself in a tooltip on hover, keyboard focus or a tap (its own
-registration, as the shared one ignores touch focus) -->
+<!-- a described header explains itself in a tooltip on hover, keyboard focus or a tap: its own
+registration accepts touch focus, which the shared one ignores, and a click focuses the button
+itself since Safari does not focus a tapped button -->
 {#snippet column_label(label: string, description?: string)}
   {#if description}
     <button
       type="button"
       style="all: unset; cursor: help"
       title={html_to_text(description)}
+      onclick={(event) => event.currentTarget.focus()}
       {@attach tooltip({ touch_focus: true })}>{@html render_html(label)}</button
     >
   {:else}

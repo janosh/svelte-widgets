@@ -949,11 +949,13 @@ describe(`DataTable`, () => {
       })
       const header = doc_query(`th`)
       const button = doc_query(`th button`)
-      if (pointerType === `touch`)
+      // a tap is a touch press then a click, with no focus from the browser (Safari gives none)
+      if (pointerType === `touch`) {
         button.dispatchEvent(
           new PointerEvent(`pointerdown`, { bubbles: true, pointerType }),
         )
-      button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+        button.click()
+      } else button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
       await vi.waitFor(() =>
         expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
           `Description text`,
