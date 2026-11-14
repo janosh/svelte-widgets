@@ -330,6 +330,8 @@ describe(`Markdown content manifests`, () => {
     [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
     // the table strips only \\| and the image alt only \\]
     [`| ![a\\]\\|b](i.png) [Link](next.md) |\n|---|`, 1, 20],
+    // a pipe after an even backslash run separates cells and keeps both backslashes
+    [`| a\\\\| [Link](next.md) |\n|---|---|`, 1, 8],
   ])(
     `maps links through normalized container text in %s`,
     async (source, line, column) => {
@@ -366,6 +368,7 @@ describe(`Markdown content manifests`, () => {
     ],
     [`![alt \\[x\\]](img.png)`, `<p><img src="img.png" alt="alt [x]"></p>`],
     // CommonMark #550 and #194: Marked unescapes the label only, never its closing bracket
+    [`[a\\\\](https://example.com)`, `<p><a href="https://example.com">a\\</a></p>`],
     [`[bar\\\\]: /uri\n\n[bar\\\\]`, `<p><a href="/uri">bar\\</a></p>`],
     [
       `[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]`,

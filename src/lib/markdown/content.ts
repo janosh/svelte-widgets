@@ -131,6 +131,12 @@ const UNESCAPED_BY_PARENT: Readonly<Record<string, string>> = {
   link: `[]`,
   image: `[]`,
 }
+// Length of the run of backslashes ending at `end`
+function backslash_run(text: string, end: number): number {
+  let start = end
+  while (start > 0 && text[start - 1] === `\\`) start--
+  return end - start + 1
+}
 // Index of a link or image raw's label-closing bracket: the first unescaped `]` outside nested
 // brackets. Marked unescapes only the label, never this bracket.
 function label_end(raw: string): number {
@@ -171,11 +177,13 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
       column += width
       continue
     }
-    // escaped and target characters never overlap, so one pass mirrors Marked's regexes
+    // escaped and target characters never overlap, so one pass mirrors Marked's regexes. A
+    // table pipe after an even backslash run is a cell separator that keeps every backslash.
     if (
       char === `\\` &&
       idx + 1 < unescape_end &&
-      unescaped?.includes(text[idx + 1] ?? `\n`)
+      unescaped?.includes(text[idx + 1] ?? `\n`) &&
+      (kind !== `table` || backslash_run(text, idx) % 2 === 1)
     )
       continue
     view.text += char
