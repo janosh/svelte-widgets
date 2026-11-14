@@ -137,13 +137,19 @@ function backslash_run(text: string, end: number): number {
   while (start > 0 && text[start - 1] === `\\`) start--
   return end - start + 1
 }
+// A code span inside a link label, which Marked's label grammar takes as one unit
+const LABEL_CODE_SPAN = /`+(?!`)[^`]*?`+(?!`)/uy
 // Index of a link or image raw's label-closing bracket: the first unescaped `]` outside nested
-// brackets. Marked unescapes only the label, never this bracket.
+// brackets and code spans. Marked unescapes only the label, never this bracket.
 function label_end(raw: string): number {
   let depth = 0
   for (let idx = raw.indexOf(`[`) + 1; idx < raw.length; idx++) {
     if (raw[idx] === `\\`) idx++
-    else if (raw[idx] === `[`) depth++
+    else if (raw[idx] === `\``) {
+      LABEL_CODE_SPAN.lastIndex = idx
+      const span = LABEL_CODE_SPAN.exec(raw)
+      if (span) idx += span[0].length - 1
+    } else if (raw[idx] === `[`) depth++
     else if (raw[idx] === `]` && depth-- === 0) return idx
   }
   return raw.length

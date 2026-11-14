@@ -374,6 +374,9 @@ describe(`Markdown content manifests`, () => {
       `[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]`,
       `<p><a href="my_(url)" title="title (with parens)">Foo*bar]</a></p>`,
     ],
+    // a code span in the label is one unit, so its `]` does not close the label
+    [`[\`]\` \\[](/uri)`, `<p><a href="/uri"><code>]</code> [</a></p>`],
+    [`![\`]\` \\[](/i.png)`, `<p><img src="/i.png" alt="] ["></p>`],
     // autolinks never pass through outputLink, so their text keeps the backslash
     [
       `<https://x.com/a\\]b>`,
