@@ -365,6 +365,12 @@ describe(`Markdown content manifests`, () => {
       `<p><a href="https://example.com">arr[0]</a></p>`,
     ],
     [`![alt \\[x\\]](img.png)`, `<p><img src="img.png" alt="alt [x]"></p>`],
+    // CommonMark #550 and #194: Marked unescapes the label only, never its closing bracket
+    [`[bar\\\\]: /uri\n\n[bar\\\\]`, `<p><a href="/uri">bar\\</a></p>`],
+    [
+      `[Foo*bar\\]]:my_(url) 'title (with parens)'\n\n[Foo*bar\\]]`,
+      `<p><a href="my_(url)" title="title (with parens)">Foo*bar]</a></p>`,
+    ],
     // autolinks never pass through outputLink, so their text keeps the backslash
     [
       `<https://x.com/a\\]b>`,

@@ -131,6 +131,17 @@ const UNESCAPED_BY_PARENT: Readonly<Record<string, string>> = {
   link: `[]`,
   image: `[]`,
 }
+// Index of a link or image raw's label-closing bracket: the first unescaped `]` outside nested
+// brackets. Marked unescapes only the label, never this bracket.
+function label_end(raw: string): number {
+  let depth = 0
+  for (let idx = raw.indexOf(`[`) + 1; idx < raw.length; idx++) {
+    if (raw[idx] === `\\`) idx++
+    else if (raw[idx] === `[`) depth++
+    else if (raw[idx] === `]` && depth-- === 0) return idx
+  }
+  return raw.length
+}
 // The text Marked hands a parent's children, with the parent index of each character, or
 // undefined when Marked passes the parent's text through unchanged. Built once per parent.
 const child_views = new WeakMap<MappedText, MappedText>()
@@ -141,6 +152,7 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
   const cached = child_views.get(parent)
   if (cached) return cached
   const { text } = parent
+  const unescape_end = kind === `table` ? text.length : label_end(text)
   const view: MappedText = { text: ``, offsets: [] }
   let column = 0
   let prefix_end = 0
@@ -160,7 +172,12 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
       continue
     }
     // escaped and target characters never overlap, so one pass mirrors Marked's regexes
-    if (char === `\\` && unescaped?.includes(text[idx + 1] ?? `\n`)) continue
+    if (
+      char === `\\` &&
+      idx + 1 < unescape_end &&
+      unescaped?.includes(text[idx + 1] ?? `\n`)
+    )
+      continue
     view.text += char
     view.offsets.push(idx)
     column = char === `\n` ? 0 : column + 1
