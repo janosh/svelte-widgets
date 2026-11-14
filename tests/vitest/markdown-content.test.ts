@@ -358,6 +358,10 @@ describe(`Markdown content manifests`, () => {
     `> >\tcode`,
     `>\t-\t\tcode`,
     `- a\n\n\t-\tb\n\n\t\t[L](n.md)`,
+    // Marked doubles the newline after an indented lazy line in its inline text raw
+    `> quoted text\n    continued\nlazy`,
+    // a later lazy copy of a line must not capture an earlier child
+    `> a\n> b\n>\n> c\na\nb\n>\tx`,
   ])(`renders a tab after a container marker: %j`, async (source) => {
     const result = await create_markdown().render(source, { filename: `/guide.md` })
     expect(result.diagnostics).toEqual([])

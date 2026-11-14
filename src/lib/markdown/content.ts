@@ -130,11 +130,6 @@ const INDENT = /[ \t]*/uy
 // item tokenizers indent it to four spaces so it stays paragraph text. Padding ahead of its
 // real spaces where Marked did not is harmless, since lines match as substrings.
 const LAZY_UNDERLINE_INDENT = / {0,3}(?=(?:=+|-+)[ \t]*(?:\n|$))/uy
-const UNESCAPED_BY_PARENT: Readonly<Record<string, string>> = {
-  table: `|`,
-  link: `[]`,
-  image: `[]`,
-}
 // Whether the character at `index` follows an odd run of backslashes
 export function escaped_at(text: string, index: number): boolean {
   let start = index
@@ -157,13 +152,19 @@ function label_end(raw: string): number {
   }
   return raw.length
 }
-// The text Marked hands a parent's children, with the parent index of each character, or
-// undefined when that equals the parent's text (nothing to rewrite)
-function child_view(parent: MappedText, kind: string): MappedText | undefined {
+// The text Marked hands the children of `owner` (autolinks keep their backslashes), mapped to
+// source offsets: the parent itself unless something is rewritten
+function child_view(parent: MappedText, owner?: Token): MappedText {
   const { text } = parent
-  const unescaped = UNESCAPED_BY_PARENT[kind]
+  const kind = owner?.type ?? ``
+  const unescaped =
+    kind === `table`
+      ? `|`
+      : /^(?:link|image)$/u.test(kind) && !(owner as Tokens.Link).autolink
+        ? `[]`
+        : undefined
   const expands_tabs = kind === `blockquote` || kind === `list_item`
-  if (!(unescaped || expands_tabs) || !/[\t\\]|\n {0,3}[=-]/u.test(text)) return undefined
+  if (!expands_tabs && !(unescaped && /\\/u.test(text))) return parent
   const unescape_end = kind === `table` ? text.length : unescaped ? label_end(text) : 0
   // a list item's content column (Marked's R): continuation lines indented less are lazy and
   // keep their tabs
@@ -179,13 +180,14 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
   const view: MappedText = { text: ``, offsets: [] }
   let column = 0
   let prefix_end = 0
+  let marker_end = 0
   for (let idx = 0; idx < text.length; idx++) {
     if (expands_tabs && column === 0 && idx > 0) {
       LAZY_UNDERLINE_INDENT.lastIndex = idx
       const indent = LAZY_UNDERLINE_INDENT.exec(text)?.[0]
       for (let pad = indent?.length ?? 4; pad < 4; pad++) {
         view.text += ` `
-        view.offsets.push(idx)
+        view.offsets.push(parent.offsets[idx])
       }
     }
     const char = text[idx]
@@ -193,18 +195,25 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
       const prefix =
         kind === `blockquote` ? QUOTE_PREFIX : idx ? INDENT : ITEM_FIRST_PREFIX
       prefix.lastIndex = idx
-      prefix_end = idx + (prefix.exec(text)?.[0].length ?? 0)
+      const prefix_text = prefix.exec(text)?.[0] ?? ``
+      prefix_end = idx + prefix_text.length
       const lazy =
         kind === `list_item` &&
         idx > 0 &&
         ![`\n`, undefined].includes(text[prefix_end]) &&
         expanded_column(text.slice(idx, prefix_end)) < content_column
       if (lazy) prefix_end = idx
+      marker_end = lazy ? idx : idx + prefix_text.trimEnd().length
+    }
+    // Marked strips quote and item markers, so no child can sit on one
+    if (idx < marker_end) {
+      column++
+      continue
     }
     if (char === `\t` && idx < prefix_end) {
       const width = 4 - (column % 4)
       view.text += ` `.repeat(width)
-      for (let space = 0; space < width; space++) view.offsets.push(idx)
+      for (let space = 0; space < width; space++) view.offsets.push(parent.offsets[idx])
       column += width
       continue
     }
@@ -218,59 +227,45 @@ function child_view(parent: MappedText, kind: string): MappedText | undefined {
     )
       continue
     view.text += char
-    view.offsets.push(idx)
+    view.offsets.push(parent.offsets[idx])
     column = char === `\n` ? 0 : column + 1
   }
   return view
 }
 
 // Container tokens remove quote/list indentation. Match complete lines within the parent
-// rather than searching the whole document, which confuses repeated code and headings. A
-// rewritten parent is searched only in its child view: its plain text can hold a later,
-// literal copy of a rewritten line.
+// rather than searching the whole document, which confuses repeated code and headings.
 function locate(
   raw: string,
   parent: MappedText,
   cursor: number,
-  view?: MappedText,
 ): MappedText & { end: number } {
-  const exact = view ? -1 : parent.text.indexOf(raw, cursor)
-  if (exact !== -1)
-    return {
-      text: raw,
-      offsets: parent.offsets.slice(exact, exact + raw.length),
-      end: exact + raw.length,
-    }
   const offsets: number[] = []
   let offset = cursor
-  // parent index of a view index (the view of an unchanged parent is the parent itself)
-  const parent_idx = (idx: number) => (view ? view.offsets[idx] : idx)
   for (const line of raw.split(/(?<=\n)/u)) {
     const newline = line.endsWith(`\n`)
     const text = newline ? line.slice(0, -1) : line
     if (text) {
-      let from = offset
-      if (view) {
-        // first view character at or after the parent cursor
-        let high = view.offsets.length
-        from = 0
-        while (from < high) {
-          const middle = (from + high) >>> 1
-          if (view.offsets[middle] < offset) from = middle + 1
-          else high = middle
-        }
-      }
-      const matched = (view ?? parent).text.indexOf(text, from)
-      if (matched === -1)
+      const start = parent.text.indexOf(text, offset)
+      if (start === -1)
         throw new Error(
           `Cannot locate Markdown token ${JSON.stringify(raw.slice(0, 80))}`,
         )
-      for (let idx = matched; idx < matched + text.length; idx++)
-        offsets.push(parent.offsets[parent_idx(idx)])
-      offset = parent_idx(matched + text.length - 1) + 1
+      for (let idx = start; idx < start + text.length; idx++)
+        offsets.push(parent.offsets[idx])
+      offset = start + text.length
     }
     if (newline) {
       const end = parent.text.indexOf(`\n`, offset)
+      // Marked doubles the newline after an indented lazy line in its inline text raw
+      if (
+        !text &&
+        offsets.length &&
+        /\S/u.test(parent.text.slice(offset, end === -1 ? undefined : end))
+      ) {
+        offsets.push(offsets[offsets.length - 1])
+        continue
+      }
       // Marked replaces trailing whitespace in quoted lists with a synthetic newline.
       if (end === -1 && /^[ \t]+$/u.test(parent.text.slice(offset))) {
         offsets.push(parent.offsets[offset])
@@ -432,19 +427,18 @@ export function content_manifest(
   }
   const inline_text = (children: Token[]): string =>
     heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
-  // `kind` is the parent token's type, which decides how Marked rewrote the children's text
-  const visit = (children: Token[], parent: MappedText, kind = ``) => {
-    const view = child_view(parent, kind)
+  const visit = (children: Token[], parent: MappedText, owner?: Token) => {
+    const view = child_view(parent, owner)
     let cursor = 0
     for (const token of children) {
       // Marked builds a task checkbox's raw as `[ ] ` whatever whitespace follows it
       const raw = token.type === `checkbox` ? token.raw.trimEnd() : token.raw
-      const mapped = locate(raw, parent, cursor, view)
+      const mapped = locate(raw, view, cursor)
       cursor = mapped.end
       // ends before any trailing whitespace, which Marked keeps in nested raws (`# H\n` in a
       // quote) but strips at the top level
       const at = range(
-        mapped.offsets[0] ?? parent.offsets[cursor] ?? source.length,
+        mapped.offsets[0] ?? view.offsets[cursor] ?? source.length,
         (mapped.offsets[token.raw.trimEnd().length - 1] ??
           mapped.offsets.at(-1) ??
           source.length - 1) + 1,
@@ -522,12 +516,7 @@ export function content_manifest(
       if (token.type === `table`)
         for (const cell of table_cells(token as Tokens.Table))
           prose.push(inline_text(cell.tokens))
-      // autolinks never pass through outputLink, so their text keeps its backslashes
-      visit(
-        child_tokens(token),
-        mapped,
-        (token as Tokens.Link).autolink ? `autolink` : token.type,
-      )
+      visit(child_tokens(token), mapped, token)
     }
   }
   visit(tokens, { text: normalized, offsets })

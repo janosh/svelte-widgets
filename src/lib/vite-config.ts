@@ -213,7 +213,7 @@ const fmt: SharedConfig[`fmt`] = {
 const build: SharedConfig[`build`] = { cssTarget: `esnext` }
 
 const staged: SharedConfig[`staged`] = {
-  '*.{js,ts,svelte,html,css,scss,less,md,json,yaml,graphql,gql}': `vp check --fix`,
+  '*.{js,ts,svelte,html,css,scss,less,md,json,yaml,graphql,gql}': `vp check --fix --no-error-on-unmatched-pattern`,
   '*.{ts,svelte}': `sh -c 'npx svelte-kit sync && npx svelte-check --threshold error'`,
 }
 
