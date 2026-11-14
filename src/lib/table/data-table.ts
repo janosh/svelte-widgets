@@ -46,6 +46,10 @@ export type Column<Row extends object = RowData> = {
   // drag-reordered within that group. The column picker also sections its list by it.
   group?: string
   description?: string
+  // Tilt the header label this many degrees, in (0, 90], up from horizontal: it starts at the
+  // column's center and rises to the right, so a long name no longer sets the width. The
+  // header cell drops its background so neighboring labels show through it.
+  label_angle?: number
   // Passed to the table's format_number for numeric cells
   format?: string
   // Render cells as dates/times in this mode; also makes bare numbers read as epoch timestamps
