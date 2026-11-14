@@ -932,28 +932,39 @@ describe(`DataTable`, () => {
     expect(col_values(`Plain`)).toEqual([`1.5|.2f`, `2|.2f`])
   })
 
-  it(`exposes rich column descriptions on keyboard focus`, async () => {
-    mount_table({
-      data: sample_data,
-      columns: [
-        { id: `Col`, label: `Col`, description: `<b>Description</b>`, pin: `left` },
-      ],
-    })
-
-    const header = document.querySelector(`th`)
-    const trigger = doc_query(`th button`)
-    trigger.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
-    await vi.waitFor(() =>
-      expect(document.querySelector(`.popover b`)?.textContent).toBe(`Description`),
-    )
-    expect(header?.classList.contains(`pinned`)).toBe(true)
-    // It wraps as prose, not as the header's single bold line.
-    const { whiteSpace, fontWeight } = getComputedStyle(doc_query(`th .popover`))
-    expect({ whiteSpace, fontWeight }).toEqual({
-      whiteSpace: `normal`,
-      fontWeight: `normal`,
-    })
-  })
+  // a tap focuses after touch input, which the table's shared tooltip ignores
+  it.each([`keyboard`, `touch`])(
+    `explains described columns on %s focus`,
+    async (pointerType) => {
+      mount_table({
+        data: sample_data,
+        columns: [
+          {
+            id: `Col`,
+            label: `Col`,
+            description: `<b>Description</b> text`,
+            pin: `left`,
+          },
+        ],
+      })
+      const header = doc_query(`th`)
+      const button = doc_query(`th button`)
+      // a tap is a touch press then a click, with no focus from the browser (Safari gives none)
+      if (pointerType === `touch`) {
+        button.dispatchEvent(
+          new PointerEvent(`pointerdown`, { bubbles: true, pointerType }),
+        )
+        button.click()
+      } else button.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+      await vi.waitFor(() =>
+        expect(document.querySelector(`.tooltip-content`)?.textContent).toBe(
+          `Description text`,
+        ),
+      )
+      expect(header.classList.contains(`pinned`)).toBe(true)
+      expect(header.querySelector(`.popover`)).toBeNull()
+    },
+  )
 
   // Missing values displayed as 'n/a', never as literal 'NaN' or 'undefined'. A row whose
   // values are all undefined still shows, as all n/a: silently dropping it hid it from row
@@ -1821,6 +1832,105 @@ describe(`DataTable`, () => {
       drag(`dragend`)
       await tick()
       expect(header.getAttribute(`aria-grabbed`)).toBeNull()
+    })
+
+    // An angled label starts at its column's center: the header row grows to the tallest
+    // label's rise (width sin + height cos) and the table reserves its end side for labels
+    // that reach past the last column (center + width cos - table width)
+    it(`tilts label_angle headers and sizes the header row and overhang to fit them`, async () => {
+      const sizes: Record<string, { left: number; width: number }> = {
+        Name: { left: 0, width: 40 },
+        A: { left: 40, width: 40 },
+        B: { left: 80, width: 40 },
+      }
+      const size_of = (el: HTMLElement) =>
+        el.classList.contains(`angled-label`)
+          ? { left: 0, width: 100, height: 20 }
+          : el.tagName === `TABLE`
+            ? { left: 0, width: 120, height: 0 }
+            : { height: 0, ...(sizes[el.dataset.colId ?? ``] ?? { left: 0, width: 0 }) }
+      for (const [prop, field] of [
+        [`offsetWidth`, `width`],
+        [`offsetHeight`, `height`],
+        [`offsetLeft`, `left`],
+      ] as const) {
+        vi.spyOn(HTMLElement.prototype, prop, `get`).mockImplementation(function (
+          this: HTMLElement,
+        ) {
+          return size_of(this)[field]
+        })
+      }
+      const state = $state<{ hidden_columns: string[]; column_order: string[] }>({
+        hidden_columns: [],
+        column_order: [],
+      })
+      const data = [{ Name: `x`, A: 1, B: 2 }]
+      mount_table(
+        bind_props(
+          {
+            data,
+            columns: [
+              { id: `Name`, label: `Name` },
+              { id: `A`, label: `Model A`, label_angle: 45 },
+              { id: `B`, label: `Model B`, label_angle: 30 },
+            ],
+          },
+          state,
+        ),
+      )
+      await tick()
+      const head = (col_id: string) => doc_query(`thead th[data-col-id="${col_id}"]`)
+      expect(head(`Name`).querySelector(`.angled-label`)).toBeNull()
+      expect(head(`A`).classList.contains(`angled`)).toBe(true)
+      expect(doc_query(`th[data-col-id="A"] .angled-label`).style.rotate).toBe(`-45deg`)
+      // the row takes the taller rise: A at 45° (120 cos 45°) over B at 30° (100/2 + 20 cos 30°)
+      const rise_of = (col_id: string) =>
+        Number(/calc\((?<rise>[\d.]+)px/.exec(head(col_id).style.height)?.groups?.rise)
+      expect(rise_of(`B`)).toBeCloseTo(120 * Math.SQRT1_2, 6)
+      expect(head(`Name`).style.height).toBe(``)
+      // B's label reaches from its center (80 + 20) by 100 cos 30° past the table's 120 px
+      const overhang = () =>
+        Number(doc_query(`table`).style.marginRight.replace(`px`, ``))
+      expect(overhang()).toBeCloseTo(100 + 100 * Math.cos(Math.PI / 6) - 120, 6)
+      // swapping the equal-width A and B moves both labels but resizes nothing: A now ends the
+      // row and reaches 80 + 20 + 100 cos 45° past 120 px
+      ;[sizes.A.left, sizes.B.left] = [80, 40]
+      state.column_order = [`Name`, `B`, `A`]
+      await tick()
+      expect(overhang()).toBeCloseTo(100 + 100 * Math.SQRT1_2 - 120, 6)
+      // no label swings back past the table's left edge yet
+      expect(doc_query(`table`).style.marginLeft).toBe(``)
+      // A first and 20 px wide: its 20 px tall label leans back 20 sin 45° from its center at
+      // 10, past the left edge, which the table reserves
+      sizes.A = { left: 0, width: 20 }
+      state.column_order = [`A`, `Name`, `B`]
+      await tick()
+      expect(Number(doc_query(`table`).style.marginLeft.replace(`px`, ``))).toBeCloseTo(
+        20 * Math.SQRT1_2 - 10,
+        6,
+      )
+      sizes.A = { left: 40, width: 40 }
+      sizes.B.left = 80
+      state.column_order = [`Name`, `A`, `B`]
+      await tick()
+      expect(doc_query(`table`).style.marginLeft).toBe(``)
+      // hiding B drops its measurement: A alone reaches 40 + 20 + 100 cos 45° past 120 px
+      state.hidden_columns = [`B`]
+      await tick()
+      expect(overhang()).toBeCloseTo(60 + 100 * Math.SQRT1_2 - 120, 6)
+      expect(rise_of(`A`)).toBeCloseTo(120 * Math.SQRT1_2, 6)
+      state.hidden_columns = [`A`, `B`]
+      await tick()
+      expect(doc_query(`table`).style.marginRight).toBe(``)
+    })
+
+    it.each([0, -45, 120, Number.NaN])(`rejects label_angle %s`, (label_angle) => {
+      expect(() =>
+        mount_table({
+          data: [{ A: 1 }],
+          columns: [{ id: `A`, label: `A`, label_angle }],
+        }),
+      ).toThrow(`Column A: label_angle must be in (0, 90], got ${label_angle}`)
     })
 
     // Pinned columns stick to one edge, so any after the first clears the ones before it (by
