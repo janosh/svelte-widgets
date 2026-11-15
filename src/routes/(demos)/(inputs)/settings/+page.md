@@ -15,6 +15,8 @@ Four components for building a settings panel out of plain markup. They coordina
 
 A row opts into per-row reset and filtering by carrying `data-key`. Direct `label` and `.setting` children without `data-key` are also searchable; other section content still renders but is not indexed.
 
+`SettingsGroup` collapses by default. With `collapsible={false}` it is an always-open, unframed group headed by its title, for a few labeled control groups in a panel. Either way its controls sit in a `<fieldset>` named by the title, so `disabled` turns off the whole group.
+
 ### `SettingsSearch`
 
 Filters the rows below it as you type, hiding sections and groups that hold no match and expanding the groups that do. Clearing the query puts every group back the way the user left it. A row matches on its own text, its `data-label` and `data-description`, or on the title of any section or group above it — so typing a heading name reveals what it holds.
