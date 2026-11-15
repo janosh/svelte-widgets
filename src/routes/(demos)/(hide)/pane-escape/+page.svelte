@@ -5,6 +5,7 @@
   import DraggablePane from '#lib/DraggablePane.svelte'
   import MultiSelect from '#lib/MultiSelect.svelte'
   import Popover from '#lib/Popover.svelte'
+  import type { PopoverTriggerProps } from '#lib/types.ts'
 
   let [pane_open, popover_open] = $state([false, false])
 </script>
@@ -15,7 +16,7 @@
     {#snippet children()}
       <MultiSelect options={[`alpha`, `beta`, `gamma`]} placeholder="Pick" />
       <Popover bind:open={popover_open}>
-        {#snippet trigger(props)}
+        {#snippet trigger(props: PopoverTriggerProps)}
           <button type="button" {...props}>Details</button>
         {/snippet}
         <p>Popover body</p>

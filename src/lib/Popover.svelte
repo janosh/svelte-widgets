@@ -1,24 +1,16 @@
 <script lang="ts">
+  import type { PopoverTriggerProps } from './types'
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
   import { escape_layer, focusable } from './attachments/shared'
-  import { chain_handlers, type Placement } from './utils'
+  import { chain_handlers } from './utils'
+  import type { Placement } from './position'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
   type PopupHasPopup = Exclude<PopupRole, `alertdialog`>
-  // Attributes for the trigger to spread, so consumers keep their own markup
-  type TriggerProps = {
-    onclick?: (event: MouseEvent) => void
-    onmouseenter?: (event: MouseEvent) => void
-    onmouseleave?: (event: MouseEvent) => void
-    onfocusin?: (event: FocusEvent) => void
-    onfocusout?: (event: FocusEvent) => void
-    'aria-expanded': boolean
-    'aria-haspopup': PopupHasPopup
-    'aria-controls': string | undefined
-  }
+  type TriggerProps = PopoverTriggerProps
   type TriggerMode = `click` | `hover` | `focus`
   const unique_id = $props.id()
 
