@@ -83,10 +83,16 @@ export function create_wiggle(options: WiggleOptions = {}): {
       return () => {
         animations.get(node)?.cancel()
         animations.delete(node)
+        // nothing left mid-wiggle, so the next node must not resume a cancelled pose
+        if (animations.size === 0) frames = [REST]
       }
     },
     trigger: () => {
-      if (globalThis.matchMedia?.(`(prefers-reduced-motion: reduce)`).matches) return
+      if (
+        animations.size === 0 ||
+        globalThis.matchMedia?.(`(prefers-reduced-motion: reduce)`).matches
+      )
+        return
       // continue from the running wiggle's [previous, current] frame, or rest once it ended
       const idx = Math.round((performance.now() - started_at) / FRAME_MS)
       const from: [Pose, Pose] =

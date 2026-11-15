@@ -131,6 +131,20 @@ describe(`create_wiggle`, () => {
     expect(animate).not.toHaveBeenCalled()
   })
 
+  // a node attached after the last one detached mid-wiggle starts from rest, not the
+  // cancelled animation's pose
+  test(`a wiggle on a fresh node after every node detached starts from rest`, () => {
+    vi.useFakeTimers({ toFake: [`performance`] })
+    const shake = create_wiggle({ angle: 20 })
+    const detach = shake.attach(document.createElement(`span`))
+    shake.trigger()
+    vi.advanceTimersByTime(10 * FRAME_MS)
+    if (typeof detach === `function`) detach()
+    shake.attach(document.createElement(`span`))
+    shake.trigger()
+    expect(animate.mock.calls[1][0]).toEqual(animate.mock.calls[0][0])
+  })
+
   test(`detaching cancels the node's wiggle and stops animating it`, () => {
     const shake = create_wiggle({ angle: 20 })
     const node = document.createElement(`span`)

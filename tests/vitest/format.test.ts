@@ -98,7 +98,17 @@ test.each<[number, FormatNumOptions | undefined, string]>([
   [1.5e-7, plain, `1.5e-7`],
   [1e21, plain, `1e+21`],
 ])(`format_num(%s, %j) = %s`, (value, options, expected) => {
-  expect(format_num(value, options)).toBe(expected)
+  // pinned to en-US unless a case names its locale, so the table passes on any host
+  expect(format_num(value, { locale: `en-US`, ...options })).toBe(expected)
+})
+
+test(`format_num uses the host locale when none is given`, () => {
+  const host = (options: Intl.NumberFormatOptions) =>
+    new Intl.NumberFormat(undefined, options).format
+  expect([format_num(1234567), format_num(55.85)]).toEqual([
+    host({ useGrouping: `min2`, maximumFractionDigits: 0 })(1234567),
+    host({ useGrouping: `min2`, maximumSignificantDigits: 3 })(55.85),
+  ])
 })
 
 // formatters are cached, so options that look alike must not share one: each pair differs
@@ -117,7 +127,7 @@ test(`format_num keeps formatters for differing options apart`, () => {
     [9.995, { ...to_10, digits: 3 }, `1e+1`],
     [9.995, { ...to_10, digits: 4 }, `9.995`],
   ]
-  expect(calls.map(([value, options]) => format_num(value, options))).toEqual(
-    calls.map(([, , expected]) => expected),
-  )
+  expect(
+    calls.map(([value, options]) => format_num(value, { locale: `en-US`, ...options })),
+  ).toEqual(calls.map(([, , expected]) => expected))
 })
