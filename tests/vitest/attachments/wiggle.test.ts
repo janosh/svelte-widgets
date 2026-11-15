@@ -1,8 +1,12 @@
-import { create_wiggle, WIGGLE_DEFAULTS, wiggle_frames } from '#lib/attachments/index.ts'
+import { create_wiggle, WIGGLE_DEFAULTS, wiggle_frames } from '#lib/attachments/wiggle.ts'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MockInstance } from 'vite-plus/test'
 
 const FRAME_MS = 1000 / 60
+const to_keyframes = (frames: ReturnType<typeof wiggle_frames>) =>
+  frames.map(([angle, scale, dx, dy]) => ({
+    transform: `rotate(${angle}deg) scale(${scale}) translate(${dx}px, ${dy}px)`,
+  }))
 
 describe(`wiggle_frames`, () => {
   test.each([50, 200, 500])(
@@ -66,7 +70,10 @@ describe(`create_wiggle`, () => {
     )
     animate = vi.spyOn(HTMLElement.prototype, `animate`)
   })
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.restoreAllMocks()
+    vi.useRealTimers()
+  })
 
   test(`trigger animates every attached node with the spring keyframes`, () => {
     const options = { scale: 1.2, duration_ms: 100 }
@@ -78,11 +85,7 @@ describe(`create_wiggle`, () => {
     const frames = wiggle_frames(options)
     expect(animate.mock.contexts).toEqual(nodes)
     for (const [keyframes, timing] of animate.mock.calls) {
-      expect(keyframes).toEqual(
-        frames.map(([angle, scale, dx, dy]) => ({
-          transform: `rotate(${angle}deg) scale(${scale}) translate(${dx}px, ${dy}px)`,
-        })),
-      )
+      expect(keyframes).toEqual(to_keyframes(frames))
       expect(timing).toEqual({
         duration: (frames.length - 1) * FRAME_MS,
         easing: `linear`,
@@ -97,11 +100,10 @@ describe(`create_wiggle`, () => {
     shake.trigger()
     options.angle = 30
     shake.trigger()
-    const peaks = animate.mock.calls.map(([keyframes]) => JSON.stringify(keyframes))
-    expect(peaks[0]).not.toBe(peaks[1])
+    expect(animate.mock.calls[1][0]).toEqual(to_keyframes(wiggle_frames({ angle: 30 })))
   })
 
-  test(`a re-trigger cancels the running wiggle and continues from its pose`, () => {
+  test(`a re-trigger cancels the running wiggle and continues from its pose, or from rest once it ended`, () => {
     vi.useFakeTimers({ toFake: [`performance`] })
     const shake = create_wiggle({ angle: 20 })
     shake.attach(document.createElement(`span`))
@@ -111,10 +113,14 @@ describe(`create_wiggle`, () => {
     vi.advanceTimersByTime(10 * FRAME_MS)
     shake.trigger()
     expect(cancel).toHaveBeenCalledOnce()
-    const [keyframes] = animate.mock.calls[1] as [Keyframe[]]
-    // the second wiggle starts where the first one was (frame 10), not at rest
-    expect(keyframes[0]).toEqual((animate.mock.calls[0][0] as Keyframe[])[10])
-    vi.useRealTimers()
+    // the second wiggle continues from frame 10 with its momentum, not from rest
+    const frames = wiggle_frames({ angle: 20 })
+    const resumed = wiggle_frames({ angle: 20 }, [frames[9], frames[10]])
+    expect(animate.mock.calls[1][0]).toEqual(to_keyframes(resumed))
+    // once that wiggle has ended, the next one starts from rest again
+    vi.advanceTimersByTime(20_000)
+    shake.trigger()
+    expect(animate.mock.calls[2][0]).toEqual(animate.mock.calls[0][0])
   })
 
   test(`does nothing while the user prefers reduced motion`, () => {

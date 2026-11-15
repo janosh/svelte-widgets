@@ -13,6 +13,7 @@ describe(`InfoCard`, () => {
     [{ label: `Magmom`, value: [1.2, -1.2, 0], unit: `μB` }, `1.200, -1.200, 0.000 μB`],
     [{ label: `Label`, value: `Fe<sub>2</sub>O<sub>3</sub>` }, `Fe2O3`],
     [{ label: `Band gap`, value: 1.5, unit: `eV` }, `1.500 eV`],
+    [{ label: `Charge`, value: 0 }, `0.000`], // zero is a value, not a missing one
     [{ label: `F<sub>max</sub>`, value: 1.5, unit: `eV/Å` }, `1.500 eV/Å`],
   ])(`renders %j as %p`, (item, expected) => {
     render(InfoCard, { items: [item], format: fixed(3) })
@@ -27,15 +28,14 @@ describe(`InfoCard`, () => {
     expect(value_text()).toBe(`1,230,000`) // 3 significant digits, grouped
   })
 
-  test(`hides null/undefined values and falsy conditions, falls back when nothing remains`, () => {
+  test(`hides null/undefined values, falls back when nothing remains`, () => {
     const unmount_card = render(InfoCard, {
       title: `E<sub>hull</sub>`,
       items: [
-        { label: `Present`, value: `yes`, condition: 1, tooltip: `tip` },
+        { label: `Present`, value: `yes`, tooltip: `tip` },
         { label: `Null`, value: null },
         { label: `Undef`, value: undefined },
-        { label: `Off`, value: `no`, condition: false },
-        { label: `Zero`, value: `no`, condition: 0 },
+        { label: `Unset` },
       ],
       fallback: `No data`,
     })

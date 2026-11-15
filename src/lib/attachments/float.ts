@@ -96,14 +96,13 @@ export const float =
         node.style.width = width
       }
       const { width, height } = node.getBoundingClientRect()
-      const margin = getComputedStyle(node)
-      const box = {
-        width: width + css_px(margin.marginLeft) + css_px(margin.marginRight),
-        height: height + css_px(margin.marginTop) + css_px(margin.marginBottom),
-      }
+      const { marginTop, marginRight, marginBottom, marginLeft } = getComputedStyle(node)
       const { top, left, placement } = compute_position(
         anchor_rect,
-        box,
+        {
+          width: width + css_px(marginLeft) + css_px(marginRight),
+          height: height + css_px(marginTop) + css_px(marginBottom),
+        },
         position_options,
       )
       // compute_position is in viewport coordinates, which `absolute` offsets from the

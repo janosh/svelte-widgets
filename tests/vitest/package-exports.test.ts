@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { readFileSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { exports as pkg_exports } from '#root/package.json'
 import { expect, test } from 'vite-plus/test'
@@ -24,7 +24,10 @@ const IMPORT_RE = /(?:from|import)\s*\(?\s*['"](?<spec>\.{1,2}\/[^'"]+)['"]/gu
 const resolve_source = (from_dir: string, spec: string): string => {
   const base = resolve(from_dir, spec.replace(/\.js$/u, ``))
   const candidates = [base, `${base}.ts`, `${base}.svelte.ts`, `${base}/index.ts`]
-  const found = candidates.find((path) => existsSync(path) && !path.endsWith(`/`))
+  // a directory import names its index.ts, never the directory itself
+  const found = candidates.find((path) =>
+    statSync(path, { throwIfNoEntry: false })?.isFile(),
+  )
   if (!found) throw new Error(`Unresolved import ${spec} from ${from_dir}`)
   return found
 }

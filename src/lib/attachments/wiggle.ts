@@ -73,20 +73,13 @@ export function create_wiggle(options: WiggleOptions = {}): {
   attach: Attachment<HTMLElement>
   trigger: () => void
 } {
-  const animations = new Map<HTMLElement, Animation | null>()
+  const animations = new Map<HTMLElement, Animation | undefined>()
   let frames: Pose[] = [REST]
   let started_at = 0
 
-  // where the running wiggle is now, as [previous, current] frame
-  const current_pose = (): [Pose, Pose] => {
-    const idx = Math.round((performance.now() - started_at) / FRAME_MS)
-    if (idx >= frames.length - 1) return [REST, REST]
-    return [frames[Math.max(idx - 1, 0)], frames[idx]]
-  }
-
   return {
     attach: (node) => {
-      animations.set(node, null)
+      animations.set(node, undefined)
       return () => {
         animations.get(node)?.cancel()
         animations.delete(node)
@@ -94,13 +87,19 @@ export function create_wiggle(options: WiggleOptions = {}): {
     },
     trigger: () => {
       if (globalThis.matchMedia?.(`(prefers-reduced-motion: reduce)`).matches) return
-      frames = wiggle_frames(options, current_pose())
+      // continue from the running wiggle's [previous, current] frame, or rest once it ended
+      const idx = Math.round((performance.now() - started_at) / FRAME_MS)
+      const from: [Pose, Pose] =
+        idx < frames.length - 1
+          ? [frames[Math.max(idx - 1, 0)], frames[idx]]
+          : [REST, REST]
+      frames = wiggle_frames(options, from)
       started_at = performance.now()
       const keyframes = frames.map((pose) => ({ transform: to_transform(pose) }))
+      const timing = { duration: (frames.length - 1) * FRAME_MS, easing: `linear` }
       for (const node of animations.keys()) {
         animations.get(node)?.cancel()
-        const duration = (frames.length - 1) * FRAME_MS
-        animations.set(node, node.animate(keyframes, { duration, easing: `linear` }))
+        animations.set(node, node.animate(keyframes, timing))
       }
     },
   }

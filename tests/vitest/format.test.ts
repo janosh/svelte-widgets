@@ -42,7 +42,7 @@ test.each([
 })
 
 const sci: FormatNumOptions = { sci_range: [1e-3, 1e6] }
-// ColumnFilter's placeholders: String()-like, typeable into a number input
+// String()-like, typeable into a number input
 const plain: FormatNumOptions = {
   digits: 3,
   sci_range: [1e-6, 1e21],
@@ -56,8 +56,8 @@ test.each<[number, FormatNumOptions | undefined, string]>([
   [NaN, undefined, `NaN`],
   [Infinity, undefined, `∞`],
   [-Infinity, undefined, `-∞`],
-  [NaN, { non_finite: `n/a` }, `n/a`],
-  [-Infinity, { ...sci, non_finite: `n/a` }, `n/a`],
+  [NaN, sci, `NaN`], // non-finite values never go scientific
+  [-Infinity, sci, `-∞`],
   // DataTable's default: integers in full, 3 significant digits, grouped from 5 digits
   [1234567, undefined, `1,234,567`],
   [1766, undefined, `1766`], // years and IDs stay ungrouped below 5 digits
@@ -71,6 +71,7 @@ test.each<[number, FormatNumOptions | undefined, string]>([
   [-12345.67, undefined, `-12,300`],
   // grouping and locale
   [1766, { grouping: true }, `1,766`],
+  [1766, { grouping: true, locale: `es` }, `1.766`], // `true` always groups, past es's min2
   [12345, { grouping: false }, `12345`],
   [12345.678, { locale: `de-DE` }, `12.300`],
   // scientific outside sci_range, on the rounded value, mantissa unpadded
@@ -79,7 +80,17 @@ test.each<[number, FormatNumOptions | undefined, string]>([
   [1234567, sci, `1.23e+6`],
   [1e-4, sci, `1e-4`],
   [-1.5e-7, sci, `-1.5e-7`],
+  // notation is decided in en-US even for comma-decimal locales, and the scientific formatter
+  // is cached per locale (the plain en-US call warms the cache first)
+  [0.00012, { digits: 2, sci_range: [1e-3, 1e6], locale: `de-DE` }, `1,2e-4`], // unique digits: a fresh rounding cache key
+  [1.5e-7, sci, `1.5e-7`],
+  [1.5e-7, { ...sci, locale: `de-DE` }, `1,5e-7`],
+  // RTL bidi marks around Intl's exponent stay out of the mantissa
+  [-1.23e-5, { ...sci, locale: `ar-EG` }, `\u061C-١٫٢٣e-٥`],
   [0.001, sci, `0.001`],
+  // notation follows the digits Intl shows, not toPrecision's binary rounding (9.99, 0.000999)
+  [9.995, { sci_range: [1e-3, 10], locale: `en-US` }, `1e+1`],
+  [0.0009995, sci, `0.001`],
   // String()-like plain notation, integers in full
   [123456, plain, `123456`],
   [123456.7, plain, `123000`],
@@ -88,4 +99,25 @@ test.each<[number, FormatNumOptions | undefined, string]>([
   [1e21, plain, `1e+21`],
 ])(`format_num(%s, %j) = %s`, (value, options, expected) => {
   expect(format_num(value, options)).toBe(expected)
+})
+
+// formatters are cached, so options that look alike must not share one: each pair differs
+// in one option, run in this order
+test(`format_num keeps formatters for differing options apart`, () => {
+  const to_10: FormatNumOptions = { sci_range: [1e-3, 10] }
+  const calls: [number, FormatNumOptions, string][] = [
+    [1234567, { ...sci, grouping: true }, `1.23e+6`],
+    [1234567, { grouping: true }, `1,234,567`],
+    [1234567, { ...sci, digits: 2 }, `1.2e+6`],
+    [1234567, { ...sci, digits: 4 }, `1.235e+6`],
+    [12.345, { digits: 2 }, `12`],
+    [12.345, { digits: 4 }, `12.35`],
+    [12345, { digits: 2 }, `12,345`],
+    [12345, { grouping: false }, `12345`],
+    [9.995, { ...to_10, digits: 3 }, `1e+1`],
+    [9.995, { ...to_10, digits: 4 }, `9.995`],
+  ]
+  expect(calls.map(([value, options]) => format_num(value, options))).toEqual(
+    calls.map(([, , expected]) => expected),
+  )
 })

@@ -232,7 +232,6 @@ export interface MultiSelectSnippets<
 }
 
 export interface PortalParams {
-  target_node?: HTMLElement | null
   // portal the dropdown to document.body; honored at runtime, so toggling portals or
   // un-portals the open dropdown in place
   active?: boolean
@@ -511,16 +510,23 @@ export type ShortcutEntry = {
   keys_label?: string
 }
 
-export type InfoTagVariant = `default` | `success` | `warning` | `error` | `info`
-export type InfoTagSize = `sm` | `md` | `lg`
-
-// One InfoCard row. `label` and string values are trusted HTML. A row without a value or with
-// a present-but-falsy `condition` is hidden. `format` overrides the card's number formatter.
+// One InfoCard row. `label` and string values are trusted HTML. A row without a value is
+// hidden. `format` overrides the card's number formatter.
 export type InfoCardItem = {
   label: string
   value?: string | number | readonly number[] | null
   unit?: string
   format?: (num: number) => string
-  condition?: boolean | number | null
   tooltip?: string
+}
+
+// One StatGrid tile
+export interface StatItem {
+  label: string
+  value: string | number
+  unit?: string
+  delta?: number
+  // Direction alone does not imply improvement (e.g. increasing cost or latency).
+  delta_tone?: `positive` | `negative`
+  hint?: string
 }

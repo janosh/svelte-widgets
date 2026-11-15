@@ -1,26 +1,14 @@
 <script lang="ts" module>
-  import { format_num } from '../format'
-
-  // 3 significant digits (integers too) in String()'s notation (scientific below 1e-6 and from 1e21), no
-  // grouping or locale separators, so a placeholder types into the number input as shown
-  const plain = (value: number): string =>
-    Number.isFinite(value)
-      ? format_num(Number(value.toPrecision(3)), {
-          digits: 3,
-          sci_range: [1e-6, 1e21],
-          grouping: false,
-          locale: `en-US`,
-        })
-      : String(value)
-
   // 3 significant digits, stepped one unit outwards (min down, max up) when rounding to
   // nearest would exclude the value, so the shown range still includes every value. Compares
   // final doubles, so values a few ULPs past a short decimal (0.1 * 3) round the right way.
+  // String()'s notation (no grouping or locale separators, scientific below 1e-6 and from
+  // 1e21), so a placeholder types into the number input as shown.
   const inclusive_bound = (num: number, bound: `min` | `max`): string => {
-    const short = plain(num)
-    if (bound === `min` ? Number(short) <= num : Number(short) >= num) return short
+    const short = Number(num.toPrecision(3))
+    if (bound === `min` ? short <= num : short >= num) return String(short)
     const step = 10 ** (Math.floor(Math.log10(Math.abs(num))) - 2)
-    return plain(Number(short) + (bound === `min` ? -step : step))
+    return String(Number((bound === `min` ? short - step : short + step).toPrecision(3)))
   }
 </script>
 

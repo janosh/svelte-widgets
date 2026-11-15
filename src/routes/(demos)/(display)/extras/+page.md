@@ -218,7 +218,7 @@ Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg
 
 ### `InfoTag`
 
-A label/value pill for a property: `label` reads as a caption, `value` is emphasized in the `variant`'s color (`default`, `success`, `warning`, `error` or `info`). Clicking copies the value's plain text (or `copy_value`) and flashes a checkmark; an `onclick` replaces the copy. `title` opens a hover popover, `on_remove` adds a remove button, and `size` is `sm`, `md` or `lg`. `label`, `value` and `title` render as trusted HTML for sub- and superscripts, so sanitize untrusted input before passing it. For category or filter chips, use [`Tag`](#tag).
+A [`Tag`](#tag) for a property: `label` reads as a caption and `value` is emphasized. Clicking copies the value's plain text (or `copy_value`) and flashes a checkmark; an `onclick` replaces the copy. `title` opens a hover popover. Every other prop goes to `Tag`, so `color`, `variant`, `disabled` and `on_remove` work as there. `label`, `value` and `title` render as trusted HTML for sub- and superscripts, so sanitize untrusted input before passing it.
 
 ```svelte example id="info-tag-demo"
 <script lang="ts">
@@ -229,10 +229,13 @@ A label/value pill for a property: `label` reads as a caption, `value` is emphas
 
 <div style="display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center">
   <InfoTag label="E<sub>g</sub>:" value="1.12 eV" title="<b>Band gap</b> from PBE" />
-  <InfoTag label="E<sub>hull</sub>:" value="0.02 eV" variant="warning" />
-  <InfoTag label="Stable:" value="yes" variant="success" size="lg" />
-  <InfoTag label="Error:" value="none" variant="error" size="sm" />
-  <InfoTag label="Area:" value="42 m<sup>2</sup>" variant="info" />
+  <InfoTag
+    label="E<sub>hull</sub>:"
+    value="0.02 eV"
+    color="var(--warning-color, orange)"
+  />
+  <InfoTag label="Stable:" value="yes" color="mediumseagreen" variant="solid" />
+  <InfoTag label="Area:" value="42 m<sup>2</sup>" variant="outline" />
   <InfoTag label="Locked:" value="42" disabled />
 </div>
 
@@ -251,11 +254,9 @@ A label/value pill for a property: `label` reads as a caption, `value` is emphas
 </div>
 ```
 
-Recolor a tag with `--info-tag-color`; the variants read `--accent`, `--success-color`, `--warning-color`, `--error-color` and `--info-color`.
-
 ### `InfoCard`
 
-A grid of label/value rows under an optional `title`, for property sheets and metadata. Numbers and number arrays go through `format` (default `format_num` from `svelte-widgets/format`); a row's own `format` wins. `unit` trails the value, `tooltip` titles it, and rows with no `value` or a falsy `condition` are hidden, showing `fallback` when none remain. Labels, string values and `title` render as trusted HTML.
+A grid of label/value rows under an optional `title`, for property sheets and metadata. Numbers and number arrays go through `format` (default `format_num` from `svelte-widgets/format`); a row's own `format` wins. `unit` trails the value, `tooltip` titles it, and rows with no `value` are hidden, showing `fallback` when none remain. Labels, string values and `title` render as trusted HTML.
 
 ```svelte example id="info-card-demo"
 <script lang="ts">
@@ -273,7 +274,6 @@ A grid of label/value rows under an optional `title`, for property sheets and me
     },
     { label: `Space group`, value: `Fd-3m`, tooltip: `No. 227` },
     { label: `Magnetic moment`, value: null }, // hidden: no value
-    { label: `Defects`, value: 0, condition: false }, // hidden: falsy condition
   ]
 </script>
 
@@ -281,7 +281,7 @@ A grid of label/value rows under an optional `title`, for property sheets and me
 <InfoCard items={[]} fallback="No properties computed yet" />
 ```
 
-Style it with `--info-card-bg`, `--info-card-padding`, `--info-card-gap`, `--info-card-value-bg` and friends; the full list is on the [theming page](theming).
+Set its box (background, padding, gap, width) with `style` or `class`, its column width with `--info-card-min-col-width` and the value chips with `--info-card-value-bg`.
 
 ### `ShortcutsList`
 

@@ -14,7 +14,7 @@
     format: default_format = (num: number) => format_num(num),
     ...rest
   }: Omit<HTMLAttributes<HTMLElement>, `title`> & {
-    // Rows to show as label/value pairs. Rows without a value or with a falsy `condition` are hidden.
+    // Rows to show as label/value pairs. Rows without a value are hidden.
     items?: readonly InfoCardItem[]
     // Heading above the rows (trusted HTML). Omitted when empty.
     title?: string
@@ -24,12 +24,8 @@
     format?: (num: number) => string
   } = $props()
 
-  // A present-but-falsy condition or a missing value hides an item; the fallback shows if none remain
-  const shown = $derived(
-    items.filter(
-      (item) => (!(`condition` in item) || item.condition) && item.value != null,
-    ),
-  )
+  // the fallback shows when no row has a value
+  const shown = $derived(items.filter((item) => item.value != null))
   const format_value = (
     value: string | number | readonly number[],
     format: (num: number) => string,
@@ -59,23 +55,20 @@
 </section>
 
 <style>
-  .info-card {
+  /* zero specificity, so a caller's class sets the box */
+  :where(.info-card) {
     display: grid;
     grid-template-columns: repeat(
       auto-fit,
       minmax(var(--info-card-min-col-width, 250px), 1fr)
     );
+    /* box properties take a plain style or class; only inner elements read custom properties */
     box-sizing: border-box;
-    border-radius: var(--info-card-radius, 3pt);
-    padding: var(--info-card-padding, 10pt 12pt);
-    margin: var(--info-card-margin, 1em 0);
-    gap: var(--info-card-gap, 10pt 5%);
-    background-color: var(
-      --info-card-bg,
-      light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.1))
-    );
-    font-size: var(--info-card-font-size);
-    width: var(--info-card-width);
+    border-radius: 3pt;
+    padding: 10pt 12pt;
+    margin: 1em 0;
+    gap: 10pt 5%;
+    background: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.1));
     h2 {
       grid-column: 1 / -1;
       margin: 0;
@@ -90,7 +83,7 @@
       justify-content: space-between;
       align-items: center;
       white-space: nowrap;
-      gap: var(--info-card-value-gap);
+      gap: 1em;
     }
     .label {
       text-overflow: ellipsis;
@@ -98,13 +91,12 @@
     }
     strong {
       font-weight: 600;
-      margin: var(--info-card-value-margin);
-      background-color: var(
+      background: var(
         --info-card-value-bg,
         light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.1))
       );
-      padding: var(--info-card-value-padding, 0 4pt);
-      border-radius: var(--info-card-value-radius, 3pt);
+      padding: 0 4pt;
+      border-radius: 3pt;
       small {
         font-weight: normal;
       }

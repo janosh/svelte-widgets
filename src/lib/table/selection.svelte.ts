@@ -29,16 +29,13 @@ const NO_RECTS: CellRect[] = []
 // reading them, to reset it on every change, or call clear(). A forgotten clear never throws
 // here: `to_tsv` skips cells whose `cell_text` returns undefined (out of range).
 export class CellSelection {
+  // replaced, never mutated in place, so its rectangles stay plain objects. Writable derived:
+  // empties whenever what `layout` reads changes
+  rects = $derived.by((): CellRect[] => (this.#layout?.(), NO_RECTS))
   readonly #layout: (() => unknown) | undefined
   constructor(layout?: () => unknown) {
     this.#layout = layout
   }
-  // replaced, never mutated in place, so its rectangles stay plain objects. Writable derived:
-  // empties whenever what `layout` reads changes
-  rects = $derived.by((): CellRect[] => {
-    this.#layout?.()
-    return NO_RECTS
-  })
   dragging = $state(false)
   // true once a drag crossed into another cell, so the click on release can be swallowed
   #drag_moved = false

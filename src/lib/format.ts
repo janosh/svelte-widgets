@@ -16,69 +16,77 @@ export const format_bytes = (bytes?: number): string => {
 }
 
 export interface FormatNumOptions {
-  // significant digits non-integers round to (and integers, with round_integers)
+  // significant digits non-integers round to; integers print in full in plain notation
   digits?: number
   // [low, high]: scientific notation when the rounded magnitude is >= high or below low
-  // (zero never is); omit for plain notation throughout
+  // (zero and non-finite values never are); omit for plain notation throughout
   sci_range?: readonly [low: number, high: number]
   // digit grouping: `min2` groups from 5 digits on, so years and IDs read 1766, not 1,766
   grouping?: boolean | `min2`
   // Intl locale; the host's by default
   locale?: string
-  // text for NaN and ±Infinity; Intl's own (`NaN`, `∞`, `-∞`) by default
-  non_finite?: string
 }
 
-// Intl.NumberFormat construction costs far more than formatting, and tables call this per cell
+// Intl.NumberFormat construction costs far more than formatting, and tables call this per
+// cell, so formatters are cached under a string key of the options that shape them
 const formatters = new Map<string, Intl.NumberFormat>()
-const formatter = (
+const cached_format = (
+  key: string,
   locale: string | undefined,
   options: Intl.NumberFormatOptions,
 ): Intl.NumberFormat => {
-  const key = `${locale}|${JSON.stringify(options)}`
-  let cached = formatters.get(key)
-  if (!cached) {
-    cached = new Intl.NumberFormat(locale, options)
-    formatters.set(key, cached)
-  }
-  return cached
+  let format = formatters.get(key)
+  if (!format) formatters.set(key, (format = new Intl.NumberFormat(locale, options)))
+  return format
 }
 
 // Number formatting for display: `digits` significant digits (integers in full), optional
 // scientific notation outside `sci_range` (as `1.23e+6`, `4.56e-4`, mantissa unpadded),
-// Intl digit grouping and locale. -0 prints as 0.
+// Intl digit grouping and locale. -0 prints as 0, NaN and ±Infinity as Intl's `NaN`, `∞`, `-∞`.
 export const format_num = (value: number, options: FormatNumOptions = {}): string => {
-  const { digits = 3, sci_range, grouping = `min2`, locale, non_finite } = options
-  if (!Number.isFinite(value) && non_finite !== undefined) return non_finite
+  const { digits = 3, sci_range, grouping = `min2`, locale } = options
   const keep_integer = Number.isInteger(value)
-  // Pick notation on the rounded value: 999999.9 at 4 digits is 1.000e6, not ungrouped 1000000
-  const rounded = keep_integer ? value : Number(value.toPrecision(digits))
-  if (rounded === 0) value = 0 // Intl would print -0 as `-0`
-  const magnitude = Math.abs(rounded)
-  if (
-    sci_range &&
+  if (value === 0) value = 0 // Intl would print -0 as `-0`
+  // Notation is picked on Intl's own rounding (half away from zero on the shortest decimal),
+  // so it matches the digits shown: 9.995 at 3 digits shows 10, not toPrecision's 9.99
+  const magnitude =
+    sci_range && !keep_integer
+      ? Math.abs(
+          Number(
+            cached_format(`round|${digits}`, `en-US`, {
+              useGrouping: false,
+              maximumSignificantDigits: digits,
+            }).format(value),
+          ),
+        )
+      : Math.abs(value)
+  // NaN, and ±Infinity (Intl's `∞` parses to NaN), fail both comparisons, so stay plain
+  const sci =
+    sci_range !== undefined &&
     magnitude > 0 &&
-    Number.isFinite(value) &&
     (magnitude >= sci_range[1] || magnitude < sci_range[0])
-  ) {
-    const parts = formatter(locale, {
-      notation: `scientific`,
-      maximumSignificantDigits: digits,
-    }).formatToParts(value)
-    let [mantissa, exponent] = [``, `+`]
-    for (const { type, value: text } of parts) {
-      if (type === `exponentMinusSign`) exponent = `-`
-      else if (type === `exponentInteger`) exponent += text
-      else if (type !== `exponentSeparator`) mantissa += text
-    }
-    return `${mantissa}e${exponent}`
+  if (!sci) {
+    return cached_format(
+      `${locale}|${grouping}|${keep_integer ? `int` : digits}`,
+      locale,
+      keep_integer
+        ? { useGrouping: grouping, maximumFractionDigits: 0 }
+        : { useGrouping: grouping, maximumSignificantDigits: digits },
+    ).format(value)
   }
-  return formatter(locale, {
-    useGrouping: grouping === true ? `always` : grouping,
-    ...(keep_integer
-      ? { maximumFractionDigits: 0 }
-      : { maximumSignificantDigits: digits }),
-  }).format(value)
+  const parts = cached_format(`${locale}|sci|${digits}`, locale, {
+    notation: `scientific`,
+    maximumSignificantDigits: digits,
+  }).formatToParts(value)
+  let [mantissa, exponent, in_exponent] = [``, `+`, false]
+  for (const { type, value: text } of parts) {
+    if (type === `exponentSeparator`) in_exponent = true
+    else if (type === `exponentMinusSign`) exponent = `-`
+    else if (type === `exponentInteger`) exponent += text
+    // RTL locales (ar-EG) wrap the exponent in bidi marks, which belong to Intl's `E`
+    else if (!in_exponent) mantissa += text
+  }
+  return `${mantissa}e${exponent}`
 }
 
 // === CSV ===
@@ -110,36 +118,3 @@ export function rows_to_csv(
     ...rows.map((row) => csv_line(headers.map((key) => row[key]))),
   ].join(`\n`)
 }
-
-// === Statistics ===
-
-export interface StatItem {
-  label: string
-  value: string | number
-  unit?: string
-  delta?: number
-  // Direction alone does not imply improvement (e.g. increasing cost or latency).
-  delta_tone?: `positive` | `negative`
-  hint?: string
-}
-
-// StatGrid's number format, for tiles and changes: 4 significant digits (integers in full),
-// scientific `1.00e+6` from 1e6 and below 1e-3, en-US grouping, `n/a` for NaN and ±Infinity
-export const STAT_NUM_FORMAT: FormatNumOptions = {
-  digits: 4,
-  sci_range: [1e-3, 1e6],
-  grouping: true,
-  locale: `en-US`,
-  non_finite: `n/a`,
-}
-
-// Signed change with a direction glyph; the glyph carries the sign, never color alone.
-export const format_stat_delta = (delta: number): string =>
-  !Number.isFinite(delta)
-    ? `n/a`
-    : `${delta > 0 ? `▲` : delta < 0 ? `▼` : `▸`} ${format_num(Math.abs(delta), STAT_NUM_FORMAT)}`
-
-export const stat_delta_label = (delta: number): string =>
-  !Number.isFinite(delta)
-    ? `change unavailable`
-    : `change ${delta > 0 ? `up` : delta < 0 ? `down` : `flat`} ${format_num(Math.abs(delta), STAT_NUM_FORMAT)}`

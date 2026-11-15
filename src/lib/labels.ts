@@ -168,8 +168,8 @@ export const FULLSCREEN_BUTTON_LABELS = {
 }
 export type FullscreenButtonLabels = typeof FULLSCREEN_BUTTON_LABELS
 
+// InfoTag also takes TAG_LABELS, which it hands to Tag
 export const INFO_TAG_LABELS = {
-  remove: `Remove`, // aria-label on the remove button
   details: `Tag details`, // aria-label naming the hover popover shown for a `title`
 }
 export type InfoTagLabels = typeof INFO_TAG_LABELS

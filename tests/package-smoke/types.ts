@@ -35,7 +35,7 @@ import { theme } from 'svelte-widgets/theme'
 import { get_label } from 'svelte-widgets/utils'
 import type { PositionOptions, PositionResult } from 'svelte-widgets/position'
 import type { Hotkey } from 'svelte-widgets/shortcuts'
-import { rows_to_csv, format_bytes, format_stat_delta } from 'svelte-widgets/format'
+import { rows_to_csv, format_bytes, format_num } from 'svelte-widgets/format'
 import { url_with_params, valid_query_param } from 'svelte-widgets/browser'
 import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/canvas'
 import {
@@ -258,7 +258,7 @@ export const typed_content = async () => {
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])
 export const bytes = format_bytes(1024)
-export const delta = format_stat_delta(-2)
+export const formatted: string = format_num(1234.5, { digits: 4, sci_range: [1e-3, 1e6] })
 export const relative_url = url_with_params(
   [['page', '2']],
   new URL('https://example.com/'),

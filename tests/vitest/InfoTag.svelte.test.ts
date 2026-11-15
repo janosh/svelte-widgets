@@ -10,9 +10,10 @@ beforeEach(() => {
 })
 
 describe(`InfoTag`, () => {
-  const mount_tag = (props: ComponentProps<typeof InfoTag>): HTMLSpanElement => {
+  // the clickable part: Tag's content element, a <button> when it has an action
+  const mount_tag = (props: ComponentProps<typeof InfoTag>): HTMLElement => {
     render(InfoTag, props)
-    return doc_query(`.info-tag`)
+    return doc_query(`.tag.info-tag > .content`)
   }
 
   test(`renders trusted HTML labels and hover details while retaining click actions`, async () => {
@@ -23,7 +24,7 @@ describe(`InfoTag`, () => {
       title: `<b>Energy</b>`,
       onclick,
     })
-    expect(tag.getAttribute(`role`)).toBe(`button`)
+    expect(tag.tagName).toBe(`BUTTON`)
     expect(tag.querySelector(`sub`)?.textContent).toBe(`hull`)
     expect(doc_query(`em`).textContent).toBe(`42`)
     tag.dispatchEvent(new MouseEvent(`mouseenter`))
@@ -37,30 +38,26 @@ describe(`InfoTag`, () => {
     expect(onclick).toHaveBeenCalledOnce()
   })
 
-  // variant, size and extra attributes pass straight through; disabled leaves the tab order
-  // and blocks click plus Enter/Space activation
+  // Tag props pass straight through; disabled disables the native button, blocking clicks
   test.each([
-    [`defaults`, {}, [`default`, `md`]],
+    [`defaults`, {}, [`soft`]],
     [
-      `variant, size and spread attrs`,
-      { variant: `error`, size: `lg`, style: `color: red` },
-      [`error`, `lg`],
+      `Tag props and spread attrs`,
+      { variant: `solid`, color: `red`, class: `extra`, style: `margin: 3px` },
+      [`solid`, `extra`],
     ],
-    [`disabled`, { disabled: true }, [`default`, `md`]],
+    [`disabled`, { disabled: true }, [`soft`, `disabled`]],
   ] as const)(`%s`, (_name, props, classes) => {
     const onclick = vi.fn()
     const tag = mount_tag({ label: `Test`, value: 1, onclick, ...props })
-    const disabled = `disabled` in props
-    for (const cls of classes) expect(tag.classList.contains(cls)).toBe(true)
-    expect(tag.classList.contains(`disabled`)).toBe(disabled)
-    expect(tag.getAttribute(`tabindex`)).toBe(disabled ? `-1` : `0`)
-    expect(tag.getAttribute(`aria-disabled`)).toBe(String(disabled))
-    expect(tag.style.color).toBe(`style` in props ? `red` : ``)
+    const pill = doc_query(`.tag.info-tag`)
+    for (const cls of classes) expect(pill.classList.contains(cls)).toBe(true)
+    expect(pill.style.margin).toBe(`style` in props ? `3px` : ``)
+    expect(pill.style.getPropertyValue(`--tag-color`)).toBe(`color` in props ? `red` : ``)
+    expect((tag as HTMLButtonElement).disabled).toBe(`disabled` in props)
     tag.click()
-    for (const key of [`Enter`, ` `])
-      tag.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
     flushSync()
-    expect(onclick).toHaveBeenCalledTimes(disabled ? 0 : 3)
+    expect(onclick).toHaveBeenCalledTimes(`disabled` in props ? 0 : 1)
   })
 
   // a tag is a copy button only when it has something to copy
@@ -88,13 +85,49 @@ describe(`InfoTag`, () => {
     ({ value, copy_value, copied, text = String(value ?? ``) }) => {
       const tag = mount_tag({ label: `ID:`, value, copy_value })
       expect(doc_query(`em`).textContent).toBe(text)
-      expect(tag.getAttribute(`role`)).toBe(copied ? `button` : null)
-      expect(tag.getAttribute(`tabindex`)).toBe(copied ? `0` : null)
+      expect(tag.tagName).toBe(copied ? `BUTTON` : `SPAN`)
       tag.click()
       flushSync()
       expect(write_text.mock.calls).toEqual(copied ? [[copied]] : [])
     },
   )
+
+  // a title-only tag has no button, so it must take focus itself (as a role=button, which makes
+  // its aria-expanded valid) to open its popover
+  test.each([
+    [{ title: `<b>Details</b>` }, `SPAN`, `0`, `button`],
+    [{ title: `<b>Details</b>`, copy_value: `id` }, `BUTTON`, null, null],
+    [{}, `SPAN`, null, null],
+  ])(
+    `props=%j renders a %s with tabindex %j, role %j`,
+    async (props, tag_name, tabindex, role) => {
+      const tag = mount_tag({ label: `Note`, value: undefined, ...props })
+      expect([
+        tag.tagName,
+        tag.getAttribute(`tabindex`),
+        tag.getAttribute(`role`),
+      ]).toEqual([tag_name, tabindex, role])
+      if (!(`title` in props)) return
+      tag.dispatchEvent(new FocusEvent(`focusin`, { bubbles: true }))
+      await vi.waitFor(() =>
+        expect(document.querySelector(`.popover b`)?.textContent).toBe(`Details`),
+      )
+    },
+  )
+
+  // copy and remove are sibling native buttons inside a non-interactive pill
+  test(`copy and remove are sibling buttons, not nested in a role=button`, () => {
+    const copy_button = mount_tag({ label: `ID:`, value: `abc`, on_remove: vi.fn() })
+    const pill = doc_query(`.tag.info-tag`)
+    const remove = doc_query(`.tag.info-tag > button.remove`)
+    expect([
+      copy_button.tagName,
+      copy_button.parentElement,
+      remove.parentElement,
+    ]).toEqual([`BUTTON`, pill, pill])
+    expect(copy_button.contains(remove)).toBe(false)
+    expect(document.querySelector(`[role="button"]`)).toBeNull()
+  })
 
   test(`shows a checkmark after copying and removes it after 1s`, async () => {
     vi.useFakeTimers()
@@ -126,19 +159,20 @@ describe(`InfoTag`, () => {
   test(`custom onclick overrides copy`, () => {
     const onclick = vi.fn()
     const tag = mount_tag({ label: `Test`, value: undefined, copy_value: `id`, onclick })
-    expect(tag.getAttribute(`role`)).toBe(`button`)
+    expect(tag.tagName).toBe(`BUTTON`)
     tag.click()
     flushSync()
     expect(onclick).toHaveBeenCalledOnce()
     expect(write_text).not.toHaveBeenCalled()
   })
 
+  // the remove button is Tag's, a sibling of the clickable content rather than nested in it
   test.each([
     { disabled: false, callback: true, expected: true },
-    { disabled: true, callback: true, expected: false },
+    { disabled: true, callback: true, expected: true },
     { disabled: false, callback: false, expected: false },
   ])(
-    `remove button visible=$expected when disabled=$disabled, callback=$callback`,
+    `remove button present=$expected when disabled=$disabled, callback=$callback`,
     ({ disabled, callback, expected }) => {
       const onclick = vi.fn()
       const on_remove = vi.fn()
@@ -155,12 +189,11 @@ describe(`InfoTag`, () => {
       )
       expect(Boolean(remove)).toBe(expected)
       if (!remove) return
-      for (const key of [`Enter`, ` `])
-        remove.dispatchEvent(new KeyboardEvent(`keydown`, { key, bubbles: true }))
-      expect(onclick).not.toHaveBeenCalled()
+      expect(remove.disabled).toBe(disabled)
+      expect(remove.closest(`.content`)).toBeNull()
       remove.click()
       flushSync()
-      expect(on_remove).toHaveBeenCalledExactlyOnceWith()
+      expect(on_remove).toHaveBeenCalledTimes(disabled ? 0 : 1)
       expect(onclick).not.toHaveBeenCalled()
     },
   )

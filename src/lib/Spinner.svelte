@@ -51,13 +51,13 @@
     margin: var(--spinner-margin, 0 3pt);
   }
   .circle {
-    --color: var(--spinner-color, cornflowerblue);
     flex-shrink: 0;
     box-sizing: border-box;
     width: var(--spinner-size, 1em);
     height: var(--spinner-size, 1em);
-    border: var(--spinner-border-width, calc(var(--spinner-size, 1em) / 5)) solid;
-    border-color: var(--color) transparent var(--color) var(--color);
+    border: var(--spinner-border-width, calc(var(--spinner-size, 1em) / 5)) solid
+      var(--spinner-color, cornflowerblue);
+    border-right-color: transparent;
     border-radius: 50%;
     animation: var(--spinner-duration, 1.5s) linear infinite spin;
   }

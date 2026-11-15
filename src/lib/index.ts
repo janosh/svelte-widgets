@@ -80,7 +80,7 @@ export { default as StatusMessage } from './StatusMessage.svelte'
 export { default as Spinner } from './Spinner.svelte'
 export { default as CodeBlock } from './CodeBlock.svelte'
 export { default as StatGrid } from './StatGrid.svelte'
-export type { StatItem } from './format'
+
 export { default as ColumnFilter } from './table/ColumnFilter.svelte'
 export { default as ColumnPicker } from './table/ColumnPicker.svelte'
 export type { ColumnFilterValue, TableColumn } from './table/types'

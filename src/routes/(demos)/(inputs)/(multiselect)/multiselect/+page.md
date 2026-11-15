@@ -292,7 +292,7 @@ Props ordered by how often you'll reach for them.
    Whether/how to sort selected options. `true` uses default sort, function enables custom sorting.
 
 1. ```ts
-   portal: { target_node?: HTMLElement; active?: boolean; placement?: 'auto' | 'bottom' | 'top' } = {}
+   portal: { active?: boolean; placement?: 'auto' | 'bottom' | 'top' } = {}
    ```
 
    Configuration for portal rendering. When `active: true`, the dropdown is rendered at document.body level with fixed positioning. Useful for avoiding z-index and overflow issues. `active` is honored at runtime, so toggling it portals/un-portals in place. `placement` controls which side of the input the dropdown opens on: `'auto'` (default) opens below and flips above when the dropdown would overflow the viewport bottom with more space available above, `'bottom'`/`'top'` force a side.

@@ -11,24 +11,24 @@ Pick what triggers it and drag the sliders to tune the motion. The snippet below
   import { default_highlighter } from 'svelte-widgets/highlight'
   import { format_num } from 'svelte-widgets/format'
 
-  // [option, initial, min, max, step]
+  // [option, min, max, step]
   const sliders = [
-    [`angle`, 20, 0, 45, 1],
-    [`scale`, 1, 1, 2, 0.05],
-    [`dx`, 0, 0, 50, 1],
-    [`dy`, 0, 0, 50, 1],
-    [`duration_ms`, 200, 50, 1000, 50],
-    [`stiffness`, 0.05, 0.01, 0.5, 0.01],
-    [`damping`, 0.1, 0.01, 1, 0.01],
+    [`angle`, 0, 45, 1],
+    [`scale`, 1, 2, 0.05],
+    [`dx`, 0, 50, 1],
+    [`dy`, 0, 50, 1],
+    [`duration_ms`, 50, 1000, 50],
+    [`stiffness`, 0.01, 0.5, 0.01],
+    [`damping`, 0.01, 1, 0.01],
   ] as const
-  const options = $state(
-    Object.fromEntries(sliders.map(([option, initial]) => [option, initial])) as Record<
-      (typeof sliders)[number][0],
-      number
-    >,
-  )
+  const options = $state({ ...WIGGLE_DEFAULTS, angle: 20 })
   const shake = create_wiggle(options)
-  let trigger_on = $state<`click` | `hover` | `focus`>(`click`)
+  const handlers = {
+    click: `onclick`,
+    hover: `onpointerenter`,
+    focus: `onfocus`,
+  } as const
+  let trigger_on = $state<keyof typeof handlers>(`click`)
 
   // the options that differ from the defaults, as create_wiggle() source
   const snippet = $derived.by(() => {
@@ -36,16 +36,13 @@ Pick what triggers it and drag the sliders to tune the motion. The snippet below
       .filter(([key]) => options[key] !== WIGGLE_DEFAULTS[key])
       .map(([key]) => `${key}: ${options[key]}`)
     const args = changed.length ? `{ ${changed.join(`, `)} }` : ``
-    const handler = { click: `onclick`, hover: `onpointerenter`, focus: `onfocus` }[
-      trigger_on
-    ]
-    return `const shake = create_wiggle(${args})\n\n<button {@attach shake.attach} ${handler}={shake.trigger}>`
+    return `const shake = create_wiggle(${args})\n\n<button {@attach shake.attach} ${handlers[trigger_on]}={shake.trigger}>`
   })
 </script>
 
 <p style="display: flex; gap: 1em; justify-content: center">
   Wiggle on
-  {#each [`click`, `hover`, `focus`] as const as mode (mode)}
+  {#each Object.keys(handlers) as mode (mode)}
     <label><input type="radio" bind:group={trigger_on} value={mode} /> {mode}</label>
   {/each}
 </p>
@@ -53,16 +50,14 @@ Pick what triggers it and drag the sliders to tune the motion. The snippet below
 <button
   type="button"
   {@attach shake.attach}
-  onclick={() => trigger_on === `click` && shake.trigger()}
-  onpointerenter={() => trigger_on === `hover` && shake.trigger()}
-  onfocus={() => trigger_on === `focus` && shake.trigger()}
+  {...{ [handlers[trigger_on]]: shake.trigger }}
   style="display: block; margin: 1em auto; font-size: 1.1em; padding: 0.5em 1em"
 >
   🎯 Wiggle me
 </button>
 
 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 1em">
-  {#each sliders as [option, , min, max, step] (option)}
+  {#each sliders as [option, min, max, step] (option)}
     <label>
       {option}: {format_num(options[option])}
       <input
