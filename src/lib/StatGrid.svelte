@@ -1,11 +1,17 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { StatItem } from './stats'
-  import { format_stat_delta, format_stat_value, stat_delta_label } from './stats'
+  import {
+    format_num,
+    format_stat_delta,
+    STAT_NUM_FORMAT,
+    stat_delta_label,
+  } from './format'
+  import type { StatItem } from './format'
 
   let {
     items,
-    format = format_stat_value,
+    format = (value) =>
+      typeof value === `string` ? value : format_num(value, STAT_NUM_FORMAT),
     ...rest
   }: { items: readonly StatItem[]; format?: (value: string | number) => string } & Omit<
     HTMLAttributes<HTMLDivElement>,

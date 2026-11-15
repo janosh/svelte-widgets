@@ -16,7 +16,7 @@ import * as table_data from '#lib/table/data.ts'
 import data_table_source from '#lib/table/DataTable.svelte?raw'
 import * as data_table_module from '#lib/table/data-table.ts'
 import * as table_index from '#lib/table/index.ts'
-import { TABLE_EXPORT_FORMATS } from '#lib/table/index.ts'
+import { CellSelection, TABLE_EXPORT_FORMATS } from '#lib/table/index.ts'
 import { html_to_text } from '#lib/utils.ts'
 import type { Component, ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
@@ -2897,12 +2897,13 @@ describe(`DataTable`, () => {
       expect(cell_at(2, 1).classList.contains(`cell-selected`)).toBe(true)
     })
 
-    it.each([`hide`, `reorder`, `sort`, `Escape`, `outside`] as const)(
+    it.each([`hide`, `reorder`, `sort`, `filter`, `Escape`, `outside`] as const)(
       `clears a cell selection on %s`,
       async (action) => {
         const state = $state({
           hidden_columns: [] as string[],
           column_order: [] as string[],
+          column_prefs: {},
         })
         mount_sample(state)
         await tick()
@@ -2913,6 +2914,9 @@ describe(`DataTable`, () => {
         if (action === `hide`) state.hidden_columns = [`Value`]
         else if (action === `reorder`) state.column_order = [`Score`, `Model`, `Value`]
         else if (action === `sort`) doc_query(`th[data-col-id="Model"]`).click()
+        // drops only the unselected last row, so the selected cells all still exist
+        else if (action === `filter`)
+          state.column_prefs = { Value: { filter: { kind: `numeric`, max: 250 } } }
         // from a focused resize handle, which must let it bubble to the window
         else if (action === `Escape`) press_key(doc_query(`.resize-handle`), `Escape`)
         else document.body.dispatchEvent(pointer(`pointerdown`))
@@ -2920,6 +2924,23 @@ describe(`DataTable`, () => {
         expect(n_selected()).toBe(0)
       },
     )
+
+    // DataTable hands its row ids and visible columns in as the layout
+    it(`CellSelection empties when its layout changes, keeping one empty array`, () => {
+      const layout = $state({ rows: 3 })
+      const selection = new CellSelection(() => layout.rows)
+      const empty = selection.rects
+      selection.start_drag({ row: 1, col: 1 }, false)
+      expect(selection.has(1, 1)).toBe(true)
+      layout.rows = 2
+      expect(selection.rects).toBe(empty)
+      expect(selection.has(1, 1)).toBe(false)
+      layout.rows = 1 // a reset of an empty selection hands dependents no new array
+      expect(selection.rects).toBe(empty)
+      selection.step({ row: 0, col: 0 }, { row: 0, col: 1 }, false)
+      selection.clear()
+      expect(selection.rects).toBe(empty)
+    })
 
     // A live refresh (fresh row objects, e.g. trajectory frames) cleared the selection even
     // with every row id in place; only a change of ids or order must clear it

@@ -1,32 +1,34 @@
-import StatGrid from '#lib/StatGrid.svelte'
 import {
+  format_num,
   format_stat_delta,
-  format_stat_value,
+  STAT_NUM_FORMAT,
   stat_delta_label,
   type StatItem,
-} from '#lib/stats.ts'
+} from '#lib/format.ts'
+import StatGrid from '#lib/StatGrid.svelte'
 import { tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { render } from './index'
 
 test.each([
-  [`ready`, `ready`],
   [0, `0`],
   [-0, `0`],
   [1234, `1,234`],
   [12345.6, `12,350`],
   [-12345.67, `-12,350`],
-  [999999.9, `1.00e+6`],
+  [999999.9, `1e+6`],
   [1.23456, `1.235`],
   [0.001, `0.001`],
   [0.000999, `9.99e-4`],
   [999999, `999,999`],
-  [1e6, `1.00e+6`],
-  [-1e6, `-1.00e+6`],
+  [1e6, `1e+6`],
+  [-1e6, `-1e+6`],
   [Number.NaN, `n/a`],
   [-Infinity, `n/a`],
+  [-0.12355, `-0.1236`], // ties round half away from zero on the decimal as written
+  [1234500.4, `1.235e+6`], // the same 4 significant digits as plain notation
 ] as const)(`formats %s as %s`, (value, expected) => {
-  expect(format_stat_value(value)).toBe(expected)
+  expect(format_num(value, STAT_NUM_FORMAT)).toBe(expected)
 })
 
 test.each([

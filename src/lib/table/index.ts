@@ -12,7 +12,6 @@ export {
   cell_text,
   DATETIME_MODE_LABELS,
   DATETIME_MODES_BY_KIND,
-  default_format_number,
   discover_columns,
   format_datetime,
   infer_datetime_kind,

@@ -286,8 +286,8 @@ export type DataTableProps<
   sort?: TableSort[]
   // Format passed to format_number for columns without their own `format`
   default_num_format?: string
-  // Numeric cells and summary values. Defaults to integers in full and other numbers to 3
-  // significant digits, grouped from 5 digits on; pass e.g. a d3-format wrapper to honor
+  // Numeric cells and summary values. Defaults to format_num: integers in full and other
+  // numbers to 3 significant digits, grouped from 5 digits on; pass e.g. a d3-format wrapper to honor
   // `format` strings.
   format_number?: (num: number, format?: string) => string
   // Turns HTML-looking cells, labels and descriptions into markup for {@html}. Defaults to

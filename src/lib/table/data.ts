@@ -3,11 +3,11 @@
 import {
   DECIMAL_SRC,
   escape_html,
-  fuzzy_match,
   HTML_ENTITY_SRC,
   html_to_text,
   HTML_TAG_SRC,
 } from '../utils'
+import { fuzzy_match } from '../match'
 import { type CellReaders, default_is_missing } from './filter'
 import type {
   CellVal,
@@ -332,15 +332,6 @@ export function format_datetime(
   const time = `${pad2(stamp.getHours())}:${pad2(stamp.getMinutes())}`
   return mode === `date` ? date : mode === `time` ? time : `${date} ${time}`
 }
-
-// DataTable's default number formatter: integers in full, other numbers to 3 significant
-// digits. Digits group only from 5 on (`min2`), so years and IDs read 1766, not 1,766.
-// `format` strings are host-defined, so ignored here.
-export const default_format_number = (num: number): string =>
-  num.toLocaleString(undefined, {
-    useGrouping: `min2`,
-    ...(Number.isInteger(num) ? {} : { maximumSignificantDigits: 3 }),
-  })
 
 // DataTable's default render_html: the markup's visible text, escaped. Safe for {@html}
 // without a sanitizer, at the cost of dropping formatting.

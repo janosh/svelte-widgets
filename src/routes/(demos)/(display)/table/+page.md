@@ -130,7 +130,7 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
 
 ```svelte example id="table-composed"
 <script lang="ts">
-  import { download } from 'svelte-widgets/download'
+  import { download } from 'svelte-widgets/browser'
   import {
     CellSelection,
     ColumnFilter,
@@ -405,7 +405,7 @@ Selection coordinates index your current rows and columns, so clear the selectio
 | `ColumnFilter`                            | `bind:filter` (a `ColumnFilterValue`) and `bind:open` for the `column` it names. `values()` is read lazily while open; `options` (what `filter_panel` takes: `kind`, `numeric`, `category_limit` and the cell readers) and `format_bound` tune the panel. Snippets: `trigger`, `option`.                                                                                                               |
 | `CellSelection`                           | Reactive rectangles with `has(row, col)`, `size`, `start_drag` / `extend_drag` / `end_drag`, `step` for Shift+arrow growth, `clear` and `to_tsv`. Clear it whenever the rows or columns change.                                                                                                                                                                                                        |
 | `cell_range_select(selection, options)`   | Attachment wiring pointer drags, Escape, outside presses and copy events (Cmd/Ctrl+C, Edit > Copy, given `cell_text`) onto cells marked `data-row` / `data-col` (or your own `cell_at`). Touch presses scroll instead of selecting.                                                                                                                                                                    |
-| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/csv`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                   |
+| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/format`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                |
 | `table_to_json(rows, columns, to_value?)` | Rows as objects keyed by stable column IDs, so renamed or repeated headers never collide.                                                                                                                                                                                                                                                                                                              |
 
 Both components take `labels` for translation, `class`, `style` and other attributes on their root, and CSS custom properties prefixed `--column-picker-` and `--column-filter-` (see [theming](theming)).
