@@ -480,3 +480,47 @@ export type TreeNode = {
   load?: (signal: AbortSignal) => Promise<readonly TreeNode[]>
   disabled?: boolean
 }
+
+// Attributes Popover hands its `trigger` snippet to spread, so consumers keep their own markup
+export type PopoverTriggerProps = {
+  onclick?: (event: MouseEvent) => void
+  onmouseenter?: (event: MouseEvent) => void
+  onmouseleave?: (event: MouseEvent) => void
+  onfocusin?: (event: FocusEvent) => void
+  onfocusout?: (event: FocusEvent) => void
+  'aria-expanded': boolean
+  'aria-haspopup': `dialog` | `menu` | `listbox` | `tree` | `grid`
+  'aria-controls': string | undefined
+}
+
+// Attributes ActionMenu hands its `trigger` snippet to spread
+export type ActionMenuTriggerProps = {
+  onclick: (event: MouseEvent) => void
+  'aria-controls': string | undefined
+  'aria-expanded': boolean
+  'aria-haspopup': `menu`
+  'aria-disabled': boolean | undefined
+}
+
+// One ShortcutsList row: `keys` in the hotkey grammar (format_shortcut renders them), several
+// alternatives joined by ` / `. `keys_label` replaces the rendered keys for gestures the grammar
+// can't spell (e.g. `⌘/Ctrl + scroll`, `0-9`).
+export type ShortcutEntry = {
+  keys: string | readonly string[]
+  label: string
+  keys_label?: string
+}
+
+export type InfoTagVariant = `default` | `success` | `warning` | `error` | `info`
+export type InfoTagSize = `sm` | `md` | `lg`
+
+// One InfoCard row. `label` and string values are trusted HTML. A row without a value or with
+// a present-but-falsy `condition` is hidden. `format` overrides the card's number formatter.
+export type InfoCardItem = {
+  label: string
+  value?: string | number | readonly number[] | null
+  unit?: string
+  format?: (num: number) => string
+  condition?: boolean | number | null
+  tooltip?: string
+}
