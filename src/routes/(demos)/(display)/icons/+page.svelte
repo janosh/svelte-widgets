@@ -2,7 +2,7 @@
   import Heading from '#lib/Heading.svelte'
   import { CodeBlock, Icon } from 'svelte-widgets'
   import { default_highlighter } from 'svelte-widgets/highlight'
-  import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
+  import { create_clipboard_feedback } from 'svelte-widgets/browser'
   import { to_error } from 'svelte-widgets/utils'
   import * as icon_module from 'svelte-widgets/icons'
   import type { IconData } from 'svelte-widgets/icons'

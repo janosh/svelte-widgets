@@ -1,4 +1,4 @@
-import { draw_markup_strokes, object_fit_contain_box } from '#lib/image-markup.ts'
+import { draw_markup_strokes, object_fit_contain_box } from '#lib/canvas.svelte.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
 test.each([

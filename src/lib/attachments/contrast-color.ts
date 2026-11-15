@@ -5,10 +5,11 @@ import { composed_parent } from './shared'
 const clamp_unit = (value: number): number => clamp(value, 0, 1)
 
 export interface ContrastOptions {
-  // Fill behind the text; the attachment defaults it to the node's own background
+  // Fill behind the text (required by pick_contrast_color); the attachment defaults it to what
+  // the node shows, its own background over everything behind it
   bg_color?: string
-  // Opaque color a translucent bg_color is painted over. Defaults to the white a page
-  // starts as; the attachment defaults it to the background resolved behind the node.
+  // Opaque color a translucent bg_color is painted over, required for one since assuming a
+  // white page is wrong in dark mode; the attachment resolves it from behind the node.
   backdrop?: string
   // Contrast ratio the lighter choice needs to win (default 4.5, WCAG AA body text)
   min_ratio?: number
@@ -18,8 +19,7 @@ export interface ContrastOptions {
 // === CSS color parsing ===
 // `getComputedStyle` returns wide-gamut and perceptual colors verbatim (`oklch(…)`,
 // `color(display-p3 …)`), not as sRGB, so reading only `rgb()`/`rgba()` would mistake a
-// painted ancestor for a transparent one. Everything below converts to sRGB. `color-mix()`
-// and `currentcolor` are rejected: a computed background never carries either.
+// painted ancestor for a transparent one. Everything below converts to sRGB.
 const RGB_COLOR = /^rgba?\((?<channels>[^)]+)\)$/iu
 const HEX_COLOR = /^#(?<digits>[\da-f]+)$/iu
 const COLOR_FN = /^(?<name>oklch|oklab|lch|lab|hsla?|hwb|color)\((?<args>[^)]*)\)$/iu
@@ -36,8 +36,10 @@ const dot3 = (matrix: readonly number[], [x_val, y_val, z_val]: Triple): Triple 
 // `none` is a real component value meaning "missing", and behaves as zero here
 const parse_component = (token: string, percent_ref: number): number => {
   if (token.toLowerCase() === `none`) return 0
-  if (token.endsWith(`%`)) return (Number(token.slice(0, -1)) / 100) * percent_ref
-  return Number(token)
+  const number = token.endsWith(`%`) ? token.slice(0, -1) : token
+  // CSS decimals only: Number() would read `` as 0 and 0x10 as 16
+  if (!/^[+-]?(?:\d*\.)?\d+(?:e[+-]?\d+)?$/iu.test(number)) return Number.NaN
+  return number === token ? Number(number) : (Number(number) / 100) * percent_ref
 }
 // hsl/hwb take `50` and `50%` to mean the same thing
 const parse_percentage = (token: string): number =>
@@ -247,43 +249,50 @@ const function_to_rgb255 = (name: string, tokens: string[]): Triple | null => {
   )
 }
 
+// [components, alpha] in modern `a b c / alpha` syntax or, where `legacy` (rgb, hsl), comma
+// syntax `a, b, c[, alpha]`, never mixed; null when malformed
+const split_args = (
+  args: string,
+  legacy: boolean,
+): [string[], string | undefined] | null => {
+  const text = args.trim()
+  if (text.includes(`,`)) {
+    const parts = text.split(/\s*,\s*/u)
+    const valid = legacy && !text.includes(`/`) && [3, 4].includes(parts.length)
+    return valid ? [parts.slice(0, 3), parts[3]] : null
+  }
+  const [main, alpha, extra] = text.split(/\s*\/\s*/u)
+  return extra === undefined ? [main.split(/\s+/u), alpha] : null
+}
+
 const parse_color_function = (name: string, args: string): Rgba | null => {
-  const [main = ``, alpha_arg] = args.split(`/`)
-  const tokens = main
-    .trim()
-    .split(/[\s,]+/u)
-    .filter(Boolean)
-  // legacy `hsla(h, s, l, a)` carries alpha in the argument list instead of after a slash
-  const legacy_alpha =
-    alpha_arg === undefined && name !== `color` && tokens.length === 4
-      ? tokens.pop()
-      : undefined
-  const rgb = function_to_rgb255(name, tokens)
-  if (!rgb) return null
-  return finite_rgba(rgb, parse_alpha(alpha_arg?.trim() ?? legacy_alpha))
+  const parts = split_args(args, name.startsWith(`hsl`))
+  const rgb = parts && function_to_rgb255(name, parts[0])
+  return rgb ? finite_rgba(rgb, parse_alpha(parts[1])) : null
 }
 
 // The 148 CSS named colors plus `transparent`, looked up as a `name #hex` pair. Computed
 // styles never carry names, but hand-passed colors (`choices`, `backdrop`) often do.
 const NAMED_COLORS = `aliceblue #f0f8ff antiquewhite #faebd7 aqua #00ffff aquamarine #7fffd4 azure #f0ffff beige #f5f5dc bisque #ffe4c4 black #000000 blanchedalmond #ffebcd blue #0000ff blueviolet #8a2be2 brown #a52a2a burlywood #deb887 cadetblue #5f9ea0 chartreuse #7fff00 chocolate #d2691e coral #ff7f50 cornflowerblue #6495ed cornsilk #fff8dc crimson #dc143c cyan #00ffff darkblue #00008b darkcyan #008b8b darkgoldenrod #b8860b darkgray #a9a9a9 darkgreen #006400 darkgrey #a9a9a9 darkkhaki #bdb76b darkmagenta #8b008b darkolivegreen #556b2f darkorange #ff8c00 darkorchid #9932cc darkred #8b0000 darksalmon #e9967a darkseagreen #8fbc8f darkslateblue #483d8b darkslategray #2f4f4f darkslategrey #2f4f4f darkturquoise #00ced1 darkviolet #9400d3 deeppink #ff1493 deepskyblue #00bfff dimgray #696969 dimgrey #696969 dodgerblue #1e90ff firebrick #b22222 floralwhite #fffaf0 forestgreen #228b22 fuchsia #ff00ff gainsboro #dcdcdc ghostwhite #f8f8ff gold #ffd700 goldenrod #daa520 gray #808080 green #008000 greenyellow #adff2f grey #808080 honeydew #f0fff0 hotpink #ff69b4 indianred #cd5c5c indigo #4b0082 ivory #fffff0 khaki #f0e68c lavender #e6e6fa lavenderblush #fff0f5 lawngreen #7cfc00 lemonchiffon #fffacd lightblue #add8e6 lightcoral #f08080 lightcyan #e0ffff lightgoldenrodyellow #fafad2 lightgray #d3d3d3 lightgreen #90ee90 lightgrey #d3d3d3 lightpink #ffb6c1 lightsalmon #ffa07a lightseagreen #20b2aa lightskyblue #87cefa lightslategray #778899 lightslategrey #778899 lightsteelblue #b0c4de lightyellow #ffffe0 lime #00ff00 limegreen #32cd32 linen #faf0e6 magenta #ff00ff maroon #800000 mediumaquamarine #66cdaa mediumblue #0000cd mediumorchid #ba55d3 mediumpurple #9370db mediumseagreen #3cb371 mediumslateblue #7b68ee mediumspringgreen #00fa9a mediumturquoise #48d1cc mediumvioletred #c71585 midnightblue #191970 mintcream #f5fffa mistyrose #ffe4e1 moccasin #ffe4b5 navajowhite #ffdead navy #000080 oldlace #fdf5e6 olive #808000 olivedrab #6b8e23 orange #ffa500 orangered #ff4500 orchid #da70d6 palegoldenrod #eee8aa palegreen #98fb98 paleturquoise #afeeee palevioletred #db7093 papayawhip #ffefd5 peachpuff #ffdab9 peru #cd853f pink #ffc0cb plum #dda0dd powderblue #b0e0e6 purple #800080 rebeccapurple #663399 red #ff0000 rosybrown #bc8f8f royalblue #4169e1 saddlebrown #8b4513 salmon #fa8072 sandybrown #f4a460 seagreen #2e8b57 seashell #fff5ee sienna #a0522d silver #c0c0c0 skyblue #87ceeb slateblue #6a5acd slategray #708090 slategrey #708090 snow #fffafa springgreen #00ff7f steelblue #4682b4 tan #d2b48c teal #008080 thistle #d8bfd8 tomato #ff6347 transparent #0000 turquoise #40e0d0 violet #ee82ee wheat #f5deb3 white #ffffff whitesmoke #f5f5f5 yellow #ffff00 yellowgreen #9acd32`
 
-// Any CSS color except `color-mix()` and `currentcolor` as sRGB `[red, green, blue, alpha]`
-// (channels 0..255, alpha 0..1), or null when unreadable
-export const parse_color = (color: string): Rgba | null => {
+// CSS color syntax read without a browser: hex, named, rgb()/hsl()/hwb()/lab()/lch()/oklab()/oklch()/color()
+const parse_color_syntax = (color: string): Rgba | null => {
   const trimmed = color.trim()
   const lower = trimmed.toLowerCase()
   if (/^[a-z]+$/u.test(lower)) {
     const hex = new RegExp(`(?:^| )${lower} (#\\w+)`, `u`).exec(NAMED_COLORS)?.[1]
-    return hex ? parse_color(hex) : null
+    return hex ? parse_color_syntax(hex) : null
   }
   const channels = RGB_COLOR.exec(trimmed)?.groups?.channels
   if (channels) {
     // percentages are legal in channels and alpha (`rgb(50% 0% 0% / 50%)`), even though a
     // computed value never uses them
-    const parts = channels.split(/[\s,/]+/u).filter(Boolean)
-    if (parts.length !== 3 && parts.length !== 4) return null
-    const rgb = parts.slice(0, 3).map((token) => parse_component(token, 255)) as Triple
-    return finite_rgba(rgb, parse_alpha(parts[3]))
+    const parts = split_args(channels, true)
+    if (parts?.[0].length !== 3) return null
+    const rgb = parts[0].map((token) =>
+      clamp(parse_component(token, 255), 0, 255),
+    ) as Triple
+    return finite_rgba(rgb, parse_alpha(parts[1]))
   }
   const color_fn = COLOR_FN.exec(trimmed)?.groups
   if (color_fn) {
@@ -301,6 +310,36 @@ export const parse_color = (color: string): Rgba | null => {
   return [red, green, blue, alpha / 255]
 }
 
+// The browser's computed value of `value` as a background, which resolves color-mix(),
+// relative, system and light-dark() colors against the root's color-scheme into syntax the
+// parser above reads. Null outside a browser, for rejected values, and for values depending
+// on context the probe lacks (var(), currentcolor, attr(), env(), CSS-wide keywords).
+export const computed_color = (value: string): string | null => {
+  const root = globalThis.document?.documentElement
+  const context_free =
+    !/var\(|currentcolor|attr\(|env\(|^\s*(?:inherit|initial|unset|revert(?:-layer)?)\s*$/iu.test(
+      value,
+    )
+  if (!root || !context_free) return null
+  const probe = document.createElement(`div`)
+  probe.style.backgroundColor = value
+  if (!probe.style.backgroundColor) return null
+  root.append(probe)
+  const computed = getComputedStyle(probe).backgroundColor
+  probe.remove()
+  return computed || null
+}
+
+// Any CSS color but var() and currentcolor as sRGB `[red, green, blue, alpha]` (channels
+// 0..255, alpha 0..1), or null when unreadable. Syntax the parser above lacks is resolved by
+// the browser (computed_color).
+export const parse_color = (color: string): Rgba | null => {
+  const parsed = parse_color_syntax(color)
+  if (parsed) return parsed
+  const computed = computed_color(color)
+  return computed === null ? null : parse_color_syntax(computed)
+}
+
 // Computed alphas round-trip through 8 bits, so a nominally opaque one can land just shy of 1
 const OPAQUE = 0.999
 
@@ -312,15 +351,11 @@ const composite_color = (top: Rgba, bottom: Rgba): Rgba => {
   return [channel(0), channel(1), channel(2), alpha]
 }
 
-const PAGE_WHITE: Rgba = [255, 255, 255, 1]
-
 const read_color = (color: string): Rgba => {
   const parsed = parse_color(color)
   if (parsed) return parsed
   throw new Error(
-    `pick_contrast_color: cannot read color \`${color}\`, expected hex, a named color, ` +
-      `rgb()/rgba(), hsl()/hwb(), lab()/lch()/oklab()/oklch(), color() or transparent; ` +
-      `color-mix() and currentcolor are not parsed`,
+    `pick_contrast_color: cannot read color \`${color}\` (var() and currentcolor never resolve)`,
   )
 }
 
@@ -332,20 +367,17 @@ const relative_luminance = ([red, green, blue]: Rgba): number => {
 const luminance_ratio = (lum_a: number, lum_b: number): number =>
   (Math.max(lum_a, lum_b) + 0.05) / (Math.min(lum_a, lum_b) + 0.05)
 
-// WCAG 2 contrast ratio from 1 (identical) to 21 (black on white). `color_a` is painted over
-// `color_b`, which is in turn judged over a white page when translucent.
-export const contrast_ratio = (color_a: string, color_b: string): number => {
-  const bottom = composite_color(read_color(color_b), PAGE_WHITE)
-  const top = composite_color(read_color(color_a), bottom)
-  return luminance_ratio(relative_luminance(top), relative_luminance(bottom))
-}
-
 // The browser reports 8-bit channels; match that rather than emit blend fractions
 const rgb_string = ([red, green, blue]: Rgba): string =>
   `rgb(${Math.round(red)} ${Math.round(green)} ${Math.round(blue)})`
 
+// The page canvas the root paints where nothing else does: white, or the browser's dark
+// canvas under a dark root color-scheme. A nested color-scheme repaints nothing, so only the
+// root's counts. DOMs without system colors (happy-dom, jsdom) paint white.
+const page_canvas = (): Rgba => parse_color(`Canvas`) ?? [255, 255, 255, 1]
+
 // Effective background behind a node: a translucent ancestor only tints what it sits on,
-// so keep walking and blend. A chain with nothing opaque shows the browser's white canvas.
+// so keep walking and blend, down to the page canvas when nothing opaque is painted.
 // Shadow roots paint nothing, so the walk continues at their host.
 export const get_bg_color = (element: Element | null): string => {
   let composite: Rgba | undefined
@@ -358,20 +390,27 @@ export const get_bg_color = (element: Element | null): string => {
     composite = composite ? composite_color(composite, layer) : layer
     if (composite[3] >= OPAQUE) return rgb_string(composite)
   }
-  return composite ? rgb_string(composite_color(composite, PAGE_WHITE)) : ``
+  return rgb_string(composite ? composite_color(composite, page_canvas()) : page_canvas())
 }
 
 // The lighter choice whenever it reaches min_ratio, else the higher-contrast one (black or
 // white always reaches 4.58:1). Pure max-ratio flips near-ties like #4e79a7 (black 4.62:1,
 // white 4.55:1) to black, which reads worse; APCA puts white on mid-tones at 2.7-3.3:1.
-export const pick_contrast_color = (options: ContrastOptions = {}): string => {
+export const pick_contrast_color = (
+  options: ContrastOptions & { bg_color: string },
+): string => {
   const { bg_color, backdrop, min_ratio = 4.5, choices = [`black`, `white`] } = options
-  const base = backdrop ? read_color(backdrop) : PAGE_WHITE
+  const fill = read_color(bg_color)
+  if (backdrop === undefined && fill[3] < OPAQUE) {
+    throw new Error(
+      `pick_contrast_color: translucent bg_color \`${bg_color}\` needs a backdrop`,
+    )
+  }
+  const base = backdrop === undefined ? fill : read_color(backdrop)
   if (base[3] < OPAQUE) {
     throw new Error(`pick_contrast_color: backdrop must be opaque, got \`${backdrop}\``)
   }
-  // No fill of its own: the node shows the backdrop
-  const background = bg_color ? composite_color(read_color(bg_color), base) : base
+  const background = composite_color(fill, base)
   const bg_luminance = relative_luminance(background)
   const luminances = choices.map((choice) =>
     relative_luminance(composite_color(read_color(choice), background)),
@@ -389,13 +428,14 @@ export const contrast_color =
   (node: Element): (() => void) | undefined => {
     if (!(node instanceof HTMLElement)) return undefined
     const previous_color = node.style.color
-    // An explicit bg_color replaces the node's own fill, so either way only its parent's
-    // background shows through a translucent one
-    const {
-      bg_color = getComputedStyle(node).backgroundColor,
-      backdrop = get_bg_color(composed_parent(node)),
-    } = options
-    node.style.color = pick_contrast_color({ ...options, bg_color, backdrop })
+    // An explicit bg_color replaces the node's own fill, so only its parent's background
+    // shows through a translucent one; otherwise the node's fill is read with what's behind it
+    const { bg_color } = options
+    node.style.color = pick_contrast_color(
+      bg_color === undefined
+        ? { ...options, bg_color: get_bg_color(node) }
+        : { backdrop: get_bg_color(composed_parent(node)), ...options, bg_color },
+    )
     return () => {
       node.style.color = previous_color
     }

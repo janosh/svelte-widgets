@@ -5,7 +5,12 @@
   import Icon from './Icon.svelte'
   import { Monitor, Moon, Sun } from './icons'
   import { merge_defaults, THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
-  import { apply_theme_mode, watch_theme, theme, THEME_MODE_CYCLE } from './theme.svelte'
+  import {
+    apply_theme_mode,
+    watch_theme,
+    theme,
+    THEME_MODE_CYCLE,
+  } from './theme.svelte.ts'
   import { chain_handlers } from './utils'
 
   let {

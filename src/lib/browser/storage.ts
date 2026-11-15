@@ -1,7 +1,7 @@
 // Best-effort localStorage: disabled/private/full stores become no-ops so in-memory UI
 // state still works. Also provides persisted choices and MRU lists.
 
-import { clamp_integer, is_object } from './utils'
+import { clamp_integer, is_object } from '../utils'
 
 // Single catch-all for storage failures; callers retain working state in memory.
 const guarded = <Result>(access: () => Result, fallback: Result): Result => {

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { HTMLButtonAttributes } from 'svelte/elements'
-  import { sync_fullscreen } from './fullscreen.svelte'
+  import { sync_fullscreen } from './browser/index'
   import Icon from './Icon.svelte'
   import { ExitFullscreen, Fullscreen, type IconData } from './icons'
   import {

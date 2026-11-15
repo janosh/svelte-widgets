@@ -6,7 +6,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { tooltip } from './attachments/index'
   import { escape_layer } from './attachments/shared'
-  import { create_find_state, type FindOptions } from './find-in-page.svelte'
+  import { create_find_state, type FindOptions } from './find-in-page.svelte.ts'
   import Icon from './Icon.svelte'
   import { merge_defaults, FIND_BAR_LABELS, type FindBarLabels } from './labels'
 

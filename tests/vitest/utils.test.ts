@@ -1,38 +1,47 @@
 import type { CmdAction, Option, OptionStyle } from '#lib'
 import {
+  clamp,
   chain_handlers,
-  cmd_action_matches,
-  create_cmd_action_filter,
-  create_term_matcher,
-  compute_position,
-  event_to_combo,
-  format_cmd_metadata,
-  format_shortcut,
-  fuzzy_match,
-  fuzzy_match_indices,
+  evict_oldest,
   get_label,
   get_option_key,
   get_style,
   get_uuid,
   has_group,
-  is_editable_event_target,
-  is_modifier_chord,
   is_object,
+  is_plain_object,
   lower_bound,
   make_change_detector,
-  matches_shortcut,
-  normalize_combo,
   observe_subtree,
-  type PositionOptions,
-  type PositionResult,
-  parse_shortcut,
-  sanitize_shortcut_overrides,
   slug_to_title,
-  step_focus,
   escape_html,
   strip_html,
   to_error,
+  with_defaults,
 } from '#lib/utils.ts'
+import {
+  create_cmd_action_filter,
+  create_term_matcher,
+  format_cmd_metadata,
+  fuzzy_match,
+  fuzzy_match_indices,
+} from '#lib/match.ts'
+import {
+  compute_position,
+  type PositionOptions,
+  type PositionResult,
+} from '#lib/position.ts'
+import {
+  event_to_combo,
+  format_shortcut,
+  is_editable_event_target,
+  is_modifier_chord,
+  matches_shortcut,
+  normalize_combo,
+  parse_shortcut,
+  sanitize_shortcut_overrides,
+  step_focus,
+} from '#lib/shortcuts.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { create_element, doc_query, stub_props } from './index'
 
@@ -270,7 +279,7 @@ describe(`shortcut rebinding`, () => {
     },
   )
 
-  test.each([
+  test.each<[string, string | null, { require_modifier: boolean }?]>([
     [`Ctrl+Shift+K`, `ctrl+shift+k`], // case folded
     [`shift+ctrl+k`, `ctrl+shift+k`], // modifiers reordered
     [`Cmd+K`, `meta+k`], // aliases folded onto one spelling
@@ -287,16 +296,11 @@ describe(`shortcut rebinding`, () => {
     [`shift+alt`, null],
     [`ctrl+capslock`, null], // key that is only ever a modifier
     [`meta+control`, null],
-  ])(`normalize_combo(%j) is %j`, (combo, expected) => {
-    expect(normalize_combo(combo)).toBe(expected)
-  })
-
-  test.each([
-    [`mod+k`, `mod+k`],
-    [`k`, null], // an unmodified key would swallow ordinary typing
-    [`escape`, null],
-  ])(`normalize_combo(%j, { require_modifier }) is %j`, (combo, expected) => {
-    expect(normalize_combo(combo, { require_modifier: true })).toBe(expected)
+    [`mod+k`, `mod+k`, { require_modifier: true }],
+    [`k`, null, { require_modifier: true }], // an unmodified key would swallow typing
+    [`escape`, null, { require_modifier: true }],
+  ])(`normalize_combo(%j) is %j (%j)`, (combo, expected, options) => {
+    expect(normalize_combo(combo, options)).toBe(expected)
   })
 
   describe(`sanitize_shortcut_overrides`, () => {
@@ -861,14 +865,12 @@ describe(`create_cmd_action_filter`, () => {
     [`tgtm`, false, false],
     [`toggle`, false, true], // substring still matches with fuzzy off
   ])(`%j with fuzzy=%s -> %s`, (search, fuzzy, expected) => {
-    expect(cmd_action_matches(action, search, fuzzy)).toBe(expected)
     expect(create_cmd_action_filter(search, fuzzy)(action)).toBe(expected)
   })
 
   test(`an action with only a label does not throw on absent fields`, () => {
     const bare: CmdAction = { id: `Bare`, label: `Bare`, action: () => {} }
-    expect(cmd_action_matches(bare, `bare`)).toBe(true)
-    expect(cmd_action_matches(bare, `missing`)).toBe(false)
+    expect(create_cmd_action_filter(`missing`)(bare)).toBe(false)
     const matches = create_cmd_action_filter(`bare`)
     expect(matches(bare)).toBe(true)
     bare.label = `Changed`
@@ -1079,4 +1081,61 @@ test.each([
   [`plain`, `plain`],
 ])(`escape_html(%j) = %j`, (input, expected) => {
   expect(escape_html(input)).toBe(expected)
+})
+
+// bounds in order clamp as usual; inverted bounds let the lower bound win, as CSS clamp()
+// does, so an index clamped into an empty list ([0, -1]) stays 0 rather than -1
+test.each([
+  [5, 0, 10, 5],
+  [-3, 0, 10, 0],
+  [12, 0, 10, 10],
+  [Number.NaN, 0, 10, Number.NaN],
+  [3, 0, -1, 0],
+  [-5, 2, 1, 2],
+  [Infinity, 0, -1, 0],
+])(`clamp(%s, %s, %s) = %s`, (value, lower, upper, expected) => {
+  expect(clamp(value, lower, upper)).toBe(expected)
+})
+
+test.each([
+  [{}, true],
+  [Object.create(null), true],
+  [JSON.parse(`{"value": 1}`), true],
+  [new Proxy({ value: 1 }, {}), true],
+  [null, false],
+  [0, false],
+  [`value`, false],
+  [[], false],
+  [new Date(0), false],
+  [new Map(), false],
+  [/pattern/u, false],
+  [new Float64Array(2), false],
+  [
+    new (class RecordLike {
+      value = 1
+    })(),
+    false,
+  ],
+])(`is_plain_object(%j) = %s`, (value, expected) => {
+  expect(is_plain_object(value)).toBe(expected)
+})
+
+test.each([
+  [true, { size: 10, open: false }],
+  [{ open: true }, { size: 10, open: true }],
+  [false, null],
+  [undefined, null],
+])(`with_defaults(%j) = %j`, (option, expected) => {
+  expect(with_defaults(option, { size: 10, open: false })).toEqual(expected)
+})
+
+test(`evict_oldest drops the first-inserted key once the limit is reached`, () => {
+  const cache = new Map([
+    [`a`, 1],
+    [`b`, 2],
+  ])
+  evict_oldest(cache, 3)
+  expect([...cache.keys()]).toEqual([`a`, `b`])
+  evict_oldest(cache, 2)
+  expect([...cache.keys()]).toEqual([`b`])
 })

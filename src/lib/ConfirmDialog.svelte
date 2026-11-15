@@ -12,7 +12,7 @@
     dismiss_all_dialogs,
     dismiss_dialog,
     submit_prompt,
-  } from './dialogs.svelte'
+  } from './dialogs.svelte.ts'
   import { focusable } from './attachments/shared'
   import { restore_dialog_focus, show_modal, track_backdrop_dismiss } from './dialog'
   import { chain_handlers } from './utils'

@@ -1,16 +1,39 @@
+<script lang="ts" module>
+  import { format_locale } from './format'
+
+  // Tiles and changes: 4 significant digits (integers in full), scientific `1e6` from 1e6
+  // and below 1e-3, en-US grouping, `n/a` for NaN and ±Infinity
+  const format_stat = (num: number): string =>
+    Number.isFinite(num)
+      ? format_locale(num, {
+          digits: 4,
+          sci_range: [1e-3, 1e6],
+          grouping: true,
+          locale: `en-US`,
+        })
+      : `n/a`
+  // [direction, glyph] by Math.sign(delta) + 1; the glyph carries the sign, so a change
+  // never reads by color alone
+  const DELTA_DIRS = [
+    [`down`, `▼`],
+    [`flat`, `▸`],
+    [`up`, `▲`],
+  ] as const
+</script>
+
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
-  import type { StatItem } from './stats'
-  import { format_stat_delta, format_stat_value, stat_delta_label } from './stats'
+  import type { StatItem } from './types'
 
   let {
     items,
-    format = format_stat_value,
+    format = (value) => (typeof value === `string` ? value : format_stat(value)),
     ...rest
-  }: { items: readonly StatItem[]; format?: (value: string | number) => string } & Omit<
-    HTMLAttributes<HTMLDivElement>,
-    `children`
-  > = $props()
+  }: {
+    items: readonly StatItem[]
+    // formats values only; deltas always use the built-in 4-significant-digit format
+    format?: (value: string | number) => string
+  } & Omit<HTMLAttributes<HTMLDivElement>, `children`> = $props()
 </script>
 
 <div {...rest} class={[`stat-tiles`, rest.class]} role="list">
@@ -21,15 +44,16 @@
         {format(value)}{#if unit}<small class="stat-unit">{unit}</small>{/if}
       </span>
       {#if delta !== undefined}
-        {@const finite = Number.isFinite(delta)}
+        {@const [dir, glyph] = Number.isFinite(delta)
+          ? DELTA_DIRS[Math.sign(delta) + 1]
+          : []}
+        {@const shown = format_stat(Math.abs(delta))}
         <span
-          class={[`stat-delta`, finite && delta_tone]}
-          class:up={finite && delta > 0}
-          class:down={finite && delta < 0}
+          class={[`stat-delta`, dir, dir && delta_tone]}
           role="img"
-          aria-label={stat_delta_label(delta)}
+          aria-label={dir ? `change ${dir} ${shown}` : `change unavailable`}
         >
-          {format_stat_delta(delta)}
+          {dir ? `${glyph} ${shown}` : `n/a`}
         </span>
       {/if}
       {#if hint}

@@ -232,7 +232,6 @@ export interface MultiSelectSnippets<
 }
 
 export interface PortalParams {
-  target_node?: HTMLElement | null
   // portal the dropdown to document.body; honored at runtime, so toggling portals or
   // un-portals the open dropdown in place
   active?: boolean
@@ -479,4 +478,55 @@ export type TreeNode = {
   children?: readonly TreeNode[]
   load?: (signal: AbortSignal) => Promise<readonly TreeNode[]>
   disabled?: boolean
+}
+
+// Attributes Popover hands its `trigger` snippet to spread, so consumers keep their own markup
+export type PopoverTriggerProps = {
+  onclick?: (event: MouseEvent) => void
+  onmouseenter?: (event: MouseEvent) => void
+  onmouseleave?: (event: MouseEvent) => void
+  onfocusin?: (event: FocusEvent) => void
+  onfocusout?: (event: FocusEvent) => void
+  'aria-expanded': boolean
+  'aria-haspopup': `dialog` | `menu` | `listbox` | `tree` | `grid`
+  'aria-controls': string | undefined
+}
+
+// Attributes ActionMenu hands its `trigger` snippet to spread
+export type ActionMenuTriggerProps = {
+  onclick: (event: MouseEvent) => void
+  'aria-controls': string | undefined
+  'aria-expanded': boolean
+  'aria-haspopup': `menu`
+  'aria-disabled': boolean | undefined
+}
+
+// One ShortcutsList row: `keys` in the hotkey grammar (format_shortcut renders them), several
+// alternatives joined by ` / `. `keys_label` replaces the rendered keys for gestures the grammar
+// can't spell (e.g. `⌘/Ctrl + scroll`, `0-9`).
+export type ShortcutEntry = {
+  keys: string | readonly string[]
+  label: string
+  keys_label?: string
+}
+
+// One InfoCard row. `label` and string values are trusted HTML. A row without a value is
+// hidden. `format` overrides the card's number formatter.
+export type InfoCardItem = {
+  label: string
+  value?: string | number | readonly number[] | null
+  unit?: string
+  format?: (num: number) => string
+  tooltip?: string
+}
+
+// One StatGrid tile
+export interface StatItem {
+  label: string
+  value: string | number
+  unit?: string
+  delta?: number
+  // Direction alone does not imply improvement (e.g. increasing cost or latency).
+  delta_tone?: `positive` | `negative`
+  hint?: string
 }

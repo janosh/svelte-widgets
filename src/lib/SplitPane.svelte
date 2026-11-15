@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { clamp, is_modifier_chord } from './utils'
+  import { clamp } from './utils'
+  import { is_modifier_chord } from './shortcuts'
 
   type Orientation = `horizontal` | `vertical`
 

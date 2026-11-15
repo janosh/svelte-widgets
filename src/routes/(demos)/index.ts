@@ -78,7 +78,6 @@ export const demo_descriptions: Record<string, string> = {
   '/table': `Compose column picking, per-column filters, cell-range selection and export into a table.`,
   '/theming': `Every CSS custom property components read, generated from source.`,
   '/virtual-list': `Render a small visible window into a large fixed-height list.`,
-  '/wiggle': `Animate a component to draw attention to a change.`,
   '/workbench': `Combine file loading, data inspection, and resizable panels.`,
   '/form': `Form integration and native validation behavior.`,
   '/kit-form-actions': `Progressively enhanced SvelteKit form actions.`,
@@ -114,6 +113,7 @@ export const demo_descriptions: Record<string, string> = {
   '/attachments/forward-window-keydown': `Route page-level keys to the viewer under the pointer.`,
   '/attachments/file-drop': `Drag-and-drop files with directory expansion and MIME filtering.`,
   '/attachments/stick-to-bottom': `Keep a streaming log or chat pinned to its end until the reader scrolls away.`,
+  '/attachments/wiggle': `Shake an element with a spring to draw attention to a change.`,
 }
 
 // Source groups determine membership; recipes remain searchable without filling the nav.

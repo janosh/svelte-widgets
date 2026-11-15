@@ -1,11 +1,10 @@
-import { ControlGroup, EmptyState, GlassChip, KeyValueList, LiveMessage } from '#lib'
+import { EmptyState, GlassChip, KeyValueList, LiveMessage } from '#lib'
 import { flushSync, type ComponentProps } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, raw_snippet, render } from './index'
 
 const children = raw_snippet(`<span class="custom">Custom content</span>`)
 const attrs = { class: `caller`, id: `root`, style: `margin-top: 3px` }
-const legend = `Stacking`
 const children_text = `Custom content`
 
 test.each([
@@ -13,7 +12,6 @@ test.each([
   [`dl.key-value-list`, () => render(KeyValueList, { rows: [], ...attrs })],
   [`span.sr-only`, () => render(LiveMessage, attrs)],
   [`.glass-chip`, () => render(GlassChip, { children, ...attrs })],
-  [`fieldset.control-group`, () => render(ControlGroup, { legend, children, ...attrs })],
 ] as const)(`%s forwards class, attributes and style`, (selector, mount) => {
   mount()
   const root = doc_query(`${selector}.caller`)
@@ -84,17 +82,5 @@ test(`GlassChip stays start-aligned inside a centered parent`, () => {
   expect([chip.textContent, getComputedStyle(chip).textAlign]).toEqual([
     children_text,
     `start`,
-  ])
-})
-
-test(`ControlGroup is a fieldset named by its legend that disables its controls`, () => {
-  const label = raw_snippet(`<label>Gap <input type="number" /></label>`)
-  render(ControlGroup, { legend, children: label, disabled: true })
-  const fieldset = doc_query<HTMLFieldSetElement>(`fieldset.control-group`)
-  const { tagName, textContent } = fieldset.firstElementChild ?? {}
-  expect([tagName, textContent]).toEqual([`LEGEND`, legend])
-  expect([fieldset.disabled, fieldset.querySelector(`input`)?.type]).toEqual([
-    true,
-    `number`,
   ])
 })

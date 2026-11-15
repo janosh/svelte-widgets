@@ -3,11 +3,11 @@
 import {
   DECIMAL_SRC,
   escape_html,
-  fuzzy_match,
   HTML_ENTITY_SRC,
   html_to_text,
   HTML_TAG_SRC,
 } from '../utils'
+import { fuzzy_match } from '../match'
 import { type CellReaders, default_is_missing } from './filter'
 import type {
   CellVal,
@@ -333,34 +333,9 @@ export function format_datetime(
   return mode === `date` ? date : mode === `time` ? time : `${date} ${time}`
 }
 
-// DataTable's default number formatter: integers in full, other numbers to 3 significant
-// digits. Digits group only from 5 on (`min2`), so years and IDs read 1766, not 1,766.
-// `format` strings are host-defined, so ignored here.
-export const default_format_number = (num: number): string =>
-  num.toLocaleString(undefined, {
-    useGrouping: `min2`,
-    ...(Number.isInteger(num) ? {} : { maximumSignificantDigits: 3 }),
-  })
-
 // DataTable's default render_html: the markup's visible text, escaped. Safe for {@html}
 // without a sanitizer, at the cost of dropping formatting.
 export const escape_markup = (html: string): string => escape_html(html_to_text(html))
-
-export const is_plain_object = (value: unknown): value is Record<string, unknown> => {
-  if (typeof value !== `object` || value === null) return false
-  const prototype: unknown = Object.getPrototypeOf(value)
-  return prototype === Object.prototype || prototype === null
-}
-
-// A boolean-or-object option merged over defaults, null when off
-export const with_defaults = <Defaults extends object, Config extends object>(
-  option: boolean | Config | undefined,
-  defaults: Defaults,
-): (Defaults & Config) | null =>
-  option
-    ? ({ ...defaults, ...(typeof option === `object` ? option : {}) } as Defaults &
-        Config)
-    : null
 
 // Keeps returning the first of a run of JSON-equal arguments, so a caller that rebuilds an
 // equal value on every read hands its consumers one identity. JSON values only.

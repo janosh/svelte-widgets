@@ -1,6 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
-import type { Placement } from '../utils'
-import { clamp, compute_position, get_uuid } from '../utils'
+import type { Placement } from '../position'
+import { clamp, get_uuid } from '../utils'
+import { compute_position } from '../position'
 import { auto_update_position } from './float'
 import { css_px, escape_layer } from './shared'
 

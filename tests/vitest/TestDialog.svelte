@@ -1,6 +1,7 @@
 <script lang="ts">
   import Dialog from '#lib/Dialog.svelte'
   import Sheet from '#lib/Sheet.svelte'
+  import type { DialogControls, DialogTriggerProps } from '#lib/dialog.ts'
   import type { ComponentProps } from 'svelte'
 
   // Compile-time coverage: Dialog and Sheet accept native dialog attributes while their
@@ -21,17 +22,17 @@
 </script>
 
 <Surface {...props} bind:open bind:surface aria-labelledby="test-dialog-title">
-  {#snippet trigger(trigger_props)}
+  {#snippet trigger(trigger_props: DialogTriggerProps)}
     <button data-testid="dialog-trigger" {...trigger_props}>Open dialog</button>
   {/snippet}
   {#snippet header()}
     <h2 id="test-dialog-title">Edit profile</h2>
   {/snippet}
-  {#snippet children({ close })}
+  {#snippet children({ close }: DialogControls)}
     <button type="button" data-testid="dialog-action" onclick={close}>Save</button>
     {#if nested}
       <Dialog aria-label="Nested dialog" on_close={on_nested_close}>
-        {#snippet trigger(trigger_props)}
+        {#snippet trigger(trigger_props: DialogTriggerProps)}
           <button data-testid="nested-trigger" {...trigger_props}>Open nested</button>
         {/snippet}
         <button>Nested action</button>

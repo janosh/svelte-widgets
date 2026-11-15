@@ -9,9 +9,9 @@
     OpenChangeVia,
     TocHeadingData,
   } from './types'
-  import { create_key_selector } from './internal/key-selector.svelte'
+  import { create_key_selector } from './internal/key-selector.svelte.ts'
   import { flash_toc_target, get_heading_visibility } from './toc-utils'
-  import { is_editable_event_target, is_modified_click } from './utils'
+  import { is_editable_event_target, is_modified_click } from './shortcuts'
   import { override_style } from './attachments/shared'
   import { fragment_href } from './heading-anchors'
 

@@ -3,7 +3,8 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import type { AccordionItem, SelectionProps } from './types'
   import { selection_values } from './internal/selection'
-  import { chain_handlers, step_focus } from './utils'
+  import { chain_handlers } from './utils'
+  import { step_focus } from './shortcuts'
 
   // Headless styling hooks: .accordion, .accordion-item, .accordion-heading,
   // .accordion-trigger and .accordion-panel. Items and panels expose data-state.

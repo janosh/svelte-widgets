@@ -124,4 +124,4 @@ sync_fullscreen({
 })
 ```
 
-`get_page_background()` is exported alongside it. It returns the first opaque background among `body` and `html`, falling back to `prefers-color-scheme`.
+The wrapper's background comes from `get_bg_color(document.body)` (from `svelte-widgets/attachments`): the first opaque background among `body` and `html`, else the browser's page canvas, which is dark under a dark root `color-scheme`.

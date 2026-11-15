@@ -42,7 +42,7 @@ Every component is a named export from the package root and has a direct subpath
 | [`JsonTree`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/json-tree/JsonTree.svelte)       | Searchable JSON inspector with editing, copying and diffs                                        | [docs](https://svelte-widgets.janosh.dev/json-tree)                    |
 | [`Progress`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Progress.svelte)                 | Accessible determinate or indeterminate progress                                                 | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | [`TaskStatus`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/TaskStatus.svelte)             | Task progress, spinner or overlay status with caller-owned cancellation and retry                | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| [`SettingsGroup`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/SettingsGroup.svelte)       | Collapsible group for organizing related settings sections                                       | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
+| [`SettingsGroup`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/SettingsGroup.svelte)       | Collapsible or static group of related settings or controls                                      | [docs](https://svelte-widgets.janosh.dev/settings#settingsgroup)       |
 | [`SettingsSearch`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/SettingsSearch.svelte)     | Settings-row filter that expands matching groups and restores their prior state                  | [docs](https://svelte-widgets.janosh.dev/settings#settingssearch)      |
 | [`SettingsSection`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/SettingsSection.svelte)   | Titled settings region with explicit changed keys, resets, descriptions and grid layout          | [docs](https://svelte-widgets.janosh.dev/settings#settingssection)     |
 | [`Sheet`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Sheet.svelte)                       | Dialog-based modal edge panel with side placement and shared dismissal policies                  | [docs](https://svelte-widgets.janosh.dev/patterns#sheet)               |
@@ -51,15 +51,17 @@ Every component is a named export from the package root and has a direct subpath
 | [`FindBar`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/FindBar.svelte)                   | In-DOM find-in-page bar that highlights, counts and steps through matches                        | [docs](https://svelte-widgets.janosh.dev/patterns#findbar)             |
 | [`CodeBlock`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/CodeBlock.svelte)               | Read-only code with cancellable highlighting, escaped tokens or trusted HTML                     | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | [`StatGrid`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/StatGrid.svelte)                 | Responsive statistic tiles with units, hints and accessible changes                              | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
-| [`Spinner`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Spinner.svelte)                   | Loading status with optional text                                                                | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
+| [`Spinner`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Spinner.svelte)                   | Loading indicator, a status region unless decorative                                             | [docs](https://svelte-widgets.janosh.dev/extras#spinner)               |
 | [`StatusMessage`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/StatusMessage.svelte)       | Dismissible info, success, warning or error feedback                                             | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | [`EmptyState`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/EmptyState.svelte)             | Polite "no data" placeholder, inline or overlaid on empty axes or a blank canvas                 | [docs](https://svelte-widgets.janosh.dev/workbench#layout-primitives)  |
 | [`KeyValueList`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/KeyValueList.svelte)         | One-line term/value rows that ellipsize long values                                              | [docs](https://svelte-widgets.janosh.dev/workbench#layout-primitives)  |
+| [`InfoCard`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/InfoCard.svelte)                 | Grid of label/value rows with units, number formatting and hidden empty rows                     | [docs](https://svelte-widgets.janosh.dev/extras#infocard)              |
+| [`ShortcutsList`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/ShortcutsList.svelte)       | Collapsible list of keyboard shortcuts with platform-aware key symbols                           | [docs](https://svelte-widgets.janosh.dev/extras#shortcutslist)         |
 | [`ColumnPicker`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/table/ColumnPicker.svelte)   | Grouped, searchable show/hide menu for table columns                                             | [docs](https://svelte-widgets.janosh.dev/table)                        |
 | [`ColumnFilter`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/table/ColumnFilter.svelte)   | Per-column range, checklist or substring filter for table headers                                | [docs](https://svelte-widgets.janosh.dev/table)                        |
-| [`ControlGroup`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/ControlGroup.svelte)         | Unframed fieldset grouping controls under a legend                                               | [docs](https://svelte-widgets.janosh.dev/workbench#layout-primitives)  |
 | [`GlassChip`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/GlassChip.svelte)               | Frosted label overlaid on a canvas, plot or image                                                | [docs](https://svelte-widgets.janosh.dev/workbench#layout-primitives)  |
 | [`Tag`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Tag.svelte)                           | Badge, link, toggle or removable chip with variants and auto-contrast text                       | [docs](https://svelte-widgets.janosh.dev/extras#tag)                   |
+| [`InfoTag`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/InfoTag.svelte)                   | Label/value pill that copies its value, with semantic variants and a hover popover               | [docs](https://svelte-widgets.janosh.dev/extras#infotag)               |
 | [`LiveMessage`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/LiveMessage.svelte)           | Visually hidden live region announcing a changing message                                        | [docs](https://svelte-widgets.janosh.dev/workbench#layout-primitives)  |
 | [`DragOverlay`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/DragOverlay.svelte)           | Drop-target overlay with an optional message                                                     | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
 | [`ClickFeedback`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/ClickFeedback.svelte)       | Positioned transient confirmation icon                                                           | [docs](https://svelte-widgets.janosh.dev/workbench)                    |
@@ -86,12 +88,10 @@ Every component is a named export from the package root and has a direct subpath
 | [`SubpageGrid`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/SubpageGrid.svelte)           | Card grid linking to child pages                                                                 | [docs](https://svelte-widgets.janosh.dev/extras#subpagegrid)           |
 | [`Icon`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Icon.svelte)                         | Inline SVG icon from the bundled set                                                             | [docs](https://svelte-widgets.janosh.dev/extras#icon)                  |
 | [`GitHubCorner`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/GitHubCorner.svelte)         | The classic corner ribbon link                                                                   | [docs](https://svelte-widgets.janosh.dev/extras#githubcorner)          |
-| [`CircleSpinner`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/CircleSpinner.svelte)       | Minimal loading spinner                                                                          | [docs](https://svelte-widgets.janosh.dev/extras#circlespinner)         |
 | [`ContributorList`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/ContributorList.svelte)   | Avatar row of GitHub contributors                                                                | [docs](https://svelte-widgets.janosh.dev/site-chrome#contributorlist)  |
 | [`LiteYouTubeEmbed`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/LiteYouTubeEmbed.svelte) | YouTube poster that only loads the player iframe once clicked                                    | [docs](https://svelte-widgets.janosh.dev/site-chrome#liteyoutubeembed) |
-| [`Wiggle`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/Wiggle.svelte)                     | Spring-animated shake wrapper                                                                    | [docs](https://svelte-widgets.janosh.dev/wiggle)                       |
 
-Eighteen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any element: seventeen come from `svelte-widgets/attachments`, while `heading_anchors` has its own subpath. `dismiss_on_outside_press` is the lower-level multi-surface primitive behind `click_outside`.
+Nineteen [attachments](https://svelte-widgets.janosh.dev/attachments) work on any element: eighteen come from `svelte-widgets/attachments`, while `heading_anchors` has its own subpath. `dismiss_on_outside_press` is the lower-level multi-surface primitive behind `click_outside`.
 
 ```svelte
 <script>
@@ -194,37 +194,29 @@ import {
   escape_layer, // add a handler to the shared LIFO Escape stack, optionally while focused
   sortable,
   tooltip,
+  create_wiggle, // spring shake to flag a change, e.g. a rejected input
 } from 'svelte-widgets/attachments'
-import {
-  compute_position,
-  fuzzy_match,
-  get_label,
-  make_change_detector, // (value) => true when it differs (===) from the previous call's
-} from 'svelte-widgets/utils'
+import { get_label, make_change_detector } from 'svelte-widgets/utils'
+import { compute_position } from 'svelte-widgets/position' // pick a side that fits, stay on screen
+import { fuzzy_match } from 'svelte-widgets/match'
+import { format_shortcut } from 'svelte-widgets/shortcuts'
 import { heading_anchors } from 'svelte-widgets/heading-anchors'
 ```
 
 | Subpath                                                                                                               | API                                                                               |
 | --------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- |
 | [`/attachments`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/attachments/index.ts)                     | Element attachments and dismissal primitives                                      |
-| [`/canvas`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/canvas.svelte.ts)                              | Parent content-box sizing, DPR tracking and coalesced canvas redraws              |
-| [`/csv`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/csv.ts)                                           | CSV escaping and row serialization with optional explicit columns                 |
-| [`/format`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/format.ts)                                     | Binary byte-size formatting                                                       |
+| [`/canvas`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/canvas.svelte.ts)                              | Canvas sizing, DPR tracking, coalesced redraws and freehand image markup          |
+| [`/format`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/format.ts)                                     | `format_num` (d3-style specs incl. SI prefixes, or options), byte sizes and CSV   |
 | [`/roving-focus`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/roving-focus.svelte.ts)                  | One keyboard tab stop across available HTML or SVG items, including nested groups |
-| [`/stats`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/stats.ts)                                       | Statistic value and change formatting                                             |
 | [`/table`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/table/index.ts)                                 | Column picker, column filters, cell-range selection and table export              |
-| [`/url-params`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/url-params.ts)                             | Typed query validation and URL updates that omit defaults                         |
-| [`/poll`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/poll.ts)                                         | Interval polling that pauses while the page is hidden and catches up on return    |
-| [`/clipboard`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/clipboard.svelte.ts)                        | Clipboard feedback state                                                          |
 | [`/code-editor`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/code-editor/index.ts)                     | Backend-agnostic editing, diff rendering and primitives                           |
 | [`/code-editor/editor.css`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/code-editor/editor.css)        | Shared syntax-token and diff-view styles                                          |
+| [`/browser`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/browser/index.ts)                             | Clipboard feedback, downloads, printing, storage, URL params, polling, fullscreen |
 | [`/dialogs`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/dialogs.svelte.ts)                            | Queued choice, confirmation and prompt requests                                   |
-| [`/download`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/download.ts)                                 | Browser file downloads and blob-to-data-URL reads                                 |
 | [`/file-drop`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/file-drop.ts)                               | Directory expansion and accept filtering                                          |
 | [`/find-in-page`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/find-in-page.svelte.ts)                  | Reactive find-in-page cursor behind `FindBar`                                     |
-| [`/fullscreen`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/fullscreen.svelte.ts)                      | Shared fullscreen state                                                           |
 | [`/heading-anchors`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/heading-anchors.ts)                   | Heading text/ID helpers, slugger and anchor attachment                            |
-| [`/image-markup`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/image-markup.ts)                         | Image-fit geometry and canvas rendering of freehand annotation strokes            |
 | [`/icons`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/icons.ts)                                       | Dynamic icon registry                                                             |
 | [`/json-tree`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/json-tree/index.ts)                         | JSON inspector component and types                                                |
 | [`/json-tree/path`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/json-tree/path.ts)                     | Dot/bracket path formatting and resolution                                        |
@@ -237,15 +229,16 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 | [`/markdown/content`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/content.ts)                 | Content manifests, typed frontmatter, link validation, TOC and search records     |
 | [`/markdown/check`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/check.ts)                     | Node-only syntax, type and assertion checks for documentation examples            |
 | [`/markdown/mermaid`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts)                 | Client-side Mermaid rendering and theme sync for `mermaid: true` diagrams         |
-| [`/print`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/print.ts)                                       | Page printing with a suggested PDF filename                                       |
 | [`/source-links`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/source-links/index.ts)                   | Link inline code mentions of your source to GitHub                                |
 | [`/source-links/vite-plugin`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/source-links/vite-plugin.ts) | Vite plugin emitting the file/export index those links use                        |
 | [`/source-links/virtual`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/source-links/virtual.d.ts)       | Types for the plugin's `virtual:source-symbols` module                            |
-| [`/storage`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/storage.ts)                                   | Non-throwing localStorage, persisted choices and MRU lists                        |
 | [`/text-search`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/text-search.ts)                           | Text ranges, highlighting and search-jump helpers                                 |
 | [`/theme`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/theme.svelte.ts)                                | Headless light/dark/system state                                                  |
 | [`/toast-queue`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/toast-queue.svelte.ts)                    | Toast reducer and reactive store                                                  |
-| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Positioning, fuzzy and term matching (`create_term_matcher`), hotkeys, helpers    |
+| [`/utils`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/utils.ts)                                       | Error coercion, HTML text/escaping, option helpers, change detection              |
+| [`/position`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/position.ts)                                 | `compute_position`: flip and shift geometry for floating surfaces                 |
+| [`/shortcuts`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/shortcuts.ts)                               | Shortcut parsing, matching, display, rebinding and focus stepping                 |
+| [`/match`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/match.ts)                                       | Fuzzy and term matching (`create_term_matcher`), command filters                  |
 | [`/virtual`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/virtual.ts)                                   | Visible-window calculation for fixed-size items                                   |
 | [`/vite-config`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/vite-config.ts)                           | This repository's Vite Plus configuration helper                                  |
 | [`/assets`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/assets.ts)                                     | Svelte preprocessor for relative media, responsive images and downloads           |
@@ -253,7 +246,7 @@ import { heading_anchors } from 'svelte-widgets/heading-anchors'
 
 [`create_canvas_surface()`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/canvas.svelte.ts#L10) owns both layers' inline CSS dimensions and restores them on cleanup. Supply `height()` or give the parent a definite height; draw callbacks receive CSS-pixel coordinates and isolated context state. [`create_roving_focus()`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/roving-focus.svelte.ts#L37) keeps nested groups independent and observes DOM eligibility changes, including hidden panels and disabled items.
 
-`StatGrid` changes are neutral by default; set an item's `delta_tone` to `positive` or `negative` when the change has that meaning. `ClickFeedback` restarts when given a fresh `position` object, even at identical coordinates. [`rows_to_csv(rows, columns)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/csv.ts#L18) accepts explicit readonly columns for sparse rows or header-only exports. URL validators accept native Sets or record keys; present empty strings remain valid when allowed.
+`StatGrid` changes are neutral by default; set an item's `delta_tone` to `positive` or `negative` when the change has that meaning. `ClickFeedback` restarts when given a fresh `position` object, even at identical coordinates. [`rows_to_csv(rows, columns)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/format.ts#L390) accepts explicit readonly columns for sparse rows or header-only exports. URL validators accept native Sets or record keys; present empty strings remain valid when allowed.
 
 `CodeEditor` and `DiffView` take host-supplied `EditorBackend` and `DiffBackend` implementations, either through their `backend` props or once per app with [`set_editor_backend()`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/code-editor/types.ts#L180) and [`set_diff_backend()`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/code-editor/types.ts#L182). Import `svelte-widgets/code-editor/editor.css` alongside them for the token palette and shared line metrics. The editor takes a host-owned `model={create_editor_model({ uri, text })}` whose rope, UTF-16 selection, transactions, dirty checkpoint, and bounded history remain usable at 100 MB / 1,000,000 lines. Saving is an optional callback, so file reads, persistence, conflicts and draft policy remain in the host. The editable DOM uses a viewport-sized textarea; explicit selections may expand that window, while scroll height remains subject to browser limits. Both backend contracts are runtime-agnostic and can call a native process, worker, WASM module or server route.
 

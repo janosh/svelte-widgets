@@ -2,8 +2,9 @@
 // and fail on repo-private specifiers it left unresolved.
 /// <reference types="node" />
 /// <reference lib="es2023.array" />
+import { existsSync } from 'node:fs'
 import { readFile, readdir, unlink, writeFile } from 'node:fs/promises'
-import { extname, resolve } from 'node:path'
+import { dirname, extname, resolve } from 'node:path'
 import { parse } from 'svelte/compiler'
 import ts from 'typescript'
 import { edit_source, type SourceEdit } from '../src/lib/markdown/source-map.ts'
@@ -67,7 +68,16 @@ export const rewrite_imports = (source: string, filename: string): string => {
   return edit_source({ code: source, spans: [] }, edits).code
 }
 
+// Node resolves no extensions, so a relative import of a file dist/ lacks (e.g.
+// `./clipboard.svelte` for clipboard.svelte.js) breaks consumers outside Vite
+const RELATIVE_IMPORT = /(?:from|import)\s*\(?\s*['"](?<spec>\.{1,2}\/[^'"]+)['"]/gu
+const missing_imports = (path: string, source: string): string[] =>
+  [...source.matchAll(RELATIVE_IMPORT)]
+    .map((match) => match.groups?.spec ?? ``)
+    .filter((spec) => !existsSync(resolve(dirname(path), spec)))
+
 export const finalize_package = async (directory: string): Promise<void> => {
+  const code_files: [string, string][] = []
   for (const file of await readdir(directory, { recursive: true, withFileTypes: true })) {
     if (!file.isFile()) continue
     const path = resolve(file.parentPath, file.name)
@@ -82,8 +92,14 @@ export const finalize_package = async (directory: string): Promise<void> => {
       const source = await readFile(path, `utf8`)
       const output = rewrite_imports(source, file.name)
       if (output !== source) await writeFile(path, output)
+      if (!file.name.endsWith(`.d.ts`)) code_files.push([path, output])
     }
   }
+  const broken = code_files.flatMap(([path, source]) =>
+    missing_imports(path, source).map((spec) => `${path}: ${spec}`),
+  )
+  if (broken.length)
+    throw new Error(`dist/ imports files it does not contain:\n${broken.join(`\n`)}`)
 }
 
 if (import.meta.main) await finalize_package(resolve(import.meta.dirname, `../dist`))

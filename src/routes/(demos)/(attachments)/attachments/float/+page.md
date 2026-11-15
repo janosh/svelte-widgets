@@ -5,7 +5,7 @@ Parks an element next to an anchor and keeps it there while the page scrolls or 
 ```svelte example id="attachments-float"
 <script lang="ts">
   import { float } from 'svelte-widgets/attachments'
-  import type { Placement } from 'svelte-widgets/utils'
+  import type { Placement } from 'svelte-widgets/position'
 
   let anchor = $state<HTMLElement | null>(null)
   let placement = $state<Placement>(`bottom`)

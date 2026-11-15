@@ -10,7 +10,7 @@ the package root:
 
 ```svelte
 <script>
-  import { CircleSpinner, Icon, ThemeToggle, Toggle } from 'svelte-widgets'
+  import { Icon, Spinner, ThemeToggle, Toggle } from 'svelte-widgets'
 </script>
 ```
 
@@ -115,18 +115,18 @@ Renders one glyph from the bundled icon set at `1em` square, inheriting `current
 </div>
 ```
 
-### `CircleSpinner`
+### `Spinner`
 
-A dependency-free loading indicator. `size`, `color` and `duration` are plain CSS strings, so any unit works.
+A dependency-free loading indicator. `size`, `color` and `duration` are plain CSS strings, so any unit works; unset ones fall back to `--spinner-size`, `--spinner-color` and `--spinner-duration`. It is a polite status region named by `text` (or `Loading`); pass `status={false}` when the surrounding control announces its own busy state.
 
 ```svelte example id="spinner-demo"
 <script lang="ts">
-  import { CircleSpinner } from 'svelte-widgets'
+  import { Spinner } from 'svelte-widgets'
 </script>
 
-<CircleSpinner />
-<CircleSpinner size="2em" color="tomato" />
-<CircleSpinner size="3em" color="mediumseagreen" duration="0.6s" />
+<Spinner />
+<Spinner size="2em" color="tomato" />
+<Spinner size="3em" color="mediumseagreen" duration="0.6s" text="Loading data" />
 ```
 
 ### `FileDetails`
@@ -216,6 +216,88 @@ An inline pill for categories, statuses, filters and counts. It is a static `<sp
 
 Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-border-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
 
+### `InfoTag`
+
+A [`Tag`](#tag) for a property: `label` reads as a caption and `value` is emphasized. Clicking copies the value's plain text (or `copy_value`) and flashes a checkmark; an `onclick` replaces the copy. `title` opens a hover popover. Every other prop goes to `Tag`, so `color`, `variant`, `disabled` and `on_remove` work as there. `label`, `value` and `title` render as trusted HTML for sub- and superscripts, so sanitize untrusted input before passing it.
+
+```svelte example id="info-tag-demo"
+<script lang="ts">
+  import { InfoTag } from 'svelte-widgets'
+
+  let tags = $state([`mp-149`, `mp-13`, `mp-2534`])
+</script>
+
+<div style="display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center">
+  <InfoTag label="E<sub>g</sub>:" value="1.12 eV" title="<b>Band gap</b> from PBE" />
+  <InfoTag label="Stable:" value="yes" color="mediumseagreen" variant="solid" />
+  <InfoTag label="Area:" value="42 m<sup>2</sup>" variant="outline" />
+  <InfoTag label="Locked:" value="42" disabled />
+</div>
+
+<p>Removable tags, copying a longer ID than they show:</p>
+<div style="display: flex; flex-wrap: wrap; gap: 0.5em">
+  {#each tags as id (id)}
+    <InfoTag
+      label="ID:"
+      value={id}
+      copy_value="https://materialsproject.org/materials/{id}"
+      on_remove={() => (tags = tags.filter((other) => other !== id))}
+    />
+  {:else}
+    <button onclick={() => (tags = [`mp-149`, `mp-13`])}>Reset</button>
+  {/each}
+</div>
+```
+
+### `InfoCard`
+
+A grid of label/value rows under an optional `title`, for property sheets and metadata. Numbers and number arrays go through `format` (default `format_num` from `svelte-widgets/format`); a row's own `format` wins. `unit` trails the value, `tooltip` titles it, and rows with no `value` are hidden, showing `fallback` when none remain. Labels, string values and `title` render as trusted HTML.
+
+```svelte example id="info-card-demo"
+<script lang="ts">
+  import { InfoCard } from 'svelte-widgets'
+
+  const items = [
+    { label: `Band gap`, value: 1.1234, unit: `eV` },
+    { label: `Density`, value: 2.329, unit: `g/cm³` },
+    { label: `Lattice`, value: [5.431, 5.431, 5.431], unit: `Å` },
+    {
+      label: `Volume`,
+      value: 160.2,
+      format: (num: number) => num.toFixed(0),
+      unit: `Å³`,
+    },
+    { label: `Space group`, value: `Fd-3m`, tooltip: `No. 227` },
+    { label: `Magnetic moment`, value: null }, // hidden: no value
+  ]
+</script>
+
+<InfoCard {items} title="Si<sub>8</sub>" />
+<InfoCard items={[]} fallback="No properties computed yet" />
+```
+
+Set its box (background, padding, gap, width) with `style` or `class`, its column width with `--info-card-min-col-width` and the value chips with `--info-card-value-bg`.
+
+### `ShortcutsList`
+
+A collapsed `<details>` listing keyboard shortcuts, e.g. at the bottom of a settings or help pane. Each entry's `keys` uses the [`hotkey` grammar](attachments/hotkey) and renders with `format_shortcut`, so `mod` shows as `⌘` on Apple keyboards and `Ctrl` elsewhere. An array lists alternatives; `keys_label` replaces the keys for gestures the grammar can't spell. `summary` renames the toggle and `bind:open` expands it.
+
+```svelte example id="shortcuts-list-demo"
+<script lang="ts">
+  import { ShortcutsList } from 'svelte-widgets'
+
+  const shortcuts = [
+    { keys: `mod+k`, label: `Open command menu` },
+    { keys: [`ArrowLeft`, `ArrowRight`], label: `Previous / next frame` },
+    { keys: `shift+?`, label: `Show help` },
+    { keys: `Escape`, label: `Close the open pane` },
+    { keys: [], keys_label: `⌘/Ctrl + scroll`, label: `Zoom` },
+  ]
+</script>
+
+<ShortcutsList {shortcuts} open />
+```
+
 ### `PrevNext`
 
 Sequential navigation with wraparound. Pass `items` as `{ href, label }` objects and the `current` href. A nonempty list must contain `current`. Use `children({ kind, item, index, total })` to customize both links and `between` for content between them. `labels` translates the previous/next headings; `as` changes the wrapper element. Navigation uses ordinary links; apps own keyboard shortcuts, preloading, and router behavior. The links at the bottom of every demo page use this component.
@@ -273,11 +355,11 @@ Fence metadata drives it: `collapsible` hides the source behind a button, `code_
 
 ### `start_polling`
 
-`svelte-widgets/poll` runs a task on an interval only while the page is visible, unless `while_hidden`. Returning to the tab (or, with `catch_up_on_focus`, to the window) runs it at once, or with `catch_up_after_ms` only once the last run is that old, and re-arms the interval, so the catch-up is not followed by a timed run a moment later. `first_delay_ms` sets the first timed run, `0` to run right away. A run never overlaps the previous one: ticks, returns and `run_now()` landing while a returned promise is pending are skipped. Its `AbortSignal` aborts on stop, and a task returning `false` marks a skipped run that does not reset the catch-up age. The returned function stops polling, which makes it a ready-made `$effect` cleanup; its `run_now()` runs at once and restarts the interval, e.g. for a refresh button.
+`start_polling` from `svelte-widgets/browser` runs a task on an interval only while the page is visible, unless `while_hidden`. Returning to the tab (or, with `catch_up_on_focus`, to the window) runs it at once, or with `catch_up_after_ms` only once the last run is that old, and re-arms the interval, so the catch-up is not followed by a timed run a moment later. `first_delay_ms` sets the first timed run, `0` to run right away. A run never overlaps the previous one: ticks, returns and `run_now()` landing while a returned promise is pending are skipped. Its `AbortSignal` aborts on stop, and a task returning `false` marks a skipped run that does not reset the catch-up age. The returned function stops polling, which makes it a ready-made `$effect` cleanup; its `run_now()` runs at once and restarts the interval, e.g. for a refresh button.
 
 ```svelte example id="poll-demo"
 <script lang="ts">
-  import { start_polling } from 'svelte-widgets/poll'
+  import { start_polling } from 'svelte-widgets/browser'
 
   let [runs, last_run] = $state([0, `never`])
   let interval_ms = $state(2000)

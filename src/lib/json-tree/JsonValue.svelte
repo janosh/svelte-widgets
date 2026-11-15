@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { create_flash } from './feedback.svelte'
+  import { create_flash } from '../browser/flash.svelte.ts'
   import { tick } from 'svelte'
   import { escape_layer, is_composing } from '../attachments/shared'
   import { get_json_tree_context, type JsonValueType } from './types'

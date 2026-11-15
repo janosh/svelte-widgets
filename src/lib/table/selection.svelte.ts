@@ -1,5 +1,5 @@
 import { on } from 'svelte/events'
-import { is_editable_event_target } from '../utils'
+import { is_editable_event_target } from '../shortcuts'
 import { tsv_cell } from './export'
 import type { CellPos } from './types'
 
@@ -21,12 +21,21 @@ const rect_bounds = ({ start, end }: CellRect): RectBounds => ({
   col_hi: Math.max(start.col, end.col),
 })
 
-// Contract: coordinates index the host's current rows and columns, so hosts clear the
-// selection whenever those change (re-sort, filter, hide or reorder). A forgotten clear never
-// throws here: `to_tsv` skips cells whose `cell_text` returns undefined (out of range).
+// Shared so a reset or clear of an empty selection hands dependents the same array
+const NO_RECTS: CellRect[] = []
+
+// Contract: coordinates index the host's current rows and columns, so the selection must
+// clear whenever those change (re-sort, filter, hide or reorder): pass `layout`, a function
+// reading them, to reset it on every change, or call clear(). A forgotten clear never throws
+// here: `to_tsv` skips cells whose `cell_text` returns undefined (out of range).
 export class CellSelection {
-  // replaced, never mutated in place, so its rectangles stay plain objects
-  rects = $state.raw<CellRect[]>([])
+  // replaced, never mutated in place, so its rectangles stay plain objects. Writable derived:
+  // empties whenever what `layout` reads changes
+  rects = $derived.by((): CellRect[] => (this.#layout?.(), NO_RECTS))
+  readonly #layout: (() => unknown) | undefined
+  constructor(layout?: () => unknown) {
+    this.#layout = layout
+  }
   dragging = $state(false)
   // true once a drag crossed into another cell, so the click on release can be swallowed
   #drag_moved = false
@@ -50,7 +59,7 @@ export class CellSelection {
   )
   // A no-op when empty, so clearing on every data update re-runs no cell's has()
   clear = (): void => {
-    if (this.rects.length > 0) this.rects = []
+    if (this.rects.length > 0) this.rects = NO_RECTS
   }
 
   // Pointer down on a cell: start a 1x1 rectangle, replacing the selection unless additive

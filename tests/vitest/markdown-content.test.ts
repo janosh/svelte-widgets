@@ -354,6 +354,9 @@ describe(`Markdown content manifests`, () => {
   // tokens start with that many spaces, which locate() must map back to the one tab
   test.each([
     `> \tcode`,
+    // Marked 18.2+ keeps a tab after `> ` (or after a second space) as a tab
+    `>  \tcode`,
+    `> - a\n> \tb`,
     `>\t- item`,
     `> >\tcode`,
     `>\t-\t\tcode`,

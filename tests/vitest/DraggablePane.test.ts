@@ -15,6 +15,7 @@ import {
   press_key,
   render,
   stub_props,
+  stub_resize_observer,
 } from './index'
 import TestPaneEscape from './TestPaneEscape.svelte'
 import TestPaneExternalToggles from './TestPaneExternalToggles.svelte'
@@ -685,18 +686,7 @@ describe(`DraggablePane`, () => {
     `%s panes follow viewport, content and toggle size changes until dragged`,
     async (position, viewport_left) => {
       vi.useFakeTimers()
-      let notify_resize = () => {}
-      const observe = vi.fn()
-      const disconnect = vi.fn()
-      class MockResizeObserver implements ResizeObserver {
-        observe = observe
-        disconnect = disconnect
-        unobserve = vi.fn()
-        constructor(callback: ResizeObserverCallback) {
-          notify_resize = () => callback([], this)
-        }
-      }
-      stub_props(globalThis, { ResizeObserver: MockResizeObserver })
+      const { created } = stub_resize_observer()
       mock_viewport()
       const window_listeners = vi.spyOn(globalThis, `addEventListener`)
       const { toggle, pane } = await setup({ position })
@@ -708,6 +698,7 @@ describe(`DraggablePane`, () => {
       Object.assign(pane.style, { width: `420px`, height: `300px` })
       await click(toggle)
       expect(pane.style.left).toBe(`175px`)
+      const [{ observe, disconnect }] = created
       expect(observe.mock.calls).toEqual([
         [pane, { box: `border-box` }],
         [toggle, { box: `border-box` }],
@@ -722,18 +713,18 @@ describe(`DraggablePane`, () => {
 
       // A delayed stylesheet or async content can change width without a window event.
       mock_rect(pane, { left: 0, top: 0, width: 300, height: 300 })
-      notify_resize()
+      created[0].fire()
       expect(pane.style.left).toBe(`325px`)
 
       mock_rect(toggle, { left: 600, top: 20, width: 40, height: 40 })
-      notify_resize()
+      created[0].fire()
       expect([pane.style.left, pane.style.top]).toEqual([`345px`, `65px`])
       expect([pane.style.width, pane.style.height]).toEqual([`420px`, `300px`])
 
       drag_by(20, 0)
       await tick()
       expect(disconnect).toHaveBeenCalledOnce()
-      notify_resize() // A queued notification must not undo a user's drag.
+      created[0].fire() // A queued notification must not undo a user's drag.
       stub_props(globalThis, { innerWidth: 900 })
       globalThis.dispatchEvent(new Event(`resize`))
       vi.advanceTimersByTime(60)
