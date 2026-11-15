@@ -1,4 +1,4 @@
-import { escape_csv_field, rows_to_csv } from '#lib/csv.ts'
+import { escape_csv_field, rows_to_csv } from '#lib/format.ts'
 import { describe, expect, test } from 'vite-plus/test'
 
 describe(`rows_to_csv`, () => {
@@ -32,7 +32,11 @@ describe(`rows_to_csv`, () => {
   })
 
   test.each([
-    [`=1+2`, `=1+2`], // formula prefixes are preserved, not sanitized
+    [`=1+2`, `'=1+2`], // formula-like text is quoted so spreadsheets don't evaluate it
+    [`@cmd`, `'@cmd`],
+    [`-2`, `-2`], // numeric text is no formula
+    [Number.NaN, ``],
+    [-Infinity, ``],
     [`line1\rline2`, `"line1\rline2"`],
   ])(`escape_csv_field(%j) = %j`, (value, expected) => {
     expect(escape_csv_field(value)).toBe(expected)

@@ -57,7 +57,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 
 ```svelte example id="action-button-children"
 <script lang="ts">
-  import { ActionButton, CircleSpinner } from 'svelte-widgets'
+  import { ActionButton, Spinner } from 'svelte-widgets'
 
   const roll = async (): Promise<number> => {
     await new Promise<void>((resolve) => setTimeout(resolve, 700))
@@ -68,7 +68,7 @@ The `children` snippet receives `{ state, icon, text, disabled, result, error }`
 <ActionButton action={roll} reset_ms={2500}>
   {#snippet children({ state, result })}
     {#if state === `pending`}
-      <CircleSpinner size="1em" /> rolling…
+      <Spinner size="1em" status={false} /> rolling…
     {:else if state === `success`}
       <strong>you rolled {result}</strong>
     {:else}

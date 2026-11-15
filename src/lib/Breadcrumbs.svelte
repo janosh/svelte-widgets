@@ -7,7 +7,8 @@
   import Icon from './Icon.svelte'
   import { BREADCRUMBS_LABELS, merge_defaults, type BreadcrumbsLabels } from './labels'
   import type { BreadcrumbItem } from './types'
-  import { clamp_integer, is_modified_click } from './utils'
+  import { clamp_integer } from './utils'
+  import { is_modified_click } from './shortcuts'
 
   let {
     items,

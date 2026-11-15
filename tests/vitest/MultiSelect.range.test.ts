@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
-import { expect, test, vi } from 'vite-plus/test'
+import { expect, onTestFinished, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps } from '#lib/types.ts'
-import { click, press_key } from './index'
+import { click, doc_query, press_key } from './index'
 import {
   fresh_mousemove,
   get_input,
@@ -180,6 +180,8 @@ test(`Shift-click is an ordinary click while range_select is off`, async () => {
 
 test(`range selection skips disabled rows and obeys max_select`, async () => {
   const on_max_reached = vi.fn()
+  const animate = vi.spyOn(HTMLElement.prototype, `animate`)
+  onTestFinished(() => animate.mockRestore())
   const options = [
     { label: `Alpha` },
     { label: `Beta`, disabled: true },
@@ -198,6 +200,8 @@ test(`range selection skips disabled rows and obeys max_select`, async () => {
   expect(onrange_select.mock.calls[0][0].selected).toEqual([options[0], options[2]])
   expect(on_max_reached).toHaveBeenCalledOnce()
   expect(on_max_reached.mock.calls[0][0].attempted_option).toBe(options[3])
+  // the rejected add shakes the max-select message
+  expect(animate.mock.contexts).toEqual([doc_query(`span.max-select-msg`)])
 })
 
 test(`an invalidated anchor falls back to one ordinary add`, async () => {

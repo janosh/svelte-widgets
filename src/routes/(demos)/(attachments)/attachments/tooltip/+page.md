@@ -21,7 +21,7 @@ One recycled tooltip node serves the whole document, rendered in the browser's t
 ```svelte example id="attachments-tooltip-placement"
 <script lang="ts">
   import { tooltip } from 'svelte-widgets/attachments'
-  import type { Placement } from 'svelte-widgets/utils'
+  import type { Placement } from 'svelte-widgets/position'
 
   let placement = $state<Placement | `auto`>(`auto`)
   let align = $state<`start` | `center` | `end`>(`center`)

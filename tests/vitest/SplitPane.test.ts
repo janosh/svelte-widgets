@@ -1,9 +1,14 @@
 import PaneDivider from '#lib/SplitPane.svelte'
 import { flushSync } from 'svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { create_element, pointer_event, press_key, render } from './index'
-
-let notify_resize = () => {}
+import { expect, test, vi } from 'vite-plus/test'
+import {
+  create_element,
+  pointer_event,
+  press_key,
+  render,
+  resize_observers,
+  stub_resize_observer,
+} from './index'
 
 type PixelClamps = {
   min_px?: number
@@ -40,18 +45,7 @@ const mount_divider = ({
     { orientation, ratio },
     Object.getOwnPropertyDescriptors(clamps),
   )
-  vi.stubGlobal(
-    `ResizeObserver`,
-    class implements ResizeObserver {
-      observe = vi.fn()
-      unobserve = vi.fn()
-      disconnect = vi.fn()
-      constructor(callback: ResizeObserverCallback) {
-        notify_resize = () => callback([], this)
-      }
-    },
-  )
-  onTestFinished(() => void vi.unstubAllGlobals())
+  stub_resize_observer()
   const unmount_divider = render(PaneDivider, props, parent)
   const divider = parent.querySelector<HTMLElement>(`[role="separator"]`)
   if (!divider) throw new Error(`Missing separator`)
@@ -233,15 +227,15 @@ test(`pixel-mode keyboard resizing steps in px within the clamps`, () => {
 test(`pixel mode re-clamps on container resize without overwriting first_px`, () => {
   let width = 1000
   const bound = bound_first_px(320, { second_min_px: 200 })
-  const { size } = mount_divider({ clamps: bound, width: () => width })
+  const { size, parent } = mount_divider({ clamps: bound, width: () => width })
   expect(size()).toBe(`320px`)
 
   width = 400
-  notify_resize()
+  resize_observers.resize(parent)
   flushSync()
   expect([size(), bound.first_px]).toEqual([`200px`, 320])
   width = 1000
-  notify_resize()
+  resize_observers.resize(parent)
   flushSync()
   expect(size()).toBe(`320px`)
 })

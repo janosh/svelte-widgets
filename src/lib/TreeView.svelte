@@ -1,11 +1,11 @@
 <script lang="ts">
   import type { SelectionProps, TreeNode } from './types'
-  import { create_key_selector, keep_unchanged } from './internal/key-selector.svelte'
+  import { create_key_selector, keep_unchanged } from './internal/key-selector.svelte.ts'
   import { selection_values } from './internal/selection'
   import { tick, type Snippet } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { is_editable_event_target, is_modifier_chord } from './utils'
+  import { is_editable_event_target, is_modifier_chord } from './shortcuts'
 
   let {
     nodes,

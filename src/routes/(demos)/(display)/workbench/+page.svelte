@@ -17,12 +17,12 @@
   import { default_highlighter } from 'svelte-widgets/highlight'
   import {
     CodeBlock,
-    ControlGroup,
     EmptyState,
     GlassChip,
     Icon,
     KeyValueList,
     LiveMessage,
+    SettingsGroup,
     StatGrid,
     Spinner,
     StatusMessage,
@@ -226,8 +226,8 @@
 <StatusMessage bind:message type="success" dismissible />
 <p>
   <code>StatusMessage</code> supports info, success, warning and error announcements.
-  Dismissal clears its bindable message. <code>Spinner</code> adds an accessible status
-  around <code>CircleSpinner</code>.
+  Dismissal clears its bindable message. <code>Spinner</code> is a polite status region by
+  default; <code>status=&lbrace;false&rbrace;</code> makes it decoration.
 </p>
 <button onclick={() => (dragging = !dragging)}>Toggle drop overlay</button>
 <div
@@ -251,17 +251,17 @@
   <code>EmptyState</code> is a polite status placeholder for missing data; with
   <code>overlay</code> it lies over still-rendered axes or a blank canvas (as above)
   without blocking their pointer events. <code>KeyValueList</code> renders one-line
-  term/value rows that ellipsize long values. <code>ControlGroup</code> is an unframed
-  fieldset headed by its legend. <code>GlassChip</code> is a frosted label over visual
-  content, placed with
+  term/value rows that ellipsize long values. <code>SettingsGroup</code> with
+  <code>collapsible=&lbrace;false&rbrace;</code> is an unframed fieldset headed by its
+  title. <code>GlassChip</code> is a frosted label over visual content, placed with
   <code>--glass-chip-top</code>/<code>-left</code>. <code>LiveMessage</code> is a visually hidden
   live region that announces its message as it changes.
 </p>
 <div class="primitives-demo">
-  <ControlGroup legend="Sample">
+  <SettingsGroup title="Sample" collapsible={false}>
     <label>Points <input type="number" min="0" bind:value={n_points} /></label>
     <LiveMessage message="{n_points} points" />
-  </ControlGroup>
+  </SettingsGroup>
   <KeyValueList
     rows={[
       ['Points', n_points],

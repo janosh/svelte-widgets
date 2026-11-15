@@ -2,7 +2,7 @@
 
 `contrast_color` chooses between two foregrounds using the painted background behind the element when the attachment initializes. It does not observe later CSS or ancestor changes; pass a changing `bg_color` option or reattach when the background changes.
 
-The lighter of the two `choices` wins whenever it reaches `min_ratio` (default 4.5:1, WCAG AA for body text), otherwise the one with the higher contrast. `pick_contrast_color` makes the same choice without an element, judging a translucent `bg_color` over `backdrop` (default white), and `contrast_ratio` returns the WCAG ratio of any two CSS colors.
+The lighter of the two `choices` wins whenever it reaches `min_ratio` (default 4.5:1, WCAG AA for body text), otherwise the one with the higher contrast. `pick_contrast_color` makes the same choice without an element, judging a translucent `bg_color` over an opaque `backdrop` it then requires, and `get_bg_color` resolves what an element shows, down to the page canvas.
 
 ```svelte example id="attachments-contrast-color"
 <script lang="ts">

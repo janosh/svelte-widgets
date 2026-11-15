@@ -1,7 +1,7 @@
 // Headless theme helpers shared by ThemeToggle and callers that set theme without the
 // button (CommandMenu / PageSearch actions).
 
-import { persisted_choice, storage_set } from './storage'
+import { persisted_choice, storage_set } from './browser/index'
 
 const THEME_MODES = [`light`, `dark`, `system`] as const
 export type ThemeMode = (typeof THEME_MODES)[number]

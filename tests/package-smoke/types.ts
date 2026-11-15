@@ -21,9 +21,6 @@ import {
   type StatItem,
   type DialogCloseDetail,
   type DialogProps,
-  type Hotkey,
-  type PositionOptions,
-  type PositionResult,
   type ThemeMode,
 } from 'svelte-widgets'
 import type { ComponentProps } from 'svelte'
@@ -36,11 +33,11 @@ import type {
 } from 'svelte-widgets/code-editor'
 import { theme } from 'svelte-widgets/theme'
 import { get_label } from 'svelte-widgets/utils'
-import { rows_to_csv } from 'svelte-widgets/csv'
-import { format_bytes } from 'svelte-widgets/format'
-import { format_stat_delta } from 'svelte-widgets/stats'
-import { url_with_params, valid_query_param } from 'svelte-widgets/url-params'
-import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/image-markup'
+import type { PositionOptions, PositionResult } from 'svelte-widgets/position'
+import type { Hotkey } from 'svelte-widgets/shortcuts'
+import { rows_to_csv, format_bytes, format_locale } from 'svelte-widgets/format'
+import { url_with_params, valid_query_param } from 'svelte-widgets/browser'
+import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/canvas'
 import {
   configure_default_highlighter,
   create_highlighter,
@@ -261,7 +258,10 @@ export const typed_content = async () => {
 export const statistic: StatItem = { label: 'Count', value: 3, delta: 1 }
 export const csv = rows_to_csv([{ name: 'one,two', count: 2 }])
 export const bytes = format_bytes(1024)
-export const delta = format_stat_delta(-2)
+export const formatted: string = format_locale(1234.5, {
+  digits: 4,
+  sci_range: [1e-3, 1e6],
+})
 export const relative_url = url_with_params(
   [['page', '2']],
   new URL('https://example.com/'),

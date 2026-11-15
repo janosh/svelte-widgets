@@ -130,7 +130,7 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
 
 ```svelte example id="table-composed"
 <script lang="ts">
-  import { download } from 'svelte-widgets/download'
+  import { download } from 'svelte-widgets/browser'
   import {
     CellSelection,
     ColumnFilter,
@@ -142,7 +142,6 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
     type ColumnFilterValue,
     type TableColumn,
   } from 'svelte-widgets/table'
-  import { untrack } from 'svelte'
 
   type Row = {
     name: string
@@ -231,11 +230,7 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
 
   // selection coordinates index `shown` and `visible`, so a re-sort, re-filter or column
   // toggle clears them
-  const selection = new CellSelection()
-  $effect(() => {
-    void [shown, visible]
-    untrack(selection.clear)
-  })
+  const selection = new CellSelection(() => [shown, visible])
 
   const toggle_sort = (key: keyof Row) =>
     (sort = { key, dir: sort.key === key && sort.dir === 1 ? -1 : 1 })
@@ -395,7 +390,7 @@ table_to_text(
 // | Iron | 26 |
 ```
 
-Selection coordinates index your current rows and columns, so clear the selection (`selection.clear()`) whenever those change: after a sort, filter, or hiding or reordering columns. A forgotten clear doesn't throw, as long as `cell_text` returns `undefined` for cells out of range.
+Selection coordinates index your current rows and columns, so the selection must clear whenever those change: after a sort, filter, or hiding or reordering columns. Pass `new CellSelection(() => [rows, columns])` a function reading them to clear it whenever they are reassigned (spread arrays you mutate in place, `() => [...rows, ...columns]`), or call `selection.clear()` yourself. A forgotten clear doesn't throw, as long as `cell_text` returns `undefined` for cells out of range.
 
 ### Main API
 
@@ -403,9 +398,9 @@ Selection coordinates index your current rows and columns, so clear the selectio
 | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `ColumnPicker`                            | `bind:columns` of `TableColumn` (`id`, `label`, `group`, `description`, `visible`, `default_visible`, `disabled`). Sections by `group` (`bind:collapsed_groups`), searches past `search_threshold` columns, resets per section or globally to each column's default. Snippets: `trigger`, `header`, `toggle_label`, `description`. `on_toggle(column, visible)` reports every change, resets included. |
 | `ColumnFilter`                            | `bind:filter` (a `ColumnFilterValue`) and `bind:open` for the `column` it names. `values()` is read lazily while open; `options` (what `filter_panel` takes: `kind`, `numeric`, `category_limit` and the cell readers) and `format_bound` tune the panel. Snippets: `trigger`, `option`.                                                                                                               |
-| `CellSelection`                           | Reactive rectangles with `has(row, col)`, `size`, `start_drag` / `extend_drag` / `end_drag`, `step` for Shift+arrow growth, `clear` and `to_tsv`. Clear it whenever the rows or columns change.                                                                                                                                                                                                        |
+| `CellSelection`                           | Reactive rectangles with `has(row, col)`, `size`, `start_drag` / `extend_drag` / `end_drag`, `step` for Shift+arrow growth, `clear` and `to_tsv`. The optional constructor argument reads the rows and columns, clearing the selection when they change.                                                                                                                                               |
 | `cell_range_select(selection, options)`   | Attachment wiring pointer drags, Escape, outside presses and copy events (Cmd/Ctrl+C, Edit > Copy, given `cell_text`) onto cells marked `data-row` / `data-col` (or your own `cell_at`). Touch presses scroll instead of selecting.                                                                                                                                                                    |
-| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/csv`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                   |
+| `table_to_text(matrix, format)`           | CSV (RFC 4180 via `svelte-widgets/format`), TSV, Markdown or LaTeX from a `TableMatrix` of plain-text headers and rows.                                                                                                                                                                                                                                                                                |
 | `table_to_json(rows, columns, to_value?)` | Rows as objects keyed by stable column IDs, so renamed or repeated headers never collide.                                                                                                                                                                                                                                                                                                              |
 
 Both components take `labels` for translation, `class`, `style` and other attributes on their root, and CSS custom properties prefixed `--column-picker-` and `--column-filter-` (see [theming](theming)).

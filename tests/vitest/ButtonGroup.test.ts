@@ -324,13 +324,14 @@ describe(`ButtonGroup`, () => {
     expect(buttons[0].querySelector(`svg`)).not.toBeNull()
     expect(buttons[1].querySelector(`svg`)).toBeNull()
     // Hidden spinners reserve width; aria-busy carries their state.
-    expect(buttons[1].querySelector(`div`)?.style.width).toBe(`0.8em`)
-    expect(buttons[1].querySelector(`div`)?.style.visibility).toBe(`visible`)
-    expect(buttons[2].querySelector(`div`)?.style.visibility).toBe(`hidden`)
+    const spinner = (button: HTMLElement) => button.querySelector<HTMLElement>(`.spinner`)
+    expect(spinner(buttons[1])?.style.getPropertyValue(`--spinner-size`)).toBe(`0.8em`)
+    expect(spinner(buttons[1])?.style.visibility).toBe(`visible`)
+    expect(spinner(buttons[2])?.style.visibility).toBe(`hidden`)
     expect(
       buttons.map((button) => [
         button.getAttribute(`aria-busy`),
-        button.querySelector(`div`)?.getAttribute(`aria-hidden`),
+        spinner(button)?.getAttribute(`aria-hidden`),
       ]),
     ).toEqual([
       [null, undefined],

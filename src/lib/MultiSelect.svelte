@@ -16,26 +16,34 @@
     option_window,
     validate_option_list_config,
   } from './internal/option-list'
-  import { create_key_selector } from './internal/key-selector.svelte'
-  import { create_option_loader } from './internal/option-loader.svelte'
+  import { create_key_selector } from './internal/key-selector.svelte.ts'
+  import { create_option_loader } from './internal/option-loader.svelte.ts'
   import { tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
-  import { fromAction } from 'svelte/attachments'
   import type { FocusEventHandler } from 'svelte/elements'
   import {
     click_outside,
+    float,
     highlight_matches as attach_highlight_matches,
+    portal,
   } from './attachments/index'
   import { escape_layer, is_composing } from './attachments/shared'
-  import CircleSpinner from './CircleSpinner.svelte'
+  import { create_wiggle } from './attachments/wiggle'
+  import Spinner from './Spinner.svelte'
   import Icon from './Icon.svelte'
   import LiveMessage from './LiveMessage.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
-  import { portal_action } from './portal'
   import type { MultiSelectCloseVia, MultiSelectProps, SelectAllScope } from './types'
-  import * as utils from './utils'
-  import Wiggle from './Wiggle.svelte'
+  import { run_hotkeys } from './shortcuts'
+  import {
+    chain_handlers,
+    get_label,
+    get_option_key,
+    get_style,
+    has_group,
+    is_object,
+  } from './utils'
 
   // === Props ===
   let {
@@ -53,7 +61,7 @@
     duplicate_option_msg = `This option is already selected`,
     duplicates = false,
     keep_selected_in_dropdown = false,
-    key = (opt) => utils.get_option_key(opt),
+    key = (opt) => get_option_key(opt),
     filter_func = (opt, search_text) => option_matches(opt, search_text, fuzzy),
     fuzzy = true,
     close_dropdown_on_select = false,
@@ -191,12 +199,12 @@
   // every string this component renders on its own, overridable key by key for i18n
   const msg = $derived(merge_defaults(MULTI_SELECT_LABELS, labels))
   // `get_label` returns string | number; coerce once here rather than at each call site
-  const label_of = (option_item: Option): string => `${utils.get_label(option_item)}`
+  const label_of = (option_item: Option): string => `${get_label(option_item)}`
 
   const invalid_config = (message: string): never => {
     throw new TypeError(`MultiSelect: ${message}`)
   }
-  const validate_config = (has_grouped_options = options.some(utils.has_group)): void => {
+  const validate_config = (has_grouped_options = options.some(has_group)): void => {
     if (`selected` in rest) invalid_config(`use value instead of selected`)
     if (max_select !== null && !is_integer_at_least(max_select, 1))
       invalid_config(`max_select must be null or a positive integer, got ${max_select}`)
@@ -263,7 +271,7 @@
     load_error = loader.error
   })
 
-  let should_wiggle = $state(false) // wiggle when the user tries to exceed max_select
+  const max_wiggle = create_wiggle({ angle: 20 }) // shakes when the user tries to exceed max_select
   let highlighted_idx: number | null = $state(null) // chip index for arrow-key navigation
   // range_select anchor. Plain (non-$state) since only event handlers read it. The anchor
   // can't be matched by reference — matching_options is $bindable, so its elements are
@@ -369,7 +377,7 @@
   const norm_label = (label: unknown) =>
     lower_dupes ? `${label}`.toLowerCase() : `${label}`
   let selected_labels_set = $derived(
-    new Set(selected.map((opt) => norm_label(utils.get_label(opt)))),
+    new Set(selected.map((opt) => norm_label(get_label(opt)))),
   )
   const is_label_selected = (label: string): boolean =>
     selected_labels_set.has(norm_label(label))
@@ -387,16 +395,14 @@
   // identity check for bulk/range ops. Compares label too, since a custom `key` may
   // deliberately collapse distinct options onto one key.
   const is_same_option = (opt_a: Option | null | undefined, opt_b: Option): boolean =>
-    opt_a != null &&
-    key(opt_a) === key(opt_b) &&
-    utils.get_label(opt_a) === utils.get_label(opt_b)
+    opt_a != null && key(opt_a) === key(opt_b) && get_label(opt_a) === get_label(opt_b)
   // Key + label is the identity when duplicates are allowed. Count each occurrence once
   // instead of scanning every selected option for every dropdown row or bulk candidate.
   const count_options = (items: Option[]) => {
     const counts = new Map<unknown, Map<string | number, number>>()
     for (const item of items) {
       const item_key = key(item)
-      const label = utils.get_label(item)
+      const label = get_label(item)
       // is_same_option uses strict equality, which never matches NaN.
       if (Number.isNaN(item_key) || Number.isNaN(label)) continue
       let label_counts = counts.get(item_key)
@@ -408,7 +414,7 @@
   const selected_option_counts = $derived(count_options(selected))
   const has_selected_option = (opt: Option): boolean =>
     duplicates === true
-      ? (selected_option_counts.get(key(opt))?.has(utils.get_label(opt)) ?? false)
+      ? (selected_option_counts.get(key(opt))?.has(get_label(opt)) ?? false)
       : selected_keys_set.has(key(opt))
 
   const group_options = (items: Option[]) =>
@@ -654,7 +660,7 @@
   const at_max_capacity = () =>
     max_select !== null && mode !== `single` && selected.length >= max_select
   const reject_at_max = (attempted_option: Option) => {
-    should_wiggle = true
+    max_wiggle.trigger()
     if (max_select !== null) on_max_reached?.({ selected, max_select, attempted_option })
   }
 
@@ -663,7 +669,7 @@
     opt: Option,
     style_key: `selected` | `option`,
     extra_style: string | null,
-  ) => [utils.get_style(opt, style_key), extra_style].filter(Boolean).join(` `) || null
+  ) => [get_style(opt, style_key), extra_style].filter(Boolean).join(` `) || null
 
   function get_option_view(option_item: Option) {
     const {
@@ -671,7 +677,7 @@
       title = null,
       selected_title = null,
       disabled_title = default_disabled_title,
-    } = utils.is_object(option_item) ? option_item : {}
+    } = is_object(option_item) ? option_item : {}
     return {
       disabled: option_disabled,
       title,
@@ -727,9 +733,7 @@
     const option_key = key(option_to_add)
     // text (typed or pasted) never stands for an object option through its key
     const is_from_options = effective_options.some(
-      (opt) =>
-        key(opt) === option_key &&
-        utils.is_object(opt) === utils.is_object(option_to_add),
+      (opt) => key(opt) === option_key && is_object(opt) === is_object(option_to_add),
     )
     const is_user_option =
       !is_from_options &&
@@ -1074,7 +1078,7 @@
     const chip_navigation_enabled = !input_display && selected.length > 0 && !search_text
 
     if (
-      utils.run_hotkeys(
+      run_hotkeys(
         event,
         [
           {
@@ -1230,7 +1234,7 @@
       return options_to_filter.filter((option_item) => {
         if (is_disabled(option_item)) return false
         const label_counts = remaining_selected.get(key(option_item))
-        const label = utils.get_label(option_item)
+        const label = get_label(option_item)
         const count = label_counts?.get(label) ?? 0
         if (count === 0) return true
         label_counts?.set(label, count - 1)
@@ -1241,7 +1245,7 @@
     const seen_labels = new Set(selected_labels_set)
     return options_to_filter.filter((option_item) => {
       const option_key = key(option_item)
-      const option_label = norm_label(utils.get_label(option_item))
+      const option_label = norm_label(get_label(option_item))
       if (
         is_disabled(option_item) ||
         seen_keys.has(option_key) ||
@@ -1304,7 +1308,7 @@
     for (const opt of selected) {
       const matches =
         duplicates === true
-          ? (identities_to_remove?.get(key(opt))?.has(utils.get_label(opt)) ?? false)
+          ? (identities_to_remove?.get(key(opt))?.has(get_label(opt)) ?? false)
           : keys_to_remove.has(key(opt))
       if (matches && removed.length < max_removals) removed.push(opt)
       else kept.push(opt)
@@ -1523,7 +1527,7 @@
       // `text.split(',')` yields an empty entry for a trailing separator, and `add` throws
       // on those: the rejection would stop the loop, drop every later entry and skip
       // `on_parsed_paste`. Count them as rejected and carry on.
-      const match = utils.is_object(parsed_option)
+      const match = is_object(parsed_option)
         ? undefined
         : option_named(`${parsed_option}`)
       if (!is_non_empty_option(parsed_option) || (match && is_disabled(match))) {
@@ -1570,7 +1574,7 @@
   {#if children}
     {@render children({ option: opt, idx, type })}
   {:else}
-    {utils.get_label(opt)}
+    {get_label(opt)}
   {/if}
 {/snippet}
 
@@ -1739,11 +1743,11 @@
       aria-activedescendant={active_option_id}
       aria-busy={loading || loader.pending || creating_option || null}
       aria-invalid={invalid ? `true` : null}
-      ondrop={utils.chain_handlers((event) => event.preventDefault(), ondrop)}
-      onpaste={utils.chain_handlers(handle_paste, onpaste)}
-      onbeforeinput={utils.chain_handlers(handle_input_beforeinput, onbeforeinput)}
+      ondrop={chain_handlers((event) => event.preventDefault(), ondrop)}
+      onpaste={chain_handlers(handle_paste, onpaste)}
+      onbeforeinput={chain_handlers(handle_input_beforeinput, onbeforeinput)}
       oninput={handle_input_input}
-      onmouseup={utils.chain_handlers(open_dropdown, onmouseup)}
+      onmouseup={chain_handlers(open_dropdown, onmouseup)}
       onkeydown={(event) => {
         handle_keydown(event) // internal logic first, then forwarded handler
         onkeydown?.(event)
@@ -1760,7 +1764,7 @@
     {#if spinner}
       {@render spinner()}
     {:else}
-      <CircleSpinner />
+      <Spinner status={false} />
     {/if}
   {/if}
   {#if disabled}
@@ -1776,13 +1780,9 @@
     {/if}
   {:else if !input_display && selected.length > 0}
     {#if max_select && (max_select > 1 || max_select_msg)}
-      <Wiggle
-        bind:wiggle={should_wiggle}
-        angle={20}
-        class={[`max-select-msg`, max_select_msg_class]}
-      >
+      <span {@attach max_wiggle.attach} class={[`max-select-msg`, max_select_msg_class]}>
         {max_select_msg?.(selected.length, max_select)}
-      </Wiggle>
+      </span>
     {/if}
     {#if mode !== `single` && selected.length > 1 && can_remove}
       {@render remove_btn(remove_all, remove_all_title, { is_remove_all: true })}
@@ -1791,11 +1791,18 @@
 
   {#if listbox_rendered}
     <ul
-      {@attach fromAction(portal_action, () => ({
-        target_node: outer_div,
-        open,
-        ...portal_params,
-      }))}
+      {@attach portal(portal_params.active ? document.body : null)}
+      {@attach float({
+        anchor: outer_div,
+        enabled: (portal_params.active ?? false) && open,
+        placement: portal_params.placement ?? `auto`,
+        align: `start`,
+        match_width: true,
+        // only above or below: a dropdown beside its input is not a dropdown
+        flip: (portal_params.placement ?? `auto`) === `auto` && [`bottom`, `top`],
+        // never slide up over the input, but keep the first options on screen
+        shift: [`top`],
+      })}
       {@attach attach_highlight_matches({
         query: effective_filter_text,
         disabled: !highlight_matches,
@@ -1810,6 +1817,7 @@
       })}
       id={listbox_id}
       class={[`options`, ul_options_class, { hidden: !open }]}
+      hidden={portal_params.active && (!open || !outer_div)}
       role="listbox"
       aria-multiselectable={multi_select}
       aria-disabled={disabled ? `true` : null}
@@ -2021,7 +2029,7 @@
       {/if}
       {#if loader.config && loader.loading}
         <li class="loading-more" role="status" aria-label={msg.loading_more}>
-          <CircleSpinner />
+          <Spinner status={false} />
         </li>
       {/if}
     </ul>
@@ -2223,12 +2231,12 @@
   /* :where() so class props (ul_options_class, li_option_class, li_user_msg_class) win */
   :where(ul.options) {
     list-style: none;
-    /* the portal manages top/left/width/position when active (fixed while open); these are
-       the defaults for the non-portalled and initial states */
+    /* float manages top/left/width/position while portalled and open; these are the
+       defaults for the non-portalled and closed states */
     position: absolute;
     top: 100%;
     /* deliberately physical: at width 100% left/right anchoring is identical, and a logical
-       inset would resolve to `right` in RTL, over-constraining the portal's fixed `left` */
+       inset would resolve to `right` in RTL, over-constraining float's fixed `left` */
     left: 0;
     width: 100%;
     z-index: var(--sms-options-z-index, 3);
@@ -2434,6 +2442,7 @@
     color: var(--sms-group-deselect-color, light-dark(#c44, #f77));
   }
   :where(div.multiselect) :global(:where(span.max-select-msg)) {
+    display: inline-block;
     padding: 0 3pt;
   }
   :global(::highlight(sms-search-matches)) {

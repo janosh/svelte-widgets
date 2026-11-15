@@ -1,7 +1,7 @@
 import type { ContrastOptions } from '#lib/attachments/index.ts'
 import {
+  computed_color,
   contrast_color,
-  contrast_ratio,
   get_bg_color,
   parse_color,
   pick_contrast_color,
@@ -35,7 +35,7 @@ describe(`contrast_color`, () => {
     [`white xyz`, `color(xyz 0.9505 1 1.089)`, `black`],
     [`white hwb`, `hwb(0 100% 0%)`, `black`], // white + black >= 1 short-circuits to gray
   ])(`picks contrast text for a %s`, (_desc, bg_color, expected) => {
-    expect(pick_contrast_color({ bg_color })).toBe(expected)
+    expect(pick_contrast_color({ bg_color, backdrop: `white` })).toBe(expected)
   })
 
   // each must land on the same luminance as its equivalent sRGB spelling
@@ -102,18 +102,59 @@ describe(`contrast_color`, () => {
     expect(parse_color(color)).toEqual(expected)
   })
 
-  it.each<[string, ContrastOptions, string]>([
+  // CSS decimals only, no empty fields, and comma syntax (rgb/hsl only) never mixed with
+  // spaces or a slash; a browser would refuse to paint each
+  it.each([
+    `rgb(0x10, 0, 0)`,
+    `rgba(255, 0, 0, )`,
+    `rgb(, , )`,
+    `rgb(1e, 0, 0)`,
+    `rgb(255 0 0 0.5)`,
+    `rgb(1 2, 3)`,
+    `rgb(255, 0, 0 / 0.5)`,
+    `rgb(1,2,3 4)`,
+    `hsl(120 50% 50% 0.5)`,
+    `oklch(0.5 0.1 120 0.5)`,
+    `lab(50, 0, 0)`,
+  ])(`parse_color rejects %s`, (color) => expect(parse_color(color)).toBeNull())
+
+  it.each([
+    [`rgb(300 -10 0)`, [255, 0, 0, 1]], // channels clamp like every other space
+    [`hsla(120, 100%, 50%, 0.5)`, [0, 255, 0, 0.5]],
+    [`rgb(255 0 0 / 50%)`, [255, 0, 0, 0.5]],
+  ])(`parse_color(%s) = %j`, (color, expected) => {
+    expect(parse_color(color)).toEqual(expected)
+  })
+
+  // the browser's computed style reads what the syntax parser can't (color-mix(), system and
+  // light-dark() colors; see the e2e test), never context-dependent values a lone probe would
+  // resolve wrongly
+  it.each([
+    `var(--x)`,
+    `rgb(var(--x) 0 0)`,
+    `currentcolor`,
+    `color-mix(in srgb, currentcolor 50%, white)`,
+    `inherit`,
+    ` unset `,
+    `revert-layer`,
+    `env(safe-area-inset-top)`,
+  ])(`computed_color(%j) is null and leaves the DOM untouched`, (value) => {
+    const append = vi.spyOn(document.documentElement, `append`)
+    expect(computed_color(value)).toBeNull()
+    expect(append).not.toHaveBeenCalled()
+  })
+
+  it(`computed_color removes its probe`, () => {
+    const children = document.documentElement.children.length
+    expect(computed_color(`rgb(1 2 3)`)).toBe(`rgb(1 2 3)`)
+    expect(computed_color(`not-a-color`)).toBeNull()
+    expect(document.documentElement.children).toHaveLength(children)
+  })
+
+  it.each<[string, ContrastOptions & { bg_color: string }, string]>([
     [`custom choices`, { bg_color: `#000`, choices: [`#222`, `#eee`] }, `#eee`],
     // the lighter choice reaches AA here, so a stricter bar flips it to the darker one
     [`custom min_ratio`, { bg_color: `#4e79a7`, min_ratio: 5 }, `black`],
-    [`empty bg treated as a white page`, { bg_color: `` }, `black`],
-    [`no bg treated as a white page`, {}, `black`],
-    [`no bg shows the backdrop`, { backdrop: `#111` }, `white`],
-    [
-      `empty backdrop treated as a white page`,
-      { bg_color: `rgb(255 255 255 / 0.1)`, backdrop: `` },
-      `black`,
-    ],
     [`named colors`, { bg_color: `navy`, choices: [`gold`, `black`] }, `gold`],
     // neither red (4.0:1 on white) reaches AA, so the higher-ratio blue wins
     [`choices in either order`, { bg_color: `#fff`, choices: [`red`, `blue`] }, `blue`],
@@ -123,9 +164,14 @@ describe(`contrast_color`, () => {
       `white`,
     ],
     [
-      `translucent fill over the default white page`,
-      { bg_color: `rgba(0 0 0 / 0.1)` },
+      `translucent fill over white`,
+      { bg_color: `rgba(0, 0, 0, 0.1)`, backdrop: `white` },
       `black`,
+    ],
+    [
+      `transparent fill shows the backdrop`,
+      { bg_color: `transparent`, backdrop: `black` },
+      `white`,
     ],
     // a translucent choice is judged blended over the background it sits on
     [
@@ -149,22 +195,6 @@ describe(`contrast_color`, () => {
     [`#808080`, `black`], // white 3.9:1
   ])(`prefers white at WCAG AA on %s, else the higher ratio`, (bg_color, expected) => {
     expect(pick_contrast_color({ bg_color })).toBe(expected)
-    // independent of the picker: the rule restated on contrast_ratio
-    const [black, white] = [
-      contrast_ratio(`black`, bg_color),
-      contrast_ratio(`white`, bg_color),
-    ]
-    expect(white >= 4.5 ? `white` : black > white ? `black` : `white`).toBe(expected)
-  })
-
-  it.each([
-    [`black`, `white`, 21],
-    [`white`, `white`, 1],
-    [`#777`, `#fff`, 4.4781],
-    // a translucent top color blends over the bottom one first (to sRGB 127.5)
-    [`rgb(0 0 0 / 0.5)`, `white`, 3.9767],
-  ])(`contrast_ratio(%s, %s) = %f`, (color_a, color_b, expected) => {
-    expect(contrast_ratio(color_a, color_b)).toBeCloseTo(expected, 3)
   })
 
   it(`rejects a translucent backdrop`, () => {
@@ -173,7 +203,7 @@ describe(`contrast_color`, () => {
     ).toThrow(/backdrop must be opaque/u)
   })
 
-  // color-mix() never reaches a computed value (it resolves first)
+  // color-mix() needs the browser's computed style, which happy-dom lacks
   it.each([
     `notacolor`,
     `ffffff`, // a hex without `#` is no name, though the name table holds its digits
@@ -193,11 +223,27 @@ describe(`contrast_color`, () => {
     expect(() => pick_contrast_color({ bg_color })).toThrow(/cannot read color/u)
   })
 
+  it.each([undefined, ``])(
+    `throws on a translucent bg_color with backdrop %j`,
+    (backdrop) => {
+      // an empty string is no color, not an absent one
+      expect(() => pick_contrast_color({ bg_color: `#0001`, backdrop })).toThrow(
+        backdrop === undefined ? /needs a backdrop/u : /cannot read color/u,
+      )
+    },
+  )
+
   // an all-transparent chain reports no background; a node with nothing behind it is white
   const tint = `rgba(0, 0, 0, 0.05)`
   it.each([
     [`the first painted ancestor`, `rgb(10, 10, 10)`, ``, `rgb(10, 10, 10)`, `white`],
-    [`nothing when all are transparent`, `rgba(0, 0, 0, 0)`, ``, ``, `black`],
+    [
+      `the page canvas when all are transparent`,
+      `rgba(0, 0, 0, 0)`,
+      ``,
+      `rgb(255 255 255)`,
+      `black`,
+    ],
     [`translucent over white`, `rgb(255, 255, 255)`, tint, `rgb(242 242 242)`, `black`],
     [`translucent over the page`, `rgba(0, 0, 0, 0)`, tint, `rgb(242 242 242)`, `black`],
   ])(`resolves %s`, (_desc, background, overlay, expected_bg, expected_color) => {
@@ -228,7 +274,7 @@ describe(`contrast_color`, () => {
         }) as CSSStyleDeclaration,
     )
 
-    expect(get_bg_color(node)).toBe(painted ? background : ``)
+    expect(get_bg_color(node)).toBe(painted ? background : `rgb(255 255 255)`) // the page canvas
     contrast_color()(node)
     expect(node.style.color).toBe(expected_color)
   })

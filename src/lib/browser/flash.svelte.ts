@@ -1,4 +1,5 @@
-type Flash<T> = { readonly value: T; show: (value: T) => void; reset: () => void }
+// A value that shows `next` for duration_ms after each show(), then falls back to `resting`
+export type Flash<T> = { readonly value: T; show: (value: T) => void; reset: () => void }
 
 export function create_flash<T>(resting: T, duration_ms: number): Flash<T> {
   let value = $state(resting)

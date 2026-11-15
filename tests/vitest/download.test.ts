@@ -1,4 +1,4 @@
-import { blob_to_data_url, download, type DownloadData } from '#lib/download.ts'
+import { blob_to_data_url, download, type DownloadData } from '#lib/browser/index.ts'
 import { expect, test, vi } from 'vite-plus/test'
 
 // fake timers hold the deferred revoke until the test advances them; the click may throw

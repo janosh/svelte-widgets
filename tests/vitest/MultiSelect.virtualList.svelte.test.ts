@@ -1,7 +1,7 @@
 import { tick } from 'svelte'
-import { afterAll, beforeAll, describe, expect, test, vi } from 'vite-plus/test'
+import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import type { MultiSelectProps } from '#lib/types.ts'
-import { click, doc_query } from './index'
+import { click, doc_query, resize_observers, stub_resize_observer } from './index'
 import {
   active_text,
   get_input,
@@ -13,27 +13,7 @@ import {
 } from './MultiSelect.test-utils'
 
 // Install before the first mount: Svelte shares its dimension observer across bindings.
-const resize_callbacks = new Map<Element, () => void>()
-beforeAll(() => {
-  vi.stubGlobal(
-    `ResizeObserver`,
-    class implements ResizeObserver {
-      constructor(private readonly callback: ResizeObserverCallback) {}
-      observe(target: Element) {
-        resize_callbacks.set(target, () =>
-          this.callback([{ target } as ResizeObserverEntry], this),
-        )
-      }
-      unobserve(target: Element) {
-        resize_callbacks.delete(target)
-      }
-      disconnect() {}
-    },
-  )
-})
-afterAll(() => {
-  vi.unstubAllGlobals()
-})
+beforeEach(() => void stub_resize_observer())
 
 describe(`virtual_list`, () => {
   const item_height = 30
@@ -118,12 +98,9 @@ describe(`virtual_list`, () => {
     await tick()
     const list = doc_query<HTMLUListElement>(`ul.options`)
     const height = vi.spyOn(list, `clientHeight`, `get`)
-    const resize = resize_callbacks.get(list)
-    expect(resize).toBeTypeOf(`function`)
-
     for (const viewport_height of [150, 900, 300]) {
       height.mockReturnValue(viewport_height)
-      resize?.()
+      resize_observers.resize(list)
       await tick()
       expect(option_rows()).toHaveLength(viewport_height / item_height)
       expect(list.scrollTop).toBe(0)

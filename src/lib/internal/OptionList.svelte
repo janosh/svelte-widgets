@@ -5,8 +5,8 @@
   import { get_label, get_option_key, has_group } from '../utils'
   import type { OptionListProps } from '../types'
   import { merge_defaults, MULTI_SELECT_LABELS } from '../labels'
-  import { create_key_selector } from './key-selector.svelte'
-  import { create_option_loader } from './option-loader.svelte'
+  import { create_key_selector } from './key-selector.svelte.ts'
+  import { create_option_loader } from './option-loader.svelte.ts'
   import {
     create_option_rows,
     group_names,

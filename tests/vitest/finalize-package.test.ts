@@ -53,13 +53,28 @@ test(`finalizes nested package files and removes only Markdown guides`, async ()
   await mkdir(nested)
   for (const [name, source] of [
     [`index.js`, `export * from './value'`],
+    [`value.js`, `export const value = 1`],
     [`readme.md`, `Guide`],
     [`other-readme.md`, `Keep`],
   ])
     await writeFile(`${nested}/${name}`, source)
   await finalize_package(directory)
-  expect((await readdir(nested)).toSorted()).toEqual([`index.js`, `other-readme.md`])
+  expect((await readdir(nested)).toSorted()).toEqual([
+    `index.js`,
+    `other-readme.md`,
+    `value.js`,
+  ])
   expect(await readFile(`${nested}/index.js`, `utf8`)).toBe(`export * from './value.js'`)
+})
+
+// svelte-package keeps `./clipboard.svelte` for clipboard.svelte.ts, which only Vite resolves
+test(`rejects relative imports of files missing from dist`, async () => {
+  const directory = await temp_dir(`widgets-package-test-`)
+  await writeFile(`${directory}/clipboard.svelte.js`, `export const copy = 1`)
+  await writeFile(`${directory}/index.js`, `export * from './clipboard.svelte'`)
+  await expect(finalize_package(directory)).rejects.toThrow(
+    `index.js: ./clipboard.svelte`,
+  )
 })
 
 test(`rejects a guide compiled with the site's Markdown preprocessors`, async () => {

@@ -1,6 +1,7 @@
 import type { Attachment } from 'svelte/attachments'
-import type { PositionOptions } from '../utils'
-import { compute_position } from '../utils'
+import type { PositionOptions } from '../position'
+import { compute_position } from '../position'
+import { css_px } from './shared'
 
 export type AnchorRect = { top: number; left: number; bottom: number; right: number }
 
@@ -54,6 +55,7 @@ export interface FloatOptions extends PositionOptions {
 
 // Parks an element next to an anchor and keeps it there while the page moves. Geometry
 // comes from compute_position, so tooltip, portalled dropdown and this flip and shift alike.
+// Margins count as part of the floating box, since inline top/left place its margin edge.
 export const float =
   (options: FloatOptions = {}) =>
   (node: Element): (() => void) | undefined => {
@@ -93,9 +95,14 @@ export const float =
         node.style.minWidth = width
         node.style.width = width
       }
+      const { width, height } = node.getBoundingClientRect()
+      const { marginTop, marginRight, marginBottom, marginLeft } = getComputedStyle(node)
       const { top, left, placement } = compute_position(
         anchor_rect,
-        node.getBoundingClientRect(),
+        {
+          width: width + css_px(marginLeft) + css_px(marginRight),
+          height: height + css_px(marginTop) + css_px(marginBottom),
+        },
         position_options,
       )
       // compute_position is in viewport coordinates, which `absolute` offsets from the

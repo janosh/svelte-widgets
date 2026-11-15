@@ -4,18 +4,13 @@
   import { fade } from 'svelte/transition'
   import { track_backdrop_dismiss } from './dialog'
   import OptionList from './internal/OptionList.svelte'
-  import { create_recent_list } from './storage'
+  import { create_recent_list } from './browser/index'
   import { validate_cmd_actions } from './internal/command'
   import type { CmdAction, LoadOptionsParams, OptionListProps } from './types'
-  import type { Hotkey } from './utils'
-  import {
-    create_cmd_action_filter,
-    chain_handlers,
-    clamp_integer,
-    format_cmd_metadata,
-    format_shortcut,
-    run_hotkeys,
-  } from './utils'
+  import type { Hotkey } from './shortcuts'
+  import { create_cmd_action_filter, format_cmd_metadata } from './match'
+  import { chain_handlers, clamp_integer } from './utils'
+  import { format_shortcut, run_hotkeys } from './shortcuts'
 
   type DialogEvent = Parameters<NonNullable<HTMLDialogAttributes[`oncancel`]>>[0]
 

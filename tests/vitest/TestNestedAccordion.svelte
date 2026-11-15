@@ -1,5 +1,6 @@
 <script lang="ts">
   import Accordion from '#lib/Accordion.svelte'
+  import type { AccordionItem } from '#lib/types.ts'
 
   const outer_items = [
     { value: `outer-one`, label: `Outer one` },
@@ -13,7 +14,7 @@
 </script>
 
 <Accordion items={outer_items} bind:value={outer_value}>
-  {#snippet panel({ item })}
+  {#snippet panel({ item }: { item: AccordionItem })}
     {#if item.value === `outer-one`}
       <Accordion items={inner_items} bind:value={inner_value} />
     {/if}

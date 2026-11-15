@@ -1,5 +1,5 @@
 import FullscreenButton from '#lib/FullscreenButton.svelte'
-import { get_page_background, sync_fullscreen } from '#lib/fullscreen.svelte.ts'
+import { sync_fullscreen } from '#lib/browser/index.ts'
 import * as icons from '#lib/icons.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
@@ -325,31 +325,6 @@ describe(`flag <-> browser sync`, () => {
 })
 
 describe(`fullscreen background`, () => {
-  test.each([
-    [`body wins over html`, `rgb(1, 2, 3)`, `rgb(4, 5, 6)`, `rgb(1, 2, 3)`],
-    [`html when body is transparent`, ``, `rgb(4, 5, 6)`, `rgb(4, 5, 6)`],
-  ])(`get_page_background: %s`, (_name, body_bg, html_bg, expected) => {
-    document.body.style.backgroundColor = body_bg
-    document.documentElement.style.backgroundColor = html_bg
-    expect(get_page_background()).toBe(expected)
-  })
-
-  test.each([
-    [true, [], `#1a1a1a`],
-    [false, [], `#ffffff`],
-    [true, [`#000`, `#eee`], `#000`],
-    [false, [`#000`, `#eee`], `#eee`],
-  ] as const)(
-    `get_page_background falls back to prefers-color-scheme (dark=%s, fallbacks=%j)`,
-    (dark, fallbacks, expected) => {
-      // Once: restoreAllMocks spares vi.fn() mocks, so a lasting value would leak onward
-      vi.mocked(globalThis.matchMedia).mockReturnValueOnce({
-        matches: dark,
-      } as MediaQueryList)
-      expect(get_page_background(...fallbacks)).toBe(expected)
-    },
-  )
-
   test.each([
     [`default var`, undefined, `--fullscreen-bg`],
     [`custom var`, `--struct-bg-fullscreen`, `--struct-bg-fullscreen`],

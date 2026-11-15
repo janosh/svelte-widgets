@@ -2,7 +2,7 @@
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import type { TabItem } from './types'
-  import { step_focus } from './utils'
+  import { step_focus } from './shortcuts'
 
   // Headless styling hooks: .tabs, .tabs-list, .tabs-tab and .tabs-panel.
   // Tabs and panels expose data-state="active|inactive".

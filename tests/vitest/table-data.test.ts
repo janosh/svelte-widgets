@@ -9,7 +9,6 @@ import {
   type ColumnFilterValue,
   type DateTimeFormatMode,
   compute_column_stats,
-  default_format_number,
   discover_columns,
   format_datetime,
   infer_datetime_kind,
@@ -191,15 +190,6 @@ it.each<[CellVal, number | null]>([
 
 // `\d+\.?\d*` overlapped itself: a 30k-digit cell ending in a letter backtracked O(n²),
 // over a second per call (4x that at 60k), so the cap leaves a loaded runner ample room
-it.each([
-  [1234567, `1,234,567`],
-  [1766, `1766`], // years and IDs stay ungrouped below 5 digits
-  [55.85, `55.9`],
-  [0.000123, `0.000123`],
-])(`default_format_number(%s) = %s`, (num, expected) => {
-  expect(default_format_number(num)).toBe(expected)
-})
-
 it(`parse_numeric_val stays linear on long digit runs`, () => {
   const long_digits = `${`1`.repeat(60_000)}x`
   const start = performance.now()

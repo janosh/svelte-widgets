@@ -1,7 +1,7 @@
 // Table serializers for downloads and clipboard copy. The text formats all work from one
 // plain-text matrix (`TableMatrix`), so CSV, TSV, Markdown and LaTeX can't drift apart; JSON
 // reads raw row values instead, keeping numbers, booleans and nesting.
-import { csv_line } from '../csv'
+import { csv_line } from '../format'
 import type { TableMatrix } from './types'
 
 export type TableTextFormat = `csv` | `tsv` | `md` | `tex`

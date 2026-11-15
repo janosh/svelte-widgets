@@ -1,18 +1,14 @@
 import { create_canvas_surface } from '#lib/canvas.svelte.ts'
 import { flushSync } from 'svelte'
 import { beforeEach, expect, onTestFinished, test, vi } from 'vite-plus/test'
+import { resize_observers, stub_resize_observer } from './index'
 
 const frames = new Map<number, FrameRequestCallback>()
-const observers: {
-  resize: () => void
-  observe: ReturnType<typeof vi.fn>
-  disconnect: ReturnType<typeof vi.fn>
-}[] = []
+const { created: observers } = resize_observers
 const media_queries: EventTarget[] = []
 
 beforeEach(() => {
   frames.clear()
-  observers.length = 0
   media_queries.length = 0
   // registered first, so it runs after each test's surface cleanup
   onTestFinished(() => void vi.unstubAllGlobals())
@@ -23,16 +19,7 @@ beforeEach(() => {
     return next_frame
   })
   vi.stubGlobal(`cancelAnimationFrame`, (frame_id: number) => frames.delete(frame_id))
-  vi.stubGlobal(
-    `ResizeObserver`,
-    class {
-      observe = vi.fn()
-      disconnect = vi.fn()
-      constructor(resize: () => void) {
-        observers.push({ resize, observe: this.observe, disconnect: this.disconnect })
-      }
-    },
-  )
+  stub_resize_observer()
   vi.stubGlobal(
     `matchMedia`,
     vi.fn(() => {
@@ -123,7 +110,7 @@ test(`sizes both layers in CSS pixels and retains unchanged contexts`, () => {
     expect(context.imageSmoothingQuality).toBe(`high`)
     expect(get_context).toHaveBeenCalledOnce()
   }
-  observers[0].resize()
+  observers[0].fire()
   paint()
   expect(base.get_context).toHaveBeenCalledOnce()
   expect_drawn_once([
@@ -178,7 +165,7 @@ test.each([1, 400])(
       overlay.canvas.style.height,
     ]).toEqual([`100%`, ``, `border-box`, `inherit`])
     surface.schedule()
-    observers[0].resize()
+    observers[0].fire()
     expect(frames.size).toBe(0)
     paint()
     expect(draw).not.toHaveBeenCalled()
@@ -256,7 +243,7 @@ test.each([
     clientWidth: { value: 80 },
     clientHeight: { value: 40 },
   })
-  observers[0].resize()
+  observers[0].fire()
   paint()
   expect(draw).toHaveBeenCalledOnce()
   expect(draw_overlay).toHaveBeenCalledOnce()
