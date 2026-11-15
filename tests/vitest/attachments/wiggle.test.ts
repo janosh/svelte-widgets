@@ -131,29 +131,21 @@ describe(`create_wiggle`, () => {
     expect(animate).not.toHaveBeenCalled()
   })
 
-  // a node attached after the last one detached mid-wiggle starts from rest, not the
-  // cancelled animation's pose
-  test(`a wiggle on a fresh node after every node detached starts from rest`, () => {
+  test(`detaching cancels the node's wiggle, and a fresh node after the last detach starts from rest`, () => {
     vi.useFakeTimers({ toFake: [`performance`] })
     const shake = create_wiggle({ angle: 20 })
     const detach = shake.attach(document.createElement(`span`))
     shake.trigger()
+    const cancel = vi.spyOn(animate.mock.results[0].value as Animation, `cancel`)
     vi.advanceTimersByTime(10 * FRAME_MS)
     if (typeof detach === `function`) detach()
+    expect(cancel).toHaveBeenCalledOnce()
+    shake.trigger() // no nodes left: animates nothing and starts no wiggle to resume
+    expect(animate).toHaveBeenCalledOnce()
+    vi.advanceTimersByTime(10 * FRAME_MS)
+    // neither the cancelled pose nor the node-less trigger carries over
     shake.attach(document.createElement(`span`))
     shake.trigger()
     expect(animate.mock.calls[1][0]).toEqual(animate.mock.calls[0][0])
-  })
-
-  test(`detaching cancels the node's wiggle and stops animating it`, () => {
-    const shake = create_wiggle({ angle: 20 })
-    const node = document.createElement(`span`)
-    const detach = shake.attach(node)
-    shake.trigger()
-    const cancel = vi.spyOn(animate.mock.results[0].value as Animation, `cancel`)
-    if (typeof detach === `function`) detach()
-    expect(cancel).toHaveBeenCalledOnce()
-    shake.trigger()
-    expect(animate).toHaveBeenCalledOnce()
   })
 })

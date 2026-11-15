@@ -1,6 +1,6 @@
 import { float } from '#lib/attachments/index.ts'
-import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
-import { create_element, mock_rect, stub_props } from '../index'
+import { describe, expect, it, vi } from 'vite-plus/test'
+import { create_element, mock_rect, stub_props, stub_resize_observer } from '../index'
 
 describe(`float`, () => {
   // anchor as a bare rect, so no element geometry has to be mocked for the anchor
@@ -145,25 +145,7 @@ describe(`float`, () => {
   )
 
   it(`tracks floating and anchor resizes and releases observers on cleanup`, async () => {
-    const callbacks = new Map<Element, () => void>()
-    vi.stubGlobal(
-      `ResizeObserver`,
-      class implements ResizeObserver {
-        private readonly targets = new Set<Element>()
-        constructor(private readonly callback: ResizeObserverCallback) {}
-        observe(target: Element) {
-          this.targets.add(target)
-          callbacks.set(target, () => this.callback([], this))
-        }
-        unobserve(target: Element) {
-          callbacks.delete(target)
-        }
-        disconnect() {
-          for (const target of this.targets) callbacks.delete(target)
-        }
-      },
-    )
-    onTestFinished(() => void vi.unstubAllGlobals())
+    const { observed, resize } = stub_resize_observer()
     const anchor = create_element()
     mock_rect(anchor, { left: 20, top: 300, width: 200, height: 30 })
     const node = floating_node()
@@ -174,16 +156,16 @@ describe(`float`, () => {
     expect(node.style.top).toBe(`200px`)
 
     mock_rect(node, { left: 0, top: 0, width: 200, height: 200 })
-    callbacks.get(node)?.()
+    resize(node)
     await new Promise(requestAnimationFrame)
     expect(node.style.top).toBe(`100px`)
 
     mock_rect(anchor, { left: 20, top: 300, width: 300, height: 50 })
-    callbacks.get(anchor)?.()
+    resize(anchor)
     await new Promise(requestAnimationFrame)
     expect(node.style.width).toBe(`300px`)
     cleanup?.()
-    expect(callbacks.size).toBe(0)
+    expect(observed().size).toBe(0)
   })
 
   it.each([

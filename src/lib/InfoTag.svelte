@@ -38,17 +38,16 @@
   } = $props()
 
   const msg = $derived(merge_defaults(INFO_TAG_LABELS, labels))
-  // one key, since a tag copies a single value; `copied` handles the timed reset
-  const { copied, copy } = create_clipboard_feedback(1000, (error, text) =>
-    on_copy_error(error, text),
+  const { copied, copy } = create_clipboard_feedback(1000, (...args) =>
+    on_copy_error(...args),
   )
   // the clipboard takes plain text, so an HTML value (Fe<sub>2</sub>O<sub>3</sub>) copies as it reads
   const to_copy = $derived(
     copy_value ?? (typeof value === `string` ? html_to_text(value) : value),
   )
-  const copy_value_text = () => void copy(String(to_copy), `value`)
   const action = $derived(
-    onclick ?? (to_copy === undefined ? undefined : copy_value_text),
+    onclick ??
+      (to_copy === undefined ? undefined : () => void copy(String(to_copy), `value`)),
   )
 </script>
 
@@ -64,7 +63,7 @@
     onclick={action}
   >
     {@html label}
-    <em>{@html value ?? ``}</em>
+    <em style="font-style: normal; font-weight: 600">{@html value ?? ``}</em>
     {#if copied.has(`value`)}<Icon icon={Check} class="copy-checkmark" />{/if}
     {@render children?.()}
   </Tag>
@@ -88,10 +87,6 @@
   /* the pill is the checkmark's containing block, so it overlays the value without a shift */
   :global(.tag.info-tag) {
     position: relative;
-  }
-  em {
-    font-style: normal;
-    font-weight: 600;
   }
   :global(.info-tag .copy-checkmark) {
     position: absolute;

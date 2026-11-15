@@ -29,12 +29,7 @@
   const format_value = (
     value: string | number | readonly number[],
     format: (num: number) => string,
-  ): string =>
-    typeof value === `number`
-      ? format(value)
-      : typeof value === `string`
-        ? value
-        : value.map(format).join(`, `)
+  ): string => (typeof value === `string` ? value : [value].flat().map(format).join(`, `))
 </script>
 
 <section {...rest} class={[`info-card`, rest.class]}>
@@ -46,7 +41,7 @@
       <span class="label" title={html_to_text(label)}>{@html label}</span>
       <strong title={tooltip ?? null}>
         {@html format_value(value ?? ``, format)}
-        {#if unit}<small>{unit}</small>{/if}
+        {#if unit}<small style="font-weight: normal">{unit}</small>{/if}
       </strong>
     </div>
   {:else}
@@ -97,9 +92,6 @@
       );
       padding: 0 4pt;
       border-radius: 3pt;
-      small {
-        font-weight: normal;
-      }
     }
   }
 </style>

@@ -50,12 +50,8 @@ const reachable = (entry: string): Set<string> => {
 const pure_subpaths = Object.entries(pkg_exports).flatMap(([subpath, target]) => {
   const dist = `default` in target ? target.default : target.types
   if (COMPONENT_SUBPATHS.has(subpath) || !dist.endsWith(`.js`)) return []
-  return [
-    [
-      subpath,
-      resolve(root, dist.replace(`./dist/`, `src/lib/`).replace(/\.js$/u, `.ts`)),
-    ],
-  ]
+  const source = dist.replace(`./dist/`, `src/lib/`).replace(/\.js$/u, `.ts`)
+  return [[subpath, resolve(root, source)]]
 })
 
 test(`the component allowlist only names real subpaths`, () => {

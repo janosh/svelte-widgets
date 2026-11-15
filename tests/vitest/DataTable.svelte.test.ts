@@ -24,6 +24,7 @@ import * as animations from 'svelte/animate'
 import { prefersReducedMotion } from 'svelte/motion'
 import {
   assert,
+  beforeEach,
   describe,
   expect,
   expectTypeOf,
@@ -40,6 +41,8 @@ import {
   pointer_event,
   press_key,
   render,
+  resize_observers,
+  stub_resize_observer,
 } from './index'
 
 // === Environment (ported from MatterViz's HeatmapTable tests) ===
@@ -50,43 +53,15 @@ Object.defineProperties(HTMLElement.prototype, {
   clientHeight: { get: () => 600, configurable: true },
 })
 
-// ResizeObserver mock: report a useful initial size and let tests trigger later
+// report a useful initial size on observe; tests call resize_observers.resize() for later
 // measurements after changing an observed element's dimensions
-const resize_observers: TestResizeObserver[] = []
-class TestResizeObserver implements ResizeObserver {
-  readonly observed_elements = new Set<Element>()
-  constructor(private readonly callback: ResizeObserverCallback) {
-    resize_observers.push(this)
-  }
-  notify(element: Element): void {
-    const { clientWidth: width, clientHeight: height } = element
-    this.callback(
-      [{ target: element, contentRect: { width, height } } as ResizeObserverEntry],
-      this,
-    )
-  }
-  observe(element: Element): void {
-    if (!resize_observers.includes(this)) resize_observers.push(this)
-    this.observed_elements.add(element)
+beforeEach(() => {
+  stub_resize_observer((target, observer) =>
     queueMicrotask(() => {
-      if (this.observed_elements.has(element)) this.notify(element)
-    })
-  }
-  unobserve(element: Element): void {
-    this.observed_elements.delete(element)
-  }
-  disconnect(): void {
-    this.observed_elements.clear()
-    const observer_idx = resize_observers.indexOf(this)
-    if (observer_idx !== -1) resize_observers.splice(observer_idx, 1)
-  }
-}
-const trigger_resize_observer = (element: Element): void => {
-  for (const observer of resize_observers) {
-    if (observer.observed_elements.has(element)) observer.notify(element)
-  }
-}
-globalThis.ResizeObserver = TestResizeObserver
+      if (observer.targets.has(target)) observer.fire(target)
+    }),
+  )
+})
 
 const write_clipboard = vi.fn().mockResolvedValue(undefined)
 Object.defineProperty(navigator, `clipboard`, {
@@ -1701,7 +1676,7 @@ describe(`DataTable`, () => {
         await tick()
         const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
         Object.defineProperty(scroller, `scrollHeight`, { value: scroll_height })
-        trigger_resize_observer(scroller) // clientHeight is mocked to 600
+        resize_observers.resize(scroller) // clientHeight is mocked to 600
         await tick()
         expect(scroller.classList.contains(`no-y-overflow`)).toBe(!scrolls)
       },
@@ -1991,7 +1966,7 @@ describe(`DataTable`, () => {
       expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`80px`, `80px`]) // after Name
       // the first header grows (a manual resize, longer label): every pin after it shifts
       name_width = 120
-      trigger_resize_observer(head(`Name`))
+      resize_observers.resize(head(`Name`))
       await tick()
       expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`120px`, `120px`])
       await pick(`Name`, `Pin left`) // re-picking the current side unpins, over its config
@@ -3181,7 +3156,7 @@ describe(`DataTable`, () => {
       const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
       rows_have_layout = true
       Object.defineProperty(scroller, `clientWidth`, { value: 700, configurable: true })
-      trigger_resize_observer(scroller)
+      resize_observers.resize(scroller)
       await tick()
       expect(measurement_reads).toBe(min_window * 2)
 
@@ -3191,7 +3166,7 @@ describe(`DataTable`, () => {
       expect(spacers()[0].style.height).toBe(`${(state.data.length - min_window) * 20}px`)
 
       Object.defineProperty(scroller, `clientWidth`, { value: 600, configurable: true })
-      trigger_resize_observer(scroller)
+      resize_observers.resize(scroller)
       await tick()
       expect(measurement_reads).toBe(min_window * 3)
     })

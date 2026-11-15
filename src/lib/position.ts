@@ -75,12 +75,11 @@ export function compute_position(
     left: anchor.left - boundary.left - padding - offset,
     right: boundary.right - padding - anchor.right - offset,
   }
+  const vertical = (side: Placement): boolean => side === `top` || side === `bottom`
   // Only main-axis overflow flips; counting the cross axis (shifting's job) would send an
   // edge-aligned bottom tooltip to the left instead.
-  const main_axis_overflow = (side: Placement): number => {
-    const needed = side === `top` || side === `bottom` ? floating.height : floating.width
-    return Math.max(0, needed - free_space[side])
-  }
+  const main_axis_overflow = (side: Placement): number =>
+    Math.max(0, (vertical(side) ? floating.height : floating.width) - free_space[side])
 
   // `flip: false` pins the requested side, else least main-axis overflow wins. A named
   // placement stays first choice, its fallbacks queue up behind it.
@@ -93,7 +92,6 @@ export function compute_position(
   // Plain `auto` breaks overflow ties above or below before beside (a tooltip beside a
   // trigger in a row of chips covers its neighbors), then on free space
   const rank_by_space = flip !== false && placement === `auto` && !explicit_order
-  const vertical = (side: Placement): boolean => side === `top` || side === `bottom`
   let chosen = requested
   let least_overflow = Infinity
   let greatest_space = -Infinity

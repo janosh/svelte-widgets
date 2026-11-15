@@ -167,6 +167,7 @@ export function get_style(
   return trimmed && !trimmed.endsWith(`;`) ? `${css_str};` : css_str
 }
 
+// Coalesces subtree mutations (including ones `refresh` causes) into one refresh per
 // microtask; callers do their own initial refresh. watch_text is needed because Svelte
 // updates a reactive `{value}` via the text node's `nodeValue`, a characterData mutation
 // that fires no childList record.

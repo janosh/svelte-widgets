@@ -229,11 +229,6 @@ A [`Tag`](#tag) for a property: `label` reads as a caption and `value` is emphas
 
 <div style="display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center">
   <InfoTag label="E<sub>g</sub>:" value="1.12 eV" title="<b>Band gap</b> from PBE" />
-  <InfoTag
-    label="E<sub>hull</sub>:"
-    value="0.02 eV"
-    color="var(--warning-color, orange)"
-  />
   <InfoTag label="Stable:" value="yes" color="mediumseagreen" variant="solid" />
   <InfoTag label="Area:" value="42 m<sup>2</sup>" variant="outline" />
   <InfoTag label="Locked:" value="42" disabled />

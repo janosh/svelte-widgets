@@ -17,16 +17,14 @@
   } & Omit<HTMLDetailsAttributes, `open` | `children`> = $props()
 
   const chords = (keys: ShortcutEntry[`keys`]): string[] =>
-    (typeof keys === `string` ? [keys] : keys).map((chord) =>
-      format_shortcut(chord).join(`+`),
-    )
+    [keys].flat().map((chord) => format_shortcut(chord).join(`+`))
 </script>
 
 <details {...rest} bind:open class={[`shortcuts-list`, rest.class]}>
-  <summary>{summary}</summary>
+  <summary style="cursor: pointer; opacity: 0.8">{summary}</summary>
   <dl>
     {#each shortcuts as { keys, label, keys_label }, idx (idx)}
-      <dt>
+      <dt style="text-align: right; white-space: nowrap">
         {#if keys_label}
           <kbd>{keys_label}</kbd>
         {:else}
@@ -36,7 +34,7 @@
           {/each}
         {/if}
       </dt>
-      <dd>{label}</dd>
+      <dd style="margin: 0">{label}</dd>
     {/each}
   </dl>
 </details>
@@ -45,22 +43,11 @@
   .shortcuts-list {
     font-size: var(--shortcuts-list-font-size, 0.85em);
     margin: var(--shortcuts-list-margin, 6pt 0 0);
-    summary {
-      cursor: pointer;
-      opacity: 0.8;
-    }
     dl {
       display: grid;
       grid-template-columns: auto 1fr;
       gap: var(--shortcuts-list-gap, 3pt 1em);
       margin: 4pt 0 0;
-    }
-    dt {
-      text-align: right;
-      white-space: nowrap;
-    }
-    dd {
-      margin: 0;
     }
     kbd {
       font-family: var(--shortcuts-list-kbd-font, monospace);

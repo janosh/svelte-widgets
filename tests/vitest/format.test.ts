@@ -43,12 +43,7 @@ test.each([
 
 const sci: FormatNumOptions = { sci_range: [1e-3, 1e6] }
 // String()-like, typeable into a number input
-const plain: FormatNumOptions = {
-  digits: 3,
-  sci_range: [1e-6, 1e21],
-  grouping: false,
-  locale: `en-US`,
-}
+const plain: FormatNumOptions = { digits: 3, sci_range: [1e-6, 1e21], grouping: false }
 test.each<[number, FormatNumOptions | undefined, string]>([
   [0, undefined, `0`],
   [-0, undefined, `0`],

@@ -16,11 +16,12 @@ describe(`InfoTag`, () => {
     return doc_query(`.tag.info-tag > .content`)
   }
 
-  test(`renders trusted HTML labels and hover details while retaining click actions`, async () => {
+  test(`renders trusted HTML labels and hover details, a custom onclick replacing copy`, async () => {
     const onclick = vi.fn()
     const tag = mount_tag({
       label: `E<sub>hull</sub>:`,
       value: 42,
+      copy_value: `id`,
       title: `<b>Energy</b>`,
       onclick,
     })
@@ -35,7 +36,9 @@ describe(`InfoTag`, () => {
       `Tag details`,
     )
     tag.click()
+    flushSync()
     expect(onclick).toHaveBeenCalledOnce()
+    expect(write_text).not.toHaveBeenCalled()
   })
 
   // Tag props pass straight through; disabled disables the native button, blocking clicks
@@ -60,29 +63,19 @@ describe(`InfoTag`, () => {
     expect(onclick).toHaveBeenCalledTimes(`disabled` in props ? 0 : 1)
   })
 
-  // a tag is a copy button only when it has something to copy
+  // a tag is a copy button only when it has something to copy; an HTML value copies as the
+  // text it renders, an explicit copy_value verbatim
   test.each([
-    { value: undefined, copy_value: undefined, copied: undefined },
-    { value: `mp-1234`, copy_value: undefined, copied: `mp-1234` },
-    { value: 123.456, copy_value: undefined, copied: `123.456` },
-    { value: `abc123`, copy_value: `full-id-abc123`, copied: `full-id-abc123` },
-    // an HTML value copies as the text it renders, an explicit copy_value verbatim
-    {
-      value: `Fe<sub>2</sub>O<sub>3</sub> &amp; co`,
-      copy_value: undefined,
-      copied: `Fe2O3 & co`,
-      text: `Fe2O3 & co`,
-    },
-    {
-      value: `Fe<sub>2</sub>`,
-      copy_value: `<b>raw</b>`,
-      copied: `<b>raw</b>`,
-      text: `Fe2`,
-    },
-    { value: undefined, copy_value: `full-id-abc123`, copied: `full-id-abc123` },
-  ])(
-    `value=$value, copy_value=$copy_value copies $copied`,
-    ({ value, copy_value, copied, text = String(value ?? ``) }) => {
+    [undefined, undefined, undefined, ``],
+    [`mp-1234`, undefined, `mp-1234`, `mp-1234`],
+    [123.456, undefined, `123.456`, `123.456`],
+    [`abc123`, `full-id-abc123`, `full-id-abc123`, `abc123`],
+    [`Fe<sub>2</sub>O<sub>3</sub> &amp; co`, undefined, `Fe2O3 & co`, `Fe2O3 & co`],
+    [`Fe<sub>2</sub>`, `<b>raw</b>`, `<b>raw</b>`, `Fe2`],
+    [undefined, `full-id-abc123`, `full-id-abc123`, ``],
+  ] as const)(
+    `value=%j, copy_value=%j copies %j and shows %j`,
+    (value, copy_value, copied, text) => {
       const tag = mount_tag({ label: `ID:`, value, copy_value })
       expect(doc_query(`em`).textContent).toBe(text)
       expect(tag.tagName).toBe(copied ? `BUTTON` : `SPAN`)
@@ -115,58 +108,28 @@ describe(`InfoTag`, () => {
     },
   )
 
-  // copy and remove are sibling native buttons inside a non-interactive pill
-  test(`copy and remove are sibling buttons, not nested in a role=button`, () => {
-    const copy_button = mount_tag({ label: `ID:`, value: `abc`, on_remove: vi.fn() })
-    const pill = doc_query(`.tag.info-tag`)
-    const remove = doc_query(`.tag.info-tag > button.remove`)
-    expect([
-      copy_button.tagName,
-      copy_button.parentElement,
-      remove.parentElement,
-    ]).toEqual([`BUTTON`, pill, pill])
-    expect(copy_button.contains(remove)).toBe(false)
-    expect(document.querySelector(`[role="button"]`)).toBeNull()
-  })
-
-  test(`shows a checkmark after copying and removes it after 1s`, async () => {
+  // a copy flashes the checkmark for 1s; a failed one reaches on_copy_error instead
+  test.each([undefined, new Error(`denied`)])(`copy error=%s`, async (error) => {
     vi.useFakeTimers()
     try {
-      mount_tag({ label: `ID:`, value: `abc123` }).click()
+      if (error) write_text.mockRejectedValue(error)
+      const on_copy_error = vi.fn()
+      mount_tag({ label: `ID:`, value: `abc`, on_copy_error }).click()
       await vi.advanceTimersByTimeAsync(0)
       flushSync()
-      expect(document.querySelector(`.copy-checkmark`)).toBeInstanceOf(SVGSVGElement)
+      const checkmark = () => document.querySelector(`.copy-checkmark`)
+      expect(on_copy_error.mock.calls).toEqual(error ? [[error, `abc`]] : [])
+      expect(checkmark() instanceof SVGSVGElement).toBe(!error)
       vi.advanceTimersByTime(1000)
       flushSync()
-      expect(document.querySelector(`.copy-checkmark`)).toBeNull()
+      expect(checkmark()).toBeNull()
     } finally {
       vi.useRealTimers()
     }
   })
 
-  test(`a failed copy reaches on_copy_error and shows no checkmark`, async () => {
-    const error = new Error(`denied`)
-    write_text.mockRejectedValue(error)
-    const on_copy_error = vi.fn()
-    mount_tag({ label: `ID:`, value: `abc`, on_copy_error }).click()
-    await vi.waitFor(() =>
-      expect(on_copy_error).toHaveBeenCalledExactlyOnceWith(error, `abc`),
-    )
-    flushSync()
-    expect(document.querySelector(`.copy-checkmark`)).toBeNull()
-  })
-
-  test(`custom onclick overrides copy`, () => {
-    const onclick = vi.fn()
-    const tag = mount_tag({ label: `Test`, value: undefined, copy_value: `id`, onclick })
-    expect(tag.tagName).toBe(`BUTTON`)
-    tag.click()
-    flushSync()
-    expect(onclick).toHaveBeenCalledOnce()
-    expect(write_text).not.toHaveBeenCalled()
-  })
-
-  // the remove button is Tag's, a sibling of the clickable content rather than nested in it
+  // the remove button is Tag's: a native button beside the clickable content, never nested in
+  // it or in a role=button
   test.each([
     { disabled: false, callback: true, expected: true },
     { disabled: true, callback: true, expected: true },
@@ -176,21 +139,25 @@ describe(`InfoTag`, () => {
     ({ disabled, callback, expected }) => {
       const onclick = vi.fn()
       const on_remove = vi.fn()
-      const props = {
+      const tag = mount_tag({
         label: `Test`,
         value: 1,
         disabled,
         onclick,
         labels: { remove: `Drop` },
-      }
-      mount_tag({ ...props, on_remove: callback ? on_remove : undefined })
+        on_remove: callback ? on_remove : undefined,
+      })
       const remove = document.querySelector<HTMLButtonElement>(
-        `button[aria-label="Drop"]`,
+        `.tag.info-tag > button[aria-label="Drop"]`,
       )
       expect(Boolean(remove)).toBe(expected)
       if (!remove) return
-      expect(remove.disabled).toBe(disabled)
-      expect(remove.closest(`.content`)).toBeNull()
+      expect([tag.tagName, remove.disabled, tag.contains(remove)]).toEqual([
+        `BUTTON`,
+        disabled,
+        false,
+      ])
+      expect(document.querySelector(`[role="button"]`)).toBeNull()
       remove.click()
       flushSync()
       expect(on_remove).toHaveBeenCalledTimes(disabled ? 0 : 1)

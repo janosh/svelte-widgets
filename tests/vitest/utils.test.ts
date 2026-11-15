@@ -276,7 +276,7 @@ describe(`shortcut rebinding`, () => {
     },
   )
 
-  test.each([
+  test.each<[string, string | null, { require_modifier: boolean }?]>([
     [`Ctrl+Shift+K`, `ctrl+shift+k`], // case folded
     [`shift+ctrl+k`, `ctrl+shift+k`], // modifiers reordered
     [`Cmd+K`, `meta+k`], // aliases folded onto one spelling
@@ -293,16 +293,11 @@ describe(`shortcut rebinding`, () => {
     [`shift+alt`, null],
     [`ctrl+capslock`, null], // key that is only ever a modifier
     [`meta+control`, null],
-  ])(`normalize_combo(%j) is %j`, (combo, expected) => {
-    expect(normalize_combo(combo)).toBe(expected)
-  })
-
-  test.each([
-    [`mod+k`, `mod+k`],
-    [`k`, null], // an unmodified key would swallow ordinary typing
-    [`escape`, null],
-  ])(`normalize_combo(%j, { require_modifier }) is %j`, (combo, expected) => {
-    expect(normalize_combo(combo, { require_modifier: true })).toBe(expected)
+    [`mod+k`, `mod+k`, { require_modifier: true }],
+    [`k`, null, { require_modifier: true }], // an unmodified key would swallow typing
+    [`escape`, null, { require_modifier: true }],
+  ])(`normalize_combo(%j) is %j (%j)`, (combo, expected, options) => {
+    expect(normalize_combo(combo, options)).toBe(expected)
   })
 
   describe(`sanitize_shortcut_overrides`, () => {

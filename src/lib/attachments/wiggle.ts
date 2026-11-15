@@ -2,25 +2,16 @@ import type { Attachment } from 'svelte/attachments'
 
 // Peak offsets a wiggle springs toward before springing back; usually set just one of
 // angle (deg), scale, dx or dy (px). stiffness and damping follow svelte/motion's Spring.
-export interface WiggleOptions {
-  angle?: number // try 20
-  scale?: number // try 1.2
-  dx?: number // try 10
-  dy?: number // try 10
-  duration_ms?: number // how long the spring pulls toward the peak before heading back
-  stiffness?: number
-  damping?: number
-}
-
 export const WIGGLE_DEFAULTS = {
-  angle: 0,
-  scale: 1,
-  dx: 0,
-  dy: 0,
-  duration_ms: 200,
+  angle: 0, // try 20
+  scale: 1, // try 1.2
+  dx: 0, // try 10
+  dy: 0, // try 10
+  duration_ms: 200, // how long the spring pulls toward the peak before heading back
   stiffness: 0.05,
   damping: 0.1,
-} satisfies Required<WiggleOptions>
+}
+export type WiggleOptions = Partial<typeof WIGGLE_DEFAULTS>
 
 type Pose = [angle: number, scale: number, dx: number, dy: number]
 const REST: Pose = [0, 1, 0, 0]

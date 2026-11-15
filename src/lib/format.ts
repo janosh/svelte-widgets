@@ -28,13 +28,13 @@ export interface FormatNumOptions {
 }
 
 // Intl.NumberFormat construction costs far more than formatting, and tables call this per
-// cell, so formatters are cached under a string key of the options that shape them
+// cell, so formatters are cached under their locale and options
 const formatters = new Map<string, Intl.NumberFormat>()
 const cached_format = (
-  key: string,
   locale: string | undefined,
   options: Intl.NumberFormatOptions,
 ): Intl.NumberFormat => {
+  const key = JSON.stringify([locale, options])
   let format = formatters.get(key)
   if (!format) formatters.set(key, (format = new Intl.NumberFormat(locale, options)))
   return format
@@ -49,17 +49,16 @@ export const format_num = (value: number, options: FormatNumOptions = {}): strin
   if (value === 0) value = 0 // Intl would print -0 as `-0`
   // Notation is picked on Intl's own rounding (half away from zero on the shortest decimal),
   // so it matches the digits shown: 9.995 at 3 digits shows 10, not toPrecision's 9.99
-  const magnitude =
+  const rounded =
     sci_range && !keep_integer
-      ? Math.abs(
-          Number(
-            cached_format(`round|${digits}`, `en-US`, {
-              useGrouping: false,
-              maximumSignificantDigits: digits,
-            }).format(value),
-          ),
+      ? Number(
+          cached_format(`en-US`, {
+            useGrouping: false,
+            maximumSignificantDigits: digits,
+          }).format(value),
         )
-      : Math.abs(value)
+      : value
+  const magnitude = Math.abs(rounded)
   // NaN, and ±Infinity (Intl's `∞` parses to NaN), fail both comparisons, so stay plain
   const sci =
     sci_range !== undefined &&
@@ -67,14 +66,13 @@ export const format_num = (value: number, options: FormatNumOptions = {}): strin
     (magnitude >= sci_range[1] || magnitude < sci_range[0])
   if (!sci) {
     return cached_format(
-      `${locale}|${grouping}|${keep_integer ? `int` : digits}`,
       locale,
       keep_integer
         ? { useGrouping: grouping, maximumFractionDigits: 0 }
         : { useGrouping: grouping, maximumSignificantDigits: digits },
     ).format(value)
   }
-  const parts = cached_format(`${locale}|sci|${digits}`, locale, {
+  const parts = cached_format(locale, {
     notation: `scientific`,
     maximumSignificantDigits: digits,
   }).formatToParts(value)

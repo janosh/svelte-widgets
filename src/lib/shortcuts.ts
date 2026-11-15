@@ -5,8 +5,7 @@ import { is_active_element, is_composing } from './attachments/shared'
 const primary_modifier = (): `meta` | `ctrl` =>
   /mac|iphone|ipad|ipod/iu.test(globalThis.navigator?.userAgent ?? ``) ? `meta` : `ctrl`
 
-// `,`, `+` and space are spelled out so a combo can always be split on `+`;
-// matching needs the literal `event.key` back
+// `,`, `+` and space are spelled out so a combo always splits on `+`; TOKEN_KEYS maps back
 const KEY_TOKENS = new Map([
   [`,`, `comma`],
   [`+`, `plus`],
@@ -14,13 +13,7 @@ const KEY_TOKENS = new Map([
 ])
 const TOKEN_KEYS = new Map([...KEY_TOKENS].map(([key, token]) => [token, key]))
 
-export function parse_shortcut(shortcut: string): {
-  key: string
-  ctrl: boolean
-  shift: boolean
-  alt: boolean
-  meta: boolean
-} | null {
+export function parse_shortcut(shortcut: string) {
   const parts = shortcut_parts(shortcut, true)
   if (!parts) return null
   const key = parts.pop() ?? ``
@@ -86,8 +79,7 @@ export type Hotkey = {
   prevent_default?: boolean // default true
 }
 
-// Runs the first matching binding and reports whether one fired. Shared by the `hotkey`
-// attachment and components that own a window listener.
+// Runs the first matching binding and reports whether one fired
 export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
   if (is_composing(event)) return false // mid-IME the keystroke belongs to the editor
   // outside a chord, a bare key in a text field is typing, not a shortcut
@@ -112,10 +104,7 @@ export const is_editable_event_target = (target: EventTarget | null): boolean =>
   const editable = target.closest(
     `[contenteditable=""], [contenteditable="true" i], [contenteditable="plaintext-only" i], [contenteditable="false" i]`,
   )
-  return (
-    editable !== null &&
-    editable.getAttribute(`contenteditable`)?.toLowerCase() !== `false`
-  )
+  return editable ? !editable.matches(`[contenteditable="false" i]`) : false
 }
 
 // Alt/Ctrl/Meta make a keystroke a chord. Shift is excluded: it types capitals.
