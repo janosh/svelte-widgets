@@ -52,3 +52,5 @@ export {
   pick_contrast_color,
 } from './contrast-color'
 export type { ContrastOptions } from './contrast-color'
+export { create_wiggle, wiggle_frames, WIGGLE_DEFAULTS } from './wiggle'
+export type { WiggleOptions } from './wiggle'
