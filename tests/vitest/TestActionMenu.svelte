@@ -1,6 +1,6 @@
 <script lang="ts">
   import ActionMenu from '#lib/ActionMenu.svelte'
-  import type { CmdAction } from '#lib/types.ts'
+  import type { ActionMenuTriggerProps, CmdAction } from '#lib/types.ts'
 
   let {
     actions,
@@ -16,7 +16,7 @@
 </script>
 
 <ActionMenu {actions} bind:open {match_width} {disabled}>
-  {#snippet trigger(props)}
+  {#snippet trigger(props: ActionMenuTriggerProps)}
     <span data-testid="action-menu-anchor">
       <button type="button" data-testid="action-menu-trigger" {...props}>Actions</button>
     </span>

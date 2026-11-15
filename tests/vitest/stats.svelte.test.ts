@@ -1,44 +1,49 @@
+import type { StatItem } from '#lib/types.ts'
 import StatGrid from '#lib/StatGrid.svelte'
-import {
-  format_stat_delta,
-  format_stat_value,
-  stat_delta_label,
-  type StatItem,
-} from '#lib/stats.ts'
 import { tick, type ComponentProps } from 'svelte'
 import { expect, test, vi } from 'vite-plus/test'
 import { render } from './index'
 
-test.each([
-  [`ready`, `ready`],
-  [0, `0`],
-  [-0, `0`],
-  [1234, `1,234`],
-  [12345.6, `12,350`],
-  [-12345.67, `-12,350`],
-  [999999.9, `1.00e+6`],
-  [1.23456, `1.235`],
-  [0.001, `0.001`],
-  [0.000999, `9.99e-4`],
-  [999999, `999,999`],
-  [1e6, `1.00e+6`],
-  [-1e6, `-1.00e+6`],
-  [Number.NaN, `n/a`],
-  [-Infinity, `n/a`],
-] as const)(`formats %s as %s`, (value, expected) => {
-  expect(format_stat_value(value)).toBe(expected)
+const texts = (selector: string, attr?: string): (string | null | undefined)[] =>
+  [...document.querySelectorAll(selector)].map((node) =>
+    attr ? node.getAttribute(attr) : node.textContent?.trim(),
+  )
+
+test(`default format: 4 significant digits, en-US grouping, scientific outside [1e-3, 1e6)`, () => {
+  const cases = [
+    [0, `0`],
+    [-0, `0`],
+    [1234, `1,234`],
+    [12345.6, `12,350`],
+    [-12345.67, `-12,350`],
+    [999999.9, `1e6`],
+    [1.23456, `1.235`],
+    [0.001, `0.001`],
+    [0.000999, `9.99e-4`],
+    [999999, `999,999`],
+    [1e6, `1e6`],
+    [-1e6, `-1e6`],
+    [Number.NaN, `n/a`],
+    [-Infinity, `n/a`],
+    [-0.12355, `-0.1236`], // ties round half away from zero on the decimal as written
+    [1234500.4, `1.235e6`], // the same 4 significant digits as plain notation
+  ] as const
+  render(StatGrid, { items: cases.map(([value]) => ({ label: `x`, value })) })
+  expect(texts(`.stat-value`)).toEqual(cases.map(([, text]) => text))
 })
 
-test.each([
-  [12.345, `▲ 12.35`, `change up 12.35`],
-  [-12.345, `▼ 12.35`, `change down 12.35`],
-  [0, `▸ 0`, `change flat 0`],
-  [-0, `▸ 0`, `change flat 0`],
-  [NaN, `n/a`, `change unavailable`],
-  [-Infinity, `n/a`, `change unavailable`],
-] as const)(`formats delta %s visually and accessibly`, (delta, visual, accessible) => {
-  expect(format_stat_delta(delta)).toBe(visual)
-  expect(stat_delta_label(delta)).toBe(accessible)
+test(`formats deltas visually and accessibly`, () => {
+  const cases = [
+    [12.345, `▲ 12.35`, `change up 12.35`],
+    [-12.345, `▼ 12.35`, `change down 12.35`],
+    [0, `▸ 0`, `change flat 0`],
+    [-0, `▸ 0`, `change flat 0`],
+    [NaN, `n/a`, `change unavailable`],
+    [-Infinity, `n/a`, `change unavailable`],
+  ] as const
+  render(StatGrid, { items: cases.map(([delta]) => ({ label: `x`, value: 0, delta })) })
+  expect(texts(`.stat-delta`)).toEqual(cases.map(([, visual]) => visual))
+  expect(texts(`.stat-delta`, `aria-label`)).toEqual(cases.map(([, , label]) => label))
 })
 
 test(`renders stats, units, hints and delta directions with reactive custom formatting`, async () => {
@@ -71,12 +76,12 @@ test(`renders stats, units, hints and delta directions with reactive custom form
   expect(
     tiles.map((tile) => tile.querySelector(`.stat-delta`)?.getAttribute(`aria-label`)),
   ).toEqual([`change up 2`, `change down 3`, `change flat 0`, undefined])
+  // direction classes: up, down or flat, none for a missing change
   expect(
-    tiles.map((tile) => {
-      const delta = tile.querySelector(`.stat-delta`)
-      return delta && [delta.classList.contains(`up`), delta.classList.contains(`down`)]
-    }),
-  ).toEqual([[true, false], [false, true], [false, false], null])
+    tiles.map((tile) =>
+      tile.querySelector(`.stat-delta`)?.className.match(/\b(?:up|down|flat)\b/g),
+    ),
+  ).toEqual([[`up`], [`down`], [`flat`], undefined])
   expect(document.querySelectorAll(`.stat-delta.positive`)).toHaveLength(1)
   expect(tiles[1].querySelector(`.stat-delta`)?.classList.contains(`positive`)).toBe(true)
   expect(tiles[0].hasAttribute(`title`)).toBe(false)
@@ -102,7 +107,7 @@ test(`renders stats, units, hints and delta directions with reactive custom form
       delta.getAttribute(`aria-label`),
     ]),
   ).toEqual(Array.from({ length: 3 }, () => [`n/a`, `change unavailable`]))
-  expect(document.querySelector(`.stat-delta.up, .stat-delta.down`)).toBeNull()
+  expect(document.querySelector(`.stat-delta:is(.up, .down, .flat)`)).toBeNull()
   expect(document.querySelector(`.stat-delta.positive, .stat-delta.negative`)).toBeNull()
   expect(document.querySelector(`.stat-hint, [title]`)).toBeNull()
   props.items = [{ label: `Cost`, value: 20, delta: 5, delta_tone: `negative` }]

@@ -12,7 +12,6 @@ export {
   cell_text,
   DATETIME_MODE_LABELS,
   DATETIME_MODES_BY_KIND,
-  default_format_number,
   discover_columns,
   format_datetime,
   infer_datetime_kind,
@@ -29,5 +28,5 @@ export * from './data-table'
 export * from './export'
 export * from './filter'
 export * from './labels'
-export * from './selection.svelte'
+export * from './selection.svelte.ts'
 export type * from './types'

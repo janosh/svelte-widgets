@@ -31,7 +31,7 @@
     update_editor_matches,
   } from './search'
   import type { EditorMatch } from './search'
-  import { create_key_selector } from '../internal/key-selector.svelte'
+  import { create_key_selector } from '../internal/key-selector.svelte.ts'
   import { render_tokens, type RenderedToken } from './tokens'
   import { resolve_editor_backend } from './types'
   import type {

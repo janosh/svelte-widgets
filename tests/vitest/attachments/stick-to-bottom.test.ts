@@ -1,19 +1,16 @@
 import { create_stick_to_bottom } from '#lib/attachments/index.ts'
 import type { StickToBottomOptions } from '#lib/attachments/index.ts'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { pointer_event, press_key } from '../index'
+import {
+  pointer_event,
+  press_key,
+  resize_observers,
+  stub_resize_observer,
+} from '../index'
 
 // `resize` fires the latest fake observer, the way a container or child resize would
-let resize: () => void
-const observed = new Set<Element>()
-class FakeResizeObserver {
-  constructor(callback: () => void) {
-    resize = callback
-  }
-  observe = (node: Element) => observed.add(node)
-  unobserve = (node: Element) => observed.delete(node)
-  disconnect = () => observed.clear()
-}
+const { created, observed } = resize_observers
+const resize = () => created[created.length - 1].fire()
 
 // happy-dom has no layout, so the scroll box is modeled by hand: the offset clamps to
 // [0, extent - viewport] like a real one
@@ -38,12 +35,8 @@ const scroll_to = (node: HTMLElement, offset: number) => {
   node.dispatchEvent(new Event(`scroll`))
 }
 
-beforeEach(() => {
-  vi.stubGlobal(`ResizeObserver`, FakeResizeObserver)
-})
+beforeEach(() => void stub_resize_observer())
 afterEach(() => {
-  vi.unstubAllGlobals()
-  observed.clear()
   document.body.innerHTML = ``
 })
 
@@ -226,21 +219,28 @@ describe(`stick_to_bottom`, () => {
   )
 
   test(`observe_children watches each direct child's size as children come and go`, async () => {
-    const { node } = setup({ observe_children: true, observe_mutations: false })
-    const [first, second] = [document.createElement(`p`), document.createElement(`p`)]
+    // a child present before attaching is watched too, not only later additions
+    const { node } = scroll_box()
+    const [existing, first, second] = [`p`, `p`, `p`].map((tag) =>
+      document.createElement(tag),
+    )
+    node.append(existing)
+    create_stick_to_bottom({ observe_children: true, observe_mutations: false }).attach(
+      node,
+    )
     node.append(first, second)
     await Promise.resolve()
-    expect(observed).toEqual(new Set([node, first, second]))
+    expect(observed()).toEqual(new Set([node, existing, first, second]))
     first.remove()
     await Promise.resolve()
-    expect(observed).toEqual(new Set([node, second]))
+    expect(observed()).toEqual(new Set([node, existing, second]))
   })
 
   test(`cleanup removes listeners and observers`, () => {
     const { node, box, stick, cleanup } = setup()
     node.dispatchEvent(new Event(`selectstart`))
     cleanup()
-    expect([observed.size, stick.selecting]).toEqual([0, false])
+    expect([observed().size, stick.selecting]).toEqual([0, false])
     node.dispatchEvent(new WheelEvent(`wheel`))
     scroll_to(node, 100)
     expect(stick.stuck).toBe(true)

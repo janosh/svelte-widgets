@@ -1,7 +1,8 @@
 import type { GroupedOptions, LoadOptionsConfig, Option, OptionListProps } from '../types'
-import { create_term_matcher, get_label, has_group, is_object } from '../utils'
+import { create_term_matcher } from '../match'
+import { get_label, has_group, is_object } from '../utils'
 import { reveal_scroll, virtual_window } from '../virtual'
-import { keep_unchanged } from './key-selector.svelte'
+import { keep_unchanged } from './key-selector.svelte.ts'
 
 export const option_disabled = (option: Option): boolean =>
   Boolean(is_object(option) && option.disabled)

@@ -360,13 +360,10 @@ test.describe(`tooltip layout and lifecycle`, () => {
   })
 })
 
-// happy-dom leaves assignedSlot unset, so slotted composition needs a real browser. The
-// module is bundled here rather than imported from a route so dev and preview runs match.
-test(`contrast_color walks slotted content through the slot's painted wrapper`, async ({
-  page,
-}) => {
-  // Vite's build sets NODE_ENV=production for the whole worker, so a later dev server here
-  // (Markdown.test.ts) would compile without HMR. Restore it once bundled.
+// The contrast module bundled for a page, rather than imported from a route so dev and
+// preview runs match. Vite's build sets NODE_ENV=production for the whole worker, so a later
+// dev server here (Markdown.test.ts) would compile without HMR: restore it once bundled.
+const bundle_contrast_module = async (): Promise<string> => {
   const node_env = process.env.NODE_ENV
   const result = await build({
     configFile: false,
@@ -387,8 +384,15 @@ test(`contrast_color walks slotted content through the slot's painted wrapper`, 
   const [bundle] = Array.isArray(result) ? result : [result]
   if (!bundle || !(`output` in bundle))
     throw new Error(`expected one bundle, got watcher`)
+  return bundle.output[0].code
+}
+// happy-dom leaves assignedSlot unset, so slotted composition needs a real browser
+test(`contrast_color walks slotted content through the slot's painted wrapper`, async ({
+  page,
+}) => {
+  const code = await bundle_contrast_module()
   await page.setContent(`<div id="host" style="background: rgb(250, 250, 250)"></div>`)
-  await page.addScriptTag({ content: bundle.output[0].code })
+  await page.addScriptTag({ content: code })
   const walked = await page.evaluate(() => {
     const host = document.querySelector(`#host`)
     if (!host) throw new Error(`missing #host`)
@@ -409,4 +413,40 @@ test(`contrast_color walks slotted content through the slot's painted wrapper`, 
     }
   })
   expect(walked).toEqual({ slotted: true, bg_color: `rgb(10, 10, 10)`, color: `white` })
+})
+
+// computed style resolves what the syntax parser can't, against the root's color-scheme, and
+// an unpainted page shows the browser's own (here dark) canvas
+test(`parse_color and get_bg_color resolve browser-only colors and the dark page canvas`, async ({
+  page,
+}) => {
+  const code = await bundle_contrast_module()
+  await page.emulateMedia({ colorScheme: `dark` })
+  await page.setContent(
+    `<html style="color-scheme: light dark"><body><span></span></body></html>`,
+  )
+  await page.addScriptTag({ content: code })
+  const resolved = await page.evaluate(() => {
+    const { contrast_color, get_bg_color, parse_color } = (
+      globalThis as unknown as { contrast_module: typeof ContrastModule }
+    ).contrast_module
+    const node = document.querySelector(`span`)
+    if (!node) throw new Error(`missing span`)
+    contrast_color()(node)
+    return {
+      mixed: parse_color(`color-mix(in srgb, red 50%, blue)`),
+      light_dark: parse_color(`light-dark(red, blue)`),
+      page: get_bg_color(node),
+      text: node.style.color,
+    }
+  })
+  // color(srgb 0.5 0 0.5) goes through the sRGB transfer and back: ulp-level drift only
+  const expected_mix = [127.5, 0, 127.5, 1]
+  resolved.mixed?.forEach((channel, idx) =>
+    expect(channel).toBeCloseTo(expected_mix[idx], 9),
+  )
+  expect(resolved.mixed).toHaveLength(4)
+  expect(resolved.light_dark).toEqual([0, 0, 255, 1])
+  expect(resolved.page).not.toBe(`rgb(255 255 255)`)
+  expect(resolved.text).toBe(`white`)
 })

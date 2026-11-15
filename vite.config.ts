@@ -35,8 +35,11 @@ const docs = markdown_vite(
 // subpath imports can't express. Stateful exports point at `.svelte.ts` modules, so their
 // aliases precede the prefix rule. tsconfig.json `paths` mirrors these for TS.
 const self_aliases: { find: string | RegExp; replacement: string }[] = []
-for (const [path, target] of Object.entries(package_json.exports)) {
-  if (`default` in target && target.default.endsWith(`.svelte.js`))
+// TypeScript 7 infers the JSON exports' values as unknown, so name the shape we read
+for (const [path, target] of Object.entries<{ default?: string; types?: string }>(
+  package_json.exports,
+)) {
+  if (target.default?.endsWith(`.svelte.js`))
     self_aliases.push({
       find: path.replace(`.`, `svelte-widgets`),
       replacement: resolve(

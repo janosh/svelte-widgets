@@ -1,5 +1,6 @@
 import { is_composing } from './attachments/shared'
-import { clamp, is_modifier_chord } from './utils'
+import { clamp } from './utils'
+import { is_modifier_chord } from './shortcuts'
 
 export type RangeValue = [number, number]
 export type RangeScale = 'linear' | 'log'

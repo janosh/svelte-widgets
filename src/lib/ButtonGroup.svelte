@@ -2,10 +2,11 @@
   import type { Snippet } from 'svelte'
   import type { ButtonGroupOption, SelectionProps } from './types'
   import { selection_values } from './internal/selection'
-  import { chain_handlers, step_focus } from './utils'
+  import { chain_handlers } from './utils'
+  import { step_focus } from './shortcuts'
   import type { HTMLAttributes, HTMLButtonAttributes } from 'svelte/elements'
   import { tooltip, type TooltipOptions, type TooltipTrigger } from './attachments/index'
-  import CircleSpinner from './CircleSpinner.svelte'
+  import Spinner from './Spinner.svelte'
   import Icon from './Icon.svelte'
   import { merge_defaults, BUTTON_GROUP_LABELS, type ButtonGroupLabels } from './labels'
 
@@ -126,9 +127,9 @@
       {opt.label ?? opt.value}
       {#if opt.loading !== undefined}
         <!-- decoration for sighted users; `aria-busy` on the button is what AT reads -->
-        <CircleSpinner
+        <Spinner
           size="0.8em"
-          aria-hidden="true"
+          status={false}
           style={`visibility: ${opt.loading ? `visible` : `hidden`}`}
         />
       {/if}

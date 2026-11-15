@@ -168,6 +168,12 @@ export const FULLSCREEN_BUTTON_LABELS = {
 }
 export type FullscreenButtonLabels = typeof FULLSCREEN_BUTTON_LABELS
 
+// InfoTag also takes TAG_LABELS, which it hands to Tag
+export const INFO_TAG_LABELS = {
+  details: `Tag details`, // aria-label naming the hover popover shown for a `title`
+}
+export type InfoTagLabels = typeof INFO_TAG_LABELS
+
 export const MULTI_SELECT_LABELS = {
   // chip overflow toggle rendered when max_visible_chips collapses selected chips
   more_chips: (hidden_count: number) => `+${hidden_count} more`,

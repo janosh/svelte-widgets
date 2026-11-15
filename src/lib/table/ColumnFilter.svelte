@@ -2,11 +2,11 @@
   // 3 significant digits, stepped one unit outwards (min down, max up) when rounding to
   // nearest would exclude the value, so the shown range still includes every value. Compares
   // final doubles, so values a few ULPs past a short decimal (0.1 * 3) round the right way.
+  // String()'s notation (no grouping or locale separators, scientific below 1e-6 and from
+  // 1e21), so a placeholder types into the number input as shown.
   const inclusive_bound = (num: number, bound: `min` | `max`): string => {
     const short = Number(num.toPrecision(3))
-    if ((bound === `min` ? short <= num : short >= num) || !Number.isFinite(num)) {
-      return String(short)
-    }
+    if (bound === `min` ? short <= num : short >= num) return String(short)
     const step = 10 ** (Math.floor(Math.log10(Math.abs(num))) - 2)
     return String(Number((bound === `min` ? short - step : short + step).toPrecision(3)))
   }

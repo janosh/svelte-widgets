@@ -26,7 +26,7 @@
     // show a spinner instead of an indeterminate bar while `value` is unknown (decoration
     // inside the live region, not a second region)
     spinner?: boolean
-    spinner_props?: Omit<ComponentProps<typeof Spinner>, `text`>
+    spinner_props?: Omit<ComponentProps<typeof Spinner>, `text` | `status`>
     // centered over a positioned parent (a loading canvas, say), letting pointer events
     // through to it everywhere but the buttons
     overlay?: boolean
@@ -43,12 +43,7 @@
 </script>
 
 {#snippet message()}
-  {#if spin}<Spinner
-      {...spinner_props}
-      role={null}
-      aria-live={null}
-      aria-label={null}
-    />{/if}
+  {#if spin}<Spinner {...spinner_props} status={false} />{/if}
   <span id={label_id}
     >{#if typeof label === `string`}{label}{:else}{@render label()}{/if}</span
   >
@@ -96,9 +91,6 @@
     }
     :global(.spinner) {
       margin: 0;
-    }
-    :global(.circle-spinner) {
-      flex-shrink: 0;
     }
     &.overlay {
       position: absolute;

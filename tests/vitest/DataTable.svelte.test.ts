@@ -16,14 +16,15 @@ import * as table_data from '#lib/table/data.ts'
 import data_table_source from '#lib/table/DataTable.svelte?raw'
 import * as data_table_module from '#lib/table/data-table.ts'
 import * as table_index from '#lib/table/index.ts'
-import { TABLE_EXPORT_FORMATS } from '#lib/table/index.ts'
-import { html_to_text } from '#lib/utils.ts'
+import { CellSelection, TABLE_EXPORT_FORMATS } from '#lib/table/index.ts'
+import { html_to_text, is_plain_object } from '#lib/utils.ts'
 import type { Component, ComponentProps } from 'svelte'
 import { createRawSnippet, flushSync, tick } from 'svelte'
 import * as animations from 'svelte/animate'
 import { prefersReducedMotion } from 'svelte/motion'
 import {
   assert,
+  beforeEach,
   describe,
   expect,
   expectTypeOf,
@@ -40,6 +41,8 @@ import {
   pointer_event,
   press_key,
   render,
+  resize_observers,
+  stub_resize_observer,
 } from './index'
 
 // === Environment (ported from MatterViz's HeatmapTable tests) ===
@@ -50,43 +53,15 @@ Object.defineProperties(HTMLElement.prototype, {
   clientHeight: { get: () => 600, configurable: true },
 })
 
-// ResizeObserver mock: report a useful initial size and let tests trigger later
+// report a useful initial size on observe; tests call resize_observers.resize() for later
 // measurements after changing an observed element's dimensions
-const resize_observers: TestResizeObserver[] = []
-class TestResizeObserver implements ResizeObserver {
-  readonly observed_elements = new Set<Element>()
-  constructor(private readonly callback: ResizeObserverCallback) {
-    resize_observers.push(this)
-  }
-  notify(element: Element): void {
-    const { clientWidth: width, clientHeight: height } = element
-    this.callback(
-      [{ target: element, contentRect: { width, height } } as ResizeObserverEntry],
-      this,
-    )
-  }
-  observe(element: Element): void {
-    if (!resize_observers.includes(this)) resize_observers.push(this)
-    this.observed_elements.add(element)
+beforeEach(() => {
+  stub_resize_observer((target, observer) =>
     queueMicrotask(() => {
-      if (this.observed_elements.has(element)) this.notify(element)
-    })
-  }
-  unobserve(element: Element): void {
-    this.observed_elements.delete(element)
-  }
-  disconnect(): void {
-    this.observed_elements.clear()
-    const observer_idx = resize_observers.indexOf(this)
-    if (observer_idx !== -1) resize_observers.splice(observer_idx, 1)
-  }
-}
-const trigger_resize_observer = (element: Element): void => {
-  for (const observer of resize_observers) {
-    if (observer.observed_elements.has(element)) observer.notify(element)
-  }
-}
-globalThis.ResizeObserver = TestResizeObserver
+      if (observer.targets.has(target)) observer.fire(target)
+    }),
+  )
+})
 
 const write_clipboard = vi.fn().mockResolvedValue(undefined)
 Object.defineProperty(navigator, `clipboard`, {
@@ -145,8 +120,7 @@ const count_attribute_updates = (elements: Element[]): number[] => {
     // happy-dom keeps its own Symbol(attributes) too: Svelte's is a plain record
     const key = Object.getOwnPropertySymbols(element).find(
       (sym) =>
-        sym.description === `attributes` &&
-        table_data.is_plain_object(Reflect.get(element, sym)),
+        sym.description === `attributes` && is_plain_object(Reflect.get(element, sym)),
     )
     if (!key) throw new Error(`${element.tagName} has no Svelte attribute cache`)
     let cache: unknown = Reflect.get(element, key)
@@ -271,6 +245,15 @@ describe(`DataTable`, () => {
 
   const mount_sample = (props: Partial<TableProps> = {}) =>
     mount_table(bind_props({ data: sample_data, columns: sample_columns }, props))
+
+  // the default format_number applies a column's d3 spec, else locale-aware Intl digits
+  it.each([
+    [`.1%`, [`95.0%`, `85.0%`, `75.0%`]],
+    [undefined, [`0.95`, `0.85`, `0.75`]],
+  ])(`default format_number with column format %s`, (format, expected) => {
+    mount_table({ data: sample_data, columns: [{ id: `Score`, label: `Score`, format }] })
+    expect(col_values(`Score`)).toEqual(expected)
+  })
 
   const heatmap_col: Column = { id: `Value`, label: `Value` }
   // A stand-in host coloring: each value gets its own fill, so tests can tell cells apart
@@ -442,7 +425,7 @@ describe(`DataTable`, () => {
     )
   })
 
-  it.each([`with_defaults`, `same_while_equal`, `is_plain_object`, `escape_markup`])(
+  it.each([`same_while_equal`, `escape_markup`])(
     `keeps the internal helper %s out of the public table module`,
     (name) => {
       expect(name in table_index).toBe(false)
@@ -1701,7 +1684,7 @@ describe(`DataTable`, () => {
         await tick()
         const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
         Object.defineProperty(scroller, `scrollHeight`, { value: scroll_height })
-        trigger_resize_observer(scroller) // clientHeight is mocked to 600
+        resize_observers.resize(scroller) // clientHeight is mocked to 600
         await tick()
         expect(scroller.classList.contains(`no-y-overflow`)).toBe(!scrolls)
       },
@@ -1991,7 +1974,7 @@ describe(`DataTable`, () => {
       expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`80px`, `80px`]) // after Name
       // the first header grows (a manual resize, longer label): every pin after it shifts
       name_width = 120
-      trigger_resize_observer(head(`Name`))
+      resize_observers.resize(head(`Name`))
       await tick()
       expect([edges(`Tag`).left, cell_style(`Tag`).left]).toEqual([`120px`, `120px`])
       await pick(`Name`, `Pin left`) // re-picking the current side unpins, over its config
@@ -2897,12 +2880,13 @@ describe(`DataTable`, () => {
       expect(cell_at(2, 1).classList.contains(`cell-selected`)).toBe(true)
     })
 
-    it.each([`hide`, `reorder`, `sort`, `Escape`, `outside`] as const)(
+    it.each([`hide`, `reorder`, `sort`, `filter`, `Escape`, `outside`] as const)(
       `clears a cell selection on %s`,
       async (action) => {
         const state = $state({
           hidden_columns: [] as string[],
           column_order: [] as string[],
+          column_prefs: {},
         })
         mount_sample(state)
         await tick()
@@ -2913,6 +2897,9 @@ describe(`DataTable`, () => {
         if (action === `hide`) state.hidden_columns = [`Value`]
         else if (action === `reorder`) state.column_order = [`Score`, `Model`, `Value`]
         else if (action === `sort`) doc_query(`th[data-col-id="Model"]`).click()
+        // drops only the unselected last row, so the selected cells all still exist
+        else if (action === `filter`)
+          state.column_prefs = { Value: { filter: { kind: `numeric`, max: 250 } } }
         // from a focused resize handle, which must let it bubble to the window
         else if (action === `Escape`) press_key(doc_query(`.resize-handle`), `Escape`)
         else document.body.dispatchEvent(pointer(`pointerdown`))
@@ -2920,6 +2907,23 @@ describe(`DataTable`, () => {
         expect(n_selected()).toBe(0)
       },
     )
+
+    // DataTable hands its row ids and visible columns in as the layout
+    it(`CellSelection empties when its layout changes, keeping one empty array`, () => {
+      const layout = $state({ rows: 3 })
+      const selection = new CellSelection(() => layout.rows)
+      const empty = selection.rects
+      selection.start_drag({ row: 1, col: 1 }, false)
+      expect(selection.has(1, 1)).toBe(true)
+      layout.rows = 2
+      expect(selection.rects).toBe(empty)
+      expect(selection.has(1, 1)).toBe(false)
+      layout.rows = 1 // a reset of an empty selection hands dependents no new array
+      expect(selection.rects).toBe(empty)
+      selection.step({ row: 0, col: 0 }, { row: 0, col: 1 }, false)
+      selection.clear()
+      expect(selection.rects).toBe(empty)
+    })
 
     // A live refresh (fresh row objects, e.g. trajectory frames) cleared the selection even
     // with every row id in place; only a change of ids or order must clear it
@@ -3160,7 +3164,7 @@ describe(`DataTable`, () => {
       const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
       rows_have_layout = true
       Object.defineProperty(scroller, `clientWidth`, { value: 700, configurable: true })
-      trigger_resize_observer(scroller)
+      resize_observers.resize(scroller)
       await tick()
       expect(measurement_reads).toBe(min_window * 2)
 
@@ -3170,7 +3174,7 @@ describe(`DataTable`, () => {
       expect(spacers()[0].style.height).toBe(`${(state.data.length - min_window) * 20}px`)
 
       Object.defineProperty(scroller, `clientWidth`, { value: 600, configurable: true })
-      trigger_resize_observer(scroller)
+      resize_observers.resize(scroller)
       await tick()
       expect(measurement_reads).toBe(min_window * 3)
     })

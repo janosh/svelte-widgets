@@ -146,6 +146,53 @@ export const stub_css_highlights = () => {
   return { registry, clear_spy, set_spy, delete_spy }
 }
 
+// happy-dom's ResizeObserver never fires, so tests fire this fake by hand. The registry
+// outlives each stub because Svelte's size bindings share one long-lived observer.
+type OnObserve = (target: Element, observer: FakeResizeObserver) => void
+let on_observe: OnObserve | undefined
+const all_observers = new Set<FakeResizeObserver>()
+export const resize_observers = {
+  created: [] as FakeResizeObserver[], // since the last stub, oldest first
+  observed: () => new Set([...all_observers].flatMap(({ targets }) => [...targets])),
+  // fires every observer watching target; throws if none does
+  resize: (target: Element) => {
+    const watching = [...all_observers].filter(({ targets }) => targets.has(target))
+    assert(watching.length > 0, `No ResizeObserver observes ${target.nodeName}`)
+    for (const observer of watching) observer.fire(target)
+  },
+}
+class FakeResizeObserver implements ResizeObserver {
+  readonly targets = new Set<Element>()
+  constructor(readonly callback: ResizeObserverCallback) {
+    all_observers.add(this)
+    resize_observers.created.push(this)
+  }
+  readonly observe = vi.fn((target: Element, _options?: ResizeObserverOptions) => {
+    this.targets.add(target)
+    on_observe?.(target, this)
+  })
+  readonly unobserve = vi.fn((target: Element) => void this.targets.delete(target))
+  readonly disconnect = vi.fn(() => this.targets.clear())
+  // fires its own targets by default, and still calls back once disconnected, like a
+  // notification queued before disconnect()
+  fire(...targets: Element[]): void {
+    const entries = (targets.length ? targets : [...this.targets]).map((target) => {
+      const { clientWidth: width, clientHeight: height } = target
+      return { target, contentRect: new DOMRect(0, 0, width, height) }
+    })
+    this.callback(entries as ResizeObserverEntry[], this)
+  }
+}
+// call per test (or in beforeEach): forgets earlier targets, unstubs when the test finishes
+export const stub_resize_observer = (observe_hook?: OnObserve) => {
+  for (const observer of all_observers) observer.targets.clear()
+  resize_observers.created.length = 0
+  on_observe = observe_hook
+  vi.stubGlobal(`ResizeObserver`, FakeResizeObserver)
+  onTestFinished(() => void vi.unstubAllGlobals())
+  return resize_observers
+}
+
 // tracking settlement rather than awaiting is the only way to assert a promise is pending
 export const track = <T>(promise: Promise<T>) => {
   const state: { settled: boolean; value?: T; reason?: unknown } = { settled: false }

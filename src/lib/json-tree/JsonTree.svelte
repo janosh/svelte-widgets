@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { create_flash } from './feedback.svelte'
+  import { create_flash } from '../browser/flash.svelte.ts'
   import Icon from '../Icon.svelte'
   import type { IconData } from '../icons'
   import {
@@ -12,9 +12,10 @@
     Download,
     Search,
   } from '../icons'
-  import { download } from '../download'
-  import { create_key_selector } from '../internal/key-selector.svelte'
-  import { clamp, is_editable_event_target, is_modifier_chord } from '../utils'
+  import { download } from '../browser/index'
+  import { create_key_selector } from '../internal/key-selector.svelte.ts'
+  import { is_editable_event_target, is_modifier_chord } from '../shortcuts'
+  import { clamp } from '../utils'
   import { tick, untrack } from 'svelte'
   import { highlight_matches, tooltip } from '../attachments/index'
   import { escape_layer } from '../attachments/shared'

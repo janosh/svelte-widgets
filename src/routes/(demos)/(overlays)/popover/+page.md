@@ -9,7 +9,7 @@ The `trigger` snippet receives the click handler and `aria-expanded`/`aria-haspo
 ```svelte example id="popover-basic"
 <script lang="ts">
   import { Popover } from 'svelte-widgets'
-  import type { Placement } from 'svelte-widgets/utils'
+  import type { Placement } from 'svelte-widgets/position'
 
   let placement = $state<Placement>(`bottom`)
   let last_close = $state(``)

@@ -102,7 +102,7 @@ Print the current page with an optional suggested PDF filename. The helper tempo
 
 ```svelte example id="print-page-demo"
 <script lang="ts">
-  import { format_print_filename, print_page } from 'svelte-widgets/print'
+  import { format_print_filename, print_page } from 'svelte-widgets/browser'
 </script>
 
 <button
@@ -119,7 +119,7 @@ Reactive "recently copied" state keyed by string, for UIs that render their own 
 
 ```svelte example id="clipboard-feedback-demo"
 <script lang="ts">
-  import { create_clipboard_feedback } from 'svelte-widgets/clipboard'
+  import { create_clipboard_feedback } from 'svelte-widgets/browser'
 
   const { copied, copy } = create_clipboard_feedback(1500, (error) =>
     console.error(error),

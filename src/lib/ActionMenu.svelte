@@ -2,18 +2,14 @@
   import { onDestroy, untrack, type Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import { click_outside, type DismissConfig, float } from './attachments/index'
-  import type { CmdAction, CmdSection } from './types'
+  import type { ActionMenuTriggerProps, CmdAction, CmdSection } from './types'
   import { focusable } from './attachments/shared'
   import { validate_cmd_actions } from './internal/command'
-  import { chain_handlers, format_shortcut, type Placement, step_focus } from './utils'
+  import { chain_handlers } from './utils'
+  import { format_shortcut, step_focus } from './shortcuts'
+  import type { Placement } from './position'
 
-  type TriggerProps = {
-    onclick: (event: MouseEvent) => void
-    'aria-controls': string | undefined
-    'aria-expanded': boolean
-    'aria-haspopup': `menu`
-    'aria-disabled': boolean | undefined
-  }
+  type TriggerProps = ActionMenuTriggerProps
   type ContextMode = {
     // Where the menu is open, as viewport coordinates. null while closed.
     at?: { x: number; y: number } | null

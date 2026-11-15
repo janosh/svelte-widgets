@@ -64,6 +64,9 @@ describe(`ColumnFilter`, () => {
     [[98_765, 123_456], `98700`, `124000`],
     // a few ULPs past a short decimal, as computed data lands
     [[0.000021799999999999998, 0.28500000000000003], `0.0000217`, `0.286`],
+    // String()'s notation, so the placeholder types into a number input as shown
+    [[-1.5e-7, 2.5e21], `-1.5e-7`, `2.5e+21`],
+    [[-0, 1234.5], `0`, `1240`],
   ])(`default bound placeholders for %j are %s to %s`, (values, min, max) => {
     mount_filter(values)
     const inputs = document.querySelectorAll<HTMLInputElement>(`input[type="number"]`)

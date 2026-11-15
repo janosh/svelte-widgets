@@ -45,10 +45,12 @@ export type { ForwardWindowKeydownOptions, HotkeyOptions } from './keyboard'
 export { focus_trap, tabbable_selector } from './focus-trap'
 export type { FocusTrapOptions } from './focus-trap'
 export {
+  computed_color,
   contrast_color,
-  contrast_ratio,
   get_bg_color,
   parse_color,
   pick_contrast_color,
 } from './contrast-color'
 export type { ContrastOptions } from './contrast-color'
+export { create_wiggle, WIGGLE_DEFAULTS } from './wiggle'
+export type { WiggleOptions } from './wiggle'

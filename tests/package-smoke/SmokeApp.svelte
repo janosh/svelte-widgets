@@ -62,9 +62,10 @@
   import { Claude as direct_claude } from 'svelte-widgets/icons'
   import { heading_anchor_html } from 'svelte-widgets/heading-anchors'
   import type { TemmlOptions } from 'svelte-widgets/markdown'
-  import { storage_get } from 'svelte-widgets/storage'
+  import { storage_get } from 'svelte-widgets/browser'
   import { apply_theme_mode as apply_theme_from_subpath } from 'svelte-widgets/theme'
-  import { fuzzy_match, get_label } from 'svelte-widgets/utils'
+  import { fuzzy_match } from 'svelte-widgets/match'
+  import { get_label } from 'svelte-widgets/utils'
   import { parse_yaml, stringify_yaml } from 'svelte-widgets/yaml'
 
   const options: Option[] = [`One`, { label: `Two`, value: 2 }]

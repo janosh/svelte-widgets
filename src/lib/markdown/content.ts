@@ -119,11 +119,12 @@ export function walk_tokens(
 }
 
 // Marked rewrites some container text before tokenizing the children: it expands tabs to the
-// next multiple of four columns after a blockquote's `>` and in a list item's first-line marker
-// and continuation indentation, and drops the backslash of `\|` in table cells and of `\[`
-// and `\]` in link and image labels (its outputLink regex). Each rewrites one container level,
-// since a nested container's raw is already in its parent's coordinates.
-const QUOTE_PREFIX = / {0,3}>[ \t]*/uy
+// next multiple of four columns after a blockquote's `>` when a tab follows it (tabs after `> `
+// stay tabs) and in a list item's first-line marker and continuation indentation, and drops
+// the backslash of `\|` in table cells and of `\[` and `\]` in link and image labels (its
+// outputLink regex). Each rewrites one container level, since a nested container's raw is
+// already in its parent's coordinates.
+const QUOTE_PREFIX = / {0,3}>(?: |\t[ \t]*)?/uy
 const ITEM_FIRST_PREFIX = / {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*/uy
 const INDENT = /[ \t]*/uy
 // A lazy continuation line that would read as a setext underline: Marked's blockquote and list

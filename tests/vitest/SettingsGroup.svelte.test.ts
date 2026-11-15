@@ -39,3 +39,38 @@ test(`binds open in both directions and omits unset subtitle`, async () => {
   await tick()
   expect(group.open).toBe(false)
 })
+
+const controls = raw_snippet(`<label>Gap <input type="number" /></label>`)
+
+// both modes put the controls in a fieldset named by the title, so disabled covers them all
+test.each([true, false])(
+  `collapsible=%s groups its controls in a disableable fieldset named by the title`,
+  (collapsible) => {
+    render(SettingsGroup, {
+      title: `Stacking`,
+      collapsible,
+      disabled: true,
+      class: `caller`,
+      style: `margin-top: 3px`,
+      children: controls,
+    })
+    const root = doc_query(`.settings-group.caller`)
+    expect([root.tagName, root.style.marginTop]).toEqual([
+      collapsible ? `DETAILS` : `FIELDSET`,
+      `3px`,
+    ])
+    const fieldset = doc_query<HTMLFieldSetElement>(
+      collapsible ? `fieldset.group-body` : `fieldset.static`,
+    )
+    const name_id = fieldset.getAttribute(`aria-labelledby`)
+    const name = collapsible
+      ? document.querySelector(`#${CSS.escape(name_id ?? ``)}`)?.textContent
+      : fieldset.querySelector(`:scope > legend`)?.textContent
+    expect([name, fieldset.disabled, fieldset.querySelector(`input`)?.type]).toEqual([
+      `Stacking`,
+      true,
+      `number`,
+    ])
+    expect(document.querySelector(`summary`) !== null).toBe(collapsible)
+  },
+)

@@ -10,11 +10,18 @@
   import ActionMenu from '../ActionMenu.svelte'
   import Icon from '../Icon.svelte'
   import { tooltip } from '../attachments/index'
-  import { download } from '../download'
+  import { download } from '../browser/index'
+  import { format_locale, format_num } from '../format'
   import { Columns, Cross, Download, Search as SearchIcon } from '../icons'
   import type { IconData } from '../icons'
   import type { CmdAction, CmdSection } from '../types'
-  import { clamp, escape_html, html_to_text } from '../utils'
+  import {
+    clamp,
+    escape_html,
+    html_to_text,
+    is_plain_object,
+    with_defaults,
+  } from '../utils'
   import { virtual_window } from '../virtual'
   import ColumnFilter from './ColumnFilter.svelte'
   import ColumnPicker from './ColumnPicker.svelte'
@@ -45,13 +52,11 @@
     cell_readers,
     cell_text,
     DATETIME_MODES_BY_KIND,
-    default_format_number,
     discover_columns,
     escape_markup,
     format_datetime,
     infer_datetime_kind,
     is_html_str,
-    is_plain_object,
     is_invalid,
     MIDDLE_ELLIPSIS_MIN_LENGTH,
     middle_ellipsis_parts,
@@ -60,7 +65,6 @@
     same_while_equal,
     sort_table_rows,
     text_matches_query,
-    with_defaults,
   } from './data'
   import { table_to_json, table_to_text, tsv_cell } from './export'
   import { compile_filter } from './filter'
@@ -68,7 +72,7 @@
     cell_range_select,
     CellSelection,
     INTERACTIVE_SELECTOR,
-  } from './selection.svelte'
+  } from './selection.svelte.ts'
   import type { CellPos, ColumnFilterValue, TableMatrix } from './types'
   import { type Snippet, tick, untrack } from 'svelte'
   import { flip } from 'svelte/animate'
@@ -82,7 +86,9 @@
     controls,
     sort = $bindable([]),
     default_num_format = undefined,
-    format_number = default_format_number,
+    // a column's d3 spec when it has one, else locale-aware Intl
+    format_number = (num, format) =>
+      format ? format_num(num, format) : format_locale(num),
     render_html = escape_markup,
     column_color,
     menu_sections,
@@ -947,7 +953,7 @@
   }
 
   // === Cell range selection, keyboard navigation and copy ===
-  const selection = new CellSelection()
+  const selection = new CellSelection(() => [row_identities, visible_columns])
   // Roving tabindex anchor: exactly one cell is tabbable, and arrow keys move it
   let active_cell = $state({ row: 0, col: 0 })
   // Stale (row, col) coordinates must not survive a change of the row set or column layout.
@@ -959,11 +965,6 @@
     const next = sorted_data.map((row) => (row_key === undefined ? row : get_row_id(row)))
     if (same_parts(next, prev_row_identities)) return prev_row_identities
     return (prev_row_identities = next)
-  })
-  $effect(() => {
-    void row_identities
-    void visible_columns
-    untrack(() => selection.clear()) // untracked: clear() reads the selection
   })
 
   // active_cell clamped to rendered cells, else an off-page anchor would leave every cell at

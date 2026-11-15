@@ -2,7 +2,7 @@ import { Masonry } from '#lib'
 import { order_options as ALL_ORDER_MODES } from '#lib/utils.ts'
 import { type ComponentProps, mount, tick } from 'svelte'
 import { beforeEach, describe, expect, test, vi } from 'vite-plus/test'
-import { doc_query } from './index'
+import { doc_query, resize_observers, stub_resize_observer } from './index'
 import MasonryAppendHarness from './MasonryAppendHarness.svelte'
 
 const mount_masonry = (props: ComponentProps<typeof Masonry>) =>
@@ -31,51 +31,20 @@ const as_columns = () =>
   get_col_dist()
     .map((col) => col.join(`,`))
     .join(` | `)
-const resize_observers = new Map<Element, ResizeObserverCallback>()
 // number for a uniform height, or a function to give each item its own measured height
 let mock_height: number | ((el: Element) => number) = 100
 const measured_height = (el: Element): number =>
   typeof mock_height === `number` ? mock_height : mock_height(el)
-
-const mock_resize_entry = (target: Element): ResizeObserverEntry => ({
-  target,
-  contentRect: new DOMRect(0, 0, 0, 0),
-  borderBoxSize: [],
-  contentBoxSize: [],
-  devicePixelContentBoxSize: [],
-})
-
-let observers_created = 0
-globalThis.ResizeObserver = class ResizeObserver implements ResizeObserver {
-  private readonly callback: ResizeObserverCallback
-  // disconnect() must untrack everything this instance observed, like the real API
-  private readonly targets = new Set<Element>()
-  constructor(callback: ResizeObserverCallback) {
-    this.callback = callback
-    observers_created += 1
-  }
-  observe(target: Element): void {
-    this.targets.add(target)
-    resize_observers.set(target, this.callback)
-    Object.defineProperty(target, `offsetHeight`, {
-      value: measured_height(target),
-      configurable: true,
-    })
-    this.callback([mock_resize_entry(target)], this)
-  }
-  unobserve(target: Element): void {
-    this.targets.delete(target)
-    resize_observers.delete(target)
-  }
-  disconnect(): void {
-    for (const target of this.targets) resize_observers.delete(target)
-    this.targets.clear()
-  }
-}
+const set_offset_height = (node: Element, value: number) =>
+  Object.defineProperty(node, `offsetHeight`, { value, configurable: true })
 
 beforeEach(() => {
-  resize_observers.clear()
   mock_height = 100
+  // observing measures the target and reports its size at once, like the real API
+  stub_resize_observer((target, observer) => {
+    set_offset_height(target, measured_height(target))
+    observer.fire(target)
+  })
 })
 
 const scroll_to = async (scroll_top: number) => {
@@ -416,10 +385,9 @@ describe(`Masonry order modes`, () => {
 
       const resize_card = (id: number, height: number) => {
         const node = [...item_els()].find((item) => item.textContent === String(id))
-        const notify = node && resize_observers.get(node)
-        if (!node || !notify) throw new Error(`Missing resize observer for card ${id}`)
-        Object.defineProperty(node, `offsetHeight`, { value: height, configurable: true })
-        notify([mock_resize_entry(node)], {} as ResizeObserver)
+        if (!node) throw new Error(`Missing card ${id}`)
+        set_offset_height(node, height)
+        resize_observers.resize(node)
       }
       resize_card(0, 500)
       await tick()
@@ -464,17 +432,16 @@ describe(`Masonry order modes`, () => {
 
   // every mode measures (for mode switching support), with one observer shared by all cards
   test.each(ALL_ORDER_MODES)(`order=%s measures every card`, async (order) => {
-    const created_before = observers_created
     mount_masonry({ items: make_items(5), order, masonry_width: 500 })
     await tick()
-    expect(resize_observers.size).toBe(6) // masonry container + 5 items
+    expect(resize_observers.observed().size).toBe(6) // masonry container + 5 items
     // the container binding may bring its own; the cards share one
-    expect(observers_created - created_before).toBeLessThanOrEqual(2)
+    expect(resize_observers.created.length).toBeLessThanOrEqual(2)
   })
 
   test(`virtualization skips ResizeObservers (only estimated heights used)`, () => {
     mount_virtualized(3)
-    expect(resize_observers.size).toBe(1) // the container only
+    expect(resize_observers.observed().size).toBe(1) // the container only
   })
 
   // Every mode must render every item, whatever the item shape or column count
@@ -577,10 +544,8 @@ describe(`Masonry virtualization`, () => {
     expect(item_els()).toHaveLength(100) // clientHeight=0 is unmeasured: every card renders
     const first_card = item_els()[0]
     const container = doc_query(`.masonry`)
-    const notify = resize_observers.get(container)
-    if (!notify) throw new Error(`Missing resize observer for the masonry container`)
     container_height = 300
-    notify([mock_resize_entry(container)], {} as ResizeObserver)
+    resize_observers.resize(container)
     await tick()
     expect(item_els().length).toBeLessThan(100) // now windowed
     expect(item_els()[0]).toBe(first_card) // same node: the render branch didn't swap
@@ -646,6 +611,19 @@ describe(`Masonry live item updates`, () => {
     harness.append(5, 6)
     await tick()
     expect(events).toEqual([5, 6])
+  })
+
+  // a removed item stops being measured, so its node does not stay observed
+  test(`removing an item unobserves its node`, async () => {
+    const harness = mount_harness()
+    await tick()
+    const observed = () => [...resize_observers.observed()]
+    const [removed, ...kept] = item_els()
+    expect(observed()).toEqual(expect.arrayContaining([removed, ...kept]))
+    harness.remove(1)
+    await tick()
+    expect(observed()).not.toContain(removed)
+    expect(observed()).toEqual(expect.arrayContaining([...item_els()]))
   })
 
   // Regression: a removed id must be purged from stable_assignments, else re-adding it

@@ -78,10 +78,10 @@ test(`spinner adds no live region; an error moves the label to the mounted alert
   props.spinner_props = { title: `Worker` }
   const root = render_task(props)
   const spinner = doc_query(`[role="status"] .spinner`)
-  const attrs = [`role`, `aria-live`, `aria-label`, `title`].map((key) =>
+  const attrs = [`role`, `aria-live`, `aria-label`, `aria-hidden`, `title`].map((key) =>
     spinner.getAttribute(key),
   )
-  expect(attrs).toEqual([null, null, null, `Worker`])
+  expect(attrs).toEqual([null, null, null, `true`, `Worker`])
   const alert = doc_query(`[role="alert"]`)
   Object.assign(props, { state: `error`, label: `Failed` })
   await tick()

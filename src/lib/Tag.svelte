@@ -9,7 +9,7 @@
   import type { IconData } from './icons'
   import { Cross } from './icons'
   import { merge_defaults, TAG_LABELS, type TagLabels } from './labels'
-  import { theme } from './theme.svelte'
+  import { theme } from './theme.svelte.ts'
 
   let {
     label,

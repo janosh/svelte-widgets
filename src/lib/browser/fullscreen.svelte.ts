@@ -1,4 +1,4 @@
-import { get_bg_color } from './attachments/index'
+import { get_bg_color } from '../attachments/index'
 
 export type FullscreenSyncOptions = {
   // the element that goes fullscreen; sync is inert until this resolves
@@ -10,19 +10,6 @@ export type FullscreenSyncOptions = {
   on_change?: (fullscreen: boolean) => void
   // Reports rejected enter and exit requests.
   on_request_error?: (error: unknown) => void
-}
-
-// Page background as an explicit color: `get_bg_color` walks body (which themes usually
-// paint) then html, and the OS color scheme decides when both are transparent.
-export function get_page_background(
-  fallback_dark = `#1a1a1a`,
-  fallback_light = `#ffffff`,
-): string {
-  if (typeof document === `undefined`) return ``
-  return (
-    get_bg_color(document.body) ||
-    (matchMedia(`(prefers-color-scheme: dark)`).matches ? fallback_dark : fallback_light)
-  )
 }
 
 // Two-way sync between a bindable `fullscreen` flag and the browser's fullscreen state,
@@ -72,7 +59,7 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
     // out (and on a var rename, wrapper swap or unmount) so nothing reads a stale value
     if (!fullscreen) return undefined
     const bg_css_var = options.get_bg_css_var?.() ?? `--fullscreen-bg`
-    wrapper.style.setProperty(bg_css_var, get_page_background())
+    wrapper.style.setProperty(bg_css_var, get_bg_color(document.body))
     return () => wrapper.style.removeProperty(bg_css_var)
   })
 
