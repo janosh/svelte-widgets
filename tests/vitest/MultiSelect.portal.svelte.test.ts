@@ -1,5 +1,6 @@
 import { tick } from 'svelte'
 import { afterEach, describe, expect, test, vi } from 'vite-plus/test'
+import { css_px } from '#lib/attachments/shared.ts'
 import type { MultiSelectProps, PortalParams } from '#lib/types.ts'
 import { create_element, doc_query } from './index'
 import { focus_input, mount_multiselect } from './MultiSelect.test-utils'
@@ -15,7 +16,7 @@ const reposition = async (type: `resize` | `scroll` = `resize`) => {
 describe(`portal placement`, () => {
   afterEach(() => vi.unstubAllGlobals()) // don't leak innerHeight overrides to other tests
 
-  // happy-dom has no layout engine: stub trigger rect, dropdown offsetHeight, viewport
+  // happy-dom has no layout engine: stub trigger rect, dropdown height, viewport
   function stub_layout({
     trigger_rect,
     dropdown_height,
@@ -39,10 +40,9 @@ describe(`portal placement`, () => {
     } as DOMRect
     vi.spyOn(doc_query(`div.multiselect`), `getBoundingClientRect`).mockReturnValue(rect)
     const dropdown = doc_query<HTMLUListElement>(`body > ul.options`)
-    Object.defineProperty(dropdown, `offsetHeight`, {
-      value: dropdown_height,
-      configurable: true,
-    })
+    vi.spyOn(dropdown, `getBoundingClientRect`).mockReturnValue(
+      new DOMRect(0, 0, rect.width, dropdown_height),
+    )
     vi.stubGlobal(`innerHeight`, viewport_height)
     return dropdown
   }
@@ -56,7 +56,8 @@ describe(`portal placement`, () => {
     await tick()
   }
 
-  // `top` positions the margin edge, so the action subtracts margin-top when above
+  // `top` positions the margin edge and float places the whole margin box, so above the
+  // input it subtracts both vertical margins (the default margin-bottom is 0)
   function expected_top_style(
     expected_placement: `top` | `bottom`,
     trigger_rect: { top: number; bottom: number },
@@ -64,9 +65,9 @@ describe(`portal placement`, () => {
     dropdown: HTMLUListElement,
   ): string {
     if (expected_placement === `bottom`) return `${trigger_rect.bottom}px`
-    const margin_px = getComputedStyle(dropdown).marginTop.replace(/px$/u, ``)
-    const margin_top = Number(margin_px) || 0
-    return `${Math.max(0, trigger_rect.top - dropdown_height - margin_top)}px`
+    const { marginTop, marginBottom } = getComputedStyle(dropdown)
+    const margin_y = css_px(marginTop) + css_px(marginBottom)
+    return `${Math.max(0, trigger_rect.top - dropdown_height - margin_y)}px`
   }
 
   test.each([
@@ -108,7 +109,7 @@ describe(`portal placement`, () => {
       dropdown_height: 0,
       viewport_height: 700,
       expected_placement: `bottom`,
-      desc: `unmeasured dropdown (offsetHeight 0) falls back to bottom`,
+      desc: `unmeasured dropdown (height 0) falls back to bottom`,
     },
     {
       // same tight-space-below setup as the auto row above, so a flip proves the default
@@ -148,7 +149,7 @@ describe(`portal placement`, () => {
     }) => {
       await mount_with_portal(placement)
       const dropdown = stub_layout({ trigger_rect, dropdown_height, viewport_height })
-      await reposition() // force update_position with stubs
+      await reposition() // force a float update with stubs
 
       expect(dropdown.dataset.placement).toBe(expected_placement)
       expect(dropdown.style.top).toBe(
@@ -184,7 +185,7 @@ describe(`portal placement`, () => {
     await reposition(`scroll`)
     expect(dropdown.dataset.placement).toBe(`top`)
 
-    // changing placement via props flows through the action's update() method
+    // changing placement via props re-runs the float attachment
     props.portal = { active: true, placement: `bottom` }
     await tick()
     await reposition()
@@ -197,19 +198,29 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
   const props = $state<MultiSelectProps>({
     options: [1, 2, 3],
     open: true,
-    portal: { active: false },
+    portal: {}, // omitted `active` must stay in place, not position it as if portalled
     ul_options_style: `width: 20em`,
   })
   mount_multiselect(props)
   await tick()
 
   expect(document.querySelector(`body > ul.options`)).toBeNull()
-  expect(document.querySelector(`div.multiselect ul.options`)).not.toBeNull()
+  const in_place = doc_query<HTMLUListElement>(`div.multiselect ul.options`)
+  expect([in_place.style.position, in_place.dataset.placement]).toEqual([``, undefined])
 
   props.portal = { active: true }
   await tick()
   const portalled = doc_query<HTMLUListElement>(`body > ul.options`)
-  expect(portalled.style.position).toBe(`fixed`)
+  expect([portalled.style.position, portalled.style.width]).toEqual([`fixed`, `0px`])
+  expect(portalled.hidden).toBe(false)
+
+  // closed while portalled, it has no position to paint at, so it hides at once
+  props.open = false
+  await tick()
+  expect(portalled.hidden).toBe(true)
+  props.open = true
+  await tick()
+  expect(portalled.hidden).toBe(false)
 
   props.portal = { active: false }
   await tick()
@@ -220,6 +231,11 @@ test(`toggling portal.active at runtime portals and un-portals the dropdown`, as
   expect(back_inside.style.position).toBe(``)
   expect(back_inside.style.width).toBe(`20em`)
   expect(back_inside.dataset.placement).toBeUndefined()
+
+  // once home, visibility is the component CSS again: closing must not latch `hidden`
+  props.open = false
+  await tick()
+  expect(back_inside.hidden).toBe(false)
 })
 
 // click_outside gets `inside: [options_list_el]`, undefined until bind:this lands — the
