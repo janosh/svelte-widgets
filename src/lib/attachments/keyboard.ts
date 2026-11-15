@@ -1,5 +1,5 @@
-import type { Hotkey } from '../utils'
-import { run_hotkeys } from '../utils'
+import type { Hotkey } from '../shortcuts'
+import { run_hotkeys } from '../shortcuts'
 import { is_composing } from './shared'
 
 export interface HotkeyOptions {

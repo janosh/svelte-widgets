@@ -18,7 +18,8 @@
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
   import type { NavGroup, NavLink, NavRoute } from './types'
   import { is_composing } from './attachments/shared'
-  import { chain_handlers, step_focus } from './utils'
+  import { chain_handlers } from './utils'
+  import { step_focus } from './shortcuts'
 
   type Route = NavLink | NavGroup
   let {

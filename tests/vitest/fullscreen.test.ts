@@ -1,5 +1,5 @@
 import FullscreenButton from '#lib/FullscreenButton.svelte'
-import { get_page_background, sync_fullscreen } from '#lib/fullscreen.svelte.ts'
+import { get_page_background, sync_fullscreen } from '#lib/browser/index.ts'
 import * as icons from '#lib/icons.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'

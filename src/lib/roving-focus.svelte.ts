@@ -5,7 +5,7 @@ import {
   is_focus_available,
 } from './attachments/shared'
 import { create_key_selector } from './internal/key-selector.svelte'
-import { is_editable_event_target, is_modifier_chord } from './utils'
+import { is_editable_event_target, is_modifier_chord } from './shortcuts'
 import { SvelteSet } from 'svelte/reactivity'
 // Roving tabindex over keyed HTML or SVG items in DOM order.
 // Home scans forward from the first item, End backward from the last

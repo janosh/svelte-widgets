@@ -68,6 +68,18 @@
       "types": "./dist/utils.d.ts",
       "default": "./dist/utils.js"
     },
+    "./position": {
+      "types": "./dist/position.d.ts",
+      "default": "./dist/position.js"
+    },
+    "./shortcuts": {
+      "types": "./dist/shortcuts.d.ts",
+      "default": "./dist/shortcuts.js"
+    },
+    "./match": {
+      "types": "./dist/match.d.ts",
+      "default": "./dist/match.js"
+    },
     "./assets": {
       "types": "./dist/assets.d.ts",
       "default": "./dist/assets.js"
@@ -110,10 +122,6 @@
     "./source-links/virtual": {
       "types": "./dist/source-links/virtual.d.ts"
     },
-    "./clipboard": {
-      "types": "./dist/clipboard.svelte.d.ts",
-      "default": "./dist/clipboard.svelte.js"
-    },
     "./code-editor": {
       "types": "./dist/code-editor/index.d.ts",
       "svelte": "./dist/code-editor/index.js",
@@ -126,6 +134,10 @@
       "types": "./dist/dialogs.svelte.d.ts",
       "default": "./dist/dialogs.svelte.js"
     },
+    "./browser": {
+      "types": "./dist/browser/index.d.ts",
+      "default": "./dist/browser/index.js"
+    },
     "./file-drop": {
       "types": "./dist/file-drop.d.ts",
       "default": "./dist/file-drop.js"
@@ -133,22 +145,6 @@
     "./find-in-page": {
       "types": "./dist/find-in-page.svelte.d.ts",
       "default": "./dist/find-in-page.svelte.js"
-    },
-    "./fullscreen": {
-      "types": "./dist/fullscreen.svelte.d.ts",
-      "default": "./dist/fullscreen.svelte.js"
-    },
-    "./download": {
-      "types": "./dist/download.d.ts",
-      "default": "./dist/download.js"
-    },
-    "./print": {
-      "types": "./dist/print.d.ts",
-      "default": "./dist/print.js"
-    },
-    "./storage": {
-      "types": "./dist/storage.d.ts",
-      "default": "./dist/storage.js"
     },
     "./text-search": {
       "types": "./dist/text-search.d.ts",
@@ -188,10 +184,6 @@
       "svelte": "./dist/table/index.js",
       "default": "./dist/table/index.js"
     },
-    "./csv": {
-      "types": "./dist/csv.d.ts",
-      "default": "./dist/csv.js"
-    },
     "./format": {
       "types": "./dist/format.d.ts",
       "default": "./dist/format.js"
@@ -203,22 +195,6 @@
     "./canvas": {
       "types": "./dist/canvas.svelte.d.ts",
       "default": "./dist/canvas.svelte.js"
-    },
-    "./stats": {
-      "types": "./dist/stats.d.ts",
-      "default": "./dist/stats.js"
-    },
-    "./url-params": {
-      "types": "./dist/url-params.d.ts",
-      "default": "./dist/url-params.js"
-    },
-    "./poll": {
-      "types": "./dist/poll.d.ts",
-      "default": "./dist/poll.js"
-    },
-    "./image-markup": {
-      "types": "./dist/image-markup.d.ts",
-      "default": "./dist/image-markup.js"
     },
     "./markdown": {
       "types": "./dist/markdown/index.d.ts",

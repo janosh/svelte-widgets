@@ -5,7 +5,7 @@
   import { tick, type Snippet } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import type { HTMLAttributes } from 'svelte/elements'
-  import { is_editable_event_target, is_modifier_chord } from './utils'
+  import { is_editable_event_target, is_modifier_chord } from './shortcuts'
 
   let {
     nodes,

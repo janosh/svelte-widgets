@@ -9,7 +9,8 @@
     SETTINGS_SEARCH_LABELS,
     type SettingsSearchLabels,
   } from './labels'
-  import { create_term_matcher, observe_subtree } from './utils'
+  import { create_term_matcher } from './match'
+  import { observe_subtree } from './utils'
 
   let {
     query = $bindable(``),

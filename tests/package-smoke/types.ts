@@ -21,9 +21,6 @@ import {
   type StatItem,
   type DialogCloseDetail,
   type DialogProps,
-  type Hotkey,
-  type PositionOptions,
-  type PositionResult,
   type ThemeMode,
 } from 'svelte-widgets'
 import type { ComponentProps } from 'svelte'
@@ -36,11 +33,11 @@ import type {
 } from 'svelte-widgets/code-editor'
 import { theme } from 'svelte-widgets/theme'
 import { get_label } from 'svelte-widgets/utils'
-import { rows_to_csv } from 'svelte-widgets/csv'
-import { format_bytes } from 'svelte-widgets/format'
-import { format_stat_delta } from 'svelte-widgets/stats'
-import { url_with_params, valid_query_param } from 'svelte-widgets/url-params'
-import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/image-markup'
+import type { PositionOptions, PositionResult } from 'svelte-widgets/position'
+import type { Hotkey } from 'svelte-widgets/shortcuts'
+import { rows_to_csv, format_bytes, format_stat_delta } from 'svelte-widgets/format'
+import { url_with_params, valid_query_param } from 'svelte-widgets/browser'
+import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/canvas'
 import {
   configure_default_highlighter,
   create_highlighter,

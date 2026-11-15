@@ -1,5 +1,5 @@
 import { untrack } from 'svelte'
-import { is_editable_event_target } from '../utils'
+import { is_editable_event_target } from '../shortcuts'
 
 // Keeps a scroll container pinned to the bottom of growing content (a streaming chat thread, a
 // log tail) until the reader scrolls away, and re-pins once they scroll back. Layout alone

@@ -1,6 +1,6 @@
 import type { TextMutationOptions, TextSearchNodeFilter } from '../text-search'
 import { create_burst_debounce, search_text, sync_owned_highlight } from '../text-search'
-import { fuzzy_match_indices } from '../utils'
+import { fuzzy_match_indices } from '../match'
 
 export type HighlightOptions = {
   query?: string

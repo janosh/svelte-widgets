@@ -1,38 +1,44 @@
 import type { CmdAction, Option, OptionStyle } from '#lib'
 import {
   chain_handlers,
-  cmd_action_matches,
-  create_cmd_action_filter,
-  create_term_matcher,
-  compute_position,
-  event_to_combo,
-  format_cmd_metadata,
-  format_shortcut,
-  fuzzy_match,
-  fuzzy_match_indices,
   get_label,
   get_option_key,
   get_style,
   get_uuid,
   has_group,
-  is_editable_event_target,
-  is_modifier_chord,
   is_object,
   lower_bound,
   make_change_detector,
-  matches_shortcut,
-  normalize_combo,
   observe_subtree,
-  type PositionOptions,
-  type PositionResult,
-  parse_shortcut,
-  sanitize_shortcut_overrides,
   slug_to_title,
-  step_focus,
   escape_html,
   strip_html,
   to_error,
 } from '#lib/utils.ts'
+import {
+  cmd_action_matches,
+  create_cmd_action_filter,
+  create_term_matcher,
+  format_cmd_metadata,
+  fuzzy_match,
+  fuzzy_match_indices,
+} from '#lib/match.ts'
+import {
+  compute_position,
+  type PositionOptions,
+  type PositionResult,
+} from '#lib/position.ts'
+import {
+  event_to_combo,
+  format_shortcut,
+  is_editable_event_target,
+  is_modifier_chord,
+  matches_shortcut,
+  normalize_combo,
+  parse_shortcut,
+  sanitize_shortcut_overrides,
+  step_focus,
+} from '#lib/shortcuts.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { create_element, doc_query, stub_props } from './index'
 

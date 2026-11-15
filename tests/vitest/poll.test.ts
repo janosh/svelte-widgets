@@ -1,4 +1,4 @@
-import { start_polling } from '#lib/poll.ts'
+import { start_polling } from '#lib/browser/index.ts'
 import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test'
 
 const set_hidden = (hidden: boolean): void => {
