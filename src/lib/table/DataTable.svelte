@@ -55,6 +55,7 @@
     discover_columns,
     escape_markup,
     format_datetime,
+    full_value_title,
     infer_datetime_kind,
     is_html_str,
     is_invalid,
@@ -1537,6 +1538,14 @@ itself since Safari does not focus a tapped button -->
   {/if}
 {/snippet}
 
+<!-- A number in its column format; when the format dropped digits, a span hands the full value
+to the delegated tooltip (otherwise plain text, no extra node) -->
+{#snippet num_text(val: number, format: string | undefined)}
+  {@const text = format_number(val, format)}
+  {@const title = full_value_title(val, text, format)}
+  {#if title}<span data-title={title}>{text}</span>{:else}{text}{/if}
+{/snippet}
+
 {#snippet sort_hint_element(pos: `top` | `bottom`)}
   {#if hint_config?.position === pos}
     <div
@@ -1896,7 +1905,7 @@ itself since Safari does not focus a tapped button -->
               {:else if date_val != null}
                 {@render plain_text(date_val)}
               {:else if typeof val === `number` && !Number.isNaN(val)}
-                {format_number(val, col.format ?? default_num_format)}
+                {@render num_text(val, col.format ?? default_num_format)}
               {:else if is_invalid(val)}
                 <!-- data-title feeds the delegated tooltip, so no per-cell attachment -->
                 <span data-title="Not available">n/a</span>
@@ -1954,7 +1963,7 @@ itself since Safari does not focus a tapped button -->
                   {:else if stats && numeric && stats[stat] != null}
                     <!-- only columns that are numeric throughout get a statistic; a mixed
                          text column would otherwise report a mean of the few parseable cells -->
-                    {format_number(stats[stat], col.format ?? default_num_format)}
+                    {@render num_text(stats[stat], col.format ?? default_num_format)}
                   {/if}
                 </td>
               {/each}
