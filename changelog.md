@@ -1,5 +1,15 @@
 # Changelog
 
+## [v1.12.0](https://github.com/janosh/svelte-widgets/compare/v1.11.0...v1.12.0)
+
+> 21 November 2026
+
+- **Breaking:** Export paths are reorganized (49 to 43). `svelte-widgets/utils` keeps general helpers; positioning moves to `/position`, keyboard shortcuts to `/shortcuts` and fuzzy/term matching to `/match`. `clipboard`, `download`, `print`, `storage`, `url-params`, `poll` and `fullscreen` fold into `/browser`, `csv` and `stats` into `/format`, and `image-markup` into `/canvas`. The root package no longer re-exports helper types (only `MasonryOrder` stays) [`#478`](https://github.com/janosh/svelte-widgets/pull/478)
+- **Breaking:** `create_wiggle(options)` returns `{ attach, trigger }` and replaces the `Wiggle` component; `Spinner` absorbs `CircleSpinner` (`status={false}` for decoration); `SettingsGroup` absorbs `ControlGroup` (`collapsible={false}`, `disabled`) [`#478`](https://github.com/janosh/svelte-widgets/pull/478)
+- **Breaking:** `format_num(value, { digits, sci_range, grouping, locale, non_finite })` replaces `format_stat_value` and `default_format_number`. `-0` prints `0`, and StatGrid rounds once to 4 significant digits (`1234500.4` gives `1.235e+6`) [`#478`](https://github.com/janosh/svelte-widgets/pull/478)
+- Add `InfoTag`, `InfoCard` and `ShortcutsList`, moved from MatterViz (string fields are trusted HTML); export `PopoverTriggerProps` and `ActionMenuTriggerProps`. `float` counts an element's margins, and `compute_position`'s `shift` accepts an edge list. MultiSelect's portalled dropdown uses the shared `portal` and `float` attachments [`#478`](https://github.com/janosh/svelte-widgets/pull/478)
+- Pane toggle tooltips open above, tooltip arrows are seamless, DataTable scrolls only on real overflow, and Nav submenus get section headings [`ee9814a`](https://github.com/janosh/svelte-widgets/commit/ee9814aa1c5d92fdf95e3c16446a52fba0708fc5)
+
 ## [v1.11.0](https://github.com/janosh/svelte-widgets/compare/v1.10.0...v1.11.0)
 
 > 9 November 2026
