@@ -255,6 +255,45 @@ describe(`DataTable`, () => {
     expect(col_values(`Score`)).toEqual(expected)
   })
 
+  // the delegated tooltip's data-title gives a number cell's full value where the format
+  // rounded it, in body and summary rows; missing values keep their n/a note
+  it(`titles rounded number cells with their full value`, () => {
+    mount_table({
+      data: [
+        { Plain: 0.12345, Fixed: 0.956 },
+        { Plain: 12345, Fixed: 3 },
+        { Plain: Infinity, Fixed: 0.95 },
+        { Plain: NaN, Fixed: null },
+      ],
+      columns: [
+        { id: `Plain`, label: `Plain` },
+        { id: `Fixed`, label: `Fixed`, format: `.2f` },
+      ],
+      summary: true,
+    })
+    const cells = (selector: string) =>
+      Array.from(document.querySelectorAll(selector), (td) => [
+        td.textContent?.trim(),
+        td.querySelector(`[data-title]`)?.getAttribute(`data-title`),
+      ])
+    expect(cells(`td[data-col="Plain"]`)).toEqual([
+      [`0.123`, `0.12345`],
+      [`12,345`, undefined],
+      [`∞`, undefined],
+      [`n/a`, `Not available`],
+    ])
+    expect(cells(`td[data-col="Fixed"]`)).toEqual([
+      [`0.96`, `0.956`],
+      [`3.00`, undefined],
+      [`0.95`, undefined],
+      [`n/a`, `Not available`],
+    ])
+    expect(cells(`tfoot td`)).toEqual([
+      [`mean`, undefined],
+      [`1.64`, `1.63533333333333`], // the mean (0.956 + 3 + 0.95) / 3 to 15 digits
+    ])
+  })
+
   const heatmap_col: Column = { id: `Value`, label: `Value` }
   // A stand-in host coloring: each value gets its own fill, so tests can tell cells apart
   const value_color = (): ((num: number | null) => CellColor) => (num) => ({
@@ -425,7 +464,7 @@ describe(`DataTable`, () => {
     )
   })
 
-  it.each([`same_while_equal`, `escape_markup`])(
+  it.each([`same_while_equal`, `escape_markup`, `full_value_title`])(
     `keeps the internal helper %s out of the public table module`,
     (name) => {
       expect(name in table_index).toBe(false)

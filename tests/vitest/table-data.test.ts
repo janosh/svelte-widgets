@@ -18,6 +18,7 @@ import {
   resolve_domain,
   sort_table_rows,
 } from '#lib/table/index.ts'
+import { full_value_title } from '#lib/table/data.ts'
 import { html_to_text } from '#lib/utils.ts'
 import { virtual_window } from '#lib/virtual.ts'
 import { describe, expect, it } from 'vite-plus/test'
@@ -467,4 +468,34 @@ it.each<[Partial<Parameters<typeof virtual_window>[0]>, [number, number]]>([
   [{ scroll: 0, count: 0 }, [0, 0]], // empty data
 ])(`virtual_window(%o) = %j`, (opts, [start, end]) => {
   expect(virtual_window({ ...window_base, scroll: 0, ...opts })).toEqual({ start, end })
+})
+
+// A number cell's tooltip gives the full value only when its format dropped digits, not when
+// it padded, grouped, scaled or signed them, nor for float noise or non-decimal digits
+it.each<[number, string, string, string | undefined]>([
+  [0.956, `0.96`, ``, `0.956`],
+  [0.9512, `95.1%`, ``, `0.9512`],
+  [1234, `1.2k`, ``, `1234`],
+  [999_999, `1M`, ``, `999999`],
+  [-0.001234, `−1.23e-3`, ``, `-0.001234`],
+  [-0.001234, `−1.23E-3`, ``, `-0.001234`],
+  [-0.001, `0.00`, `.2f`, `-0.001`],
+  [123_456.7, `123,000`, ``, `123456.7`],
+  [0.95, `0.950`, ``, undefined],
+  [0.95, `95.0%`, ``, undefined],
+  [3, `3.00`, ``, undefined],
+  [0, `0.00`, ``, undefined],
+  [12_345, `12,345`, ``, undefined],
+  [12_345_678_901_234_568, `12,345,678,901,234,568`, `,d`, undefined], // beyond 15 digits
+  [1500, `1.5k`, ``, undefined],
+  [12_000, `1.20e+4`, ``, undefined],
+  [1.5e-7, `0.00000015`, ``, undefined],
+  [0.1 + 0.2, `0.3`, ``, undefined],
+  [255, `ff`, `x`, undefined],
+  [5, `101`, `b`, undefined],
+  [0.956, `٠٫٩٥٦`, ``, undefined],
+  [Infinity, `∞`, ``, undefined],
+  [-Infinity, `-Infinity`, ``, undefined],
+])(`full_value_title(%s, %s, %s) = %s`, (val, text, format, expected) => {
+  expect(full_value_title(val, text, format)).toBe(expected)
 })

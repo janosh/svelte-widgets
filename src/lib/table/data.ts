@@ -42,6 +42,24 @@ export const middle_ellipsis_parts = (text: string): [string, string] => {
 // category filter: the table widgets' own missing-cell test
 export const is_invalid = default_is_missing
 
+// A number's significant digits as text shows them: the mantissa's digits less leading and
+// trailing zeros, so padding, grouping, sign, unit, percent and SI scaling all drop out
+const sig_digits = (text: string) =>
+  text
+    .split(/e/i)[0]
+    .replaceAll(/\D/g, ``)
+    .replaceAll(/^0+|0+$/g, ``)
+// A number's full value for a tooltip when its formatted text dropped significant digits (0.956
+// as `0.96`). Taken to 15 digits, so float noise (0.1 + 0.2) reads 0.3 and isn't news. None when
+// the text keeps as many digits (3 as `3.00`, 12345 as `12,345`, 0.95 as `95%`, 1500 as `1.5k`) or
+// isn't decimal digits to compare: hex/binary/octal types and non-Latin numerals (`٣`).
+export const full_value_title = (val: number, text: string, format = ``) => {
+  const full = String(Number(val.toPrecision(15)))
+  if (/[boxX]$/.test(format) || /(?![0-9])\p{Decimal_Number}/u.test(text))
+    return undefined
+  return sig_digits(text).length < sig_digits(full).length ? full : undefined
+}
+
 const HTML_MARKUP_RE = new RegExp(`${HTML_TAG_SRC}|${HTML_ENTITY_SRC}`, `i`)
 // Distinguish actual tags/entities from ordinary comparison and ampersand text so plain
 // strings still receive middle ellipsis.
