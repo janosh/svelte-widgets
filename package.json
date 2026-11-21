@@ -1,6 +1,6 @@
 {
   "name": "svelte-widgets",
-  "version": "1.11.0",
+  "version": "1.12.0",
   "description": "Accessible, keyboard-friendly Svelte components and attachments",
   "keywords": [
     "accessibility",
