@@ -2,4 +2,4 @@
 import { create_source_links } from '#lib/source-links/index.ts'
 import * as source_symbols from 'virtual:source-symbols'
 
-export const { link_source_mentions, source_href } = create_source_links(source_symbols)
+export const { link_source_mentions } = create_source_links(source_symbols)
