@@ -11,6 +11,8 @@ permissions:
 
 jobs:
   publish:
+    # main-build is the rolling prerelease of main (see ci.yml), not an npm release
+    if: ${{ !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
