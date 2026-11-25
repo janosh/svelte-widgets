@@ -119,3 +119,33 @@ jobs:
     steps:
       - id: deploy
         uses: actions/deploy-pages@v5
+
+  # Consumers track main through this tarball instead of a git dependency, which would
+  # clone and build the repo on every install. The prerelease's tag never moves; its
+  # notes and the tarball's gitHead name the commit it was built from.
+  main-build:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [check, unit, e2e]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: package.json
+
+      # npm install runs prepare, which builds dist/
+      - run: npm install --legacy-peer-deps
+
+      - name: Upload main build to the main-build prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          npm pkg set gitHead="$GITHUB_SHA"
+          mv "$(npm pack --ignore-scripts)" svelte-widgets.tgz
+          gh release upload main-build svelte-widgets.tgz --clobber
+          gh release edit main-build --notes "Build of main@$GITHUB_SHA"
