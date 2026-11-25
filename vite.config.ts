@@ -75,8 +75,6 @@ const svelte_config = {
       throw new Error(message)
     },
   },
-
-  inspector: true,
 } satisfies Parameters<typeof sveltekit>[0]
 
 // vite-plugin-svelte inlines all of node_modules/svelte so tests get its browser runtime.
