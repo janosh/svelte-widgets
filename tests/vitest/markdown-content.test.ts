@@ -328,6 +328,13 @@ describe(`Markdown content manifests`, () => {
     // Marked 18.3 also expands one after `> `, and after a fence in a top-level quote
     [`> \t[Link](next.md)`, 1, 4],
     [`> ~~~\n> \tx\n> ~~~\n> \t[Link](next.md)`, 4, 4],
+    // after a lazy line, Marked hands a list the quote's later lines with their markers
+    [`> - y\nb\n  > [Link](next.md)`, 3, 5],
+    [`> - y\nb\n  > - z\nc\n    > [Link](next.md)`, 5, 7],
+    // unexpanded, as Marked appends them before its tab pre-pass
+    [`> * y\na\n  > x\n> * z\nb\n  >\t[Link](next.md)`, 6, 5],
+    // not a later stripped copy of that line (here in an indented code block)
+    [`> - y\nb\n  > [Link](next.md)\n>\n>       > [Link](next.md)`, 3, 5],
     // an escaped bracket in an image alt shifts every later offset by its dropped backslash
     [`![a\\]b](i.png) [Link](next.md)`, 1, 16],
     // a lazy continuation line, indented less than the item's content, keeps its tab

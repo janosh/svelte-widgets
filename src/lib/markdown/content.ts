@@ -91,7 +91,13 @@ export type FrontmatterValidator = (
   range: SourceRange,
 ) => Record<string, unknown>
 
-type MappedText = { text: string; offsets: number[] }
+// verbatim: a quote's text before its markers and tabs are rewritten, with each of text's
+// line starts mapped to the same line's start there
+type MappedText = {
+  text: string
+  offsets: number[]
+  verbatim?: { text: string; offsets: number[]; line_starts: Map<number, number> }
+}
 
 export const table_cells = ({ header, rows }: Tokens.Table): Tokens.TableCell[] => [
   ...header,
@@ -320,7 +326,12 @@ function child_view(input: MappedText, owner?: Token, outer = false): MappedText
     view.offsets.push(parent.offsets[idx])
     column = char === `\n` ? 0 : column + 1
   }
-  return view
+  if (kind !== `blockquote`) return view
+  const line_starts = new Map([[0, 0]])
+  for (let idx = 0, input_idx = 0; idx < view.text.length; idx++)
+    if (view.text[idx] === `\n`)
+      line_starts.set(idx + 1, (input_idx = input.text.indexOf(`\n`, input_idx) + 1))
+  return { ...view, verbatim: { ...input, line_starts } }
 }
 
 // Container tokens remove quote/list indentation. Match complete lines within the parent
@@ -336,14 +347,28 @@ function locate(
     const newline = line.endsWith(`\n`)
     const text = newline ? line.slice(0, -1) : line
     if (text) {
-      const start = parent.text.indexOf(text, offset)
+      const newline_idx = parent.text.indexOf(`\n`, offset)
+      const line_end = newline_idx === -1 ? parent.text.length : newline_idx
+      let [source, start] = [parent, parent.text.indexOf(text, offset)]
+      let next = start + text.length
+      // Marked hands a quote's lines after a lazy one, markers and all, to the list they
+      // continue, so a line missing from the stripped one at the cursor is its verbatim copy
+      const { verbatim } = parent
+      const verbatim_start = verbatim?.line_starts.get(offset)
+      if (
+        verbatim &&
+        verbatim_start !== undefined &&
+        (start === -1 || start > line_end) &&
+        verbatim.text.startsWith(text, verbatim_start)
+      )
+        [source, start, next] = [verbatim, verbatim_start, line_end]
       if (start === -1)
         throw new Error(
           `Cannot locate Markdown token ${JSON.stringify(raw.slice(0, 80))}`,
         )
       for (let idx = start; idx < start + text.length; idx++)
-        offsets.push(parent.offsets[idx])
-      offset = start + text.length
+        offsets.push(source.offsets[idx])
+      offset = next
     }
     if (newline) {
       const end = parent.text.indexOf(`\n`, offset)
