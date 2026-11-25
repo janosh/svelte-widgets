@@ -325,6 +325,9 @@ describe(`Markdown content manifests`, () => {
     // Marked expands a tab after `>` or a list marker to the next tab stop
     [`>\t[Link](next.md)`, 1, 3],
     [`- >\t[Link](next.md)`, 1, 5],
+    // Marked 18.3 also expands one after `> `, and after a fence in a top-level quote
+    [`> \t[Link](next.md)`, 1, 4],
+    [`> ~~~\n> \tx\n> ~~~\n> \t[Link](next.md)`, 4, 4],
     // an escaped bracket in an image alt shifts every later offset by its dropped backslash
     [`![a\\]b](i.png) [Link](next.md)`, 1, 16],
     // a lazy continuation line, indented less than the item's content, keeps its tab
@@ -365,6 +368,19 @@ describe(`Markdown content manifests`, () => {
     `> quoted text\n    continued\nlazy`,
     // a later lazy copy of a line must not capture an earlier child
     `> a\n> b\n>\n> c\na\nb\n>\tx`,
+    // Marked 18.3 expands a quote's tabs per line until a list item or fence starts a line;
+    // the same markers mid-line start nothing
+    `> a - b\n> \tcode`,
+    '> a ``` b\n> \tcode',
+    // each group of quote lines (a lazy line ends one) starts fresh: a list item or fence in
+    // an earlier group no longer stops the expansion
+    `> a\n> 2) b\nlazy\n> \tc`,
+    `> - a\nlazy\n> \tcode`,
+    // but lines continuing a group's trailing nested quote stay unexpanded
+    `> > a\nlazy\n> > \tb`,
+    `> > a\nlazy\n> > \t[L](n.md)`,
+    `> > a\nlazy\n> >\t[L](n.md)`,
+    `> > a\nlazy\n> > \tb\n> \tc`,
   ])(`renders a tab after a container marker: %j`, async (source) => {
     const result = await create_markdown().render(source, { filename: `/guide.md` })
     expect(result.diagnostics).toEqual([])

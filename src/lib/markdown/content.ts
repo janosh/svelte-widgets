@@ -137,9 +137,11 @@ export function escaped_at(text: string, index: number): boolean {
   while (text[start - 1] === `\\`) start--
   return (index - start) % 2 === 1
 }
+// Columns `char` spans from `column`: a tab reaches the next multiple of four
+const tab_width = (char: string, column: number) => (char === `\t` ? 4 - (column % 4) : 1)
 // Column of the next tab stop-expanded character after `text`, starting at `column`
 const expanded_column = (text: string, column = 0): number => {
-  for (const char of text) column = char === `\t` ? column + 4 - (column % 4) : column + 1
+  for (const char of text) column += tab_width(char, column)
   return column
 }
 // End of a link or image raw's label, the only text Marked unescapes brackets in: the first
@@ -153,9 +155,96 @@ function label_end(raw: string): number {
   }
   return raw.length
 }
+// Marked 18.3+ first rewrites a quote outside any list or quote that holds a tab: on each line
+// it expands the whitespace before every `>` and up to four columns past the last one's content
+// column to absolute tab stops. Lines inside a fenced code block keep their tabs past that
+// column, and lines from a list item's first one on stay as they are (its Fe and Xt helpers).
+const FENCE_OPEN = /^ {0,3}(?<fence>`{3,}(?=[^`]*$)|~{3,})/u
+const FENCE_CLOSE = /^ {0,3}(?<fence>`{3,}|~{3,})[ \t]*$/u
+const LIST_ITEM_START = /^ {0,3}(?:[*+-]|\d{1,9}[.)])(?:[ \t]|$)/u
+const is_blank = (char?: string) => char === ` ` || char === `\t`
+function expand_quote_tabs({ text, offsets }: MappedText): MappedText {
+  const view: MappedText = { text: ``, offsets: [] }
+  let fence: { marker: string; depth: number } | undefined
+  let verbatim = false // from a list item's first line on
+  let line_start = 0
+  let [prev_quote, nested_end] = [false, false]
+  for (const line of text.split(`\n`)) {
+    const is_quote = /^ {0,3}>/u.test(line)
+    // Marked runs this per group of quote lines (a lazy line ends one), each with fresh state,
+    // but never on the lines it hands a group's trailing nested quote to continue
+    if (!is_quote && prev_quote) {
+      fence = undefined
+      verbatim = nested_end
+    }
+    prev_quote = is_quote
+    // markers (up to an open fence's depth), each at most 3 columns past the last content one
+    const max_depth = fence?.depth ?? Infinity
+    let [idx, column, depth, content_column] = [0, 0, 0, 0]
+    while (depth < max_depth) {
+      let [end, end_column] = [idx, column]
+      for (; is_blank(line[end]); end++) end_column += tab_width(line[end], end_column)
+      if (line[end] !== `>` || end_column - content_column > 3) break
+      ;[idx, column] = [end + 1, end_column + 1]
+      depth++
+      content_column = is_blank(line[idx]) ? column + 1 : column
+    }
+    if (is_quote) nested_end = depth >= 2
+    // then the blanks up to 4 columns past the content column
+    let [blanks_end, blanks_column] = [idx, column]
+    if (depth)
+      while (is_blank(line[blanks_end]) && blanks_column < content_column + 4)
+        blanks_column += tab_width(line[blanks_end++], blanks_column)
+    const content =
+      ` `.repeat(Math.max(0, blanks_column - content_column)) + line.slice(blanks_end)
+    let raw = verbatim
+    let keep_tabs = false // in a fenced code block, tabs past the content column stay
+    if (!verbatim) {
+      if (fence?.depth !== depth) fence = undefined
+      if (fence) {
+        const close = FENCE_CLOSE.exec(content)?.groups?.fence
+        if (close?.startsWith(fence.marker[0]) && close.length >= fence.marker.length)
+          fence = undefined
+        else keep_tabs = true
+      } else if (LIST_ITEM_START.test(content)) {
+        verbatim = true
+        raw = true
+      } else {
+        const open = FENCE_OPEN.exec(content)?.groups?.fence
+        if (open) fence = { marker: open, depth }
+      }
+    }
+    for (let char_idx = 0, col = 0; char_idx < line.length; char_idx++) {
+      const char = line[char_idx]
+      const width = tab_width(char, col)
+      const expand =
+        !raw &&
+        char_idx < blanks_end &&
+        is_blank(char) &&
+        (char_idx < idx || !keep_tabs || (col < content_column && width > 1))
+      const chunk = expand ? ` `.repeat(width) : char
+      view.text += chunk
+      for (let left = chunk.length; left > 0; left--)
+        view.offsets.push(offsets[line_start + char_idx])
+      col += width
+    }
+    line_start += line.length + 1
+    if (line_start <= text.length) {
+      view.text += `\n`
+      view.offsets.push(offsets[line_start - 1])
+    }
+  }
+  return view
+}
+
 // The text Marked hands the children of `owner` (autolinks keep their backslashes), mapped to
-// source offsets: the parent itself unless something is rewritten
-function child_view(parent: MappedText, owner?: Token): MappedText {
+// source offsets: the parent itself unless something is rewritten. `outer`: owner sits in no
+// list or quote, where Marked 18.3+ pre-expands a quote's tabs (expand_quote_tabs).
+function child_view(input: MappedText, owner?: Token, outer = false): MappedText {
+  const parent =
+    owner?.type === `blockquote` && outer && input.text.includes(`\t`)
+      ? expand_quote_tabs(input)
+      : input
   const { text } = parent
   const kind = owner?.type ?? ``
   const unescaped =
@@ -212,7 +301,7 @@ function child_view(parent: MappedText, owner?: Token): MappedText {
       continue
     }
     if (char === `\t` && idx < prefix_end) {
-      const width = 4 - (column % 4)
+      const width = tab_width(char, column)
       view.text += ` `.repeat(width)
       for (let space = 0; space < width; space++) view.offsets.push(parent.offsets[idx])
       column += width
@@ -428,8 +517,11 @@ export function content_manifest(
   }
   const inline_text = (children: Token[]): string =>
     heading_text(restore(parser.Parser.parseInline(children, parser.defaults)), svelte)
-  const visit = (children: Token[], parent: MappedText, owner?: Token) => {
-    const view = child_view(parent, owner)
+  // outer: owner sits in no list or quote (see child_view)
+  const visit = (children: Token[], parent: MappedText, owner?: Token, outer = true) => {
+    const view = child_view(parent, owner, outer)
+    const children_outer =
+      outer && !/^(?:blockquote|list|list_item)$/u.test(owner?.type ?? ``)
     let cursor = 0
     for (const token of children) {
       // Marked builds a task checkbox's raw as `[ ] ` whatever whitespace follows it
@@ -517,7 +609,7 @@ export function content_manifest(
       if (token.type === `table`)
         for (const cell of table_cells(token as Tokens.Table))
           prose.push(inline_text(cell.tokens))
-      visit(child_tokens(token), mapped, token)
+      visit(child_tokens(token), mapped, token, children_outer)
     }
   }
   visit(tokens, { text: normalized, offsets })
