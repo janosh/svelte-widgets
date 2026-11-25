@@ -140,7 +140,6 @@
 
   let window_width: number = $state(0)
   // ignores spurious scrollend events chrome fires on page load before any real scrolling
-  // see https://github.com/janosh/svelte-toc/issues/57
   let page_has_scrolled: boolean = $state(false)
   // desktop only
   let is_overlapping_hide_target: boolean = $state(false)
