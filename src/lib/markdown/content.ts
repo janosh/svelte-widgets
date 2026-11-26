@@ -169,8 +169,8 @@ function align_line(child: string, line: string): number[] | undefined {
   for (let idx = 0, column = 0; idx < line.length; column += widths[idx++])
     widths.push(tab_width(line[idx], column))
   const indexes: number[] = []
-  // block raws may drop a line's trailing blanks
-  let line_idx = (/[ \t]$/u.test(child) ? line : line.trimEnd()).length - 1
+  // block raws may drop a line's trailing ASCII blanks (not other whitespace like U+00A0)
+  let line_idx = (/[ \t]$/u.test(child) ? line : line.replace(/[ \t]+$/u, ``)).length - 1
   let absorbed = 0 // spaces the tab at line_idx stands for so far
   for (let idx = child.length - 1; idx >= 0; idx--) {
     const char = child[idx]
@@ -508,8 +508,11 @@ export function content_manifest(
           let offset = 0
           const line_positions = code.text.split(`\n`).map((line) => {
             const result = range(
-              // an empty last line has no character: it sits where the located code ends
-              code_map.offsets[offset] ?? mapped.offsets[code_map.end] ?? at.start.offset,
+              // an empty last line has no character: it sits where the located code ends,
+              // at the closing fence or, for an unclosed fence, the end of the token
+              code_map.offsets[offset] ??
+                mapped.offsets[code_map.end] ??
+                (mapped.offsets.at(-1) ?? -1) + 1,
             ).start
             offset += line.length + 1
             return result

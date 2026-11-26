@@ -297,6 +297,8 @@ describe(`Markdown content manifests`, () => {
     // Marked ends a fence's text with one more newline than its blank last line has: that
     // empty last line sits where the code ends, at the closing fence, not on the first line
     [`\`\`\`js\nfirst()\n\n\`\`\``, [2, 3, 4], [1, 1, 1]],
+    // an unclosed fence's empty last line sits at the end of the input, after the blank line
+    [`\`\`\`js\nfirst()\n\n`, [2, 3, 4], [1, 1, 1]],
     [`> \`\`\`js\n> first()\n>\n> \`\`\``, [2, 3, 4], [3, 2, 3]],
     [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
@@ -364,6 +366,8 @@ describe(`Markdown content manifests`, () => {
     [`>b\n    >  \n[Link](next.md)`, 3, 1],
     // the expanded first line must not jump to a later, literal copy of its text
     [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
+    // only ASCII blanks are trimmed from a quote line's end: Marked keeps a trailing U+00A0
+    [`> a\u00A0\n> [Link](next.md)`, 2, 3],
     // the table strips only \\| and the image alt only \\]
     [`| ![a\\]\\|b](i.png) [Link](next.md) |\n|---|`, 1, 20],
     // a pipe after an even backslash run separates cells and keeps both backslashes
