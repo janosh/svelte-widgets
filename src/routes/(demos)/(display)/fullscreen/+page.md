@@ -62,7 +62,7 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 ### Driving the flag from elsewhere
 
-`bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave fullscreen without touching the button. Omit `wrapper` and the button becomes a plain toggle for the flag, for consumers that call the Fullscreen API themselves.
+`bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave fullscreen without touching the button. Omit `wrapper` and the button becomes a plain toggle for the flag, for consumers that call the Fullscreen API themselves (`on_change` then stays silent: there is no wrapper to transition). A request the browser rejects flips the flag back, so it always ends up matching the browser.
 
 ```svelte example id="fullscreen-bound"
 <script lang="ts">
@@ -91,8 +91,8 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
     </label>
   </p>
   <p style="margin: 0">
-    <code>on_change</code> only fires when the browser moves the flag — pressing
-    <kbd>Esc</kbd> counts, clicking the button does not.
+    <code>on_change</code> fires once per real fullscreen transition — button, checkbox or
+    <kbd>Esc</kbd> alike — and never for a request the browser rejects.
   </p>
   {#if events.length}
     <ul style="margin: 6pt 0 0; padding-left: 1.25em">

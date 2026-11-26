@@ -7,6 +7,7 @@ export type FullscreenSyncOptions = {
   set_fullscreen: (fullscreen: boolean) => void
   // CSS variable painted on the wrapper with the page background, e.g. `--struct-bg-fullscreen`
   get_bg_css_var?: () => string | undefined
+  // Reports each real transition (click, flag write, Esc, F11), not rejections or wrapper swaps.
   on_change?: (fullscreen: boolean) => void
   // Reports rejected enter and exit requests.
   on_request_error?: (error: unknown) => void
@@ -16,6 +17,10 @@ export type FullscreenSyncOptions = {
 // scoped to one wrapper element. Creates $effects, so call during component init.
 export function sync_fullscreen(options: FullscreenSyncOptions): void {
   let pending_request: { wrapper: HTMLElement; entering: boolean } | null = null
+  // last state passed to on_change, shared across wrappers so a swap mid-fullscreen that hands
+  // fullscreen to the new wrapper isn't reported as a second entry. Deduped against the
+  // wrapper's state, not the flag, which a click flips early
+  let reported: boolean | undefined
 
   function reconcile(wrapper: HTMLElement): void {
     if (options.get_wrapper() !== wrapper) return
@@ -48,6 +53,37 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
     }
   }
 
+  // browser -> flag, covering Esc, F11 and programmatic exits. Declared first so on a wrapper
+  // swap its teardown clears the old wrapper's request before the flag effect files one for
+  // the new wrapper (else that request's rejection is dropped as stale), and `reported` is
+  // seeded before a mount's own request can land
+  $effect(() => {
+    const wrapper = options.get_wrapper()
+    if (!wrapper) return undefined
+    reported ??= document.fullscreenElement === wrapper
+
+    const handle_change = () => {
+      // key the flag to this wrapper: a bare document.fullscreenElement check would flip
+      // every mounted flag on any fullscreen, each then firing its own requestFullscreen
+      const is_fullscreen = document.fullscreenElement === wrapper
+      // any change ends our request, landed or overtaken (an exit before the entry's event):
+      // left pending, it would swallow the next same-direction request as a duplicate
+      const own_request = pending_request?.wrapper === wrapper ? pending_request : null
+      if (own_request) pending_request = null
+      // our own request landed: follow the flag in case it moved on while in flight
+      if (own_request?.entering === is_fullscreen) reconcile(wrapper)
+      else options.set_fullscreen(is_fullscreen)
+      if (is_fullscreen === reported) return
+      reported = is_fullscreen
+      options.on_change?.(is_fullscreen)
+    }
+    document.addEventListener(`fullscreenchange`, handle_change)
+    return () => {
+      pending_request = null
+      document.removeEventListener(`fullscreenchange`, handle_change)
+    }
+  })
+
   // flag -> browser
   $effect(() => {
     const wrapper = options.get_wrapper()
@@ -61,31 +97,5 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
     const bg_css_var = options.get_bg_css_var?.() ?? `--fullscreen-bg`
     wrapper.style.setProperty(bg_css_var, get_bg_color(document.body))
     return () => wrapper.style.removeProperty(bg_css_var)
-  })
-
-  // browser -> flag, covering Esc, F11 and programmatic exits
-  $effect(() => {
-    const wrapper = options.get_wrapper()
-    if (!wrapper) return undefined
-
-    const handle_change = () => {
-      // key the flag to this wrapper: a bare document.fullscreenElement check would flip
-      // every mounted flag on any fullscreen, each then firing its own requestFullscreen
-      const is_fullscreen = document.fullscreenElement === wrapper
-      // any change ends our request, landed or overtaken (an exit before the entry's event):
-      // left pending, it would swallow the next same-direction request as a duplicate
-      const own_request = pending_request?.wrapper === wrapper ? pending_request : null
-      if (own_request) pending_request = null
-      if (is_fullscreen === options.get_fullscreen()) return
-      // our own request landed but the flag moved on while it was in flight: follow the flag
-      if (own_request?.entering === is_fullscreen) return reconcile(wrapper)
-      options.set_fullscreen(is_fullscreen)
-      options.on_change?.(is_fullscreen)
-    }
-    document.addEventListener(`fullscreenchange`, handle_change)
-    return () => {
-      pending_request = null
-      document.removeEventListener(`fullscreenchange`, handle_change)
-    }
   })
 }
