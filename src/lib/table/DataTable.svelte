@@ -174,6 +174,7 @@
     prev_rows = new Map()
     return rows.map((row) => {
       const id = get_row_id(row)
+      if (prev_rows.has(id)) throw new Error(`Duplicate row id: ${id}`)
       const old = prev.get(id)
       const kept =
         old &&
@@ -641,7 +642,7 @@
   $effect(() => {
     const el = scroll_el
     const table = el?.querySelector(`:scope > table`)
-    if (!el || !table || typeof ResizeObserver === `undefined`) return
+    if (!el || !table) return
     const observer = new ResizeObserver(() => {
       y_overflow = el.scrollHeight - el.clientHeight > 1
     })
@@ -651,7 +652,7 @@
   })
   // Track scroll-container resizes (e.g. dashboard card resizing)
   $effect(() => {
-    if (!virtual_config || !scroll_el || typeof ResizeObserver === `undefined`) return
+    if (!virtual_config || !scroll_el) return
     let observed_width: number | undefined
     const observer = new ResizeObserver(([entry]) => {
       const next_width = entry?.contentRect.width
@@ -735,7 +736,6 @@
     const col_id = header_cell.dataset.colId ?? ``
     const measure = () => (pinned_widths[col_id] = header_cell.offsetWidth)
     measure()
-    if (typeof ResizeObserver === `undefined`) return
     const observer = new ResizeObserver(measure)
     observer.observe(header_cell)
     return () => observer.disconnect()
@@ -768,7 +768,6 @@
         angled_labels.set(col_id, prev)
       }
       measure()
-      if (typeof ResizeObserver === `undefined`) return
       const observer = new ResizeObserver(measure)
       // the table too: another column resizing moves this one without resizing it
       for (const el of [label, header_cell, table]) observer.observe(el)
@@ -894,7 +893,9 @@
   const bar_fraction = (num: number | null, view: ColumnView): number | null => {
     if (num === null || !view.domain) return null
     const [lower, upper] = view.domain
-    const frac = upper === lower ? 1 : (num - lower) / (upper - lower)
+    // A zero-width domain (all values equal) has no worse end, whichever end is better
+    if (upper === lower) return 1
+    const frac = (num - lower) / (upper - lower)
     // `lower is better` puts the best value at the full end, matching the color scale
     const oriented = view.better === `lower` ? 1 - frac : frac
     return clamp(oriented, 0, 1)
@@ -1286,20 +1287,11 @@
     }
     return identifier
   }
-  // A boolean, so linked hovers that move highlighted_row_id between rows skip the O(n) pass
-  let needs_row_ids = $derived(
-    show_row_select || highlighted_row_id !== null || row_key !== undefined,
-  )
-  $effect(() => {
-    if (!needs_row_ids) return
-    if (row_key === undefined)
+  // Row ids are checked as `data` reads them. A pre effect, so this error beats a row
+  // checkbox's own ("row_key ... received undefined") in naming the misconfiguration.
+  $effect.pre(() => {
+    if (row_key === undefined && (show_row_select || highlighted_row_id !== null))
       throw new Error(`row_key is required with show_row_select or highlighted_row_id`)
-    const ids = new Set<RowId>()
-    for (const row of data) {
-      const identifier = get_row_id(row)
-      if (ids.has(identifier)) throw new Error(`Duplicate row id: ${identifier}`)
-      ids.add(identifier)
-    }
   })
   // Rows render keyed by id, else by object identity, else (one object listed twice, a
   // duplicate key that crashed the each block) by position

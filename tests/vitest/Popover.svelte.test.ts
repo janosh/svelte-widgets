@@ -97,8 +97,11 @@ describe(`Popover`, () => {
     const on_close = vi.fn()
     const added = vi.spyOn(document, `addEventListener`)
     mount_popover({ on_close })
-    // closed popovers register no document-wide close trackers
-    expect(added.mock.calls.map(([type]) => type)).not.toContain(`keydown`)
+    // closed popovers register no document-wide close trackers; those carry an abort
+    // signal, unlike the delegated listeners Svelte adds for every component loaded so far
+    const has_signal = (options: unknown) =>
+      typeof options === `object` && options !== null && `signal` in options
+    expect(added.mock.calls.filter(([, , options]) => has_signal(options))).toEqual([])
     await click_trigger()
 
     escape_native_popover()

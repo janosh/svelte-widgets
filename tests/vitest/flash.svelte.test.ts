@@ -1,4 +1,4 @@
-import { create_flash } from '#lib/browser/flash.svelte.ts'
+import { create_flash, create_shortcut_flash } from '#lib/browser/flash.svelte.ts'
 import { flushSync } from 'svelte'
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 
@@ -50,4 +50,23 @@ describe(`create_flash`, () => {
     vi.advanceTimersByTime(2000) // a surviving timer would revert this to `idle`
     expect(flash.value).toBe(`copied`)
   })
+})
+
+// only the flashed control gets the highlight, and it fades back after 400 ms
+test(`create_shortcut_flash highlights only the flashed control for 400 ms`, () => {
+  vi.useFakeTimers()
+  let flash!: ReturnType<typeof create_shortcut_flash<`play` | `next`>>
+  const dispose = $effect.root(() => void (flash = create_shortcut_flash()))
+  const highlighted = (control: `play` | `next`) =>
+    flash.style(control).startsWith(`background`)
+  flash.show(`play`)
+  expect([highlighted(`play`), highlighted(`next`)]).toEqual([true, false])
+  vi.advanceTimersByTime(399)
+  expect(highlighted(`play`)).toBe(true)
+  vi.advanceTimersByTime(1)
+  expect([highlighted(`play`), flash.style(`play`)]).toEqual([
+    false,
+    `transition: background-color 0.2s ease-out, box-shadow 0.2s ease-out`,
+  ])
+  flushSync(dispose)
 })

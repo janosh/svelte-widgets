@@ -14,10 +14,6 @@ import {
   type_search_text,
 } from './MultiSelect.test-utils'
 
-vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
-  (await import(`./index`)).count_key_reads(await import_original()),
-)
-
 // https://github.com/janosh/svelte-widgets/issues/111
 // https://github.com/janosh/svelte-widgets/issues/112
 test(`can select 1st and last option with arrow and enter key`, async () => {
@@ -434,17 +430,14 @@ describe(`keyboard shortcuts`, () => {
       { ctrlKey: true },
     ],
     [`empty string`, { select_all_option: true, shortcuts: { select_all: `` } }, {}],
-  ])(
-    `select_all %s: the key is not swallowed`,
-    async (_label, extra_props, modifiers) => {
-      const { props, event } = await test_shortcut(extra_props, {
-        key: `a`,
-        ...modifiers,
-      })
-      expect(props.value).toEqual([])
-      expect(event.defaultPrevented).toBe(false)
-    },
-  )
+  ])(`select_all %s: the key is not swallowed`, async (_, extra_props, modifiers) => {
+    const { props, event } = await test_shortcut(extra_props, {
+      key: `a`,
+      ...modifiers,
+    })
+    expect(props.value).toEqual([])
+    expect(event.defaultPrevented).toBe(false)
+  })
 
   test(`clear_all respects min_select`, async () => {
     const { props } = await test_shortcut(

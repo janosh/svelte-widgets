@@ -18,10 +18,6 @@ import {
 } from './index'
 import TestSnippetHarness from './TestSnippetHarness.svelte'
 
-vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
-  (await import(`./index`)).count_key_reads(await import_original()),
-)
-
 describe(`Nav`, () => {
   const default_routes = [
     { href: `/`, label: `Home` },
@@ -739,14 +735,16 @@ describe(`Nav`, () => {
         expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
       },
     )
-    test(`section runs get one heading each, counted toward the column threshold`, () => {
-      set_window_width(1024)
-      const sections = [`both`, `both`, undefined, `electronic`, `phonon`, `phonon`]
-      const children = sections.map((section, idx) => ({
+    const section_children = (sections: (string | undefined)[]) =>
+      sections.map((section, idx) => ({
         href: `/docs/page-${idx}`,
         label: `Page ${idx}`,
         section,
       }))
+    test(`section runs get one heading each, counted toward the column threshold`, () => {
+      set_window_width(1024)
+      const sections = [`both`, `both`, undefined, `electronic`, `phonon`, `phonon`]
+      const children = section_children(sections)
       const { submenu } = mount_dropdown({
         routes: [{ href: `/docs`, label: `docs`, children }],
         dropdown_column_threshold: 8, // 6 links + 3 headings
@@ -762,9 +760,38 @@ describe(`Nav`, () => {
         headings.map((heading) => heading.nextElementSibling?.getAttribute(`href`)),
       ).toEqual([`/docs/page-0`, `/docs/page-3`, `/docs/page-4`])
       expect(submenu.classList.contains(`two-columns`)).toBe(true)
-      expect(submenu.style.getPropertyValue(`--submenu-rows`)).toBe(`5`)
+      // 9 items fit 5 rows, but `electronic` would end column 1 apart from its link
+      expect(submenu.style.getPropertyValue(`--submenu-rows`)).toBe(`6`)
       expect(hrefs(submenu)).toEqual(children.map(({ href }) => href))
     })
+    // a heading never ends column 1 (rows grow by one instead) and one topping column 2
+    // draws no separator; a section name may head several runs
+    test.each([
+      [[`a`, `a`, `a`, `b`, `b`, `b`], 1024, 7, 4, [false, true]],
+      [[`a`, `a`, `a`, `b`, `b`, `b`], 500, 7, 4, [false, false]],
+      [[`a`, `a`, `a`, `b`, `b`, `b`], 1024, 8, 4, [false, false]],
+      [[`a`, `a`, `b`, `b`, `b`, `b`], 1024, 7, 5, [false, false]],
+      [[`a`, `a`, `b`, `c`, `c`], 1024, 7, 5, [false, false, true]],
+      [[`a`, `b`, `b`, `a`, `a`, `a`], 1024, 7, 5, [false, false, true]],
+    ])(
+      `sections %j at width %d, threshold %d use %d rows, mark column starts %j`,
+      (sections, width, threshold, rows, column_starts) => {
+        set_window_width(width)
+        const { submenu } = mount_dropdown({
+          routes: [
+            { href: `/docs`, label: `docs`, children: section_children(sections) },
+          ],
+          dropdown_column_threshold: threshold,
+        })
+        expect(submenu.style.getPropertyValue(`--submenu-rows`)).toBe(String(rows))
+        const items = [...(submenu.querySelector(`.submenu-inner`)?.children ?? [])]
+        const headings = [...submenu.querySelectorAll(`.submenu-section`)]
+        expect(headings.map((heading) => items.indexOf(heading))).not.toContain(rows - 1)
+        expect(
+          headings.map((heading) => heading.classList.contains(`column-start`)),
+        ).toEqual(column_starts)
+      },
+    )
     test.each([
       [1024, `mouse`, true],
       [500, `mouse`, false],

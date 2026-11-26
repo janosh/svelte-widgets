@@ -256,12 +256,10 @@ describe(`DraggablePane`, () => {
     const pin = doc_query<HTMLButtonElement>(`.pin-button`)
     const parent_box = doc_query<HTMLInputElement>(`[data-testid="persistent"]`)
     await click(pin)
-    expect([pin.getAttribute(`aria-pressed`), parent_box.checked]).toEqual([`true`, true])
+    const pinned = () => [pin.getAttribute(`aria-pressed`), parent_box.checked]
+    expect(pinned()).toEqual([`true`, true])
     await click(parent_box)
-    expect([pin.getAttribute(`aria-pressed`), parent_box.checked]).toEqual([
-      `false`,
-      false,
-    ])
+    expect(pinned()).toEqual([`false`, false])
   })
 
   test(`closing hands focus inside the pane back to the toggle`, async () => {
@@ -429,20 +427,17 @@ describe(`DraggablePane`, () => {
     mock_pane_rect(pane, 75, 125)
 
     await click(toggle)
-    const anchored = { left: pane.style.left, top: pane.style.top }
-    expect(anchored).toEqual({ left: `75px`, top: `125px` })
+    const place = () => [pane.style.left, pane.style.top]
+    expect(place()).toEqual([`75px`, `125px`])
     expect(document.querySelector(`.reset-button`)).toBeNull()
 
     drag_by(60, 40)
     await tick()
-    expect({ left: pane.style.left, top: pane.style.top }).toEqual({
-      left: `135px`,
-      top: `165px`,
-    })
+    expect(place()).toEqual([`135px`, `165px`])
 
     await click(`.reset-button`)
 
-    expect({ left: pane.style.left, top: pane.style.top }).toEqual(anchored)
+    expect(place()).toEqual([`75px`, `125px`])
     // the controls hide again, which is the pane reporting has_been_dragged = false
     expect(document.querySelector(`.reset-button`)).toBeNull()
   })

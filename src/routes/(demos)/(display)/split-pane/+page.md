@@ -79,3 +79,33 @@ Set `first_px` to use pixels instead of a ratio. Its width remains stable when t
 ### Keyboard behavior
 
 Tab focuses the divider. Left/Right resize side-by-side panes; Up/Down resize stacked panes. Each press changes the size by 5% of the container. Home/End reach the effective bounds, and Enter collapses or restores when enabled. Horizontal keys follow the page's text direction. Render loading, empty or error feedback inside either pane; SplitPane only owns their size.
+
+## DockedSidebar
+
+A resizable sidebar beside a main pane, built on SplitPane. Until the divider moves, the sidebar is as wide as its content (at most half the row, or `--docked-sidebar-max-share`), so a short table leaves no band of empty space; a drag or arrow key hands its width to the divider. A row too narrow for both minimums (320 px main pane, 260 px sidebar) stacks the sidebar under the main pane. Give the parent the `docked-sidebar-row` class and render the sidebar last in it.
+
+```svelte example id="docked-sidebar"
+<script lang="ts">
+  import { DockedSidebar } from 'svelte-widgets'
+
+  let width = $state(0)
+</script>
+
+<div class="docked-sidebar-row" style="height: 12rem; border: 1px solid #8885">
+  <section style="min-width: 0; overflow: auto; padding: 1rem">
+    Main pane. Sidebar width: {Math.round(width)} px
+  </section>
+  <DockedSidebar label="details" bind:width>
+    {#snippet header()}Details{/snippet}
+    <p style="margin: 0">Sized to its content until you drag the divider.</p>
+  </DockedSidebar>
+</div>
+```
+
+| Prop                  | Purpose                                                                                 |
+| --------------------- | --------------------------------------------------------------------------------------- |
+| `label`               | Accessible name of the sidebar and its divider.                                         |
+| `bind:width`          | The sidebar's measured width, back to 0 once it unmounts.                               |
+| `header`              | Snippet rendered as the sidebar's `<h4>` heading row.                                   |
+| `children`            | Sidebar content. A DataTable inside takes the height left under the header and scrolls. |
+| other HTML attributes | Forwarded to the `<aside>`, including `class`.                                          |

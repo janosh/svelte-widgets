@@ -23,9 +23,8 @@ describe(`tooltip manager`, () => {
     element: HTMLElement,
     options: TooltipOptions = {},
   ): (() => void) => {
-    if (!Object.hasOwn(element, `getBoundingClientRect`)) {
+    if (!Object.hasOwn(element, `getBoundingClientRect`))
       mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
-    }
     options.strategy ??= `absolute`
     options.open_delay_ms ??= 0
     options.close_delay_ms ??= 0
@@ -131,9 +130,8 @@ describe(`tooltip manager`, () => {
     label.textContent = `Save`
     element.append(` `, label, ` `)
     element.title = title
-    if (child_scroll_width !== null) {
+    if (child_scroll_width !== null)
       Object.defineProperty(label, `scrollWidth`, { value: child_scroll_width })
-    }
     attach_tooltip(element)
     pointer_over(element)
     expect(visible_text() !== null).toBe(shows)
@@ -675,6 +673,14 @@ describe(`tooltip manager`, () => {
     mock_rect(element, { left: 100, top: 200, width: 80, height: 30 })
     scroll()
     expect(tooltip_el.style.top).not.toBe(first_top)
+    // scrolled out of the viewport: the trigger still renders but anchors nothing on screen
+    mock_rect(element, { left: 100, top: 900, width: 80, height: 30 })
+    scroll()
+    expect(tooltip_el.hidden).toBe(true)
+    mock_rect(element, { left: 100, top: 200, width: 80, height: 30 })
+    pointer_out(element)
+    pointer_over(element)
+    expect(tooltip_el.hidden).toBe(false)
     element.style.display = `none`
     scroll()
     expect(tooltip_el.hidden).toBe(true)
@@ -694,6 +700,85 @@ describe(`tooltip manager`, () => {
     element.remove()
     await Promise.resolve()
     expect(tooltip_el.hidden).toBe(true)
+  })
+
+  // each step runs on an open tooltip (or after closing it) and must leave it as stated
+  it.each<
+    [
+      string,
+      TooltipOptions,
+      (element: HTMLElement, surface: HTMLElement) => void,
+      boolean,
+    ]
+  >([
+    [
+      `a press keeps a focus-only tooltip`,
+      { trigger: `focus` },
+      (element) => {
+        element.dispatchEvent(
+          pointer_event(`pointerdown`, 110, 110, { pointerType: `mouse` }),
+        )
+      },
+      true,
+    ],
+    [
+      `a focus-only surface ignores hover`,
+      { trigger: `focus` },
+      (_element, surface) => {
+        surface.dispatchEvent(new PointerEvent(`pointerenter`))
+        surface.dispatchEvent(new PointerEvent(`pointerleave`))
+        vi.advanceTimersByTime(0)
+      },
+      true,
+    ],
+    [
+      `moving onto a trigger's child keeps it`,
+      {},
+      (element) => {
+        const child = document.createElement(`span`)
+        element.append(child)
+        pointer_out(element, child)
+      },
+      true,
+    ],
+    [
+      `surface events after closing do nothing`,
+      {},
+      (element, surface) => {
+        pointer_out(element)
+        surface.dispatchEvent(new PointerEvent(`pointerenter`))
+        surface.dispatchEvent(new PointerEvent(`pointerleave`))
+      },
+      false,
+    ],
+    [
+      `a title set and removed in one batch hides it`,
+      {},
+      (element) => {
+        element.title = `Replaced`
+        element.removeAttribute(`title`)
+      },
+      false,
+    ],
+  ])(`%s`, async (_case, options, act, open_after) => {
+    const { element } = register_tooltip(`Tooltip content`, options)
+    if (options.trigger === `focus`) {
+      press_tab()
+      focus_in(element)
+    } else pointer_over(element)
+    const surface = visible_tooltip()
+    act(element, surface)
+    await Promise.resolve()
+    expect(!surface.hidden).toBe(open_after)
+  })
+
+  it(`ignores focus on hover-only triggers and attaching to non-HTML elements`, () => {
+    const { element } = register_tooltip(`Hover only`, { trigger: `hover` })
+    press_tab()
+    focus_in(element)
+    expect(visible_text()).toBeNull()
+    const svg = document.createElementNS(`http://www.w3.org/2000/svg`, `svg`)
+    expect(tooltip({ content: `Never` })(svg)).toBeUndefined()
   })
 
   it(`keeps one bordered arrow visible and aimed after shifting`, () => {

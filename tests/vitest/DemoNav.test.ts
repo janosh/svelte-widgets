@@ -1,8 +1,8 @@
 import { DemoNav } from '#site'
 import CategoryOverview from '#site/CategoryOverview.svelte'
 import Home from '../../src/routes/+page.svelte'
-import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { render } from './index'
+import { beforeEach, expect, test, vi } from 'vite-plus/test'
+import { app, render } from './index'
 import {
   demo_labels,
   demo_nav_routes,
@@ -11,13 +11,10 @@ import {
 } from '../../src/routes/(demos)'
 
 const base = `/docs`
-const resolver = vi.hoisted(() => ({ relative: false }))
-vi.mock(`$app/paths`, () => ({
-  resolve: (path: string): string => (resolver.relative ? `./${path}` : `/docs/${path}`),
-}))
-// Kit types page.url as readonly, so tests swap the whole URL on a hoisted mock
-const page = vi.hoisted(() => ({ url: new URL(`https://example.com/docs/`) }))
-vi.mock(`$app/state`, () => ({ page }))
+beforeEach(() => {
+  app.base = base
+  app.page.url = new URL(`https://example.com${base}/`)
+})
 
 const page_files = Object.keys(
   import.meta.glob(`../../src/routes/**/+page.{svelte,md}`),
@@ -162,12 +159,8 @@ test.each([`inputs`, `navigation`, `overlays`, `display`, `attachments`])(
 test.each([false, true])(
   `recipe pages mark their MultiSelect parent active with relative paths=%s`,
   (relative) => {
-    resolver.relative = relative
-    onTestFinished(() => {
-      resolver.relative = false
-      page.url = new URL(`https://example.com${base}/`)
-    })
-    page.url = new URL(`https://example.com${base}/events`)
+    app.relative = relative
+    app.page.url = new URL(`https://example.com${base}/events`)
     render(DemoNav, {})
     expect(
       document

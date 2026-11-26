@@ -61,41 +61,22 @@ describe(`CellSelection`, () => {
     selection.clear()
     expect(selection.bounds).toBe(bounds)
     expect(selection.end_drag()).toBe(false)
+    // no drag, or one whose rectangle a layout change cleared: moves select nothing
+    expect(selection.extend_drag({ row: 1, col: 1 })).toBe(false)
+    selection.start_drag({ row: 0, col: 0 }, false)
+    selection.clear()
+    expect(selection.extend_drag({ row: 1, col: 1 })).toBe(false)
+    expect(selection.size).toBe(0)
   })
 
   // size counts what a copy emits: overlapping cells once per rectangle, and a select-all on a
   // huge table is measured from the rectangles instead of enumerating every cell
+  // oxfmt-ignore
   test.each([
-    {
-      rects: [
-        [0, 0, 2, 2],
-        [1, 1, 3, 3],
-      ],
-      size: 18,
-    },
-    {
-      rects: [
-        [0, 0, 4, 0],
-        [2, 0, 2, 0],
-        [0, 2, 1, 3],
-      ],
-      size: 10,
-    },
-    {
-      rects: [
-        [3, 3, 0, 0],
-        [0, 5, 3, 6],
-        [1, 4, 2, 5],
-      ],
-      size: 28,
-    },
-    {
-      rects: [
-        [0, 0, 9, 9],
-        [5, 5, 5, 5],
-      ],
-      size: 101,
-    },
+    { rects: [[0, 0, 2, 2], [1, 1, 3, 3]], size: 18 },
+    { rects: [[0, 0, 4, 0], [2, 0, 2, 0], [0, 2, 1, 3]], size: 10 },
+    { rects: [[3, 3, 0, 0], [0, 5, 3, 6], [1, 4, 2, 5]], size: 28 },
+    { rects: [[0, 0, 9, 9], [5, 5, 5, 5]], size: 101 },
     { rects: [[0, 0, 1e8 - 1, 9]], size: 1e9 },
   ])(`size of $rects is $size`, ({ rects, size }) => {
     const selection = new CellSelection()
@@ -310,17 +291,19 @@ describe(`cell_range_select`, () => {
     })
   })
 
-  test(`ignores presses on interactive content and cells outside the node`, async () => {
+  test(`ignores presses on interactive content, unindexed cells and cells outside the node`, async () => {
     const { grid, cell } = make_grid()
     const button = document.createElement(`button`)
     cell(0, 0)?.append(button)
     const outside = create_element(`span`)
     Object.assign(outside.dataset, { row: `0`, col: `0` })
+    const unindexed = document.createElement(`span`)
+    Object.assign(unindexed.dataset, { row: `header`, col: `0` })
+    grid.append(unindexed)
     const selection = new CellSelection()
     cell_range_select(selection)(grid)
     await tick()
-    pointer(button, `pointerdown`)
-    pointer(outside, `pointerdown`)
+    for (const target of [button, outside, unindexed]) pointer(target, `pointerdown`)
     expect(selection.size).toBe(0)
     pointer(cell(0, 0), `pointerdown`)
     expect(selection.size).toBe(1) // the cell itself still selects
@@ -347,6 +330,14 @@ describe(`filters`, () => {
     // default cell text: dates as ISO strings, other objects as JSON
     [new Date(Date.UTC(2024, 0, 2)), { kind: `text`, text: `2024-01-02t` }, true],
     [{ el: `Fe` }, { kind: `text`, text: `"el":"fe"` }, true],
+    // only finite numbers and decimal text pass a range; NaN, invalid dates and nullish
+    // cells have blank text, booleans their own
+    [Infinity, { kind: `numeric`, min: 0 }, false],
+    [true, { kind: `numeric`, min: 0 }, false],
+    [NaN, { kind: `text`, text: `nan` }, false],
+    [new Date(NaN), { kind: `text`, text: `invalid` }, false],
+    [undefined, { kind: `text`, text: `undefined` }, false],
+    [false, { kind: `text`, text: `false` }, true],
   ])(`cell %j against %j: %j`, (val, filter, expected) => {
     expect(compile_filter(filter)(val)).toBe(expected)
   })
@@ -368,52 +359,26 @@ describe(`filters`, () => {
   })
 
   const tags = Array.from({ length: CATEGORY_LIMIT + 1 }, (_unused, idx) => `t${idx}`)
+  // oxfmt-ignore
   test.each<[string, unknown[], FilterPanelOptions, ReturnType<typeof filter_panel>]>([
     // distinct, natural order (t2 before t10), missing values skipped
-    [
-      `few strings`,
-      [`t10`, `t2`, null, `t2`],
-      {},
-      { kind: `category`, choices: [`t2`, `t10`] },
-    ],
+    [`few strings`, [`t10`, `t2`, null, `t2`], {},
+      { kind: `category`, choices: [`t2`, `t10`] }],
     [`too many strings`, tags, {}, { kind: `text`, choices: [] }],
-    [
-      `numbers`,
-      [3, `1.5`, NaN, 2],
-      {},
-      { kind: `numeric`, choices: [`1.5`, `2`, `3`], extent: { min: 1.5, max: 3 } },
-    ],
-    [
-      `numeric override`,
-      [`a`, `b`],
-      { numeric: true },
-      { kind: `numeric`, choices: [`a`, `b`] },
-    ],
-    [
-      `text override, extent still read`,
-      [1, `x`, -2],
-      { kind: `text` },
-      { kind: `text`, choices: [`-2`, `1`, `x`], extent: { min: -2, max: 1 } },
-    ],
+    [`numbers`, [3, `1.5`, NaN, 2], {},
+      { kind: `numeric`, choices: [`1.5`, `2`, `3`], extent: { min: 1.5, max: 3 } }],
+    [`numeric override`, [`a`, `b`], { numeric: true },
+      { kind: `numeric`, choices: [`a`, `b`] }],
+    [`text override, extent still read`, [1, `x`, -2], { kind: `text` },
+      { kind: `text`, choices: [`-2`, `1`, `x`], extent: { min: -2, max: 1 } }],
     [`no values`, [], {}, { kind: `text`, choices: [] }],
     // blanks are gaps in a numeric column, still listed as blank
-    [
-      `numbers with blanks`,
-      [1, ``, 2.5, ` `, 3],
-      {},
-      { kind: `numeric`, choices: [`1`, `2.5`, `3`, ``], extent: { min: 1, max: 3 } },
-    ],
+    [`numbers with blanks`, [1, ``, 2.5, ` `, 3], {},
+      { kind: `numeric`, choices: [`1`, `2.5`, `3`, ``], extent: { min: 1, max: 3 } }],
     // numbers by value (decimals, negatives), then text in natural order
-    [
-      `mixed numbers and text`,
-      [0.5, 0.25, `N/A`, 1.75, -2, -10, 0.125, `n10`, `n9`],
-      {},
-      {
-        kind: `category`,
-        choices: [`-10`, `-2`, `0.125`, `0.25`, `0.5`, `1.75`, `N/A`, `n9`, `n10`],
-        extent: { min: -10, max: 1.75 },
-      },
-    ],
+    [`mixed numbers and text`, [0.5, 0.25, `N/A`, 1.75, -2, -10, 0.125, `n10`, `n9`], {},
+      { kind: `category`, extent: { min: -10, max: 1.75 },
+        choices: [`-10`, `-2`, `0.125`, `0.25`, `0.5`, `1.75`, `N/A`, `n9`, `n10`] }],
     [`custom cap`, [`a`, `b`, `c`], { category_limit: 2 }, { kind: `text`, choices: [] }],
   ])(`filter_panel: %s`, (_desc, values, options, expected) => {
     expect(filter_panel(values, options)).toEqual(expected)
@@ -431,14 +396,9 @@ describe(`filters`, () => {
   test(`collapses no-op filters to undefined when editing bounds and checklists`, () => {
     const min_only = with_numeric_bound(undefined, `min`, ` 1.5 `)
     expect(min_only).toEqual({ kind: `numeric`, min: 1.5 })
-    expect(with_numeric_bound(undefined, `max`, `−3`)).toEqual({
-      kind: `numeric`,
-      max: -3,
-    })
-    expect(with_numeric_bound(min_only, `max`, `abc`)).toEqual({
-      kind: `numeric`,
-      min: 1.5,
-    })
+    const max_only = { kind: `numeric`, max: -3 }
+    expect(with_numeric_bound(undefined, `max`, `−3`)).toEqual(max_only)
+    expect(with_numeric_bound(min_only, `max`, `abc`)).toEqual(min_only)
     expect(with_numeric_bound(min_only, `min`, ``)).toBeUndefined()
     // a text filter on the same column is replaced, not merged
     expect(with_numeric_bound({ kind: `text`, text: `x` }, `max`, `2`)).toEqual({
@@ -449,10 +409,8 @@ describe(`filters`, () => {
     const choices = [`a`, `b`, `c`]
     const without_b = with_category_toggled(undefined, `b`, choices)
     expect(without_b).toEqual({ kind: `category`, values: [`a`, `c`] })
-    expect(with_category_toggled(without_b, `a`, choices)).toEqual({
-      kind: `category`,
-      values: [`c`],
-    })
+    const only_c = { kind: `category`, values: [`c`] }
+    expect(with_category_toggled(without_b, `a`, choices)).toEqual(only_c)
     expect(with_category_toggled(without_b, `b`, choices)).toBeUndefined() // all allowed again
     // a value no row holds any more drops out instead of keeping the filter active
     const stale = { kind: `category` as const, values: [`a`, `c`, `gone`] }
@@ -492,13 +450,9 @@ describe(`filters`, () => {
     const names = (filters: Record<string, ColumnFilterValue | undefined>) =>
       filter_rows(rows, filters).map((row) => row.name)
     expect(names({})).toEqual([`A`, `B`, `C`])
-    expect(names({ score: { kind: `numeric`, min: 15 }, tier: undefined })).toEqual([
-      `B`,
-      `C`,
-    ])
-    expect(
-      names({ score: { kind: `numeric`, min: 15 }, tier: { kind: `text`, text: `alp` } }),
-    ).toEqual([`C`])
+    const score: ColumnFilterValue = { kind: `numeric`, min: 15 }
+    expect(names({ score, tier: undefined })).toEqual([`B`, `C`])
+    expect(names({ score, tier: { kind: `text`, text: `alp` } })).toEqual([`C`])
     expect(filter_rows(rows, {})).not.toBe(rows) // always a fresh array
   })
 })

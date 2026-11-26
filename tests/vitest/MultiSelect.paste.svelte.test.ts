@@ -157,12 +157,13 @@ describe(`parse_paste`, () => {
   )
 
   test.each([
-    [`without parse_paste`, { parse_paste: undefined }],
-    [`parse_paste returns empty`, { parse_paste: () => [] }],
-  ])(`%s: paste not intercepted`, async (_label, override) => {
+    [`without parse_paste`, { parse_paste: undefined }, `a,b`],
+    [`parse_paste returns empty`, { parse_paste: () => [] }, `a,b`],
+    [`empty clipboard text`, {}, ``],
+  ])(`%s: paste not intercepted`, async (_label, override, text) => {
     const { on_add, onpaste, event } = await paste_into(
       { options: [`a`, `b`, `c`], ...override },
-      `a,b`,
+      text,
     )
     expect(on_add).not.toHaveBeenCalled()
     expect(event.defaultPrevented).toBe(false)
@@ -205,32 +206,29 @@ describe(`parse_paste`, () => {
     [`already at max`, [`a`, `b`], 2, `c`, [], [`c`]],
     [`fills the last free slot`, [`a`, `b`], 3, `c,d`, [`c`], [`d`]],
     [`exceeds max mid-paste`, [`a`], 3, `b,c,d,e`, [`b`, `c`], [`d`, `e`]],
-  ])(
-    `max_select: %s`,
-    async (_label, selected, max_select, raw_text, added, overflow) => {
-      const { props, on_add, on_max_reached, on_parsed_paste } = await paste_into(
-        {
-          options: [`a`, `b`, `c`, `d`, `e`],
-          value: selected,
-          search_text: `partial`,
-          max_select,
-        },
-        raw_text,
-      )
-      expect(props.value).toEqual([...selected, ...added])
-      expect(props.search_text).toBe(``)
-      expect(on_add).toHaveBeenCalledTimes(added.length)
-      expect(on_max_reached).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ max_select, attempted_option: overflow[0] }),
-      )
-      expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
-        added,
-        rejected: [],
-        overflow,
-        raw_text,
-      })
-    },
-  )
+  ])(`max_select: %s`, async (_, selected, max_select, raw_text, added, overflow) => {
+    const { props, on_add, on_max_reached, on_parsed_paste } = await paste_into(
+      {
+        options: [`a`, `b`, `c`, `d`, `e`],
+        value: selected,
+        search_text: `partial`,
+        max_select,
+      },
+      raw_text,
+    )
+    expect(props.value).toEqual([...selected, ...added])
+    expect(props.search_text).toBe(``)
+    expect(on_add).toHaveBeenCalledTimes(added.length)
+    expect(on_max_reached).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ max_select, attempted_option: overflow[0] }),
+    )
+    expect(on_parsed_paste).toHaveBeenCalledExactlyOnceWith({
+      added,
+      rejected: [],
+      overflow,
+      raw_text,
+    })
+  })
 
   test.each([`single`, `multiple`] as const)(
     `paste respects %s mode when one item is already selected`,
@@ -256,20 +254,17 @@ describe(`parse_paste`, () => {
   test.each([
     [`preselected duplicate`, [`a`], `a,b,c`, 2, [`a`, `b`, `c`]],
     [`self-duplicate within paste`, [], `a,a,b`, 2, [`a`, `b`]],
-  ])(
-    `handles %s`,
-    async (_label, initial, paste_text, expected_adds, expected_selected) => {
-      const { on_add, on_duplicate, props } = await paste_into(
-        { options: [`a`, `b`, `c`, `d`], value: initial },
-        paste_text,
-      )
-      expect(on_add).toHaveBeenCalledTimes(expected_adds)
-      expect(on_duplicate).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ option: `a` }),
-      )
-      expect(props.value).toEqual(expected_selected)
-    },
-  )
+  ])(`handles %s`, async (_, initial, paste_text, expected_adds, expected_selected) => {
+    const { on_add, on_duplicate, props } = await paste_into(
+      { options: [`a`, `b`, `c`, `d`], value: initial },
+      paste_text,
+    )
+    expect(on_add).toHaveBeenCalledTimes(expected_adds)
+    expect(on_duplicate).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ option: `a` }),
+    )
+    expect(props.value).toEqual(expected_selected)
+  })
 
   test(`mixed existing and new options with allow_user_options`, async () => {
     const { on_add, on_create, props } = await paste_into(

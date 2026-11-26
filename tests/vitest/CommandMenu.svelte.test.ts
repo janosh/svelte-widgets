@@ -14,10 +14,6 @@ import {
 } from './index'
 import { type_search_text } from './MultiSelect.test-utils'
 
-vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
-  (await import(`./index`)).count_key_reads(await import_original()),
-)
-
 const make_actions = (...labels: string[]) =>
   labels.map((label) => ({ id: label, label, action: vi.fn() }))
 const mock_actions = make_actions(`action 1`, `action 2`, `action 3`)

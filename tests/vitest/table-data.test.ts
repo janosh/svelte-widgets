@@ -27,17 +27,22 @@ describe(`column stats and domains`, () => {
   const values = [...Array.from({ length: 20 }, (_unused_value, idx) => idx * 5), 10_000]
 
   it(`summarizes a column in one pass, ignoring non-numeric and non-finite entries`, () => {
-    const stats = compute_column_stats([
-      1,
-      2,
-      3,
-      null,
-      undefined,
-      NaN,
-      Infinity,
-      -Infinity,
-    ])
+    const mixed = [1, 2, 3, null, undefined, NaN, Infinity, -Infinity]
+    const stats = compute_column_stats(mixed)
     expect(stats).toMatchObject({ min: 1, max: 3, mean: 2, median: 2, count: 3 })
+    // medians over every order of 4 and 5 values (quickselect partitions each differently)
+    const orders = (vals: number[]): number[][] =>
+      vals.length < 2
+        ? [vals]
+        : vals.flatMap((val, idx) =>
+            orders(vals.toSpliced(idx, 1)).map((rest) => [val, ...rest]),
+          )
+    const medians = (vals: number[]) =>
+      new Set(orders(vals).map((order) => compute_column_stats(order)?.median))
+    expect([medians([0, 1, 2, 3]), medians([0, 1, 2, 3, 4])]).toEqual([
+      new Set([1.5]),
+      new Set([2]),
+    ])
     expect(compute_column_stats([null, undefined, NaN])).toBeNull()
     // the smallest value above zero, a log scale's lower end
     expect(compute_column_stats([-2, 0, 3, 0.5], false)?.min_positive).toBe(0.5)
@@ -206,32 +211,15 @@ describe(`sort_table_rows`, () => {
   }
 
   it.each([`asc`, `desc`] as const)(`sinks missing sort keys sorting %s`, (dir) => {
-    const invalid_date = new Date(NaN)
-    expect(cell_text(invalid_date)).toBe(``)
+    const bad_date = new Date(NaN)
+    expect(cell_text(bad_date)).toBe(``)
     const blank_key = `<span data-sort-value="">42</span>` // not sorted by its numeric text
     // blank text (`` rose above every number when descending) sinks too
-    const vals = [
-      null,
-      3,
-      ``,
-      undefined,
-      `a`,
-      1,
-      NaN,
-      2,
-      blank_key,
-      invalid_date,
-      ` <b></b>`,
-    ]
+    const missing = [null, ``, undefined, NaN, blank_key, bad_date, ` <b></b>`]
+    const vals = [null, 3, ``, undefined, `a`, 1, NaN, 2, blank_key, bad_date, ` <b></b>`]
     expect(order(vals, dir)).toEqual([
       ...(dir === `asc` ? [1, 2, 3, `a`] : [`a`, 3, 2, 1]),
-      null,
-      ``,
-      undefined,
-      NaN,
-      blank_key,
-      invalid_date,
-      ` <b></b>`,
+      ...missing, // in their input order
     ])
   })
 
@@ -249,19 +237,9 @@ describe(`sort_table_rows`, () => {
     const mixed = order([`10`, `abc`, `9`, `a2`, `a10`, 2])
     expect(mixed).toEqual([2, `9`, `10`, `a2`, `a10`, `abc`])
     // ±Infinity are numbers at the ends, not text after them
-    expect(order([3, Infinity, `x`, -Infinity, 1])).toEqual([
-      -Infinity,
-      1,
-      3,
-      Infinity,
-      `x`,
-    ])
-    expect(order([3, Infinity, -Infinity, 1], `desc`)).toEqual([
-      Infinity,
-      3,
-      1,
-      -Infinity,
-    ])
+    const ascending = [-Infinity, 1, 3, Infinity]
+    expect(order([3, Infinity, `x`, -Infinity, 1])).toEqual([...ascending, `x`])
+    expect(order([3, Infinity, -Infinity, 1], `desc`)).toEqual(ascending.toReversed())
     expect(order([`b`, `B`, `a`])).toEqual([`a`, `b`, `B`]) // case-insensitive keeps input order for ties
   })
 
@@ -406,6 +384,7 @@ describe(`date/time columns`, () => {
     [`2024-02-30T12:00:00Z`, plain, null],
     [`2024-13-01`, plain, null],
     [`2024-01-00`, plain, null],
+    [`2024-01-02T25:00`, plain, null], // a real date at an impossible time
     [1_700_000_000, plain, null], // bare numbers need an explicit datetime column
     [1_700_000_000, explicit, 1_700_000_000_000], // epoch seconds scale to ms
     [1_700_000_000_000, explicit, 1_700_000_000_000],

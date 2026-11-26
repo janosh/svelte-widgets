@@ -23,6 +23,8 @@
     FileInput,
     Heading,
     JsonTree,
+    DockedSidebar,
+    SequenceControls,
     SplitPane,
     TreeView,
     VirtualList,
@@ -93,9 +95,16 @@
     DirectHeading === Heading &&
     DirectJsonTree === JsonTree &&
     DirectRangeSlider === RangeSlider &&
-    [FileInput, SplitPane, TreeView, VirtualList, TaskStatus, Progress].every(
-      (component) => typeof component === `function`,
-    ) &&
+    [
+      FileInput,
+      DockedSidebar,
+      SequenceControls,
+      SplitPane,
+      TreeView,
+      VirtualList,
+      TaskStatus,
+      Progress,
+    ].every((component) => typeof component === `function`) &&
     virtual_window({ scroll: 0, viewport: 100, count: 1000, item_size: 20 }).end === 5 &&
     DirectMultiSelect === MultiSelect &&
     DirectPageSearch === PageSearch &&

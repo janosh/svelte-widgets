@@ -424,10 +424,13 @@ test(`history barriers and unrecorded edits cannot replay stale state`, () => {
   type_text(backward, `b`, 0)
   expect([backward.undo(), backward.text()]).toEqual([true, `a`])
 })
+// adjacent deletions merge into one record; others stay separate records of the group
 test.each([
-  [`backspace`, [2, 1]],
-  [`delete`, [0, 0]],
-])(`%s groups replay as one update`, (key, starts) => {
+  [`backspace`, [2, 1], 1],
+  [`delete`, [0, 0], 1],
+  [`backspace`, [0, 1], 2],
+  [`delete`, [1, 0], 2],
+])(`%s deletions at %j replay as %i updates`, (key, starts, n_updates) => {
   const model = model_of(`abc`)
   for (const [edit_idx, from] of starts.entries())
     model.transact([{ from, to: from + 1, insert: `` }], {
@@ -437,7 +440,29 @@ test.each([
     })
   const updates: unknown[] = []
   model.subscribe((update) => updates.push(update))
-  expect([model.undo(), model.text(), updates.length]).toEqual([true, `abc`, 1])
+  expect([model.undo(), model.text(), updates.length]).toEqual([true, `abc`, n_updates])
+})
+// merging `z` into the multi-edit record's first edit would drop its `>` from undo
+test(`a multi-edit transaction never merges with typed records`, () => {
+  const model = model_of(`ab`)
+  const typed = { history_group: `insert`, timestamp: 0 }
+  model.transact([{ from: 2, to: 2, insert: `x` }], typed)
+  model.transact(
+    [
+      { from: 3, to: 3, insert: `y` },
+      { from: 4, to: 4, insert: `>` },
+    ],
+    typed,
+  )
+  model.transact([{ from: 4, to: 4, insert: `z` }], typed)
+  const updates: unknown[] = []
+  model.subscribe((update) => updates.push(update))
+  expect([model.text(), model.undo(), model.text(), updates.length]).toEqual([
+    `abxyz>`,
+    true,
+    `ab`,
+    3,
+  ])
 })
 test(`composition replacement retains the pre-composition undo text`, () => {
   const model = model_of(`selected`)
@@ -510,7 +535,15 @@ test(`invalid resulting selections leave the model unchanged`, () => {
   expect(() =>
     model.transact([{ from: 0, to: 0, insert: `x` }], { timestamp: Infinity }),
   ).toThrow(`Invalid history timestamp=Infinity`)
-  expect(model.text()).toBe(`abc`)
+  expect(() => model.transact([])).toThrow(
+    `Editor transactions require at least one edit`,
+  )
+  expect(() => model.slice(2, 1)).toThrow(`Invalid slice from=2, to=1, length=3`)
+  for (const line_idx of [-1, 1, 0.5])
+    expect(() => model.line(line_idx)).toThrow(`Invalid line ${line_idx} for 1 lines`)
+  for (const limit of [-1, 1.5, NaN])
+    expect(() => model_of(``, limit)).toThrow(`Invalid history_limit_chars=${limit}`)
+  expect([model.text(), model.revision]).toEqual([`abc`, 0])
 })
 test.each([1, 6000])(
   `property: random edits, lines, undo, and redo match a string oracle (%i initial lines)`,

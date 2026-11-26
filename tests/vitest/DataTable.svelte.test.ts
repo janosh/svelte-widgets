@@ -23,6 +23,7 @@ import { createRawSnippet, flushSync, tick } from 'svelte'
 import * as animations from 'svelte/animate'
 import { prefersReducedMotion } from 'svelte/motion'
 import {
+  afterAll,
   assert,
   beforeEach,
   describe,
@@ -36,12 +37,14 @@ import {
   click,
   create_element,
   doc_query,
+  drag_event,
   fire_input,
   hover,
   pointer_event,
   press_key,
   render,
   resize_observers,
+  stub_prop,
   stub_resize_observer,
 } from './index'
 
@@ -64,11 +67,7 @@ beforeEach(() => {
 })
 
 const write_clipboard = vi.fn().mockResolvedValue(undefined)
-Object.defineProperty(navigator, `clipboard`, {
-  value: { writeText: write_clipboard },
-  writable: true,
-  configurable: true,
-})
+afterAll(stub_prop(navigator, `clipboard`, { writeText: write_clipboard }))
 
 // === Helpers ===
 
@@ -82,14 +81,15 @@ const fire = async (
   target.dispatchEvent(event)
   await tick()
 }
-// press_key, then flush the update
+// press_key, then flush the update; returns the (cancelable) event
 const press = async (
   target: EventTarget,
   key: string,
   init?: KeyboardEventInit,
-): Promise<void> => {
-  press_key(target, key, init)
+): Promise<KeyboardEvent> => {
+  const event = press_key(target, key, init)
   await tick()
+  return event
 }
 
 // Expose `state`'s keys on `props` as live accessors, so a mounted component's bindable
@@ -731,7 +731,12 @@ describe(`DataTable`, () => {
         { id: `Ancient`, label: `Ancient`, datetime_format: `datetime` },
         { id: `Unix`, label: `Unix`, datetime_format: `datetime` },
       ]
-      mount_table({ data, columns })
+      // a stale pref the column's kind doesn't offer falls back to its first mode
+      mount_table({
+        data,
+        columns,
+        column_prefs: { Observed: { datetime_format: `iso` } },
+      })
       const cells = () => texts(`tbody td`)
       const triggers = document.querySelectorAll<HTMLButtonElement>(
         `.datetime-format-trigger`,
@@ -804,7 +809,13 @@ describe(`DataTable`, () => {
       expect(on_toggle).toHaveBeenCalledOnce()
       select.click()
       press_key(select, `Enter`)
-      expect(on_toggle).toHaveBeenCalledTimes(3)
+      press_key(select, ` `)
+      press_key(select, `a`) // other keys keep the list open
+      expect(on_toggle).toHaveBeenCalledTimes(4)
+      // a pick outside the column's modes (here none) is not applied
+      select.value = `iso`
+      select.dispatchEvent(new Event(`input`, { bubbles: true }))
+      expect(on_change).toHaveBeenCalledOnce()
       expect(header).not.toHaveBeenCalled()
     })
 
@@ -1078,17 +1089,7 @@ describe(`DataTable`, () => {
           grouped(`Value 2`, `Second Values`),
         ],
         [`/1`, `/1`, `Values/2`, `Metrics/2`, `/1`, `SecondValues/2`],
-        [
-          `Name`,
-          `Regular`,
-          `Value1`,
-          `Value2`,
-          `Metric1`,
-          `Metric2`,
-          `Another`,
-          `Value1`,
-          `Value2`,
-        ],
+        `Name Regular Value1 Value2 Metric1 Metric2 Another Value1 Value2`.split(` `),
       ],
       [
         `non-contiguously listed group`,
@@ -1316,6 +1317,18 @@ describe(`DataTable`, () => {
 
       expect(state.search_query).toBe(``)
       expect(col_values(`Model`)).toHaveLength(3)
+
+      // an opened search box folds back on blur only while it is empty
+      const search_shown = () => document.querySelector(`.search-input`) !== null
+      for (const query of [``, `model`]) {
+        await click(`.control-buttons .icon-btn`)
+        state.search_query = query
+        await tick()
+        await fire(doc_query(`.search-input`), new FocusEvent(`blur`))
+        state.search_query = ``
+        await tick()
+        expect(search_shown()).toBe(query !== ``)
+      }
     })
   })
 
@@ -1461,6 +1474,18 @@ describe(`DataTable`, () => {
     const badge = document.querySelector<HTMLElement>(`.selection-badge .badge`)
     expect(badge?.textContent).toBe(`3`)
 
+    // the header checkbox deselects every row, then selects them all again
+    await click(select_all)
+    expect([state.selected_ids, select_all.checked]).toEqual([[], false])
+    await click(checkboxes[1])
+    await click(select_all)
+    expect(state.selected_ids).toEqual([`Model B`, `Model A`, `Model C`])
+    await click(checkboxes[0]) // unchecking one row keeps the others
+    expect([state.selected_ids, select_all.checked]).toEqual([
+      [`Model B`, `Model C`],
+      false,
+    ])
+
     await click(doc_query<HTMLButtonElement>(`.selection-badge`))
     expect(state.selected_ids).toEqual([])
     expect(document.querySelectorAll(`tr.selected`)).toHaveLength(0)
@@ -1503,6 +1528,11 @@ describe(`DataTable`, () => {
     await click(headers[2])
     expect(state.sort).toEqual([{ column: `Value`, dir: `asc` }])
     expect(marks()).toEqual([` none`, ` none`, `↕ ascending`])
+    // from the keyboard, only Enter and Space sort
+    await press(headers[2], `a`)
+    expect(state.sort).toEqual([{ column: `Value`, dir: `asc` }])
+    await press(headers[2], ` `)
+    expect(state.sort).toEqual([{ column: `Value`, dir: `desc` }])
 
     // Restored keys apply in priority order: the second resolves tied scores
     state.sort = [
@@ -1522,16 +1552,20 @@ describe(`DataTable`, () => {
   })
 
   describe(`Pagination`, () => {
-    it(`renders controls, caps rows at page_size, and disables prev/first on page 1`, () => {
-      mount_table({
-        data: large_data,
-        columns: sample_columns,
-        pagination: { page_size: 10 },
-      })
+    it(`renders controls, caps rows at page_size, and disables prev/first on page 1`, async () => {
+      const state = $state({ selected_ids: [] as RowId[] })
+      const props = { data: large_data, columns: sample_columns, row_key: `Model` }
+      mount_table(
+        bind_props(
+          { ...props, pagination: { page_size: 10 }, show_row_select: true },
+          state,
+        ),
+      )
 
       expect(document.querySelector(`.pagination`)).not.toBeNull()
       // Check page input value (not textContent since it's in an input)
-      expect(doc_query<HTMLInputElement>(`.page-input`).value).toBe(`1`)
+      const page_input = doc_query<HTMLInputElement>(`.page-input`)
+      expect(page_input.value).toBe(`1`)
       expect(document.querySelector(`.page-info`)?.textContent).toContain(`of 5`)
       expect(document.querySelector(`.row-count`)?.textContent).toContain(`50 rows`)
       expect(document.querySelectorAll(`tbody tr`)).toHaveLength(10)
@@ -1540,6 +1574,28 @@ describe(`DataTable`, () => {
       // First and Previous are disabled on page 1, Next and Last are not
       const buttons = [...document.querySelectorAll<HTMLButtonElement>(`.page-btn`)]
       expect(buttons.map((btn) => btn.disabled)).toEqual([true, true, false, false])
+
+      // typed page numbers clamp to the page range, and non-numbers go to page 1
+      for (const [typed, page] of [
+        [`4`, `4`],
+        [`99`, `5`],
+        [`abc`, `1`],
+        [`0`, `1`],
+      ]) {
+        page_input.value = typed
+        await fire(page_input, new Event(`change`, { bubbles: true }))
+        expect([page_input.value, col_values(`Model`)[0]]).toEqual([
+          page,
+          `Model ${(Number(page) - 1) * 10 + 1}`,
+        ])
+      }
+      // select-all covers the current page only
+      page_input.value = `2`
+      await fire(page_input, new Event(`change`, { bubbles: true }))
+      await click(`th.select-col input`)
+      expect(state.selected_ids).toEqual(
+        large_data.slice(10, 20).map(({ Model }) => Model),
+      )
     })
 
     it(`keeps the current page across same-length data refreshes, resets on row count change`, async () => {
@@ -1559,9 +1615,12 @@ describe(`DataTable`, () => {
       await tick()
       expect(page_input.value).toBe(`2`)
 
+      const footer = () => doc_query(`.pagination`).textContent?.replaceAll(/\s+/g, ` `)
+      expect(footer()).toContain(`of 5 (${large_data.length} rows)`)
       state.data = state.data.slice(0, 30) // row count changed
       await tick()
       expect(page_input.value).toBe(`1`)
+      expect(footer()).toContain(`of 3 (30 rows)`)
       state.data = state.data.slice(0, 3) // fits on one page: no pagination bar
       await tick()
       expect(document.querySelector(`.pagination`)).toBeNull()
@@ -1679,6 +1738,14 @@ describe(`DataTable`, () => {
       expect(state.column_prefs.Value?.width).toBe(width)
     }
     pointer(`pointerup`, 0, resize_handles[2])
+    // without a layout (a hidden table) auto-fit measures nothing and keeps the width unset;
+    // the first arrow step starts from the rendered width
+    await fire(resize_handles[0], pointer_event(`dblclick`, 0, 0))
+    expect(state.column_prefs.Model).toBeUndefined()
+    const model_header = doc_query(`th[data-col-id="Model"]`)
+    Object.defineProperty(model_header, `offsetWidth`, { value: 120 })
+    press_key(resize_handles[0], `ArrowRight`)
+    expect(state.column_prefs.Model?.width).toBe(130)
   })
 
   it(`appends menu_sections to a column's context menu, without pins when allow_pinning=false`, async () => {
@@ -1696,15 +1763,21 @@ describe(`DataTable`, () => {
   })
 
   // without a sanitizer, markup renders as its escaped text rather than as raw HTML
-  it(`renders HTML cells and labels as escaped text by default`, () => {
+  it(`renders HTML, boolean and object cells and labels as escaped text by default`, () => {
     mount_table({
-      data: [{ Rich: `<b>bold</b> <img src=x onerror=alert(1)>` }],
-      columns: [{ id: `Rich`, label: `<i>Rich</i>` }],
+      data: [
+        {
+          Rich: `<b>bold</b> <img src=x onerror=alert(1)>`,
+          Flag: true,
+          Obj: { el: `Fe` },
+        },
+      ],
+      columns: [{ id: `Rich`, label: `<i>Rich</i>` }, ...plain_columns(`Flag`, `Obj`)],
       render_html: table_data.escape_markup,
     })
     const cell = cell_at(0, 0)
     expect(cell.querySelector(`b, img`)).toBeNull()
-    expect(cell.textContent?.trim()).toBe(`bold`)
+    expect(texts(`tbody td`)).toEqual([`bold`, `true`, `{"el":"Fe"}`])
     expect(doc_query(`th[data-col-id="Rich"]`).querySelector(`i`)).toBeNull()
   })
 
@@ -1836,24 +1909,61 @@ describe(`DataTable`, () => {
 
     // aria-grabbed follows the drag state reactively rather than being poked onto the DOM
     // by the drag handlers, so it can't fall out of sync with what the component thinks.
-    it(`marks the dragged header grabbed until the drag ends`, async () => {
-      mount_sample()
-      const header = doc_query(`thead tr:last-child th`)
-      const drag = (type: string) => {
-        const event = new Event(type, { bubbles: true })
-        Object.defineProperty(event, `dataTransfer`, {
-          value: { effectAllowed: ``, dropEffect: ``, setData: vi.fn() },
-        })
-        header.dispatchEvent(event)
+    // Dropping a header on another of its group moves it there; other groups refuse the drop,
+    // so group headers stay contiguous.
+    it(`drags headers to reorder within a group, marking the grab and landing side`, async () => {
+      const state = $state({ column_order: [] as string[], sort: [] as TableSort[] })
+      const columns = [
+        { id: `A`, label: `A` },
+        ...[`B`, `C`, `D`].map((id) => ({ id, label: id, group: `G` })),
+      ]
+      mount_table(bind_props({ data: [{ A: 1, B: 2, C: 3, D: 4 }], columns }, state))
+      await tick()
+      const header = (id: string) => doc_query(`th[data-col-id="${id}"]`)
+      const transfer = { effectAllowed: ``, dropEffect: ``, setData: vi.fn() }
+      const drag = async (type: string, id: string) => {
+        const event = drag_event(type, transfer as unknown as DataTransfer)
+        await fire(header(id), event)
+        return event
       }
+      const sides = () => [`A`, `B`, `C`, `D`].map((id) => header(id).dataset.dragSide)
+      const no_sides = Array(4).fill(undefined)
 
-      expect(header.getAttribute(`aria-grabbed`)).toBeNull()
-      drag(`dragstart`)
-      await tick()
-      expect(header.getAttribute(`aria-grabbed`)).toBe(`true`)
-      drag(`dragend`)
-      await tick()
-      expect(header.getAttribute(`aria-grabbed`)).toBeNull()
+      expect(header(`B`).getAttribute(`aria-grabbed`)).toBeNull()
+      await drag(`dragstart`, `B`)
+      expect(header(`B`).getAttribute(`aria-grabbed`)).toBe(`true`)
+      expect([transfer.effectAllowed, transfer.setData.mock.calls]).toEqual([
+        `move`,
+        [[`text/html`, ``]],
+      ])
+      await click(header(`B`)) // a click mid-drag must not sort
+      expect(state.sort).toEqual([])
+
+      expect((await drag(`dragover`, `A`)).defaultPrevented).toBe(true)
+      expect([transfer.dropEffect, sides()]).toEqual([`none`, no_sides])
+      await drag(`dragover`, `D`)
+      expect([transfer.dropEffect, sides()]).toEqual([
+        `move`,
+        [undefined, undefined, undefined, `right`],
+      ])
+      await drag(`dragleave`, `D`)
+      expect(sides()).toEqual(no_sides)
+      await drag(`drop`, `A`) // another group: refused, and the drag is over
+      expect(state.column_order).toEqual([`A`, `B`, `C`, `D`])
+      expect(header(`B`).getAttribute(`aria-grabbed`)).toBeNull()
+
+      await drag(`dragstart`, `D`)
+      await drag(`dragover`, `B`)
+      expect(sides()).toEqual([undefined, `left`, undefined, undefined])
+      await drag(`drop`, `B`)
+      expect(state.column_order).toEqual([`A`, `D`, `B`, `C`])
+      expect(sides()).toEqual(no_sides)
+
+      await drag(`dragstart`, `C`)
+      await drag(`drop`, `C`) // onto itself: nothing moves
+      await drag(`dragend`, `C`)
+      expect(state.column_order).toEqual([`A`, `D`, `B`, `C`])
+      expect(header(`C`).getAttribute(`aria-grabbed`)).toBeNull()
     })
 
     // An angled label starts at its column's center: the header row grows to the tallest
@@ -1946,13 +2056,39 @@ describe(`DataTable`, () => {
       expect(doc_query(`table`).style.marginRight).toBe(``)
     })
 
-    it.each([0, -45, 120, Number.NaN])(`rejects label_angle %s`, (label_angle) => {
-      expect(() =>
-        mount_table({
-          data: [{ A: 1 }],
-          columns: [{ id: `A`, label: `A`, label_angle }],
-        }),
-      ).toThrow(`Column A: label_angle must be in (0, 90], got ${label_angle}`)
+    const one_row = (props: Partial<TableProps>): TableProps => ({
+      data: [{ A: 1 }],
+      ...props,
+    })
+    it.each<[string, TableProps, string]>([
+      ...[0, -45, 120, Number.NaN].map((label_angle): [string, TableProps, string] => [
+        `label_angle ${label_angle}`,
+        one_row({ columns: [{ id: `A`, label: `A`, label_angle }] }),
+        `Column A: label_angle must be in (0, 90], got ${label_angle}`,
+      ]),
+      [
+        `empty column id`,
+        one_row({ columns: plain_columns(``) }),
+        `nonempty and unique: `,
+      ],
+      [`repeated column id`, one_row({ columns: plain_columns(`A`, `A`) }), `unique: A`],
+      [
+        `row selection without row_key`,
+        one_row({ show_row_select: true }),
+        `row_key is required with show_row_select or highlighted_row_id`,
+      ],
+      [
+        `repeated row id`,
+        { data: [{ A: 1 }, { A: 1 }], row_key: `A` },
+        `Duplicate row id: 1`,
+      ],
+      [
+        `row_key read as no id`,
+        { data: [{ A: null }], row_key: `A` },
+        `row_key must return a string or finite number; received null`,
+      ],
+    ])(`rejects %s`, (_desc, props, message) => {
+      expect(() => mount_table(props)).toThrow(message)
     })
 
     // Pinned columns stick to one edge, so any after the first clears the ones before it (by
@@ -2071,30 +2207,53 @@ describe(`DataTable`, () => {
     expect(cell.getAttribute(`colspan`)).toBe(`5`) // 3 data + select + row number
   })
 
-  describe(`Keyboard Navigation`, () => {
-    it.each([{ key: `Enter` }, { key: ` ` }])(
-      `focusable rows trigger on_row_click on $key key`,
-      async ({ key }) => {
-        const clicked: unknown[] = []
-        mount_sample({
-          on_row_click: (
-            _event: KeyboardEvent | MouseEvent,
-            row: Record<string, unknown>,
-          ) => clicked.push(row),
-        })
-
-        const rows = document.querySelectorAll<HTMLElement>(`tbody tr`)
-        expect([...rows].map((row) => row.getAttribute(`tabindex`))).toEqual([
-          `0`,
-          `0`,
-          `0`,
-        ])
-        await press(rows[0], key)
-
-        expect(clicked).toHaveLength(1)
-        expect(clicked[0]).toHaveProperty(`Model`, `Model A`)
-      },
+  // Leading select/row-number cells pad the group header, and the summary row names its stat
+  // in the last of them, so the first data column keeps its value
+  it.each([
+    [{ show_row_select: true }, [`select-col`]],
+    [{ show_row_numbers: true }, [`row-num-col`]],
+    [{ show_row_select: true, show_row_numbers: true }, [`select-col`, `row-num-col`]],
+  ])(`pads group header and summary rows for %j`, (flags, leading) => {
+    mount_table({
+      data: [
+        { A: 1, B: 2 },
+        { A: 3, B: 4 },
+      ],
+      columns: [
+        { id: `A`, label: `A` },
+        { id: `B`, label: `B`, group: `G` },
+      ],
+      summary: true,
+      row_key: `A`,
+      ...flags,
+    })
+    const group_cells = [...document.querySelectorAll(`tr.group-header th`)].map(
+      (cell) => [
+        cell.className.replaceAll(/\s*svelte-\S+/g, ``),
+        cell.textContent?.trim(),
+      ],
     )
+    expect(group_cells).toEqual([
+      ...leading.map((name) => [name, ``]),
+      [``, ``],
+      [``, `G`],
+    ])
+    const summary_pad = leading.slice(1).map(() => ``)
+    expect(texts(`tfoot .summary-row td`)).toEqual([...summary_pad, `mean`, `2`, `3`])
+  })
+
+  describe(`Keyboard Navigation`, () => {
+    it.each([`Enter`, ` `])(`focusable rows trigger on_row_click on %j`, async (key) => {
+      const on_row_click = vi.fn()
+      mount_sample({ on_row_click })
+
+      const rows = document.querySelectorAll<HTMLElement>(`tbody tr`)
+      const tab_stops = [...rows].map((row) => row.getAttribute(`tabindex`))
+      expect(tab_stops).toEqual([`0`, `0`, `0`])
+      await press(rows[0], key)
+
+      expect(on_row_click.mock.calls.map((call) => call[1])).toEqual([sample_data[0]])
+    })
 
     // Row actions are delegated to <tbody> and resolve their row from the DOM, so a table
     // rendered inside a cell snippet (whose own <tr>s carry no index) and a row whose data
@@ -2168,9 +2327,16 @@ describe(`DataTable`, () => {
       scores.set(1, 5)
       state.data = [new Scored(1)]
       await tick()
-      expect(
-        doc_query(`tbody td[data-row-idx="0"][data-col-idx="1"]`).textContent?.trim(),
-      ).toBe(`5`)
+      expect(cell_at(0, 1).textContent?.trim()).toBe(`5`)
+      // a refresh repeating an id names it (not the keyed each's generic error), rows kept
+      expect(() => {
+        state.data = [
+          { A: 1, B: 1 },
+          { A: 1, B: 2 },
+        ]
+        flushSync()
+      }).toThrow(`Duplicate row id: 1`)
+      expect(texts(`tbody td`)).toEqual([`1`, `5`])
     })
 
     // A DataTable nested in a cell (a per-row mini table) carries its own data-row-idx /
@@ -2209,6 +2375,35 @@ describe(`DataTable`, () => {
       expect(document.activeElement).toBe(cell_at(1, 0))
     })
 
+    // Focus, keys and right-clicks on a link in a cell stay the link's: no tab stop move,
+    // cell step, row action or column menu. Keys a row doesn't use pass through it too.
+    it(`leaves focus, keys and right-clicks on a link in a cell to the link`, async () => {
+      const on_row_click = vi.fn()
+      const cell = createRawSnippet((_args: () => CellSnippetArgs) => ({
+        render: () => `<a href="#row">link</a>`,
+      }))
+      const props = { data: [{ A: 1 }, { A: 2 }], columns: plain_columns(`A`), cell }
+      mount_table({ ...props, on_row_click, keyboard_cells: true })
+      await tick()
+      const link = doc_query<HTMLAnchorElement>(`tbody tr[data-row-idx="1"] a`)
+      link.focus()
+      await tick()
+      expect(cell_at(0, 0).getAttribute(`tabindex`)).toBe(`0`)
+      const key = (target: Element, name: string) =>
+        press_key(target, name).defaultPrevented
+      const right_click = pointer_event(`contextmenu`, 0, 0, { button: 2 })
+      await fire(link, right_click)
+      expect([
+        key(link, `ArrowDown`),
+        key(link, `Enter`),
+        right_click.defaultPrevented,
+      ]).toEqual([false, false, false])
+      expect([document.activeElement, n_selected()]).toEqual([link, 0])
+      expect(document.querySelector(`.action-menu`)).toBeNull()
+      expect(key(doc_query(`tbody tr[data-row-idx="0"]`), `x`)).toBe(false)
+      expect(on_row_click).not.toHaveBeenCalled()
+    })
+
     // A row-select checkbox toggles its row itself; the click or key it bubbles into the row
     // must not fire on_row_click too, or a toggling row action undoes the checkbox
     it(`row-select checkbox clicks and keys skip on_row_click`, async () => {
@@ -2242,6 +2437,9 @@ describe(`DataTable`, () => {
     const over = (row_idx: number) =>
       hover(doc_query(`tbody tr[data-row-idx="${row_idx}"] td`))
     over(1)
+    over(1) // still the same row: not re-reported
+    state.data = [...state.data] // nor while new data keeps the same row under the pointer
+    await tick()
     expect(on_row_hover.mock.calls).toEqual([[{ A: 2 }]])
     state.data = [{ A: 3 }, { A: 4 }]
     await tick()
@@ -2251,7 +2449,14 @@ describe(`DataTable`, () => {
     await tick()
     expect(on_row_hover.mock.lastCall).toEqual([null])
     over(0)
-    const n_calls = on_row_hover.mock.calls.length
+    // leaving the body clears the hover once
+    const leave = () => fire(doc_query(`tbody`), pointer_event(`pointerleave`, 0, 0))
+    let n_calls = on_row_hover.mock.calls.length
+    await leave()
+    await leave()
+    expect(on_row_hover.mock.calls.slice(n_calls)).toEqual([[null]])
+    over(0)
+    n_calls = on_row_hover.mock.calls.length
     await unmount()
     expect(on_row_hover.mock.calls.slice(n_calls)).toEqual([[null]])
   })
@@ -2293,6 +2498,42 @@ describe(`DataTable`, () => {
     expect(attribute_updates).toEqual([2, 1, 0])
   })
 
+  // A rendered row named from outside scrolls just into the 200px view, clear of the 30px
+  // sticky header; a row under the pointer named itself and stays put
+  it(`highlighted_row_id scrolls a rendered row just into view`, async () => {
+    const state = $state<{ highlighted_row_id: number | null }>({
+      highlighted_row_id: null,
+    })
+    const data = [{ id: 0 }, { id: 1 }, { id: 2 }, { id: 3 }]
+    // row id N spans [100N - 20, 100N + 30]
+    vi.spyOn(Element.prototype, `getBoundingClientRect`).mockImplementation(function (
+      this: Element,
+    ) {
+      const rect = (top: number, height: number) =>
+        ({ top, bottom: top + height, height }) as DOMRect
+      if (this.matches(`.table-scroll`)) return rect(0, 200)
+      if (this.matches(`thead`)) return rect(0, 30)
+      return rect(100 * Number(this.getAttribute(`data-row-idx`)) - 20, 50)
+    })
+    const props = { data, columns: plain_columns(`id`), on_row_hover: () => {} }
+    mount_table(bind_props({ ...props, row_key: `id` }, state))
+    await tick()
+    const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
+    for (const [row_id, scroll_top] of [
+      [3, 130], // bottom 330 sinks 130px below the view
+      [1, 130], // inside the view
+      [0, 80], // top -20 hides 50px under the header
+    ]) {
+      state.highlighted_row_id = row_id
+      await tick()
+      expect(scroller.scrollTop).toBe(scroll_top)
+    }
+    hover(doc_query(`tbody tr[data-row-idx="2"] td`))
+    state.highlighted_row_id = 2
+    await tick()
+    expect(scroller.scrollTop).toBe(80)
+  })
+
   describe(`Filtering, summaries and per-column state`, () => {
     const metrics = plain_columns(`Model`, `Score`, `Tier`)
     const metric_rows = [
@@ -2321,37 +2562,24 @@ describe(`DataTable`, () => {
     // filter rather than describing the untouched data.
     it(`summarizes only the rows left after filtering`, async () => {
       const props = $state({
-        data: metric_rows,
+        data: [...metric_rows, { Model: `D`, Score: null, Tier: `gamma` }],
         columns: metrics,
         summary: [`mean`, `median`, `count`] as SummaryStat[],
         column_prefs: {} satisfies Record<string, ColumnPrefs>,
       })
       mount_table(props)
       const summary_cells = () => texts(`tfoot .summary-row td`)
-      expect(summary_cells()).toEqual([
-        `mean`,
-        `20`,
-        ``,
-        `median`,
-        `20`,
-        ``,
-        `count`,
-        `3`,
-        ``,
-      ])
+      const all_rows = [`mean`, `20`, ``, `median`, `20`, ``, `count`, `3`, ``]
+      expect(summary_cells()).toEqual(all_rows)
+      // a range filter, even an open one, drops cells without a number
+      expect(rendered_models()).toEqual([`A`, `B`, `C`, `D`])
+      props.column_prefs = { Score: { filter: { kind: `numeric` } } }
+      await tick()
+      expect(rendered_models()).toEqual([`A`, `B`, `C`])
       props.column_prefs = { Score: { filter: { kind: `numeric`, min: 20 } } }
       await tick()
-      expect(summary_cells()).toEqual([
-        `mean`,
-        `25`,
-        ``,
-        `median`,
-        `25`,
-        ``,
-        `count`,
-        `2`,
-        ``,
-      ])
+      const filtered = [`mean`, `25`, ``, `median`, `25`, ``, `count`, `2`, ``]
+      expect(summary_cells()).toEqual(filtered)
     })
 
     it(`normalizes columns independently and enables median summaries on demand`, async () => {
@@ -2390,30 +2618,34 @@ describe(`DataTable`, () => {
       expect(fill(20, 1)).not.toBe(fill(20, 2))
     })
 
+    // a cell without a number gets no bar; `both` paints its bar in the text color, since
+    // the cell itself already carries the fill
     it.each([
-      [`higher`, [`0%`, `50%`, `100%`], `30`],
-      [`lower`, [`100%`, `50%`, `0%`], `10`],
-      [undefined, [`0%`, `50%`, `100%`], undefined],
+      [`higher`, [10, 20, 30], [`0%`, `50%`, `100%`], `30`, `bar`],
+      [`lower`, [10, 20, 30], [`100%`, `50%`, `0%`], `10`, `bar`],
+      [undefined, [10, 20, 30], [`0%`, `50%`, `100%`], undefined, `both`],
+      [`higher`, [10, null, 30], [`0%`, `100%`], `30`, `bar`],
+      // equal values span no range: every bar is full, even where lower is better
+      [`lower`, [5, 5, 5], [`100%`, `100%`, `100%`], `5`, `bar`],
     ] as const)(
-      `sizes data bars and highlights best for better=%s`,
-      (better, widths, best) => {
+      `sizes data bars and highlights best for better=%s, scores %j`,
+      (better, scores, widths, best, render_as) => {
         mount_table({
-          data: metric_rows,
+          data: metric_rows.map((row, idx) => ({ ...row, Score: scores[idx] })),
           columns: [
             { id: `Model`, label: `Model` },
-            {
-              id: `Score`,
-              label: `Score`,
-              better,
-              render_as: `bar`,
-              highlight_best: true,
-            },
+            { id: `Score`, label: `Score`, better, render_as, highlight_best: true },
           ],
         })
-        const bars = document.querySelectorAll<HTMLElement>(
-          `td[data-col="Score"] .data-bar`,
+        const bars = [
+          ...document.querySelectorAll<HTMLElement>(`td[data-col="Score"] .data-bar`),
+        ]
+        expect(bars.map((bar) => bar.style.width)).toEqual(widths)
+        expect(new Set(bars.map((bar) => bar.style.background))).toEqual(
+          new Set([
+            render_as === `both` ? `currentcolor` : `var(--accent-color, #4a9eff)`,
+          ]),
         )
-        expect([...bars].map((bar) => bar.style.width)).toEqual(widths)
         expect(
           document.querySelector(`td.best-cell[data-col="Score"]`)?.textContent?.trim(),
         ).toBe(best)
@@ -2683,8 +2915,13 @@ describe(`DataTable`, () => {
 
       await press(cell_at(1, 0), `ArrowRight`, { shiftKey: true })
       expect(n_selected()).toBe(2)
+      // Alt+Up/Down means nothing to the table: the browser keeps the key
+      const alt_up = await press(cell_at(1, 0), `ArrowUp`, { altKey: true })
+      expect([alt_up.defaultPrevented, n_selected()]).toEqual([false, 2])
 
       await press(cell_at(1, 1), `ArrowLeft`, { altKey: true })
+      expect(props.column_order).toEqual([`Score`, `Model`, `Tier`])
+      await press(cell_at(1, 0), `ArrowLeft`, { altKey: true }) // already first
       expect(props.column_order).toEqual([`Score`, `Model`, `Tier`])
     })
 
@@ -2809,26 +3046,32 @@ describe(`DataTable`, () => {
       )
     })
 
-    it(`exports only the selected rows, in the current sort order`, async () => {
-      const text = await export_table_text(
-        {
-          data: sample_data,
-          columns: sample_columns,
-          show_row_select: true,
-          row_key: `Model`,
-          sort: [{ column: `Value`, dir: `desc` }],
-        },
-        async () => {
-          // the first two rendered rows (C, B): data order would export them as B, C
-          const checkboxes = document.querySelectorAll<HTMLInputElement>(
-            `td.select-col input[type="checkbox"]`,
-          )
-          for (const checkbox of [...checkboxes].slice(0, 2)) await click(checkbox)
-        },
-      )
-      const models = text.trim().split(`\n`).slice(1)
-      expect(models.map((line) => line.split(`,`)[0])).toEqual([`Model C`, `Model B`])
-    })
+    // sorted, rows C, B (data order would export B, C); unsorted, data order, not click order
+    it.each<[TableSort[], number[], string[]]>([
+      [[{ column: `Value`, dir: `desc` }], [0, 1], [`Model C`, `Model B`]],
+      [[], [2, 0], [`Model A`, `Model C`]],
+    ])(
+      `exports only the selected rows, in the current sort order %j`,
+      async (sort, clicked_rows, expected) => {
+        const text = await export_table_text(
+          {
+            data: sample_data,
+            columns: sample_columns,
+            show_row_select: true,
+            row_key: `Model`,
+            sort,
+          },
+          async () => {
+            const checkboxes = document.querySelectorAll<HTMLInputElement>(
+              `td.select-col input[type="checkbox"]`,
+            )
+            for (const row_idx of clicked_rows) await click(checkboxes[row_idx])
+          },
+        )
+        const models = text.trim().split(`\n`).slice(1)
+        expect(models.map((line) => line.split(`,`)[0])).toEqual(expected)
+      },
+    )
 
     // hosts rendering their own export UI read the same text through the controls snippet
     it(`hands the export sources to the controls snippet`, async () => {
@@ -3166,9 +3409,7 @@ describe(`DataTable`, () => {
 
       await press(cell_at(end - 1, 0), `ArrowDown`)
       expect(scroller.scrollTop).toBe(end * row_height_px)
-      expect(document.activeElement).toBe(
-        document.querySelector(`td[data-row-idx="${end}"][data-col-idx="0"]`),
-      )
+      expect(document.activeElement).toBe(cell_at(end, 0))
     })
 
     it(`measures hidden rows on resize without scroll feedback`, async () => {
@@ -3237,6 +3478,13 @@ describe(`DataTable`, () => {
         const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
         const row_at = (abs_idx: number) =>
           doc_query(`tbody tr[data-row-idx="${abs_idx}"]`)
+
+        // the first row has nothing above it: the key is spent without moving anything
+        row_at(0).focus()
+        await press(row_at(0), `ArrowUp`)
+        expect([document.activeElement, scroller.scrollTop]).toEqual([row_at(0), 0])
+        if (mode === `paged`)
+          expect(doc_query<HTMLInputElement>(`.page-input`).value).toBe(`1`)
 
         await press(row_at(min_window - 1), `ArrowDown`)
 

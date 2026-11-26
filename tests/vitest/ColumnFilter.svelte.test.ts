@@ -67,8 +67,9 @@ describe(`ColumnFilter`, () => {
     // String()'s notation, so the placeholder types into a number input as shown
     [[-1.5e-7, 2.5e21], `-1.5e-7`, `2.5e+21`],
     [[-0, 1234.5], `0`, `1240`],
+    [[null, `n/a`], ``, ``], // no numbers, no extent to suggest
   ])(`default bound placeholders for %j are %s to %s`, (values, min, max) => {
-    mount_filter(values)
+    mount_filter(values, { options: { kind: `numeric` } })
     const inputs = document.querySelectorAll<HTMLInputElement>(`input[type="number"]`)
     expect([...inputs].map((input) => input.placeholder)).toEqual([min, max])
   })

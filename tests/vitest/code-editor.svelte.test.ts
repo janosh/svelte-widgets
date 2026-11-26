@@ -1,9 +1,9 @@
 import { escape_layer } from '#lib/attachments/index.ts'
 import CodeEditor from '#lib/code-editor/CodeEditor.svelte'
 import { create_editor_model } from '#lib/code-editor/model.ts'
-import type * as Tokens from '#lib/code-editor/tokens.ts'
 import type {
   ApplyEditsArgs,
+  CodeEditorOptions,
   EditorBackend,
   EditorModel,
   HighlightLinesArgs,
@@ -11,20 +11,14 @@ import type {
 } from '#lib/code-editor/types.ts'
 import { mount, tick, type ComponentProps, unmount } from 'svelte'
 import { expect, onTestFinished, test, vi } from 'vite-plus/test'
-import { doc_query, next_task, pointer_event, press_key, stub_prop } from './index'
-
-// Counts line tokenizations: the visible rows a change rebuilt
-const token_renders = vi.hoisted(() => ({ count: 0 }))
-vi.mock(`#lib/code-editor/tokens.ts`, async (import_original) => {
-  const actual = await import_original<typeof Tokens>()
-  return {
-    ...actual,
-    render_tokens: (...args: Parameters<typeof actual.render_tokens>) => {
-      token_renders.count++
-      return actual.render_tokens(...args)
-    },
-  }
-})
+import {
+  doc_query,
+  next_task,
+  pointer_event,
+  press_key,
+  stub_prop,
+  token_renders,
+} from './index'
 
 const DEMO_TEXT = `const first = 1\nconst second = 2\nconst third = 3`
 const OPEN_RESULT = { language: `TypeScript`, highlightable: true, editable: true }
@@ -167,6 +161,15 @@ const mount_editor = async (
   const textarea = doc_query<HTMLTextAreaElement>(`textarea`)
   return { instance, model, props, recorder, textarea }
 }
+// A 100x60 px viewport over text inset 8px, with pointer capture stubbed
+const mock_pointer_port = (textarea: HTMLTextAreaElement): HTMLDivElement => {
+  const port = doc_query<HTMLDivElement>(`.content`)
+  vi.spyOn(port, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 100, 60))
+  Object.defineProperty(port, `clientHeight`, { value: 60 })
+  textarea.style.paddingLeft = `8px`
+  textarea.setPointerCapture = vi.fn()
+  return port
+}
 const fill_search = async (value: string, label = `Find`): Promise<HTMLInputElement> => {
   const input = doc_query<HTMLInputElement>(`input[aria-label="${label}"]`)
   input.value = value
@@ -295,6 +298,10 @@ test(`replace controls honor case, words, history, backend updates, and read-onl
   await flush_async()
   expect(model.text()).toBe(original)
   expect(status_text()).toBe(`1 of 2`)
+  // with no match selected, replace only steps to the next one
+  model.set_selection({ anchor: 13, head: 13 })
+  expect(instance.replace_current()).toBe(false)
+  expect([model.selection, model.text()]).toEqual([{ anchor: 0, head: 3 }, original])
   props.read_only = true
   await flush_async()
   expect(document.querySelector(`input[aria-label="Replacement"]`)).toBeNull()
@@ -329,6 +336,10 @@ test.each([5000, 5001])(
       await flush_async()
       expect(model.selection).toEqual({ anchor: 19_996, head: 19_999 })
       expect(instance.find_next()).toBe(true) // back to the 5001st
+      // Previous from past the capped list scans back onto the 5001st
+      model.set_selection({ anchor: model.length, head: model.length })
+      expect(instance.find_next(-1)).toBe(true)
+      expect(model.selection).toEqual({ anchor: 20_000, head: 20_003 })
     }
     expect(instance.find_next()).toBe(true)
     await flush_async()
@@ -641,6 +652,36 @@ test.each<
     [`Unsupported editor input type formatBold`],
   ],
   [
+    `input without beforeinput`,
+    (textarea) => {
+      textarea.value = `!${textarea.value}`
+      textarea.dispatchEvent(new InputEvent(`input`, { bubbles: true }))
+    },
+    1,
+    [`Input arrived without a beforeinput snapshot`],
+  ],
+  [
+    `textarea edited behind the editor's back`,
+    (textarea) => {
+      textarea.value += `?`
+      emit_input(textarea, `insertText`, 0, 0, `!`)
+    },
+    1,
+    [`Editor input length mismatch: textarea=49, window=48`],
+  ],
+  [
+    `deletion that grew the text`,
+    (textarea) => emit_input(textarea, `deleteContentBackward`, 1, 1, `X`, 1, 1),
+    1,
+    [`Deletion deleteContentBackward grew text by 1`],
+  ],
+  [
+    `deletion before the document start`,
+    (textarea) => emit_input(textarea, `deleteContentBackward`, 0, 0, ``, 0, 1),
+    1,
+    [`Invalid deleteContentBackward edit from=-1, to=0, insert_length=0`],
+  ],
+  [
     `rejected command`,
     (textarea, model) => {
       vi.spyOn(model, `transact`).mockImplementationOnce(() => {
@@ -677,23 +718,25 @@ test.each<
   expect(on_error.mock.calls).toEqual(errors.map((message) => [message]))
 })
 
-test.each([`historyUndo`, `historyRedo`])(
-  `read-only blocks native %s`,
-  async (input_type) => {
+test.each([
+  [`historyUndo`, false, DEMO_TEXT],
+  [`historyRedo`, false, `!${DEMO_TEXT}`],
+  [`historyUndo`, true, `!${DEMO_TEXT}`],
+  [`historyRedo`, true, DEMO_TEXT],
+] as const)(
+  `native %s with read_only=%s leaves %j`,
+  async (input_type, read_only, text) => {
     const { model, props, textarea } = await mount_editor()
     emit_input(textarea, `insertText`, 0, 0, `!`)
     if (input_type === `historyRedo`) model.undo()
-    props.read_only = true
+    props.read_only = read_only
     await tick()
-    const text = model.text()
-    const revision = model.revision
     const event = before_input(textarea, input_type)
-    expect([
-      event.defaultPrevented,
-      model.text(),
-      textarea.value,
-      model.revision,
-    ]).toEqual([true, text, text, revision])
+    expect([event.defaultPrevented, model.text(), textarea.value]).toEqual([
+      true,
+      text,
+      text,
+    ])
   },
 )
 
@@ -811,6 +854,42 @@ test(`an edit keeps downstream tokens painted as stale until re-highlighted`, as
   model.transact([{ from: model.line(1).to, to: model.line(3).from, insert: `` }])
   await tick()
   expect(line_classes()).toEqual(Array(2).fill(`tok-keyword`))
+})
+
+// Same revision and line count, so only the closed client's own check drops the answer
+test(`a replaced model's in-flight highlight never paints its successor`, async () => {
+  const recorder = create_backend(() => [0, 1]) // comment
+  const stale = Promise.withResolvers<number[][]>()
+  recorder.highlight_lines.mockReturnValueOnce(stale.promise)
+  const { props } = await mount_editor(`alpha`, { backend: recorder.backend })
+  const highlighted = (count: number) =>
+    vi.waitFor(() => expect(recorder.highlight_lines).toHaveBeenCalledTimes(count), {
+      interval: 5,
+    })
+  await highlighted(1)
+  props.model = create_editor_model({ uri: `other.ts`, text: `omega` })
+  await highlighted(2)
+  await flush_async()
+  stale.resolve([[0, 6]]) // keyword
+  await flush_async()
+  expect(doc_query(`.token-layer .line span`).className).toMatch(/^tok-comment\b/)
+})
+
+test(`a search match spanning highlight tokens marks its part of each`, async () => {
+  const recorder = create_backend(() => [0, 6, 3, 0]) // `foo` keyword, `bar` plain
+  const { instance } = await mount_editor(`foobar`, { backend: recorder.backend })
+  await vi.waitFor(() => expect(recorder.highlight_lines).toHaveBeenCalled())
+  await instance.open_search()
+  await fill_search(`oba`)
+  const tokens = [...document.querySelectorAll(`.token-layer .line span`)]
+  const classes = (token: Element) =>
+    [...token.classList].filter((name) => !name.startsWith(`svelte-`)).join(` `)
+  expect(tokens.map((token) => [token.textContent, classes(token)])).toEqual([
+    [`fo`, `tok-keyword`],
+    [`o`, `tok-keyword editor-search-match current`],
+    [`ba`, `tok-plain editor-search-match current`],
+    [`r`, `tok-plain`],
+  ])
 })
 
 test(`a keystroke re-tokenizes only its own line, not every visible line`, async () => {
@@ -1035,6 +1114,8 @@ test.each([
   [`12\na\u0301a\u0301a\u0301`, 2, 7],
   [`12\n👩‍💻x`, 2, 8],
   [`a\u0301\t\n123456`, 3, 6],
+  [`\nabc`, 0, 1],
+  [`abc\n\nx`, 2, 4],
 ])(
   `vertical movement follows tab stops and grapheme widths in %j`,
   async (text, start, expected) => {
@@ -1047,12 +1128,8 @@ test.each([
 
 test(`mouse selection retains its anchor and supports word and line selection`, async () => {
   const { model, textarea } = await mount_editor(`alpha\nbeta\ngamma`)
-  const port = doc_query<HTMLDivElement>(`.content`)
-  vi.spyOn(port, `getBoundingClientRect`).mockReturnValue(new DOMRect(0, 0, 100, 60))
-  Object.defineProperty(port, `clientHeight`, { value: 60 })
+  mock_pointer_port(textarea)
   scroll_viewport(0)
-  textarea.style.paddingLeft = `8px`
-  textarea.setPointerCapture = vi.fn()
   const pointer = { pointerId: 1, pointerType: `mouse` }
   textarea.dispatchEvent(pointer_event(`pointerdown`, 9, 5, pointer))
   textarea.dispatchEvent(pointer_event(`pointermove`, 10, 25, pointer))
@@ -1092,4 +1169,212 @@ test(`host selection changes reveal both horizontal edges`, async () => {
   expect(port.scrollLeft).toBeGreaterThan(600)
   model.set_selection({ anchor: 0, head: 0 })
   expect(port.scrollLeft).toBe(0)
+})
+
+// two undo steps with one undone, so both undo and redo have an effect
+test.each([
+  [`z`, { ctrlKey: true }, false, DEMO_TEXT],
+  [`z`, { metaKey: true }, false, DEMO_TEXT],
+  [`Z`, { ctrlKey: true, shiftKey: true }, false, `!?${DEMO_TEXT}`],
+  [`Z`, { metaKey: true, shiftKey: true }, false, `!?${DEMO_TEXT}`],
+  [`y`, { ctrlKey: true }, false, `!?${DEMO_TEXT}`],
+  // Cmd+Y and Alt combinations are not history keys; read-only blocks them all
+  [`y`, { metaKey: true }, false, null],
+  [`z`, { ctrlKey: true, altKey: true }, false, null],
+  [`z`, { ctrlKey: true }, true, null],
+])(`%s with %o (read_only=%s) leaves %j`, async (key, init, read_only, expected) => {
+  const { model, textarea } = await mount_editor(DEMO_TEXT, { read_only })
+  model.transact([{ from: 0, to: 0, insert: `!` }])
+  model.transact([{ from: 1, to: 1, insert: `?` }])
+  model.undo()
+  const event = press_key(textarea, key, init)
+  expect([event.defaultPrevented, model.text()]).toEqual([
+    expected !== null,
+    expected ?? `!${DEMO_TEXT}`,
+  ])
+})
+
+// `line_comment` overrides the token the uri implies, and null disables toggling
+test.each<[CodeEditorOptions, string | null]>([
+  [{}, `// a\nb`],
+  [{ line_comment: `#` }, `# a\nb`],
+  [{ line_comment: null, line_numbers: false }, null],
+])(`options %o: Cmd+/ on the first line gives %j`, async (options, expected) => {
+  const { model, textarea } = await mount_editor(`a\nb`, { options })
+  const event = press_key(textarea, `/`, { metaKey: true })
+  expect([event.defaultPrevented, model.text()]).toEqual([
+    expected !== null,
+    expected ?? `a\nb`,
+  ])
+  expect(document.querySelector(`.gutter`) === null).toBe(options.line_numbers === false)
+})
+
+test(`typed closers skip an auto-inserted one, while IME and Alt keys pass through`, async () => {
+  const { model, textarea } = await mount_editor(`f`)
+  model.set_selection({ anchor: 1, head: 1 })
+  for (const init of [{ isComposing: true }, { altKey: true }]) {
+    expect(press_key(textarea, `(`, init).defaultPrevented).toBe(false)
+    expect(press_key(textarea, `Enter`, init).defaultPrevented).toBe(false)
+  }
+  expect(model.text()).toBe(`f`)
+  press_key(textarea, `(`)
+  expect([model.text(), model.selection]).toEqual([`f()`, { anchor: 2, head: 2 }])
+  const revision = model.revision
+  expect(press_key(textarea, `)`).defaultPrevented).toBe(true)
+  expect([model.text(), model.selection, model.revision]).toEqual([
+    `f()`,
+    { anchor: 3, head: 3 },
+    revision,
+  ])
+})
+
+test(`Cmd+Alt+F opens replace, Shift+F3 steps back, and Escape in the editor closes search`, async () => {
+  const { model, textarea } = await mount_editor(`foo bar foo`)
+  textarea.focus()
+  expect(press_key(textarea, `f`, { metaKey: true, altKey: true }).defaultPrevented).toBe(
+    true,
+  )
+  await flush_async()
+  doc_query(`input[aria-label="Replacement"]`)
+  await fill_search(`foo`)
+  expect(model.selection).toEqual({ anchor: 0, head: 3 })
+  expect(press_key(textarea, `F3`, { shiftKey: true }).defaultPrevented).toBe(true)
+  expect(model.selection).toEqual({ anchor: 8, head: 11 })
+  textarea.focus()
+  expect(press_key(textarea, `Escape`).defaultPrevented).toBe(true)
+  await flush_async()
+  expect(document.querySelector(`[role="search"]`)).toBeNull()
+  // that Escape closed search instead of arming Tab to leave the editor
+  expect(press_key(textarea, `Tab`).defaultPrevented).toBe(true)
+})
+
+test(`save runs once per request, only when a handler, an open document and editing allow`, async () => {
+  const on_error = vi.fn()
+  const { instance, props, textarea } = await mount_editor(DEMO_TEXT, { on_error })
+  // without a handler Cmd+S stays with the browser
+  expect(press_key(textarea, `s`, { metaKey: true }).defaultPrevented).toBe(false)
+  await expect(instance.save()).resolves.toBe(false)
+  const pending = Promise.withResolvers<undefined>()
+  const on_save = vi.fn(() => pending.promise)
+  props.on_save = on_save
+  await tick()
+  expect(press_key(textarea, `s`, { ctrlKey: true }).defaultPrevented).toBe(true)
+  await expect(instance.save()).resolves.toBe(false) // already saving
+  pending.resolve(undefined)
+  await flush_async()
+  props.read_only = true
+  await tick()
+  await expect(instance.save()).resolves.toBe(false)
+  expect(on_save).toHaveBeenCalledOnce()
+  // a save failing after a model switch reports through on_error, not the new model's alert
+  props.read_only = false
+  const failing = Promise.withResolvers<undefined>()
+  on_save.mockImplementationOnce(() => failing.promise)
+  const save = instance.save()
+  props.model = create_editor_model({ uri: `other.ts`, text: `` })
+  await flush_async()
+  failing.reject(new Error(`disk full`))
+  await expect(save).resolves.toBe(false)
+  expect(on_error.mock.calls).toEqual([[`disk full`]])
+  expect(document.querySelector(`[role="alert"]`)).toBeNull()
+})
+
+test(`only the current model's open result and updates reach the host`, async () => {
+  const on_ready = vi.fn()
+  const on_error = vi.fn()
+  const on_update = vi.fn()
+  const on_save = vi.fn()
+  const { backend } = create_backend()
+  const opens: PromiseWithResolvers<typeof OPEN_RESULT>[] = []
+  const open_doc = () => {
+    const deferred = Promise.withResolvers<typeof OPEN_RESULT>()
+    opens.push(deferred)
+    return deferred.promise
+  }
+  const { instance, model, props } = await mount_editor(DEMO_TEXT, {
+    backend: { ...backend, open_doc },
+    on_ready,
+    on_error,
+    on_update,
+    on_save,
+  })
+  await expect(instance.save()).resolves.toBe(false) // nothing opened to save yet
+  expect(on_save).not.toHaveBeenCalled()
+  const switch_model = async (uri: string) => {
+    props.model = create_editor_model({ uri, text: uri })
+    // the old model's updates stop reaching the host as soon as it is replaced
+    model.transact([{ from: 0, to: 0, insert: `x` }])
+    await flush_async()
+  }
+  await switch_model(`second.ts`)
+  expect(on_update).not.toHaveBeenCalled()
+  opens[0].resolve(OPEN_RESULT) // stale
+  opens[1].reject(new Error(`open failed`))
+  await flush_async()
+  expect(on_ready).not.toHaveBeenCalled()
+  expect(on_error.mock.calls).toEqual([[`open failed`]])
+  expect(doc_query(`[role="alert"]`).textContent).toBe(`open failed`)
+  await switch_model(`third.ts`)
+  await switch_model(`fourth.ts`)
+  opens[2].reject(new Error(`stale failure`))
+  opens[3].resolve(OPEN_RESULT)
+  await flush_async()
+  expect(on_error).toHaveBeenCalledOnce()
+  expect(on_ready.mock.calls.map(([info]) => info.uri)).toEqual([`fourth.ts`])
+  expect(document.querySelector(`[role="alert"]`)).toBeNull()
+})
+
+test(`pointer drags autoscroll past the viewport, shift extends, and other pointers pass`, async () => {
+  const { model, textarea } = await mount_editor(`alpha\n\n${numbered_lines(40)}`)
+  const port = mock_pointer_port(textarea)
+  const mouse = { pointerId: 1, pointerType: `mouse`, cancelable: true }
+  const ignored = [
+    { ...mouse, pointerType: `touch` },
+    { ...mouse, button: 2 },
+  ]
+  for (const init of ignored)
+    expect(textarea.dispatchEvent(pointer_event(`pointerdown`, 10, 45, init))).toBe(true)
+  textarea.dispatchEvent(new CompositionEvent(`compositionstart`, { bubbles: true }))
+  expect(textarea.dispatchEvent(pointer_event(`pointerdown`, 10, 45, mouse))).toBe(true)
+  textarea.dispatchEvent(new CompositionEvent(`compositionend`, { bubbles: true }))
+  textarea.dispatchEvent(pointer_event(`pointermove`, 10, 100, mouse))
+  await flush_async()
+  expect(model.selection).toEqual({ anchor: 0, head: 0 })
+  scroll_viewport(0) // mounting revealed the caret in a 0px-high viewport
+  // line 2 (`line 0`) at column 2, then 40px below the viewport: scroll 40px, line 7
+  expect(textarea.dispatchEvent(pointer_event(`pointerdown`, 10, 45, mouse))).toBe(false)
+  textarea.dispatchEvent(pointer_event(`pointermove`, 10, 100, mouse))
+  expect([model.selection, port.scrollTop]).toEqual([{ anchor: 9, head: 44 }, 40])
+  // above and right of the viewport: back up 30px onto line 0, 30px right past its end
+  textarea.dispatchEvent(pointer_event(`pointermove`, 130, -30, mouse))
+  expect([model.selection, port.scrollTop, port.scrollLeft]).toEqual([
+    { anchor: 9, head: 5 },
+    10,
+    30,
+  ])
+  textarea.dispatchEvent(pointer_event(`pointerup`, 130, -30, mouse))
+  textarea.dispatchEvent(pointer_event(`pointermove`, 10, 5, mouse))
+  await new Promise(requestAnimationFrame)
+  expect([model.selection, port.scrollTop, port.scrollLeft]).toEqual([
+    { anchor: 9, head: 5 },
+    10,
+    30,
+  ])
+  // shift keeps the anchor; single clicks and double clicks on an empty line select nothing
+  model.set_selection({ anchor: 2, head: 2 })
+  port.scrollTop = 0
+  port.scrollLeft = 0
+  port.dispatchEvent(new Event(`scroll`))
+  textarea.dispatchEvent(
+    pointer_event(`pointerdown`, 10, 45, { ...mouse, shiftKey: true }),
+  )
+  textarea.dispatchEvent(pointer_event(`pointerup`, 10, 45, mouse))
+  expect(model.selection).toEqual({ anchor: 2, head: 9 })
+  for (const [detail, client_y] of [
+    [1, 45],
+    [2, 25],
+  ]) {
+    textarea.dispatchEvent(pointer_event(`click`, 10, client_y, { detail }))
+    expect(model.selection).toEqual({ anchor: 2, head: 9 })
+  }
 })

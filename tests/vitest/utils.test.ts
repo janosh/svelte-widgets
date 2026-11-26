@@ -17,6 +17,7 @@ import {
   escape_html,
   strip_html,
   to_error,
+  value_key,
   with_defaults,
 } from '#lib/utils.ts'
 import {
@@ -170,12 +171,8 @@ describe(`keyboard shortcut parsing`, () => {
     [linux, { meta: false, ctrl: true }],
   ])(`parse_shortcut resolves mod per platform (%s)`, (user_agent, expected) => {
     stub_props(globalThis.navigator, { userAgent: user_agent })
-    expect(parse_shortcut(`mod+shift+k`)).toEqual({
-      key: `k`,
-      shift: true,
-      alt: false,
-      ...expected,
-    })
+    const parsed = parse_shortcut(`mod+shift+k`)
+    expect(parsed).toEqual({ key: `k`, shift: true, alt: false, ...expected })
   })
 
   // spelled-out tokens render as the literal `event.key` they stand for
@@ -220,12 +217,8 @@ describe(`keyboard shortcut parsing`, () => {
       expect(normalize_combo(shortcut)).toBeNull()
       expect(parse_shortcut(shortcut)).toBeNull()
       expect(format_shortcut.bind(null, shortcut)).toThrow(`Invalid keyboard shortcut`)
-      expect(
-        matches_shortcut(
-          new KeyboardEvent(`keydown`, { key: `b`, ctrlKey: true }),
-          shortcut,
-        ),
-      ).toBe(false)
+      const event = new KeyboardEvent(`keydown`, { key: `b`, ctrlKey: true })
+      expect(matches_shortcut(event, shortcut)).toBe(false)
     },
   )
 })
@@ -385,20 +378,13 @@ test.each([
 
 describe(`make_change_detector`, () => {
   const shared = { key: 1 }
+  const then_changed = [false, false, true]
   test.each([
     [`first call never counts`, [1], [false]],
     [`repeats are unchanged`, [1, 1, 1], [false, false, false]],
     [`each differing value counts`, [1, 2, 2, 3, 1], [false, true, false, true, true]],
-    [
-      `compares by identity, not structure`,
-      [shared, shared, { key: 1 }],
-      [false, false, true],
-    ],
-    [
-      `undefined is a real first value`,
-      [undefined, undefined, null],
-      [false, false, true],
-    ],
+    [`compares by identity, not structure`, [shared, shared, { key: 1 }], then_changed],
+    [`undefined is a real first value`, [undefined, undefined, null], then_changed],
     [`NaN never equals itself`, [Number.NaN, Number.NaN], [false, true]],
   ])(`%s`, (_desc, values, expected) => {
     const changed = make_change_detector()
@@ -547,86 +533,42 @@ describe(`compute_position`, () => {
   })
 
   const boundary = { top: 100, left: 100, right: 500, bottom: 500 }
-  test.each<
-    [
-      string,
-      [number, number],
-      ReturnType<typeof rect>,
-      { width: number; height: number },
-      PositionOptions,
-      Partial<PositionResult>,
-    ]
-  >([
-    [
-      `keeps the preferred side when the box fits`,
-      [1000, 800],
-      rect(100, 30),
-      { width: 200, height: 100 },
+  type Box = { width: number; height: number }
+  type Rect = ReturnType<typeof rect>
+  // description, viewport size, anchor, box, options, expected
+  // oxfmt-ignore
+  test.each<[string, [number, number], Rect, Box, PositionOptions, Partial<PositionResult>]>([
+    [`keeps the preferred side when the box fits`,
+      [1000, 800], rect(100, 30), { width: 200, height: 100 },
       { placement: `bottom`, offset: 8 },
-      { top: 138, left: 100, placement: `bottom` },
-    ],
-    [
-      // same anchor the `most room above` row flips to `top`
-      `flip: false pins auto even with no room and explicit fallbacks`,
-      [400, 400],
-      rect(370, 20, 190, 20),
-      { width: 40, height: 40 },
+      { top: 138, left: 100, placement: `bottom` }],
+    // same anchor the `most room above` row flips to `top`
+    [`flip: false pins auto even with no room and explicit fallbacks`,
+      [400, 400], rect(370, 20, 190, 20), { width: 40, height: 40 },
       { placement: `auto`, flip: false, fallback_placements: [`top`, `left`] },
-      { placement: `bottom` },
-    ],
-    [
-      `auto prefers a fitting side over greater unusable clearance`,
-      [400, 400],
-      rect(180, 20, 50, 20),
-      { width: 350, height: 100 },
+      { placement: `bottom` }],
+    [`auto prefers a fitting side over greater unusable clearance`,
+      [400, 400], rect(180, 20, 50, 20), { width: 350, height: 100 },
       { placement: `auto`, shift: false },
-      { placement: `bottom` },
-    ],
-    [
-      `explicit fallback order wins equal overflow inside a custom boundary`,
-      [1000, 800],
-      rect(290, 20, 290, 20),
-      { width: 300, height: 300 },
-      {
-        placement: `auto`,
-        boundary,
-        padding: 10,
-        fallback_placements: [`right`, `top`, `left`],
-        shift: false,
-      },
-      { placement: `right` },
-    ],
-    [
-      `offset and boundary padding count toward fallback overflow`,
-      [1000, 800],
-      rect(110, 20, 90, 20),
-      { width: 50, height: 50 },
-      {
-        placement: `auto`,
-        boundary: { top: 0, left: 0, right: 200, bottom: 200 },
-        padding: 10,
-        offset: 15,
-        flip: [`bottom`, `top`],
-        shift: false,
-      },
-      { placement: `top` },
-    ],
-    [
-      `custom boundaries clamp shifted coordinates`,
-      [1000, 800],
-      rect(200, 20, 480, 20),
-      { width: 200, height: 100 },
+      { placement: `bottom` }],
+    [`explicit fallback order wins equal overflow inside a custom boundary`,
+      [1000, 800], rect(290, 20, 290, 20), { width: 300, height: 300 },
+      { placement: `auto`, boundary, padding: 10, shift: false,
+        fallback_placements: [`right`, `top`, `left`] },
+      { placement: `right` }],
+    [`offset and boundary padding count toward fallback overflow`,
+      [1000, 800], rect(110, 20, 90, 20), { width: 50, height: 50 },
+      { placement: `auto`, boundary: { top: 0, left: 0, right: 200, bottom: 200 },
+        padding: 10, offset: 15, flip: [`bottom`, `top`], shift: false },
+      { placement: `top` }],
+    [`custom boundaries clamp shifted coordinates`,
+      [1000, 800], rect(200, 20, 480, 20), { width: 200, height: 100 },
       { placement: `bottom`, align: `start`, boundary, padding: 10, flip: false },
-      { top: 220, left: 290, placement: `bottom` },
-    ],
-    [
-      `oversize boxes retain minimum-overflow cross-axis alignment`,
-      [100, 100],
-      rect(40, 20, 40, 20),
-      { width: 200, height: 200 },
+      { top: 220, left: 290, placement: `bottom` }],
+    [`oversize boxes retain minimum-overflow cross-axis alignment`,
+      [100, 100], rect(40, 20, 40, 20), { width: 200, height: 200 },
       { placement: `bottom`, padding: 10, flip: false },
-      { top: 10, left: -50, placement: `bottom` },
-    ],
+      { top: 10, left: -50, placement: `bottom` }],
   ])(`%s`, (_description, [width, height], anchor, box, options, expected) => {
     viewport(width, height)
     expect(compute_position(anchor, box, options)).toMatchObject(expected)
@@ -645,19 +587,18 @@ describe(`compute_position`, () => {
       anchor.bottom + height > view_height &&
       anchor.top > view_height - anchor.bottom
 
+    const options = { placement: `auto`, align: `start`, shift: false } as const
     const mismatches: string[] = []
     for (const top of [-200, -30, 0, 50, 400, 700, 780, 900]) {
       for (const anchor_height of [0, 30, 120]) {
-        for (const box_height of [1, 50, 200, 600, 1200]) {
+        for (const height of [1, 50, 200, 600, 1200]) {
           const anchor = rect(top, anchor_height)
-          const { placement } = compute_position(
-            anchor,
-            { width: 200, height: box_height },
-            { placement: `auto`, align: `start`, flip: [`bottom`, `top`], shift: false },
-          )
-          const expected = legacy_place_above(anchor, box_height) ? `top` : `bottom`
+          const box = { width: 200, height }
+          const flip: PositionOptions[`flip`] = [`bottom`, `top`]
+          const { placement } = compute_position(anchor, box, { ...options, flip })
+          const expected = legacy_place_above(anchor, height) ? `top` : `bottom`
           if (placement !== expected) {
-            mismatches.push(`top=${top} h=${anchor_height} box=${box_height}`)
+            mismatches.push(`top=${top} h=${anchor_height} box=${height}`)
           }
         }
       }
@@ -667,11 +608,9 @@ describe(`compute_position`, () => {
 })
 
 describe(`chain_handlers`, () => {
+  // oxfmt-ignore
   test.each([
-    [
-      [`a`, null, `b`],
-      [`a`, `b`],
-    ],
+    [[`a`, null, `b`], [`a`, `b`]],
     [[undefined, `a`], [`a`]],
     [[null, undefined], []],
   ])(`runs %s in order, skipping nullish`, (names, expected) => {
@@ -1097,6 +1036,9 @@ test.each([
   expect(clamp(value, lower, upper)).toBe(expected)
 })
 
+class RecordLike {
+  value = 1
+}
 test.each([
   [{}, true],
   [Object.create(null), true],
@@ -1110,12 +1052,7 @@ test.each([
   [new Map(), false],
   [/pattern/u, false],
   [new Float64Array(2), false],
-  [
-    new (class RecordLike {
-      value = 1
-    })(),
-    false,
-  ],
+  [new RecordLike(), false],
 ])(`is_plain_object(%j) = %s`, (value, expected) => {
   expect(is_plain_object(value)).toBe(expected)
 })
@@ -1130,12 +1067,24 @@ test.each([
 })
 
 test(`evict_oldest drops the first-inserted key once the limit is reached`, () => {
-  const cache = new Map([
-    [`a`, 1],
-    [`b`, 2],
-  ])
+  const cache = new Map(Object.entries({ a: 1, b: 2 }))
   evict_oldest(cache, 3)
   expect([...cache.keys()]).toEqual([`a`, `b`])
   evict_oldest(cache, 2)
   expect([...cache.keys()]).toEqual([`b`])
+})
+
+// JSON.stringify writes Infinity, -Infinity, NaN and null alike, so a cache keyed on it
+// reused an unlimited option's entry for an unset one
+test(`value_key tells values apart by type and content, and Maps by identity`, () => {
+  const map = new Map([[`a`, 1]])
+  const distinct = [Infinity, -Infinity, Number.NaN, null, `Infinity`, 0, -0, 1, `1`, map]
+  const keys = distinct.map((value) => value_key({ value }))
+  expect(new Set(keys).size).toBe(keys.length)
+  expect(value_key(new Map(map))).not.toBe(value_key(map)) // a Map isn't spelled out as {}
+  expect(value_key({ value: map })).toBe(value_key({ value: map }))
+  // key order and undefined (unset) entries don't matter
+  expect(value_key({ a: 1, b: [Infinity], c: undefined })).toBe(
+    value_key({ b: [Infinity], a: 1 }),
+  )
 })

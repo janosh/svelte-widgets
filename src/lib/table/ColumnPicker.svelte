@@ -3,6 +3,7 @@
   import type { HTMLAttributes } from 'svelte/elements'
   import { slide } from 'svelte/transition'
   import { anchored_popover, close_before_removal, tooltip } from '../attachments/index'
+  import { motion_duration } from '../effects.svelte.ts'
   import Icon from '../Icon.svelte'
   import { Columns, Reset } from '../icons'
   import { merge_defaults } from '../labels'
@@ -119,8 +120,6 @@
       item_count <= 1 ? 1 : Math.max(2, Math.ceil(item_count / max_grid_rows))
     return `repeat(${Math.min(max_grid_columns, preferred)}, max-content)`
   }
-  const slide_duration = () =>
-    matchMedia(`(prefers-reduced-motion: reduce)`).matches ? 0 : slide_ms
   const toggle_group = (name: string) => {
     collapsed_groups = collapsed_groups.includes(name)
       ? collapsed_groups.filter((group) => group !== name)
@@ -241,7 +240,7 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
             <div
               class="column-items"
               style:grid-template-columns={grid_template(section.items.length)}
-              transition:slide={{ duration: slide_duration() }}
+              transition:slide={{ duration: motion_duration(slide_ms) }}
             >
               {#each section.items as col (col.id)}
                 {@render column_toggle(col)}

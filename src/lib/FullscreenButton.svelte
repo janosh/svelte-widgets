@@ -36,6 +36,7 @@
     bg_css_var?: string
     icons?: Partial<{ enter: IconData; exit: IconData }>
     labels?: Partial<FullscreenButtonLabels>
+    // once per actual transition of `wrapper`, whatever initiated it; never for a rejected request
     on_change?: (fullscreen: boolean) => void
     on_request_error?: (error: unknown) => void
     children?: Snippet<[{ fullscreen: boolean }]>
@@ -46,7 +47,7 @@
   const label = $derived(fullscreen ? msg.exit : msg.enter)
 
   // the flag is the single source of truth: clicking flips it, the effects below turn
-  // that into requestFullscreen/exitFullscreen and flip it back on Esc
+  // that into requestFullscreen/exitFullscreen and flip it back on Esc or a rejection
   sync_fullscreen({
     get_wrapper: () => wrapper,
     get_fullscreen: () => fullscreen,

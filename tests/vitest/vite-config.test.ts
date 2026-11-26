@@ -74,6 +74,9 @@ test.each([
   [`theme.svelte.ts`, () => import(`svelte-widgets/theme`)],
   [`roving-focus.svelte.ts`, () => import(`svelte-widgets/roving-focus`)],
   [`canvas.svelte.ts`, () => import(`svelte-widgets/canvas`)],
+  [`effects.svelte.ts`, () => import(`svelte-widgets/effects`)],
+  [`sequence-player.svelte.ts`, () => import(`svelte-widgets/sequence-player`)],
+  [`worker-client.svelte.ts`, () => import(`svelte-widgets/worker-client`)],
 ] as const)(`public %s imports share the live source module`, async (file, load) => {
   expect(await load()).toBe(await stateful_sources[`/src/lib/${file}`]())
 })

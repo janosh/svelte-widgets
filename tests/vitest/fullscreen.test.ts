@@ -101,7 +101,9 @@ describe(`per-wrapper isolation`, () => {
   })
 
   test(`exiting one wrapper does not clear a second wrapper that took over`, async () => {
-    const [first, second] = [mount_button(), mount_button()]
+    const [first_change, second_change] = [vi.fn(), vi.fn()]
+    const first = mount_button({ on_change: first_change })
+    const second = mount_button({ on_change: second_change })
 
     first.button.click()
     await settle()
@@ -116,6 +118,9 @@ describe(`per-wrapper isolation`, () => {
     expect(document.fullscreenElement).toBe(second.wrapper)
     expect(get(first.flag)).toBe(false)
     expect(get(second.flag)).toBe(true)
+    // the handoff is a transition of both wrappers
+    expect(first_change.mock.calls).toEqual([[true], [false]])
+    expect(second_change.mock.calls).toEqual([[true]])
   })
 })
 
@@ -200,28 +205,40 @@ describe(`flag <-> browser sync`, () => {
     expect(request_calls).toEqual([wrapper, wrapper])
   })
 
-  test(`Esc-style external exit clears the flag, calls on_change and allows re-entry`, async () => {
+  test(`on_change reports each real transition once, whoever initiated it`, async () => {
     const on_change = vi.fn()
     const { button, flag, wrapper } = mount_button({ on_change })
 
     button.click()
     await settle()
-    expect(on_change).not.toHaveBeenCalled() // the flag already agreed with the browser
+    expect(on_change.mock.calls).toEqual([[true]]) // a granted click
 
-    await set_fullscreen_element(null)
+    // a repeat event reading the same state is no transition
+    document.dispatchEvent(new Event(`fullscreenchange`))
+    await settle()
+    expect(on_change).toHaveBeenCalledOnce()
+
+    await set_fullscreen_element(null) // Esc
     await settle()
     expect(get(flag)).toBe(false)
-    expect(on_change).toHaveBeenCalledExactlyOnceWith(false)
+    expect(button.getAttribute(`aria-pressed`)).toBe(`false`)
+    expect(on_change.mock.calls).toEqual([[true], [false]])
     // the settled entry no longer counts as pending, so the same request goes out again
     await click(button)
     await settle()
     expect(document.fullscreenElement).toBe(wrapper)
+
+    flag.set(false) // an outside flag write
+    await settle()
+    await outsider_goes_fullscreen() // never this wrapper's transition
+    expect(on_change.mock.calls).toEqual([[true], [false], [true], [false]])
   })
 
   // an exit before the browser reports the entry (Esc within a frame): every change event
   // then reads "out", which used to strand the entry as pending and skip the next click
   test(`an entry overtaken by an exit before its event leaves the button working`, async () => {
-    const { button, flag, wrapper } = mount_button()
+    const on_change = vi.fn()
+    const { button, flag, wrapper } = mount_button({ on_change })
     const enter_without_event = (element: Element) => void (fullscreen_element = element)
     Element.prototype.requestFullscreen = vi.fn(function (this: Element) {
       request_calls.push(this)
@@ -235,6 +252,7 @@ describe(`flag <-> browser sync`, () => {
     document.dispatchEvent(new Event(`fullscreenchange`)) // the exit's
     await settle()
     expect(get(flag)).toBe(false)
+    expect(on_change).not.toHaveBeenCalled() // no event ever saw the wrapper fullscreen
 
     await click(button)
     await settle()
@@ -243,13 +261,15 @@ describe(`flag <-> browser sync`, () => {
   })
 
   test.each([false, true])(
-    `a rejected request (exit=%s) is reported and leaves the browser untouched`,
+    `a rejected request (exit=%s) is reported as an error, not a transition`,
     async (exiting) => {
       const console_error = vi.spyOn(console, `error`).mockImplementation(() => {})
       const on_request_error = vi.fn()
-      const { button, flag, wrapper } = mount_button({ on_request_error })
+      const on_change = vi.fn()
+      const { button, flag, wrapper } = mount_button({ on_request_error, on_change })
       if (exiting) await click(button)
       await settle()
+      on_change.mockClear()
       const error = new Error(`fullscreen denied`)
       const request = vi.fn(() => Promise.reject(error))
       if (exiting) document.exitFullscreen = request
@@ -262,6 +282,8 @@ describe(`flag <-> browser sync`, () => {
       expect(document.fullscreenElement).toBe(exiting ? wrapper : null)
       // the flag must match the browser, else aria-pressed lies and the retry is a no-op
       expect(get(flag)).toBe(exiting)
+      expect(button.getAttribute(`aria-pressed`)).toBe(String(exiting))
+      expect(on_change).not.toHaveBeenCalled()
 
       await click(button)
       await settle()
@@ -291,22 +313,109 @@ describe(`flag <-> browser sync`, () => {
   })
 
   test(`unmounting stops tracking fullscreenchange`, async () => {
-    const { unmount_button, flag, wrapper } = mount_button()
+    const on_change = vi.fn()
+    const { unmount_button, flag, wrapper } = mount_button({ on_change })
 
     await unmount_button()
     await set_fullscreen_element(wrapper)
     await settle()
 
     expect(get(flag)).toBe(false)
+    expect(on_change).not.toHaveBeenCalled()
+  })
+
+  test(`a flag bound true at mount enters and reports that entry`, async () => {
+    const on_change = vi.fn()
+    const { wrapper } = mount_button({ fullscreen: true, on_change })
+    await settle()
+    expect(document.fullscreenElement).toBe(wrapper)
+    // read before the mount's own request lands, so its entry counts as a transition
+    expect(on_change.mock.calls).toEqual([[true]])
+  })
+
+  // the swap tears down the old wrapper's listener, which used to also drop the new
+  // wrapper's just-filed request, so its rejection never reverted the flag
+  test.each([false, true])(
+    `swapping the wrapper mid-fullscreen hands fullscreen over (rejected=%s)`,
+    async (rejected) => {
+      vi.spyOn(console, `error`).mockImplementation(() => {})
+      const [first, second] = [create_element(), create_element()]
+      const target = writable(first)
+      const target_proxy = fromStore(target)
+      const on_change = vi.fn()
+      const on_request_error = vi.fn()
+      const flag = writable(false)
+      const flag_proxy = fromStore(flag)
+      // a spread would snapshot the getters, so render directly to keep the wrapper live
+      render(FullscreenButton, {
+        get wrapper() {
+          return target_proxy.current
+        },
+        get fullscreen() {
+          return flag_proxy.current
+        },
+        set fullscreen(next_fullscreen: boolean) {
+          flag.set(next_fullscreen)
+        },
+        on_change,
+        on_request_error,
+      })
+      flag.set(true)
+      await settle()
+      expect(document.fullscreenElement).toBe(first)
+      const error = new Error(`fullscreen denied`)
+      if (rejected) second.requestFullscreen = vi.fn(() => Promise.reject(error))
+
+      target.set(second)
+      await settle()
+      expect(get(flag)).toBe(!rejected)
+      expect(on_request_error.mock.calls).toEqual(rejected ? [[error]] : [])
+      // fullscreen never left the component, so the handover is no second entry
+      expect(on_change.mock.calls).toEqual([[true]])
+      if (!rejected) expect(document.fullscreenElement).toBe(second)
+    },
+  )
+
+  // a wrapper already fullscreen when adopted (entered outside the flag) reports its exit
+  test(`adopting an already-fullscreen wrapper reports its later exit`, async () => {
+    const [first, second] = [create_element(), create_element()]
+    const target = writable(first)
+    const target_proxy = fromStore(target)
+    const flag = writable(false)
+    const flag_proxy = fromStore(flag)
+    const on_change = vi.fn()
+    render(FullscreenButton, {
+      get wrapper() {
+        return target_proxy.current
+      },
+      get fullscreen() {
+        return flag_proxy.current
+      },
+      set fullscreen(next_fullscreen: boolean) {
+        flag.set(next_fullscreen)
+      },
+      on_change,
+    })
+    await settle()
+    await set_fullscreen_element(second)
+    target.set(second)
+    flag.set(true)
+    await settle()
+    expect([request_calls, on_change.mock.calls]).toEqual([[], []])
+    await set_fullscreen_element(null)
+    await settle()
+    expect([get(flag), on_change.mock.calls]).toEqual([false, [[false]]])
   })
 
   test(`without a wrapper the button only toggles its flag`, async () => {
-    const { button, flag } = mount_button({ wrapper: undefined })
+    const on_change = vi.fn()
+    const { button, flag } = mount_button({ wrapper: undefined, on_change })
 
     button.click()
     await settle()
     expect(get(flag)).toBe(true)
     expect(request_calls).toEqual([])
+    expect(on_change).not.toHaveBeenCalled() // no wrapper, so no transition to report
 
     // an unowned fullscreen session must not overwrite a flag without an explicit sync request
     await outsider_goes_fullscreen()

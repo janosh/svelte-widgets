@@ -291,15 +291,20 @@ describe(`Markdown content manifests`, () => {
   })
 
   test.each([
-    [`> - \`\`\`js\n>   first()\n>   second()\n>   \`\`\``, [2, 3], [5, 5]],
+    [`> - \`\`\`js\n>   first()\n>\n>   second()\n>   \`\`\``, [2, 3, 4], [5, 2, 5]],
     [`\`\`\`js\nfirst()\n\`\`\`\n\n\`\`\`js\nfirst()\n\`\`\``, [2], [1]],
     [`\`\`\`js\n\`\`\``, [2], [1]],
-    [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
-    [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
-    [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [1, 1, 1]],
-    // the tab after 3 spaces fills one column to the tab stop, and the item strips 2 of the 4,
-    // so the code line starts at the third space
-    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [3]],
+    // Marked ends a fence's text with one more newline than its blank last line has: that
+    // empty last line sits where the code ends, at the closing fence, not on the first line
+    [`\`\`\`js\nfirst()\n\n\`\`\``, [2, 3, 4], [1, 1, 1]],
+    // an unclosed fence's empty last line sits at the end of the input, after the blank line
+    [`\`\`\`js\nfirst()\n\n`, [2, 3, 4], [1, 1, 1]],
+    [`> \`\`\`js\n> first()\n>\n> \`\`\``, [2, 3, 4], [3, 2, 3]],
+    // a tab-indented line is matched by its content: its position is the first code character
+    [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [2]],
+    [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [2]],
+    [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [2, 2, 2]],
+    [`- \`\`\`txt\n   \talpha\tb\n   \`\`\``, [2], [5]],
     // a lazy underline keeps its real spaces, padded ahead of them to four
     [`- \`\`\`\n   ---\n  \`\`\``, [2], [3]],
   ])(`maps fence lines in %s`, async (source, lines, columns) => {
@@ -343,8 +348,21 @@ describe(`Markdown content manifests`, () => {
     [`- [ ]\t[Link](next.md)`, 1, 7],
     // a nested list's own tab is expanded by its item, not by the outer one
     [`- a\n\t-\t[Link](next.md)`, 2, 4],
+    // Marked pre-expands a quote's tabs while state.top is set outside quotes: in a list item
+    // only after a nested list (not before one nor after a quote), never in a quote
+    [`- a\n  >>\t[Link](next.md)`, 2, 6],
+    [`- a\n  > b\n\n  >>\t[Link](next.md)`, 4, 6],
+    [`> - a\n>\n> >>\t[Link](next.md)`, 3, 6],
+    [`> - *\n>   >>\t[Link](next.md)`, 2, 8],
+    // a nested quote continued past a lazy line gets later lines one marker short, unexpanded
+    [`>>=\n>a\na\n> \t[Link](next.md)`, 4, 4],
+    // after a hard break, the inline text opens with the newline Marked doubles after an
+    // indented lazy line
+    [`>b\n    >  \n[Link](next.md)`, 3, 1],
     // the expanded first line must not jump to a later, literal copy of its text
     [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
+    // only ASCII blanks are trimmed from a quote line's end: Marked keeps a trailing U+00A0
+    [`> a\u00A0\n> [Link](next.md)`, 2, 3],
     // the table strips only \\| and the image alt only \\]
     [`| ![a\\]\\|b](i.png) [Link](next.md) |\n|---|`, 1, 20],
     // a pipe after an even backslash run separates cells and keeps both backslashes
@@ -357,6 +375,20 @@ describe(`Markdown content manifests`, () => {
         { url: `next.md`, range: { start: { line, column } } },
       ])
       expect(source.slice(manifest.links[0].range.start.offset)).toMatch(/^\[Link\]/u)
+    },
+  )
+
+  // a tab right after a nested quote marker is rewritten past matching: best effort keeps the
+  // link on its line, with an approximate column, instead of failing the document
+  test.each([
+    `- *\n  >>\t[Link](next.md)`,
+    `- *\n\n  text\n\n  >>\t[Link](next.md)`,
+    `>-\t-\n\t>>\t[Link](next.md)`,
+  ])(
+    `places a link after a tab-rewritten quote marker on its line in %s`,
+    async (source) => {
+      const { links } = await document_manifest(source)
+      expect(links[0].range.start.line).toBe(source.split(`\n`).length)
     },
   )
 
@@ -388,6 +420,7 @@ describe(`Markdown content manifests`, () => {
     `> > a\nlazy\n> > \t[L](n.md)`,
     `> > a\nlazy\n> >\t[L](n.md)`,
     `> > a\nlazy\n> > \tb\n> \tc`,
+    `>>=\n>a\na\n> \t`,
   ])(`renders a tab after a container marker: %j`, async (source) => {
     const result = await create_markdown().render(source, { filename: `/guide.md` })
     expect(result.diagnostics).toEqual([])
