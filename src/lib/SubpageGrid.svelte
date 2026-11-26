@@ -32,10 +32,8 @@
     {#each subpages as { label, href, description, icon, target, rel, title: link_title }, idx (`${idx}-${href}`)}
       <a {href} {target} {rel} title={link_title} class="card">
         <Icon icon={icon ?? fallback_icon} class="icon" />
-        <div>
-          <h2>{label}</h2>
-          <p>{description}</p>
-        </div>
+        <h2>{label}</h2>
+        <p>{description}</p>
       </a>
     {/each}
   </nav>
@@ -64,9 +62,11 @@
     padding: 0;
   }
   .card {
-    display: flex;
-    gap: 0.75em;
-    align-items: flex-start;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.3em 0.6em;
+    align-items: center;
+    align-content: start;
     padding: 0.85em 1em;
     border-radius: 5pt;
     border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
@@ -81,10 +81,11 @@
     box-shadow: 0 2px 8px color-mix(in srgb, currentColor 8%, transparent);
   }
   .card h2 {
-    margin: 0 0 0.3em;
+    margin: 0;
     font-size: 1.02em;
   }
   .card p {
+    grid-column: 1 / -1;
     margin: 0;
     color: var(--text-color-muted, light-dark(#666, #999));
     font-size: 0.88em;
@@ -94,8 +95,6 @@
     width: 1.2em;
     height: auto; /* keeps non-square glyphs in proportion, as Icon.svelte does */
     max-height: 1.2em;
-    flex-shrink: 0;
-    margin-top: 0.14em;
     opacity: 0.65;
   }
 </style>

@@ -2,6 +2,13 @@
   import type { Snippet } from 'svelte'
   import { tooltip } from './attachments/tooltip'
   import { format_num } from './format'
+  import Icon from './Icon.svelte'
+  import {
+    TransportNext,
+    TransportPause,
+    TransportPlay,
+    TransportPrevious,
+  } from './icons'
   import type { create_sequence_player } from './sequence-player.svelte.ts'
   import { format_shortcut } from './shortcuts'
 
@@ -63,7 +70,7 @@
       {...shortcut_attrs(`ArrowLeft`, `Previous ${item_name}`)}
       aria-label={`Previous ${item_name}`}
     >
-      ⏮
+      <Icon icon={TransportPrevious} />
     </button>
     <button
       type="button"
@@ -74,7 +81,7 @@
       aria-label={play_label}
       class={['play-button', { playing: playback.is_playing }]}
     >
-      {playback.is_playing ? `⏸` : `▶`}
+      <Icon icon={playback.is_playing ? TransportPause : TransportPlay} />
     </button>
     <button
       type="button"
@@ -84,7 +91,7 @@
       {...shortcut_attrs(`ArrowRight`, `Next ${item_name}`)}
       aria-label={`Next ${item_name}`}
     >
-      ⏭
+      <Icon icon={TransportNext} />
     </button>
   </div>
 {/if}
@@ -165,6 +172,9 @@
 
 <style>
   button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     background: var(--btn-bg);
     font-size: inherit;
     line-height: 1;
