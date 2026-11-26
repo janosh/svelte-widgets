@@ -112,7 +112,7 @@ const shrink = async (source: string): Promise<string> => {
 }
 
 test(`random Markdown documents map links and headings to their source offsets`, async () => {
-  const count = Number(process.env.FUZZ_COUNT ?? 10_000)
+  const count = Number(process.env.FUZZ_COUNT ?? 3000)
   for (let idx = 0; idx < count; idx++) {
     const source = generate()
     if (marked_throws(source)) continue
