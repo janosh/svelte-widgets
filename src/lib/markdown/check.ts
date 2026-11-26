@@ -102,6 +102,9 @@ const source_position = (
 }
 
 // Check explicitly opted-in fences. The caller supplies execution and assertion semantics.
+// parsed TypeScript lib files per compiler, shared by every check in this process
+const lib_sources = new WeakMap<typeof TypeScript, Map<string, TypeScript.SourceFile>>()
+
 export async function check_examples(
   fences: readonly ContentFence[],
   options: CheckOptions = {},
@@ -300,8 +303,17 @@ export async function check_examples(
         diagnostics.push(make_diagnostic(code, text, locate(offset, offset + length)))
       }
     }
+    const lib_dir = dirname(compiler.getDefaultLibFilePath(settings))
+    const lib_cache =
+      lib_sources.get(compiler) ?? new Map<string, TypeScript.SourceFile>()
+    lib_sources.set(compiler, lib_cache)
     host.getSourceFile = (path, language_version, on_error) => {
       const entry = files.get(path)
+      // TypeScript's own lib declarations never change, so later checks reuse their parse
+      const lib_key =
+        dirname(path) === lib_dir && `${path}:${JSON.stringify(language_version)}`
+      const cached = lib_key && lib_cache.get(lib_key)
+      if (cached) return cached
       let source_text: string | undefined
       try {
         source_text = entry?.code ?? host.readFile(path)
@@ -322,6 +334,7 @@ export async function check_examples(
           ...source.referencedFiles,
           ...[...shims].map((file_name) => ({ fileName: file_name, pos: 0, end: 0 })),
         ]
+      if (lib_key) lib_cache.set(lib_key, source)
       return source
     }
     // Resolve local components to their checked virtual modules, rather than the

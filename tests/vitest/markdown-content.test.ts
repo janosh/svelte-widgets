@@ -291,9 +291,13 @@ describe(`Markdown content manifests`, () => {
   })
 
   test.each([
-    [`> - \`\`\`js\n>   first()\n>   second()\n>   \`\`\``, [2, 3], [5, 5]],
+    [`> - \`\`\`js\n>   first()\n>\n>   second()\n>   \`\`\``, [2, 3, 4], [5, 2, 5]],
     [`\`\`\`js\nfirst()\n\`\`\`\n\n\`\`\`js\nfirst()\n\`\`\``, [2], [1]],
     [`\`\`\`js\n\`\`\``, [2], [1]],
+    // Marked ends a fence's text with one more newline than its blank last line has: that
+    // empty last line sits where the code ends, at the closing fence, not on the first line
+    [`\`\`\`js\nfirst()\n\n\`\`\``, [2, 3, 4], [1, 1, 1]],
+    [`> \`\`\`js\n> first()\n>\n> \`\`\``, [2, 3, 4], [3, 2, 3]],
     [`- \`\`\`js\n\tconst value = 1\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\t\\|\n\t\`\`\``, [2], [1]],
     [`- \`\`\`txt\n\tone\n\tlonger\tline\n\tone\n\t\`\`\``, [2, 3, 4], [1, 1, 1]],
@@ -343,6 +347,21 @@ describe(`Markdown content manifests`, () => {
     [`- [ ]\t[Link](next.md)`, 1, 7],
     // a nested list's own tab is expanded by its item, not by the outer one
     [`- a\n\t-\t[Link](next.md)`, 2, 4],
+    // Marked pre-expands a quote's tabs while state.top is set outside quotes: in a list item
+    // only after a nested list (not before one nor after a quote), never in a quote
+    [`- *\n  >>\t[Link](next.md)`, 2, 6],
+    [`- *\n\n  text\n\n  >>\t[Link](next.md)`, 5, 6],
+    [`- a\n  >>\t[Link](next.md)`, 2, 6],
+    [`- a\n  > b\n\n  >>\t[Link](next.md)`, 4, 6],
+    [`> - a\n>\n> >>\t[Link](next.md)`, 3, 6],
+    [`> - *\n>   >>\t[Link](next.md)`, 2, 8],
+    // a nested quote continued past a lazy line gets later lines one marker short, unexpanded
+    [`>>=\n>a\na\n> \t[Link](next.md)`, 4, 4],
+    [`>>y\nb\n>\n>>\t[Link](next.md)`, 4, 4],
+    [`>-\t-\n\t>>\t[Link](next.md)`, 2, 5],
+    // after a hard break, the inline text opens with the newline Marked doubles after an
+    // indented lazy line
+    [`>b\n    >  \n[Link](next.md)`, 3, 1],
     // the expanded first line must not jump to a later, literal copy of its text
     [`>\ta\n>\n>   a\n> [Link](next.md)`, 4, 3],
     // the table strips only \\| and the image alt only \\]
@@ -388,6 +407,7 @@ describe(`Markdown content manifests`, () => {
     `> > a\nlazy\n> > \t[L](n.md)`,
     `> > a\nlazy\n> >\t[L](n.md)`,
     `> > a\nlazy\n> > \tb\n> \tc`,
+    `>>=\n>a\na\n> \t`,
   ])(`renders a tab after a container marker: %j`, async (source) => {
     const result = await create_markdown().render(source, { filename: `/guide.md` })
     expect(result.diagnostics).toEqual([])
