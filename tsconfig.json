@@ -8,11 +8,14 @@
       "svelte-widgets/canvas": ["./src/lib/canvas.svelte.ts"],
       "svelte-widgets/clipboard": ["./src/lib/clipboard.svelte.ts"],
       "svelte-widgets/dialogs": ["./src/lib/dialogs.svelte.ts"],
+      "svelte-widgets/effects": ["./src/lib/effects.svelte.ts"],
       "svelte-widgets/find-in-page": ["./src/lib/find-in-page.svelte.ts"],
       "svelte-widgets/fullscreen": ["./src/lib/fullscreen.svelte.ts"],
       "svelte-widgets/roving-focus": ["./src/lib/roving-focus.svelte.ts"],
+      "svelte-widgets/sequence-player": ["./src/lib/sequence-player.svelte.ts"],
       "svelte-widgets/theme": ["./src/lib/theme.svelte.ts"],
       "svelte-widgets/toast-queue": ["./src/lib/toast-queue.svelte.ts"],
+      "svelte-widgets/worker-client": ["./src/lib/worker-client.svelte.ts"],
       "svelte-widgets": ["./src/lib"],
       "svelte-widgets/*": ["./src/lib/*"]
     }

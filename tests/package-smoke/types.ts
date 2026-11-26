@@ -268,6 +268,11 @@ export const relative_url = url_with_params(
 )
 export { create_canvas_surface as canvas_factory } from 'svelte-widgets/canvas'
 export { create_roving_focus as focus_factory } from 'svelte-widgets/roving-focus'
+export { create_on_screen, motion_duration } from 'svelte-widgets/effects'
+export { create_shortcut_flash } from 'svelte-widgets/browser'
+export { create_worker_client, type WorkerClient } from 'svelte-widgets/worker-client'
+export { create_sequence_player } from 'svelte-widgets/sequence-player'
+export { serve_worker } from 'svelte-widgets/worker-serve'
 
 export const image_box = object_fit_contain_box(200, 100, 100, 100)
 const sort = valid_query_param(new URLSearchParams(`sort=energy`), `sort`, `force`, {

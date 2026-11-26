@@ -232,3 +232,56 @@ export const evict_oldest = (cache: Map<unknown, unknown>, limit = 4096): void =
   const [oldest] = cache.keys()
   cache.delete(oldest)
 }
+
+// Tokens for values a key can't spell out (Maps, class instances, functions): those compare by
+// identity, where JSON wrote a Map as {} and a function not at all
+const identity_tokens = new WeakMap<object, number>()
+let next_identity_token = 0
+export const identity_token = (value: object): number => {
+  let token = identity_tokens.get(value)
+  if (token === undefined) identity_tokens.set(value, (token = ++next_identity_token))
+  return token
+}
+
+// A value's identity for caches, change checks and worker-request dedupe: plain objects (keys
+// sorted, undefined entries dropped like unset ones) and arrays by content, primitives tagged
+// with their type, so 1 and "1", 0 and -0, and Infinity, NaN and null all differ (JSON.stringify
+// writes the last three alike, which merged an unlimited option with an unset one), and
+// anything else by identity. reject_functions throws on functions (no worker can receive
+// them); symbols always throw.
+export function value_key(value: unknown, reject_functions = false): string {
+  const seen = new WeakMap<object, number>()
+  let next_reference = 0
+  const encode = (item: unknown): unknown[] => {
+    if (item === null || item === undefined) return [String(item)]
+    if (
+      typeof item === `number` ||
+      typeof item === `string` ||
+      typeof item === `boolean` ||
+      typeof item === `bigint`
+    )
+      return [typeof item, Object.is(item, -0) ? `-0` : String(item)]
+    if (typeof item === `symbol` || (reject_functions && typeof item === `function`))
+      throw new TypeError(`cannot contain ${typeof item} values`)
+    const reference = seen.get(item)
+    if (reference !== undefined) return [`reference`, reference]
+    seen.set(item, next_reference++)
+    if (Array.isArray(item))
+      return [
+        `array`,
+        Array.from({ length: item.length }, (_unused, idx) =>
+          Object.hasOwn(item, idx) ? encode(item[idx]) : [`hole`],
+        ),
+      ]
+    if (is_plain_object(item))
+      return [
+        `object`,
+        Object.entries(item)
+          .filter(([, entry]) => entry !== undefined)
+          .toSorted(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+          .map(([key, entry]) => [key, encode(entry)]),
+      ]
+    return [`identity`, Object.prototype.toString.call(item), identity_token(item)]
+  }
+  return JSON.stringify(encode(value))
+}

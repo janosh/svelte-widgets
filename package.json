@@ -196,6 +196,22 @@
       "types": "./dist/canvas.svelte.d.ts",
       "default": "./dist/canvas.svelte.js"
     },
+    "./effects": {
+      "types": "./dist/effects.svelte.d.ts",
+      "default": "./dist/effects.svelte.js"
+    },
+    "./sequence-player": {
+      "types": "./dist/sequence-player.svelte.d.ts",
+      "default": "./dist/sequence-player.svelte.js"
+    },
+    "./worker-client": {
+      "types": "./dist/worker-client.svelte.d.ts",
+      "default": "./dist/worker-client.svelte.js"
+    },
+    "./worker-serve": {
+      "types": "./dist/worker-serve.d.ts",
+      "default": "./dist/worker-serve.js"
+    },
     "./markdown": {
       "types": "./dist/markdown/index.d.ts",
       "default": "./dist/markdown/index.js"
