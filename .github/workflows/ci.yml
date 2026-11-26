@@ -142,7 +142,8 @@ jobs:
       - run: npm install --legacy-peer-deps
 
       # Upload under a temporary name, then swap it in: --clobber on the final name deletes
-      # the old tarball before the new one finishes uploading, failing installs in between
+      # the old tarball before the new one finishes uploading, failing installs in between.
+      # The old one is renamed aside, not deleted, until the new one has taken its name.
       - name: Upload main build to the main-build prerelease
         env:
           GH_TOKEN: ${{ github.token }}
@@ -152,8 +153,15 @@ jobs:
           gh release upload main-build svelte-widgets-next.tgz --clobber
           api="repos/$GITHUB_REPOSITORY/releases"
           asset_id() { gh api "$api/tags/main-build" --jq ".assets[] | select(.name == \"$1\") | .id"; }
+          prev_id=$(asset_id svelte-widgets-prev.tgz) # left by a cancelled or failed swap
+          if [ -n "$prev_id" ]; then gh api -X DELETE "$api/assets/$prev_id"; fi
           old_id=$(asset_id svelte-widgets.tgz)
           new_id=$(asset_id svelte-widgets-next.tgz)
+          rename() { gh api -X PATCH "$api/assets/$1" -f name="$2" > /dev/null; }
+          if [ -n "$old_id" ]; then rename "$old_id" svelte-widgets-prev.tgz; fi
+          if ! rename "$new_id" svelte-widgets.tgz; then
+            if [ -n "$old_id" ]; then rename "$old_id" svelte-widgets.tgz; fi
+            exit 1
+          fi
           if [ -n "$old_id" ]; then gh api -X DELETE "$api/assets/$old_id"; fi
-          gh api -X PATCH "$api/assets/$new_id" -f name=svelte-widgets.tgz
           gh release edit main-build --notes "Build of main@$GITHUB_SHA"
