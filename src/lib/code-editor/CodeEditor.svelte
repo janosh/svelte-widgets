@@ -195,7 +195,7 @@
   // Next can step past a capped list, where the status can't give a position
   const selection_past_cap = $derived(
     search_result.truncated &&
-      ordered(current_selection)[0] >= (search_matches.at(-1)?.to ?? 0),
+      ordered(current_selection)[0] >= search_matches[SEARCH_MATCH_LIMIT - 1].to,
   )
   const report_error = (error: unknown): void => {
     const message = to_error(error).message
@@ -436,9 +436,8 @@
       doc_id: `code-editor-${++next_doc_seq}`,
       model: active_model,
       backend: resolve_editor_backend(backend),
-      on_spans: (event) => {
-        if (active_client === active) receive_spans(event)
-      },
+      // A closed client never emits spans, and it is closed before `active_client` moves on
+      on_spans: receive_spans,
       on_error: report_error,
     })
     active_client = active

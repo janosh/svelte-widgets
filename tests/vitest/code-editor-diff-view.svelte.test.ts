@@ -252,6 +252,15 @@ describe(`rows and layouts`, () => {
       String.raw`\ Keine neue Zeile am Dateiende`,
     )
   })
+
+  test(`renders an empty created file without a header or comparison detail`, async () => {
+    await mount_diff(diff_result(), { single_col: true })
+    const empty = query_element(`[data-empty]`)
+    expect([text_of(empty.querySelector(`strong`)), empty.querySelector(`span`)]).toEqual(
+      [`Empty file`, null],
+    )
+    expect(document.querySelector(`.panel-header`)).toBeNull()
+  })
 })
 
 test.each([4, 150_000])(
@@ -331,23 +340,62 @@ test(`gap lines missing a side stay context instead of reading as edits`, async 
   ])
 })
 
+// backend counts overshooting the texts: a gap line one side lacks stays context, and
+// lines past both texts are dropped
+test(`expanding a gap past the diffed texts keeps only lines one side has`, async () => {
+  const row = diff_row(`replace`, diff_line(1, `a`), diff_line(1, `A`))
+  await mount_diff(
+    diff_result({
+      hunks: [hunk_of([row])],
+      added: 1,
+      removed: 1,
+      old_line_count: 4,
+      new_line_count: 4,
+      skipped_after: 3,
+    }),
+    {
+      old_text: `a\nb\nc`,
+      new_text: `A\nb`,
+      options: { ...DEFAULT_OPTIONS, layout: `unified` },
+    },
+  )
+  await click(query_element(`.diff-gap`))
+  const rows = [...document.querySelectorAll(`.diff-row.unified`)].map((element) => [
+    ...[...element.querySelectorAll(`.gutter`)].map(text_of),
+    text_of(element.querySelector(`.sign`)),
+    text_of(element.querySelector(`.code`)),
+  ])
+  expect(rows).toEqual([
+    [`1`, ``, `-`, `a`],
+    [``, `1`, `+`, `A`],
+    [`2`, `2`, ` `, `b`],
+    [`3`, ``, ` `, `c`],
+  ])
+})
+
 test.each([
-  [`old`, false, true],
-  [`new`, true, false],
-])(
-  `marks only the %s side when its final newline is missing`,
-  async (missing_side, old_ends, new_ends) => {
+  [`side-by-side`, false, true, [[`old`]]],
+  [`side-by-side`, true, false, [[`new`]]],
+  [`side-by-side`, false, false, [[`old`, `new`]]],
+  [`unified`, false, true, [[`old`]]],
+  [`unified`, false, false, [[`old`], [`new`]]],
+] as const)(
+  `%s layout with old/new final newlines %s/%s marks rows %j`,
+  async (layout, old_ends, new_ends, marked_rows) => {
     await mount_diff(
       rows_result([simple_change], {
         old_ends_with_newline: old_ends,
         new_ends_with_newline: new_ends,
       }),
+      { options: { ...DEFAULT_OPTIONS, layout } },
     )
-    const other_side = missing_side === `old` ? `new` : `old`
-    expect(text_of(query_element(`[data-no-newline='${missing_side}']`))).toBe(
-      String.raw`\ No newline at end of file`,
+    const notes = [...document.querySelectorAll<HTMLElement>(`[data-no-newline]`)]
+    expect(new Set(notes.map((note) => note.closest(`.diff-row`))).size).toBe(
+      marked_rows.length,
     )
-    expect(document.querySelector(`[data-no-newline='${other_side}']`)).toBeNull()
+    expect(notes.map((note) => [note.dataset.noNewline, text_of(note)])).toEqual(
+      marked_rows.flat().map((side) => [side, String.raw`\ No newline at end of file`]),
+    )
   },
 )
 
@@ -565,6 +613,9 @@ describe(`virtualization`, () => {
 
     expect(assigned).toEqual([ROW_HEIGHT * 100, ROW_HEIGHT * 200])
     expect(scroller.scrollTop).toBe(ROW_HEIGHT * 10)
+    // navigation follows the requested row, not the clamped offset
+    await click(previous_change)
+    expect(assigned.at(-1)).toBe(ROW_HEIGHT * 100)
   })
 
   test(`keeps rows rendered when switching to a shorter layout while scrolled`, async () => {
