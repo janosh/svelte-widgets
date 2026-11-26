@@ -271,6 +271,33 @@ describe(`request dedupe`, () => {
     expect(workers()[0].posted).toHaveLength(2)
   })
 
+  // as a worker would: it is posted a snapshot taken when called
+  test(`the main-thread fallback computes on the options as they were when called`, async () => {
+    vi.stubGlobal(`Worker`, undefined)
+    const run = make_client((_input, options) => `step ${String(options?.step)}`)
+    const options = { step: 1 }
+    const first = run({ tag: `a` }, options)
+    options.step = 2
+    await expect(first).resolves.toBe(`step 1`)
+  })
+
+  // a snapshot structured-clones a class instance with only prototype methods into a plain
+  // object, which strips them
+  test(`main-thread-only requests compute on their live options`, async () => {
+    class Provider {
+      get_value() {
+        return `live`
+      }
+    }
+    const run = create_worker_client({
+      ...base_config,
+      compute_sync: (_input: { tag: string }, options?: { provider: Provider }) =>
+        String(options?.provider.get_value?.()),
+      requires_main_thread: () => true,
+    })
+    await expect(run({ tag: `a` }, { provider: new Provider() })).resolves.toBe(`live`)
+  })
+
   test(`omitted options remain distinct from an explicit empty object`, async () => {
     vi.stubGlobal(`Worker`, undefined)
     const run = make_client((_input, options) =>

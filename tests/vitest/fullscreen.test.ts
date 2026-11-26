@@ -376,6 +376,37 @@ describe(`flag <-> browser sync`, () => {
     },
   )
 
+  // a wrapper already fullscreen when adopted (entered outside the flag) reports its exit
+  test(`adopting an already-fullscreen wrapper reports its later exit`, async () => {
+    const [first, second] = [create_element(), create_element()]
+    const target = writable(first)
+    const target_proxy = fromStore(target)
+    const flag = writable(false)
+    const flag_proxy = fromStore(flag)
+    const on_change = vi.fn()
+    render(FullscreenButton, {
+      get wrapper() {
+        return target_proxy.current
+      },
+      get fullscreen() {
+        return flag_proxy.current
+      },
+      set fullscreen(next_fullscreen: boolean) {
+        flag.set(next_fullscreen)
+      },
+      on_change,
+    })
+    await settle()
+    await set_fullscreen_element(second)
+    target.set(second)
+    flag.set(true)
+    await settle()
+    expect([request_calls, on_change.mock.calls]).toEqual([[], []])
+    await set_fullscreen_element(null)
+    await settle()
+    expect([get(flag), on_change.mock.calls]).toEqual([false, [[false]]])
+  })
+
   test(`without a wrapper the button only toggles its flag`, async () => {
     const on_change = vi.fn()
     const { button, flag } = mount_button({ wrapper: undefined, on_change })

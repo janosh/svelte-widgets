@@ -94,6 +94,18 @@ describe(`create_pulse_animation`, () => {
     expect(requested_frames.size).toBe(0)
   })
 
+  test(`schedules no frame after on_tick destroys its owner`, () => {
+    install_animation_frame_mock()
+    vi.stubGlobal(`IntersectionObserver`, FakeIntersectionObserver)
+    let destroy = () => {}
+    destroy = $effect.root(() => {
+      create_pulse_animation(() => true, { on_tick: () => destroy() })
+    })
+    flushSync()
+    run_frame(1)
+    expect(requested_frames.size).toBe(0)
+  })
+
   // Ticks repaint a whole canvas or invalidate a 3D scene, so a pulse on an off-screen chart
   // is wasted work. It must still animate before any verdict arrives: gated components bind
   // their wrapper after mount, and an observer that never reports (happy-dom, or a real

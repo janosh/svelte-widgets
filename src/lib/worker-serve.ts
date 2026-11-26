@@ -52,7 +52,9 @@ export function serve_worker<Input, Options, Result>(
     options: Options | undefined,
     report_progress: (progress: unknown) => void,
   ) => Result,
-  // Buffers inside `result` to move rather than copy back to the main thread
+  // Buffers inside `result` to move rather than copy back to the main thread. Never a buffer of
+  // the input: a retaining worker keeps it for later requests, and moving it would detach it,
+  // so they would silently compute on zero-length arrays
   transferables: (result: Result) => Transferable[] = () => [],
 ): void {
   const input_of = create_input_store<Input>()

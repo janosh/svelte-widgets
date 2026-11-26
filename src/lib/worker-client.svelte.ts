@@ -374,7 +374,10 @@ export function create_worker_client<
 
       const wkr = main_thread ? null : ensure_worker()
       const token = identity_token(input)
-      const posted_options = $state.snapshot(options)
+      // The options the request key was built from: a snapshot for requests a worker can take,
+      // whether or not one does, and live for main-thread-only ones, whose providers (functions,
+      // class instances) a snapshot would strip
+      const posted_options = main_thread ? options : $state.snapshot(options)
       const request = track(request_key, wkr ? ++next_id : null)
       const promise = join(request, request_options)
       if (wkr) {
@@ -413,12 +416,17 @@ export function create_worker_client<
           .then(() => {
             // An abort/cancel in this tick must prevent queued main-thread work from starting.
             if (pending_by_key.get(request.key) !== request) return
-            const result = compute_sync(input, options, (progress) => {
-              report_progress(request, progress)
-              // A synchronous progress boundary can stop work abandoned by its last caller.
-              if (!request.waiters.size)
-                throw new Error(`${label} request has no subscribers`)
-            })
+            // a snapshot of plain options only drops reactivity, whatever Snapshot<> types
+            const result = compute_sync(
+              input,
+              posted_options as Options | undefined,
+              (progress) => {
+                report_progress(request, progress)
+                // A synchronous progress boundary can stop work abandoned by its last caller.
+                if (!request.waiters.size)
+                  throw new Error(`${label} request has no subscribers`)
+              },
+            )
             request.resolve(result)
           })
           .catch((err: unknown) => request.reject(to_error(err)))

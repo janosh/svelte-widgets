@@ -60,7 +60,9 @@ export function sync_fullscreen(options: FullscreenSyncOptions): void {
   $effect(() => {
     const wrapper = options.get_wrapper()
     if (!wrapper) return undefined
-    reported ??= document.fullscreenElement === wrapper
+    // adopting a wrapper that is already fullscreen is no transition, but its exit will be
+    if (document.fullscreenElement === wrapper) reported = true
+    else reported ??= false
 
     const handle_change = () => {
       // key the flag to this wrapper: a bare document.fullscreenElement check would flip

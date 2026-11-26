@@ -156,12 +156,13 @@ export function create_sequence_player(inputs: SequencePlayerInputs) {
     let last_timestamp = performance.now()
     let accumulated_ms = 0
     let play_raf: number
+    let disposed = false // a callback (on_end, on_loop, set_index) destroyed the owner
     const tick = (now: number) => {
       accumulated_ms += clamp(now - last_timestamp, 0, 250)
       last_timestamp = now
       const step_ms = 1000 / playback_fps
       while (accumulated_ms >= step_ms) {
-        if (!is_playing || !can_play) break
+        if (disposed || !is_playing || !can_play) break
         if (inputs.can_advance?.() === false) {
           accumulated_ms = step_ms
           break
@@ -169,11 +170,15 @@ export function create_sequence_player(inputs: SequencePlayerInputs) {
         accumulated_ms -= step_ms
         advance()
       }
+      if (disposed) return
       if (is_playing && can_play) play_raf = requestAnimationFrame(tick)
       else set_playing(false)
     }
     play_raf = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(play_raf)
+    return () => {
+      disposed = true
+      cancelAnimationFrame(play_raf)
+    }
   })
 
   return {

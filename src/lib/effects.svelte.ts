@@ -97,8 +97,11 @@ export function create_pulse_animation(
     if (!visibility.current) return cancel_frame()
 
     const animate = () => {
+      const running = frame_id
       time += step
       on_tick?.()
+      // on_tick destroyed the owner or re-ran this effect, whose cleanup or new loop took over
+      if (frame_id !== running) return
       if (!active()) return stop()
       frame_id = requestAnimationFrame(animate)
     }

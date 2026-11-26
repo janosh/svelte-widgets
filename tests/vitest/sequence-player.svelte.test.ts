@@ -46,7 +46,7 @@ const host_defaults = {
 }
 type Host = typeof host_defaults
 
-function make_player(overrides: Partial<Host> = {}) {
+function make_player(overrides: Partial<Host> = {}, after_end?: () => void) {
   const host = $state<Host>({ ...host_defaults, ...overrides })
   const events: string[] = []
   const set_index = vi.fn((index: number) => {
@@ -79,7 +79,10 @@ function make_player(overrides: Partial<Host> = {}) {
       fps_step: host.fps_step,
       on_play: () => events.push(`play:${host.index}`),
       on_pause: () => events.push(`pause:${host.index}`),
-      on_end: () => events.push(`end:${host.index}`),
+      on_end: () => {
+        events.push(`end:${host.index}`)
+        after_end?.()
+      },
       on_loop: () => events.push(`loop`),
     })
   })
@@ -200,6 +203,17 @@ describe(`create_sequence_player`, () => {
     expect(callbacks).toHaveLength(2)
     destroy()
     expect(cancel_raf).toHaveBeenLastCalledWith(2)
+  })
+
+  test(`schedules no frame after a callback destroys the player`, () => {
+    const { callbacks, run_frame } = stub_animation_frames()
+    let destroy_player = () => {}
+    const { host, player, destroy } = make_player({ index: 4 }, () => destroy_player())
+    destroy_player = destroy
+    player.play()
+    flushSync()
+    run_frame(200) // two steps: the first passes the end, where on_end destroys the player
+    expect([callbacks.length, host.index]).toEqual([0, 0])
   })
 
   test(`stops with on_pause when the sequence shrinks below two items while playing`, () => {
