@@ -85,6 +85,8 @@ Number formatting, HTML rendering and cell colors are hooks: `format_number`, `r
   {columns}
   {column_color}
   sort={[{ column: `number`, dir: `asc` }]}
+  row_key="name"
+  show_row_select
   search
   show_filters
   show_column_toggle
@@ -118,6 +120,24 @@ Set `label_angle` (degrees, up to 90) on a column to tilt its header label up fr
 </script>
 
 <DataTable data={rows} {columns} />
+```
+
+### Large tables
+
+Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer rows standing in for the rest, so mount time stays flat as rows grow. Give it a height limit (`scroll_style` or a sized parent) to scroll inside the table under a sticky header; without one, the rendered rows follow the page scroll. Rows outside the window aren't in the DOM, so find-in-page, printing, DOM queries and server-rendered HTML see only those, column widths can shift as wider or narrower rows scroll in, and `row_animation_ms` is off. Sorting, search, filters, select-all, copy and export still cover every row. Pass `virtual` (`true` or `{ overscan, min_window }`) to virtualize any table, or `virtual={false}` to always render every row. Pagination turns it off.
+
+```svelte example id="data-table-large"
+<script lang="ts">
+  import { DataTable } from 'svelte-widgets/table'
+
+  const data = Array.from({ length: 10_000 }, (_, idx) => ({
+    row: idx + 1,
+    sine: Math.sin(idx / 50),
+    cosine: Math.cos(idx / 50),
+  }))
+</script>
+
+<DataTable {data} scroll_style="max-height: 400px" />
 ```
 
 ## Table building blocks

@@ -111,7 +111,7 @@
     search_query = $bindable(``),
     show_row_select = false,
     pagination = false,
-    virtual = false,
+    virtual,
     row_key,
     row_animation_ms = 0,
     selected_ids = $bindable([]),
@@ -236,8 +236,13 @@
     with_defaults(search, { placeholder: `Filter...`, expanded: false }),
   )
   let search_expanded = $derived(search_config?.expanded ?? false)
+  // Unset, rows virtualize past 500: there a 30-column table takes ~0.35 s to mount in
+  // Chromium with every cell rendered, ~60 ms virtualized at any row count
+  let virtual_on = $derived(virtual ?? data.length > 500)
   let virtual_config = $derived(
-    pagination_config ? null : with_defaults(virtual, { overscan: 10, min_window: 60 }),
+    pagination_config
+      ? null
+      : with_defaults(virtual_on, { overscan: 10, min_window: 60 }),
   )
   let hint_config = $derived(
     sort_hint
@@ -604,11 +609,19 @@
   )
   let virtual_range = $derived({ start: virtual_start, end: virtual_end })
 
-  // Scroll events only read offsets; clientHeight can force layout, so only measure on request
+  // The rows on screen: the scroller's box clipped to the window's, so a scroller with no
+  // height limit, as tall as all its rows, renders those in the page's viewport. Its own
+  // scroll events only read offsets: measuring the box can force layout.
+  let clipped_top = 0
   const sync_viewport = (measure_size = false) => {
     if (!scroll_el || !virtual_config) return
-    scroll_top = scroll_el.scrollTop
-    if (measure_size) viewport_height = scroll_el.clientHeight
+    if (measure_size) {
+      const { top } = scroll_el.getBoundingClientRect()
+      const bottom = Math.min(top + scroll_el.clientHeight, window.innerHeight)
+      clipped_top = Math.max(0, -top)
+      viewport_height = Math.max(0, bottom - Math.max(top, 0))
+    }
+    scroll_top = scroll_el.scrollTop + clipped_top
   }
 
   // Measured once, then only on width or density change: re-measuring on every append forces
@@ -1154,8 +1167,10 @@
     if (!virtual_config || !scroll_el) return
     if (row >= virtual_range.start && row < virtual_range.end) return
     const leading_edge = align_bottom ? Math.max(0, viewport_height - avg_row_height) : 0
-    scroll_el.scrollTop = Math.max(0, row * avg_row_height - leading_edge)
-    sync_viewport()
+    // Moves the window itself: a scroller with no height limit can't scroll, so focusing
+    // the row scrolls the page to it instead
+    scroll_top = Math.max(0, row * avg_row_height - leading_edge)
+    scroll_el.scrollTop = scroll_top - clipped_top
   }
 
   // Move focus to a cell by absolute coordinates, paging/scrolling it into view first
@@ -1557,6 +1572,13 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     </tr>
   {/if}
 {/snippet}
+
+<!-- Scrolling the page or an ancestor moves the table across the window's edges. Its own
+     scroll is handled on the scroller: in a shadow root it never reaches the window. -->
+<svelte:window
+  onscrollcapture={({ target }) => target !== scroll_el && sync_viewport(true)}
+  onresize={() => sync_viewport(true)}
+/>
 
 <div
   {@attach table_tooltips}
@@ -2375,12 +2397,18 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
         color: var(--table-accent) !important;
       }
     }
-    &.selected {
-      background: var(--highlight-bg, rgba(74, 158, 255, 0.15)) !important;
-      td {
-        border-top: 1px solid var(--table-accent);
-        border-bottom: 1px solid var(--table-accent);
-      }
+    /* Inset shadows, not borders or a row background: borders grow the row, and pinned
+       cells' opaque backgrounds (striped on odd rows) would hide both. A pinned cell's
+       ::before (which inherits this) overhangs 1px under the next row, so its bottom edge sits
+       1px higher. A cell range keeps its own highlight. */
+    &.selected td:not(.cell-selected) {
+      box-shadow:
+        inset 0 1px var(--table-accent),
+        inset 0 var(--selected-row-bottom, -1px) var(--table-accent),
+        inset 0 0 0 100vmax var(--highlight-bg, rgba(74, 158, 255, 0.15));
+    }
+    &.selected td.pinned {
+      --selected-row-bottom: -2px;
     }
   }
   .group-header th {

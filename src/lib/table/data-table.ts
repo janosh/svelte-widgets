@@ -336,9 +336,9 @@ export type DataTableProps<
   search_query?: string
   show_row_select?: boolean
   pagination?: Pagination
-  // Opt-in row virtualization: only rows near the viewport render, with spacer rows
-  // preserving scroll geometry, so DOM size stays bounded for any data length.
-  // Inactive when pagination is enabled.
+  // Row virtualization: only rows near the viewport render, with spacer rows preserving
+  // scroll geometry, so DOM size stays bounded for any data length. Unset, it turns on past
+  // 500 rows; false renders every row. Inactive when pagination is enabled.
   virtual?: VirtualScroll
   // Required for selection; identifies rows across sorting and data replacement. Without
   // it rows are keyed by object identity, so a new object for a row remounts that row:
