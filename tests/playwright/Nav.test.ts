@@ -693,6 +693,7 @@ for (const width of [390, 1440]) {
       `FileInput`,
       `MultiSelect`,
       `RangeSlider`,
+      `SequenceControls`,
       `Settings`,
     ])
     await header.getByRole(`link`, { name: `FileInput`, exact: true }).click()
