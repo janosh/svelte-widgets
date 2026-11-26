@@ -92,7 +92,7 @@ export type FrontmatterValidator = (
 ) => Record<string, unknown>
 
 // quote: the raw of a blockquote, whose children locate() aligns line by line
-type MappedText = { text: string; offsets: number[]; quote?: true }
+type MappedText = { text: string; offsets: number[] }
 
 export const table_cells = ({ header, rows }: Tokens.Table): Tokens.TableCell[] => [
   ...header,
@@ -119,29 +119,13 @@ export function walk_tokens(
   }
 }
 
-// Marked rewrites some container text before tokenizing the children: it expands tabs to the
-// next multiple of four columns in a list item's first-line marker and continuation
-// indentation, and drops the backslash of `\|` in table cells and of `\[` and `\]` in link and
-// image labels (its outputLink regex). Each rewrites one container level, since a nested
-// container's raw is already in its parent's coordinates. Blockquotes go through align_line.
-const ITEM_FIRST_PREFIX = / {0,3}(?:[-*+]|\d{1,9}[.)])[ \t]*/uy
-const INDENT = /[ \t]*/uy
-// A lazy continuation line that would read as a setext underline: Marked's list item
-// tokenizer indents it to four spaces so it stays paragraph text. Padding ahead of its
-// real spaces where Marked did not is harmless, since lines match as substrings.
-const LAZY_UNDERLINE_INDENT = / {0,3}(?=(?:=+|-+)[ \t]*(?:\n|$))/uy
+// Marked drops the backslash of `\\|` in table cells and of `\\[` and `\\]` in link and image
+// labels (its outputLink regex) before tokenizing their children
 // Whether the character at `index` follows an odd run of backslashes
 export function escaped_at(text: string, index: number): boolean {
   let start = index
   while (text[start - 1] === `\\`) start--
   return (index - start) % 2 === 1
-}
-// Columns `char` spans from `column`: a tab reaches the next multiple of four
-const tab_width = (char: string, column: number) => (char === `\t` ? 4 - (column % 4) : 1)
-// Column of the next tab stop-expanded character after `text`, starting at `column`
-const expanded_column = (text: string, column = 0): number => {
-  for (const char of text) column += tab_width(char, column)
-  return column
 }
 // End of a link or image raw's label, the only text Marked unescapes brackets in: the first
 // capture of the rule that built the link (inline, full, collapsed or shortcut reference)
@@ -154,184 +138,80 @@ function label_end(raw: string): number {
   }
   return raw.length
 }
-const line_end = (text: string, from: number): number => {
-  const newline_idx = text.indexOf(`\n`, from)
-  return newline_idx === -1 ? text.length : newline_idx
-}
-// Indexes into `line` of each character of `child`, a line Marked derived from that line of a
-// blockquote's raw: it strips one `>` marker and the blank after it (none from a line it
-// re-lexes as a list's continuation), expands tabs to spaces at `line`'s tab stops, and pads a
-// lazy setext-like underline to four spaces. Which of these it did depends on lexer state
-// (top level, open fences and list items, lazy lines), so this aligns the two from the end,
-// where they agree, instead of predicting it. Undefined if `child` is not such a line.
-function align_line(child: string, line: string): number[] | undefined {
-  const widths: number[] = []
-  for (let idx = 0, column = 0; idx < line.length; column += widths[idx++])
-    widths.push(tab_width(line[idx], column))
-  const indexes: number[] = []
-  // block raws may drop a line's trailing ASCII blanks (not other whitespace like U+00A0)
-  let line_idx = (/[ \t]$/u.test(child) ? line : line.replace(/[ \t]+$/u, ``)).length - 1
-  let absorbed = 0 // spaces the tab at line_idx stands for so far
-  for (let idx = child.length - 1; idx >= 0; idx--) {
-    const char = child[idx]
-    if (char === ` ` && line[line_idx] === `\t`) {
-      indexes[idx] = line_idx
-      if (++absorbed < widths[line_idx]) continue
-    } else {
-      // a tab the marker's optional space cut into leaves fewer spaces than its width
-      if (absorbed) line_idx--
-      if (line && line_idx < 0 && char === ` `) {
-        indexes[idx] = 0 // setext padding
-        continue
-      }
-      if (char !== line[line_idx]) return undefined
-      indexes[idx] = line_idx
-    }
-    absorbed = 0
-    line_idx--
-  }
-  const stripped = line.slice(0, absorbed ? line_idx : line_idx + 1)
-  return /^(?: {0,3}>[ \t]?)?$/u.test(stripped) ? indexes : undefined
-}
-
 // The text Marked hands the children of `owner` (autolinks keep their backslashes), mapped to
-// source offsets: the parent itself unless something is rewritten
+// source offsets: the parent itself unless a label or table cell unescapes something
 function child_view(parent: MappedText, owner: Token): MappedText {
   const { text } = parent
   const kind = owner.type
-  if (kind === `blockquote`) return { ...parent, quote: true }
   const unescaped =
     kind === `table`
       ? `|`
       : /^(?:link|image)$/u.test(kind) && !(owner as Tokens.Link).autolink
         ? `[]`
         : undefined
-  const expands_tabs = kind === `list_item`
-  if (!expands_tabs && !(unescaped && /\\/u.test(text))) return parent
-  const unescape_end = kind === `table` ? text.length : unescaped ? label_end(text) : 0
-  // a list item's content column (Marked's R): continuation lines indented less are lazy and
-  // keep their tabs
-  let content_column = 0
-  if (kind === `list_item`) {
-    ITEM_FIRST_PREFIX.lastIndex = 0
-    const [prefix = ``] = ITEM_FIRST_PREFIX.exec(text) ?? []
-    const marker = prefix.trimEnd().length
-    const gap = expanded_column(prefix.slice(marker), marker) - marker
-    content_column =
-      marker + (/^[^\n]*\S/u.test(text.slice(prefix.length)) && gap <= 4 ? gap : 1)
-  }
+  if (!unescaped || !/\\/u.test(text)) return parent
+  const unescape_end = kind === `table` ? text.length : label_end(text)
   const view: MappedText = { text: ``, offsets: [] }
-  let column = 0
-  let prefix_end = 0
-  let marker_end = 0
   for (let idx = 0; idx < text.length; idx++) {
-    if (expands_tabs && column === 0 && idx > 0) {
-      LAZY_UNDERLINE_INDENT.lastIndex = idx
-      const indent = LAZY_UNDERLINE_INDENT.exec(text)?.[0]
-      for (let pad = indent?.length ?? 4; pad < 4; pad++) {
-        view.text += ` `
-        view.offsets.push(parent.offsets[idx])
-      }
-    }
     const char = text[idx]
-    if (expands_tabs && column === 0) {
-      const prefix = idx ? INDENT : ITEM_FIRST_PREFIX
-      prefix.lastIndex = idx
-      const prefix_text = prefix.exec(text)?.[0] ?? ``
-      prefix_end = idx + prefix_text.length
-      const lazy =
-        idx > 0 &&
-        ![`\n`, undefined].includes(text[prefix_end]) &&
-        expanded_column(text.slice(idx, prefix_end)) < content_column
-      if (lazy) prefix_end = idx
-      marker_end = lazy ? idx : idx + prefix_text.trimEnd().length
-    }
-    // Marked strips item markers, so no child can sit on one
-    if (idx < marker_end) {
-      column++
-      continue
-    }
-    if (char === `\t` && idx < prefix_end) {
-      const width = tab_width(char, column)
-      view.text += ` `.repeat(width)
-      for (let space = 0; space < width; space++) view.offsets.push(parent.offsets[idx])
-      column += width
-      continue
-    }
-    // escaped and target characters never overlap, so one pass mirrors Marked's regexes. A
-    // table pipe after an even backslash run is a cell separator that keeps every backslash.
+    // a table pipe after an even backslash run is a cell separator that keeps every backslash
     if (
       char === `\\` &&
       idx + 1 < unescape_end &&
-      unescaped?.includes(text[idx + 1] ?? `\n`) &&
+      unescaped.includes(text[idx + 1] ?? `\n`) &&
       (kind !== `table` || escaped_at(text, idx + 1))
     )
       continue
     view.text += char
     view.offsets.push(parent.offsets[idx])
-    column = char === `\n` ? 0 : column + 1
   }
   return view
 }
 
-// Container tokens remove quote/list indentation. Match complete lines within the parent
-// rather than searching the whole document, which confuses repeated code and headings.
+// Container tokens strip quote markers and list indentation, so match each line of `raw` as a
+// substring of the parent, searching forward from the previous match rather than the whole
+// document, which confuses repeated code and headings. A line Marked rewrote further (tabs it
+// expanded, lazy continuation lines) maps to where the search stands: its diagnostics then
+// point at its block instead of failing the whole document.
 function locate(
   raw: string,
   parent: MappedText,
   cursor: number,
 ): MappedText & { end: number } {
   const offsets: number[] = []
-  const preview = JSON.stringify(raw.slice(0, 80))
+  const at = (idx: number) =>
+    parent.offsets[Math.min(idx, parent.offsets.length - 1)] ?? 0
   let offset = cursor
   for (const line of raw.split(/(?<=\n)/u)) {
     const newline = line.endsWith(`\n`)
     const text = newline ? line.slice(0, -1) : line
-    if (text && parent.quote) {
-      const { text: quote } = parent
-      const mid_line = offset > 0 && quote[offset - 1] !== `\n`
-      let start = offset
-      let indexes: number[] | undefined
-      // blanks trailing the line the previous raw ended on are a token of their own
-      if (mid_line && /^[ \t]+$/u.test(text) && quote.startsWith(text, offset))
-        indexes = Array.from(text, (_, idx) => idx)
-      else if (mid_line) start = line_end(quote, offset) + 1
-      // else the first whole line Marked derived this one from: a blank quote line after a
-      // nested quote's lazy continuation (`>>a\nb\n>\n>c`) is in the raw but in no token
-      while (!indexes && start <= quote.length) {
-        const end = line_end(quote, start)
-        indexes = align_line(text, quote.slice(start, end))
-        if (!indexes) start = end + 1
-      }
-      if (!indexes) throw new Error(`Cannot locate Markdown token ${preview}`)
-      for (const idx of indexes) offsets.push(parent.offsets[start + idx])
-      offset = start + (indexes.at(-1) ?? 0) + 1
-    } else if (text) {
-      const start = parent.text.indexOf(text, offset)
-      if (start === -1) throw new Error(`Cannot locate Markdown token ${preview}`)
-      for (let idx = start; idx < start + text.length; idx++)
-        offsets.push(parent.offsets[idx])
-      offset = start + text.length
+    // Marked's rewrites (tabs it expands, padding) sit in a line's leading blanks, so match the
+    // rest: the first match is the nearest line, where an exact match may skip ahead to a copy
+    const trimmed = text.replace(/^[ \t]+/u, ``)
+    const lead = text.length - trimmed.length
+    const found = trimmed ? parent.text.indexOf(trimmed, offset) : offset + lead
+    // leading blanks map onto themselves where the parent has them, else onto what follows
+    const kept =
+      found !== -1 && parent.text.slice(found - lead, found) === text.slice(0, lead)
+    for (let idx = 0; idx < text.length; idx++) {
+      const source_idx = idx < lead && !kept ? found : found - lead + idx
+      offsets.push(at(found === -1 ? offset : source_idx))
     }
-    if (newline) {
-      const end = parent.text.indexOf(`\n`, offset)
-      // Marked doubles the newline after an indented lazy line in its inline text raw, even
-      // where that opens a token (after a `br`): an empty raw line facing a non-blank one
-      const rest = parent.text.slice(offset, end === -1 ? undefined : end)
-      if (!parent.quote && !text && /\S/u.test(rest)) {
-        offsets.push(parent.offsets[offset - 1])
-        continue
-      }
-      // Marked replaces trailing whitespace in quoted lists with a synthetic newline.
-      if (end === -1 && (parent.quote ? /^[ \t>]+$/u : /^[ \t]+$/u).test(rest)) {
-        offsets.push(parent.offsets[offset])
-        offset = parent.text.length
-      } else {
-        if (end === -1) throw new Error(`Cannot locate Markdown token newline`)
-        offsets.push(parent.offsets[end])
-        offset = end + 1
-      }
+    if (found !== -1) offset = found + trimmed.length
+    if (!newline) continue
+    const end = parent.text.indexOf(`\n`, offset)
+    // Marked doubles the newline after an indented lazy line in its inline text raw, even
+    // where that opens a token (after a `br`): an empty raw line facing a non-blank one
+    // (a quoted line of only markers counts as blank)
+    if (
+      !text &&
+      /[^\s>]/u.test(parent.text.slice(offset, end === -1 ? undefined : end))
+    ) {
+      offsets.push(at(offset - 1))
+      continue
     }
+    offsets.push(at(end === -1 ? offset : end))
+    offset = end === -1 ? parent.text.length : end + 1
   }
   return { text: raw, offsets, end: offset }
 }
