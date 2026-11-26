@@ -116,6 +116,14 @@ export default {
   test: {
     include: [`tests/vitest/**/*.test.ts`],
     environment: `happy-dom`,
+    // a clicked link would otherwise navigate the window, fetching localhost:3000 and logging
+    // ECONNREFUSED stack traces that bury real test output
+    environmentOptions: {
+      happyDOM: { settings: { navigation: { disableMainFrameNavigation: true } } },
+    },
+    // Test files share a worker's module graph and window, roughly halving the run. State
+    // must not outlive its file: tests/vitest/setup.ts holds the module mocks and cleanup
+    isolate: false,
     css: true,
     coverage: {
       reporter: [`text`, `json-summary`],

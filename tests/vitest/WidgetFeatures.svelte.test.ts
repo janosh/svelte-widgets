@@ -16,10 +16,6 @@ import { SvelteSet } from 'svelte/reactivity'
 import { expect, test, vi, onTestFinished } from 'vite-plus/test'
 import { click, create_element, doc_query, key_reads, press_key, render } from './index'
 
-vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
-  (await import(`./index`)).count_key_reads(await import_original()),
-)
-
 // a fresh target, so queries stay scoped to this test's widget
 const target_for = () => {
   const target = create_element()

@@ -39,8 +39,11 @@ const setup = (props: Props = {}) => {
   }
   return { thumbs, inputs, rail, pointer }
 }
+const attrs = (thumbs: HTMLButtonElement[], name: string) =>
+  thumbs.map((thumb) => thumb.getAttribute(name))
 const announced = (thumbs: HTMLButtonElement[]) =>
-  thumbs.map((thumb) => Number(thumb.getAttribute(`aria-valuenow`)))
+  attrs(thumbs, `aria-valuenow`).map(Number)
+const max_safe = Number.MAX_SAFE_INTEGER
 const log_props = { min: 0.001, max: 1000, step: 1, scale: `log` } as const
 const decades = { ...log_props, value: [0.1, 10] } satisfies Props
 
@@ -100,14 +103,7 @@ describe(`range arithmetic`, () => {
   test.each([
     [1e16, 1e16 + 100, 2, 1e16 + 8, 1, 1e16 + 10],
     [-1e16, 1e16, 4.5, 9999999999999968, -1, 9999999999999960],
-    [
-      Number.MAX_SAFE_INTEGER - 3,
-      Number.MAX_SAFE_INTEGER,
-      1,
-      Number.MAX_SAFE_INTEGER - 1,
-      1,
-      Number.MAX_SAFE_INTEGER,
-    ],
+    [max_safe - 3, max_safe, 1, max_safe - 1, 1, max_safe],
   ])(
     `large-domain stepping from %s to %s at step %s`,
     (min, max, step, value, direction, expected) => {
@@ -177,14 +173,8 @@ describe(`logarithmic RangeSlider`, () => {
   })
   test(`pointer picking, grab offsets and commits use logarithmic distances`, async () => {
     const on_commit = vi.fn()
-    const { thumbs, pointer } = setup({
-      min: 1,
-      max: 10000,
-      step: 1,
-      scale: `log`,
-      value: [10, 1000],
-      on_commit,
-    })
+    const wide = { ...log_props, min: 1, max: 10000, value: [10, 1000] } satisfies Props
+    const { thumbs, pointer } = setup({ ...wide, on_commit })
     pointer(`pointerdown`, 60)
     await tick()
     expect(announced(thumbs)).toEqual([10, 100])
@@ -382,15 +372,8 @@ describe(`RangeSlider`, () => {
           ?.textContent,
       ).toBe(`Per night`)
     }
-    expect(
-      thumbs.map((thumb) => [
-        thumb.getAttribute(`aria-valuemin`),
-        thumb.getAttribute(`aria-valuemax`),
-      ]),
-    ).toEqual([
-      [`0`, `80`],
-      [`20`, `100`],
-    ])
+    expect(attrs(thumbs, `aria-valuemin`)).toEqual([`0`, `20`])
+    expect(attrs(thumbs, `aria-valuemax`)).toEqual([`80`, `100`])
     props.min = -50
     props.max = 50
     props.value = [-10, 40]
@@ -415,10 +398,7 @@ describe(`RangeSlider`, () => {
     const { thumbs, inputs } = setup({ min: -1, max: 1, step: 0.1, show_inputs: false })
     expect(announced(thumbs)).toEqual([-1, 1])
     expect(inputs).toHaveLength(0)
-    expect(thumbs.map((thumb) => thumb.getAttribute(`aria-label`))).toEqual([
-      `Range Minimum`,
-      `Range Maximum`,
-    ])
+    expect(attrs(thumbs, `aria-label`)).toEqual([`Range Minimum`, `Range Maximum`])
   })
   const off_grid = { max: 10, step: 3 }
   test.each<[Props, 0 | 1, string, RangeValue, KeyboardEventInit?]>([
@@ -468,11 +448,8 @@ describe(`RangeSlider`, () => {
   test(`ignores claimed and unrelated keys, and emits nothing at a bound`, async () => {
     const on_commit = vi.fn()
     const { thumbs } = setup({ value: [0, 100], on_commit })
-    const event = new KeyboardEvent(`keydown`, {
-      key: `ArrowRight`,
-      bubbles: true,
-      cancelable: true,
-    })
+    const claimed = { key: `ArrowRight`, bubbles: true, cancelable: true }
+    const event = new KeyboardEvent(`keydown`, claimed)
     event.preventDefault()
     thumbs[0].dispatchEvent(event)
     expect(press_key(thumbs[0], `Tab`).defaultPrevented).toBe(false)

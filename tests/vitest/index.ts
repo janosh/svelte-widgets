@@ -183,13 +183,17 @@ class FakeResizeObserver implements ResizeObserver {
     this.callback(entries as ResizeObserverEntry[], this)
   }
 }
-// call per test (or in beforeEach): forgets earlier targets, unstubs when the test finishes
+// setup.ts installs the fake for the whole run: test files share one Svelte runtime, whose
+// shared size-binding observer must be a fake whichever file mounts a binding first
+export const install_fake_resize_observer = () => {
+  globalThis.ResizeObserver = FakeResizeObserver
+}
+// call per test (or in beforeEach): forgets earlier targets and observers
 export const stub_resize_observer = (observe_hook?: OnObserve) => {
   for (const observer of all_observers) observer.targets.clear()
   resize_observers.created.length = 0
   on_observe = observe_hook
-  vi.stubGlobal(`ResizeObserver`, FakeResizeObserver)
-  onTestFinished(() => void vi.unstubAllGlobals())
+  onTestFinished(() => void (on_observe = undefined))
   return resize_observers
 }
 
@@ -261,6 +265,36 @@ export const stub_props = (target: object, props: Record<string, unknown>) => {
 // evaluates generated ES module source (e.g. a plugin's output) via a data: URL import
 export const import_code = (code: string): Promise<Record<string, unknown>> =>
   import(/* @vite-ignore */ `data:text/javascript,${encodeURIComponent(code)}`)
+
+// The module mocks below are registered once in setup.ts: test files share one module
+// graph, so a `vi.mock` inside one file would miss every module an earlier file already
+// imported, and stay registered for the files after it. Tests steer them through these.
+
+// `$app/state` page and `$app/paths` resolver; setup.ts resets both before each test
+type AppPage = {
+  route: { id: string | null }
+  url: URL
+  status: number
+  error: Error | null
+}
+const default_app = (): { page: AppPage; base: string; relative: boolean } => ({
+  page: { route: { id: `/` }, url: new URL(`https://x.co/`), status: 200, error: null },
+  base: ``, // stands in for a configured base path, which is what resolve() prefixes
+  relative: false, // Kit can resolve links relatively during SSR
+})
+export const app = default_app()
+export const reset_app = () => {
+  const { page, ...rest } = default_app()
+  Object.assign(app.page, page) // `$app/state` consumers hold on to the page object
+  Object.assign(app, rest)
+}
+export const app_paths = {
+  asset: (path: string) => `/${path}`,
+  resolve: (path: string) => (app.relative ? `./${path}` : `${app.base}/${path}`),
+}
+
+// Counts line tokenizations: the visible rows a change rebuilt
+export const token_renders = { count: 0 }
 
 // Counts key selector reads: its readers are per-row deriveds, so the reads after a change
 // show whether it re-ran O(1) rows or all N. Use as the factory of a `vi.mock` of the module.

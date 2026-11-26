@@ -168,24 +168,20 @@ describe(`load_options feature`, () => {
       1,
       null,
     ],
-  ])(
-    `scroll pagination: %s`,
-    async (_label, make_load_options, expected_calls, last_args) => {
-      const load_options = make_load_options()
-      mount_multiselect({ load_options, open: true })
-      await flush_ticks(2)
+  ])(`scroll pagination: %s`, async (_, make_load_options, expected_calls, last_args) => {
+    const load_options = make_load_options()
+    mount_multiselect({ load_options, open: true })
+    await flush_ticks(2)
 
-      expect(load_options).toHaveBeenCalledTimes(1)
+    expect(load_options).toHaveBeenCalledTimes(1)
 
-      mock_scroll_near_bottom(doc_query(`ul.options`))
-      await tick()
+    mock_scroll_near_bottom(doc_query(`ul.options`))
+    await tick()
 
-      expect(load_options).toHaveBeenCalledTimes(expected_calls)
-      if (last_args) {
-        expect(load_options).toHaveBeenLastCalledWith(expect.objectContaining(last_args))
-      }
-    },
-  )
+    expect(load_options).toHaveBeenCalledTimes(expected_calls)
+    if (last_args)
+      expect(load_options).toHaveBeenLastCalledWith(expect.objectContaining(last_args))
+  })
 
   // fake timers + allow_user_options=append, then types `custom` and creates it with Enter
   async function create_custom_option(

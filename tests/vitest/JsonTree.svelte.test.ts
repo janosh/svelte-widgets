@@ -7,10 +7,6 @@ import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { afterEach, describe, expect, it, test, vi } from 'vite-plus/test'
 
-vi.mock(`#lib/internal/key-selector.svelte.ts`, async (import_original) =>
-  (await import(`./index`)).count_key_reads(await import_original()),
-)
-
 const mouse = (type: string, init: MouseEventInit = {}) =>
   new MouseEvent(type, { bubbles: true, ...init })
 const mock_clipboard_write = (error?: Error) => {
@@ -54,10 +50,14 @@ const control_group = (idx: number) =>
 
 const match_count = () => document.querySelector(`.match-count`)?.textContent ?? ``
 // Type into the search box and wait for the debounced (150 ms) search to report `expected`
+// fakes the search debounce (150 ms) instead of polling until it elapses in real time
 async function type_search(query: string, expected: string): Promise<void> {
+  vi.useFakeTimers({ toFake: [`setTimeout`, `clearTimeout`] })
   await fire_input(doc_query<HTMLInputElement>(`.search-input`), query, `input`)
-  await vi.waitFor(() => expect(match_count()).toBe(expected))
+  await vi.advanceTimersByTimeAsync(150)
+  vi.useRealTimers()
   await tick()
+  expect(match_count()).toBe(expected)
 }
 
 afterEach(() => vi.unstubAllGlobals())
@@ -715,9 +715,11 @@ describe(`search`, () => {
     press(input, `Enter`)
     expect(match_count()).toBe(`3 of 4`)
     // typing and deleting within the debounce window keeps the query, so the match stays
+    vi.useFakeTimers({ toFake: [`setTimeout`, `clearTimeout`] })
     await fire_input(input, `ab`, `input`)
     await fire_input(input, `a`, `input`)
-    await new Promise<void>((resolve) => void setTimeout(resolve, 200))
+    await vi.advanceTimersByTimeAsync(200)
+    vi.useRealTimers()
     expect(match_count()).toBe(`3 of 4`)
     await type_search(`ab`, `1 of 3`)
   })

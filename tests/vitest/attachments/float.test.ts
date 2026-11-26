@@ -1,5 +1,5 @@
-import { float } from '#lib/attachments/index.ts'
-import { describe, expect, it, vi } from 'vite-plus/test'
+import { float, type FloatOptions } from '#lib/attachments/index.ts'
+import { describe, expect, it, onTestFinished, vi } from 'vite-plus/test'
 import { create_element, mock_rect, stub_props, stub_resize_observer } from '../index'
 
 describe(`float`, () => {
@@ -9,6 +9,11 @@ describe(`float`, () => {
     const node = create_element()
     mock_rect(node, { left: 0, top: 0, width: 50, height: 20 })
     return node
+  }
+  // released with the test: a live float keeps answering window scrolls in later files
+  const attach = (node: HTMLElement, options: FloatOptions) => {
+    const cleanup = float(options)(node)
+    onTestFinished(() => void cleanup?.())
   }
   const sizing = ({ style }: HTMLElement) => [
     style.width,
@@ -114,7 +119,7 @@ describe(`float`, () => {
       stub_props(globalThis, { innerWidth: 800, innerHeight: 400 })
       const node = floating_node()
       node.style.cssText = css
-      float({ anchor: anchor_rect, placement, align: `start`, flip: false })(node)
+      attach(node, { anchor: anchor_rect, placement, align: `start`, flip: false })
       expect([node.style.top, node.style.left]).toEqual(expected)
     },
   )
@@ -136,9 +141,8 @@ describe(`float`, () => {
       stub_props(globalThis, { innerWidth: 800, innerHeight: 400 })
       const node = floating_node()
       mock_rect(node, { left: 0, top: 0, width: 50, height })
-      float({ anchor: { ...rect, left: 60, right: 200 }, placement, flip: false, shift })(
-        node,
-      )
+      const anchor = { ...rect, left: 60, right: 200 }
+      attach(node, { anchor, placement, flip: false, shift })
       expect(node.style.top).toBe(top)
       expect(node.style.left).toBe(`105px`) // a top-only edge list never shifts sideways
     },
