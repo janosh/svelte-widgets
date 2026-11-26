@@ -10,7 +10,10 @@
 ```svelte example id="sequence-controls-basic"
 <script lang="ts">
   import { SequenceControls } from 'svelte-widgets'
-  import { create_sequence_player } from 'svelte-widgets/sequence-player'
+  import {
+    create_sequence_player,
+    is_sequence_key_target,
+  } from 'svelte-widgets/sequence-player'
 
   const frames = Array.from({ length: 60 }, (_, idx) => (360 * idx) / 60)
   const sequence = $state({
@@ -21,9 +24,21 @@
     auto_play: false,
   })
   const playback = create_sequence_player(sequence)
+  let demo = $state<HTMLElement>()
 </script>
 
-<div style="display: flex; align-items: center; gap: 1em; flex-wrap: wrap">
+<!-- keys from inside the demo drive it; elsewhere they keep scrolling and navigating the page -->
+<svelte:window
+  onkeydown={(event) => {
+    const inside = event.target instanceof Node && demo?.contains(event.target)
+    if (inside && is_sequence_key_target(event) && playback.handle_keydown(event))
+      event.preventDefault()
+  }}
+/>
+<div
+  bind:this={demo}
+  style="display: flex; align-items: center; gap: 1em; flex-wrap: wrap"
+>
   <SequenceControls {playback} item_name="frame" step_label_positions={[0, 30, 59]} />
 </div>
 <div

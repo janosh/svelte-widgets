@@ -112,8 +112,12 @@
   :global(.docked-sidebar-row) {
     display: grid;
     position: relative;
-    grid-template-columns: minmax(0, var(--split-pane-size, 66%)) minmax(0, 1fr);
+    grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr);
+  }
+  /* split only while a sidebar is mounted: a host can keep the row and drop the sidebar */
+  :global(.docked-sidebar-row:has(> .docked-sidebar)) {
+    grid-template-columns: minmax(0, var(--split-pane-size, 66%)) minmax(0, 1fr);
   }
   :global(.docked-sidebar-row:has(> .docked-sidebar.fit-content)) {
     /* at most half the row (or --docked-sidebar-max-share), never under the viewer's 320px */
