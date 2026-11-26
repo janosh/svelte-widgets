@@ -141,11 +141,19 @@ jobs:
       # npm install runs prepare, which builds dist/
       - run: npm install --legacy-peer-deps
 
+      # Upload under a temporary name, then swap it in: --clobber on the final name deletes
+      # the old tarball before the new one finishes uploading, failing installs in between
       - name: Upload main build to the main-build prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           npm pkg set gitHead="$GITHUB_SHA"
-          mv "$(npm pack --ignore-scripts)" svelte-widgets.tgz
-          gh release upload main-build svelte-widgets.tgz --clobber
+          mv "$(npm pack --ignore-scripts)" svelte-widgets-next.tgz
+          gh release upload main-build svelte-widgets-next.tgz --clobber
+          api="repos/$GITHUB_REPOSITORY/releases"
+          asset_id() { gh api "$api/tags/main-build" --jq ".assets[] | select(.name == \"$1\") | .id"; }
+          old_id=$(asset_id svelte-widgets.tgz)
+          new_id=$(asset_id svelte-widgets-next.tgz)
+          if [ -n "$old_id" ]; then gh api -X DELETE "$api/assets/$old_id"; fi
+          gh api -X PATCH "$api/assets/$new_id" -f name=svelte-widgets.tgz
           gh release edit main-build --notes "Build of main@$GITHUB_SHA"
