@@ -52,7 +52,7 @@
     labels?: Partial<NavLabels>
     tooltip_options?: Omit<TooltipOptions, `content`>
     breakpoint?: number
-    // Desktop panes use two columns above this number of visible child links.
+    // Desktop panes use two columns above this many items (child links plus section headings).
     dropdown_column_threshold?: number
     on_navigate?: (data: {
       href: string
@@ -314,12 +314,19 @@
       {#if route.separator}
         <div class="separator" role="separator"></div>
       {:else if route.children}
-        {@const sub_routes = route.children}
-        {@const section_starts = sub_routes.map(
-          ({ section }, idx) =>
-            Boolean(section) && section !== sub_routes[idx - 1]?.section,
+        <!-- grid items in flat order: a section heading (its name) before each run's first link -->
+        {@const items = route.children.flatMap((child, idx, children) =>
+          child.section && child.section !== children[idx - 1]?.section
+            ? [child.section, child]
+            : [child],
         )}
-        {@const n_items = sub_routes.length + section_starts.filter(Boolean).length}
+        <!-- columns fill top to bottom, so a heading in slot half_rows - 1 would end column 1
+        apart from its links. One more row moves it to column 2: a link follows every heading
+        and 2 (half_rows + 1) >= items.length, so no third column. -->
+        {@const half_rows = Math.ceil(items.length / 2)}
+        {@const n_rows =
+          typeof items[half_rows - 1] === `string` ? half_rows + 1 : half_rows}
+        {@const two_columns = !is_mobile && items.length > dropdown_column_threshold}
         {@const dropdown_open = is_open_dropdown(route)}
         <!-- svelte-ignore a11y_no_static_element_interactions -- links keep native semantics; the handler routes arrows/Escape -->
         <div
@@ -351,8 +358,8 @@
           </div>
           <div
             class:visible={dropdown_open}
-            class:two-columns={!is_mobile && n_items > dropdown_column_threshold}
-            style:--submenu-rows={Math.ceil(n_items / 2)}
+            class:two-columns={two_columns}
+            style:--submenu-rows={n_rows}
             data-submenu
             tabindex="-1"
             {@attach (node) => {
@@ -383,11 +390,21 @@
           >
             <!-- display: contents on desktop; the mobile grid row animates 0fr to 1fr. -->
             <div class="submenu-inner">
-              {#each sub_routes as child, child_idx (child)}
-                {#if section_starts[child_idx]}
-                  <div class="submenu-section">{child.section}</div>
+              <!-- headings key on their slot: one section name may head several runs -->
+              {#each items as item, slot (typeof item === `string` ? slot : item)}
+                {#if typeof item === `string`}
+                  <!-- a heading topping column 2 draws no separator -->
+                  <div
+                    class={[
+                      `submenu-section`,
+                      { 'column-start': two_columns && slot === n_rows },
+                    ]}
+                  >
+                    {item}
+                  </div>
+                {:else}
+                  {@render default_link(item)}
                 {/if}
-                {@render default_link(child)}
               {/each}
             </div>
           </div>
@@ -572,7 +589,7 @@
     text-transform: uppercase;
     opacity: var(--nav-section-opacity, 0.6);
     white-space: nowrap;
-    &:not(:first-child) {
+    &:not(:first-child, .column-start) {
       margin-top: 3pt;
       border-top: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
     }
