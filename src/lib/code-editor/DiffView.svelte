@@ -586,7 +586,11 @@
     min-width: 0;
     min-height: 0;
     overflow: auto;
-    font-family: var(--editor-font);
+    /* resolved here, not on :root, so --code-font/--font-mono set on any ancestor apply */
+    font-family: var(
+      --editor-font,
+      var(--code-font, var(--font-mono, ui-monospace, Menlo, Consolas, monospace))
+    );
     font-size: var(--editor-font-size);
   }
   .diff-scroll:focus-visible {

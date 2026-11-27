@@ -103,7 +103,7 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 
 Renders one glyph from the bundled icon set at `1em` square, inheriting `currentColor`. Pass the glyph value (`<Icon icon={Info} />`), not a name.
 
-To draw your own glyph in the same 24x24 frame, build it with `markup_icon(svg_markup, { stroke: `currentColor` })` or `path_icon(d)` from `svelte-widgets/icons/builders`.
+To draw your own glyph in the same 24x24 frame, build it with `markup_icon(svg_markup, { stroke: 'currentColor' })` or `path_icon(d)` from `svelte-widgets/icons/builders`.
 
 ```svelte example id="icon-demo"
 <script lang="ts">
