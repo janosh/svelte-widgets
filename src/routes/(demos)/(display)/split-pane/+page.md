@@ -82,7 +82,7 @@ Tab focuses the divider. Left/Right resize side-by-side panes; Up/Down resize st
 
 ## DockedSidebar
 
-A resizable sidebar beside a main pane, built on SplitPane. Until the divider moves, the sidebar is as wide as its content (at most half the row, or `--docked-sidebar-max-share`), so a short table leaves no band of empty space; a drag or arrow key hands its width to the divider. A row too narrow for both minimums (320 px main pane, 260 px sidebar) stacks the sidebar under the main pane. Give the parent the `docked-sidebar-row` class and render the sidebar last in it.
+A resizable sidebar beside a main pane, built on SplitPane. Until the divider moves, the sidebar is as wide as its content (at most half the row, or `--docked-sidebar-max-share`), so a short table leaves no band of empty space; a drag or arrow key hands its width to the divider. A row too narrow for both minimums (320 px main pane, 260 px sidebar) stacks the sidebar under the main pane. Give the parent the `docked-sidebar-row` class and render the sidebar last in it. While docked, the main pane (the row's first child) and the sidebar read as one box: `--docked-sidebar-radius` rounds their outer corners and the edge they share stays square, beside or stacked.
 
 ```svelte example id="docked-sidebar"
 <script lang="ts">
@@ -91,7 +91,10 @@ A resizable sidebar beside a main pane, built on SplitPane. Until the divider mo
   let width = $state(0)
 </script>
 
-<div class="docked-sidebar-row" style="height: 12rem; border: 1px solid #8885">
+<div
+  class="docked-sidebar-row"
+  style="height: 12rem; border: 1px solid #8885; border-radius: 8px; --docked-sidebar-radius: 8px"
+>
   <section style="min-width: 0; overflow: auto; padding: 1rem">
     Main pane. Sidebar width: {Math.round(width)} px
   </section>

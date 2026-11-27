@@ -64,6 +64,8 @@ Send one panel fullscreen and watch the other panel's flag stay `false`.
 
 `bind:fullscreen` is two-way, so a checkbox, a hotkey or a `$effect` can enter and leave fullscreen without touching the button. Omit `wrapper` and the button becomes a plain toggle for the flag, for consumers that call the Fullscreen API themselves (`on_change` then stays silent: there is no wrapper to transition). A request the browser rejects flips the flag back, so it always ends up matching the browser.
 
+`hotkey="F"` adds a plain-key shortcut: it toggles fullscreen while the pointer is over `wrapper` or focus is inside it (so of several viewers only the hovered one reacts), names the key in the button's `title` and `aria-keyshortcuts`, and flashes the button. Chords such as <kbd>Cmd/Ctrl</kbd>+<kbd>F</kbd> stay the browser's, typing in a field is left alone, a hidden button takes no key, and a wrapper nested inside another with the same hotkey leaves the key to the outer one. A chord or several keys throw, since the key would never fire.
+
 ```svelte example id="fullscreen-bound"
 <script lang="ts">
   import FullscreenButton from 'svelte-widgets/FullscreenButton.svelte'

@@ -1,4 +1,5 @@
 /// <reference types="@sveltejs/kit" />
+/// <reference types="svelte-widgets/prop-docs/virtual" />
 
 declare module '*?toc' {
   import type { TocHeadingData } from 'svelte-widgets'

@@ -74,3 +74,23 @@ For uploads, build a `FormData` and pass the signal to `fetch`; throw when `resp
 ### Keyboard and feedback
 
 Tab reaches the native file picker and removal, cancel or retry buttons. Activate them with the browser's usual keyboard controls; drag and drop is optional. Validation failures are announced through a status region, and asynchronous errors use TaskStatus. Client-side `accept` checks are for user feedback; validate content and limits again at your upload endpoint.
+
+## ExportDestination
+
+The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a folder picker. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes `save(data, filename, mime)` to the task, which writes into the chosen folder (refusing to overwrite an existing file) or falls back to a browser download. Long exports call `prepare(filename, signal)` first to fail on an existing file before encoding anything.
+
+```svelte example id="export-destination"
+<script lang="ts">
+  import { ExportDestination } from 'svelte-widgets'
+  import { FileExportState } from 'svelte-widgets/browser'
+
+  const export_state = new FileExportState(() => `notes`)
+  const save_notes = () =>
+    export_state.run(({ filename, save }) =>
+      save(`Hello`, `${filename}.txt`, `text/plain`),
+    )
+</script>
+
+<ExportDestination state={export_state} />
+<button onclick={save_notes} disabled={export_state.disabled}>Save as .txt</button>
+```

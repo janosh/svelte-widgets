@@ -94,3 +94,72 @@ test(`per-setting reset buttons preserve control width and restore keyboard focu
   await expect(input).toBeFocused()
   expect((await box_of(input)).width).toBe(control_width)
 })
+
+test(`grid sections pack lone-checkbox rows into columns and put legends in the label track`, async ({
+  page,
+}) => {
+  await goto(page, `/settings`, { waitUntil: `networkidle` })
+  const demo = page.locator(`#settings-section`)
+  const section = demo.locator(`.settings-section`)
+  await expect(section).toBeVisible()
+  const boxes = () =>
+    section.evaluate((element) => {
+      const rect = (selector?: string) => {
+        const node = selector ? element.querySelector(selector) : element
+        if (!node) throw new Error(`missing ${selector}`)
+        const { left, top, bottom, width } = node.getBoundingClientRect()
+        return { left, top, bottom, width }
+      }
+      return {
+        labels: rect(`[data-key="show_labels"]`),
+        labels_box: rect(`[data-key="show_labels"] input`),
+        labels_text: rect(`[data-key="show_labels"] span`),
+        bonds: rect(`[data-key="show_bonds"]`),
+        radius: rect(`[data-key="radius"]`),
+        radius_text: rect(`[data-key="radius"] span`),
+        radius_input: rect(`[data-key="radius"] input`),
+        legend: rect(`[data-key="color"] legend`),
+        swatch: rect(`[data-key="color"] .swatch`),
+        color_controls: rect(`[data-key="color"] .controls`),
+        section: rect(),
+      }
+    })
+  const packed = await boxes()
+  // checkbox rows share a line, each narrower than the section, box before its text
+  expect(packed.bonds.top).toBe(packed.labels.top)
+  expect(packed.bonds.left).toBeGreaterThan(packed.labels.left)
+  expect(packed.labels.width).toBeLessThanOrEqual(packed.section.width / 2)
+  expect(packed.labels_box.left).toBeLessThan(packed.labels_text.left)
+  // other rows still span the section
+  expect(packed.radius.width).toBe(packed.section.width)
+  // the color legend sits in the label track, its swatch in the value track
+  expect(packed.legend.left).toBe(packed.radius_text.left)
+  expect(packed.swatch.left).toBe(packed.radius_input.left)
+  expect(packed.legend.top).toBeLessThan(packed.swatch.bottom)
+  expect(packed.swatch.top).toBeLessThan(packed.legend.bottom)
+
+  // an invalid hex adds an error after the controls; both stay in the value tracks
+  const hex = demo.getByRole(`textbox`, { name: `Hex color` })
+  await hex.fill(`#zz`)
+  const error = demo.locator(`[data-key="color"] small`)
+  await expect(error).toBeVisible()
+  const invalid = await boxes()
+  expect(invalid.color_controls.width).toBe(packed.color_controls.width)
+  expect((await error.boundingBox())?.x).toBe(packed.swatch.left)
+  await hex.press(`Escape`)
+
+  // a changed row shows its reset button and stays packed, so toggling doesn't move it
+  await demo.locator(`[data-key="show_labels"] input`).click()
+  await expect(
+    demo.locator(`[data-key="show_labels"] .setting-reset-button`),
+  ).toBeVisible()
+  const changed = await boxes()
+  expect(changed.labels.width).toBe(packed.labels.width)
+  expect(changed.bonds.top).toBe(changed.labels.top)
+
+  // a shown description needs the width, so checkbox rows span again, changed ones included
+  await demo.locator(`.description-toggle`).click()
+  const spread = await boxes()
+  expect(spread.labels.width).toBe(spread.section.width)
+  expect(spread.bonds.top).toBeGreaterThan(spread.labels.top)
+})

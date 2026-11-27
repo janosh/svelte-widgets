@@ -385,6 +385,8 @@ several panes can be renamed via pane_props -->
     max-height: min(var(--pane-max-height, 80vh), var(--pane-viewport-clamp, 200vh));
     overflow: visible; /* the control tab protrudes past the pane's right border */
     background: var(--pane-bg, var(--page-bg, light-dark(white, black)));
+    /* pair ink with a custom --pane-bg, else a light pane inherits a dark host's light text */
+    color: var(--pane-color, inherit);
     border: var(
       --pane-border,
       1px solid light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.15))

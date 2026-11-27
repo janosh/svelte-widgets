@@ -119,6 +119,13 @@
   :global(.docked-sidebar-row:has(> .docked-sidebar)) {
     grid-template-columns: minmax(0, var(--split-pane-size, 66%)) minmax(0, 1fr);
   }
+  /* main pane and sidebar read as one box: --docked-sidebar-radius rounds its outer corners,
+     the edge they share stays square so no gap opens between them */
+  :global(.docked-sidebar-row:has(> .docked-sidebar) > :first-child) {
+    border-radius: 0;
+    border-start-start-radius: var(--docked-sidebar-radius, 0);
+    border-end-start-radius: var(--docked-sidebar-radius, 0);
+  }
   :global(.docked-sidebar-row:has(> .docked-sidebar.fit-content)) {
     /* at most half the row (or --docked-sidebar-max-share), never under the viewer's 320px */
     grid-template-columns:
@@ -133,11 +140,17 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 55%) minmax(0, 1fr);
   }
+  :global(
+    .docked-sidebar-row.docked-sidebar-stacked:has(> .docked-sidebar) > :first-child
+  ) {
+    border-radius: var(--docked-sidebar-radius, 0) var(--docked-sidebar-radius, 0) 0 0;
+  }
   :global(.docked-sidebar-row.docked-sidebar-stacked > .pane-divider) {
     display: none;
   }
   /* a rule in place of the hidden divider, in its color unless --border-color is set */
   :global(.docked-sidebar-row.docked-sidebar-stacked > .docked-sidebar) {
+    border-radius: 0 0 var(--docked-sidebar-radius, 0) var(--docked-sidebar-radius, 0);
     border-top: 1px solid
       var(--border-color, color-mix(in srgb, currentColor 24%, transparent));
   }
@@ -148,6 +161,8 @@
     min-height: 0;
     overflow: hidden;
     padding: 6pt 8pt;
+    border-start-end-radius: var(--docked-sidebar-radius, 0);
+    border-end-end-radius: var(--docked-sidebar-radius, 0);
     background: var(--surface-bg, transparent);
     /* opaque sticky table cells match the sidebar, not the page */
     --table-sticky-cell-bg: var(--surface-bg, var(--page-bg, Canvas));

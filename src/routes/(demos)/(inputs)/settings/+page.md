@@ -98,13 +98,20 @@ A titled region that displays reset controls for caller-supplied `changed_keys`.
 
 Each keyed row supplies its description through `data-description`, used by both Explain and SettingsSearch. Bind that attribute directly to a schema description when needed.
 
-`layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so controls line up down the section instead of starting wherever each label ends.
+`layout="grid"` puts every row on one shared `[label] [value] [wide control]` rhythm so controls line up down the section instead of starting wherever each label ends. A row holding just a label and a checkbox (bare, or alone in a wrapper element) needs no full line: consecutive ones pack into columns at least `--settings-pack-min` (default `8.5em`) wide, box first, and span again while their description shows. Fieldset rows such as `ColorInput` put their legend in the label track.
 
 ```svelte example id="settings-section"
 <script lang="ts">
-  import { SettingsSection } from 'svelte-widgets'
+  import { ColorInput, SettingsSection } from 'svelte-widgets'
 
-  const defaults = { radius: 1, opacity: 0.8, show_labels: true }
+  const defaults = {
+    radius: 1,
+    opacity: 0.8,
+    show_labels: true,
+    show_bonds: false,
+    show_cell: true,
+    color: `#6495ed`,
+  }
   let settings = $state({ ...defaults })
 </script>
 
@@ -134,6 +141,15 @@ Each keyed row supplies its description through `data-description`, used by both
       <span>Site labels</span>
       <input type="checkbox" bind:checked={settings.show_labels} />
     </label>
+    <label data-key="show_bonds" data-description="Connect neighboring atoms">
+      <span>Bonds</span>
+      <input type="checkbox" bind:checked={settings.show_bonds} />
+    </label>
+    <label data-key="show_cell" data-description="Outline the unit cell">
+      <span>Unit cell</span>
+      <input type="checkbox" bind:checked={settings.show_cell} />
+    </label>
+    <ColorInput data-key="color" label="Atom color" bind:value={settings.color} />
   </SettingsSection>
 </div>
 ```

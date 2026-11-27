@@ -101,6 +101,23 @@ for (const [title, mutate_layout] of [
   })
 }
 
+// Panes paint their own --pane-bg, so their text follows --pane-color rather than a host's ink
+// (a light pane in a dark app would otherwise inherit its near-white text)
+test(`--pane-color sets the pane's text color, else it inherits the host's`, async ({
+  page,
+}) => {
+  const { pane } = await open_pane(page)
+  const colors = await pane.evaluate((element: HTMLElement) => {
+    const host = element.parentElement
+    if (!host) throw new Error(`pane has no parent`)
+    host.style.color = `rgb(1, 2, 3)`
+    const inherited = getComputedStyle(element).color
+    host.style.setProperty(`--pane-color`, `rgb(4, 5, 6)`)
+    return [inherited, getComputedStyle(element).color]
+  })
+  expect(colors).toEqual([`rgb(1, 2, 3)`, `rgb(4, 5, 6)`])
+})
+
 test.describe(`touch`, () => {
   test.use({ hasTouch: true, isMobile: true, viewport: { width: 900, height: 800 } })
 

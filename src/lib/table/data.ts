@@ -354,14 +354,3 @@ export function format_datetime(
 // DataTable's default render_html: the markup's visible text, escaped. Safe for {@html}
 // without a sanitizer, at the cost of dropping formatting.
 export const escape_markup = (html: string): string => escape_html(html_to_text(html))
-
-// Keeps returning the first of a run of JSON-equal arguments, so a caller that rebuilds an
-// equal value on every read hands its consumers one identity. JSON values only.
-export function same_while_equal<T>(): (value: T) => T {
-  let last: { key: string; value: T } | undefined
-  return (value) => {
-    const key = JSON.stringify(value)
-    if (last?.key !== key) last = { key, value }
-    return last.value
-  }
-}

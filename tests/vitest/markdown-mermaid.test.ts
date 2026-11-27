@@ -152,6 +152,24 @@ describe(`mermaid_diagrams attachment`, () => {
     expect(mermaid.render).toHaveBeenCalledTimes(2) // detached, so no re-render
   })
 
+  // a panel declaring its own scheme beats the page root's, and flipping it re-renders
+  test(`follows the color-scheme of a panel around the container`, async () => {
+    document.documentElement.style.colorScheme = `light`
+    const panel = document.createElement(`section`)
+    panel.style.colorScheme = `dark`
+    const container = document.createElement(`div`)
+    container.append(diagram(`graph LR`))
+    panel.append(container)
+    document.body.append(panel)
+    const detach = mermaid_diagrams()(container)
+    if (typeof detach === `function`) onTestFinished(detach)
+    await settle()
+    expect(container.querySelector(`svg`)?.dataset.theme).toBe(`dark`)
+    panel.style.colorScheme = `light`
+    await settle()
+    expect(container.querySelector(`svg`)?.dataset.theme).toBe(`default`)
+  })
+
   test(`renders diagrams added to the container later`, async () => {
     const container = document.createElement(`div`)
     document.body.append(container)

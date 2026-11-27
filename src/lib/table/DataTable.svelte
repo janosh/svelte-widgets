@@ -20,6 +20,7 @@
     escape_html,
     html_to_text,
     is_plain_object,
+    same_while_equal,
     with_defaults,
   } from '../utils'
   import { virtual_window } from '../virtual'
@@ -63,7 +64,6 @@
     middle_ellipsis_parts,
     parse_datetime_val,
     parse_numeric_val,
-    same_while_equal,
     sort_table_rows,
     text_matches_query,
   } from './data'

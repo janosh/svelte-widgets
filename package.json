@@ -96,6 +96,10 @@
       "types": "./dist/icons.d.ts",
       "default": "./dist/icons.js"
     },
+    "./icons/builders": {
+      "types": "./dist/icons/builders.d.ts",
+      "default": "./dist/icons/builders.js"
+    },
     "./heading-anchors": {
       "types": "./dist/heading-anchors.d.ts",
       "default": "./dist/heading-anchors.js"
@@ -122,6 +126,13 @@
     "./source-links/virtual": {
       "types": "./dist/source-links/virtual.d.ts"
     },
+    "./prop-docs/vite-plugin": {
+      "types": "./dist/prop-docs/vite-plugin.d.ts",
+      "default": "./dist/prop-docs/vite-plugin.js"
+    },
+    "./prop-docs/virtual": {
+      "types": "./dist/prop-docs/virtual.d.ts"
+    },
     "./code-editor": {
       "types": "./dist/code-editor/index.d.ts",
       "svelte": "./dist/code-editor/index.js",
@@ -137,6 +148,10 @@
     "./browser": {
       "types": "./dist/browser/index.d.ts",
       "default": "./dist/browser/index.js"
+    },
+    "./figure-export": {
+      "types": "./dist/figure-export.d.ts",
+      "default": "./dist/figure-export.js"
     },
     "./file-drop": {
       "types": "./dist/file-drop.d.ts",
@@ -157,6 +172,10 @@
     "./theme": {
       "types": "./dist/theme.svelte.d.ts",
       "default": "./dist/theme.svelte.js"
+    },
+    "./theme-core": {
+      "types": "./dist/theme-core.d.ts",
+      "default": "./dist/theme-core.js"
     },
     "./JsonTree.svelte": {
       "types": "./dist/json-tree/JsonTree.svelte.d.ts",
@@ -291,6 +310,7 @@
     "mermaid": "^12.0.0",
     "svelte": "^5.48.0",
     "temml": "^0.14.0",
+    "typescript": ">=5.0.0",
     "vite": "^8.0.0"
   },
   "peerDependenciesMeta": {
@@ -301,6 +321,9 @@
       "optional": true
     },
     "temml": {
+      "optional": true
+    },
+    "typescript": {
       "optional": true
     },
     "vite": {

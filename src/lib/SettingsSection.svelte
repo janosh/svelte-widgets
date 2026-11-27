@@ -28,7 +28,8 @@
     changed_keys?: readonly string[]
     children: Snippet
     // `grid` aligns every direct label/.setting row on one [label][value][wide control]
-    // rhythm instead of wherever each label's text ends; `flow` leaves layout to the caller.
+    // rhythm instead of wherever each label's text ends (a fieldset's legend takes the label
+    // track) and packs runs of lone-checkbox rows into columns; `flow` leaves layout to the caller.
     layout?: `flow` | `grid`
     // Omit to reset every changed key through `on_reset_key`. Pass one only when reset has to
     // do more than restore values (clearing validation state, say).
@@ -373,14 +374,23 @@
     font-weight: 400;
     line-height: 1.3;
   }
+  /* every row spans the section; only lone-checkbox rows (below) fall into these columns */
   section.grid {
     display: grid;
+    grid-template-columns: repeat(
+      auto-fill,
+      minmax(min(100%, var(--settings-pack-min, 8.5em)), 1fr)
+    );
     gap: var(--settings-row-gap, 4pt) 0;
     align-content: start;
   }
+  /* zero specificity, so any caller placement wins */
+  :where(section.grid) > :global(*) {
+    grid-column: 1 / -1;
+  }
   /* --ctrl-cols is published so panes can give nested rows the same rhythm without restating
      the track list */
-  section.grid > :global(:is(label, .setting)) {
+  section.grid > :global(:is(label, .setting, fieldset)) {
     display: grid;
     grid-template-columns: var(
       --ctrl-cols,
@@ -421,6 +431,40 @@
       min-width: 0;
       margin: 0;
       padding: 0;
+    }
+  }
+  /* A label and a lone checkbox (bare or alone in a wrapper element) need no full row: runs of
+     them pack into columns, box first. A reset button keeps a row packed so toggling doesn't
+     move it; a shown description needs the width, so that row spans again. :where() keeps this
+     at the row rule's specificity, so callers can unpack a row as easily as restyle it. */
+  section.grid
+    > :global(
+      :is(label, .setting):where(
+        :has(
+          > input[type='checkbox']:nth-child(2),
+          > :nth-child(2) > input[type='checkbox']:only-child
+        ):not(
+          :has(> :nth-child(3):not(.setting-reset-button), > .settings-row-description)
+        )
+      )
+    ) {
+    grid-column: auto;
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-end;
+    gap: 5pt;
+  }
+  /* a floated legend is an ordinary grid item, so a fieldset row (ColorInput, say) puts it in
+     the label track instead of above the row */
+  section.grid > :global(fieldset) {
+    > :global(legend) {
+      float: left;
+      margin: 0;
+      padding: 0;
+    }
+    /* everything else (controls, error, presets) shares the value tracks */
+    > :global(:not(legend, .settings-row-description)) {
+      grid-column: 2 / -1;
     }
   }
 </style>

@@ -9,7 +9,7 @@
   import type { IconData } from './icons'
   import { Cross } from './icons'
   import { merge_defaults, TAG_LABELS, type TagLabels } from './labels'
-  import { theme } from './theme.svelte.ts'
+  import { watch_theme_changes } from './theme-core'
 
   let {
     label,
@@ -54,15 +54,16 @@
   const uid = $props.id()
   const content_id = $derived(rest.id ?? `${uid}-content`)
 
-  // Contrast is picked from the painted fill rather than the color prop, so var(), color-mix()
-  // and a --tag-color set in a stylesheet all resolve. Reads every input of the fill and the
-  // applied theme to re-pick when any changes, e.g. for light-dark() or a theme-dependent var().
+  // Contrast is picked from the painted fill, so var(), color-mix() and a stylesheet --tag-color
+  // resolve. Re-picked when a prop or an ancestor's class, data-theme or color-scheme changes.
   let contrast_text = $state<string>()
   const auto_contrast = (node: HTMLElement) => {
+    contrast_text = undefined
     if (variant !== `solid` && !active) return
-    void [color, style, class_name, theme.resolved]
-    contrast_text = pick_contrast_color({ bg_color: get_bg_color(node) })
-    return () => (contrast_text = undefined)
+    void [color, style, class_name]
+    const pick = () => pick_contrast_color({ bg_color: get_bg_color(node) })
+    contrast_text = pick()
+    return watch_theme_changes(node, () => (contrast_text = pick()))
   }
 </script>
 

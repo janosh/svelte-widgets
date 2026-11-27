@@ -1,5 +1,6 @@
+import { on } from 'svelte/events'
 import type { Hotkey } from '../shortcuts'
-import { run_hotkeys } from '../shortcuts'
+import { is_editable_event_target, is_modifier_chord, run_hotkeys } from '../shortcuts'
 import { is_composing } from './shared'
 
 export interface HotkeyOptions {
@@ -73,3 +74,48 @@ export const forward_window_keydown =
 
     return () => listeners.abort()
   }
+
+// === Viewer keydown ===
+
+type KeydownHandler = (event: KeyboardEvent) => boolean
+
+// Attachment for the keydowns of one viewer (any surface with its own shortcuts), from focus
+// inside it or the page's while the pointer is over it (forward_window_keydown), so of several
+// viewers only one reacts. `handle` returning true prevents the default and keeps an enclosing
+// viewer from acting on the key (the root runs before the window pass, which then skips the
+// prevented key). `hover_handle` narrows what the pointer alone may trigger.
+export const viewer_keydown =
+  (handle: KeydownHandler, hover_handle: KeydownHandler = handle) =>
+  (node: HTMLElement): (() => void) => {
+    // `on`, not addEventListener: descendants' delegated onkeydown handlers run first, so
+    // one that handles (prevents) or stops a key keeps it from the viewer
+    const off = on(node, `keydown`, (event) => {
+      if (!event.defaultPrevented && !is_composing(event) && handle(event))
+        event.preventDefault()
+    })
+    const detach = forward_window_keydown({ handle: hover_handle })(node)
+    return () => {
+      off()
+      detach?.()
+    }
+  }
+
+// Plain-key shortcuts of one viewer (see viewer_keydown). Chords stay the browser's (Cmd/Ctrl+R
+// reloads), typing and autorepeat are ignored. Keys are matched lowercased for letters (so Caps
+// Lock still works) and by `event.key` otherwise (`Escape`, `+`). Shift+letter is a different
+// shortcut, never the plain letter's. An action returning false had nothing to do, which leaves
+// the key to the host.
+export const viewer_keys = (bindings: () => Partial<Record<string, () => unknown>>) =>
+  viewer_keydown((event) => {
+    if (
+      event.repeat ||
+      is_modifier_chord(event) ||
+      is_editable_event_target(event.target)
+    )
+      return false
+    const { key, shiftKey } = event
+    const letter = key.length === 1 && key.toLowerCase() !== key.toUpperCase()
+    if (letter && shiftKey) return false
+    const action = bindings()[letter ? key.toLowerCase() : key]
+    return action !== undefined && action() !== false
+  })

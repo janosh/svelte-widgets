@@ -24,3 +24,5 @@
   Hover here, focus this box and press an arrow key. Last key: {last_key}
 </div>
 ```
+
+`viewer_keys(() => ({ r: reset, Escape: close }))` builds on it for plain-key shortcuts: keys reach the viewer under the pointer or holding focus, chords stay the browser's (Cmd/Ctrl+R reloads), typing and autorepeat are ignored, letters are bound lowercase and also fire under Caps Lock, but Shift+letter is a different shortcut, and an action returning `false` leaves the key to the page. `viewer_keydown(handle, hover_handle?)` is the general form, taking any keydown handler.

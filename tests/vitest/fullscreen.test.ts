@@ -13,7 +13,7 @@ import {
   test,
   vi,
 } from 'vite-plus/test'
-import { click, create_element, render } from './index'
+import { click, create_element, press_key, render } from './index'
 
 // happy-dom implements no part of the Fullscreen API, so requestFullscreen,
 // exitFullscreen and the fullscreenElement getter are stubbed. The stubs keep one
@@ -90,6 +90,134 @@ const outsider_goes_fullscreen = async (): Promise<void> => {
 
 const icon_path = (button: HTMLElement): string | null =>
   button.querySelector(`svg path`)?.getAttribute(`d`) ?? null
+
+// The default glyphs' extents in their path units: mdi:fullscreen spans 5..19, the exit glyph 4..20.
+// Both default icons are cropped so their glyph fills the same share of the box, centered.
+test(`default enter and exit glyphs fill the same centered share of the icon box`, async () => {
+  const { button, flag } = mount_button()
+  const view_box = () =>
+    (button.querySelector(`svg`)?.getAttribute(`viewBox`) ?? ``).split(` `).map(Number)
+  const share = ([min_x, min_y, width, height]: number[], [lo, hi]: [number, number]) => {
+    expect([min_x + width / 2, min_y + height / 2, width]).toEqual([12, 12, height])
+    return (hi - lo) / width
+  }
+  const enter_share = share(view_box(), [5, 19])
+  flag.set(true)
+  await settle()
+  expect(icon_path(button)).toBe(icons.ExitFullscreen.d)
+  expect(share(view_box(), [4, 20])).toBeCloseTo(enter_share, 5)
+  expect(enter_share).toBeCloseTo(0.768, 3)
+})
+
+describe(`hotkey`, () => {
+  const hover = (node: Element) => node.dispatchEvent(new PointerEvent(`pointerenter`))
+
+  // claimed only while the pointer is over the wrapper or focus is inside it; chords stay the
+  // browser's (Cmd/Ctrl+F is find-in-page)
+  test.each([
+    [`plain f toggles`, `F`, { key: `f` }, true, `hover`],
+    [`Caps Lock F toggles`, `F`, { key: `F` }, true, `hover`],
+    [`f with focus inside the wrapper toggles`, `F`, { key: `f` }, true, `focus`],
+    [`a non-letter hotkey matches event.key`, `F11`, { key: `F11` }, true, `hover`],
+    [`Cmd+F stays find-in-page`, `F`, { key: `f`, metaKey: true }, false, `hover`],
+    [`Ctrl+F stays find-in-page`, `F`, { key: `f`, ctrlKey: true }, false, `hover`],
+    [`Shift+F is another shortcut`, `F`, { key: `F`, shiftKey: true }, false, `hover`],
+    [`an autorepeat does not re-toggle`, `F`, { key: `f`, repeat: true }, false, `hover`],
+    [`other keys are ignored`, `F`, { key: `g` }, false, `hover`],
+    [`f outside the wrapper is ignored`, `F`, { key: `f` }, false, `none`],
+  ] as const)(`%s`, async (_name, hotkey, { key, ...init }, toggles, via) => {
+    const { wrapper, flag, button } = mount_button({ hotkey })
+    expect([button.title, button.getAttribute(`aria-keyshortcuts`)]).toEqual([
+      `Enter fullscreen (${hotkey})`,
+      hotkey,
+    ])
+    if (via === `hover`) hover(wrapper)
+    press_key(via === `focus` ? button : globalThis, key, init)
+    await settle()
+    expect(get(flag)).toBe(toggles)
+    // the button flashes as the key's feedback
+    expect(button.style.boxShadow.includes(`1px`)).toBe(toggles)
+    if (toggles) expect(button.title).toBe(`Exit fullscreen (${hotkey})`)
+  })
+
+  // a key nothing would handle is not advertised
+  test.each([
+    [`no hotkey`, {}],
+    [`a hotkey without a wrapper`, { hotkey: `F`, wrapper: undefined }],
+  ])(`%s: plain title, no aria-keyshortcuts, no key`, async (_name, props) => {
+    const { wrapper, flag, button } = mount_button(props)
+    expect([button.title, button.hasAttribute(`aria-keyshortcuts`)]).toEqual([
+      `Enter fullscreen`,
+      false,
+    ])
+    hover(wrapper)
+    press_key(globalThis, `f`)
+    await settle()
+    expect(get(flag)).toBe(false)
+  })
+
+  test.each([`Shift+F`, `F F11`, `Control+F`])(
+    `hotkey %j (not one plain key) throws`,
+    (hotkey) => {
+      expect(() => mount_button({ hotkey })).toThrow(`must be one plain key`)
+    },
+  )
+
+  test(`a hidden button takes no key and marks no wrapper; the marker goes on unmount`, async () => {
+    const hidden = mount_button({ hotkey: `F`, hidden: true })
+    expect(hidden.wrapper.hasAttribute(`data-fullscreen-hotkey`)).toBe(false)
+    hover(hidden.wrapper)
+    press_key(globalThis, `f`)
+    await settle()
+    expect(get(hidden.flag)).toBe(false)
+    const shown = mount_button({ hotkey: `F` })
+    expect(shown.wrapper.getAttribute(`data-fullscreen-hotkey`)).toBe(`f`)
+    await shown.unmount_button()
+    expect(shown.wrapper.hasAttribute(`data-fullscreen-hotkey`)).toBe(false)
+  })
+
+  // both wrappers are hovered at once, and the inner one (mounted first, as a child's effects
+  // run first) would take the key before the outer one sees it. It defers only to a live
+  // outer button with the same key.
+  test.each([
+    [`same key`, { hotkey: `F` }, [false, true]],
+    [`outer has another key`, { hotkey: `G` }, [true, false]],
+    [`outer button hidden`, { hotkey: `F`, hidden: true }, [true, false]],
+  ] as const)(`nested wrapper, %s`, async (_name, outer_props, expected) => {
+    const outer = create_element()
+    const inner = create_element()
+    outer.append(inner)
+    const flags = (
+      [
+        [inner, { hotkey: `F` }],
+        [outer, outer_props],
+      ] as const
+    ).map(([wrapper, props]) => {
+      const flag = writable(false)
+      const flag_proxy = fromStore(flag)
+      const unmount_button = render(
+        FullscreenButton,
+        {
+          wrapper,
+          ...props,
+          get fullscreen() {
+            return flag_proxy.current
+          },
+          set fullscreen(next_fullscreen: boolean) {
+            flag.set(next_fullscreen)
+          },
+        },
+        wrapper,
+      )
+      onTestFinished(unmount_button)
+      hover(wrapper)
+      return flag
+    })
+    press_key(globalThis, `f`)
+    await settle()
+    expect(flags.map((flag) => get(flag))).toEqual(expected)
+  })
+})
 
 describe(`per-wrapper isolation`, () => {
   test(`an unrelated element going fullscreen flips no flag`, async () => {

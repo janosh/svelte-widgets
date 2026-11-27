@@ -87,3 +87,41 @@ test.describe(`Toggle checked knob travel`, () => {
     })
   }
 })
+
+// light-dark() tokens and system colors resolve against the panel's own scheme,
+// not the page root's, and re-resolve when the panel's inline color-scheme flips
+test(`theme-core demo resolves light-dark() and system colors against the element's scheme`, async ({
+  page,
+}) => {
+  const panel = page.getByTestId(`theme-core-panel`)
+  await expect(panel).toHaveText(
+    /dark: true, --swatch resolves to rgb\(51, 221, 51\), Canvas to rgb\(18, 18, 18\)/,
+  )
+  await page
+    .locator(`#theme-core-demo`)
+    .getByRole(`button`, { name: `Flip panel to light` })
+    .click()
+  await expect(panel).toHaveText(
+    /dark: false, --swatch resolves to rgb\(221, 51, 51\), Canvas to rgb\(255, 255, 255\)/,
+  )
+})
+
+test(`LazyMount demos mount once scrolled near, PropsTable lists extracted props`, async ({
+  page,
+}) => {
+  const lazy = page.locator(`#lazy-mount-demo`)
+  await lazy.scrollIntoViewIfNeeded()
+  await expect(lazy.getByText(`Mounted once scrolled near`)).toBeVisible()
+  await expect(lazy.getByText(`Imported once scrolled near`)).toBeVisible()
+  // the held min-height is dropped once the content has laid out
+  for (const region of await lazy.locator(`.lazy-mount`).all())
+    await expect(region).not.toHaveAttribute(`style`, /min-height/)
+
+  const table = page.locator(`#props-table-demo details.props-table`)
+  await table.locator(`summary`).click()
+  const row = (prop: string) => table.locator(`tbody tr`).filter({ hasText: prop })
+  await expect(row(`label`)).toContainText(`required`)
+  await expect(row(`label`)).toContainText(`Placeholder text and region name`)
+  await expect(row(`height`)).toContainText(`'500px'`)
+  await expect(table).toContainText(`Also takes any <div> attribute`)
+})

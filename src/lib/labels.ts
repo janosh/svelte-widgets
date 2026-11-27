@@ -66,6 +66,7 @@ export type CodeEditorLabels = typeof CODE_EDITOR_LABELS
 export const CODE_EXAMPLE_LABELS = {
   show_code: `View code`,
   hide_code: `Close`,
+  example: `Interactive example`, // placeholder of a `lazy` example
 }
 export type CodeExampleLabels = typeof CODE_EXAMPLE_LABELS
 

@@ -52,18 +52,19 @@ unreliable -->
     display: flex;
     align-items: center;
     gap: 1em;
+    font-size: var(--status-message-font-size, inherit);
     border-radius: var(--border-radius, 3pt);
     backdrop-filter: blur(8px);
     &.info {
       border: 2px dashed var(--text-color-muted, #ccc);
       background: transparent;
       color: var(--text-color-muted, light-dark(#666, #bbb));
-      padding: 2em;
+      padding: var(--status-message-padding, 2em);
     }
     &:is(.error, .success, .warning) {
       background: color-mix(in srgb, var(--message-color) 10%, transparent);
       color: var(--message-color);
-      padding: 0.5em 1em;
+      padding: var(--status-message-padding, 0.5em 1em);
     }
     &.error {
       --message-color: var(--error-color, light-dark(#b91c1c, #f87171));

@@ -464,7 +464,7 @@ describe(`DataTable`, () => {
     )
   })
 
-  it.each([`same_while_equal`, `escape_markup`, `full_value_title`])(
+  it.each([`escape_markup`, `full_value_title`])(
     `keeps the internal helper %s out of the public table module`,
     (name) => {
       expect(name in table_index).toBe(false)
@@ -2580,6 +2580,20 @@ describe(`DataTable`, () => {
       await tick()
       const filtered = [`mean`, `25`, ``, `median`, `25`, ``, `count`, `2`, ``]
       expect(summary_cells()).toEqual(filtered)
+    })
+
+    // JSON writes -Infinity and Infinity alike (null), which kept the old filter cached
+    it(`re-filters when a bound swaps between -Infinity and Infinity`, async () => {
+      const props = $state({
+        data: metric_rows,
+        columns: metrics,
+        column_prefs: { Score: { filter: { kind: `numeric` as const, max: -Infinity } } },
+      })
+      mount_table(props)
+      expect(rendered_models()).toEqual([])
+      props.column_prefs = { Score: { filter: { kind: `numeric`, max: Infinity } } }
+      await tick()
+      expect(rendered_models()).toEqual([`A`, `B`, `C`])
     })
 
     it(`normalizes columns independently and enables median summaries on demand`, async () => {
