@@ -74,6 +74,10 @@ test.each([
   [`denied`, `permission denied`],
   [`write-error`, `Disk full`],
   [`cancel-write`, `Cancelled`],
+  // another program creates the name after prepare's check, or fills the empty file we created
+  [`created-meanwhile`, `already exists`],
+  [`written-meanwhile`, `Disk full`],
+  [`concurrent`, `already being exported`],
 ] as const)(
   `selected folder handles %s without redirecting to browser downloads`,
   async (outcome, error_message) => {
@@ -87,19 +91,26 @@ test.each([
         new WritableStream<Uint8Array<ArrayBuffer>>({
           write(chunk) {
             chunks.push(chunk)
-            if (outcome === `write-error`) throw new Error(`Disk full`)
+            if ([`write-error`, `written-meanwhile`].includes(outcome))
+              throw new Error(`Disk full`)
             if (outcome === `cancel-write`) controller.abort(new Error(`Cancelled`))
           },
           close,
           abort,
         }),
     )
+    let lookups = 0
     const get_file = vi.fn(async (_name: string, options?: { create?: boolean }) => {
       if (outcome === `denied`)
         throw new DOMException(`Folder permission denied`, `NotAllowedError`)
-      if (!options?.create && outcome !== `exists`)
-        throw new DOMException(`Missing`, `NotFoundError`)
-      return { createWritable: create_writable }
+      const exists =
+        outcome === `exists` || (outcome === `created-meanwhile` && lookups++ > 0)
+      if (!options?.create && !exists) throw new DOMException(`Missing`, `NotFoundError`)
+      const content = outcome === `written-meanwhile` ? [`other`] : []
+      return {
+        createWritable: create_writable,
+        getFile: async () => new File(content, ``),
+      }
     })
     const remove_entry = vi.fn(async () => {})
     const directory = {
@@ -134,21 +145,36 @@ test.each([
     const encode = vi.fn(() => new Blob([`encoded video`], { type: `video/mp4` }))
     await export_state.run(async ({ filename, prepare }) => {
       const save = await prepare(`${filename}.mp4`, controller.signal)
-      await save(encode(), `video/mp4`)
+      const blob = encode()
+      // same-name writes started together: the second must not reopen the first's file
+      const writes = outcome === `concurrent` ? [save(blob, `video/mp4`)] : []
+      writes.push(save(blob, `video/mp4`))
+      for (const result of await Promise.allSettled(writes))
+        if (result.status === `rejected`) throw result.reason
     })
     expect(download).not.toHaveBeenCalled()
     expect(export_state.busy).toBe(false)
     expect(export_state.error).toContain(error_message)
-    expect(error_spy).toHaveBeenCalledTimes(error_message ? 1 : 0)
+    // a kept file is logged on top of the export error
+    expect(error_spy).toHaveBeenCalledTimes(
+      outcome === `written-meanwhile` ? 2 : error_message ? 1 : 0,
+    )
     expect(encode).toHaveBeenCalledTimes([`exists`, `denied`].includes(outcome) ? 0 : 1)
-    expect(close).toHaveBeenCalledTimes(outcome === `success` ? 1 : 0)
-    if (outcome === `success`) {
+    expect(close).toHaveBeenCalledTimes(
+      [`success`, `concurrent`].includes(outcome) ? 1 : 0,
+    )
+    expect(get_file.mock.calls.some(([, options]) => options?.create)).toBe(
+      ![`exists`, `denied`, `created-meanwhile`].includes(outcome),
+    )
+    if ([`success`, `concurrent`].includes(outcome))
       expect(await new Blob(chunks).text()).toBe(`encoded video`)
+    if (outcome === `success`) {
       expect(export_state.error).toBe(``)
       expect(get_file).toHaveBeenLastCalledWith(`My movie.mp4`, { create: true })
     }
     if (outcome === `cancel-write`) expect(abort).toHaveBeenCalledOnce()
-    // a failed write removes the file it created, so retrying under the same name works
+    // a failed write removes the empty file it created, so retrying under the same name works,
+    // but keeps one that another program filled meanwhile
     expect(remove_entry.mock.calls).toEqual(
       [`write-error`, `cancel-write`].includes(outcome) ? [[`My movie.mp4`]] : [],
     )

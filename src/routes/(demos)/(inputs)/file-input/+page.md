@@ -77,7 +77,7 @@ Tab reaches the native file picker and removal, cancel or retry buttons. Activat
 
 ## ExportDestination
 
-The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a folder picker. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes `save(data, filename, mime)` to the task, which writes into the chosen folder (refusing to overwrite an existing file) or falls back to a browser download. Long exports call `prepare(filename, signal)` first to fail on an existing file before encoding anything.
+The save-side counterpart: a file name field plus, where the File System Access API is usable (not in frames cross-origin to the top page), a folder picker. `FileExportState` from `svelte-widgets/browser` holds the destination and validates the name; its `run(task)` passes `save(data, filename, mime)` to the task, which writes into the chosen folder (refusing names that already exist, best effort since the API has no exclusive create) or falls back to a browser download. Long exports call `prepare(filename, signal)` first to fail on an existing file before encoding anything.
 
 ```svelte example id="export-destination"
 <script lang="ts">

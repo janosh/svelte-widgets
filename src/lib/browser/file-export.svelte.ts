@@ -2,7 +2,9 @@ import { download, type DownloadData } from './download'
 import { to_error } from '../utils'
 
 // Where an export UI saves its files: a base name plus, where the File System Access API allows,
-// a chosen folder (writes refuse to overwrite), else browser downloads via `download`.
+// a chosen folder, else browser downloads via `download`. Folder writes refuse names that
+// already exist, but best effort only: the API has no exclusive create, so another program
+// creating the same name between the last check and the write can still be overwritten.
 
 export type FileSaver = (
   data: DownloadData,
@@ -22,6 +24,20 @@ export interface FileExportContext {
 // One destination per export UI, shared by all its formats. Native handles stay in memory.
 // `run` validates the name, then hands the task a `save` (check, then write) and a `prepare`
 // (check now, write later) so long exports can fail on an existing file before encoding.
+// The write checks again and claims the name page-wide, so same-name exports can't clobber
+// each other in this page.
+const writing = new Set<string>()
+
+const assert_free = async (directory: FileSystemDirectoryHandle, filename: string) => {
+  try {
+    await directory.getFileHandle(filename)
+  } catch (error) {
+    if (error instanceof DOMException && error.name === `NotFoundError`) return
+    throw error
+  }
+  throw new Error(`${directory.name}/${filename} already exists. Choose another name.`)
+}
+
 export class FileExportState {
   filename = $derived.by(() => this.default_filename())
   directory = $state.raw<FileSystemDirectoryHandle | null>(null)
@@ -47,37 +63,38 @@ export class FileExportState {
       if (this.filename_error) throw new Error(this.filename_error)
       const directory = this.directory
       const prepare = async (filename: string, signal?: AbortSignal) => {
-        if (directory) {
-          let existing: FileSystemFileHandle | undefined
-          try {
-            existing = await directory.getFileHandle(filename)
-          } catch (error) {
-            if (!(error instanceof DOMException && error.name === `NotFoundError`))
-              throw error
-          }
-          if (existing)
-            throw new Error(
-              `${directory.name}/${filename} already exists. Choose another name.`,
-            )
-        }
+        if (directory) await assert_free(directory, filename)
         signal?.throwIfAborted()
         return async (data: DownloadData, mime: string) => {
           signal?.throwIfAborted()
           if (!directory) return download(data, filename, mime)
-          const handle = await directory.getFileHandle(filename, { create: true })
+          // keyed by folder name, not identity: two pickers on one folder give distinct handles
+          const key = `${directory.name}/${filename}`
+          if (writing.has(key)) throw new Error(`${key} is already being exported.`)
+          writing.add(key)
           try {
-            signal?.throwIfAborted()
-            const writable = await handle.createWritable()
-            await new Blob([data], { type: mime }).stream().pipeTo(writable, { signal })
-          } catch (error) {
-            // the create above left an empty file that would block a retry under this name
-            await directory.removeEntry(filename).catch((cleanup_error: unknown) => {
-              console.error(
-                `Cannot remove partial ${directory.name}/${filename}:`,
-                cleanup_error,
-              )
-            })
-            throw error
+            await assert_free(directory, filename)
+            const handle = await directory.getFileHandle(filename, { create: true })
+            try {
+              signal?.throwIfAborted()
+              const writable = await handle.createWritable()
+              await new Blob([data], { type: mime }).stream().pipeTo(writable, { signal })
+            } catch (error) {
+              // writes land on disk only on close, so a failed one leaves the empty file the
+              // create made, which would block a retry. Remove it only while still empty: if
+              // it has content, another program wrote it after our check.
+              try {
+                if ((await handle.getFile()).size === 0)
+                  await directory.removeEntry(filename)
+                else
+                  console.error(`Kept ${key}: another program wrote it after our check`)
+              } catch (cleanup_error) {
+                console.error(`Cannot remove partial ${key}:`, cleanup_error)
+              }
+              throw error
+            }
+          } finally {
+            writing.delete(key)
           }
         }
       }

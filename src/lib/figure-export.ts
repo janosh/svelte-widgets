@@ -169,6 +169,8 @@ const OWN_STYLES: Record<string, string> = {
   'stop-opacity': `1`,
   // a figure stretching a large viewBox into a few px would otherwise lose its strokes
   'vector-effect': `none`,
+  // page CSS may clip a plot area, and a lost clip shows marks panned beyond it
+  'clip-path': `none`,
 }
 // Containers whose content only renders where referenced, so nothing in them is stripped
 const DEFINITION_TAGS = new Set([
@@ -304,30 +306,39 @@ function prepare_clone(
   })
 }
 
-// Rounds decimals with 3+ fraction digits (or a negative exponent) to 2 places: 0.01 user units
-// is far below a pixel, and long floats dominate chart file sizes. url(#…) references match
-// first and stay verbatim: ids are UUIDs, whose `3e-1234` reads as a number. Whole number tokens
-// match, never a tail like `99.9999` in compact path data `0.99.9999`, and a rounded number that
-// lost the dot or sign separating it from a neighbor (`0.99.9999`, `1-0.001`) gets a space.
+// Rounds decimals with more than `digits` fraction digits (or a negative exponent) to `digits`
+// places, long floats dominating chart file sizes. url(#…) references match first and stay
+// verbatim: ids are UUIDs, whose `3e-1234` reads as a number. Whole number tokens match, never
+// a tail like `99.9999` in compact path data `0.99.9999`, and a rounded number that lost the
+// dot or sign separating it from a neighbor (`0.99.9999`, `1-0.001`) gets a space.
 const NUMBER_TOKEN = /url\([^)]*\)|-?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?/gi
-const LONG_DECIMAL = /\.\d{3}|e-/i
-const round_decimals = (text: string): string =>
-  !LONG_DECIMAL.test(text)
+const round_decimals = (text: string, digits: number): string => {
+  const long_decimal = new RegExp(`\\.\\d{${digits + 1}}|e-`, `i`)
+  const factor = 10 ** digits
+  return !long_decimal.test(text)
     ? text
     : text.replaceAll(NUMBER_TOKEN, (match, offset: number) => {
-        if (match.startsWith(`url(`) || !LONG_DECIMAL.test(match)) return match
-        const rounded = String(Math.round(Number(match) * 100) / 100 || 0)
+        if (match.startsWith(`url(`) || !long_decimal.test(match)) return match
+        const rounded = String(Math.round(Number(match) * factor) / factor || 0)
         const merges_before = /[\d.]/.test(text[offset - 1] ?? ``) && /^\d/.test(rounded)
         const merges_after = text[offset + match.length] === `.` && !rounded.includes(`.`)
         return `${merges_before ? ` ` : ``}${rounded}${merges_after ? ` ` : ``}`
       })
+}
+// Fraction digits resolving 1/10000 of the viewBox's shorter side, at least 2 (0.01 units, far
+// below a pixel when user units are px): fixed 2 would zero marks drawn in tiny user units
+function fraction_digits(viewbox: SvgViewbox | null): number {
+  if (!viewbox) return 2
+  const shorter_side = Math.min(viewbox[2], viewbox[3])
+  return Math.max(2, Math.ceil(4 - Math.log10(shorter_side)))
+}
 // Markup the standalone file has no use for: interaction and test hooks and event routing.
 // Classes stay as layer names for editing the figure in vector tools, minus Svelte's
 // scoping hashes, which only meant something to the page stylesheet.
 const DROP_ATTR = /^(?:data-|aria-|role$|tabindex$|pointer-events$|cursor$)/
 const INTERACTION_STYLES = [`cursor`, `pointer-events`, `user-select`, `touch-action`]
 
-function minify_clone(root: Element): void {
+function minify_clone(root: Element, digits: number): void {
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_COMMENT)
   const comments: Node[] = []
   while (walker.nextNode()) comments.push(walker.currentNode)
@@ -348,7 +359,7 @@ function minify_clone(root: Element): void {
     for (const { name, value } of Array.from(element.attributes)) {
       if (DROP_ATTR.test(name)) element.removeAttribute(name)
       else if (![`href`, `xlink:href`, `id`, `class`, `font-family`].includes(name))
-        element.setAttribute(name, round_decimals(value))
+        element.setAttribute(name, round_decimals(value, digits))
     }
   }
   // Groups emptied by the stripping above render nothing (definition containers may be
@@ -422,9 +433,9 @@ function svg_viewbox(svg: SVGElement, padding = 0): SvgViewbox | null {
 
 // Standalone SVG markup of a live figure, never mutating it: computed paint styles inlined
 // minimally, HTML overlays (legends, color bars) redrawn as SVG, hidden and interaction-only
-// elements dropped, coordinates rounded to 2 decimals, and the viewBox padded by half the
-// widest stroke so edge strokes aren't clipped. Foreign canvases embed at `scale`; a raster
-// export also sizes the root to its viewBox times `scale` in pixels.
+// elements dropped, coordinates rounded (see fraction_digits), and the viewBox padded by half
+// the widest stroke so edge strokes aren't clipped. Foreign canvases embed at `scale`; a
+// raster export also sizes the root to its viewBox times `scale` in pixels.
 function serialize_svg(
   svg: SVGElement,
   scale: number,
@@ -433,8 +444,14 @@ function serialize_svg(
   const clone = svg.cloneNode(true) as SVGElement
   const state: WalkState = { max_stroke: 0, raster_scale: scale }
   prepare_clone(svg, clone, null, false, state)
-  for (const overlay of export_overlays(svg)) clone.append(overlay)
-  minify_clone(clone)
+  const overlays = export_overlays(svg)
+  clone.append(...overlays.groups)
+  const digits = fraction_digits(svg_viewbox(svg))
+  minify_clone(clone, digits)
+  // set after rounding, which would skew a scale like 1/3 across the whole overlay
+  if (overlays.transform)
+    for (const group of overlays.groups)
+      group.setAttribute(`transform`, overlays.transform)
   renumber_ids(clone)
   // the figure's accessible name, as a <title> since minify_clone drops aria attributes
   const name = svg.getAttribute(`aria-label`)
@@ -446,10 +463,12 @@ function serialize_svg(
   // Floor at 1px: small viewBoxes at low DPI round to 0 and make toBlob fail confusingly
   const size: [number, number] | null = viewbox
     ? ([viewbox[2], viewbox[3]].map((len) =>
-        raster ? Math.max(1, Math.round(len * scale)) : Math.round(len * 100) / 100,
+        raster
+          ? Math.max(1, Math.round(len * scale))
+          : Math.round(len * 10 ** digits) / 10 ** digits,
       ) as [number, number])
     : null
-  if (viewbox) clone.setAttribute(`viewBox`, round_decimals(viewbox.join(` `)))
+  if (viewbox) clone.setAttribute(`viewBox`, round_decimals(viewbox.join(` `), digits))
   if (size) set_attrs(clone, { width: size[0], height: size[1] })
   clone.style.removeProperty(`width`)
   clone.style.removeProperty(`height`)
@@ -667,13 +686,26 @@ export function overlay_to_svg(root: HTMLElement, origin: DOMRect): SVGElement {
 }
 
 // SVG redraws of the HTML overlays a chart lays over `svg` (siblings marked data-export-overlay)
-function export_overlays(svg: SVGElement): SVGElement[] {
+// and the transform from their CSS px into its user units (null when they coincide)
+function export_overlays(svg: SVGElement): {
+  groups: SVGElement[]
+  transform: string | null
+} {
   const overlays = [
     ...(svg.parentElement?.querySelectorAll<HTMLElement>(`[data-export-overlay]`) ?? []),
   ].filter((overlay) => !svg.contains(overlay))
-  if (overlays.length === 0) return []
+  if (overlays.length === 0) return { groups: [], transform: null }
   const origin = svg.getBoundingClientRect()
-  return overlays.map((overlay) => overlay_to_svg(overlay, origin))
+  // Overlay boxes are CSS px from the SVG's box: a viewBox scaling or offsetting user units
+  // (preserveAspectRatio included) needs the inverse screen mapping. Null when not rendered.
+  const ctm = svg instanceof SVGGraphicsElement ? svg.getScreenCTM() : null
+  const to_user =
+    ctm && DOMMatrix.fromMatrix(ctm).inverse().translate(origin.left, origin.top)
+  const { a, b, c, d, e, f } = to_user ?? {}
+  return {
+    groups: overlays.map((overlay) => overlay_to_svg(overlay, origin)),
+    transform: to_user && !to_user.isIdentity ? `matrix(${[a, b, c, d, e, f]})` : null,
+  }
 }
 
 // An HTML element (e.g. a CSS-grid heatmap) as a standalone SVG: the overlay redraw applied

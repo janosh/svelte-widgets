@@ -324,10 +324,10 @@ describe(`svg_to_string`, () => {
     expect(result).not.toMatch(/<!--|data-|aria-|role=|tabindex=/)
   })
 
-  test(`rounds coordinates to 2 decimals, leaving text, classes, hrefs and url() refs`, () => {
+  test(`rounds a 100-unit figure to 2 decimals, leaving text, classes, hrefs and url() refs`, () => {
     const attrs = `clip-path="url(#plot-clip-1a2b3c4d-4f3e-4234-9e12-3e4f5a6b7c8d)" class="x-3e-4" stroke="black"`
     const path = `<path id="p0.123456" d="M1.23456,2.5L-3.00499,4.1234e-7" ${attrs}/>`
-    document.body.innerHTML = `<svg viewBox="0 0 100.123456 50">${path}<text x="10.98765">0.123456</text></svg>`
+    document.body.innerHTML = `<svg viewBox="0 0 100.123456 100">${path}<text x="10.98765">0.123456</text></svg>`
     const svg = document.querySelector(`svg`)
     if (!svg) throw new Error(`svg not mounted`)
     const exported = parse_svg(svg_to_string(svg))
@@ -338,7 +338,25 @@ describe(`svg_to_string`, () => {
     expect([attr(`clip-path`), attr(`class`)]).toEqual([`url(#${prefix}-1)`, `x-3e-4`])
     expect(exported.querySelector(`text`)?.getAttribute(`x`)).toBe(`10.99`)
     expect(exported.querySelector(`text`)?.textContent).toBe(`0.123456`)
-    expect(exported.getAttribute(`viewBox`)).toBe(`-0.5 -0.5 101.12 51`)
+    expect(exported.getAttribute(`viewBox`)).toBe(`-0.5 -0.5 101.12 101`)
+  })
+
+  // precision follows the viewBox: 2 decimals would zero a mark drawn in tiny user units
+  test.each([
+    [`0 0 1 1`, [`0.5123`, `0.004`, `1`]],
+    [`0 0 0.02 0.004`, [`0.5123457`, `0.004`, `0.004`]],
+    [`0 0 1000 400`, [`0.51`, `0`, `400`]],
+  ])(`rounds to the precision viewBox=%s resolves`, (viewbox, expected) => {
+    document.body.innerHTML = `<svg viewBox="${viewbox}"><circle cx="0.51234567" r="0.004"/></svg>`
+    const svg = document.querySelector(`svg`)
+    if (!svg) throw new Error(`svg not mounted`)
+    const exported = parse_svg(svg_to_string(svg))
+    const circle = exported.querySelector(`circle`)
+    expect([
+      circle?.getAttribute(`cx`),
+      circle?.getAttribute(`r`),
+      exported.getAttribute(`height`),
+    ]).toEqual(expected)
   })
 
   // compact path data: rounding must not merge numbers split by a second dot or a sign
@@ -349,7 +367,7 @@ describe(`svg_to_string`, () => {
     [`M0.123.456`, `M0.12 0.46`],
     [`M1.23456-2.5`, `M1.23-2.5`],
   ])(`rounding keeps compact path numbers apart: %s -> %s`, (d_in, d_out) => {
-    document.body.innerHTML = `<svg viewBox="0 0 10 10"><path d="${d_in}"/></svg>`
+    document.body.innerHTML = `<svg viewBox="0 0 100 100"><path d="${d_in}"/></svg>`
     const svg = document.querySelector(`svg`)
     if (!svg) throw new Error(`svg not mounted`)
     expect(parse_svg(svg_to_string(svg)).querySelector(`path`)?.getAttribute(`d`)).toBe(
