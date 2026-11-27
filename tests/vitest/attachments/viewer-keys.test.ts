@@ -14,6 +14,11 @@ const attach_root = (attachment: (node: HTMLElement) => () => void) => {
 const hover = (node: Element) => node.dispatchEvent(new PointerEvent(`pointerenter`))
 
 describe(`viewer_keys`, () => {
+  test(`throws on an uppercase letter binding, which could never fire`, () => {
+    expect(() =>
+      attach_root(viewer_keys(() => ({ R: () => {}, Escape: () => {} }))),
+    ).toThrow(`viewer_keys: bind letters lowercase, got R`)
+  })
   // Keys reach the viewer under the pointer (window keydown) or with focus inside it
   test.each([
     [`hovered plain key`, `x`, {}, `hover`, true],

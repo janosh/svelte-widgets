@@ -1,3 +1,4 @@
+import { untrack } from 'svelte'
 import { on } from 'svelte/events'
 import type { Hotkey } from '../shortcuts'
 import { is_editable_event_target, is_modifier_chord, run_hotkeys } from '../shortcuts'
@@ -105,8 +106,8 @@ export const viewer_keydown =
 // Lock still works) and by `event.key` otherwise (`Escape`, `+`). Shift+letter is a different
 // shortcut, never the plain letter's. An action returning false had nothing to do, which leaves
 // the key to the host.
-export const viewer_keys = (bindings: () => Partial<Record<string, () => unknown>>) =>
-  viewer_keydown((event) => {
+export const viewer_keys = (bindings: () => Partial<Record<string, () => unknown>>) => {
+  const attach = viewer_keydown((event) => {
     if (
       event.repeat ||
       is_modifier_chord(event) ||
@@ -119,3 +120,13 @@ export const viewer_keys = (bindings: () => Partial<Record<string, () => unknown
     const action = bindings()[letter ? key.toLowerCase() : key]
     return action !== undefined && action() !== false
   })
+  return (node: HTMLElement): (() => void) => {
+    // letters match lowercased, so an uppercase letter binding could never fire
+    const never = Object.keys(untrack(bindings)).filter(
+      (key) => key.length === 1 && key !== key.toLowerCase(),
+    )
+    if (never.length)
+      throw new Error(`viewer_keys: bind letters lowercase, got ${never.join(`, `)}`)
+    return attach(node)
+  }
+}

@@ -119,12 +119,14 @@
   :global(.docked-sidebar-row:has(> .docked-sidebar)) {
     grid-template-columns: minmax(0, var(--split-pane-size, 66%)) minmax(0, 1fr);
   }
-  /* main pane and sidebar read as one box: --docked-sidebar-radius rounds its outer corners,
-     the edge they share stays square so no gap opens between them */
-  :global(.docked-sidebar-row:has(> .docked-sidebar) > :first-child) {
-    border-radius: 0;
-    border-start-start-radius: var(--docked-sidebar-radius, 0);
-    border-end-start-radius: var(--docked-sidebar-radius, 0);
+  /* main pane and sidebar read as one box: the edge they share stays square so no gap opens
+     between them, the main pane keeps its own outer corners and --docked-sidebar-radius
+     rounds the sidebar's */
+  :global(
+    .docked-sidebar-row:not(.docked-sidebar-stacked):has(> .docked-sidebar) > :first-child
+  ) {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
   }
   :global(.docked-sidebar-row:has(> .docked-sidebar.fit-content)) {
     /* at most half the row (or --docked-sidebar-max-share), never under the viewer's 320px */
@@ -143,7 +145,8 @@
   :global(
     .docked-sidebar-row.docked-sidebar-stacked:has(> .docked-sidebar) > :first-child
   ) {
-    border-radius: var(--docked-sidebar-radius, 0) var(--docked-sidebar-radius, 0) 0 0;
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
   }
   :global(.docked-sidebar-row.docked-sidebar-stacked > .pane-divider) {
     display: none;

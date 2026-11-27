@@ -22,10 +22,15 @@ const button = (name: string): HTMLButtonElement | undefined => {
   if (found) expect(found.getAttribute(`aria-label`) ?? name).toBe(name)
   return found
 }
-// visible text of the destination toggles marked as the current one
-const pressed = (): (string | undefined)[] =>
-  [...document.querySelectorAll(`button[aria-pressed="true"]`)].map((node) =>
-    node.textContent?.trim(),
+// A destination radio by its label text
+const radio = (label: string): HTMLInputElement | undefined =>
+  [...document.querySelectorAll<HTMLInputElement>(`input[type="radio"]`)].find(
+    (node) => node.parentElement?.textContent?.trim() === label,
+  )
+// label text of the checked destination radio
+const checked = (): (string | undefined)[] =>
+  [...document.querySelectorAll(`input[type="radio"]:checked`)].map((node) =>
+    node.parentElement?.textContent?.trim(),
   )
 
 test(`filename follows the source until edited, then keeps the typed name; rejects paths`, async () => {
@@ -65,7 +70,7 @@ test(`filename follows the source until edited, then keeps the typed name; rejec
   const framed = mount_pane(export_state)
   await tick()
   expect(button(`Choose folder…`)).toBeUndefined()
-  expect(button(`Ask each time`)).toBeUndefined()
+  expect(radio(`Ask each time`)).toBeUndefined()
   await unmount(framed)
   const task = vi.fn()
   vi.spyOn(console, `error`).mockImplementation(() => {})
@@ -150,7 +155,7 @@ test.each([
       mode: `readwrite`,
       startIn: `downloads`,
     })
-    expect(document.body.textContent).toContain(`Movies/`)
+    expect(checked()).toEqual([`Movies/`])
     // Cancelling a subsequent picker preserves the chosen folder and reports no error.
     picker.mockRejectedValueOnce(new DOMException(`Cancelled`, `AbortError`))
     choose?.click()
@@ -194,12 +199,15 @@ test.each([
     expect(remove_entry.mock.calls).toEqual(
       [`write-error`, `cancel-write`].includes(outcome) ? [[`My movie.mp4`]] : [],
     )
-    expect(pressed()).toEqual([`Choose folder…`])
-    button(`Downloads`)?.click()
+    expect(checked()).toEqual([`Movies/`])
+    radio(`Downloads`)?.click()
     await tick()
     expect(export_state.destination).toBe(`downloads`)
-    expect(document.body.textContent).toContain(`Browser downloads`)
-    expect(pressed()).toEqual([`Downloads`])
+    expect(checked()).toEqual([`Downloads`])
+    // the chosen folder stays one radio away
+    radio(`Movies/`)?.click()
+    await tick()
+    expect(export_state.destination).toBe(directory)
     await unmount(pane)
   },
 )
@@ -243,16 +251,11 @@ test.each([
   await tick()
   // no folder picker in this browser, so no button for one
   expect(button(`Choose folder…`)).toBeUndefined()
-  expect(pressed()).toEqual([`Downloads`])
-  const ask = button(`Ask each time`)
-  ask?.focus()
-  ask?.click()
+  expect(checked()).toEqual([`Downloads`])
+  radio(`Ask each time`)?.click()
   await tick()
   expect(export_state.destination).toBe(`save-as`)
-  expect(document.body.textContent).toContain(`Ask for each file`)
-  // the toggles stay put, so the clicked one keeps focus
-  expect(pressed()).toEqual([`Ask each time`])
-  expect(document.activeElement).toBe(ask)
+  expect(checked()).toEqual([`Ask each time`])
   const controller = new AbortController()
   const encode = vi.fn(() => {
     if (outcome === `encoder abort`)
@@ -285,7 +288,7 @@ test.each([
     [`aborted`, `write error`, `encoder abort`].includes(outcome) ? 1 : 0,
   )
   expect(download).not.toHaveBeenCalled()
-  button(`Downloads`)?.click()
+  radio(`Downloads`)?.click()
   await tick()
   expect(export_state.destination).toBe(`downloads`)
   await unmount(pane)

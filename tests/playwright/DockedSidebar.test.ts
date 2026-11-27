@@ -1,8 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { goto } from './helpers'
 
-// Real :has() cascade, which happy-dom lacks: --docked-sidebar-radius rounds the docked pair's
-// outer corners and keeps their shared edge square, beside (either direction) and stacked
+// Real :has() cascade, which happy-dom lacks: the docked pair's shared edge stays square, beside
+// (either direction) and stacked, the main pane keeps its own outer corners and
+// --docked-sidebar-radius rounds the sidebar's
 test(`--docked-sidebar-radius rounds the outer corners beside and stacked`, async ({
   page,
 }) => {
@@ -22,4 +23,10 @@ test(`--docked-sidebar-radius rounds the outer corners beside and stacked`, asyn
   await expect(row).toHaveClass(/docked-sidebar-stacked/)
   await expect(main_pane).toHaveCSS(`border-radius`, `8px 8px 0px 0px`)
   await expect(sidebar).toHaveCSS(`border-radius`, `0px 0px 8px 8px`)
+  // the main pane's outer corners are its own: unset the variable and they stay rounded
+  await row.evaluate((node: HTMLElement) =>
+    node.style.removeProperty(`--docked-sidebar-radius`),
+  )
+  await expect(main_pane).toHaveCSS(`border-radius`, `8px 8px 0px 0px`)
+  await expect(sidebar).toHaveCSS(`border-radius`, `0px`)
 })

@@ -185,13 +185,12 @@ test(`ExportDestination example downloads by default and asks per file with Save
   })
   await goto(page, `/file-input`, { waitUntil: `networkidle` })
   const demo = page.locator(`#export-destination`)
-  await expect(demo.getByText(`Browser downloads`)).toBeVisible()
+  const destination = (name: string) => demo.getByRole(`radio`, { name, exact: true })
+  await expect(destination(`Downloads`)).toBeChecked()
   const save = demo.getByRole(`button`, { name: `Save as .txt` })
   const [download] = await Promise.all([page.waitForEvent(`download`), save.click()])
   expect(download.suggestedFilename()).toBe(`notes.txt`)
-  // accessible names are the visible labels
-  await demo.getByRole(`button`, { name: `Ask each time`, exact: true }).click()
-  await expect(demo.getByText(`Ask for each file`)).toBeVisible()
+  await destination(`Ask each time`).check()
   await save.click()
   await expect
     .poll(() => page.evaluate(() => Reflect.get(globalThis, `save_picker_record`)))
@@ -205,14 +204,11 @@ test(`ExportDestination example downloads by default and asks per file with Save
       ],
       written: `Hello`,
     })
-  await expect(
-    demo.getByRole(`button`, { name: `Ask each time`, exact: true }),
-  ).toHaveAttribute(`aria-pressed`, `true`)
-  await demo.getByRole(`button`, { name: `Downloads`, exact: true }).click()
-  await expect(demo.getByText(`Browser downloads`)).toBeVisible()
-  await expect(
-    demo.getByRole(`button`, { name: `Choose folder…`, exact: true }),
-  ).toHaveAttribute(`aria-pressed`, `false`)
+  await expect(destination(`Ask each time`)).toBeChecked()
+  await destination(`Downloads`).check()
+  await expect(destination(`Downloads`)).toBeChecked()
+  // the radios sit in a group named by its legend
+  await expect(demo.getByRole(`group`, { name: `Save to` })).toBeVisible()
 })
 
 test(`SplitPane example sizes panes and restores keyboard collapse`, async ({ page }) => {

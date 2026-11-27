@@ -149,9 +149,11 @@ for (const [width, color_scheme] of [
     await input.fill(`TypeScript`)
     await input.press(`ArrowDown`)
     await input.press(`Enter`)
-    await expect(page.locator(`main p[aria-live="polite"]`)).toHaveText(
-      `Selected: Svelte, TypeScript`,
-    )
+    // selections show as Tag pills
+    await expect(page.locator(`main p[aria-live="polite"] .tag`)).toHaveText([
+      `Svelte`,
+      `TypeScript`,
+    ])
     await page.getByRole(`button`, { name: `View code`, exact: true }).click()
     await expect(page.locator(`.code-example pre`)).toBeVisible()
     await expect(page.locator(`.code-example pre`)).toContainText(`bind:value`)

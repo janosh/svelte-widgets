@@ -126,7 +126,8 @@ code {
   padding: 0.1em 0.3em;
   border-radius: 3pt;
   background: var(--surface);
-  font-size: 1.1em;
+  /* named fonts first: a bare monospace list would size off 13px, not the text around it */
+  font: 0.85em var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   /* Break long inline identifiers; white-space: pre still prevents wrapping code blocks. */
   overflow-wrap: anywhere;
 }
