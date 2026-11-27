@@ -106,6 +106,10 @@
       box-sizing: border-box;
       text-align: center;
       pointer-events: none;
+      /* spans the column (justify-items centers it at content width), so its row can align */
+      .message {
+        justify-self: stretch;
+      }
       .message > div {
         justify-content: var(--task-status-justify, center);
       }

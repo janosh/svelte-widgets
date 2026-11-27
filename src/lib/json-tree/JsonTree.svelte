@@ -661,8 +661,9 @@
             class="unpin-btn"
             onclick={() => toggle_pin(pinned_path)}
             title="Unpin"
+            aria-label="Unpin {pinned_path}"
           >
-            ✕
+            <Icon icon={Cross} />
           </button>
         </div>
       {/each}
@@ -749,7 +750,10 @@
     color: inherit;
   }
   .json-tree {
-    font-family: var(--jt-font-family, 'SF Mono', Monaco, 'Courier New', monospace);
+    font-family: var(
+      --jt-font-family,
+      var(--font-mono, ui-monospace, Menlo, Consolas, monospace)
+    );
     font-size: var(--jt-font-size, 13px);
     line-height: var(--jt-line-height, 1.5);
     position: relative;
@@ -1020,6 +1024,7 @@
     flex: 1;
   }
   .unpin-btn {
+    display: inline-flex;
     padding: 0 2px;
     opacity: 0.5;
     font-size: 10px;

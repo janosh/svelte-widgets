@@ -5,7 +5,7 @@
   import { anchored_popover, close_before_removal, tooltip } from '../attachments/index'
   import { motion_duration } from '../effects.svelte.ts'
   import Icon from '../Icon.svelte'
-  import { Columns, Reset } from '../icons'
+  import { ChevronDown, ChevronRight, Columns, Reset } from '../icons'
   import { merge_defaults } from '../labels'
   import Popover from '../Popover.svelte'
   import { COLUMN_PICKER_LABELS, type ColumnPickerLabels } from './labels'
@@ -226,9 +226,10 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
                 onclick={() => toggle_group(section.name)}
                 type="button"
               >
-                <span class="collapse-icon" aria-hidden="true"
-                  >{collapsed ? `▶` : `▼`}</span
-                >
+                <Icon
+                  icon={collapsed ? ChevronRight : ChevronDown}
+                  class="collapse-icon"
+                />
                 {section.name}
               </button>
               {#if section.items.some(is_changed)}
@@ -403,10 +404,8 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     font-size: 0.9em;
     text-align: left;
   }
-  .collapse-icon {
+  .section-header :global(.collapse-icon) {
     flex-shrink: 0;
-    width: 1em;
-    font-size: 0.7em;
   }
   .toggle-label {
     display: inline-block;

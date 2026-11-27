@@ -1,5 +1,7 @@
 <script lang="ts">
   import type { HTMLAttributes } from 'svelte/elements'
+  import Icon from './Icon.svelte'
+  import { Cross } from './icons'
 
   let {
     message = $bindable(),
@@ -24,7 +26,7 @@
         onclick={() => (message = undefined)}
         aria-label={dismiss_label}
       >
-        ✕
+        <Icon icon={Cross} />
       </button>
     {/if}
   </div>

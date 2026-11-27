@@ -203,7 +203,7 @@ describe(`icon catalog page`, () => {
   })
 })
 
-// custom.ts builds glyphs through helper calls, which bundlers keep unless marked pure: a page
+// custom.ts builds glyphs through builders.ts calls, which bundlers keep unless marked pure: a page
 // importing one icon then shipped all ~150 hand-made glyphs
 test(`a bundle importing one icon drops every other glyph`, async () => {
   const { build } = await import(`vite`)
@@ -221,5 +221,5 @@ test(`a bundle importing one icon drops every other glyph`, async () => {
   if (!(`output` in output)) throw new Error(`expected a build output`)
   const code = output.output.map((chunk) => (`code` in chunk ? chunk.code : ``)).join(``)
   // helper calls, not the helpers' own declarations: AreaPlot's call only
-  expect(code.match(/(?<!function )\b(?:icon|path)\(/g)).toHaveLength(1)
+  expect(code.match(/(?<!function )\b(?:markup_icon|path_icon)\(/g)).toHaveLength(1)
 })

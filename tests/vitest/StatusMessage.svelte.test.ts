@@ -1,4 +1,5 @@
 import { StatusMessage } from '#lib'
+import { Cross } from '#lib/icons.ts'
 import { flushSync, type ComponentProps } from 'svelte'
 import { expect, test } from 'vite-plus/test'
 import { doc_query, render } from './index'
@@ -36,10 +37,10 @@ test(`follows message and label updates, and dismissing clears the bound message
   })
   render(StatusMessage, props)
   const button = doc_query(`.status-message button[aria-label="Dismiss message"]`)
-  expect([button.textContent?.trim(), button.getAttribute(`type`)]).toEqual([
-    `✕`,
-    `button`,
-  ])
+  expect([
+    button.querySelector(`svg path`)?.getAttribute(`d`),
+    button.getAttribute(`type`),
+  ]).toEqual([Cross.d, `button`])
   props.message = `Saved`
   props.dismiss_label = `Close status`
   flushSync()

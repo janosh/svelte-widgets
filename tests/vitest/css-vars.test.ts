@@ -1,5 +1,6 @@
 import { load } from '#root/src/routes/(demos)/(display)/theming/+page.server.ts'
 import { collect_css_vars, css_var_group, extract_css_vars } from '#site/css-vars.ts'
+import { globSync, readFileSync } from 'node:fs'
 import { expect, test } from 'vite-plus/test'
 
 const runtime = `set by component at runtime`
@@ -225,4 +226,18 @@ test(`theming page load covers the real library`, () => {
   for (const { name, vars, shared: group_shared } of groups)
     expect(vars.length + group_shared.length, name).toBeGreaterThan(0)
   expect(public_names.filter((name) => shared_names.has(name))).toEqual([])
+})
+
+// A family list of only `monospace` makes browsers size text off 13px instead of the parent's
+// size. Components route every monospace declaration through --font-mono (whose fallback
+// names real fonts first), so one token restyles them all and none can end up bare.
+test(`every monospace font declaration goes through --font-mono`, () => {
+  const declaration =
+    /(?:font(?:-family)?|--[\w-]*font[\w-]*)\s*:[^;{}]*\bmonospace\b[^;{}]*/g
+  const offenders = globSync(`src/lib/**/*.{svelte,css,ts}`).flatMap((file) =>
+    [...readFileSync(file, `utf8`).matchAll(declaration)]
+      .filter(([match]) => !match.includes(`var(--font-mono, ui-monospace`))
+      .map(([match]) => `${file}: ${match.trim()}`),
+  )
+  expect(offenders).toEqual([])
 })

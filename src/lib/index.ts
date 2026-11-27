@@ -33,6 +33,7 @@ export { default as InfoCard } from './InfoCard.svelte'
 export { default as InfoTag } from './InfoTag.svelte'
 // Glyphs stay on 'svelte-widgets/icons' so a root import does not pin the set.
 export type { IconData } from './icons'
+export { markup_icon, path_icon } from './icons/builders'
 export { default as KeyValueList } from './KeyValueList.svelte'
 export { default as LiteYouTubeEmbed } from './LiteYouTubeEmbed.svelte'
 export { default as LiveMessage } from './LiveMessage.svelte'
