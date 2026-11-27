@@ -82,3 +82,48 @@ export function sync_url_params(
   const next_url = url_with_params(entries, current_url)
   if (next_url !== url_with_params([], current_url)) write_url(next_url)
 }
+
+// A fixed-length list of numbers (e.g. score weights) as one `key=a,b,c` param, at full
+// precision so shared links reproduce exactly. Equal to defaults, the param is omitted.
+// Negative values encode fine but read back as defaults under `normalize`.
+export function numbers_url_entry(
+  key: string,
+  values: readonly number[],
+  defaults: readonly number[],
+): UrlParamEntry {
+  if (values.length !== defaults.length || !values.every(Number.isFinite))
+    throw new Error(
+      `${key}: need ${defaults.length} finite numbers, got ${values.join(`, `)}`,
+    )
+  return [key, values.join(`,`), defaults.join(`,`)]
+}
+
+// A missing, malformed (anything but plain decimals) or wrong-length param gives a copy of
+// defaults, never a partial list. `normalize` scales the values to sum to 1, treating negative
+// values or a zero total as malformed.
+export function numbers_from_param(
+  params: QueryParams,
+  key: string,
+  defaults: readonly number[],
+  { normalize = false } = {},
+): number[] {
+  const values =
+    params
+      .get(key)
+      ?.split(`,`)
+      .map((token) =>
+        /^-?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/i.test(token) ? Number(token) : NaN,
+      ) ?? []
+  // a sum of huge values overflows to Infinity, which only matters when dividing by it
+  const total = values.reduce((sum, value) => sum + value, 0)
+  const valid =
+    values.length === defaults.length &&
+    values.every(Number.isFinite) &&
+    (!normalize ||
+      (Number.isFinite(total) && total > 0 && values.every((value) => value >= 0)))
+  if (!valid) return [...defaults]
+  if (!normalize) return values
+  // values already summing to 1 up to round-off stay exact instead of shifting an ulp
+  const divisor = Math.abs(total - 1) <= values.length * Number.EPSILON ? 1 : total
+  return values.map((value) => value / divisor)
+}

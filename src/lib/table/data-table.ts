@@ -336,14 +336,18 @@ export type DataTableProps<
   search_query?: string
   show_row_select?: boolean
   pagination?: Pagination
-  // Opt-in row virtualization: only rows near the viewport render, with spacer rows
-  // preserving scroll geometry, so DOM size stays bounded for any data length.
-  // Inactive when pagination is enabled.
+  // Row virtualization: only rows near the viewport render, with spacer rows preserving
+  // scroll geometry, so DOM size stays bounded for any data length. Unset, it turns on past
+  // 500 rows; false renders every row. Inactive when pagination is enabled.
   virtual?: VirtualScroll
   // Required for selection; identifies rows across sorting and data replacement. Without
   // it rows are keyed by object identity, so a new object for a row remounts that row:
   // pass it for live data that replaces row objects, to update their cells in place.
   row_key?: Extract<keyof Row, string> | ((row: Row) => RowId)
+  // Zebra-stripe every other row (the 1st, 3rd, ...) in --table-stripe-bg, pinned cells
+  // included. Goes by row index, so virtualization's spacer rows can't flip the stripes the
+  // way a consumer's tr:nth-child(odd) rule would.
+  striped?: boolean
   // Row reorder duration in ms; disabled for reduced motion and virtualized tables.
   row_animation_ms?: number
   selected_ids?: RowId[]

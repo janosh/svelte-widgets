@@ -101,6 +101,6 @@ The pane carries `toc-exclude`, so headings in its content stay out of a page's 
 
 ### Styling
 
-Everything hangs off CSS custom properties on the pane: `--pane-bg`, `--pane-border`, `--pane-border-radius`, `--pane-box-shadow`, `--pane-width`, `--pane-min-height`, `--pane-max-height`, `--pane-padding`, `--pane-gap`, `--pane-align-content`, `--pane-overflow-x`, `--pane-overflow-y`, `--pane-z-index`, `--pane-control-tab-z-index`, plus `--pane-toggle-*` for the button. `pane_props` and `toggle_props` spread onto the two elements for anything else.
+Everything hangs off CSS custom properties on the pane: `--pane-bg`, `--pane-color`, `--pane-border`, `--pane-border-radius`, `--pane-box-shadow`, `--pane-width`, `--pane-min-height`, `--pane-max-height`, `--pane-padding`, `--pane-gap`, `--pane-align-content`, `--pane-overflow-x`, `--pane-overflow-y`, `--pane-z-index`, `--pane-control-tab-z-index`, plus `--pane-toggle-*` for the button. `pane_props` and `toggle_props` spread onto the two elements for anything else.
 
 The pane also carries `data-resize` and `data-dragging`, so content underneath can react without a prop — `[data-dragging='true'] canvas { pointer-events: none }`, say. Both, plus `role` and `aria-modal`, are applied after the `pane_props` spread so they cannot be clobbered. `aria-label` is applied before it, so a page holding more than one pane names them apart with `pane_props={{ 'aria-label': 'Structure controls' }}`.

@@ -151,6 +151,41 @@ describe(`file_drop`, () => {
     expect(on_error).not.toHaveBeenCalled()
   })
 
+  it(`queue delivers every drop in order, including one still expanding, until cleanup`, async () => {
+    const order: string[] = []
+    const first_done = Promise.withResolvers<undefined>()
+    const on_files = vi.fn(async ([{ name }]: File[]) => {
+      order.push(`start ${name}`)
+      if (name === `first.txt`) await first_done.promise
+      order.push(`end ${name}`)
+    })
+    const { node, cleanup } = attach_file_drop({ queue: true, on_files })
+    const first = delayed_transfer(`first.txt`)
+
+    drop(node, first.transfer)
+    drop(node, files_of(`second.txt`))
+    await next_task()
+    expect(order).toEqual([]) // the second drop waits for the first's folder expansion
+    first.resolve()
+    await vi.waitFor(() => expect(order).toEqual([`start first.txt`]))
+    first_done.resolve(undefined)
+    await vi.waitFor(() => expect(order).toHaveLength(4))
+    expect(order).toEqual([
+      `start first.txt`,
+      `end first.txt`,
+      `start second.txt`,
+      `end second.txt`,
+    ])
+    expect(aborted_calls(on_files)).toEqual([false, false])
+
+    const after_cleanup = delayed_transfer(`after-cleanup.txt`)
+    drop(node, after_cleanup.transfer)
+    cleanup?.()
+    after_cleanup.resolve()
+    await next_task()
+    expect(on_files).toHaveBeenCalledTimes(2)
+  })
+
   it(`a superseded callback settling late does not detach the newer drop's signal`, async () => {
     const first_result = Promise.withResolvers<undefined>()
     const on_files = vi.fn((_files: File[], signal: AbortSignal) =>
@@ -210,7 +245,9 @@ describe(`file_drop`, () => {
     },
   )
 
-  it(`disabled mode prevents browser navigation without activating or processing`, () => {
+  // dropEffect none stops a browser from firing drop at all, so a drop reaching a disabled
+  // zone came through an enabled ancestor zone, which must still get it
+  it(`disabled mode shows no-drop, never activates, and leaves the drop to ancestors`, () => {
     const [on_files, on_drag_active] = [vi.fn(), vi.fn()]
     const { node, cleanup } = attach_file_drop({
       disabled: true,
@@ -218,12 +255,114 @@ describe(`file_drop`, () => {
       on_drag_active,
     })
     const transfer = data_transfer([file(`ignored.txt`, `text/plain`)])
-    expect(drag_through(node, transfer)).toEqual([true, true, false, true])
+    expect(drag_through(node, transfer)).toEqual([true, true, false, false])
     expect(cleanup).toBeTypeOf(`function`)
     expect(transfer.dropEffect).toBe(`none`)
     expect(node.hasAttribute(`data-drag-active`)).toBe(false)
     expect(on_drag_active).not.toHaveBeenCalled()
     expect(on_files).not.toHaveBeenCalled()
+  })
+
+  // a dragenter counted while disabled keeps the depth balanced once a getter enables it
+  it(`disabled is read per event, so a getter toggles it mid-drag`, async () => {
+    const on_files = vi.fn()
+    let disabled = true
+    const { node } = attach_file_drop({
+      get disabled() {
+        return disabled
+      },
+      on_files,
+    })
+    const transfer = files_of(`file.txt`)
+    drag_through(node, transfer)
+    await next_task()
+    expect(on_files).not.toHaveBeenCalled()
+    node.dispatchEvent(drag_event(`dragenter`, transfer)) // pointer enters while disabled
+    disabled = false
+    node.dispatchEvent(drag_event(`dragenter`, transfer)) // into a child
+    node.dispatchEvent(drag_event(`dragleave`, transfer)) // out of the zone's own box
+    expect(node.hasAttribute(`data-drag-active`)).toBe(true)
+    drop(node, transfer)
+    await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
+  })
+
+  // a link drag carries no files; one that also carries files (an image dragged off a page)
+  // delivers only the files so it isn't loaded twice
+  const uri_list = `# comment\r\nhttps://example.com/a.cif\r\n\r\n/local/b.cif\n`
+  const link_transfer = (files: File[] = []) =>
+    ({
+      types: [`text/uri-list`, ...(files.length ? [`Files`] : [])],
+      files,
+      items: [],
+      getData: (type: string) => (type === `text/uri-list` ? uri_list : ``),
+    }) as unknown as DataTransfer
+  it.each([
+    [`multiple link drop`, true, [], [[`https://example.com/a.cif`, `/local/b.cif`]], []],
+    [`single link drop`, false, [], [[`https://example.com/a.cif`]], []],
+    [`link drop with files`, true, [file(`c.cif`)], [], [[`c.cif`]]],
+  ])(`on_urls: %s`, async (_label, multiple, files, url_calls, file_calls) => {
+    const [on_files, on_urls, on_error] = [vi.fn(), vi.fn(), vi.fn()]
+    const { node } = attach_file_drop({ multiple, on_files, on_urls, on_error })
+    expect(drag_through(node, link_transfer(files))).toEqual([true, true, false, true])
+    await next_task()
+    expect(on_urls.mock.calls.map(([urls]) => urls)).toEqual(url_calls)
+    expect(
+      on_files.mock.calls.map(([dropped]) => dropped.map(({ name }: File) => name)),
+    ).toEqual(file_calls)
+    expect(on_error).not.toHaveBeenCalled()
+  })
+
+  it(`without on_urls a link drag keeps its native behavior`, () => {
+    const on_files = vi.fn()
+    const { node } = attach_file_drop({ on_files })
+    expect(drag_through(node, link_transfer())).toEqual([false, false, false, false])
+  })
+
+  // e.g. a pane reordering its own items, or a capture handler claiming a drop for itself
+  it.each([
+    [`stops propagation`, (event: Event) => event.stopPropagation()],
+    [`claims the drop`, (event: Event) => event.preventDefault()],
+  ])(
+    `an inner drop target that %s resets activity without delivering`,
+    async (_label, handler) => {
+      const on_files = vi.fn()
+      const { node } = attach_file_drop({ on_files })
+      const inner = create_element()
+      node.append(inner)
+      inner.addEventListener(`drop`, handler)
+      const transfer = files_of(`file.txt`)
+      node.dispatchEvent(drag_event(`dragenter`, transfer))
+      inner.dispatchEvent(drag_event(`drop`, transfer))
+      await next_task()
+      expect(node.hasAttribute(`data-drag-active`)).toBe(false)
+      expect(on_files).not.toHaveBeenCalled()
+    },
+  )
+
+  // dragover decides whether the browser fires drop at all: either zone accepting suffices
+  it.each([
+    [`a disabled inner zone leaves it to the outer`, true, false, [0, 1]],
+    [`an enabled inner zone claims it from the outer`, false, false, [1, 0]],
+    [`a disabled outer zone doesn't veto an enabled inner one`, false, true, [1, 0]],
+  ])(`nested zones: %s`, async (_label, inner_disabled, outer_disabled, expected) => {
+    const [inner_files, outer_files] = [vi.fn(), vi.fn()]
+    const { node: outer } = attach_file_drop({
+      disabled: outer_disabled,
+      on_files: outer_files,
+    })
+    const { node: inner } = attach_file_drop({
+      disabled: inner_disabled,
+      on_files: inner_files,
+    })
+    outer.append(inner)
+    const transfer = files_of(`file.txt`)
+    inner.dispatchEvent(drag_event(`dragover`, transfer))
+    expect(transfer.dropEffect).toBe(`copy`)
+    drop(inner, transfer)
+    await next_task()
+    expect([inner_files.mock.calls.length, outer_files.mock.calls.length]).toEqual(
+      expected,
+    )
   })
 
   it(`balanced dragleave and global dragend after unbalanced dragenter clear activity`, () => {

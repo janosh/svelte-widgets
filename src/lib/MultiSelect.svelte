@@ -1743,7 +1743,11 @@
       aria-activedescendant={active_option_id}
       aria-busy={loading || loader.pending || creating_option || null}
       aria-invalid={invalid ? `true` : null}
-      ondrop={chain_handlers((event) => event.preventDefault(), ondrop)}
+      ondrop={chain_handlers((event) => {
+        // block text drops into the search box, but leave file drops to an enclosing drop
+        // zone (file_drop ignores drops already claimed with preventDefault)
+        if (!event.dataTransfer?.types.includes(`Files`)) event.preventDefault()
+      }, ondrop)}
       onpaste={chain_handlers(handle_paste, onpaste)}
       onbeforeinput={chain_handlers(handle_input_beforeinput, onbeforeinput)}
       oninput={handle_input_input}

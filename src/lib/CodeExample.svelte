@@ -7,6 +7,7 @@
     HTMLButtonAttributes,
   } from 'svelte/elements'
   import Icon from './Icon.svelte'
+  import LazyMount from './LazyMount.svelte'
   import { ChevronCollapse, ChevronExpand, GitHub, Svelte } from './icons'
   import { language_label_html } from './internal/language-label'
   import { merge_defaults, CODE_EXAMPLE_LABELS, type CodeExampleLabels } from './labels'
@@ -31,11 +32,13 @@
       // code fence metadata
       collapsible?: boolean // show an expand/collapse button
       code_above?: boolean // code above the example (default: `collapsible`)
+      lazy?: boolean // mount the example once it nears the viewport
       id?: string // id of the wrapping <div>, e.g. for precise test selectors
       repl?: string // Svelte REPL URL
       github?: string // Resolved source URL
       example?: boolean
       lang?: string
+      title?: string // names a `lazy` example's region
     }
     open?: boolean
     title?: Snippet<[]>
@@ -86,7 +89,16 @@
   id={meta_id ?? rest.id}
   class={[`code-example`, rest.class, { 'code-above': code_above }]}
 >
-  {@render example?.()}
+  {#if meta.lazy && example}
+    <LazyMount
+      label={meta.title ?? msg.example}
+      height="var(--code-example-lazy-height, 350px)"
+    >
+      {@render example()}
+    </LazyMount>
+  {:else}
+    {@render example?.()}
+  {/if}
   <pre class:open>{#if lang}{@html language_label_html(lang)}{/if}<code
       >{#if code}{@render code()}{:else}{src}{/if}</code
     ></pre>

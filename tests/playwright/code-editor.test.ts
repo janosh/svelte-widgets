@@ -361,3 +361,26 @@ for (const [text, direction] of [
     expect(actual_vertical).toBe(await caret(native))
   })
 }
+
+// The font chain resolves on the editor, not on :root, so a token set on any wrapper (a themed
+// panel, not just the page root) reaches it, and --editor-font still overrides both
+test(`CodeEditor takes --code-font/--font-mono from its wrapper and --editor-font over them`, async ({
+  page,
+}) => {
+  const { demo, area } = await open_editor(page)
+  const font_with = (vars: Record<string, string>) =>
+    demo
+      .evaluate((el: HTMLElement, entries) => {
+        for (const name of [`--font-mono`, `--code-font`, `--editor-font`])
+          el.style.removeProperty(name)
+        for (const [name, value] of entries) el.style.setProperty(name, value)
+      }, Object.entries(vars))
+      .then(() => area.evaluate((node) => getComputedStyle(node).fontFamily))
+  expect(await font_with({ '--font-mono': `Courier` })).toBe(`Courier`)
+  expect(await font_with({ '--font-mono': `Courier`, '--code-font': `Monaco` })).toBe(
+    `Monaco`,
+  )
+  expect(await font_with({ '--code-font': `Monaco`, '--editor-font': `Menlo` })).toBe(
+    `Menlo`,
+  )
+})

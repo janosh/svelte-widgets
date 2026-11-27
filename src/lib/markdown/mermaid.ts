@@ -3,6 +3,7 @@
 // the first diagram, so pages without diagrams never load it.
 import type { MermaidConfig } from 'mermaid'
 import type { Attachment } from 'svelte/attachments'
+import { is_dark_mode, watch_theme_changes } from '../theme-core'
 
 // Mermaid's own config (its MermaidConfig, minus startOnLoad), declared structurally so the
 // published types don't need the optional `mermaid` package installed
@@ -15,16 +16,6 @@ const sources = new WeakMap<Element, string>()
 let queue: Promise<void> = Promise.resolve()
 let render_count = 0
 
-// The page's resolved color-scheme (apply_theme_mode sets it inline, custom themes such
-// as a `black` one declare it in CSS), else the OS preference when it allows both
-const page_theme = (): string => {
-  const scheme = getComputedStyle(document.documentElement).colorScheme.trim()
-  const dark =
-    scheme !== `light` &&
-    (scheme === `dark` || matchMedia(`(prefers-color-scheme: dark)`).matches)
-  return dark ? `dark` : `default`
-}
-
 // Render every block in `root` (or `root` itself) not yet rendered with the current theme.
 // An explicit `config.theme` disables following the page's light/dark scheme.
 // Resolves after rendering; a failing diagram keeps its source and records the error.
@@ -33,7 +24,9 @@ export function render_mermaid(
   config: MermaidDiagramConfig = {},
 ): Promise<void> {
   const run = async () => {
-    const theme = config.theme ?? page_theme()
+    // the scheme `root` renders in (apply_theme_mode sets the root's inline, custom themes such
+    // as a `black` one declare it in CSS, a panel may nest its own), else the OS preference
+    const theme = config.theme ?? (is_dark_mode(root) ? `dark` : `default`)
     const blocks = [
       ...(root.matches(MERMAID_SELECTOR) ? [root] : []),
       ...root.querySelectorAll<HTMLElement>(MERMAID_SELECTOR),
@@ -68,22 +61,18 @@ export function render_mermaid(
 
 // Attachment factory for a `<pre class="mermaid">` or any container of them, such as an
 // element holding `{@html}` from render_markdown(). Renders blocks added later and
-// re-renders when the root `data-theme` or the OS color scheme changes.
+// re-renders when the scheme it renders in may have changed (see watch_theme_changes).
 export const mermaid_diagrams =
   (config: MermaidDiagramConfig = {}): Attachment<HTMLElement> =>
   (node) => {
     const render = () => void render_mermaid(node, config)
     render()
-    const media = matchMedia(`(prefers-color-scheme: dark)`)
-    media.addEventListener(`change`, render)
     // Own SVG writes also trigger this; blocks already rendered with the theme are skipped
     const observer = new MutationObserver(render)
-    observer.observe(document.documentElement, {
-      attributeFilter: [`data-theme`, `style`],
-    })
     observer.observe(node, { childList: true, subtree: true })
+    const stop_theme = watch_theme_changes(node, render)
     return () => {
-      media.removeEventListener(`change`, render)
+      stop_theme()
       observer.disconnect()
     }
   }

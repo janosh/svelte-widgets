@@ -11,6 +11,7 @@
   --text-color: light-dark(#222, #ccc);
   --text-color-muted: light-dark(#666, #999);
   --surface: light-dark(#fff, rgba(255, 255, 255, 0.05));
+  --table-stripe-bg: var(--surface);
   /* Neutral footer band, darker than --bg. */
   --footer-bg: light-dark(#ebebeb, #0b0b0b);
   --border: light-dark(#ddd, rgba(255, 255, 255, 0.15));
@@ -125,7 +126,8 @@ code {
   padding: 0.1em 0.3em;
   border-radius: 3pt;
   background: var(--surface);
-  font-size: 1.1em;
+  /* named fonts first: a bare monospace list would size off 13px, not the text around it */
+  font: 0.85em var(--font-mono, ui-monospace, Menlo, Consolas, monospace);
   /* Break long inline identifiers; white-space: pre still prevents wrapping code blocks. */
   overflow-wrap: anywhere;
 }
@@ -190,7 +192,9 @@ table {
   padding: 0.5em 0.75em;
   text-align: left;
 }
-tbody tr:nth-child(odd) {
+/* DataTable stripes itself by row index (its `striped` prop): a virtualized one's spacer rows
+   would flip :nth-child parity as it scrolls */
+:where(:not(.data-table) > tbody) > tr:nth-child(odd) {
   background: var(--surface);
 }
 blockquote {

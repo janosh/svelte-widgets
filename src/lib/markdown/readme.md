@@ -58,7 +58,7 @@ Every diagnostic has a stable `code`, `severity`, `message`, and `range: { start
 
 ## Diagrams
 
-With `mermaid: true`, each ` ```mermaid ` fence becomes `<pre class="mermaid">` holding its escaped source instead of highlighted code. Mermaid needs a DOM, so diagrams render on the client: the server HTML shows the source until `mermaid` is dynamically imported for the first diagram on a page. Pages without diagrams never load it. Diagrams follow the page's resolved `color-scheme` on `<html>`: `apply_theme_mode` (and so `ThemeToggle`) sets it, and a custom theme should declare it too (`data-theme` alone isn't read). When the scheme allows both (`light dark`) or is unset, `prefers-color-scheme` decides. Diagrams re-render when either changes, and an explicit `theme` in the config pins one.
+With `mermaid: true`, each ` ```mermaid ` fence becomes `<pre class="mermaid">` holding its escaped source instead of highlighted code. Mermaid needs a DOM, so diagrams render on the client: the server HTML shows the source until `mermaid` is dynamically imported for the first diagram on a page. Pages without diagrams never load it. Diagrams follow the `color-scheme` their container renders in, normally the one on `<html>`: `apply_theme_mode` (and so `ThemeToggle`) sets it, a custom theme should declare it too (`data-theme` alone isn't read), and a panel declaring its own wins. When the scheme allows both (`light dark`) or is unset, `prefers-color-scheme` decides. Diagrams re-render when either changes, and an explicit `theme` in the config pins one.
 
 ```mermaid
 flowchart LR
@@ -68,7 +68,7 @@ flowchart LR
   page & html --> browser[Diagrams render in the browser]
 ```
 
-Svelte pages need no setup: compiled pages attach the renderer to each diagram. For HTML strings from `engine.render()`, attach [`mermaid_diagrams(config?)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L72) to the container. It also renders diagrams that appear later, e.g. when `{@html}` updates. Outside Svelte, call [`render_mermaid(element, config?)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L31), which renders the diagrams within `element` and resolves when they are done.
+Svelte pages need no setup: compiled pages attach the renderer to each diagram. For HTML strings from `engine.render()`, attach [`mermaid_diagrams(config?)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L65) to the container. It also renders diagrams that appear later, e.g. when `{@html}` updates. Outside Svelte, call [`render_mermaid(element, config?)`](https://github.com/janosh/svelte-widgets/blob/main/src/lib/markdown/mermaid.ts#L22), which renders the diagrams within `element` and resolves when they are done.
 
 ```svelte
 <script lang="ts">
@@ -143,9 +143,9 @@ export default {
 
 Every fenced block has a typed, read-only `settings` object in `document.manifest.fences`. Analysis merges example defaults with authored settings; explicit `false` overrides a default. Unknown keys, duplicate keys, invalid JSON, and wrong value types fail at the fence before highlighting or checking. An info string that is not `key` / `key=value` words and names no setting is another tool's text (CommonMark allows any) and sets nothing. Rendering and checking read this same object. The raw `info` string remains available for source inspection.
 
-Supported settings are the boolean flags `example`, `check`, `csr`, `collapsible`, `hide_script`, `hide_style`, and `code_above`; nonempty strings `id`, `test`, `title`, `repl`, and `github`; and `wrapper` as a module path or `[module, export]`. Live rendering remains opt-in through the engine’s `examples` option.
+Supported settings are the boolean flags `example`, `check`, `csr`, `collapsible`, `hide_script`, `hide_style`, `code_above`, and `lazy`; nonempty strings `id`, `test`, `title`, `repl`, and `github`; and `wrapper` as a module path or `[module, export]`. Live rendering remains opt-in through the engine’s `examples` option.
 
-A `svelte` or `html` fence with `example` metadata renders a component and its source through `CodeExample`. Other languages remain ordinary highlighted code blocks. Flags are bare names or JSON values, for example `example collapsible=false id="counter"`. Use `csr` for a dynamic import rendered only in the browser. `hide_script` and `hide_style` remove real top-level blocks from the displayed source, preserving the runnable component.
+A `svelte` or `html` fence with `example` metadata renders a component and its source through `CodeExample`. Other languages remain ordinary highlighted code blocks. Flags are bare names or JSON values, for example `example collapsible=false id="counter"`. Use `csr` for a dynamic import rendered only in the browser, and `lazy` to mount each example only once it nears the viewport (pages with many heavy examples). `hide_script` and `hide_style` remove real top-level blocks from the displayed source, preserving the runnable component.
 
 Set `examples.wrapper` to a default-import module path or `[module, named_export]` for a custom wrapper. The wrapper receives `src`, `meta`, and `example`/`code` snippets. Virtual components live beside the Markdown file for relative import resolution. Vite receives their source before imports resolve and invalidates changed components and CSS during hot reload. Missing example modules fail explicitly.
 

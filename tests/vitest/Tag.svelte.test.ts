@@ -141,9 +141,10 @@ describe(`Tag`, () => {
     expect(contrast || undefined).toBe(expected)
   })
 
-  test(`contrast is re-picked when the color, theme, variant or style changes`, () => {
+  test(`contrast is re-picked when the color, theme, variant or style changes`, async () => {
+    const settle = () => new Promise<void>((resolve) => void setTimeout(resolve, 0))
     const sheet = document.createElement(`style`)
-    sheet.textContent = `:root { --brand: #1a1a2e } :root[data-theme='dark'] { --brand: #f7d154 }`
+    sheet.textContent = `:root { --brand: #1a1a2e } :root[data-theme='dark'] { --brand: #f7d154 } .light-panel { --brand: #1a1a2e }`
     document.head.append(sheet)
     onTestFinished(() => {
       sheet.remove()
@@ -160,6 +161,14 @@ describe(`Tag`, () => {
       doc_query(`.tag`).style.getPropertyValue(`--tag-contrast-color`)
     expect(contrast()).toBe(`white`)
     apply_theme_mode(`dark`) // the same color prop now paints a light fill
+    await settle()
+    expect(contrast()).toBe(`black`)
+    // an ancestor below the root restyling the token (a panel's own theme class) re-picks too
+    document.body.classList.add(`light-panel`)
+    onTestFinished(() => document.body.classList.remove(`light-panel`))
+    await settle()
+    expect(contrast()).toBe(`white`)
+    props.color = `#f7d154`
     flushSync()
     expect(contrast()).toBe(`black`)
     props.color = `#1a1a2e`

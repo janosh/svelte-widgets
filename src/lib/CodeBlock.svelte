@@ -127,7 +127,7 @@
     border-radius: var(--code-block-radius, 6px);
     background: var(--code-block-bg, light-dark(#f6f8fa, #161b22));
     font: var(--code-block-font-size, 0.85rem) / 1.5
-      var(--code-font, ui-monospace, monospace);
+      var(--code-font, var(--font-mono, ui-monospace, Menlo, Consolas, monospace));
     tab-size: 2;
     &.wrap {
       white-space: pre-wrap;

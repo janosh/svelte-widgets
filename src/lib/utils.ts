@@ -1,19 +1,9 @@
 import type { Option } from './types'
 
-let uuid_counter = 0
-
 export const chain_handlers =
   <EventType>(...handlers: (((event: EventType) => unknown) | null | undefined)[]) =>
   (event: EventType): void =>
     handlers.forEach((handler) => handler?.(event))
-
-// UUID for DOM IDs. randomUUID needs a secure context, so plain-http pages fall back to a
-// timestamp+counter in UUID shape: unique enough, not secure.
-export const get_uuid = (): string =>
-  globalThis.crypto?.randomUUID?.() ??
-  (Date.now().toString(16) + (uuid_counter++).toString(16))
-    .padStart(32, `0`)
-    .replaceAll(/(?<=^.{8}|^.{12}|^.{16}|^.{20})/gu, `-`)
 
 export const is_object = (val: unknown): val is Record<string, unknown> =>
   typeof val === `object` && val !== null
@@ -285,3 +275,132 @@ export function value_key(value: unknown, reject_functions = false): string {
   }
   return JSON.stringify(encode(value))
 }
+
+// Deep copy of the arrays and plain objects in `value`, the only things Svelte proxies (typed
+// arrays, maps and class instances are kept as they are). $state.snapshot does the same but
+// passes every number through structuredClone, which tripled the copy of 100k-item data.
+export const plain_copy = <Value>(value: Value): Value => {
+  if (typeof value !== `object` || value === null) return value
+  if (Array.isArray(value)) {
+    const copy: unknown[] = Array(value.length)
+    for (let idx = 0; idx < value.length; idx++) copy[idx] = plain_copy(value[idx])
+    return copy as Value
+  }
+  if (!is_plain_object(value)) return value
+  const copy: Record<string, unknown> = {}
+  // Not Object.keys: it runs a proxy's getOwnPropertyDescriptor trap per key (~11% slower)
+  for (const key of Reflect.ownKeys(value)) {
+    if (typeof key !== `string`) continue
+    const nested = plain_copy(Reflect.get(value, key))
+    // assigning `__proto__` (an own key after JSON.parse) would set the copy's prototype
+    if (key === `__proto__`)
+      Object.defineProperty(copy, key, {
+        value: nested,
+        enumerable: true,
+        writable: true,
+        configurable: true,
+      })
+    else copy[key] = nested
+  }
+  return copy as Value
+}
+
+// 32-bit FNV-1a hash, for short stable ids and cache keys (not cryptographic)
+export const hash_string = (text: string): number => {
+  let hash = 0x811c9dc5
+  for (let idx = 0; idx < text.length; idx++) {
+    // oxlint-disable-next-line eslint-plugin-unicorn/prefer-code-point -- hashes UTF-16 code units
+    hash ^= text.charCodeAt(idx)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return hash >>> 0
+}
+
+// Keeps returning the first of a run of value-equal arguments (by value_key), so a caller that
+// rebuilds an equal options object on every read hands its consumers one identity
+export function same_while_equal<T>(): (value: T) => T {
+  let last: { key: string; value: T } | undefined
+  return (value) => {
+    const key = value_key(value)
+    if (last?.key !== key) last = { key, value }
+    return last.value
+  }
+}
+
+// Memo of a computation per input object and options key: the latest result is kept with
+// the object (a WeakMap, so it goes when the object does) and reused while `key` repeats, so
+// a list analysed entry by entry recomputes only its new members. By identity: an object
+// edited in place keeps its stale result, pass a new one. A rejected promise is not kept.
+export function memo_by_identity<Result>(): (
+  target: object,
+  key: string,
+  compute: () => Result,
+) => Result {
+  const cache = new WeakMap<object, { key: string; result: Result }>()
+  return (target, key, compute) => {
+    const cached = cache.get(target)
+    if (cached?.key === key) return cached.result
+    const result = compute()
+    cache.set(target, { key, result })
+    if (result instanceof Promise) {
+      result.catch(() => {
+        if (cache.get(target)?.result === result) cache.delete(target)
+      })
+    }
+    return result
+  }
+}
+
+// Starts `task` now and settles with it, or rejects as soon as `signal` aborts, releasing the
+// caller even when the task ignores cancellation (it keeps running, its result is dropped)
+export async function abortable<Value>(
+  task: () => Value | Promise<Value>,
+  signal: AbortSignal,
+): Promise<Value> {
+  if (signal.aborted) throw to_error(signal.reason) // same Error as a later abort
+  const stopped = Promise.withResolvers<never>()
+  const abort = () => stopped.reject(to_error(signal.reason))
+  signal.addEventListener(`abort`, abort, { once: true })
+  try {
+    return await Promise.race([task(), stopped.promise]) // a sync throw rejects too
+  } finally {
+    signal.removeEventListener(`abort`, abort)
+  }
+}
+
+// `operation`'s result, or an Error naming `message` once `timeout_ms` passes first
+export async function with_timeout<Value>(
+  operation: () => Promise<Value>,
+  timeout_ms: number,
+  message: string,
+): Promise<Value> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () => reject(new Error(`${message} timed out after ${timeout_ms}ms`)),
+          timeout_ms,
+        )
+      }),
+    ])
+  } catch (error) {
+    throw to_error(error)
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+// Yield one event-loop turn via a message task: setTimeout(0) is clamped to 4 ms once timers
+// nest, which in a long chunked loop leaves the main thread idle for much of its budget.
+export const yield_turn = (): Promise<void> =>
+  new Promise((resolve) => {
+    const { port1, port2 } = new MessageChannel()
+    port1.addEventListener(`message`, () => {
+      port1.close() // closing one end closes the channel
+      resolve()
+    })
+    port1.start() // addEventListener (unlike onmessage) does not start the port
+    port2.postMessage(null)
+  })

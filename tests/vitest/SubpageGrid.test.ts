@@ -54,7 +54,7 @@ test.each([undefined, Check])(
       cards.map((card) => [
         card.getAttribute(`href`),
         card.querySelector(`h2`)?.textContent,
-        card.querySelector(`div > p`)?.textContent,
+        card.querySelector(`:scope > p`)?.textContent,
         card.querySelector(`svg.icon path`)?.getAttribute(`d`),
       ]),
     ).toEqual(

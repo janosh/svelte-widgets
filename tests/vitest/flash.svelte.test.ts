@@ -52,8 +52,9 @@ describe(`create_flash`, () => {
   })
 })
 
-// only the flashed control gets the highlight, and it fades back after 400 ms
-test(`create_shortcut_flash highlights only the flashed control for 400 ms`, () => {
+// only the flashed control gets the highlight, fades back after 400 ms, and then leaves the
+// control's own transitions alone
+test(`create_shortcut_flash highlights only the flashed control for 400 ms, then fades`, () => {
   vi.useFakeTimers()
   let flash!: ReturnType<typeof create_shortcut_flash<`play` | `next`>>
   const dispose = $effect.root(() => void (flash = create_shortcut_flash()))
@@ -68,5 +69,7 @@ test(`create_shortcut_flash highlights only the flashed control for 400 ms`, () 
     false,
     `transition: background-color 0.2s ease-out, box-shadow 0.2s ease-out`,
   ])
+  vi.advanceTimersByTime(200)
+  expect([flash.style(`play`), flash.style(`next`)]).toEqual([``, ``])
   flushSync(dispose)
 })

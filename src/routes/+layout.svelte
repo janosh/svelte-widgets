@@ -3,7 +3,7 @@
   import { asset } from '$app/paths'
   import { page } from '$app/state'
   import { CopyButton, Footer, GitHubCorner, PageSearch, Toc } from '#lib'
-  import { Edit, Sparkles } from '#lib/icons.ts'
+  import { Edit } from '#lib/icons.ts'
   import { observe_subtree, slug_to_title } from '#lib/utils.ts'
   import { flash_toc_target } from '#lib/toc-utils.ts'
   import { fragment_href } from '#lib/heading-anchors.ts'
@@ -218,10 +218,7 @@
 
 <Footer
   class="site-footer"
-  links={[
-    { href: `${repository}/discussions/200`, label: `Showcase`, icon: Sparkles },
-    { href: edit_href, label: `Edit this page`, icon: Edit },
-  ]}
+  links={[{ href: edit_href, label: `Edit this page`, icon: Edit }]}
 >
   <small title="For keyboard-only site navigation">
     <kbd>cmd+k</kbd> to open site search.

@@ -1,5 +1,6 @@
-import { is_object } from './utils'
 import { is_active_element, is_composing } from './attachments/shared'
+import type { ShortcutEntry } from './types'
+import { is_object } from './utils'
 
 // `mod` is Cmd on Apple keyboards and Ctrl everywhere else, so one binding covers both
 const primary_modifier = (): `meta` | `ctrl` =>
@@ -263,4 +264,57 @@ export function sanitize_shortcut_overrides(
     if (conflicting.length === 0) return overrides
     for (const id of conflicting) Reflect.deleteProperty(overrides, id)
   }
+}
+
+// === Shortcut registries ===
+// One table of the shortcuts an app handles, so its ShortcutsList rows and its buttons'
+// aria-keyshortcuts and title hints cannot drift apart.
+
+export type Shortcut = {
+  keys: string // aria-keyshortcuts value: space-separated alternatives of `+`-joined chords
+  label?: string // shown instead of the formatted keys (a key range like 0-9)
+  description: string
+  scopes: readonly string[] // surfaces that handle it, e.g. per viewer kind or mode
+}
+
+// Human-readable keys of a shortcut: `Home Control+ArrowLeft` -> `Home / Ctrl+←`
+export const format_shortcut_keys = ({
+  keys,
+  label,
+}: Pick<Shortcut, 'keys' | 'label'>): string =>
+  label ??
+  keys
+    .split(` `)
+    .map((chord) => format_shortcut(chord).join(`+`))
+    .join(` / `)
+
+// `Reset camera (R)`: a button's title naming its shortcut
+export const shortcut_title = (
+  shortcut: Shortcut,
+  label = shortcut.description,
+): string => `${label} (${format_shortcut_keys(shortcut)})`
+
+// aria-keyshortcuts plus title hint, spread onto the button that does what the key does
+export const shortcut_attrs = (shortcut: Shortcut, label?: string) => ({
+  'aria-keyshortcuts': shortcut.keys,
+  title: shortcut_title(shortcut, label),
+})
+
+// ShortcutsList rows of the given shortcuts, in order
+export const shortcut_entries = (shortcuts: Iterable<Shortcut>): ShortcutEntry[] =>
+  Array.from(shortcuts, ({ keys, label, description }) => ({
+    keys: keys.split(` `),
+    label: description,
+    keys_label: label,
+  }))
+
+// Shortcuts of any of the given scopes, each once, in input order
+export const shortcuts_in_scopes = <Entry extends Shortcut>(
+  shortcuts: Iterable<Entry>,
+  scopes: Iterable<string>,
+): Entry[] => {
+  const wanted = new Set(scopes)
+  return [...shortcuts].filter((shortcut) =>
+    shortcut.scopes.some((scope) => wanted.has(scope)),
+  )
 }

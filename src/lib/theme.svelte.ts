@@ -1,34 +1,29 @@
-// Headless theme helpers shared by ThemeToggle and callers that set theme without the
-// button (CommandMenu / PageSearch actions).
+// Reactive theme mode shared by ThemeToggle and callers that set theme without the button
+// (CommandMenu / PageSearch actions), plus everything rune-free from theme-core.ts, which
+// bundles built without the Svelte compiler (workers, Node) import directly.
 
 import { persisted_choice, storage_set } from './browser/index'
+import {
+  system_scheme,
+  THEME_MODES,
+  type ColorScheme,
+  type ThemeMode,
+} from './theme-core'
 
-const THEME_MODES = [`light`, `dark`, `system`] as const
-export type ThemeMode = (typeof THEME_MODES)[number]
-
-export const THEME_MODE_CYCLE = {
-  light: `system`,
-  system: `dark`,
-  dark: `light`,
-} as const
-
-const system_preference = (): `light` | `dark` =>
-  typeof matchMedia !== `undefined` && matchMedia(`(prefers-color-scheme: dark)`).matches
-    ? `dark`
-    : `light`
+export * from './theme-core'
 
 const resolve_theme_mode = (initial_mode: ThemeMode = `system`): ThemeMode =>
   persisted_choice(`theme`, THEME_MODES, initial_mode)
 
 // Shared so ThemeToggle's icon stays in sync when apply_theme_mode is called elsewhere
 let theme_mode = $state<ThemeMode>(`system`)
-let theme_resolved = $state<`light` | `dark`>()
+let theme_resolved = $state<ColorScheme>()
 export const theme = {
   get mode(): ThemeMode {
     return theme_mode
   },
   // the applied light or dark scheme, which also changes when the OS flips in system mode
-  get resolved(): `light` | `dark` | undefined {
+  get resolved(): ColorScheme | undefined {
     return theme_resolved
   },
 }
@@ -36,28 +31,13 @@ export const theme = {
 export const apply_theme_mode = (mode: ThemeMode): void => {
   if (typeof document === `undefined`)
     throw new TypeError(`apply_theme_mode(${mode}) is client-only`)
-  const effective = mode === `system` ? system_preference() : mode
+  const effective = mode === `system` ? system_scheme() : mode
   document.documentElement.style.colorScheme = effective
   document.documentElement.dataset.theme = effective
   theme_mode = mode
   theme_resolved = effective
   storage_set(`theme`, mode)
 }
-
-// Inline <head> script restoring the theme before first paint, so prerendered pages don't
-// flash the wrong theme before hydration. Mirrors apply_theme_mode: a stored light/dark wins,
-// anything else (system, unset, unreadable storage) follows prefers-color-scheme. Render it via
-// ThemeScript, or inject it yourself (e.g. a transformPageChunk hook or a static app.html).
-export const theme_init_script = `{
-  let theme
-  try {
-    theme = localStorage.getItem('theme')
-  } catch {}
-  if (theme !== 'light' && theme !== 'dark')
-    theme = globalThis.matchMedia?.('(prefers-color-scheme: dark)')?.matches ? 'dark' : 'light'
-  document.documentElement.style.colorScheme = theme
-  document.documentElement.dataset.theme = theme
-}`
 
 // Mount once per owner and dispose with it. Also works without a ThemeToggle.
 export const watch_theme = (): (() => void) => {

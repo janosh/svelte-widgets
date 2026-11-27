@@ -50,7 +50,10 @@
       margin: 4pt 0 0;
     }
     kbd {
-      font-family: var(--shortcuts-list-kbd-font, monospace);
+      font-family: var(
+        --shortcuts-list-kbd-font,
+        var(--font-mono, ui-monospace, Menlo, Consolas, monospace)
+      );
       padding: 0 3pt;
       border: 1px solid currentColor;
       border-radius: 3pt;

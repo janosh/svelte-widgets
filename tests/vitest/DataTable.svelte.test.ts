@@ -464,7 +464,7 @@ describe(`DataTable`, () => {
     )
   })
 
-  it.each([`same_while_equal`, `escape_markup`, `full_value_title`])(
+  it.each([`escape_markup`, `full_value_title`])(
     `keeps the internal helper %s out of the public table module`,
     (name) => {
       expect(name in table_index).toBe(false)
@@ -1929,6 +1929,10 @@ describe(`DataTable`, () => {
       const sides = () => [`A`, `B`, `C`, `D`].map((id) => header(id).dataset.dragSide)
       const no_sides = Array(4).fill(undefined)
 
+      // a file drag isn't a header drag: left to any file_drop zone around the table
+      for (const type of [`dragover`, `drop`])
+        expect((await drag(type, `B`)).defaultPrevented, type).toBe(false)
+      expect(sides()).toEqual(no_sides)
       expect(header(`B`).getAttribute(`aria-grabbed`)).toBeNull()
       await drag(`dragstart`, `B`)
       expect(header(`B`).getAttribute(`aria-grabbed`)).toBe(`true`)
@@ -2580,6 +2584,20 @@ describe(`DataTable`, () => {
       await tick()
       const filtered = [`mean`, `25`, ``, `median`, `25`, ``, `count`, `2`, ``]
       expect(summary_cells()).toEqual(filtered)
+    })
+
+    // JSON writes -Infinity and Infinity alike (null), which kept the old filter cached
+    it(`re-filters when a bound swaps between -Infinity and Infinity`, async () => {
+      const props = $state({
+        data: metric_rows,
+        columns: metrics,
+        column_prefs: { Score: { filter: { kind: `numeric` as const, max: -Infinity } } },
+      })
+      mount_table(props)
+      expect(rendered_models()).toEqual([])
+      props.column_prefs = { Score: { filter: { kind: `numeric`, max: Infinity } } }
+      await tick()
+      expect(rendered_models()).toEqual([`A`, `B`, `C`])
     })
 
     it(`normalizes columns independently and enables median summaries on demand`, async () => {
@@ -3304,10 +3322,10 @@ describe(`DataTable`, () => {
     // happy-dom has no layout: rows have no offsetHeight, so the window follows the
     // row-height estimate and min_window (above the 29 rows the mocked 600px viewport plus
     // overscan would need at the top)
-    const many_rows = Array.from({ length: 200 }, (_, idx) => ({
-      Model: `Model ${idx}`,
-      Score: idx,
-    }))
+    const rows_of = (count: number) =>
+      Array.from({ length: count }, (_, idx) => ({ Model: `Model ${idx}`, Score: idx }))
+    const many_rows = rows_of(200)
+    const big_rows = rows_of(501) // past the 500 rows where unset `virtual` turns on
     const two_cols = plain_columns(`Model`, `Score`)
     const rendered_rows = () =>
       document.querySelectorAll(`tbody tr:not(.virtual-spacer):not(.empty-row)`)
@@ -3329,7 +3347,12 @@ describe(`DataTable`, () => {
     it.each<[string, Partial<TableProps>, number, boolean]>([
       [`virtual={true} caps rendered rows`, { virtual: true }, min_window, true],
       [`custom min_window bounds the window`, { virtual: { min_window: 40 } }, 40, true],
-      [`virtualization is off by default`, {}, many_rows.length, false],
+      [
+        `virtual={false} renders past 500 rows`,
+        { data: big_rows, virtual: false },
+        501,
+        false,
+      ],
       [
         `pagination disables virtualization`,
         { virtual: true, pagination: { page_size: 10 } },
@@ -3337,16 +3360,75 @@ describe(`DataTable`, () => {
         false,
       ],
     ])(`%s`, (_desc, props, n_rendered, virtualized) => {
-      mount_table({ data: many_rows, columns: two_cols, ...props })
+      const data = props.data ?? many_rows
+      mount_table({ data, columns: two_cols, ...props })
       expect(rendered_rows()).toHaveLength(n_rendered)
+      expect(document.querySelector(`tr.stripe`)).toBeNull() // striped is opt-in
       // the window starts at the top: one bottom spacer and a shown-of-total count
       expect(spacers().map((spacer) => spacer.style.height)).toEqual(
-        virtualized ? [`${(many_rows.length - n_rendered) * row_height_px}px`] : [],
+        virtualized ? [`${(data.length - n_rendered) * row_height_px}px`] : [],
       )
       expect(document.querySelector(`.row-count-info`)?.textContent?.trim()).toBe(
-        virtualized ? `${n_rendered} of ${many_rows.length} rows` : undefined,
+        virtualized ? `${n_rendered} of ${data.length} rows` : undefined,
       )
       expect(document.querySelector(`.pagination`) !== null).toBe(`pagination` in props)
+    })
+
+    // Unset, it follows the data across 500 rows both ways (live appends, a smaller
+    // replacement), but not a search: typing would flip the rendering mode back and forth
+    it(`unset virtual turns on past 500 data rows, whatever the search leaves`, async () => {
+      vi.useFakeTimers()
+      const state = $state({ data: rows_of(500), search_query: `` })
+      mount_table(bind_props({ columns: two_cols, search: true }, state))
+      const shape = () => [rendered_rows().length, spacers().length]
+      expect(shape()).toEqual([500, 0])
+      state.data = big_rows
+      await tick()
+      expect(shape()).toEqual([min_window, 1])
+      await settle_search(state, `Model 1`) // 111 of the 501 rows
+      expect(shape()).toEqual([min_window, 1])
+      state.data = rows_of(500)
+      await tick()
+      expect(shape()).toEqual([111, 0])
+    })
+
+    // A scroller with no height limit is as tall as all its rows, so the page's viewport, not
+    // the scroller's, decides which render: here the page has scrolled 101 rows into the table.
+    // The window then starts at row 91 behind a spacer <tr>, which flips :nth-child parity, so
+    // `striped` must go by row index: the 1st, 3rd, ... data rows (even indices) get the stripe
+    it(`windows an unbounded scroller by the page viewport, striped by row index`, async () => {
+      mount_virtual({ striped: true })
+      const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
+      const height = many_rows.length * row_height_px
+      Object.defineProperty(scroller, `clientHeight`, { value: height })
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -101 * row_height_px, 500, height)
+      await fire(document, new Event(`scroll`))
+      expect(spacers()[0].style.height).toBe(`${(101 - overscan) * row_height_px}px`)
+      expect(rendered_rows()).toHaveLength(min_window)
+      const rows = [...rendered_rows()]
+      expect(rows[0].getAttribute(`data-row-idx`)).toBe(`91`)
+      const off_parity = rows.filter(
+        (row) =>
+          row.classList.contains(`stripe`) !==
+          (Number(row.getAttribute(`data-row-idx`)) % 2 === 0),
+      )
+      expect(off_parity).toEqual([])
+      // a window resize re-measures too
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -150 * row_height_px, 500, height)
+      await fire(window, new Event(`resize`))
+      expect(spacers()[0].style.height).toBe(`${(150 - overscan) * row_height_px}px`)
+      // an unrelated scroller leaves the window alone; one containing the table moves it
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -180 * row_height_px, 500, height)
+      const unrelated = document.createElement(`div`)
+      document.body.append(unrelated)
+      await fire(unrelated, new Event(`scroll`))
+      expect(spacers()[0].style.height).toBe(`${(150 - overscan) * row_height_px}px`)
+      await fire(document.body, new Event(`scroll`))
+      expect(spacers()[0].style.height).toBe(`${(180 - overscan) * row_height_px}px`)
+      unrelated.remove()
     })
 
     // a row a linked view names (an atom hovered in 3D) outside the window is scrolled to, and
@@ -3461,11 +3543,11 @@ describe(`DataTable`, () => {
 
     // Clickable rows step by absolute index, not DOM sibling: the element after the last
     // rendered row is a spacer (or, paged, nothing), so keyboard users were stranded at the
-    // window or page edge.
-    it.each([`virtual`, `paged`])(
+    // window or page edge. An unbounded scroller (no height limit) can't scroll at all.
+    it.each([`virtual`, `unbounded`, `paged`])(
       `arrow keys walk clickable rows across the %s window boundary`,
       async (mode) => {
-        if (mode === `virtual`) mount_virtual({ on_row_click: () => {} })
+        if (mode !== `paged`) mount_virtual({ on_row_click: () => {} })
         else {
           mount_table({
             data: many_rows,
@@ -3478,6 +3560,13 @@ describe(`DataTable`, () => {
         const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
         const row_at = (abs_idx: number) =>
           doc_query(`tbody tr[data-row-idx="${abs_idx}"]`)
+        if (mode === `unbounded`) {
+          Object.defineProperties(scroller, {
+            clientHeight: { value: many_rows.length * row_height_px },
+            scrollTop: { get: () => 0, set: () => {} },
+          })
+          await fire(document, new Event(`scroll`))
+        }
 
         // the first row has nothing above it: the key is spent without moving anything
         row_at(0).focus()
@@ -3489,13 +3578,33 @@ describe(`DataTable`, () => {
         await press(row_at(min_window - 1), `ArrowDown`)
 
         if (mode === `virtual`) expect(scroller.scrollTop).toBeGreaterThan(0)
-        else expect(doc_query<HTMLInputElement>(`.page-input`).value).toBe(`2`)
+        if (mode === `paged`)
+          expect(doc_query<HTMLInputElement>(`.page-input`).value).toBe(`2`)
         expect(document.activeElement).toBe(row_at(min_window))
 
         await press(row_at(min_window), `ArrowUp`)
         expect(document.activeElement).toBe(row_at(min_window - 1))
       },
     )
+
+    // A scroller whose top 20 rows sit above the page shows rows from further down: stepping
+    // past the window scrolls it so the next row lands on screen, not 20 rows below it
+    it(`a keyboard step past the window of a clipped scroller keeps the row rendered`, async () => {
+      mount_virtual({ on_row_click: () => {} })
+      await tick()
+      const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -20 * row_height_px, 500, scroller.clientHeight)
+      await fire(document, new Event(`scroll`))
+      const last = [...rendered_rows()].at(-1)
+      if (!last) throw new Error(`no rendered rows`)
+      const next_idx = Number(last.getAttribute(`data-row-idx`)) + 1
+      await press(last, `ArrowDown`)
+      await fire(scroller, new Event(`scroll`)) // the scroll the browser fires after the jump
+      expect(document.activeElement).toBe(
+        doc_query(`tbody tr[data-row-idx="${next_idx}"]`),
+      )
+    })
 
     it(`clamps the rendered window when data shrinks below the scroll position`, async () => {
       const state = $state({ data: many_rows })

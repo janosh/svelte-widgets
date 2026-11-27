@@ -12,8 +12,6 @@
  */
 
 :root {
-  /* Host code blocks can share --code-font with the editor. */
-  --editor-font: var(--code-font, ui-monospace, sfmono-regular, menlo, monospace);
   --editor-font-size: 13px;
   /* Must stay an INTEGER pixel value: a transparent <textarea> over a token <pre> can
    * round fractional line boxes differently and drift by whole lines over long files. */

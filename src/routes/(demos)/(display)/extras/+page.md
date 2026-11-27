@@ -59,9 +59,51 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 />
 ```
 
+`svelte-widgets/theme` also reads the scheme an element renders in (`is_dark_mode`, `nearest_declared` across shadow roots), calls back when that may change (`watch_theme_changes`, `watch_dark_mode`: class, `data-theme` or inline `color-scheme` on any ancestor, or the OS preference), and resolves color tokens such as `light-dark()` against an element for canvas or WebGL (`resolve_color_token`). Bundles built without the Svelte compiler (workers, Node) import all but the reactive `theme`, `apply_theme_mode` and `watch_theme` from `svelte-widgets/theme-core`:
+
+```svelte example id="theme-core-demo"
+<script lang="ts">
+  import {
+    is_dark_mode,
+    resolve_color_token,
+    watch_theme_changes,
+  } from 'svelte-widgets/theme'
+
+  let scheme = $state<`light` | `dark`>(`dark`)
+  let dark = $state(false)
+  let swatch = $state(``)
+  let canvas = $state(``)
+  const read_scheme = (node: HTMLElement) => {
+    const update = () => {
+      dark = is_dark_mode(node)
+      const token = getComputedStyle(node).getPropertyValue(`--swatch`).trim()
+      swatch = resolve_color_token(node, token)
+      canvas = resolve_color_token(node, `Canvas`)
+    }
+    update()
+    return watch_theme_changes(node, update)
+  }
+</script>
+
+<button onclick={() => (scheme = scheme === `dark` ? `light` : `dark`)}>
+  Flip panel to {scheme === `dark` ? `light` : `dark`}
+</button>
+<p
+  {@attach read_scheme}
+  data-testid="theme-core-panel"
+  style:color-scheme={scheme}
+  style="--swatch: light-dark(#d33, #3d3); padding: 1ex; background: light-dark(#eee, #222)"
+>
+  dark: {dark}, <code>--swatch</code> resolves to
+  <code style:color={swatch}>{swatch}</code>, <code>Canvas</code> to <code>{canvas}</code>
+</p>
+```
+
 ### `Icon`
 
 Renders one glyph from the bundled icon set at `1em` square, inheriting `currentColor`. Pass the glyph value (`<Icon icon={Info} />`), not a name.
+
+To draw your own glyph in the same 24x24 frame, build it with `markup_icon(svg_markup, { stroke: 'currentColor' })` or `path_icon(d)` from `svelte-widgets/icons/builders`.
 
 ```svelte example id="icon-demo"
 <script lang="ts">
@@ -282,6 +324,8 @@ Set its box (background, padding, gap, width) with `style` or `class`, its colum
 
 A collapsed `<details>` listing keyboard shortcuts, e.g. at the bottom of a settings or help pane. Each entry's `keys` uses the [`hotkey` grammar](attachments/hotkey) and renders with `format_shortcut`, so `mod` shows as `⌘` on Apple keyboards and `Ctrl` elsewhere. An array lists alternatives; `keys_label` replaces the keys for gestures the grammar can't spell. `summary` renames the toggle and `bind:open` expands it.
 
+To keep the list and your buttons' hints in sync, describe each shortcut once as a `Shortcut` (`keys` in aria-keyshortcuts spelling, `description`, `scopes`) and derive both from it with `svelte-widgets/shortcuts`: `shortcut_entries(shortcuts_in_scopes(registry, scopes))` gives the rows, `shortcut_attrs(shortcut)` the button's `aria-keyshortcuts` and `title`. For the keys themselves, see [`viewer_keys`](attachments/forward-window-keydown).
+
 ```svelte example id="shortcuts-list-demo"
 <script lang="ts">
   import { ShortcutsList } from 'svelte-widgets'
@@ -351,7 +395,56 @@ Colors come from `--github-corner-bg` and `--github-corner-color` (plus their `-
 
 The wrapper the [Markdown integration](markdown) mounts around runnable code fences. Configure it through `create_markdown({ examples: { wrapper: ["svelte-widgets", "CodeExample"] } })` and pass that engine to `markdown_vite(engine)`. Every "View code" button on this site uses this component.
 
-Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported.
+Fence metadata drives it: `collapsible` hides the source behind a button, `code_above` puts the source before the rendered example, and `repl`/`github` accept resolved URLs, for example `github="https://github.com/org/repo/blob/main/src/example.svelte"`. Resolve repository paths in the caller or build configuration; `repo`, `file`, and boolean `github` metadata are no longer supported. `lazy` mounts the example only once it nears the viewport (via [`LazyMount`](#lazymount)), for pages with many heavy examples: set it per fence or for all of them with `create_markdown({ examples: { lazy: true } })`. The placeholder holds `--code-example-lazy-height` (default `350px`).
+
+### `LazyMount`
+
+Mounts its content once it comes within 200px of the viewport, and keeps it mounted after scrolling away so user input and loaded data survive. Until the content lays out with some height, it holds `height` (default `500px`) so content still loading doesn't collapse and pull everything below into view at once. Content that shows its own loading message first (e.g. in an `{#await}`) marks it with `data-lazy-placeholder`, so the hold outlasts it and the message fills the held height. During SSR it renders only the placeholder. Pass a snippet as children, or `load` (a dynamic import) plus `props` to also defer the component's code:
+
+```svelte example id="lazy-mount-demo"
+<script lang="ts">
+  import { LazyMount } from 'svelte-widgets'
+</script>
+
+<LazyMount label="Snippet demo" height="80px">
+  <p>Mounted once scrolled near</p>
+</LazyMount>
+<LazyMount
+  label="Lazily imported demo"
+  height="80px"
+  load={() => import('svelte-widgets/Tag.svelte')}
+  props={{ label: `Imported once scrolled near` }}
+/>
+```
+
+The placeholder's colors come from `--lazy-mount-placeholder-color` and `--lazy-mount-placeholder-bg`.
+
+### `PropsTable`
+
+A collapsible reference of a component's props: name, type, default and the `//` comment above or beside each prop in its `$props()` type, extracted at build time by the `prop_docs_plugin` Vite plugin. Inherited props (shared prop types, `Pick<ComponentProps<typeof X>, ...>`, `HTMLAttributes`) resolve to their declaring comment, and a constant default also shows the value it stands for. The docs load per component and only once the browser idles.
+
+```svelte example id="props-table-demo"
+<script lang="ts">
+  import { PropsTable } from 'svelte-widgets'
+  import loaders from 'virtual:prop-docs'
+</script>
+
+<PropsTable name="LazyMount" {loaders} />
+```
+
+Wire it up with the plugin, which documents every `.svelte` file under `dir` (default `src/lib`) calling `$props(`, resolving their imports with the nearest tsconfig's `paths`:
+
+```ts
+// vite.config.ts
+import { prop_docs_plugin } from 'svelte-widgets/prop-docs/vite-plugin'
+
+export default { plugins: [prop_docs_plugin()] }
+```
+
+```ts
+// src/app.d.ts
+/// <reference types="svelte-widgets/prop-docs/virtual" />
+```
 
 ### `start_polling`
 

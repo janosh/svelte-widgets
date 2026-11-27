@@ -1,4 +1,5 @@
 import ColumnPicker from '#lib/table/ColumnPicker.svelte'
+import { ChevronDown, ChevronRight } from '#lib/icons.ts'
 import type { TableColumn } from '#lib/table/types.ts'
 import { type ComponentProps, createRawSnippet, tick } from 'svelte'
 import { describe, expect, test, vi } from 'vite-plus/test'
@@ -202,7 +203,7 @@ describe(`ColumnPicker`, () => {
       )
       expect(
         sections.map((section) =>
-          section.querySelector(`.section-header`)?.textContent?.replace(`▼`, ``).trim(),
+          section.querySelector(`.section-header`)?.textContent?.trim(),
         ),
       ).toEqual([...headers, undefined])
     })
@@ -252,7 +253,9 @@ describe(`ColumnPicker`, () => {
       expect(headers[1].getAttribute(`aria-expanded`)).toBe(`true`)
       for (const expected of [!collapsed, collapsed]) {
         expect(headers[0].getAttribute(`aria-expanded`)).toBe(String(expected))
-        expect(headers[0].textContent).toContain(expected ? `▼` : `▶`)
+        expect(headers[0].querySelector(`.collapse-icon path`)?.getAttribute(`d`)).toBe(
+          (expected ? ChevronDown : ChevronRight).d,
+        )
         expect(checkbox_states()).toHaveLength(expected ? 3 : 1)
         await click(headers[0])
       }

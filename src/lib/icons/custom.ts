@@ -1,15 +1,7 @@
 // Hand-maintained glyphs (domain shapes, hand-tuned marks, pre-generator set). See icons.ts for tree-shake rationale.
+// short aliases keep the ~150 glyph definitions below on one line each
+import { markup_icon as icon, path_icon as path } from './builders.ts'
 import type { IconData } from './types.ts'
-
-type Paint = Pick<IconData, 'stroke' | 'fill'>
-// pure-call annotations let bundlers drop unused `export const X = icon(...)` glyphs; declared as
-// functions, the one form esbuild, rollup and terser all document for the annotation
-/* #__NO_SIDE_EFFECTS__ */ function icon(markup: string, paint?: Paint): IconData {
-  return { viewBox: `0 0 24 24`, markup, ...paint }
-}
-/* #__NO_SIDE_EFFECTS__ */ function path(d: string, paint?: Paint): IconData {
-  return { viewBox: `0 0 24 24`, d, ...paint }
-}
 
 export const AreaPlot = icon(
   `<path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M5 18c2-7 4-4 6-8s4 1 8-5v13z" fill="currentColor" opacity="0.45"/><path d="M5 18c2-7 4-4 6-8s4 1 8-5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>`,
@@ -473,6 +465,16 @@ export const ThreePanels = path(
 )
 export const TimeSeriesPlot = icon(
   `<path d="M3 3v18h18" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 16l3-4l3 2l3-7l3 4l4-5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M8 19v2m6-2v2m6-2v2" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>`,
+)
+// The ⏮ ▶ ⏸ ⏭ glyphs' shapes as 1em paths, for players: each font sets those glyphs' ink at its
+// own height (▶ ~1.3px above center in macOS Chrome), so only SVG centers them in a button
+export const TransportNext = path(
+  `M1 5.5 9.5 12 1 18.5zm8.5 0L18 12l-8.5 6.5zm9 0H22v13h-3.5z`,
+)
+export const TransportPause = path(`M5 5h5v14H5zm9 0h5v14h-5z`)
+export const TransportPlay = path(`M4 1l19 11L4 23z`)
+export const TransportPrevious = path(
+  `M23 5.5 14.5 12l8.5 6.5zm-8.5 0L6 12l8.5 6.5zm-9 0H2v13h3.5z`,
 )
 export const Treemap = icon(
   `<g fill="currentColor"><rect x="2" y="2" width="11" height="12" rx="1"/><rect x="15" y="2" width="7" height="7" rx="1" opacity="0.65"/><rect x="15" y="11" width="7" height="11" rx="1" opacity="0.85"/><rect x="2" y="16" width="6" height="6" rx="1" opacity="0.55"/><rect x="10" y="16" width="3" height="6" rx="1" opacity="0.35"/></g>`,

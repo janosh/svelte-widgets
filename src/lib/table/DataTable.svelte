@@ -20,6 +20,7 @@
     escape_html,
     html_to_text,
     is_plain_object,
+    same_while_equal,
     with_defaults,
   } from '../utils'
   import { virtual_window } from '../virtual'
@@ -63,7 +64,6 @@
     middle_ellipsis_parts,
     parse_datetime_val,
     parse_numeric_val,
-    same_while_equal,
     sort_table_rows,
     text_matches_query,
   } from './data'
@@ -111,9 +111,10 @@
     search_query = $bindable(``),
     show_row_select = false,
     pagination = false,
-    virtual = false,
+    virtual,
     row_key,
     row_animation_ms = 0,
+    striped = false,
     selected_ids = $bindable([]),
     visible_rows = $bindable([]),
     hidden_columns = $bindable(),
@@ -236,8 +237,14 @@
     with_defaults(search, { placeholder: `Filter...`, expanded: false }),
   )
   let search_expanded = $derived(search_config?.expanded ?? false)
+  // Unset, rows virtualize past 500: there a 30-column table takes ~0.35 s to mount in
+  // Chromium with every cell rendered, ~60 ms virtualized at any row count. A boolean of its
+  // own, so data updates that stay on one side of 500 keep virtual_config's identity.
+  let virtual_on = $derived(virtual ?? data.length > 500)
   let virtual_config = $derived(
-    pagination_config ? null : with_defaults(virtual, { overscan: 10, min_window: 60 }),
+    pagination_config
+      ? null
+      : with_defaults(virtual_on, { overscan: 10, min_window: 60 }),
   )
   let hint_config = $derived(
     sort_hint
@@ -604,11 +611,19 @@
   )
   let virtual_range = $derived({ start: virtual_start, end: virtual_end })
 
-  // Scroll events only read offsets; clientHeight can force layout, so only measure on request
+  // The rows on screen: the scroller's box clipped to the window's, so a scroller with no
+  // height limit, as tall as all its rows, renders those in the page's viewport. Its own
+  // scroll events only read offsets: measuring the box can force layout.
+  let clipped_top = 0
   const sync_viewport = (measure_size = false) => {
     if (!scroll_el || !virtual_config) return
-    scroll_top = scroll_el.scrollTop
-    if (measure_size) viewport_height = scroll_el.clientHeight
+    if (measure_size) {
+      const { top } = scroll_el.getBoundingClientRect()
+      const bottom = Math.min(top + scroll_el.clientHeight, window.innerHeight)
+      clipped_top = Math.max(0, -top)
+      viewport_height = Math.max(0, bottom - Math.max(top, 0))
+    }
+    scroll_top = scroll_el.scrollTop + clipped_top
   }
 
   // Measured once, then only on width or density change: re-measuring on every append forces
@@ -924,17 +939,18 @@
     event.dataTransfer.effectAllowed = `move`
     event.dataTransfer.setData(`text/html`, ``)
   }
+  // Header drags only: a file dragged over a header goes on to any drop zone around the table
   function handle_drag_over(event: DragEvent, col: Column<Row>) {
+    if (!drag_col_id || !event.dataTransfer) return
     event.preventDefault()
-    if (!event.dataTransfer) return
     const same_group = drag_col_group() === col.group
     event.dataTransfer.dropEffect = same_group ? `move` : `none`
     drag_over_col_id = same_group ? col.id : null
   }
   function handle_drop(event: DragEvent, target_col: Column<Row>) {
+    if (!drag_col_id) return
     event.preventDefault()
-    if (drag_col_id && drag_col_group() === target_col.group)
-      move_column_to(drag_col_id, target_col.id)
+    if (drag_col_group() === target_col.group) move_column_to(drag_col_id, target_col.id)
     reset_drag_state()
   }
   // Remove `col_id` from column_order and reinsert it at `target_id`'s position
@@ -1154,8 +1170,10 @@
     if (!virtual_config || !scroll_el) return
     if (row >= virtual_range.start && row < virtual_range.end) return
     const leading_edge = align_bottom ? Math.max(0, viewport_height - avg_row_height) : 0
-    scroll_el.scrollTop = Math.max(0, row * avg_row_height - leading_edge)
-    sync_viewport()
+    // Moves the window itself: a scroller with no height limit can't scroll, so focusing
+    // the row scrolls the page to it instead
+    scroll_top = Math.max(0, row * avg_row_height - leading_edge)
+    scroll_el.scrollTop = scroll_top - clipped_top
   }
 
   // Move focus to a cell by absolute coordinates, paging/scrolling it into view first
@@ -1308,7 +1326,13 @@
   // Shared by the animated and static row loops
   const row_attrs = (row: Row & RowData, abs_idx: number) => ({
     style: row.style,
-    class: [row.class, { selected: show_row_select && is_row_selected(row) }],
+    class: [
+      row.class,
+      {
+        selected: show_row_select && is_row_selected(row),
+        stripe: striped && abs_idx % 2 === 0,
+      },
+    ],
     'data-row-idx': abs_idx,
     tabindex: on_row_click ? 0 : undefined,
   })
@@ -1557,6 +1581,19 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     </tr>
   {/if}
 {/snippet}
+
+<!-- Scrolling the page or an ancestor moves the table across the window's edges. Its own
+     scroll is handled on the scroller: in a shadow root it never reaches the window. -->
+<svelte:window
+  onscrollcapture={({ target }) =>
+    // the page or a container around this table, not unrelated scrollers or its own
+    target instanceof Node &&
+    target !== scroll_el &&
+    scroll_el &&
+    target.contains(scroll_el) &&
+    sync_viewport(true)}
+  onresize={() => sync_viewport(true)}
+/>
 
 <div
   {@attach table_tooltips}
@@ -2326,7 +2363,7 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
      seam; overflow: clip with a 1px clip margin lets the overhang render. */
   td.pinned {
     position: sticky;
-    background: var(--table-sticky-cell-bg, var(--page-bg, Canvas));
+    background-color: var(--table-sticky-cell-bg, var(--page-bg, Canvas));
     z-index: 1;
     overflow: clip;
     overflow-clip-margin: 1px;
@@ -2339,26 +2376,35 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     background: inherit;
     box-shadow: inherit;
   }
-  /* separate odd-row var so consumers with striped rows can composite their stripe
-  color over the opaque sticky background (which must stay opaque to occlude columns
-  scrolling beneath it), e.g.
-  --table-sticky-cell-odd-bg: linear-gradient(var(--stripe), var(--stripe)), var(--page-bg) */
-  tbody tr:nth-child(odd) td.pinned {
-    background: var(
-      --table-sticky-cell-odd-bg,
-      var(--table-sticky-cell-bg, var(--page-bg, Canvas))
-    );
-  }
+  /* Stripes follow row_attrs' row index, not :nth-child, which the top virtual spacer row
+     would flip. The row paints them under cells' own (column color) backgrounds; a pinned
+     cell's stays opaque to occlude columns scrolling beneath it, so it layers the stripe over
+     that as an image, under the hover wash. */
   tbody tr {
+    --table-cell-stripe: initial; /* nested tables don't inherit an outer cell's stripe */
+    &.stripe {
+      --table-stripe: var(
+        --table-stripe-bg,
+        color-mix(in srgb, CanvasText 6%, transparent)
+      );
+      background-color: var(--table-stripe);
+      td.pinned {
+        --table-cell-stripe: linear-gradient(var(--table-stripe), var(--table-stripe));
+      }
+    }
+    td.pinned {
+      background-image: var(--table-cell-stripe, none);
+    }
     &:is(:hover, .hovered) {
       filter: var(--table-row-hover-filter, none);
     }
-    /* Tint cells because their opaque backgrounds hide a row-level wash. */
     &:is(:hover, .hovered) td {
-      background-image: linear-gradient(
-        var(--table-row-hover-bg, rgba(128, 128, 128, 0.16)),
-        var(--table-row-hover-bg, rgba(128, 128, 128, 0.16))
-      );
+      background-image:
+        linear-gradient(
+          var(--table-row-hover-bg, rgba(128, 128, 128, 0.16)),
+          var(--table-row-hover-bg, rgba(128, 128, 128, 0.16))
+        ),
+        var(--table-cell-stripe, none);
     }
     &[tabindex] {
       cursor: pointer;
@@ -2375,12 +2421,18 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
         color: var(--table-accent) !important;
       }
     }
-    &.selected {
-      background: var(--highlight-bg, rgba(74, 158, 255, 0.15)) !important;
-      td {
-        border-top: 1px solid var(--table-accent);
-        border-bottom: 1px solid var(--table-accent);
-      }
+    /* Inset shadows, not borders or a row background: borders grow the row, and pinned
+       cells' opaque backgrounds would hide both. A pinned cell's ::before (which inherits
+       this) overhangs 1px under the next row, so its bottom edge sits 1px higher. A cell
+       range keeps its own highlight. */
+    &.selected td:not(.cell-selected) {
+      box-shadow:
+        inset 0 1px var(--table-accent),
+        inset 0 var(--selected-row-bottom, -1px) var(--table-accent),
+        inset 0 0 0 100vmax var(--highlight-bg, rgba(74, 158, 255, 0.15));
+    }
+    &.selected td.pinned {
+      --selected-row-bottom: -2px;
     }
   }
   .group-header th {

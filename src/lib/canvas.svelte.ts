@@ -1,5 +1,6 @@
 import { untrack } from 'svelte'
 import { css_px } from './attachments/shared'
+import { set_export_painter } from './figure-export'
 
 export interface CanvasFrame {
   ctx: CanvasRenderingContext2D
@@ -116,6 +117,30 @@ export function create_canvas_surface(inputs: {
       })
     return () => {
       for (const restore of originals) restore()
+    }
+  })
+
+  // Figure exports redraw each layer at export resolution instead of upscaling its bitmap
+  $effect(() => {
+    const layers = [
+      [inputs.canvas(), inputs.draw],
+      [inputs.overlay_canvas?.(), inputs.draw_overlay],
+    ] as const
+    const cleanups = layers.map(([layer, draw]) =>
+      layer && draw
+        ? set_export_painter(layer, (target, pixel_ratio) => {
+            const { width, height } = untrack(() => dims)
+            target.width = Math.max(1, Math.round(width * pixel_ratio))
+            target.height = Math.max(1, Math.round(height * pixel_ratio))
+            const context = target.getContext(`2d`)
+            if (!context) throw new Error(`Canvas 2D context not available`)
+            context.scale(pixel_ratio, pixel_ratio)
+            draw({ ctx: context, width, height })
+          })
+        : undefined,
+    )
+    return () => {
+      for (const cleanup of cleanups) cleanup?.()
     }
   })
 

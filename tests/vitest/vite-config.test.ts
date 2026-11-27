@@ -65,6 +65,7 @@ test(`a returned config owns its nested state`, () => {
 const stateful_sources = import.meta.glob([
   `/src/lib/*.svelte.ts`,
   `/src/lib/browser/index.ts`,
+  `/src/lib/theme-core.ts`,
 ])
 test.each([
   [`browser/index.ts`, () => import(`svelte-widgets/browser`)],
@@ -72,6 +73,7 @@ test.each([
   [`find-in-page.svelte.ts`, () => import(`svelte-widgets/find-in-page`)],
   [`toast-queue.svelte.ts`, () => import(`svelte-widgets/toast-queue`)],
   [`theme.svelte.ts`, () => import(`svelte-widgets/theme`)],
+  [`theme-core.ts`, () => import(`svelte-widgets/theme-core`)],
   [`roving-focus.svelte.ts`, () => import(`svelte-widgets/roving-focus`)],
   [`canvas.svelte.ts`, () => import(`svelte-widgets/canvas`)],
   [`effects.svelte.ts`, () => import(`svelte-widgets/effects`)],

@@ -6,6 +6,7 @@ import type { ContentManifest } from './src/lib/markdown/content.ts'
 import { default_highlighter } from './src/lib/highlight/default-highlighter.ts'
 import { create_markdown } from './src/lib/markdown/index.ts'
 import { markdown_vite } from './src/lib/markdown/vite.ts'
+import { prop_docs_plugin } from './src/lib/prop-docs/vite-plugin.ts'
 import source_links from './src/lib/source-links/vite-plugin.ts'
 import { make_config } from './src/lib/vite-config.ts'
 import { asset_imports } from './src/lib/assets.ts'
@@ -102,7 +103,7 @@ export default {
     staged: {
       // afterAll is a Vitest API; `fo` is a fixture splitting `foo` across markup;
       // `alle` is German for "all", used by the label-override tests
-      '*': `codespell --ignore-words-list afterall,falsy,fo,alle --check-filenames`,
+      '*': `codespell --ignore-words-list afterall,falsy,fo,alle,startin --check-filenames`,
       // keep readme #L source links on their symbols as library lines shift
       'src/lib/**/*.{ts,svelte}': `sh -c 'git diff --quiet -- readme.md src/lib/markdown/readme.md || { echo "readme-links: stage your readme edits first" >&2; exit 1; }; node scripts/readme-links.ts && git add readme.md src/lib/markdown/readme.md'`,
     },
@@ -112,6 +113,7 @@ export default {
     sveltekit(svelte_config),
     docs.plugin,
     source_links(),
+    prop_docs_plugin(),
     ...(process.env.VITEST ? [native_svelte_compiler] : []),
   ],
 

@@ -3,6 +3,12 @@ import {
   create_sequence_player,
   is_sequence_key_target,
 } from '#lib/sequence-player.svelte.ts'
+import {
+  TransportNext,
+  TransportPause,
+  TransportPlay,
+  TransportPrevious,
+} from '#lib/icons.ts'
 import { flushSync, type ComponentProps } from 'svelte'
 import { describe, expect, onTestFinished, test, vi } from 'vite-plus/test'
 import { doc_query, fire_input, press_key, render } from './index'
@@ -377,6 +383,15 @@ describe(`SequenceControls`, () => {
       for (const btn of [previous, next])
         expect(btn.hasAttribute(`disabled`)).toBe(was_playing)
       expect(play.getAttribute(`aria-label`)).toBe(was_playing ? `Pause` : `Play`)
+      // SVG glyphs: ⏮ ▶ ⏸ ⏭ text sits at a font-dependent height off the button's center
+      const icons = [
+        TransportPrevious,
+        was_playing ? TransportPause : TransportPlay,
+        TransportNext,
+      ]
+      expect(
+        [previous, play, next].map((btn) => btn.querySelector(`path`)?.getAttribute(`d`)),
+      ).toEqual(icons.map((icon) => icon.d))
       // titles name the keys handle_keydown binds
       const shortcuts = [play, next].map((btn) => btn.getAttribute(`aria-keyshortcuts`))
       expect(shortcuts).toEqual([`Space`, `ArrowRight`])

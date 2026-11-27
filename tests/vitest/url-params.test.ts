@@ -1,10 +1,13 @@
 import {
   bool_from_param,
   bool_url_entry,
+  numbers_from_param,
+  numbers_url_entry,
   sync_url_params,
   url_with_params,
   valid_query_param,
 } from '#lib/browser/index.ts'
+import { sort_from_param, sort_url_entry, type TableSort } from '#lib/table/index.ts'
 import { expect, expectTypeOf, test, vi } from 'vite-plus/test'
 
 test.each([
@@ -105,3 +108,153 @@ test(`sync_url_params writes only semantic URL changes`, () => {
   sync_url_params([[`weights`, `0.5,0.4,0.1`]], encoded_url, write_url)
   expect(write_url).not.toHaveBeenCalled()
 })
+
+const default_sort: TableSort[] = [{ column: `force`, dir: `desc` }]
+const energy_asc: TableSort = { column: `energy`, dir: `asc` }
+const force_desc: TableSort = { column: `force`, dir: `desc` }
+const force_asc: TableSort = { column: `force`, dir: `asc` }
+const stress_desc: TableSort = { column: `stress`, dir: `desc` }
+
+test.each([
+  [`sort=energy`, undefined, [energy_asc]],
+  [`sort=-energy,force`, undefined, [{ column: `energy`, dir: `desc` }, force_asc]],
+  [
+    `sort=-stress,energy,-force`,
+    new Set([`energy`, `force`, `stress`]),
+    [stress_desc, energy_asc, force_desc],
+  ],
+  [`sort=`, undefined, []],
+  [``, undefined, default_sort],
+  [`dir=asc`, undefined, default_sort],
+  [`sort=-`, undefined, default_sort],
+  [`sort=--energy`, undefined, default_sort],
+  [`sort=energy,,force`, undefined, default_sort],
+  [`sort=energy,`, undefined, default_sort],
+  [`sort=energy,-energy`, undefined, default_sort],
+  [`sort=energy`, new Set<string>(), default_sort],
+  [`sort=energy,unknown`, new Set([`energy`, `force`]), default_sort],
+] as const)(`sort_from_param(%s, valid=%o)`, (query, valid_columns, expected) => {
+  const sort = sort_from_param(new URLSearchParams(query), default_sort, {
+    valid_columns,
+  })
+  expect(sort).toEqual(expected)
+})
+
+test.each([
+  [[force_desc], `/`],
+  [[], `/?sort=`],
+  [[energy_asc], `/?sort=energy`],
+  [[force_asc], `/?sort=force`],
+  [[stress_desc, energy_asc, force_desc], `/?sort=-stress,energy,-force`],
+  [[{ column: `κ_SRME`, dir: `asc` }], `/?sort=%CE%BA_SRME`],
+  [
+    [
+      { column: `Run Time (discovery)`, dir: `desc` },
+      { column: `κ_SRME`, dir: `asc` },
+    ],
+    `/?sort=-Run+Time+%28discovery%29,%CE%BA_SRME`,
+  ],
+] as const)(`sort_url_entry(%o) round-trips via %s`, (sort, expected_url) => {
+  const entry = sort_url_entry(sort, default_sort)
+  const url = url_with_params([entry], new URL(`https://example.com/`))
+  expect(url).toBe(expected_url)
+  const params = new URL(`https://example.com${url}`).searchParams
+  expect(sort_from_param(params, default_sort)).toEqual(sort)
+})
+
+test(`sort_from_param returns copies of the default entries`, () => {
+  const [entry] = sort_from_param(new URLSearchParams(`sort=-`), default_sort)
+  entry.dir = `asc`
+  expect(default_sort).toEqual([force_desc])
+  expect(force_desc.dir).toBe(`desc`)
+})
+
+test(`sort_url_entry omits an empty sort when it is the default`, () => {
+  expect(sort_url_entry([], [])).toEqual([`sort`, ``, ``])
+  expect(sort_from_param(new URLSearchParams(), [])).toEqual([])
+})
+
+test(`sort helpers take a custom key so two tables can share a URL`, () => {
+  const entry = sort_url_entry([energy_asc], default_sort, `models_sort`)
+  expect(entry).toEqual([`models_sort`, `energy`, `-force`])
+  const params = new URLSearchParams(`sort=-stress&models_sort=energy`)
+  expect(sort_from_param(params, default_sort, { key: `models_sort` })).toEqual([
+    energy_asc,
+  ])
+  expect(sort_from_param(params, default_sort)).toEqual([stress_desc])
+})
+
+test.each([``, `-energy`, `a,b`])(`sort_url_entry rejects column id %j`, (column) => {
+  expect(() => sort_url_entry([{ column, dir: `asc` }], default_sort)).toThrow(
+    `can't be a URL param`,
+  )
+  expect(() => sort_url_entry([], [{ column, dir: `asc` }])).toThrow(
+    `can't be a URL param`,
+  )
+})
+
+const default_weights = [0.5, 0.4, 0.1]
+const weights_from = (query: string, normalize = true) =>
+  numbers_from_param(new URLSearchParams(query), `w`, default_weights, { normalize })
+
+test.each([
+  [default_weights, `/`],
+  [[0.7, 0.2, 0.1], `/?w=0.7,0.2,0.1`],
+  [[1 / 3, 0.5, 1 / 6], `/?w=${1 / 3},0.5,${1 / 6}`],
+  // sums to 1 - 1.1e-16, so dividing by the total would shift each value by an ulp
+  [[1 / 6, 2 / 3, 1 / 6], `/?w=${1 / 6},${2 / 3},${1 / 6}`],
+])(`numbers_url_entry(%o) round-trips exactly via %s`, (values, expected_url) => {
+  const url = url_with_params(
+    [numbers_url_entry(`w`, values, default_weights)],
+    new URL(`https://example.com/`),
+  )
+  expect(url).toBe(expected_url)
+  expect(weights_from(url.slice(2))).toStrictEqual(values)
+})
+
+test.each([[[NaN, 0.4, 0.1]], [[Infinity, 0.4, 0.1]], [[0.5, 0.5]]])(
+  `numbers_url_entry rejects %o`,
+  (values) => {
+    expect(() => numbers_url_entry(`w`, values, default_weights)).toThrow(
+      `w: need 3 finite numbers`,
+    )
+  },
+)
+
+test.each([
+  [`w=0.7,0.2,0.1`, [0.7, 0.2, 0.1]],
+  [`w=2,1,1`, [0.5, 0.25, 0.25]],
+  [`w=1e-1,.2,5.`, [0.1 / 5.3, 0.2 / 5.3, 5 / 5.3]],
+  [`w=0.5,,0.5`, default_weights],
+  [`w=0.5,0.5`, default_weights],
+  [`w=-1,1,1`, default_weights],
+  [`w=0,0,0`, default_weights],
+  [`w=1e308,1e308,1`, default_weights],
+  [`w=Infinity,1,1`, default_weights],
+  [`w=a,1,1`, default_weights],
+  [`w= 1 ,1,1`, default_weights],
+  [`w=0x10,1,1`, default_weights],
+  [`w=`, default_weights],
+  [``, default_weights],
+] as const)(`numbers_from_param(%s, normalize)`, (query, expected) => {
+  const values = weights_from(query)
+  for (const [idx, value] of values.entries())
+    expect(value).toBeCloseTo(expected[idx], 12)
+  expect(values).toHaveLength(3)
+  expect(values).not.toBe(default_weights)
+  expect(default_weights).toEqual([0.5, 0.4, 0.1])
+})
+
+test.each([
+  [`w=-1,2,0`, [-1, 2, 0]],
+  [`w=0,0,0`, [0, 0, 0]],
+  [`w=-1,x,0`, default_weights],
+  // a running sum hitting Infinity mustn't reject finite values that don't get normalized
+  [`w=1e308,1e308,-1e308`, [1e308, 1e308, -1e308]],
+  [`w=1e309,0,0`, default_weights],
+])(
+  `numbers_from_param(%s) without normalize keeps values as given`,
+  (query, expected) => {
+    expect(weights_from(query, false)).toStrictEqual(expected)
+  },
+)

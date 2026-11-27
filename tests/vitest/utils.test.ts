@@ -1,24 +1,30 @@
 import type { CmdAction, Option, OptionStyle } from '#lib'
 import {
+  abortable,
   clamp,
   chain_handlers,
   evict_oldest,
   get_label,
   get_option_key,
   get_style,
-  get_uuid,
   has_group,
+  hash_string,
   is_object,
   is_plain_object,
   lower_bound,
   make_change_detector,
+  memo_by_identity,
   observe_subtree,
+  plain_copy,
+  same_while_equal,
   slug_to_title,
   escape_html,
   strip_html,
   to_error,
   value_key,
   with_defaults,
+  with_timeout,
+  yield_turn,
 } from '#lib/utils.ts'
 import {
   create_cmd_action_filter,
@@ -45,20 +51,6 @@ import {
 } from '#lib/shortcuts.ts'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import { create_element, doc_query, stub_props } from './index'
-
-// RFC 4122 v4 pins the version/variant nibbles; the timestamp+counter fallback used when
-// crypto is unavailable only guarantees the generic UUID shape
-const uuid_v4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu
-const uuid_any = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu
-test.each([
-  [`crypto`, false, uuid_v4],
-  [`fallback`, true, uuid_any],
-] as const)(`get_uuid via %s: unique valid UUIDs`, (_desc, drop_crypto, regex) => {
-  if (drop_crypto) stub_props(globalThis.crypto, { randomUUID: undefined })
-  const uuids = Array.from({ length: 100 }, () => get_uuid())
-  uuids.forEach((uuid) => expect(uuid).toMatch(regex))
-  expect(new Set(uuids).size).toBe(100)
-})
 
 // only letters not preceded by a letter/mark/number/underscore get capitalized
 test.each([
@@ -1087,4 +1079,112 @@ test(`value_key tells values apart by type and content, and Maps by identity`, (
   expect(value_key({ a: 1, b: [Infinity], c: undefined })).toBe(
     value_key({ b: [Infinity], a: 1 }),
   )
+})
+
+test(`memo_by_identity recomputes per object only when its key changes`, async () => {
+  const memo = memo_by_identity<number>()
+  const [one, two] = [{}, {}]
+  const compute = vi.fn(() => compute.mock.calls.length)
+  // reused; another object, however alike; another key replaces the kept result, so the first
+  // key recomputes; the other object is untouched by those keys
+  const results = [one, one, two, one, one, two].map((target, idx) =>
+    memo(target, `aaabaa`[idx], compute),
+  )
+  expect(results).toEqual([1, 1, 2, 3, 4, 2])
+  // a throwing compute caches nothing, and a rejected promise is dropped for a retry
+  expect(() => memo(one, `c`, () => JSON.parse(`{`))).toThrow(SyntaxError)
+  expect(memo(one, `c`, () => 7)).toBe(7)
+  const async_memo = memo_by_identity<Promise<number>>()
+  const failed = async_memo(one, `a`, () => Promise.reject(new Error(`lost`)))
+  await expect(failed).rejects.toThrow(`lost`)
+  await expect(async_memo(one, `a`, () => Promise.resolve(2))).resolves.toBe(2)
+})
+
+// value_key, not JSON: Infinity and null (which JSON writes alike) are different runs
+test(`same_while_equal keeps the first of a run of equal values`, () => {
+  const keep = same_while_equal<{ gap: number | null }>()
+  const first = { gap: Infinity }
+  expect(keep(first)).toBe(first)
+  expect(keep({ gap: Infinity })).toBe(first)
+  const next = { gap: null }
+  expect(keep(next)).toBe(next)
+})
+
+test(`plain_copy deep-copies plain data, keeps other objects and an own __proto__ key`, () => {
+  const own_proto = JSON.parse(`{"__proto__":{"flag":true}}`)
+  const input = { list: [{ num: 1 }], typed: new Float64Array([1]), ...own_proto }
+  const copy = plain_copy(input)
+  expect(copy).toEqual(input)
+  expect([copy.list[0] === input.list[0], copy.typed === input.typed]).toEqual([
+    false,
+    true,
+  ])
+  expect(Object.hasOwn(copy, `__proto__`)).toBe(true) // not assigned as the copy's prototype
+  expect(Object.getPrototypeOf(copy)).toBe(Object.prototype)
+})
+
+// reference values of 32-bit FNV-1a
+test.each([
+  [``, 0x811c9dc5],
+  [`a`, 0xe40c292c],
+  [`foobar`, 0xbf9cf968],
+])(`hash_string(%j) is %i`, (text, expected) => {
+  expect(hash_string(text)).toBe(expected)
+})
+
+describe(`abortable`, () => {
+  test(`settles with the task, a synchronous throw included`, async () => {
+    const { signal } = new AbortController()
+    await expect(abortable(() => 3, signal)).resolves.toBe(3)
+    const fail = () => {
+      throw new Error(`sync`)
+    }
+    await expect(abortable(fail, signal)).rejects.toThrow(`sync`)
+  })
+
+  // either way the caller gets an Error carrying the reason, never the raw reason
+  test.each([`before`, `during`])(
+    `an abort %s the task rejects with an Error`,
+    async (when) => {
+      const controller = new AbortController()
+      if (when === `before`) controller.abort(`gone`)
+      const task = vi.fn(() => new Promise<never>(() => {}))
+      const run = abortable(task, controller.signal)
+      expect(task).toHaveBeenCalledTimes(when === `before` ? 0 : 1) // started synchronously
+      controller.abort(`gone`)
+      await expect(run).rejects.toThrow(new Error(`gone`))
+    },
+  )
+})
+
+// the operation's outcome as an Error either way, or a timeout naming it, never a leaked timer
+test.each<[string, () => Promise<number>, number | string]>([
+  [`resolves`, async () => 3, 3],
+  // oxlint-disable-next-line prefer-promise-reject-errors -- non-Errors become Errors
+  [`rejects with a non-Error`, () => Promise.reject(`gone`), `gone`],
+  [`times out`, () => new Promise<never>(() => {}), `encode timed out after 50ms`],
+])(`with_timeout when the operation %s`, async (label, operation, expected) => {
+  vi.useFakeTimers()
+  try {
+    const result = with_timeout(operation, 50, `encode`).catch((error: unknown) => error)
+    if (label === `times out`) await vi.advanceTimersByTimeAsync(50)
+    if (typeof expected === `number`) expect(await result).toBe(expected)
+    else expect(await result).toEqual(new Error(expected))
+    // settled before the deadline: its timer is cleared, not left to fire
+    expect(vi.getTimerCount()).toBe(0)
+  } finally {
+    vi.useRealTimers()
+  }
+})
+
+test(`yield_turn resolves after a macrotask, not within the current microtask run`, async () => {
+  const order: string[] = []
+  const turn = yield_turn().then(() => order.push(`turn`))
+  // a long microtask chain drains before any macrotask (queueMicrotask(resolve) would not wait)
+  const chain = (async () => {
+    for (let hop = 0; hop < 50; hop++) await Promise.resolve()
+    order.push(`microtasks`)
+  })()
+  await Promise.all([turn, chain])
+  expect(order).toEqual([`microtasks`, `turn`])
 })

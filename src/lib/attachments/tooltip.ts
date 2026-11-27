@@ -1,6 +1,6 @@
 import type { Attachment } from 'svelte/attachments'
 import type { Placement } from '../position'
-import { clamp, get_uuid } from '../utils'
+import { clamp } from '../utils'
 import { compute_position } from '../position'
 import { auto_update_position } from './float'
 import { css_px, escape_layer } from './shared'
@@ -263,12 +263,14 @@ const remember_and_strip_title = (
   return title
 }
 
+// one manager per document, so a module counter keeps their surface ids unique
+let tooltip_count = 0
 const create_tooltip_manager = (doc: Document, on_empty: () => void) => {
   let registration_count = 0
   let active: ActiveTooltip | null = null
   const surface = doc.createElement(`div`)
   surface.className = `custom-tooltip`
-  surface.id = `tooltip-${get_uuid()}`
+  surface.id = `tooltip-${++tooltip_count}`
   surface.setAttribute(`role`, `tooltip`)
   const content_el = doc.createElement(`div`)
   content_el.className = `tooltip-content`

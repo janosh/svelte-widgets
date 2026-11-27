@@ -5,6 +5,7 @@ export type ExampleOptions = {
   hide_style?: boolean
   code_above?: boolean
   csr?: boolean
+  lazy?: boolean // mount the example once it nears the viewport (LazyMount)
 }
 export type FenceSettings = ExampleOptions & {
   example?: boolean
@@ -24,6 +25,7 @@ const boolean_keys = [
   `hide_style`,
   `collapsible`,
   `code_above`,
+  `lazy`,
 ] as const
 const string_keys = [`test`, `id`, `title`, `repl`, `github`] as const
 const setting_keys = new Set<string>([...boolean_keys, ...string_keys, `wrapper`])

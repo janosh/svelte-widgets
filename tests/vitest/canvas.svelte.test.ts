@@ -294,3 +294,39 @@ test(`draw state is restored even when a drawing callback throws`, () => {
   expect(overlay.context.save).toHaveBeenCalledOnce()
   expect(overlay.context.restore).toHaveBeenCalledOnce()
 })
+
+// the painter set_export_painter stores (a registered symbol, see figure-export.ts)
+const export_painter = (canvas: HTMLCanvasElement) =>
+  (
+    canvas as unknown as Record<
+      symbol,
+      ((target: HTMLCanvasElement, ratio: number) => void) | undefined
+    >
+  )[Symbol.for(`svelte-widgets.export-painter`)]
+
+test(`figure exports redraw each layer at export scale until it is removed`, () => {
+  const { base, overlay, draw, draw_overlay, state } = setup()
+  for (const [layer, callback] of [
+    [base, draw],
+    [overlay, draw_overlay],
+  ] as const) {
+    callback.mockClear()
+    const target = document.createElement(`canvas`)
+    const target_ctx = { scale: vi.fn() }
+    vi.spyOn(target, `getContext`).mockReturnValue(
+      target_ctx as unknown as CanvasRenderingContext2D,
+    )
+    export_painter(layer.canvas)?.(target, 2.5)
+    expect([target.width, target.height]).toEqual([1000, 750])
+    expect(target_ctx.scale).toHaveBeenCalledExactlyOnceWith(2.5, 2.5)
+    expect(callback).toHaveBeenCalledExactlyOnceWith({
+      ctx: target_ctx,
+      width: 400,
+      height: 300,
+    })
+  }
+  state.overlay_canvas = undefined
+  flushSync()
+  expect(export_painter(overlay.canvas)).toBeUndefined()
+  expect(export_painter(base.canvas)).toBeTypeOf(`function`)
+})
