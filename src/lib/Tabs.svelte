@@ -5,7 +5,8 @@
   import { step_focus } from './shortcuts'
 
   // Headless styling hooks: .tabs, .tabs-list, .tabs-tab and .tabs-panel.
-  // Tabs and panels expose data-state="active|inactive".
+  // Tabs and panels expose data-state="active|inactive". The one default style: tabs inherit
+  // the surrounding font instead of the browser's 13.33px button font, at zero specificity.
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> & {
     items: readonly TabItem<Value>[]
     value?: Value
@@ -126,3 +127,9 @@
     </div>
   {/each}
 </div>
+
+<style>
+  :where(.tabs-tab) {
+    font: inherit;
+  }
+</style>

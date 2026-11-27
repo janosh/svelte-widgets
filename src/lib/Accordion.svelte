@@ -8,6 +8,8 @@
 
   // Headless styling hooks: .accordion, .accordion-item, .accordion-heading,
   // .accordion-trigger and .accordion-panel. Items and panels expose data-state.
+  // The one default style: triggers take the heading's font, not the browser's 13.33px
+  // button font, at zero specificity.
   type HeadingLevel = 1 | 2 | 3 | 4 | 5 | 6
   type Props = Omit<HTMLAttributes<HTMLDivElement>, `children`> & {
     items: readonly AccordionItem<Value>[]
@@ -104,3 +106,9 @@
     </div>
   {/each}
 </div>
+
+<style>
+  :where(.accordion-trigger) {
+    font: inherit;
+  }
+</style>

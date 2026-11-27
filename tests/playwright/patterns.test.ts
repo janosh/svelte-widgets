@@ -124,3 +124,32 @@ test(`a stale native close event cannot close a reopened Dialog`, async ({ page 
   const dialog = page.getByRole(`dialog`, { name: `Edit profile` })
   await expect(dialog).toBeVisible()
 })
+
+// Headless Tabs' and Accordion's one default style: their buttons take the surrounding font,
+// not the browser's 13.33px button font, at zero specificity so any consumer rule still wins
+for (const [role, name, selector] of [
+  [`tab`, `Overview`, `.tabs-tab`],
+  [`button`, `Installation`, `.accordion-trigger`],
+] as const) {
+  test(`${selector} buttons inherit the surrounding font`, async ({ page }) => {
+    const button = page.getByRole(role, { name })
+    const fonts = await button.evaluate((el, rule_selector) => {
+      const font = (node: Element) => {
+        const { fontSize, fontFamily, fontWeight } = getComputedStyle(node)
+        return { fontSize, fontFamily, fontWeight }
+      }
+      if (!el.parentElement) throw new Error(`button has no parent`)
+      const inherited = font(el)
+      const sheet = new CSSStyleSheet()
+      sheet.replaceSync(`${rule_selector} { font-size: 7px }`)
+      document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet]
+      const overridden = getComputedStyle(el).fontSize
+      document.adoptedStyleSheets = document.adoptedStyleSheets.filter(
+        (it) => it !== sheet,
+      )
+      return { inherited, parent: font(el.parentElement), overridden }
+    }, selector)
+    expect(fonts.inherited).toEqual(fonts.parent)
+    expect(fonts.overridden).toBe(`7px`)
+  })
+}
