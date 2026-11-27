@@ -35,7 +35,7 @@ test(`an angled header label stays on top over the next ordinary header`, async 
 })
 
 // Selected rows drew border lines and a row background: the borders grew the row by 2px and
-// a pinned cell's opaque (odd-row striped) background hid both the tint and its bottom edge
+// a pinned cell's opaque (striped) background hid both the tint and its bottom edge
 test(`a selected row keeps its height and pinned cells show its edges and tint`, async ({
   page,
 }) => {
@@ -55,6 +55,47 @@ test(`a selected row keeps its height and pinned cells show its edges and tint`,
     expect(shadow.match(/inset/g), shadow).toHaveLength(3)
     expect(shadow).toContain(`0px -2px 0px 0px inset`)
   }
+})
+
+// `striped` rows paint the stripe under cells' own backgrounds, so column colors stay visible
+// whatever the stripe's opacity; a pinned cell (opaque, to occlude columns scrolling beneath)
+// layers it over its background as an image instead, with the hover wash on top
+test(`striped rows keep column colors and reach pinned cells under the hover wash`, async ({
+  page,
+}) => {
+  await goto(page, `/table`)
+  const demo = page.locator(`#data-table`)
+  // an opaque stripe, the case that would hide column color fills painted beneath it
+  await demo.evaluate((el: HTMLElement) =>
+    el.style.setProperty(`--table-stripe-bg`, `#f00`),
+  )
+  const rows = demo.locator(`tbody tr`)
+  const paint = (idx: number) =>
+    rows.nth(idx).evaluate((row) => {
+      const style = (selector: string) => {
+        const cell = row.querySelector(selector)
+        if (!cell) throw new Error(`row has no ${selector}`)
+        return getComputedStyle(cell)
+      }
+      const [pinned, colored] = [style(`td.pinned`), style(`td[style*="--cell-bg"]`)]
+      return {
+        row: getComputedStyle(row).backgroundColor,
+        pinned_layers: pinned.backgroundImage.match(/linear-gradient/g)?.length ?? 0,
+        pinned_color: pinned.backgroundColor,
+        colored: [colored.backgroundColor, colored.backgroundImage],
+      }
+    })
+  const [striped, plain] = [await paint(0), await paint(1)]
+  expect([striped.row, plain.row]).toEqual([`rgb(255, 0, 0)`, `rgba(0, 0, 0, 0)`])
+  expect([striped.pinned_layers, plain.pinned_layers]).toEqual([1, 0])
+  expect(striped.pinned_color).toBe(plain.pinned_color) // its own opaque background stays
+  expect(striped.pinned_color).not.toMatch(/(?:, 0|\/ 0)\)$|transparent/)
+  expect(striped.colored).toEqual([
+    expect.not.stringMatching(/rgba\(0, 0, 0, 0\)/),
+    `none`,
+  ])
+  await rows.nth(0).locator(`td.pinned`).hover()
+  expect((await paint(0)).pinned_layers).toBe(2)
 })
 
 // Past 500 rows only those on screen render: in the scroller's view under a height limit, and

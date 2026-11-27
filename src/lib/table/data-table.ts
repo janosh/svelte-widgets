@@ -344,6 +344,10 @@ export type DataTableProps<
   // it rows are keyed by object identity, so a new object for a row remounts that row:
   // pass it for live data that replaces row objects, to update their cells in place.
   row_key?: Extract<keyof Row, string> | ((row: Row) => RowId)
+  // Zebra-stripe every other row (the 1st, 3rd, ...) in --table-stripe-bg, pinned cells
+  // included. Goes by row index, so virtualization's spacer rows can't flip the stripes the
+  // way a consumer's tr:nth-child(odd) rule would.
+  striped?: boolean
   // Row reorder duration in ms; disabled for reduced motion and virtualized tables.
   row_animation_ms?: number
   selected_ids?: RowId[]

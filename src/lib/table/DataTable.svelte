@@ -114,6 +114,7 @@
     virtual,
     row_key,
     row_animation_ms = 0,
+    striped = false,
     selected_ids = $bindable([]),
     visible_rows = $bindable([]),
     hidden_columns = $bindable(),
@@ -1323,7 +1324,13 @@
   // Shared by the animated and static row loops
   const row_attrs = (row: Row & RowData, abs_idx: number) => ({
     style: row.style,
-    class: [row.class, { selected: show_row_select && is_row_selected(row) }],
+    class: [
+      row.class,
+      {
+        selected: show_row_select && is_row_selected(row),
+        stripe: striped && abs_idx % 2 === 0,
+      },
+    ],
     'data-row-idx': abs_idx,
     tabindex: on_row_click ? 0 : undefined,
   })
@@ -2348,7 +2355,7 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
      seam; overflow: clip with a 1px clip margin lets the overhang render. */
   td.pinned {
     position: sticky;
-    background: var(--table-sticky-cell-bg, var(--page-bg, Canvas));
+    background-color: var(--table-sticky-cell-bg, var(--page-bg, Canvas));
     z-index: 1;
     overflow: clip;
     overflow-clip-margin: 1px;
@@ -2361,26 +2368,35 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
     background: inherit;
     box-shadow: inherit;
   }
-  /* separate odd-row var so consumers with striped rows can composite their stripe
-  color over the opaque sticky background (which must stay opaque to occlude columns
-  scrolling beneath it), e.g.
-  --table-sticky-cell-odd-bg: linear-gradient(var(--stripe), var(--stripe)), var(--page-bg) */
-  tbody tr:nth-child(odd) td.pinned {
-    background: var(
-      --table-sticky-cell-odd-bg,
-      var(--table-sticky-cell-bg, var(--page-bg, Canvas))
-    );
-  }
+  /* Stripes follow row_attrs' row index, not :nth-child, which the top virtual spacer row
+     would flip. The row paints them under cells' own (column color) backgrounds; a pinned
+     cell's stays opaque to occlude columns scrolling beneath it, so it layers the stripe over
+     that as an image, under the hover wash. */
   tbody tr {
+    --table-cell-stripe: initial; /* nested tables don't inherit an outer cell's stripe */
+    &.stripe {
+      --table-stripe: var(
+        --table-stripe-bg,
+        color-mix(in srgb, CanvasText 6%, transparent)
+      );
+      background-color: var(--table-stripe);
+      td.pinned {
+        --table-cell-stripe: linear-gradient(var(--table-stripe), var(--table-stripe));
+      }
+    }
+    td.pinned {
+      background-image: var(--table-cell-stripe, none);
+    }
     &:is(:hover, .hovered) {
       filter: var(--table-row-hover-filter, none);
     }
-    /* Tint cells because their opaque backgrounds hide a row-level wash. */
     &:is(:hover, .hovered) td {
-      background-image: linear-gradient(
-        var(--table-row-hover-bg, rgba(128, 128, 128, 0.16)),
-        var(--table-row-hover-bg, rgba(128, 128, 128, 0.16))
-      );
+      background-image:
+        linear-gradient(
+          var(--table-row-hover-bg, rgba(128, 128, 128, 0.16)),
+          var(--table-row-hover-bg, rgba(128, 128, 128, 0.16))
+        ),
+        var(--table-cell-stripe, none);
     }
     &[tabindex] {
       cursor: pointer;
@@ -2398,9 +2414,9 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
       }
     }
     /* Inset shadows, not borders or a row background: borders grow the row, and pinned
-       cells' opaque backgrounds (striped on odd rows) would hide both. A pinned cell's
-       ::before (which inherits this) overhangs 1px under the next row, so its bottom edge sits
-       1px higher. A cell range keeps its own highlight. */
+       cells' opaque backgrounds would hide both. A pinned cell's ::before (which inherits
+       this) overhangs 1px under the next row, so its bottom edge sits 1px higher. A cell
+       range keeps its own highlight. */
     &.selected td:not(.cell-selected) {
       box-shadow:
         inset 0 1px var(--table-accent),

@@ -3345,6 +3345,7 @@ describe(`DataTable`, () => {
       const data = props.data ?? many_rows
       mount_table({ data, columns: two_cols, ...props })
       expect(rendered_rows()).toHaveLength(n_rendered)
+      expect(document.querySelector(`tr.stripe`)).toBeNull() // striped is opt-in
       // the window starts at the top: one bottom spacer and a shown-of-total count
       expect(spacers().map((spacer) => spacer.style.height)).toEqual(
         virtualized ? [`${(data.length - n_rendered) * row_height_px}px`] : [],
@@ -3374,17 +3375,27 @@ describe(`DataTable`, () => {
     })
 
     // A scroller with no height limit is as tall as all its rows, so the page's viewport, not
-    // the scroller's, decides which render: here the page has scrolled 100 rows into the table
-    it(`windows an unbounded scroller by the page viewport`, async () => {
-      mount_virtual()
+    // the scroller's, decides which render: here the page has scrolled 101 rows into the table.
+    // The window then starts at row 91 behind a spacer <tr>, which flips :nth-child parity, so
+    // `striped` must go by row index: the 1st, 3rd, ... data rows (even indices) get the stripe
+    it(`windows an unbounded scroller by the page viewport, striped by row index`, async () => {
+      mount_virtual({ striped: true })
       const scroller = doc_query<HTMLDivElement>(`.table-scroll`)
       const height = many_rows.length * row_height_px
       Object.defineProperty(scroller, `clientHeight`, { value: height })
       scroller.getBoundingClientRect = () =>
-        new DOMRect(0, -100 * row_height_px, 500, height)
+        new DOMRect(0, -101 * row_height_px, 500, height)
       await fire(document, new Event(`scroll`))
-      expect(spacers()[0].style.height).toBe(`${(100 - overscan) * row_height_px}px`)
+      expect(spacers()[0].style.height).toBe(`${(101 - overscan) * row_height_px}px`)
       expect(rendered_rows()).toHaveLength(min_window)
+      const rows = [...rendered_rows()]
+      expect(rows[0].getAttribute(`data-row-idx`)).toBe(`91`)
+      const off_parity = rows.filter(
+        (row) =>
+          row.classList.contains(`stripe`) !==
+          (Number(row.getAttribute(`data-row-idx`)) % 2 === 0),
+      )
+      expect(off_parity).toEqual([])
     })
 
     // a row a linked view names (an atom hovered in 3D) outside the window is scrolled to, and
