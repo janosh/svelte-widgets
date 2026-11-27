@@ -10,38 +10,37 @@ import ts from 'typescript'
 import type { Plugin } from 'vite'
 import type { ComponentDoc, PropDoc } from './types'
 
-// Each component's merged <script> blocks become a virtual TS file next to it, so relative
-// and subpath (`#lib/...`) imports resolve as in the component
-const VIRTUAL_SUFFIX = `.props.ts`
+// Each component's merged <script> blocks become a virtual `X.svelte.ts` next to it, which TS
+// resolves `./X.svelte` and `#lib/.../X.svelte` imports to (it tries appending `.ts`)
+const VIRTUAL_SUFFIX = `.ts`
+const svelte_file = (virtual_file: string): string =>
+  virtual_file.slice(0, -VIRTUAL_SUFFIX.length)
 const LINT_PRAGMA_RE = /^(?:oxlint|eslint|oxfmt|prettier|@ts-)/
-// specifiers of script modules, whose types count (not `./x.css`, `./data.json?raw`, ...)
-const SCRIPT_SPEC_RE = /^(?:[^?]*\/)?[^/.?]+(?:\.(?:svelte|[cm]?[jt]s))*$/
+// specifiers the extraction can't resolve and needn't: assets, which carry no types
+// (`./data.json?raw`, `./logo.svg`), and framework or plugin modules typed by ambient
+// declarations it doesn't load (`$app/state`, `$env/static/public`, `virtual:x`, `~icons/x`)
+const ASSET_SPEC_RE =
+  /\?|\.(?:css|scss|sass|less|json|svg|png|jpe?g|gif|webp|avif|woff2?|wasm|txt|md|ya?ml)$|^(?:\$app\/|\$env\/|virtual:|~icons\/)/
 
-// Multi-line source text on one line, minus the padding, trailing commas and leading union
-// operator its line breaks left
+// Multi-line source text on one line, minus the padding and trailing commas its line breaks
+// left, with plain string literals as '...': backticks would read as nested code in the
+// rendered table. Template literals with ${...} (template literal types) keep theirs.
 const one_line = (text: string): string =>
   text
     .replaceAll(/\s+/g, ` `)
     .replaceAll(/(?<open>[([]) /g, `$<open>`)
     .replaceAll(/,? (?<close>[)\]])/g, `$<close>`)
     .replaceAll(`, }`, ` }`)
+    .replaceAll(/`[^`]*`/g, (lit) => (/[$\\']/.test(lit) ? lit : `'${lit.slice(1, -1)}'`))
     .trim()
-    .replace(/^[|&] /, ``)
 
-// Plain string literals as '...': the repo writes them in backticks, which read as nested code
-// in the rendered table. Template literals with ${...} (template literal types) keep theirs.
-const quote_literals = (text: string): string =>
-  text.replaceAll(/`(?<text>[^`$\\']*)`/g, `'$<text>'`)
-
-// A type on one line, also without the padding inside <...> and the union operator its line
-// breaks left leading a type argument: `Pick< T, | 'a' | 'b' >` -> `Pick<T, 'a' | 'b'>`
+// A type on one line, also without the padding inside <...> and the union operator line breaks
+// left leading it or a type argument: `| Pick< T, | 'a' | 'b' >` -> `Pick<T, 'a' | 'b'>`
 const type_line = (text: string): string =>
-  quote_literals(
-    one_line(text)
-      .replaceAll(`< `, `<`)
-      .replaceAll(` >`, `>`)
-      .replaceAll(/(?<before>[<([]|, ) ?[|&] /g, `$<before>`),
-  )
+  one_line(text)
+    .replaceAll(`< `, `<`)
+    .replaceAll(` >`, `>`)
+    .replaceAll(/(?<before>^|[<([]|, ) ?[|&] /g, `$<before>`)
 
 // Source comments are often lowercase fragments: capitalize a leading plain word for the table,
 // but not an identifier (`x_axis`, `on_click(...)`) or a JS literal whose case is meaningful
@@ -195,7 +194,7 @@ const resolve_literal = (
   depth = 0,
 ): string | undefined => {
   const expr = unwrap(node)
-  if (is_literal(expr)) return quote_literals(one_line(expr.getText()))
+  if (is_literal(expr)) return one_line(expr.getText())
   if (depth > 4 || !(ts.isIdentifier(expr) || ts.isPropertyAccessExpression(expr)))
     return undefined
   let symbol = checker.getSymbolAtLocation(
@@ -225,11 +224,10 @@ const rest_attributes = (
   props_type: ts.Type | undefined,
   checker: ts.TypeChecker,
 ): string | undefined => {
-  const named = /\b(?:HTML|SVG)Attributes<(?:HTML|SVG)(?<tag>\w*?)Element>/.exec(
+  const named = /\b(?:HTML|SVG)Attributes<(?:HTML|SVG)(?<tag>\w+?)?Element>/.exec(
     type_node?.getText() ?? ``,
   )
-  if (named)
-    return `<${{ SVG: `svg`, '': `element` }[named.groups?.tag ?? ``] ?? named.groups?.tag?.toLowerCase()}>`
+  if (named) return `<${named.groups?.tag?.toLowerCase() ?? `element`}>`
   const onclick = props_type && find_prop(checker, props_type, `onclick`)
   const from_svelte = onclick?.declarations?.some((decl) =>
     decl.getSourceFile().fileName.includes(`/svelte/elements`),
@@ -277,7 +275,7 @@ const component_props = (
       const doc: PropDoc = { name }
       if (type) doc.type = type_line(type)
       if (init) {
-        doc.default = quote_literals(one_line(init.getText()))
+        doc.default = one_line(init.getText())
         const value = resolve_literal(init, checker)
         if (value !== undefined && value !== doc.default) doc.default_value = value
       }
@@ -294,10 +292,10 @@ const component_props = (
 const parsed_files = new Map<string, ts.SourceFile>()
 let last_program: ts.Program | undefined
 
-// The `paths` of the tsconfig nearest to `dir` (after `extends`, e.g. SvelteKit's `$lib`),
-// absolute so they resolve alike from every component. Extensionless package.json `imports`
-// (`#lib/...`) need them too: TypeScript resolves those patterns without trying extensions.
-const tsconfig_paths = (dir: string): Record<string, string[]> => {
+// The `paths` of the tsconfig nearest to `dir` (after `extends`, e.g. SvelteKit's `$lib`), with
+// the base they resolve from (baseUrl or the declaring config's directory). Extensionless
+// package.json `imports` (`#lib/...`) need them too: TS resolves those without trying extensions.
+const tsconfig_paths = (dir: string): ts.CompilerOptions => {
   const file = ts.findConfigFile(dir, (name) => ts.sys.fileExists(name))
   if (!file) return {}
   const { config, error } = ts.readConfigFile(file, (name) => ts.sys.readFile(name))
@@ -309,18 +307,11 @@ const tsconfig_paths = (dir: string): Record<string, string[]> => {
     throw new Error(
       `prop-docs: invalid ${file}: ${ts.flattenDiagnosticMessageText(first_error.messageText, ` `)}`,
     )
-  // relative to baseUrl if set, else to the (possibly extended) config declaring them. baseUrl
-  // is deprecated, but configs that still set it resolve `paths` from there
+  // baseUrl is deprecated, but configs still setting it resolve `paths` from there
   // oxlint-disable-next-line typescript/no-deprecated
-  const { paths = {}, pathsBasePath, baseUrl } = parsed.options
-  const base =
-    baseUrl ?? (typeof pathsBasePath === `string` ? pathsBasePath : dirname(file))
-  return Object.fromEntries(
-    Object.entries(paths).map(([key, targets]) => [
-      key,
-      targets.map((target) => resolve(base, target)),
-    ]),
-  )
+  const { paths, pathsBasePath, baseUrl } = parsed.options
+  // oxlint-disable-next-line typescript/no-deprecated
+  return { paths, pathsBasePath, baseUrl }
 }
 
 // Prop docs keyed by component name (file basename) for the given .svelte files. Components
@@ -334,21 +325,12 @@ export const extract_prop_docs = (
   const by_name = Map.groupBy(files, (file) => basename(file, `.svelte`))
   const clashes = [...by_name.values()].filter((paths) => paths.length > 1)
   if (clashes.length) throw new Error(`Components share a name: ${clashes.join(`; `)}`)
-  const virtual_files = new Map<string, string>()
-  const virtual_text = (name: string): string => {
-    let text = virtual_files.get(name)
-    if (text === undefined) {
-      text = component_ts(readFileSync(name.slice(0, -VIRTUAL_SUFFIX.length), `utf8`))
-      virtual_files.set(name, text)
-    }
-    return text
-  }
   const options: ts.CompilerOptions = {
     target: ts.ScriptTarget.ESNext,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     allowImportingTsExtensions: true,
-    paths: files.length ? tsconfig_paths(dirname(resolve(files[0]))) : {},
+    ...(files.length ? tsconfig_paths(dirname(resolve(files[0]))) : {}),
     noEmit: true,
     skipLibCheck: true,
     strict: true,
@@ -358,110 +340,75 @@ export const extract_prop_docs = (
   // the default host's own, before the overrides below wrap them
   const file_exists = host.fileExists.bind(host)
   const read_file = host.readFile.bind(host)
-  const is_virtual = (name: string): boolean =>
-    name.endsWith(`.svelte${VIRTUAL_SUFFIX}`) &&
-    file_exists(name.slice(0, -VIRTUAL_SUFFIX.length))
+  const is_virtual = (name: string): boolean => {
+    if (!name.endsWith(`.svelte${VIRTUAL_SUFFIX}`) || !file_exists(svelte_file(name)))
+      return false
+    if (file_exists(name))
+      throw new Error(`prop-docs: ${name} shadows its component's types`)
+    return true
+  }
   host.fileExists = (name) => is_virtual(name) || file_exists(name)
-  host.readFile = (name) => (is_virtual(name) ? virtual_text(name) : read_file(name))
   host.getSourceFile = (name, language) => {
-    const virtual = is_virtual(name)
-    const text = virtual ? virtual_text(name) : read_file(name)
+    const text = is_virtual(name)
+      ? component_ts(readFileSync(svelte_file(name), `utf8`))
+      : read_file(name)
     if (text === undefined) return undefined
     const cached = parsed_files.get(name)
     if (cached?.text === text) return cached
-    const kind = virtual ? ts.ScriptKind.TS : undefined
-    const source = ts.createSourceFile(name, text, language, true, kind)
+    const source = ts.createSourceFile(name, text, language, true)
     parsed_files.set(name, source)
     return source
   }
-  // Shared by every import in this program: uncached, each one re-walks its ancestor
-  // directories' package.json files (over half the extraction time)
-  const resolution_cache = ts.createModuleResolutionCache(
-    host.getCurrentDirectory(),
-    (name) => host.getCanonicalFileName(name),
-    options,
-  )
-  const unresolved: string[] = []
-  // `./X.svelte` and `#lib/.../X.svelte` resolve to X's virtual TS file
-  host.resolveModuleNameLiterals = (
-    literals,
-    containing_file,
-    redirected,
-    compiler_options,
-  ) =>
-    literals.map(({ text }) => {
-      const resolve_name = (spec: string) =>
-        ts.resolveModuleName(
-          spec,
-          containing_file,
-          compiler_options,
-          host,
-          resolution_cache,
-          redirected,
-        )
-      const virtual = text.endsWith(`.svelte`)
-        ? resolve_name(`${text}${VIRTUAL_SUFFIX}`)
-        : undefined
-      const resolved = virtual?.resolvedModule ? virtual : resolve_name(text)
-      if (
-        !resolved.resolvedModule &&
-        is_virtual(containing_file) &&
-        SCRIPT_SPEC_RE.test(text)
-      )
-        unresolved.push(`${containing_file.slice(0, -VIRTUAL_SUFFIX.length)}: ${text}`)
-      return resolved
-    })
   const roots = files.map((file) => `${file}${VIRTUAL_SUFFIX}`)
   const program = ts.createProgram(roots, options, host, last_program)
+  const checker = program.getTypeChecker()
+  // imports binding names (not side-effect ones, e.g. of a stylesheet) TS can't resolve,
+  // which would silently type them `any`
+  const unresolved = roots.flatMap((root) =>
+    (program.getSourceFile(root)?.statements ?? []).flatMap((node) =>
+      ts.isImportDeclaration(node) &&
+      node.importClause &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      !ASSET_SPEC_RE.test(node.moduleSpecifier.text) &&
+      !checker.getSymbolAtLocation(node.moduleSpecifier)
+        ? [`${svelte_file(root)}: ${node.moduleSpecifier.text}`]
+        : [],
+    ),
+  )
   if (unresolved.length)
     throw new Error(`prop-docs: unresolved component imports:\n${unresolved.join(`\n`)}`)
   last_program = program
-  const checker = program.getTypeChecker()
   return Object.fromEntries(
-    roots.map((virtual_file) => {
-      const source = program.getSourceFile(virtual_file)
-      if (!source) throw new Error(`TypeScript program is missing ${virtual_file}`)
-      return [
-        basename(virtual_file, `.svelte${VIRTUAL_SUFFIX}`),
-        component_props(source, checker),
-      ]
+    roots.map((root) => {
+      const source = program.getSourceFile(root)
+      if (!source) throw new Error(`TypeScript program is missing ${root}`)
+      return [basename(svelte_file(root), `.svelte`), component_props(source, checker)]
     }),
   )
 }
 
-export const PROP_DOCS_MODULE_ID = `virtual:prop-docs`
-const RESOLVED_ID = `\0${PROP_DOCS_MODULE_ID}`
-
-export type PropDocsPluginOptions = {
-  root?: string // project root holding `dir`; defaults to Vite's root
-  dir?: string // component directory to document, relative to root
-}
+const MODULE_ID = `virtual:prop-docs`
+const RESOLVED_ID = `\0${MODULE_ID}`
 
 // `virtual:prop-docs` default-exports a loader per component name importing
 // `virtual:prop-docs/<name>` (that component's ComponentDoc), so a page fetches only its own
 // components' docs. One shared extraction (seconds for a large library, well under one after
 // an edit) runs on the first per-component import. Components are every .svelte file under
-// `dir` that calls `$props(`.
-export const prop_docs_plugin = ({
-  root,
-  dir = `src/lib`,
-}: PropDocsPluginOptions = {}): Plugin => {
-  let project_root = root
-  const lib_dir = () => {
-    if (!project_root)
-      throw new Error(`prop-docs: no root before Vite resolved its config`)
-    return `${resolve(project_root, dir)}/`
-  }
-  const component_files = (): string[] =>
-    globSync(`**/*.svelte`, { cwd: lib_dir() })
-      .map((path) => `${lib_dir()}${path}`)
+// `dir` (relative to Vite's root) that calls `$props(`.
+export const prop_docs_plugin = ({ dir = `src/lib` }: { dir?: string } = {}): Plugin => {
+  let lib_dir = `` // absolute, with a trailing slash, once Vite resolved its root
+  const component_files = (): string[] => {
+    if (!lib_dir) throw new Error(`prop-docs: no root before Vite resolved its config`)
+    return globSync(`**/*.svelte`, { cwd: lib_dir })
+      .map((path) => `${lib_dir}${path}`)
       .filter((file) => readFileSync(file, `utf8`).includes(`$props(`))
+  }
   let docs: Record<string, ComponentDoc> | undefined
   const extract = () => (docs ??= extract_prop_docs(component_files()))
   return {
     name: `prop-docs`,
     configResolved(config) {
-      project_root ??= config.root
+      lib_dir = `${resolve(config.root, dir)}/`
     },
     // Dev server: extract once it is up rather than on the first page's prefetch, so that one
     // doesn't wait (blocking, while nothing else is being served yet)
@@ -479,14 +426,12 @@ export const prop_docs_plugin = ({
       })
     },
     resolveId: (id) =>
-      id === PROP_DOCS_MODULE_ID || id.startsWith(`${PROP_DOCS_MODULE_ID}/`)
-        ? `\0${id}`
-        : null,
+      id === MODULE_ID || id.startsWith(`${MODULE_ID}/`) ? `\0${id}` : null,
     load(id) {
       if (id === RESOLVED_ID) {
         const loaders = component_files().map((file) => {
           const name = basename(file, `.svelte`)
-          const module_id = JSON.stringify(`${PROP_DOCS_MODULE_ID}/${name}`)
+          const module_id = JSON.stringify(`${MODULE_ID}/${name}`)
           return `${JSON.stringify(name)}: () => import(${module_id})`
         })
         return `export default {${loaders.join(`,`)}}`
@@ -504,7 +449,7 @@ export const prop_docs_plugin = ({
     // that, so an open table shows the new props after a reload. A created or deleted
     // component changes the index itself, which is updated.
     hotUpdate({ type, file, modules }) {
-      if (!file.startsWith(lib_dir()) || !/\.(?:svelte|ts)$/.test(file)) return undefined
+      if (!file.startsWith(lib_dir) || !/\.(?:svelte|ts)$/.test(file)) return undefined
       docs = undefined
       const { moduleGraph } = this.environment
       const loaded = [...moduleGraph.idToModuleMap.values()].filter(({ id }) =>

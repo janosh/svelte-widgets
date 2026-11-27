@@ -298,3 +298,15 @@ describe(`parse_paste`, () => {
     )
   })
 })
+
+// text dropped on the search box is blocked; a file drop stays unclaimed for an enclosing zone
+test.each([
+  [`text/plain`, true],
+  [`Files`, false],
+])(`a %s drop on the search input is default-prevented: %s`, (type, prevented) => {
+  mount_multiselect({ options: [`a`, `b`] })
+  const event = new Event(`drop`, { bubbles: true, cancelable: true })
+  Object.assign(event, { dataTransfer: { types: [type] } })
+  get_input().dispatchEvent(event)
+  expect(event.defaultPrevented).toBe(prevented)
+})

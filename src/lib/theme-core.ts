@@ -125,8 +125,14 @@ const changed_style_props = (
 
 const handle_theme_records = (records: MutationRecord[]): void => {
   const notified = new Set<ThemeSubscriber>()
+  // a node's first record of an attribute holds its value from before the batch; comparing a
+  // later one with the current value would report a write undone within the batch
+  const seen = new Map<Node, Set<string>>()
   for (const { target, attributeName, oldValue } of records) {
-    if (!(target instanceof Element) || !attributeName) continue
+    const names = seen.get(target) ?? new Set<string>()
+    if (!(target instanceof Element) || !attributeName || names.has(attributeName))
+      continue
+    seen.set(target, names.add(attributeName))
     const current = target.getAttribute(attributeName)
     if (current === oldValue) continue
     // class and data-theme can restyle every token through the stylesheets; a style write

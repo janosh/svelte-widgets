@@ -15,7 +15,7 @@ afterEach(() => {
 const mount_pane = (state: FileExportState) =>
   mount(ExportDestination, { target: document.body, props: { state } })
 
-test(`filename follows the source until edited, rejects paths, and resets the destination`, async () => {
+test(`filename follows the source until edited, then keeps the typed name; rejects paths`, async () => {
   let source = $state(`initial`)
   const export_state = new FileExportState(() => source)
   const pane = mount_pane(export_state)
@@ -27,6 +27,10 @@ test(`filename follows the source until edited, rejects paths, and resets the de
   await tick()
   expect(input.value).toBe(`changed`)
   await fire_input(input, `My movie`, `input`)
+  // a typed name survives later changes to the default
+  source = `frame 2`
+  await tick()
+  expect(input.value).toBe(`My movie`)
   await export_state.run(({ filename, save }) => {
     expect(export_state.disabled).toBe(true)
     return save(`contents`, `${filename}.csv`, `text/csv`)

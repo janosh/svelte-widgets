@@ -46,7 +46,8 @@
     on_request_error?: (error: unknown) => void
     // one plain key in aria-keyshortcuts spelling (`F`, `F11`; no chords) that toggles
     // fullscreen while the pointer is over `wrapper` or focus is inside it; a wrapper inside
-    // another live wrapper with the same hotkey leaves it to the outer one, as a press hits both
+    // another live wrapper with the same hotkey leaves it to the outer one unless it is the one
+    // in fullscreen
     hotkey?: string
     children?: Snippet<[{ fullscreen: boolean }]>
   } = $props()
@@ -61,7 +62,8 @@
   )
   const shortcut_flash = create_shortcut_flash<`fullscreen`>()
 
-  // marks a live hotkey wrapper with its key, so a nested one with the same key defers
+  // marks a live hotkey wrapper with its key, so a nested one with the same key defers to it.
+  // Otherwise the innermost would win: viewer_keydown hands each press to one viewer only.
   const HOTKEY_ATTR = `data-fullscreen-hotkey`
   $effect(() => {
     const root = wrapper
@@ -74,7 +76,7 @@
     root.setAttribute(HOTKEY_ATTR, key)
     const outer = `[${HOTKEY_ATTR}="${CSS.escape(key)}"]`
     const detach = viewer_keys(() =>
-      root.parentElement?.closest(outer)
+      !fullscreen && root.parentElement?.closest(outer)
         ? {}
         : {
             [key]: () => {

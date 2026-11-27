@@ -112,7 +112,10 @@ test(`LazyMount demos mount once scrolled near, PropsTable lists extracted props
   const lazy = page.locator(`#lazy-mount-demo`)
   await lazy.scrollIntoViewIfNeeded()
   await expect(lazy.getByText(`Mounted once scrolled near`)).toBeVisible()
-  await expect(lazy.getByText(`Imported once scrolled near`)).toBeVisible()
+  // exact: the demo's shown source holds the same words in backticks
+  await expect(
+    lazy.getByText(`Imported once scrolled near`, { exact: true }),
+  ).toBeVisible()
   // the held min-height is dropped once the content has laid out
   for (const region of await lazy.locator(`.lazy-mount`).all())
     await expect(region).not.toHaveAttribute(`style`, /min-height/)

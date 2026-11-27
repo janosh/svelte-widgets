@@ -263,7 +263,8 @@ describe(`file_drop`, () => {
     expect(on_files).not.toHaveBeenCalled()
   })
 
-  it(`disabled is read per event, so a getter toggles it on a live attachment`, async () => {
+  // a dragenter counted while disabled keeps the depth balanced once a getter enables it
+  it(`disabled is read per event, so a getter toggles it mid-drag`, async () => {
     const on_files = vi.fn()
     let disabled = true
     const { node } = attach_file_drop({
@@ -276,8 +277,12 @@ describe(`file_drop`, () => {
     drag_through(node, transfer)
     await next_task()
     expect(on_files).not.toHaveBeenCalled()
+    node.dispatchEvent(drag_event(`dragenter`, transfer)) // pointer enters while disabled
     disabled = false
-    drag_through(node, transfer)
+    node.dispatchEvent(drag_event(`dragenter`, transfer)) // into a child
+    node.dispatchEvent(drag_event(`dragleave`, transfer)) // out of the zone's own box
+    expect(node.hasAttribute(`data-drag-active`)).toBe(true)
+    drop(node, transfer)
     await vi.waitFor(() => expect(on_files).toHaveBeenCalledOnce())
   })
 
@@ -358,22 +363,6 @@ describe(`file_drop`, () => {
     expect([inner_files.mock.calls.length, outer_files.mock.calls.length]).toEqual(
       expected,
     )
-  })
-
-  it(`enabling a zone mid-drag keeps child-to-child moves active`, () => {
-    let disabled = true
-    const { node } = attach_file_drop({
-      get disabled() {
-        return disabled
-      },
-      on_files: vi.fn(),
-    })
-    const transfer = files_of(`file.txt`)
-    node.dispatchEvent(drag_event(`dragenter`, transfer)) // pointer enters while disabled
-    disabled = false
-    node.dispatchEvent(drag_event(`dragenter`, transfer)) // into a child
-    node.dispatchEvent(drag_event(`dragleave`, transfer)) // out of the zone's own box
-    expect(node.hasAttribute(`data-drag-active`)).toBe(true)
   })
 
   it(`balanced dragleave and global dragend after unbalanced dragenter clear activity`, () => {

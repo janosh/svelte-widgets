@@ -1929,6 +1929,10 @@ describe(`DataTable`, () => {
       const sides = () => [`A`, `B`, `C`, `D`].map((id) => header(id).dataset.dragSide)
       const no_sides = Array(4).fill(undefined)
 
+      // a file drag isn't a header drag: left to any file_drop zone around the table
+      for (const type of [`dragover`, `drop`])
+        expect((await drag(type, `B`)).defaultPrevented, type).toBe(false)
+      expect(sides()).toEqual(no_sides)
       expect(header(`B`).getAttribute(`aria-grabbed`)).toBeNull()
       await drag(`dragstart`, `B`)
       expect(header(`B`).getAttribute(`aria-grabbed`)).toBe(`true`)
@@ -3410,6 +3414,21 @@ describe(`DataTable`, () => {
           (Number(row.getAttribute(`data-row-idx`)) % 2 === 0),
       )
       expect(off_parity).toEqual([])
+      // a window resize re-measures too
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -150 * row_height_px, 500, height)
+      await fire(window, new Event(`resize`))
+      expect(spacers()[0].style.height).toBe(`${(150 - overscan) * row_height_px}px`)
+      // an unrelated scroller leaves the window alone; one containing the table moves it
+      scroller.getBoundingClientRect = () =>
+        new DOMRect(0, -180 * row_height_px, 500, height)
+      const unrelated = document.createElement(`div`)
+      document.body.append(unrelated)
+      await fire(unrelated, new Event(`scroll`))
+      expect(spacers()[0].style.height).toBe(`${(150 - overscan) * row_height_px}px`)
+      await fire(document.body, new Event(`scroll`))
+      expect(spacers()[0].style.height).toBe(`${(180 - overscan) * row_height_px}px`)
+      unrelated.remove()
     })
 
     // a row a linked view names (an atom hovered in 3D) outside the window is scrolled to, and

@@ -361,8 +361,8 @@ export function memo_by_identity<Result>(): (
   }
 }
 
-// Settles with `task` or rejects as soon as `signal` aborts, releasing the caller even when
-// the task ignores cancellation (it keeps running, its result is dropped)
+// Starts `task` now and settles with it, or rejects as soon as `signal` aborts, releasing the
+// caller even when the task ignores cancellation (it keeps running, its result is dropped)
 export async function abortable<Value>(
   task: () => Value | Promise<Value>,
   signal: AbortSignal,
@@ -372,7 +372,7 @@ export async function abortable<Value>(
   const abort = () => stopped.reject(to_error(signal.reason))
   signal.addEventListener(`abort`, abort, { once: true })
   try {
-    return await Promise.race([Promise.resolve().then(task), stopped.promise])
+    return await Promise.race([task(), stopped.promise]) // a sync throw rejects too
   } finally {
     signal.removeEventListener(`abort`, abort)
   }

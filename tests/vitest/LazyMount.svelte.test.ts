@@ -4,7 +4,7 @@ import LazyMountTextHarness from './LazyMountTextHarness.svelte'
 import StatusMessage from '#lib/StatusMessage.svelte'
 import { createRawSnippet, tick } from 'svelte'
 import { beforeEach, expect, test, vi } from 'vite-plus/test'
-import { doc_query, render, stub_resize_observer } from './index'
+import { doc_query, raw_snippet, render, stub_resize_observer } from './index'
 
 // `intersect` delivers a crossing to the observer watching the target, throwing if none does
 const observers = new Map<
@@ -52,7 +52,23 @@ test(`defers loading until near view, loads once and forwards reactive props`, a
   render(LazyMount, props)
   const region = doc_query(`.lazy-mount`)
   expect(observers.get(region)?.init).toMatchObject({ rootMargin: `200px` })
-  expect(region.getAttribute(`aria-label`)).toBe(`Test demo`)
+  expect([region.getAttribute(`role`), region.getAttribute(`aria-label`)]).toEqual([
+    `region`,
+    `Test demo`,
+  ])
+  // a caller's role and label win over the defaults
+  render(LazyMount, {
+    label: `Other`,
+    load,
+    props: { message: `x` },
+    role: `group`,
+    'aria-label': `Custom`,
+  })
+  const custom = document.querySelectorAll(`.lazy-mount`)[1]
+  expect([custom.getAttribute(`role`), custom.getAttribute(`aria-label`)]).toEqual([
+    `group`,
+    `Custom`,
+  ])
   intersect(region, false)
   await tick()
   expect(load).not.toHaveBeenCalled()
@@ -89,7 +105,7 @@ test.each([
   [`<div class="content" role="status"></div>`, ``],
   [`<p class="content" data-lazy-placeholder>Loading…</p>`, `350px`],
 ])(`holds its height until content with some height lays out: %s`, async (html, held) => {
-  const children = createRawSnippet(() => ({ render: () => html }))
+  const children = raw_snippet(html)
   const resize = stub_resize_observer()
   render(LazyMount, { label: `Demo`, height: `350px`, children })
   const region = doc_query(`.lazy-mount`)
@@ -170,7 +186,7 @@ test(`CodeExample without lazy renders its example directly`, () => {
   render(CodeExample, {
     src: ``,
     meta: { id: `eager` },
-    example: createRawSnippet(() => ({ render: () => `<p class="demo">Demo</p>` })),
+    example: raw_snippet(`<p class="demo">Demo</p>`),
   })
   expect(doc_query(`#eager > p.demo`).textContent).toBe(`Demo`)
   expect(document.querySelector(`.lazy-mount`)).toBeNull()

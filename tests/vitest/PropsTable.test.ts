@@ -86,7 +86,7 @@ test(`renders the docs, retrying a failed load when the table is reopened`, asyn
   )
 })
 
-test(`prefetches when idle and reports a component without docs`, async () => {
+test(`prefetches when idle, which opening reuses, and reports a component without docs`, async () => {
   vi.useFakeTimers()
   const load = vi.fn(() => Promise.resolve({ default: doc }))
   render(PropsTable, { name: `Plot`, loaders: { Plot: load } })
@@ -94,6 +94,10 @@ test(`prefetches when idle and reports a component without docs`, async () => {
   await vi.runAllTimersAsync()
   expect(load).toHaveBeenCalledOnce()
   vi.useRealTimers()
+  const details = doc_query<HTMLDetailsElement>(`details`)
+  toggle(details, true)
+  await vi.waitFor(() => expect(details.querySelectorAll(`tbody tr`)).toHaveLength(3))
+  expect(load).toHaveBeenCalledOnce()
 
   render(PropsTable, { name: `Missing`, loaders: {}, open: true })
   await vi.waitFor(() =>

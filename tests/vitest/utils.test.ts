@@ -1147,12 +1147,13 @@ test.each([
 })
 
 describe(`abortable`, () => {
-  test(`settles with the task, or rejects with the abort reason while the task hangs`, async () => {
-    await expect(abortable(() => 3, new AbortController().signal)).resolves.toBe(3)
-    const controller = new AbortController()
-    const hanging = abortable(() => new Promise<never>(() => {}), controller.signal)
-    controller.abort(new Error(`stop`))
-    await expect(hanging).rejects.toThrow(`stop`)
+  test(`settles with the task, a synchronous throw included`, async () => {
+    const { signal } = new AbortController()
+    await expect(abortable(() => 3, signal)).resolves.toBe(3)
+    const fail = () => {
+      throw new Error(`sync`)
+    }
+    await expect(abortable(fail, signal)).rejects.toThrow(`sync`)
   })
 
   // either way the caller gets an Error carrying the reason, never the raw reason
@@ -1163,9 +1164,9 @@ describe(`abortable`, () => {
       if (when === `before`) controller.abort(`gone`)
       const task = vi.fn(() => new Promise<never>(() => {}))
       const run = abortable(task, controller.signal)
+      expect(task).toHaveBeenCalledTimes(when === `before` ? 0 : 1) // started synchronously
       controller.abort(`gone`)
       await expect(run).rejects.toThrow(new Error(`gone`))
-      expect(task).toHaveBeenCalledTimes(when === `before` ? 0 : 1)
     },
   )
 })

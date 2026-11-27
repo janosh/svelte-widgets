@@ -238,7 +238,8 @@
   )
   let search_expanded = $derived(search_config?.expanded ?? false)
   // Unset, rows virtualize past 500: there a 30-column table takes ~0.35 s to mount in
-  // Chromium with every cell rendered, ~60 ms virtualized at any row count
+  // Chromium with every cell rendered, ~60 ms virtualized at any row count. A boolean of its
+  // own, so data updates that stay on one side of 500 keep virtual_config's identity.
   let virtual_on = $derived(virtual ?? data.length > 500)
   let virtual_config = $derived(
     pagination_config
@@ -938,17 +939,18 @@
     event.dataTransfer.effectAllowed = `move`
     event.dataTransfer.setData(`text/html`, ``)
   }
+  // Header drags only: a file dragged over a header goes on to any drop zone around the table
   function handle_drag_over(event: DragEvent, col: Column<Row>) {
+    if (!drag_col_id || !event.dataTransfer) return
     event.preventDefault()
-    if (!event.dataTransfer) return
     const same_group = drag_col_group() === col.group
     event.dataTransfer.dropEffect = same_group ? `move` : `none`
     drag_over_col_id = same_group ? col.id : null
   }
   function handle_drop(event: DragEvent, target_col: Column<Row>) {
+    if (!drag_col_id) return
     event.preventDefault()
-    if (drag_col_id && drag_col_group() === target_col.group)
-      move_column_to(drag_col_id, target_col.id)
+    if (drag_col_group() === target_col.group) move_column_to(drag_col_id, target_col.id)
     reset_drag_state()
   }
   // Remove `col_id` from column_order and reinsert it at `target_id`'s position
@@ -1583,7 +1585,13 @@ to the delegated tooltip (otherwise plain text, no extra node) -->
 <!-- Scrolling the page or an ancestor moves the table across the window's edges. Its own
      scroll is handled on the scroller: in a shadow root it never reaches the window. -->
 <svelte:window
-  onscrollcapture={({ target }) => target !== scroll_el && sync_viewport(true)}
+  onscrollcapture={({ target }) =>
+    // the page or a container around this table, not unrelated scrollers or its own
+    target instanceof Node &&
+    target !== scroll_el &&
+    scroll_el &&
+    target.contains(scroll_el) &&
+    sync_viewport(true)}
   onresize={() => sync_viewport(true)}
 />
 

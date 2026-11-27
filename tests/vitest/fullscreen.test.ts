@@ -113,17 +113,14 @@ describe(`hotkey`, () => {
   const hover = (node: Element) => node.dispatchEvent(new PointerEvent(`pointerenter`))
 
   // claimed only while the pointer is over the wrapper or focus is inside it; chords stay the
-  // browser's (Cmd/Ctrl+F is find-in-page)
+  // browser's (Cmd/Ctrl+F is find-in-page). The rest of the key rules are viewer_keys' own,
+  // tested in viewer-keys.test.ts
   test.each([
     [`plain f toggles`, `F`, { key: `f` }, true, `hover`],
     [`Caps Lock F toggles`, `F`, { key: `F` }, true, `hover`],
     [`f with focus inside the wrapper toggles`, `F`, { key: `f` }, true, `focus`],
     [`a non-letter hotkey matches event.key`, `F11`, { key: `F11` }, true, `hover`],
     [`Cmd+F stays find-in-page`, `F`, { key: `f`, metaKey: true }, false, `hover`],
-    [`Ctrl+F stays find-in-page`, `F`, { key: `f`, ctrlKey: true }, false, `hover`],
-    [`Shift+F is another shortcut`, `F`, { key: `F`, shiftKey: true }, false, `hover`],
-    [`an autorepeat does not re-toggle`, `F`, { key: `f`, repeat: true }, false, `hover`],
-    [`other keys are ignored`, `F`, { key: `g` }, false, `hover`],
     [`f outside the wrapper is ignored`, `F`, { key: `f` }, false, `none`],
   ] as const)(`%s`, async (_name, hotkey, { key, ...init }, toggles, via) => {
     const { wrapper, flag, button } = mount_button({ hotkey })
@@ -178,45 +175,30 @@ describe(`hotkey`, () => {
 
   // both wrappers are hovered at once, and the inner one (mounted first, as a child's effects
   // run first) would take the key before the outer one sees it. It defers only to a live
-  // outer button with the same key.
+  // outer button with the same key, and never while it is the one in fullscreen.
   test.each([
-    [`same key`, { hotkey: `F` }, [false, true]],
-    [`outer has another key`, { hotkey: `G` }, [true, false]],
-    [`outer button hidden`, { hotkey: `F`, hidden: true }, [true, false]],
-  ] as const)(`nested wrapper, %s`, async (_name, outer_props, expected) => {
-    const outer = create_element()
-    const inner = create_element()
-    outer.append(inner)
-    const flags = (
-      [
-        [inner, { hotkey: `F` }],
-        [outer, outer_props],
-      ] as const
-    ).map(([wrapper, props]) => {
-      const flag = writable(false)
-      const flag_proxy = fromStore(flag)
-      const unmount_button = render(
-        FullscreenButton,
-        {
-          wrapper,
-          ...props,
-          get fullscreen() {
-            return flag_proxy.current
-          },
-          set fullscreen(next_fullscreen: boolean) {
-            flag.set(next_fullscreen)
-          },
-        },
-        wrapper,
-      )
-      onTestFinished(unmount_button)
-      hover(wrapper)
-      return flag
-    })
-    press_key(globalThis, `f`)
-    await settle()
-    expect(flags.map((flag) => get(flag))).toEqual(expected)
-  })
+    [`same key`, { hotkey: `F` }, false, [false, true]],
+    [`same key, inner in fullscreen exits`, { hotkey: `F` }, true, [false, false]],
+    [`outer has another key`, { hotkey: `G` }, false, [true, false]],
+    [`outer button hidden`, { hotkey: `F`, hidden: true }, false, [true, false]],
+  ] as const)(
+    `nested wrapper, %s`,
+    async (_name, outer_props, in_fullscreen, expected) => {
+      const outer = create_element()
+      const inner = create_element()
+      outer.append(inner)
+      const buttons = [
+        mount_button({ wrapper: inner, hotkey: `F` }),
+        mount_button({ wrapper: outer, ...outer_props }),
+      ]
+      for (const { unmount_button } of buttons) onTestFinished(unmount_button)
+      buttons[0].flag.set(in_fullscreen)
+      for (const node of [inner, outer]) hover(node)
+      press_key(globalThis, `f`)
+      await settle()
+      expect(buttons.map(({ flag }) => get(flag))).toEqual(expected)
+    },
+  )
 })
 
 describe(`per-wrapper isolation`, () => {

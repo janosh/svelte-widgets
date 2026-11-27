@@ -103,7 +103,6 @@ test.each([
   expect(found).toEqual([bar, spinner])
 })
 
-// layout under --task-status-justify is covered by tests/playwright/TaskStatus.test.ts
 test(`overlay class and snippet labels with markup`, () => {
   const label = raw_snippet(`<span>Could not load κ<sub>SRME</sub></span>`)
   const root = render_task({ state: `error`, label, overlay: true })

@@ -186,6 +186,15 @@ describe(`set_png_dpi`, () => {
 
 const parse_svg = (markup: string): Element =>
   new DOMParser().parseFromString(markup, `image/svg+xml`).documentElement
+const mount_svg = (markup: string): SVGSVGElement => {
+  document.body.innerHTML = markup
+  const svg = document.querySelector(`svg`)
+  if (!svg) throw new Error(`svg not mounted`)
+  return svg
+}
+// `markup` mounted, exported and parsed back
+const export_svg = (markup: string): Element =>
+  parse_svg(svg_to_string(mount_svg(markup)))
 
 describe(`svg_to_string`, () => {
   test.each([
@@ -237,12 +246,7 @@ describe(`svg_to_string`, () => {
       figure(`1e3126d8`),
       figure(`9b2c44f0`),
       figure(`1e3126d8`, 8),
-    ].map((markup) => {
-      document.body.innerHTML = markup
-      const svg = document.querySelector(`svg`)
-      if (!svg) throw new Error(`svg not mounted`)
-      return svg_to_string(svg)
-    })
+    ].map((markup) => svg_to_string(mount_svg(markup)))
     expect(first).toBe(second)
     const exported = parse_svg(first)
     const prefix = exported.id.replace(/-0$/, ``)
@@ -275,29 +279,29 @@ describe(`svg_to_string`, () => {
     style.textContent = `.tick-label { fill: rgb(200, 0, 0); font-size: 13px } .themed { stroke: rgb(0, 0, 200); stroke-width: 3px }`
     document.head.append(style)
     onTestFinished(() => style.remove())
-    document.body.innerHTML = `<svg viewBox="0 0 100 100" style="cursor: crosshair" class="svelte-4hqm71"><g fill="blue"><text class="tick-label svelte-1stqk4m">1</text><rect class="themed" width="10" height="10"/><circle fill="blue" r="2"/></g></svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
-    const exported = parse_svg(svg_to_string(svg))
+    const exported = export_svg(
+      `<svg viewBox="0 0 100 100" style="cursor: crosshair" class="svelte-4hqm71"><g fill="blue" style="font-weight: 700"><text class="tick-label svelte-1stqk4m svelte-widgets-legend" style="font-weight: normal">1</text><rect class="themed" width="10" height="10"/><circle fill="blue" r="2"/></g></svg>`,
+    )
     const [text, rect, circle] = [`text`, `rect`, `circle`].map((tag) =>
       exported.querySelector(tag),
     )
     // class-based styles survive without the page stylesheet...
     expect(text?.getAttribute(`fill`)).toBe(`rgb(200, 0, 0)`)
     expect(text?.getAttribute(`font-size`)).toBe(`13`)
+    expect(text?.getAttribute(`font-weight`)).toBe(`400`) // `normal`, as its numeric weight
     expect(rect?.getAttribute(`stroke`)).toBe(`rgb(0, 0, 200)`)
     expect(rect?.getAttribute(`stroke-width`)).toBe(`3`)
     // ...inherited values are written once on the ancestor, not repeated per child
     expect(exported.querySelector(`g`)?.getAttribute(`fill`)).toBe(`blue`)
     expect(circle?.hasAttribute(`fill`)).toBe(false)
     // classes stay as layer names for vector editors, minus Svelte scoping hashes
-    expect(text?.getAttribute(`class`)).toBe(`tick-label`)
+    expect(text?.getAttribute(`class`)).toBe(`tick-label svelte-widgets-legend`)
     expect(exported.getAttributeNames()).not.toContain(`class`)
     expect(exported.getAttributeNames()).not.toContain(`style`) // interaction-only cursor
   })
 
   test(`strips hidden, transparent and interaction-only markup but keeps export-only`, () => {
-    document.body.innerHTML = `<svg viewBox="0 0 100 100" role="application" tabindex="0">
+    const svg = mount_svg(`<svg viewBox="0 0 100 100" role="application" tabindex="0">
       <!-- svelte anchor -->
       <rect class="visible" width="5" height="5" fill="red" data-series-id="a" aria-label="bar"/>
       <rect width="5" height="5" fill="red" display="none"/>
@@ -307,10 +311,8 @@ describe(`svg_to_string`, () => {
       <g data-export-exclude><text>tooltip</text></g>
       <g><rect width="1" height="1" display="none"/></g>
       <text data-export-only display="none">static label</text>
-      <defs><clipPath id="clip"><rect width="5" height="5" fill="none"/></clipPath></defs>
-    </svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
+      <defs><clipPath id="clip"><rect width="5" height="5" fill="none"/></clipPath><path id="glyph" fill="rgb(0, 0, 0)" d="M0 0h1"/></defs>
+    </svg>`)
     const result = svg_to_string(svg)
     const exported = parse_svg(result)
     expect(exported.querySelectorAll(`rect`)).toHaveLength(2) // the visible one + clip shape
@@ -319,6 +321,8 @@ describe(`svg_to_string`, () => {
       `static label`,
     ])
     expect(exported.querySelector(`text`)?.hasAttribute(`display`)).toBe(false)
+    // <use> content inherits from the use site, so its authored paint can't be elided
+    expect(exported.querySelector(`defs path`)?.getAttribute(`fill`)).toBe(`rgb(0, 0, 0)`)
     expect(exported.querySelectorAll(`g`)).toHaveLength(0) // emptied groups are dropped
     expect(exported.querySelector(`clipPath rect`)).not.toBeNull()
     expect(result).not.toMatch(/<!--|data-|aria-|role=|tabindex=/)
@@ -326,16 +330,16 @@ describe(`svg_to_string`, () => {
 
   test(`rounds a 100-unit figure to 2 decimals, leaving text, classes, hrefs and url() refs`, () => {
     const attrs = `clip-path="url(#plot-clip-1a2b3c4d-4f3e-4234-9e12-3e4f5a6b7c8d)" class="x-3e-4" stroke="black"`
-    const path = `<path id="p0.123456" d="M1.23456,2.5L-3.00499,4.1234e-7" ${attrs}/>`
-    document.body.innerHTML = `<svg viewBox="0 0 100.123456 100">${path}<text x="10.98765">0.123456</text></svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
-    const exported = parse_svg(svg_to_string(svg))
+    const path = `<path id="p0.123456" d="M1.23456,2.5L-3.00499,4.1234e-7" transform="scale(0.004)" ${attrs}/>`
+    const exported = export_svg(
+      `<svg viewBox="0 0 100.123456 100">${path}<text x="10.98765">0.123456</text></svg>`,
+    )
     const attr = (name: string) => exported.querySelector(`path`)?.getAttribute(name)
     // ids are renamed (not rounded), and so is a ref to an id outside the figure
     const prefix = attr(`id`)?.replace(/-0$/, ``)
     expect([attr(`d`), attr(`id`)]).toEqual([`M1.23,2.5L-3,0`, `${prefix}-0`])
     expect([attr(`clip-path`), attr(`class`)]).toEqual([`url(#${prefix}-1)`, `x-3e-4`])
+    expect(attr(`transform`)).toBe(`scale(0.004)`) // dimensionless factors keep precision
     expect(exported.querySelector(`text`)?.getAttribute(`x`)).toBe(`10.99`)
     expect(exported.querySelector(`text`)?.textContent).toBe(`0.123456`)
     expect(exported.getAttribute(`viewBox`)).toBe(`-0.5 -0.5 101.12 101`)
@@ -347,10 +351,9 @@ describe(`svg_to_string`, () => {
     [`0 0 0.02 0.004`, [`0.5123457`, `0.004`, `0.004`]],
     [`0 0 1000 400`, [`0.51`, `0`, `400`]],
   ])(`rounds to the precision viewBox=%s resolves`, (viewbox, expected) => {
-    document.body.innerHTML = `<svg viewBox="${viewbox}"><circle cx="0.51234567" r="0.004"/></svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
-    const exported = parse_svg(svg_to_string(svg))
+    const exported = export_svg(
+      `<svg viewBox="${viewbox}"><circle cx="0.51234567" r="0.004"/></svg>`,
+    )
     const circle = exported.querySelector(`circle`)
     expect([
       circle?.getAttribute(`cx`),
@@ -366,13 +369,11 @@ describe(`svg_to_string`, () => {
     [`M1-0.001`, `M1 0`],
     [`M0.123.456`, `M0.12 0.46`],
     [`M1.23456-2.5`, `M1.23-2.5`],
+    // leading zeros are packed arc flags, not numbers to round
+    [`a5 5 0 011.123456 2`, `a5 5 0 011.123456 2`],
   ])(`rounding keeps compact path numbers apart: %s -> %s`, (d_in, d_out) => {
-    document.body.innerHTML = `<svg viewBox="0 0 100 100"><path d="${d_in}"/></svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
-    expect(parse_svg(svg_to_string(svg)).querySelector(`path`)?.getAttribute(`d`)).toBe(
-      d_out,
-    )
+    const exported = export_svg(`<svg viewBox="0 0 100 100"><path d="${d_in}"/></svg>`)
+    expect(exported.querySelector(`path`)?.getAttribute(`d`)).toBe(d_out)
   })
 
   test(`a 1000-point chart exports at under a third of its raw markup`, () => {
@@ -386,25 +387,25 @@ describe(`svg_to_string`, () => {
       (_, idx) =>
         `<!----><circle class="pt" cx="${rng(idx)}" cy="${rng(idx + 1)}" r="3" data-point-idx="${idx}" role="button" tabindex="-1" aria-label="point ${idx}"></circle>`,
     ).join(``)
-    document.body.innerHTML = `<svg viewBox="0 0 400 400"><g class="series">${points}</g></svg>`
-    const svg = document.querySelector(`svg`)
-    if (!svg) throw new Error(`svg not mounted`)
+    const svg = mount_svg(
+      `<svg viewBox="0 0 400 400"><g class="series">${points}</g></svg>`,
+    )
     const result = svg_to_string(svg)
     expect(result.length).toBeLessThan(svg.outerHTML.length / 3)
-    const circles = parse_svg(result).querySelectorAll(`circle`)
+    const exported = parse_svg(result)
+    const circles = exported.querySelectorAll(`circle`)
     expect(circles).toHaveLength(1000)
     // colors inherited from the group are written once there, not on 1000 circles
-    expect(parse_svg(result).querySelector(`g`)?.getAttribute(`fill`)).toBe(
-      `rgb(31, 119, 180)`,
-    )
+    expect(exported.querySelector(`g`)?.getAttribute(`fill`)).toBe(`rgb(31, 119, 180)`)
     expect(circles[0].getAttributeNames().toSorted()).toEqual([`class`, `cx`, `cy`, `r`])
   })
 
   test(`embeds foreign canvases via their registered painter at the export scale`, () => {
-    document.body.innerHTML = `<svg viewBox="0 0 100 50"><foreignObject x="0" y="0" width="100" height="50"><canvas width="100" height="50"></canvas></foreignObject></svg>`
-    const canvas = document.querySelector(`canvas`)
-    const svg = document.querySelector(`svg`)
-    if (!canvas || !svg) throw new Error(`canvas not mounted`)
+    const svg = mount_svg(
+      `<svg viewBox="0 0 100 50"><foreignObject x="0" y="0" width="100" height="50"><canvas width="100" height="50"></canvas></foreignObject></svg>`,
+    )
+    const canvas = svg.querySelector(`canvas`)
+    if (!canvas) throw new Error(`canvas not mounted`)
     Object.assign(canvas, { width: 100, height: 50 })
     const painter = vi.fn((target: HTMLCanvasElement) => {
       target.toDataURL = () => `data:image/png;base64,PAINTED`
@@ -417,19 +418,7 @@ describe(`svg_to_string`, () => {
   })
 })
 
-test(`html_to_svg redraws an HTML grid's cell backgrounds and text as SVG`, () => {
-  document.body.innerHTML = `<div class="grid"><span style="background-color: rgb(255, 0, 0)">Fe</span></div>`
-  const grid = document.querySelector<HTMLElement>(`.grid`)
-  if (!grid) throw new Error(`grid not mounted`)
-  vi.spyOn(Element.prototype, `getBoundingClientRect`).mockReturnValue(
-    new DOMRect(0, 0, 40, 20),
-  )
-  const exported = parse_svg(svg_to_string(html_to_svg(grid)))
-  expect(exported.getAttribute(`viewBox`)).toBe(`0 0 40 20`)
-  expect(exported.querySelector(`rect`)?.getAttribute(`fill`)).toBe(`rgb(255, 0, 0)`)
-})
-
-test(`html_to_svg paints children in CSS stacking order and skips export-excluded nodes`, () => {
+test(`html_to_svg redraws backgrounds and text in CSS stacking order, skipping excluded nodes`, () => {
   // like a split periodic-table tile: value label (z 2) before its segment (z 1) in the DOM
   document.body.innerHTML = `<div class="tile">
     <span style="position: absolute; z-index: 2">18</span>
@@ -447,7 +436,9 @@ test(`html_to_svg paints children in CSS stacking order and skips export-exclude
   vi.spyOn(Range.prototype, `getBoundingClientRect`).mockReturnValue(
     new DOMRect(0, 0, 10, 10),
   )
-  const group = parse_svg(svg_to_string(html_to_svg(tile))).querySelector(`g`)
+  const exported = parse_svg(svg_to_string(html_to_svg(tile)))
+  expect(exported.getAttribute(`viewBox`)).toBe(`0 0 40 20`)
+  const group = exported.querySelector(`g`)
   const painted = [...(group?.children ?? [])].map((node) =>
     node.localName === `text`
       ? node.textContent
@@ -458,6 +449,12 @@ test(`html_to_svg paints children in CSS stacking order and skips export-exclude
   expect(group?.querySelector(`path`)?.getAttribute(`vector-effect`)).toBe(
     `non-scaling-stroke`,
   )
+  // overlays must not inherit a chart root's centered text or stroke
+  const raw_group = html_to_svg(tile).querySelector(`g`)
+  expect([`text-anchor`, `stroke`].map((attr) => raw_group?.getAttribute(attr))).toEqual([
+    `start`,
+    `none`,
+  ])
 })
 
 describe(`svg_to_png_blob`, () => {
@@ -522,6 +519,7 @@ describe(`svg_to_png_blob`, () => {
       expect(exported.getAttribute(`viewBox`)).toBe(viewbox)
       expect(exported.getAttribute(`width`)).toBe(String(size[0]))
       expect(exported.getAttribute(`height`)).toBe(String(size[1]))
+      expect(exported.hasAttribute(`style`)).toBe(false) // CSS size became attributes
       expect(svg.style.width).toBe(`100px`)
       expect(svg.getAttribute(`width`)).toBe(`80`)
       expect(svg.getAttribute(`viewBox`)).toBe(source_viewbox ?? null)
@@ -543,7 +541,7 @@ describe(`svg_to_png_blob`, () => {
 
   test.each([
     [`success`, `load`, null],
-    [`empty`, `load`, `Failed to generate high-resolution PNG`],
+    [`empty`, `load`, `Failed to generate PNG`],
     [`throw`, `load`, `encoding failed`],
     [`timeout`, `load`, `toBlob timed out`],
     [`image-throw`, `throw`, `image setup failed`],
@@ -581,11 +579,15 @@ describe(`svg_to_png_blob`, () => {
 // Only the `to right` / `to top` form is recognized; any other background paints nothing.
 // oxfmt-ignore
 test.each([
-  [`linear-gradient(to right, rgb(0, 0, 255) 0%, rgb(255, 0, 0) 100%)`, { vector: [`0`, `0`, `1`, `0`], stops: [[`rgb(0, 0, 255)`, `0%`], [`rgb(255, 0, 0)`, `100%`]] }],
-  [`linear-gradient(to top, red 0%, rgba(0, 128, 0, 0.5) 50%, blue 100%)`, { vector: [`0`, `1`, `0`, `0`], stops: [[`red`, `0%`], [`rgba(0, 128, 0, 0.5)`, `50%`], [`blue`, `100%`]] }],
+  [`linear-gradient(to right, rgb(0, 0, 255) 0%, rgb(255, 0, 0) 100%)`, { vector: [`0`, `0.5`, `1`, `0.5`], stops: [[`rgb(0, 0, 255)`, `0%`], [`rgb(255, 0, 0)`, `100%`]] }],
+  [`linear-gradient(to top, red 0%, rgba(0, 128, 0, 0.5) 50%, blue 100%)`, { vector: [`0.5`, `1`, `0.5`, `0`], stops: [[`red`, `0%`], [`rgba(0, 128, 0, 0.5)`, `50%`], [`blue`, `100%`]] }],
   // Chrome's computed value for evenly spaced stops omits their offsets
-  [`linear-gradient(to right, rgb(68, 1, 84), rgb(33, 145, 140), rgb(253, 231, 37))`, { vector: [`0`, `0`, `1`, `0`], stops: [[`rgb(68, 1, 84)`, `0%`], [`rgb(33, 145, 140)`, `50%`], [`rgb(253, 231, 37)`, `100%`]] }],
-  [`linear-gradient(red, blue)`, null],
+  [`linear-gradient(to right, rgb(68, 1, 84), rgb(33, 145, 140), rgb(253, 231, 37))`, { vector: [`0`, `0.5`, `1`, `0.5`], stops: [[`rgb(68, 1, 84)`, `0%`], [`rgb(33, 145, 140)`, `50%`], [`rgb(253, 231, 37)`, `100%`]] }],
+  // no direction is `to bottom`; angles map onto the bounding box
+  [`linear-gradient(red, blue)`, { vector: [`0.5`, `0`, `0.5`, `1`], stops: [[`red`, `0%`], [`blue`, `100%`]] }],
+  [`linear-gradient(270deg, red 0%, blue 100%)`, { vector: [`1`, `0.5`, `0`, `0.5`], stops: [[`red`, `0%`], [`blue`, `100%`]] }],
+  [`linear-gradient(to top right, red, blue)`, null],
+  [`linear-gradient(0.5turn, red, blue)`, null],
   [`none`, null],
 ])(`html_to_svg redraws background %s as an SVG gradient`, (background, expected) => {
   const bar = document.createElement(`div`)

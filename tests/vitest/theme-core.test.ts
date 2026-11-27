@@ -168,6 +168,11 @@ describe(`watch_theme_changes`, () => {
       0,
     ],
     [`an unchanged class`, ({ outer }) => outer.setAttribute(`class`, `host`), 0],
+    [
+      `a class undone within the batch`,
+      ({ outer }) => outer.classList.toggle(`dark`) && outer.classList.toggle(`dark`),
+      0,
+    ],
     [`a sibling subtree`, ({ sibling }) => sibling.classList.add(`dark`), 0],
   ] satisfies [string, (tree: ReturnType<typeof make_tree>) => unknown, number][])(
     `%s notifies %i time(s)`,
@@ -193,17 +198,32 @@ describe(`watch_theme_changes`, () => {
     expect(on_change).toHaveBeenCalledOnce()
   })
 
-  test(`the OS preference flipping notifies every subscriber`, () => {
-    const listeners: (() => void)[] = []
-    vi.stubGlobal(`matchMedia`, () => ({
-      matches: false,
-      addEventListener: (_type: string, listener: () => void) => listeners.push(listener),
-      removeEventListener: vi.fn(),
-    }))
+  test(`the OS preference flipping notifies every subscriber until it unsubscribes`, () => {
+    // each matchMedia() call is its own list with its own listeners, as in browsers
+    const lists: Set<() => void>[] = []
+    vi.stubGlobal(`matchMedia`, () => {
+      const listeners = new Set<() => void>()
+      lists.push(listeners)
+      return {
+        matches: false,
+        addEventListener: (_type: string, listener: () => void) =>
+          listeners.add(listener),
+        removeEventListener: (_type: string, listener: () => void) =>
+          listeners.delete(listener),
+      }
+    })
     const { inner, sibling } = make_tree()
     const [on_inner, on_sibling] = [watch(inner), watch(sibling)]
-    for (const listener of listeners) listener()
-    expect([on_inner.mock.calls.length, on_sibling.mock.calls.length]).toEqual([1, 1])
+    const flip = () => {
+      for (const listener of lists.flatMap((listeners) => [...listeners])) listener()
+    }
+    flip()
+    for (const stop of stoppers.splice(0)) stop()
+    const on_later = watch(inner) // a fresh subscriber hears each flip once
+    flip()
+    expect(
+      [on_inner, on_sibling, on_later].map((on_change) => on_change.mock.calls.length),
+    ).toEqual([1, 1, 1])
   })
 
   test(`is a no-op without MutationObserver (workers, SSR)`, () => {

@@ -46,6 +46,7 @@ export const GRID = { grid_step: 0.1 }`,
     orientation = \`vertical\` as const,
     fps = DEFAULT_FPS,
     speed = DEFAULTS.player.fps,
+    width = \`auto\`,
     ...rest
   }: BaseProps &
     HTMLAttributes<HTMLDivElement> & {
@@ -59,8 +60,11 @@ export const GRID = { grid_step: 0.1 }`,
       // Component-specific props
       // \`vertical\` draws bars upward, \`horizontal\` rightward
       orientation?: \`vertical\` | \`horizontal\`
+      // a note set apart by a blank line, describing no prop
+
       fps?: number
       speed?: number
+      width?: \`\${number}px\` | \`auto\` // CSS width
     } = $props()
 </script>`,
   'src/lib/Child.svelte': `<script lang="ts" generics="T extends string">
@@ -186,6 +190,34 @@ describe(`extract_prop_docs`, () => {
         description: `\`vertical\` draws bars upward, \`horizontal\` rightward`,
       },
     ],
+    // a constant or setting default also gives the literal it stands for; a comment block
+    // above a blank line describes nothing
+    [
+      `Plot`,
+      `fps`,
+      { name: `fps`, type: `number`, default: `DEFAULT_FPS`, default_value: `24` },
+    ],
+    [
+      `Plot`,
+      `speed`,
+      {
+        name: `speed`,
+        type: `number`,
+        default: `DEFAULTS.player.fps`,
+        default_value: `10`,
+      },
+    ],
+    // a template literal type keeps its backticks, plain ones beside it read as '...'
+    [
+      `Plot`,
+      `width`,
+      {
+        name: `width`,
+        type: `\`\${number}px\` | 'auto'`,
+        default: `'auto'`,
+        description: `CSS width`,
+      },
+    ],
     // a multi-line Pick<...> on one line: no padding inside <>, no union operator leading
     // the second type argument, literals in single quotes
     [
@@ -214,16 +246,6 @@ describe(`extract_prop_docs`, () => {
     expect(docs[component]?.props.find((doc) => doc.name === name)).toEqual(expected)
   })
 
-  // a constant or setting default also gives the literal it stands for
-  test.each([
-    [`fps`, `DEFAULT_FPS`, `24`],
-    [`speed`, `DEFAULTS.player.fps`, `10`],
-    [`orientation`, `'vertical'`, undefined],
-  ])(`Plot.%s defaults to %s (value %s)`, (name, fallback, value) => {
-    const doc = docs.Plot.props.find((prop) => prop.name === name)
-    expect([doc?.default, doc?.default_value]).toEqual([fallback, value])
-  })
-
   test(`notes the element a ...rest binding passes attributes to, skipping the binding`, () => {
     expect(docs.Plot.rest_attributes).toBe(`<div>`)
     expect(docs.Child.rest_attributes).toBeUndefined()
@@ -237,21 +259,54 @@ describe(`extract_prop_docs`, () => {
     )
   })
 
-  // its types would silently read as `any`, wiping even the component's own prop types
-  test(`throws on a component import TypeScript can't resolve`, () => {
-    const file = `${root}/src/lib/Broken.svelte`
+  // framework and plugin modules are typed by ambient declarations the extraction doesn't load
+  test(`extracts a component importing $app, $env and virtual modules`, () => {
+    const file = `${root}/src/lib/Framework.svelte`
     writeFileSync(
       file,
       `<script lang="ts">
-  import type { Base } from '$lib/missing'
-  import './styles.css'
-  let { size = 1 }: Base & { size?: number } = $props()
+  import { page } from '$app/state'
+  import { PUBLIC_URL } from '$env/static/public'
+  import docs from 'virtual:prop-docs'
+  let { size = 1 }: { size?: number } = $props()
 </script>`,
     )
-    expect(() => extract_prop_docs([file])).toThrow(
-      `prop-docs: unresolved component imports:\n${file}: $lib/missing`,
+    try {
+      const { Framework } = extract_prop_docs([file])
+      expect(Framework.props.map(({ name }) => name)).toEqual([`size`])
+    } finally {
+      rm_file(file, { force: true })
+    }
+  })
+
+  // an unresolved import would silently type its names `any`, wiping even the component's own
+  // prop types (a side-effect import binds none); a real X.svelte.ts would stand in for X's
+  test.each([
+    [
+      `an import TypeScript can't resolve`,
+      `import type { Base } from '$lib/missing'\n  import './styles.css'`,
+      false,
+      (file: string) => `prop-docs: unresolved component imports:\n${file}: $lib/missing`,
+    ],
+    [
+      `an X.svelte.ts beside X.svelte`,
+      `type Base = {}`,
+      true,
+      (file: string) => `prop-docs: ${file}.ts shadows its component's types`,
+    ],
+  ])(`throws on %s`, (_case, imports, shadowed, message) => {
+    const file = `${root}/src/lib/Broken.svelte`
+    writeFileSync(
+      file,
+      `<script lang="ts">\n  ${imports}\n  let { size = 1 }: Base & { size?: number } = $props()\n</script>`,
     )
-    rm_file(file)
+    if (shadowed) writeFileSync(`${file}.ts`, `export {}`)
+    try {
+      expect(() => extract_prop_docs([file])).toThrow(message(file))
+    } finally {
+      rm_file(file, { force: true })
+      rm_file(`${file}.ts`, { force: true })
+    }
   })
 })
 
@@ -293,13 +348,15 @@ test.each([
 })
 
 const plugin_hooks = () => {
-  const { resolveId, load, hotUpdate } = prop_docs_plugin({ root })
+  const { configResolved, resolveId, load, hotUpdate } = prop_docs_plugin()
   if (
+    typeof configResolved !== `function` ||
     typeof resolveId !== `function` ||
     typeof load !== `function` ||
     typeof hotUpdate !== `function`
   )
-    throw new TypeError(`resolveId, load and hotUpdate must be functions`)
+    throw new TypeError(`configResolved, resolveId, load and hotUpdate must be functions`)
+  void configResolved.call({} as never, { root } as never)
   return {
     resolve_id: (id: string) => resolveId.call({} as never, id, undefined, {} as never),
     load: (id: string) => load.call({} as never, id),

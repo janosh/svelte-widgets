@@ -39,7 +39,15 @@ const assert_free = async (directory: FileSystemDirectoryHandle, filename: strin
 }
 
 export class FileExportState {
-  filename = $derived.by(() => this.default_filename())
+  // follows the default until the user types a name, which then sticks (a default derived from
+  // e.g. the current trajectory frame changes during playback)
+  #typed_filename = $state<string | null>(null)
+  get filename(): string {
+    return this.#typed_filename ?? this.default_filename()
+  }
+  set filename(name: string) {
+    this.#typed_filename = name
+  }
   directory = $state.raw<FileSystemDirectoryHandle | null>(null)
   busy = $state(false)
   error = $state(``)

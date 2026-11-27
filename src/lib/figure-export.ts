@@ -103,18 +103,17 @@ export async function set_png_dpi(png: Blob, png_dpi: number): Promise<Blob> {
 export const encode_canvas_png = (
   canvas: HTMLCanvasElement,
   png_dpi: number,
-  failure_message = `Failed to generate PNG blob`,
 ): Promise<Blob> =>
   with_timeout(
     () =>
       new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
-          (blob) => (blob ? resolve(blob) : reject(new Error(failure_message))),
+          (blob) => (blob ? resolve(blob) : reject(new Error(`Failed to generate PNG`))),
           `image/png`,
         )
       }),
     export_timeout_ms((canvas.width * canvas.height * 4) / 1e6),
-    `${failure_message}: toBlob`,
+    `PNG toBlob`,
   ).then((blob) => set_png_dpi(blob, png_dpi))
 
 // PNG of a scene drawn in CSS pixels: `paint` runs on a fresh canvas pre-scaled by `scale`,
@@ -134,7 +133,7 @@ export async function paint_png_blob(
   if (!ctx) throw new Error(`Canvas 2D context not available`)
   ctx.scale(scale, scale)
   paint(ctx)
-  return encode_canvas_png(canvas, png_dpi, `Failed to generate high-resolution PNG`)
+  return encode_canvas_png(canvas, png_dpi)
 }
 
 // === SVG serialization ===
@@ -192,12 +191,14 @@ const is_no_paint = (paint: string): boolean =>
 type ResolvedStyles = Record<string, string>
 
 // Write each paint property onto `clone` where it differs from what the clone would inherit,
-// and drop authored ones that are redundant. Reads the browser's computed style, falling back
+// and drop authored ones that are redundant, except in definitions: content a <use> clones
+// inherits from the use site, so its authored values are never redundant. Reads the browser's computed style, falling back
 // to the authored attribute for engines that don't compute SVG presentation attributes.
 function inline_styles(
   live: Element,
   clone: Element,
   parent: ResolvedStyles | null,
+  in_defs: boolean,
 ): ResolvedStyles {
   const computed = getComputedStyle(live)
   const resolved: ResolvedStyles = {}
@@ -209,22 +210,20 @@ function inline_styles(
     for (const [prop, initial] of Object.entries(props)) {
       const expected = (inherited ? parent?.[prop] : undefined) ?? initial
       // empty strings mean "not set" at every level, hence find(Boolean) rather than ??
-      const value = (
+      let value = (
         [
           computed.getPropertyValue(prop),
           (live as SVGElement).style?.getPropertyValue(prop),
           live.getAttribute(prop),
         ].find(Boolean) ?? expected
-      )
-        .replaceAll(/(?<num>\d)px\b/g, `$<num>`)
-        .replace(/^normal$/, prop === `font-weight` ? `400` : `normal`)
+      ).replaceAll(/(?<num>\d)px\b/g, `$<num>`)
+      if (prop === `font-weight` && value === `normal`) value = `400`
       resolved[prop] = value
       style?.removeProperty(prop)
-      if (value === expected) clone.removeAttribute(prop)
-      else clone.setAttribute(prop, value)
+      if (value !== expected) clone.setAttribute(prop, value)
+      else if (!in_defs) clone.removeAttribute(prop)
     }
   }
-  if (style && !style.length) clone.removeAttribute(`style`)
   // Read for stripping, never written: an element is either exported visible or dropped
   resolved.display =
     [computed.display, live.getAttribute(`display`)].find(Boolean) ?? `inline`
@@ -282,7 +281,7 @@ function prepare_clone(
   in_defs: boolean,
   state: WalkState,
 ): void {
-  const styles = inline_styles(live, clone, parent)
+  const styles = inline_styles(live, clone, parent, in_defs)
   // Static stand-ins for interactive markup, hidden on screen
   if (live.hasAttribute(`data-export-only`)) clone.removeAttribute(`display`)
   if (!in_defs && renders_nothing(live, styles)) return clone.remove()
@@ -318,7 +317,8 @@ const round_decimals = (text: string, digits: number): string => {
   return !long_decimal.test(text)
     ? text
     : text.replaceAll(NUMBER_TOKEN, (match, offset: number) => {
-        if (match.startsWith(`url(`) || !long_decimal.test(match)) return match
+        // a leading zero before a digit marks compact arc flags (`a5 5 0 011.5 2`)
+        if (/^url\(|^-?0\d/.test(match) || !long_decimal.test(match)) return match
         const rounded = String(Math.round(Number(match) * factor) / factor || 0)
         const merges_before = /[\d.]/.test(text[offset - 1] ?? ``) && /^\d/.test(rounded)
         const merges_after = text[offset + match.length] === `.` && !rounded.includes(`.`)
@@ -336,6 +336,9 @@ function fraction_digits(viewbox: SvgViewbox | null): number {
 // Classes stay as layer names for editing the figure in vector tools, minus Svelte's
 // scoping hashes, which only meant something to the page stylesheet.
 const DROP_ATTR = /^(?:data-|aria-|role$|tabindex$|pointer-events$|cursor$)/
+// transforms carry dimensionless factors (`scale(0.004)`), not coordinates
+// oxfmt-ignore
+const NOT_ROUNDED = new Set([`href`, `xlink:href`, `id`, `class`, `font-family`, `transform`, `gradientTransform`, `patternTransform`])
 const INTERACTION_STYLES = [`cursor`, `pointer-events`, `user-select`, `touch-action`]
 
 function minify_clone(root: Element, digits: number): void {
@@ -351,14 +354,14 @@ function minify_clone(root: Element, digits: number): void {
     if (style && !style.length) element.removeAttribute(`style`)
     const classes = element
       .getAttribute(`class`)
-      ?.replaceAll(/\bsvelte-\w+\b/g, ``)
+      ?.replaceAll(/(?<![\w-])svelte-[a-z0-9]+(?![\w-])/g, ``)
       .trim()
     if (classes) element.setAttribute(`class`, classes.replaceAll(/\s+/g, ` `))
     else element.removeAttribute(`class`)
     // a snapshot: the live NamedNodeMap shifts as attributes are removed
     for (const { name, value } of Array.from(element.attributes)) {
       if (DROP_ATTR.test(name)) element.removeAttribute(name)
-      else if (![`href`, `xlink:href`, `id`, `class`, `font-family`].includes(name))
+      else if (!NOT_ROUNDED.has(name))
         element.setAttribute(name, round_decimals(value, digits))
     }
   }
@@ -412,14 +415,12 @@ type SvgViewbox = [x: number, y: number, width: number, height: number]
 function svg_viewbox(svg: SVGElement, padding = 0): SvgViewbox | null {
   const viewbox = svg.getAttribute(`viewBox`)?.trim()
   // Without a viewBox, SVG coordinates use the viewport's resolved length units.
-  const style = viewbox ? null : getComputedStyle(svg)
+  const { width: css_width, height: css_height } = viewbox ? {} : getComputedStyle(svg)
   const parts = viewbox
     ? viewbox.split(/[\s,]+/).map(Number)
-    : style
-      ? // oxlint-disable-next-line unicorn/prefer-number-coercion -- computed CSS dimensions include px
-        [0, 0, Number.parseFloat(style.width), Number.parseFloat(style.height)]
-      : null
-  if (parts?.length !== 4) return null
+    : // oxlint-disable-next-line unicorn/prefer-number-coercion -- computed CSS dimensions include px
+      [0, 0, Number.parseFloat(css_width ?? ``), Number.parseFloat(css_height ?? ``)]
+  if (parts.length !== 4) return null
   const [coord_x, coord_y, width, height] = parts
   if (!(width > 0 && height > 0)) return null
   const padded: SvgViewbox = [
@@ -447,6 +448,8 @@ function serialize_svg(
   const overlays = export_overlays(svg)
   clone.append(...overlays.groups)
   const digits = fraction_digits(svg_viewbox(svg))
+  clone.style.removeProperty(`width`)
+  clone.style.removeProperty(`height`)
   minify_clone(clone, digits)
   // set after rounding, which would skew a scale like 1/3 across the whole overlay
   if (overlays.transform)
@@ -470,9 +473,6 @@ function serialize_svg(
     : null
   if (viewbox) clone.setAttribute(`viewBox`, round_decimals(viewbox.join(` `), digits))
   if (size) set_attrs(clone, { width: size[0], height: size[1] })
-  clone.style.removeProperty(`width`)
-  clone.style.removeProperty(`height`)
-  if (!clone.style.length) clone.removeAttribute(`style`)
   clone.setAttribute(`xmlns`, SVG_NS)
   return { markup: new XMLSerializer().serializeToString(clone), size }
 }
@@ -488,7 +488,8 @@ export async function svg_to_png_blob(
 ): Promise<Blob> {
   if (!Number.isFinite(png_dpi) || png_dpi <= 0)
     throw new Error(`Invalid PNG DPI for export`)
-  const { markup, size } = serialize_svg(svg, dpi_to_scale(png_dpi), true)
+  const scale = dpi_to_scale(png_dpi)
+  const { markup, size } = serialize_svg(svg, scale, true)
   if (!size) throw new Error(`Invalid SVG dimensions for PNG export`)
   const [width, height] = size
   return with_svg_image(markup, width * height, (img) =>
@@ -497,7 +498,7 @@ export async function svg_to_png_blob(
       height,
       1,
       (ctx) => ctx.drawImage(img, 0, 0, width, height),
-      dpi_to_scale(png_dpi) * 72,
+      scale * 72,
     ),
   )
 }
@@ -552,20 +553,26 @@ const set_attrs = <El extends Element>(element: El, attrs: Attrs): El => {
 export const svg_el = (tag: string, attrs: Attrs): SVGElement =>
   set_attrs(document.createElementNS(SVG_NS, tag), attrs)
 
-// Color bars draw `to right` (horizontal) or `to top` (vertical) gradients
-const GRADIENT_VECTORS: Record<string, [number, number, number, number]> = {
-  right: [0, 0, 1, 0],
-  top: [0, 1, 0, 0],
-}
+const SIDE_DEGREES: Record<string, number> = { top: 0, right: 90, bottom: 180, left: 270 }
 
-// A computed `linear-gradient(to <side>, <color> <offset>, ...)` as an SVG gradient
-// vector plus [color, offset] stops, or null for any other background
+// A computed `linear-gradient([to <side> | <angle>deg,] <color> <offset>, ...)` as an SVG
+// gradient vector (in bounding-box units, exact for axis-aligned angles) plus [color, offset]
+// stops, or null for any other background. Browsers compute `to bottom` as no direction.
 function parse_linear_gradient(background_image: string) {
-  const { side = ``, args = `` } =
-    /^linear-gradient\(to (?<side>\w+), (?<args>.*)\)$/s.exec(background_image.trim())
-      ?.groups ?? {}
-  const vector = GRADIENT_VECTORS[side]
-  if (!vector) return null
+  const { side, deg, args } =
+    /^linear-gradient\((?:to (?<side>\w+), |(?<deg>-?[\d.]+)deg, )?(?<args>.*)\)$/s.exec(
+      background_image.trim(),
+    )?.groups ?? {}
+  // a corner (`to top right`) or another angle unit is left unparsed in args
+  if (args === undefined || /^(?:to |-?[\d.]+[a-z]+,)/.test(args)) return null
+  const angle = deg === undefined ? SIDE_DEGREES[side ?? `bottom`] : Number(deg)
+  if (angle === undefined) return null
+  const radians = (angle * Math.PI) / 180
+  // rounded so axis-aligned angles give exact 0/0.5/1 instead of 6e-17 residues
+  const [dx, dy] = [Math.sin(radians), -Math.cos(radians)].map(
+    (component) => Math.round(component * 1e6) / 2e6 || 0,
+  )
+  const vector = [0.5 - dx, 0.5 - dy, 0.5 + dx, 0.5 + dy]
   // split on commas outside parentheses (color functions like rgb(1, 2, 3) nest their own),
   // then each stop at the space before its percent offset. Browsers drop the offsets of
   // evenly spaced stops from computed values, so a stop without one gets its even spacing
@@ -583,8 +590,9 @@ function parse_linear_gradient(background_image: string) {
 // solid and gradient backgrounds become rects, nested SVGs (legend markers) are cloned in
 // place, text runs become <text> at their laid-out position with the computed font.
 export function overlay_to_svg(root: HTMLElement, origin: DOMRect): SVGElement {
-  // clipPath and linearGradient never render themselves, so they can live in the group
-  const group = svg_el(`g`, {})
+  // clipPath and linearGradient never render themselves, so they can live in the group. The
+  // reset paints stop it inheriting the chart root's (e.g. a centered text-anchor)
+  const group = svg_el(`g`, { 'text-anchor': `start`, stroke: `none` })
   const box = (rect: DOMRect) => ({
     x: rect.left - origin.left,
     y: rect.top - origin.top,

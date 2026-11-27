@@ -432,13 +432,13 @@ A collapsible reference of a component's props: name, type, default and the `//`
 <PropsTable name="LazyMount" {loaders} />
 ```
 
-Wire it up with the plugin, which documents every `.svelte` file under `dir` calling `$props(` and resolves the `imports` in `root`'s package.json:
+Wire it up with the plugin, which documents every `.svelte` file under `dir` (default `src/lib`) calling `$props(`, resolving their imports with the nearest tsconfig's `paths`:
 
 ```ts
 // vite.config.ts
 import { prop_docs_plugin } from 'svelte-widgets/prop-docs/vite-plugin'
 
-export default { plugins: [prop_docs_plugin({ dir: `src/lib` })] }
+export default { plugins: [prop_docs_plugin()] }
 ```
 
 ```ts

@@ -69,11 +69,11 @@
 </script>
 
 <div
+  role="region"
+  aria-label={label}
   {...rest}
   class={[`lazy-mount`, rest.class]}
   style:min-height={laid_out ? undefined : height}
-  role="region"
-  aria-label={label}
   {@attach observe}
   {@attach hold_height}
 >

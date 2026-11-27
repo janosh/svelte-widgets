@@ -443,9 +443,7 @@
         :has(
           > input[type='checkbox']:nth-child(2),
           > :nth-child(2) > input[type='checkbox']:only-child
-        ):not(
-          :has(> :nth-child(3):not(.setting-reset-button), > .settings-row-description)
-        )
+        ):not(:has(> :nth-child(n + 3):not(.setting-reset-button)))
       )
     ) {
     grid-column: auto;
