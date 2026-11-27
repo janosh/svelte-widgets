@@ -103,9 +103,27 @@ test.each([
   expect(found).toEqual([bar, spinner])
 })
 
-test(`overlay class and snippet labels with markup`, () => {
+// happy-dom ignores nested CSS, so read the rules: text-align can't center the flex
+// spinner/label rows, so they and the button share --task-status-justify in both modes
+test(`overlay class, snippet labels with markup, message rows justified like the button`, () => {
   const label = raw_snippet(`<span>Could not load κ<sub>SRME</sub></span>`)
   const root = render_task({ state: `error`, label, overlay: true })
   expect(root.classList.contains(`overlay`)).toBe(true)
   expect(doc_query(`[role="alert"] sub`).textContent).toBe(`SRME`)
+  const css = [...document.querySelectorAll(`style`)]
+    .map((style) => style.textContent)
+    .find((text) => text.includes(`.task-status`))
+  if (!css) throw new Error(`TaskStatus styles not injected`)
+  const justify = (target: string) =>
+    [...css.matchAll(/(?<selector>[^{};]+)\{(?<block>[^{}]+)\}/g)]
+      .filter(({ groups }) => groups?.selector.includes(target))
+      .flatMap(
+        ({ groups }) =>
+          /justify-(?:content|self):\s*(?<value>[^;]+)/.exec(groups?.block ?? ``)?.groups
+            ?.value ?? [],
+      )
+  const fallbacks = [`start`, `center`].map(
+    (fallback) => `var(--task-status-justify, ${fallback})`,
+  )
+  expect([justify(`.message`), justify(`button`)]).toEqual([fallbacks, fallbacks])
 })

@@ -73,11 +73,13 @@
 </div>
 
 <style>
+  /* --task-status-justify (start | center | end) places the button (justify-self) and the
+     spinner/label row (justify-content), which text-align can't center */
   .task-status {
     display: grid;
     gap: 0.5em;
     button {
-      justify-self: var(--task-status-button-justify, start);
+      justify-self: var(--task-status-justify, start);
       font: inherit;
     }
     &[data-state='error'] {
@@ -86,6 +88,7 @@
     .message > div {
       display: flex;
       align-items: center;
+      justify-content: var(--task-status-justify, start);
       gap: 0.5em;
       overflow-wrap: anywhere;
     }
@@ -103,8 +106,11 @@
       box-sizing: border-box;
       text-align: center;
       pointer-events: none;
+      .message > div {
+        justify-content: var(--task-status-justify, center);
+      }
       button {
-        justify-self: var(--task-status-button-justify, center);
+        justify-self: var(--task-status-justify, center);
         pointer-events: auto;
       }
     }
