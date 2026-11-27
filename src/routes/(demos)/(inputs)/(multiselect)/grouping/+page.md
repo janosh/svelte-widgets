@@ -274,7 +274,7 @@ Use the `group_header` snippet for complete control over header rendering:
   collapsible_groups
   group_select_all
   placeholder="Select cities..."
-  li_group_header_style="gap: 8px"
+  li_group_header_props={{ style: `gap: 8px` }}
 >
   {#snippet group_header({ group, options, collapsed })}
     <span style="font-size: 1.2em">{emojis[group]}</span>

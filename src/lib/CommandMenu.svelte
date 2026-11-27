@@ -184,9 +184,9 @@
     close_keys.filter((key) => key !== `Escape` || effective_closedby !== `none`),
   )
   const toggle_bindings = $derived<Hotkey[]>([
-    { keys: open_shortcuts, handler: () => (open = true), enabled: !open },
+    { keys: open_shortcuts, handler: () => (open = true), disabled: open },
     // Escape has to work while the search input has focus, hence allow_in_inputs
-    { keys: close_hotkeys, handler: close_menu, enabled: open, allow_in_inputs: true },
+    { keys: close_hotkeys, handler: close_menu, disabled: !open, allow_in_inputs: true },
   ])
   // Backdrop clicks close by default even when Escape doesn't (native closedby `none`)
   const backdrop_closes = $derived((dialog_props?.closedby ?? `any`) === `any`)
@@ -196,7 +196,7 @@
     ...toggle_bindings,
     ...actions.map((action) => ({
       keys: action.shortcut ?? ``,
-      enabled: global_shortcuts && !open && !action.disabled,
+      disabled: !global_shortcuts || open || action.disabled,
       handler: () => execute_action(action),
     })),
   ])

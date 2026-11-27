@@ -103,7 +103,6 @@ describe(`Popover`, () => {
       typeof options === `object` && options !== null && `signal` in options
     expect(added.mock.calls.filter(([, , options]) => has_signal(options))).toEqual([])
     await click_trigger()
-
     escape_native_popover()
     await tick()
     expect(on_close).toHaveBeenLastCalledWith({ via: `escape` })
@@ -141,7 +140,8 @@ describe(`Popover`, () => {
   })
 
   test(`hover honors delays and stays open across the trigger-surface gap`, async () => {
-    mount_popover({ trigger_mode: `hover`, open_delay_ms: 40 })
+    const on_close = vi.fn()
+    mount_popover({ trigger_mode: `hover`, open_delay_ms: 40, on_close })
 
     mouse_enter()
     await advance_time(39)
@@ -162,6 +162,7 @@ describe(`Popover`, () => {
     expect(surface()).toBe(dialog)
     await advance_time(1)
     expect(surface()).toBeNull()
+    expect(on_close.mock.calls).toEqual([[{ via: `trigger` }]])
   })
 
   test.each([`hover`, `focus`] as const)(

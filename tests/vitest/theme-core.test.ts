@@ -106,7 +106,7 @@ describe(`is_dark_mode + watch_dark_mode`, () => {
     const widget = document.createElement(`div`)
     document.body.append(widget)
     const widget_calls: boolean[] = []
-    stoppers.push(watch_dark_mode((dark) => widget_calls.push(dark), widget))
+    stoppers.push(watch_dark_mode(widget, (dark) => widget_calls.push(dark)))
     expect(widget_calls).toEqual([])
     widget.style.colorScheme = `dark`
     document.documentElement.style.colorScheme = `light`
@@ -114,7 +114,7 @@ describe(`is_dark_mode + watch_dark_mode`, () => {
     expect(widget_calls.at(-1)).toBe(true) // re-read from the element, not the (light) root
 
     const calls: boolean[] = []
-    const cleanup = watch_dark_mode((dark) => calls.push(dark))
+    const cleanup = watch_dark_mode(document.documentElement, (dark) => calls.push(dark))
     document.documentElement.style.colorScheme = `dark`
     await settle()
     expect(calls).toEqual([true])

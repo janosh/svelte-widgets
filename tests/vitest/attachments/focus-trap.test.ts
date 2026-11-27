@@ -196,7 +196,7 @@ describe(`focus_trap`, () => {
   it(`does nothing when disabled`, () => {
     const outside = create_element(`button`)
     outside.focus()
-    expect(focus_trap({ enabled: false })(make_surface().surface)).toBeUndefined()
+    expect(focus_trap({ disabled: true })(make_surface().surface)).toBeUndefined()
     expect(document.activeElement).toBe(outside)
     press_tab()
     expect(document.activeElement).toBe(outside)

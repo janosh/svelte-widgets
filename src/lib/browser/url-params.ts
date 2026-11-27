@@ -6,7 +6,7 @@ export type ValidQueryValues<Value extends string> =
 type UrlLocation = Pick<URL, `pathname` | `search` | `hash`>
 // Only reads params, so read-only views like SvelteKit's page.url.searchParams work too.
 export type QueryParams = Pick<URLSearchParams, `get`>
-// Boolean flags omit their default and encode the non-default as 0 or 1.
+// Boolean flags encode as 0 or 1 and are omitted at their default.
 export const bool_from_param = (
   params: QueryParams,
   key: string,
@@ -17,7 +17,7 @@ export const bool_url_entry = (
   key: string,
   value: boolean,
   fallback = false,
-): UrlParamEntry => [key, value === fallback ? `` : value ? `1` : `0`]
+): UrlParamEntry => [key, value ? `1` : `0`, fallback ? `1` : `0`]
 
 const is_valid_query_value = (
   value: string,
@@ -27,7 +27,7 @@ const is_valid_query_value = (
     ? valid_values.has(value)
     : Object.hasOwn(valid_values, value)
 
-export function valid_query_param<
+export function string_from_param<
   Fallback extends string,
   Values extends ValidQueryValues<string>,
 >(
@@ -40,12 +40,12 @@ export function valid_query_param<
   | (Values extends ReadonlySet<infer Value>
       ? Value
       : `${Extract<keyof Values, string | number>}`)
-export function valid_query_param(
+export function string_from_param(
   params: QueryParams,
   key: string,
   fallback: string,
 ): string
-export function valid_query_param(
+export function string_from_param(
   params: QueryParams,
   key: string,
   fallback: string,

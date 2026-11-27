@@ -1,0 +1,10 @@
+/* hides heading_anchor_html links until their heading is hovered or focused; the gap before
+   the icon is --heading-anchor-gap, set inline on each anchor */
+:where(h1, h2, h3, h4, h5, h6) a[data-heading-anchor] {
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+:where(h1, h2, h3, h4, h5, h6):is(:hover, :focus-within) a[data-heading-anchor],
+:where(h1, h2, h3, h4, h5, h6) a[data-heading-anchor]:focus-visible {
+  opacity: 1;
+}

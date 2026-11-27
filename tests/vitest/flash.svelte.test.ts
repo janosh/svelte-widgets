@@ -17,17 +17,17 @@ describe(`create_flash`, () => {
   // the second one early
   test(`reverts once the window elapses, a second show restarting the window`, () => {
     const { flash, teardown } = mount_flash()
-    expect(flash.value).toBe(`idle`)
+    expect(flash.current).toBe(`idle`)
     flash.show(`first`)
-    expect(flash.value).toBe(`first`)
+    expect(flash.current).toBe(`first`)
     vi.advanceTimersByTime(900)
     flash.show(`second`)
     vi.advanceTimersByTime(100) // the first timer would have fired here
-    expect(flash.value).toBe(`second`)
+    expect(flash.current).toBe(`second`)
     vi.advanceTimersByTime(899)
-    expect(flash.value).toBe(`second`)
+    expect(flash.current).toBe(`second`)
     vi.advanceTimersByTime(1)
-    expect(flash.value).toBe(`idle`)
+    expect(flash.current).toBe(`idle`)
     teardown()
   })
 
@@ -38,7 +38,7 @@ describe(`create_flash`, () => {
     flash.show(`copied`)
     expect(vi.getTimerCount()).toBe(1)
     flash.reset()
-    expect([flash.value, vi.getTimerCount()]).toEqual([`idle`, 0])
+    expect([flash.current, vi.getTimerCount()]).toEqual([`idle`, 0])
     teardown()
   })
 
@@ -48,7 +48,7 @@ describe(`create_flash`, () => {
     teardown()
     expect(vi.getTimerCount()).toBe(0)
     vi.advanceTimersByTime(2000) // a surviving timer would revert this to `idle`
-    expect(flash.value).toBe(`copied`)
+    expect(flash.current).toBe(`copied`)
   })
 })
 

@@ -15,6 +15,7 @@
   } from '#lib/icons.ts'
   import { resolve } from '$app/paths'
   import { default_highlighter } from 'svelte-widgets/highlight'
+  import { copy_text } from 'svelte-widgets/browser'
   import {
     CodeBlock,
     EmptyState,
@@ -27,7 +28,6 @@
     Spinner,
     StatusMessage,
     DragOverlay,
-    ClickFeedback,
     FileInput,
     JsonTree,
     NumberRangeInput,
@@ -40,8 +40,6 @@
 
   let message = $state<string | undefined>(`Your changes were saved.`)
   let dragging = $state(false)
-  let clicked = $state(false)
-  let feedback_position = $state({ x: 0, y: 0 })
   let value = $state<number | undefined>(0.5)
   let ratio = $state(0.4)
   let collapsed = $state(false)
@@ -235,16 +233,12 @@
 >
   <DragOverlay visible={dragging} message="Drop files here" />
 </div>
-<button
-  onclick={(event) => {
-    feedback_position = { x: event.clientX, y: event.clientY }
-    clicked = !clicked
-  }}>Toggle click feedback</button
->
-<ClickFeedback visible={clicked} position={feedback_position} />
+<button onclick={(event) => copy_text(`svelte-widgets`, { anchor: event.currentTarget })}>
+  Copy package name
+</button>
 <p>
-  <code>DragOverlay</code> fills a positioned parent; <code>ClickFeedback</code> uses viewport
-  coordinates. The caller owns visibility and timing.
+  <code>DragOverlay</code> fills a positioned parent. <code>copy_text</code> confirms a copy
+  beside its anchor (an element or a viewport point) and announces it to screen readers.
 </p>
 <Heading level={3} id="layout-primitives" icon={ListBulleted}>Layout primitives</Heading>
 <p>

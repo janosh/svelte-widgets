@@ -203,7 +203,10 @@
     /* an active filter is easy to forget about, so it stays fully lit and accented */
     &.active {
       opacity: 1;
-      color: var(--column-filter-active-color, var(--accent-color, #4a9eff));
+      color: var(
+        --column-filter-active-color,
+        var(--accent-color, light-dark(#4a7abf, cornflowerblue))
+      );
     }
   }
   /* touch: the glyph keeps its size inside a 24px target, whatever size the host picks */

@@ -63,7 +63,7 @@ export {
   apply_theme_mode,
   theme,
   theme_init_script,
-  watch_theme,
+  init_theme,
   type ThemeMode,
 } from './theme.svelte.ts'
 export { default as ThemeScript } from './ThemeScript.svelte'
@@ -80,7 +80,6 @@ export { default as TaskStatus } from './TaskStatus.svelte'
 export { default as JsonTree } from './json-tree/JsonTree.svelte'
 export type { JsonTreeProps } from './json-tree/types'
 export { default as TreeView } from './TreeView.svelte'
-export { default as ClickFeedback } from './ClickFeedback.svelte'
 export { default as DragOverlay } from './DragOverlay.svelte'
 export { default as StatusMessage } from './StatusMessage.svelte'
 export { default as Spinner } from './Spinner.svelte'

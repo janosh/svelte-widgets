@@ -298,15 +298,9 @@ overflow and stacking contexts, and the browser owns light dismiss and Escape --
     overflow: auto;
     padding: var(--column-picker-menu-padding, 3pt 5pt);
     background: var(--column-picker-menu-bg, var(--page-bg, Canvas));
-    border: var(
-      --column-picker-menu-border,
-      1px solid color-mix(in srgb, currentColor 10%, transparent)
-    );
+    border: var(--column-picker-menu-border, 1px solid light-dark(lightgray, #555));
     border-radius: var(--column-picker-radius, 4pt);
-    box-shadow: var(
-      --column-picker-menu-shadow,
-      0 4px 12px color-mix(in srgb, currentColor 8%, transparent)
-    );
+    box-shadow: var(--column-picker-menu-shadow, 0 3px 12px rgba(0, 0, 0, 0.3));
     color: inherit; /* not the UA [popover] CanvasText */
     &.grouped {
       display: flex;

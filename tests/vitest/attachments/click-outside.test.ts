@@ -37,7 +37,7 @@ describe(`click_outside`, () => {
   }
 
   it(`disabled suppresses outside presses`, () => {
-    const { callback } = attach_outside({ enabled: false })
+    const { callback } = attach_outside({ disabled: true })
     dispatch_press(create_element())
     expect(callback).not.toHaveBeenCalled()
   })

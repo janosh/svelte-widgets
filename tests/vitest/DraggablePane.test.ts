@@ -127,8 +127,8 @@ describe(`DraggablePane`, () => {
 
   // the close button only exists once the pane has been moved
   test.each([
-    [`toggle`, (toggle: HTMLElement) => toggle.click(), false],
-    [`button`, () => doc_query<HTMLButtonElement>(`.close-button`).click(), true],
+    [`trigger`, (toggle: HTMLElement) => toggle.click(), false],
+    [`close`, () => doc_query<HTMLButtonElement>(`.close-button`).click(), true],
     [`pointer`, () => press_release(document.body), false],
   ] as const)(`closes via %s`, async (via, dismiss, has_been_dragged) => {
     const on_close = vi.fn()

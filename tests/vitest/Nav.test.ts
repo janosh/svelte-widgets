@@ -1,6 +1,6 @@
 import { Nav } from '#lib'
 import type { NavRoute, NavLink } from '#lib/types.ts'
-import { type ComponentProps, tick } from 'svelte'
+import { type ComponentProps, flushSync, tick } from 'svelte'
 import { fromStore, writable } from 'svelte/store'
 import { assert, beforeEach, describe, expect, test, vi } from 'vite-plus/test'
 import {
@@ -132,7 +132,16 @@ describe(`Nav`, () => {
     expect(state()).toEqual([`false`, false])
     expect(link_props.onclick).toHaveBeenCalledOnce()
     // one call per open/close transition and none on mount
-    expect([on_open.mock.calls.length, on_close.mock.calls.length]).toEqual([2, 2])
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([
+      [[{ via: `trigger` }], [{ via: `trigger` }]],
+      [[{ via: `escape` }], [{ via: `select` }]],
+    ])
+  })
+  test(`mounting open reports nothing`, () => {
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    mount_nav({ routes: default_routes, open: true, on_open, on_close })
+    flushSync()
+    expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
   })
   test(`burger bars take the shared --text-color`, () => {
     const host = document.createElement(`div`)

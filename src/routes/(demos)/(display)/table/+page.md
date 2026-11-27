@@ -125,7 +125,7 @@ Set `label_angle` (degrees, up to 90) on a column to tilt its header label up fr
 
 ### Large tables
 
-Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer rows standing in for the rest, so mount time stays flat as rows grow. Give it a height limit (`scroll_style` or a sized parent) to scroll inside the table under a sticky header; without one, the rendered rows follow the page scroll. Rows outside the window aren't in the DOM, so find-in-page, printing, DOM queries and server-rendered HTML see only those, column widths can shift as wider or narrower rows scroll in, and `row_animation_ms` is off. Sorting, search, filters, select-all, copy and export still cover every row. Pass `virtual` (`true` or `{ overscan, min_window }`) to virtualize any table, or `virtual={false}` to always render every row. Pagination turns it off. `striped` zebra-stripes rows by index (color: `--table-stripe-bg`), so spacer rows can't flip the stripes the way a `tr:nth-child(odd)` rule does, and pinned columns get the stripe too.
+Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer rows standing in for the rest, so mount time stays flat as rows grow. Give it a height limit (a `max-height` in `scroll_props.style`, or a sized parent) to scroll inside the table under a sticky header; without one, the rendered rows follow the page scroll. Rows outside the window aren't in the DOM, so find-in-page, printing, DOM queries and server-rendered HTML see only those, column widths can shift as wider or narrower rows scroll in, and `row_animation_ms` is off. Sorting, search, filters, select-all, copy and export still cover every row. Pass `virtual` (`true` or `{ overscan, min_window }`) to virtualize any table, or `virtual={false}` to always render every row. Pagination turns it off. `striped` zebra-stripes rows by index (color: `--table-stripe-bg`), so spacer rows can't flip the stripes the way a `tr:nth-child(odd)` rule does, and pinned columns get the stripe too.
 
 ```svelte example id="data-table-large"
 <script lang="ts">
@@ -138,7 +138,7 @@ Past 500 rows, `DataTable` renders only the rows near the viewport, with spacer 
   }))
 </script>
 
-<DataTable {data} scroll_style="max-height: 400px" striped />
+<DataTable {data} scroll_props={{ style: `max-height: 400px` }} striped />
 ```
 
 ## Table building blocks
@@ -377,7 +377,11 @@ Click a header to sort, open a funnel to filter that column, toggle columns from
       cursor: pointer;
     }
     td.selected {
-      background: color-mix(in srgb, var(--accent-color, #4a9eff) 25%, transparent);
+      background: color-mix(
+        in srgb,
+        var(--accent-color, light-dark(#4a7abf, cornflowerblue)) 25%,
+        transparent
+      );
     }
   }
 </style>

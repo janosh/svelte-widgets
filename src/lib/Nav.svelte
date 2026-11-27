@@ -1,6 +1,6 @@
 <script lang="ts">
   import { ChevronDown } from './icons'
-  import { tick, type Snippet } from 'svelte'
+  import { tick, untrack, type Snippet } from 'svelte'
   import type {
     HTMLAnchorAttributes,
     HTMLAttributes,
@@ -16,7 +16,7 @@
   import Icon from './Icon.svelte'
   import { create_key_selector } from './internal/key-selector.svelte.ts'
   import { merge_defaults, NAV_LABELS, type NavLabels } from './labels'
-  import type { NavGroup, NavLink, NavRoute } from './types'
+  import type { NavCloseVia, NavGroup, NavLink, NavOpenVia, NavRoute } from './types'
   import { is_composing } from './attachments/shared'
   import { chain_handlers } from './utils'
   import { step_focus } from './shortcuts'
@@ -59,8 +59,8 @@
       event: MouseEvent
       route: Route
     }) => false | undefined
-    on_open?: () => void
-    on_close?: () => void
+    on_open?: (detail: { via: NavOpenVia }) => void
+    on_close?: (detail: { via: NavCloseVia }) => void
   } & Omit<HTMLAttributes<HTMLElementTagNameMap[`nav`]>, `children`> = $props()
 
   const msg = $derived(merge_defaults(NAV_LABELS, labels))
@@ -94,14 +94,19 @@
   const is_mobile = $derived(viewport_width <= breakpoint)
   const unique_id = $props.id()
   const panel_id = `nav-menu-${unique_id}`
-  // Plain bookkeeping avoids retriggering the observer when it records the new state.
-  let was_open = false
+  // Plain bookkeeping avoids retriggering the observer when it records the new state. Seeded
+  // with the initial `open` so mounting open reports nothing, like Toc.
+  let was_open = untrack(() => open)
+  // what the next open change came from; a change with none set came through the bound prop
+  let pending_via: NavCloseVia | null = null
   $effect(() => {
+    const via = pending_via ?? `programmatic`
+    pending_via = null
     if (open !== was_open) {
-      if (open) on_open?.()
+      if (open) on_open?.({ via: via === `trigger` ? via : `programmatic` })
       else {
         open_dropdown = null
-        on_close?.()
+        on_close?.({ via })
       }
     }
     was_open = open
@@ -110,7 +115,8 @@
     if (open_dropdown && !checked_routes.includes(open_dropdown)) open_dropdown = null
   })
 
-  function close_menus() {
+  function close_menus(via: NavCloseVia) {
+    if (open) pending_via = via
     open = false
     open_dropdown = null
   }
@@ -150,7 +156,7 @@
     }
   }
   function onkeydown(event: KeyboardEvent) {
-    if (event.key === `Escape`) close_menus()
+    if (event.key === `Escape`) close_menus(`escape`)
   }
   function handle_toggle_keydown(event: KeyboardEvent, idx: number) {
     const { key } = event
@@ -167,7 +173,7 @@
     if (open_dropdown !== checked_routes[idx]) return
     if (event.key === `Escape`) {
       event.preventDefault()
-      close_menus()
+      close_menus(`escape`)
       dropdown_toggle(idx)?.focus()
     } else if (
       (event.key === `Tab` && !is_composing(event)) ||
@@ -235,7 +241,7 @@
       event.preventDefault()
       return
     }
-    close_menus()
+    close_menus(`select`)
   }
 </script>
 
@@ -283,11 +289,11 @@
   onclick={chain_handlers((event: MouseEvent) => {
     const target = event.target
     if (target instanceof Element && target.closest(`a[href]`) && !event.defaultPrevented)
-      close_menus()
+      close_menus(`select`)
   }, rest.onclick)}
   {@attach click_outside({
-    enabled: open || open_dropdown !== null,
-    callback: close_menus,
+    disabled: !open && open_dropdown === null,
+    callback: (_node, _config, { via }) => close_menus(via),
   })}
 >
   <button
@@ -297,7 +303,10 @@
     aria-expanded={open}
     aria-controls={panel_id}
     class={[`burger`, burger_props?.class]}
-    onclick={chain_handlers(() => (open = !open), burger_props?.onclick)}
+    onclick={chain_handlers(() => {
+      pending_via = `trigger`
+      open = !open
+    }, burger_props?.onclick)}
   >
     <span aria-hidden="true"></span>
     <span aria-hidden="true"></span>
@@ -423,7 +432,7 @@
   nav {
     position: relative;
     margin: -0.75em auto 1.25em;
-    --nav-border-radius: 3pt;
+    --nav-radius: 3pt;
     --nav-surface-bg: light-dark(#fafafa, #222226);
     --nav-surface-border: light-dark(rgba(128, 128, 128, 0.25), rgba(200, 200, 200, 0.2));
     /* light-dark() takes colors only: one shadow layer per theme, transparent in the other */
@@ -452,7 +461,7 @@
   .dropdown > div:first-child {
     display: flex;
     align-items: center;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
     background-color: var(--nav-link-bg);
     transition: background-color 0.2s;
   }
@@ -497,8 +506,8 @@
   }
   .dropdown > div:first-child > :is(a, span) {
     padding-inline-end: 2pt;
-    border-start-start-radius: var(--nav-border-radius);
-    border-end-start-radius: var(--nav-border-radius);
+    border-start-start-radius: var(--nav-radius);
+    border-end-start-radius: var(--nav-radius);
   }
   .dropdown > div:first-child > button {
     padding-block: 1pt;
@@ -510,8 +519,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-start-end-radius: var(--nav-border-radius);
-    border-end-end-radius: var(--nav-border-radius);
+    border-start-end-radius: var(--nav-radius);
+    border-end-end-radius: var(--nav-radius);
     outline: none;
     opacity: 0.6;
     transition:
@@ -543,7 +552,7 @@
     width: var(--nav-dropdown-width, max-content);
     background-color: var(--nav-dropdown-bg, var(--nav-surface-bg));
     border: 1px solid var(--nav-dropdown-border-color, var(--nav-surface-border));
-    border-radius: var(--nav-border-radius, 6pt);
+    border-radius: var(--nav-radius, 6pt);
     box-shadow: var(--nav-dropdown-shadow, var(--nav-surface-shadow));
     padding: var(--nav-dropdown-padding, 0);
     display: none;
@@ -619,7 +628,7 @@
        leaves the bars on whatever text passes beneath */
     background: var(--nav-burger-bg, var(--nav-surface-bg));
     border: 1px solid var(--nav-burger-border-color, var(--nav-surface-border));
-    border-radius: var(--nav-border-radius, 6pt);
+    border-radius: var(--nav-radius, 6pt);
     box-shadow: var(--nav-burger-shadow, var(--nav-surface-shadow));
     z-index: var(--nav-toggle-btn-z-index, 10);
   }
@@ -700,7 +709,7 @@
      --nav-item-padding stacked on the row's and indented every expandable entry */
   nav.mobile .dropdown > div:first-child > :is(a, span) {
     flex: 1;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
     margin-inline-start: -4pt;
     padding-inline-start: 4pt;
     padding-block: 0;
@@ -720,7 +729,7 @@
     align-self: stretch;
     margin: -1pt -4pt -1pt 0;
     padding: 1pt 4pt 1pt 14pt;
-    border-radius: var(--nav-border-radius);
+    border-radius: var(--nav-radius);
   }
   /* `display: none` can't transition, so collapse via a 0fr grid row + fade. `visibility`
      keeps the still-mounted links out of the tab order. */
@@ -781,8 +790,8 @@
     overflow-wrap: anywhere;
     padding-block: 1pt;
     padding-inline: 4pt 8pt;
-    border-start-end-radius: var(--nav-border-radius);
-    border-end-end-radius: var(--nav-border-radius);
+    border-start-end-radius: var(--nav-radius);
+    border-end-end-radius: var(--nav-radius);
     /* matches the top-level rows; an inherited 1.6 made child rows taller than their parent */
     line-height: 1.3;
     /* pull the link's border onto the wrapper's guide line so the active row recolours a

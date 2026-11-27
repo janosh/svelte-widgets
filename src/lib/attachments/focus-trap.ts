@@ -7,7 +7,7 @@ import {
 } from './shared'
 
 export interface FocusTrapOptions {
-  enabled?: boolean
+  disabled?: boolean
   // element, selector resolved within the root, or `false` to leave focus put; defaults to
   // the first tabbable descendant
   initial?: Element | string | false
@@ -113,7 +113,7 @@ export const focus_trap =
   (options: FocusTrapOptions = {}) =>
   (node: Element): (() => void) | undefined => {
     const {
-      enabled = true,
+      disabled = false,
       initial,
       restore,
       include = [],
@@ -121,7 +121,7 @@ export const focus_trap =
       on_escape,
       recapture = false,
     } = options
-    if (!enabled || !(node instanceof HTMLElement)) return undefined
+    if (disabled || !(node instanceof HTMLElement)) return undefined
 
     const extra_containers = include.filter((el) => el instanceof Element)
     const resolve_root = (): Element =>

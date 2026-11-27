@@ -147,7 +147,7 @@
     transition-property: max-height, opacity, padding, margin;
     transition-duration: var(--code-example-pre-transition-duration, 0.3s);
     transition-timing-function: ease;
-    border-radius: var(--code-example-pre-border-radius, 4pt);
+    border-radius: var(--code-example-pre-radius, 4pt);
     background-color: var(--code-example-pre-bg, var(--pre-bg));
   }
   pre.open {

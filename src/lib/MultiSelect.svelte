@@ -34,7 +34,12 @@
   import LiveMessage from './LiveMessage.svelte'
   import { ChevronDown, ChevronExpand, ChevronRight, Cross, Disabled } from './icons'
   import { merge_defaults, MULTI_SELECT_LABELS } from './labels'
-  import type { MultiSelectCloseVia, MultiSelectProps, SelectAllScope } from './types'
+  import type {
+    MultiSelectCloseVia,
+    MultiSelectOpenVia,
+    MultiSelectProps,
+    SelectAllScope,
+  } from './types'
   import { run_hotkeys } from './shortcuts'
   import {
     chain_handlers,
@@ -70,19 +75,15 @@
     highlight_matches = true,
     id = null,
     input = $bindable(null),
-    input_class = ``,
     input_props = {},
-    input_style = null,
     inputmode = null,
     invalid = $bindable(false),
     labels,
-    li_active_option_class = ``,
-    li_active_user_msg_class = ``,
-    li_option_class = ``,
-    li_option_style = null,
-    li_selected_class = ``,
-    li_selected_style = null,
-    li_user_msg_class = ``,
+    li_option_props = {},
+    li_active_option_class,
+    li_selected_props = {},
+    li_user_msg_props = {},
+    li_active_user_msg_class,
     loading = false,
     matching_options = $bindable([]),
     max_options,
@@ -90,7 +91,7 @@
     mode = `multiple`,
     max_select: selection_limit = null,
     max_select_msg = (current, max) => (mode === `multiple` ? `${current}/${max}` : ``),
-    max_select_msg_class = ``,
+    max_select_msg_props = {},
     max_visible_chips = null,
     name = null,
     no_matching_options_msg = `No matching options`,
@@ -98,7 +99,6 @@
     dismiss_on = `press`,
     options = $bindable([]),
     outer_div = $bindable(null),
-    outer_div_class = ``,
     pattern = null,
     placeholder = null,
     remove_all_title = `Remove all`,
@@ -113,10 +113,8 @@
     selected_options_draggable = !sort_selected,
     selected_display = `chips`,
     style = null,
-    ul_options_class = ``,
-    ul_selected_class = ``,
-    ul_selected_style = null,
-    ul_options_style = null,
+    ul_options_props = {},
+    ul_selected_props = {},
     expand_icon,
     expand_icon_position = `left`,
     selected_item,
@@ -150,7 +148,7 @@
     select_all_option = false,
     select_all_scope = `visible`,
     select_all_disabled_title,
-    li_select_all_class = ``,
+    li_select_all_props = {},
     load_options,
     load_error = $bindable(null),
     selected_flip_params = { duration: 100 },
@@ -164,8 +162,7 @@
     search_matches_groups = false,
     keyboard_expands_collapsed_groups = false,
     sticky_group_headers = false,
-    li_group_header_class = ``,
-    li_group_header_style = null,
+    li_group_header_props = {},
     group_header,
     on_group_toggle,
     on_collapse_all,
@@ -664,11 +661,11 @@
     if (max_select !== null) on_max_reached?.({ selected, max_select, attempted_option })
   }
 
-  // merges a per-option style with the matching li*Style prop
+  // merges a per-option style with the matching li_*_props.style
   const merge_styles = (
     opt: Option,
     style_key: `selected` | `option`,
-    extra_style: string | null,
+    extra_style: string | null | undefined,
   ) => [get_style(opt, style_key), extra_style].filter(Boolean).join(` `) || null
 
   function get_option_view(option_item: Option) {
@@ -686,7 +683,7 @@
       // `active` and `selected` deliberately stay out of this object: they track
       // `active_index` and the selection, and bundling them re-rendered every row on each
       // arrow key or toggle
-      style: merge_styles(option_item, `option`, li_option_style),
+      style: merge_styles(option_item, `option`, li_option_props.style),
     }
   }
 
@@ -849,7 +846,21 @@
     on_change?.({ option: option_removed, type: `remove` })
   }
 
-  function open_dropdown(event: Event, focus_input = true, stop_propagation = true) {
+  const open_via = (event: Event): MultiSelectOpenVia =>
+    event instanceof FocusEvent
+      ? `focus`
+      : event instanceof KeyboardEvent
+        ? `keyboard`
+        : event.type === `input`
+          ? `input`
+          : `pointer`
+
+  function open_dropdown(
+    event: Event,
+    focus_input = true,
+    stop_propagation = true,
+    via = open_via(event),
+  ) {
     if (stop_propagation) event.stopPropagation()
 
     if (disabled) return
@@ -865,7 +876,7 @@
       // skipped for FocusEvents, which already focused the input
       input?.focus()
     }
-    on_open?.()
+    on_open?.({ via: clicked_expand_icon ? `trigger` : via })
   }
 
   let suppress_next_focus_open = false
@@ -1083,26 +1094,26 @@
         [
           {
             keys: effective_shortcuts.select_all ?? [],
-            enabled:
-              Boolean(select_all_option) &&
-              navigable_options.length > 0 &&
-              multi_select &&
-              !matching_scope_unavailable,
+            disabled:
+              !select_all_option ||
+              navigable_options.length === 0 ||
+              !multi_select ||
+              matching_scope_unavailable,
             handler: select_all,
           },
           {
             keys: effective_shortcuts.clear_all ?? [],
-            enabled: chip_navigation_enabled,
+            disabled: !chip_navigation_enabled,
             handler: remove_all,
           },
           {
             keys: effective_shortcuts.open ?? [],
-            enabled: !open,
-            handler: open_dropdown,
+            disabled: open,
+            handler: () => open_dropdown(event, true, true, `shortcut`),
           },
           {
             keys: effective_shortcuts.close ?? [],
-            enabled: open,
+            disabled: !open,
             handler: () => close_and_clear(`shortcut`),
           },
         ].map(({ handler, ...binding }) => ({
@@ -1621,10 +1632,10 @@
   class:open
   class:invalid
   class:input-display={input_display}
-  class={[`multiselect`, outer_div_class, rest.class]}
+  class={[`multiselect`, rest.class]}
   onmouseup={open_dropdown}
   {@attach click_outside({
-    enabled: open,
+    disabled: !open,
     // a portalled dropdown is no longer a descendant of this div
     inside: [options_list_el],
     dismiss_on,
@@ -1652,16 +1663,17 @@
     {@render render_expand_icon()}
   {/if}
   <ul
-    class={[`selected`, ul_selected_class]}
+    {...ul_selected_props}
+    class={[`selected`, ul_selected_props.class]}
     aria-label={msg.selected_options}
-    style={ul_selected_style}
   >
     {@render before_input?.(input_snippet_props)}
     {#if !input_display}
       {#each visible_chips as option, idx (chip_render_keys[idx])}
         <!-- svelte-ignore a11y_no_noninteractive_element_interactions -- selected chips stay plain list items; nested buttons handle removal -->
         <li
-          class={li_selected_class}
+          {...li_selected_props}
+          class={li_selected_props.class}
           class:highlighted={highlighted_idx === idx}
           animate:flip={selected_flip_params}
           draggable={selected_options_draggable && !disabled && selected.length > 1}
@@ -1681,7 +1693,7 @@
             drag_start_idx = null
           }}
           class:active={drag_idx === idx}
-          style={merge_styles(option, `selected`, li_selected_style)}
+          style={merge_styles(option, `selected`, li_selected_props.style)}
           onmouseup={can_remove && !disabled
             ? (event) => event.stopPropagation()
             : undefined}
@@ -1723,8 +1735,7 @@
     <input
       {...rest}
       {...input_props}
-      class={input_class}
-      style={input_style}
+      class={input_props.class}
       bind:this={input}
       {@attach patch_focus}
       bind:value={search_text}
@@ -1784,7 +1795,11 @@
     {/if}
   {:else if !input_display && selected.length > 0}
     {#if max_select && (max_select > 1 || max_select_msg)}
-      <span {@attach max_wiggle.attach} class={[`max-select-msg`, max_select_msg_class]}>
+      <span
+        {...max_select_msg_props}
+        {@attach max_wiggle.attach}
+        class={[`max-select-msg`, max_select_msg_props.class]}
+      >
         {max_select_msg?.(selected.length, max_select)}
       </span>
     {/if}
@@ -1795,10 +1810,11 @@
 
   {#if listbox_rendered}
     <ul
+      {...ul_options_props}
       {@attach portal(portal_params.active ? document.body : null)}
       {@attach float({
         anchor: outer_div,
-        enabled: (portal_params.active ?? false) && open,
+        disabled: !portal_params.active || !open,
         placement: portal_params.placement ?? `auto`,
         align: `start`,
         match_width: true,
@@ -1820,14 +1836,13 @@
             : NodeFilter.FILTER_ACCEPT,
       })}
       id={listbox_id}
-      class={[`options`, ul_options_class, { hidden: !open }]}
+      class={[`options`, ul_options_props.class, { hidden: !open }]}
       hidden={portal_params.active && (!open || !outer_div)}
       role="listbox"
       aria-multiselectable={multi_select}
       aria-disabled={disabled ? `true` : null}
       bind:this={options_list_el}
       bind:clientHeight={options_client_height}
-      style={ul_options_style}
       onscroll={(event) => {
         options_scroll_top = event.currentTarget.scrollTop
         loader.on_scroll(event)
@@ -1844,7 +1859,8 @@
           all_selectable_selected,
         )}
         <li
-          class={[`select-all`, li_select_all_class, { disabled: all_selected }]}
+          {...li_select_all_props}
+          class={[`select-all`, li_select_all_props.class, { disabled: all_selected }]}
           onclick={all_selected ? undefined : select_all}
           onkeydown={all_selected ? undefined : if_enter_or_space(select_all)}
           role="option"
@@ -1863,15 +1879,16 @@
         {@const is_selected = is_row_selected(option_item)}
         {@const is_active = is_active_idx(flat_idx)}
         <li
+          {...li_option_props}
           id="{base_id}-opt-{flat_idx}"
           onclick={(event) => handle_option_interact(option_item, event, flat_idx)}
           title={view.disabled
             ? view.disabled_title
-            : (is_selected && view.selected_title) || view.title}
+            : (is_selected && view.selected_title) || view.title || li_option_props.title}
           class:selected={is_selected}
           class:active={is_active}
           class:disabled={view.disabled}
-          class={[li_option_class, is_active && li_active_option_class]}
+          class={[li_option_props.class, is_active && li_active_option_class]}
           onmousemove={() => {
             if (view.disabled) return
             // release the user-message row so it cannot pin active_index
@@ -1936,11 +1953,11 @@
             is dropped if the element is focusable or has a global ARIA attribute, so this
             <li> must have neither — hence the nested <button> and no `aria-label`. -->
         <li
-          class={[`group-header`, li_group_header_class]}
+          {...li_group_header_props}
+          class={[`group-header`, li_group_header_props.class]}
           class:collapsible={collapsible_groups}
           class:sticky={sticky_group_headers}
           role="presentation"
-          style={li_group_header_style}
           style:height={virtual_row_height}
           style:box-sizing={virtual_row_height && `border-box`}
           onclick={handle_toggle}
@@ -2003,6 +2020,7 @@
         {@const handle_create = (event: Event) =>
           can_add_user_option && add_typed_text(event)}
         <li
+          {...li_user_msg_props}
           id={user_message_id}
           onclick={handle_create}
           onkeydown={can_add_user_option ? if_enter_or_space(handle_create) : undefined}
@@ -2015,7 +2033,7 @@
           aria-selected="false"
           class={[
             `user-msg`,
-            li_user_msg_class,
+            li_user_msg_props.class,
             is_user_message_active && li_active_user_msg_class,
           ]}
           style:cursor={{
@@ -2072,7 +2090,7 @@
     white-space: nowrap;
     border: 0;
   }
-  /* :where() so user class props (outer_div_class, ul_selected_class, li_selected_class) win
+  /* :where() so user classes (class, ul_selected_props.class, li_selected_props.class) win
      https://github.com/janosh/svelte-widgets/issues/380 */
   :where(div.multiselect) {
     position: relative;
@@ -2081,7 +2099,7 @@
     cursor: text;
     box-sizing: border-box;
     border: var(--sms-border, 1px solid light-dark(lightgray, #555));
-    border-radius: var(--sms-border-radius, 3pt);
+    border-radius: var(--sms-radius, 3pt);
     background: var(--sms-bg, light-dark(white, #222226));
     width: var(--sms-width);
     max-width: var(--sms-max-width);
@@ -2264,7 +2282,7 @@
     );
     border: var(--sms-options-border, 1px solid light-dark(lightgray, #555));
     border-width: var(--sms-options-border-width, 1px);
-    border-radius: var(--sms-options-border-radius, 1ex);
+    border-radius: var(--sms-options-radius, 1ex);
     padding: var(--sms-options-padding, 0);
     margin: var(--sms-options-margin, 6pt 0 0 0);
   }

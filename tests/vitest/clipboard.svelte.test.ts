@@ -1,4 +1,8 @@
-import { create_clipboard_feedback } from '#lib/browser/index.ts'
+import {
+  copy_text,
+  create_clipboard_feedback,
+  type CopyAnchor,
+} from '#lib/browser/index.ts'
 import { flushSync } from 'svelte'
 import { afterAll, beforeEach, expect, test, vi } from 'vite-plus/test'
 
@@ -98,4 +102,147 @@ test(`clear does not subscribe its calling effect to timer state`, async () => {
 
   cleanup()
   clear()
+})
+
+const toast = () => document.querySelector<HTMLElement>(`.copy-toast`)
+const live = () => document.querySelector<HTMLElement>(`.copy-toast-live`)
+const element_at = (rect: DOMRect, parent: Element = document.body) => {
+  const element = document.createElement(`button`)
+  parent.append(element)
+  element.getBoundingClientRect = () => rect
+  return element
+}
+// centered above a point 10px over the viewport's bottom edge (toast stubbed 0x0, offset 6)
+const bottom_center = [`${innerWidth / 2}px`, `${innerHeight - 16}px`]
+
+// Right of the anchor and vertically centered, or left of it where the viewport's right edge
+// leaves no room; a detached or page-level anchor falls back to the viewport's bottom center
+test.each<[string, () => CopyAnchor | undefined, [number, number], string[]]>([
+  [`element`, () => element_at(new DOMRect(30, 50, 70, 20)), [0, 0], [`106px`, `60px`]],
+  [
+    `element at the right edge`,
+    () => element_at(new DOMRect(950, 50, 60, 20)),
+    [80, 20],
+    [`864px`, `50px`],
+  ],
+  [`viewport point`, () => ({ x: 200, y: 100 }), [0, 0], [`206px`, `100px`]],
+  [
+    `focused element (default)`,
+    () => {
+      element_at(new DOMRect(30, 50, 70, 20)).focus()
+      return undefined
+    },
+    [0, 0],
+    [`106px`, `60px`],
+  ],
+  [`detached element`, () => document.createElement(`button`), [0, 0], bottom_center],
+  [`body`, () => document.body, [0, 0], bottom_center],
+])(
+  `copy_text confirms beside a %s anchor, then fades out`,
+  async (_kind, anchor_of, [width, height], expected) => {
+    const anchor = anchor_of()
+    vi.spyOn(HTMLDivElement.prototype, `getBoundingClientRect`).mockReturnValue(
+      new DOMRect(0, 0, width, height),
+    )
+    expect(await copy_text(`npm test`, { anchor, duration_ms: 500 })).toBe(true)
+    expect(write_text).toHaveBeenCalledWith(`npm test`)
+    const el = toast()
+    const shown = () => [el?.textContent, el?.style.opacity, el?.matches(`:popover-open`)]
+    expect([el?.style.left, el?.style.top, el?.hasAttribute(`data-error`)]).toEqual([
+      ...expected,
+      false,
+    ])
+    expect(shown()).toEqual([`Copied!`, `1`, true])
+    await vi.advanceTimersByTimeAsync(500)
+    // stays rendered, so the next message is announced: it only empties and turns transparent
+    expect(shown()).toEqual([``, `0`, true])
+    vi.restoreAllMocks()
+  },
+)
+
+// A popover re-shown per copy re-enters the accessibility tree, so the toast is aria-hidden and
+// a separate status region announces; a just-inserted one is often skipped, so its first
+// message waits a beat. A copy mid-fade cancels the fade, else its fill holds the old opacity.
+test(`copy_text announces through a live region and restarts the fade`, async () => {
+  live()?.remove()
+  await copy_text(`a`, { labels: { success: `first` }, duration_ms: 1000 })
+  expect([toast()?.getAttribute(`aria-hidden`), live()?.getAttribute(`role`)]).toEqual([
+    `true`,
+    `status`,
+  ])
+  expect(live()?.textContent).toBe(``)
+  await vi.advanceTimersByTimeAsync(100)
+  expect(live()?.textContent).toBe(`first`)
+  const cancel = vi.fn()
+  Object.assign(toast() ?? {}, { getAnimations: () => [{ cancel }] })
+  await copy_text(`b`, { labels: { success: `second` }, duration_ms: 1000 })
+  expect([live()?.textContent, cancel.mock.calls.length]).toEqual([`second`, 1]) // immediate
+  await vi.advanceTimersByTimeAsync(1000)
+  expect(live()?.textContent).toBe(``)
+})
+
+test(`copy_text resolves false and says so when the write fails`, async () => {
+  write_text.mockRejectedValue(new Error(`blocked`))
+  expect(await copy_text(`x`, { labels: { error: `No clipboard` } })).toBe(false)
+  expect([toast()?.textContent, toast()?.hasAttribute(`data-error`)]).toEqual([
+    `No clipboard`,
+    true,
+  ])
+})
+
+// The live region stays empty until the write settles (an announced "Copied!" must be true),
+// and a slow earlier write must not overwrite a newer one
+test(`copy_text confirms only after the write, and the newest copy wins`, async () => {
+  let resolve_first = () => {}
+  write_text.mockImplementationOnce(
+    () =>
+      new Promise<void>((done) => {
+        resolve_first = done
+      }),
+  )
+  const first = copy_text(`first`, { labels: { success: `first` } })
+  expect([toast()?.textContent, live()?.textContent]).toEqual([``, ``])
+  await copy_text(`second`, { labels: { success: `second` } })
+  resolve_first()
+  expect(await first).toBe(true)
+  expect(toast()?.textContent).toBe(`second`)
+})
+
+// a modal dialog makes the page outside it inert, so the toast moves in, also for a point
+// anchor (a canvas inside the dialog); a non-modal dialog leaves it on the page
+test(`copy_text hosts the toast in the modal dialog holding the anchor or focus`, async () => {
+  const dialog = document.createElement(`dialog`)
+  document.body.append(dialog)
+  let modal = true
+  // happy-dom has no :modal
+  const closest = Element.prototype.closest
+  vi.spyOn(Element.prototype, `closest`).mockImplementation(function (
+    this: Element,
+    selector,
+  ) {
+    if (selector !== `dialog:modal`) return closest.call(this, selector)
+    return modal && dialog.contains(this) ? dialog : null
+  })
+  const in_dialog = () => element_at(new DOMRect(0, 0, 10, 10), dialog)
+  await copy_text(`x`, { anchor: in_dialog() })
+  expect(toast()?.parentElement).toBe(dialog)
+  await copy_text(`y`, { anchor: element_at(new DOMRect(0, 0, 10, 10)) })
+  expect(toast()?.parentElement).toBe(document.body)
+  in_dialog().focus()
+  await copy_text(`z`, { anchor: { x: 5, y: 5 } })
+  expect(toast()?.parentElement).toBe(dialog)
+  // closest() stops at a shadow root: the lookup continues from its host
+  const shadow_host = element_at(new DOMRect(0, 0, 10, 10), dialog)
+  const in_shadow = document.createElement(`button`)
+  shadow_host.attachShadow({ mode: `open` }).append(in_shadow)
+  await copy_text(`s`, { anchor: in_shadow })
+  expect([toast()?.parentElement, live()?.parentElement]).toEqual([dialog, dialog])
+  modal = false
+  await copy_text(`w`, { anchor: in_dialog() })
+  expect([toast()?.parentElement, live()?.parentElement]).toEqual([
+    document.body,
+    document.body,
+  ])
+  vi.restoreAllMocks()
+  dialog.remove()
 })

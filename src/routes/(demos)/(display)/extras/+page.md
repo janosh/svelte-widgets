@@ -35,7 +35,7 @@ A checkbox styled as a switch. `checked` is bindable and the children snippet re
   <Toggle
     bind:checked={telemetry}
     style="gap: 8pt"
-    --toggle-background="forestgreen"
+    --toggle-bg="forestgreen"
     --toggle-knob-width="4em"
   >
     Telemetry (custom CSS vars)
@@ -45,7 +45,7 @@ A checkbox styled as a switch. `checked` is bindable and the children snippet re
 
 ### `ThemeToggle`
 
-Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can call `watch_theme()` to initialize the theme and follow both system preference and cross-tab changes, then call its returned cleanup function on teardown; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
+Cycles light → system → dark → light, writes the choice to `localStorage.theme`, and sets `colorScheme` plus `data-theme` on `<html>`. The button stays hidden until mounted so SSR cannot flash a stale icon, and mounted toggles synchronize changes across tabs. Headless consumers can call `init_theme()` to initialize the theme and follow both system preference and cross-tab changes, then call its returned cleanup function on teardown; flash-free first paint still requires equivalent [synchronous logic in the HTML shell](https://github.com/janosh/svelte-widgets/blob/main/src/app.html#L16) because hydration is too late.
 
 ```svelte example id="theme-toggle-demo"
 <script lang="ts">
@@ -55,11 +55,11 @@ Cycles light → system → dark → light, writes the choice to `localStorage.t
 <ThemeToggle
   style="font-size: 2em"
   tooltip={{ placement: `right` }}
-  icon_props={{ style: `color: var(--accent)` }}
+  icon_props={{ style: `color: var(--accent-color)` }}
 />
 ```
 
-`svelte-widgets/theme` also reads the scheme an element renders in (`is_dark_mode`, `nearest_declared` across shadow roots), calls back when that may change (`watch_theme_changes`, `watch_dark_mode`: class, `data-theme` or inline `color-scheme` on any ancestor, or the OS preference), and resolves color tokens such as `light-dark()` against an element for canvas or WebGL (`resolve_color_token`). Bundles built without the Svelte compiler (workers, Node) import all but the reactive `theme`, `apply_theme_mode` and `watch_theme` from `svelte-widgets/theme-core`:
+`svelte-widgets/theme` also reads the scheme an element renders in (`is_dark_mode`, `nearest_declared` across shadow roots), calls back when that may change (`watch_theme_changes`, `watch_dark_mode`: class, `data-theme` or inline `color-scheme` on any ancestor, or the OS preference), and resolves color tokens such as `light-dark()` against an element for canvas or WebGL (`resolve_color_token`). Bundles built without the Svelte compiler (workers, Node) import all but the reactive `theme`, `apply_theme_mode` and `init_theme` from `svelte-widgets/theme-core`:
 
 ```svelte example id="theme-core-demo"
 <script lang="ts">
@@ -256,7 +256,7 @@ An inline pill for categories, statuses, filters and counts. It is a static `<sp
 </ul>
 ```
 
-Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-border-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
+Style it with `--tag-color` (the fill/tint/border), `--tag-bg`, `--tag-active-bg`, `--tag-text-color`, `--tag-radius`, `--tag-padding`, `--tag-font-size` and friends; the full list is on the [theming page](theming).
 
 ### `InfoTag`
 

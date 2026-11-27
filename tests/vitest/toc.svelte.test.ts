@@ -1,6 +1,6 @@
 import Toc from '#lib/Toc.svelte'
 import Heading from '#lib/Heading.svelte'
-import type { CollapseMode, OpenChangeHandler, TocHeadingData } from '#lib/types.ts'
+import type { CollapseMode, TocHeadingData } from '#lib/types.ts'
 import type { ComponentProps } from 'svelte'
 import { createRawSnippet, tick } from 'svelte'
 import {
@@ -570,14 +570,22 @@ describe(`Toc`, () => {
     },
   )
 
-  test(`on_open_change handler receives open state, desktop state, and via`, async () => {
+  test(`on_open and on_close receive desktop state and via`, async () => {
     set_window_width(1200)
     set_nested_pair()
-    const on_open_change = vi.fn<OpenChangeHandler>()
-    const events = () => on_open_change.mock.calls.map(([event]) => event)
+    const events: unknown[] = []
+    const on_open = (detail: object) => events.push({ open: true, ...detail })
+    const on_close = (detail: object) => events.push({ open: false, ...detail })
 
-    await mount_toc({ on_open_change, open: false })
-    expect(events()).toEqual([{ desktop: true, open: false, via: `programmatic` }])
+    const props = $state<TocProps>({ dynamic: true, on_open, on_close, open: false })
+    render(Toc, props)
+    await tick()
+    // mounting reports nothing; a bound change reports as programmatic
+    expect(events).toEqual([])
+    props.open = true
+    await tick()
+    props.open = false
+    await tick()
 
     set_window_width(600)
     await tick()
@@ -589,10 +597,12 @@ describe(`Toc`, () => {
     press_key(globalThis, `Escape`)
     await tick()
 
-    expect(events().slice(1)).toEqual([
-      { desktop: false, open: true, via: `button` },
+    expect(events).toEqual([
+      { desktop: true, open: true, via: `programmatic` },
+      { desktop: true, open: false, via: `programmatic` },
+      { desktop: false, open: true, via: `trigger` },
       { desktop: false, open: false, via: `escape` },
-      { desktop: false, open: true, via: `button` },
+      { desktop: false, open: true, via: `trigger` },
       { desktop: false, open: false, via: `escape` },
     ])
   })
@@ -846,10 +856,9 @@ describe(`Toc`, () => {
   ] as const)(`$desc`, async ({ key, via }) => {
     set_headings(2)
     set_window_width(600)
-    const on_open_change = vi.fn<OpenChangeHandler>()
+    const on_close = vi.fn()
     const react_to_keys = via === null ? [] : [key]
-    await mount_toc({ open: true, react_to_keys, on_open_change })
-    on_open_change.mockClear()
+    await mount_toc({ open: true, react_to_keys, on_close })
 
     if (via === `tab`) doc_query(`aside.toc > nav > ol > li.active > a`).focus()
     const key_event = press_key(globalThis, key)
@@ -857,12 +866,8 @@ describe(`Toc`, () => {
 
     // Tab must stay un-prevented so focus still leaves the ToC
     expect(key_event.defaultPrevented).toBe(via === `escape`)
-    if (via === null) expect(on_open_change).not.toHaveBeenCalled()
-    else {
-      expect(on_open_change).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ desktop: false, open: false, via }),
-      )
-    }
+    if (via === null) expect(on_close).not.toHaveBeenCalled()
+    else expect(on_close).toHaveBeenCalledExactlyOnceWith({ desktop: false, via })
   })
 
   // the hover check used to scan the whole document for :hover on every keystroke
@@ -1330,10 +1335,9 @@ describe(`Element Prop Bags`, () => {
       setup = set_nested_pair,
     }) => {
       setup()
-      const on_open_change = vi.fn<OpenChangeHandler>()
+      const [on_open, on_close] = [vi.fn(), vi.fn()]
       const full_bag = { ...bag, style: marker_style, 'data-testid': prop_name }
-      await mount_toc({ ...extra_props, on_open_change, [prop_name]: full_bag })
-      on_open_change.mockClear()
+      await mount_toc({ ...extra_props, on_open, on_close, [prop_name]: full_bag })
 
       const element = doc_query(selector)
       expect(element.getAttribute(`style`)).toContain(marker_style)
@@ -1350,7 +1354,7 @@ describe(`Element Prop Bags`, () => {
         expect(bag.onclick).toHaveBeenCalledTimes(`disabled` in bag ? 0 : 1)
       }
       // neither the li click nor the prevented button click toggles the panel
-      expect(on_open_change).not.toHaveBeenCalled()
+      expect([on_open.mock.calls, on_close.mock.calls]).toEqual([[], []])
     },
   )
 
@@ -1377,7 +1381,7 @@ describe(`Element Prop Bags`, () => {
     await mount_toc()
 
     const css = document.head.textContent
-    expect(css.indexOf(`--toc-li-hover-bg`)).toBeGreaterThan(
+    expect(css.indexOf(`--toc-li-hover-bg,`)).toBeGreaterThan(
       css.indexOf(`--toc-active-bg`),
     )
   })

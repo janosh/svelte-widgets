@@ -1126,14 +1126,23 @@ describe(`DataTable`, () => {
         { id: `Col2`, label: `Col2` },
       ],
       density: `compact`,
-      root_style: `flex: 1`,
-      style: `color: red`,
+      style: `color: red; flex: 1`,
+      scroll_props: { style: `max-height: 50px`, class: `my-scroll`, 'data-x': `1` },
     })
     const container = doc_query(`.table-container`)
     const root_style = container.getAttribute(`style`) ?? ``
     expect(root_style).toContain(`color: red`)
     // happy-dom normalizes `flex: 1` to longhand properties
     expect(root_style).toMatch(/flex-grow:\s*1|flex:\s*1/)
+    // scroll_props land on the scroller; a style makes it the scroll container
+    const scroller = doc_query(`.table-scroll`)
+    expect([
+      scroller.style.maxHeight,
+      [...scroller.classList].filter(
+        (cls) => cls !== `no-y-overflow` && !cls.startsWith(`svelte-`),
+      ),
+      scroller.dataset.x,
+    ]).toEqual([`50px`, [`table-scroll`, `my-scroll`, `has-scroll`], `1`])
     expect(getComputedStyle(container).getPropertyValue(`--table-density-padding`)).toBe(
       `0 4pt`,
     )
@@ -2661,7 +2670,9 @@ describe(`DataTable`, () => {
         expect(bars.map((bar) => bar.style.width)).toEqual(widths)
         expect(new Set(bars.map((bar) => bar.style.background))).toEqual(
           new Set([
-            render_as === `both` ? `currentcolor` : `var(--accent-color, #4a9eff)`,
+            render_as === `both`
+              ? `currentcolor`
+              : `var(--accent-color, light-dark(#4a7abf, cornflowerblue))`,
           ]),
         )
         expect(
@@ -3051,7 +3062,7 @@ describe(`DataTable`, () => {
       },
     )
 
-    it(`TSV goes to the clipboard`, async () => {
+    it(`TSV goes to the clipboard with a visible confirmation`, async () => {
       mount_table({
         data: [{ Model: `Model\tA\nB`, Score: 1, Value: 2 }],
         columns: sample_columns,
@@ -3062,6 +3073,7 @@ describe(`DataTable`, () => {
       expect(write_clipboard).toHaveBeenLastCalledWith(
         `Model\tScore\tValue\nModel A B\t1\t2`,
       )
+      await vi.waitFor(() => expect(doc_query(`.copy-toast`).textContent).toBe(`Copied!`))
     })
 
     // sorted, rows C, B (data order would export B, C); unsorted, data order, not click order

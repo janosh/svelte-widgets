@@ -16,7 +16,7 @@ A trail of levels from a root to the current page, rendered as `nav[aria-label] 
 </script>
 
 <Breadcrumbs {items} />
-<Breadcrumbs {items} separator="›" --breadcrumbs-current-color="var(--accent)" />
+<Breadcrumbs {items} separator="›" --breadcrumbs-current-color="var(--accent-color)" />
 ```
 
 ### Callback navigation and collapsing

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { create_flash } from '../browser/flash.svelte.ts'
   import Icon from '../Icon.svelte'
   import type { IconData } from '../icons'
   import {
@@ -12,7 +11,7 @@
     Download,
     Search,
   } from '../icons'
-  import { download } from '../browser/index'
+  import { copy_text, download } from '../browser/index'
   import { create_key_selector } from '../internal/key-selector.svelte.ts'
   import { is_editable_event_target, is_modifier_chord } from '../shortcuts'
   import { clamp } from '../utils'
@@ -80,9 +79,6 @@
   let search_input_value = $state(``)
   let search_debounce_timeout: ReturnType<typeof setTimeout> | undefined
   let focused_path = $state<string | null>(null)
-  type CopyFeedback = { error: boolean; rect?: DOMRect }
-  const copy_feedback = create_flash<CopyFeedback | null>(null, 1000)
-  const copy_feedback_room = 100 // px, fits "Copy failed" plus its gap
   $effect(() => () => clearTimeout(search_debounce_timeout))
   // Paths expanded explicitly (overrides auto-fold thresholds)
   let force_expanded = $state(new SvelteSet<string>())
@@ -116,7 +112,6 @@
   $effect.pre(() => {
     if (value === previous_value) return
     previous_value = value
-    copy_feedback.reset()
     context_menu_state = null
     untrack(() => {
       // by existence, not value: a path may hold undefined (a sparse-array hole)
@@ -291,20 +286,11 @@
     text: string,
     anchor: EventTarget | null | undefined, // the copied element; feedback shows beside it
   ): Promise<void> {
-    // measured now: the element may re-render while the clipboard write settles. A detached
-    // one (data replaced under an open context menu) has no box, so it falls back to the corner
-    const rect =
-      anchor instanceof Element && anchor.isConnected
-        ? anchor.getBoundingClientRect()
-        : undefined
-    let error = false
-    try {
-      await navigator.clipboard.writeText(text)
+    if (
+      await copy_text(text, { anchor: anchor instanceof Element ? anchor : undefined })
+    ) {
       on_copy?.(path, text)
-    } catch {
-      error = true // show feedback regardless, but flag the failure
     }
-    copy_feedback.show({ error, rect })
   }
 
   const diff_map = $derived(
@@ -682,20 +668,6 @@
     <JsonNode node_key={root_label ?? null} {value} path={root_path} depth={0} />
   </div>
 
-  {#if copy_feedback.value}
-    {@const { rect, error } = copy_feedback.value}
-    {@const before = rect && rect.right + copy_feedback_room > globalThis.innerWidth}
-    <!-- beside the copied element, or before it when that would cross the viewport edge -->
-    <div
-      class={[`copy-feedback`, { error }]}
-      style={rect
-        ? `left: ${before ? rect.left - 6 : rect.right + 6}px; top: ${rect.top + rect.height / 2}px; translate: ${before ? `-100%` : 0} -50%`
-        : `right: 8px; top: 8px`}
-    >
-      {error ? `Copy failed` : `Copied!`}
-    </div>
-  {/if}
-
   {#if context_menu_state}
     <button
       type="button"
@@ -758,7 +730,7 @@
     line-height: var(--jt-line-height, 1.5);
     position: relative;
     background: var(--jt-bg, transparent);
-    border-radius: var(--jt-border-radius, 4px);
+    border-radius: var(--jt-radius, 4px);
     overflow: hidden;
   }
   /* Shared reset for every button in the tree, incl. those rendered by JsonNode/JsonValue.
@@ -910,37 +882,6 @@
     padding: var(--jt-content-padding, 8px);
     overflow: auto;
     max-height: var(--jt-max-height, none);
-  }
-  .copy-feedback {
-    position: fixed;
-    background: var(--success-color, #10b981);
-    color: white;
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 11px;
-    animation: fade-in-out 1s ease-out forwards;
-    pointer-events: none;
-    z-index: 1002;
-    white-space: nowrap;
-    &.error {
-      background: var(--error-color, #ef4444);
-    }
-  }
-  @keyframes fade-in-out {
-    0% {
-      opacity: 0;
-      transform: translateX(-4px);
-    }
-    15% {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    85% {
-      opacity: 1;
-    }
-    100% {
-      opacity: 0;
-    }
   }
   .context-menu-backdrop {
     position: fixed;

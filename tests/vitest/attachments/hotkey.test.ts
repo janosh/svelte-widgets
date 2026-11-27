@@ -78,7 +78,7 @@ describe(`hotkey`, () => {
     const [off, first, second] = [vi.fn(), vi.fn(), vi.fn()]
     const { node } = attach_hotkey({
       bindings: [
-        { keys: `ctrl+k`, handler: off, enabled: false },
+        { keys: `ctrl+k`, handler: off, disabled: true },
         { keys: [`ctrl+j`, `ctrl+k`], handler: first, prevent_default: false },
         { keys: `ctrl+k`, handler: second },
       ],
@@ -109,7 +109,7 @@ describe(`hotkey`, () => {
     const handler = vi.fn()
     const { node, cleanup } = attach_hotkey({
       bindings: [{ keys: `ctrl+k`, handler }],
-      enabled: false,
+      disabled: true,
     })
     expect(cleanup).toBeUndefined()
     keydown(node, `k`, { ctrlKey: true })

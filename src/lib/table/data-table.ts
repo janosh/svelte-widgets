@@ -1,7 +1,7 @@
 // Types and column statistics for DataTable. Everything here is DOM-free.
 import type { Snippet } from 'svelte'
 import type { ClassValue, HTMLAttributes } from 'svelte/elements'
-import type { CmdSection } from '../types'
+import type { CmdSection, ElementProps } from '../types'
 import type { ColumnFilterValue } from './types'
 
 // Every format a table can export, for opting in: <DataTable export_formats={TABLE_EXPORT_FORMATS}>
@@ -358,9 +358,9 @@ export type DataTableProps<
   // follow column changes); the first toggle writes the full list. Bindable for persistence:
   // bind an undefined state to start from the defaults.
   hidden_columns?: string[]
-  scroll_style?: string
-  // Inline styles for the root container (merged with rest.style)
-  root_style?: string
+  // Attributes for the scroll container around the table; a `style` (e.g. a max-height)
+  // makes it the scroller, under a sticky header
+  scroll_props?: ElementProps<HTMLDivElement>
   // Show a row number column as the first column
   show_row_numbers?: boolean
   // Offer a higher/lower-is-better toggle in the context menu of numeric columns

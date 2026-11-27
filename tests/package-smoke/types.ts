@@ -9,7 +9,7 @@ import {
   type Nav,
   type RangeSlider,
   type CommandMenu,
-  watch_theme,
+  init_theme,
   type CmdAction,
   type CmdSection,
   type LinkItem,
@@ -36,7 +36,7 @@ import { get_label } from 'svelte-widgets/utils'
 import type { PositionOptions, PositionResult } from 'svelte-widgets/position'
 import type { Hotkey } from 'svelte-widgets/shortcuts'
 import { rows_to_csv, format_bytes, format_locale } from 'svelte-widgets/format'
-import { url_with_params, valid_query_param } from 'svelte-widgets/browser'
+import { url_with_params, string_from_param } from 'svelte-widgets/browser'
 import { draw_markup_strokes, object_fit_contain_box } from 'svelte-widgets/canvas'
 import {
   configure_default_highlighter,
@@ -209,7 +209,7 @@ export const hotkey: Hotkey = { keys: `Escape`, handler: () => undefined }
 export const line_window: LineWindow = { start: 0, end: 0 }
 export const position_options: PositionOptions = { placement: `auto` }
 export const position_result: PositionResult = { top: 0, left: 0, placement: `bottom` }
-export const start_theme_watcher = () => watch_theme()
+export const start_theme_watcher = () => init_theme()
 export const file_drop_handler: FileDropOptions[`on_files`] = (files, signal) => ({
   aborted: signal.aborted,
   file_count: files.length,
@@ -275,7 +275,7 @@ export { create_sequence_player } from 'svelte-widgets/sequence-player'
 export { serve_worker } from 'svelte-widgets/worker-serve'
 
 export const image_box = object_fit_contain_box(200, 100, 100, 100)
-const sort = valid_query_param(new URLSearchParams(`sort=energy`), `sort`, `force`, {
+const sort = string_from_param(new URLSearchParams(`sort=energy`), `sort`, `force`, {
   force: 0,
   energy: 1,
 })

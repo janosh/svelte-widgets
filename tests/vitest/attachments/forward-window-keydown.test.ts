@@ -5,7 +5,7 @@ import { create_element, press_key as dispatch_key } from '../index'
 describe(`forward_window_keydown`, () => {
   const attach = (
     handled = true,
-    options: { enabled?: boolean } = {},
+    options: { disabled?: boolean } = {},
     initially_hovered = false,
   ) => {
     const node = create_element()
@@ -112,7 +112,7 @@ describe(`forward_window_keydown`, () => {
   })
 
   it(`disabled attaches nothing`, () => {
-    const { node, handle, cleanup } = attach(true, { enabled: false })
+    const { node, handle, cleanup } = attach(true, { disabled: true })
     expect(cleanup).toBeUndefined()
     hover(node)
     press_key()

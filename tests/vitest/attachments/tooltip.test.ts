@@ -105,19 +105,18 @@ describe(`tooltip manager`, () => {
   ])(`resolves %s content and closes once on repeated cleanup`, (attribute, expected) => {
     const element = create_element(`button`)
     element.setAttribute(attribute, expected)
-    const on_open_change = vi.fn()
-    const cleanup = attach_tooltip(element, { on_open_change })
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    const cleanup = attach_tooltip(element, { on_open, on_close })
     pointer_over(element)
 
     expect(doc_query(`.tooltip-content`).textContent).toBe(expected)
     cleanup()
     cleanup()
-    expect(on_open_change.mock.calls.map(([open, detail]) => [open, detail.via])).toEqual(
-      [
-        [true, `pointer`],
-        [false, `visibility`],
-      ],
-    )
+    expect(on_open).toHaveBeenCalledExactlyOnceWith({ trigger: element, via: `pointer` })
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({
+      trigger: element,
+      via: `visibility`,
+    })
   })
 
   it.each([
@@ -184,29 +183,26 @@ describe(`tooltip manager`, () => {
     element.title = `Native`
     outer.append(element)
     mock_rect(element, { left: 100, top: 100, width: 80, height: 30 })
-    const on_open_change = vi.fn()
-    let cleanup = attach_tooltip(element, { on_open_change })
+    const [on_open, on_close] = [vi.fn(), vi.fn()]
+    let cleanup = attach_tooltip(element, { on_open, on_close })
     pointer_over(element)
     expect(visible_text()).toBe(`Native`)
 
     cleanup()
-    cleanup = attach_tooltip(element, { on_open_change, disabled: true })
-    expect(on_open_change).toHaveBeenLastCalledWith(false, {
-      trigger: element,
-      via: `visibility`,
-    })
+    cleanup = attach_tooltip(element, { on_open, on_close, disabled: true })
+    expect(on_close).toHaveBeenLastCalledWith({ trigger: element, via: `visibility` })
     expect(element.hasAttribute(`title`)).toBe(false)
     focus_in(element)
     // unclaimed, so the enclosing tooltip takes the hover
     pointer_over(element)
     expect(visible_text()).toBe(`Outer`)
-    expect(on_open_change).toHaveBeenCalledTimes(2)
+    expect([on_open.mock.calls.length, on_close.mock.calls.length]).toEqual([1, 1])
 
     pointer_out(element)
     focus_out(element)
     cleanup()
     expect(element.title).toBe(`Native`)
-    attach_tooltip(element, { on_open_change })
+    attach_tooltip(element, { on_open, on_close })
     pointer_over(element)
     expect(visible_text()).toBe(`Native`)
   })
@@ -324,21 +320,15 @@ describe(`tooltip manager`, () => {
   })
 
   it(`keeps one tooltip when pointer and focus states overlap`, () => {
-    const on_open_change = vi.fn()
-    const { element, tooltip_el } = show_tooltip({
-      trigger: `hover-focus`,
-      on_open_change,
-    })
+    const on_close = vi.fn()
+    const { element, tooltip_el } = show_tooltip({ trigger: `hover-focus`, on_close })
     focus_in(element)
     pointer_out(element)
     expect(tooltip_el.hidden).toBe(false)
 
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
-    expect(on_open_change).toHaveBeenLastCalledWith(false, {
-      trigger: element,
-      via: `blur`,
-    })
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({ trigger: element, via: `blur` })
   })
 
   it(`closes only once every pointer has left both trigger and tooltip`, () => {
@@ -393,14 +383,14 @@ describe(`tooltip manager`, () => {
   })
 
   it(`keeps text-only tooltips unfocusable and trigger focus intact after Escape`, () => {
-    const on_open_change = vi.fn()
+    const on_close = vi.fn()
     // Stands in for a surface the tooltip opened over, e.g. a dialog owning Escape.
     const surrounding_layer = vi.fn(() => true)
     onTestFinished(escape_layer(surrounding_layer))
     const element = create_element(`button`)
     attach_tooltip(element, {
       trigger: `focus`,
-      on_open_change,
+      on_close,
       content: `<button>Details</button>`,
     })
     element.focus()
@@ -416,9 +406,7 @@ describe(`tooltip manager`, () => {
     // Leaving the trigger after dismissal must not announce a second close.
     focus_out(element)
     expect(tooltip_el.hidden).toBe(true)
-    expect(on_open_change.mock.calls.filter(([open]) => open === false)).toEqual([
-      [false, { trigger: element, via: `escape` }],
-    ])
+    expect(on_close).toHaveBeenCalledExactlyOnceWith({ trigger: element, via: `escape` })
 
     // Dismissal releases the tooltip's Escape layer so the surrounding one can respond.
     press_escape()

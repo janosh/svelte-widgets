@@ -154,44 +154,6 @@ test.each([
   },
 )
 
-test(`applies custom classes for styling through CSS frameworks`, async () => {
-  const prop_elem_map = {
-    input: HTMLInputElement,
-    li_option: HTMLLIElement,
-    li_active_option: HTMLLIElement,
-    li_selected: HTMLLIElement,
-    outer_div: HTMLDivElement,
-    ul_options: HTMLUListElement,
-    ul_selected: HTMLUListElement,
-    max_select_msg: HTMLSpanElement,
-    li_select_all: HTMLLIElement,
-  }
-  const css_classes = Object.fromEntries(
-    Object.keys(prop_elem_map).map((cls) => [`${cls}_class`, cls]),
-  )
-
-  mount_multiselect({
-    options: [1, 2, 3],
-    ...css_classes,
-    value: [1],
-    max_select: 2,
-    select_all_option: true,
-  })
-
-  // hover to make an option active
-  document
-    .querySelector(`ul.options > li[role='option']:not(.select-all)`)
-    ?.dispatchEvent(fresh_mousemove())
-  await tick()
-
-  expect(doc_query(`.max_select_msg`).textContent?.trim()).toBe(`1/2`)
-  for (const [class_name, elem_type] of Object.entries(prop_elem_map)) {
-    const el = doc_query(`.${class_name}`)
-
-    expect(el).toBeInstanceOf(elem_type)
-  }
-})
-
 test.each([
   // click, keyup and mouse events are covered by the handler-forwarding table below
   [`blur`, FocusEvent],
@@ -1649,7 +1611,7 @@ test(`on_open and on_close fire once per transition`, async () => {
   expect(on_close).not.toHaveBeenCalled()
 
   const input = await focus_input()
-  expect(on_open).toHaveBeenCalledExactlyOnceWith()
+  expect(on_open).toHaveBeenCalledExactlyOnceWith({ via: `focus` })
 
   // already open, so a second click must not re-fire
   await mouseup(input)
@@ -1660,6 +1622,30 @@ test(`on_open and on_close fire once per transition`, async () => {
   // closed again, so no extra fire
   await click(document.body)
   expect(on_close).toHaveBeenCalledOnce()
+})
+
+// each case opens a closed dropdown whose input was blurred by an Escape close
+test.each([
+  [`pointer`, {}, (input: HTMLInputElement) => mouseup(input)],
+  [`trigger`, {}, click_expand_icon],
+  [`keyboard`, {}, (input: HTMLInputElement) => press_sequence(input, `ArrowDown`)],
+  [`input`, {}, () => type_search_text(`2`)],
+  [
+    `shortcut`,
+    { shortcuts: { open: `ctrl+o` } },
+    async (input: HTMLInputElement) => {
+      press_key(input, `o`, { ctrlKey: true })
+      await tick()
+    },
+  ],
+] as const)(`on_open reports via=%s`, async (via, props, open_it) => {
+  const on_open = vi.fn()
+  mount_multiselect({ options: [1, 2, 3], on_open, ...props })
+  const input = await focus_input()
+  await press_sequence(input, `Escape`)
+  on_open.mockClear()
+  await open_it(input)
+  expect(on_open).toHaveBeenCalledExactlyOnceWith({ via })
 })
 
 test.each([
@@ -1800,9 +1786,11 @@ describe(`keep_selected_in_dropdown feature`, () => {
         value: [`Apple`],
         keep_selected_in_dropdown: mode,
         on_change,
-        get li_option_style() {
-          style_reads++
-          return undefined
+        li_option_props: {
+          get style() {
+            style_reads++
+            return undefined
+          },
         },
       })
       const input = await focus_input()
@@ -1811,13 +1799,16 @@ describe(`keep_selected_in_dropdown feature`, () => {
         [`Banana`, `add`],
       ]) {
         const option = option_by_label(label)
+        // counted for the toggle alone: moving the active row re-renders its two rows first
+        if (interaction === `keyboard`) await press_sequence(input, `ArrowDown`)
         style_reads = 0
-        if (interaction === `keyboard`) await press_sequence(input, `ArrowDown`, `Enter`)
+        if (interaction === `keyboard`) await press_sequence(input, `Enter`)
         else await click_keep_selected_option(option, mode)
         expect(on_change).toHaveBeenLastCalledWith({ option: label, type })
         expect(option.classList.contains(`selected`)).toBe(type === `add`)
-        // the selection lives outside each row's view, so no toggle rebuilds every row
-        expect(style_reads).toBe(0)
+        // a toggle re-renders only the rows whose state flips (the toggled one, plus the newly
+        // active one for a click), which re-read their props through the attribute spread
+        expect(style_reads).toBeLessThanOrEqual(2)
       }
     },
   )
@@ -1966,21 +1957,59 @@ test.each<[OptionStyle, `selected` | `option`, string]>([
   expect(li.style.cssText).toBe(expected_css)
 })
 
-test.each([
-  [`style`, `div.multiselect`],
-  [`ul_selected_style`, `ul.selected`],
-  [`ul_options_style`, `ul.options`],
-  [`li_selected_style`, `ul.selected > li`],
-  [`li_option_style`, `ul.options > li`],
-  [`input_style`, `input[autocomplete]`],
-])(`MultiSelect applies style props to the correct element`, (prop, css_selector) => {
+test(`style applies to the outer div`, () => {
   const css_str = `font-weight: bold; color: red;`
-  mount_multiselect({ options: [1, 2, 3], [prop]: css_str, value: [1] })
-
-  expect(doc_query(css_selector).style.cssText, prop).toContain(css_str)
+  mount_multiselect({ options: [1, 2, 3], style: css_str })
+  expect(doc_query(`div.multiselect`).style.cssText).toContain(css_str)
 })
 
-test(`li_selected_style and li_option_style add no style attribute when omitted`, () => {
+// each *_props object lands on its element, merging class with the internal classes
+test.each([
+  [`ul_selected_props`, `ul.selected`, `selected`, {}],
+  [`ul_options_props`, `ul.options`, `options`, {}],
+  [`li_selected_props`, `ul.selected > li`, null, {}],
+  [`li_option_props`, `ul.options > li[role="option"]`, null, {}],
+  [`input_props`, `input[autocomplete]`, null, {}],
+  [`li_select_all_props`, `li.select-all`, `select-all`, { select_all_option: true }],
+  [`max_select_msg_props`, `span.max-select-msg`, `max-select-msg`, { max_select: 2 }],
+  [`li_user_msg_props`, `li.user-msg`, `user-msg`, { search_text: `zzz` }],
+] as const)(
+  `%s applies class, style and attributes to %s`,
+  async (prop, css_selector, internal_class, extra_props) => {
+    const css_str = `font-weight: bold; color: red;`
+    const props = { class: `custom`, style: css_str, 'data-custom': `yes` }
+    mount_multiselect({ options: [1, 2, 3], value: [1], ...extra_props, [prop]: props })
+    await tick()
+
+    const node = doc_query(css_selector)
+    expect(node.style.cssText, prop).toContain(css_str)
+    expect(node.classList.contains(`custom`), prop).toBe(true)
+    if (internal_class) expect(node.classList.contains(internal_class), prop).toBe(true)
+    expect(node.dataset.custom, prop).toBe(`yes`)
+  },
+)
+
+// *_props can't express a state, so the keyboard-active rows keep dedicated class props
+test(`li_active_option_class and li_active_user_msg_class follow the active row`, async () => {
+  mount_multiselect({
+    options: [1, 2, 3],
+    allow_user_options: true,
+    li_active_option_class: `active-opt`,
+    li_active_user_msg_class: `active-msg`,
+  })
+  const input = await focus_input()
+  await press_sequence(input, `ArrowDown`)
+  const active = () =>
+    [...document.querySelectorAll(`.active-opt`)].map((li) => li.textContent?.trim())
+  expect(active()).toEqual([`1`])
+  await press_sequence(input, `ArrowDown`)
+  expect(active()).toEqual([`2`])
+  await type_search_text(`zzz`)
+  await press_sequence(input, `ArrowDown`)
+  expect(document.querySelectorAll(`li.user-msg.active-msg`)).toHaveLength(1)
+})
+
+test(`li_selected_props and li_option_props add no style attribute when omitted`, () => {
   mount_multiselect({ options: [1, 2, 3], value: [1] })
   for (const selector of [`ul.selected > li`, `ul.options > li`])
     expect(doc_query(selector).hasAttribute(`style`), selector).toBe(false)

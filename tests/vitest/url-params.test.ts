@@ -5,7 +5,7 @@ import {
   numbers_url_entry,
   sync_url_params,
   url_with_params,
-  valid_query_param,
+  string_from_param,
 } from '#lib/browser/index.ts'
 import { sort_from_param, sort_url_entry, type TableSort } from '#lib/table/index.ts'
 import { expect, expectTypeOf, test, vi } from 'vite-plus/test'
@@ -21,27 +21,31 @@ test.each([
   // read-only views (e.g. SvelteKit's page.url.searchParams) only need get()
   const read_only = { get: (key: string) => params.get(key) }
   expect(bool_from_param(read_only, `flag`, fallback)).toBe(expected)
-  expect(valid_query_param(read_only, `flag`, `none`)).toBe(
+  expect(string_from_param(read_only, `flag`, `none`)).toBe(
     query ? query.slice(5) : `none`,
   )
 })
 
 test.each([
-  [true, false, [`flag`, `1`]],
-  [false, false, [`flag`, ``]],
-  [false, true, [`flag`, `0`]],
-  [true, true, [`flag`, ``]],
-] as const)(`bool_url_entry(value=%s, fallback=%s)`, (value, fallback, expected) => {
-  expect(bool_url_entry(`flag`, value, fallback)).toEqual(expected)
+  [true, false, `/?flag=1`],
+  [false, false, `/`],
+  [false, true, `/?flag=0`],
+  [true, true, `/`],
+] as const)(`bool_url_entry(value=%s, fallback=%s) writes %s`, (value, fallback, url) => {
+  const entry = bool_url_entry(`flag`, value, fallback)
+  expect(url_with_params([entry], new URL(`https://example.com/?flag=1`))).toBe(url)
+  expect(
+    bool_from_param(new URL(`https://example.com${url}`).searchParams, `flag`, fallback),
+  ).toBe(value)
 })
 
-test(`valid_query_param infers allowed set members and record keys`, () => {
+test(`string_from_param infers allowed set members and record keys`, () => {
   const params = new URLSearchParams(`sort=energy`)
-  expect(valid_query_param(new URLSearchParams(`sort=`), `sort`, `force`)).toBe(`force`)
+  expect(string_from_param(new URLSearchParams(`sort=`), `sort`, `force`)).toBe(`force`)
   const valid_values = { force: 0, energy: 1 }
-  const unvalidated = valid_query_param(params, `sort`, `force`)
-  const set_like_validated = valid_query_param(params, `sort`, `force`, valid_values)
-  const narrowed = valid_query_param(
+  const unvalidated = string_from_param(params, `sort`, `force`)
+  const set_like_validated = string_from_param(params, `sort`, `force`, valid_values)
+  const narrowed = string_from_param(
     params,
     `sort`,
     `force`,
@@ -50,7 +54,7 @@ test(`valid_query_param infers allowed set members and record keys`, () => {
   expectTypeOf(unvalidated).toEqualTypeOf<string>()
   expectTypeOf(narrowed).toEqualTypeOf<`energy` | `force`>()
   expectTypeOf(set_like_validated).toEqualTypeOf<`energy` | `force`>()
-  const numeric_key = valid_query_param(new URLSearchParams(`key=42`), `key`, `none`, {
+  const numeric_key = string_from_param(new URLSearchParams(`key=42`), `key`, `none`, {
     42: true,
   })
   expectTypeOf(numeric_key).toEqualTypeOf<`42` | `none`>()
@@ -61,17 +65,17 @@ test(`valid_query_param infers allowed set members and record keys`, () => {
     `energy`,
   ])
   expect(
-    valid_query_param(params, `sort`, `force`, { has: () => false, energy: 1 }),
+    string_from_param(params, `sort`, `force`, { has: () => false, energy: 1 }),
   ).toBe(`energy`)
   const empty = new URL(
     `https://example.com${url_with_params([[`filter`, ``, `all`]], new URL(`https://example.com/`))}`,
   )
   for (const valid of [new Set([``, `all`]), { '': true, all: true }]) {
-    expect(valid_query_param(empty.searchParams, `filter`, `all`, valid)).toBe(``)
-    expect(valid_query_param(new URLSearchParams(), `filter`, `all`, valid)).toBe(`all`)
+    expect(string_from_param(empty.searchParams, `filter`, `all`, valid)).toBe(``)
+    expect(string_from_param(new URLSearchParams(), `filter`, `all`, valid)).toBe(`all`)
     for (const value of [`invalid`, `toString`, `__proto__`]) {
       expect(
-        valid_query_param(new URLSearchParams({ filter: value }), `filter`, `all`, valid),
+        string_from_param(new URLSearchParams({ filter: value }), `filter`, `all`, valid),
       ).toBe(`all`)
     }
   }
@@ -134,9 +138,12 @@ test.each([
   [`sort=energy`, new Set<string>(), default_sort],
   [`sort=energy,unknown`, new Set([`energy`, `force`]), default_sort],
 ] as const)(`sort_from_param(%s, valid=%o)`, (query, valid_columns, expected) => {
-  const sort = sort_from_param(new URLSearchParams(query), default_sort, {
+  const sort = sort_from_param(
+    new URLSearchParams(query),
+    `sort`,
+    default_sort,
     valid_columns,
-  })
+  )
   expect(sort).toEqual(expected)
 })
 
@@ -155,40 +162,38 @@ test.each([
     `/?sort=-Run+Time+%28discovery%29,%CE%BA_SRME`,
   ],
 ] as const)(`sort_url_entry(%o) round-trips via %s`, (sort, expected_url) => {
-  const entry = sort_url_entry(sort, default_sort)
+  const entry = sort_url_entry(`sort`, sort, default_sort)
   const url = url_with_params([entry], new URL(`https://example.com/`))
   expect(url).toBe(expected_url)
   const params = new URL(`https://example.com${url}`).searchParams
-  expect(sort_from_param(params, default_sort)).toEqual(sort)
+  expect(sort_from_param(params, `sort`, default_sort)).toEqual(sort)
 })
 
 test(`sort_from_param returns copies of the default entries`, () => {
-  const [entry] = sort_from_param(new URLSearchParams(`sort=-`), default_sort)
+  const [entry] = sort_from_param(new URLSearchParams(`sort=-`), `sort`, default_sort)
   entry.dir = `asc`
   expect(default_sort).toEqual([force_desc])
   expect(force_desc.dir).toBe(`desc`)
 })
 
 test(`sort_url_entry omits an empty sort when it is the default`, () => {
-  expect(sort_url_entry([], [])).toEqual([`sort`, ``, ``])
-  expect(sort_from_param(new URLSearchParams(), [])).toEqual([])
+  expect(sort_url_entry(`sort`, [], [])).toEqual([`sort`, ``, ``])
+  expect(sort_from_param(new URLSearchParams(), `sort`, [])).toEqual([])
 })
 
 test(`sort helpers take a custom key so two tables can share a URL`, () => {
-  const entry = sort_url_entry([energy_asc], default_sort, `models_sort`)
+  const entry = sort_url_entry(`models_sort`, [energy_asc], default_sort)
   expect(entry).toEqual([`models_sort`, `energy`, `-force`])
   const params = new URLSearchParams(`sort=-stress&models_sort=energy`)
-  expect(sort_from_param(params, default_sort, { key: `models_sort` })).toEqual([
-    energy_asc,
-  ])
-  expect(sort_from_param(params, default_sort)).toEqual([stress_desc])
+  expect(sort_from_param(params, `models_sort`, default_sort)).toEqual([energy_asc])
+  expect(sort_from_param(params, `sort`, default_sort)).toEqual([stress_desc])
 })
 
 test.each([``, `-energy`, `a,b`])(`sort_url_entry rejects column id %j`, (column) => {
-  expect(() => sort_url_entry([{ column, dir: `asc` }], default_sort)).toThrow(
+  expect(() => sort_url_entry(`sort`, [{ column, dir: `asc` }], default_sort)).toThrow(
     `can't be a URL param`,
   )
-  expect(() => sort_url_entry([], [{ column, dir: `asc` }])).toThrow(
+  expect(() => sort_url_entry(`sort`, [], [{ column, dir: `asc` }])).toThrow(
     `can't be a URL param`,
   )
 })

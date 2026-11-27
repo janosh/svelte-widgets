@@ -78,7 +78,7 @@
   let trigger_wrapper = $state<HTMLSpanElement | null>(null)
   const trigger_element = $derived(trigger_wrapper?.firstElementChild ?? trigger_wrapper)
   const native_dismiss = $derived(
-    dismiss?.enabled !== false &&
+    !dismiss?.disabled &&
       dismiss?.escape !== false &&
       (dismiss?.dismiss_on ?? `release`) === `release` &&
       !dismiss?.inside?.some(Boolean) &&
@@ -293,10 +293,12 @@
     inset: auto;
     z-index: var(--action-menu-z-index, 20);
     margin: 0;
-    padding: var(--action-menu-padding, 3pt);
+    padding: var(--action-menu-padding, 2pt);
     /* else rows inherit the page line-height: on a 16px/1.6 body each item is 33px tall
        before its own padding */
     line-height: var(--action-menu-line-height, 1.35);
+    font-size: var(--action-menu-font-size, 0.75rem);
+    text-align: left; /* else headings and items inherit a centered host card's alignment */
     list-style: none;
     min-width: var(--action-menu-min-width, 10rem);
     background: var(--action-menu-bg, var(--sms-options-bg, light-dark(#fff, #2a2a2e)));
@@ -306,13 +308,12 @@
     button {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 1em;
+      gap: 0.5em;
       width: 100%;
       padding: var(--action-menu-item-padding, 2pt 6pt);
       background: none;
       border: none;
-      border-radius: 3pt;
+      border-radius: var(--action-menu-item-radius, 3pt);
       color: inherit;
       font: inherit;
       text-align: left;
@@ -337,6 +338,10 @@
       );
       font-weight: 600;
     }
+    button > span[aria-hidden] {
+      margin-left: auto; /* shortcut hugs the right edge */
+      padding-left: 1em;
+    }
     kbd {
       /* a bare `monospace` family resolves `em` against the browser's monospace default
          (13px, not 16px), shrinking symbol keys like ⌘ ⇧ ⌥ past legibility */
@@ -355,9 +360,10 @@
     .section-title {
       display: block;
       padding: var(--action-menu-item-padding, 2pt 6pt);
-      font-size: 0.75em;
+      font-size: 0.8em;
       letter-spacing: 0.05em;
-      opacity: 0.6;
+      font-weight: 600; /* headings outweigh the items they group */
+      opacity: 0.75;
       text-transform: uppercase;
     }
   }

@@ -20,6 +20,8 @@ export { create_stick_to_bottom } from './stick-to-bottom.svelte.ts'
 export type { StickToBottom, StickToBottomOptions } from './stick-to-bottom.svelte.ts'
 export { tooltip } from './tooltip'
 export type {
+  TooltipCloseDetail,
+  TooltipCloseVia,
   TooltipOpenDetail,
   TooltipOpenVia,
   TooltipOptions,

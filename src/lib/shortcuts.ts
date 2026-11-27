@@ -73,7 +73,7 @@ export const format_shortcut = (shortcut: string): string[] =>
 export type Hotkey = {
   keys: string | string[] // e.g. `mod+k`, `ctrl+shift+p`, `Escape`
   handler: (event: KeyboardEvent) => void
-  enabled?: boolean
+  disabled?: boolean
   // bare keys are ignored while typing in a text field (chords always fire);
   // set true for keys that must work either way
   allow_in_inputs?: boolean
@@ -86,7 +86,7 @@ export function run_hotkeys(event: KeyboardEvent, bindings: Hotkey[]): boolean {
   // outside a chord, a bare key in a text field is typing, not a shortcut
   const typing = !is_modifier_chord(event) && is_editable_event_target(event.target)
   for (const binding of bindings) {
-    if (binding.enabled === false) continue
+    if (binding.disabled) continue
     const keys = Array.isArray(binding.keys) ? binding.keys : [binding.keys]
     if (!keys.some((key) => matches_shortcut(event, key))) continue
     if (typing && !binding.allow_in_inputs) continue

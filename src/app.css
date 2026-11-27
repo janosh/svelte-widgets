@@ -1,12 +1,13 @@
 /* starry-night syntax highlighting (GitHub-style), following the page's color-scheme */
 @import './lib/highlight/theme.css';
+@import './lib/heading-anchors.css';
 
 :root {
-  --accent: light-dark(#4a7abf, cornflowerblue);
-  --accent-hover: orange;
+  --accent-color: light-dark(#4a7abf, cornflowerblue);
+  --accent-hover-color: orange;
   --main-max-width: 50em;
   --toc-width: 18rem;
-  --nav-link-active-color: var(--accent);
+  --nav-link-active-color: var(--accent-color);
   --bg: light-dark(#fafafa, #141418);
   --text-color: light-dark(#222, #ccc);
   --text-color-muted: light-dark(#666, #999);
@@ -75,7 +76,7 @@ body > div {
   --toc-li-font-size-min: 0.9em;
   --toc-min-width: 0;
   --toc-mobile-bg: light-dark(#fff, #222226);
-  --toc-active-color: var(--accent);
+  --toc-active-color: var(--accent-color);
   display: grid;
   gap: 2rem;
   align-items: start;
@@ -105,10 +106,10 @@ main {
   margin: 0 auto 3em;
 }
 a {
-  color: var(--accent);
+  color: var(--accent-color);
   text-decoration: none;
   &:hover {
-    color: var(--accent-hover);
+    color: var(--accent-hover-color);
   }
 }
 button {
@@ -159,7 +160,7 @@ h1 {
   margin-inline-end: 0.4em;
   vertical-align: -0.125em;
   flex-shrink: 0;
-  color: var(--accent);
+  color: var(--accent-color);
 }
 h1 > .heading-icon {
   margin-inline-end: 0;
@@ -170,14 +171,6 @@ h1 > .heading-icon {
 }
 :is(h1, h2, h3, h4, h5, h6) {
   text-wrap-style: balance;
-  /* Build-time and dynamic heading links occupy the same space before hover/focus. */
-  a[aria-hidden='true'] {
-    opacity: 0;
-    transition: opacity 0.2s;
-  }
-  &:is(:hover, :focus-within) a[aria-hidden='true'] {
-    opacity: 1;
-  }
 }
 label {
   font-weight: 600;
@@ -200,7 +193,7 @@ table {
 blockquote {
   margin: 1em 0;
   padding: 0.5em 1em;
-  border-left: 3px solid var(--accent);
+  border-left: 3px solid var(--accent-color);
   background: var(--surface);
   > :first-child {
     margin-top: 0;

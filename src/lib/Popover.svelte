@@ -1,12 +1,12 @@
 <script lang="ts">
-  import type { PopoverTriggerProps } from './types'
+  import type { PopoverCloseVia, PopoverTriggerProps } from './types'
   import type { Snippet } from 'svelte'
   import type { HTMLAttributes } from 'svelte/elements'
   import type { DismissConfig } from './attachments/index'
   import { click_outside, float, focus_trap } from './attachments/index'
   import { escape_layer, focusable } from './attachments/shared'
   import { chain_handlers } from './utils'
-  import type { Placement } from './position'
+  import type { Placement, PositionOptions } from './position'
 
   type PopupRole = `alertdialog` | `dialog` | `menu` | `listbox` | `tree` | `grid`
   type PopupHasPopup = Exclude<PopupRole, `alertdialog`>
@@ -38,7 +38,7 @@
   }: Omit<HTMLAttributes<HTMLDivElement>, `children` | `role`> & {
     open?: boolean
     placement?: Placement | `auto`
-    align?: `center` | `start`
+    align?: PositionOptions[`align`]
     offset?: number
     padding?: number // closest the surface may come to a viewport edge
     match_width?: boolean // size the surface to the trigger, for dropdown-like menus
@@ -56,7 +56,7 @@
     trigger?: Snippet<[TriggerProps]>
     trigger_mode?: TriggerMode
     children: Snippet
-    on_close?: (detail: { via: `pointer` | `escape` | `trigger` }) => void
+    on_close?: (detail: { via: PopoverCloseVia }) => void
   } = $props()
 
   const surface_id = $derived(id ?? unique_id)
@@ -83,7 +83,7 @@
     clear_close_timeout()
   }
 
-  const close = (via: `pointer` | `escape` | `trigger`) => {
+  const close = (via: PopoverCloseVia) => {
     clear_timeouts()
     if (!open) return
     open = false
@@ -235,7 +235,7 @@
           callback: (_node, _config, { via }) => close(via),
         })}
     {@attach focus_trap({
-      enabled: trap_focus,
+      disabled: !trap_focus,
       // Hover/focus opening must not steal focus.
       initial: click_mode ? undefined : false,
       // Return focus to the exact trigger that opened this instance; `false` for one the

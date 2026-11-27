@@ -7,7 +7,7 @@
   import { merge_defaults, THEME_TOGGLE_LABELS, type ThemeToggleLabels } from './labels'
   import {
     apply_theme_mode,
-    watch_theme,
+    init_theme,
     theme,
     THEME_MODE_CYCLE,
   } from './theme.svelte.ts'
@@ -32,7 +32,7 @@
 
   onMount(() => {
     is_hydrated = true
-    return watch_theme()
+    return init_theme()
   })
 </script>
 
@@ -62,10 +62,10 @@
     width: var(--theme-toggle-size, 1.8em);
     height: var(--theme-toggle-size, 1.8em);
     line-height: var(--theme-toggle-line-height, 1);
-    background: var(--theme-toggle-background, transparent);
+    background: var(--theme-toggle-bg, transparent);
     border: var(--theme-toggle-border, none);
     box-sizing: border-box;
-    border-radius: var(--theme-toggle-border-radius, 50%);
+    border-radius: var(--theme-toggle-radius, 50%);
     cursor: pointer;
   }
   button:hover {

@@ -10,7 +10,6 @@
     Spinner,
     StatusMessage,
     DragOverlay,
-    ClickFeedback,
     ActionMenu,
     CodeEditor,
     ColorInput,
@@ -59,6 +58,8 @@
   import { count_lines } from 'svelte-widgets/code-editor'
   // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
   import 'svelte-widgets/code-editor/editor.css'
+  // oxlint-disable-next-line import/no-unassigned-import -- verifies the CSS export bundles
+  import 'svelte-widgets/heading-anchors.css'
   import { ask_prompt } from 'svelte-widgets/dialogs'
   import { create_find_state } from 'svelte-widgets/find-in-page'
   import { Claude as direct_claude } from 'svelte-widgets/icons'
@@ -149,4 +150,3 @@
 <Spinner text="Loading" />
 <StatusMessage message="Ready" type="success" />
 <DragOverlay visible={false} />
-<ClickFeedback position={{ x: 0, y: 0 }} />

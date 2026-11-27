@@ -304,7 +304,7 @@
   :is(.reset-button, .description-toggle) {
     padding: var(--reset-btn-padding, 1pt 4pt);
     font-size: 0.65em;
-    border-radius: var(--reset-btn-border-radius, var(--border-radius, 3pt));
+    border-radius: var(--reset-btn-radius, var(--border-radius, 3pt));
     background: var(--btn-bg, rgba(0, 0, 0, 0.1));
     color: var(--text-color-muted, #6b7280);
     border: 1px solid var(--border-color, #d1d5db);

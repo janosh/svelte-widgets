@@ -220,12 +220,9 @@ export const watch_theme_changes = (
 // callback writes state, which a synchronous first call would re-trigger, so read
 // is_dark_mode(element) for the initial value. Returns the teardown; a no-op without a DOM.
 export const watch_dark_mode = (
+  element: Element,
   on_change: (dark: boolean) => void,
-  element: Element | undefined = globalThis.document?.documentElement,
-): (() => void) =>
-  element
-    ? watch_theme_changes(element, () => on_change(is_dark_mode(element)))
-    : () => {}
+): (() => void) => watch_theme_changes(element, () => on_change(is_dark_mode(element)))
 
 // === Color tokens ===
 

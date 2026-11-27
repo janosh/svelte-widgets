@@ -186,7 +186,7 @@ test.each([
 
 test(`opens a labeled native light-dismiss modal and forwards styling props`, async () => {
   const show_modal = vi.spyOn(HTMLDialogElement.prototype, `showModal`)
-  let style_reads = 0 // each option row render reads its style once
+  let style_reads = 0 // each option row render reads li_option_props twice (spread, class)
   mount_menu({
     // more rows than the two an arrow key moves between, so re-running all would show
     actions: make_actions(`a1`, `a2`, `a3`, `a4`, `a5`, `a6`),
@@ -197,9 +197,9 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
     class: `my-custom-class`,
     placeholder: `Custom placeholder`,
     dialog_props: { style: `padding: 20px;` },
-    get li_option_style() {
+    get li_option_props() {
       style_reads++
-      return `font-weight: bold;`
+      return { style: `font-weight: bold;` }
     },
   })
 
@@ -214,12 +214,13 @@ test(`opens a labeled native light-dismiss modal and forwards styling props`, as
   expect(doc_query(`dialog div.option-list`).classList).toContain(`my-custom-class`)
   expect(menu_input().placeholder).toBe(`Custom placeholder`)
   expect(doc_query(`dialog ul.options li`).style.fontWeight).toBe(`bold`)
-  // an arrow key re-renders only the two rows whose active state flips, not every row
+  // an arrow key re-renders only the two rows whose active state flips, not every row; each
+  // reads li_option_props 3 times (attribute spread, class, title fallback)
   style_reads = 0
   key_reads.count = 0
   press_key(menu_input(), `ArrowDown`)
   await tick()
-  expect([style_reads, key_reads.count]).toEqual([2, 2])
+  expect([style_reads, key_reads.count]).toEqual([6, 2])
 })
 
 test(`handles action selection and execution`, async () => {

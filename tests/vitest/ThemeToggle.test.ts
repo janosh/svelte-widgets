@@ -1,6 +1,6 @@
 import {
   apply_theme_mode,
-  watch_theme,
+  init_theme,
   theme,
   theme_init_script,
   ThemeScript,
@@ -116,11 +116,11 @@ const start_toggle = async () => {
   await tick()
   return () => void unmount_toggle()
 }
-const start_watcher = async () => watch_theme()
+const start_watcher = async () => init_theme()
 
 test.each([
   [`ThemeToggle`, start_toggle],
-  [`watch_theme`, start_watcher],
+  [`init_theme`, start_watcher],
 ])(`system mode follows the OS via %s`, async (_owner, start) => {
   let matches = false
   let change_handler: (() => void) | undefined
@@ -236,9 +236,9 @@ test(`apply_theme_mode keeps mounted ThemeToggles in sync`, async () => {
   }
 })
 
-test(`watch_theme fails clearly without a document`, () => {
+test(`init_theme fails clearly without a document`, () => {
   vi.stubGlobal(`document`, undefined)
-  expect(() => watch_theme()).toThrow(`watch_theme() is client-only`)
+  expect(() => init_theme()).toThrow(`init_theme() is client-only`)
 })
 
 // theme_init_script runs before hydration, so it must land on what apply_theme_mode applies.

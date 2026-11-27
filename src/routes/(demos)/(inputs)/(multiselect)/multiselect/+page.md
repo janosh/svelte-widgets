@@ -383,18 +383,6 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    Programmatically expand all groups. Use with `bind:expand_all_groups` to get a callable function.
 
 1. ```ts
-   li_group_header_class: string = ''
-   ```
-
-   CSS class applied to group header `<li>` elements.
-
-1. ```ts
-   li_group_header_style: string | null = null
-   ```
-
-   Inline style for group header elements.
-
-1. ```ts
    group_header: Snippet<[{ group: string; options: T[]; collapsed: boolean }]>
    ```
 
@@ -542,12 +530,6 @@ See the [grouping demo](https://svelte-widgets.janosh.dev/grouping) for live exa
    Whether Shift-click and Shift+Arrow select an inclusive range of options. The first plain click (or the option active before Shift+Arrow) sets the anchor, then the range spans from the anchor to the shift-targeted option. Disabled options are skipped, `max_select` is respected. Off by default since enabling it changes what Shift-click does for existing consumers.
 
 1. ```ts
-   li_select_all_class: string = ''
-   ```
-
-   CSS class applied to the "Select All" `<li>` element.
-
-1. ```ts
    selected_options_draggable: boolean = !sort_selected
    ```
 
@@ -643,109 +625,49 @@ These give you access to DOM elements after the component mounts:
 
    Handle to the outer wrapper `<div>` element.
 
-### Styling Props
+### Inner Element Props
 
-For custom styling with CSS frameworks or one-off styles:
+Each inner element takes an object of HTML attributes (`class`, `style`, `data-*`, `title`, ...) for CSS frameworks like Tailwind or one-off styles. They spread before the component's own attributes, so internal roles, ARIA state and event handlers (not accepted here) win, while `class` merges with the internal classes. See [Inner Element Props](css-classes) for an example.
 
 1. ```ts
    style: string | null = null
    ```
 
-   CSS rules for the outer wrapper div.
+   CSS rules for the outer wrapper div (its classes come from `class`).
 
 1. ```ts
-   input_style: string | null = null
+   input_props: Omit<HTMLInputAttributes, `on${string}`> = {}
    ```
 
-   CSS rules for the main input element.
+   Attributes for the search `<input>`.
 
 1. ```ts
-   ul_selected_style: string | null = null
+   ul_selected_props: ElementProps<HTMLUListElement> = {}
+   li_selected_props: ElementProps<HTMLLIElement> = {}
    ```
 
-   CSS rules for the selected options list.
+   The selected options list and its chips. `li_selected_props.style` merges after each option's own `style.selected`.
 
 1. ```ts
-   ul_options_style: string | null = null
+   ul_options_props: ElementProps<HTMLUListElement> = {}
+   li_option_props: ElementProps<HTMLLIElement> = {}
    ```
 
-   CSS rules for the dropdown options list.
+   The dropdown list and its options. The active option (hovered or arrow-keyed) gets class `active`. `li_option_props.style` merges after each option's own `style.option`.
 
 1. ```ts
-   li_selected_style: string | null = null
+   li_group_header_props: ElementProps<HTMLLIElement> = {}
+   li_select_all_props: ElementProps<HTMLLIElement> = {}
+   li_user_msg_props: ElementProps<HTMLLIElement> = {}
    ```
 
-   CSS rules for selected option list items.
+   Group headers, the "Select all" row (when `select_all_option` is enabled) and the user message row (no matches, create option, duplicate), which gets class `active` while active.
 
 1. ```ts
-   li_option_style: string | null = null
+   max_select_msg_props: ElementProps<HTMLSpanElement> = {}
    ```
 
-   CSS rules for dropdown option list items.
-
-### CSS Class Props
-
-For use with CSS frameworks like Tailwind:
-
-1. ```ts
-   outer_div_class: string = ''
-   ```
-
-   CSS class for outer wrapper div.
-
-1. ```ts
-   input_class: string = ''
-   ```
-
-   CSS class for main input element.
-
-1. ```ts
-   ul_selected_class: string = ''
-   ```
-
-   CSS class for selected options list.
-
-1. ```ts
-   ul_options_class: string = ''
-   ```
-
-   CSS class for dropdown options list.
-
-1. ```ts
-   li_selected_class: string = ''
-   ```
-
-   CSS class for selected option items.
-
-1. ```ts
-   li_option_class: string = ''
-   ```
-
-   CSS class for dropdown option items.
-
-1. ```ts
-   li_active_option_class: string = ''
-   ```
-
-   CSS class for the currently active dropdown option.
-
-1. ```ts
-   li_user_msg_class: string = ''
-   ```
-
-   CSS class for user messages (no matches, create option, etc.).
-
-1. ```ts
-   li_active_user_msg_class: string = ''
-   ```
-
-   CSS class for active user messages.
-
-1. ```ts
-   max_select_msg_class: string = ''
-   ```
-
-   CSS class for the "X of Y selected" message.
+   The "X/Y selected" message shown when `max_select` is set.
 
 ### Read-only Props (bindable)
 
@@ -855,10 +777,10 @@ Example using several snippets:
    Triggers when an option is either added (selected) or removed from selected, all selected options are removed at once, a range is selected, or selected options are reordered via drag-and-drop. `type` is one of `'add' | 'remove' | 'remove_all' | 'select_all' | 'range_select' | 'reorder'` and payload will be `option: Option` or `options: Option[]`, respectively.
 
 1. ```ts
-   on_open={() => console.log(`Dropdown opened`)}
+   on_open={({ via }) => console.log(`Dropdown opened via`, via)}
    ```
 
-   Triggers when the dropdown list of options appears.
+   Triggers when the dropdown list of options appears. `via` is `'pointer' | 'trigger' | 'focus' | 'keyboard' | 'input' | 'shortcut'`: `pointer` a click on the already focused input or elsewhere on the component (a first click on an unfocused input reports `focus`), `trigger` the expand icon, `focus` focusing the input (also programmatically), `keyboard` Enter or an arrow key, `input` typing and `shortcut` the `open` hotkey.
 
 1. ```ts
    on_close={({ via }) => console.log(`Dropdown closed via`, via)}
@@ -991,7 +913,7 @@ Minimal example that changes the background color of the options dropdown:
 
 - `div.multiselect`
   - `border: var(--sms-border, 1px solid light-dark(lightgray, #555))`: Change this to e.g. to `1px solid red` to indicate this form field is in an invalid state.
-  - `border-radius: var(--sms-border-radius, 3pt)`
+  - `border-radius: var(--sms-radius, 3pt)`
   - `padding: var(--sms-padding, 0 3pt)`
   - `background: var(--sms-bg, light-dark(white, #222226))`
   - `color: var(--sms-text-color, light-dark(#222, #eee))`: Text color. Defaults to a theme-aware color paired with `--sms-bg` so the component stays readable on dark pages that never declare `color-scheme` (where `light-dark()` falls back to light). Set `--sms-text-color: inherit` to blend with the surrounding page instead.
@@ -1025,7 +947,7 @@ Minimal example that changes the background color of the options dropdown:
   - `box-shadow: var(--sms-options-shadow, light-dark(0 0 14pt -8pt black, 0 0 14pt -4pt rgba(0, 0, 0, 0.8)))`: Box shadow of dropdown list.
   - `border: var(--sms-options-border, 1px solid light-dark(lightgray, #555))`
   - `border-width: var(--sms-options-border-width, 1px)`
-  - `border-radius: var(--sms-options-border-radius, 1ex)`
+  - `border-radius: var(--sms-options-radius, 1ex)`
   - `padding: var(--sms-options-padding, 0)`
   - `margin: var(--sms-options-margin, 6pt 0 0 0)`
 - `div.multiselect > ul.options > li`
@@ -1077,37 +999,26 @@ Minimal example that changes the background color of the options dropdown:
 
 ### With CSS frameworks
 
-The second method allows you to pass in custom classes to the important DOM elements of this component to target them with frameworks like [Tailwind CSS](https://tailwindcss.com).
-
-- `outer_div_class`: wrapper `div` enclosing the whole component
-- `ul_selected_class`: list of selected options
-- `li_selected_class`: selected list items
-- `ul_options_class`: available options listed in the dropdown when component is in `open` state
-- `li_option_class`: list items selectable from dropdown list
-- `li_active_option_class`: the currently active dropdown list item (i.e. hovered or navigated to with arrow keys)
-- `li_select_all_class`: the "Select All" option at the top of the dropdown (when `select_all_option` is enabled)
-- `li_user_msg_class`: user message (last child of dropdown list when no options match user input)
-- `li_active_user_msg_class`: user message when active (i.e. hovered or navigated to with arrow keys)
-- `max_select_msg_class`: small span toward the right end of the input field displaying to the user how many of the allowed number of options they've already selected
-
-This simplified version of the DOM structure of the component shows where these classes are inserted:
+The second method passes classes to the important DOM elements of this component through the `*_props` objects listed under [Inner Element Props](#inner-element-props) to target them with frameworks like [Tailwind CSS](https://tailwindcss.com). This simplified DOM structure shows where they land:
 
 ```svelte
-<div class="multiselect {outer_div_class}">
-  <input class={input_class} />
-  <ul class="selected {ul_selected_class}">
-    <li class={li_selected_class}>Selected 1</li>
-    <li class={li_selected_class}>Selected 2</li>
+<div class="multiselect {class}">
+  <ul {...ul_selected_props} class="selected {ul_selected_props.class}">
+    <li {...li_selected_props}>Selected 1</li>
+    <li {...li_selected_props}>Selected 2</li>
   </ul>
-  <span class="max-select-msg {max_select_msg_class}">2/5</span>
-  <ul class="options {ul_options_class}">
-    <li class="select-all {li_select_all_class}">Select all</li>
-    <li class={li_option_class}>Option 1</li>
-    <li class="{li_option_class} {li_active_option_class}">
+  <input {...input_props} />
+  <span {...max_select_msg_props} class="max-select-msg {max_select_msg_props.class}">2/5</span>
+  <ul {...ul_options_props} class="options {ul_options_props.class}">
+    <li {...li_select_all_props} class="select-all {li_select_all_props.class}">Select all</li>
+    <li {...li_option_props}>Option 1</li>
+    <li {...li_option_props} class="{li_option_props.class} active">
       Option 2 (currently active)
     </li>
     ...
-    <li class="{li_user_msg_class} {li_active_user_msg_class}">Create this option...</li>
+    <li {...li_user_msg_props} class="user-msg {li_user_msg_props.class} active">
+      Create this option...
+    </li>
   </ul>
 </div>
 ```

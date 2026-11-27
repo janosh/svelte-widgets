@@ -129,7 +129,7 @@
     align-items: center;
     justify-content: center;
     padding: var(--fullscreen-btn-padding, 2pt);
-    border-radius: var(--fullscreen-btn-border-radius, var(--border-radius, 3pt));
+    border-radius: var(--fullscreen-btn-radius, var(--border-radius, 3pt));
     background: var(--fullscreen-btn-bg, transparent);
     color: var(--fullscreen-btn-color, inherit);
     cursor: pointer;

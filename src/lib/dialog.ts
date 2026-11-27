@@ -2,6 +2,7 @@ import type { Snippet } from 'svelte'
 import type { HTMLDialogAttributes } from 'svelte/elements'
 import { escape_layer } from './attachments/shared'
 
+// `close`: the controls' close() or setting `open` to false
 export type DialogCloseVia = `pointer` | `escape` | `close`
 export type DialogCloseDetail = { via: DialogCloseVia }
 export type DialogControls = { close: () => void }

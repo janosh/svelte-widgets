@@ -272,7 +272,7 @@ announced by only some screen readers, and swapping aria-live mid-flight is as u
       line-height: 1;
     }
     &[data-priority='success'] {
-      --toast-accent: var(--toast-success-color, forestgreen);
+      --toast-accent: var(--toast-success-color, #4a8f67);
     }
     &[data-priority='warning'] {
       --toast-accent: var(--toast-warning-color, orange);

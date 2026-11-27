@@ -24,7 +24,7 @@
   .drag-overlay {
     position: absolute;
     inset: 0;
-    color: var(--accent-color, #1976d2);
+    color: var(--accent-color, light-dark(#4a7abf, cornflowerblue));
     background: color-mix(in srgb, currentColor 10%, transparent);
     border: 2px dashed;
     display: flex;

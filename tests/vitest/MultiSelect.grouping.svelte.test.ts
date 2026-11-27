@@ -217,8 +217,7 @@ describe(`option grouping feature`, () => {
 
   test(`applies group header class, style, and sticky mode`, async () => {
     await mount_grouped({
-      li_group_header_class: `custom-header-class`,
-      li_group_header_style: `background: red`,
+      li_group_header_props: { class: `custom-header-class`, style: `background: red` },
       sticky_group_headers: true,
     })
 
