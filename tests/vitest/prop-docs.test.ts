@@ -255,6 +255,43 @@ describe(`extract_prop_docs`, () => {
   })
 })
 
+// tsconfig shapes the `paths` lookup must handle: a Svelte-only `include` (TS reports no inputs,
+// since it doesn't enumerate .svelte files) and `paths` relative to `baseUrl`
+test.each([
+  [
+    `a Svelte-only include`,
+    {
+      include: [`src/**/*.svelte`],
+      compilerOptions: { paths: { '#fx/*': [`./src/lib/*`] } },
+    },
+  ],
+  [
+    `paths under baseUrl`,
+    {
+      compilerOptions: {
+        baseUrl: `./src`,
+        paths: { '#fx/*': [`lib/*`] },
+        ignoreDeprecations: `6.0`,
+      },
+    },
+  ],
+])(`resolves component imports through %s`, (_case, tsconfig) => {
+  const dir = `${root}/variants/${_case.replaceAll(` `, `-`)}`
+  mkdirSync(`${dir}/src/lib`, { recursive: true })
+  writeFileSync(`${dir}/tsconfig.json`, JSON.stringify(tsconfig))
+  writeFileSync(`${dir}/src/lib/types.ts`, `export type Base = { size?: number }`)
+  writeFileSync(
+    `${dir}/src/lib/Sized.svelte`,
+    `<script lang="ts">
+  import type { Base } from '#fx/types'
+  let { size = 1 }: Base = $props()
+</script>`,
+  )
+  symlinkSync(`${process.cwd()}/node_modules`, `${dir}/node_modules`)
+  const { Sized } = extract_prop_docs([`${dir}/src/lib/Sized.svelte`])
+  expect(Sized.props.map(({ name, type }) => [name, type])).toEqual([[`size`, `number`]])
+})
+
 const plugin_hooks = () => {
   const { resolveId, load, hotUpdate } = prop_docs_plugin({ root })
   if (

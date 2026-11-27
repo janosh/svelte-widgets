@@ -302,14 +302,19 @@ const tsconfig_paths = (dir: string): Record<string, string[]> => {
   if (!file) return {}
   const { config, error } = ts.readConfigFile(file, (name) => ts.sys.readFile(name))
   const parsed = ts.parseJsonConfigFileContent(config, ts.sys, dirname(file))
-  const first_error = error ?? parsed.errors[0]
+  // TS18003 "No inputs were found": a Svelte-only `include`, whose .svelte files TS doesn't
+  // enumerate; the components are passed as roots anyway
+  const first_error = error ?? parsed.errors.find(({ code }) => code !== 18003)
   if (first_error)
     throw new Error(
       `prop-docs: invalid ${file}: ${ts.flattenDiagnosticMessageText(first_error.messageText, ` `)}`,
     )
-  // relative to the (possibly extended) config declaring them
-  const { paths = {}, pathsBasePath } = parsed.options
-  const base = typeof pathsBasePath === `string` ? pathsBasePath : dirname(file)
+  // relative to baseUrl if set, else to the (possibly extended) config declaring them. baseUrl
+  // is deprecated, but configs that still set it resolve `paths` from there
+  // oxlint-disable-next-line typescript/no-deprecated
+  const { paths = {}, pathsBasePath, baseUrl } = parsed.options
+  const base =
+    baseUrl ?? (typeof pathsBasePath === `string` ? pathsBasePath : dirname(file))
   return Object.fromEntries(
     Object.entries(paths).map(([key, targets]) => [
       key,
